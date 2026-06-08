@@ -2,68 +2,67 @@ version: '3.9'
 
 services:
 
-  # ── Banco de Dados ───────────────────────────
-  db:
+  postgres:
     image: postgres:16-alpine
-    container_name: sig_db
+    container_name: sig_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_DB: ${POSTGRES_DB:-sig_v2}
+      POSTGRES_USER: ${POSTGRES_USER:-sig_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sig_password}
     volumes:
-      - pg_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sig_user} -d ${POSTGRES_DB:-sig_v2}"]
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
     networks:
       - sig_network
 
-  # ── Cache / Filas ─────────────────────────────
   redis:
     image: redis:7-alpine
     container_name: sig_redis
     restart: unless-stopped
-    command: redis-server --save 60 1 --loglevel warning
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
     ports:
       - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
+      interval: 5s
       timeout: 3s
       retries: 5
     networks:
       - sig_network
 
-  # ── Backend FastAPI ───────────────────────────
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: sig_backend
     restart: unless-stopped
-    env_file: .env
-    volumes:
-      - ./backend:/app
-      - uploads_data:/app/uploads
-    ports:
-      - "8000:8000"
+    entrypoint: ["/bin/sh", "/app/entrypoint.sh"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-sig_user}:${POSTGRES_PASSWORD:-sig_password}@postgres:5432/${POSTGRES_DB:-sig_v2}
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY}
+      BRAPI_TOKEN: ${BRAPI_TOKEN}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:80}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
     depends_on:
-      db:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+    ports:
+      - "8000:8000"
     networks:
       - sig_network
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
-  # ── Frontend React ────────────────────────────
   frontend:
     build:
       context: ./frontend
@@ -71,22 +70,17 @@ services:
     container_name: sig_frontend
     restart: unless-stopped
     environment:
-      - VITE_API_URL=http://localhost:8000
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    ports:
-      - "5173:5173"
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
     depends_on:
       - backend
+    ports:
+      - "80:80"
     networks:
       - sig_network
-    command: npm run dev -- --host
 
 volumes:
-  pg_data:
+  postgres_data:
   redis_data:
-  uploads_data:
 
 networks:
   sig_network:
