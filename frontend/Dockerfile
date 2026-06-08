@@ -3,8 +3,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Instala dependencias (gera lock automaticamente se nao existir)
 COPY package*.json ./
-RUN npm ci --prefer-offline
+RUN npm install --frozen-lockfile || npm install
 
 COPY . .
 RUN npm run build
