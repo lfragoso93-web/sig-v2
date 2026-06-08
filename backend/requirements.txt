@@ -1,0 +1,44 @@
+# Web framework
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+
+# Banco de dados
+sqlalchemy==2.0.36
+alembic==1.13.3
+asyncpg==0.29.0
+psycopg2-binary==2.9.9
+
+# Cache
+redis==5.1.0
+
+# Auth
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.12
+
+# HTTP client (BRAPI)
+httpx==0.27.2
+
+# IA - Google Gemini
+google-generativeai==0.8.3
+
+# Processamento de documentos (relatórios PDF)
+pypdf2==3.0.1
+python-docx==1.1.2
+
+# Validação e schemas
+pydantic==2.9.2
+pydantic-settings==2.5.2
+email-validator==2.2.0
+
+# Datas e cálculos financeiros
+python-dateutil==2.9.0
+numpy==2.1.2
+
+# Scheduler (atualização de cotações)
+apscheduler==3.10.4
+
+# Utilitários
+python-dotenv==1.0.1
+tenacity==9.0.0
+loguru==0.7.2
