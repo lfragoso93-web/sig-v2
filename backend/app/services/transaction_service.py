@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, extract
 from datetime import date
-from app.models.asset import Asset, AssetType
+from app.models.asset import Asset
 from app.models.transaction import Transaction, TransactionType
 from app.models.portfolio import Portfolio
 from app.schemas.transaction import TransactionCreate, TransactionOut
@@ -11,23 +11,27 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+USD_ASSET_TYPES = {"STOCK", "ETF_INTERNACIONAL", "REIT"}
+
+
 def _get_or_create_asset(db: Session, ticker: str, asset_type: str) -> Asset:
     asset = db.query(Asset).filter(Asset.ticker == ticker).first()
     if not asset:
-        asset = Asset(
-            ticker=ticker,
-            name=ticker,
-            asset_type=asset_type,
-        )
+        asset = Asset(ticker=ticker, name=ticker, asset_type=asset_type)
         db.add(asset)
         db.flush()
     return asset
 
 
 def _calc_average_price(db: Session, portfolio_id: int, asset_id: int) -> float:
-    """Calcula preço médio ponderado após todas as compras (excluindo vendas)."""
+    """Preco medio ponderado em BRL (usa price_brl para ativos USD)."""
     rows = (
-        db.query(Transaction.transaction_type, Transaction.quantity, Transaction.price)
+        db.query(
+            Transaction.transaction_type,
+            Transaction.quantity,
+            Transaction.price_brl,
+            Transaction.price,
+        )
         .filter(
             Transaction.portfolio_id == portfolio_id,
             Transaction.asset_id == asset_id,
@@ -39,9 +43,10 @@ def _calc_average_price(db: Session, portfolio_id: int, asset_id: int) -> float:
     qty = 0.0
     cost = 0.0
     for r in rows:
+        unit_price = float(r.price_brl or r.price)
         if r.transaction_type in (TransactionType.COMPRA, TransactionType.BONIFICACAO):
             qty += float(r.quantity)
-            cost += float(r.quantity) * float(r.price)
+            cost += float(r.quantity) * unit_price
         elif r.transaction_type == TransactionType.VENDA:
             sold = min(float(r.quantity), qty)
             if qty > 0:
@@ -55,17 +60,17 @@ def _calc_average_price(db: Session, portfolio_id: int, asset_id: int) -> float:
 
 
 def create_transaction(db: Session, portfolio_id: int, user_id: int, data: TransactionCreate) -> TransactionOut:
-    # Valida ownership
     portfolio = db.query(Portfolio).filter(
         Portfolio.id == portfolio_id,
         Portfolio.user_id == user_id,
     ).first()
     if not portfolio:
-        raise HTTPException(404, "Carteira não encontrada")
+        raise HTTPException(404, "Carteira nao encontrada")
 
     asset = _get_or_create_asset(db, data.ticker, data.asset_type)
 
-    total_value = data.quantity * data.price + (data.fees or 0)
+    price_brl = data.price_brl
+    total_value = data.quantity * price_brl + (data.fees or 0)
 
     tx = Transaction(
         portfolio_id=portfolio_id,
@@ -73,6 +78,9 @@ def create_transaction(db: Session, portfolio_id: int, user_id: int, data: Trans
         transaction_type=data.transaction_type,
         quantity=data.quantity,
         price=data.price,
+        currency=data.currency,
+        fx_rate=data.fx_rate,
+        price_brl=price_brl,
         total_value=total_value,
         fees=data.fees or 0,
         transaction_date=data.transaction_date,
@@ -93,6 +101,9 @@ def create_transaction(db: Session, portfolio_id: int, user_id: int, data: Trans
         transaction_type=tx.transaction_type,
         quantity=float(tx.quantity),
         price=float(tx.price),
+        currency=tx.currency,
+        fx_rate=float(tx.fx_rate) if tx.fx_rate else None,
+        price_brl=float(tx.price_brl) if tx.price_brl else None,
         total_value=float(tx.total_value),
         fees=float(tx.fees),
         transaction_date=tx.transaction_date,
@@ -114,7 +125,7 @@ def list_transactions(
         Portfolio.user_id == user_id,
     ).first()
     if not portfolio:
-        raise HTTPException(404, "Carteira não encontrada")
+        raise HTTPException(404, "Carteira nao encontrada")
 
     filters = [Transaction.portfolio_id == portfolio_id]
     if ticker:
@@ -124,7 +135,6 @@ def list_transactions(
     if tx_type:
         filters.append(Transaction.transaction_type == tx_type)
     if year:
-        from sqlalchemy import extract
         filters.append(extract("year", Transaction.transaction_date) == year)
 
     rows = (
@@ -144,6 +154,9 @@ def list_transactions(
             transaction_type=t.transaction_type,
             quantity=float(t.quantity),
             price=float(t.price),
+            currency=t.currency or "BRL",
+            fx_rate=float(t.fx_rate) if t.fx_rate else None,
+            price_brl=float(t.price_brl) if t.price_brl else None,
             total_value=float(t.total_value),
             fees=float(t.fees),
             transaction_date=t.transaction_date,
@@ -163,6 +176,6 @@ def delete_transaction(db: Session, tx_id: int, user_id: int) -> None:
         .first()
     )
     if not tx:
-        raise HTTPException(404, "Transação não encontrada")
+        raise HTTPException(404, "Transacao nao encontrada")
     db.delete(tx)
     db.commit()
