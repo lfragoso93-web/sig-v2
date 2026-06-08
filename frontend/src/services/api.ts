@@ -1,44 +1,28 @@
 import axios from 'axios'
+import { useAuthStore } from '@/store/authStore'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:8000',
-  timeout: 15000,
+  headers: { 'Content-Type': 'application/json' },
 })
 
-// Interceptor: injeta token em todas as requests
-api.interceptors.request.use(config => {
-  const token = localStorage.getItem('sig_token')
+// Injeta token em toda requisição
+api.interceptors.request.use((config) => {
+  const token = useAuthStore.getState().token
   if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
 
-// Interceptor: tenta refresh automático em 401
+// Se 401, desloga
 api.interceptors.response.use(
-  res => res,
-  async error => {
-    const original = error.config
-    if (error.response?.status === 401 && !original._retry) {
-      original._retry = true
-      const refresh = localStorage.getItem('sig_refresh')
-      if (refresh) {
-        try {
-          const { data } = await axios.post(
-            `${import.meta.env.VITE_API_URL ?? 'http://localhost:8000'}/api/v1/auth/refresh`,
-            { refresh_token: refresh }
-          )
-          localStorage.setItem('sig_token', data.access_token)
-          api.defaults.headers.common['Authorization'] = `Bearer ${data.access_token}`
-          original.headers['Authorization'] = `Bearer ${data.access_token}`
-          return api(original)
-        } catch {
-          localStorage.removeItem('sig_token')
-          localStorage.removeItem('sig_refresh')
-          window.location.href = '/login'
-        }
-      }
+  (res) => res,
+  (err) => {
+    if (err.response?.status === 401) {
+      useAuthStore.getState().logout()
+      window.location.href = '/auth/login'
     }
-    return Promise.reject(error)
-  }
+    return Promise.reject(err)
+  },
 )
 
 export default api
