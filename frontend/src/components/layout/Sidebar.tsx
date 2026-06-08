@@ -1,158 +1,114 @@
-import { NavLink, useParams } from 'react-router-dom'
-import clsx from 'clsx'
+import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard,
-  Wallet,
   TrendingUp,
-  Gift,
   ArrowLeftRight,
+  Landmark,
   Settings,
-  ChevronRight,
+  ChevronDown,
+  Briefcase,
 } from 'lucide-react'
+import { usePortfolios } from '@/hooks/usePortfolios'
+import { useAppStore } from '@/store/appStore'
+import { useState } from 'react'
 
-// ── Logo SVG inline ─────────────────────────────────────────────────────
-function SigLogo() {
-  return (
-    <svg
-      viewBox="0 0 40 40"
-      fill="none"
-      aria-label="SIG v2"
-      className="w-8 h-8"
-    >
-      {/* Fundo arredondado */}
-      <rect width="40" height="40" rx="10" fill="var(--color-primary)" />
-      {/* Seta de crescimento */}
-      <polyline
-        points="7,28 16,18 22,23 33,11"
-        stroke="white"
-        strokeWidth="3"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-      {/* Ponto no topo da seta */}
-      <circle cx="33" cy="11" r="2.5" fill="white" />
-    </svg>
-  )
-}
-
-// ── Itens de navegação ─────────────────────────────────────────────────
-const NAV_ITEMS = [
-  { to: '',              icon: LayoutDashboard, label: 'Resumo'        },
-  { to: 'rentabilidade', icon: TrendingUp,      label: 'Rentabilidade' },
-  { to: 'transacoes',   icon: ArrowLeftRight,  label: 'Transações'    },
-  { to: 'proventos',    icon: Gift,            label: 'Proventos'     },
+const NAV = [
+  { to: '/app/dashboard',      icon: LayoutDashboard,  label: 'Resumo'       },
+  { to: '/app/rentabilidade',  icon: TrendingUp,        label: 'Rentabilidade'},
+  { to: '/app/transacoes',     icon: ArrowLeftRight,    label: 'Transações'   },
+  { to: '/app/proventos',      icon: Landmark,          label: 'Proventos'    },
+  { to: '/app/configuracoes',  icon: Settings,           label: 'Configurações'},
 ]
 
-// ── Componente ─────────────────────────────────────────────────────────────────
-interface Props {
-  portfolios: { id: number; name: string }[]
-  selectedPortfolioId: number | null
-  onSelectPortfolio: (id: number) => void
-  collapsed: boolean
-  onToggleCollapse: () => void
-}
+export default function Sidebar() {
+  const { data: portfolios = [] } = usePortfolios()
+  const { selectedPortfolioId, setSelectedPortfolio } = useAppStore()
+  const [open, setOpen] = useState(false)
 
-export default function Sidebar({
-  portfolios,
-  selectedPortfolioId,
-  onSelectPortfolio,
-  collapsed,
-  onToggleCollapse,
-}: Props) {
-  const base = selectedPortfolioId ? `/carteira/${selectedPortfolioId}` : '#'
+  const selected = portfolios.find(p => p.id === selectedPortfolioId)
 
   return (
     <aside
-      className={clsx(
-        'flex flex-col h-full bg-surface border-r border-light-border dark:border-dark-border transition-all duration-200',
-        collapsed ? 'w-14' : 'w-56',
-      )}
+      className="flex flex-col h-full w-56 shrink-0 border-r py-5"
+      style={{
+        background:   'var(--color-surface)',
+        borderColor:  'var(--color-divider)',
+      }}
     >
-      {/* Logo + nome */}
-      <div className="flex items-center gap-3 px-3 py-4 border-b border-light-border dark:border-dark-border">
-        <SigLogo />
-        {!collapsed && (
-          <div className="min-w-0">
-            <p className="font-bold text-sm leading-tight truncate">SIG v2</p>
-            <p className="text-xs text-muted truncate">Investimentos</p>
-          </div>
-        )}
-        <button
-          onClick={onToggleCollapse}
-          className="ml-auto text-muted hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
-          aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
-        >
-          <ChevronRight
-            size={16}
-            className={clsx('transition-transform duration-200', !collapsed && 'rotate-180')}
-          />
-        </button>
+      {/* Logo */}
+      <div className="px-5 mb-6">
+        <span className="text-base font-bold tracking-tight" style={{ color: 'var(--color-primary)' }}>
+          SIG
+          <span className="text-xs font-medium ml-1" style={{ color: 'var(--color-text-muted)' }}>v2</span>
+        </span>
       </div>
 
       {/* Seletor de carteira */}
-      {!collapsed && portfolios.length > 0 && (
-        <div className="px-3 py-3 border-b border-light-border dark:border-dark-border">
-          <p className="text-xs font-medium text-muted mb-1.5 uppercase tracking-wide">Carteira</p>
-          <div className="flex flex-col gap-0.5">
+      <div className="px-3 mb-4">
+        <button
+          onClick={() => setOpen(o => !o)}
+          className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm border transition-colors"
+          style={{
+            background:  'var(--color-surface-offset)',
+            borderColor: 'var(--color-border)',
+            color:       'var(--color-text)',
+          }}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <Briefcase size={13} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
+            <span className="truncate text-xs font-medium">
+              {selected?.name ?? 'Selecionar carteira'}
+            </span>
+          </div>
+          <ChevronDown size={13} className={`transition-transform ${open ? 'rotate-180' : ''}`} style={{ flexShrink: 0 }} />
+        </button>
+
+        {open && portfolios.length > 0 && (
+          <div
+            className="mt-1 rounded-lg border overflow-hidden"
+            style={{ background: 'var(--color-surface-2)', borderColor: 'var(--color-border)', boxShadow: 'var(--shadow-md)' }}
+          >
             {portfolios.map(p => (
               <button
                 key={p.id}
-                onClick={() => onSelectPortfolio(p.id)}
-                className={clsx(
-                  'w-full text-left px-2.5 py-1.5 rounded text-sm truncate transition-colors',
-                  selectedPortfolioId === p.id
-                    ? 'bg-brand-primary/10 text-brand-primary font-medium'
-                    : 'text-muted hover:text-gray-700 dark:hover:text-gray-300 hover:bg-surface-2'
-                )}
+                onClick={() => { setSelectedPortfolio(p.id); setOpen(false) }}
+                className="w-full text-left px-3 py-2 text-xs transition-colors"
+                style={{
+                  background: selectedPortfolioId === p.id ? 'oklch(from var(--color-primary) l c h / 0.1)' : 'transparent',
+                  color:      selectedPortfolioId === p.id ? 'var(--color-primary)' : 'var(--color-text)',
+                  fontWeight: selectedPortfolioId === p.id ? 600 : 400,
+                }}
               >
                 {p.name}
               </button>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* Nav principal */}
-      <nav className="flex-1 px-2 py-3 flex flex-col gap-0.5">
-        {NAV_ITEMS.map(({ to, icon: Icon, label }) => (
+      {/* Nav */}
+      <nav className="flex flex-col gap-0.5 px-3 flex-1">
+        {NAV.map(({ to, icon: Icon, label }) => (
           <NavLink
-            key={label}
-            to={selectedPortfolioId ? `${base}/${to}` : '#'}
-            end={to === ''}
+            key={to}
+            to={to}
             className={({ isActive }) =>
-              clsx(
-                'flex items-center gap-2.5 px-2.5 py-2 rounded transition-colors',
+              `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
                 isActive
-                  ? 'bg-brand-primary/10 text-brand-primary font-medium'
-                  : 'text-muted hover:text-gray-700 dark:hover:text-gray-300 hover:bg-surface-2',
-                !selectedPortfolioId && 'opacity-40 pointer-events-none',
-              )
+                  ? 'font-semibold'
+                  : 'font-normal'
+              }`
             }
+            style={({ isActive }) => ({
+              background: isActive ? 'oklch(from var(--color-primary) l c h / 0.1)' : 'transparent',
+              color:      isActive ? 'var(--color-primary)' : 'var(--color-text-muted)',
+            })}
           >
-            <Icon size={18} className="shrink-0" />
-            {!collapsed && <span className="text-sm truncate">{label}</span>}
+            <Icon size={15} />
+            {label}
           </NavLink>
         ))}
       </nav>
-
-      {/* Rodapé - Configurações */}
-      <div className="px-2 py-3 border-t border-light-border dark:border-dark-border">
-        <NavLink
-          to="/configuracoes"
-          className={({ isActive }) =>
-            clsx(
-              'flex items-center gap-2.5 px-2.5 py-2 rounded transition-colors',
-              isActive
-                ? 'bg-brand-primary/10 text-brand-primary font-medium'
-                : 'text-muted hover:text-gray-700 dark:hover:text-gray-300 hover:bg-surface-2',
-            )
-          }
-        >
-          <Settings size={18} className="shrink-0" />
-          {!collapsed && <span className="text-sm">Configurações</span>}
-        </NavLink>
-      </div>
     </aside>
   )
 }

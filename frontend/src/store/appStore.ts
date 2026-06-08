@@ -1,22 +1,27 @@
 import { create } from 'zustand'
 
-type Theme = 'light' | 'dark'
+type Theme = 'light' | 'dark' | 'system'
 
 interface AppState {
-  theme: Theme
   selectedPortfolioId: number | null
+  theme: Theme
+  setSelectedPortfolio: (id: number | null) => void
   setTheme: (t: Theme) => void
-  setSelectedPortfolioId: (id: number) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
   selectedPortfolioId: null,
+  theme: 'system',
 
-  setTheme: (theme) => {
-    document.documentElement.setAttribute('data-theme', theme)
-    set({ theme })
+  setSelectedPortfolio: (id) => set({ selectedPortfolioId: id }),
+
+  setTheme: (t) => {
+    set({ theme: t })
+    const root = document.documentElement
+    if (t === 'system') {
+      root.removeAttribute('data-theme')
+    } else {
+      root.setAttribute('data-theme', t)
+    }
   },
-
-  setSelectedPortfolioId: (id) => set({ selectedPortfolioId: id }),
 }))

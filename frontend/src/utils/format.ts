@@ -1,63 +1,40 @@
-// ─ Moeda ───────────────────────────────────────────────────────────────────────
 export function formatBRL(value: number): string {
   return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
+    style:    'currency',
     currency: 'BRL',
     minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
   }).format(value)
 }
 
-export function formatUSD(value: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value)
+export function formatPercent(value: number, decimals = 2): string {
+  return `${value >= 0 ? '+' : ''}${value.toFixed(decimals)}%`
 }
 
-// ─ Percentual ───────────────────────────────────────────────────────────────
-export function formatPct(value: number, decimals = 2): string {
-  const sign = value >= 0 ? '+' : ''
-  return `${sign}${value.toFixed(decimals)}%`
-}
-
-// ─ Data ────────────────────────────────────────────────────────────────────────
 export function formatDate(iso: string): string {
-  return new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  }).format(new Date(iso))
+  return new Intl.DateTimeFormat('pt-BR').format(new Date(iso + 'T00:00:00'))
 }
 
 export function formatDateShort(iso: string): string {
-  return new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: 'short',
-  }).format(new Date(iso))
+  const d = new Date(iso + 'T00:00:00')
+  return d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })
 }
 
-// ─ Número compacto ────────────────────────────────────────────────────────────
-export function formatCompact(value: number): string {
-  if (value >= 1_000_000) return `R$ ${(value / 1_000_000).toFixed(1)}M`
-  if (value >= 1_000)     return `R$ ${(value / 1_000).toFixed(1)}K`
-  return formatBRL(value)
-}
-
-// ─ Badge class por tipo de ativo ───────────────────────────────────────────
-const BADGE_MAP: Record<string, string> = {
-  'acao nacional':     'acao',
-  'fii':               'fii',
-  'etf nacional':      'etf',
-  'tesouro direto':    'tesouro',
-  'stock':             'stock',
-  'etf internacional': 'etf',
-  'criptomoeda':       'cripto',
-  'renda fixa':        'renda-fixa',
-}
-
+/** Retorna classe CSS para badge de tipo de ativo */
 export function assetBadgeClass(type: string): string {
-  return BADGE_MAP[type.toLowerCase()] ?? 'acao'
+  const t = type.toLowerCase()
+  if (t.includes('fii'))          return 'badge-fii'
+  if (t.includes('etf'))          return 'badge-etf'
+  if (t.includes('tesouro'))      return 'badge-tesouro'
+  if (t.includes('stock'))        return 'badge-stock'
+  if (t.includes('cripto'))       return 'badge-cripto'
+  if (t.includes('renda'))        return 'badge-rendafixa'
+  return 'badge-acao'
+}
+
+export function formatLargeNumber(value: number): string {
+  if (Math.abs(value) >= 1_000_000)
+    return `R$ ${(value / 1_000_000).toFixed(1)}M`
+  if (Math.abs(value) >= 1_000)
+    return `R$ ${(value / 1_000).toFixed(1)}k`
+  return formatBRL(value)
 }
