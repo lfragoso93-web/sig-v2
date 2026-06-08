@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import AppLayout from '@/components/layout/AppLayout'
 import AuthLayout from '@/components/layout/AuthLayout'
+import Landing from '@/pages/Landing'
 import Login from '@/pages/Login'
 import Register from '@/pages/Register'
 import Resumo from '@/pages/Resumo'
@@ -10,19 +11,24 @@ import Proventos from '@/pages/Proventos'
 import ProtectedRoute from './ProtectedRoute'
 
 export const router = createBrowserRouter([
+  // Landing page publica
   {
     path: '/',
-    element: <Navigate to="/carteira" replace />,
+    element: <Landing />,
   },
+
+  // Auth
   {
     path: '/auth',
     element: <AuthLayout />,
     children: [
       { index: true, element: <Navigate to="login" replace /> },
-      { path: 'login',   element: <Login /> },
+      { path: 'login',    element: <Login /> },
       { path: 'registro', element: <Register /> },
     ],
   },
+
+  // App protegido
   {
     path: '/carteira',
     element: <ProtectedRoute><AppLayout /></ProtectedRoute>,
@@ -31,10 +37,10 @@ export const router = createBrowserRouter([
       {
         path: ':portfolioId',
         children: [
-          { index: true,             element: <Resumo /> },
-          { path: 'rentabilidade',   element: <Rentabilidade /> },
-          { path: 'transacoes',      element: <Transacoes /> },
-          { path: 'proventos',       element: <Proventos /> },
+          { index: true,           element: <Resumo /> },
+          { path: 'rentabilidade', element: <Rentabilidade /> },
+          { path: 'transacoes',    element: <Transacoes /> },
+          { path: 'proventos',     element: <Proventos /> },
         ],
       },
     ],
