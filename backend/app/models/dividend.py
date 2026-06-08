@@ -1,9 +1,12 @@
-from sqlalchemy import Column, Integer, ForeignKey, Numeric, Date, String, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Numeric, Date, ForeignKey, Enum as SAEnum
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
 from app.core.database import Base
 import enum
-from sqlalchemy import Enum as SAEnum
+
+
+class DividendStatus(str, enum.Enum):
+    RECEBIDO = "RECEBIDO"
+    A_RECEBER = "A_RECEBER"
 
 
 class DividendType(str, enum.Enum):
@@ -11,8 +14,7 @@ class DividendType(str, enum.Enum):
     JCP = "JCP"
     RENDIMENTO = "RENDIMENTO"
     AMORTIZACAO = "AMORTIZACAO"
-    DIVIDENDO_INTERNATIONAL = "DIVIDENDO_INTERNATIONAL"
-    CUPOM = "CUPOM"
+    BONIFICACAO = "BONIFICACAO"
     OUTROS = "OUTROS"
 
 
@@ -21,17 +23,15 @@ class Dividend(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     portfolio_id = Column(Integer, ForeignKey("portfolios.id", ondelete="CASCADE"), nullable=False)
-    asset_id = Column(Integer, ForeignKey("assets.id"), nullable=False)
-    dividend_type = Column(SAEnum(DividendType), nullable=False)
+    asset_id = Column(Integer, ForeignKey("assets.id", ondelete="CASCADE"), nullable=False)
+    dividend_type = Column(SAEnum(DividendType), nullable=False, default=DividendType.DIVIDENDO)
+    status = Column(SAEnum(DividendStatus), nullable=False, default=DividendStatus.A_RECEBER)
     ex_date = Column(Date, nullable=False)
     payment_date = Column(Date, nullable=True)
+    quantity = Column(Numeric(18, 8), nullable=False)
     value_per_unit = Column(Numeric(18, 8), nullable=False)
-    quantity_held = Column(Numeric(18, 8), nullable=False)
-    total_value = Column(Numeric(18, 4), nullable=False)
-    is_automatic = Column(Boolean, default=False, nullable=False)
-    brapi_event_id = Column(String(150), nullable=True, unique=True)
-    notes = Column(String(500), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    total_value = Column(Numeric(18, 8), nullable=False)
+    net_value = Column(Numeric(18, 8), nullable=False)
 
-    portfolio = relationship("Portfolio")
+    portfolio = relationship("Portfolio", back_populates="dividends")
     asset = relationship("Asset")
