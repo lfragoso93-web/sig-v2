@@ -1,4 +1,4 @@
-# SIG v2 — Sistema de Gerenciamento de Investimentos
+# SGI v2 — Sistema de Gestão de Investimentos
 
 > Plataforma multi-usuário para gestão completa de carteiras de investimentos com IA.
 
@@ -17,8 +17,11 @@ cp .env.example .env
 docker compose up -d
 
 # 4. Acesse
-# Frontend: http://localhost:5173
+# Frontend:           http://localhost:5173
 # Backend (API docs): http://localhost:8000/docs
+# Landing Page:       http://localhost:5173/
+# Registro:           http://localhost:5173/register
+# Admin:              http://localhost:5173/admin  (SuperAdmin only)
 ```
 
 ## 🧱 Stack
@@ -43,12 +46,14 @@ docker compose up -d
 - **Proventos** — dividendos, JCP, rendimentos e projeções
 - **Metas** — patrimônio alvo, alocação por classe, DY alvo
 - **Análise com IA** — Gemini analisa carteira, lê relatórios PDF, gera sinais
+- **Landing Page** — página pública de apresentação do sistema
+- **SuperAdmin** — gestão de usuários, configurações do sistema
 
 ## 🗺️ Roadmap de desenvolvimento
 
 - [x] Bloco 1 — Estrutura base, Docker, configurações
-- [ ] Bloco 2 — Models do banco (PostgreSQL + Alembic)
-- [ ] Bloco 3 — Autenticação JWT
+- [x] Bloco 2 — Models do banco (PostgreSQL + Alembic)
+- [ ] Bloco 3 — Autenticação JWT + SuperAdmin
 - [ ] Bloco 4 — Carteiras e transações
 - [ ] Bloco 5 — Integração BRAPI (cotações, tesouro, cripto, câmbio)
 - [ ] Bloco 6 — Motor de cálculo (preço médio, rentabilidade, renda fixa)
@@ -56,8 +61,15 @@ docker compose up -d
 - [ ] Bloco 8 — Proventos
 - [ ] Bloco 9 — Metas
 - [ ] Bloco 10 — Análise com IA (Gemini)
-- [ ] Bloco 11 — Frontend React
+- [ ] Bloco 11 — Frontend React (Landing, Registro, Dashboard, Admin)
 
 ## 📋 Tipos de ativo suportados
 
 `Ação Nacional` · `FII` · `ETF Nacional` · `Tesouro Direto` · `Stock (EUA)` · `ETF Internacional` · `Criptomoeda` · `Renda Fixa`
+
+## 👥 Perfis de usuário
+
+| Role | Acesso |
+|------|--------|
+| `user` | Acesso às próprias carteiras |
+| `superadmin` | Gestão de usuários, configurações do sistema |
