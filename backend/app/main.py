@@ -1,26 +1,18 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
 from app.core.config import settings
-from app.routers import auth, users, admin, portfolios, transactions, assets, dividends
-from app.scheduler import init_scheduler, scheduler
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    init_scheduler()
-    yield
-    if scheduler.running:
-        scheduler.shutdown(wait=False)
-
+# Routers
+from app.routers import auth, users, portfolios, transactions, dividends, performance, fx
 
 app = FastAPI(
-    title="SIG v2 - Sistema de Investimentos Gerenciado",
-    description="API para gestao de carteiras de investimentos multi-usuario",
+    title="SIG v2 - Sistema de Investimentos",
     version="2.0.0",
-    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -29,15 +21,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth.router,         prefix="/api/auth",       tags=["Auth"])
-app.include_router(users.router,        prefix="/api/users",      tags=["Users"])
-app.include_router(admin.router,        prefix="/api/admin",      tags=["Admin"])
-app.include_router(portfolios.router,   prefix="/api/portfolios", tags=["Portfolios"])
-app.include_router(transactions.router, prefix="/api/portfolios", tags=["Transactions"])
-app.include_router(dividends.router,    prefix="/api/portfolios", tags=["Dividends"])
-app.include_router(assets.router,       prefix="/api/assets",     tags=["Assets"])
+# Registro de routers
+app.include_router(auth.router)
+app.include_router(users.router)
+app.include_router(portfolios.router)
+app.include_router(transactions.router)
+app.include_router(dividends.router)
+app.include_router(performance.router)
+app.include_router(fx.router)
 
 
-@app.get("/health")
+@app.get("/health", tags=["health"])
 async def health_check():
     return {"status": "ok", "version": "2.0.0"}
