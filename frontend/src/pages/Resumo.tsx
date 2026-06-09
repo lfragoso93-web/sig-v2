@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { Plus, RefreshCw } from 'lucide-react'
 import { useAppStore } from '@/store/appStore'
 import { usePortfolioSummary } from '@/hooks/usePerformance'
@@ -11,21 +11,19 @@ import ModalNovaCarteira from '@/components/dashboard/ModalNovaCarteira'
 import { formatBRL, formatPct } from '@/utils/format'
 
 export default function Resumo() {
-  const { portfolioId } = useParams()
   const navigate = useNavigate()
-  const { selectedPortfolioId, setSelectedPortfolioId } = useAppStore()
-  const activeId = portfolioId ? Number(portfolioId) : selectedPortfolioId
+  const { selectedPortfolioId, setSelectedPortfolio } = useAppStore()
 
   const { data: portfolios = [] } = usePortfolios()
-  const { data: summary, isLoading, refetch, isRefetching } = usePortfolioSummary(activeId)
+  const { data: summary, isLoading, refetch, isRefetching } = usePortfolioSummary(selectedPortfolioId)
   const createPortfolio = useCreatePortfolio()
 
   const [showModal, setShowModal] = useState(false)
 
   async function handleCreatePortfolio(name: string, description: string) {
     const p = await createPortfolio.mutateAsync({ name, description })
-    setSelectedPortfolioId(p.id)
-    navigate(`/carteira/${p.id}`)
+    setSelectedPortfolio(p.id)
+    navigate('/app/dashboard')
     setShowModal(false)
   }
 
@@ -33,8 +31,10 @@ export default function Resumo() {
   if (!isLoading && portfolios.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center">
-        <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-5"
-          style={{ background: 'oklch(from var(--color-primary) l c h / 0.1)' }}>
+        <div
+          className="w-16 h-16 rounded-2xl flex items-center justify-center mb-5"
+          style={{ background: 'oklch(from var(--color-primary) l c h / 0.1)' }}
+        >
           <Plus size={28} color="var(--color-primary)" />
         </div>
         <h2 className="text-xl font-semibold mb-2">Nenhuma carteira ainda</h2>
@@ -55,8 +55,8 @@ export default function Resumo() {
     )
   }
 
-  // Estado: carteira selecionada mas sem dados ainda
-  if (!activeId) {
+  // Estado: nenhuma carteira selecionada
+  if (!selectedPortfolioId) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center">
         <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
@@ -72,10 +72,10 @@ export default function Resumo() {
   }
 
   const s = summary!
-  const gain = s.total_gain
+  const gain    = s.total_gain
   const gainPct = s.total_gain_pct
   const dailyPos = s.daily_change >= 0
-  const gainPos = gain >= 0
+  const gainPos  = gain >= 0
 
   return (
     <div className="flex flex-col gap-6">
@@ -84,7 +84,7 @@ export default function Resumo() {
         <div>
           <h1 className="text-xl font-bold">Resumo</h1>
           <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-            {portfolios.find(p => p.id === activeId)?.name ?? 'Carteira'}
+            {portfolios.find(p => p.id === selectedPortfolioId)?.name ?? 'Carteira'}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -96,7 +96,10 @@ export default function Resumo() {
             <RefreshCw size={15} className={isRefetching ? 'animate-spin' : ''} />
             Atualizar
           </button>
-          <button className="btn btn-primary flex items-center gap-1.5 text-sm" onClick={() => setShowModal(true)}>
+          <button
+            className="btn btn-primary flex items-center gap-1.5 text-sm"
+            onClick={() => setShowModal(true)}
+          >
             <Plus size={15} /> Nova carteira
           </button>
         </div>
@@ -152,7 +155,6 @@ export default function Resumo() {
   )
 }
 
-// ─ Skeleton ───────────────────────────────────────────────────────────────
 function ResumoSkeleton() {
   return (
     <div className="flex flex-col gap-6">
