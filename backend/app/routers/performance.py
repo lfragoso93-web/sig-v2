@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from app.core.db import get_db
-from app.core.security import get_current_user
+from app.core.database import get_db
+from app.core.deps import get_current_user
 from app.models.user import User
 from app.services.performance_service import (
     calc_portfolio_performance,
@@ -17,7 +17,7 @@ from typing import Optional
 router = APIRouter(prefix="/api/v1/portfolios", tags=["performance"])
 
 
-# ─── Schemas de resposta ──────────────────────────────────────────────────────
+# ─── Schemas de resposta ────────────────────────────────────────────────────
 
 class AssetPerfOut(BaseModel):
     ticker: str
@@ -71,7 +71,7 @@ class PortfolioPerfOut(BaseModel):
     history: list[HistoryPoint]
 
 
-# ─── Endpoints ────────────────────────────────────────────────────────────────
+# ─── Endpoints ──────────────────────────────────────────────────────────────────
 
 @router.get("/{portfolio_id}/performance", response_model=PortfolioPerfOut)
 async def get_portfolio_performance(
