@@ -28,6 +28,10 @@ export const router = createBrowserRouter([
     ],
   },
 
+  // Atalhos legados para nao quebrar bookmarks
+  { path: '/login',    element: <Navigate to="/auth/login" replace /> },
+  { path: '/register', element: <Navigate to="/auth/registro" replace /> },
+
   // App protegido
   {
     path: '/carteira',
@@ -44,5 +48,11 @@ export const router = createBrowserRouter([
         ],
       },
     ],
+  },
+
+  // Catch-all: qualquer rota desconhecida vai para a landing
+  {
+    path: '*',
+    element: <Navigate to="/" replace />,
   },
 ])

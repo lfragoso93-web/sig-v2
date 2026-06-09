@@ -21,8 +21,8 @@ export default function Register() {
 
   const onSubmit = async (data: FormData) => {
     try {
-      await api.post('/auth/register', data)
-      navigate('/login')
+      await api.post('/api/v1/auth/register', data)
+      navigate('/auth/login')
     } catch {
       setError('root', { message: 'Erro ao cadastrar. Tente novamente.' })
     }
@@ -52,7 +52,7 @@ export default function Register() {
           <button type="submit" disabled={isSubmitting} className="w-full bg-teal-600 hover:bg-teal-500 text-white font-semibold py-2 rounded-lg transition">
             {isSubmitting ? 'Criando...' : 'Criar conta'}
           </button>
-          <p className="text-center text-gray-500 text-sm">Já tem conta? <Link to="/login" className="text-teal-400 hover:underline">Entrar</Link></p>
+          <p className="text-center text-gray-500 text-sm">Já tem conta? <Link to="/auth/login" className="text-teal-400 hover:underline">Entrar</Link></p>
         </form>
       </div>
     </div>
