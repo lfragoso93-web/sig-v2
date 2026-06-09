@@ -19,8 +19,8 @@ class PortfolioResponse(BaseModel):
     user_id: int
     name: str
     description: Optional[str] = None
-    is_active: bool
+    is_active: bool = True
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
