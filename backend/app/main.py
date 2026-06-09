@@ -12,12 +12,12 @@ from app.routers import (
     assets, sync, fx, goals, irpf,
     analysis, fixed_income, quotes, treasury,
 )
+from app.routers import debug
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
-        # Cria o enum de forma idempotente — DO $$ nao usa prepared statement
         await conn.execute(text("""
             DO $$
             BEGIN
@@ -39,7 +39,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Converte a string CSV em lista, removendo espacos extras
 _cors_origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
 
 app.add_middleware(
@@ -77,6 +76,11 @@ app.include_router(irpf.router,         prefix=f"{PREFIX}/irpf",        tags=["i
 app.include_router(analysis.router,     prefix=f"{PREFIX}/analysis",    tags=["analysis"])
 app.include_router(fixed_income.router, prefix=f"{PREFIX}/fixed-income", tags=["fixed_income"])
 app.include_router(treasury.router,     prefix=f"{PREFIX}/treasury",    tags=["treasury"])
+
+# Debug temporario — ativo apenas se ADMIN_SECRET estiver definido
+import os
+if os.getenv("ADMIN_SECRET"):
+    app.include_router(debug.router, prefix=f"{PREFIX}/debug", tags=["debug"])
 
 
 @app.get("/health")
