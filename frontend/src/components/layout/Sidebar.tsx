@@ -16,11 +16,11 @@ import { useState } from 'react'
 import Modal from '@/components/ui/Modal'
 
 const NAV = [
-  { to: '/app/dashboard',      icon: LayoutDashboard,  label: 'Resumo'       },
-  { to: '/app/rentabilidade',  icon: TrendingUp,        label: 'Rentabilidade'},
-  { to: '/app/transacoes',     icon: ArrowLeftRight,    label: 'Transações'   },
-  { to: '/app/proventos',      icon: Landmark,          label: 'Proventos'    },
-  { to: '/app/configuracoes',  icon: Settings,           label: 'Configurações'},
+  { to: '/app/dashboard',      icon: LayoutDashboard,  label: 'Resumo'        },
+  { to: '/app/rentabilidade',  icon: TrendingUp,        label: 'Rentabilidade' },
+  { to: '/app/transacoes',     icon: ArrowLeftRight,    label: 'Transações'    },
+  { to: '/app/proventos',      icon: Landmark,          label: 'Proventos'     },
+  { to: '/app/configuracoes',  icon: Settings,          label: 'Configurações' },
 ]
 
 export default function Sidebar() {
@@ -57,12 +57,16 @@ export default function Sidebar() {
     if (!name.trim()) return
     setError(null)
     try {
-      const created = await createPortfolio.mutateAsync({ name: name.trim(), description: description.trim() || undefined })
+      const created = await createPortfolio.mutateAsync({
+        name: name.trim(),
+        description: description.trim() || undefined,
+      })
       setSelectedPortfolio(created.id)
       setCreatedName(created.name)
       await refetch()
-    } catch {
-      setError('Erro ao criar carteira. Tente novamente.')
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail ?? 'Erro ao criar carteira. Tente novamente.'
+      setError(typeof msg === 'string' ? msg : JSON.stringify(msg))
     }
   }
 
@@ -112,13 +116,24 @@ export default function Sidebar() {
                 {selected?.name ?? 'Selecionar carteira'}
               </span>
             </div>
-            <ChevronDown size={13} className={`transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} style={{ flexShrink: 0 }} />
+            <ChevronDown
+              size={13}
+              style={{
+                flexShrink: 0,
+                transition: 'transform var(--transition-interactive)',
+                transform: dropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+              }}
+            />
           </button>
 
           {dropdownOpen && (
             <div
               className="mt-1 rounded-lg border overflow-hidden"
-              style={{ background: 'var(--color-surface-2)', borderColor: 'var(--color-border)', boxShadow: 'var(--shadow-md)' }}
+              style={{
+                background:  'var(--color-surface-2)',
+                borderColor: 'var(--color-border)',
+                boxShadow:   'var(--shadow-md)',
+              }}
             >
               {portfolios.map(p => (
                 <button
@@ -126,8 +141,12 @@ export default function Sidebar() {
                   onClick={() => { setSelectedPortfolio(p.id); setDropdownOpen(false) }}
                   className="w-full text-left px-3 py-2 text-xs transition-colors"
                   style={{
-                    background: selectedPortfolioId === p.id ? 'oklch(from var(--color-primary) l c h / 0.1)' : 'transparent',
-                    color:      selectedPortfolioId === p.id ? 'var(--color-primary)' : 'var(--color-text)',
+                    background: selectedPortfolioId === p.id
+                      ? 'oklch(from var(--color-primary) l c h / 0.1)'
+                      : 'transparent',
+                    color:      selectedPortfolioId === p.id
+                      ? 'var(--color-primary)'
+                      : 'var(--color-text)',
                     fontWeight: selectedPortfolioId === p.id ? 600 : 400,
                   }}
                 >
@@ -135,33 +154,32 @@ export default function Sidebar() {
                 </button>
               ))}
 
-              {/* Divider + Criar nova */}
+              {/* Divider + Nova carteira */}
               <div style={{ borderTop: '1px solid var(--color-divider)' }}>
                 <button
                   onClick={openModal}
                   className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 transition-colors"
                   style={{ color: 'var(--color-primary)', fontWeight: 500 }}
                 >
-                  <Plus size={12} />
-                  Nova carteira
+                  <Plus size={12} /> Nova carteira
                 </button>
               </div>
             </div>
           )}
 
-          {/* Botão quando não há carteiras */}
+          {/* Botão quando não há nenhuma carteira */}
           {portfolios.length === 0 && (
             <button
               onClick={openModal}
-              className="mt-1 w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border transition-colors"
+              className="mt-1 w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border"
               style={{
                 background:  'oklch(from var(--color-primary) l c h / 0.08)',
                 borderColor: 'oklch(from var(--color-primary) l c h / 0.3)',
                 color:       'var(--color-primary)',
+                cursor:      'pointer',
               }}
             >
-              <Plus size={12} />
-              Nova carteira
+              <Plus size={12} /> Nova carteira
             </button>
           )}
         </div>
@@ -178,8 +196,12 @@ export default function Sidebar() {
                 }`
               }
               style={({ isActive }) => ({
-                background: isActive ? 'oklch(from var(--color-primary) l c h / 0.1)' : 'transparent',
-                color:      isActive ? 'var(--color-primary)' : 'var(--color-text-muted)',
+                background: isActive
+                  ? 'oklch(from var(--color-primary) l c h / 0.1)'
+                  : 'transparent',
+                color: isActive
+                  ? 'var(--color-primary)'
+                  : 'var(--color-text-muted)',
               })}
             >
               <Icon size={15} />
@@ -192,34 +214,33 @@ export default function Sidebar() {
       {/* Modal Nova Carteira */}
       <Modal open={modalOpen} onClose={handleClose} title="Nova carteira" size="sm">
         {createdName ? (
-          /* === Tela de sucesso === */
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-4)', textAlign: 'center', padding: 'var(--space-4) 0' }}>
+          /* Tela de sucesso */
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            gap: 'var(--space-4)', textAlign: 'center', padding: 'var(--space-4) 0',
+          }}>
             <CheckCircle2 size={48} style={{ color: 'var(--color-success)' }} />
             <div>
-              <p style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', marginBottom: 'var(--space-1)' }}>
+              <p style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', marginBottom: 'var(--space-1)', margin: 0 }}>
                 Carteira criada com sucesso!
               </p>
-              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', margin: 0, marginTop: '4px' }}>
                 <strong style={{ color: 'var(--color-primary)' }}>{createdName}</strong> está pronta para uso.
               </p>
             </div>
-            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', margin: 0 }}>
               O que deseja fazer agora?
             </p>
             <div style={{ display: 'flex', gap: 'var(--space-3)', width: '100%' }}>
               <button
                 onClick={handleCreateAnother}
                 style={{
-                  flex: 1,
-                  padding: 'var(--space-2) var(--space-3)',
+                  flex: 1, padding: 'var(--space-2) var(--space-3)',
                   borderRadius: 'var(--radius-md)',
                   border: '1px solid var(--color-border)',
                   background: 'var(--color-surface-offset)',
                   color: 'var(--color-text)',
-                  fontSize: 'var(--text-xs)',
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  transition: 'background var(--transition-interactive)',
+                  fontSize: 'var(--text-xs)', fontWeight: 500, cursor: 'pointer',
                 }}
               >
                 Criar outra
@@ -227,16 +248,12 @@ export default function Sidebar() {
               <button
                 onClick={handleGoToResumo}
                 style={{
-                  flex: 1,
-                  padding: 'var(--space-2) var(--space-3)',
+                  flex: 1, padding: 'var(--space-2) var(--space-3)',
                   borderRadius: 'var(--radius-md)',
                   border: 'none',
                   background: 'var(--color-primary)',
                   color: 'var(--color-text-inverse)',
-                  fontSize: 'var(--text-xs)',
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  transition: 'background var(--transition-interactive)',
+                  fontSize: 'var(--text-xs)', fontWeight: 500, cursor: 'pointer',
                 }}
               >
                 Ir ao Resumo
@@ -244,7 +261,7 @@ export default function Sidebar() {
             </div>
           </div>
         ) : (
-          /* === Formulário === */
+          /* Formulário */
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
               <label style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text)' }}>
@@ -266,10 +283,9 @@ export default function Sidebar() {
                   color: 'var(--color-text)',
                   fontSize: 'var(--text-sm)',
                   outline: 'none',
-                  transition: 'border-color var(--transition-interactive)',
                 }}
                 onFocus={e => (e.target.style.borderColor = 'var(--color-primary)')}
-                onBlur={e => (e.target.style.borderColor = 'var(--color-border)')}
+                onBlur={e  => (e.target.style.borderColor = 'var(--color-border)')}
               />
             </div>
 
@@ -292,16 +308,17 @@ export default function Sidebar() {
                   fontSize: 'var(--text-sm)',
                   resize: 'vertical',
                   outline: 'none',
-                  transition: 'border-color var(--transition-interactive)',
                   fontFamily: 'inherit',
                 }}
                 onFocus={e => (e.target.style.borderColor = 'var(--color-primary)')}
-                onBlur={e => (e.target.style.borderColor = 'var(--color-border)')}
+                onBlur={e  => (e.target.style.borderColor = 'var(--color-border)')}
               />
             </div>
 
             {error && (
-              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-error)', margin: 0 }}>{error}</p>
+              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-error)', margin: 0 }}>
+                {error}
+              </p>
             )}
 
             <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'flex-end' }}>
@@ -314,9 +331,7 @@ export default function Sidebar() {
                   border: '1px solid var(--color-border)',
                   background: 'var(--color-surface-offset)',
                   color: 'var(--color-text)',
-                  fontSize: 'var(--text-xs)',
-                  fontWeight: 500,
-                  cursor: 'pointer',
+                  fontSize: 'var(--text-xs)', fontWeight: 500, cursor: 'pointer',
                 }}
               >
                 Cancelar
@@ -328,12 +343,12 @@ export default function Sidebar() {
                   padding: 'var(--space-2) var(--space-4)',
                   borderRadius: 'var(--radius-md)',
                   border: 'none',
-                  background: createPortfolio.isPending || !name.trim() ? 'var(--color-primary-highlight)' : 'var(--color-primary)',
+                  background: (createPortfolio.isPending || !name.trim())
+                    ? 'var(--color-primary-highlight)'
+                    : 'var(--color-primary)',
                   color: 'var(--color-text-inverse)',
-                  fontSize: 'var(--text-xs)',
-                  fontWeight: 500,
-                  cursor: createPortfolio.isPending || !name.trim() ? 'not-allowed' : 'pointer',
-                  transition: 'background var(--transition-interactive)',
+                  fontSize: 'var(--text-xs)', fontWeight: 500,
+                  cursor: (createPortfolio.isPending || !name.trim()) ? 'not-allowed' : 'pointer',
                 }}
               >
                 {createPortfolio.isPending ? 'Criando...' : 'Criar carteira'}

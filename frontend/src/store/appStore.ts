@@ -1,21 +1,29 @@
 import { create } from 'zustand'
-
-interface Portfolio {
-  id: number
-  name: string
-}
+import { persist } from 'zustand/middleware'
 
 interface AppState {
+  theme: 'dark' | 'light'
   selectedPortfolioId: number | null
-  portfolios: Portfolio[]
-  setPortfolios: (portfolios: Portfolio[]) => void
+  setTheme: (t: 'dark' | 'light') => void
+  setSelectedPortfolio: (id: number) => void
+  // aliases para compatibilidade
+  setSelectedPortfolioId: (id: number) => void
   selectPortfolio: (id: number) => void
 }
 
-export const useAppStore = create<AppState>((set) => ({
-  selectedPortfolioId: null,
-  portfolios: [],
-  setPortfolios: (portfolios: Portfolio[]) =>
-    set({ portfolios, selectedPortfolioId: portfolios[0]?.id ?? null }),
-  selectPortfolio: (id: number) => set({ selectedPortfolioId: id }),
-}))
+export const useAppStore = create<AppState>()(
+  persist(
+    (set) => ({
+      theme: 'dark',
+      selectedPortfolioId: null,
+      setTheme: (theme) => set({ theme }),
+      setSelectedPortfolio: (id) => set({ selectedPortfolioId: id }),
+      setSelectedPortfolioId: (id) => set({ selectedPortfolioId: id }),
+      selectPortfolio: (id) => set({ selectedPortfolioId: id }),
+    }),
+    {
+      name: 'sig-app',
+      partialize: (state) => ({ theme: state.theme, selectedPortfolioId: state.selectedPortfolioId }),
+    }
+  )
+)
