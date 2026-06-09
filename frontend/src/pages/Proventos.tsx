@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
 import { Plus } from 'lucide-react'
 import { useAppStore } from '@/store/appStore'
+import { usePortfolios } from '@/hooks/usePortfolios'
 import { useDividends, useDividendSummary } from '@/hooks/useDividends'
 import KpiCard from '@/components/dashboard/KpiCard'
 import DividendChart from '@/components/dividends/DividendChart'
@@ -10,15 +10,14 @@ import ModalNovoProvento from '@/components/dividends/ModalNovoProvento'
 import { formatBRL } from '@/utils/format'
 
 export default function Proventos() {
-  const { portfolioId } = useParams()
   const { selectedPortfolioId } = useAppStore()
-  const activeId = portfolioId ? Number(portfolioId) : selectedPortfolioId
+  const { data: portfolios = [] } = usePortfolios()
 
-  const { data: dividends = [],  isLoading: loadingList    } = useDividends(activeId)
-  const { data: summary,         isLoading: loadingSummary } = useDividendSummary(activeId)
+  const { data: dividends = [],  isLoading: loadingList    } = useDividends(selectedPortfolioId)
+  const { data: summary,         isLoading: loadingSummary } = useDividendSummary(selectedPortfolioId)
   const [showModal, setShowModal] = useState(false)
 
-  if (!activeId) {
+  if (!selectedPortfolioId) {
     return (
       <div className="flex items-center justify-center py-24">
         <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Selecione uma carteira.</p>
@@ -26,7 +25,8 @@ export default function Proventos() {
     )
   }
 
-  // Calcular yield medio mensal do ano
+  const portfolioName = portfolios.find(p => p.id === selectedPortfolioId)?.name ?? 'Carteira'
+
   const avgMonthly = summary
     ? summary.monthly.reduce((s, m) => s + m.amount, 0) / Math.max(summary.monthly.length, 1)
     : 0
@@ -38,7 +38,7 @@ export default function Proventos() {
         <div>
           <h1 className="text-xl font-bold">Proventos</h1>
           <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-            Dividendos, JCP e rendimentos recebidos
+            {portfolioName} · Dividendos, JCP e rendimentos recebidos
           </p>
         </div>
         <button
@@ -84,7 +84,10 @@ export default function Proventos() {
       ) : null}
 
       {/* Gráfico de barras mensais */}
-      <div className="bg-surface border border-[var(--color-border)] rounded-xl p-5">
+      <div
+        className="rounded-xl p-5"
+        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+      >
         <h3 className="text-sm font-semibold mb-4">Proventos por mês</h3>
         {loadingSummary ? (
           <div className="skeleton h-48 w-full rounded-lg" />
@@ -103,9 +106,9 @@ export default function Proventos() {
       <DividendTable dividends={dividends} loading={loadingList} />
 
       {/* Modal */}
-      {showModal && activeId && (
+      {showModal && (
         <ModalNovoProvento
-          portfolioId={activeId}
+          portfolioId={selectedPortfolioId}
           onClose={() => setShowModal(false)}
         />
       )}
