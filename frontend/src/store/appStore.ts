@@ -1,27 +1,21 @@
 import { create } from 'zustand'
 
-type Theme = 'light' | 'dark' | 'system'
+interface Portfolio {
+  id: number
+  name: string
+}
 
 interface AppState {
   selectedPortfolioId: number | null
-  theme: Theme
-  setSelectedPortfolio: (id: number | null) => void
-  setTheme: (t: Theme) => void
+  portfolios: Portfolio[]
+  setPortfolios: (portfolios: Portfolio[]) => void
+  selectPortfolio: (id: number) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
   selectedPortfolioId: null,
-  theme: 'system',
-
-  setSelectedPortfolio: (id) => set({ selectedPortfolioId: id }),
-
-  setTheme: (t) => {
-    set({ theme: t })
-    const root = document.documentElement
-    if (t === 'system') {
-      root.removeAttribute('data-theme')
-    } else {
-      root.setAttribute('data-theme', t)
-    }
-  },
+  portfolios: [],
+  setPortfolios: (portfolios: Portfolio[]) =>
+    set({ portfolios, selectedPortfolioId: portfolios[0]?.id ?? null }),
+  selectPortfolio: (id: number) => set({ selectedPortfolioId: id }),
 }))

@@ -1,128 +1,60 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { useAuthStore } from '@/store/authStore'
-import { authService } from '@/services/authService'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import { useNavigate, Link } from 'react-router-dom'
+import api from '@/services/api'
+
+const schema = z.object({
+  name: z.string().min(2, 'Nome obrigatório'),
+  email: z.string().email('E-mail inválido'),
+  password: z.string().min(6, 'Mínimo 6 caracteres'),
+})
+
+type FormData = z.infer<typeof schema>
 
 export default function Register() {
   const navigate = useNavigate()
-  const setAuth = useAuthStore((s) => s.setAuth)
 
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirm, setConfirm] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+  const { register, handleSubmit, formState: { errors, isSubmitting }, setError } = useForm<FormData>({
+    resolver: zodResolver(schema),
+  })
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setError(null)
-
-    if (password !== confirm) {
-      setError('As senhas não coincidem.')
-      return
-    }
-    if (password.length < 8) {
-      setError('A senha deve ter pelo menos 8 caracteres.')
-      return
-    }
-
-    setLoading(true)
+  const onSubmit = async (data: FormData) => {
     try {
-      const res = await authService.register({ name, email, password })
-      setAuth(res.access_token, res.user)
-      navigate('/carteira', { replace: true })
-    } catch (err: any) {
-      setError(
-        err?.response?.data?.detail ?? 'Erro ao criar conta. Tente novamente.',
-      )
-    } finally {
-      setLoading(false)
+      await api.post('/auth/register', data)
+      navigate('/login')
+    } catch {
+      setError('root', { message: 'Erro ao cadastrar. Tente novamente.' })
     }
   }
 
   return (
-    <>
-      <h2 className="text-lg font-semibold mb-6">Criar conta</h2>
-
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="name" className="text-sm font-medium">Nome</label>
-          <input
-            id="name"
-            type="text"
-            autoComplete="name"
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="input"
-            placeholder="Seu nome"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="email" className="text-sm font-medium">E-mail</label>
-          <input
-            id="email"
-            type="email"
-            autoComplete="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="input"
-            placeholder="seu@email.com"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="password" className="text-sm font-medium">Senha</label>
-          <input
-            id="password"
-            type="password"
-            autoComplete="new-password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="input"
-            placeholder="Mínimo 8 caracteres"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="confirm" className="text-sm font-medium">Confirmar senha</label>
-          <input
-            id="confirm"
-            type="password"
-            autoComplete="new-password"
-            required
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            className="input"
-            placeholder="Repita a senha"
-          />
-        </div>
-
-        {error && (
-          <p className="text-sm text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded px-3 py-2">
-            {error}
-          </p>
-        )}
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="btn btn-primary w-full mt-1"
-        >
-          {loading ? 'Criando conta...' : 'Criar conta'}
-        </button>
-      </form>
-
-      <p className="text-sm text-center text-muted mt-6">
-        Já tem conta?{' '}
-        <Link to="/auth/login" className="text-brand-primary hover:underline font-medium">
-          Entrar
-        </Link>
-      </p>
-    </>
+    <div className="min-h-screen flex items-center justify-center bg-gray-950">
+      <div className="w-full max-w-sm bg-gray-900 rounded-xl p-8 shadow-lg">
+        <h1 className="text-2xl font-bold text-white mb-6 text-center">Criar conta</h1>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Nome</label>
+            <input {...register('name')} className="w-full bg-gray-800 text-white rounded-lg px-3 py-2 border border-gray-700 focus:outline-none focus:border-teal-500" />
+            {errors.name && <p className="text-red-400 text-xs mt-1">{errors.name.message}</p>}
+          </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">E-mail</label>
+            <input {...register('email')} type="email" className="w-full bg-gray-800 text-white rounded-lg px-3 py-2 border border-gray-700 focus:outline-none focus:border-teal-500" />
+            {errors.email && <p className="text-red-400 text-xs mt-1">{errors.email.message}</p>}
+          </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Senha</label>
+            <input {...register('password')} type="password" className="w-full bg-gray-800 text-white rounded-lg px-3 py-2 border border-gray-700 focus:outline-none focus:border-teal-500" />
+            {errors.password && <p className="text-red-400 text-xs mt-1">{errors.password.message}</p>}
+          </div>
+          {errors.root && <p className="text-red-400 text-sm text-center">{errors.root.message}</p>}
+          <button type="submit" disabled={isSubmitting} className="w-full bg-teal-600 hover:bg-teal-500 text-white font-semibold py-2 rounded-lg transition">
+            {isSubmitting ? 'Criando...' : 'Criar conta'}
+          </button>
+          <p className="text-center text-gray-500 text-sm">Já tem conta? <Link to="/login" className="text-teal-400 hover:underline">Entrar</Link></p>
+        </form>
+      </div>
+    </div>
   )
 }
