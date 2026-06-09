@@ -5,7 +5,7 @@ from typing import AsyncGenerator
 
 
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    settings.ASYNC_DATABASE_URL,
     echo=settings.APP_DEBUG,
     pool_size=10,
     max_overflow=20,
@@ -21,6 +21,9 @@ AsyncSessionLocal = async_sessionmaker(
 
 class Base(DeclarativeBase):
     pass
+
+
+SessionLocal = AsyncSessionLocal
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

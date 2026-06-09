@@ -4,7 +4,10 @@ from typing import Optional
 
 class Settings(BaseSettings):
     # Banco de dados
+    # psycopg2 (sincrono, usado pelo Alembic)
     DATABASE_URL: str = "postgresql://sig:sig@db:5432/sig"
+    # asyncpg (assincrono, usado pelo SQLAlchemy async engine)
+    ASYNC_DATABASE_URL: str = "postgresql+asyncpg://sig:sig@db:5432/sig"
 
     # Debug
     APP_DEBUG: bool = False
