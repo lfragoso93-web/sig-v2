@@ -1,68 +1,107 @@
-from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.database import get_db
-from app.core.deps import get_current_user
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from sqlalchemy import func, extract
+from typing import List
+from datetime import date, timedelta
+from collections import defaultdict
+
+from app.core.deps import get_db, get_current_user
 from app.models.user import User
-from app.schemas.dividend import DividendCreate, DividendResponse, DividendSummaryResponse
-from app.schemas.pagination import PaginatedResponse
-from app.services.dividend_service import (
-    create_dividend_manual, list_dividends, get_dividend_summary
-)
-from app.services.portfolio_service import get_portfolio
-from typing import Optional
-import math
+from app.models.portfolio import Portfolio
+from app.models.dividend import Dividend
+from app.schemas.dividend import DividendCreate, DividendOut, DividendSummary, MonthPoint
 
-router = APIRouter()
+router = APIRouter(prefix="/portfolios/{portfolio_id}/dividends", tags=["dividends"])
 
 
-@router.get("/{portfolio_id}/dividends", response_model=PaginatedResponse[DividendResponse])
-async def list_portfolio_dividends(
+def _get_portfolio(portfolio_id: int, user: User, db: Session) -> Portfolio:
+    p = db.query(Portfolio).filter(
+        Portfolio.id == portfolio_id,
+        Portfolio.user_id == user.id,
+    ).first()
+    if not p:
+        raise HTTPException(status_code=404, detail="Carteira n\u00e3o encontrada.")
+    return p
+
+
+@router.get("", response_model=List[DividendOut])
+def list_dividends(
     portfolio_id: int,
-    asset_id: Optional[int] = Query(None),
-    year: Optional[int] = Query(None),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ):
-    """Lista proventos recebidos. Filtravel por ativo e ano."""
-    await get_portfolio(db, portfolio_id, current_user.id)
-    dividends, total = await list_dividends(db, portfolio_id, asset_id, year, page, page_size)
-    return PaginatedResponse(
-        items=dividends,
-        total=total,
-        page=page,
-        page_size=page_size,
-        total_pages=math.ceil(total / page_size) if total > 0 else 1,
+    _get_portfolio(portfolio_id, current_user, db)
+    return (
+        db.query(Dividend)
+        .filter(Dividend.portfolio_id == portfolio_id)
+        .order_by(Dividend.payment_date.desc())
+        .all()
     )
 
 
-@router.post(
-    "/{portfolio_id}/dividends",
-    response_model=DividendResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-async def add_dividend_manual(
+@router.post("", response_model=DividendOut, status_code=status.HTTP_201_CREATED)
+def create_dividend(
     portfolio_id: int,
-    data: DividendCreate,
+    payload: DividendCreate,
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ):
-    """Lancamento manual de provento (para ativos sem cobertura BRAPI)."""
-    await get_portfolio(db, portfolio_id, current_user.id)
-    return await create_dividend_manual(db, portfolio_id, data)
+    _get_portfolio(portfolio_id, current_user, db)
+
+    div = Dividend(
+        portfolio_id=portfolio_id,
+        ticker=payload.ticker.upper(),
+        asset_type=payload.asset_type,
+        type=payload.type,
+        amount=payload.amount,
+        quantity=payload.quantity,
+        payment_date=payload.payment_date,
+        ex_date=payload.ex_date,
+    )
+    db.add(div)
+    db.commit()
+    db.refresh(div)
+    return div
 
 
-@router.get(
-    "/{portfolio_id}/dividends/summary",
-    response_model=DividendSummaryResponse,
-)
-async def dividend_summary(
+@router.get("/summary", response_model=DividendSummary)
+def dividend_summary(
     portfolio_id: int,
-    year: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ):
-    """Resumo de proventos por tipo com total geral. Filtravel por ano."""
-    await get_portfolio(db, portfolio_id, current_user.id)
-    return await get_dividend_summary(db, portfolio_id, year)
+    _get_portfolio(portfolio_id, current_user, db)
+
+    dividends = (
+        db.query(Dividend)
+        .filter(Dividend.portfolio_id == portfolio_id)
+        .all()
+    )
+
+    today = date.today()
+    total_received = sum(d.amount * d.quantity for d in dividends if d.payment_date <= today)
+
+    # Agrupar por m\u00eas (YYYY-MM)
+    monthly_map: dict[str, float] = defaultdict(float)
+    for d in dividends:
+        if d.payment_date <= today:
+            key = d.payment_date.strftime("%Y-%m")
+            monthly_map[key] += d.amount * d.quantity
+
+    monthly = [
+        MonthPoint(month=k, amount=v)
+        for k, v in sorted(monthly_map.items())
+    ]
+
+    # Proje\u00e7\u00e3o: m\u00e9dia dos \u00faltimos 6 meses * 12
+    cutoff = today - timedelta(days=180)
+    recent = [d for d in dividends if cutoff <= d.payment_date <= today]
+    recent_total = sum(d.amount * d.quantity for d in recent)
+    avg_monthly = recent_total / 6 if recent else 0
+    total_projected = avg_monthly * 12
+
+    return DividendSummary(
+        total_received=total_received,
+        total_projected=total_projected,
+        monthly=monthly,
+    )

@@ -1,82 +1,69 @@
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
-from fastapi import HTTPException, status
-from app.models.portfolio import Portfolio
-from app.models.system_config import SystemConfig
-from app.schemas.portfolio import PortfolioCreate, PortfolioUpdate
-from typing import Optional
+from sqlalchemy.orm import Session
+from collections import defaultdict
+from app.models.transaction import Transaction, OperationType
+from app.models.position import Position
 
 
-async def _get_max_portfolios(db: AsyncSession) -> int:
-    result = await db.execute(
-        select(SystemConfig).where(SystemConfig.key == "max_portfolios_per_user")
+def recalc_positions(portfolio_id: int, db: Session) -> None:
+    """
+    Recalcula pre\u00e7o m\u00e9dio ponderado e quantidade atual
+    para cada ativo da carteira, a partir do hist\u00f3rico de transa\u00e7\u00f5es.
+
+    Algoritmo de pre\u00e7o m\u00e9dio ponderado (FIFO simplificado):
+      - Compra: pm = (pm_ant * qt_ant + qt_nova * preco) / (qt_ant + qt_nova)
+      - Venda:  pm n\u00e3o muda, apenas reduz quantidade
+    """
+    txs = (
+        db.query(Transaction)
+        .filter(Transaction.portfolio_id == portfolio_id)
+        .order_by(Transaction.date.asc(), Transaction.id.asc())
+        .all()
     )
-    config = result.scalar_one_or_none()
-    return int(config.value) if config else 10
 
+    # ticker -> {qty, avg_price, asset_type}
+    state: dict[str, dict] = defaultdict(lambda: {"qty": 0.0, "avg_price": 0.0, "asset_type": ""})
 
-async def get_portfolio(
-    db: AsyncSession, portfolio_id: int, user_id: int
-) -> Portfolio:
-    result = await db.execute(
-        select(Portfolio).where(
-            Portfolio.id == portfolio_id,
-            Portfolio.user_id == user_id,
-        )
-    )
-    portfolio = result.scalar_one_or_none()
-    if not portfolio:
-        raise HTTPException(status_code=404, detail="Carteira não encontrada")
-    return portfolio
+    for tx in txs:
+        s = state[tx.ticker]
+        s["asset_type"] = tx.asset_type
 
+        if tx.operation == OperationType.buy:
+            total_cost  = s["qty"] * s["avg_price"] + tx.quantity * tx.price + tx.fees
+            new_qty     = s["qty"] + tx.quantity
+            s["avg_price"] = total_cost / new_qty if new_qty > 0 else 0
+            s["qty"]       = new_qty
+        else:  # sell
+            s["qty"] = max(s["qty"] - tx.quantity, 0)
+            # pm n\u00e3o altera em venda
 
-async def list_portfolios(db: AsyncSession, user_id: int) -> list[Portfolio]:
-    result = await db.execute(
-        select(Portfolio)
-        .where(Portfolio.user_id == user_id)
-        .order_by(Portfolio.created_at.desc())
-    )
-    return result.scalars().all()
+    # Remove posi\u00e7\u00f5es zeradas do estado
+    active = {k: v for k, v in state.items() if v["qty"] > 1e-9}
 
+    # Busca posi\u00e7\u00f5es existentes no banco
+    existing = {
+        p.ticker: p
+        for p in db.query(Position).filter(Position.portfolio_id == portfolio_id).all()
+    }
 
-async def create_portfolio(
-    db: AsyncSession, user_id: int, data: PortfolioCreate
-) -> Portfolio:
-    # Verifica limite de carteiras
-    count_result = await db.execute(
-        select(func.count()).select_from(Portfolio).where(Portfolio.user_id == user_id)
-    )
-    count = count_result.scalar_one()
-    max_portfolios = await _get_max_portfolios(db)
-    if count >= max_portfolios:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Limite de {max_portfolios} carteiras atingido",
-        )
-    portfolio = Portfolio(user_id=user_id, name=data.name, description=data.description)
-    db.add(portfolio)
-    await db.flush()
-    await db.refresh(portfolio)
-    return portfolio
+    # Tickers que sumiram (zerados) -> excluir
+    for ticker in list(existing.keys()):
+        if ticker not in active:
+            db.delete(existing[ticker])
 
+    # Upsert
+    for ticker, data in active.items():
+        if ticker in existing:
+            pos = existing[ticker]
+            pos.quantity  = data["qty"]
+            pos.avg_price = data["avg_price"]
+        else:
+            pos = Position(
+                portfolio_id=portfolio_id,
+                ticker=ticker,
+                asset_type=data["asset_type"],
+                quantity=data["qty"],
+                avg_price=data["avg_price"],
+            )
+            db.add(pos)
 
-async def update_portfolio(
-    db: AsyncSession, portfolio_id: int, user_id: int, data: PortfolioUpdate
-) -> Portfolio:
-    portfolio = await get_portfolio(db, portfolio_id, user_id)
-    if data.name is not None:
-        portfolio.name = data.name
-    if data.description is not None:
-        portfolio.description = data.description
-    if data.is_active is not None:
-        portfolio.is_active = data.is_active
-    await db.flush()
-    await db.refresh(portfolio)
-    return portfolio
-
-
-async def delete_portfolio(
-    db: AsyncSession, portfolio_id: int, user_id: int
-) -> None:
-    portfolio = await get_portfolio(db, portfolio_id, user_id)
-    await db.delete(portfolio)
+    db.commit()
