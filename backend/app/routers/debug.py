@@ -6,10 +6,10 @@ Remova este arquivo quando nao precisar mais.
 import os
 from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, text
+from sqlalchemy import select
 from app.core.database import get_db
 from app.models.user import User
-from app.core.security import hash_password
+from app.core.security import hash_password, verify_password
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -48,11 +48,21 @@ async def reset_password(
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="Usuario nao encontrado")
-    user.hashed_password = hash_password(data.new_password)
+
+    new_hash = hash_password(data.new_password)
+    user.hashed_password = new_hash
     user.is_active = True
-    await db.flush()
+
+    await db.commit()
     await db.refresh(user)
-    return {"message": f"Senha do usuario {user.email} redefinida com sucesso"}
+
+    # Verifica se o hash foi salvo corretamente
+    ok = verify_password(data.new_password, user.hashed_password)
+    return {
+        "message": f"Senha do usuario {user.email} redefinida com sucesso",
+        "verify_ok": ok,
+        "is_active": user.is_active,
+    }
 
 
 class CreateUserRequest(BaseModel):
@@ -83,6 +93,6 @@ async def create_user_debug(
         is_active=True,
     )
     db.add(user)
-    await db.flush()
+    await db.commit()
     await db.refresh(user)
     return {"message": f"Usuario {user.email} criado com sucesso", "id": user.id, "role": str(user.role)}
