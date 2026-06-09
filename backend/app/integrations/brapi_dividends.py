@@ -11,16 +11,17 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Tipos de ativos nacionais que recebem proventos via BRAPI
 NATIONAL_TYPES = {
-    AssetType.ACAO_NACIONAL,
+    AssetType.ACAO,
     AssetType.FII,
     AssetType.ETF_NACIONAL,
 }
 
 DIVIDEND_TYPE_MAP = {
-    "DIVIDENDO": DividendType.DIVIDENDO,
-    "JCP": DividendType.JCP,
-    "RENDIMENTO": DividendType.RENDIMENTO,
+    "DIVIDENDO":   DividendType.DIVIDENDO,
+    "JCP":         DividendType.JCP,
+    "RENDIMENTO":  DividendType.RENDIMENTO,
     "AMORTIZACAO": DividendType.AMORTIZACAO,
     "BONIFICACAO": DividendType.BONIFICACAO,
 }
@@ -28,7 +29,6 @@ DIVIDEND_TYPE_MAP = {
 
 async def sync_dividends_for_portfolio(db: Session, portfolio_id: int) -> dict:
     """Busca todos os tickers nacionais da carteira e sincroniza proventos via BRAPI."""
-    # Tickers nacionais distintos na carteira
     tickers = (
         db.query(Asset.ticker, Asset.id, Asset.asset_type)
         .join(Transaction, Transaction.asset_id == Asset.id)
@@ -70,7 +70,6 @@ async def sync_dividends_for_portfolio(db: Session, portfolio_id: int) -> dict:
                     ex_date = date.fromisoformat(ex_date_str[:10])
                     pay_date = date.fromisoformat(pay_date_str[:10]) if pay_date_str else None
 
-                    # Quantidade na data-com (usa posição atual como aproximação)
                     qty = (
                         db.query(func.sum(Transaction.quantity))
                         .filter(
@@ -84,7 +83,6 @@ async def sync_dividends_for_portfolio(db: Session, portfolio_id: int) -> dict:
                         continue
 
                     total = float(qty) * value
-                    # Imposto de renda: JCP retém 15%, demais tipos isentos para PF
                     div_type_raw = div.get("type", "DIVIDENDO").upper()
                     div_type = DIVIDEND_TYPE_MAP.get(div_type_raw, DividendType.OUTROS)
                     ir_rate = 0.15 if div_type == DividendType.JCP else 0.0
@@ -96,7 +94,6 @@ async def sync_dividends_for_portfolio(db: Session, portfolio_id: int) -> dict:
                         else DividendStatus.A_RECEBER
                     )
 
-                    # Upsert: evita duplicatas por asset_id + portfolio_id + ex_date
                     existing = db.query(Dividend).filter(
                         Dividend.portfolio_id == portfolio_id,
                         Dividend.asset_id == asset_id,
