@@ -41,16 +41,13 @@ class Asset(Base, TimestampMixin):
     logo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     # Relacionamentos
-    # Nota: Transaction nao tem FK para assets (usa ticker como string)
-    # O relacionamento Asset.transactions foi removido para evitar erro de mapeamento
+    # Nota: Transaction e Dividend nao tem FK para assets (usam ticker como string).
+    # Apenas PortfolioPosition e AssetPrice tem FK real para assets.id.
     positions: Mapped[list["PortfolioPosition"]] = relationship(
         "PortfolioPosition", back_populates="asset"
     )
     prices: Mapped[list["AssetPrice"]] = relationship(
         "AssetPrice", back_populates="asset", cascade="all, delete-orphan"
-    )
-    dividends: Mapped[list["Dividend"]] = relationship(
-        "Dividend", back_populates="asset"
     )
 
     def __repr__(self) -> str:
