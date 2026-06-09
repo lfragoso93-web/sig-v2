@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
 
   # ── Banco de dados ────────────────────────────────────
@@ -39,10 +37,14 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     restart: unless-stopped
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-sig}:${POSTGRES_PASSWORD:-sig}@db:5432/${POSTGRES_DB:-sig}
       REDIS_URL:    redis://redis:6379/0
+      SECRET_KEY:   ${SECRET_KEY:-dev-secret-key-troque-em-producao}
+      BRAPI_TOKEN:  ${BRAPI_TOKEN:-}
     depends_on:
       db:
         condition: service_healthy
@@ -55,6 +57,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 20s
 
   # ── Frontend React + Nginx ────────────────────────────
   frontend:
