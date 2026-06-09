@@ -1,5 +1,6 @@
 import logging
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app.models.position import Position
 from app.integrations.brapi import fetch_quotes
 from app.integrations.yfinance_client import fetch_international_quotes, INTERNATIONAL_TYPES
@@ -14,12 +15,11 @@ NATIONAL_TYPES = {
 }
 
 
-async def update_quotes_for_portfolio(portfolio_id: int, db: Session) -> int:
-    positions = (
-        db.query(Position)
-        .filter(Position.portfolio_id == portfolio_id)
-        .all()
+async def update_quotes_for_portfolio(portfolio_id: int, db: AsyncSession) -> int:
+    result = await db.execute(
+        select(Position).where(Position.portfolio_id == portfolio_id)
     )
+    positions = result.scalars().all()
 
     national      = [p for p in positions if p.asset_type.lower() in NATIONAL_TYPES]
     international = [p for p in positions if p.asset_type.lower() in INTERNATIONAL_TYPES]
@@ -47,15 +47,14 @@ async def update_quotes_for_portfolio(portfolio_id: int, db: Session) -> int:
             pos.current_value = price * pos.quantity
             updated += 1
 
-    db.commit()
+    await db.commit()
     logger.info(f"Portfolio {portfolio_id}: {updated}/{len(positions)} posicoes atualizadas")
     return updated
 
 
-async def update_all_quotes(db: Session) -> None:
-    from app.models.position import Position
-
-    all_positions = db.query(Position).all()
+async def update_all_quotes(db: AsyncSession) -> None:
+    result = await db.execute(select(Position))
+    all_positions = result.scalars().all()
 
     national      = [p for p in all_positions if p.asset_type.lower() in NATIONAL_TYPES]
     international = [p for p in all_positions if p.asset_type.lower() in INTERNATIONAL_TYPES]
@@ -79,5 +78,5 @@ async def update_all_quotes(db: Session) -> None:
             pos.current_value = price * pos.quantity
             updated += 1
 
-    db.commit()
+    await db.commit()
     logger.info(f"[scheduler] {updated} posicoes atualizadas")

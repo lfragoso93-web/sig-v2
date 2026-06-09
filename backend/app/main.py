@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from app.core.database import Base, engine
 from app.core.scheduler import start_scheduler
@@ -15,6 +16,10 @@ from app.routers import (
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
+        # Cria ENUMs de forma idempotente antes do create_all
+        await conn.execute(text(
+            "CREATE TYPE IF NOT EXISTS userrole AS ENUM ('user', 'superadmin')"
+        ))
         await conn.run_sync(Base.metadata.create_all, checkfirst=True)
     start_scheduler()
     yield
