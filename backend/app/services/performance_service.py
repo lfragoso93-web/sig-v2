@@ -23,7 +23,7 @@ from sqlalchemy import func, and_, extract, case
 from sqlalchemy.orm import Session
 
 from app.integrations.fx_rate import get_usd_brl
-from app.integrations.brapi import get_quote  # retorna regularMarketPrice
+from app.integrations.brapi import fetch_quote_single
 from app.models.asset import Asset
 from app.models.transaction import Transaction, TransactionType
 from app.models.portfolio import Portfolio
@@ -81,7 +81,7 @@ def _safe_div(a: float, b: float, default: float = 0.0) -> float:
 async def _fetch_price_brl(ticker: str, asset_type: str, fx_current: float) -> float:
     """Busca cotacao atual. Retorna 0.0 se falhar."""
     try:
-        price = await get_quote(ticker)
+        price = await fetch_quote_single(ticker)
         if asset_type in USD_TYPES:
             return float(price) * fx_current
         return float(price)
@@ -93,7 +93,7 @@ async def _fetch_price_brl(ticker: str, asset_type: str, fx_current: float) -> f
 async def _fetch_price_orig(ticker: str) -> float:
     """Cotacao atual na moeda original."""
     try:
-        return float(await get_quote(ticker))
+        return float(await fetch_quote_single(ticker))
     except Exception:
         return 0.0
 
