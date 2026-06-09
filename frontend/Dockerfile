@@ -1,20 +1,20 @@
-# --- Stage 1: build React ---
-FROM node:20-alpine AS builder
+# ---- build ----
+FROM node:20-alpine AS build
 
 WORKDIR /app
-
-# Instala dependencias (gera lock automaticamente se nao existir)
 COPY package*.json ./
-RUN npm install --frozen-lockfile || npm install
+RUN npm ci --frozen-lockfile
 
 COPY . .
 RUN npm run build
 
-# --- Stage 2: Nginx serve ---
-FROM nginx:alpine
+# ---- serve via nginx ----
+FROM nginx:1.27-alpine AS runtime
 
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+
+HEALTHCHECK --interval=30s --timeout=5s \
+    CMD wget -qO- http://localhost/health || exit 1

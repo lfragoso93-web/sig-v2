@@ -1,75 +1,80 @@
-# SGI v2 — Sistema de Gestão de Investimentos
+# SIG v2 — Sistema de Investimentos Gerenciado
 
-> Plataforma multi-usuário para gestão completa de carteiras de investimentos com IA.
+Aplicacao full-stack containerizada para gestao de carteiras de investimentos.
 
-## 🚀 Como rodar
-
-```bash
-# 1. Clone o repositório
-git clone https://github.com/lfragoso93-web/sig-v2.git
-cd sig-v2
-
-# 2. Configure as variáveis de ambiente
-cp .env.example .env
-# Edite .env com suas chaves (BRAPI, Gemini, etc.)
-
-# 3. Suba tudo com Docker
-docker compose up -d
-
-# 4. Acesse
-# Frontend:           http://localhost:5173
-# Backend (API docs): http://localhost:8000/docs
-# Landing Page:       http://localhost:5173/
-# Registro:           http://localhost:5173/register
-# Admin:              http://localhost:5173/admin  (SuperAdmin only)
-```
-
-## 🧱 Stack
+## Stack
 
 | Camada | Tecnologia |
-|--------|------------|
+|---|---|
+| Frontend | React 18 + Vite + TypeScript |
 | Backend | FastAPI (Python 3.12) |
-| Banco de dados | PostgreSQL 16 |
+| Banco | PostgreSQL 16 |
 | Cache | Redis 7 |
-| Scheduler | APScheduler |
-| IA | Google Gemini 1.5 Pro |
-| Frontend | React 18 + Vite + TailwindCSS |
+| Cotacoes nacionais | BRAPI |
+| Cotacoes internacionais | yfinance (Yahoo Finance) |
 | Infra | Docker Compose |
 
-## 📦 Módulos
+## Inicio rapido
 
-- **Carteiras** — múltiplas carteiras por usuário, N ativos por carteira
-- **Transações** — compra/venda com preço médio automático
-- **Cotações** — integração BRAPI (ações, FIIs, ETFs, Tesouro Direto, cripto, câmbio)
-- **Renda Fixa** — cálculo de rentabilidade CDI%, IPCA+, SELIC, prefixado
-- **IRPF** — apuração mensal, isenção de ações, compensação de prejuízos
-- **Proventos** — dividendos, JCP, rendimentos e projeções
-- **Metas** — patrimônio alvo, alocação por classe, DY alvo
-- **Análise com IA** — Gemini analisa carteira, lê relatórios PDF, gera sinais
-- **Landing Page** — página pública de apresentação do sistema
-- **SuperAdmin** — gestão de usuários, configurações do sistema
+```bash
+# 1. Clone e configure variaveis
+git clone https://github.com/lfragoso93-web/sig-v2
+cd sig-v2
+cp .env.example .env
+# Edite .env com sua senha e BRAPI_TOKEN
 
-## 🗺️ Roadmap de desenvolvimento
+# 2. Suba tudo
+docker compose up -d --build
 
-- [x] Bloco 1 — Estrutura base, Docker, configurações
-- [x] Bloco 2 — Models do banco (PostgreSQL + Alembic)
-- [ ] Bloco 3 — Autenticação JWT + SuperAdmin
-- [ ] Bloco 4 — Carteiras e transações
-- [ ] Bloco 5 — Integração BRAPI (cotações, tesouro, cripto, câmbio)
-- [ ] Bloco 6 — Motor de cálculo (preço médio, rentabilidade, renda fixa)
-- [ ] Bloco 7 — Módulo IRPF
-- [ ] Bloco 8 — Proventos
-- [ ] Bloco 9 — Metas
-- [ ] Bloco 10 — Análise com IA (Gemini)
-- [ ] Bloco 11 — Frontend React (Landing, Registro, Dashboard, Admin)
+# 3. Acesse
+# Frontend:  http://localhost
+# API docs:  http://localhost/api/v1/docs
+```
 
-## 📋 Tipos de ativo suportados
+## Desenvolvimento local
 
-`Ação Nacional` · `FII` · `ETF Nacional` · `Tesouro Direto` · `Stock (EUA)` · `ETF Internacional` · `Criptomoeda` · `Renda Fixa`
+```bash
+# Backend
+cd backend
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
 
-## 👥 Perfis de usuário
+# Frontend
+cd frontend
+npm install
+npm run dev   # http://localhost:5173
+```
 
-| Role | Acesso |
-|------|--------|
-| `user` | Acesso às próprias carteiras |
-| `superadmin` | Gestão de usuários, configurações do sistema |
+## Variaveis de ambiente (.env)
+
+| Variavel | Descricao | Obrigatoria |
+|---|---|---|
+| `POSTGRES_PASSWORD` | Senha do banco | Sim |
+| `SECRET_KEY` | Chave JWT | Sim |
+| `BRAPI_TOKEN` | Token BRAPI para cotacoes nacionais | Nao (limite menor) |
+| `APP_PORT` | Porta de acesso (padrao: 80) | Nao |
+
+## Tipos de ativo suportados
+
+| Tipo | API de cotacao |
+|---|---|
+| Acao Nacional, FII, ETF Nacional, Tesouro Direto | BRAPI |
+| Stock, ETF Internacional | Yahoo Finance (yfinance) |
+| Criptomoeda | Yahoo Finance (ticker-USD) |
+| Renda Fixa | Manual (sem cotacao automatica) |
+
+## Arquitetura
+
+```
+browser -> nginx (frontend) -> /api/* -> FastAPI (backend) -> PostgreSQL
+                                                           -> Redis
+                                                           -> BRAPI
+                                                           -> Yahoo Finance
+```
+
+## Scheduler de cotacoes
+
+Cotacoes sao atualizadas automaticamente:
+- **Seg-Sex, 9h-18h, a cada 15 minutos** (horario de Brasilia)
+- Atualizacao on-demand via `?refresh=true` nos endpoints de posicoes
