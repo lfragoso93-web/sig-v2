@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import get_current_user
@@ -17,16 +17,14 @@ from typing import Optional
 router = APIRouter(prefix="/api/v1/portfolios", tags=["performance"])
 
 
-# ─── Schemas de resposta ────────────────────────────────────────────────────
+# ─── Schemas de resposta ────────────────────────────────────────────────
 
 class AssetPerfOut(BaseModel):
     ticker: str
     asset_type: str
     currency: str
     quantity: float
-    avg_price: float
     avg_price_brl: float
-    current_price: float
     current_price_brl: float
     cost_basis: float
     current_value: float
@@ -34,10 +32,8 @@ class AssetPerfOut(BaseModel):
     realized_pnl: float
     total_pnl: float
     return_pct: float
-    fx_rate_avg: Optional[float]
-    fx_rate_current: Optional[float]
-    fx_variation_pct: Optional[float]
-    allocation_pct: float = 0.0  # preenchido no endpoint
+    fx_rate_current: Optional[float] = None
+    allocation_pct: float = 0.0
 
 
 class ByTypeOut(BaseModel):
@@ -71,7 +67,7 @@ class PortfolioPerfOut(BaseModel):
     history: list[HistoryPoint]
 
 
-# ─── Endpoints ──────────────────────────────────────────────────────────────────
+# ─── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get("/{portfolio_id}/performance", response_model=PortfolioPerfOut)
 async def get_portfolio_performance(
@@ -82,11 +78,23 @@ async def get_portfolio_performance(
     """Retorna rentabilidade completa da carteira."""
     perf = await calc_portfolio_performance(db, portfolio_id, current_user.id)
 
-    total_current = perf.total_current or 1.0  # evitar div/zero
+    total_current = perf.total_current or 1.0
 
     assets_out = [
         AssetPerfOut(
-            **{k: getattr(a, k) for k in AssetPerfOut.model_fields if hasattr(a, k)},
+            ticker=a.ticker,
+            asset_type=a.asset_type,
+            currency=a.currency,
+            quantity=a.quantity,
+            avg_price_brl=a.avg_price_brl,
+            current_price_brl=a.current_price_brl,
+            cost_basis=a.cost_basis,
+            current_value=a.current_value,
+            unrealized_pnl=a.unrealized_pnl,
+            realized_pnl=a.realized_pnl,
+            total_pnl=a.total_pnl,
+            return_pct=a.return_pct,
+            fx_rate_current=a.fx_rate_current,
             allocation_pct=(a.current_value / total_current * 100) if total_current else 0.0,
         )
         for a in perf.assets
@@ -130,13 +138,26 @@ async def get_asset_performance(
     """Rentabilidade de um ativo especifico dentro da carteira."""
     asset = db.query(Asset).filter(Asset.ticker == ticker.upper()).first()
     if not asset:
-        from fastapi import HTTPException
         raise HTTPException(404, "Ativo nao encontrado")
 
     fx = await get_usd_brl()
-    ap = await calc_asset_performance(db, portfolio_id, asset, fx)
+    ap = await calc_asset_performance(
+        db, portfolio_id, asset.ticker, asset.asset_type, fx
+    )
 
     return AssetPerfOut(
-        **{k: getattr(ap, k) for k in AssetPerfOut.model_fields if hasattr(ap, k)},
+        ticker=ap.ticker,
+        asset_type=ap.asset_type,
+        currency=ap.currency,
+        quantity=ap.quantity,
+        avg_price_brl=ap.avg_price_brl,
+        current_price_brl=ap.current_price_brl,
+        cost_basis=ap.cost_basis,
+        current_value=ap.current_value,
+        unrealized_pnl=ap.unrealized_pnl,
+        realized_pnl=ap.realized_pnl,
+        total_pnl=ap.total_pnl,
+        return_pct=ap.return_pct,
+        fx_rate_current=ap.fx_rate_current,
         allocation_pct=0.0,
     )
