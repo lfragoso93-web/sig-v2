@@ -5,6 +5,9 @@ export function formatCurrency(value: number): string {
   return numeral(value).format('R$ 0,0.00')
 }
 
+/** Alias BRL — usado em PositionsTable e outros componentes */
+export const formatBRL = formatCurrency
+
 export function formatUSD(value: number): string {
   return numeral(value).format('$ 0,0.00')
 }
@@ -40,4 +43,26 @@ export function signClass(value: number): string {
   if (value > 0) return 'text-green-500'
   if (value < 0) return 'text-red-500'
   return 'text-gray-400'
+}
+
+// ── Badge por tipo de ativo ───────────────────────────────────────────────────
+// Retorna a classe CSS de cor para o badge de tipo de ativo na tabela de posições
+export function assetBadgeClass(assetType: string): string {
+  const map: Record<string, string> = {
+    'ACAO':              'badge-acao',
+    'AÇÃO':              'badge-acao',
+    'FII':               'badge-fii',
+    'ETF':               'badge-etf',
+    'ETF_NACIONAL':      'badge-etf',
+    'ETF_INT':           'badge-etf-int',
+    'ETF_INTERNACIONAL': 'badge-etf-int',
+    'TESOURO':           'badge-tesouro',
+    'TESOURO_DIRETO':    'badge-tesouro',
+    'STOCK':             'badge-stock',
+    'STOCKS':            'badge-stock',
+    'CRIPTO':            'badge-cripto',
+    'CRIPTOMOEDA':       'badge-cripto',
+    'RENDA_FIXA':        'badge-renda-fixa',
+  }
+  return map[assetType?.toUpperCase()] ?? 'badge-default'
 }
