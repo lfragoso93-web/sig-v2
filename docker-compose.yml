@@ -1,17 +1,17 @@
 services:
 
-  # ── Banco de dados ────────────────────────────────────
+  # ── Banco de dados ──────────────────────────────────────
   db:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER:     ${POSTGRES_USER:-sig}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sig}
-      POSTGRES_DB:       ${POSTGRES_DB:-sig}
+      POSTGRES_USER:     ${POSTGRES_USER:-sgi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sgi}
+      POSTGRES_DB:       ${POSTGRES_DB:-sgi}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sig}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sgi}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -31,7 +31,7 @@ services:
     networks:
       - sig-net
 
-  # ── Backend FastAPI ───────────────────────────────────
+  # ── Backend FastAPI ──────────────────────────────────────
   backend:
     build:
       context: ./backend
@@ -41,10 +41,11 @@ services:
       - path: .env
         required: false
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-sig}:${POSTGRES_PASSWORD:-sig}@db:5432/${POSTGRES_DB:-sig}
-      REDIS_URL:    redis://redis:6379/0
-      SECRET_KEY:   ${SECRET_KEY:-dev-secret-key-troque-em-producao}
-      BRAPI_TOKEN:  ${BRAPI_TOKEN:-}
+      DATABASE_URL:       postgresql://${POSTGRES_USER:-sgi}:${POSTGRES_PASSWORD:-sgi}@db:5432/${POSTGRES_DB:-sgi}
+      ASYNC_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-sgi}:${POSTGRES_PASSWORD:-sgi}@db:5432/${POSTGRES_DB:-sgi}
+      REDIS_URL:          redis://redis:6379/0
+      SECRET_KEY:         ${SECRET_KEY:-dev-secret-key-troque-em-producao}
+      BRAPI_TOKEN:        ${BRAPI_TOKEN:-}
     depends_on:
       db:
         condition: service_healthy
@@ -59,7 +60,7 @@ services:
       retries: 3
       start_period: 20s
 
-  # ── Frontend React + Nginx ────────────────────────────
+  # ── Frontend React + Nginx ──────────────────────────────────────
   frontend:
     build:
       context: ./frontend

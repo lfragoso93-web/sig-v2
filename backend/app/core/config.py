@@ -5,9 +5,9 @@ from typing import Optional
 class Settings(BaseSettings):
     # Banco de dados
     # psycopg2 (sincrono, usado pelo Alembic)
-    DATABASE_URL: str = "postgresql://sig:sig@db:5432/sig"
+    DATABASE_URL: str = "postgresql://sgi:sgi@db:5432/sgi"
     # asyncpg (assincrono, usado pelo SQLAlchemy async engine)
-    ASYNC_DATABASE_URL: str = "postgresql+asyncpg://sig:sig@db:5432/sig"
+    ASYNC_DATABASE_URL: str = "postgresql+asyncpg://sgi:sgi@db:5432/sgi"
 
     # Debug
     APP_DEBUG: bool = False
