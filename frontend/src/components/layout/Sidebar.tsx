@@ -166,22 +166,6 @@ export default function Sidebar() {
               </div>
             </div>
           )}
-
-          {/* Botão quando não há nenhuma carteira */}
-          {portfolios.length === 0 && (
-            <button
-              onClick={openModal}
-              className="mt-1 w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border"
-              style={{
-                background:  'oklch(from var(--color-primary) l c h / 0.08)',
-                borderColor: 'oklch(from var(--color-primary) l c h / 0.3)',
-                color:       'var(--color-primary)',
-                cursor:      'pointer',
-              }}
-            >
-              <Plus size={12} /> Nova carteira
-            </button>
-          )}
         </div>
 
         {/* Nav */}
@@ -214,14 +198,13 @@ export default function Sidebar() {
       {/* Modal Nova Carteira */}
       <Modal open={modalOpen} onClose={handleClose} title="Nova carteira" size="sm">
         {createdName ? (
-          /* Tela de sucesso */
           <div style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center',
             gap: 'var(--space-4)', textAlign: 'center', padding: 'var(--space-4) 0',
           }}>
             <CheckCircle2 size={48} style={{ color: 'var(--color-success)' }} />
             <div>
-              <p style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', marginBottom: 'var(--space-1)', margin: 0 }}>
+              <p style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', margin: 0 }}>
                 Carteira criada com sucesso!
               </p>
               <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', margin: 0, marginTop: '4px' }}>
@@ -261,7 +244,6 @@ export default function Sidebar() {
             </div>
           </div>
         ) : (
-          /* Formulário */
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
               <label style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text)' }}>
