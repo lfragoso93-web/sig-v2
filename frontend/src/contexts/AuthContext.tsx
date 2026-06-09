@@ -8,7 +8,6 @@ interface User {
   name: string
   email: string
   role: string
-  theme_preference: 'dark' | 'light'
 }
 
 interface AuthContextData {
@@ -47,12 +46,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const login = async (email: string, password: string) => {
-    const params = new URLSearchParams()
-    params.append('username', email)
-    params.append('password', password)
-    const { data } = await api.post('/auth/login', params, {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    })
+    // Backend espera JSON com campos { email, password }
+    const { data } = await api.post('/auth/login', { email, password })
     localStorage.setItem('sig_token', data.access_token)
     localStorage.setItem('sig_refresh', data.refresh_token)
     api.defaults.headers.common['Authorization'] = `Bearer ${data.access_token}`
