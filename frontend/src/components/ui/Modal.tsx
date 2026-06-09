@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react'
-import clsx from 'clsx'
 import { X } from 'lucide-react'
 
 interface Props {
@@ -10,11 +9,11 @@ interface Props {
   size?: 'sm' | 'md' | 'lg' | 'xl'
 }
 
-const SIZE = {
-  sm: 'max-w-sm',
-  md: 'max-w-md',
-  lg: 'max-w-2xl',
-  xl: 'max-w-4xl',
+const SIZE: Record<string, string> = {
+  sm: '360px',
+  md: '480px',
+  lg: '672px',
+  xl: '896px',
 }
 
 export default function Modal({ open, onClose, title, children, size = 'md' }: Props) {
@@ -31,33 +30,73 @@ export default function Modal({ open, onClose, title, children, size = 'md' }: P
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 50,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 'var(--space-4)',
+      }}
       role="dialog"
       aria-modal="true"
       aria-label={title}
     >
       {/* Overlay */}
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'oklch(0 0 0 / 0.45)',
+          backdropFilter: 'blur(2px)',
+        }}
         onClick={onClose}
       />
 
       {/* Panel */}
       <div
         ref={ref}
-        className={clsx(
-          'relative w-full bg-white dark:bg-dark-600 rounded-xl shadow-2xl',
-          'border border-light-border dark:border-dark-border',
-          'animate-in fade-in slide-in-from-bottom-2 duration-200',
-          SIZE[size]
-        )}
+        style={{
+          position: 'relative',
+          width: '100%',
+          maxWidth: SIZE[size],
+          background: 'var(--color-surface)',
+          color: 'var(--color-text)',
+          borderRadius: 'var(--radius-xl)',
+          border: '1px solid var(--color-border)',
+          boxShadow: 'var(--shadow-lg)',
+        }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-light-border dark:border-dark-border">
-          <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: 'var(--space-4) var(--space-5)',
+          borderBottom: '1px solid var(--color-divider)',
+        }}>
+          <h2 style={{
+            fontSize: 'var(--text-sm)',
+            fontWeight: 600,
+            color: 'var(--color-primary)',
+            margin: 0,
+          }}>{title}</h2>
           <button
             onClick={onClose}
-            className="text-muted hover:text-gray-700 dark:hover:text-gray-300 transition-colors p-1 rounded"
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'var(--color-text-muted)',
+              padding: 'var(--space-1)',
+              borderRadius: 'var(--radius-sm)',
+              display: 'flex',
+              alignItems: 'center',
+              transition: 'color var(--transition-interactive)',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-text)')}
+            onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-text-muted)')}
             aria-label="Fechar modal"
           >
             <X size={16} />
@@ -65,7 +104,11 @@ export default function Modal({ open, onClose, title, children, size = 'md' }: P
         </div>
 
         {/* Body */}
-        <div className="px-5 py-4 max-h-[80vh] overflow-y-auto">
+        <div style={{
+          padding: 'var(--space-5)',
+          maxHeight: '80vh',
+          overflowY: 'auto',
+        }}>
           {children}
         </div>
       </div>
