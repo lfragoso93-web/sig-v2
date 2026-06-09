@@ -6,8 +6,8 @@ import enum
 
 
 class AssetType(str, enum.Enum):
-    ACAO = "ACAO"                         # Ação Nacional
-    FII = "FII"                           # Fundo Imobiliário
+    ACAO = "ACAO"                         # Acao Nacional
+    FII = "FII"                           # Fundo Imobiliario
     ETF_NACIONAL = "ETF_NACIONAL"         # ETF Nacional
     TESOURO_DIRETO = "TESOURO_DIRETO"     # Tesouro Direto
     STOCK = "STOCK"                       # Stock Internacional
@@ -41,9 +41,8 @@ class Asset(Base, TimestampMixin):
     logo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     # Relacionamentos
-    transactions: Mapped[list["Transaction"]] = relationship(
-        "Transaction", back_populates="asset"
-    )
+    # Nota: Transaction nao tem FK para assets (usa ticker como string)
+    # O relacionamento Asset.transactions foi removido para evitar erro de mapeamento
     positions: Mapped[list["PortfolioPosition"]] = relationship(
         "PortfolioPosition", back_populates="asset"
     )
