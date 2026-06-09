@@ -16,10 +16,15 @@ from app.routers import (
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
-        # Cria ENUMs de forma idempotente antes do create_all
-        await conn.execute(text(
-            "CREATE TYPE IF NOT EXISTS userrole AS ENUM ('user', 'superadmin')"
-        ))
+        # Cria o enum de forma idempotente — DO $$ nao usa prepared statement
+        await conn.execute(text("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'userrole') THEN
+                    CREATE TYPE userrole AS ENUM ('user', 'superadmin');
+                END IF;
+            END$$;
+        """))
         await conn.run_sync(Base.metadata.create_all, checkfirst=True)
     start_scheduler()
     yield
