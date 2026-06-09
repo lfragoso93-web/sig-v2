@@ -65,8 +65,19 @@ export default function Sidebar() {
       setCreatedName(created.name)
       await refetch()
     } catch (err: any) {
-      const msg = err?.response?.data?.detail ?? 'Erro ao criar carteira. Tente novamente.'
-      setError(typeof msg === 'string' ? msg : JSON.stringify(msg))
+      const detail = err?.response?.data?.detail
+      let msg: string
+      if (Array.isArray(detail)) {
+        // Erros de validacao 422 do FastAPI/Pydantic
+        msg = detail.map((e: any) => e.msg ?? JSON.stringify(e)).join(', ')
+      } else if (typeof detail === 'string') {
+        msg = detail
+      } else if (detail) {
+        msg = JSON.stringify(detail)
+      } else {
+        msg = 'Erro ao criar carteira. Tente novamente.'
+      }
+      setError(msg)
     }
   }
 
