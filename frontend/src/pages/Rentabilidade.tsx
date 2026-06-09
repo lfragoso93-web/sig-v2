@@ -1,39 +1,39 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
-import { usePortfolioSummary, useEquityHistory } from '@/hooks/usePerformance'
+import { usePortfolioSummary, useEquityHistory, EquityPeriod } from '@/hooks/usePerformance'
 import { useAppStore } from '@/store/appStore'
+import { usePortfolios } from '@/hooks/usePortfolios'
 import KpiCard from '@/components/dashboard/KpiCard'
 import EquityChart from '@/components/performance/EquityChart'
 import PerformanceTable from '@/components/performance/PerformanceTable'
 import { formatBRL, formatPct } from '@/utils/format'
 
-type Period = '1m' | '3m' | '6m' | '1y' | 'all'
-
-const PERIODS: { label: string; value: Period }[] = [
-  { label: '1M',   value: '1m'  },
-  { label: '3M',   value: '3m'  },
-  { label: '6M',   value: '6m'  },
-  { label: '1 ano',value: '1y'  },
-  { label: 'Tudo', value: 'all' },
+const PERIODS: { label: string; value: EquityPeriod }[] = [
+  { label: '1M',    value: '1m'  },
+  { label: '3M',    value: '3m'  },
+  { label: '6M',    value: '6m'  },
+  { label: '1 ano', value: '1y'  },
+  { label: 'Tudo',  value: 'all' },
 ]
 
 export default function Rentabilidade() {
-  const { portfolioId } = useParams()
   const { selectedPortfolioId } = useAppStore()
-  const activeId = portfolioId ? Number(portfolioId) : selectedPortfolioId
+  const { data: portfolios = [] } = usePortfolios()
+  const [period, setPeriod] = useState<EquityPeriod>('1y')
 
-  const [period, setPeriod] = useState<Period>('1y')
+  const { data: summary, isLoading: loadingSummary } = usePortfolioSummary(selectedPortfolioId)
+  const { data: equity,  isLoading: loadingEquity  } = useEquityHistory(selectedPortfolioId, period)
 
-  const { data: summary, isLoading: loadingSummary } = usePortfolioSummary(activeId)
-  const { data: equity,  isLoading: loadingEquity  } = useEquityHistory(activeId, period)
-
-  if (!activeId) {
+  if (!selectedPortfolioId) {
     return (
       <div className="flex items-center justify-center py-24">
-        <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Selecione uma carteira.</p>
+        <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+          Selecione uma carteira.
+        </p>
       </div>
     )
   }
+
+  const portfolioName = portfolios.find(p => p.id === selectedPortfolioId)?.name ?? 'Carteira'
 
   return (
     <div className="flex flex-col gap-6">
@@ -41,11 +41,11 @@ export default function Rentabilidade() {
       <div>
         <h1 className="text-xl font-bold">Rentabilidade</h1>
         <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-          Evolução e desempenho da carteira
+          {portfolioName} · Evolução e desempenho
         </p>
       </div>
 
-      {/* KPIs de performance */}
+      {/* KPIs */}
       {loadingSummary ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -73,7 +73,7 @@ export default function Rentabilidade() {
           <KpiCard
             label="Rentab. total"
             value={formatPct(summary.total_gain_pct)}
-            change={summary.total_gain >= 0 ? 'Ganho realiz. + não realiz.' : 'Perda acumulada'}
+            change={summary.total_gain >= 0 ? 'Ganho acumulado' : 'Perda acumulada'}
             positive={summary.total_gain_pct >= 0}
           />
           <KpiCard
@@ -86,12 +86,20 @@ export default function Rentabilidade() {
       ) : null}
 
       {/* Gráfico de evolução */}
-      <div className="bg-surface border border-[var(--color-border)] rounded-xl p-5">
-        {/* Seletor de período */}
+      <div
+        className="rounded-xl p-5"
+        style={{
+          background: 'var(--color-surface)',
+          border: '1px solid var(--color-border)',
+        }}
+      >
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold">Evolução do patrimônio</h3>
-          <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: 'var(--color-surface-offset)' }}>
-            {PERIODS.map(p => (
+          <div
+            className="flex items-center gap-1 p-1 rounded-lg"
+            style={{ background: 'var(--color-surface-offset)' }}
+          >
+            {PERIODS.map((p) => (
               <button
                 key={p.value}
                 onClick={() => setPeriod(p.value)}
