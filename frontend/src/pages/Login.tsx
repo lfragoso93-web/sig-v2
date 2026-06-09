@@ -26,24 +26,19 @@ export default function Login() {
       params.append('username', data.email)
       params.append('password', data.password)
 
-      // 1) Faz login e pega o token
+      // baseURL ja aponta para o backend, entao usamos apenas o path
       const res = await api.post('/api/v1/auth/login', params, {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       })
 
-      // 2) Seta o header para a proxima chamada
       api.defaults.headers.common['Authorization'] = `Bearer ${res.data.access_token}`
       if (res.data.refresh_token) {
         localStorage.setItem('sig_refresh', res.data.refresh_token)
       }
 
-      // 3) Busca dados do usuario
       const me = await api.get('/api/v1/users/me')
-
-      // 4) Salva no store (persiste via zustand/persist)
       login(res.data.access_token, me.data)
 
-      // 5) Redireciona para o app
       navigate('/carteira')
     } catch {
       setError('root', { message: 'E-mail ou senha inválidos' })
