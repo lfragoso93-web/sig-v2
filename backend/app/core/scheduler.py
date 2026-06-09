@@ -1,37 +1,33 @@
+import asyncio
+import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.interval import IntervalTrigger
-from loguru import logger
+from apscheduler.triggers.cron import CronTrigger
 
-scheduler = AsyncIOScheduler()
+logger = logging.getLogger(__name__)
+
+scheduler = AsyncIOScheduler(timezone="America/Sao_Paulo")
 
 
-def start_scheduler():
-    """Registra e inicia os jobs periódicos."""
-    from app.services.quote_service import refresh_active_quotes
-    from app.services.treasury_service import refresh_treasury_rates
+def start_scheduler(db_factory) -> None:
+    """
+    Registra jobs e inicia o scheduler.
+    db_factory: callable que retorna uma Session do SQLAlchemy.
+    """
 
-    # Atualiza cotações de ativos ativos a cada 5 minutos (horário de mercado)
-    scheduler.add_job(
-        refresh_active_quotes,
-        trigger=IntervalTrigger(minutes=5),
-        id="refresh_quotes",
-        replace_existing=True,
-        misfire_grace_time=60,
+    @scheduler.scheduled_job(
+        CronTrigger(day_of_week="mon-fri", hour="9-18", minute="*/15"),
+        id="update_quotes",
+        name="Atualizar cotacoes BRAPI",
     )
-
-    # Atualiza taxas do Tesouro Direto a cada hora
-    scheduler.add_job(
-        refresh_treasury_rates,
-        trigger=IntervalTrigger(hours=1),
-        id="refresh_treasury",
-        replace_existing=True,
-        misfire_grace_time=300,
-    )
+    async def update_quotes_job():
+        from app.services.quote_service import update_all_quotes
+        db = db_factory()
+        try:
+            await update_all_quotes(db)
+        except Exception as e:
+            logger.error(f"[scheduler] Erro ao atualizar cotacoes: {e}")
+        finally:
+            db.close()
 
     scheduler.start()
-    logger.info("⏰ Scheduler iniciado")
-
-
-def shutdown_scheduler():
-    scheduler.shutdown(wait=False)
-    logger.info("⏰ Scheduler encerrado")
+    logger.info("Scheduler iniciado — cotacoes atualizadas a cada 15min (seg-sex 9h-18h)")

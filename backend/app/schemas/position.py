@@ -1,36 +1,41 @@
 from pydantic import BaseModel
-from app.schemas.asset import AssetResponse
 from typing import Optional
-from decimal import Decimal
-from datetime import datetime
 
 
-class PositionResponse(BaseModel):
-    id: int
-    portfolio_id: int
-    asset_id: int
-    asset: AssetResponse
-    quantity: Decimal
-    average_price: Decimal
-    total_invested: Decimal
-    realized_profit: Decimal
-    # Campos calculados em tempo real (não persistidos)
-    current_price: Optional[Decimal] = None
-    current_value: Optional[Decimal] = None
-    unrealized_profit: Optional[Decimal] = None
-    unrealized_profit_pct: Optional[Decimal] = None
-    updated_at: datetime
+class PositionOut(BaseModel):
+    id:            int
+    portfolio_id:  int
+    ticker:        str
+    asset_type:    str
+    quantity:      float
+    avg_price:     float
+    current_price: Optional[float]
+    current_value: Optional[float]
 
-    model_config = {"from_attributes": True}
+    # Campos calculados
+    @property
+    def invested(self) -> float:
+        return self.avg_price * self.quantity
+
+    @property
+    def result_abs(self) -> float:
+        cv = self.current_value if self.current_value is not None else self.invested
+        return cv - self.invested
+
+    @property
+    def result_pct(self) -> float:
+        inv = self.invested
+        if inv == 0:
+            return 0.0
+        return self.result_abs / inv * 100
+
+    class Config:
+        from_attributes = True
 
 
 class PortfolioSummary(BaseModel):
-    portfolio_id: int
-    portfolio_name: str
-    total_invested: Decimal
-    current_value: Optional[Decimal] = None
-    total_return: Optional[Decimal] = None
-    total_return_pct: Optional[Decimal] = None
-    realized_profit: Decimal
-    positions_count: int
-    positions: list[PositionResponse]
+    total_invested:   float
+    total_current:    float
+    result_abs:       float
+    result_pct:       float
+    positions_count:  int
