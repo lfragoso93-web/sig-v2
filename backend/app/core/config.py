@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     # Redis (opcional, para cache de cotacoes)
     REDIS_URL: Optional[str] = "redis://redis:6379/0"
 
+    # CORS — lista separada por virgula, ex: https://app.com,http://localhost:5173
+    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000,http://localhost:80,http://localhost"
+
     class Config:
         env_file = ".env"
         case_sensitive = True

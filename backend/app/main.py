@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.core.database import Base, engine
+from app.core.config import settings
 from app.core.scheduler import start_scheduler
 from app.routers import (
     auth, portfolios, transactions, dividends, positions,
@@ -38,14 +39,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Converte a string CSV em lista, removendo espacos extras
+_cors_origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "http://localhost:80",
-        "http://localhost",
-    ],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
