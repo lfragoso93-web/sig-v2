@@ -1,30 +1,36 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.ext.asyncio import AsyncConnection
 
-from app.core.database import Base, engine, SessionLocal
+from app.core.database import Base, engine, AsyncSessionLocal
 from app.core.scheduler import start_scheduler
 from app.routers import auth, portfolios, transactions, dividends, positions
-
-Base.metadata.create_all(bind=engine)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    start_scheduler(SessionLocal)
+    # Cria tabelas usando conexao assincrona (AsyncEngine nao suporta create_all direto)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    start_scheduler()
     yield
+
+    # Encerra o engine ao desligar
+    await engine.dispose()
 
 
 app = FastAPI(
-    title="SIG v2 API",
-    description="Sistema de Investimentos Gerenciado",
+    title="SGI v2 API",
+    description="Sistema de Gerenciamento de Investimentos",
     version="2.0.0",
     lifespan=lifespan,
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=["http://localhost:5173", "http://localhost:3000", "http://localhost:80", "http://localhost"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -38,5 +44,5 @@ app.include_router(positions.router,    prefix="/api/v1")
 
 
 @app.get("/health")
-def health():
+async def health():
     return {"status": "ok", "version": "2.0.0"}
