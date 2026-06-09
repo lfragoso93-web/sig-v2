@@ -6,6 +6,9 @@ class Settings(BaseSettings):
     # Banco de dados
     DATABASE_URL: str = "postgresql://sig:sig@db:5432/sig"
 
+    # Debug
+    APP_DEBUG: bool = False
+
     # JWT
     SECRET_KEY: str = "change-me-in-production"
     ALGORITHM: str  = "HS256"
