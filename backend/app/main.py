@@ -10,9 +10,9 @@ from app.routers import auth, portfolios, transactions, dividends, positions
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Cria tabelas usando conexao assincrona (AsyncEngine nao suporta create_all direto)
+    # Cria tabelas usando conexao assincrona (checkfirst=True evita erro em ENUMs ja existentes)
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(Base.metadata.create_all, checkfirst=True)
 
     start_scheduler()
     yield
