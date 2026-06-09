@@ -1,11 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
-import { fxService } from '@/services/fxService'
+import api from '@/services/api'
 
-export function useUsdBrl() {
-  return useQuery({
-    queryKey: ['fx-usd-brl'],
-    queryFn: fxService.getUsdBrl,
-    staleTime: 5 * 60 * 1000,  // 5 minutos
-    refetchInterval: 5 * 60 * 1000,
+export function useFxRate(from: string, to: string) {
+  return useQuery<{ rate: number }>({
+    queryKey: ['fxrate', from, to],
+    queryFn: () =>
+      api.get('/fxrate', { params: { from, to } }).then((r) => r.data),
+    staleTime: 5 * 60 * 1000,
   })
 }

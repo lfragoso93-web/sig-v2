@@ -5,8 +5,8 @@ import { useAuthStore } from '@/store/authStore'
 // Em desenvolvimento: http://localhost:8000
 const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
-export const api = axios.create({
-  baseURL: BASE_URL,
+const api = axios.create({
+  baseURL: `${BASE_URL}/api/v1`,
   headers: { 'Content-Type': 'application/json' },
 })
 
@@ -25,9 +25,11 @@ api.interceptors.response.use(
   (err) => {
     if (err.response?.status === 401) {
       useAuthStore.getState().logout()
+      window.location.href = '/'
     }
     return Promise.reject(err)
   }
 )
 
+export { api }
 export default api

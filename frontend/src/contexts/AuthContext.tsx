@@ -31,7 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const token = localStorage.getItem('sig_token')
     if (token) {
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`
-      api.get('/api/v1/users/me')
+      api.get('/users/me')
         .then(({ data }) => {
           setUser(data)
           setTheme(data.theme_preference ?? 'dark')
@@ -50,14 +50,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const params = new URLSearchParams()
     params.append('username', email)
     params.append('password', password)
-    const { data } = await api.post('/api/v1/auth/login', params)
+    const { data } = await api.post('/auth/login', params, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    })
     localStorage.setItem('sig_token', data.access_token)
     localStorage.setItem('sig_refresh', data.refresh_token)
     api.defaults.headers.common['Authorization'] = `Bearer ${data.access_token}`
-    const me = await api.get('/api/v1/users/me')
+    const me = await api.get('/users/me')
     setUser(me.data)
     setTheme(me.data.theme_preference ?? 'dark')
-    navigate('/resumo')
+    navigate('/app/dashboard')
   }
 
   const logout = () => {
@@ -65,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('sig_refresh')
     delete api.defaults.headers.common['Authorization']
     setUser(null)
-    navigate('/login')
+    navigate('/')
   }
 
   return (

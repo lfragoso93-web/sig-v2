@@ -1,42 +1,32 @@
-import { useQuery } from '@tanstack/react-query'
-import { proventosService } from '@/services/proventosService'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import api from '@/services/api'
 
-export function useProventosSummary(portfolioId: number) {
-  return useQuery({
-    queryKey: ['proventos-summary', portfolioId],
-    queryFn: () => proventosService.getSummary(portfolioId),
+export interface Provento {
+  id: number
+  portfolio_id: number
+  ticker: string
+  type: string
+  amount: number
+  date: string
+  created_at: string
+}
+
+const KEY = (pid: number) => ['proventos', pid]
+
+export function useProventos(portfolioId: number | null) {
+  return useQuery<Provento[]>({
+    queryKey: KEY(portfolioId!),
+    queryFn: () =>
+      api.get('/proventos', { params: { portfolio_id: portfolioId } }).then((r) => r.data),
     enabled: !!portfolioId,
   })
 }
 
-export function useProventosDistribution(portfolioId: number, months = 12) {
-  return useQuery({
-    queryKey: ['proventos-distribution', portfolioId, months],
-    queryFn: () => proventosService.getDistribution(portfolioId, months),
-    enabled: !!portfolioId,
-  })
-}
-
-export function useProventosEvolucao(portfolioId: number, tipo: 'mensal' | 'anual', period: string) {
-  return useQuery({
-    queryKey: ['proventos-evolucao', portfolioId, tipo, period],
-    queryFn: () => proventosService.getEvolucao(portfolioId, tipo, period),
-    enabled: !!portfolioId,
-  })
-}
-
-export function useProventosHistoricoMensal(portfolioId: number, status: string, assetType: string) {
-  return useQuery({
-    queryKey: ['proventos-historico', portfolioId, status, assetType],
-    queryFn: () => proventosService.getHistoricoMensal(portfolioId, status, assetType),
-    enabled: !!portfolioId,
-  })
-}
-
-export function useProventosList(portfolioId: number, year?: number, status?: string, assetType?: string) {
-  return useQuery({
-    queryKey: ['proventos-list', portfolioId, year, status, assetType],
-    queryFn: () => proventosService.getList(portfolioId, year, status, assetType),
-    enabled: !!portfolioId,
+export function useCreateProvento() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: Omit<Provento, 'id' | 'created_at'>) =>
+      api.post<Provento>('/proventos', data).then((r) => r.data),
+    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: KEY(v.portfolio_id) }),
   })
 }

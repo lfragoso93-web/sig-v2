@@ -2,61 +2,33 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/services/api'
 
 export interface Transaction {
-  id:         number
-  ticker:     string
-  asset_type: string
-  operation:  'buy' | 'sell'
-  quantity:   number
-  price:      number
-  fees:       number
-  date:       string
-  notes?:     string
+  id: number
+  portfolio_id: number
+  ticker: string
+  type: 'buy' | 'sell'
+  quantity: number
+  price: number
+  date: string
+  currency: string
+  created_at: string
 }
 
-export interface CreateTransactionPayload {
-  ticker:     string
-  asset_type: string
-  operation:  'buy' | 'sell'
-  quantity:   number
-  price:      number
-  fees:       number
-  date:       string
-  notes?:     string
-}
+const KEY = (pid: number) => ['transactions', pid]
 
-export function useTransactions(portfolioId?: number | null) {
+export function useTransactions(portfolioId: number | null) {
   return useQuery<Transaction[]>({
-    queryKey: ['transactions', portfolioId],
-    queryFn:  () => api.get(`/portfolios/${portfolioId}/transactions`).then(r => r.data),
-    enabled:  !!portfolioId,
-    staleTime: 30_000,
+    queryKey: KEY(portfolioId!),
+    queryFn: () =>
+      api.get('/transactions', { params: { portfolio_id: portfolioId } }).then((r) => r.data),
+    enabled: !!portfolioId,
   })
 }
 
-export function useCreateTransaction(portfolioId: number) {
+export function useCreateTransaction() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (payload: CreateTransactionPayload) =>
-      api.post(`/portfolios/${portfolioId}/transactions`, payload).then(r => r.data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['transactions', portfolioId] })
-      qc.invalidateQueries({ queryKey: ['positions',   portfolioId] })
-      qc.invalidateQueries({ queryKey: ['summary',     portfolioId] })
-      qc.invalidateQueries({ queryKey: ['performance', portfolioId] })
-    },
-  })
-}
-
-export function useDeleteTransaction(portfolioId: number) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (id: number) =>
-      api.delete(`/portfolios/${portfolioId}/transactions/${id}`).then(r => r.data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['transactions', portfolioId] })
-      qc.invalidateQueries({ queryKey: ['positions',   portfolioId] })
-      qc.invalidateQueries({ queryKey: ['summary',     portfolioId] })
-      qc.invalidateQueries({ queryKey: ['performance', portfolioId] })
-    },
+    mutationFn: (data: Omit<Transaction, 'id' | 'created_at'>) =>
+      api.post<Transaction>('/transactions', data).then((r) => r.data),
+    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: KEY(v.portfolio_id) }),
   })
 }
