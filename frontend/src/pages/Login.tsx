@@ -22,13 +22,10 @@ export default function Login() {
 
   const onSubmit = async (data: FormData) => {
     try {
-      const params = new URLSearchParams()
-      params.append('username', data.email)
-      params.append('password', data.password)
-
-      // baseURL ja aponta para o backend, entao usamos apenas o path
-      const res = await api.post('/api/v1/auth/login', params, {
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      // Backend espera JSON: { email, password }
+      const res = await api.post('/api/v1/auth/login', {
+        email: data.email,
+        password: data.password,
       })
 
       api.defaults.headers.common['Authorization'] = `Bearer ${res.data.access_token}`
