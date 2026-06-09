@@ -15,3 +15,11 @@ export function usePortfolio(id: number | null) {
     enabled: !!id,
   })
 }
+
+/** Alias conveniente — retorna lista de carteiras do usuário */
+export function usePortfolioList() {
+  return useQuery<PortfolioDetail[]>({
+    queryKey: ['portfolios'],
+    queryFn: () => api.get('/portfolios').then((r) => r.data),
+  })
+}

@@ -5,9 +5,12 @@ export interface Transaction {
   id: number
   portfolio_id: number
   ticker: string
-  type: 'buy' | 'sell'
+  asset_type: string
+  /** 'buy' | 'sell' */
+  operation: 'buy' | 'sell'
   quantity: number
   price: number
+  fees: number
   date: string
   currency: string
   created_at: string

@@ -1,5 +1,4 @@
 import { useState, useMemo } from 'react'
-import { useParams } from 'react-router-dom'
 import { Plus, Search, Trash2 } from 'lucide-react'
 import { useAppStore } from '@/store/appStore'
 import {
@@ -7,6 +6,7 @@ import {
   useDeleteTransaction,
   type Transaction,
 } from '@/hooks/useTransactions'
+import { usePortfolios } from '@/hooks/usePortfolios'
 import ModalNovaTransacao from '@/components/transactions/ModalNovaTransacao'
 import { formatBRL, formatDate, assetBadgeClass } from '@/utils/format'
 
@@ -23,12 +23,11 @@ const ASSET_TYPES = [
 ]
 
 export default function Transacoes() {
-  const { portfolioId } = useParams()
   const { selectedPortfolioId } = useAppStore()
-  const activeId = portfolioId ? Number(portfolioId) : selectedPortfolioId
+  const { data: portfolios = [] } = usePortfolios()
 
-  const { data: transactions = [], isLoading } = useTransactions(activeId)
-  const deleteTransaction = useDeleteTransaction(activeId!)
+  const { data: transactions = [], isLoading } = useTransactions(selectedPortfolioId)
+  const deleteTransaction = useDeleteTransaction()
 
   const [showModal, setShowModal]   = useState(false)
   const [search, setSearch]         = useState('')
@@ -36,7 +35,6 @@ export default function Transacoes() {
   const [opFilter, setOpFilter]     = useState<'todos' | 'buy' | 'sell'>('todos')
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
 
-  // Filtros aplicados
   const filtered = useMemo(() => {
     return transactions.filter(t => {
       const matchSearch = t.ticker.toLowerCase().includes(search.toLowerCase())
@@ -46,26 +44,28 @@ export default function Transacoes() {
     })
   }, [transactions, search, typeFilter, opFilter])
 
-  // Totais do rodapé
   const totalCompras = filtered
     .filter(t => t.operation === 'buy')
-    .reduce((s, t) => s + t.quantity * t.price + t.fees, 0)
+    .reduce((s, t) => s + t.quantity * t.price + (t.fees ?? 0), 0)
   const totalVendas = filtered
     .filter(t => t.operation === 'sell')
-    .reduce((s, t) => s + t.quantity * t.price - t.fees, 0)
+    .reduce((s, t) => s + t.quantity * t.price - (t.fees ?? 0), 0)
 
   async function handleDelete(id: number) {
-    await deleteTransaction.mutateAsync(id)
+    if (!selectedPortfolioId) return
+    await deleteTransaction.mutateAsync({ id, portfolio_id: selectedPortfolioId })
     setConfirmDelete(null)
   }
 
-  if (!activeId) {
+  if (!selectedPortfolioId) {
     return (
       <div className="flex items-center justify-center py-24">
         <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Selecione uma carteira.</p>
       </div>
     )
   }
+
+  const portfolioName = portfolios.find(p => p.id === selectedPortfolioId)?.name ?? 'Carteira'
 
   return (
     <div className="flex flex-col gap-5">
@@ -74,7 +74,7 @@ export default function Transacoes() {
         <div>
           <h1 className="text-xl font-bold">Transações</h1>
           <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-            {transactions.length} registro{transactions.length !== 1 ? 's' : ''}
+            {portfolioName} · {transactions.length} registro{transactions.length !== 1 ? 's' : ''}
           </p>
         </div>
         <button
@@ -87,7 +87,6 @@ export default function Transacoes() {
 
       {/* Filtros */}
       <div className="flex flex-wrap gap-2">
-        {/* Busca por ticker */}
         <div className="relative">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-text-muted)' }} />
           <input
@@ -98,7 +97,6 @@ export default function Transacoes() {
           />
         </div>
 
-        {/* Filtro por tipo */}
         <select
           className="input text-sm w-44"
           value={typeFilter}
@@ -107,7 +105,6 @@ export default function Transacoes() {
           {ASSET_TYPES.map(t => <option key={t}>{t}</option>)}
         </select>
 
-        {/* Filtro compra/venda */}
         <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: 'var(--color-surface-offset)' }}>
           {(['todos', 'buy', 'sell'] as const).map(op => (
             <button
@@ -127,7 +124,10 @@ export default function Transacoes() {
       </div>
 
       {/* Tabela */}
-      <div className="bg-surface border border-[var(--color-border)] rounded-xl overflow-hidden">
+      <div
+        className="rounded-xl overflow-hidden"
+        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+      >
         {isLoading ? (
           <div className="p-6 flex flex-col gap-3">
             {Array.from({ length: 5 }).map((_, i) => (
@@ -186,15 +186,13 @@ export default function Transacoes() {
         )}
       </div>
 
-      {/* Modal nova transação */}
-      {showModal && activeId && (
+      {showModal && selectedPortfolioId && (
         <ModalNovaTransacao
-          portfolioId={activeId}
+          portfolioId={selectedPortfolioId}
           onClose={() => setShowModal(false)}
         />
       )}
 
-      {/* Confirm delete */}
       {confirmDelete !== null && (
         <ConfirmDeleteModal
           onCancel={() => setConfirmDelete(null)}
@@ -206,20 +204,16 @@ export default function Transacoes() {
   )
 }
 
-// ─ Linha da tabela ────────────────────────────────────────────────────────
 function TransactionRow({ t, onDelete }: { t: Transaction; onDelete: () => void }) {
   const isBuy  = t.operation === 'buy'
-  const total  = t.quantity * t.price + (isBuy ? t.fees : -t.fees)
+  const fees   = t.fees ?? 0
+  const total  = t.quantity * t.price + (isBuy ? fees : -fees)
 
   return (
     <tr>
       <td className="text-sm" style={{ color: 'var(--color-text-muted)' }}>{formatDate(t.date)}</td>
-      <td>
-        <span className="font-semibold text-sm">{t.ticker}</span>
-      </td>
-      <td>
-        <span className={`asset-badge ${assetBadgeClass(t.asset_type)}`}>{t.asset_type}</span>
-      </td>
+      <td><span className="font-semibold text-sm">{t.ticker}</span></td>
+      <td><span className={`asset-badge ${assetBadgeClass(t.asset_type)}`}>{t.asset_type}</span></td>
       <td className="text-center">
         <span
           className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold"
@@ -236,13 +230,14 @@ function TransactionRow({ t, onDelete }: { t: Transaction; onDelete: () => void 
       <td className="text-right text-sm tabular-nums">{t.quantity}</td>
       <td className="text-right text-sm tabular-nums">{formatBRL(t.price)}</td>
       <td className="text-right text-sm tabular-nums" style={{ color: 'var(--color-text-muted)' }}>
-        {t.fees > 0 ? formatBRL(t.fees) : '—'}
+        {fees > 0 ? formatBRL(fees) : '—'}
       </td>
       <td className="text-right text-sm font-medium tabular-nums">{formatBRL(total)}</td>
       <td className="text-right pr-3">
         <button
           onClick={onDelete}
-          className="btn btn-ghost p-1 rounded text-[var(--color-text-faint)] hover:text-[var(--color-notification)] transition-colors"
+          className="btn btn-ghost p-1 rounded"
+          style={{ color: 'var(--color-text-faint)' }}
           aria-label="Excluir transação"
         >
           <Trash2 size={14} />
@@ -252,16 +247,9 @@ function TransactionRow({ t, onDelete }: { t: Transaction; onDelete: () => void 
   )
 }
 
-// ─ Modal confirmação de exclusão ──────────────────────────────────────────
 function ConfirmDeleteModal({
-  onCancel,
-  onConfirm,
-  loading,
-}: {
-  onCancel: () => void
-  onConfirm: () => void
-  loading: boolean
-}) {
+  onCancel, onConfirm, loading,
+}: { onCancel: () => void; onConfirm: () => void; loading: boolean }) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center px-4"
