@@ -14,7 +14,7 @@ type FormData = z.infer<typeof schema>
 
 export default function Login() {
   const navigate = useNavigate()
-  const login = useAuthStore((s: { login: (token: string, user: unknown) => void }) => s.login)
+  const login = useAuthStore((s) => s.login)
 
   const { register, handleSubmit, formState: { errors, isSubmitting }, setError } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -25,13 +25,28 @@ export default function Login() {
       const params = new URLSearchParams()
       params.append('username', data.email)
       params.append('password', data.password)
-      const res = await api.post('/auth/token', params, {
+
+      // 1) Faz login e pega o token
+      const res = await api.post('/api/v1/auth/login', params, {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       })
-      login(res.data.access_token, res.data.user)
-      navigate('/')
+
+      // 2) Seta o header para a proxima chamada
+      api.defaults.headers.common['Authorization'] = `Bearer ${res.data.access_token}`
+      if (res.data.refresh_token) {
+        localStorage.setItem('sig_refresh', res.data.refresh_token)
+      }
+
+      // 3) Busca dados do usuario
+      const me = await api.get('/api/v1/users/me')
+
+      // 4) Salva no store (persiste via zustand/persist)
+      login(res.data.access_token, me.data)
+
+      // 5) Redireciona para o app
+      navigate('/carteira')
     } catch {
-      setError('root', { message: 'Credenciais inválidas' })
+      setError('root', { message: 'E-mail ou senha inválidos' })
     }
   }
 
@@ -54,7 +69,7 @@ export default function Login() {
           <button type="submit" disabled={isSubmitting} className="w-full bg-teal-600 hover:bg-teal-500 text-white font-semibold py-2 rounded-lg transition">
             {isSubmitting ? 'Entrando...' : 'Entrar'}
           </button>
-          <p className="text-center text-gray-500 text-sm">Não tem conta? <Link to="/register" className="text-teal-400 hover:underline">Cadastre-se</Link></p>
+          <p className="text-center text-gray-500 text-sm">Não tem conta? <Link to="/auth/registro" className="text-teal-400 hover:underline">Cadastre-se</Link></p>
         </form>
       </div>
     </div>
