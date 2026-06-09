@@ -1,11 +1,10 @@
-from fastapi import APIRouter, Depends, BackgroundTasks
+from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.core.security import get_current_user
+from app.core.deps import get_current_user
 from app.models.user import User
 from app.models.portfolio import Portfolio
 from app.integrations.brapi_dividends import sync_dividends_for_portfolio
-from fastapi import HTTPException
 
 router = APIRouter(prefix="/api/v1/sync", tags=["sync"])
 
