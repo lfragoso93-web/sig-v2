@@ -4,6 +4,7 @@ import AuthLayout from '@/components/layout/AuthLayout'
 import Landing from '@/pages/Landing'
 import Login from '@/pages/Login'
 import Register from '@/pages/Register'
+import EsqueceuSenha from '@/pages/EsqueceuSenha'
 import Resumo from '@/pages/Resumo'
 import Rentabilidade from '@/pages/Rentabilidade'
 import Transacoes from '@/pages/Transacoes'
@@ -22,9 +23,10 @@ export const router = createBrowserRouter([
     path: '/auth',
     element: <AuthLayout />,
     children: [
-      { index: true, element: <Navigate to="login" replace /> },
-      { path: 'login',    element: <Login /> },
-      { path: 'registro', element: <Register /> },
+      { index: true,           element: <Navigate to="login" replace /> },
+      { path: 'login',         element: <Login /> },
+      { path: 'registro',      element: <Register /> },
+      { path: 'esqueceu-senha', element: <EsqueceuSenha /> },
     ],
   },
 
