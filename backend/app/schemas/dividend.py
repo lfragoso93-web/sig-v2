@@ -46,3 +46,50 @@ class DividendSummary(BaseModel):
     total_received:  float
     total_projected: float
     monthly:         List[MonthPoint]
+
+
+# ── Schemas de Proventos ──────────────────────────────────────────────────────
+
+class ProventosSummary(BaseModel):
+    total_recebido:    float
+    total_projetado:   float
+    media_mensal:      float
+    yield_medio:       Optional[float] = None
+
+
+class ProventoDistribution(BaseModel):
+    ticker:     str
+    asset_type: str
+    total:      float
+    percentual: float
+
+
+class ProventosEvolucao(BaseModel):
+    periodo:    str
+    total:      float
+    acoes:      float = 0.0
+    fiis:       float = 0.0
+    outros:     float = 0.0
+
+
+class ProventosHistoricoMes(BaseModel):
+    mes:        str
+    total:      float
+    status:     Optional[str] = None
+
+
+class ProventoItem(BaseModel):
+    id:           int
+    portfolio_id: int
+    ticker:       str
+    asset_type:   str
+    type:         DividendType
+    amount:       float
+    quantity:     float
+    total:        float
+    payment_date: date
+    ex_date:      Optional[date] = None
+    status:       Optional[str] = None
+
+    class Config:
+        from_attributes = True
