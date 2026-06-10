@@ -1,9 +1,14 @@
 import axios from 'axios'
 import { useAuthStore } from '@/store/authStore'
 
-// Em producao: VITE_API_URL=https://sgi-s4u9.onrender.com
+// Em producao: VITE_API_URL pode ser:
+//   https://sgi-s4u9.onrender.com         (correto)
+//   https://sgi-s4u9.onrender.com/api/v1  (legado — normalizado abaixo)
 // Em desenvolvimento: http://localhost:8000
-const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+const _raw = (import.meta.env.VITE_API_URL ?? 'http://localhost:8000').replace(/\/$/, '')
+
+// Remove sufixo /api/v1 caso a variavel de ambiente ja o inclua
+const BASE_URL = _raw.endsWith('/api/v1') ? _raw.slice(0, -7) : _raw
 
 const api = axios.create({
   baseURL: `${BASE_URL}/api/v1`,
