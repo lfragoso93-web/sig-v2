@@ -1,7 +1,8 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import text
+from sqlalchemy import text, event
+from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.core.database import Base, engine
 from app.core.config import settings
@@ -14,95 +15,42 @@ from app.routers import (
 )
 from app.routers import debug
 
-# SQL que cria todos os ENUMs do projeto de forma idempotente.
-# Deve ser executado ANTES de qualquer create_table / alembic upgrade.
-_CREATE_ENUMS_SQL = """
-DO $$
-BEGIN
-    -- user.py
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'userrole') THEN
-        CREATE TYPE userrole AS ENUM ('user', 'superadmin');
-    END IF;
+# Cada ENUM e criado individualmente com IF NOT EXISTS.
+# Precisam rodar fora de bloco transacional (AUTOCOMMIT) pois o PostgreSQL
+# nao permite DDL de tipo dentro de transacao quando o tipo ja existe.
+_ENUMS: list[str] = [
+    "CREATE TYPE IF NOT EXISTS userrole AS ENUM ('user', 'superadmin')",
+    "CREATE TYPE IF NOT EXISTS dividendstatus AS ENUM ('RECEBIDO', 'A_RECEBER')",
+    "CREATE TYPE IF NOT EXISTS dividendtype AS ENUM ('DIVIDENDO', 'JCP', 'RENDIMENTO', 'AMORTIZACAO', 'BONIFICACAO', 'OUTROS')",
+    "CREATE TYPE IF NOT EXISTS assettype AS ENUM ('ACAO', 'FII', 'ETF_NACIONAL', 'TESOURO_DIRETO', 'STOCK', 'ETF_INTERNACIONAL', 'CRIPTO', 'RENDA_FIXA')",
+    "CREATE TYPE IF NOT EXISTS assetcurrency AS ENUM ('BRL', 'USD', 'EUR', 'BTC')",
+    "CREATE TYPE IF NOT EXISTS corporateeventtype AS ENUM ('DESDOBRAMENTO', 'GRUPAMENTO', 'BONIFICACAO')",
+    "CREATE TYPE IF NOT EXISTS corporateeventstatus AS ENUM ('PENDENTE', 'APLICADO', 'IGNORADO')",
+    "CREATE TYPE IF NOT EXISTS fixedincometype AS ENUM ('CDB', 'LCI', 'LCA', 'LCI_LCA', 'CRI', 'CRA', 'DEBENTURE', 'POUPANCA', 'OUTROS')",
+    "CREATE TYPE IF NOT EXISTS indexertype AS ENUM ('CDI', 'IPCA_PLUS', 'SELIC', 'PREFIXADO', 'IGPM_PLUS')",
+    "CREATE TYPE IF NOT EXISTS irpfmarket AS ENUM ('ACOES', 'DAY_TRADE', 'FII', 'ETF', 'CRIPTO', 'RENDA_FIXA', 'STOCKS')",
+    "CREATE TYPE IF NOT EXISTS goaltype AS ENUM ('PATRIMONIO_ALVO', 'ALOCACAO', 'DY_MENSAL', 'RENTABILIDADE', 'APORTE_MENSAL')",
+    "CREATE TYPE IF NOT EXISTS treasurytype AS ENUM ('Tesouro Selic', 'Tesouro Prefixado', 'Tesouro Prefixado com Juros Semestrais', 'Tesouro IPCA+', 'Tesouro IPCA+ com Juros Semestrais', 'Tesouro IGP-M+ com Juros Semestrais', 'Tesouro Renda+', 'Tesouro Educa+')",
+]
 
-    -- dividend.py
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'dividendstatus') THEN
-        CREATE TYPE dividendstatus AS ENUM ('recebido', 'a_receber');
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'dividendtype') THEN
-        CREATE TYPE dividendtype AS ENUM (
-            'dividendo', 'jcp', 'rendimento', 'amortizacao', 'bonificacao', 'outros'
-        );
-    END IF;
 
-    -- asset.py
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'assettype') THEN
-        CREATE TYPE assettype AS ENUM (
-            'ACAO', 'FII', 'ETF_NACIONAL', 'TESOURO_DIRETO',
-            'STOCK', 'ETF_INTERNACIONAL', 'CRIPTO', 'RENDA_FIXA'
-        );
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'assetcurrency') THEN
-        CREATE TYPE assetcurrency AS ENUM ('BRL', 'USD', 'EUR', 'BTC');
-    END IF;
-
-    -- corporate_event.py
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'corporateeventtype') THEN
-        CREATE TYPE corporateeventtype AS ENUM ('DESDOBRAMENTO', 'GRUPAMENTO', 'BONIFICACAO');
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'corporateeventstatus') THEN
-        CREATE TYPE corporateeventstatus AS ENUM ('PENDENTE', 'APLICADO', 'IGNORADO');
-    END IF;
-
-    -- fixed_income.py
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'fixedincometype') THEN
-        CREATE TYPE fixedincometype AS ENUM (
-            'CDB', 'LCI', 'LCA', 'LCI_LCA', 'CRI', 'CRA',
-            'DEBENTURE', 'POUPANCA', 'OUTROS'
-        );
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'indexertype') THEN
-        CREATE TYPE indexertype AS ENUM (
-            'CDI', 'IPCA_PLUS', 'SELIC', 'PREFIXADO', 'IGPM_PLUS'
-        );
-    END IF;
-
-    -- irpf.py
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'irpfmarket') THEN
-        CREATE TYPE irpfmarket AS ENUM (
-            'ACOES', 'DAY_TRADE', 'FII', 'ETF', 'CRIPTO', 'RENDA_FIXA', 'STOCKS'
-        );
-    END IF;
-
-    -- goal.py
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'goaltype') THEN
-        CREATE TYPE goaltype AS ENUM (
-            'PATRIMONIO_ALVO', 'ALOCACAO', 'DY_MENSAL', 'RENTABILIDADE', 'APORTE_MENSAL'
-        );
-    END IF;
-
-    -- treasury.py
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'treasurytype') THEN
-        CREATE TYPE treasurytype AS ENUM (
-            'Tesouro Selic', 'Tesouro Prefixado',
-            'Tesouro Prefixado com Juros Semestrais',
-            'Tesouro IPCA+', 'Tesouro IPCA+ com Juros Semestrais',
-            'Tesouro IGP-M+ com Juros Semestrais',
-            'Tesouro Renda+', 'Tesouro Educa+'
-        );
-    END IF;
-END$$;
-"""
+async def _create_enums_autocommit() -> None:
+    """Cria todos os ENUMs fora de transacao (AUTOCOMMIT) para ser idempotente."""
+    # Conecta diretamente com isolation_level=AUTOCOMMIT para que cada
+    # CREATE TYPE seja executado fora de bloco transacional.
+    async with engine.connect() as conn:
+        await conn.execution_options(isolation_level="AUTOCOMMIT")
+        for stmt in _ENUMS:
+            await conn.execute(text(stmt))
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1. Garante que todos os ENUMs existem (idempotente)
-    async with engine.begin() as conn:
-        await conn.execute(text(_CREATE_ENUMS_SQL))
+    # 1. Garante todos os ENUMs (idempotente, AUTOCOMMIT)
+    await _create_enums_autocommit()
 
-    # 2. Cria tabelas apenas se NAO existirem (sem tentar recriar ENUMs)
-    #    Em producao prefira rodar apenas "alembic upgrade head" via entrypoint.
-    #    Este bloco e um safety-net para dev/primeiro boot sem migrations aplicadas.
+    # 2. Cria tabelas que ainda nao existem (checkfirst=True)
+    #    Em producao prefira apenas "alembic upgrade head" via entrypoint.
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all, checkfirst=True)
 
