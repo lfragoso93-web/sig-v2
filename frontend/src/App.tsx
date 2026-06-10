@@ -23,29 +23,38 @@ export default function App() {
         <AuthProvider>
           <Routes>
             {/* Public */}
-            <Route path="/login" element={<LoginPage />} />
+            <Route path="/login"    element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
 
             {/* Protected */}
             <Route element={<ProtectedRoute />}>
               <Route element={<AppLayout />}>
-                <Route path="/" element={<Navigate to="/resumo" replace />} />
-                <Route path="/resumo" element={<ResumePage />} />
-                <Route path="/proventos" element={<ProventosPage />} />
-                <Route path="/patrimonio" element={<PatrimonioPage />} />
-                <Route path="/rentabilidade" element={<RentabilidadePage />} />
-                <Route path="/metas" element={<MetasPage />} />
-                <Route path="/analise" element={<AnalisePage />} />
-                <Route path="/lancamentos" element={<LancamentosPage />} />
-                <Route path="/irpf" element={<IRPFPage />} />
-                {/* Rotas de carteira */}
-                <Route path="/carteira/transacoes" element={<Transacoes />} />
-                <Route path="/carteira/lancamentos" element={<LancamentosPage />} />
-                <Route path="/configuracoes" element={<Configuracoes />} />
+                {/* Raiz → /carteira (rota principal da Sidebar) */}
+                <Route path="/"        element={<Navigate to="/carteira" replace />} />
+                {/* /resumo antigo → redireciona para /carteira */}
+                <Route path="/resumo" element={<Navigate to="/carteira" replace />} />
+
+                {/* Rotas principais */}
+                <Route path="/carteira"                   element={<ResumePage />} />
+                <Route path="/carteira/transacoes"        element={<Transacoes />} />
+                <Route path="/carteira/lancamentos"       element={<LancamentosPage />} />
+                <Route path="/carteira/proventos"         element={<ProventosPage />} />
+                <Route path="/carteira/rentabilidade"     element={<RentabilidadePage />} />
+                <Route path="/carteira/configuracoes"     element={<Configuracoes />} />
+
+                {/* Rotas legadas sem /carteira */}
+                <Route path="/proventos"      element={<Navigate to="/carteira/proventos"     replace />} />
+                <Route path="/patrimonio"     element={<PatrimonioPage />} />
+                <Route path="/rentabilidade"  element={<Navigate to="/carteira/rentabilidade" replace />} />
+                <Route path="/metas"          element={<MetasPage />} />
+                <Route path="/analise"        element={<AnalisePage />} />
+                <Route path="/lancamentos"    element={<Navigate to="/carteira/lancamentos"   replace />} />
+                <Route path="/irpf"           element={<IRPFPage />} />
+                <Route path="/configuracoes"  element={<Navigate to="/carteira/configuracoes" replace />} />
               </Route>
             </Route>
 
-            <Route path="*" element={<Navigate to="/resumo" replace />} />
+            <Route path="*" element={<Navigate to="/carteira" replace />} />
           </Routes>
         </AuthProvider>
       </BrowserRouter>
