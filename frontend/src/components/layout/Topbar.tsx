@@ -5,14 +5,14 @@ import { useAuth } from '@/contexts/AuthContext'
 import clsx from 'clsx'
 
 const NAV_ITEMS = [
-  { to: '/resumo',       label: 'Resumo' },
-  { to: '/proventos',    label: 'Proventos' },
-  { to: '/patrimonio',   label: 'Patrimônio' },
-  { to: '/rentabilidade',label: 'Rentabilidade' },
-  { to: '/metas',        label: 'Metas' },
-  { to: '/analise',      label: 'Análise' },
-  { to: '/lancamentos',  label: 'Lançamentos' },
-  { to: '/irpf',         label: 'IRPF' },
+  { to: '/resumo',        label: 'Resumo' },
+  { to: '/proventos',     label: 'Proventos' },
+  { to: '/patrimonio',    label: 'Patrimônio' },
+  { to: '/rentabilidade', label: 'Rentabilidade' },
+  { to: '/metas',         label: 'Metas' },
+  { to: '/analise',       label: 'Análise' },
+  { to: '/lancamentos',   label: 'Lançamentos' },
+  { to: '/irpf',          label: 'IRPF' },
 ]
 
 interface TopbarProps {
@@ -25,15 +25,14 @@ export default function Topbar({ onAddLancamento }: TopbarProps) {
 
   return (
     <header className="fixed top-0 inset-x-0 z-40 h-14
-      bg-white/90 dark:bg-dark-700/90
-      border-b border-light-border dark:border-dark-border
+      bg-surface-900/95 border-b border-surface-700
       backdrop-blur-sm">
       <div className="flex items-center h-full px-4 gap-1">
 
         {/* Logo */}
-        <span className="mr-4 text-sm font-semibold text-brand-primary tracking-wide shrink-0">
+        <span className="mr-4 text-sm font-semibold text-brand-400 tracking-wide shrink-0">
           SIG
-          <span className="text-gray-400 dark:text-gray-500 font-light"> v2</span>
+          <span className="text-slate-500 font-light"> v2</span>
         </span>
 
         {/* Nav */}
@@ -46,8 +45,8 @@ export default function Topbar({ onAddLancamento }: TopbarProps) {
                 clsx(
                   'shrink-0 px-3 py-1.5 rounded text-xs font-medium transition-colors duration-150',
                   isActive
-                    ? 'text-brand-primary bg-brand-primary/10'
-                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-light-100 dark:hover:bg-dark-600'
+                    ? 'text-brand-400 bg-brand-600/15'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-surface-700'
                 )
               }
             >
@@ -58,13 +57,13 @@ export default function Topbar({ onAddLancamento }: TopbarProps) {
 
         {/* Actions */}
         <div className="flex items-center gap-2 ml-2 shrink-0">
+
           {/* Theme toggle */}
           <button
             onClick={toggleTheme}
             aria-label={theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
-            className="p-1.5 rounded-lg text-gray-500 dark:text-gray-400
-              hover:bg-light-100 dark:hover:bg-dark-600
-              hover:text-gray-800 dark:hover:text-gray-200
+            className="p-1.5 rounded-lg text-slate-400
+              hover:bg-surface-700 hover:text-slate-200
               transition-colors duration-150"
           >
             {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
@@ -72,7 +71,7 @@ export default function Topbar({ onAddLancamento }: TopbarProps) {
 
           {/* User */}
           {user && (
-            <div className="flex items-center gap-1 text-xs text-muted">
+            <div className="flex items-center gap-1 text-xs text-slate-400">
               <User size={14} />
               <span className="hidden sm:block max-w-24 truncate">{user.name}</span>
             </div>
@@ -82,8 +81,8 @@ export default function Topbar({ onAddLancamento }: TopbarProps) {
           <button
             onClick={logout}
             aria-label="Sair"
-            className="p-1.5 rounded-lg text-gray-500 dark:text-gray-400
-              hover:bg-rose-500/10 hover:text-rose-500
+            className="p-1.5 rounded-lg text-slate-400
+              hover:bg-red-500/10 hover:text-red-400
               transition-colors duration-150"
           >
             <LogOut size={16} />
@@ -92,7 +91,9 @@ export default function Topbar({ onAddLancamento }: TopbarProps) {
           {/* Add Lancamento */}
           <button
             onClick={onAddLancamento}
-            className="btn-primary text-xs px-3 py-1.5"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md
+              text-xs font-medium bg-brand-600 hover:bg-brand-500
+              text-white transition-colors duration-150"
           >
             <Plus size={14} />
             Adicionar Lançamento

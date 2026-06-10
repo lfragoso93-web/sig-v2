@@ -7,7 +7,7 @@ export default function AppLayout() {
   const [showAddModal, setShowAddModal] = useState(false)
 
   return (
-    <div className="min-h-screen flex flex-col bg-light-50 dark:bg-dark-800">
+    <div className="min-h-screen flex flex-col bg-surface-900">
       <Topbar onAddLancamento={() => setShowAddModal(true)} />
       <main className="flex-1 pt-14">
         <Outlet />
