@@ -96,6 +96,10 @@ async def _fetch_yfinance(ticker_asset_pairs: list[tuple[str, str]]) -> dict[str
         return await loop.run_in_executor(pool, _fetch_yf_sync, ticker_map)
 
 
+async def _noop() -> dict:
+    return {}
+
+
 # ── API publica ────────────────────────────────────────────────────────────────────
 
 async def get_prices(positions: list[dict]) -> dict[str, float]:
@@ -116,7 +120,6 @@ async def get_prices(positions: list[dict]) -> dict[str, float]:
             cached[ticker] = cached_val
             continue
         if asset_type in BR_TYPES:
-            # Garante sufixo .SA para BRAPI quando necessario
             br_tickers.append(ticker)
         elif asset_type in INTL_TYPES:
             intl_pairs.append((ticker, asset_type))
@@ -124,9 +127,9 @@ async def get_prices(positions: list[dict]) -> dict[str, float]:
             # Tenta BRAPI como fallback para tipos desconhecidos
             br_tickers.append(ticker)
 
-    # Busca em paralelo
+    # Busca em paralelo — usa _noop() quando a lista esta vazia (compativel com Python 3.12+)
     br_results, intl_results = await asyncio.gather(
-        brapi_fetch_quotes(br_tickers) if br_tickers else asyncio.coroutine(lambda: {})().__await__().__next__() or _noop(),
+        brapi_fetch_quotes(br_tickers) if br_tickers else _noop(),
         _fetch_yfinance(intl_pairs)    if intl_pairs  else _noop(),
     )
 
@@ -137,7 +140,3 @@ async def get_prices(positions: list[dict]) -> dict[str, float]:
         _cache_set(ticker, price)
 
     return all_prices
-
-
-async def _noop() -> dict:
-    return {}

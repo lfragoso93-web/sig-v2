@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, text
 from datetime import date, timedelta
 from typing import Optional
 from pydantic import BaseModel
@@ -154,13 +154,42 @@ async def _calc_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
     return _enrich_with_prices(raw, prices)
 
 
-def _div_total(d: Dividend) -> float:
-    """Retorna o valor total de um Dividend priorizando campos disponiveis."""
-    if d.total_value is not None:
-        return float(d.total_value)
-    unit = d.value_per_unit or d.amount or 0.0
-    qty  = d.quantity or 1.0
-    return float(unit) * float(qty)
+async def _sum_dividends(db: AsyncSession, portfolio_id: int, cutoff: Optional[date] = None) -> float:
+    """
+    Soma proventos usando SQL puro para evitar erro de coluna ausente no modelo ORM.
+    Suporta tanto tabelas com coluna total_value quanto sem ela.
+    """
+    try:
+        if cutoff:
+            rows = await db.execute(
+                text(
+                    "SELECT total_value, value_per_unit, amount, quantity "
+                    "FROM dividends "
+                    "WHERE portfolio_id = :pid AND payment_date >= :cutoff"
+                ),
+                {'pid': portfolio_id, 'cutoff': cutoff},
+            )
+        else:
+            rows = await db.execute(
+                text(
+                    "SELECT total_value, value_per_unit, amount, quantity "
+                    "FROM dividends "
+                    "WHERE portfolio_id = :pid"
+                ),
+                {'pid': portfolio_id},
+            )
+        total = 0.0
+        for row in rows.fetchall():
+            tv, vpu, amt, qty = row
+            if tv is not None:
+                total += float(tv)
+            else:
+                unit = vpu or amt or 0.0
+                q    = qty or 1.0
+                total += float(unit) * float(q)
+        return round(total, 2)
+    except Exception:
+        return 0.0
 
 
 # ── Rotas CRUD ───────────────────────────────────────────────────────────────────────
@@ -235,21 +264,10 @@ async def portfolio_summary(
     result_abs     = round(total_current - total_invested, 2)
     result_pct     = round((result_abs / total_invested * 100) if total_invested > 0 else 0.0, 4)
 
-    # Proventos (tabela dividends)
+    # Proventos via SQL puro (evita erro de coluna asset_id ausente no banco)
     cutoff = date.today() - timedelta(days=365)
-
-    div_12m_res = await db.execute(
-        select(Dividend).where(
-            Dividend.portfolio_id == portfolio_id,
-            Dividend.payment_date >= cutoff,
-        )
-    )
-    proventos_12m = sum(_div_total(d) for d in div_12m_res.scalars().all())
-
-    div_all_res = await db.execute(
-        select(Dividend).where(Dividend.portfolio_id == portfolio_id)
-    )
-    total_proventos = sum(_div_total(d) for d in div_all_res.scalars().all())
+    proventos_12m   = await _sum_dividends(db, portfolio_id, cutoff=cutoff)
+    total_proventos = await _sum_dividends(db, portfolio_id)
 
     return SummaryResponse(
         total_invested           = round(total_invested,   2),
@@ -263,8 +281,8 @@ async def portfolio_summary(
         variacao_valor           = result_abs,
         variacao_percentual      = result_pct,
         rentabilidade_total      = result_pct,
-        dividendos_recebidos_12m = round(proventos_12m,    2),
-        total_proventos          = round(total_proventos,  2),
+        dividendos_recebidos_12m = proventos_12m,
+        total_proventos          = total_proventos,
     )
 
 
