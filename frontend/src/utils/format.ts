@@ -1,6 +1,6 @@
 import numeral from 'numeral'
 
-// ── Moeda ────────────────────────────────────────────────────────────────────
+// ── Moeda ──────────────────────────────────────────────────────────────────────────────
 export function formatCurrency(value: number): string {
   return numeral(value).format('R$ 0,0.00')
 }
@@ -12,7 +12,7 @@ export function formatUSD(value: number): string {
   return numeral(value).format('$ 0,0.00')
 }
 
-// ── Percentual ───────────────────────────────────────────────────────────────
+// ── Percentual ────────────────────────────────────────────────────────────────────
 export function formatPercent(value: number): string {
   return numeral(value / 100).format('0.00%')
 }
@@ -20,12 +20,12 @@ export function formatPercent(value: number): string {
 /** Alias usado em vários componentes */
 export const formatPct = formatPercent
 
-// ── Quantidade ───────────────────────────────────────────────────────────────
+// ── Quantidade ──────────────────────────────────────────────────────────────────────
 export function formatQuantity(value: number): string {
   return numeral(value).format('0,0.####')
 }
 
-// ── Data ─────────────────────────────────────────────────────────────────────
+// ── Data ────────────────────────────────────────────────────────────────────────────────
 export function formatDate(dateStr: string): string {
   if (!dateStr) return '-'
   const d = new Date(dateStr)
@@ -38,19 +38,20 @@ export function formatDateShort(dateStr: string): string {
   return d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })
 }
 
-// ── Classe de cor por sinal ───────────────────────────────────────────────────
+// ── Classe de cor por sinal ───────────────────────────────────────────────────────────────
 export function signClass(value: number): string {
   if (value > 0) return 'text-green-500'
   if (value < 0) return 'text-red-500'
   return 'text-gray-400'
 }
 
-// ── Badge por tipo de ativo ───────────────────────────────────────────────────
-// Retorna a classe CSS de cor para o badge de tipo de ativo na tabela de posições
+// ── Badge por tipo de ativo ─────────────────────────────────────────────────────────────
+// Normaliza para uppercase antes de mapear — cobre todos os formatos do banco
 export function assetBadgeClass(assetType: string): string {
+  if (!assetType) return 'badge-default'
   const map: Record<string, string> = {
     'ACAO':              'badge-acao',
-    'AÇÃO':              'badge-acao',
+    'ACAO_NACIONAL':     'badge-acao',
     'FII':               'badge-fii',
     'ETF':               'badge-etf',
     'ETF_NACIONAL':      'badge-etf',
@@ -64,5 +65,6 @@ export function assetBadgeClass(assetType: string): string {
     'CRIPTOMOEDA':       'badge-cripto',
     'RENDA_FIXA':        'badge-renda-fixa',
   }
-  return map[assetType?.toUpperCase()] ?? 'badge-default'
+  // já estava uppercase mas garantimos
+  return map[assetType.toUpperCase()] ?? 'badge-default'
 }

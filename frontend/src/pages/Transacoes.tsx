@@ -10,16 +10,17 @@ import { usePortfolios } from '@/hooks/usePortfolios'
 import ModalNovaTransacao from '@/components/transactions/ModalNovaTransacao'
 import { formatBRL, formatDate, assetBadgeClass } from '@/utils/format'
 
-const ASSET_TYPES = [
-  'Todos',
-  'Acao Nacional',
-  'FII',
-  'ETF Nacional',
-  'Tesouro Direto',
-  'Stock',
-  'ETF Internacional',
-  'Criptomoeda',
-  'Renda Fixa',
+// Valores batem exatamente com asset_type salvo no banco (UPPERCASE_SNAKE)
+const ASSET_TYPES: { label: string; value: string }[] = [
+  { label: 'Todos',               value: '' },
+  { label: 'Ações',               value: 'ACAO_NACIONAL' },
+  { label: 'FII',                  value: 'FII' },
+  { label: 'ETF Nacional',         value: 'ETF_NACIONAL' },
+  { label: 'ETF Internacional',    value: 'ETF_INTERNACIONAL' },
+  { label: 'Tesouro Direto',       value: 'TESOURO_DIRETO' },
+  { label: 'Stock',                value: 'STOCK' },
+  { label: 'Criptomoeda',          value: 'CRIPTO' },
+  { label: 'Renda Fixa',           value: 'RENDA_FIXA' },
 ]
 
 export default function Transacoes() {
@@ -31,14 +32,15 @@ export default function Transacoes() {
 
   const [showModal, setShowModal]   = useState(false)
   const [search, setSearch]         = useState('')
-  const [typeFilter, setTypeFilter] = useState('Todos')
+  const [typeFilter, setTypeFilter] = useState('')
   const [opFilter, setOpFilter]     = useState<'todos' | 'buy' | 'sell'>('todos')
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
 
   const filtered = useMemo(() => {
     return transactions.filter(t => {
       const matchSearch = t.ticker.toLowerCase().includes(search.toLowerCase())
-      const matchType   = typeFilter === 'Todos' || t.asset_type.toLowerCase() === typeFilter.toLowerCase()
+      // compara direto com o valor uppercase do enum
+      const matchType   = !typeFilter || t.asset_type === typeFilter
       const matchOp     = opFilter === 'todos' || t.operation === opFilter
       return matchSearch && matchType && matchOp
     })
@@ -99,11 +101,13 @@ export default function Transacoes() {
         </div>
 
         <select
-          className="input text-sm w-44"
+          className="input text-sm w-48"
           value={typeFilter}
           onChange={e => setTypeFilter(e.target.value)}
         >
-          {ASSET_TYPES.map(t => <option key={t}>{t}</option>)}
+          {ASSET_TYPES.map(t => (
+            <option key={t.value} value={t.value}>{t.label}</option>
+          ))}
         </select>
 
         <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: 'var(--color-surface-offset)' }}>
