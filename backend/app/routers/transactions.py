@@ -10,7 +10,8 @@ from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction
 from app.schemas.transaction import TransactionCreate, TransactionOut
 
-router = APIRouter(prefix="/portfolios/{portfolio_id}/transactions", tags=["transactions"])
+# Sem prefix aqui — o main.py monta sob /api/v1/portfolios
+router = APIRouter()
 
 
 async def _get_portfolio(portfolio_id: int, user: User, db: AsyncSession) -> Portfolio:
@@ -26,7 +27,7 @@ async def _get_portfolio(portfolio_id: int, user: User, db: AsyncSession) -> Por
     return p
 
 
-@router.get("", response_model=List[TransactionOut])
+@router.get("/{portfolio_id}/transactions", response_model=List[TransactionOut])
 async def list_transactions(
     portfolio_id: int,
     db: AsyncSession = Depends(get_db),
@@ -41,7 +42,7 @@ async def list_transactions(
     return result.scalars().all()
 
 
-@router.post("", response_model=TransactionOut, status_code=status.HTTP_201_CREATED)
+@router.post("/{portfolio_id}/transactions", response_model=TransactionOut, status_code=status.HTTP_201_CREATED)
 async def create_transaction(
     portfolio_id: int,
     payload: TransactionCreate,
@@ -68,7 +69,7 @@ async def create_transaction(
     return tx
 
 
-@router.delete("/{transaction_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{portfolio_id}/transactions/{transaction_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_transaction(
     portfolio_id: int,
     transaction_id: int,

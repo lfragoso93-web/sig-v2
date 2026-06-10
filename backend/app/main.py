@@ -15,9 +15,6 @@ from app.routers import (
 )
 from app.routers import debug
 
-# Lista de todos os ENUMs do projeto.
-# Cada item: (nome_do_tipo, valores...)
-# Criados via asyncpg raw em AUTOCOMMIT; erro 42710 (duplicate_object) e ignorado.
 _ENUMS: list[tuple] = [
     ("userrole",           "'user'", "'superadmin'"),
     ("dividendstatus",     "'RECEBIDO'", "'A_RECEBER'"),
@@ -44,12 +41,6 @@ _ENUMS: list[tuple] = [
 
 
 async def _create_enums_raw() -> None:
-    """
-    Cria todos os ENUMs usando asyncpg diretamente (sem SQLAlchemy).
-    Conexao em autocommit; erro 42710 (tipo ja existe) e silenciado.
-    Compativel com PostgreSQL 9.1+.
-    """
-    # Extrai a DSN sincrona e converte para formato asyncpg
     dsn = settings.ASYNC_DATABASE_URL.replace("postgresql+asyncpg", "postgresql")
     conn = await asyncpg.connect(dsn)
     try:
@@ -60,7 +51,6 @@ async def _create_enums_raw() -> None:
             try:
                 await conn.execute(sql)
             except asyncpg.exceptions.DuplicateObjectError:
-                # Tipo ja existe — ignorar
                 pass
     finally:
         await conn.close()
@@ -68,14 +58,9 @@ async def _create_enums_raw() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1. Garante todos os ENUMs (idempotente, autocommit via asyncpg raw)
     await _create_enums_raw()
-
-    # 2. Cria tabelas que ainda nao existem
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all, checkfirst=True)
-
-    # 3. Inicia o scheduler (apenas 1 worker — ver entrypoint.sh)
     start_scheduler()
     yield
     await engine.dispose()
@@ -107,7 +92,8 @@ app.include_router(admin.router,        prefix=f"{PREFIX}/admin",       tags=["a
 
 # Core financeiro
 app.include_router(portfolios.router,   prefix=f"{PREFIX}/portfolios",  tags=["portfolios"])
-app.include_router(transactions.router, prefix=f"{PREFIX}/transactions", tags=["transactions"])
+# transactions montado sob /portfolios (rotas: /{portfolio_id}/transactions)
+app.include_router(transactions.router, prefix=f"{PREFIX}/portfolios",  tags=["transactions"])
 app.include_router(positions.router,    prefix=f"{PREFIX}/positions",   tags=["positions"])
 app.include_router(dividends.router,    prefix=f"{PREFIX}/dividends",   tags=["dividends"])
 app.include_router(proventos.router,    prefix=f"{PREFIX}/proventos",   tags=["proventos"])
@@ -126,7 +112,6 @@ app.include_router(analysis.router,     prefix=f"{PREFIX}/analysis",    tags=["a
 app.include_router(fixed_income.router, prefix=f"{PREFIX}/fixed-income", tags=["fixed_income"])
 app.include_router(treasury.router,     prefix=f"{PREFIX}/treasury",    tags=["treasury"])
 
-# Debug temporario — ativo apenas se ADMIN_SECRET estiver definido
 import os
 if os.getenv("ADMIN_SECRET"):
     app.include_router(debug.router, prefix=f"{PREFIX}/debug", tags=["debug"])
