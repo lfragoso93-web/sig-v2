@@ -21,6 +21,7 @@ class Transaction(Base):
     price        = Column(Float, nullable=False)
     fees         = Column(Float, default=0.0)
     date         = Column(Date, nullable=False, index=True)
+    currency     = Column(String(10), default="BRL", nullable=False)
     notes        = Column(String(500), nullable=True)
 
     portfolio = relationship("Portfolio", back_populates="transactions")

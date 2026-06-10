@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, text
 from typing import List
 
 from app.core.database import get_db
@@ -10,7 +10,6 @@ from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction
 from app.schemas.transaction import TransactionCreate, TransactionOut
 
-# Sem prefix aqui — o main.py monta sob /api/v1/portfolios
 router = APIRouter()
 
 
@@ -25,6 +24,18 @@ async def _get_portfolio(portfolio_id: int, user: User, db: AsyncSession) -> Por
     if not p:
         raise HTTPException(status_code=404, detail="Carteira n\u00e3o encontrada.")
     return p
+
+
+async def _ensure_currency_column(db: AsyncSession) -> None:
+    """Adiciona coluna currency se ainda nao existir (migration inline)."""
+    try:
+        await db.execute(text(
+            "ALTER TABLE transactions ADD COLUMN IF NOT EXISTS "
+            "currency VARCHAR(10) NOT NULL DEFAULT 'BRL'"
+        ))
+        await db.commit()
+    except Exception:
+        await db.rollback()
 
 
 @router.get("/{portfolio_id}/transactions", response_model=List[TransactionOut])
@@ -50,6 +61,7 @@ async def create_transaction(
     current_user: User = Depends(get_current_user),
 ):
     await _get_portfolio(portfolio_id, current_user, db)
+    await _ensure_currency_column(db)
 
     tx = Transaction(
         portfolio_id = portfolio_id,
@@ -60,7 +72,7 @@ async def create_transaction(
         price        = payload.price,
         fees         = payload.fees or 0.0,
         date         = payload.date,
-        currency     = getattr(payload, 'currency', 'BRL'),
+        currency     = getattr(payload, 'currency', 'BRL') or 'BRL',
         notes        = payload.notes,
     )
     db.add(tx)
