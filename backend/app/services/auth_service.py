@@ -12,23 +12,43 @@ from app.core.security import (
 )
 from app.services.user_service import get_user_by_email
 from datetime import timedelta
+from loguru import logger
 
 
 RESET_TOKEN_EXPIRE_MINUTES = 30
 
+_INVALID_CREDENTIALS = HTTPException(
+    status_code=status.HTTP_401_UNAUTHORIZED,
+    detail="E-mail ou senha incorretos",
+)
+
 
 async def login(db: AsyncSession, data: LoginRequest) -> TokenResponse:
-    user = await get_user_by_email(db, data.email)
-    if not user or not verify_password(data.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="E-mail ou senha incorretos",
-        )
+    # Normaliza o email para evitar falhas por caixa ou espacos
+    email_normalizado = data.email.strip().lower()
+
+    user = await get_user_by_email(db, email_normalizado)
+    if not user:
+        logger.warning(f"Login falhou: e-mail nao encontrado ({email_normalizado})")
+        raise _INVALID_CREDENTIALS
+
+    try:
+        senha_ok = verify_password(data.password, user.hashed_password)
+    except Exception as exc:
+        # Hash corrompido ou esquema incompativel — nao vaza informacao ao cliente
+        logger.error(f"Erro ao verificar senha do usuario id={user.id}: {exc}")
+        raise _INVALID_CREDENTIALS from exc
+
+    if not senha_ok:
+        logger.warning(f"Login falhou: senha invalida para usuario id={user.id}")
+        raise _INVALID_CREDENTIALS
+
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Usuario inativo. Entre em contato com o administrador.",
         )
+
     return TokenResponse(
         access_token=create_access_token(str(user.id)),
         refresh_token=create_refresh_token(str(user.id)),
@@ -56,9 +76,8 @@ async def forgot_password(db: AsyncSession, email: str) -> str:
     Retorna o token (em producao, enviar por e-mail).
     Nao revela se o e-mail existe ou nao para evitar enumeracao.
     """
-    user = await get_user_by_email(db, email)
+    user = await get_user_by_email(db, email.strip().lower())
     if not user or not user.is_active:
-        # Retorna token falso para nao revelar quais e-mails existem
         return "usuario-nao-encontrado-token-invalido"
 
     reset_token = create_access_token(
