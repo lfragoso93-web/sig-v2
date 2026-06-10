@@ -2,7 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import ProtectedRoute from '@/components/ProtectedRoute'
-import AppLayout from '@/layouts/AppLayout'
+// Layout CORRETO — tem Sidebar + auto-selecao de portfolio
+import AppLayout from '@/components/layout/AppLayout'
 import LoginPage from '@/pages/auth/LoginPage'
 import RegisterPage from '@/pages/auth/RegisterPage'
 import ResumePage from '@/pages/ResumePage'
@@ -29,28 +30,27 @@ export default function App() {
             {/* Protected */}
             <Route element={<ProtectedRoute />}>
               <Route element={<AppLayout />}>
-                {/* Raiz → /carteira (rota principal da Sidebar) */}
+                {/* Raiz -> /carteira */}
                 <Route path="/"        element={<Navigate to="/carteira" replace />} />
-                {/* /resumo antigo → redireciona para /carteira */}
-                <Route path="/resumo" element={<Navigate to="/carteira" replace />} />
+                <Route path="/resumo"  element={<Navigate to="/carteira" replace />} />
 
                 {/* Rotas principais */}
-                <Route path="/carteira"                   element={<ResumePage />} />
-                <Route path="/carteira/transacoes"        element={<Transacoes />} />
-                <Route path="/carteira/lancamentos"       element={<LancamentosPage />} />
-                <Route path="/carteira/proventos"         element={<ProventosPage />} />
-                <Route path="/carteira/rentabilidade"     element={<RentabilidadePage />} />
-                <Route path="/carteira/configuracoes"     element={<Configuracoes />} />
+                <Route path="/carteira"               element={<ResumePage />} />
+                <Route path="/carteira/transacoes"    element={<Transacoes />} />
+                <Route path="/carteira/lancamentos"   element={<LancamentosPage />} />
+                <Route path="/carteira/proventos"     element={<ProventosPage />} />
+                <Route path="/carteira/rentabilidade" element={<RentabilidadePage />} />
+                <Route path="/carteira/configuracoes" element={<Configuracoes />} />
 
-                {/* Rotas legadas sem /carteira */}
-                <Route path="/proventos"      element={<Navigate to="/carteira/proventos"     replace />} />
-                <Route path="/patrimonio"     element={<PatrimonioPage />} />
-                <Route path="/rentabilidade"  element={<Navigate to="/carteira/rentabilidade" replace />} />
-                <Route path="/metas"          element={<MetasPage />} />
-                <Route path="/analise"        element={<AnalisePage />} />
-                <Route path="/lancamentos"    element={<Navigate to="/carteira/lancamentos"   replace />} />
-                <Route path="/irpf"           element={<IRPFPage />} />
-                <Route path="/configuracoes"  element={<Navigate to="/carteira/configuracoes" replace />} />
+                {/* Rotas sem /carteira */}
+                <Route path="/patrimonio"    element={<PatrimonioPage />} />
+                <Route path="/metas"         element={<MetasPage />} />
+                <Route path="/analise"       element={<AnalisePage />} />
+                <Route path="/irpf"          element={<IRPFPage />} />
+                <Route path="/proventos"     element={<Navigate to="/carteira/proventos"     replace />} />
+                <Route path="/rentabilidade" element={<Navigate to="/carteira/rentabilidade" replace />} />
+                <Route path="/lancamentos"   element={<Navigate to="/carteira/lancamentos"   replace />} />
+                <Route path="/configuracoes" element={<Navigate to="/carteira/configuracoes" replace />} />
               </Route>
             </Route>
 
