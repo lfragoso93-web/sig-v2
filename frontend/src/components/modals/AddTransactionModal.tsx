@@ -32,8 +32,8 @@ const TABS: AssetTab[] = [
   { key: 'cripto',     label: 'Cripto',     icon: <Bitcoin    size={13} />, assetType: 'CRIPTO',            currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: BTC' },
 ]
 
-const RF_INDEXERS  = ['CDI', 'IPCA', 'Prefixado', 'SELIC', 'IGP-M', 'Outro']
-const TD_INDEXERS  = ['IPCA+', 'Prefixado', 'SELIC']
+const RF_INDEXERS = ['CDI', 'IPCA', 'Prefixado', 'SELIC', 'IGP-M', 'Outro']
+const TD_INDEXERS = ['IPCA+', 'Prefixado', 'SELIC']
 
 const TODAY = new Date().toISOString().split('T')[0]
 
@@ -49,25 +49,25 @@ export default function AddTransactionModal({ onClose }: Props) {
   const selectedPortfolioId = useAppStore(s => s.selectedPortfolioId)
   const { mutateAsync, isPending } = useCreateTransaction()
 
-  const [activeTab,   setActiveTab]   = useState('acao')
-  const [operation,   setOperation]   = useState<'buy' | 'sell'>('buy')
-  const [ticker,      setTicker]      = useState('')
-  const [quantity,    setQuantity]    = useState('')
-  const [price,       setPrice]       = useState('')
-  const [fees,        setFees]        = useState('')
-  const [date,        setDate]        = useState(TODAY)
-  const [notes,       setNotes]       = useState('')
-  const [currency,    setCurrency]    = useState('BRL')
-  const [error,       setError]       = useState<string | null>(null)
-  const [success,     setSuccess]     = useState(false)
+  const [activeTab, setActiveTab] = useState('acao')
+  const [operation, setOperation] = useState<'buy' | 'sell'>('buy')
+  const [ticker,    setTicker]    = useState('')
+  const [quantity,  setQuantity]  = useState('')
+  const [price,     setPrice]     = useState('')
+  const [fees,      setFees]      = useState('')
+  const [date,      setDate]      = useState(TODAY)
+  const [notes,     setNotes]     = useState('')
+  const [currency,  setCurrency]  = useState('BRL')
+  const [error,     setError]     = useState<string | null>(null)
+  const [success,   setSuccess]   = useState(false)
 
   // campos extra RF / Tesouro
-  const [indexer,     setIndexer]     = useState('')
-  const [rate,        setRate]        = useState('')        // taxa % a.a.
-  const [maturity,    setMaturity]    = useState('')        // data vencimento
-  const [issuer,      setIssuer]      = useState('')        // emissor (RF)
+  const [indexer,  setIndexer]  = useState('')
+  const [rate,     setRate]     = useState('')
+  const [maturity, setMaturity] = useState('')
+  const [issuer,   setIssuer]   = useState('')
 
-  const tab = TABS.find(t => t.key === activeTab)!
+  const tab       = TABS.find(t => t.key === activeTab)!
   const isRF      = tab.extraFields === 'renda_fixa'
   const isTesouro = tab.extraFields === 'tesouro'
   const indexerOptions = isTesouro ? TD_INDEXERS : RF_INDEXERS
@@ -96,7 +96,7 @@ export default function AddTransactionModal({ onClose }: Props) {
     if (isNaN(prc) || prc <= 0) { setError('Preço deve ser maior que zero.'); return }
     if ((isRF || isTesouro) && !indexer) { setError('Selecione o indexador.'); return }
 
-    // monta notes enriquecidas para RF/TD
+    // enriquece notes com dados de RF/TD
     let enrichedNotes = notes.trim()
     if (isRF || isTesouro) {
       const extras = [
@@ -109,25 +109,21 @@ export default function AddTransactionModal({ onClose }: Props) {
     }
 
     try {
+      // ✔ payload correto: { portfolioId, data } conforme useCreateTransaction
       await mutateAsync({
-        portfolio_id: selectedPortfolioId,
-        ticker:       ticker.trim().toUpperCase(),
-        asset_type:   tab.assetType,
-        operation,
-        quantity:     qty,
-        price:        prc,
-        fees:         fee,
-        date,
-        currency,
-        notes:        enrichedNotes || undefined,
-        // campos extras passados como metadata quando disponíveis
-        ...(isRF || isTesouro ? {
-          indexer:  indexer || undefined,
-          rate:     rate ? parseFloat(rate) : undefined,
-          maturity: maturity || undefined,
-          issuer:   issuer || undefined,
-        } : {}),
-      } as any)
+        portfolioId: selectedPortfolioId,
+        data: {
+          ticker:     ticker.trim().toUpperCase(),
+          asset_type: tab.assetType,
+          operation,
+          quantity:   qty,
+          price:      prc,
+          fees:       fee,
+          date,
+          currency,
+          notes:      enrichedNotes || undefined,
+        },
+      })
       setSuccess(true)
     } catch (err: any) {
       const msg = err?.response?.data?.detail
@@ -211,24 +207,12 @@ export default function AddTransactionModal({ onClose }: Props) {
               {/* Toggle Compra / Venda */}
               <div className="flex rounded-lg overflow-hidden border border-surface-600 text-xs font-semibold">
                 <button
-                  type="button"
-                  onClick={() => setOperation('buy')}
-                  className={[
-                    'flex-1 py-2 transition-colors duration-150',
-                    operation === 'buy'
-                      ? 'bg-positive text-white'
-                      : 'bg-surface-800 text-slate-400 hover:bg-surface-700 hover:text-slate-200',
-                  ].join(' ')}
+                  type="button" onClick={() => setOperation('buy')}
+                  className={['flex-1 py-2 transition-colors duration-150', operation === 'buy' ? 'bg-positive text-white' : 'bg-surface-800 text-slate-400 hover:bg-surface-700 hover:text-slate-200'].join(' ')}
                 >Compra</button>
                 <button
-                  type="button"
-                  onClick={() => setOperation('sell')}
-                  className={[
-                    'flex-1 py-2 transition-colors duration-150',
-                    operation === 'sell'
-                      ? 'bg-negative text-white'
-                      : 'bg-surface-800 text-slate-400 hover:bg-surface-700 hover:text-slate-200',
-                  ].join(' ')}
+                  type="button" onClick={() => setOperation('sell')}
+                  className={['flex-1 py-2 transition-colors duration-150', operation === 'sell' ? 'bg-negative text-white' : 'bg-surface-800 text-slate-400 hover:bg-surface-700 hover:text-slate-200'].join(' ')}
                 >Venda</button>
               </div>
 
@@ -236,14 +220,7 @@ export default function AddTransactionModal({ onClose }: Props) {
               <div className="flex gap-3">
                 <div className="flex-1">
                   <label className="block text-xs text-slate-400 mb-1">{tab.tickerLabel}</label>
-                  <input
-                    type="text"
-                    value={ticker}
-                    onChange={e => setTicker(e.target.value)}
-                    placeholder={tab.tickerPlaceholder}
-                    className={inputCls}
-                    autoFocus
-                  />
+                  <input type="text" value={ticker} onChange={e => setTicker(e.target.value)} placeholder={tab.tickerPlaceholder} className={inputCls} autoFocus />
                 </div>
                 <div className="w-24">
                   <label className="block text-xs text-slate-400 mb-1">Moeda</label>
@@ -256,65 +233,34 @@ export default function AddTransactionModal({ onClose }: Props) {
                 </div>
               </div>
 
-              {/* ── CAMPOS EXTRAS: Renda Fixa / Tesouro Direto ───────────── */}
+              {/* CAMPOS EXTRAS: Renda Fixa / Tesouro Direto */}
               {(isRF || isTesouro) && (
                 <div className="rounded-lg border border-surface-600 bg-surface-800/50 px-3 py-3 flex flex-col gap-3">
                   <p className="text-xs font-medium text-slate-400">
                     {isTesouro ? '🏛 Dados do Título' : '📄 Dados do Ativo'}
                   </p>
-
-                  {/* Indexador + Taxa */}
                   <div className="flex gap-3">
                     <div className="flex-1">
                       <label className="block text-xs text-slate-400 mb-1">Indexador <span className="text-red-400">*</span></label>
-                      <select
-                        value={indexer}
-                        onChange={e => setIndexer(e.target.value)}
-                        className={inputCls}
-                      >
+                      <select value={indexer} onChange={e => setIndexer(e.target.value)} className={inputCls}>
                         <option value="">Selecionar…</option>
-                        {indexerOptions.map(o => (
-                          <option key={o} value={o}>{o}</option>
-                        ))}
+                        {indexerOptions.map(o => <option key={o} value={o}>{o}</option>)}
                       </select>
                     </div>
                     <div className="w-32">
-                      <label className="block text-xs text-slate-400 mb-1">
-                        Taxa <span className="text-slate-600">(% a.a.)</span>
-                      </label>
-                      <input
-                        type="number"
-                        value={rate}
-                        onChange={e => setRate(e.target.value)}
-                        placeholder={isTesouro ? 'ex: 5.82' : 'ex: 110'}
-                        min="0"
-                        step="any"
-                        className={inputCls}
-                      />
+                      <label className="block text-xs text-slate-400 mb-1">Taxa <span className="text-slate-600">(% a.a.)</span></label>
+                      <input type="number" value={rate} onChange={e => setRate(e.target.value)} placeholder={isTesouro ? 'ex: 5.82' : 'ex: 110'} min="0" step="any" className={inputCls} />
                     </div>
                   </div>
-
-                  {/* Vencimento + Emissor */}
                   <div className="flex gap-3">
                     <div className="flex-1">
                       <label className="block text-xs text-slate-400 mb-1">Vencimento</label>
-                      <input
-                        type="date"
-                        value={maturity}
-                        onChange={e => setMaturity(e.target.value)}
-                        className={inputCls}
-                      />
+                      <input type="date" value={maturity} onChange={e => setMaturity(e.target.value)} className={inputCls} />
                     </div>
                     {isRF && (
                       <div className="flex-1">
                         <label className="block text-xs text-slate-400 mb-1">Emissor</label>
-                        <input
-                          type="text"
-                          value={issuer}
-                          onChange={e => setIssuer(e.target.value)}
-                          placeholder="ex: Banco XP"
-                          className={inputCls}
-                        />
+                        <input type="text" value={issuer} onChange={e => setIssuer(e.target.value)} placeholder="ex: Banco XP" className={inputCls} />
                       </div>
                     )}
                   </div>
@@ -325,7 +271,7 @@ export default function AddTransactionModal({ onClose }: Props) {
               <div className="flex gap-3">
                 <div className="flex-1">
                   <label className="block text-xs text-slate-400 mb-1">
-                    {isRF || isTesouro ? 'Qtd / Valor aplicado' : 'Quantidade'}
+                    {isRF || isTesouro ? 'Qtd / Cotas' : 'Quantidade'}
                   </label>
                   <input type="number" value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="0" min="0" step="any" className={inputCls} />
                 </div>
@@ -361,40 +307,22 @@ export default function AddTransactionModal({ onClose }: Props) {
               {/* Observações */}
               <div>
                 <label className="block text-xs text-slate-400 mb-1">Observações <span className="text-slate-600">(opcional)</span></label>
-                <textarea
-                  value={notes}
-                  onChange={e => setNotes(e.target.value)}
-                  rows={2}
-                  placeholder="Anotações sobre o lançamento..."
-                  className={inputCls + ' resize-none'}
-                />
+                <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Anotações sobre o lançamento..." className={inputCls + ' resize-none'} />
               </div>
 
               {/* Erro */}
               {error && (
                 <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-md px-3 py-2">{error}</p>
               )}
-
             </div>
 
             {/* Footer */}
             <div className="flex justify-end gap-2.5 px-4 py-3 border-t border-surface-700">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-1.5 rounded-md text-xs font-medium bg-surface-700 hover:bg-surface-600 text-slate-300 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={isPending}
-                className="px-4 py-1.5 rounded-md text-xs font-medium bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white transition-colors"
-              >
+              <button type="button" onClick={onClose} className="px-4 py-1.5 rounded-md text-xs font-medium bg-surface-700 hover:bg-surface-600 text-slate-300 transition-colors">Cancelar</button>
+              <button type="submit" disabled={isPending} className="px-4 py-1.5 rounded-md text-xs font-medium bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white transition-colors">
                 {isPending ? 'Salvando...' : 'Salvar Lançamento'}
               </button>
             </div>
-
           </form>
         )}
       </div>
