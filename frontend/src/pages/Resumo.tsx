@@ -8,6 +8,7 @@ import KpiCard from '@/components/dashboard/KpiCard'
 import PositionsTable from '@/components/dashboard/PositionsTable'
 import AllocationChart from '@/components/dashboard/AllocationChart'
 import ModalNovaCarteira from '@/components/dashboard/ModalNovaCarteira'
+import AddTransactionModal from '@/components/modals/AddTransactionModal'
 import { formatBRL, formatPct } from '@/utils/format'
 
 export default function Resumo() {
@@ -18,13 +19,15 @@ export default function Resumo() {
   const { data: summary, isLoading, refetch, isRefetching } = usePortfolioSummary(selectedPortfolioId)
   const createPortfolio = useCreatePortfolio()
 
-  const [showModal, setShowModal] = useState(false)
+  const [showModalCarteira, setShowModalCarteira] = useState(false)
+  const [showModalLancamento, setShowModalLancamento] = useState(false)
 
   async function handleCreatePortfolio(name: string, description: string) {
     const p = await createPortfolio.mutateAsync({ name, description })
     setSelectedPortfolio(p.id)
-    navigate('/app/dashboard')
-    setShowModal(false)
+    // Navega para a rota correta do app (nao /app/dashboard que nao existe)
+    navigate('/carteira')
+    setShowModalCarteira(false)
   }
 
   // Estado: sem carteiras ainda
@@ -41,16 +44,9 @@ export default function Resumo() {
         <p className="text-sm mb-6 max-w-xs" style={{ color: 'var(--color-text-muted)' }}>
           Crie sua primeira carteira para começar a registrar seus investimentos.
         </p>
-        <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-          <Plus size={16} /> Criar carteira
-        </button>
-        {showModal && (
-          <ModalNovaCarteira
-            onClose={() => setShowModal(false)}
-            onConfirm={handleCreatePortfolio}
-            loading={createPortfolio.isPending}
-          />
-        )}
+        <p className="text-xs mb-2" style={{ color: 'var(--color-text-faint)' }}>
+          Use o dropdown no menu lateral para criar uma carteira.
+        </p>
       </div>
     )
   }
@@ -96,11 +92,12 @@ export default function Resumo() {
             <RefreshCw size={15} className={isRefetching ? 'animate-spin' : ''} />
             Atualizar
           </button>
+          {/* Botao principal: adiciona lancamento na carteira selecionada */}
           <button
             className="btn btn-primary flex items-center gap-1.5 text-sm"
-            onClick={() => setShowModal(true)}
+            onClick={() => setShowModalLancamento(true)}
           >
-            <Plus size={15} /> Nova carteira
+            <Plus size={15} /> Novo Lançamento
           </button>
         </div>
       </div>
@@ -143,10 +140,15 @@ export default function Resumo() {
         </div>
       </div>
 
-      {/* Modal nova carteira */}
-      {showModal && (
+      {/* Modal novo lancamento */}
+      {showModalLancamento && (
+        <AddTransactionModal onClose={() => setShowModalLancamento(false)} />
+      )}
+
+      {/* Modal nova carteira (mantido para uso via sidebar, nao exposto no header) */}
+      {showModalCarteira && (
         <ModalNovaCarteira
-          onClose={() => setShowModal(false)}
+          onClose={() => setShowModalCarteira(false)}
           onConfirm={handleCreatePortfolio}
           loading={createPortfolio.isPending}
         />
