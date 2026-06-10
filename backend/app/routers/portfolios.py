@@ -1,7 +1,6 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
-from decimal import Decimal
+from sqlalchemy import select
 from typing import Optional
 from pydantic import BaseModel
 
@@ -18,57 +17,95 @@ from app.services.portfolio_service import (
 
 router = APIRouter()
 
+# ── Labels amigáveis para asset_type ──────────────────────────────────────────
+ASSET_LABELS: dict[str, str] = {
+    'ACAO':              'Ações',
+    'ACAO_NACIONAL':     'Ações',
+    'FII':               'FIIs',
+    'ETF_NACIONAL':      'ETFs Nacionais',
+    'ETF_INT':           'ETFs Internacionais',
+    'ETF_INTERNACIONAL': 'ETFs Internacionais',
+    'STOCK':             'Stocks',
+    'STOCKS':            'Stocks',
+    'TESOURO':           'Tesouro Direto',
+    'TESOURO_DIRETO':    'Tesouro Direto',
+    'RENDA_FIXA':        'Renda Fixa',
+    'CRIPTO':            'Criptomoedas',
+    'CRIPTOMOEDA':       'Criptomoedas',
+}
 
-# ── Schemas inline para summary/positions ──────────────────────────────
+
+def _normalize_type(raw: str) -> str:
+    """Normaliza asset_type para o enum uppercase padrao do frontend."""
+    mapping = {
+        'ACAO':     'ACAO_NACIONAL',
+        'ACOES':    'ACAO_NACIONAL',
+        'ETF_INT':  'ETF_INTERNACIONAL',
+        'ETF':      'ETF_NACIONAL',
+        'TESOURO':  'TESOURO_DIRETO',
+        'CRIPTO':   'CRIPTO',
+        'CRIPTOMOEDA': 'CRIPTO',
+        'STOCKS':   'STOCK',
+    }
+    upper = (raw or '').upper().strip()
+    return mapping.get(upper, upper)
+
+
+# ── Schemas inline ─────────────────────────────────────────────────────────────
 class PositionItem(BaseModel):
-    ticker:        str
-    asset_type:    str
-    quantity:      float
-    avg_price:     float
+    ticker:         str
+    asset_type:     str       # enum normalizado
+    asset_label:    str       # label amigável ex: "Ações"
+    quantity:       float
+    avg_price:      float
     total_invested: float
-    current_price: Optional[float] = None
-    current_value: Optional[float] = None
-    result_abs:    Optional[float] = None
-    result_pct:    Optional[float] = None
+    current_price:  float     # avg_price como fallback (nunca null)
+    current_value:  float     # quantity * current_price
+    result_abs:     float     # current_value - total_invested
+    result_pct:     float     # result_abs / total_invested * 100
 
 
 class SummaryResponse(BaseModel):
-    total_invested:          float
-    total_current:           float
-    result_abs:              float
-    result_pct:              float
-    positions_count:         int
+    total_invested:           float
+    total_current:            float
+    result_abs:               float
+    result_pct:               float
+    positions_count:          int
     # aliases para os hooks do frontend
-    total_patrimonio:        float
-    total_investido:         float
-    lucro_total:             float
-    variacao_valor:          float
-    variacao_percentual:     float
-    rentabilidade_total:     float
+    total_patrimonio:         float
+    total_investido:          float
+    lucro_total:              float
+    variacao_valor:           float
+    variacao_percentual:      float
+    rentabilidade_total:      float
     dividendos_recebidos_12m: float
-    total_proventos:         float
+    total_proventos:          float
 
 
-# ── Helper: calcula posições agregadas das transactions ────────────────
+# ── Helper: calcula posições das transactions ─────────────────────────────────
 async def _calc_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
     result = await db.execute(
-        select(Transaction).where(
-            Transaction.portfolio_id == portfolio_id
-        ).order_by(Transaction.date)
+        select(Transaction)
+        .where(Transaction.portfolio_id == portfolio_id)
+        .order_by(Transaction.date)
     )
     txs = result.scalars().all()
 
-    # Agrupa por (ticker, asset_type)
     pos: dict[tuple, dict] = {}
     for tx in txs:
-        key = (tx.ticker, tx.asset_type)
+        raw_type = tx.asset_type or 'OUTROS'
+        norm     = _normalize_type(raw_type)
+        key      = (tx.ticker, norm)
         if key not in pos:
-            pos[key] = {'qty': 0.0, 'total_cost': 0.0, 'ticker': tx.ticker, 'asset_type': tx.asset_type}
+            pos[key] = {
+                'qty': 0.0, 'total_cost': 0.0,
+                'ticker': tx.ticker, 'asset_type': norm,
+            }
         p = pos[key]
         if tx.operation == OperationType.buy:
             p['total_cost'] += tx.quantity * tx.price + (tx.fees or 0)
             p['qty']        += tx.quantity
-        else:  # sell
+        else:
             if p['qty'] > 0:
                 avg = p['total_cost'] / p['qty']
                 p['total_cost'] -= avg * tx.quantity
@@ -77,24 +114,31 @@ async def _calc_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
     items = []
     for p in pos.values():
         if p['qty'] > 1e-9:
-            avg = p['total_cost'] / p['qty'] if p['qty'] > 0 else 0
+            avg           = p['total_cost'] / p['qty'] if p['qty'] > 0 else 0.0
+            total_inv     = round(p['total_cost'], 2)
+            current_price = round(avg, 6)           # fallback = preço médio
+            current_value = round(p['qty'] * current_price, 2)
+            result_abs    = round(current_value - total_inv, 2)
+            result_pct    = round((result_abs / total_inv * 100) if total_inv > 0 else 0.0, 4)
+            norm_type     = p['asset_type']
             items.append({
-                'ticker':        p['ticker'],
-                'asset_type':    p['asset_type'],
-                'quantity':      round(p['qty'], 8),
-                'avg_price':     round(avg, 6),
-                'total_invested': round(p['total_cost'], 2),
-                'current_price': None,
-                'current_value': None,
-                'result_abs':    None,
-                'result_pct':    None,
+                'ticker':         p['ticker'],
+                'asset_type':     norm_type,
+                'asset_label':    ASSET_LABELS.get(norm_type, norm_type),
+                'quantity':       round(p['qty'], 8),
+                'avg_price':      round(avg, 6),
+                'total_invested': total_inv,
+                'current_price':  current_price,
+                'current_value':  current_value,
+                'result_abs':     result_abs,
+                'result_pct':     result_pct,
             })
     return items
 
 
-# ── Rotas ───────────────────────────────────────────────────────────────
+# ── Rotas básicas de carteira ─────────────────────────────────────────────────
 
-@router.get("/", response_model=list[PortfolioResponse])
+@router.get('/', response_model=list[PortfolioResponse])
 async def list_my_portfolios(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -102,7 +146,7 @@ async def list_my_portfolios(
     return await list_portfolios(db, current_user.id)
 
 
-@router.post("/", response_model=PortfolioResponse, status_code=status.HTTP_201_CREATED)
+@router.post('/', response_model=PortfolioResponse, status_code=status.HTTP_201_CREATED)
 async def create_my_portfolio(
     data: PortfolioCreate,
     current_user: User = Depends(get_current_user),
@@ -111,7 +155,7 @@ async def create_my_portfolio(
     return await create_portfolio(db, current_user.id, data)
 
 
-@router.get("/{portfolio_id}", response_model=PortfolioResponse)
+@router.get('/{portfolio_id}', response_model=PortfolioResponse)
 async def get_portfolio(
     portfolio_id: int,
     current_user: User = Depends(get_current_user),
@@ -121,7 +165,7 @@ async def get_portfolio(
     return await _get(db, portfolio_id, current_user.id)
 
 
-@router.put("/{portfolio_id}", response_model=PortfolioResponse)
+@router.put('/{portfolio_id}', response_model=PortfolioResponse)
 async def update_my_portfolio(
     portfolio_id: int,
     data: PortfolioUpdate,
@@ -131,24 +175,24 @@ async def update_my_portfolio(
     return await update_portfolio(db, portfolio_id, current_user.id, data)
 
 
-@router.delete("/{portfolio_id}", response_model=MessageResponse)
+@router.delete('/{portfolio_id}', response_model=MessageResponse)
 async def delete_my_portfolio(
     portfolio_id: int,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     await delete_portfolio(db, portfolio_id, current_user.id)
-    return MessageResponse(message="Carteira excluída com sucesso")
+    return MessageResponse(message='Carteira excluída com sucesso')
 
 
-@router.get("/{portfolio_id}/summary", response_model=SummaryResponse)
+# ── Summary ────────────────────────────────────────────────────────────────────
+
+@router.get('/{portfolio_id}/summary', response_model=SummaryResponse)
 async def portfolio_summary(
     portfolio_id: int,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Resumo calculado direto das transactions — sem depender de portfolio_positions."""
-    from fastapi import HTTPException
     p_res = await db.execute(
         select(Portfolio).where(
             Portfolio.id == portfolio_id,
@@ -156,39 +200,63 @@ async def portfolio_summary(
         )
     )
     if not p_res.scalar_one_or_none():
-        raise HTTPException(404, "Carteira não encontrada")
+        raise HTTPException(404, 'Carteira não encontrada')
 
-    items = await _calc_positions(db, portfolio_id)
+    items          = await _calc_positions(db, portfolio_id)
     total_invested = sum(i['total_invested'] for i in items)
-    total_current  = total_invested  # sem cotação real por ora
-    result_abs     = total_current - total_invested
-    result_pct     = (result_abs / total_invested * 100) if total_invested > 0 else 0.0
+    total_current  = sum(i['current_value']  for i in items)
+    result_abs     = round(total_current - total_invested, 2)
+    result_pct     = round((result_abs / total_invested * 100) if total_invested > 0 else 0.0, 4)
+
+    # Proventos recebidos (12 meses)
+    from datetime import date, timedelta
+    from app.models.provento import Provento
+    cutoff = date.today() - timedelta(days=365)
+    prov_res = await db.execute(
+        select(Provento).where(
+            Provento.portfolio_id == portfolio_id,
+            Provento.date >= cutoff,
+        )
+    )
+    proventos_12m = sum(
+        (p.value or 0) * (p.quantity or 1)
+        for p in prov_res.scalars().all()
+    )
+
+    # Total de proventos (todos os tempos)
+    prov_all_res = await db.execute(
+        select(Provento).where(Provento.portfolio_id == portfolio_id)
+    )
+    total_proventos = sum(
+        (p.value or 0) * (p.quantity or 1)
+        for p in prov_all_res.scalars().all()
+    )
 
     return SummaryResponse(
-        total_invested          = round(total_invested, 2),
-        total_current           = round(total_current,  2),
-        result_abs              = round(result_abs,     2),
-        result_pct              = round(result_pct,     4),
-        positions_count         = len(items),
-        total_patrimonio        = round(total_current,  2),
-        total_investido         = round(total_invested, 2),
-        lucro_total             = round(result_abs,     2),
-        variacao_valor          = round(result_abs,     2),
-        variacao_percentual     = round(result_pct,     4),
-        rentabilidade_total     = round(result_pct,     4),
-        dividendos_recebidos_12m = 0.0,
-        total_proventos         = 0.0,
+        total_invested           = round(total_invested, 2),
+        total_current            = round(total_current,  2),
+        result_abs               = result_abs,
+        result_pct               = result_pct,
+        positions_count          = len(items),
+        total_patrimonio         = round(total_current,  2),
+        total_investido          = round(total_invested, 2),
+        lucro_total              = result_abs,
+        variacao_valor           = result_abs,
+        variacao_percentual      = result_pct,
+        rentabilidade_total      = result_pct,
+        dividendos_recebidos_12m = round(proventos_12m,    2),
+        total_proventos          = round(total_proventos,  2),
     )
 
 
-@router.get("/{portfolio_id}/positions", response_model=list[PositionItem])
+# ── Positions ──────────────────────────────────────────────────────────────────
+
+@router.get('/{portfolio_id}/positions', response_model=list[PositionItem])
 async def portfolio_positions(
     portfolio_id: int,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Posições calculadas direto das transactions."""
-    from fastapi import HTTPException
     p_res = await db.execute(
         select(Portfolio).where(
             Portfolio.id == portfolio_id,
@@ -196,6 +264,5 @@ async def portfolio_positions(
         )
     )
     if not p_res.scalar_one_or_none():
-        raise HTTPException(404, "Carteira não encontrada")
-
+        raise HTTPException(404, 'Carteira não encontrada')
     return await _calc_positions(db, portfolio_id)

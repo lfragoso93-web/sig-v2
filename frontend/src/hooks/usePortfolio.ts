@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import api from '@/services/api'
 import { PORTFOLIOS_QUERY_KEY } from '@/hooks/usePortfolios'
 
-// ── Tipos ─────────────────────────────────────────────────────────────────────
+// ── Tipos ───────────────────────────────────────────────────────────────────
 
 export interface PortfolioDetail {
   id: number
@@ -52,6 +52,7 @@ export interface PositionItem {
   ticker: string
   name: string
   asset_type: string
+  asset_label: string        // label amigável vindo do backend
   logo_url?: string
   quantity: number
   average_price: number
@@ -74,7 +75,7 @@ export interface PositionGroup {
   positions: PositionItem[]
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Constantes ──────────────────────────────────────────────────────────────────
 
 const ASSET_LABELS: Record<string, string> = {
   ACAO:              'Ações',
@@ -101,9 +102,12 @@ const ASSET_COLORS: Record<string, string> = {
   OUTROS:            '#6b7280',
 }
 
+// ── Helper: mapeia RawPosition -> PositionGroup[] ─────────────────────────────
+
 interface RawPositionItem {
   ticker:         string
   asset_type:     string
+  asset_label?:   string
   quantity:       number
   avg_price:      number
   total_invested: number
@@ -129,9 +133,11 @@ function toPositionGroups(raw: RawPositionItem[]): PositionGroup[] {
     const total_invested = items.reduce((s, p) => s + (p.total_invested ?? 0), 0)
     const variation_value   = total_value - total_invested
     const variation_percent = total_invested > 0 ? (variation_value / total_invested) * 100 : 0
+    // Label: usa o que vem do backend, ou fallback local
+    const label = items[0]?.asset_label ?? ASSET_LABELS[asset_type] ?? asset_type
     return {
       asset_type,
-      label:               ASSET_LABELS[asset_type] ?? asset_type,
+      label,
       count:               items.length,
       total_value,
       variation_percent,
@@ -142,6 +148,7 @@ function toPositionGroups(raw: RawPositionItem[]): PositionGroup[] {
         ticker:              p.ticker,
         name:                p.ticker,
         asset_type:          p.asset_type,
+        asset_label:         p.asset_label ?? ASSET_LABELS[p.asset_type] ?? p.asset_type,
         quantity:            p.quantity,
         average_price:       p.avg_price,
         current_price:       p.current_price ?? p.avg_price,
@@ -230,7 +237,6 @@ export function usePatrimonioHistory(portfolioId: number | null, _months: number
   })
 }
 
-/** Histórico de evolução do patrimônio (linha) — endpoint futuro */
 export function useEquityHistory(portfolioId: number | null, _period: EquityPeriod = '12m') {
   return useQuery<EquityPoint[]>({
     queryKey: ['equity-history', portfolioId, _period],
