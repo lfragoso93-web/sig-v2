@@ -72,8 +72,7 @@ async def fetch_asset_info(ticker: str) -> Optional[dict]:
 async def fetch_historical_price(ticker: str, date_str: str) -> Optional[float]:
     """
     Busca o preco de fechamento de um ticker em uma data especifica (YYYY-MM-DD).
-    Usa range=custom com intervalo de 3 dias para garantir retorno mesmo em dias sem pregao.
-    Retorna o preco de fechamento mais proximo anterior ou igual a data.
+    Usa range=custom com janela de 5 dias anteriores para cobrir feriados/fins de semana.
     """
     from datetime import date, timedelta
     headers = _auth_headers()
@@ -97,10 +96,8 @@ async def fetch_historical_price(ticker: str, date_str: str) -> Optional[float]:
                 return None
             history = results[0].get("historicalDataPrice", [])
             if not history:
-                # sem historico — usa preco atual como fallback
                 return results[0].get("regularMarketPrice")
-            # pega o ultimo ponto disponivel (mais proximo da data solicitada)
-            last = history[-1]
+            last  = history[-1]
             close = last.get("close") or last.get("adjclose")
             return float(close) if close else None
     except Exception as e:
@@ -110,18 +107,24 @@ async def fetch_historical_price(ticker: str, date_str: str) -> Optional[float]:
 
 async def fetch_treasury_list() -> list[dict]:
     """
-    Busca a lista de titulos do Tesouro Direto disponíveis via BRAPI.
-    Retorna lista de dicts com name, type, rate, maturityDate, price, etc.
+    Busca a lista de titulos do Tesouro Direto via BRAPI.
+    Endpoint correto: GET /api/v2/treasury/list
+    Requer plano Pro; sem token retorna apenas 3 titulos sandbox.
     """
     headers = _auth_headers()
-    url = f"{BRAPI_BASE}/v2/funds?type=TREASURY"
+    url = f"{BRAPI_BASE}/v2/treasury/list"
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(url, headers=headers)
             resp.raise_for_status()
             data = resp.json()
-            # BRAPI /v2/funds retorna {indexes: [...]} ou lista direta
-            items = data.get("funds") or data.get("indexes") or data.get("results") or []
+            # A API retorna { "treasuries": [...] }
+            items = (
+                data.get("treasuries")
+                or data.get("data")
+                or data.get("results")
+                or (data if isinstance(data, list) else [])
+            )
             return items if isinstance(items, list) else []
     except Exception as e:
         logger.warning(f"BRAPI treasury list error: {e}")
