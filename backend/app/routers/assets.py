@@ -2,6 +2,9 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 from pydantic import BaseModel
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+import logging
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
@@ -9,7 +12,8 @@ from app.models.asset import AssetType
 from app.schemas.asset import AssetCreate, AssetResponse
 from app.services.asset_service import get_or_create_asset, search_assets
 from app.integrations.brapi import fetch_asset_info
-from app.integrations.yfinance_client import fetch_asset_info as yf_fetch_info
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -22,26 +26,60 @@ class TickerQuoteResponse(BaseModel):
     price:      Optional[float] = None
     currency:   str             = "BRL"
     asset_type: Optional[str]   = None
-    source:     str             = "brapi"   # 'brapi' | 'yfinance' | 'unknown'
+    source:     str             = "brapi"
 
 
-# -------  helpers  -----------------------------------------------------------
+# ---------- helpers -----------------------------------------------------------
 
 def _detect_type_from_brapi(info: dict) -> Optional[str]:
-    """Infere asset_type pelo campo quoteType da BRAPI."""
     qt = (info.get("quoteType") or "").upper()
     ticker = (info.get("symbol") or "").upper()
     mapping = {
-        "EQUITY":   "ACAO",
-        "ETF":      "ETF_NACIONAL",
-        "FUND":     "FII",
+        "EQUITY": "ACAO",
+        "ETF": "ETF_NACIONAL",
+        "FUND": "FII",
         "MUTUALFUND": "FII",
     }
     detected = mapping.get(qt)
-    # FIIs terminam em 11 em geral
     if not detected and ticker.endswith("11"):
         detected = "FII"
     return detected
+
+
+def _yf_fetch_sync(ticker: str) -> Optional[dict]:
+    """Busca info via yfinance em thread (não bloqueia o event loop)."""
+    try:
+        import yfinance as yf
+        t = yf.Ticker(ticker)
+        info = t.info
+        price = (
+            info.get("regularMarketPrice")
+            or info.get("currentPrice")
+            or info.get("previousClose")
+        )
+        if not price:
+            return None
+        qt = (info.get("quoteType") or "").upper()
+        asset_map = {
+            "EQUITY": "STOCK",
+            "ETF": "ETF_INTERNACIONAL",
+            "CRYPTOCURRENCY": "CRIPTO",
+        }
+        return {
+            "price":      float(price),
+            "name":       info.get("longName") or info.get("shortName"),
+            "currency":   (info.get("currency") or "USD").upper(),
+            "asset_type": asset_map.get(qt),
+        }
+    except Exception as e:
+        logger.warning(f"yfinance fetch error for {ticker}: {e}")
+        return None
+
+
+async def _yf_fetch_async(ticker: str) -> Optional[dict]:
+    loop = asyncio.get_event_loop()
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        return await loop.run_in_executor(pool, _yf_fetch_sync, ticker)
 
 
 # ---------- endpoints ---------------------------------------------------------
@@ -74,38 +112,33 @@ async def get_ticker_quote(
     _=Depends(get_current_user),
 ):
     """
-    Retorna cotação atual + metadados de um ticker.
-    Tenta BRAPI primeiro (ativos BR); fallback para yfinance (stocks/ETFs internacionais).
-    Usado pelo modal de lançamento para autocompletar preço e nome.
+    Cotação atual + metadados de um ticker.
+    Tenta BRAPI primeiro (ativos BR); fallback yfinance (stocks/ETFs internacionais).
     """
     t = ticker.strip().upper()
 
-    # --- tenta BRAPI (mercado brasileiro) ---
+    # --- BRAPI (mercado brasileiro) ---
     info = await fetch_asset_info(t)
     if info and info.get("regularMarketPrice"):
         return TickerQuoteResponse(
             ticker     = t,
             name       = info.get("longName") or info.get("shortName"),
             price      = float(info["regularMarketPrice"]),
-            currency   = info.get("currency") or "BRL",
+            currency   = (info.get("currency") or "BRL").upper(),
             asset_type = _detect_type_from_brapi(info),
             source     = "brapi",
         )
 
-    # --- fallback: yfinance (internacionais) ---
-    try:
-        yf_info = await yf_fetch_info(t)
-        if yf_info and yf_info.get("price"):
-            return TickerQuoteResponse(
-                ticker     = t,
-                name       = yf_info.get("name"),
-                price      = float(yf_info["price"]),
-                currency   = yf_info.get("currency") or "USD",
-                asset_type = yf_info.get("asset_type"),
-                source     = "yfinance",
-            )
-    except Exception:
-        pass
+    # --- yfinance fallback (internacionais) ---
+    yf_info = await _yf_fetch_async(t)
+    if yf_info and yf_info.get("price"):
+        return TickerQuoteResponse(
+            ticker     = t,
+            name       = yf_info.get("name"),
+            price      = yf_info["price"],
+            currency   = yf_info.get("currency", "USD"),
+            asset_type = yf_info.get("asset_type"),
+            source     = "yfinance",
+        )
 
-    # --- não encontrado ---
     raise HTTPException(status_code=404, detail=f"Ticker '{t}' não encontrado.")
