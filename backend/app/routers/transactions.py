@@ -1,89 +1,91 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from typing import List
 
-from app.core.deps import get_db, get_current_user
+from app.core.database import get_db
+from app.core.deps import get_current_user
 from app.models.user import User
 from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction
 from app.schemas.transaction import TransactionCreate, TransactionOut
-from app.services.portfolio_service import recalc_positions
 
 router = APIRouter(prefix="/portfolios/{portfolio_id}/transactions", tags=["transactions"])
 
 
-def _get_portfolio(portfolio_id: int, user: User, db: Session) -> Portfolio:
-    p = db.query(Portfolio).filter(
-        Portfolio.id == portfolio_id,
-        Portfolio.user_id == user.id,
-    ).first()
+async def _get_portfolio(portfolio_id: int, user: User, db: AsyncSession) -> Portfolio:
+    result = await db.execute(
+        select(Portfolio).where(
+            Portfolio.id == portfolio_id,
+            Portfolio.user_id == user.id,
+        )
+    )
+    p = result.scalar_one_or_none()
     if not p:
         raise HTTPException(status_code=404, detail="Carteira n\u00e3o encontrada.")
     return p
 
 
 @router.get("", response_model=List[TransactionOut])
-def list_transactions(
+async def list_transactions(
     portfolio_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_portfolio(portfolio_id, current_user, db)
-    return (
-        db.query(Transaction)
-        .filter(Transaction.portfolio_id == portfolio_id)
+    await _get_portfolio(portfolio_id, current_user, db)
+    result = await db.execute(
+        select(Transaction)
+        .where(Transaction.portfolio_id == portfolio_id)
         .order_by(Transaction.date.desc())
-        .all()
     )
+    return result.scalars().all()
 
 
 @router.post("", response_model=TransactionOut, status_code=status.HTTP_201_CREATED)
-def create_transaction(
+async def create_transaction(
     portfolio_id: int,
     payload: TransactionCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_portfolio(portfolio_id, current_user, db)
+    await _get_portfolio(portfolio_id, current_user, db)
 
     tx = Transaction(
-        portfolio_id=portfolio_id,
-        ticker=payload.ticker.upper(),
-        asset_type=payload.asset_type,
-        operation=payload.operation,
-        quantity=payload.quantity,
-        price=payload.price,
-        fees=payload.fees or 0.0,
-        date=payload.date,
-        notes=payload.notes,
+        portfolio_id = portfolio_id,
+        ticker       = payload.ticker.upper(),
+        asset_type   = payload.asset_type,
+        operation    = payload.operation,
+        quantity     = payload.quantity,
+        price        = payload.price,
+        fees         = payload.fees or 0.0,
+        date         = payload.date,
+        currency     = getattr(payload, 'currency', 'BRL'),
+        notes        = payload.notes,
     )
     db.add(tx)
-    db.commit()
-    db.refresh(tx)
-
-    # Recalcula pre\u00e7o m\u00e9dio e posi\u00e7\u00f5es
-    recalc_positions(portfolio_id, db)
-
+    await db.commit()
+    await db.refresh(tx)
     return tx
 
 
 @router.delete("/{transaction_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_transaction(
+async def delete_transaction(
     portfolio_id: int,
     transaction_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_portfolio(portfolio_id, current_user, db)
+    await _get_portfolio(portfolio_id, current_user, db)
 
-    tx = db.query(Transaction).filter(
-        Transaction.id == transaction_id,
-        Transaction.portfolio_id == portfolio_id,
-    ).first()
+    result = await db.execute(
+        select(Transaction).where(
+            Transaction.id == transaction_id,
+            Transaction.portfolio_id == portfolio_id,
+        )
+    )
+    tx = result.scalar_one_or_none()
     if not tx:
         raise HTTPException(status_code=404, detail="Transa\u00e7\u00e3o n\u00e3o encontrada.")
 
-    db.delete(tx)
-    db.commit()
-
-    recalc_positions(portfolio_id, db)
+    await db.delete(tx)
+    await db.commit()
