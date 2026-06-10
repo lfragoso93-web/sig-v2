@@ -16,11 +16,11 @@ import { useState } from 'react'
 import Modal from '@/components/ui/Modal'
 
 const NAV = [
-  { to: '/app/dashboard',      icon: LayoutDashboard,  label: 'Resumo'        },
-  { to: '/app/rentabilidade',  icon: TrendingUp,        label: 'Rentabilidade' },
-  { to: '/app/transacoes',     icon: ArrowLeftRight,    label: 'Transações'    },
-  { to: '/app/proventos',      icon: Landmark,          label: 'Proventos'     },
-  { to: '/app/configuracoes',  icon: Settings,          label: 'Configurações' },
+  { to: '/carteira',                  icon: LayoutDashboard,  label: 'Resumo'        },
+  { to: '/carteira/rentabilidade',    icon: TrendingUp,        label: 'Rentabilidade' },
+  { to: '/carteira/transacoes',       icon: ArrowLeftRight,    label: 'Transações'    },
+  { to: '/carteira/proventos',        icon: Landmark,          label: 'Proventos'     },
+  { to: '/carteira/configuracoes',    icon: Settings,          label: 'Configurações' },
 ]
 
 export default function Sidebar() {
@@ -68,7 +68,6 @@ export default function Sidebar() {
       const detail = err?.response?.data?.detail
       let msg: string
       if (Array.isArray(detail)) {
-        // Erros de validacao 422 do FastAPI/Pydantic
         msg = detail.map((e: any) => e.msg ?? JSON.stringify(e)).join(', ')
       } else if (typeof detail === 'string') {
         msg = detail
@@ -90,7 +89,8 @@ export default function Sidebar() {
 
   function handleGoToResumo() {
     handleClose()
-    navigate('/app/dashboard')
+    // Rota correta do app — nao /app/dashboard
+    navigate('/carteira')
   }
 
   return (
@@ -185,6 +185,7 @@ export default function Sidebar() {
             <NavLink
               key={to}
               to={to}
+              end={to === '/carteira'}
               className={({ isActive }) =>
                 `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
                   isActive ? 'font-semibold' : 'font-normal'
