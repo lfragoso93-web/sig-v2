@@ -2,11 +2,12 @@ import type { Position } from '@/hooks/usePerformance'
 import { formatBRL, formatPct, assetBadgeClass } from '@/utils/format'
 
 interface Props {
-  positions: Position[]
+  positions?: Position[]
 }
 
 export default function PositionsTable({ positions }: Props) {
-  if (positions.length === 0) {
+  // guard: nunca crash se positions vier undefined ou null
+  if (!positions || positions.length === 0) {
     return (
       <div className="bg-surface border border-[var(--color-border)] rounded-xl p-8 text-center">
         <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
@@ -37,11 +38,11 @@ export default function PositionsTable({ positions }: Props) {
             {positions.map((p) => {
               const pos = p.gain >= 0
               return (
-                <tr key={p.asset_id}>
+                <tr key={p.asset_id ?? p.ticker}>
                   <td>
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-sm">{p.ticker}</span>
-                      <span className={`asset-badge ${assetBadgeClass(p.asset_type)}`}>
+                      <span className={`asset-badge ${assetBadgeClass(p.asset_type ?? '')}`}>
                         {p.asset_type}
                       </span>
                     </div>
