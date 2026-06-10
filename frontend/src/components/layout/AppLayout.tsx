@@ -1,11 +1,23 @@
+import { useState, useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
-import { Sun, Moon } from 'lucide-react'
+import { Sun, Moon, Plus } from 'lucide-react'
 import Sidebar from './Sidebar'
 import UserMenu from './UserMenu'
+import AddTransactionModal from '@/components/modals/AddTransactionModal'
 import { useAppStore } from '@/store/appStore'
+import { usePortfolioList } from '@/hooks/usePortfolio'
 
 export default function AppLayout() {
-  const { theme, setTheme } = useAppStore()
+  const { theme, setTheme, selectedPortfolioId, setSelectedPortfolioId } = useAppStore()
+  const [showModal, setShowModal] = useState(false)
+
+  // Auto-seleciona a primeira carteira se nenhuma estiver selecionada
+  const { data: portfolios } = usePortfolioList()
+  useEffect(() => {
+    if (!selectedPortfolioId && portfolios && portfolios.length > 0) {
+      setSelectedPortfolioId(portfolios[0].id)
+    }
+  }, [portfolios, selectedPortfolioId, setSelectedPortfolioId])
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: 'var(--color-bg)' }}>
@@ -23,6 +35,15 @@ export default function AppLayout() {
             background: 'var(--color-surface)',
           }}
         >
+          {/* Botão Novo Lançamento */}
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-brand-600 hover:bg-brand-500 text-white transition-colors duration-150"
+          >
+            <Plus size={14} />
+            Novo Lançamento
+          </button>
+
           {/* Toggle tema */}
           <button
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
@@ -55,6 +76,11 @@ export default function AppLayout() {
           <Outlet />
         </main>
       </div>
+
+      {/* Modal global de lançamento */}
+      {showModal && (
+        <AddTransactionModal onClose={() => setShowModal(false)} />
+      )}
     </div>
   )
 }
