@@ -22,7 +22,7 @@ export default function Login() {
 
   const onSubmit = async (data: FormData) => {
     try {
-      const res = await api.post('/api/v1/auth/login', {
+      const res = await api.post('/auth/login', {
         email: data.email,
         password: data.password,
       })
@@ -32,7 +32,7 @@ export default function Login() {
         localStorage.setItem('sig_refresh', res.data.refresh_token)
       }
 
-      const me = await api.get('/api/v1/users/me')
+      const me = await api.get('/users/me')
       login(res.data.access_token, me.data)
 
       navigate('/carteira')
