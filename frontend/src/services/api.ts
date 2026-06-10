@@ -3,7 +3,6 @@ import { useAuthStore } from '@/store/authStore'
 
 // Se VITE_API_URL estiver definido (ex: producao no Render), usa ele.
 // Caso contrario, usa URL relativa — o nginx faz o proxy /api/ -> backend:8000
-// Isso evita CORS em ambiente dockerizado local.
 const _raw = import.meta.env.VITE_API_URL
   ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
   : ''
@@ -17,21 +16,24 @@ const api = axios.create({
 })
 
 // Injeta token em toda requisicao
+// Usa store primeiro; fallback para localStorage para cobrir hidratacao tardia do Zustand
 api.interceptors.request.use((config) => {
-  const token = useAuthStore.getState().token
+  const token =
+    useAuthStore.getState().token ?? localStorage.getItem('sig_token')
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
   return config
 })
 
-// Logout automatico em 401
+// Logout automatico em 401 — redireciona para login, nao para a landing
 api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
       useAuthStore.getState().logout()
-      window.location.href = '/'
+      // Usa replace para nao acumular entrada no historico
+      window.location.replace('/auth/login')
     }
     return Promise.reject(err)
   }
