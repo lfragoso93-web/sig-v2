@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import {
-  Wallet, TrendingUp, TrendingDown, BarChart2,
+  TrendingUp, TrendingDown, BarChart2,
   Activity, DollarSign, RefreshCw, PackageOpen,
 } from 'lucide-react'
 import clsx from 'clsx'
@@ -10,6 +10,7 @@ import {
   useAssetDistribution,
   usePositions,
 } from '@/hooks/usePortfolio'
+import { useAppStore } from '@/store/appStore'
 import { formatBRL, formatPercent, signClass } from '@/utils/format'
 import KpiCard from '@/components/ui/KpiCard'
 import SkeletonCard from '@/components/ui/SkeletonCard'
@@ -40,15 +41,20 @@ const ASSET_TYPE_COLORS: Record<string, string> = {
 }
 
 export default function PatrimonioPage() {
+  const globalPortfolioId = useAppStore(s => s.selectedPortfolioId)
+  const setGlobal         = useAppStore(s => s.setSelectedPortfolioId)
+
   const { data: portfolios, isLoading: loadingPortfolios } = usePortfolioList()
-  const [selectedPortfolio, setSelectedPortfolio] = useState<number | null>(null)
   const [activeTypeFilter, setActiveTypeFilter] = useState<string | null>(null)
 
-  const portfolioId = selectedPortfolio ?? (portfolios?.[0]?.id ?? 0)
+  // usa o id global (selecionado na topbar/store); fallback para o primeiro
+  const portfolioId: number =
+    globalPortfolioId ??
+    (portfolios?.[0]?.id ?? 0)
 
-  const { data: summary, isLoading: loadingSummary }    = usePortfolioSummary(portfolioId)
-  const { data: distribution, isLoading: loadingDist }  = useAssetDistribution(portfolioId)
-  const { data: positions, isLoading: loadingPositions } = usePositions(portfolioId)
+  const { data: summary,      isLoading: loadingSummary   } = usePortfolioSummary(portfolioId)
+  const { data: distribution, isLoading: loadingDist      } = useAssetDistribution(portfolioId)
+  const { data: positions,    isLoading: loadingPositions  } = usePositions(portfolioId)
 
   // ── agrupa posições por tipo ─────────────────────────────────────────────
   const allPositions = useMemo(() => {
@@ -61,15 +67,13 @@ export default function PatrimonioPage() {
     for (const p of allPositions) {
       const t = p.asset_type ?? 'OUTROS'
       if (!map[t]) map[t] = { total: 0, count: 0 }
-      map[t].total  += p.current_value ?? 0
-      map[t].count  += 1
+      map[t].total += p.current_value ?? 0
+      map[t].count += 1
     }
     const grandTotal = Object.values(map).reduce((s, v) => s + v.total, 0)
     return Object.entries(map)
       .map(([type, { total, count }]) => ({
-        type,
-        total,
-        count,
+        type, total, count,
         pct: grandTotal > 0 ? (total / grandTotal) * 100 : 0,
       }))
       .sort((a, b) => b.total - a.total)
@@ -117,13 +121,13 @@ export default function PatrimonioPage() {
           <p className="text-xs text-slate-500 mt-0.5">Visão consolidada de todos os seus ativos</p>
         </div>
 
-        {/* seletor de carteira */}
+        {/* seletor de carteira — visível quando há mais de uma */}
         {portfolios.length > 1 && (
           <div className="flex items-center gap-1.5 flex-wrap">
             {portfolios.map(p => (
               <button
                 key={p.id}
-                onClick={() => setSelectedPortfolio(p.id)}
+                onClick={() => setGlobal(p.id)}
                 className={clsx(
                   'px-3 py-1.5 rounded-md text-xs font-medium transition-colors duration-150',
                   portfolioId === p.id
@@ -146,40 +150,44 @@ export default function PatrimonioPage() {
           <>
             <KpiCard
               label="Patrimônio Total"
-              value={formatBRL(summary.total_patrimonio)}
-              subValue={formatBRL(summary.total_investido)}
+              value={formatBRL(summary.total_patrimonio ?? 0)}
+              subValue={formatBRL(summary.total_investido ?? 0)}
               subLabel="Valor investido"
               change={summary.variacao_percentual}
             />
             <KpiCard
               label="Resultado"
-              value={formatBRL(summary.lucro_total)}
+              value={formatBRL(summary.lucro_total ?? 0)}
               subLabel="Ganho de capital + proventos"
             />
             <KpiCard
               label="Proventos (12m)"
-              value={formatBRL(summary.dividendos_recebidos_12m)}
-              subValue={formatBRL(summary.total_proventos)}
+              value={formatBRL(summary.dividendos_recebidos_12m ?? 0)}
+              subValue={formatBRL(summary.total_proventos ?? 0)}
               subLabel="Total recebido"
             />
             <div className="rounded-xl bg-surface-900 border border-surface-700 p-4 flex flex-col gap-1">
               <span className="text-xs text-slate-500 font-medium">Variação</span>
-              <div className={clsx('text-xl font-bold tabular-nums tracking-tight', signClass(summary.variacao_valor))}>
-                {formatBRL(summary.variacao_valor)}
+              <div className={clsx('text-xl font-bold tabular-nums tracking-tight', signClass(summary.variacao_valor ?? 0))}>
+                {formatBRL(summary.variacao_valor ?? 0)}
               </div>
-              <div className={clsx('text-xs font-medium flex items-center gap-1', signClass(summary.variacao_valor))}>
-                {summary.variacao_valor >= 0
+              <div className={clsx('text-xs font-medium flex items-center gap-1', signClass(summary.variacao_valor ?? 0))}>
+                {(summary.variacao_valor ?? 0) >= 0
                   ? <TrendingUp size={11} />
                   : <TrendingDown size={11} />}
-                {formatPercent(summary.variacao_percentual)}
+                {formatPercent(summary.variacao_percentual ?? 0)}
               </div>
-              <div className={clsx('text-sm font-bold mt-1 tabular-nums', signClass(summary.rentabilidade_total))}>
-                {formatPercent(summary.rentabilidade_total)}
+              <div className={clsx('text-sm font-bold mt-1 tabular-nums', signClass(summary.rentabilidade_total ?? 0))}>
+                {formatPercent(summary.rentabilidade_total ?? 0)}
                 <span className="text-xs font-normal text-slate-500 ml-1">rentab.</span>
               </div>
             </div>
           </>
-        ) : null}
+        ) : (
+          <div className="col-span-4 py-8 text-center text-xs text-slate-500">
+            Nenhum dado de resumo disponível. Adicione lançamentos para começar.
+          </div>
+        )}
       </div>
 
       {/* ── breakdown por classe + donut ─────────────────────────────────── */}
@@ -198,7 +206,9 @@ export default function PatrimonioPage() {
               ))}
             </div>
           ) : typeBreakdown.length === 0 ? (
-            <div className="py-10 text-center text-xs text-slate-500">Nenhum ativo encontrado</div>
+            <div className="py-10 text-center text-xs text-slate-500">
+              Nenhum ativo encontrado. Adicione lançamentos para visualizar sua alocação.
+            </div>
           ) : (
             <div className="divide-y divide-surface-700">
               {typeBreakdown.map(({ type, total, count, pct }) => {
@@ -214,12 +224,9 @@ export default function PatrimonioPage() {
                       isActive ? 'bg-surface-800' : 'hover:bg-surface-800/60',
                     )}
                   >
-                    {/* badge */}
                     <span className={clsx('shrink-0 text-xs font-medium px-2 py-0.5 rounded border', colorCls)}>
                       {ASSET_TYPE_LABELS[type] ?? type}
                     </span>
-
-                    {/* barra */}
                     <div className="flex-1 min-w-0">
                       <div className="h-1.5 rounded-full bg-surface-700 overflow-hidden">
                         <div
@@ -228,8 +235,6 @@ export default function PatrimonioPage() {
                         />
                       </div>
                     </div>
-
-                    {/* valores */}
                     <span className="shrink-0 text-xs tabular-nums font-medium text-slate-300">
                       {formatBRL(total)}
                     </span>
@@ -303,7 +308,7 @@ export default function PatrimonioPage() {
         ) : (
           <EmptyState
             icon={DollarSign}
-            title="Nenhum ativo encontrado"
+            title="Nenhuma posição encontrada"
             description="Adicione lançamentos para acompanhar seu patrimônio."
           />
         )}

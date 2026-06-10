@@ -6,7 +6,6 @@ export interface Transaction {
   portfolio_id: number
   ticker: string
   asset_type: string
-  /** 'buy' | 'sell' */
   operation: 'buy' | 'sell'
   quantity: number
   price: number
@@ -14,7 +13,6 @@ export interface Transaction {
   date: string
   currency: string
   notes?: string
-  created_at: string
 }
 
 export interface TransactionCreate {
@@ -29,11 +27,22 @@ export interface TransactionCreate {
   notes?: string
 }
 
-const KEY = (pid: number | null) => ['transactions', pid]
+const TX_KEY  = (pid: number | null) => ['transactions', pid]
+
+// Todas as query keys que dependem de posições/resumo da carteira
+function invalidatePortfolioKeys(qc: ReturnType<typeof useQueryClient>, portfolioId: number) {
+  qc.invalidateQueries({ queryKey: ['transactions',       portfolioId] })
+  qc.invalidateQueries({ queryKey: ['portfolio-summary',  portfolioId] })
+  qc.invalidateQueries({ queryKey: ['positions',          portfolioId] })
+  qc.invalidateQueries({ queryKey: ['asset-distribution', portfolioId] })
+  qc.invalidateQueries({ queryKey: ['patrimonio-history', portfolioId] })
+  // resumo usado no ResumePage (endpoint /portfolios/{id}/summary)
+  qc.invalidateQueries({ queryKey: ['summary', portfolioId] })
+}
 
 export function useTransactions(portfolioId: number | null) {
   return useQuery<Transaction[]>({
-    queryKey: KEY(portfolioId),
+    queryKey: TX_KEY(portfolioId),
     queryFn: () =>
       api
         .get(`/portfolios/${portfolioId}/transactions`)
@@ -49,7 +58,7 @@ export function useCreateTransaction() {
       api
         .post<Transaction>(`/portfolios/${portfolioId}/transactions`, data)
         .then((r) => r.data),
-    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: KEY(v.portfolioId) }),
+    onSuccess: (_d, v) => invalidatePortfolioKeys(qc, v.portfolioId),
   })
 }
 
@@ -60,6 +69,6 @@ export function useDeleteTransaction() {
       api
         .delete(`/portfolios/${portfolioId}/transactions/${id}`)
         .then((r) => r.data),
-    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: KEY(v.portfolioId) }),
+    onSuccess: (_d, v) => invalidatePortfolioKeys(qc, v.portfolioId),
   })
 }
