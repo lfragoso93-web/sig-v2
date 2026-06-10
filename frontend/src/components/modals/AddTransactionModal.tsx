@@ -19,98 +19,41 @@ type AssetTab = {
 }
 
 const TABS: AssetTab[] = [
-  {
-    key: 'acao',
-    label: 'Ação',
-    icon: <TrendingUp size={14} />,
-    assetType: 'ACAO',
-    currency: 'BRL',
-    tickerLabel: 'Ticker',
-    tickerPlaceholder: 'ex: PETR4',
-  },
-  {
-    key: 'fii',
-    label: 'FII',
-    icon: <Building2 size={14} />,
-    assetType: 'FII',
-    currency: 'BRL',
-    tickerLabel: 'Ticker',
-    tickerPlaceholder: 'ex: MXRF11',
-  },
-  {
-    key: 'etf_nacional',
-    label: 'ETF BR',
-    icon: <BarChart2 size={14} />,
-    assetType: 'ETF_NACIONAL',
-    currency: 'BRL',
-    tickerLabel: 'Ticker',
-    tickerPlaceholder: 'ex: BOVA11',
-  },
-  {
-    key: 'stock',
-    label: 'Stock',
-    icon: <Globe size={14} />,
-    assetType: 'STOCK',
-    currency: 'USD',
-    tickerLabel: 'Ticker',
-    tickerPlaceholder: 'ex: AAPL',
-  },
-  {
-    key: 'etf_int',
-    label: 'ETF INT',
-    icon: <Globe size={14} />,
-    assetType: 'ETF_INTERNACIONAL',
-    currency: 'USD',
-    tickerLabel: 'Ticker',
-    tickerPlaceholder: 'ex: VTI',
-  },
-  {
-    key: 'tesouro',
-    label: 'Tesouro',
-    icon: <Landmark size={14} />,
-    assetType: 'TESOURO_DIRETO',
-    currency: 'BRL',
-    tickerLabel: 'Código',
-    tickerPlaceholder: 'ex: LTN 2029',
-  },
-  {
-    key: 'renda_fixa',
-    label: 'Renda Fixa',
-    icon: <Banknote size={14} />,
-    assetType: 'RENDA_FIXA',
-    currency: 'BRL',
-    tickerLabel: 'Código/Nome',
-    tickerPlaceholder: 'ex: CDB XP 110% CDI',
-    extraFields: 'renda_fixa',
-  },
-  {
-    key: 'cripto',
-    label: 'Cripto',
-    icon: <Bitcoin size={14} />,
-    assetType: 'CRIPTO',
-    currency: 'BRL',
-    tickerLabel: 'Ticker',
-    tickerPlaceholder: 'ex: BTC',
-  },
+  { key: 'acao',       label: 'Ação',       icon: <TrendingUp size={13} />, assetType: 'ACAO',              currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: PETR4' },
+  { key: 'fii',        label: 'FII',        icon: <Building2  size={13} />, assetType: 'FII',               currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: MXRF11' },
+  { key: 'etf_br',     label: 'ETF BR',     icon: <BarChart2  size={13} />, assetType: 'ETF_NACIONAL',      currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: BOVA11' },
+  { key: 'stock',      label: 'Stock',      icon: <Globe      size={13} />, assetType: 'STOCK',             currency: 'USD', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: AAPL' },
+  { key: 'etf_int',    label: 'ETF INT',    icon: <Globe      size={13} />, assetType: 'ETF_INTERNACIONAL', currency: 'USD', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: VTI' },
+  { key: 'tesouro',    label: 'Tesouro',    icon: <Landmark   size={13} />, assetType: 'TESOURO_DIRETO',    currency: 'BRL', tickerLabel: 'Código',       tickerPlaceholder: 'ex: LTN 2029' },
+  { key: 'renda_fixa', label: 'Renda Fixa', icon: <Banknote   size={13} />, assetType: 'RENDA_FIXA',        currency: 'BRL', tickerLabel: 'Código/Nome',  tickerPlaceholder: 'ex: CDB XP 110% CDI', extraFields: 'renda_fixa' },
+  { key: 'cripto',     label: 'Cripto',     icon: <Bitcoin    size={13} />, assetType: 'CRIPTO',            currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: BTC' },
 ]
 
 const TODAY = new Date().toISOString().split('T')[0]
+
+const inputCls = [
+  'w-full rounded-md px-3 py-2 text-xs',
+  'bg-surface-800 border border-surface-600',
+  'text-slate-200 placeholder-slate-500',
+  'focus:outline-none focus:ring-1 focus:ring-brand-500 focus:border-brand-500',
+  'transition-colors duration-150',
+].join(' ')
 
 export default function AddTransactionModal({ onClose }: Props) {
   const selectedPortfolioId = useAppStore(s => s.selectedPortfolioId)
   const { mutateAsync, isPending } = useCreateTransaction()
 
-  const [activeTab, setActiveTab] = useState<string>('acao')
+  const [activeTab, setActiveTab] = useState('acao')
   const [operation, setOperation] = useState<'buy' | 'sell'>('buy')
-  const [ticker, setTicker] = useState('')
-  const [quantity, setQuantity] = useState('')
-  const [price, setPrice] = useState('')
-  const [fees, setFees] = useState('')
-  const [date, setDate] = useState(TODAY)
-  const [notes, setNotes] = useState('')
-  const [currency, setCurrency] = useState('BRL')
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
+  const [ticker,    setTicker]    = useState('')
+  const [quantity,  setQuantity]  = useState('')
+  const [price,     setPrice]     = useState('')
+  const [fees,      setFees]      = useState('')
+  const [date,      setDate]      = useState(TODAY)
+  const [notes,     setNotes]     = useState('')
+  const [currency,  setCurrency]  = useState('BRL')
+  const [error,     setError]     = useState<string | null>(null)
+  const [success,   setSuccess]   = useState(false)
 
   const tab = TABS.find(t => t.key === activeTab)!
 
@@ -125,17 +68,13 @@ export default function AddTransactionModal({ onClose }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
-    if (!selectedPortfolioId) {
-      setError('Selecione uma carteira antes de lançar.')
-      return
-    }
+    if (!selectedPortfolioId) { setError('Selecione uma carteira antes de lançar.'); return }
     const qty = parseFloat(quantity)
     const prc = parseFloat(price)
     const fee = parseFloat(fees || '0')
-    if (!ticker.trim()) { setError('Informe o ticker/código do ativo.'); return }
+    if (!ticker.trim())         { setError('Informe o ticker/código do ativo.'); return }
     if (isNaN(qty) || qty <= 0) { setError('Quantidade deve ser maior que zero.'); return }
     if (isNaN(prc) || prc <= 0) { setError('Preço deve ser maior que zero.'); return }
-
     try {
       await mutateAsync({
         portfolio_id: selectedPortfolioId,
@@ -156,45 +95,46 @@ export default function AddTransactionModal({ onClose }: Props) {
     }
   }
 
-  function handleNewLancamento() {
-    setSuccess(false)
-    setTicker('')
-    setQuantity('')
-    setPrice('')
-    setFees('')
-    setDate(TODAY)
-    setNotes('')
-    setError(null)
+  function handleReset() {
+    setSuccess(false); setTicker(''); setQuantity(''); setPrice('')
+    setFees(''); setDate(TODAY); setNotes(''); setError(null)
   }
+
+  const total = quantity && price
+    ? (parseFloat(quantity) * parseFloat(price) + parseFloat(fees || '0'))
+        .toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative z-10 w-full max-w-lg card shadow-xl overflow-hidden">
+      <div className="relative z-10 w-full max-w-lg rounded-xl bg-surface-900 border border-surface-700 shadow-2xl overflow-hidden">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-light-border dark:border-dark-border">
-          <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-            Novo Lançamento
-          </h2>
-          <button onClick={onClose} className="btn-ghost p-1" aria-label="Fechar">
-            <X size={16} />
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-surface-700">
+          <h2 className="text-sm font-semibold text-slate-100">Novo Lançamento</h2>
+          <button
+            onClick={onClose}
+            className="p-1 rounded hover:bg-surface-700 text-slate-400 hover:text-slate-200 transition-colors"
+            aria-label="Fechar"
+          >
+            <X size={15} />
           </button>
         </div>
 
-        {/* Success state */}
+        {/* ── SUCCESS ── */}
         {success ? (
-          <div className="flex flex-col items-center justify-center gap-4 py-12 px-6">
-            <CheckCircle2 size={48} className="text-green-500" />
-            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Lançamento registrado!</p>
+          <div className="flex flex-col items-center justify-center gap-4 py-14 px-6">
+            <CheckCircle2 size={48} className="text-positive" />
+            <p className="text-sm font-medium text-slate-100">Lançamento registrado com sucesso!</p>
             <div className="flex gap-3">
-              <button onClick={handleNewLancamento} className="btn-primary text-xs px-4 py-1.5">
+              <button onClick={handleReset} className="px-4 py-1.5 rounded-md text-xs font-medium bg-brand-600 hover:bg-brand-500 text-white transition-colors">
                 Novo Lançamento
               </button>
-              <button onClick={onClose} className="btn-secondary text-xs px-4 py-1.5">
+              <button onClick={onClose} className="px-4 py-1.5 rounded-md text-xs font-medium bg-surface-700 hover:bg-surface-600 text-slate-200 transition-colors">
                 Fechar
               </button>
             </div>
@@ -202,18 +142,18 @@ export default function AddTransactionModal({ onClose }: Props) {
         ) : (
           <form onSubmit={handleSubmit}>
 
-            {/* Asset type tabs */}
-            <div className="flex overflow-x-auto scrollbar-hide px-5 pt-4 gap-1.5">
+            {/* ── ABAS ── */}
+            <div className="flex overflow-x-auto px-4 pt-4 pb-2 gap-1 scrollbar-hide">
               {TABS.map(t => (
                 <button
                   key={t.key}
                   type="button"
                   onClick={() => handleTabChange(t.key)}
                   className={[
-                    'shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors duration-150',
+                    'shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors duration-150 whitespace-nowrap',
                     activeTab === t.key
-                      ? 'bg-brand-primary text-white'
-                      : 'text-gray-500 dark:text-gray-400 hover:bg-light-100 dark:hover:bg-dark-600 hover:text-gray-800 dark:hover:text-gray-200',
+                      ? 'bg-brand-600 text-white'
+                      : 'text-slate-400 hover:bg-surface-700 hover:text-slate-200',
                   ].join(' ')}
                 >
                   {t.icon}
@@ -222,57 +162,51 @@ export default function AddTransactionModal({ onClose }: Props) {
               ))}
             </div>
 
-            {/* Form body */}
-            <div className="px-5 py-4 flex flex-col gap-3.5">
+            <div className="mx-4 border-t border-surface-700" />
 
-              {/* Operation toggle */}
-              <div className="flex rounded overflow-hidden border border-light-border dark:border-dark-border text-xs font-medium">
+            {/* ── CAMPOS ── */}
+            <div className="px-4 py-4 flex flex-col gap-3">
+
+              {/* Toggle Compra / Venda */}
+              <div className="flex rounded-lg overflow-hidden border border-surface-600 text-xs font-semibold">
                 <button
                   type="button"
                   onClick={() => setOperation('buy')}
                   className={[
                     'flex-1 py-2 transition-colors duration-150',
                     operation === 'buy'
-                      ? 'bg-green-500 text-white'
-                      : 'text-gray-500 dark:text-gray-400 hover:bg-light-100 dark:hover:bg-dark-600',
+                      ? 'bg-positive text-white'
+                      : 'bg-surface-800 text-slate-400 hover:bg-surface-700 hover:text-slate-200',
                   ].join(' ')}
-                >
-                  Compra
-                </button>
+                >Compra</button>
                 <button
                   type="button"
                   onClick={() => setOperation('sell')}
                   className={[
                     'flex-1 py-2 transition-colors duration-150',
                     operation === 'sell'
-                      ? 'bg-red-500 text-white'
-                      : 'text-gray-500 dark:text-gray-400 hover:bg-light-100 dark:hover:bg-dark-600',
+                      ? 'bg-negative text-white'
+                      : 'bg-surface-800 text-slate-400 hover:bg-surface-700 hover:text-slate-200',
                   ].join(' ')}
-                >
-                  Venda
-                </button>
+                >Venda</button>
               </div>
 
-              {/* Ticker + Currency row */}
+              {/* Ticker + Moeda */}
               <div className="flex gap-3">
                 <div className="flex-1">
-                  <label className="block text-xs text-muted mb-1">{tab.tickerLabel}</label>
+                  <label className="block text-xs text-slate-400 mb-1">{tab.tickerLabel}</label>
                   <input
                     type="text"
                     value={ticker}
                     onChange={e => setTicker(e.target.value)}
                     placeholder={tab.tickerPlaceholder}
-                    className="input w-full text-xs"
+                    className={inputCls}
                     autoFocus
                   />
                 </div>
                 <div className="w-24">
-                  <label className="block text-xs text-muted mb-1">Moeda</label>
-                  <select
-                    value={currency}
-                    onChange={e => setCurrency(e.target.value)}
-                    className="input w-full text-xs"
-                  >
+                  <label className="block text-xs text-slate-400 mb-1">Moeda</label>
+                  <select value={currency} onChange={e => setCurrency(e.target.value)} className={inputCls}>
                     <option value="BRL">BRL</option>
                     <option value="USD">USD</option>
                     <option value="EUR">EUR</option>
@@ -281,103 +215,70 @@ export default function AddTransactionModal({ onClose }: Props) {
                 </div>
               </div>
 
-              {/* Quantity + Price row */}
+              {/* Quantidade + Preço */}
               <div className="flex gap-3">
                 <div className="flex-1">
-                  <label className="block text-xs text-muted mb-1">Quantidade</label>
-                  <input
-                    type="number"
-                    value={quantity}
-                    onChange={e => setQuantity(e.target.value)}
-                    placeholder="0"
-                    min="0"
-                    step="any"
-                    className="input w-full text-xs"
-                  />
+                  <label className="block text-xs text-slate-400 mb-1">Quantidade</label>
+                  <input type="number" value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="0" min="0" step="any" className={inputCls} />
                 </div>
                 <div className="flex-1">
-                  <label className="block text-xs text-muted mb-1">
-                    Preço <span className="text-gray-400">({currency})</span>
-                  </label>
-                  <input
-                    type="number"
-                    value={price}
-                    onChange={e => setPrice(e.target.value)}
-                    placeholder="0,00"
-                    min="0"
-                    step="any"
-                    className="input w-full text-xs"
-                  />
+                  <label className="block text-xs text-slate-400 mb-1">Preço <span className="text-slate-600">({currency})</span></label>
+                  <input type="number" value={price} onChange={e => setPrice(e.target.value)} placeholder="0,00" min="0" step="any" className={inputCls} />
                 </div>
               </div>
 
-              {/* Fees + Date row */}
+              {/* Taxas + Data */}
               <div className="flex gap-3">
                 <div className="flex-1">
-                  <label className="block text-xs text-muted mb-1">Taxas / Corretagem</label>
-                  <input
-                    type="number"
-                    value={fees}
-                    onChange={e => setFees(e.target.value)}
-                    placeholder="0,00"
-                    min="0"
-                    step="any"
-                    className="input w-full text-xs"
-                  />
+                  <label className="block text-xs text-slate-400 mb-1">Taxas / Corretagem</label>
+                  <input type="number" value={fees} onChange={e => setFees(e.target.value)} placeholder="0,00" min="0" step="any" className={inputCls} />
                 </div>
                 <div className="flex-1">
-                  <label className="block text-xs text-muted mb-1">Data</label>
-                  <input
-                    type="date"
-                    value={date}
-                    onChange={e => setDate(e.target.value)}
-                    className="input w-full text-xs"
-                  />
+                  <label className="block text-xs text-slate-400 mb-1">Data</label>
+                  <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inputCls} />
                 </div>
               </div>
 
               {/* Total preview */}
-              {quantity && price && (
-                <div className="rounded bg-light-50 dark:bg-dark-600 px-3 py-2 flex justify-between items-center">
-                  <span className="text-xs text-muted">Total estimado</span>
-                  <span className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-                    {currency}{' '}
-                    {(parseFloat(quantity) * parseFloat(price) + parseFloat(fees || '0')).toLocaleString('pt-BR', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-                  </span>
+              {total && (
+                <div className="rounded-lg bg-surface-800 border border-surface-700 px-3 py-2 flex justify-between items-center">
+                  <span className="text-xs text-slate-500">Total estimado</span>
+                  <span className="text-xs font-semibold text-slate-100">{currency} {total}</span>
                 </div>
               )}
 
-              {/* Notes */}
+              {/* Observações */}
               <div>
-                <label className="block text-xs text-muted mb-1">Observações <span className="text-gray-400">(opcional)</span></label>
+                <label className="block text-xs text-slate-400 mb-1">Observações <span className="text-slate-600">(opcional)</span></label>
                 <textarea
                   value={notes}
                   onChange={e => setNotes(e.target.value)}
                   rows={2}
                   placeholder="Anotações sobre o lançamento..."
-                  className="input w-full text-xs resize-none"
+                  className={inputCls + ' resize-none'}
                 />
               </div>
 
-              {/* Error message */}
+              {/* Erro */}
               {error && (
-                <p className="text-xs text-red-500 bg-red-500/10 rounded px-3 py-2">{error}</p>
+                <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-md px-3 py-2">{error}</p>
               )}
 
             </div>
 
             {/* Footer */}
-            <div className="flex justify-end gap-3 px-5 py-4 border-t border-light-border dark:border-dark-border">
-              <button type="button" onClick={onClose} className="btn-secondary text-xs px-4 py-1.5">
+            <div className="flex justify-end gap-2.5 px-4 py-3 border-t border-surface-700">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-1.5 rounded-md text-xs font-medium bg-surface-700 hover:bg-surface-600 text-slate-300 transition-colors"
+              >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={isPending}
-                className="btn-primary text-xs px-4 py-1.5 disabled:opacity-60"
+                className="px-4 py-1.5 rounded-md text-xs font-medium bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white transition-colors"
               >
                 {isPending ? 'Salvando...' : 'Salvar Lançamento'}
               </button>
