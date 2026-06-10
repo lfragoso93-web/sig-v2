@@ -105,10 +105,30 @@ async def fetch_historical_price(ticker: str, date_str: str) -> Optional[float]:
         return None
 
 
+async def fetch_ticker_suggestions(q: str, limit: int = 10) -> list[dict]:
+    """
+    Busca sugestoes de tickers/ativos da B3 via BRAPI /api/quote/list.
+    Retorna lista de dicts com stock (ticker) e name.
+    Requer token para acesso completo; sem token retorna lista limitada.
+    """
+    headers = _auth_headers()
+    try:
+        params = {"search": q, "limit": limit}
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(f"{BRAPI_BASE}/quote/list", headers=headers, params=params)
+            resp.raise_for_status()
+            data = resp.json()
+            # Resposta: { "stocks": [{"stock": "PETR4", "name": "Petrobras...", "type": "..."}, ...] }
+            return data.get("stocks") or []
+    except Exception as e:
+        logger.warning(f"BRAPI ticker suggestions error for q={q!r}: {e}")
+        return []
+
+
 async def fetch_treasury_list() -> list[dict]:
     """
     Busca a lista de titulos do Tesouro Direto via BRAPI.
-    Endpoint correto: GET /api/v2/treasury/list
+    Endpoint: GET /api/v2/treasury/list
     Requer plano Pro; sem token retorna apenas 3 titulos sandbox.
     """
     headers = _auth_headers()
@@ -118,7 +138,6 @@ async def fetch_treasury_list() -> list[dict]:
             resp = await client.get(url, headers=headers)
             resp.raise_for_status()
             data = resp.json()
-            # A API retorna { "treasuries": [...] }
             items = (
                 data.get("treasuries")
                 or data.get("data")

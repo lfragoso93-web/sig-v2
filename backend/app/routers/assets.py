@@ -11,11 +11,58 @@ from app.core.deps import get_current_user
 from app.models.asset import AssetType
 from app.schemas.asset import AssetCreate, AssetResponse
 from app.services.asset_service import get_or_create_asset, search_assets
-from app.integrations.brapi import fetch_asset_info, fetch_historical_price, fetch_treasury_list
+from app.integrations.brapi import (
+    fetch_asset_info,
+    fetch_historical_price,
+    fetch_treasury_list,
+    fetch_ticker_suggestions,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+# ---------- Lista estatica de titulos do Tesouro Direto --------------------
+# Fallback garantido independente do plano BRAPI.
+# Fonte: Tesouro Direto / B3 (junho 2026)
+
+_TESOURO_STATIC: list[dict] = [
+    # Tesouro Selic
+    {"bondType": "Tesouro Selic",    "indexer": "selic",     "maturityDate": "2026-03-01"},
+    {"bondType": "Tesouro Selic",    "indexer": "selic",     "maturityDate": "2027-03-01"},
+    {"bondType": "Tesouro Selic",    "indexer": "selic",     "maturityDate": "2029-03-01"},
+    {"bondType": "Tesouro Selic",    "indexer": "selic",     "maturityDate": "2031-03-01"},
+    # Tesouro Prefixado
+    {"bondType": "Tesouro Prefixado", "indexer": "prefixado", "maturityDate": "2027-01-01"},
+    {"bondType": "Tesouro Prefixado", "indexer": "prefixado", "maturityDate": "2029-01-01"},
+    {"bondType": "Tesouro Prefixado", "indexer": "prefixado", "maturityDate": "2031-01-01"},
+    {"bondType": "Tesouro Prefixado com Juros Semestrais", "indexer": "prefixado", "maturityDate": "2033-01-01"},
+    {"bondType": "Tesouro Prefixado com Juros Semestrais", "indexer": "prefixado", "maturityDate": "2035-01-01"},
+    # Tesouro IPCA+
+    {"bondType": "Tesouro IPCA+",    "indexer": "ipca",      "maturityDate": "2029-05-15"},
+    {"bondType": "Tesouro IPCA+",    "indexer": "ipca",      "maturityDate": "2032-08-15"},
+    {"bondType": "Tesouro IPCA+",    "indexer": "ipca",      "maturityDate": "2035-05-15"},
+    {"bondType": "Tesouro IPCA+",    "indexer": "ipca",      "maturityDate": "2045-05-15"},
+    {"bondType": "Tesouro IPCA+ com Juros Semestrais", "indexer": "ipca", "maturityDate": "2030-08-15"},
+    {"bondType": "Tesouro IPCA+ com Juros Semestrais", "indexer": "ipca", "maturityDate": "2040-08-15"},
+    {"bondType": "Tesouro IPCA+ com Juros Semestrais", "indexer": "ipca", "maturityDate": "2055-05-15"},
+    {"bondType": "Tesouro IPCA+ com Juros Semestrais", "indexer": "ipca", "maturityDate": "2060-08-15"},
+    # Tesouro Renda+
+    {"bondType": "Tesouro Renda+ Aposentadoria Extra", "indexer": "ipca", "maturityDate": "2030-12-01"},
+    {"bondType": "Tesouro Renda+ Aposentadoria Extra", "indexer": "ipca", "maturityDate": "2035-12-01"},
+    {"bondType": "Tesouro Renda+ Aposentadoria Extra", "indexer": "ipca", "maturityDate": "2040-12-01"},
+    {"bondType": "Tesouro Renda+ Aposentadoria Extra", "indexer": "ipca", "maturityDate": "2045-12-01"},
+    {"bondType": "Tesouro Renda+ Aposentadoria Extra", "indexer": "ipca", "maturityDate": "2050-12-01"},
+    {"bondType": "Tesouro Renda+ Aposentadoria Extra", "indexer": "ipca", "maturityDate": "2055-12-01"},
+    {"bondType": "Tesouro Renda+ Aposentadoria Extra", "indexer": "ipca", "maturityDate": "2060-12-01"},
+    {"bondType": "Tesouro Renda+ Aposentadoria Extra", "indexer": "ipca", "maturityDate": "2065-12-01"},
+    # Tesouro Educa+
+    {"bondType": "Tesouro Educa+",   "indexer": "ipca",      "maturityDate": "2026-12-01"},
+    {"bondType": "Tesouro Educa+",   "indexer": "ipca",      "maturityDate": "2030-12-01"},
+    {"bondType": "Tesouro Educa+",   "indexer": "ipca",      "maturityDate": "2035-12-01"},
+    {"bondType": "Tesouro Educa+",   "indexer": "ipca",      "maturityDate": "2037-12-01"},
+]
 
 
 # ---------- modelos de resposta -------------------------------------------
@@ -37,6 +84,12 @@ class TreasuryItem(BaseModel):
     rate:          Optional[float] = None
     maturity_date: Optional[str]   = None
     price:         Optional[float] = None
+
+
+class TickerSuggestion(BaseModel):
+    ticker: str
+    name:   str
+    type:   Optional[str] = None  # stock, fii, etf, bdr, index...
 
 
 # ---------- helpers -----------------------------------------------------------
@@ -112,16 +165,14 @@ async def _yf_fetch_async(ticker: str, date_str: Optional[str] = None) -> Option
 
 def _parse_treasury_item(raw: dict) -> Optional[TreasuryItem]:
     """
-    Normaliza um item da resposta BRAPI /v2/treasury/list para TreasuryItem.
-    Campos da API v2: symbol, bondType, indexer, buyRate, sellRate,
-                      buyPrice, sellPrice, basePrice, maturityDate, couponType, durationDays.
+    Normaliza um item (API BRAPI v2 ou estatico) para TreasuryItem.
+    Campos BRAPI v2: symbol, bondType, indexer, buyRate, buyPrice, maturityDate.
+    Campos estaticos: bondType, indexer, maturityDate.
     """
-    # Nome legivel do titulo (ex: "Tesouro IPCA+ com Juros Semestrais")
     bond_type = raw.get("bondType") or raw.get("name") or raw.get("shortName") or ""
     if not bond_type:
         return None
 
-    # Data de vencimento (campo maturityDate vem como YYYY-MM-DD)
     maturity = raw.get("maturityDate") or raw.get("expirationDate") or ""
     if maturity:
         try:
@@ -134,14 +185,10 @@ def _parse_treasury_item(raw: dict) -> Optional[TreasuryItem]:
     else:
         maturity = None
 
-    # Nome completo para exibicao (ex: "Tesouro IPCA+ 2029")
-    year = maturity[:4] if maturity else ""
+    year         = maturity[:4] if maturity else ""
     display_name = f"{bond_type} {year}".strip() if year else bond_type
+    ticker       = raw.get("symbol") or display_name
 
-    # Ticker slug (symbol) ou display_name como fallback
-    ticker = raw.get("symbol") or display_name
-
-    # Indexador: usa campo 'indexer' da API (selic / prefixado / ipca / igpm)
     indexer_raw = (raw.get("indexer") or "").lower()
     bond_upper  = bond_type.upper()
     if indexer_raw == "ipca" or "IPCA" in bond_upper:
@@ -155,14 +202,12 @@ def _parse_treasury_item(raw: dict) -> Optional[TreasuryItem]:
     else:
         indexer = "Prefixado"
 
-    # Taxa: buyRate (% a.a.) — para Selic e o spread, nao a taxa total
     rate = raw.get("buyRate") or raw.get("sellRate")
     try:
         rate = float(rate) if rate is not None else None
     except (ValueError, TypeError):
         rate = None
 
-    # Preco unitario de compra
     price = raw.get("buyPrice") or raw.get("basePrice") or raw.get("sellPrice")
     try:
         price = float(price) if price is not None else None
@@ -203,23 +248,55 @@ async def upsert_asset(
     return await get_or_create_asset(db, data)
 
 
+@router.get("/suggest", response_model=list[TickerSuggestion])
+async def suggest_tickers(
+    q: str = Query("", min_length=2),
+    limit: int = Query(10, ge=1, le=20),
+    _=Depends(get_current_user),
+):
+    """
+    Autocomplete de tickers da B3 (acoes, FIIs, ETFs, BDRs) via BRAPI /api/quote/list.
+    Busca por ticker OU nome. Requer token para lista completa.
+    """
+    raw = await fetch_ticker_suggestions(q.strip(), limit)
+    result = []
+    for item in raw:
+        ticker = item.get("stock") or item.get("ticker") or item.get("symbol")
+        name   = item.get("name") or item.get("longName") or item.get("shortName") or ""
+        kind   = item.get("type") or item.get("assetType")
+        if ticker:
+            result.append(TickerSuggestion(ticker=ticker.upper(), name=name, type=kind))
+    return result
+
+
 @router.get("/tesouro/search", response_model=list[TreasuryItem])
 async def search_treasury(
     q: str = Query("", min_length=0),
     _=Depends(get_current_user),
 ):
     """
-    Busca titulos do Tesouro Direto via BRAPI /v2/treasury/list.
+    Busca titulos do Tesouro Direto.
+    Tenta BRAPI /v2/treasury/list; usa lista estatica como fallback.
     Filtra pelo parametro q (busca no nome do titulo).
-    Requer plano Pro na BRAPI; sem token retorna apenas 3 titulos sandbox.
     """
-    items = await fetch_treasury_list()
-    parsed = [_parse_treasury_item(i) for i in items]
+    # Tenta BRAPI primeiro
+    api_items = await fetch_treasury_list()
+
+    if api_items:
+        raw_list = api_items
+    else:
+        # Fallback: lista estatica dos titulos ativos
+        raw_list = _TESOURO_STATIC
+
+    parsed = [_parse_treasury_item(i) for i in raw_list]
     parsed = [i for i in parsed if i is not None]
 
     if q.strip():
         q_lower = q.strip().lower()
-        parsed = [i for i in parsed if q_lower in i.name.lower() or q_lower in i.ticker.lower()]
+        parsed = [
+            i for i in parsed
+            if q_lower in i.name.lower() or q_lower in i.ticker.lower()
+        ]
 
     return parsed
 
@@ -238,7 +315,6 @@ async def get_ticker_quote(
     today    = __import__('datetime').date.today().isoformat()
     use_hist = date and date != today
 
-    # --- BRAPI historico ---
     if use_hist:
         hist_price = await fetch_historical_price(t, date)
         if hist_price:
@@ -250,7 +326,6 @@ async def get_ticker_quote(
                 price_date = date,
             )
 
-    # --- BRAPI atual ---
     info = await fetch_asset_info(t)
     if info and info.get("regularMarketPrice"):
         return TickerQuoteResponse(
@@ -263,7 +338,6 @@ async def get_ticker_quote(
             price_date = today,
         )
 
-    # --- yfinance fallback (internacionais / historico) ---
     yf_info = await _yf_fetch_async(t, date if use_hist else None)
     if yf_info and yf_info.get("price"):
         return TickerQuoteResponse(
