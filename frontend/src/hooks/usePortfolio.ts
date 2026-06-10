@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import api from '@/services/api'
 import type { PositionGroup, AssetTypeDistribution } from '@/services/portfolioService'
+import { PORTFOLIOS_QUERY_KEY } from '@/hooks/usePortfolios'
 
 // ── tipos ────────────────────────────────────────────────────────────────
 
@@ -118,21 +119,17 @@ function toPositionGroups(raw: RawPositionItem[]): PositionGroup[] {
   }).sort((a, b) => b.total_value - a.total_value)
 }
 
-// ── QUERY KEYS centralizadas (evita conflito de cache) ─────────────────────────
-// Nota: usePortfolios.ts usa ['portfolios'] — este hook usa a mesma key
-// para compartilhar o mesmo cache e evitar 307 em loop.
-export const PORTFOLIOS_QUERY_KEY = ['portfolios'] as const
-
 // ── hooks ──────────────────────────────────────────────────────────────
 
 /**
- * Lista de carteiras — usa a MESMA queryKey que usePortfolios.ts
+ * Lista de carteiras — usa a MESMA queryKey e staleTime que usePortfolios.ts
  * para compartilhar cache. URL sem barra final (evita 307).
  */
 export function usePortfolioList() {
   return useQuery<PortfolioDetail[]>({
     queryKey: PORTFOLIOS_QUERY_KEY,
     queryFn: () => api.get('/portfolios').then(r => r.data),
+    staleTime: 30_000,
   })
 }
 
@@ -141,6 +138,7 @@ export function usePortfolio(id: number | null) {
     queryKey: ['portfolio', id],
     queryFn: () => api.get(`/portfolios/${id}`).then(r => r.data),
     enabled: !!id,
+    staleTime: 30_000,
   })
 }
 
@@ -149,10 +147,9 @@ export function usePortfolioSummary(portfolioId: number | null) {
   return useQuery<PortfolioSummaryData>({
     queryKey: ['portfolio-summary', portfolioId],
     queryFn: () =>
-      api
-        .get(`/portfolios/${portfolioId}/summary`)
-        .then(r => r.data),
+      api.get(`/portfolios/${portfolioId}/summary`).then(r => r.data),
     enabled: !!portfolioId,
+    staleTime: 15_000,
   })
 }
 
@@ -161,25 +158,24 @@ export function useAssetDistribution(portfolioId: number | null) {
   return useQuery<AssetTypeDistribution[]>({
     queryKey: ['asset-distribution', portfolioId],
     queryFn: () =>
-      api
-        .get(`/portfolios/${portfolioId}/positions`)
-        .then(r => {
-          const positions: RawPositionItem[] = r.data
-          const map: Record<string, number> = {}
-          for (const p of positions) {
-            const t = p.asset_type ?? 'OUTROS'
-            map[t] = (map[t] ?? 0) + (p.current_value ?? p.total_invested ?? 0)
-          }
-          const total = Object.values(map).reduce((s, v) => s + v, 0)
-          return Object.entries(map).map(([asset_type, value]) => ({
-            type:       asset_type,
-            label:      ASSET_LABELS[asset_type] ?? asset_type,
-            value,
-            percentage: total > 0 ? (value / total) * 100 : 0,
-            color:      ASSET_COLORS[asset_type] ?? ASSET_COLORS.OUTROS,
-          })).sort((a, b) => b.value - a.value)
-        }),
+      api.get(`/portfolios/${portfolioId}/positions`).then(r => {
+        const positions: RawPositionItem[] = r.data ?? []
+        const map: Record<string, number> = {}
+        for (const p of positions) {
+          const t = p.asset_type ?? 'OUTROS'
+          map[t] = (map[t] ?? 0) + (p.current_value ?? p.total_invested ?? 0)
+        }
+        const total = Object.values(map).reduce((s, v) => s + v, 0)
+        return Object.entries(map).map(([asset_type, value]) => ({
+          type:       asset_type,
+          label:      ASSET_LABELS[asset_type] ?? asset_type,
+          value,
+          percentage: total > 0 ? (value / total) * 100 : 0,
+          color:      ASSET_COLORS[asset_type] ?? ASSET_COLORS.OUTROS,
+        })).sort((a, b) => b.value - a.value)
+      }),
     enabled: !!portfolioId,
+    staleTime: 15_000,
   })
 }
 
@@ -188,10 +184,11 @@ export function usePositions(portfolioId: number | null) {
   return useQuery<PositionGroup[]>({
     queryKey: ['positions', portfolioId],
     queryFn: () =>
-      api
-        .get(`/portfolios/${portfolioId}/positions`)
-        .then(r => toPositionGroups(r.data ?? [])),
+      api.get(`/portfolios/${portfolioId}/positions`).then(r =>
+        toPositionGroups(r.data ?? [])
+      ),
     enabled: !!portfolioId,
+    staleTime: 15_000,
   })
 }
 
@@ -201,5 +198,6 @@ export function usePatrimonioHistory(portfolioId: number | null, _months: number
     queryKey: ['patrimonio-history', portfolioId, _months],
     queryFn: () => Promise.resolve([]),
     enabled: !!portfolioId,
+    staleTime: 60_000,
   })
 }

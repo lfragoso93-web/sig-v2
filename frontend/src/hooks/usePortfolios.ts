@@ -11,12 +11,14 @@ export interface Portfolio {
   updated_at: string | null
 }
 
-const QUERY_KEY = ['portfolios']
+export const PORTFOLIOS_QUERY_KEY = ['portfolios'] as const
 
 export function usePortfolios() {
   return useQuery<Portfolio[]>({
-    queryKey: QUERY_KEY,
+    queryKey: PORTFOLIOS_QUERY_KEY,
     queryFn: () => api.get('/portfolios').then((r) => r.data),
+    // Evita refetch a cada re-render da Sidebar — lista de carteiras muda raramente
+    staleTime: 30_000,
   })
 }
 
@@ -25,6 +27,6 @@ export function useCreatePortfolio() {
   return useMutation({
     mutationFn: (data: { name: string; description?: string }) =>
       api.post<Portfolio>('/portfolios', data).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEY }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: PORTFOLIOS_QUERY_KEY }),
   })
 }
