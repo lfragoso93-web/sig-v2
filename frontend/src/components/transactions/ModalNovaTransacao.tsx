@@ -19,7 +19,7 @@ interface Props {
 }
 
 export default function ModalNovaTransacao({ portfolioId, onClose }: Props) {
-  const createTx = useCreateTransaction(portfolioId)
+  const createTx = useCreateTransaction()
 
   const today = new Date().toISOString().split('T')[0]
 
@@ -63,18 +63,28 @@ export default function ModalNovaTransacao({ portfolioId, onClose }: Props) {
 
     try {
       await createTx.mutateAsync({
-        ticker:     form.ticker.toUpperCase().trim(),
-        asset_type: form.asset_type,
-        operation:  form.operation,
-        quantity:   qty,
-        price,
-        fees:       fees || 0,
-        date:       form.date,
-        notes:      form.notes || undefined,
+        portfolioId,
+        data: {
+          ticker:     form.ticker.toUpperCase().trim(),
+          asset_type: form.asset_type,
+          operation:  form.operation,
+          quantity:   qty,
+          price,
+          fees:       fees || 0,
+          date:       form.date,
+          notes:      form.notes || undefined,
+        },
       })
       onClose()
     } catch (err: any) {
-      setError(err?.response?.data?.detail ?? 'Erro ao registrar transação.')
+      const detail = err?.response?.data?.detail
+      if (Array.isArray(detail)) {
+        setError(detail.map((d: any) => d.msg ?? JSON.stringify(d)).join(', '))
+      } else if (typeof detail === 'string') {
+        setError(detail)
+      } else {
+        setError('Erro ao registrar transação. Verifique os dados e tente novamente.')
+      }
     }
   }
 
@@ -126,7 +136,7 @@ export default function ModalNovaTransacao({ portfolioId, onClose }: Props) {
           {/* Ticker + Tipo */}
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">Ticker <span className="text-red-500">*</span></label>
+              <label className="text-sm font-medium">Ticker <span style={{ color: 'var(--color-error)' }}>*</span></label>
               <input
                 className="input uppercase"
                 placeholder="Ex: PETR4"
@@ -146,7 +156,7 @@ export default function ModalNovaTransacao({ portfolioId, onClose }: Props) {
           {/* Quantidade + Preço + Taxas */}
           <div className="grid grid-cols-3 gap-3">
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">Quantidade <span className="text-red-500">*</span></label>
+              <label className="text-sm font-medium">Quantidade <span style={{ color: 'var(--color-error)' }}>*</span></label>
               <input
                 type="number"
                 min="0"
@@ -159,7 +169,7 @@ export default function ModalNovaTransacao({ portfolioId, onClose }: Props) {
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">Preço unit. <span className="text-red-500">*</span></label>
+              <label className="text-sm font-medium">Preço unit. <span style={{ color: 'var(--color-error)' }}>*</span></label>
               <input
                 type="number"
                 min="0"
@@ -188,7 +198,7 @@ export default function ModalNovaTransacao({ portfolioId, onClose }: Props) {
           {/* Data + Notas */}
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">Data <span className="text-red-500">*</span></label>
+              <label className="text-sm font-medium">Data <span style={{ color: 'var(--color-error)' }}>*</span></label>
               <input
                 type="date"
                 className="input"

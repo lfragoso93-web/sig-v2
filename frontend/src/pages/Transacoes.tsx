@@ -53,14 +53,15 @@ export default function Transacoes() {
 
   async function handleDelete(id: number) {
     if (!selectedPortfolioId) return
-    await deleteTransaction.mutateAsync({ id, portfolio_id: selectedPortfolioId })
+    await deleteTransaction.mutateAsync({ id, portfolioId: selectedPortfolioId })
     setConfirmDelete(null)
   }
 
   if (!selectedPortfolioId) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Selecione uma carteira.</p>
+      <div className="flex flex-col items-center justify-center py-24 gap-3">
+        <p className="text-sm font-medium">Nenhuma carteira selecionada</p>
+        <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Selecione ou crie uma carteira na barra lateral.</p>
       </div>
     )
   }
