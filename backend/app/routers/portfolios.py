@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from datetime import date, timedelta
 from typing import Optional
 from pydantic import BaseModel
 
@@ -9,6 +10,7 @@ from app.core.deps import get_current_user
 from app.models.user import User
 from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction, OperationType
+from app.models.dividend import Dividend
 from app.schemas.portfolio import PortfolioCreate, PortfolioUpdate, PortfolioResponse
 from app.schemas.auth import MessageResponse
 from app.services.portfolio_service import (
@@ -51,7 +53,7 @@ def _normalize_type(raw: str) -> str:
     return mapping.get(upper, upper)
 
 
-# ── Schemas ─────────────────────────────────────────────────────────────────────────
+# ── Schemas ──────────────────────────────────────────────────────────────────────────
 class PositionItem(BaseModel):
     ticker:         str
     asset_type:     str
@@ -124,15 +126,14 @@ async def _calc_raw_positions(db: AsyncSession, portfolio_id: int) -> list[dict]
 
 
 def _enrich_with_prices(items: list[dict], prices: dict[str, float]) -> list[dict]:
-    """Aplica cotacoes reais (ou fallback avg_price) e calcula result."""
     enriched = []
     for item in items:
-        ticker        = item['ticker']
-        avg_price     = item['avg_price']
-        quantity      = item['quantity']
-        total_invested= item['total_invested']
+        ticker         = item['ticker']
+        avg_price      = item['avg_price']
+        quantity       = item['quantity']
+        total_invested = item['total_invested']
 
-        current_price = prices.get(ticker) or avg_price   # fallback
+        current_price = prices.get(ticker) or avg_price
         current_value = round(quantity * current_price, 2)
         result_abs    = round(current_value - total_invested, 2)
         result_pct    = round((result_abs / total_invested * 100) if total_invested > 0 else 0.0, 4)
@@ -148,13 +149,21 @@ def _enrich_with_prices(items: list[dict], prices: dict[str, float]) -> list[dic
 
 
 async def _calc_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
-    """Posicoes completas com cotacao real."""
     raw    = await _calc_raw_positions(db, portfolio_id)
-    prices = await get_prices(raw)       # busca BRAPI + yfinance
+    prices = await get_prices(raw)
     return _enrich_with_prices(raw, prices)
 
 
-# ── Rotas CRUD ──────────────────────────────────────────────────────────────────────
+def _div_total(d: Dividend) -> float:
+    """Retorna o valor total de um Dividend priorizando campos disponiveis."""
+    if d.total_value is not None:
+        return float(d.total_value)
+    unit = d.value_per_unit or d.amount or 0.0
+    qty  = d.quantity or 1.0
+    return float(unit) * float(qty)
+
+
+# ── Rotas CRUD ───────────────────────────────────────────────────────────────────────
 
 @router.get('/', response_model=list[PortfolioResponse])
 async def list_my_portfolios(
@@ -203,7 +212,7 @@ async def delete_my_portfolio(
     return MessageResponse(message='Carteira excluída com sucesso')
 
 
-# ── Summary ──────────────────────────────────────────────────────────────────────
+# ── Summary ──────────────────────────────────────────────────────────────────────────
 
 @router.get('/{portfolio_id}/summary', response_model=SummaryResponse)
 async def portfolio_summary(
@@ -226,44 +235,40 @@ async def portfolio_summary(
     result_abs     = round(total_current - total_invested, 2)
     result_pct     = round((result_abs / total_invested * 100) if total_invested > 0 else 0.0, 4)
 
-    # Proventos
-    from datetime import date, timedelta
-    from app.models.provento import Provento
-    cutoff   = date.today() - timedelta(days=365)
-    prov_res = await db.execute(
-        select(Provento).where(
-            Provento.portfolio_id == portfolio_id,
-            Provento.date >= cutoff,
+    # Proventos (tabela dividends)
+    cutoff = date.today() - timedelta(days=365)
+
+    div_12m_res = await db.execute(
+        select(Dividend).where(
+            Dividend.portfolio_id == portfolio_id,
+            Dividend.payment_date >= cutoff,
         )
     )
-    proventos_12m = sum(
-        (p.value or 0) * (p.quantity or 1) for p in prov_res.scalars().all()
+    proventos_12m = sum(_div_total(d) for d in div_12m_res.scalars().all())
+
+    div_all_res = await db.execute(
+        select(Dividend).where(Dividend.portfolio_id == portfolio_id)
     )
-    prov_all = await db.execute(
-        select(Provento).where(Provento.portfolio_id == portfolio_id)
-    )
-    total_proventos = sum(
-        (p.value or 0) * (p.quantity or 1) for p in prov_all.scalars().all()
-    )
+    total_proventos = sum(_div_total(d) for d in div_all_res.scalars().all())
 
     return SummaryResponse(
-        total_invested           = round(total_invested, 2),
-        total_current            = round(total_current,  2),
+        total_invested           = round(total_invested,   2),
+        total_current            = round(total_current,    2),
         result_abs               = result_abs,
         result_pct               = result_pct,
         positions_count          = len(items),
-        total_patrimonio         = round(total_current,  2),
-        total_investido          = round(total_invested, 2),
+        total_patrimonio         = round(total_current,    2),
+        total_investido          = round(total_invested,   2),
         lucro_total              = result_abs,
         variacao_valor           = result_abs,
         variacao_percentual      = result_pct,
         rentabilidade_total      = result_pct,
-        dividendos_recebidos_12m = round(proventos_12m,   2),
-        total_proventos          = round(total_proventos, 2),
+        dividendos_recebidos_12m = round(proventos_12m,    2),
+        total_proventos          = round(total_proventos,  2),
     )
 
 
-# ── Positions ───────────────────────────────────────────────────────────────────
+# ── Positions ────────────────────────────────────────────────────────────────────────
 
 @router.get('/{portfolio_id}/positions', response_model=list[PositionItem])
 async def portfolio_positions(
