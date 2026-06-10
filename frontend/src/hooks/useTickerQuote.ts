@@ -2,20 +2,20 @@ import { useEffect, useState } from 'react'
 import api from '@/services/api'
 
 export interface TickerQuote {
-  ticker:     string
-  name:       string | null
-  price:      number | null
-  currency:   string
-  asset_type: string | null
-  source:     string
+  ticker:      string
+  name:        string | null
+  price:       number | null
+  currency:    string
+  asset_type:  string | null
+  source:      string
+  price_date:  string | null
 }
 
 /**
  * Hook com debounce de 600 ms.
- * Quando o ticker tiver >= 2 caracteres, consulta /assets/quote/{ticker}.
- * Retorna { quote, loading, error }.
+ * Consulta /assets/quote/{ticker}?date=YYYY-MM-DD quando a data nao for hoje.
  */
-export function useTickerQuote(ticker: string, enabled = true) {
+export function useTickerQuote(ticker: string, enabled = true, date?: string) {
   const [quote,   setQuote]   = useState<TickerQuote | null>(null)
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState<string | null>(null)
@@ -33,15 +33,18 @@ export function useTickerQuote(ticker: string, enabled = true) {
 
     const timer = setTimeout(async () => {
       try {
-        const res = await api.get<TickerQuote>(`/assets/quote/${t}`)
+        const today   = new Date().toISOString().split('T')[0]
+        const useDate = date && date !== today ? date : undefined
+        const params  = useDate ? `?date=${useDate}` : ''
+        const res     = await api.get<TickerQuote>(`/assets/quote/${t}${params}`)
         setQuote(res.data)
       } catch (e: any) {
         setQuote(null)
         const status = e?.response?.status
         if (status === 404) {
-          setError('Ticker não encontrado na BRAPI.')
+          setError('Ticker nao encontrado na BRAPI.')
         } else {
-          setError(null) // erro de rede — não bloqueia o usuário
+          setError(null)
         }
       } finally {
         setLoading(false)
@@ -49,7 +52,7 @@ export function useTickerQuote(ticker: string, enabled = true) {
     }, 600)
 
     return () => clearTimeout(timer)
-  }, [ticker, enabled])
+  }, [ticker, enabled, date])
 
   return { quote, loading, error }
 }

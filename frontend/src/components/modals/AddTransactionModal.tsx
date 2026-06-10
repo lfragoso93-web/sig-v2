@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   X, TrendingUp, Building2, Globe, Landmark,
   Bitcoin, Banknote, BarChart2, CheckCircle2, Loader2, Zap,
@@ -7,6 +7,7 @@ import clsx from 'clsx'
 import { useCreateTransaction } from '@/hooks/useTransactions'
 import { useAppStore } from '@/store/appStore'
 import { useTickerQuote } from '@/hooks/useTickerQuote'
+import { useTesouroSearch, TreasuryItem } from '@/hooks/useTesouroSearch'
 
 interface Props {
   onClose: () => void
@@ -21,18 +22,17 @@ type AssetTab = {
   tickerPlaceholder: string
   tickerLabel: string
   extraFields?: 'renda_fixa' | 'tesouro'
-  // BRAPI não cobre RF/TD/Cripto com cotação real
   brapiEnabled?: boolean
 }
 
 const TABS: AssetTab[] = [
-  { key: 'acao',       label: 'Ação',       icon: <TrendingUp size={13} />, assetType: 'ACAO',              currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: PETR4',           brapiEnabled: true },
+  { key: 'acao',       label: 'Acao',       icon: <TrendingUp size={13} />, assetType: 'ACAO',              currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: PETR4',           brapiEnabled: true },
   { key: 'fii',        label: 'FII',        icon: <Building2  size={13} />, assetType: 'FII',               currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: MXRF11',          brapiEnabled: true },
   { key: 'etf_br',     label: 'ETF BR',     icon: <BarChart2  size={13} />, assetType: 'ETF_NACIONAL',      currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: BOVA11',          brapiEnabled: true },
   { key: 'stock',      label: 'Stock',      icon: <Globe      size={13} />, assetType: 'STOCK',             currency: 'USD', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: AAPL',            brapiEnabled: true },
   { key: 'etf_int',    label: 'ETF INT',    icon: <Globe      size={13} />, assetType: 'ETF_INTERNACIONAL', currency: 'USD', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: VTI',             brapiEnabled: true },
-  { key: 'tesouro',    label: 'Tesouro',    icon: <Landmark   size={13} />, assetType: 'TESOURO_DIRETO',    currency: 'BRL', tickerLabel: 'Título',      tickerPlaceholder: 'ex: LTN 2029',        brapiEnabled: false, extraFields: 'tesouro' },
-  { key: 'renda_fixa', label: 'Renda Fixa', icon: <Banknote   size={13} />, assetType: 'RENDA_FIXA',        currency: 'BRL', tickerLabel: 'Código/Nome', tickerPlaceholder: 'ex: CDB XP 110% CDI', brapiEnabled: false, extraFields: 'renda_fixa' },
+  { key: 'tesouro',    label: 'Tesouro',    icon: <Landmark   size={13} />, assetType: 'TESOURO_DIRETO',    currency: 'BRL', tickerLabel: 'Titulo',      tickerPlaceholder: 'ex: Tesouro IPCA 2029', brapiEnabled: false, extraFields: 'tesouro' },
+  { key: 'renda_fixa', label: 'Renda Fixa', icon: <Banknote   size={13} />, assetType: 'RENDA_FIXA',        currency: 'BRL', tickerLabel: 'Codigo/Nome', tickerPlaceholder: 'ex: CDB XP 110% CDI', brapiEnabled: false, extraFields: 'renda_fixa' },
   { key: 'cripto',     label: 'Cripto',     icon: <Bitcoin    size={13} />, assetType: 'CRIPTO',            currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: BTC',             brapiEnabled: true },
 ]
 
@@ -64,7 +64,6 @@ export default function AddTransactionModal({ onClose }: Props) {
   const [currency,  setCurrency]  = useState('BRL')
   const [error,     setError]     = useState<string | null>(null)
   const [success,   setSuccess]   = useState(false)
-  // indica se o preço foi preenchido pela BRAPI (para exibir badge)
   const [priceFromBrapi, setPriceFromBrapi] = useState(false)
 
   // campos extra RF / Tesouro
@@ -73,67 +72,104 @@ export default function AddTransactionModal({ onClose }: Props) {
   const [maturity, setMaturity] = useState('')
   const [issuer,   setIssuer]   = useState('')
 
+  // dropdown sugestoes Tesouro
+  const [showTDSuggestions, setShowTDSuggestions] = useState(false)
+  const tdRef = useRef<HTMLDivElement>(null)
+
   const tab       = TABS.find(t => t.key === activeTab)!
   const isRF      = tab.extraFields === 'renda_fixa'
   const isTesouro = tab.extraFields === 'tesouro'
   const indexerOptions = isTesouro ? TD_INDEXERS : RF_INDEXERS
 
-  // ── BRAPI autocomplete ─────────────────────────────────────────────────
+  // ── BRAPI cotacao (renda variavel) ────────────────────────────────────
   const { quote, loading: quoteLoading, error: quoteError } =
-    useTickerQuote(ticker, !!tab.brapiEnabled)
+    useTickerQuote(ticker, !!tab.brapiEnabled, date)
 
-  // Quando a cotação chega, preenche preço + moeda automaticamente
+  // Quando cotacao chega, preenche preco + moeda + nome
   useEffect(() => {
     if (!quote) { setPriceFromBrapi(false); return }
-
     if (quote.price !== null && !price) {
       setPrice(String(quote.price))
       setPriceFromBrapi(true)
     }
-    if (quote.name && !assetName) {
-      setAssetName(quote.name)
-    }
-    if (quote.currency) {
-      setCurrency(quote.currency.toUpperCase())
-    }
+    if (quote.name && !assetName) setAssetName(quote.name)
+    if (quote.currency) setCurrency(quote.currency.toUpperCase())
   }, [quote])
 
-  // Quando o preço é editado manualmente, remove o badge BRAPI
+  // Quando data muda, limpa o preco atual para rebuscar
+  const prevDate = useRef(date)
+  useEffect(() => {
+    if (prevDate.current !== date && tab.brapiEnabled && ticker.length >= 2) {
+      setPrice('')
+      setPriceFromBrapi(false)
+    }
+    prevDate.current = date
+  }, [date])
+
   function handlePriceChange(v: string) {
     setPrice(v)
     if (priceFromBrapi) setPriceFromBrapi(false)
   }
 
-  // ── handlers ─────────────────────────────────────────────────────────
+  // ── Tesouro Direto autocomplete ───────────────────────────────────────
+  const { items: tdItems, loading: tdLoading } = useTesouroSearch(ticker, isTesouro)
+
+  useEffect(() => {
+    if (isTesouro && tdItems.length > 0) setShowTDSuggestions(true)
+    else setShowTDSuggestions(false)
+  }, [tdItems, isTesouro])
+
+  // fecha dropdown ao clicar fora
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (tdRef.current && !tdRef.current.contains(e.target as Node))
+        setShowTDSuggestions(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  function applyTDSuggestion(item: TreasuryItem) {
+    setTicker(item.ticker)
+    setAssetName(item.name)
+    if (item.indexer) setIndexer(item.indexer)
+    if (item.rate !== null && item.rate !== undefined) setRate(String(item.rate))
+    if (item.maturity_date) {
+      // converte para YYYY-MM-DD se nao estiver nesse formato
+      setMaturity(item.maturity_date.slice(0, 10))
+    }
+    if (item.price !== null && item.price !== undefined) {
+      setPrice(String(item.price))
+      setPriceFromBrapi(true)
+    }
+    setShowTDSuggestions(false)
+  }
+
+  // ── handlers gerais ───────────────────────────────────────────────────
   function handleTabChange(key: string) {
     const t = TABS.find(t => t.key === key)!
     setActiveTab(key)
     setCurrency(t.currency)
-    setTicker('')
-    setAssetName('')
-    setPrice('')
-    setIndexer('')
-    setRate('')
-    setMaturity('')
-    setIssuer('')
-    setPriceFromBrapi(false)
+    setTicker(''); setAssetName(''); setPrice('')
+    setIndexer(''); setRate(''); setMaturity(''); setIssuer('')
+    setPriceFromBrapi(false); setShowTDSuggestions(false)
     setError(null)
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
-    if (!selectedPortfolioId) { setError('Selecione uma carteira antes de lançar.'); return }
+    if (!selectedPortfolioId) { setError('Selecione uma carteira antes de lancar.'); return }
     const qty = parseFloat(quantity)
     const prc = parseFloat(price)
     const fee = parseFloat(fees || '0')
-    if (!ticker.trim())         { setError('Informe o ticker/código do ativo.'); return }
+    if (!ticker.trim())         { setError('Informe o ticker/codigo do ativo.'); return }
     if (isNaN(qty) || qty <= 0) { setError('Quantidade deve ser maior que zero.'); return }
-    if (isNaN(prc) || prc <= 0) { setError('Preço deve ser maior que zero.'); return }
+    if (isNaN(prc) || prc <= 0) { setError('Preco deve ser maior que zero.'); return }
     if ((isRF || isTesouro) && !indexer) { setError('Selecione o indexador.'); return }
 
     let enrichedNotes = notes.trim()
-    if (assetName) enrichedNotes = [assetName, enrichedNotes].filter(Boolean).join(' — ')
+    if (assetName) enrichedNotes = [assetName, enrichedNotes].filter(Boolean).join(' - ')
     if (isRF || isTesouro) {
       const extras = [
         indexer  && `Indexador: ${indexer}`,
@@ -141,7 +177,7 @@ export default function AddTransactionModal({ onClose }: Props) {
         maturity && `Vencimento: ${maturity}`,
         isRF && issuer && `Emissor: ${issuer}`,
       ].filter(Boolean).join(' | ')
-      enrichedNotes = [extras, enrichedNotes].filter(Boolean).join(' — ')
+      enrichedNotes = [extras, enrichedNotes].filter(Boolean).join(' - ')
     }
 
     try {
@@ -162,7 +198,7 @@ export default function AddTransactionModal({ onClose }: Props) {
       setSuccess(true)
     } catch (err: any) {
       const msg = err?.response?.data?.detail
-      setError(typeof msg === 'string' ? msg : 'Erro ao salvar lançamento. Tente novamente.')
+      setError(typeof msg === 'string' ? msg : 'Erro ao salvar lancamento. Tente novamente.')
     }
   }
 
@@ -171,7 +207,7 @@ export default function AddTransactionModal({ onClose }: Props) {
     setTicker(''); setAssetName(''); setQuantity(''); setPrice('')
     setFees(''); setDate(TODAY); setNotes('')
     setIndexer(''); setRate(''); setMaturity(''); setIssuer('')
-    setPriceFromBrapi(false)
+    setPriceFromBrapi(false); setShowTDSuggestions(false)
     setError(null)
   }
 
@@ -188,7 +224,7 @@ export default function AddTransactionModal({ onClose }: Props) {
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-surface-700">
-          <h2 className="text-sm font-semibold text-slate-100">Novo Lançamento</h2>
+          <h2 className="text-sm font-semibold text-slate-100">Novo Lancamento</h2>
           <button onClick={onClose} className="p-1 rounded hover:bg-surface-700 text-slate-400 hover:text-slate-200 transition-colors" aria-label="Fechar">
             <X size={15} />
           </button>
@@ -198,9 +234,9 @@ export default function AddTransactionModal({ onClose }: Props) {
         {success ? (
           <div className="flex flex-col items-center justify-center gap-4 py-14 px-6">
             <CheckCircle2 size={48} className="text-positive" />
-            <p className="text-sm font-medium text-slate-100">Lançamento registrado com sucesso!</p>
+            <p className="text-sm font-medium text-slate-100">Lancamento registrado com sucesso!</p>
             <div className="flex gap-3">
-              <button onClick={handleReset} className="px-4 py-1.5 rounded-md text-xs font-medium bg-brand-600 hover:bg-brand-500 text-white transition-colors">Novo Lançamento</button>
+              <button onClick={handleReset} className="px-4 py-1.5 rounded-md text-xs font-medium bg-brand-600 hover:bg-brand-500 text-white transition-colors">Novo Lancamento</button>
               <button onClick={onClose}    className="px-4 py-1.5 rounded-md text-xs font-medium bg-surface-700 hover:bg-surface-600 text-slate-200 transition-colors">Fechar</button>
             </div>
           </div>
@@ -236,35 +272,62 @@ export default function AddTransactionModal({ onClose }: Props) {
                 >Venda</button>
               </div>
 
-              {/* ── Ticker + Moeda ─────────────────────────────────────────── */}
+              {/* Ticker + Moeda */}
               <div className="flex gap-3">
-                <div className="flex-1">
+                <div className="flex-1" ref={isTesouro ? tdRef : undefined}>
                   <label className="block text-xs text-slate-400 mb-1">{tab.tickerLabel}</label>
                   <div className="relative">
                     <input
                       type="text"
                       value={ticker}
-                      onChange={e => { setTicker(e.target.value); setAssetName(''); setPrice(''); setPriceFromBrapi(false) }}
+                      onChange={e => {
+                        setTicker(e.target.value)
+                        setAssetName('')
+                        setPrice('')
+                        setPriceFromBrapi(false)
+                        if (!isTesouro) return
+                        // nao limpa indexer/rate/maturity automaticamente ao digitar
+                      }}
                       placeholder={tab.tickerPlaceholder}
                       className={clsx(inputCls, 'pr-7')}
                       autoFocus
                     />
-                    {/* spinner BRAPI */}
-                    {quoteLoading && (
+                    {(quoteLoading || tdLoading) && (
                       <span className="absolute right-2 top-1/2 -translate-y-1/2">
                         <Loader2 size={13} className="animate-spin text-brand-400" />
                       </span>
                     )}
+
+                    {/* Dropdown sugestoes Tesouro */}
+                    {showTDSuggestions && tdItems.length > 0 && (
+                      <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-md border border-surface-600 bg-surface-800 shadow-xl max-h-52 overflow-y-auto">
+                        {tdItems.map((item, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onMouseDown={() => applyTDSuggestion(item)}
+                            className="w-full text-left px-3 py-2 text-xs hover:bg-surface-700 transition-colors border-b border-surface-700 last:border-0"
+                          >
+                            <span className="font-medium text-slate-200">{item.name}</span>
+                            <span className="ml-2 text-slate-500">
+                              {item.indexer}
+                              {item.rate ? ` ${item.rate}% a.a.` : ''}
+                              {item.maturity_date ? ` • venc. ${item.maturity_date.slice(0, 7)}` : ''}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  {/* nome do ativo retornado pela BRAPI */}
+
                   {assetName && (
                     <p className="mt-1 text-xs text-slate-500 truncate">{assetName}</p>
                   )}
-                  {/* ticker não encontrado */}
                   {quoteError && !quoteLoading && (
                     <p className="mt-1 text-xs text-slate-500">{quoteError}</p>
                   )}
                 </div>
+
                 <div className="w-24">
                   <label className="block text-xs text-slate-400 mb-1">Moeda</label>
                   <select value={currency} onChange={e => setCurrency(e.target.value)} className={inputCls}>
@@ -276,17 +339,17 @@ export default function AddTransactionModal({ onClose }: Props) {
                 </div>
               </div>
 
-              {/* ── Campos extras RF / Tesouro ────────────────────────────── */}
+              {/* Campos extras RF / Tesouro */}
               {(isRF || isTesouro) && (
                 <div className="rounded-lg border border-surface-600 bg-surface-800/50 px-3 py-3 flex flex-col gap-3">
                   <p className="text-xs font-medium text-slate-400">
-                    {isTesouro ? '🏛 Dados do Título' : '📄 Dados do Ativo'}
+                    {isTesouro ? 'Dados do Titulo' : 'Dados do Ativo'}
                   </p>
                   <div className="flex gap-3">
                     <div className="flex-1">
                       <label className="block text-xs text-slate-400 mb-1">Indexador <span className="text-red-400">*</span></label>
                       <select value={indexer} onChange={e => setIndexer(e.target.value)} className={inputCls}>
-                        <option value="">Selecionar…</option>
+                        <option value="">Selecionar...</option>
                         {indexerOptions.map(o => <option key={o} value={o}>{o}</option>)}
                       </select>
                     </div>
@@ -310,7 +373,7 @@ export default function AddTransactionModal({ onClose }: Props) {
                 </div>
               )}
 
-              {/* ── Quantidade + Preço ────────────────────────────────────── */}
+              {/* Quantidade + Preco */}
               <div className="flex gap-3">
                 <div className="flex-1">
                   <label className="block text-xs text-slate-400 mb-1">
@@ -321,10 +384,9 @@ export default function AddTransactionModal({ onClose }: Props) {
                 <div className="flex-1">
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs text-slate-400">
-                      {isRF || isTesouro ? 'PU / Preço unit.' : 'Preço'}
+                      {isRF || isTesouro ? 'PU / Preco unit.' : 'Preco'}
                       <span className="text-slate-600 ml-1">({currency})</span>
                     </label>
-                    {/* badge BRAPI */}
                     {priceFromBrapi && (
                       <span className="flex items-center gap-0.5 text-[10px] font-medium text-brand-400 bg-brand-500/10 border border-brand-500/20 rounded px-1.5 py-0.5">
                         <Zap size={9} />BRAPI
@@ -350,7 +412,7 @@ export default function AddTransactionModal({ onClose }: Props) {
                   <input type="number" value={fees} onChange={e => setFees(e.target.value)} placeholder="0,00" min="0" step="any" className={inputCls} />
                 </div>
                 <div className="flex-1">
-                  <label className="block text-xs text-slate-400 mb-1">Data da operação</label>
+                  <label className="block text-xs text-slate-400 mb-1">Data da operacao</label>
                   <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inputCls} />
                 </div>
               </div>
@@ -363,13 +425,12 @@ export default function AddTransactionModal({ onClose }: Props) {
                 </div>
               )}
 
-              {/* Observações */}
+              {/* Observacoes */}
               <div>
-                <label className="block text-xs text-slate-400 mb-1">Observações <span className="text-slate-600">(opcional)</span></label>
-                <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Anotações sobre o lançamento..." className={inputCls + ' resize-none'} />
+                <label className="block text-xs text-slate-400 mb-1">Observacoes <span className="text-slate-600">(opcional)</span></label>
+                <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Anotacoes sobre o lancamento..." className={inputCls + ' resize-none'} />
               </div>
 
-              {/* Erro */}
               {error && (
                 <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-md px-3 py-2">{error}</p>
               )}
@@ -379,7 +440,7 @@ export default function AddTransactionModal({ onClose }: Props) {
             <div className="flex justify-end gap-2.5 px-4 py-3 border-t border-surface-700">
               <button type="button" onClick={onClose} className="px-4 py-1.5 rounded-md text-xs font-medium bg-surface-700 hover:bg-surface-600 text-slate-300 transition-colors">Cancelar</button>
               <button type="submit" disabled={isPending} className="px-4 py-1.5 rounded-md text-xs font-medium bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white transition-colors">
-                {isPending ? 'Salvando...' : 'Salvar Lançamento'}
+                {isPending ? 'Salvando...' : 'Salvar Lancamento'}
               </button>
             </div>
           </form>
