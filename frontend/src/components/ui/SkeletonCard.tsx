@@ -1,9 +1,9 @@
-export default function SkeletonCard({ className = '' }: { className?: string }) {
+export default function SkeletonCard() {
   return (
-    <div className={`card p-4 animate-pulse ${className}`}>
-      <div className="h-3 w-24 bg-gray-200 dark:bg-dark-400 rounded mb-3" />
-      <div className="h-7 w-32 bg-gray-200 dark:bg-dark-400 rounded mb-2" />
-      <div className="h-3 w-20 bg-gray-200 dark:bg-dark-400 rounded" />
+    <div className="rounded-xl bg-surface-900 border border-surface-700 p-4 flex flex-col gap-2 animate-pulse">
+      <div className="h-3 w-20 bg-surface-700 rounded" />
+      <div className="h-7 w-28 bg-surface-700 rounded" />
+      <div className="h-3 w-14 bg-surface-700 rounded" />
     </div>
   )
 }

@@ -1,9 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import api from '@/services/api'
-import type { PositionGroup, AssetTypeDistribution } from '@/services/portfolioService'
 import { PORTFOLIOS_QUERY_KEY } from '@/hooks/usePortfolios'
 
-// ── tipos ────────────────────────────────────────────────────────────────
+// ── Tipos ─────────────────────────────────────────────────────────────────────
 
 export interface PortfolioDetail {
   id: number
@@ -13,19 +12,19 @@ export interface PortfolioDetail {
 }
 
 export interface PortfolioSummaryData {
-  total_invested:           number
-  total_current:            number
-  result_abs:               number
-  result_pct:               number
-  positions_count:          number
-  total_patrimonio:         number
-  total_investido:          number
-  lucro_total:              number
-  variacao_valor:           number
-  variacao_percentual:      number
-  rentabilidade_total:      number
-  dividendos_recebidos_12m: number
-  total_proventos:          number
+  total_invested:            number
+  total_current:             number
+  result_abs:                number
+  result_pct:                number
+  positions_count:           number
+  total_patrimonio:          number
+  total_investido:           number
+  lucro_total:               number
+  variacao_valor:            number
+  variacao_percentual:       number
+  rentabilidade_total:       number
+  dividendos_recebidos_12m:  number
+  total_proventos:           number
 }
 
 export interface PatrimonioHistoryPoint {
@@ -33,19 +32,49 @@ export interface PatrimonioHistoryPoint {
   value: number
 }
 
-interface RawPositionItem {
-  ticker:         string
-  asset_type:     string
-  quantity:       number
-  avg_price:      number
-  total_invested: number
-  current_price?: number | null
-  current_value?: number | null
-  result_abs?:    number | null
-  result_pct?:    number | null
+export interface EquityPoint {
+  date: string
+  value: number
 }
 
-// ── helpers ──────────────────────────────────────────────────────────────
+export type EquityPeriod = '6m' | '12m' | '24m' | 'all'
+
+export interface AssetTypeDistribution {
+  type: string
+  label: string
+  value: number
+  percentage: number
+  color: string
+}
+
+export interface PositionItem {
+  id: number
+  ticker: string
+  name: string
+  asset_type: string
+  logo_url?: string
+  quantity: number
+  average_price: number
+  current_price: number
+  current_value: number
+  variation_value: number
+  variation_percent: number
+  rentability_percent: number
+  portfolio_percent: number
+}
+
+export interface PositionGroup {
+  asset_type: string
+  label: string
+  count: number
+  total_value: number
+  variation_percent: number
+  rentability_percent: number
+  portfolio_percent: number
+  positions: PositionItem[]
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 const ASSET_LABELS: Record<string, string> = {
   ACAO:              'Ações',
@@ -72,24 +101,34 @@ const ASSET_COLORS: Record<string, string> = {
   OUTROS:            '#6b7280',
 }
 
+interface RawPositionItem {
+  ticker:         string
+  asset_type:     string
+  quantity:       number
+  avg_price:      number
+  total_invested: number
+  current_price?: number | null
+  current_value?: number | null
+  result_abs?:    number | null
+  result_pct?:    number | null
+}
+
 function toPositionGroups(raw: RawPositionItem[]): PositionGroup[] {
+  if (!raw || raw.length === 0) return []
   const byType: Record<string, RawPositionItem[]> = {}
   for (const p of raw) {
     const t = p.asset_type ?? 'OUTROS'
     if (!byType[t]) byType[t] = []
     byType[t].push(p)
   }
-
   const grandTotal = raw.reduce(
     (s, p) => s + (p.current_value ?? p.total_invested ?? 0), 0
   )
-
   return Object.entries(byType).map(([asset_type, items], groupIdx) => {
     const total_value    = items.reduce((s, p) => s + (p.current_value ?? p.total_invested ?? 0), 0)
     const total_invested = items.reduce((s, p) => s + (p.total_invested ?? 0), 0)
     const variation_value   = total_value - total_invested
     const variation_percent = total_invested > 0 ? (variation_value / total_invested) * 100 : 0
-
     return {
       asset_type,
       label:               ASSET_LABELS[asset_type] ?? asset_type,
@@ -103,12 +142,11 @@ function toPositionGroups(raw: RawPositionItem[]): PositionGroup[] {
         ticker:              p.ticker,
         name:                p.ticker,
         asset_type:          p.asset_type,
-        logo_url:            undefined,
         quantity:            p.quantity,
         average_price:       p.avg_price,
         current_price:       p.current_price ?? p.avg_price,
         current_value:       p.current_value ?? p.total_invested,
-        variation_value:     p.result_abs ?? 0,
+        variation_value:     p.result_abs  ?? 0,
         variation_percent:   p.result_pct  ?? 0,
         rentability_percent: p.result_pct  ?? 0,
         portfolio_percent:   grandTotal > 0
@@ -119,12 +157,8 @@ function toPositionGroups(raw: RawPositionItem[]): PositionGroup[] {
   }).sort((a, b) => b.total_value - a.total_value)
 }
 
-// ── hooks ──────────────────────────────────────────────────────────────
+// ── Hooks ─────────────────────────────────────────────────────────────────────
 
-/**
- * Lista de carteiras — usa a MESMA queryKey e staleTime que usePortfolios.ts
- * para compartilhar cache. URL sem barra final (evita 307).
- */
 export function usePortfolioList() {
   return useQuery<PortfolioDetail[]>({
     queryKey: PORTFOLIOS_QUERY_KEY,
@@ -142,18 +176,15 @@ export function usePortfolio(id: number | null) {
   })
 }
 
-/** Resumo financeiro — GET /portfolios/{id}/summary */
 export function usePortfolioSummary(portfolioId: number | null) {
   return useQuery<PortfolioSummaryData>({
     queryKey: ['portfolio-summary', portfolioId],
-    queryFn: () =>
-      api.get(`/portfolios/${portfolioId}/summary`).then(r => r.data),
+    queryFn: () => api.get(`/portfolios/${portfolioId}/summary`).then(r => r.data),
     enabled: !!portfolioId,
     staleTime: 15_000,
   })
 }
 
-/** Distribuição de ativos — calculada a partir de /positions */
 export function useAssetDistribution(portfolioId: number | null) {
   return useQuery<AssetTypeDistribution[]>({
     queryKey: ['asset-distribution', portfolioId],
@@ -179,23 +210,30 @@ export function useAssetDistribution(portfolioId: number | null) {
   })
 }
 
-/** Posições agrupadas por tipo — GET /portfolios/{id}/positions */
 export function usePositions(portfolioId: number | null) {
   return useQuery<PositionGroup[]>({
     queryKey: ['positions', portfolioId],
     queryFn: () =>
-      api.get(`/portfolios/${portfolioId}/positions`).then(r =>
-        toPositionGroups(r.data ?? [])
-      ),
+      api.get(`/portfolios/${portfolioId}/positions`)
+        .then(r => toPositionGroups(r.data ?? [])),
     enabled: !!portfolioId,
     staleTime: 15_000,
   })
 }
 
-/** Histórico mensal — endpoint ainda não implementado; retorna lista vazia */
 export function usePatrimonioHistory(portfolioId: number | null, _months: number) {
   return useQuery<PatrimonioHistoryPoint[]>({
     queryKey: ['patrimonio-history', portfolioId, _months],
+    queryFn: () => Promise.resolve([]),
+    enabled: !!portfolioId,
+    staleTime: 60_000,
+  })
+}
+
+/** Histórico de evolução do patrimônio (linha) — endpoint futuro */
+export function useEquityHistory(portfolioId: number | null, _period: EquityPeriod = '12m') {
+  return useQuery<EquityPoint[]>({
+    queryKey: ['equity-history', portfolioId, _period],
     queryFn: () => Promise.resolve([]),
     enabled: !!portfolioId,
     staleTime: 60_000,

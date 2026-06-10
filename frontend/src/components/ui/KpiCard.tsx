@@ -1,42 +1,30 @@
-import { ReactNode } from 'react'
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import clsx from 'clsx'
+import { signClass } from '@/utils/format'
 
-interface KpiCardProps {
+interface Props {
   label: string
   value: string
   subValue?: string
   subLabel?: string
   change?: number
-  children?: ReactNode
-  className?: string
 }
 
-export default function KpiCard({ label, value, subValue, subLabel, change, children, className }: KpiCardProps) {
-  const isPositive = change !== undefined && change > 0
-  const isNegative = change !== undefined && change < 0
-
+export default function KpiCard({ label, value, subValue, subLabel, change }: Props) {
   return (
-    <div className={clsx('card p-4 flex flex-col gap-1', className)}>
-      <span className="text-xs text-muted font-medium">{label}</span>
-      <span className="text-2xl font-bold tabular-nums tracking-tight text-gray-900 dark:text-gray-100">
-        {value}
-      </span>
-      {(subValue || subLabel) && (
-        <span className="text-xs text-muted">
-          {subValue && <span className="text-gray-700 dark:text-gray-300">{subValue}</span>}
-          {subLabel && <span> {subLabel}</span>}
-        </span>
+    <div className="rounded-xl bg-surface-900 border border-surface-700 p-4 flex flex-col gap-1">
+      <span className="text-xs text-slate-500 font-medium">{label}</span>
+      <div className="text-2xl font-bold tabular-nums tracking-tight text-slate-100">{value}</div>
+      {subValue && (
+        <div className="text-sm font-medium text-slate-300 tabular-nums">{subValue}</div>
+      )}
+      {subLabel && (
+        <div className="text-xs text-slate-500 truncate">{subLabel}</div>
       )}
       {change !== undefined && (
-        <div className={clsx('flex items-center gap-1 text-sm font-medium mt-0.5',
-          isPositive ? 'text-positive' : isNegative ? 'text-negative' : 'text-muted'
-        )}>
-          {isPositive ? <TrendingUp size={14} /> : isNegative ? <TrendingDown size={14} /> : <Minus size={14} />}
-          <span>{change > 0 ? '+' : ''}{change.toFixed(2)}%</span>
+        <div className={clsx('text-xs font-semibold tabular-nums', signClass(change))}>
+          {change >= 0 ? '+' : ''}{change.toFixed(2)}%
         </div>
       )}
-      {children}
     </div>
   )
 }
