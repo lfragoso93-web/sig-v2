@@ -1,5 +1,8 @@
 import { useState } from 'react'
-import { X, TrendingUp, Building2, Globe, Landmark, Bitcoin, Banknote, BarChart2, CheckCircle2 } from 'lucide-react'
+import {
+  X, TrendingUp, Building2, Globe, Landmark,
+  Bitcoin, Banknote, BarChart2, CheckCircle2,
+} from 'lucide-react'
 import { useCreateTransaction } from '@/hooks/useTransactions'
 import { useAppStore } from '@/store/appStore'
 
@@ -15,19 +18,22 @@ type AssetTab = {
   currency: string
   tickerPlaceholder: string
   tickerLabel: string
-  extraFields?: 'renda_fixa'
+  extraFields?: 'renda_fixa' | 'tesouro'
 }
 
 const TABS: AssetTab[] = [
-  { key: 'acao',       label: 'Ação',       icon: <TrendingUp size={13} />, assetType: 'ACAO',              currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: PETR4' },
-  { key: 'fii',        label: 'FII',        icon: <Building2  size={13} />, assetType: 'FII',               currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: MXRF11' },
-  { key: 'etf_br',     label: 'ETF BR',     icon: <BarChart2  size={13} />, assetType: 'ETF_NACIONAL',      currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: BOVA11' },
-  { key: 'stock',      label: 'Stock',      icon: <Globe      size={13} />, assetType: 'STOCK',             currency: 'USD', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: AAPL' },
-  { key: 'etf_int',    label: 'ETF INT',    icon: <Globe      size={13} />, assetType: 'ETF_INTERNACIONAL', currency: 'USD', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: VTI' },
-  { key: 'tesouro',    label: 'Tesouro',    icon: <Landmark   size={13} />, assetType: 'TESOURO_DIRETO',    currency: 'BRL', tickerLabel: 'Código',       tickerPlaceholder: 'ex: LTN 2029' },
-  { key: 'renda_fixa', label: 'Renda Fixa', icon: <Banknote   size={13} />, assetType: 'RENDA_FIXA',        currency: 'BRL', tickerLabel: 'Código/Nome',  tickerPlaceholder: 'ex: CDB XP 110% CDI', extraFields: 'renda_fixa' },
-  { key: 'cripto',     label: 'Cripto',     icon: <Bitcoin    size={13} />, assetType: 'CRIPTO',            currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: BTC' },
+  { key: 'acao',       label: 'Ação',       icon: <TrendingUp size={13} />, assetType: 'ACAO',              currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: PETR4' },
+  { key: 'fii',        label: 'FII',        icon: <Building2  size={13} />, assetType: 'FII',               currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: MXRF11' },
+  { key: 'etf_br',     label: 'ETF BR',     icon: <BarChart2  size={13} />, assetType: 'ETF_NACIONAL',      currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: BOVA11' },
+  { key: 'stock',      label: 'Stock',      icon: <Globe      size={13} />, assetType: 'STOCK',             currency: 'USD', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: AAPL' },
+  { key: 'etf_int',    label: 'ETF INT',    icon: <Globe      size={13} />, assetType: 'ETF_INTERNACIONAL', currency: 'USD', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: VTI' },
+  { key: 'tesouro',    label: 'Tesouro',    icon: <Landmark   size={13} />, assetType: 'TESOURO_DIRETO',    currency: 'BRL', tickerLabel: 'Título',      tickerPlaceholder: 'ex: LTN 2029',         extraFields: 'tesouro' },
+  { key: 'renda_fixa', label: 'Renda Fixa', icon: <Banknote   size={13} />, assetType: 'RENDA_FIXA',        currency: 'BRL', tickerLabel: 'Código/Nome', tickerPlaceholder: 'ex: CDB XP 110% CDI', extraFields: 'renda_fixa' },
+  { key: 'cripto',     label: 'Cripto',     icon: <Bitcoin    size={13} />, assetType: 'CRIPTO',            currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: BTC' },
 ]
+
+const RF_INDEXERS  = ['CDI', 'IPCA', 'Prefixado', 'SELIC', 'IGP-M', 'Outro']
+const TD_INDEXERS  = ['IPCA+', 'Prefixado', 'SELIC']
 
 const TODAY = new Date().toISOString().split('T')[0]
 
@@ -43,25 +49,38 @@ export default function AddTransactionModal({ onClose }: Props) {
   const selectedPortfolioId = useAppStore(s => s.selectedPortfolioId)
   const { mutateAsync, isPending } = useCreateTransaction()
 
-  const [activeTab, setActiveTab] = useState('acao')
-  const [operation, setOperation] = useState<'buy' | 'sell'>('buy')
-  const [ticker,    setTicker]    = useState('')
-  const [quantity,  setQuantity]  = useState('')
-  const [price,     setPrice]     = useState('')
-  const [fees,      setFees]      = useState('')
-  const [date,      setDate]      = useState(TODAY)
-  const [notes,     setNotes]     = useState('')
-  const [currency,  setCurrency]  = useState('BRL')
-  const [error,     setError]     = useState<string | null>(null)
-  const [success,   setSuccess]   = useState(false)
+  const [activeTab,   setActiveTab]   = useState('acao')
+  const [operation,   setOperation]   = useState<'buy' | 'sell'>('buy')
+  const [ticker,      setTicker]      = useState('')
+  const [quantity,    setQuantity]    = useState('')
+  const [price,       setPrice]       = useState('')
+  const [fees,        setFees]        = useState('')
+  const [date,        setDate]        = useState(TODAY)
+  const [notes,       setNotes]       = useState('')
+  const [currency,    setCurrency]    = useState('BRL')
+  const [error,       setError]       = useState<string | null>(null)
+  const [success,     setSuccess]     = useState(false)
+
+  // campos extra RF / Tesouro
+  const [indexer,     setIndexer]     = useState('')
+  const [rate,        setRate]        = useState('')        // taxa % a.a.
+  const [maturity,    setMaturity]    = useState('')        // data vencimento
+  const [issuer,      setIssuer]      = useState('')        // emissor (RF)
 
   const tab = TABS.find(t => t.key === activeTab)!
+  const isRF      = tab.extraFields === 'renda_fixa'
+  const isTesouro = tab.extraFields === 'tesouro'
+  const indexerOptions = isTesouro ? TD_INDEXERS : RF_INDEXERS
 
   function handleTabChange(key: string) {
     const t = TABS.find(t => t.key === key)!
     setActiveTab(key)
     setCurrency(t.currency)
     setTicker('')
+    setIndexer('')
+    setRate('')
+    setMaturity('')
+    setIssuer('')
     setError(null)
   }
 
@@ -75,18 +94,39 @@ export default function AddTransactionModal({ onClose }: Props) {
     if (!ticker.trim())         { setError('Informe o ticker/código do ativo.'); return }
     if (isNaN(qty) || qty <= 0) { setError('Quantidade deve ser maior que zero.'); return }
     if (isNaN(prc) || prc <= 0) { setError('Preço deve ser maior que zero.'); return }
+    if ((isRF || isTesouro) && !indexer) { setError('Selecione o indexador.'); return }
+
+    // monta notes enriquecidas para RF/TD
+    let enrichedNotes = notes.trim()
+    if (isRF || isTesouro) {
+      const extras = [
+        indexer  && `Indexador: ${indexer}`,
+        rate     && `Taxa: ${rate}% a.a.`,
+        maturity && `Vencimento: ${maturity}`,
+        isRF && issuer && `Emissor: ${issuer}`,
+      ].filter(Boolean).join(' | ')
+      enrichedNotes = [extras, enrichedNotes].filter(Boolean).join(' — ')
+    }
+
     try {
       await mutateAsync({
         portfolio_id: selectedPortfolioId,
-        ticker: ticker.trim().toUpperCase(),
-        asset_type: tab.assetType,
+        ticker:       ticker.trim().toUpperCase(),
+        asset_type:   tab.assetType,
         operation,
-        quantity: qty,
-        price: prc,
-        fees: fee,
+        quantity:     qty,
+        price:        prc,
+        fees:         fee,
         date,
         currency,
-        notes: notes.trim() || undefined,
+        notes:        enrichedNotes || undefined,
+        // campos extras passados como metadata quando disponíveis
+        ...(isRF || isTesouro ? {
+          indexer:  indexer || undefined,
+          rate:     rate ? parseFloat(rate) : undefined,
+          maturity: maturity || undefined,
+          issuer:   issuer || undefined,
+        } : {}),
       } as any)
       setSuccess(true)
     } catch (err: any) {
@@ -96,8 +136,11 @@ export default function AddTransactionModal({ onClose }: Props) {
   }
 
   function handleReset() {
-    setSuccess(false); setTicker(''); setQuantity(''); setPrice('')
-    setFees(''); setDate(TODAY); setNotes(''); setError(null)
+    setSuccess(false)
+    setTicker(''); setQuantity(''); setPrice('')
+    setFees(''); setDate(TODAY); setNotes('')
+    setIndexer(''); setRate(''); setMaturity(''); setIssuer('')
+    setError(null)
   }
 
   const total = quantity && price
@@ -107,10 +150,8 @@ export default function AddTransactionModal({ onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Modal */}
       <div className="relative z-10 w-full max-w-lg rounded-xl bg-surface-900 border border-surface-700 shadow-2xl overflow-hidden">
 
         {/* Header */}
@@ -125,7 +166,7 @@ export default function AddTransactionModal({ onClose }: Props) {
           </button>
         </div>
 
-        {/* ── SUCCESS ── */}
+        {/* SUCCESS */}
         {success ? (
           <div className="flex flex-col items-center justify-center gap-4 py-14 px-6">
             <CheckCircle2 size={48} className="text-positive" />
@@ -142,7 +183,7 @@ export default function AddTransactionModal({ onClose }: Props) {
         ) : (
           <form onSubmit={handleSubmit}>
 
-            {/* ── ABAS ── */}
+            {/* ABAS */}
             <div className="flex overflow-x-auto px-4 pt-4 pb-2 gap-1 scrollbar-hide">
               {TABS.map(t => (
                 <button
@@ -164,8 +205,8 @@ export default function AddTransactionModal({ onClose }: Props) {
 
             <div className="mx-4 border-t border-surface-700" />
 
-            {/* ── CAMPOS ── */}
-            <div className="px-4 py-4 flex flex-col gap-3">
+            {/* CAMPOS */}
+            <div className="px-4 py-4 flex flex-col gap-3 max-h-[70vh] overflow-y-auto">
 
               {/* Toggle Compra / Venda */}
               <div className="flex rounded-lg overflow-hidden border border-surface-600 text-xs font-semibold">
@@ -215,14 +256,84 @@ export default function AddTransactionModal({ onClose }: Props) {
                 </div>
               </div>
 
+              {/* ── CAMPOS EXTRAS: Renda Fixa / Tesouro Direto ───────────── */}
+              {(isRF || isTesouro) && (
+                <div className="rounded-lg border border-surface-600 bg-surface-800/50 px-3 py-3 flex flex-col gap-3">
+                  <p className="text-xs font-medium text-slate-400">
+                    {isTesouro ? '🏛 Dados do Título' : '📄 Dados do Ativo'}
+                  </p>
+
+                  {/* Indexador + Taxa */}
+                  <div className="flex gap-3">
+                    <div className="flex-1">
+                      <label className="block text-xs text-slate-400 mb-1">Indexador <span className="text-red-400">*</span></label>
+                      <select
+                        value={indexer}
+                        onChange={e => setIndexer(e.target.value)}
+                        className={inputCls}
+                      >
+                        <option value="">Selecionar…</option>
+                        {indexerOptions.map(o => (
+                          <option key={o} value={o}>{o}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="w-32">
+                      <label className="block text-xs text-slate-400 mb-1">
+                        Taxa <span className="text-slate-600">(% a.a.)</span>
+                      </label>
+                      <input
+                        type="number"
+                        value={rate}
+                        onChange={e => setRate(e.target.value)}
+                        placeholder={isTesouro ? 'ex: 5.82' : 'ex: 110'}
+                        min="0"
+                        step="any"
+                        className={inputCls}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Vencimento + Emissor */}
+                  <div className="flex gap-3">
+                    <div className="flex-1">
+                      <label className="block text-xs text-slate-400 mb-1">Vencimento</label>
+                      <input
+                        type="date"
+                        value={maturity}
+                        onChange={e => setMaturity(e.target.value)}
+                        className={inputCls}
+                      />
+                    </div>
+                    {isRF && (
+                      <div className="flex-1">
+                        <label className="block text-xs text-slate-400 mb-1">Emissor</label>
+                        <input
+                          type="text"
+                          value={issuer}
+                          onChange={e => setIssuer(e.target.value)}
+                          placeholder="ex: Banco XP"
+                          className={inputCls}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Quantidade + Preço */}
               <div className="flex gap-3">
                 <div className="flex-1">
-                  <label className="block text-xs text-slate-400 mb-1">Quantidade</label>
+                  <label className="block text-xs text-slate-400 mb-1">
+                    {isRF || isTesouro ? 'Qtd / Valor aplicado' : 'Quantidade'}
+                  </label>
                   <input type="number" value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="0" min="0" step="any" className={inputCls} />
                 </div>
                 <div className="flex-1">
-                  <label className="block text-xs text-slate-400 mb-1">Preço <span className="text-slate-600">({currency})</span></label>
+                  <label className="block text-xs text-slate-400 mb-1">
+                    {isRF || isTesouro ? 'PU / Preço unit.' : 'Preço'}
+                    <span className="text-slate-600 ml-1">({currency})</span>
+                  </label>
                   <input type="number" value={price} onChange={e => setPrice(e.target.value)} placeholder="0,00" min="0" step="any" className={inputCls} />
                 </div>
               </div>
@@ -234,7 +345,7 @@ export default function AddTransactionModal({ onClose }: Props) {
                   <input type="number" value={fees} onChange={e => setFees(e.target.value)} placeholder="0,00" min="0" step="any" className={inputCls} />
                 </div>
                 <div className="flex-1">
-                  <label className="block text-xs text-slate-400 mb-1">Data</label>
+                  <label className="block text-xs text-slate-400 mb-1">Data da operação</label>
                   <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inputCls} />
                 </div>
               </div>
