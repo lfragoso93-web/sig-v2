@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { X, TrendingUp, Building2, Globe, Landmark, Bitcoin, Banknote, BarChart2, CheckCircle2 } from 'lucide-react'
 import { useCreateTransaction } from '@/hooks/useTransactions'
-import { usePortfolioStore } from '@/store/portfolioStore'
+import { useAppStore } from '@/store/appStore'
 
 interface Props {
   onClose: () => void
@@ -97,7 +97,7 @@ const TABS: AssetTab[] = [
 const TODAY = new Date().toISOString().split('T')[0]
 
 export default function AddTransactionModal({ onClose }: Props) {
-  const { selectedPortfolioId } = usePortfolioStore()
+  const selectedPortfolioId = useAppStore(s => s.selectedPortfolioId)
   const { mutateAsync, isPending } = useCreateTransaction()
 
   const [activeTab, setActiveTab] = useState<string>('acao')
