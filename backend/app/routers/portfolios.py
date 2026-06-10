@@ -14,10 +14,11 @@ from app.schemas.auth import MessageResponse
 from app.services.portfolio_service import (
     list_portfolios, create_portfolio, update_portfolio, delete_portfolio
 )
+from app.services.quotes_service import get_prices
 
 router = APIRouter()
 
-# ── Labels amigáveis para asset_type ──────────────────────────────────────────
+# ── Labels amigáveis ───────────────────────────────────────────────────────────────────
 ASSET_LABELS: dict[str, str] = {
     'ACAO':              'Ações',
     'ACAO_NACIONAL':     'Ações',
@@ -36,33 +37,32 @@ ASSET_LABELS: dict[str, str] = {
 
 
 def _normalize_type(raw: str) -> str:
-    """Normaliza asset_type para o enum uppercase padrao do frontend."""
     mapping = {
-        'ACAO':     'ACAO_NACIONAL',
-        'ACOES':    'ACAO_NACIONAL',
-        'ETF_INT':  'ETF_INTERNACIONAL',
-        'ETF':      'ETF_NACIONAL',
-        'TESOURO':  'TESOURO_DIRETO',
-        'CRIPTO':   'CRIPTO',
+        'ACAO':        'ACAO_NACIONAL',
+        'ACOES':       'ACAO_NACIONAL',
+        'ETF_INT':     'ETF_INTERNACIONAL',
+        'ETF':         'ETF_NACIONAL',
+        'TESOURO':     'TESOURO_DIRETO',
+        'CRIPTO':      'CRIPTO',
         'CRIPTOMOEDA': 'CRIPTO',
-        'STOCKS':   'STOCK',
+        'STOCKS':      'STOCK',
     }
     upper = (raw or '').upper().strip()
     return mapping.get(upper, upper)
 
 
-# ── Schemas inline ─────────────────────────────────────────────────────────────
+# ── Schemas ─────────────────────────────────────────────────────────────────────────
 class PositionItem(BaseModel):
     ticker:         str
-    asset_type:     str       # enum normalizado
-    asset_label:    str       # label amigável ex: "Ações"
+    asset_type:     str
+    asset_label:    str
     quantity:       float
     avg_price:      float
     total_invested: float
-    current_price:  float     # avg_price como fallback (nunca null)
-    current_value:  float     # quantity * current_price
-    result_abs:     float     # current_value - total_invested
-    result_pct:     float     # result_abs / total_invested * 100
+    current_price:  float
+    current_value:  float
+    result_abs:     float
+    result_pct:     float
 
 
 class SummaryResponse(BaseModel):
@@ -71,7 +71,6 @@ class SummaryResponse(BaseModel):
     result_abs:               float
     result_pct:               float
     positions_count:          int
-    # aliases para os hooks do frontend
     total_patrimonio:         float
     total_investido:          float
     lucro_total:              float
@@ -82,8 +81,8 @@ class SummaryResponse(BaseModel):
     total_proventos:          float
 
 
-# ── Helper: calcula posições das transactions ─────────────────────────────────
-async def _calc_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
+# ── Helper: posições brutas (sem cotacao) ────────────────────────────────────────
+async def _calc_raw_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
     result = await db.execute(
         select(Transaction)
         .where(Transaction.portfolio_id == portfolio_id)
@@ -97,10 +96,7 @@ async def _calc_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
         norm     = _normalize_type(raw_type)
         key      = (tx.ticker, norm)
         if key not in pos:
-            pos[key] = {
-                'qty': 0.0, 'total_cost': 0.0,
-                'ticker': tx.ticker, 'asset_type': norm,
-            }
+            pos[key] = {'qty': 0.0, 'total_cost': 0.0, 'ticker': tx.ticker, 'asset_type': norm}
         p = pos[key]
         if tx.operation == OperationType.buy:
             p['total_cost'] += tx.quantity * tx.price + (tx.fees or 0)
@@ -114,29 +110,51 @@ async def _calc_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
     items = []
     for p in pos.values():
         if p['qty'] > 1e-9:
-            avg           = p['total_cost'] / p['qty'] if p['qty'] > 0 else 0.0
-            total_inv     = round(p['total_cost'], 2)
-            current_price = round(avg, 6)           # fallback = preço médio
-            current_value = round(p['qty'] * current_price, 2)
-            result_abs    = round(current_value - total_inv, 2)
-            result_pct    = round((result_abs / total_inv * 100) if total_inv > 0 else 0.0, 4)
-            norm_type     = p['asset_type']
+            avg       = p['total_cost'] / p['qty'] if p['qty'] > 0 else 0.0
+            total_inv = round(p['total_cost'], 2)
             items.append({
                 'ticker':         p['ticker'],
-                'asset_type':     norm_type,
-                'asset_label':    ASSET_LABELS.get(norm_type, norm_type),
+                'asset_type':     p['asset_type'],
+                'asset_label':    ASSET_LABELS.get(p['asset_type'], p['asset_type']),
                 'quantity':       round(p['qty'], 8),
                 'avg_price':      round(avg, 6),
                 'total_invested': total_inv,
-                'current_price':  current_price,
-                'current_value':  current_value,
-                'result_abs':     result_abs,
-                'result_pct':     result_pct,
             })
     return items
 
 
-# ── Rotas básicas de carteira ─────────────────────────────────────────────────
+def _enrich_with_prices(items: list[dict], prices: dict[str, float]) -> list[dict]:
+    """Aplica cotacoes reais (ou fallback avg_price) e calcula result."""
+    enriched = []
+    for item in items:
+        ticker        = item['ticker']
+        avg_price     = item['avg_price']
+        quantity      = item['quantity']
+        total_invested= item['total_invested']
+
+        current_price = prices.get(ticker) or avg_price   # fallback
+        current_value = round(quantity * current_price, 2)
+        result_abs    = round(current_value - total_invested, 2)
+        result_pct    = round((result_abs / total_invested * 100) if total_invested > 0 else 0.0, 4)
+
+        enriched.append({
+            **item,
+            'current_price': round(current_price, 6),
+            'current_value': current_value,
+            'result_abs':    result_abs,
+            'result_pct':    result_pct,
+        })
+    return enriched
+
+
+async def _calc_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
+    """Posicoes completas com cotacao real."""
+    raw    = await _calc_raw_positions(db, portfolio_id)
+    prices = await get_prices(raw)       # busca BRAPI + yfinance
+    return _enrich_with_prices(raw, prices)
+
+
+# ── Rotas CRUD ──────────────────────────────────────────────────────────────────────
 
 @router.get('/', response_model=list[PortfolioResponse])
 async def list_my_portfolios(
@@ -185,7 +203,7 @@ async def delete_my_portfolio(
     return MessageResponse(message='Carteira excluída com sucesso')
 
 
-# ── Summary ────────────────────────────────────────────────────────────────────
+# ── Summary ──────────────────────────────────────────────────────────────────────
 
 @router.get('/{portfolio_id}/summary', response_model=SummaryResponse)
 async def portfolio_summary(
@@ -208,10 +226,10 @@ async def portfolio_summary(
     result_abs     = round(total_current - total_invested, 2)
     result_pct     = round((result_abs / total_invested * 100) if total_invested > 0 else 0.0, 4)
 
-    # Proventos recebidos (12 meses)
+    # Proventos
     from datetime import date, timedelta
     from app.models.provento import Provento
-    cutoff = date.today() - timedelta(days=365)
+    cutoff   = date.today() - timedelta(days=365)
     prov_res = await db.execute(
         select(Provento).where(
             Provento.portfolio_id == portfolio_id,
@@ -219,17 +237,13 @@ async def portfolio_summary(
         )
     )
     proventos_12m = sum(
-        (p.value or 0) * (p.quantity or 1)
-        for p in prov_res.scalars().all()
+        (p.value or 0) * (p.quantity or 1) for p in prov_res.scalars().all()
     )
-
-    # Total de proventos (todos os tempos)
-    prov_all_res = await db.execute(
+    prov_all = await db.execute(
         select(Provento).where(Provento.portfolio_id == portfolio_id)
     )
     total_proventos = sum(
-        (p.value or 0) * (p.quantity or 1)
-        for p in prov_all_res.scalars().all()
+        (p.value or 0) * (p.quantity or 1) for p in prov_all.scalars().all()
     )
 
     return SummaryResponse(
@@ -244,12 +258,12 @@ async def portfolio_summary(
         variacao_valor           = result_abs,
         variacao_percentual      = result_pct,
         rentabilidade_total      = result_pct,
-        dividendos_recebidos_12m = round(proventos_12m,    2),
-        total_proventos          = round(total_proventos,  2),
+        dividendos_recebidos_12m = round(proventos_12m,   2),
+        total_proventos          = round(total_proventos, 2),
     )
 
 
-# ── Positions ──────────────────────────────────────────────────────────────────
+# ── Positions ───────────────────────────────────────────────────────────────────
 
 @router.get('/{portfolio_id}/positions', response_model=list[PositionItem])
 async def portfolio_positions(
