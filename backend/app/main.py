@@ -1,8 +1,8 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import text, event
-from sqlalchemy.ext.asyncio import AsyncConnection
+import asyncpg
+import asyncpg.exceptions
 
 from app.core.database import Base, engine
 from app.core.config import settings
@@ -15,46 +15,67 @@ from app.routers import (
 )
 from app.routers import debug
 
-# Cada ENUM e criado individualmente com IF NOT EXISTS.
-# Precisam rodar fora de bloco transacional (AUTOCOMMIT) pois o PostgreSQL
-# nao permite DDL de tipo dentro de transacao quando o tipo ja existe.
-_ENUMS: list[str] = [
-    "CREATE TYPE IF NOT EXISTS userrole AS ENUM ('user', 'superadmin')",
-    "CREATE TYPE IF NOT EXISTS dividendstatus AS ENUM ('RECEBIDO', 'A_RECEBER')",
-    "CREATE TYPE IF NOT EXISTS dividendtype AS ENUM ('DIVIDENDO', 'JCP', 'RENDIMENTO', 'AMORTIZACAO', 'BONIFICACAO', 'OUTROS')",
-    "CREATE TYPE IF NOT EXISTS assettype AS ENUM ('ACAO', 'FII', 'ETF_NACIONAL', 'TESOURO_DIRETO', 'STOCK', 'ETF_INTERNACIONAL', 'CRIPTO', 'RENDA_FIXA')",
-    "CREATE TYPE IF NOT EXISTS assetcurrency AS ENUM ('BRL', 'USD', 'EUR', 'BTC')",
-    "CREATE TYPE IF NOT EXISTS corporateeventtype AS ENUM ('DESDOBRAMENTO', 'GRUPAMENTO', 'BONIFICACAO')",
-    "CREATE TYPE IF NOT EXISTS corporateeventstatus AS ENUM ('PENDENTE', 'APLICADO', 'IGNORADO')",
-    "CREATE TYPE IF NOT EXISTS fixedincometype AS ENUM ('CDB', 'LCI', 'LCA', 'LCI_LCA', 'CRI', 'CRA', 'DEBENTURE', 'POUPANCA', 'OUTROS')",
-    "CREATE TYPE IF NOT EXISTS indexertype AS ENUM ('CDI', 'IPCA_PLUS', 'SELIC', 'PREFIXADO', 'IGPM_PLUS')",
-    "CREATE TYPE IF NOT EXISTS irpfmarket AS ENUM ('ACOES', 'DAY_TRADE', 'FII', 'ETF', 'CRIPTO', 'RENDA_FIXA', 'STOCKS')",
-    "CREATE TYPE IF NOT EXISTS goaltype AS ENUM ('PATRIMONIO_ALVO', 'ALOCACAO', 'DY_MENSAL', 'RENTABILIDADE', 'APORTE_MENSAL')",
-    "CREATE TYPE IF NOT EXISTS treasurytype AS ENUM ('Tesouro Selic', 'Tesouro Prefixado', 'Tesouro Prefixado com Juros Semestrais', 'Tesouro IPCA+', 'Tesouro IPCA+ com Juros Semestrais', 'Tesouro IGP-M+ com Juros Semestrais', 'Tesouro Renda+', 'Tesouro Educa+')",
+# Lista de todos os ENUMs do projeto.
+# Cada item: (nome_do_tipo, valores...)
+# Criados via asyncpg raw em AUTOCOMMIT; erro 42710 (duplicate_object) e ignorado.
+_ENUMS: list[tuple] = [
+    ("userrole",           "'user'", "'superadmin'"),
+    ("dividendstatus",     "'RECEBIDO'", "'A_RECEBER'"),
+    ("dividendtype",       "'DIVIDENDO'", "'JCP'", "'RENDIMENTO'", "'AMORTIZACAO'", "'BONIFICACAO'", "'OUTROS'"),
+    ("assettype",          "'ACAO'", "'FII'", "'ETF_NACIONAL'", "'TESOURO_DIRETO'", "'STOCK'", "'ETF_INTERNACIONAL'", "'CRIPTO'", "'RENDA_FIXA'"),
+    ("assetcurrency",      "'BRL'", "'USD'", "'EUR'", "'BTC'"),
+    ("corporateeventtype", "'DESDOBRAMENTO'", "'GRUPAMENTO'", "'BONIFICACAO'"),
+    ("corporateeventstatus", "'PENDENTE'", "'APLICADO'", "'IGNORADO'"),
+    ("fixedincometype",    "'CDB'", "'LCI'", "'LCA'", "'LCI_LCA'", "'CRI'", "'CRA'", "'DEBENTURE'", "'POUPANCA'", "'OUTROS'"),
+    ("indexertype",        "'CDI'", "'IPCA_PLUS'", "'SELIC'", "'PREFIXADO'", "'IGPM_PLUS'"),
+    ("irpfmarket",         "'ACOES'", "'DAY_TRADE'", "'FII'", "'ETF'", "'CRIPTO'", "'RENDA_FIXA'", "'STOCKS'"),
+    ("goaltype",           "'PATRIMONIO_ALVO'", "'ALOCACAO'", "'DY_MENSAL'", "'RENTABILIDADE'", "'APORTE_MENSAL'"),
+    ("treasurytype",
+        "'Tesouro Selic'",
+        "'Tesouro Prefixado'",
+        "'Tesouro Prefixado com Juros Semestrais'",
+        "'Tesouro IPCA+'",
+        "'Tesouro IPCA+ com Juros Semestrais'",
+        "'Tesouro IGP-M+ com Juros Semestrais'",
+        "'Tesouro Renda+'",
+        "'Tesouro Educa+'",
+    ),
 ]
 
 
-async def _create_enums_autocommit() -> None:
-    """Cria todos os ENUMs fora de transacao (AUTOCOMMIT) para ser idempotente."""
-    # Conecta diretamente com isolation_level=AUTOCOMMIT para que cada
-    # CREATE TYPE seja executado fora de bloco transacional.
-    async with engine.connect() as conn:
-        await conn.execution_options(isolation_level="AUTOCOMMIT")
-        for stmt in _ENUMS:
-            await conn.execute(text(stmt))
+async def _create_enums_raw() -> None:
+    """
+    Cria todos os ENUMs usando asyncpg diretamente (sem SQLAlchemy).
+    Conexao em autocommit; erro 42710 (tipo ja existe) e silenciado.
+    Compativel com PostgreSQL 9.1+.
+    """
+    # Extrai a DSN sincrona e converte para formato asyncpg
+    dsn = settings.ASYNC_DATABASE_URL.replace("postgresql+asyncpg", "postgresql")
+    conn = await asyncpg.connect(dsn)
+    try:
+        for enum_def in _ENUMS:
+            type_name = enum_def[0]
+            values = ", ".join(enum_def[1:])
+            sql = f"CREATE TYPE {type_name} AS ENUM ({values})"
+            try:
+                await conn.execute(sql)
+            except asyncpg.exceptions.DuplicateObjectError:
+                # Tipo ja existe — ignorar
+                pass
+    finally:
+        await conn.close()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1. Garante todos os ENUMs (idempotente, AUTOCOMMIT)
-    await _create_enums_autocommit()
+    # 1. Garante todos os ENUMs (idempotente, autocommit via asyncpg raw)
+    await _create_enums_raw()
 
-    # 2. Cria tabelas que ainda nao existem (checkfirst=True)
-    #    Em producao prefira apenas "alembic upgrade head" via entrypoint.
+    # 2. Cria tabelas que ainda nao existem
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all, checkfirst=True)
 
-    # 3. Inicia o scheduler (apenas 1 worker deve rodar — ver entrypoint.sh)
+    # 3. Inicia o scheduler (apenas 1 worker — ver entrypoint.sh)
     start_scheduler()
     yield
     await engine.dispose()
