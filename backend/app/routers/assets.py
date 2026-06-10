@@ -27,13 +27,13 @@ class TickerQuoteResponse(BaseModel):
     currency:    str             = "BRL"
     asset_type:  Optional[str]   = None
     source:      str             = "brapi"
-    price_date:  Optional[str]   = None  # data a que o preco se refere
+    price_date:  Optional[str]   = None
 
 
 class TreasuryItem(BaseModel):
     name:          str
-    ticker:        str           # ex: "TESOURO IPCA+ 2029"
-    indexer:       str           # IPCA+, Prefixado, SELIC
+    ticker:        str
+    indexer:       str
     rate:          Optional[float] = None
     maturity_date: Optional[str]   = None
     price:         Optional[float] = None
@@ -111,38 +111,19 @@ async def _yf_fetch_async(ticker: str, date_str: Optional[str] = None) -> Option
 
 
 def _parse_treasury_item(raw: dict) -> Optional[TreasuryItem]:
-    """Normaliza um item da resposta BRAPI treasury para TreasuryItem."""
-    name = raw.get("name") or raw.get("title") or raw.get("shortName") or ""
-    if not name:
+    """
+    Normaliza um item da resposta BRAPI /v2/treasury/list para TreasuryItem.
+    Campos da API v2: symbol, bondType, indexer, buyRate, sellRate,
+                      buyPrice, sellPrice, basePrice, maturityDate, couponType, durationDays.
+    """
+    # Nome legivel do titulo (ex: "Tesouro IPCA+ com Juros Semestrais")
+    bond_type = raw.get("bondType") or raw.get("name") or raw.get("shortName") or ""
+    if not bond_type:
         return None
 
-    name_upper = name.upper()
-
-    # Detecta indexador pelo nome
-    if "IPCA" in name_upper:
-        indexer = "IPCA+"
-    elif "SELIC" in name_upper:
-        indexer = "SELIC"
-    elif "PREFIXADO" in name_upper or "PRE" in name_upper:
-        indexer = "Prefixado"
-    else:
-        indexer = "Prefixado"
-
-    # Taxa
-    rate = raw.get("taxaAnual") or raw.get("rate") or raw.get("annualRate")
-    try:
-        rate = float(rate) if rate is not None else None
-    except (ValueError, TypeError):
-        rate = None
-
-    # Vencimento
-    maturity = (
-        raw.get("maturityDate")
-        or raw.get("vencimento")
-        or raw.get("expirationDate")
-    )
+    # Data de vencimento (campo maturityDate vem como YYYY-MM-DD)
+    maturity = raw.get("maturityDate") or raw.get("expirationDate") or ""
     if maturity:
-        # normaliza para YYYY-MM-DD se vier como timestamp
         try:
             if isinstance(maturity, (int, float)):
                 from datetime import datetime
@@ -150,19 +131,46 @@ def _parse_treasury_item(raw: dict) -> Optional[TreasuryItem]:
         except Exception:
             pass
         maturity = str(maturity)[:10]
+    else:
+        maturity = None
 
-    # Preco PU
-    price = raw.get("price") or raw.get("unitPrice") or raw.get("closingPrice")
+    # Nome completo para exibicao (ex: "Tesouro IPCA+ 2029")
+    year = maturity[:4] if maturity else ""
+    display_name = f"{bond_type} {year}".strip() if year else bond_type
+
+    # Ticker slug (symbol) ou display_name como fallback
+    ticker = raw.get("symbol") or display_name
+
+    # Indexador: usa campo 'indexer' da API (selic / prefixado / ipca / igpm)
+    indexer_raw = (raw.get("indexer") or "").lower()
+    bond_upper  = bond_type.upper()
+    if indexer_raw == "ipca" or "IPCA" in bond_upper:
+        indexer = "IPCA+"
+    elif indexer_raw == "selic" or "SELIC" in bond_upper:
+        indexer = "SELIC"
+    elif indexer_raw in ("prefixado", "pre") or "PREFIXADO" in bond_upper:
+        indexer = "Prefixado"
+    elif indexer_raw == "igpm" or "IGP" in bond_upper:
+        indexer = "IGP-M"
+    else:
+        indexer = "Prefixado"
+
+    # Taxa: buyRate (% a.a.) — para Selic e o spread, nao a taxa total
+    rate = raw.get("buyRate") or raw.get("sellRate")
+    try:
+        rate = float(rate) if rate is not None else None
+    except (ValueError, TypeError):
+        rate = None
+
+    # Preco unitario de compra
+    price = raw.get("buyPrice") or raw.get("basePrice") or raw.get("sellPrice")
     try:
         price = float(price) if price is not None else None
     except (ValueError, TypeError):
         price = None
 
-    # Ticker legivel (ex: "TESOURO IPCA+ 2029")
-    ticker = name.strip()
-
     return TreasuryItem(
-        name=name,
+        name=display_name,
         ticker=ticker,
         indexer=indexer,
         rate=rate,
@@ -201,8 +209,9 @@ async def search_treasury(
     _=Depends(get_current_user),
 ):
     """
-    Busca titulos do Tesouro Direto via BRAPI.
-    Retorna lista filtrada pelo parametro q (busca no nome do titulo).
+    Busca titulos do Tesouro Direto via BRAPI /v2/treasury/list.
+    Filtra pelo parametro q (busca no nome do titulo).
+    Requer plano Pro na BRAPI; sem token retorna apenas 3 titulos sandbox.
     """
     items = await fetch_treasury_list()
     parsed = [_parse_treasury_item(i) for i in items]
@@ -210,7 +219,7 @@ async def search_treasury(
 
     if q.strip():
         q_lower = q.strip().lower()
-        parsed = [i for i in parsed if q_lower in i.name.lower()]
+        parsed = [i for i in parsed if q_lower in i.name.lower() or q_lower in i.ticker.lower()]
 
     return parsed
 
