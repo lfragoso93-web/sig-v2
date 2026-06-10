@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import api from '@/services/api'
 import type { PositionGroup, AssetTypeDistribution } from '@/services/portfolioService'
 
-// ── tipos extras usados nos hooks ─────────────────────────────────────
+// ── tipos ────────────────────────────────────────────────────────────────
 
 export interface PortfolioDetail {
   id: number
@@ -25,15 +25,13 @@ export interface PortfolioSummaryData {
   rentabilidade_total:      number
   dividendos_recebidos_12m: number
   total_proventos:          number
-  ganho_capital?:           number
 }
 
 export interface PatrimonioHistoryPoint {
-  month:  string
-  value:  number
+  month: string
+  value: number
 }
 
-// raw item devolvido pelo novo endpoint
 interface RawPositionItem {
   ticker:         string
   asset_type:     string
@@ -60,7 +58,19 @@ const ASSET_LABELS: Record<string, string> = {
   CRIPTO:            'Criptomoedas',
 }
 
-/** Converte lista flat de RawPositionItem → PositionGroup[] (schema do PositionTable) */
+const ASSET_COLORS: Record<string, string> = {
+  ACAO:              '#3b82f6',
+  ACAO_NACIONAL:     '#3b82f6',
+  FII:               '#a855f7',
+  ETF_NACIONAL:      '#14b8a6',
+  STOCK:             '#0ea5e9',
+  ETF_INTERNACIONAL: '#06b6d4',
+  TESOURO_DIRETO:    '#eab308',
+  RENDA_FIXA:        '#f97316',
+  CRIPTO:            '#f43f5e',
+  OUTROS:            '#6b7280',
+}
+
 function toPositionGroups(raw: RawPositionItem[]): PositionGroup[] {
   const byType: Record<string, RawPositionItem[]> = {}
   for (const p of raw) {
@@ -74,13 +84,10 @@ function toPositionGroups(raw: RawPositionItem[]): PositionGroup[] {
   )
 
   return Object.entries(byType).map(([asset_type, items], groupIdx) => {
-    const total_value = items.reduce(
-      (s, p) => s + (p.current_value ?? p.total_invested ?? 0), 0
-    )
+    const total_value    = items.reduce((s, p) => s + (p.current_value ?? p.total_invested ?? 0), 0)
     const total_invested = items.reduce((s, p) => s + (p.total_invested ?? 0), 0)
-    const variation_value  = total_value - total_invested
-    const variation_percent  = total_invested > 0
-      ? (variation_value / total_invested) * 100 : 0
+    const variation_value   = total_value - total_invested
+    const variation_percent = total_invested > 0 ? (variation_value / total_invested) * 100 : 0
 
     return {
       asset_type,
@@ -90,20 +97,19 @@ function toPositionGroups(raw: RawPositionItem[]): PositionGroup[] {
       variation_percent,
       rentability_percent: variation_percent,
       portfolio_percent:   grandTotal > 0 ? (total_value / grandTotal) * 100 : 0,
-      // mapeia para o schema de PositionItem que PositionTable usa
       positions: items.map((p, idx) => ({
         id:                  groupIdx * 1000 + idx,
         ticker:              p.ticker,
-        name:                p.ticker,          // sem nome detalhado por ora
+        name:                p.ticker,
         asset_type:          p.asset_type,
         logo_url:            undefined,
         quantity:            p.quantity,
         average_price:       p.avg_price,
         current_price:       p.current_price ?? p.avg_price,
         current_value:       p.current_value ?? p.total_invested,
-        variation_value:     (p.result_abs ?? 0),
-        variation_percent:   (p.result_pct ?? 0),
-        rentability_percent: (p.result_pct ?? 0),
+        variation_value:     p.result_abs ?? 0,
+        variation_percent:   p.result_pct  ?? 0,
+        rentability_percent: p.result_pct  ?? 0,
         portfolio_percent:   grandTotal > 0
           ? ((p.current_value ?? p.total_invested ?? 0) / grandTotal) * 100
           : 0,
@@ -112,12 +118,21 @@ function toPositionGroups(raw: RawPositionItem[]): PositionGroup[] {
   }).sort((a, b) => b.total_value - a.total_value)
 }
 
+// ── QUERY KEYS centralizadas (evita conflito de cache) ─────────────────────────
+// Nota: usePortfolios.ts usa ['portfolios'] — este hook usa a mesma key
+// para compartilhar o mesmo cache e evitar 307 em loop.
+export const PORTFOLIOS_QUERY_KEY = ['portfolios'] as const
+
 // ── hooks ──────────────────────────────────────────────────────────────
 
+/**
+ * Lista de carteiras — usa a MESMA queryKey que usePortfolios.ts
+ * para compartilhar cache. URL sem barra final (evita 307).
+ */
 export function usePortfolioList() {
   return useQuery<PortfolioDetail[]>({
-    queryKey: ['portfolios'],
-    queryFn: () => api.get('/portfolios/').then(r => r.data),
+    queryKey: PORTFOLIOS_QUERY_KEY,
+    queryFn: () => api.get('/portfolios').then(r => r.data),
   })
 }
 
@@ -136,7 +151,7 @@ export function usePortfolioSummary(portfolioId: number | null) {
     queryFn: () =>
       api
         .get(`/portfolios/${portfolioId}/summary`)
-        .then(r => ({ ...r.data, ganho_capital: r.data.lucro_total ?? 0 })),
+        .then(r => r.data),
     enabled: !!portfolioId,
   })
 }
@@ -156,18 +171,12 @@ export function useAssetDistribution(portfolioId: number | null) {
             map[t] = (map[t] ?? 0) + (p.current_value ?? p.total_invested ?? 0)
           }
           const total = Object.values(map).reduce((s, v) => s + v, 0)
-          const COLORS: Record<string, string> = {
-            ACAO: '#3b82f6', FII: '#a855f7', ETF_NACIONAL: '#14b8a6',
-            STOCK: '#0ea5e9', ETF_INTERNACIONAL: '#06b6d4',
-            TESOURO_DIRETO: '#eab308', RENDA_FIXA: '#f97316',
-            CRIPTO: '#f43f5e', OUTROS: '#6b7280',
-          }
           return Object.entries(map).map(([asset_type, value]) => ({
             type:       asset_type,
             label:      ASSET_LABELS[asset_type] ?? asset_type,
             value,
             percentage: total > 0 ? (value / total) * 100 : 0,
-            color:      COLORS[asset_type] ?? '#6b7280',
+            color:      ASSET_COLORS[asset_type] ?? ASSET_COLORS.OUTROS,
           })).sort((a, b) => b.value - a.value)
         }),
     enabled: !!portfolioId,
@@ -181,7 +190,7 @@ export function usePositions(portfolioId: number | null) {
     queryFn: () =>
       api
         .get(`/portfolios/${portfolioId}/positions`)
-        .then(r => toPositionGroups(r.data)),
+        .then(r => toPositionGroups(r.data ?? [])),
     enabled: !!portfolioId,
   })
 }
