@@ -31,14 +31,16 @@ export default function ResumePage() {
   const { data: portfolios, isLoading: loadingPortfolios } = usePortfolioList()
   const [period, setPeriod] = useState(12)
 
-  // usa id global do store; fallback para o primeiro
   const portfolioId: number | null =
     globalPortfolioId ?? (portfolios?.[0]?.id ?? null)
 
-  const { data: summary,          isLoading: loadingSummary   } = usePortfolioSummary(portfolioId)
-  const { data: patrimonioHistory, isLoading: loadingHistory   } = usePatrimonioHistory(portfolioId, period)
-  const { data: distribution,      isLoading: loadingDist      } = useAssetDistribution(portfolioId)
-  const { data: positions,          isLoading: loadingPositions } = usePositions(portfolioId)
+  const { data: summary,           isLoading: loadingSummary    } = usePortfolioSummary(portfolioId)
+  const { data: patrimonioHistory, isLoading: loadingHistory    } = usePatrimonioHistory(portfolioId, period)
+  const { data: distribution,      isLoading: loadingDist       } = useAssetDistribution(portfolioId)
+  const { data: positions,          isLoading: loadingPositions  } = usePositions(portfolioId)
+
+  // campos com alias seguros para evitar crash se backend não retornar
+  const safeGanhoCapital = (summary as any)?.ganho_capital ?? summary?.lucro_total ?? 0
 
   if (loadingPortfolios) {
     return (
@@ -102,7 +104,7 @@ export default function ResumePage() {
             <KpiCard
               label="Lucro total"
               value={formatBRL(summary.lucro_total ?? 0)}
-              subLabel={`Ganho de Capital ${formatBRL(summary.ganho_capital ?? 0)} · Dividendos ${formatBRL(summary.dividendos_recebidos_12m ?? 0)}`}
+              subLabel={`Ganho de Capital ${formatBRL(safeGanhoCapital)} · Dividendos ${formatBRL(summary.dividendos_recebidos_12m ?? 0)}`}
             />
             <KpiCard
               label="Proventos Recebidos (12m)"
@@ -187,7 +189,7 @@ export default function ResumePage() {
           <span className="text-sm font-semibold text-slate-200">Meus Ativos</span>
           {positions && (
             <span className="ml-1 px-1.5 py-0.5 rounded bg-surface-700 text-slate-400 text-xs tabular-nums">
-              {positions.reduce((acc, g) => acc + g.count, 0)}
+              {positions.reduce((acc, g) => acc + (g.count ?? 0), 0)}
             </span>
           )}
         </div>
@@ -198,7 +200,7 @@ export default function ResumePage() {
               <div key={i} className="h-10 animate-pulse bg-surface-800 rounded" />
             ))}
           </div>
-        ) : positions?.length ? (
+        ) : positions && positions.length > 0 ? (
           <PositionTable groups={positions} />
         ) : (
           <EmptyState

@@ -16,6 +16,7 @@ const ASSET_TYPE_LABELS: Record<string, string> = {
 }
 
 function AssetRow({ position }: { position: PositionItem }) {
+  const firstChar = position.ticker ? position.ticker[0] : '?'
   return (
     <tr className="group">
       <td className="px-3 py-2 border-b border-light-border/30 dark:border-dark-border/30">
@@ -25,7 +26,7 @@ function AssetRow({ position }: { position: PositionItem }) {
               className="rounded-full w-6 h-6 object-contain bg-light-200 dark:bg-dark-500" />
           ) : (
             <div className="w-6 h-6 rounded-full bg-brand-primary/20 flex items-center justify-center">
-              <span className="text-xs font-bold text-brand-primary">{position.ticker[0]}</span>
+              <span className="text-xs font-bold text-brand-primary">{firstChar}</span>
             </div>
           )}
           <div>
@@ -81,10 +82,10 @@ function AssetRow({ position }: { position: PositionItem }) {
 
 function GroupRow({ group }: { group: PositionGroup }) {
   const [open, setOpen] = useState(true)
+  const positions = group.positions ?? []
 
   return (
     <>
-      {/* Header do grupo */}
       <tr
         className="bg-light-100 dark:bg-dark-700 cursor-pointer hover:bg-light-200 dark:hover:bg-dark-600 transition-colors"
         onClick={() => setOpen(o => !o)}
@@ -119,16 +120,16 @@ function GroupRow({ group }: { group: PositionGroup }) {
         <td className="px-3 py-2.5" />
       </tr>
 
-      {/* Linhas de posições */}
-      {open && group.positions.map(pos => (
+      {open && positions.map(pos => (
         <AssetRow key={pos.id} position={pos} />
       ))}
     </>
   )
 }
 
-export default function PositionTable({ groups }: { groups: PositionGroup[] }) {
-  if (!groups.length) return null
+export default function PositionTable({ groups }: { groups?: PositionGroup[] }) {
+  // guard: nunca renderiza com undefined ou array vazio
+  if (!groups || groups.length === 0) return null
 
   return (
     <div className="overflow-x-auto">
