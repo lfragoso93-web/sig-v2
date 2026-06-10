@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { BarChart2, TrendingUp, DollarSign, Activity, PackageOpen } from 'lucide-react'
 import clsx from 'clsx'
 import {
@@ -31,15 +31,20 @@ export default function ResumePage() {
   const { data: portfolios, isLoading: loadingPortfolios } = usePortfolioList()
   const [period, setPeriod] = useState(12)
 
-  const portfolioId: number | null =
-    globalPortfolioId ?? (portfolios?.[0]?.id ?? null)
+  // Auto-seleciona o primeiro portfolio quando ainda nao ha selecao
+  useEffect(() => {
+    if (!globalPortfolioId && portfolios && portfolios.length > 0) {
+      setGlobal(portfolios[0].id)
+    }
+  }, [globalPortfolioId, portfolios, setGlobal])
 
-  const { data: summary,           isLoading: loadingSummary    } = usePortfolioSummary(portfolioId)
+  const portfolioId: number | null = globalPortfolioId ?? (portfolios?.[0]?.id ?? null)
+
+  const { data: summary,           isLoading: loadingSummary   } = usePortfolioSummary(portfolioId)
   const { data: patrimonioHistory, isLoading: loadingHistory    } = usePatrimonioHistory(portfolioId, period)
   const { data: distribution,      isLoading: loadingDist       } = useAssetDistribution(portfolioId)
   const { data: positions,          isLoading: loadingPositions  } = usePositions(portfolioId)
 
-  // campos com alias seguros para evitar crash se backend não retornar
   const safeGanhoCapital = (summary as any)?.ganho_capital ?? summary?.lucro_total ?? 0
 
   if (loadingPortfolios) {

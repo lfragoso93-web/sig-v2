@@ -4,15 +4,16 @@ import { useTheme } from '@/contexts/ThemeContext'
 import { useAuth } from '@/contexts/AuthContext'
 import clsx from 'clsx'
 
+// Rotas alinhadas com App.tsx — todas sob /carteira/*
 const NAV_ITEMS = [
-  { to: '/resumo',        label: 'Resumo' },
-  { to: '/proventos',     label: 'Proventos' },
-  { to: '/patrimonio',    label: 'Patrimônio' },
-  { to: '/rentabilidade', label: 'Rentabilidade' },
-  { to: '/metas',         label: 'Metas' },
-  { to: '/analise',       label: 'Análise' },
-  { to: '/lancamentos',   label: 'Lançamentos' },
-  { to: '/irpf',          label: 'IRPF' },
+  { to: '/carteira',                 label: 'Resumo',        end: true },
+  { to: '/carteira/proventos',       label: 'Proventos',     end: false },
+  { to: '/patrimonio',               label: 'Patrimônio',    end: false },
+  { to: '/carteira/rentabilidade',   label: 'Rentabilidade', end: false },
+  { to: '/metas',                    label: 'Metas',         end: false },
+  { to: '/analise',                  label: 'Análise',       end: false },
+  { to: '/carteira/lancamentos',     label: 'Lançamentos',   end: false },
+  { to: '/irpf',                     label: 'IRPF',          end: false },
 ]
 
 interface TopbarProps {
@@ -41,6 +42,7 @@ export default function Topbar({ onAddLancamento }: TopbarProps) {
             <NavLink
               key={item.to}
               to={item.to}
+              end={item.end}
               className={({ isActive }) =>
                 clsx(
                   'shrink-0 px-3 py-1.5 rounded text-xs font-medium transition-colors duration-150',
@@ -57,19 +59,14 @@ export default function Topbar({ onAddLancamento }: TopbarProps) {
 
         {/* Actions */}
         <div className="flex items-center gap-2 ml-2 shrink-0">
-
-          {/* Theme toggle */}
           <button
             onClick={toggleTheme}
             aria-label={theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
-            className="p-1.5 rounded-lg text-slate-400
-              hover:bg-surface-700 hover:text-slate-200
-              transition-colors duration-150"
+            className="p-1.5 rounded-lg text-slate-400 hover:bg-surface-700 hover:text-slate-200 transition-colors duration-150"
           >
             {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
           </button>
 
-          {/* User */}
           {user && (
             <div className="flex items-center gap-1 text-xs text-slate-400">
               <User size={14} />
@@ -77,26 +74,20 @@ export default function Topbar({ onAddLancamento }: TopbarProps) {
             </div>
           )}
 
-          {/* Logout */}
           <button
             onClick={logout}
             aria-label="Sair"
-            className="p-1.5 rounded-lg text-slate-400
-              hover:bg-red-500/10 hover:text-red-400
-              transition-colors duration-150"
+            className="p-1.5 rounded-lg text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-colors duration-150"
           >
             <LogOut size={16} />
           </button>
 
-          {/* Add Lancamento */}
           <button
             onClick={onAddLancamento}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md
-              text-xs font-medium bg-brand-600 hover:bg-brand-500
-              text-white transition-colors duration-150"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-brand-600 hover:bg-brand-500 text-white transition-colors duration-150"
           >
             <Plus size={14} />
-            Adicionar Lançamento
+            Novo Lançamento
           </button>
         </div>
       </div>
