@@ -16,7 +16,11 @@ export const useAppStore = create<AppState>()(
     (set) => ({
       theme: 'dark',
       selectedPortfolioId: null,
-      setTheme: (theme) => set({ theme }),
+      setTheme: (theme) => {
+        // Sincroniza o DOM imediatamente
+        document.documentElement.setAttribute('data-theme', theme)
+        set({ theme })
+      },
       setSelectedPortfolio: (id) => set({ selectedPortfolioId: id }),
       setSelectedPortfolioId: (id) => set({ selectedPortfolioId: id }),
       selectPortfolio: (id) => set({ selectedPortfolioId: id }),

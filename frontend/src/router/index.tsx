@@ -34,21 +34,16 @@ export const router = createBrowserRouter([
   { path: '/login',    element: <Navigate to="/auth/login" replace /> },
   { path: '/register', element: <Navigate to="/auth/registro" replace /> },
 
-  // App protegido
+  // App protegido — rotas flat sem portfolioId na URL
+  // O portfolioId vem do appStore (seletor de carteira na sidebar)
   {
     path: '/carteira',
     element: <ProtectedRoute><AppLayout /></ProtectedRoute>,
     children: [
-      { index: true, element: <Resumo /> },
-      {
-        path: ':portfolioId',
-        children: [
-          { index: true,           element: <Resumo /> },
-          { path: 'rentabilidade', element: <Rentabilidade /> },
-          { path: 'transacoes',    element: <Transacoes /> },
-          { path: 'proventos',     element: <Proventos /> },
-        ],
-      },
+      { index: true,              element: <Resumo /> },
+      { path: 'rentabilidade',    element: <Rentabilidade /> },
+      { path: 'transacoes',       element: <Transacoes /> },
+      { path: 'proventos',        element: <Proventos /> },
     ],
   },
 

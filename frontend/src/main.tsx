@@ -8,6 +8,17 @@ import '@/styles/base.css'
 import '@/styles/components.css'
 import '@/index.css'
 
+// Aplica o tema salvo ANTES do primeiro render para evitar flash branco
+;(function applyTheme() {
+  try {
+    const stored = JSON.parse(localStorage.getItem('sig-app') ?? '{}')
+    const theme = stored?.state?.theme ?? 'dark'
+    document.documentElement.setAttribute('data-theme', theme)
+  } catch {
+    document.documentElement.setAttribute('data-theme', 'dark')
+  }
+})()
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
