@@ -13,6 +13,8 @@ import MetasPage from '@/pages/MetasPage'
 import AnalisePage from '@/pages/AnalisePage'
 import LancamentosPage from '@/pages/LancamentosPage'
 import IRPFPage from '@/pages/IRPFPage'
+import Transacoes from '@/pages/Transacoes'
+import Configuracoes from '@/pages/Configuracoes'
 
 export default function App() {
   return (
@@ -36,6 +38,10 @@ export default function App() {
                 <Route path="/analise" element={<AnalisePage />} />
                 <Route path="/lancamentos" element={<LancamentosPage />} />
                 <Route path="/irpf" element={<IRPFPage />} />
+                {/* Rotas de carteira */}
+                <Route path="/carteira/transacoes" element={<Transacoes />} />
+                <Route path="/carteira/lancamentos" element={<LancamentosPage />} />
+                <Route path="/configuracoes" element={<Configuracoes />} />
               </Route>
             </Route>
 
