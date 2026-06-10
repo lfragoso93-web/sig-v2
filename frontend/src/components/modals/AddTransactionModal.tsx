@@ -8,6 +8,7 @@ import { useCreateTransaction } from '@/hooks/useTransactions'
 import { useAppStore } from '@/store/appStore'
 import { useTickerQuote } from '@/hooks/useTickerQuote'
 import { useTesouroSearch, TreasuryItem } from '@/hooks/useTesouroSearch'
+import { useTickerSuggest, TickerSuggestion } from '@/hooks/useTickerSuggest'
 
 interface Props {
   onClose: () => void
@@ -23,17 +24,18 @@ type AssetTab = {
   tickerLabel: string
   extraFields?: 'renda_fixa' | 'tesouro'
   brapiEnabled?: boolean
+  suggestEnabled?: boolean   // autocomplete via /assets/suggest
 }
 
 const TABS: AssetTab[] = [
-  { key: 'acao',       label: 'Acao',       icon: <TrendingUp size={13} />, assetType: 'ACAO',              currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: PETR4',           brapiEnabled: true },
-  { key: 'fii',        label: 'FII',        icon: <Building2  size={13} />, assetType: 'FII',               currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: MXRF11',          brapiEnabled: true },
-  { key: 'etf_br',     label: 'ETF BR',     icon: <BarChart2  size={13} />, assetType: 'ETF_NACIONAL',      currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: BOVA11',          brapiEnabled: true },
-  { key: 'stock',      label: 'Stock',      icon: <Globe      size={13} />, assetType: 'STOCK',             currency: 'USD', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: AAPL',            brapiEnabled: true },
-  { key: 'etf_int',    label: 'ETF INT',    icon: <Globe      size={13} />, assetType: 'ETF_INTERNACIONAL', currency: 'USD', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: VTI',             brapiEnabled: true },
-  { key: 'tesouro',    label: 'Tesouro',    icon: <Landmark   size={13} />, assetType: 'TESOURO_DIRETO',    currency: 'BRL', tickerLabel: 'Titulo',      tickerPlaceholder: 'ex: Tesouro IPCA 2029', brapiEnabled: false, extraFields: 'tesouro' },
-  { key: 'renda_fixa', label: 'Renda Fixa', icon: <Banknote   size={13} />, assetType: 'RENDA_FIXA',        currency: 'BRL', tickerLabel: 'Codigo/Nome', tickerPlaceholder: 'ex: CDB XP 110% CDI', brapiEnabled: false, extraFields: 'renda_fixa' },
-  { key: 'cripto',     label: 'Cripto',     icon: <Bitcoin    size={13} />, assetType: 'CRIPTO',            currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: BTC',             brapiEnabled: true },
+  { key: 'acao',       label: 'Acao',       icon: <TrendingUp size={13} />, assetType: 'ACAO',              currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: PETR4 ou Petrobras',    brapiEnabled: true,  suggestEnabled: true  },
+  { key: 'fii',        label: 'FII',        icon: <Building2  size={13} />, assetType: 'FII',               currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: MXRF11 ou Maxi Renda',  brapiEnabled: true,  suggestEnabled: true  },
+  { key: 'etf_br',     label: 'ETF BR',     icon: <BarChart2  size={13} />, assetType: 'ETF_NACIONAL',      currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: BOVA11 ou IVVB11',      brapiEnabled: true,  suggestEnabled: true  },
+  { key: 'stock',      label: 'Stock',      icon: <Globe      size={13} />, assetType: 'STOCK',             currency: 'USD', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: AAPL',                  brapiEnabled: true,  suggestEnabled: false },
+  { key: 'etf_int',    label: 'ETF INT',    icon: <Globe      size={13} />, assetType: 'ETF_INTERNACIONAL', currency: 'USD', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: VTI',                   brapiEnabled: true,  suggestEnabled: false },
+  { key: 'tesouro',    label: 'Tesouro',    icon: <Landmark   size={13} />, assetType: 'TESOURO_DIRETO',    currency: 'BRL', tickerLabel: 'Titulo',      tickerPlaceholder: 'ex: Tesouro IPCA 2029',     brapiEnabled: false, suggestEnabled: false, extraFields: 'tesouro'    },
+  { key: 'renda_fixa', label: 'Renda Fixa', icon: <Banknote   size={13} />, assetType: 'RENDA_FIXA',        currency: 'BRL', tickerLabel: 'Codigo/Nome', tickerPlaceholder: 'ex: CDB XP 110% CDI',       brapiEnabled: false, suggestEnabled: false, extraFields: 'renda_fixa' },
+  { key: 'cripto',     label: 'Cripto',     icon: <Bitcoin    size={13} />, assetType: 'CRIPTO',            currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: BTC',                   brapiEnabled: true,  suggestEnabled: false },
 ]
 
 const RF_INDEXERS = ['CDI', 'IPCA', 'Prefixado', 'SELIC', 'IGP-M', 'Outro']
@@ -72,9 +74,10 @@ export default function AddTransactionModal({ onClose }: Props) {
   const [maturity, setMaturity] = useState('')
   const [issuer,   setIssuer]   = useState('')
 
-  // dropdown sugestoes Tesouro
+  // dropdown states
   const [showTDSuggestions, setShowTDSuggestions] = useState(false)
-  const tdRef = useRef<HTMLDivElement>(null)
+  const [showRVSuggestions, setShowRVSuggestions] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
   const tab       = TABS.find(t => t.key === activeTab)!
   const isRF      = tab.extraFields === 'renda_fixa'
@@ -85,7 +88,6 @@ export default function AddTransactionModal({ onClose }: Props) {
   const { quote, loading: quoteLoading, error: quoteError } =
     useTickerQuote(ticker, !!tab.brapiEnabled, date)
 
-  // Quando cotacao chega, preenche preco + moeda + nome
   useEffect(() => {
     if (!quote) { setPriceFromBrapi(false); return }
     if (quote.price !== null && !price) {
@@ -96,7 +98,6 @@ export default function AddTransactionModal({ onClose }: Props) {
     if (quote.currency) setCurrency(quote.currency.toUpperCase())
   }, [quote])
 
-  // Quando data muda, limpa o preco atual para rebuscar
   const prevDate = useRef(date)
   useEffect(() => {
     if (prevDate.current !== date && tab.brapiEnabled && ticker.length >= 2) {
@@ -119,11 +120,21 @@ export default function AddTransactionModal({ onClose }: Props) {
     else setShowTDSuggestions(false)
   }, [tdItems, isTesouro])
 
-  // fecha dropdown ao clicar fora
+  // ── Renda Variavel autocomplete ───────────────────────────────────────
+  const { items: rvItems, loading: rvLoading } = useTickerSuggest(ticker, !!tab.suggestEnabled)
+
+  useEffect(() => {
+    if (tab.suggestEnabled && rvItems.length > 0) setShowRVSuggestions(true)
+    else setShowRVSuggestions(false)
+  }, [rvItems, tab.suggestEnabled])
+
+  // fecha dropdowns ao clicar fora
   useEffect(() => {
     function handler(e: MouseEvent) {
-      if (tdRef.current && !tdRef.current.contains(e.target as Node))
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setShowTDSuggestions(false)
+        setShowRVSuggestions(false)
+      }
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
@@ -134,15 +145,20 @@ export default function AddTransactionModal({ onClose }: Props) {
     setAssetName(item.name)
     if (item.indexer) setIndexer(item.indexer)
     if (item.rate !== null && item.rate !== undefined) setRate(String(item.rate))
-    if (item.maturity_date) {
-      // converte para YYYY-MM-DD se nao estiver nesse formato
-      setMaturity(item.maturity_date.slice(0, 10))
-    }
+    if (item.maturity_date) setMaturity(item.maturity_date.slice(0, 10))
     if (item.price !== null && item.price !== undefined) {
       setPrice(String(item.price))
       setPriceFromBrapi(true)
     }
     setShowTDSuggestions(false)
+  }
+
+  function applyRVSuggestion(item: TickerSuggestion) {
+    setTicker(item.ticker)
+    setAssetName(item.name)
+    setPrice('')
+    setPriceFromBrapi(false)
+    setShowRVSuggestions(false)
   }
 
   // ── handlers gerais ───────────────────────────────────────────────────
@@ -152,7 +168,9 @@ export default function AddTransactionModal({ onClose }: Props) {
     setCurrency(t.currency)
     setTicker(''); setAssetName(''); setPrice('')
     setIndexer(''); setRate(''); setMaturity(''); setIssuer('')
-    setPriceFromBrapi(false); setShowTDSuggestions(false)
+    setPriceFromBrapi(false)
+    setShowTDSuggestions(false)
+    setShowRVSuggestions(false)
     setError(null)
   }
 
@@ -207,7 +225,9 @@ export default function AddTransactionModal({ onClose }: Props) {
     setTicker(''); setAssetName(''); setQuantity(''); setPrice('')
     setFees(''); setDate(TODAY); setNotes('')
     setIndexer(''); setRate(''); setMaturity(''); setIssuer('')
-    setPriceFromBrapi(false); setShowTDSuggestions(false)
+    setPriceFromBrapi(false)
+    setShowTDSuggestions(false)
+    setShowRVSuggestions(false)
     setError(null)
   }
 
@@ -215,6 +235,20 @@ export default function AddTransactionModal({ onClose }: Props) {
     ? (parseFloat(quantity) * parseFloat(price) + parseFloat(fees || '0'))
         .toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     : null
+
+  // Componente dropdown reutilizavel
+  const showDropdown = showTDSuggestions || showRVSuggestions
+  const dropdownItems: Array<{ label: string; sublabel: string; onSelect: () => void }> = showTDSuggestions
+    ? tdItems.map(item => ({
+        label:    item.name,
+        sublabel: `${item.indexer}${item.rate ? ` ${item.rate}% a.a.` : ''}${item.maturity_date ? ` • venc. ${item.maturity_date.slice(0, 7)}` : ''}`,
+        onSelect: () => applyTDSuggestion(item),
+      }))
+    : rvItems.map(item => ({
+        label:    item.ticker,
+        sublabel: item.name,
+        onSelect: () => applyRVSuggestion(item),
+      }))
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -274,46 +308,48 @@ export default function AddTransactionModal({ onClose }: Props) {
 
               {/* Ticker + Moeda */}
               <div className="flex gap-3">
-                <div className="flex-1" ref={isTesouro ? tdRef : undefined}>
+                <div className="flex-1" ref={dropdownRef}>
                   <label className="block text-xs text-slate-400 mb-1">{tab.tickerLabel}</label>
                   <div className="relative">
                     <input
                       type="text"
                       value={ticker}
                       onChange={e => {
-                        setTicker(e.target.value)
+                        const v = e.target.value
+                        setTicker(v)
                         setAssetName('')
                         setPrice('')
                         setPriceFromBrapi(false)
-                        if (!isTesouro) return
-                        // nao limpa indexer/rate/maturity automaticamente ao digitar
+                      }}
+                      onFocus={() => {
+                        if (showTDSuggestions || showRVSuggestions) return
+                        if (isTesouro && tdItems.length > 0) setShowTDSuggestions(true)
+                        if (tab.suggestEnabled && rvItems.length > 0) setShowRVSuggestions(true)
                       }}
                       placeholder={tab.tickerPlaceholder}
                       className={clsx(inputCls, 'pr-7')}
                       autoFocus
                     />
-                    {(quoteLoading || tdLoading) && (
+                    {(quoteLoading || tdLoading || rvLoading) && (
                       <span className="absolute right-2 top-1/2 -translate-y-1/2">
                         <Loader2 size={13} className="animate-spin text-brand-400" />
                       </span>
                     )}
 
-                    {/* Dropdown sugestoes Tesouro */}
-                    {showTDSuggestions && tdItems.length > 0 && (
+                    {/* Dropdown unificado (Tesouro + RV) */}
+                    {showDropdown && dropdownItems.length > 0 && (
                       <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-md border border-surface-600 bg-surface-800 shadow-xl max-h-52 overflow-y-auto">
-                        {tdItems.map((item, i) => (
+                        {dropdownItems.map((item, i) => (
                           <button
                             key={i}
                             type="button"
-                            onMouseDown={() => applyTDSuggestion(item)}
+                            onMouseDown={item.onSelect}
                             className="w-full text-left px-3 py-2 text-xs hover:bg-surface-700 transition-colors border-b border-surface-700 last:border-0"
                           >
-                            <span className="font-medium text-slate-200">{item.name}</span>
-                            <span className="ml-2 text-slate-500">
-                              {item.indexer}
-                              {item.rate ? ` ${item.rate}% a.a.` : ''}
-                              {item.maturity_date ? ` • venc. ${item.maturity_date.slice(0, 7)}` : ''}
-                            </span>
+                            <span className="font-medium text-slate-200">{item.label}</span>
+                            {item.sublabel && (
+                              <span className="ml-2 text-slate-500">{item.sublabel}</span>
+                            )}
                           </button>
                         ))}
                       </div>
