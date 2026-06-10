@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   X, TrendingUp, Building2, Globe, Landmark,
-  Bitcoin, Banknote, BarChart2, CheckCircle2,
+  Bitcoin, Banknote, BarChart2, CheckCircle2, Loader2, Zap,
 } from 'lucide-react'
+import clsx from 'clsx'
 import { useCreateTransaction } from '@/hooks/useTransactions'
 import { useAppStore } from '@/store/appStore'
+import { useTickerQuote } from '@/hooks/useTickerQuote'
 
 interface Props {
   onClose: () => void
@@ -19,22 +21,23 @@ type AssetTab = {
   tickerPlaceholder: string
   tickerLabel: string
   extraFields?: 'renda_fixa' | 'tesouro'
+  // BRAPI não cobre RF/TD/Cripto com cotação real
+  brapiEnabled?: boolean
 }
 
 const TABS: AssetTab[] = [
-  { key: 'acao',       label: 'Ação',       icon: <TrendingUp size={13} />, assetType: 'ACAO',              currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: PETR4' },
-  { key: 'fii',        label: 'FII',        icon: <Building2  size={13} />, assetType: 'FII',               currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: MXRF11' },
-  { key: 'etf_br',     label: 'ETF BR',     icon: <BarChart2  size={13} />, assetType: 'ETF_NACIONAL',      currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: BOVA11' },
-  { key: 'stock',      label: 'Stock',      icon: <Globe      size={13} />, assetType: 'STOCK',             currency: 'USD', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: AAPL' },
-  { key: 'etf_int',    label: 'ETF INT',    icon: <Globe      size={13} />, assetType: 'ETF_INTERNACIONAL', currency: 'USD', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: VTI' },
-  { key: 'tesouro',    label: 'Tesouro',    icon: <Landmark   size={13} />, assetType: 'TESOURO_DIRETO',    currency: 'BRL', tickerLabel: 'Título',      tickerPlaceholder: 'ex: LTN 2029',         extraFields: 'tesouro' },
-  { key: 'renda_fixa', label: 'Renda Fixa', icon: <Banknote   size={13} />, assetType: 'RENDA_FIXA',        currency: 'BRL', tickerLabel: 'Código/Nome', tickerPlaceholder: 'ex: CDB XP 110% CDI', extraFields: 'renda_fixa' },
-  { key: 'cripto',     label: 'Cripto',     icon: <Bitcoin    size={13} />, assetType: 'CRIPTO',            currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: BTC' },
+  { key: 'acao',       label: 'Ação',       icon: <TrendingUp size={13} />, assetType: 'ACAO',              currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: PETR4',           brapiEnabled: true },
+  { key: 'fii',        label: 'FII',        icon: <Building2  size={13} />, assetType: 'FII',               currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: MXRF11',          brapiEnabled: true },
+  { key: 'etf_br',     label: 'ETF BR',     icon: <BarChart2  size={13} />, assetType: 'ETF_NACIONAL',      currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: BOVA11',          brapiEnabled: true },
+  { key: 'stock',      label: 'Stock',      icon: <Globe      size={13} />, assetType: 'STOCK',             currency: 'USD', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: AAPL',            brapiEnabled: true },
+  { key: 'etf_int',    label: 'ETF INT',    icon: <Globe      size={13} />, assetType: 'ETF_INTERNACIONAL', currency: 'USD', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: VTI',             brapiEnabled: true },
+  { key: 'tesouro',    label: 'Tesouro',    icon: <Landmark   size={13} />, assetType: 'TESOURO_DIRETO',    currency: 'BRL', tickerLabel: 'Título',      tickerPlaceholder: 'ex: LTN 2029',        brapiEnabled: false, extraFields: 'tesouro' },
+  { key: 'renda_fixa', label: 'Renda Fixa', icon: <Banknote   size={13} />, assetType: 'RENDA_FIXA',        currency: 'BRL', tickerLabel: 'Código/Nome', tickerPlaceholder: 'ex: CDB XP 110% CDI', brapiEnabled: false, extraFields: 'renda_fixa' },
+  { key: 'cripto',     label: 'Cripto',     icon: <Bitcoin    size={13} />, assetType: 'CRIPTO',            currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: BTC',             brapiEnabled: true },
 ]
 
 const RF_INDEXERS = ['CDI', 'IPCA', 'Prefixado', 'SELIC', 'IGP-M', 'Outro']
 const TD_INDEXERS = ['IPCA+', 'Prefixado', 'SELIC']
-
 const TODAY = new Date().toISOString().split('T')[0]
 
 const inputCls = [
@@ -52,6 +55,7 @@ export default function AddTransactionModal({ onClose }: Props) {
   const [activeTab, setActiveTab] = useState('acao')
   const [operation, setOperation] = useState<'buy' | 'sell'>('buy')
   const [ticker,    setTicker]    = useState('')
+  const [assetName, setAssetName] = useState('')
   const [quantity,  setQuantity]  = useState('')
   const [price,     setPrice]     = useState('')
   const [fees,      setFees]      = useState('')
@@ -60,6 +64,8 @@ export default function AddTransactionModal({ onClose }: Props) {
   const [currency,  setCurrency]  = useState('BRL')
   const [error,     setError]     = useState<string | null>(null)
   const [success,   setSuccess]   = useState(false)
+  // indica se o preço foi preenchido pela BRAPI (para exibir badge)
+  const [priceFromBrapi, setPriceFromBrapi] = useState(false)
 
   // campos extra RF / Tesouro
   const [indexer,  setIndexer]  = useState('')
@@ -72,15 +78,45 @@ export default function AddTransactionModal({ onClose }: Props) {
   const isTesouro = tab.extraFields === 'tesouro'
   const indexerOptions = isTesouro ? TD_INDEXERS : RF_INDEXERS
 
+  // ── BRAPI autocomplete ─────────────────────────────────────────────────
+  const { quote, loading: quoteLoading, error: quoteError } =
+    useTickerQuote(ticker, !!tab.brapiEnabled)
+
+  // Quando a cotação chega, preenche preço + moeda automaticamente
+  useEffect(() => {
+    if (!quote) { setPriceFromBrapi(false); return }
+
+    if (quote.price !== null && !price) {
+      setPrice(String(quote.price))
+      setPriceFromBrapi(true)
+    }
+    if (quote.name && !assetName) {
+      setAssetName(quote.name)
+    }
+    if (quote.currency) {
+      setCurrency(quote.currency.toUpperCase())
+    }
+  }, [quote])
+
+  // Quando o preço é editado manualmente, remove o badge BRAPI
+  function handlePriceChange(v: string) {
+    setPrice(v)
+    if (priceFromBrapi) setPriceFromBrapi(false)
+  }
+
+  // ── handlers ─────────────────────────────────────────────────────────
   function handleTabChange(key: string) {
     const t = TABS.find(t => t.key === key)!
     setActiveTab(key)
     setCurrency(t.currency)
     setTicker('')
+    setAssetName('')
+    setPrice('')
     setIndexer('')
     setRate('')
     setMaturity('')
     setIssuer('')
+    setPriceFromBrapi(false)
     setError(null)
   }
 
@@ -96,8 +132,8 @@ export default function AddTransactionModal({ onClose }: Props) {
     if (isNaN(prc) || prc <= 0) { setError('Preço deve ser maior que zero.'); return }
     if ((isRF || isTesouro) && !indexer) { setError('Selecione o indexador.'); return }
 
-    // enriquece notes com dados de RF/TD
     let enrichedNotes = notes.trim()
+    if (assetName) enrichedNotes = [assetName, enrichedNotes].filter(Boolean).join(' — ')
     if (isRF || isTesouro) {
       const extras = [
         indexer  && `Indexador: ${indexer}`,
@@ -109,7 +145,6 @@ export default function AddTransactionModal({ onClose }: Props) {
     }
 
     try {
-      // ✔ payload correto: { portfolioId, data } conforme useCreateTransaction
       await mutateAsync({
         portfolioId: selectedPortfolioId,
         data: {
@@ -133,9 +168,10 @@ export default function AddTransactionModal({ onClose }: Props) {
 
   function handleReset() {
     setSuccess(false)
-    setTicker(''); setQuantity(''); setPrice('')
+    setTicker(''); setAssetName(''); setQuantity(''); setPrice('')
     setFees(''); setDate(TODAY); setNotes('')
     setIndexer(''); setRate(''); setMaturity(''); setIssuer('')
+    setPriceFromBrapi(false)
     setError(null)
   }
 
@@ -153,11 +189,7 @@ export default function AddTransactionModal({ onClose }: Props) {
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-surface-700">
           <h2 className="text-sm font-semibold text-slate-100">Novo Lançamento</h2>
-          <button
-            onClick={onClose}
-            className="p-1 rounded hover:bg-surface-700 text-slate-400 hover:text-slate-200 transition-colors"
-            aria-label="Fechar"
-          >
+          <button onClick={onClose} className="p-1 rounded hover:bg-surface-700 text-slate-400 hover:text-slate-200 transition-colors" aria-label="Fechar">
             <X size={15} />
           </button>
         </div>
@@ -168,12 +200,8 @@ export default function AddTransactionModal({ onClose }: Props) {
             <CheckCircle2 size={48} className="text-positive" />
             <p className="text-sm font-medium text-slate-100">Lançamento registrado com sucesso!</p>
             <div className="flex gap-3">
-              <button onClick={handleReset} className="px-4 py-1.5 rounded-md text-xs font-medium bg-brand-600 hover:bg-brand-500 text-white transition-colors">
-                Novo Lançamento
-              </button>
-              <button onClick={onClose} className="px-4 py-1.5 rounded-md text-xs font-medium bg-surface-700 hover:bg-surface-600 text-slate-200 transition-colors">
-                Fechar
-              </button>
+              <button onClick={handleReset} className="px-4 py-1.5 rounded-md text-xs font-medium bg-brand-600 hover:bg-brand-500 text-white transition-colors">Novo Lançamento</button>
+              <button onClick={onClose}    className="px-4 py-1.5 rounded-md text-xs font-medium bg-surface-700 hover:bg-surface-600 text-slate-200 transition-colors">Fechar</button>
             </div>
           </div>
         ) : (
@@ -182,19 +210,13 @@ export default function AddTransactionModal({ onClose }: Props) {
             {/* ABAS */}
             <div className="flex overflow-x-auto px-4 pt-4 pb-2 gap-1 scrollbar-hide">
               {TABS.map(t => (
-                <button
-                  key={t.key}
-                  type="button"
-                  onClick={() => handleTabChange(t.key)}
-                  className={[
+                <button key={t.key} type="button" onClick={() => handleTabChange(t.key)}
+                  className={clsx(
                     'shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors duration-150 whitespace-nowrap',
-                    activeTab === t.key
-                      ? 'bg-brand-600 text-white'
-                      : 'text-slate-400 hover:bg-surface-700 hover:text-slate-200',
-                  ].join(' ')}
+                    activeTab === t.key ? 'bg-brand-600 text-white' : 'text-slate-400 hover:bg-surface-700 hover:text-slate-200',
+                  )}
                 >
-                  {t.icon}
-                  {t.label}
+                  {t.icon}{t.label}
                 </button>
               ))}
             </div>
@@ -206,21 +228,42 @@ export default function AddTransactionModal({ onClose }: Props) {
 
               {/* Toggle Compra / Venda */}
               <div className="flex rounded-lg overflow-hidden border border-surface-600 text-xs font-semibold">
-                <button
-                  type="button" onClick={() => setOperation('buy')}
-                  className={['flex-1 py-2 transition-colors duration-150', operation === 'buy' ? 'bg-positive text-white' : 'bg-surface-800 text-slate-400 hover:bg-surface-700 hover:text-slate-200'].join(' ')}
+                <button type="button" onClick={() => setOperation('buy')}
+                  className={clsx('flex-1 py-2 transition-colors duration-150', operation === 'buy' ? 'bg-positive text-white' : 'bg-surface-800 text-slate-400 hover:bg-surface-700 hover:text-slate-200')}
                 >Compra</button>
-                <button
-                  type="button" onClick={() => setOperation('sell')}
-                  className={['flex-1 py-2 transition-colors duration-150', operation === 'sell' ? 'bg-negative text-white' : 'bg-surface-800 text-slate-400 hover:bg-surface-700 hover:text-slate-200'].join(' ')}
+                <button type="button" onClick={() => setOperation('sell')}
+                  className={clsx('flex-1 py-2 transition-colors duration-150', operation === 'sell' ? 'bg-negative text-white' : 'bg-surface-800 text-slate-400 hover:bg-surface-700 hover:text-slate-200')}
                 >Venda</button>
               </div>
 
-              {/* Ticker + Moeda */}
+              {/* ── Ticker + Moeda ─────────────────────────────────────────── */}
               <div className="flex gap-3">
                 <div className="flex-1">
                   <label className="block text-xs text-slate-400 mb-1">{tab.tickerLabel}</label>
-                  <input type="text" value={ticker} onChange={e => setTicker(e.target.value)} placeholder={tab.tickerPlaceholder} className={inputCls} autoFocus />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={ticker}
+                      onChange={e => { setTicker(e.target.value); setAssetName(''); setPrice(''); setPriceFromBrapi(false) }}
+                      placeholder={tab.tickerPlaceholder}
+                      className={clsx(inputCls, 'pr-7')}
+                      autoFocus
+                    />
+                    {/* spinner BRAPI */}
+                    {quoteLoading && (
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2">
+                        <Loader2 size={13} className="animate-spin text-brand-400" />
+                      </span>
+                    )}
+                  </div>
+                  {/* nome do ativo retornado pela BRAPI */}
+                  {assetName && (
+                    <p className="mt-1 text-xs text-slate-500 truncate">{assetName}</p>
+                  )}
+                  {/* ticker não encontrado */}
+                  {quoteError && !quoteLoading && (
+                    <p className="mt-1 text-xs text-slate-500">{quoteError}</p>
+                  )}
                 </div>
                 <div className="w-24">
                   <label className="block text-xs text-slate-400 mb-1">Moeda</label>
@@ -233,7 +276,7 @@ export default function AddTransactionModal({ onClose }: Props) {
                 </div>
               </div>
 
-              {/* CAMPOS EXTRAS: Renda Fixa / Tesouro Direto */}
+              {/* ── Campos extras RF / Tesouro ────────────────────────────── */}
               {(isRF || isTesouro) && (
                 <div className="rounded-lg border border-surface-600 bg-surface-800/50 px-3 py-3 flex flex-col gap-3">
                   <p className="text-xs font-medium text-slate-400">
@@ -267,7 +310,7 @@ export default function AddTransactionModal({ onClose }: Props) {
                 </div>
               )}
 
-              {/* Quantidade + Preço */}
+              {/* ── Quantidade + Preço ────────────────────────────────────── */}
               <div className="flex gap-3">
                 <div className="flex-1">
                   <label className="block text-xs text-slate-400 mb-1">
@@ -276,11 +319,27 @@ export default function AddTransactionModal({ onClose }: Props) {
                   <input type="number" value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="0" min="0" step="any" className={inputCls} />
                 </div>
                 <div className="flex-1">
-                  <label className="block text-xs text-slate-400 mb-1">
-                    {isRF || isTesouro ? 'PU / Preço unit.' : 'Preço'}
-                    <span className="text-slate-600 ml-1">({currency})</span>
-                  </label>
-                  <input type="number" value={price} onChange={e => setPrice(e.target.value)} placeholder="0,00" min="0" step="any" className={inputCls} />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-slate-400">
+                      {isRF || isTesouro ? 'PU / Preço unit.' : 'Preço'}
+                      <span className="text-slate-600 ml-1">({currency})</span>
+                    </label>
+                    {/* badge BRAPI */}
+                    {priceFromBrapi && (
+                      <span className="flex items-center gap-0.5 text-[10px] font-medium text-brand-400 bg-brand-500/10 border border-brand-500/20 rounded px-1.5 py-0.5">
+                        <Zap size={9} />BRAPI
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="number"
+                    value={price}
+                    onChange={e => handlePriceChange(e.target.value)}
+                    placeholder="0,00"
+                    min="0"
+                    step="any"
+                    className={clsx(inputCls, priceFromBrapi && 'border-brand-500/50')}
+                  />
                 </div>
               </div>
 
