@@ -1,55 +1,54 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom'
-import AppLayout from '@/components/layout/AppLayout'
-import AuthLayout from '@/components/layout/AuthLayout'
-import Landing from '@/pages/Landing'
-import Login from '@/pages/Login'
-import Register from '@/pages/Register'
-import EsqueceuSenha from '@/pages/EsqueceuSenha'
-import Resumo from '@/pages/Resumo'
-import Rentabilidade from '@/pages/Rentabilidade'
-import Transacoes from '@/pages/Transacoes'
-import Proventos from '@/pages/Proventos'
+import AppLayout    from '@/components/layout/AppLayout'
+import AuthLayout   from '@/components/layout/AuthLayout'
 import ProtectedRoute from './ProtectedRoute'
 
+// Pages
+import Landing          from '@/pages/Landing'
+import Login            from '@/pages/Login'
+import Register         from '@/pages/Register'
+import EsqueceuSenha    from '@/pages/EsqueceuSenha'
+import ResumePage       from '@/pages/ResumePage'
+import RentabilidadePage from '@/pages/RentabilidadePage'
+import Transacoes        from '@/pages/Transacoes'
+import Configuracoes     from '@/pages/Configuracoes'
+
+// Lazy stubs — ainda não implementados
+import ProventosPage    from '@/pages/ProventosPage'
+
 export const router = createBrowserRouter([
-  // Landing page publica
-  {
-    path: '/',
-    element: <Landing />,
-  },
+  // Landing pública
+  { path: '/', element: <Landing /> },
 
   // Auth
   {
     path: '/auth',
     element: <AuthLayout />,
     children: [
-      { index: true,           element: <Navigate to="login" replace /> },
-      { path: 'login',         element: <Login /> },
-      { path: 'registro',      element: <Register /> },
-      { path: 'esqueceu-senha', element: <EsqueceuSenha /> },
+      { index: true,              element: <Navigate to="login" replace /> },
+      { path: 'login',            element: <Login /> },
+      { path: 'registro',         element: <Register /> },
+      { path: 'esqueceu-senha',   element: <EsqueceuSenha /> },
     ],
   },
 
-  // Atalhos legados para nao quebrar bookmarks
-  { path: '/login',    element: <Navigate to="/auth/login" replace /> },
+  // Atalhos legados
+  { path: '/login',    element: <Navigate to="/auth/login"    replace /> },
   { path: '/register', element: <Navigate to="/auth/registro" replace /> },
 
-  // App protegido — rotas flat sem portfolioId na URL
-  // O portfolioId vem do appStore (seletor de carteira na sidebar)
+  // App protegido
   {
     path: '/carteira',
     element: <ProtectedRoute><AppLayout /></ProtectedRoute>,
     children: [
-      { index: true,              element: <Resumo /> },
-      { path: 'rentabilidade',    element: <Rentabilidade /> },
-      { path: 'transacoes',       element: <Transacoes /> },
-      { path: 'proventos',        element: <Proventos /> },
+      { index: true,                    element: <ResumePage /> },
+      { path: 'rentabilidade',          element: <RentabilidadePage /> },
+      { path: 'transacoes',             element: <Transacoes /> },
+      { path: 'proventos',              element: <ProventosPage /> },
+      { path: 'configuracoes',          element: <Configuracoes /> },
     ],
   },
 
-  // Catch-all: qualquer rota desconhecida vai para a landing
-  {
-    path: '*',
-    element: <Navigate to="/" replace />,
-  },
+  // Catch-all → landing
+  { path: '*', element: <Navigate to="/" replace /> },
 ])
