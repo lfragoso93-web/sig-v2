@@ -1,3 +1,4 @@
+import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from fastapi import HTTPException, status
@@ -12,8 +13,8 @@ from app.core.security import (
 )
 from app.services.user_service import get_user_by_email
 from datetime import timedelta
-from loguru import logger
 
+logger = logging.getLogger(__name__)
 
 RESET_TOKEN_EXPIRE_MINUTES = 30
 
@@ -29,18 +30,18 @@ async def login(db: AsyncSession, data: LoginRequest) -> TokenResponse:
 
     user = await get_user_by_email(db, email_normalizado)
     if not user:
-        logger.warning(f"Login falhou: e-mail nao encontrado ({email_normalizado})")
+        logger.warning("Login falhou: e-mail nao encontrado (%s)", email_normalizado)
         raise _INVALID_CREDENTIALS
 
     try:
         senha_ok = verify_password(data.password, user.hashed_password)
     except Exception as exc:
         # Hash corrompido ou esquema incompativel — nao vaza informacao ao cliente
-        logger.error(f"Erro ao verificar senha do usuario id={user.id}: {exc}")
+        logger.error("Erro ao verificar senha do usuario id=%s: %s", user.id, exc)
         raise _INVALID_CREDENTIALS from exc
 
     if not senha_ok:
-        logger.warning(f"Login falhou: senha invalida para usuario id={user.id}")
+        logger.warning("Login falhou: senha invalida para usuario id=%s", user.id)
         raise _INVALID_CREDENTIALS
 
     if not user.is_active:
@@ -73,7 +74,6 @@ async def refresh_access_token(db: AsyncSession, refresh_token: str) -> str:
 async def forgot_password(db: AsyncSession, email: str) -> str:
     """
     Gera um token de reset de senha valido por 30 minutos.
-    Retorna o token (em producao, enviar por e-mail).
     Nao revela se o e-mail existe ou nao para evitar enumeracao.
     """
     user = await get_user_by_email(db, email.strip().lower())
