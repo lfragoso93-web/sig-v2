@@ -8,8 +8,14 @@ from app.models.system_config import SystemConfig
 from typing import Optional
 
 
+def _normalize_email(email: str) -> str:
+    """Remove espacos e converte para minusculas para comparacao segura."""
+    return email.strip().lower()
+
+
 async def get_user_by_email(db: AsyncSession, email: str) -> Optional[User]:
-    result = await db.execute(select(User).where(User.email == email))
+    normalized = _normalize_email(email)
+    result = await db.execute(select(User).where(User.email == normalized))
     return result.scalar_one_or_none()
 
 
@@ -36,15 +42,16 @@ async def create_user(
     data: UserCreate,
     role: UserRole = UserRole.user,
 ) -> User:
-    existing = await get_user_by_email(db, data.email)
+    normalized_email = _normalize_email(data.email)
+    existing = await get_user_by_email(db, normalized_email)
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="E-mail já cadastrado",
+            detail="E-mail ja cadastrado",
         )
     user = User(
-        name=data.name,
-        email=data.email,
+        name=data.name.strip(),
+        email=normalized_email,
         hashed_password=hash_password(data.password),
         role=role,
     )
@@ -56,7 +63,7 @@ async def create_user(
 
 async def update_user_profile(db: AsyncSession, user: User, data: UserUpdate) -> User:
     if data.name is not None:
-        user.name = data.name
+        user.name = data.name.strip()
     if data.avatar_url is not None:
         user.avatar_url = data.avatar_url
     await db.flush()
@@ -67,14 +74,15 @@ async def update_user_profile(db: AsyncSession, user: User, data: UserUpdate) ->
 async def admin_update_user(db: AsyncSession, user_id: int, data: UserAdminUpdate) -> User:
     user = await get_user_by_id(db, user_id)
     if not user:
-        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+        raise HTTPException(status_code=404, detail="Usuario nao encontrado")
     if data.name is not None:
-        user.name = data.name
+        user.name = data.name.strip()
     if data.email is not None:
-        existing = await get_user_by_email(db, data.email)
+        normalized_email = _normalize_email(data.email)
+        existing = await get_user_by_email(db, normalized_email)
         if existing and existing.id != user_id:
-            raise HTTPException(status_code=409, detail="E-mail já em uso")
-        user.email = data.email
+            raise HTTPException(status_code=409, detail="E-mail ja em uso")
+        user.email = normalized_email
     if data.role is not None:
         user.role = data.role
     if data.is_active is not None:
@@ -87,7 +95,7 @@ async def admin_update_user(db: AsyncSession, user_id: int, data: UserAdminUpdat
 async def delete_user(db: AsyncSession, user_id: int) -> None:
     user = await get_user_by_id(db, user_id)
     if not user:
-        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+        raise HTTPException(status_code=404, detail="Usuario nao encontrado")
     await db.delete(user)
 
 
