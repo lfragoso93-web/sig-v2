@@ -1,0 +1,45 @@
+import { useEffect, useState } from 'react'
+import api from '@/services/api'
+
+interface TreasuryPriceResponse {
+  slug:       string
+  price:      number | null
+  price_date: string
+  source:     string
+}
+
+/**
+ * Busca o PU de um titulo do Tesouro Direto para uma data especifica.
+ * Chama GET /assets/tesouro/price?slug={slug}&date={date}.
+ * So dispara quando slug e date estao preenchidos.
+ * Debounce de 400ms.
+ */
+export function useTreasuryPrice(slug: string, date: string, enabled = true) {
+  const [price,   setPrice]   = useState<number | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!enabled || !slug || !date) {
+      setPrice(null)
+      return
+    }
+
+    setLoading(true)
+    const timer = setTimeout(async () => {
+      try {
+        const res = await api.get<TreasuryPriceResponse>(
+          `/assets/tesouro/price?slug=${encodeURIComponent(slug)}&date=${date}`
+        )
+        setPrice(res.data.price)
+      } catch {
+        setPrice(null)
+      } finally {
+        setLoading(false)
+      }
+    }, 400)
+
+    return () => clearTimeout(timer)
+  }, [slug, date, enabled])
+
+  return { price, loading }
+}

@@ -9,33 +9,35 @@ import { useAppStore } from '@/store/appStore'
 import { useTickerQuote } from '@/hooks/useTickerQuote'
 import { useTesouroSearch, TreasuryItem } from '@/hooks/useTesouroSearch'
 import { useTickerSuggest, TickerSuggestion } from '@/hooks/useTickerSuggest'
+import { useTreasuryPrice } from '@/hooks/useTreasuryPrice'
 
 interface Props {
   onClose: () => void
 }
 
 type AssetTab = {
-  key: string
-  label: string
-  icon: React.ReactNode
-  assetType: string
-  currency: string
+  key:               string
+  label:             string
+  icon:              React.ReactNode
+  assetType:         string
+  currency:          string
   tickerPlaceholder: string
-  tickerLabel: string
-  extraFields?: 'renda_fixa' | 'tesouro'
-  brapiEnabled?: boolean
-  suggestEnabled?: boolean   // autocomplete via /assets/suggest
+  tickerLabel:       string
+  extraFields?:      'renda_fixa' | 'tesouro'
+  brapiEnabled?:     boolean
+  // Tipo BRAPI para filtrar sugestoes: 'stock' | 'fund' | 'etf' | 'bdr' | undefined
+  brapiSuggestType?: string
 }
 
 const TABS: AssetTab[] = [
-  { key: 'acao',       label: 'Acao',       icon: <TrendingUp size={13} />, assetType: 'ACAO',              currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: PETR4 ou Petrobras',    brapiEnabled: true,  suggestEnabled: true  },
-  { key: 'fii',        label: 'FII',        icon: <Building2  size={13} />, assetType: 'FII',               currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: MXRF11 ou Maxi Renda',  brapiEnabled: true,  suggestEnabled: true  },
-  { key: 'etf_br',     label: 'ETF BR',     icon: <BarChart2  size={13} />, assetType: 'ETF_NACIONAL',      currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: BOVA11 ou IVVB11',      brapiEnabled: true,  suggestEnabled: true  },
-  { key: 'stock',      label: 'Stock',      icon: <Globe      size={13} />, assetType: 'STOCK',             currency: 'USD', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: AAPL',                  brapiEnabled: true,  suggestEnabled: false },
-  { key: 'etf_int',    label: 'ETF INT',    icon: <Globe      size={13} />, assetType: 'ETF_INTERNACIONAL', currency: 'USD', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: VTI',                   brapiEnabled: true,  suggestEnabled: false },
-  { key: 'tesouro',    label: 'Tesouro',    icon: <Landmark   size={13} />, assetType: 'TESOURO_DIRETO',    currency: 'BRL', tickerLabel: 'Titulo',      tickerPlaceholder: 'ex: Tesouro IPCA 2029',     brapiEnabled: false, suggestEnabled: false, extraFields: 'tesouro'    },
-  { key: 'renda_fixa', label: 'Renda Fixa', icon: <Banknote   size={13} />, assetType: 'RENDA_FIXA',        currency: 'BRL', tickerLabel: 'Codigo/Nome', tickerPlaceholder: 'ex: CDB XP 110% CDI',       brapiEnabled: false, suggestEnabled: false, extraFields: 'renda_fixa' },
-  { key: 'cripto',     label: 'Cripto',     icon: <Bitcoin    size={13} />, assetType: 'CRIPTO',            currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: BTC',                   brapiEnabled: true,  suggestEnabled: false },
+  { key: 'acao',       label: 'Acao',       icon: <TrendingUp size={13} />, assetType: 'ACAO',              currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: PETR4 ou Petrobras',    brapiEnabled: true,  brapiSuggestType: 'stock'   },
+  { key: 'fii',        label: 'FII',        icon: <Building2  size={13} />, assetType: 'FII',               currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: MXRF11 ou Maxi Renda',  brapiEnabled: true,  brapiSuggestType: 'fund'    },
+  { key: 'etf_br',     label: 'ETF BR',     icon: <BarChart2  size={13} />, assetType: 'ETF_NACIONAL',      currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: BOVA11 ou IVVB11',      brapiEnabled: true,  brapiSuggestType: 'etf'     },
+  { key: 'stock',      label: 'Stock',      icon: <Globe      size={13} />, assetType: 'STOCK',             currency: 'USD', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: AAPL',                  brapiEnabled: true,  brapiSuggestType: undefined },
+  { key: 'etf_int',    label: 'ETF INT',    icon: <Globe      size={13} />, assetType: 'ETF_INTERNACIONAL', currency: 'USD', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: VTI',                   brapiEnabled: true,  brapiSuggestType: undefined },
+  { key: 'tesouro',    label: 'Tesouro',    icon: <Landmark   size={13} />, assetType: 'TESOURO_DIRETO',    currency: 'BRL', tickerLabel: 'Titulo',      tickerPlaceholder: 'ex: Tesouro IPCA 2029',     brapiEnabled: false, brapiSuggestType: undefined, extraFields: 'tesouro'    },
+  { key: 'renda_fixa', label: 'Renda Fixa', icon: <Banknote   size={13} />, assetType: 'RENDA_FIXA',        currency: 'BRL', tickerLabel: 'Codigo/Nome', tickerPlaceholder: 'ex: CDB XP 110% CDI',       brapiEnabled: false, brapiSuggestType: undefined, extraFields: 'renda_fixa' },
+  { key: 'cripto',     label: 'Cripto',     icon: <Bitcoin    size={13} />, assetType: 'CRIPTO',            currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: BTC',                   brapiEnabled: true,  brapiSuggestType: undefined },
 ]
 
 const RF_INDEXERS = ['CDI', 'IPCA', 'Prefixado', 'SELIC', 'IGP-M', 'Outro']
@@ -69,19 +71,23 @@ export default function AddTransactionModal({ onClose }: Props) {
   const [priceFromBrapi, setPriceFromBrapi] = useState(false)
 
   // campos extra RF / Tesouro
-  const [indexer,  setIndexer]  = useState('')
-  const [rate,     setRate]     = useState('')
-  const [maturity, setMaturity] = useState('')
-  const [issuer,   setIssuer]   = useState('')
+  const [indexer,    setIndexer]    = useState('')
+  const [rate,       setRate]       = useState('')
+  const [maturity,   setMaturity]   = useState('')
+  const [issuer,     setIssuer]     = useState('')
+  // slug BRAPI do titulo selecionado (para buscar PU por data)
+  const [activeSlug, setActiveSlug] = useState('')
+  // flag: usuario editou o preco manualmente
+  const [priceEdited, setPriceEdited] = useState(false)
 
   // dropdown states
   const [showTDSuggestions, setShowTDSuggestions] = useState(false)
   const [showRVSuggestions, setShowRVSuggestions] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  const tab       = TABS.find(t => t.key === activeTab)!
-  const isRF      = tab.extraFields === 'renda_fixa'
-  const isTesouro = tab.extraFields === 'tesouro'
+  const tab            = TABS.find(t => t.key === activeTab)!
+  const isRF           = tab.extraFields === 'renda_fixa'
+  const isTesouro      = tab.extraFields === 'tesouro'
   const indexerOptions = isTesouro ? TD_INDEXERS : RF_INDEXERS
 
   // ── BRAPI cotacao (renda variavel) ────────────────────────────────────
@@ -98,18 +104,44 @@ export default function AddTransactionModal({ onClose }: Props) {
     if (quote.currency) setCurrency(quote.currency.toUpperCase())
   }, [quote])
 
+  // Quando data muda na RV, limpa preco para rebuscar
   const prevDate = useRef(date)
   useEffect(() => {
     if (prevDate.current !== date && tab.brapiEnabled && ticker.length >= 2) {
       setPrice('')
       setPriceFromBrapi(false)
+      setPriceEdited(false)
     }
     prevDate.current = date
   }, [date])
 
+  // ── PU Tesouro por data ────────────────────────────────────────────
+  // Dispara quando: aba Tesouro + slug selecionado + usuario nao editou preco manualmente
+  const { price: tdPrice, loading: tdPriceLoading } = useTreasuryPrice(
+    activeSlug,
+    date,
+    isTesouro && !!activeSlug && !priceEdited,
+  )
+
+  useEffect(() => {
+    if (tdPrice !== null && tdPrice !== undefined && isTesouro && !priceEdited) {
+      setPrice(String(tdPrice))
+      setPriceFromBrapi(true)
+    }
+  }, [tdPrice, isTesouro, priceEdited])
+
+  // Quando data muda no Tesouro, limpa preco para rebuscar (se slug ativo e preco nao editado)
+  useEffect(() => {
+    if (isTesouro && activeSlug && !priceEdited) {
+      setPrice('')
+      setPriceFromBrapi(false)
+    }
+  }, [date, isTesouro, activeSlug])
+
   function handlePriceChange(v: string) {
     setPrice(v)
-    if (priceFromBrapi) setPriceFromBrapi(false)
+    setPriceFromBrapi(false)
+    setPriceEdited(true)
   }
 
   // ── Tesouro Direto autocomplete ───────────────────────────────────────
@@ -120,13 +152,17 @@ export default function AddTransactionModal({ onClose }: Props) {
     else setShowTDSuggestions(false)
   }, [tdItems, isTesouro])
 
-  // ── Renda Variavel autocomplete ───────────────────────────────────────
-  const { items: rvItems, loading: rvLoading } = useTickerSuggest(ticker, !!tab.suggestEnabled)
+  // ── Renda Variavel autocomplete (com filtro por tipo) ───────────────────
+  const { items: rvItems, loading: rvLoading } = useTickerSuggest(
+    ticker,
+    !!tab.brapiSuggestType,
+    tab.brapiSuggestType,
+  )
 
   useEffect(() => {
-    if (tab.suggestEnabled && rvItems.length > 0) setShowRVSuggestions(true)
+    if (tab.brapiSuggestType && rvItems.length > 0) setShowRVSuggestions(true)
     else setShowRVSuggestions(false)
-  }, [rvItems, tab.suggestEnabled])
+  }, [rvItems, tab.brapiSuggestType])
 
   // fecha dropdowns ao clicar fora
   useEffect(() => {
@@ -141,15 +177,17 @@ export default function AddTransactionModal({ onClose }: Props) {
   }, [])
 
   function applyTDSuggestion(item: TreasuryItem) {
-    setTicker(item.ticker)
+    setTicker(item.name)          // mostra o nome legivel no campo
     setAssetName(item.name)
-    if (item.indexer) setIndexer(item.indexer)
-    if (item.rate !== null && item.rate !== undefined) setRate(String(item.rate))
+    // @ts-ignore: TreasuryItem agora tem slug do backend
+    setActiveSlug((item as any).slug || item.ticker)
+    if (item.indexer)   setIndexer(item.indexer)
+    if (item.rate != null) setRate(String(item.rate))
     if (item.maturity_date) setMaturity(item.maturity_date.slice(0, 10))
-    if (item.price !== null && item.price !== undefined) {
-      setPrice(String(item.price))
-      setPriceFromBrapi(true)
-    }
+    // Nao aplica price da sugestao — o useTreasuryPrice vai buscar pelo slug + date
+    setPrice('')
+    setPriceFromBrapi(false)
+    setPriceEdited(false)
     setShowTDSuggestions(false)
   }
 
@@ -158,6 +196,7 @@ export default function AddTransactionModal({ onClose }: Props) {
     setAssetName(item.name)
     setPrice('')
     setPriceFromBrapi(false)
+    setPriceEdited(false)
     setShowRVSuggestions(false)
   }
 
@@ -168,6 +207,7 @@ export default function AddTransactionModal({ onClose }: Props) {
     setCurrency(t.currency)
     setTicker(''); setAssetName(''); setPrice('')
     setIndexer(''); setRate(''); setMaturity(''); setIssuer('')
+    setActiveSlug(''); setPriceEdited(false)
     setPriceFromBrapi(false)
     setShowTDSuggestions(false)
     setShowRVSuggestions(false)
@@ -198,11 +238,14 @@ export default function AddTransactionModal({ onClose }: Props) {
       enrichedNotes = [extras, enrichedNotes].filter(Boolean).join(' - ')
     }
 
+    // Para Tesouro, usa slug como ticker se disponivel
+    const finalTicker = isTesouro && activeSlug ? activeSlug : ticker.trim().toUpperCase()
+
     try {
       await mutateAsync({
         portfolioId: selectedPortfolioId,
         data: {
-          ticker:     ticker.trim().toUpperCase(),
+          ticker:     finalTicker,
           asset_type: tab.assetType,
           operation,
           quantity:   qty,
@@ -225,6 +268,7 @@ export default function AddTransactionModal({ onClose }: Props) {
     setTicker(''); setAssetName(''); setQuantity(''); setPrice('')
     setFees(''); setDate(TODAY); setNotes('')
     setIndexer(''); setRate(''); setMaturity(''); setIssuer('')
+    setActiveSlug(''); setPriceEdited(false)
     setPriceFromBrapi(false)
     setShowTDSuggestions(false)
     setShowRVSuggestions(false)
@@ -236,19 +280,20 @@ export default function AddTransactionModal({ onClose }: Props) {
         .toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     : null
 
-  // Componente dropdown reutilizavel
-  const showDropdown = showTDSuggestions || showRVSuggestions
-  const dropdownItems: Array<{ label: string; sublabel: string; onSelect: () => void }> = showTDSuggestions
-    ? tdItems.map(item => ({
-        label:    item.name,
-        sublabel: `${item.indexer}${item.rate ? ` ${item.rate}% a.a.` : ''}${item.maturity_date ? ` • venc. ${item.maturity_date.slice(0, 7)}` : ''}`,
-        onSelect: () => applyTDSuggestion(item),
-      }))
-    : rvItems.map(item => ({
-        label:    item.ticker,
-        sublabel: item.name,
-        onSelect: () => applyRVSuggestion(item),
-      }))
+  const anyLoading    = quoteLoading || tdLoading || rvLoading || tdPriceLoading
+  const showDropdown  = showTDSuggestions || showRVSuggestions
+  const dropdownItems: Array<{ label: string; sublabel: string; onSelect: () => void }> =
+    showTDSuggestions
+      ? tdItems.map(item => ({
+          label:    item.name,
+          sublabel: `${item.indexer}${item.rate ? ` ${item.rate}% a.a.` : ''}${item.maturity_date ? ` • venc. ${item.maturity_date.slice(0, 7)}` : ''}`,
+          onSelect: () => applyTDSuggestion(item),
+        }))
+      : rvItems.map(item => ({
+          label:    item.ticker,
+          sublabel: item.name,
+          onSelect: () => applyRVSuggestion(item),
+        }))
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -320,23 +365,24 @@ export default function AddTransactionModal({ onClose }: Props) {
                         setAssetName('')
                         setPrice('')
                         setPriceFromBrapi(false)
+                        setPriceEdited(false)
+                        if (isTesouro) setActiveSlug('')
                       }}
                       onFocus={() => {
-                        if (showTDSuggestions || showRVSuggestions) return
                         if (isTesouro && tdItems.length > 0) setShowTDSuggestions(true)
-                        if (tab.suggestEnabled && rvItems.length > 0) setShowRVSuggestions(true)
+                        if (tab.brapiSuggestType && rvItems.length > 0) setShowRVSuggestions(true)
                       }}
                       placeholder={tab.tickerPlaceholder}
                       className={clsx(inputCls, 'pr-7')}
                       autoFocus
                     />
-                    {(quoteLoading || tdLoading || rvLoading) && (
+                    {anyLoading && (
                       <span className="absolute right-2 top-1/2 -translate-y-1/2">
                         <Loader2 size={13} className="animate-spin text-brand-400" />
                       </span>
                     )}
 
-                    {/* Dropdown unificado (Tesouro + RV) */}
+                    {/* Dropdown unificado */}
                     {showDropdown && dropdownItems.length > 0 && (
                       <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-md border border-surface-600 bg-surface-800 shadow-xl max-h-52 overflow-y-auto">
                         {dropdownItems.map((item, i) => (

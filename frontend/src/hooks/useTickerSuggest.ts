@@ -8,11 +8,16 @@ export interface TickerSuggestion {
 }
 
 /**
- * Hook com debounce de 500 ms para buscar sugestoes de tickers da B3.
- * Chama GET /assets/suggest?q={q}&limit=10.
+ * Hook com debounce de 500ms para buscar sugestoes de tickers da B3.
+ * Chama GET /assets/suggest?q={q}&limit=10&asset_type={assetType}.
+ * assetType: 'stock' | 'fund' | 'etf' | 'bdr' | undefined (todos)
  * So dispara quando enabled=true e q tiver >= 2 chars.
  */
-export function useTickerSuggest(q: string, enabled = true) {
+export function useTickerSuggest(
+  q:         string,
+  enabled  = true,
+  assetType?: string,
+) {
   const [items,   setItems]   = useState<TickerSuggestion[]>([])
   const [loading, setLoading] = useState(false)
 
@@ -23,11 +28,15 @@ export function useTickerSuggest(q: string, enabled = true) {
     }
 
     setLoading(true)
+    const params = new URLSearchParams({
+      q:     q.trim(),
+      limit: '10',
+      ...(assetType ? { asset_type: assetType } : {}),
+    })
+
     const timer = setTimeout(async () => {
       try {
-        const res = await api.get<TickerSuggestion[]>(
-          `/assets/suggest?q=${encodeURIComponent(q.trim())}&limit=10`
-        )
+        const res = await api.get<TickerSuggestion[]>(`/assets/suggest?${params}`)
         setItems(res.data)
       } catch {
         setItems([])
@@ -37,7 +46,7 @@ export function useTickerSuggest(q: string, enabled = true) {
     }, 500)
 
     return () => clearTimeout(timer)
-  }, [q, enabled])
+  }, [q, enabled, assetType])
 
   return { items, loading }
 }
