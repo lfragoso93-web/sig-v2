@@ -245,7 +245,7 @@ sig-v2/
 | **Análise IA (Gemini)** | Router stub | `analysis_service.py`, prompts, integração Gemini, tela frontend |
 | **Renda Fixa** | Model + router stub | CRUD completo backend + tela frontend |
 | **Metas (Goals)** | Model criado | CRUD backend + tela frontend com progresso |
-| **Benchmarks** | Estrutura preparada | Integração CDI/IBOV/IPCA na tela de Rentabilidade |
+| **Benchmarks** | Estrutura preparada | Integração CDI/IBOV/IPCA/IFIX na tela de Rentabilidade |
 | **FX (câmbio)** | Router básico | USD/BRL em tempo real para consolidar patrimônio em BRL |
 | **Tesouro Direto — edição/exclusão** | Cadastro funcional | Editar e excluir títulos; `treasury_service.py` quase vazio |
 
@@ -436,66 +436,94 @@ docker compose exec backend alembic upgrade head
 
 > Use esta seção como ponto de partida em cada nova sessão de desenvolvimento.
 
-### Próximos passos priorizados
+---
 
-#### 🔴 Alta Prioridade
+### Roadmap — 4 Fases
 
-1. **Criar migration Alembic formal para `ticker VARCHAR(100)`**
+#### 🔴 Fase 1 — Fundação (sem isso tudo é frágil)
+
+> Dívidas técnicas que, se ignoradas, encarecem cada feature futura. Fazer antes de qualquer nova funcionalidade.
+
+1. **Migration Alembic formal para `ticker VARCHAR(100)`**
    - Atualmente existe apenas uma migration inline em `transactions.py` (`_ensure_migrations`)
    - Criar `alembic revision --autogenerate -m "increase_ticker_length"` e remover a migration inline
    - Arquivo: `backend/alembic/versions/`
 
-2. **Renda Fixa — CRUD completo**
-   - Backend: `routers/fixed_income.py` é stub (77 bytes) — implementar endpoints CRUD
-   - Service: `services/fixed_income_service.py` não existe — criar
-   - Frontend: tela de cadastro e listagem de RF, integrar ao modal de lançamentos
+2. **Limpeza de arquivos duplicados no frontend**
+   - Pares legados: `Resumo.tsx` / `ResumePage.tsx`, `Transacoes.tsx` / `TransacoesPage.tsx`, etc.
+   - Verificar qual versão está registrada no router, remover a obsoleta
+
+3. **Suite de testes automatizados (pytest)**
+   - Criar `backend/tests/` com fixtures de banco em memória (SQLite async)
+   - Prioridade de cobertura: `quotes_service` (lógica de roteamento BRAPI/yfinance/cripto), `portfolio_service` (cálculo de posições e preço médio FIFO), `transactions` (validação e persistência)
+   - Esses três módulos já geraram bugs em produção — são os mais críticos
+
+---
+
+#### 🟡 Fase 2 — Core financeiro completo
+
+> Gaps funcionais que afetam a exatidão dos dados hoje. Usuários com RF, Tesouro ou ativos internacionais têm dados incompletos ou errados enquanto esses itens não estiverem prontos.
+
+4. **Renda Fixa — CRUD completo**
+   - Backend: `routers/fixed_income.py` é stub — implementar endpoints CRUD
+   - Criar `services/fixed_income_service.py` (não existe)
+   - Frontend: tela de cadastro/listagem, integrar ao modal de lançamentos
    - Modelo já existe: `models/fixed_income.py`
 
-3. **Tesouro Direto — edição e exclusão**
+5. **Tesouro Direto — edição e exclusão**
    - Cadastro via modal já funciona ✅
-   - Falta: editar e excluir títulos na tabela de posições
-   - Backend: `treasury_service.py` está quase vazio — implementar `get`, `update`, `delete`
+   - Implementar `get`, `update`, `delete` em `treasury_service.py` (atualmente quase vazio)
+   - Adicionar ações de editar/excluir na tabela de posições do frontend
 
-#### 🟡 Média Prioridade
+6. **FX (câmbio) — USD→BRL em tempo real**
+   - `routers/fx.py` tem implementação básica
+   - Completar para buscar USD/BRL via BRAPI ou BCB e expor para o frontend
+   - Usar na `PatrimonioPage` para converter ativos em USD e exibir patrimônio total correto em BRL
 
-4. **Benchmarks na tela de Rentabilidade**
-   - Integrar CDI (API do Banco Central), IBOV e IPCA
-   - Exibir gráfico comparativo na `RentabilidadePage.tsx`
-   - Hook `usePerformance.ts` já existe e busca `/performance`
+7. **Benchmarks CDI/IPCA/IBOV/IFIX na Rentabilidade**
+   - Integrar CDI e IPCA via API pública do Banco Central (SGS)
+   - IBOV e IFIX via BRAPI
+   - Exibir gráfico comparativo na `RentabilidadePage.tsx` ao lado do retorno da carteira
 
-5. **Análise IA (Gemini)**
-   - Criar `services/analysis_service.py` com prompts de análise de carteira
-   - Conectar `GEMINI_API_KEY` do `.env`
-   - Implementar `routers/analysis.py` (stub com 78 bytes)
-   - Página `AnalisePage.tsx` já existe como stub
+---
 
-6. **Metas (Goals)**
-   - Model `goal.py` existe
-   - `routers/goals.py` é stub (77 bytes) — implementar CRUD
-   - Frontend: `MetasPage.tsx` stub — implementar tela com progresso visual
+#### 🟢 Fase 3 — Valor estratégico
 
-7. **FX (câmbio)**
-   - `routers/fx.py` tem implementação básica (324 bytes)
-   - Completar para buscar USD/BRL em tempo real via BRAPI ou BCB
-   - Usar na consolidação de patrimônio para converter ativos em USD para BRL
+> Features que elevam a utilidade do sistema para uso contínuo e planejamento financeiro de longo prazo.
 
-#### 🟢 Baixa Prioridade / Qualidade
+8. **Metas financeiras**
+   - Model `goal.py` já existe
+   - Implementar CRUD em `routers/goals.py` (stub)
+   - Frontend: `MetasPage.tsx` stub — tela com barra de progresso, valor atual vs. meta, prazo
 
-8. **Limpeza de arquivos duplicados**
-   - Existem pares legados: `Resumo.tsx` / `ResumePage.tsx`, `Transacoes.tsx` / `TransacoesPage.tsx`, etc.
-   - Verificar qual versão está ativa no router, remover a obsoleta
-
-9. **IRPF**
+9. **IRPF — apuração e exportação**
    - Módulo mais complexo — model e router stub existem
-   - Implementar: apuração mensal, cálculo de ganho de capital, isenções (ações até R$20k/mês), DARFs, exportação
+   - Implementar: apuração mensal de ganho de capital, isenções (ações até R$20k/mês), cálculo de DARF
+   - Exportação em CSV para preencher a declaração
 
-10. **Testes automatizados**
-    - Criar `backend/tests/` com pytest
-    - Prioridade: `quotes_service`, `portfolios` (cálculo de posições), `transactions`
-
-11. **Exportação de dados**
+10. **Exportação de dados**
     - CSV/Excel de transações e posições
-    - Botão na `TransacoesPage.tsx`
+    - Botão na `TransacoesPage.tsx` e na `PatrimonioPage.tsx`
+
+---
+
+#### 🔵 Fase 4 — Diferencial competitivo
+
+> Features que diferenciam o produto e só funcionam bem em cima de uma base financeira completa e testada.
+
+11. **Análise IA (Gemini)**
+    - Criar `services/analysis_service.py` com prompts de análise de carteira
+    - Conectar `GEMINI_API_KEY` do `.env`
+    - Implementar `routers/analysis.py` (stub)
+    - Página `AnalisePage.tsx` já existe como stub
+    - Sugestões de rebalanceamento, concentração setorial, comparação com benchmarks
+
+12. **Importação via CSV**
+    - Import de histórico de transações via CSV (formato padrão de corretoras)
+    - Muito mais viável que integração direta com corretoras (Open Finance tem barreira regulatória)
+    - Validar, mapear colunas e inserir em massa via endpoint `/portfolios/{id}/transactions/import`
+
+---
 
 ### Contexto técnico importante para próximas sessões
 
