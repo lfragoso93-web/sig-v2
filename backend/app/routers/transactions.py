@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, text
+from sqlalchemy import select
 from typing import List
 
 from app.core.database import get_db
@@ -26,23 +26,6 @@ async def _get_portfolio(portfolio_id: int, user: User, db: AsyncSession) -> Por
     return p
 
 
-async def _ensure_migrations(db: AsyncSession) -> None:
-    """Migrations inline: garante currency e ticker(100) na tabela transactions."""
-    try:
-        # currency
-        await db.execute(text(
-            "ALTER TABLE transactions ADD COLUMN IF NOT EXISTS "
-            "currency VARCHAR(10) NOT NULL DEFAULT 'BRL'"
-        ))
-        # aumenta ticker para 100 chars (slugs do Tesouro Direto tem ate ~60 chars)
-        await db.execute(text(
-            "ALTER TABLE transactions ALTER COLUMN ticker TYPE VARCHAR(100)"
-        ))
-        await db.commit()
-    except Exception:
-        await db.rollback()
-
-
 @router.get("/{portfolio_id}/transactions", response_model=List[TransactionOut])
 async def list_transactions(
     portfolio_id: int,
@@ -66,7 +49,6 @@ async def create_transaction(
     current_user: User = Depends(get_current_user),
 ):
     await _get_portfolio(portfolio_id, current_user, db)
-    await _ensure_migrations(db)
 
     tx = Transaction(
         portfolio_id = portfolio_id,
