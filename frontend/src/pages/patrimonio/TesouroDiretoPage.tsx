@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Pencil, Trash2, TrendingUp, TrendingDown, Minus, Loader2 } from 'lucide-react'
+import { Pencil, Trash2, TrendingUp, TrendingDown, Minus, Loader2, Plus } from 'lucide-react'
 import {
   useTreasury,
   useCreateTreasury,
@@ -55,7 +55,6 @@ function toPayload(f: FormState): TreasuryCreatePayload {
 // ── Componente principal ───────────────────────────────────────────
 
 export default function TesouroDiretoPage() {
-  // portfolioId vem do store global (carteira ativa selecionada no header)
   const portfolioId = useAppStore(s => s.selectedPortfolioId) ?? 0
 
   const { data: investments = [], isLoading } = useTreasury(portfolioId)
@@ -78,6 +77,15 @@ export default function TesouroDiretoPage() {
   const [deleteTarget, setDeleteTarget] = useState<TreasuryInvestment | null>(null)
 
   // ── handlers modal ───────────────────────────────────────────
+
+  function openCreate() {
+    setEditItem(null)
+    setForm(emptyForm())
+    setFormError('')
+    setTesouroQuery('')
+    setShowSugg(false)
+    setShowModal(true)
+  }
 
   function openEdit(item: TreasuryInvestment) {
     setEditItem(item)
@@ -138,6 +146,14 @@ export default function TesouroDiretoPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
 
+      {/* Barra superior com botão Novo */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <button onClick={openCreate} style={btnPrimary}>
+          <Plus size={15} />
+          Novo Título
+        </button>
+      </div>
+
       {/* Tabela */}
       {isLoading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-12)' }}>
@@ -149,7 +165,10 @@ export default function TesouroDiretoPage() {
           color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)',
           border: '1px dashed var(--color-border)', borderRadius: 'var(--radius-lg)',
         }}>
-          Nenhum título cadastrado. Clique em “Novo Laçamento” no topo para começar.
+          <p style={{ marginBottom: 'var(--space-4)' }}>Nenhum título cadastrado.</p>
+          <button onClick={openCreate} style={btnPrimary}>
+            <Plus size={14} /> Cadastrar primeiro título
+          </button>
         </div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
@@ -232,12 +251,12 @@ export default function TesouroDiretoPage() {
         </div>
       )}
 
-      {/* ===== Modal Edição ===== */}
+      {/* ===== Modal Cadastro / Edição ===== */}
       {showModal && (
         <div style={overlayStyle} onClick={e => { if (e.target === e.currentTarget) closeModal() }}>
           <div style={modalStyle}>
             <h2 style={{ margin: '0 0 var(--space-4)', fontSize: 'var(--text-base)', fontWeight: 600 }}>
-              Editar Título
+              {editItem ? 'Editar Título' : 'Novo Título'}
             </h2>
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
               {/* brapi_name autocomplete */}
@@ -330,7 +349,7 @@ export default function TesouroDiretoPage() {
                 <button type="button" onClick={closeModal} style={btnSecondary}>Cancelar</button>
                 <button type="submit" disabled={isMutating} style={btnPrimary}>
                   {isMutating && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}
-                  Salvar
+                  {editItem ? 'Salvar' : 'Cadastrar'}
                 </button>
               </div>
             </form>
