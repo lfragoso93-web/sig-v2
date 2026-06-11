@@ -2,42 +2,26 @@ import { useState } from 'react'
 import { ChevronDown, ChevronRight, HelpCircle } from 'lucide-react'
 import clsx from 'clsx'
 import { formatBRL, formatPercent, signClass } from '@/utils/format'
-
-interface PositionItem {
-  ticker:         string
-  asset_type:     string
-  asset_label:    string
-  quantity:       number
-  avg_price:      number
-  total_invested: number
-  current_price:  number | null   // null = cotacao indisponivel
-  current_value:  number
-  result_abs:     number
-  result_pct:     number
-}
-
-interface PositionGroup {
-  label:    string
-  count:    number
-  items:    PositionItem[]
-}
+import type { PositionGroup } from '@/hooks/usePortfolio'
 
 interface Props {
   groups: PositionGroup[]
 }
 
-function fmtPrice(val: number | null, fallback = '—'): string {
-  if (val === null || val === undefined) return fallback
+function fmtPrice(val: number | null | undefined): string {
+  if (val === null || val === undefined) return '—'
   return formatBRL(val)
 }
 
 export default function PositionTable({ groups }: Props) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>(
-    Object.fromEntries(groups.map(g => [g.label, true]))
+    Object.fromEntries((groups ?? []).map(g => [g.label, true]))
   )
 
   const toggle = (label: string) =>
     setExpanded(prev => ({ ...prev, [label]: !prev[label] }))
+
+  if (!groups || groups.length === 0) return null
 
   return (
     <div className="overflow-x-auto">
@@ -50,7 +34,11 @@ export default function PositionTable({ groups }: Props) {
             <th className="text-right px-4 py-2 font-medium">
               <span className="flex items-center justify-end gap-1">
                 P. Atual
-                <HelpCircle size={10} className="text-slate-600" title="Cotação via BRAPI/yfinance. '—' quando indisponível." />
+                <HelpCircle
+                  size={10}
+                  className="text-slate-600"
+                  title="Cotação via BRAPI/yfinance. '—' quando indisponível."
+                />
               </span>
             </th>
             <th className="text-right px-4 py-2 font-medium">Total Inv.</th>
@@ -80,54 +68,72 @@ export default function PositionTable({ groups }: Props) {
                 </td>
               </tr>
 
-              {/* Linhas de posicao */}
-              {expanded[group.label] && group.items.map(item => (
-                <tr
-                  key={`${item.ticker}-${item.asset_type}`}
-                  className="border-b border-surface-700/50 hover:bg-surface-800/30 transition-colors"
-                >
-                  <td className="px-4 py-2.5">
-                    <div className="font-semibold text-slate-200 truncate max-w-[140px]" title={item.ticker}>
-                      {item.ticker}
-                    </div>
-                    <div className="text-[10px] text-slate-500">{item.asset_label}</div>
-                  </td>
-                  <td className="text-right px-4 py-2.5 tabular-nums text-slate-300">
-                    {item.quantity % 1 === 0
-                      ? item.quantity.toLocaleString('pt-BR')
-                      : item.quantity.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 8 })}
-                  </td>
-                  <td className="text-right px-4 py-2.5 tabular-nums text-slate-300">
-                    {formatBRL(item.avg_price)}
-                  </td>
-                  {/* P. Atual — mostra '—' quando null (cotacao indisponivel) */}
-                  <td className="text-right px-4 py-2.5 tabular-nums">
-                    {item.current_price !== null && item.current_price !== undefined
-                      ? (
-                        <span className="text-slate-200">{formatBRL(item.current_price)}</span>
+              {/* Linhas de posicao — usa group.positions (campo real do PositionGroup) */}
+              {expanded[group.label] && (group.positions ?? []).map(item => {
+                // current_price vem do backend como number|null;
+                // no usePortfolio.ts o fallback já usa avg quando null, mas
+                // queremos exibir '—' quando era null originalmente.
+                // variation_value == 0 && variation_percent == 0 indica sem cotacao.
+                const hasQuote = item.current_price !== item.average_price
+                  || item.variation_value !== 0
+
+                return (
+                  <tr
+                    key={`${item.ticker}-${item.asset_type}-${item.id}`}
+                    className="border-b border-surface-700/50 hover:bg-surface-800/30 transition-colors"
+                  >
+                    <td className="px-4 py-2.5">
+                      <div
+                        className="font-semibold text-slate-200 truncate max-w-[160px]"
+                        title={item.ticker}
+                      >
+                        {item.ticker}
+                      </div>
+                      <div className="text-[10px] text-slate-500">{item.asset_label}</div>
+                    </td>
+
+                    <td className="text-right px-4 py-2.5 tabular-nums text-slate-300">
+                      {item.quantity % 1 === 0
+                        ? item.quantity.toLocaleString('pt-BR')
+                        : item.quantity.toLocaleString('pt-BR', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 8,
+                          })}
+                    </td>
+
+                    <td className="text-right px-4 py-2.5 tabular-nums text-slate-300">
+                      {formatBRL(item.average_price)}
+                    </td>
+
+                    {/* P. Atual */}
+                    <td className="text-right px-4 py-2.5 tabular-nums">
+                      <span className={hasQuote ? 'text-slate-200' : 'text-slate-600'}>
+                        {fmtPrice(item.current_price)}
+                      </span>
+                    </td>
+
+                    <td className="text-right px-4 py-2.5 tabular-nums text-slate-300">
+                      {formatBRL(item.current_value)}
+                    </td>
+
+                    <td className="text-right px-4 py-2.5 tabular-nums text-slate-300">
+                      {formatBRL(item.current_value)}
+                    </td>
+
+                    {/* Resultado */}
+                    <td className="text-right px-4 py-2.5 tabular-nums">
+                      {hasQuote ? (
+                        <div className={clsx('font-medium', signClass(item.variation_value))}>
+                          <div>{formatBRL(item.variation_value)}</div>
+                          <div className="text-[10px]">{formatPercent(item.variation_percent)}</div>
+                        </div>
                       ) : (
                         <span className="text-slate-600" title="Cotação indisponível">—</span>
-                      )
-                    }
-                  </td>
-                  <td className="text-right px-4 py-2.5 tabular-nums text-slate-300">
-                    {formatBRL(item.total_invested)}
-                  </td>
-                  <td className="text-right px-4 py-2.5 tabular-nums text-slate-300">
-                    {formatBRL(item.current_value)}
-                  </td>
-                  <td className="text-right px-4 py-2.5 tabular-nums">
-                    {item.current_price !== null && item.current_price !== undefined ? (
-                      <div className={clsx('font-medium', signClass(item.result_abs))}>
-                        <div>{formatBRL(item.result_abs)}</div>
-                        <div className="text-[10px]">{formatPercent(item.result_pct)}</div>
-                      </div>
-                    ) : (
-                      <span className="text-slate-600">—</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
             </>
           ))}
         </tbody>
