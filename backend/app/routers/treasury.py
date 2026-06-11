@@ -18,14 +18,15 @@ async def _check_portfolio_ownership(
     current_user: User,
     db: AsyncSession,
 ) -> None:
-    # get_portfolio já levanta HTTPException 404 se não encontrar
     await get_portfolio(db, portfolio_id, current_user.id)
 
 
 # ---------- CRUD endpoints ---------------------------------------------------
+# Prefix registrado em main.py: /api/v1/portfolios
+# Logo os paths aqui são apenas os suffixes: /{portfolio_id}/treasury/...
 
 @router.get(
-    "/portfolios/{portfolio_id}/treasury",
+    "/{portfolio_id}/treasury",
     response_model=list[TreasuryResponse],
     summary="Lista investimentos em Tesouro Direto de uma carteira",
 )
@@ -41,7 +42,7 @@ async def list_treasury(
 
 
 @router.post(
-    "/portfolios/{portfolio_id}/treasury",
+    "/{portfolio_id}/treasury",
     response_model=TreasuryResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Cadastra novo investimento em Tesouro Direto",
@@ -61,7 +62,7 @@ async def create_treasury(
 
 
 @router.get(
-    "/portfolios/{portfolio_id}/treasury/{investment_id}",
+    "/{portfolio_id}/treasury/{investment_id}",
     response_model=TreasuryResponse,
     summary="Detalhe de um investimento em Tesouro Direto",
 )
@@ -78,7 +79,7 @@ async def get_treasury(
 
 
 @router.patch(
-    "/portfolios/{portfolio_id}/treasury/{investment_id}",
+    "/{portfolio_id}/treasury/{investment_id}",
     response_model=TreasuryResponse,
     summary="Atualiza investimento em Tesouro Direto",
 )
@@ -97,7 +98,7 @@ async def update_treasury(
 
 
 @router.delete(
-    "/portfolios/{portfolio_id}/treasury/{investment_id}",
+    "/{portfolio_id}/treasury/{investment_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Remove investimento em Tesouro Direto",
 )
