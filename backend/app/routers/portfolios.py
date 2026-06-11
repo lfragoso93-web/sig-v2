@@ -61,7 +61,7 @@ class PositionItem(BaseModel):
     quantity:       float
     avg_price:      float
     total_invested: float
-    current_price:  float
+    current_price:  Optional[float]  # None quando cotacao nao disponivel
     current_value:  float
     result_abs:     float
     result_pct:     float
@@ -133,14 +133,19 @@ def _enrich_with_prices(items: list[dict], prices: dict[str, float]) -> list[dic
         quantity       = item['quantity']
         total_invested = item['total_invested']
 
-        current_price = prices.get(ticker) or avg_price
-        current_value = round(quantity * current_price, 2)
-        result_abs    = round(current_value - total_invested, 2)
-        result_pct    = round((result_abs / total_invested * 100) if total_invested > 0 else 0.0, 4)
+        # current_price = None quando cotacao nao disponivel (NAO usar avg como fallback)
+        raw_price     = prices.get(ticker)  # None se ausente
+        current_price = float(raw_price) if raw_price is not None else None
+
+        # Para calculo de valor/resultado: usa avg quando sem cotacao (posicao neutra)
+        effective_price = current_price if current_price is not None else avg_price
+        current_value   = round(quantity * effective_price, 2)
+        result_abs      = round(current_value - total_invested, 2) if current_price is not None else 0.0
+        result_pct      = round((result_abs / total_invested * 100) if total_invested > 0 and current_price is not None else 0.0, 4)
 
         enriched.append({
             **item,
-            'current_price': round(current_price, 6),
+            'current_price': round(current_price, 6) if current_price is not None else None,
             'current_value': current_value,
             'result_abs':    result_abs,
             'result_pct':    result_pct,
@@ -155,10 +160,6 @@ async def _calc_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
 
 
 async def _sum_dividends(db: AsyncSession, portfolio_id: int, cutoff: Optional[date] = None) -> float:
-    """
-    Soma proventos usando SQL puro para evitar erro de coluna ausente no modelo ORM.
-    Suporta tanto tabelas com coluna total_value quanto sem ela.
-    """
     try:
         if cutoff:
             rows = await db.execute(
@@ -264,8 +265,7 @@ async def portfolio_summary(
     result_abs     = round(total_current - total_invested, 2)
     result_pct     = round((result_abs / total_invested * 100) if total_invested > 0 else 0.0, 4)
 
-    # Proventos via SQL puro (evita erro de coluna asset_id ausente no banco)
-    cutoff = date.today() - timedelta(days=365)
+    cutoff          = date.today() - timedelta(days=365)
     proventos_12m   = await _sum_dividends(db, portfolio_id, cutoff=cutoff)
     total_proventos = await _sum_dividends(db, portfolio_id)
 

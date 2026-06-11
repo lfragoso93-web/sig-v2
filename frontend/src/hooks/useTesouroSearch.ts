@@ -4,6 +4,7 @@ import api from '@/services/api'
 export interface TreasuryItem {
   name:          string
   ticker:        string
+  slug:          string | null   // adicionado: slug unico do titulo (ex: tesouro-selic-01032031)
   indexer:       string
   rate:          number | null
   maturity_date: string | null
@@ -11,15 +12,15 @@ export interface TreasuryItem {
 }
 
 /**
- * Hook com debounce de 700 ms para buscar titulos do Tesouro Direto via BRAPI.
- * So dispara quando enabled=true e q tiver >= 3 chars.
+ * Hook com debounce de 500ms para buscar titulos do Tesouro Direto.
+ * Dispara a partir de 2 chars (era 3, reduzido para melhor UX).
  */
 export function useTesouroSearch(q: string, enabled = true) {
   const [items,   setItems]   = useState<TreasuryItem[]>([])
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    if (!enabled || q.trim().length < 3) {
+    if (!enabled || q.trim().length < 2) {
       setItems([])
       return
     }
@@ -27,14 +28,16 @@ export function useTesouroSearch(q: string, enabled = true) {
     setLoading(true)
     const timer = setTimeout(async () => {
       try {
-        const res = await api.get<TreasuryItem[]>(`/assets/tesouro/search?q=${encodeURIComponent(q.trim())}`)
+        const res = await api.get<TreasuryItem[]>(
+          `/assets/tesouro/search?q=${encodeURIComponent(q.trim())}`
+        )
         setItems(res.data)
       } catch {
         setItems([])
       } finally {
         setLoading(false)
       }
-    }, 700)
+    }, 500)
 
     return () => clearTimeout(timer)
   }, [q, enabled])

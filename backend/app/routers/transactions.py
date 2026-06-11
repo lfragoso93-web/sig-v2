@@ -22,16 +22,21 @@ async def _get_portfolio(portfolio_id: int, user: User, db: AsyncSession) -> Por
     )
     p = result.scalar_one_or_none()
     if not p:
-        raise HTTPException(status_code=404, detail="Carteira n\u00e3o encontrada.")
+        raise HTTPException(status_code=404, detail="Carteira não encontrada.")
     return p
 
 
-async def _ensure_currency_column(db: AsyncSession) -> None:
-    """Adiciona coluna currency se ainda nao existir (migration inline)."""
+async def _ensure_migrations(db: AsyncSession) -> None:
+    """Migrations inline: garante currency e ticker(100) na tabela transactions."""
     try:
+        # currency
         await db.execute(text(
             "ALTER TABLE transactions ADD COLUMN IF NOT EXISTS "
             "currency VARCHAR(10) NOT NULL DEFAULT 'BRL'"
+        ))
+        # aumenta ticker para 100 chars (slugs do Tesouro Direto tem ate ~60 chars)
+        await db.execute(text(
+            "ALTER TABLE transactions ALTER COLUMN ticker TYPE VARCHAR(100)"
         ))
         await db.commit()
     except Exception:
@@ -61,7 +66,7 @@ async def create_transaction(
     current_user: User = Depends(get_current_user),
 ):
     await _get_portfolio(portfolio_id, current_user, db)
-    await _ensure_currency_column(db)
+    await _ensure_migrations(db)
 
     tx = Transaction(
         portfolio_id = portfolio_id,
@@ -98,7 +103,7 @@ async def delete_transaction(
     )
     tx = result.scalar_one_or_none()
     if not tx:
-        raise HTTPException(status_code=404, detail="Transa\u00e7\u00e3o n\u00e3o encontrada.")
+        raise HTTPException(status_code=404, detail="Transação não encontrada.")
 
     await db.delete(tx)
     await db.commit()

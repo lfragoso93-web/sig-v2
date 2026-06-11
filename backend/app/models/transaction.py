@@ -14,7 +14,7 @@ class Transaction(Base):
 
     id           = Column(Integer, primary_key=True, index=True)
     portfolio_id = Column(Integer, ForeignKey("portfolios.id", ondelete="CASCADE"), nullable=False)
-    ticker       = Column(String(20), nullable=False, index=True)
+    ticker       = Column(String(100), nullable=False, index=True)  # aumentado de 20 para 100 (slugs do Tesouro)
     asset_type   = Column(String(50), nullable=False)
     operation    = Column(SAEnum(OperationType), nullable=False)
     quantity     = Column(Float, nullable=False)
