@@ -10,6 +10,40 @@ const fmtBRL = (v: number | null | undefined) =>
 const fmt = (v: number | null | undefined, dec = 2) =>
   v == null ? '—' : v.toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec })
 
+/**
+ * Converte o slug da BRAPI em nome amigável para exibição.
+ * Ex: TESOURO-SELIC-01032031        → Tesouro Selic 2031
+ *     TESOURO-IPCA-MAIS-01032035    → Tesouro IPCA+ 2035
+ *     TESOURO-PREFIXADO-01012026    → Tesouro Prefixado 2026
+ *     TESOURO-RENDA-PLUS-01032065   → Tesouro Renda+ 2065
+ *     TESOURO-EDUCA-MAIS-01032045   → Tesouro Educa+ 2045
+ */
+function formatTreasuryName(ticker: string): string {
+  // Remove o prefixo TESOURO-
+  const s = ticker.toUpperCase().replace(/^TESOURO-/, '')
+
+  // Extrai a data no formato DDMMYYYY (últimos 8 dígitos antes do fim)
+  const dateMatch = s.match(/(\d{8})$/)
+  const year = dateMatch ? dateMatch[1].slice(4) : ''
+
+  // Remove o trecho de data para processar o tipo
+  const typeRaw = s.replace(/[-_]?\d{8}$/, '')
+
+  const TYPE_MAP: Record<string, string> = {
+    'SELIC':             'Selic',
+    'IPCA-MAIS':         'IPCA+',
+    'IPCA-MAIS-COM-JUROS-SEMESTRAIS': 'IPCA+ c/ Juros Semestrais',
+    'PREFIXADO':         'Prefixado',
+    'PREFIXADO-COM-JUROS-SEMESTRAIS': 'Prefixado c/ Juros Semestrais',
+    'RENDA-PLUS':        'Renda+',
+    'EDUCA-MAIS':        'Educa+',
+  }
+
+  const friendlyType = TYPE_MAP[typeRaw] ?? typeRaw.replace(/-/g, ' ')
+
+  return year ? `Tesouro ${friendlyType} ${year}` : `Tesouro ${friendlyType}`
+}
+
 // ── Componente ────────────────────────────────────────────────────────────────
 
 export default function TesouroDiretoPage() {
@@ -112,14 +146,26 @@ export default function TesouroDiretoPage() {
               const resPct  = pos.variation_percent
               const isPos   = res >= 0
               const isZero  = res === 0
+              const name    = formatTreasuryName(pos.ticker)
 
               return (
                 <tr key={pos.id} style={{ borderBottom: '1px solid var(--color-divider)' }}>
                   {/* Título */}
                   <td style={{ padding: 'var(--space-2) var(--space-3)', fontWeight: 500, color: 'var(--color-text)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                      <Landmark size={13} style={{ color: 'var(--color-text-faint)', flexShrink: 0 }} />
-                      <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                        <Landmark size={13} style={{ color: 'var(--color-text-faint)', flexShrink: 0 }} />
+                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 240 }}>
+                          {name}
+                        </span>
+                      </div>
+                      <span style={{
+                        fontSize: 'var(--text-xs)',
+                        color: 'var(--color-text-faint)',
+                        paddingLeft: 21,   /* alinha com o texto acima (icon 13px + gap 8px) */
+                        fontFamily: 'monospace',
+                        letterSpacing: '0.02em',
+                      }}>
                         {pos.ticker}
                       </span>
                     </div>
