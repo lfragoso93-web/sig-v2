@@ -92,8 +92,9 @@ app.include_router(admin.router,        prefix=f"{PREFIX}/admin",       tags=["a
 
 # Core financeiro
 app.include_router(portfolios.router,   prefix=f"{PREFIX}/portfolios",  tags=["portfolios"])
-# transactions montado sob /portfolios (rotas: /{portfolio_id}/transactions)
+# transactions e treasury montados sob /portfolios (rotas: /{portfolio_id}/...)
 app.include_router(transactions.router, prefix=f"{PREFIX}/portfolios",  tags=["transactions"])
+app.include_router(treasury.router,     prefix=f"{PREFIX}/portfolios",  tags=["treasury"])
 app.include_router(positions.router,    prefix=f"{PREFIX}/positions",   tags=["positions"])
 app.include_router(dividends.router,    prefix=f"{PREFIX}/dividends",   tags=["dividends"])
 app.include_router(proventos.router,    prefix=f"{PREFIX}/proventos",   tags=["proventos"])
@@ -110,7 +111,6 @@ app.include_router(goals.router,        prefix=f"{PREFIX}/goals",       tags=["g
 app.include_router(irpf.router,         prefix=f"{PREFIX}/irpf",        tags=["irpf"])
 app.include_router(analysis.router,     prefix=f"{PREFIX}/analysis",    tags=["analysis"])
 app.include_router(fixed_income.router, prefix=f"{PREFIX}/fixed-income", tags=["fixed_income"])
-app.include_router(treasury.router,     prefix=f"{PREFIX}/treasury",    tags=["treasury"])
 
 import os
 if os.getenv("ADMIN_SECRET"):
