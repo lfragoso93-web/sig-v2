@@ -12,9 +12,13 @@ import ResumePage       from '@/pages/ResumePage'
 import RentabilidadePage from '@/pages/RentabilidadePage'
 import Transacoes        from '@/pages/Transacoes'
 import Configuracoes     from '@/pages/Configuracoes'
-
-// Lazy stubs — ainda não implementados
 import ProventosPage    from '@/pages/ProventosPage'
+
+// Patrimônio
+import PatrimonioPage         from '@/pages/patrimonio/PatrimonioPage'
+import RendaVariavelPage      from '@/pages/patrimonio/RendaVariavelPage'
+import TesouroDiretoPage      from '@/pages/patrimonio/TesouroDiretoPage'
+import RendaFixaPage          from '@/pages/patrimonio/RendaFixaPage'
 
 export const router = createBrowserRouter([
   // Landing pública
@@ -46,6 +50,12 @@ export const router = createBrowserRouter([
       { path: 'transacoes',             element: <Transacoes /> },
       { path: 'proventos',              element: <ProventosPage /> },
       { path: 'configuracoes',          element: <Configuracoes /> },
+
+      // Módulo Patrimônio
+      { path: 'patrimonio',             element: <PatrimonioPage /> },
+      { path: 'patrimonio/renda-variavel', element: <RendaVariavelPage /> },
+      { path: 'patrimonio/tesouro',     element: <TesouroDiretoPage /> },
+      { path: 'patrimonio/renda-fixa',  element: <RendaFixaPage /> },
     ],
   },
 
