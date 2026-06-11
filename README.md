@@ -210,6 +210,7 @@ sig-v2/
         │   ├── LancamentosPage.tsx     # modal de lançamento (Ação/FII/ETF/Stock/Tesouro)
         │   ├── TransacoesPage.tsx
         │   ├── ProventosPage.tsx
+        │   ├── PatrimonioPage.tsx      # painel de patrimônio consolidado com filtro por classe
         │   └── RentabilidadePage.tsx
         └── services/
             └── api.ts                  # axios instance com interceptor de refresh token
@@ -234,6 +235,7 @@ sig-v2/
 | **Eventos Corporativos** | Grupamento, desdobramento, bonificação com ajuste de posição |
 | **Rentabilidade** | Retorno por carteira (absoluto e %) |
 | **Admin** | Painel de usuários e configurações (is_superuser) |
+| **PatrimonioPage** | Conectada ao `selectedPortfolioId` do store; KPIs, alocação por classe, donut chart e tabela de posições; filtro de classe interativo |
 
 ### 🚧 Parcialmente Implementado
 
@@ -243,9 +245,9 @@ sig-v2/
 | **Análise IA (Gemini)** | Router stub | `analysis_service.py`, prompts, integração Gemini, tela frontend |
 | **Renda Fixa** | Model + router stub | CRUD completo backend + tela frontend |
 | **Metas (Goals)** | Model criado | CRUD backend + tela frontend com progresso |
-| **PatrimonioPage** | Página stub criada | Conectar a posições consolidadas e gráfico histórico |
 | **Benchmarks** | Estrutura preparada | Integração CDI/IBOV/IPCA na tela de Rentabilidade |
 | **FX (câmbio)** | Router básico | USD/BRL em tempo real para consolidar patrimônio em BRL |
+| **Tesouro Direto — edição/exclusão** | Cadastro funcional | Editar e excluir títulos; `treasury_service.py` quase vazio |
 
 ### 🔧 Dívidas Técnicas Conhecidas
 
@@ -272,6 +274,8 @@ Registro de todos os bugs identificados e corrigidos durante o desenvolvimento:
 | 4 | **Cripto com valor errado** | `CRIPTO` estava em `INTL_TYPES` → cotação via yfinance em USD; frontend exibia em BRL | Movido para `BR_TYPES`; cripto via `_fetch_brapi_crypto()` separado (BRAPI `/v2/crypto?currency=BRL`) |
 | 5 | **Crash `Cannot read properties of undefined (reading 'map')`** | `PositionTable` usava `group.items` mas `PositionGroup` do hook usa `group.positions` | `PositionTable` importa `PositionGroup` diretamente de `usePortfolio.ts`; usa `group.positions` |
 | 6 | **Nome correto do ativo não aparecia no autocomplete** | Lógica de label display no AddTransactionModal não usava o campo `name` retornado pelo backend | Corrigido para usar `item.name` quando disponível |
+| 7 | **PatrimonioPage não carregava dados** | `portfolioId` caia para `portfolios?.[0]?.id ?? 0` antes da carteira ser selecionada; `usePositions(0)` disparava com ID inválido | `PatrimonioPage` passa a usar `selectedPortfolioId` do store Zustand diretamente, sem fallback; exibe empty state se nenhuma carteira selecionada |
+| 8 | **PatrimonioPage tinha seletor de carteira duplicado** | A página tinha um switcher de carteiras próprio, redundante com o seletor global do header | Removido o seletor da página; toda navegação de carteiras usa exclusivamente o header global |
 
 ---
 
@@ -382,7 +386,7 @@ Base URL: `http://localhost/api/v1`
 | `/app/proventos` | `ProventosPage.tsx` | ✅ |
 | `/app/rentabilidade` | `RentabilidadePage.tsx` | ✅ |
 | `/app/configuracoes` | `Configuracoes.tsx` | ✅ |
-| `/app/patrimonio` | `PatrimonioPage.tsx` | 🚧 Stub |
+| `/app/patrimonio` | `PatrimonioPage.tsx` | ✅ KPIs, alocação por classe, donut, posições filtradas |
 | `/app/irpf` | `IRPFPage.tsx` | 🚧 Stub |
 | `/app/analise` | `AnalisePage.tsx` | 🚧 Stub |
 | `/app/metas` | `MetasPage.tsx` | 🚧 Stub |
@@ -441,61 +445,55 @@ docker compose exec backend alembic upgrade head
    - Criar `alembic revision --autogenerate -m "increase_ticker_length"` e remover a migration inline
    - Arquivo: `backend/alembic/versions/`
 
-2. **PatrimonioPage — conectar à API**
-   - Página existe como stub em `/app/patrimonio`
-   - Conectar a `usePositions()` e `usePortfolioSummary()` para exibir patrimônio total consolidado
-   - Adicionar gráfico de evolução histórica (hook `usePatrimonioHistory` existe mas retorna array vazio)
-   - Arquivo: `frontend/src/pages/PatrimonioPage.tsx`
-
-3. **Renda Fixa — CRUD completo**
+2. **Renda Fixa — CRUD completo**
    - Backend: `routers/fixed_income.py` é stub (77 bytes) — implementar endpoints CRUD
    - Service: `services/fixed_income_service.py` não existe — criar
    - Frontend: tela de cadastro e listagem de RF, integrar ao modal de lançamentos
    - Modelo já existe: `models/fixed_income.py`
 
-4. **Tesouro Direto — edição e exclusão**
+3. **Tesouro Direto — edição e exclusão**
    - Cadastro via modal já funciona ✅
    - Falta: editar e excluir títulos na tabela de posições
    - Backend: `treasury_service.py` está quase vazio — implementar `get`, `update`, `delete`
 
 #### 🟡 Média Prioridade
 
-5. **Benchmarks na tela de Rentabilidade**
+4. **Benchmarks na tela de Rentabilidade**
    - Integrar CDI (API do Banco Central), IBOV e IPCA
    - Exibir gráfico comparativo na `RentabilidadePage.tsx`
    - Hook `usePerformance.ts` já existe e busca `/performance`
 
-6. **Análise IA (Gemini)**
+5. **Análise IA (Gemini)**
    - Criar `services/analysis_service.py` com prompts de análise de carteira
    - Conectar `GEMINI_API_KEY` do `.env`
    - Implementar `routers/analysis.py` (stub com 78 bytes)
    - Página `AnalisePage.tsx` já existe como stub
 
-7. **Metas (Goals)**
+6. **Metas (Goals)**
    - Model `goal.py` existe
    - `routers/goals.py` é stub (77 bytes) — implementar CRUD
    - Frontend: `MetasPage.tsx` stub — implementar tela com progresso visual
 
-8. **FX (câmbio)**
+7. **FX (câmbio)**
    - `routers/fx.py` tem implementação básica (324 bytes)
    - Completar para buscar USD/BRL em tempo real via BRAPI ou BCB
    - Usar na consolidação de patrimônio para converter ativos em USD para BRL
 
 #### 🟢 Baixa Prioridade / Qualidade
 
-9. **Limpeza de arquivos duplicados**
+8. **Limpeza de arquivos duplicados**
    - Existem pares legados: `Resumo.tsx` / `ResumePage.tsx`, `Transacoes.tsx` / `TransacoesPage.tsx`, etc.
    - Verificar qual versão está ativa no router, remover a obsoleta
 
-10. **IRPF**
-    - Módulo mais complexo — model e router stub existem
-    - Implementar: apuração mensal, cálculo de ganho de capital, isenções (ações até R$20k/mês), DARFs, exportação
+9. **IRPF**
+   - Módulo mais complexo — model e router stub existem
+   - Implementar: apuração mensal, cálculo de ganho de capital, isenções (ações até R$20k/mês), DARFs, exportação
 
-11. **Testes automatizados**
+10. **Testes automatizados**
     - Criar `backend/tests/` com pytest
     - Prioridade: `quotes_service`, `portfolios` (cálculo de posições), `transactions`
 
-12. **Exportação de dados**
+11. **Exportação de dados**
     - CSV/Excel de transações e posições
     - Botão na `TransacoesPage.tsx`
 
@@ -519,3 +517,8 @@ docker compose exec backend alembic upgrade head
 **Cripto:**
 - Cotações via BRAPI `/api/v2/crypto?coin={TICKER}&currency=BRL` — retorna em BRL diretamente
 - `asset_type = CRIPTO` → vai para `_fetch_brapi_crypto()`, não para yfinance
+
+**Seleção de carteira:**
+- `selectedPortfolioId` vive no store Zustand (`useAppStore`)
+- Todas as páginas devem ler `selectedPortfolioId` do store — sem fallback para `portfolios[0]`
+- Se `portfolioId` for `null`, exibir empty state orientando o usuário a selecionar uma carteira no header
