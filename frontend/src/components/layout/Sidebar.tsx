@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
   TrendingUp,
@@ -9,14 +9,27 @@ import {
   Briefcase,
   Plus,
   CheckCircle2,
+  Wallet,
+  TrendingDown,
+  Building2,
+  Banknote,
 } from 'lucide-react'
 import { usePortfolios, useCreatePortfolio } from '@/hooks/usePortfolios'
 import { useAppStore } from '@/store/appStore'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Modal from '@/components/ui/Modal'
 
-const NAV = [
+const NAV_TOP = [
   { to: '/carteira',                  icon: LayoutDashboard,  label: 'Resumo'        },
+]
+
+const NAV_PATRIMONIO_SUBS = [
+  { to: '/carteira/patrimonio/renda-variavel', icon: TrendingDown, label: 'Renda Variável' },
+  { to: '/carteira/patrimonio/tesouro',        icon: Building2,    label: 'Tesouro Direto' },
+  { to: '/carteira/patrimonio/renda-fixa',     icon: Banknote,     label: 'Renda Fixa'     },
+]
+
+const NAV_BOTTOM = [
   { to: '/carteira/rentabilidade',    icon: TrendingUp,        label: 'Rentabilidade' },
   { to: '/carteira/transacoes',       icon: ArrowLeftRight,    label: 'Transações'    },
   { to: '/carteira/proventos',        icon: Landmark,          label: 'Proventos'     },
@@ -28,13 +41,22 @@ export default function Sidebar() {
   const { selectedPortfolioId, setSelectedPortfolio } = useAppStore()
   const createPortfolio = useCreatePortfolio()
   const navigate = useNavigate()
+  const location = useLocation()
 
-  const [dropdownOpen, setDropdownOpen] = useState(false)
-  const [modalOpen, setModalOpen]       = useState(false)
-  const [name, setName]                 = useState('')
-  const [description, setDescription]  = useState('')
-  const [createdName, setCreatedName]   = useState<string | null>(null)
-  const [error, setError]               = useState<string | null>(null)
+  const [dropdownOpen, setDropdownOpen]   = useState(false)
+  const [modalOpen, setModalOpen]         = useState(false)
+  const [name, setName]                   = useState('')
+  const [description, setDescription]    = useState('')
+  const [createdName, setCreatedName]     = useState<string | null>(null)
+  const [error, setError]                 = useState<string | null>(null)
+
+  // Abre submenu automaticamente se estiver em qualquer rota de patrimônio
+  const isPatrimonioActive = location.pathname.startsWith('/carteira/patrimonio')
+  const [patrimonioOpen, setPatrimonioOpen] = useState(isPatrimonioActive)
+
+  useEffect(() => {
+    if (isPatrimonioActive) setPatrimonioOpen(true)
+  }, [isPatrimonioActive])
 
   const selected = portfolios.find(p => p.id === selectedPortfolioId)
 
@@ -89,9 +111,18 @@ export default function Sidebar() {
 
   function handleGoToResumo() {
     handleClose()
-    // Rota correta do app — nao /app/dashboard
     navigate('/carteira')
   }
+
+  const navLinkStyle = ({ isActive }: { isActive: boolean }) => ({
+    background: isActive ? 'oklch(from var(--color-primary) l c h / 0.1)' : 'transparent',
+    color: isActive ? 'var(--color-primary)' : 'var(--color-text-muted)',
+  })
+
+  const navLinkClass = ({ isActive }: { isActive: boolean }) =>
+    `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+      isActive ? 'font-semibold' : 'font-normal'
+    }`
 
   return (
     <>
@@ -164,8 +195,6 @@ export default function Sidebar() {
                   {p.name}
                 </button>
               ))}
-
-              {/* Divider + Nova carteira */}
               <div style={{ borderTop: '1px solid var(--color-divider)' }}>
                 <button
                   onClick={openModal}
@@ -181,24 +210,78 @@ export default function Sidebar() {
 
         {/* Nav */}
         <nav className="flex flex-col gap-0.5 px-3 flex-1">
-          {NAV.map(({ to, icon: Icon, label }) => (
+          {/* Resumo */}
+          {NAV_TOP.map(({ to, icon: Icon, label }) => (
             <NavLink
               key={to}
               to={to}
-              end={to === '/carteira'}
-              className={({ isActive }) =>
-                `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
-                  isActive ? 'font-semibold' : 'font-normal'
-                }`
-              }
-              style={({ isActive }) => ({
-                background: isActive
+              end
+              className={navLinkClass}
+              style={navLinkStyle}
+            >
+              <Icon size={15} />
+              {label}
+            </NavLink>
+          ))}
+
+          {/* ── Patrimônio (com submenu) ── */}
+          <div>
+            {/* Botão pai: navega E expande */}
+            <button
+              onClick={() => {
+                navigate('/carteira/patrimonio')
+                setPatrimonioOpen(o => !o)
+              }}
+              className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors"
+              style={{
+                background: isPatrimonioActive
                   ? 'oklch(from var(--color-primary) l c h / 0.1)'
                   : 'transparent',
-                color: isActive
+                color: isPatrimonioActive
                   ? 'var(--color-primary)'
                   : 'var(--color-text-muted)',
-              })}
+                fontWeight: isPatrimonioActive ? 600 : 400,
+              }}
+            >
+              <span className="flex items-center gap-2.5">
+                <Wallet size={15} />
+                Patrimônio
+              </span>
+              <ChevronDown
+                size={13}
+                style={{
+                  transition: 'transform var(--transition-interactive)',
+                  transform: patrimonioOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                  flexShrink: 0,
+                }}
+              />
+            </button>
+
+            {/* Subitens */}
+            {patrimonioOpen && (
+              <div className="flex flex-col gap-0.5 mt-0.5 ml-3 pl-3" style={{ borderLeft: '1px solid var(--color-divider)' }}>
+                {NAV_PATRIMONIO_SUBS.map(({ to, icon: Icon, label }) => (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    className={navLinkClass}
+                    style={navLinkStyle}
+                  >
+                    <Icon size={14} />
+                    <span className="text-xs">{label}</span>
+                  </NavLink>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Demais itens */}
+          {NAV_BOTTOM.map(({ to, icon: Icon, label }) => (
+            <NavLink
+              key={to}
+              to={to}
+              className={navLinkClass}
+              style={navLinkStyle}
             >
               <Icon size={15} />
               {label}
@@ -282,7 +365,6 @@ export default function Sidebar() {
                 onBlur={e  => (e.target.style.borderColor = 'var(--color-border)')}
               />
             </div>
-
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
               <label style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-muted)' }}>
                 Descrição <span style={{ color: 'var(--color-text-faint)' }}>(opcional)</span>
@@ -308,13 +390,11 @@ export default function Sidebar() {
                 onBlur={e  => (e.target.style.borderColor = 'var(--color-border)')}
               />
             </div>
-
             {error && (
               <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-error)', margin: 0 }}>
                 {error}
               </p>
             )}
-
             <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'flex-end' }}>
               <button
                 type="button"
