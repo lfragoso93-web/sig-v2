@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react'
 import {
   TrendingUp, TrendingDown, BarChart2,
-  Activity, DollarSign, RefreshCw, PackageOpen,
+  Activity, DollarSign, RefreshCw, Wallet,
 } from 'lucide-react'
 import clsx from 'clsx'
 import {
-  usePortfolioList,
   usePortfolioSummary,
   useAssetDistribution,
   usePositions,
@@ -44,22 +43,15 @@ const ASSET_TYPE_COLORS: Record<string, string> = {
 }
 
 export default function PatrimonioPage() {
-  const globalPortfolioId = useAppStore(s => s.selectedPortfolioId)
-  const setGlobal         = useAppStore(s => s.setSelectedPortfolioId)
+  // Usa exatamente o portfolio que o usuário selecionou no header — sem fallback
+  const portfolioId = useAppStore(s => s.selectedPortfolioId)
 
-  const { data: portfolios, isLoading: loadingPortfolios } = usePortfolioList()
   const [activeTypeFilter, setActiveTypeFilter] = useState<string | null>(null)
-
-  const portfolioId: number =
-    globalPortfolioId ??
-    (portfolios?.[0]?.id ?? 0)
 
   const { data: summary,      isLoading: loadingSummary   } = usePortfolioSummary(portfolioId)
   const { data: distribution, isLoading: loadingDist      } = useAssetDistribution(portfolioId)
   const { data: positions,    isLoading: loadingPositions  } = usePositions(portfolioId)
 
-  // ── agrega todas as posições individuais para contagem e breakdown
-  // usePositions já retorna PositionGroup[], cada grupo tem .positions (não .items)
   const allPositions = useMemo(() => {
     if (!positions) return []
     return positions.flatMap((g: PositionGroup) => g.positions ?? [])
@@ -93,21 +85,14 @@ export default function PatrimonioPage() {
       .filter((g: PositionGroup) => g.positions.length > 0)
   }, [positions, activeTypeFilter])
 
-  if (loadingPortfolios) {
-    return (
-      <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[...Array(4)].map((_, i) => <SkeletonCard key={i} />)}
-      </div>
-    )
-  }
-
-  if (!portfolios?.length) {
+  // Nenhuma carteira selecionada no header ainda
+  if (!portfolioId) {
     return (
       <div className="p-6">
         <EmptyState
-          icon={PackageOpen}
-          title="Nenhuma carteira encontrada"
-          description="Crie sua primeira carteira para começar a acompanhar seu patrimônio."
+          icon={Wallet}
+          title="Nenhuma carteira selecionada"
+          description="Selecione uma carteira no menu superior para visualizar o patrimônio."
         />
       </div>
     )
@@ -120,26 +105,8 @@ export default function PatrimonioPage() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-base font-semibold text-slate-100">Patrimônio</h1>
-          <p className="text-xs text-slate-500 mt-0.5">Visão consolidada de todos os seus ativos</p>
+          <p className="text-xs text-slate-500 mt-0.5">Visão consolidada dos ativos da carteira selecionada</p>
         </div>
-        {portfolios.length > 1 && (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {portfolios.map(p => (
-              <button
-                key={p.id}
-                onClick={() => setGlobal(p.id)}
-                className={clsx(
-                  'px-3 py-1.5 rounded-md text-xs font-medium transition-colors duration-150',
-                  portfolioId === p.id
-                    ? 'bg-brand-600 text-white'
-                    : 'bg-surface-800 border border-surface-600 text-slate-400 hover:bg-surface-700 hover:text-slate-200',
-                )}
-              >
-                {p.name}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* ── KPIs ── */}
@@ -185,7 +152,7 @@ export default function PatrimonioPage() {
           </>
         ) : (
           <div className="col-span-4 py-8 text-center text-xs text-slate-500">
-            Nenhum dado de resumo disponível. Adicione lançamentos para começar.
+            Nenhum dado disponível. Adicione lançamentos para começar.
           </div>
         )}
       </div>
