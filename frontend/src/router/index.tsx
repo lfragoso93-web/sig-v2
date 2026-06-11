@@ -29,10 +29,10 @@ export const router = createBrowserRouter([
     path: '/auth',
     element: <AuthLayout />,
     children: [
-      { index: true,              element: <Navigate to="login" replace /> },
-      { path: 'login',            element: <Login /> },
-      { path: 'registro',         element: <Register /> },
-      { path: 'esqueceu-senha',   element: <EsqueceuSenha /> },
+      { index: true,            element: <Navigate to="login" replace /> },
+      { path: 'login',          element: <Login /> },
+      { path: 'registro',       element: <Register /> },
+      { path: 'esqueceu-senha', element: <EsqueceuSenha /> },
     ],
   },
 
@@ -45,17 +45,23 @@ export const router = createBrowserRouter([
     path: '/carteira',
     element: <ProtectedRoute><AppLayout /></ProtectedRoute>,
     children: [
-      { index: true,                    element: <ResumePage /> },
-      { path: 'rentabilidade',          element: <RentabilidadePage /> },
-      { path: 'transacoes',             element: <Transacoes /> },
-      { path: 'proventos',              element: <ProventosPage /> },
-      { path: 'configuracoes',          element: <Configuracoes /> },
+      { index: true,               element: <ResumePage /> },
+      { path: 'rentabilidade',     element: <RentabilidadePage /> },
+      { path: 'transacoes',        element: <Transacoes /> },
+      { path: 'proventos',         element: <ProventosPage /> },
+      { path: 'configuracoes',     element: <Configuracoes /> },
 
-      // Módulo Patrimônio
-      { path: 'patrimonio',             element: <PatrimonioPage /> },
-      { path: 'patrimonio/renda-variavel', element: <RendaVariavelPage /> },
-      { path: 'patrimonio/tesouro',     element: <TesouroDiretoPage /> },
-      { path: 'patrimonio/renda-fixa',  element: <RendaFixaPage /> },
+      // Módulo Patrimônio — PatrimonioPage renderiza o Outlet das sub-abas
+      {
+        path: 'patrimonio',
+        element: <PatrimonioPage />,
+        children: [
+          { index: true,              element: <Navigate to="renda-variavel" replace /> },
+          { path: 'renda-variavel',   element: <RendaVariavelPage /> },
+          { path: 'tesouro',          element: <TesouroDiretoPage /> },
+          { path: 'renda-fixa',       element: <RendaFixaPage /> },
+        ],
+      },
     ],
   },
 

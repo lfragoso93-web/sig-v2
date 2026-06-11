@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Pencil, Trash2, TrendingUp, TrendingDown, Minus, Loader2 } from 'lucide-react'
+import { Pencil, Trash2, TrendingUp, TrendingDown, Minus, Loader2 } from 'lucide-react'
 import {
   useTreasury,
   useCreateTreasury,
@@ -9,6 +9,7 @@ import {
   TreasuryCreatePayload,
 } from '@/hooks/useTreasury'
 import { useTesouroSearch } from '@/hooks/useTesouroSearch'
+import { useAppStore } from '@/store/appStore'
 
 // ── helpers ─────────────────────────────────────────────────────
 
@@ -51,15 +52,12 @@ function toPayload(f: FormState): TreasuryCreatePayload {
   }
 }
 
-// ── Props ───────────────────────────────────────────────────────
-
-interface Props {
-  portfolioId: number
-}
-
 // ── Componente principal ───────────────────────────────────────────
 
-export default function TesouroDiretoPage({ portfolioId }: Props) {
+export default function TesouroDiretoPage() {
+  // portfolioId vem do store global (carteira ativa selecionada no header)
+  const portfolioId = useAppStore(s => s.selectedPortfolioId) ?? 0
+
   const { data: investments = [], isLoading } = useTreasury(portfolioId)
   const createMut = useCreateTreasury(portfolioId)
   const updateMut = useUpdateTreasury(portfolioId)
@@ -71,7 +69,7 @@ export default function TesouroDiretoPage({ portfolioId }: Props) {
   const [form,      setForm]      = useState<FormState>(emptyForm())
   const [formError, setFormError] = useState('')
 
-  // autocomplete: query separada para controlar o hook
+  // autocomplete
   const [tesouroQuery, setTesouroQuery] = useState('')
   const [showSugg,     setShowSugg]     = useState(false)
   const { items: tesouroItems } = useTesouroSearch(tesouroQuery, showModal)
@@ -80,15 +78,6 @@ export default function TesouroDiretoPage({ portfolioId }: Props) {
   const [deleteTarget, setDeleteTarget] = useState<TreasuryInvestment | null>(null)
 
   // ── handlers modal ───────────────────────────────────────────
-
-  function openCreate() {
-    setEditItem(null)
-    setForm(emptyForm())
-    setFormError('')
-    setTesouroQuery('')
-    setShowSugg(false)
-    setShowModal(true)
-  }
 
   function openEdit(item: TreasuryInvestment) {
     setEditItem(item)
@@ -142,22 +131,12 @@ export default function TesouroDiretoPage({ portfolioId }: Props) {
     setDeleteTarget(null)
   }
 
-  // ── render ────────────────────────────────────────────────────
-
   const isMutating = createMut.isPending || updateMut.isPending
+
+  // ── render ────────────────────────────────────────────────────
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <h3 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 600, color: 'var(--color-text)' }}>
-          Tesouro Direto
-        </h3>
-        <button onClick={openCreate} style={btnPrimary}>
-          <Plus size={15} /> Adicionar
-        </button>
-      </div>
 
       {/* Tabela */}
       {isLoading ? (
@@ -170,7 +149,7 @@ export default function TesouroDiretoPage({ portfolioId }: Props) {
           color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)',
           border: '1px dashed var(--color-border)', borderRadius: 'var(--radius-lg)',
         }}>
-          Nenhum título cadastrado. Clique em “Adicionar” para começar.
+          Nenhum título cadastrado. Clique em “Novo Laçamento” no topo para começar.
         </div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
@@ -253,19 +232,14 @@ export default function TesouroDiretoPage({ portfolioId }: Props) {
         </div>
       )}
 
-      {/* ===== Modal Cadastro / Edição ===== */}
+      {/* ===== Modal Edição ===== */}
       {showModal && (
-        <div
-          style={overlayStyle}
-          onClick={e => { if (e.target === e.currentTarget) closeModal() }}
-        >
+        <div style={overlayStyle} onClick={e => { if (e.target === e.currentTarget) closeModal() }}>
           <div style={modalStyle}>
             <h2 style={{ margin: '0 0 var(--space-4)', fontSize: 'var(--text-base)', fontWeight: 600 }}>
-              {editItem ? 'Editar Título' : 'Adicionar Título'}
+              Editar Título
             </h2>
-
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-
               {/* brapi_name autocomplete */}
               <div style={{ position: 'relative' }}>
                 <label style={labelStyle}>Título</label>
@@ -320,20 +294,14 @@ export default function TesouroDiretoPage({ portfolioId }: Props) {
                   </ul>
                 )}
               </div>
-
               {/* valor investido */}
               <div>
                 <label style={labelStyle}>Valor Investido (R$)</label>
-                <input
-                  type="number" step="0.01" min="0.01"
+                <input type="number" step="0.01" min="0.01"
                   value={form.invested_value}
                   onChange={e => setField('invested_value', e.target.value)}
-                  placeholder="1000.00"
-                  required
-                  style={inputStyle}
-                />
+                  placeholder="1000.00" required style={inputStyle} />
               </div>
-
               {/* datas */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
                 <div>
@@ -349,23 +317,20 @@ export default function TesouroDiretoPage({ portfolioId }: Props) {
                     style={inputStyle} />
                 </div>
               </div>
-
               {/* is_active */}
               <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--text-sm)', cursor: 'pointer' }}>
                 <input type="checkbox" checked={form.is_active}
                   onChange={e => setField('is_active', e.target.checked)} />
                 Investimento ativo
               </label>
-
               {formError && (
                 <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--color-error)' }}>{formError}</p>
               )}
-
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
                 <button type="button" onClick={closeModal} style={btnSecondary}>Cancelar</button>
                 <button type="submit" disabled={isMutating} style={btnPrimary}>
                   {isMutating && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}
-                  {editItem ? 'Salvar' : 'Adicionar'}
+                  Salvar
                 </button>
               </div>
             </form>
@@ -375,10 +340,7 @@ export default function TesouroDiretoPage({ portfolioId }: Props) {
 
       {/* ===== Modal Confirmação Exclusão ===== */}
       {deleteTarget && (
-        <div
-          style={overlayStyle}
-          onClick={e => { if (e.target === e.currentTarget) setDeleteTarget(null) }}
-        >
+        <div style={overlayStyle} onClick={e => { if (e.target === e.currentTarget) setDeleteTarget(null) }}>
           <div style={{ ...modalStyle, maxWidth: 400 }}>
             <h2 style={{ margin: '0 0 var(--space-2)', fontSize: 'var(--text-base)', fontWeight: 600 }}>
               Excluir Título
