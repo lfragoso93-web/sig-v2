@@ -1,13 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
 from app.schemas.treasury import TreasuryCreate, TreasuryUpdate, TreasuryResponse
 from app.services import treasury_service
-from app.services.portfolio_service import get_portfolio_by_id
+from app.services.portfolio_service import get_portfolio
 
 router = APIRouter()
 
@@ -19,12 +18,8 @@ async def _check_portfolio_ownership(
     current_user: User,
     db: AsyncSession,
 ) -> None:
-    portfolio = await get_portfolio_by_id(db, portfolio_id, current_user.id)
-    if not portfolio:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Carteira não encontrada.",
-        )
+    # get_portfolio já levanta HTTPException 404 se não encontrar
+    await get_portfolio(db, portfolio_id, current_user.id)
 
 
 # ---------- CRUD endpoints ---------------------------------------------------
