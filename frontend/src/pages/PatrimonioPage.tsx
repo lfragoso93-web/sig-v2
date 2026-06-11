@@ -9,6 +9,7 @@ import {
   usePortfolioSummary,
   useAssetDistribution,
   usePositions,
+  type PositionGroup,
 } from '@/hooks/usePortfolio'
 import { useAppStore } from '@/store/appStore'
 import { formatBRL, formatPercent, signClass } from '@/utils/format'
@@ -20,6 +21,7 @@ import PositionTable from '@/components/resume/PositionTable'
 
 const ASSET_TYPE_LABELS: Record<string, string> = {
   ACAO:              'Ações',
+  ACAO_NACIONAL:     'Ações',
   FII:               'FIIs',
   ETF_NACIONAL:      'ETFs BR',
   STOCK:             'Stocks',
@@ -31,6 +33,7 @@ const ASSET_TYPE_LABELS: Record<string, string> = {
 
 const ASSET_TYPE_COLORS: Record<string, string> = {
   ACAO:              'bg-blue-500/15 text-blue-400 border-blue-500/30',
+  ACAO_NACIONAL:     'bg-blue-500/15 text-blue-400 border-blue-500/30',
   FII:               'bg-purple-500/15 text-purple-400 border-purple-500/30',
   ETF_NACIONAL:      'bg-teal-500/15 text-teal-400 border-teal-500/30',
   STOCK:             'bg-sky-500/15 text-sky-400 border-sky-500/30',
@@ -47,7 +50,6 @@ export default function PatrimonioPage() {
   const { data: portfolios, isLoading: loadingPortfolios } = usePortfolioList()
   const [activeTypeFilter, setActiveTypeFilter] = useState<string | null>(null)
 
-  // usa o id global (selecionado na topbar/store); fallback para o primeiro
   const portfolioId: number =
     globalPortfolioId ??
     (portfolios?.[0]?.id ?? 0)
@@ -56,10 +58,11 @@ export default function PatrimonioPage() {
   const { data: distribution, isLoading: loadingDist      } = useAssetDistribution(portfolioId)
   const { data: positions,    isLoading: loadingPositions  } = usePositions(portfolioId)
 
-  // ── agrupa posições por tipo ─────────────────────────────────────────────
+  // ── agrega todas as posições individuais para contagem e breakdown
+  // usePositions já retorna PositionGroup[], cada grupo tem .positions (não .items)
   const allPositions = useMemo(() => {
     if (!positions) return []
-    return positions.flatMap((g: any) => g.items ?? [])
+    return positions.flatMap((g: PositionGroup) => g.positions ?? [])
   }, [positions])
 
   const typeBreakdown = useMemo(() => {
@@ -83,14 +86,13 @@ export default function PatrimonioPage() {
     if (!positions) return []
     if (!activeTypeFilter) return positions
     return positions
-      .map((g: any) => ({
+      .map((g: PositionGroup) => ({
         ...g,
-        items: (g.items ?? []).filter((p: any) => p.asset_type === activeTypeFilter),
+        positions: g.positions.filter(p => p.asset_type === activeTypeFilter),
       }))
-      .filter((g: any) => g.items.length > 0)
+      .filter((g: PositionGroup) => g.positions.length > 0)
   }, [positions, activeTypeFilter])
 
-  // ── loading inicial ──────────────────────────────────────────────────────
   if (loadingPortfolios) {
     return (
       <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -114,14 +116,12 @@ export default function PatrimonioPage() {
   return (
     <div className="px-4 py-5 max-w-screen-xl mx-auto flex flex-col gap-5">
 
-      {/* ── cabeçalho ──────────────────────────────────────────────────────── */}
+      {/* ── cabeçalho ── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-base font-semibold text-slate-100">Patrimônio</h1>
           <p className="text-xs text-slate-500 mt-0.5">Visão consolidada de todos os seus ativos</p>
         </div>
-
-        {/* seletor de carteira — visível quando há mais de uma */}
         {portfolios.length > 1 && (
           <div className="flex items-center gap-1.5 flex-wrap">
             {portfolios.map(p => (
@@ -142,7 +142,7 @@ export default function PatrimonioPage() {
         )}
       </div>
 
-      {/* ── KPIs ─────────────────────────────────────────────────────────── */}
+      {/* ── KPIs ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {loadingSummary ? (
           [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
@@ -190,10 +190,8 @@ export default function PatrimonioPage() {
         )}
       </div>
 
-      {/* ── breakdown por classe + donut ─────────────────────────────────── */}
+      {/* ── breakdown por classe + donut ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-        {/* Tabela de classes */}
         <div className="lg:col-span-2 rounded-xl bg-surface-900 border border-surface-700 overflow-hidden">
           <div className="flex items-center gap-2 px-4 py-3 border-b border-surface-700">
             <BarChart2 size={15} className="text-brand-500" />
@@ -252,7 +250,7 @@ export default function PatrimonioPage() {
           {activeTypeFilter && (
             <div className="px-4 py-2 border-t border-surface-700 flex items-center justify-between">
               <span className="text-xs text-slate-500">
-                Mostrando apenas: <span className="text-slate-300 font-medium">{ASSET_TYPE_LABELS[activeTypeFilter]}</span>
+                Mostrando apenas: <span className="text-slate-300 font-medium">{ASSET_TYPE_LABELS[activeTypeFilter] ?? activeTypeFilter}</span>
               </span>
               <button
                 onClick={() => setActiveTypeFilter(null)}
@@ -280,7 +278,7 @@ export default function PatrimonioPage() {
         </div>
       </div>
 
-      {/* ── tabela de posições ───────────────────────────────────────────── */}
+      {/* ── tabela de posições ── */}
       <div className="rounded-xl bg-surface-900 border border-surface-700 overflow-hidden">
         <div className="flex items-center gap-2 px-4 py-3 border-b border-surface-700">
           <TrendingUp size={15} className="text-brand-500" />
@@ -292,7 +290,7 @@ export default function PatrimonioPage() {
           )}
           {activeTypeFilter && (
             <span className="ml-auto text-xs text-slate-500">
-              Filtrado por: <span className="text-slate-300">{ASSET_TYPE_LABELS[activeTypeFilter]}</span>
+              Filtrado por: <span className="text-slate-300">{ASSET_TYPE_LABELS[activeTypeFilter] ?? activeTypeFilter}</span>
             </span>
           )}
         </div>
