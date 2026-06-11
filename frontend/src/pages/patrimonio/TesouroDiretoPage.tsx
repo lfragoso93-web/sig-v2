@@ -1,442 +1,176 @@
-import { useState } from 'react'
-import { Pencil, Trash2, TrendingUp, TrendingDown, Minus, Loader2, Plus } from 'lucide-react'
-import {
-  useTreasury,
-  useCreateTreasury,
-  useUpdateTreasury,
-  useDeleteTreasury,
-  TreasuryInvestment,
-  TreasuryCreatePayload,
-} from '@/hooks/useTreasury'
-import { useTesouroSearch } from '@/hooks/useTesouroSearch'
+import { Landmark, TrendingUp, TrendingDown, Minus, Loader2 } from 'lucide-react'
+import { usePositions } from '@/hooks/usePortfolio'
 import { useAppStore } from '@/store/appStore'
 
-// ── helpers ─────────────────────────────────────────────────────
-
-const fmt = (v: number | null | undefined, decimals = 2) =>
-  v == null ? '—' : v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+// ── helpers ──────────────────────────────────────────────────────────────────
 
 const fmtBRL = (v: number | null | undefined) =>
   v == null ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
-const fmtDate = (s: string | null | undefined) =>
-  s ? new Date(s + 'T00:00:00').toLocaleDateString('pt-BR') : '—'
+const fmt = (v: number | null | undefined, dec = 2) =>
+  v == null ? '—' : v.toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec })
 
-const today = () => new Date().toISOString().slice(0, 10)
-
-// ── tipos internos ───────────────────────────────────────────────
-
-interface FormState {
-  brapi_name: string
-  invested_value: string
-  purchase_date: string
-  maturity_date: string
-  is_active: boolean
-}
-
-const emptyForm = (): FormState => ({
-  brapi_name: '',
-  invested_value: '',
-  purchase_date: today(),
-  maturity_date: '',
-  is_active: true,
-})
-
-function toPayload(f: FormState): TreasuryCreatePayload {
-  return {
-    brapi_name: f.brapi_name,
-    invested_value: parseFloat(f.invested_value),
-    purchase_date: f.purchase_date,
-    maturity_date: f.maturity_date || null,
-    is_active: f.is_active,
-  }
-}
-
-// ── Componente principal ───────────────────────────────────────────
+// ── Componente ────────────────────────────────────────────────────────────────
 
 export default function TesouroDiretoPage() {
-  const portfolioId = useAppStore(s => s.selectedPortfolioId) ?? 0
+  const portfolioId = useAppStore(s => s.selectedPortfolioId)
+  const { data: groups = [], isLoading } = usePositions(portfolioId)
 
-  const { data: investments = [], isLoading } = useTreasury(portfolioId)
-  const createMut = useCreateTreasury(portfolioId)
-  const updateMut = useUpdateTreasury(portfolioId)
-  const deleteMut = useDeleteTreasury(portfolioId)
+  const group = groups.find(g => g.asset_type === 'TESOURO_DIRETO')
+  const positions = group?.positions ?? []
 
-  // modal state
-  const [showModal, setShowModal] = useState(false)
-  const [editItem,  setEditItem]  = useState<TreasuryInvestment | null>(null)
-  const [form,      setForm]      = useState<FormState>(emptyForm())
-  const [formError, setFormError] = useState('')
-
-  // autocomplete
-  const [tesouroQuery, setTesouroQuery] = useState('')
-  const [showSugg,     setShowSugg]     = useState(false)
-  const { items: tesouroItems } = useTesouroSearch(tesouroQuery, showModal)
-
-  // confirm delete
-  const [deleteTarget, setDeleteTarget] = useState<TreasuryInvestment | null>(null)
-
-  // ── handlers modal ───────────────────────────────────────────
-
-  function openCreate() {
-    setEditItem(null)
-    setForm(emptyForm())
-    setFormError('')
-    setTesouroQuery('')
-    setShowSugg(false)
-    setShowModal(true)
+  // ── loading ────────────────────────────────────────────────────────────────
+  if (isLoading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-16)' }}>
+        <Loader2 size={24} style={{ animation: 'spin 1s linear infinite', color: 'var(--color-text-muted)' }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+      </div>
+    )
   }
 
-  function openEdit(item: TreasuryInvestment) {
-    setEditItem(item)
-    setForm({
-      brapi_name:     item.brapi_name,
-      invested_value: String(item.invested_value),
-      purchase_date:  item.purchase_date,
-      maturity_date:  item.maturity_date ?? '',
-      is_active:      item.is_active,
-    })
-    setFormError('')
-    setTesouroQuery('')
-    setShowSugg(false)
-    setShowModal(true)
+  // ── empty state ────────────────────────────────────────────────────────────
+  if (positions.length === 0) {
+    return (
+      <div style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        gap: 'var(--space-3)', padding: 'var(--space-16) var(--space-8)',
+        border: '1px dashed var(--color-border)', borderRadius: 'var(--radius-lg)',
+        color: 'var(--color-text-muted)', textAlign: 'center',
+      }}>
+        <Landmark size={32} style={{ color: 'var(--color-text-faint)' }} />
+        <p style={{ margin: 0, fontSize: 'var(--text-sm)', fontWeight: 500 }}>
+          Nenhum título cadastrado.
+        </p>
+        <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--color-text-faint)', maxWidth: '36ch' }}>
+          Clique em <strong>+ Novo Lançamento</strong> no topo, selecione a aba <strong>Tesouro</strong> e registre sua compra.
+        </p>
+      </div>
+    )
   }
 
-  function closeModal() {
-    setShowModal(false)
-    setEditItem(null)
-    setFormError('')
-    setTesouroQuery('')
-    setShowSugg(false)
-  }
-
-  function setField<K extends keyof FormState>(k: K, v: FormState[K]) {
-    setForm(f => ({ ...f, [k]: v }))
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setFormError('')
-    const val = parseFloat(form.invested_value)
-    if (!form.brapi_name.trim()) return setFormError('Informe o título.')
-    if (isNaN(val) || val <= 0)  return setFormError('Valor investido deve ser positivo.')
-    if (!form.purchase_date)      return setFormError('Informe a data de compra.')
-    try {
-      if (editItem) {
-        await updateMut.mutateAsync({ id: editItem.id, data: toPayload(form) })
-      } else {
-        await createMut.mutateAsync(toPayload(form))
-      }
-      closeModal()
-    } catch {
-      setFormError('Erro ao salvar. Verifique os dados e tente novamente.')
-    }
-  }
-
-  async function handleDelete() {
-    if (!deleteTarget) return
-    await deleteMut.mutateAsync(deleteTarget.id)
-    setDeleteTarget(null)
-  }
-
-  const isMutating = createMut.isPending || updateMut.isPending
-
-  // ── render ────────────────────────────────────────────────────
+  // ── resumo do grupo ────────────────────────────────────────────────────────
+  const totalInvestido = positions.reduce((s, p) => s + p.average_price * p.quantity, 0)
+  const totalAtual     = group?.total_value ?? 0
+  const resultado      = totalAtual - totalInvestido
+  const resultadoPct   = totalInvestido > 0 ? (resultado / totalInvestido) * 100 : 0
+  const positivo       = resultado >= 0
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
 
-      {/* Barra superior com botão Novo */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <button onClick={openCreate} style={btnPrimary}>
-          <Plus size={15} />
-          Novo Título
-        </button>
+      {/* Cards de resumo */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 'var(--space-3)' }}>
+        {[
+          { label: 'Total Investido',  value: fmtBRL(totalInvestido) },
+          { label: 'Valor Atual',      value: fmtBRL(totalAtual) },
+          {
+            label: 'Resultado',
+            value: `${fmtBRL(resultado)} (${fmt(resultadoPct)}%)`,
+            color: positivo ? 'var(--color-success)' : 'var(--color-error)',
+          },
+          { label: 'Títulos',          value: String(positions.length) },
+        ].map(card => (
+          <div key={card.label} style={{
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-lg)',
+            padding: 'var(--space-4)',
+          }}>
+            <p style={{ margin: '0 0 var(--space-1)', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+              {card.label}
+            </p>
+            <p style={{
+              margin: 0, fontSize: 'var(--text-base)', fontWeight: 600,
+              color: card.color ?? 'var(--color-text)',
+              fontVariantNumeric: 'tabular-nums',
+            }}>
+              {card.value}
+            </p>
+          </div>
+        ))}
       </div>
 
-      {/* Tabela */}
-      {isLoading ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-12)' }}>
-          <Loader2 size={24} style={{ animation: 'spin 1s linear infinite', color: 'var(--color-text-muted)' }} />
-        </div>
-      ) : investments.length === 0 ? (
-        <div style={{
-          textAlign: 'center', padding: 'var(--space-12) var(--space-8)',
-          color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)',
-          border: '1px dashed var(--color-border)', borderRadius: 'var(--radius-lg)',
-        }}>
-          <p style={{ marginBottom: 'var(--space-4)' }}>Nenhum título cadastrado.</p>
-          <button onClick={openCreate} style={btnPrimary}>
-            <Plus size={14} /> Cadastrar primeiro título
-          </button>
-        </div>
-      ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                {['Título','Compra','Vencimento','Valor Invest.','Preço Atual','Valor Atual','Resultado','Status',''].map(h => (
-                  <th key={h} style={{
-                    padding: 'var(--space-2) var(--space-3)',
-                    textAlign: h === '' ? 'center' : 'left',
-                    fontWeight: 600, color: 'var(--color-text-muted)',
-                    fontSize: 'var(--text-xs)', whiteSpace: 'nowrap',
-                  }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {investments.map(inv => {
-                const positivo = (inv.lucro_prejuizo ?? 0) >= 0
-                const neutro   = inv.lucro_prejuizo == null
-                return (
-                  <tr key={inv.id} style={{ borderBottom: '1px solid var(--color-divider)' }}>
-                    <td style={{ padding: 'var(--space-2) var(--space-3)', fontWeight: 500, color: 'var(--color-text)' }}>
-                      {inv.brapi_name}
-                    </td>
-                    <td style={{ padding: 'var(--space-2) var(--space-3)', color: 'var(--color-text-muted)' }}>
-                      {fmtDate(inv.purchase_date)}
-                    </td>
-                    <td style={{ padding: 'var(--space-2) var(--space-3)', color: 'var(--color-text-muted)' }}>
-                      {fmtDate(inv.maturity_date)}
-                    </td>
-                    <td style={{ padding: 'var(--space-2) var(--space-3)', fontVariantNumeric: 'tabular-nums' }}>
-                      {fmtBRL(inv.invested_value)}
-                    </td>
-                    <td style={{ padding: 'var(--space-2) var(--space-3)', fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-muted)' }}>
-                      {fmtBRL(inv.current_price)}
-                    </td>
-                    <td style={{ padding: 'var(--space-2) var(--space-3)', fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>
-                      {fmtBRL(inv.valor_atual)}
-                    </td>
-                    <td style={{ padding: 'var(--space-2) var(--space-3)' }}>
-                      <span style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 'var(--space-1)',
-                        color: neutro ? 'var(--color-text-muted)' : positivo ? 'var(--color-success)' : 'var(--color-error)',
-                        fontVariantNumeric: 'tabular-nums',
-                      }}>
-                        {neutro ? <Minus size={12} /> : positivo ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                        {neutro ? '—' : `${fmtBRL(inv.lucro_prejuizo)} (${fmt(inv.rentabilidade_pct)}%)`}
-                      </span>
-                    </td>
-                    <td style={{ padding: 'var(--space-2) var(--space-3)' }}>
-                      <span style={{
-                        display: 'inline-block',
-                        padding: '2px var(--space-2)',
-                        borderRadius: 'var(--radius-full)',
-                        fontSize: 'var(--text-xs)',
-                        background: inv.is_active ? 'var(--color-success-highlight)' : 'var(--color-surface-offset)',
-                        color: inv.is_active ? 'var(--color-success)' : 'var(--color-text-muted)',
-                        fontWeight: 500,
-                      }}>
-                        {inv.is_active ? 'Ativo' : 'Encerrado'}
-                      </span>
-                    </td>
-                    <td style={{ padding: 'var(--space-2) var(--space-3)' }}>
-                      <div style={{ display: 'flex', gap: 'var(--space-1)' }}>
-                        <button onClick={() => openEdit(inv)} title="Editar" style={iconBtn}>
-                          <Pencil size={15} />
-                        </button>
-                        <button onClick={() => setDeleteTarget(inv)} title="Excluir"
-                          style={{ ...iconBtn, color: 'var(--color-error)' }}>
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* Tabela de posições */}
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+              {['Título', 'Qtd', 'Preço Médio', 'Preço Atual', 'Valor Atual', 'Resultado', '% Cart.'].map(h => (
+                <th key={h} style={{
+                  padding: 'var(--space-2) var(--space-3)',
+                  textAlign: 'left', fontWeight: 600,
+                  color: 'var(--color-text-muted)',
+                  fontSize: 'var(--text-xs)', whiteSpace: 'nowrap',
+                }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {positions.map(pos => {
+              const res     = pos.variation_value
+              const resPct  = pos.variation_percent
+              const isPos   = res >= 0
+              const isZero  = res === 0
 
-      {/* ===== Modal Cadastro / Edição ===== */}
-      {showModal && (
-        <div style={overlayStyle} onClick={e => { if (e.target === e.currentTarget) closeModal() }}>
-          <div style={modalStyle}>
-            <h2 style={{ margin: '0 0 var(--space-4)', fontSize: 'var(--text-base)', fontWeight: 600 }}>
-              {editItem ? 'Editar Título' : 'Novo Título'}
-            </h2>
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-              {/* brapi_name autocomplete */}
-              <div style={{ position: 'relative' }}>
-                <label style={labelStyle}>Título</label>
-                <input
-                  type="text"
-                  value={form.brapi_name}
-                  onChange={e => {
-                    setField('brapi_name', e.target.value)
-                    setTesouroQuery(e.target.value)
-                    setShowSugg(true)
-                  }}
-                  onBlur={() => setTimeout(() => setShowSugg(false), 150)}
-                  placeholder="Ex: TESOURO SELIC 2029"
-                  required
-                  style={inputStyle}
-                />
-                {showSugg && tesouroItems.length > 0 && (
-                  <ul style={{
-                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
-                    background: 'var(--color-surface-2)',
-                    border: '1px solid var(--color-border)',
-                    borderRadius: 'var(--radius-md)',
-                    listStyle: 'none', margin: 0, padding: 'var(--space-1)',
-                    maxHeight: 200, overflowY: 'auto',
-                    boxShadow: 'var(--shadow-md)',
-                  }}>
-                    {tesouroItems.map(item => (
-                      <li
-                        key={item.ticker}
-                        onMouseDown={() => {
-                          setField('brapi_name', item.name)
-                          if (item.maturity_date) setField('maturity_date', item.maturity_date.slice(0, 10))
-                          setTesouroQuery('')
-                          setShowSugg(false)
-                        }}
-                        style={{
-                          padding: 'var(--space-2) var(--space-3)',
-                          cursor: 'pointer',
-                          borderRadius: 'var(--radius-sm)',
-                          fontSize: 'var(--text-xs)',
-                          color: 'var(--color-text)',
-                        }}
-                      >
-                        <span style={{ fontWeight: 500 }}>{item.name}</span>
-                        {item.maturity_date && (
-                          <span style={{ color: 'var(--color-text-muted)', marginLeft: 'var(--space-2)' }}>
-                            venc. {fmtDate(item.maturity_date)}
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-              {/* valor investido */}
-              <div>
-                <label style={labelStyle}>Valor Investido (R$)</label>
-                <input type="number" step="0.01" min="0.01"
-                  value={form.invested_value}
-                  onChange={e => setField('invested_value', e.target.value)}
-                  placeholder="1000.00" required style={inputStyle} />
-              </div>
-              {/* datas */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-                <div>
-                  <label style={labelStyle}>Data de Compra</label>
-                  <input type="date" value={form.purchase_date}
-                    onChange={e => setField('purchase_date', e.target.value)}
-                    required style={inputStyle} />
-                </div>
-                <div>
-                  <label style={labelStyle}>Vencimento (opcional)</label>
-                  <input type="date" value={form.maturity_date}
-                    onChange={e => setField('maturity_date', e.target.value)}
-                    style={inputStyle} />
-                </div>
-              </div>
-              {/* is_active */}
-              <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--text-sm)', cursor: 'pointer' }}>
-                <input type="checkbox" checked={form.is_active}
-                  onChange={e => setField('is_active', e.target.checked)} />
-                Investimento ativo
-              </label>
-              {formError && (
-                <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--color-error)' }}>{formError}</p>
-              )}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
-                <button type="button" onClick={closeModal} style={btnSecondary}>Cancelar</button>
-                <button type="submit" disabled={isMutating} style={btnPrimary}>
-                  {isMutating && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}
-                  {editItem ? 'Salvar' : 'Cadastrar'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ===== Modal Confirmação Exclusão ===== */}
-      {deleteTarget && (
-        <div style={overlayStyle} onClick={e => { if (e.target === e.currentTarget) setDeleteTarget(null) }}>
-          <div style={{ ...modalStyle, maxWidth: 400 }}>
-            <h2 style={{ margin: '0 0 var(--space-2)', fontSize: 'var(--text-base)', fontWeight: 600 }}>
-              Excluir Título
-            </h2>
-            <p style={{ margin: '0 0 var(--space-4)', fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>
-              Deseja remover <strong>{deleteTarget.brapi_name}</strong>? Esta ação não pode ser desfeita.
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
-              <button onClick={() => setDeleteTarget(null)} style={btnSecondary}>Cancelar</button>
-              <button onClick={handleDelete} disabled={deleteMut.isPending}
-                style={{ ...btnPrimary, background: 'var(--color-error)' }}>
-                {deleteMut.isPending && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}
-                Excluir
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+              return (
+                <tr key={pos.id} style={{ borderBottom: '1px solid var(--color-divider)' }}>
+                  {/* Título */}
+                  <td style={{ padding: 'var(--space-2) var(--space-3)', fontWeight: 500, color: 'var(--color-text)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                      <Landmark size={13} style={{ color: 'var(--color-text-faint)', flexShrink: 0 }} />
+                      <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220 }}>
+                        {pos.ticker}
+                      </span>
+                    </div>
+                  </td>
+                  {/* Qtd */}
+                  <td style={{ padding: 'var(--space-2) var(--space-3)', fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-muted)' }}>
+                    {fmt(pos.quantity, 0)}
+                  </td>
+                  {/* Preço Médio */}
+                  <td style={{ padding: 'var(--space-2) var(--space-3)', fontVariantNumeric: 'tabular-nums' }}>
+                    {fmtBRL(pos.average_price)}
+                  </td>
+                  {/* Preço Atual */}
+                  <td style={{ padding: 'var(--space-2) var(--space-3)', fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-muted)' }}>
+                    {pos.current_price === pos.average_price ? '—' : fmtBRL(pos.current_price)}
+                  </td>
+                  {/* Valor Atual */}
+                  <td style={{ padding: 'var(--space-2) var(--space-3)', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
+                    {fmtBRL(pos.current_value)}
+                  </td>
+                  {/* Resultado */}
+                  <td style={{ padding: 'var(--space-2) var(--space-3)' }}>
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 'var(--space-1)',
+                      fontVariantNumeric: 'tabular-nums',
+                      color: isZero
+                        ? 'var(--color-text-muted)'
+                        : isPos
+                          ? 'var(--color-success)'
+                          : 'var(--color-error)',
+                    }}>
+                      {isZero
+                        ? <Minus size={12} />
+                        : isPos
+                          ? <TrendingUp size={12} />
+                          : <TrendingDown size={12} />}
+                      {isZero ? '—' : `${fmtBRL(res)} (${fmt(resPct)}%)`}
+                    </span>
+                  </td>
+                  {/* % Carteira */}
+                  <td style={{ padding: 'var(--space-2) var(--space-3)', color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                    {fmt(pos.portfolio_percent)}%
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
 
       <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </div>
   )
-}
-
-// ── estilos ──────────────────────────────────────────────────────────
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: 'var(--space-2) var(--space-3)',
-  border: '1px solid var(--color-border)',
-  borderRadius: 'var(--radius-md)',
-  background: 'var(--color-bg)',
-  color: 'var(--color-text)',
-  fontSize: 'var(--text-sm)',
-}
-
-const labelStyle: React.CSSProperties = {
-  display: 'block',
-  fontSize: 'var(--text-xs)',
-  fontWeight: 500,
-  color: 'var(--color-text-muted)',
-  marginBottom: 'var(--space-1)',
-}
-
-const btnPrimary: React.CSSProperties = {
-  display: 'inline-flex', alignItems: 'center', gap: 'var(--space-1)',
-  padding: 'var(--space-2) var(--space-4)',
-  background: 'var(--color-primary)', color: '#fff',
-  border: 'none', borderRadius: 'var(--radius-md)',
-  fontSize: 'var(--text-sm)', fontWeight: 500, cursor: 'pointer',
-}
-
-const btnSecondary: React.CSSProperties = {
-  display: 'inline-flex', alignItems: 'center', gap: 'var(--space-1)',
-  padding: 'var(--space-2) var(--space-4)',
-  background: 'var(--color-surface-offset)', color: 'var(--color-text)',
-  border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
-  fontSize: 'var(--text-sm)', fontWeight: 500, cursor: 'pointer',
-}
-
-const iconBtn: React.CSSProperties = {
-  background: 'none', border: 'none', cursor: 'pointer',
-  color: 'var(--color-text-muted)', padding: 'var(--space-1)',
-  borderRadius: 'var(--radius-sm)',
-}
-
-const overlayStyle: React.CSSProperties = {
-  position: 'fixed', inset: 0, zIndex: 50,
-  background: 'oklch(0 0 0 / 0.45)',
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-  padding: 'var(--space-4)',
-}
-
-const modalStyle: React.CSSProperties = {
-  background: 'var(--color-surface)',
-  borderRadius: 'var(--radius-xl)',
-  padding: 'var(--space-6)',
-  width: '100%', maxWidth: 480,
-  boxShadow: 'var(--shadow-lg)',
 }
