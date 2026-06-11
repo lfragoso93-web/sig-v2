@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, HelpCircle } from 'lucide-react'
 import clsx from 'clsx'
 import { formatBRL, formatPercent, signClass } from '@/utils/format'
 import { formatTreasuryName } from '@/utils/treasury'
+import AssetLogo from '@/components/ui/AssetLogo'
 import type { PositionGroup } from '@/hooks/usePortfolio'
 
 interface Props {
@@ -14,12 +15,9 @@ function fmtPrice(val: number | null | undefined): string {
   return formatBRL(val)
 }
 
-/** Retorna o nome de exibição do ativo: amigável para Tesouro, ticker puro para demais. */
 function displayName(ticker: string, assetType: string): string {
   const norm = assetType.toUpperCase()
-  if (norm === 'TESOURO_DIRETO' || norm === 'TESOURO') {
-    return formatTreasuryName(ticker)
-  }
+  if (norm === 'TESOURO_DIRETO' || norm === 'TESOURO') return formatTreasuryName(ticker)
   return ticker
 }
 
@@ -44,11 +42,7 @@ export default function PositionTable({ groups }: Props) {
             <th className="text-right px-4 py-2 font-medium">
               <span className="flex items-center justify-end gap-1">
                 P. Atual
-                <HelpCircle
-                  size={10}
-                  className="text-slate-600"
-                  title="Cotação via BRAPI/yfinance. '—' quando indisponível."
-                />
+                <HelpCircle size={10} className="text-slate-600" title="Cotação via BRAPI/yfinance. '—' quando indisponível." />
               </span>
             </th>
             <th className="text-right px-4 py-2 font-medium">Total Inv.</th>
@@ -78,12 +72,10 @@ export default function PositionTable({ groups }: Props) {
                 </td>
               </tr>
 
-              {/* Linhas de posicao */}
+              {/* Linhas de posição */}
               {expanded[group.label] && (group.positions ?? []).map(item => {
-                const hasQuote = item.current_price !== item.average_price
-                  || item.variation_value !== 0
-
-                const name = displayName(item.ticker, item.asset_type)
+                const hasQuote = item.current_price !== item.average_price || item.variation_value !== 0
+                const name     = displayName(item.ticker, item.asset_type)
                 const isTesouro = item.asset_type.toUpperCase() === 'TESOURO_DIRETO'
                   || item.asset_type.toUpperCase() === 'TESOURO'
 
@@ -92,49 +84,49 @@ export default function PositionTable({ groups }: Props) {
                     key={`${item.ticker}-${item.asset_type}-${item.id}`}
                     className="border-b border-surface-700/50 hover:bg-surface-800/30 transition-colors"
                   >
-                    <td className="px-4 py-2.5">
-                      <div
-                        className="font-semibold text-slate-200 truncate max-w-[200px]"
-                        title={item.ticker}
-                      >
-                        {name}
-                      </div>
-                      {/* Para Tesouro, exibe o ticker como subtítulo discreto; para demais, exibe o asset_label */}
-                      <div className="text-[10px] text-slate-500">
-                        {isTesouro ? item.ticker : item.asset_label}
+                    {/* Coluna Ativo */}
+                    <td className="px-4 py-2">
+                      <div className="flex items-center gap-2.5">
+                        <AssetLogo ticker={item.ticker} assetType={item.asset_type} size={28} />
+                        <div className="min-w-0">
+                          <div
+                            className="font-semibold text-slate-200 truncate max-w-[180px]"
+                            title={item.ticker}
+                          >
+                            {name}
+                          </div>
+                          <div className="text-[10px] text-slate-500 truncate max-w-[180px]">
+                            {isTesouro ? item.ticker : item.asset_label}
+                          </div>
+                        </div>
                       </div>
                     </td>
 
-                    <td className="text-right px-4 py-2.5 tabular-nums text-slate-300">
+                    <td className="text-right px-4 py-2 tabular-nums text-slate-300">
                       {item.quantity % 1 === 0
                         ? item.quantity.toLocaleString('pt-BR')
-                        : item.quantity.toLocaleString('pt-BR', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 8,
-                          })}
+                        : item.quantity.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 8 })}
                     </td>
 
-                    <td className="text-right px-4 py-2.5 tabular-nums text-slate-300">
+                    <td className="text-right px-4 py-2 tabular-nums text-slate-300">
                       {formatBRL(item.average_price)}
                     </td>
 
-                    {/* P. Atual */}
-                    <td className="text-right px-4 py-2.5 tabular-nums">
+                    <td className="text-right px-4 py-2 tabular-nums">
                       <span className={hasQuote ? 'text-slate-200' : 'text-slate-600'}>
                         {fmtPrice(item.current_price)}
                       </span>
                     </td>
 
-                    <td className="text-right px-4 py-2.5 tabular-nums text-slate-300">
+                    <td className="text-right px-4 py-2 tabular-nums text-slate-300">
                       {formatBRL(item.current_value)}
                     </td>
 
-                    <td className="text-right px-4 py-2.5 tabular-nums text-slate-300">
+                    <td className="text-right px-4 py-2 tabular-nums text-slate-300">
                       {formatBRL(item.current_value)}
                     </td>
 
-                    {/* Resultado */}
-                    <td className="text-right px-4 py-2.5 tabular-nums">
+                    <td className="text-right px-4 py-2 tabular-nums">
                       {hasQuote ? (
                         <div className={clsx('font-medium', signClass(item.variation_value))}>
                           <div>{formatBRL(item.variation_value)}</div>
