@@ -25,19 +25,68 @@ type AssetTab = {
   tickerLabel:       string
   extraFields?:      'renda_fixa' | 'tesouro'
   brapiEnabled?:     boolean
-  // Tipo BRAPI para filtrar sugestoes: 'stock' | 'fund' | 'etf' | 'bdr' | undefined
+  /**
+   * Tipo passado ao endpoint /assets/suggest?asset_type=:
+   *   'stock'     -> acoes B3 via BRAPI
+   *   'fund'      -> FIIs via BRAPI
+   *   'etf'       -> ETFs B3 via BRAPI
+   *   'cripto'    -> criptos via BRAPI /v2/crypto/available
+   *   'stock_int' -> stocks internacionais via yfinance
+   *   'etf_int'   -> ETFs internacionais via yfinance
+   *   undefined   -> sem autocomplete de sugestoes
+   */
   brapiSuggestType?: string
 }
 
 const TABS: AssetTab[] = [
-  { key: 'acao',       label: 'Acao',       icon: <TrendingUp size={13} />, assetType: 'ACAO',              currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: PETR4 ou Petrobras',    brapiEnabled: true,  brapiSuggestType: 'stock'   },
-  { key: 'fii',        label: 'FII',        icon: <Building2  size={13} />, assetType: 'FII',               currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: MXRF11 ou Maxi Renda',  brapiEnabled: true,  brapiSuggestType: 'fund'    },
-  { key: 'etf_br',     label: 'ETF BR',     icon: <BarChart2  size={13} />, assetType: 'ETF_NACIONAL',      currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: BOVA11 ou IVVB11',      brapiEnabled: true,  brapiSuggestType: 'etf'     },
-  { key: 'stock',      label: 'Stock',      icon: <Globe      size={13} />, assetType: 'STOCK',             currency: 'USD', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: AAPL',                  brapiEnabled: true,  brapiSuggestType: undefined },
-  { key: 'etf_int',    label: 'ETF INT',    icon: <Globe      size={13} />, assetType: 'ETF_INTERNACIONAL', currency: 'USD', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: VTI',                   brapiEnabled: true,  brapiSuggestType: undefined },
-  { key: 'tesouro',    label: 'Tesouro',    icon: <Landmark   size={13} />, assetType: 'TESOURO_DIRETO',    currency: 'BRL', tickerLabel: 'Titulo',      tickerPlaceholder: 'ex: Tesouro IPCA 2029',     brapiEnabled: false, brapiSuggestType: undefined, extraFields: 'tesouro'    },
-  { key: 'renda_fixa', label: 'Renda Fixa', icon: <Banknote   size={13} />, assetType: 'RENDA_FIXA',        currency: 'BRL', tickerLabel: 'Codigo/Nome', tickerPlaceholder: 'ex: CDB XP 110% CDI',       brapiEnabled: false, brapiSuggestType: undefined, extraFields: 'renda_fixa' },
-  { key: 'cripto',     label: 'Cripto',     icon: <Bitcoin    size={13} />, assetType: 'CRIPTO',            currency: 'BRL', tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: BTC',                   brapiEnabled: true,  brapiSuggestType: undefined },
+  {
+    key: 'acao',       label: 'Acao',       icon: <TrendingUp size={13} />,
+    assetType: 'ACAO',              currency: 'BRL',
+    tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: PETR4 ou Petrobras',
+    brapiEnabled: true,  brapiSuggestType: 'stock',
+  },
+  {
+    key: 'fii',        label: 'FII',        icon: <Building2  size={13} />,
+    assetType: 'FII',               currency: 'BRL',
+    tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: MXRF11 ou Maxi Renda',
+    brapiEnabled: true,  brapiSuggestType: 'fund',
+  },
+  {
+    key: 'etf_br',     label: 'ETF BR',     icon: <BarChart2  size={13} />,
+    assetType: 'ETF_NACIONAL',      currency: 'BRL',
+    tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: BOVA11 ou IVVB11',
+    brapiEnabled: true,  brapiSuggestType: 'etf',
+  },
+  {
+    key: 'stock',      label: 'Stock',      icon: <Globe      size={13} />,
+    assetType: 'STOCK',             currency: 'USD',
+    tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: AAPL ou Apple',
+    brapiEnabled: true,  brapiSuggestType: 'stock_int',
+  },
+  {
+    key: 'etf_int',    label: 'ETF INT',    icon: <Globe      size={13} />,
+    assetType: 'ETF_INTERNACIONAL', currency: 'USD',
+    tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: VTI ou Vanguard',
+    brapiEnabled: true,  brapiSuggestType: 'etf_int',
+  },
+  {
+    key: 'tesouro',    label: 'Tesouro',    icon: <Landmark   size={13} />,
+    assetType: 'TESOURO_DIRETO',    currency: 'BRL',
+    tickerLabel: 'Titulo',      tickerPlaceholder: 'ex: Tesouro IPCA 2029',
+    brapiEnabled: false, brapiSuggestType: undefined, extraFields: 'tesouro',
+  },
+  {
+    key: 'renda_fixa', label: 'Renda Fixa', icon: <Banknote   size={13} />,
+    assetType: 'RENDA_FIXA',        currency: 'BRL',
+    tickerLabel: 'Codigo/Nome', tickerPlaceholder: 'ex: CDB XP 110% CDI',
+    brapiEnabled: false, brapiSuggestType: undefined, extraFields: 'renda_fixa',
+  },
+  {
+    key: 'cripto',     label: 'Cripto',     icon: <Bitcoin    size={13} />,
+    assetType: 'CRIPTO',            currency: 'BRL',
+    tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: BTC ou Bitcoin',
+    brapiEnabled: true,  brapiSuggestType: 'cripto',
+  },
 ]
 
 const RF_INDEXERS = ['CDI', 'IPCA', 'Prefixado', 'SELIC', 'IGP-M', 'Outro']
@@ -75,9 +124,7 @@ export default function AddTransactionModal({ onClose }: Props) {
   const [rate,       setRate]       = useState('')
   const [maturity,   setMaturity]   = useState('')
   const [issuer,     setIssuer]     = useState('')
-  // slug BRAPI do titulo selecionado (para buscar PU por data)
   const [activeSlug, setActiveSlug] = useState('')
-  // flag: usuario editou o preco manualmente
   const [priceEdited, setPriceEdited] = useState(false)
 
   // dropdown states
@@ -104,7 +151,6 @@ export default function AddTransactionModal({ onClose }: Props) {
     if (quote.currency) setCurrency(quote.currency.toUpperCase())
   }, [quote])
 
-  // Quando data muda na RV, limpa preco para rebuscar
   const prevDate = useRef(date)
   useEffect(() => {
     if (prevDate.current !== date && tab.brapiEnabled && ticker.length >= 2) {
@@ -116,7 +162,6 @@ export default function AddTransactionModal({ onClose }: Props) {
   }, [date])
 
   // ── PU Tesouro por data ────────────────────────────────────────────
-  // Dispara quando: aba Tesouro + slug selecionado + usuario nao editou preco manualmente
   const { price: tdPrice, loading: tdPriceLoading } = useTreasuryPrice(
     activeSlug,
     date,
@@ -130,7 +175,6 @@ export default function AddTransactionModal({ onClose }: Props) {
     }
   }, [tdPrice, isTesouro, priceEdited])
 
-  // Quando data muda no Tesouro, limpa preco para rebuscar (se slug ativo e preco nao editado)
   useEffect(() => {
     if (isTesouro && activeSlug && !priceEdited) {
       setPrice('')
@@ -152,7 +196,7 @@ export default function AddTransactionModal({ onClose }: Props) {
     else setShowTDSuggestions(false)
   }, [tdItems, isTesouro])
 
-  // ── Renda Variavel autocomplete (com filtro por tipo) ───────────────────
+  // ── RV / Cripto / Internacional autocomplete ──────────────────────────
   const { items: rvItems, loading: rvLoading } = useTickerSuggest(
     ticker,
     !!tab.brapiSuggestType,
@@ -177,14 +221,12 @@ export default function AddTransactionModal({ onClose }: Props) {
   }, [])
 
   function applyTDSuggestion(item: TreasuryItem) {
-    setTicker(item.name)          // mostra o nome legivel no campo
+    setTicker(item.name)
     setAssetName(item.name)
-    // @ts-ignore: TreasuryItem agora tem slug do backend
     setActiveSlug((item as any).slug || item.ticker)
-    if (item.indexer)   setIndexer(item.indexer)
+    if (item.indexer)      setIndexer(item.indexer)
     if (item.rate != null) setRate(String(item.rate))
     if (item.maturity_date) setMaturity(item.maturity_date.slice(0, 10))
-    // Nao aplica price da sugestao — o useTreasuryPrice vai buscar pelo slug + date
     setPrice('')
     setPriceFromBrapi(false)
     setPriceEdited(false)
@@ -238,7 +280,6 @@ export default function AddTransactionModal({ onClose }: Props) {
       enrichedNotes = [extras, enrichedNotes].filter(Boolean).join(' - ')
     }
 
-    // Para Tesouro, usa slug como ticker se disponivel
     const finalTicker = isTesouro && activeSlug ? activeSlug : ticker.trim().toUpperCase()
 
     try {
@@ -280,8 +321,9 @@ export default function AddTransactionModal({ onClose }: Props) {
         .toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     : null
 
-  const anyLoading    = quoteLoading || tdLoading || rvLoading || tdPriceLoading
-  const showDropdown  = showTDSuggestions || showRVSuggestions
+  const anyLoading   = quoteLoading || tdLoading || rvLoading || tdPriceLoading
+  const showDropdown = showTDSuggestions || showRVSuggestions
+
   const dropdownItems: Array<{ label: string; sublabel: string; onSelect: () => void }> =
     showTDSuggestions
       ? tdItems.map(item => ({
