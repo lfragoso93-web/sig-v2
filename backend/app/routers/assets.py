@@ -17,6 +17,8 @@ from app.integrations.brapi import (
     fetch_treasury_list,
     fetch_ticker_suggestions,
     fetch_treasury_price_by_date,
+    fetch_crypto_suggestions,
+    _yf_search_sync,
 )
 
 logger = logging.getLogger(__name__)
@@ -25,8 +27,6 @@ router = APIRouter()
 
 
 # ---------- Lista estatica de titulos do Tesouro Direto --------------------
-# Fonte: Tesouro Direto / B3 (junho 2026)
-# 'slug' e o identificador BRAPI para busca de historico de precos.
 
 _TESOURO_STATIC: list[dict] = [
     # Tesouro Selic
@@ -65,7 +65,6 @@ _TESOURO_STATIC: list[dict] = [
     {"bondType": "Tesouro Educa+",   "indexer": "ipca",      "maturityDate": "2037-12-01", "slug": "tesouro-educa-01122037"},
 ]
 
-# Indice slug -> item estatico para lookup rapido
 _SLUG_INDEX: dict[str, dict] = {item["slug"]: item for item in _TESOURO_STATIC if "slug" in item}
 
 
@@ -84,7 +83,7 @@ class TickerQuoteResponse(BaseModel):
 class TreasuryItem(BaseModel):
     name:          str
     ticker:        str
-    slug:          Optional[str]   = None   # identificador BRAPI para historico
+    slug:          Optional[str]   = None
     indexer:       str
     rate:          Optional[float] = None
     maturity_date: Optional[str]   = None
@@ -160,12 +159,13 @@ async def _yf_fetch_async(ticker: str, date_str: Optional[str] = None) -> Option
         return await loop.run_in_executor(pool, _yf_fetch_sync, ticker, date_str)
 
 
+async def _yf_search_async(q: str, limit: int = 10, asset_type: Optional[str] = None) -> list[dict]:
+    loop = asyncio.get_event_loop()
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        return await loop.run_in_executor(pool, _yf_search_sync, q, limit, asset_type)
+
+
 def _parse_treasury_item(raw: dict) -> Optional[TreasuryItem]:
-    """
-    Normaliza item da BRAPI v2 ou da lista estatica para TreasuryItem.
-    Campos BRAPI v2: symbol, bondType, indexer, buyRate, buyPrice, maturityDate.
-    Campos estaticos: bondType, indexer, maturityDate, slug.
-    """
     bond_type = raw.get("bondType") or raw.get("name") or raw.get("shortName") or ""
     if not bond_type:
         return None
@@ -249,13 +249,45 @@ async def upsert_asset(
 async def suggest_tickers(
     q: str = Query("", min_length=2),
     limit: int = Query(10, ge=1, le=20),
-    asset_type: Optional[str] = Query(None, description="Filtro de tipo BRAPI: stock, fund, etf, bdr"),
+    asset_type: Optional[str] = Query(
+        None,
+        description=(
+            "Tipo de ativo: "
+            "'stock' (acoes B3), 'fund' (FII), 'etf' (ETF B3), 'bdr', "
+            "'cripto' (via BRAPI /v2/crypto), "
+            "'stock_int' (stocks internacionais via yfinance), "
+            "'etf_int' (ETFs internacionais via yfinance)"
+        ),
+    ),
     _=Depends(get_current_user),
 ):
     """
-    Autocomplete de tickers da B3 via BRAPI /api/quote/list.
-    asset_type filtra pelo tipo do ativo (stock, fund, etf, bdr).
+    Autocomplete de tickers.
+    - B3 (stock/fund/etf/bdr): BRAPI /api/quote/list
+    - Cripto: BRAPI /api/v2/crypto/available
+    - Internacionais (stock_int/etf_int): yfinance Search/Lookup em thread
     """
+    # --- Cripto via BRAPI ---
+    if asset_type == "cripto":
+        raw = await fetch_crypto_suggestions(q.strip(), limit)
+        result = []
+        for item in raw:
+            coin = item.get("coin") or item.get("symbol") or item.get("ticker") or ""
+            name = item.get("name") or ""
+            if coin:
+                result.append(TickerSuggestion(ticker=coin.upper(), name=name, type="cripto"))
+        return result
+
+    # --- Internacionais via yfinance ---
+    if asset_type in ("stock_int", "etf_int"):
+        yf_type = "stock" if asset_type == "stock_int" else "etf"
+        raw     = await _yf_search_async(q.strip(), limit, yf_type)
+        return [
+            TickerSuggestion(ticker=item["ticker"], name=item["name"], type=item.get("type"))
+            for item in raw
+        ]
+
+    # --- B3 via BRAPI ---
     raw    = await fetch_ticker_suggestions(q.strip(), limit, asset_type)
     result = []
     for item in raw:
@@ -284,25 +316,17 @@ async def search_treasury(
 
 @router.get("/tesouro/price", response_model=TreasuryPriceResponse)
 async def get_treasury_price(
-    slug: str = Query(..., description="Slug do titulo (ex: tesouro-ipca-15082029)"),
-    date: str = Query(..., description="Data no formato YYYY-MM-DD"),
+    slug: str = Query(...),
+    date: str = Query(...),
     _=Depends(get_current_user),
 ):
-    """
-    Busca o PU (preco unitario) de um titulo do Tesouro em uma data especifica.
-    Usa BRAPI /v2/treasury/{slug}/historical.
-    Requer plano Pro na BRAPI.
-    """
     today    = __import__('datetime').date.today().isoformat()
     use_hist = date != today
+    price    = None
 
-    price = None
-
-    # Para data historica, tenta BRAPI historical
     if use_hist:
         price = await fetch_treasury_price_by_date(slug, date)
 
-    # Para data atual (ou fallback), tenta lista do tesouro (buyPrice do dia)
     if price is None:
         items = await fetch_treasury_list()
         for item in items:
@@ -319,7 +343,7 @@ async def get_treasury_price(
 @router.get("/quote/{ticker}", response_model=TickerQuoteResponse)
 async def get_ticker_quote(
     ticker: str,
-    date: Optional[str] = Query(None, description="Data no formato YYYY-MM-DD"),
+    date: Optional[str] = Query(None),
     _=Depends(get_current_user),
 ):
     t        = ticker.strip().upper()

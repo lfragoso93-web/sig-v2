@@ -89,13 +89,6 @@ async def fetch_historical_price(ticker: str, date_str: str) -> Optional[float]:
 
 
 async def fetch_treasury_price_by_date(slug: str, date_str: str) -> Optional[float]:
-    """
-    Busca o PU (preco unitario) de um titulo do Tesouro Direto em uma data especifica.
-    Endpoint BRAPI: GET /api/v2/treasury/{slug}/historical?from=YYYY-MM-DD&to=YYYY-MM-DD
-    O slug deve ser o identificador do titulo (ex: tesouro-ipca-15082029).
-    Quando o slug e texto livre (fallback estatico), retorna None.
-    Requer plano Pro na BRAPI.
-    """
     from datetime import date, timedelta
     headers = _auth_headers()
     try:
@@ -110,7 +103,6 @@ async def fetch_treasury_price_by_date(slug: str, date_str: str) -> Optional[flo
             resp = await client.get(url, headers=headers)
             resp.raise_for_status()
             data  = resp.json()
-            # Resposta esperada: { "historical": [{"date": "...", "buyPrice": ..., ...}] }
             hist  = data.get("historical") or data.get("prices") or []
             if not hist:
                 return None
@@ -122,7 +114,11 @@ async def fetch_treasury_price_by_date(slug: str, date_str: str) -> Optional[flo
         return None
 
 
-async def fetch_ticker_suggestions(q: str, limit: int = 10, asset_type: Optional[str] = None) -> list[dict]:
+async def fetch_ticker_suggestions(
+    q: str,
+    limit: int = 10,
+    asset_type: Optional[str] = None,
+) -> list[dict]:
     """
     Busca sugestoes de tickers da B3 via BRAPI /api/quote/list.
     asset_type: 'stock' | 'fund' | 'etf' | 'bdr' | None (todos)
@@ -139,6 +135,69 @@ async def fetch_ticker_suggestions(q: str, limit: int = 10, asset_type: Optional
             return data.get("stocks") or []
     except Exception as e:
         logger.warning(f"BRAPI ticker suggestions error for q={q!r} type={asset_type!r}: {e}")
+        return []
+
+
+async def fetch_crypto_suggestions(q: str, limit: int = 10) -> list[dict]:
+    """
+    Busca sugestoes de criptomoedas via BRAPI GET /api/v2/crypto/available?search={q}.
+    Retorna lista de dicts com coin, name.
+    """
+    headers = _auth_headers()
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                f"{BRAPI_BASE}/v2/crypto/available",
+                headers=headers,
+                params={"search": q, "limit": limit},
+            )
+            resp.raise_for_status()
+            data  = resp.json()
+            # Resposta: { "coins": [{ "coin": "BTC", "name": "Bitcoin", ... }] }
+            items = data.get("coins") or data.get("available") or (data if isinstance(data, list) else [])
+            return items[:limit]
+    except Exception as e:
+        logger.warning(f"BRAPI crypto suggestions error for q={q!r}: {e}")
+        return []
+
+
+def _yf_search_sync(q: str, limit: int = 10, asset_type: Optional[str] = None) -> list[dict]:
+    """
+    Busca tickers internacionais via yfinance Search / Lookup.
+    asset_type: 'stock' | 'etf' | None (todos via Search)
+    Roda em thread (bloqueante).
+    """
+    try:
+        import yfinance as yf
+        results = []
+
+        if asset_type == "stock":
+            items = yf.Lookup(q).get_stock(count=limit)
+        elif asset_type == "etf":
+            items = yf.Lookup(q).get_etf(count=limit)
+        else:
+            search = yf.Search(q, max_results=limit)
+            items  = search.quotes or []
+
+        for item in items:
+            # yf.Search retorna dicts; yf.Lookup retorna DataFrame
+            if hasattr(item, "to_dict"):
+                # e um objeto pandas-like, converte
+                row = item
+                ticker = str(getattr(row, "symbol", "") or "")
+                name   = str(getattr(row, "longname", "") or getattr(row, "shortname", "") or "")
+                kind   = str(getattr(row, "quoteType", "") or asset_type or "")
+            elif isinstance(item, dict):
+                ticker = item.get("symbol") or item.get("ticker") or ""
+                name   = item.get("longname") or item.get("shortname") or ""
+                kind   = item.get("quoteType") or asset_type or ""
+            else:
+                continue
+            if ticker:
+                results.append({"ticker": ticker.upper(), "name": name, "type": kind.lower()})
+        return results[:limit]
+    except Exception as e:
+        logger.warning(f"yfinance search error for q={q!r} type={asset_type!r}: {e}")
         return []
 
 
