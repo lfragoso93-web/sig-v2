@@ -1,6 +1,7 @@
 import { Landmark, TrendingUp, TrendingDown, Minus, Loader2 } from 'lucide-react'
 import { usePositions } from '@/hooks/usePortfolio'
 import { useAppStore } from '@/store/appStore'
+import { formatTreasuryName } from '@/utils/treasury'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -9,40 +10,6 @@ const fmtBRL = (v: number | null | undefined) =>
 
 const fmt = (v: number | null | undefined, dec = 2) =>
   v == null ? '—' : v.toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec })
-
-/**
- * Converte o slug da BRAPI em nome amigável para exibição.
- * Ex: TESOURO-SELIC-01032031        → Tesouro Selic 2031
- *     TESOURO-IPCA-MAIS-01032035    → Tesouro IPCA+ 2035
- *     TESOURO-PREFIXADO-01012026    → Tesouro Prefixado 2026
- *     TESOURO-RENDA-PLUS-01032065   → Tesouro Renda+ 2065
- *     TESOURO-EDUCA-MAIS-01032045   → Tesouro Educa+ 2045
- */
-function formatTreasuryName(ticker: string): string {
-  // Remove o prefixo TESOURO-
-  const s = ticker.toUpperCase().replace(/^TESOURO-/, '')
-
-  // Extrai a data no formato DDMMYYYY (últimos 8 dígitos antes do fim)
-  const dateMatch = s.match(/(\d{8})$/)
-  const year = dateMatch ? dateMatch[1].slice(4) : ''
-
-  // Remove o trecho de data para processar o tipo
-  const typeRaw = s.replace(/[-_]?\d{8}$/, '')
-
-  const TYPE_MAP: Record<string, string> = {
-    'SELIC':             'Selic',
-    'IPCA-MAIS':         'IPCA+',
-    'IPCA-MAIS-COM-JUROS-SEMESTRAIS': 'IPCA+ c/ Juros Semestrais',
-    'PREFIXADO':         'Prefixado',
-    'PREFIXADO-COM-JUROS-SEMESTRAIS': 'Prefixado c/ Juros Semestrais',
-    'RENDA-PLUS':        'Renda+',
-    'EDUCA-MAIS':        'Educa+',
-  }
-
-  const friendlyType = TYPE_MAP[typeRaw] ?? typeRaw.replace(/-/g, ' ')
-
-  return year ? `Tesouro ${friendlyType} ${year}` : `Tesouro ${friendlyType}`
-}
 
 // ── Componente ────────────────────────────────────────────────────────────────
 
@@ -162,7 +129,7 @@ export default function TesouroDiretoPage() {
                       <span style={{
                         fontSize: 'var(--text-xs)',
                         color: 'var(--color-text-faint)',
-                        paddingLeft: 21,   /* alinha com o texto acima (icon 13px + gap 8px) */
+                        paddingLeft: 21,
                         fontFamily: 'monospace',
                         letterSpacing: '0.02em',
                       }}>

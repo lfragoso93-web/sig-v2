@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ChevronDown, ChevronRight, HelpCircle } from 'lucide-react'
 import clsx from 'clsx'
 import { formatBRL, formatPercent, signClass } from '@/utils/format'
+import { formatTreasuryName } from '@/utils/treasury'
 import type { PositionGroup } from '@/hooks/usePortfolio'
 
 interface Props {
@@ -11,6 +12,15 @@ interface Props {
 function fmtPrice(val: number | null | undefined): string {
   if (val === null || val === undefined) return '—'
   return formatBRL(val)
+}
+
+/** Retorna o nome de exibição do ativo: amigável para Tesouro, ticker puro para demais. */
+function displayName(ticker: string, assetType: string): string {
+  const norm = assetType.toUpperCase()
+  if (norm === 'TESOURO_DIRETO' || norm === 'TESOURO') {
+    return formatTreasuryName(ticker)
+  }
+  return ticker
 }
 
 export default function PositionTable({ groups }: Props) {
@@ -68,14 +78,14 @@ export default function PositionTable({ groups }: Props) {
                 </td>
               </tr>
 
-              {/* Linhas de posicao — usa group.positions (campo real do PositionGroup) */}
+              {/* Linhas de posicao */}
               {expanded[group.label] && (group.positions ?? []).map(item => {
-                // current_price vem do backend como number|null;
-                // no usePortfolio.ts o fallback já usa avg quando null, mas
-                // queremos exibir '—' quando era null originalmente.
-                // variation_value == 0 && variation_percent == 0 indica sem cotacao.
                 const hasQuote = item.current_price !== item.average_price
                   || item.variation_value !== 0
+
+                const name = displayName(item.ticker, item.asset_type)
+                const isTesouro = item.asset_type.toUpperCase() === 'TESOURO_DIRETO'
+                  || item.asset_type.toUpperCase() === 'TESOURO'
 
                 return (
                   <tr
@@ -84,12 +94,15 @@ export default function PositionTable({ groups }: Props) {
                   >
                     <td className="px-4 py-2.5">
                       <div
-                        className="font-semibold text-slate-200 truncate max-w-[160px]"
+                        className="font-semibold text-slate-200 truncate max-w-[200px]"
                         title={item.ticker}
                       >
-                        {item.ticker}
+                        {name}
                       </div>
-                      <div className="text-[10px] text-slate-500">{item.asset_label}</div>
+                      {/* Para Tesouro, exibe o ticker como subtítulo discreto; para demais, exibe o asset_label */}
+                      <div className="text-[10px] text-slate-500">
+                        {isTesouro ? item.ticker : item.asset_label}
+                      </div>
                     </td>
 
                     <td className="text-right px-4 py-2.5 tabular-nums text-slate-300">
