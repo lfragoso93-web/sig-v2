@@ -15,6 +15,8 @@ from app.routers import (
 )
 from app.routers import debug
 
+# Enums gerenciados pelo FastAPI no startup.
+# treasurytype foi removido: o novo modelo de Tesouro Direto nao usa enum.
 _ENUMS: list[tuple] = [
     ("userrole",           "'user'", "'superadmin'"),
     ("dividendstatus",     "'RECEBIDO'", "'A_RECEBER'"),
@@ -27,16 +29,6 @@ _ENUMS: list[tuple] = [
     ("indexertype",        "'CDI'", "'IPCA_PLUS'", "'SELIC'", "'PREFIXADO'", "'IGPM_PLUS'"),
     ("irpfmarket",         "'ACOES'", "'DAY_TRADE'", "'FII'", "'ETF'", "'CRIPTO'", "'RENDA_FIXA'", "'STOCKS'"),
     ("goaltype",           "'PATRIMONIO_ALVO'", "'ALOCACAO'", "'DY_MENSAL'", "'RENTABILIDADE'", "'APORTE_MENSAL'"),
-    ("treasurytype",
-        "'Tesouro Selic'",
-        "'Tesouro Prefixado'",
-        "'Tesouro Prefixado com Juros Semestrais'",
-        "'Tesouro IPCA+'",
-        "'Tesouro IPCA+ com Juros Semestrais'",
-        "'Tesouro IGP-M+ com Juros Semestrais'",
-        "'Tesouro Renda+'",
-        "'Tesouro Educa+'",
-    ),
 ]
 
 
@@ -47,11 +39,9 @@ async def _create_enums_raw() -> None:
         for enum_def in _ENUMS:
             type_name = enum_def[0]
             values = ", ".join(enum_def[1:])
-            sql = f"CREATE TYPE {type_name} AS ENUM ({values})"
-            try:
-                await conn.execute(sql)
-            except asyncpg.exceptions.DuplicateObjectError:
-                pass
+            # DO NOTHING e a captura de excecao garantem idempotencia
+            sql = f"DO $$ BEGIN CREATE TYPE {type_name} AS ENUM ({values}); EXCEPTION WHEN duplicate_object THEN NULL; END $$;"
+            await conn.execute(sql)
     finally:
         await conn.close()
 
@@ -92,7 +82,6 @@ app.include_router(admin.router,        prefix=f"{PREFIX}/admin",       tags=["a
 
 # Core financeiro
 app.include_router(portfolios.router,   prefix=f"{PREFIX}/portfolios",  tags=["portfolios"])
-# transactions e treasury montados sob /portfolios (rotas: /{portfolio_id}/...)
 app.include_router(transactions.router, prefix=f"{PREFIX}/portfolios",  tags=["transactions"])
 app.include_router(treasury.router,     prefix=f"{PREFIX}/portfolios",  tags=["treasury"])
 app.include_router(positions.router,    prefix=f"{PREFIX}/positions",   tags=["positions"])
