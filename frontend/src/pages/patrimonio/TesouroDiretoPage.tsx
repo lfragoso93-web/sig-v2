@@ -61,19 +61,20 @@ interface Props {
 
 export default function TesouroDiretoPage({ portfolioId }: Props) {
   const { data: investments = [], isLoading } = useTreasury(portfolioId)
-  const createMut  = useCreateTreasury(portfolioId)
-  const updateMut  = useUpdateTreasury(portfolioId)
-  const deleteMut  = useDeleteTreasury(portfolioId)
+  const createMut = useCreateTreasury(portfolioId)
+  const updateMut = useUpdateTreasury(portfolioId)
+  const deleteMut = useDeleteTreasury(portfolioId)
 
-  // modal
-  const [showModal, setShowModal]   = useState(false)
-  const [editItem,  setEditItem]    = useState<TreasuryInvestment | null>(null)
-  const [form,      setForm]        = useState<FormState>(emptyForm())
-  const [formError, setFormError]   = useState('')
+  // modal state
+  const [showModal, setShowModal] = useState(false)
+  const [editItem,  setEditItem]  = useState<TreasuryInvestment | null>(null)
+  const [form,      setForm]      = useState<FormState>(emptyForm())
+  const [formError, setFormError] = useState('')
 
-  // autocomplete brapi_name
-  const { suggestions, search: searchTesouro, clear: clearTesouro } = useTesouroSearch()
-  const [showSugg, setShowSugg] = useState(false)
+  // autocomplete: query separada para controlar o hook
+  const [tesouroQuery, setTesouroQuery] = useState('')
+  const [showSugg,     setShowSugg]     = useState(false)
+  const { items: tesouroItems } = useTesouroSearch(tesouroQuery, showModal)
 
   // confirm delete
   const [deleteTarget, setDeleteTarget] = useState<TreasuryInvestment | null>(null)
@@ -84,7 +85,8 @@ export default function TesouroDiretoPage({ portfolioId }: Props) {
     setEditItem(null)
     setForm(emptyForm())
     setFormError('')
-    clearTesouro()
+    setTesouroQuery('')
+    setShowSugg(false)
     setShowModal(true)
   }
 
@@ -98,6 +100,8 @@ export default function TesouroDiretoPage({ portfolioId }: Props) {
       is_active:      item.is_active,
     })
     setFormError('')
+    setTesouroQuery('')
+    setShowSugg(false)
     setShowModal(true)
   }
 
@@ -105,6 +109,8 @@ export default function TesouroDiretoPage({ portfolioId }: Props) {
     setShowModal(false)
     setEditItem(null)
     setFormError('')
+    setTesouroQuery('')
+    setShowSugg(false)
   }
 
   function setField<K extends keyof FormState>(k: K, v: FormState[K]) {
@@ -118,7 +124,6 @@ export default function TesouroDiretoPage({ portfolioId }: Props) {
     if (!form.brapi_name.trim()) return setFormError('Informe o título.')
     if (isNaN(val) || val <= 0)  return setFormError('Valor investido deve ser positivo.')
     if (!form.purchase_date)      return setFormError('Informe a data de compra.')
-
     try {
       if (editItem) {
         await updateMut.mutateAsync({ id: editItem.id, data: toPayload(form) })
@@ -149,16 +154,7 @@ export default function TesouroDiretoPage({ portfolioId }: Props) {
         <h3 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 600, color: 'var(--color-text)' }}>
           Tesouro Direto
         </h3>
-        <button
-          onClick={openCreate}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 'var(--space-1)',
-            padding: 'var(--space-2) var(--space-3)',
-            background: 'var(--color-primary)', color: '#fff',
-            border: 'none', borderRadius: 'var(--radius-md)',
-            fontSize: 'var(--text-sm)', fontWeight: 500, cursor: 'pointer',
-          }}
-        >
+        <button onClick={openCreate} style={btnPrimary}>
           <Plus size={15} /> Adicionar
         </button>
       </div>
@@ -196,10 +192,7 @@ export default function TesouroDiretoPage({ portfolioId }: Props) {
                 const positivo = (inv.lucro_prejuizo ?? 0) >= 0
                 const neutro   = inv.lucro_prejuizo == null
                 return (
-                  <tr
-                    key={inv.id}
-                    style={{ borderBottom: '1px solid var(--color-divider)' }}
-                  >
+                  <tr key={inv.id} style={{ borderBottom: '1px solid var(--color-divider)' }}>
                     <td style={{ padding: 'var(--space-2) var(--space-3)', fontWeight: 500, color: 'var(--color-text)' }}>
                       {inv.brapi_name}
                     </td>
@@ -224,9 +217,7 @@ export default function TesouroDiretoPage({ portfolioId }: Props) {
                         color: neutro ? 'var(--color-text-muted)' : positivo ? 'var(--color-success)' : 'var(--color-error)',
                         fontVariantNumeric: 'tabular-nums',
                       }}>
-                        {neutro
-                          ? <Minus size={12} />
-                          : positivo ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                        {neutro ? <Minus size={12} /> : positivo ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
                         {neutro ? '—' : `${fmtBRL(inv.lucro_prejuizo)} (${fmt(inv.rentabilidade_pct)}%)`}
                       </span>
                     </td>
@@ -245,26 +236,11 @@ export default function TesouroDiretoPage({ portfolioId }: Props) {
                     </td>
                     <td style={{ padding: 'var(--space-2) var(--space-3)' }}>
                       <div style={{ display: 'flex', gap: 'var(--space-1)' }}>
-                        <button
-                          onClick={() => openEdit(inv)}
-                          title="Editar"
-                          style={{
-                            background: 'none', border: 'none', cursor: 'pointer',
-                            color: 'var(--color-text-muted)', padding: 'var(--space-1)',
-                            borderRadius: 'var(--radius-sm)',
-                          }}
-                        >
+                        <button onClick={() => openEdit(inv)} title="Editar" style={iconBtn}>
                           <Pencil size={15} />
                         </button>
-                        <button
-                          onClick={() => setDeleteTarget(inv)}
-                          title="Excluir"
-                          style={{
-                            background: 'none', border: 'none', cursor: 'pointer',
-                            color: 'var(--color-error)', padding: 'var(--space-1)',
-                            borderRadius: 'var(--radius-sm)',
-                          }}
-                        >
+                        <button onClick={() => setDeleteTarget(inv)} title="Excluir"
+                          style={{ ...iconBtn, color: 'var(--color-error)' }}>
                           <Trash2 size={15} />
                         </button>
                       </div>
@@ -280,21 +256,10 @@ export default function TesouroDiretoPage({ portfolioId }: Props) {
       {/* ===== Modal Cadastro / Edição ===== */}
       {showModal && (
         <div
-          style={{
-            position: 'fixed', inset: 0, zIndex: 50,
-            background: 'oklch(0 0 0 / 0.45)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: 'var(--space-4)',
-          }}
+          style={overlayStyle}
           onClick={e => { if (e.target === e.currentTarget) closeModal() }}
         >
-          <div style={{
-            background: 'var(--color-surface)',
-            borderRadius: 'var(--radius-xl)',
-            padding: 'var(--space-6)',
-            width: '100%', maxWidth: 480,
-            boxShadow: 'var(--shadow-lg)',
-          }}>
+          <div style={modalStyle}>
             <h2 style={{ margin: '0 0 var(--space-4)', fontSize: 'var(--text-base)', fontWeight: 600 }}>
               {editItem ? 'Editar Título' : 'Adicionar Título'}
             </h2>
@@ -303,15 +268,13 @@ export default function TesouroDiretoPage({ portfolioId }: Props) {
 
               {/* brapi_name autocomplete */}
               <div style={{ position: 'relative' }}>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-muted)', marginBottom: 'var(--space-1)' }}>
-                  Título
-                </label>
+                <label style={labelStyle}>Título</label>
                 <input
                   type="text"
                   value={form.brapi_name}
                   onChange={e => {
                     setField('brapi_name', e.target.value)
-                    searchTesouro(e.target.value)
+                    setTesouroQuery(e.target.value)
                     setShowSugg(true)
                   }}
                   onBlur={() => setTimeout(() => setShowSugg(false), 150)}
@@ -319,7 +282,7 @@ export default function TesouroDiretoPage({ portfolioId }: Props) {
                   required
                   style={inputStyle}
                 />
-                {showSugg && suggestions.length > 0 && (
+                {showSugg && tesouroItems.length > 0 && (
                   <ul style={{
                     position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
                     background: 'var(--color-surface-2)',
@@ -329,13 +292,14 @@ export default function TesouroDiretoPage({ portfolioId }: Props) {
                     maxHeight: 200, overflowY: 'auto',
                     boxShadow: 'var(--shadow-md)',
                   }}>
-                    {suggestions.map((s: string) => (
+                    {tesouroItems.map(item => (
                       <li
-                        key={s}
+                        key={item.ticker}
                         onMouseDown={() => {
-                          setField('brapi_name', s)
+                          setField('brapi_name', item.name)
+                          if (item.maturity_date) setField('maturity_date', item.maturity_date.slice(0, 10))
+                          setTesouroQuery('')
                           setShowSugg(false)
-                          clearTesouro()
                         }}
                         style={{
                           padding: 'var(--space-2) var(--space-3)',
@@ -345,7 +309,12 @@ export default function TesouroDiretoPage({ portfolioId }: Props) {
                           color: 'var(--color-text)',
                         }}
                       >
-                        {s}
+                        <span style={{ fontWeight: 500 }}>{item.name}</span>
+                        {item.maturity_date && (
+                          <span style={{ color: 'var(--color-text-muted)', marginLeft: 'var(--space-2)' }}>
+                            venc. {fmtDate(item.maturity_date)}
+                          </span>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -369,47 +338,33 @@ export default function TesouroDiretoPage({ portfolioId }: Props) {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
                 <div>
                   <label style={labelStyle}>Data de Compra</label>
-                  <input
-                    type="date"
-                    value={form.purchase_date}
+                  <input type="date" value={form.purchase_date}
                     onChange={e => setField('purchase_date', e.target.value)}
-                    required
-                    style={inputStyle}
-                  />
+                    required style={inputStyle} />
                 </div>
                 <div>
                   <label style={labelStyle}>Vencimento (opcional)</label>
-                  <input
-                    type="date"
-                    value={form.maturity_date}
+                  <input type="date" value={form.maturity_date}
                     onChange={e => setField('maturity_date', e.target.value)}
-                    style={inputStyle}
-                  />
+                    style={inputStyle} />
                 </div>
               </div>
 
               {/* is_active */}
               <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--text-sm)', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={form.is_active}
-                  onChange={e => setField('is_active', e.target.checked)}
-                />
+                <input type="checkbox" checked={form.is_active}
+                  onChange={e => setField('is_active', e.target.checked)} />
                 Investimento ativo
               </label>
 
               {formError && (
-                <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--color-error)' }}>
-                  {formError}
-                </p>
+                <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--color-error)' }}>{formError}</p>
               )}
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
-                <button type="button" onClick={closeModal} style={btnSecondary}>
-                  Cancelar
-                </button>
+                <button type="button" onClick={closeModal} style={btnSecondary}>Cancelar</button>
                 <button type="submit" disabled={isMutating} style={btnPrimary}>
-                  {isMutating ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : null}
+                  {isMutating && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}
                   {editItem ? 'Salvar' : 'Adicionar'}
                 </button>
               </div>
@@ -421,21 +376,10 @@ export default function TesouroDiretoPage({ portfolioId }: Props) {
       {/* ===== Modal Confirmação Exclusão ===== */}
       {deleteTarget && (
         <div
-          style={{
-            position: 'fixed', inset: 0, zIndex: 50,
-            background: 'oklch(0 0 0 / 0.45)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: 'var(--space-4)',
-          }}
+          style={overlayStyle}
           onClick={e => { if (e.target === e.currentTarget) setDeleteTarget(null) }}
         >
-          <div style={{
-            background: 'var(--color-surface)',
-            borderRadius: 'var(--radius-xl)',
-            padding: 'var(--space-6)',
-            width: '100%', maxWidth: 400,
-            boxShadow: 'var(--shadow-lg)',
-          }}>
+          <div style={{ ...modalStyle, maxWidth: 400 }}>
             <h2 style={{ margin: '0 0 var(--space-2)', fontSize: 'var(--text-base)', fontWeight: 600 }}>
               Excluir Título
             </h2>
@@ -443,15 +387,10 @@ export default function TesouroDiretoPage({ portfolioId }: Props) {
               Deseja remover <strong>{deleteTarget.brapi_name}</strong>? Esta ação não pode ser desfeita.
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
-              <button onClick={() => setDeleteTarget(null)} style={btnSecondary}>
-                Cancelar
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={deleteMut.isPending}
-                style={{ ...btnPrimary, background: 'var(--color-error)' }}
-              >
-                {deleteMut.isPending ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : null}
+              <button onClick={() => setDeleteTarget(null)} style={btnSecondary}>Cancelar</button>
+              <button onClick={handleDelete} disabled={deleteMut.isPending}
+                style={{ ...btnPrimary, background: 'var(--color-error)' }}>
+                {deleteMut.isPending && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}
                 Excluir
               </button>
             </div>
@@ -464,7 +403,7 @@ export default function TesouroDiretoPage({ portfolioId }: Props) {
   )
 }
 
-// ── estilos inline compartilhados ───────────────────────────────────
+// ── estilos ──────────────────────────────────────────────────────────
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
@@ -498,4 +437,25 @@ const btnSecondary: React.CSSProperties = {
   background: 'var(--color-surface-offset)', color: 'var(--color-text)',
   border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
   fontSize: 'var(--text-sm)', fontWeight: 500, cursor: 'pointer',
+}
+
+const iconBtn: React.CSSProperties = {
+  background: 'none', border: 'none', cursor: 'pointer',
+  color: 'var(--color-text-muted)', padding: 'var(--space-1)',
+  borderRadius: 'var(--radius-sm)',
+}
+
+const overlayStyle: React.CSSProperties = {
+  position: 'fixed', inset: 0, zIndex: 50,
+  background: 'oklch(0 0 0 / 0.45)',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  padding: 'var(--space-4)',
+}
+
+const modalStyle: React.CSSProperties = {
+  background: 'var(--color-surface)',
+  borderRadius: 'var(--radius-xl)',
+  padding: 'var(--space-6)',
+  width: '100%', maxWidth: 480,
+  boxShadow: 'var(--shadow-lg)',
 }
