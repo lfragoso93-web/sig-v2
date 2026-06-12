@@ -22,8 +22,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const root = document.documentElement
-    // tokens.css usa [data-theme="dark"] como seletor — não a classe .dark
+    // tokens.css usa [data-theme="dark"] — CSS vars
     root.setAttribute('data-theme', theme)
+    // Tailwind darkMode: 'class' precisa da classe .dark no <html>
+    if (theme === 'dark') {
+      root.classList.add('dark')
+    } else {
+      root.classList.remove('dark')
+    }
     try { localStorage.setItem('sig_theme', theme) } catch { /* sandboxed */ }
   }, [theme])
 
