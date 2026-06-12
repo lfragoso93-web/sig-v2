@@ -3,13 +3,13 @@ from dateutil.relativedelta import relativedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import func, extract, and_
 from app.models.dividend import Dividend, DividendStatus
+from app.models.asset_dividend import AssetDividend
 from app.models.asset import Asset
 from app.schemas.dividend import (
     ProventosSummary, ProventoDistribution,
     ProventosEvolucao, ProventosHistoricoMes, ProventoItem
 )
 from typing import Optional
-import calendar
 
 
 def _period_start(period: str) -> date:
@@ -28,23 +28,31 @@ def get_summary(db: Session, portfolio_id: int) -> ProventosSummary:
     today = date.today()
     start_12m = today - relativedelta(months=12)
 
-    # Total carteira (todos os recebidos)
-    total_carteira = db.query(func.sum(Dividend.net_value)).filter(
-        Dividend.portfolio_id == portfolio_id,
-        Dividend.status == DividendStatus.RECEBIDO,
-    ).scalar() or 0.0
+    base = (
+        db.query(Dividend)
+        .join(AssetDividend, AssetDividend.id == Dividend.asset_dividend_id)
+        .filter(Dividend.portfolio_id == portfolio_id)
+    )
 
-    # Total últimos 12 meses (recebidos)
-    total_12m = db.query(func.sum(Dividend.net_value)).filter(
-        Dividend.portfolio_id == portfolio_id,
-        Dividend.status == DividendStatus.RECEBIDO,
-        Dividend.payment_date >= start_12m,
-    ).scalar() or 0.0
+    total_carteira = (
+        base.filter(Dividend.status == DividendStatus.RECEBIDO)
+        .with_entities(func.sum(Dividend.net_value))
+        .scalar() or 0.0
+    )
 
-    media_mensal = total_12m / 12
+    total_12m = (
+        base.filter(
+            Dividend.status == DividendStatus.RECEBIDO,
+            AssetDividend.payment_date >= start_12m,
+        )
+        .with_entities(func.sum(Dividend.net_value))
+        .scalar() or 0.0
+    )
+
+    media_mensal = float(total_12m) / 12
 
     return ProventosSummary(
-        media_mensal=float(media_mensal),
+        media_mensal=media_mensal,
         meta_mensal=0.0,
         meta_percent=0.0,
         total_12m=float(total_12m),
@@ -52,53 +60,65 @@ def get_summary(db: Session, portfolio_id: int) -> ProventosSummary:
     )
 
 
-def get_distribution(db: Session, portfolio_id: int, months: int = 12) -> list[ProventoDistribution]:
+def get_distribution(
+    db: Session, portfolio_id: int, months: int = 12
+) -> list[ProventoDistribution]:
     start = date.today() - relativedelta(months=months)
+
     rows = (
         db.query(Asset.ticker, func.sum(Dividend.net_value).label("total"))
-        .join(Dividend, Dividend.asset_id == Asset.id)
+        .join(AssetDividend, AssetDividend.id == Dividend.asset_dividend_id)
+        .join(Asset, Asset.id == AssetDividend.asset_id)
         .filter(
             Dividend.portfolio_id == portfolio_id,
-            Dividend.payment_date >= start,
+            AssetDividend.payment_date >= start,
         )
         .group_by(Asset.ticker)
         .order_by(func.sum(Dividend.net_value).desc())
         .all()
     )
-    grand_total = sum(r.total for r in rows) or 1
+
+    grand_total = sum(float(r.total) for r in rows) or 1.0
     return [
         ProventoDistribution(
             ticker=r.ticker,
             total=float(r.total),
-            percentage=float(r.total / grand_total * 100),
+            percentage=float(r.total) / grand_total * 100,
         )
         for r in rows
     ]
 
 
 def get_evolucao(
-    db: Session, portfolio_id: int, tipo: str, period: str,
+    db: Session,
+    portfolio_id: int,
+    tipo: str,
+    period: str,
     asset_type: Optional[str] = None,
 ) -> list[ProventosEvolucao]:
     start = _period_start(period)
-    filters = [Dividend.portfolio_id == portfolio_id, Dividend.payment_date >= start]
+
+    filters = [
+        Dividend.portfolio_id == portfolio_id,
+        AssetDividend.payment_date >= start,
+    ]
     if asset_type:
         filters.append(Asset.asset_type == asset_type)
 
-    base_q = (
+    rows = (
         db.query(
-            Dividend.payment_date,
+            AssetDividend.payment_date,
             Dividend.net_value,
             Dividend.status,
         )
-        .join(Asset, Asset.id == Dividend.asset_id)
+        .join(AssetDividend, AssetDividend.id == Dividend.asset_dividend_id)
+        .join(Asset, Asset.id == AssetDividend.asset_id)
         .filter(and_(*filters))
         .all()
     )
 
-    # Agrupa por mês ou ano
     buckets: dict[str, dict] = {}
-    for row in base_q:
+    for row in rows:
         if row.payment_date is None:
             continue
         key = (
@@ -119,7 +139,8 @@ def get_evolucao(
 
 
 def get_historico_mensal(
-    db: Session, portfolio_id: int,
+    db: Session,
+    portfolio_id: int,
     status: Optional[str] = None,
     asset_type: Optional[str] = None,
 ) -> list[ProventosHistoricoMes]:
@@ -131,18 +152,18 @@ def get_historico_mensal(
 
     rows = (
         db.query(
-            extract("year", Dividend.payment_date).label("year"),
-            extract("month", Dividend.payment_date).label("month"),
+            extract("year",  AssetDividend.payment_date).label("year"),
+            extract("month", AssetDividend.payment_date).label("month"),
             func.sum(Dividend.net_value).label("total"),
         )
-        .join(Asset, Asset.id == Dividend.asset_id)
+        .join(AssetDividend, AssetDividend.id == Dividend.asset_dividend_id)
+        .join(Asset, Asset.id == AssetDividend.asset_id)
         .filter(and_(*filters))
         .group_by("year", "month")
         .order_by("year", "month")
         .all()
     )
 
-    # Monta dicionário year -> {month -> total}
     data: dict[int, dict[int, float]] = {}
     for r in rows:
         y, m = int(r.year), int(r.month)
@@ -152,8 +173,8 @@ def get_historico_mensal(
     for year in sorted(data.keys(), reverse=True):
         months_vals = [data[year].get(m) for m in range(1, 13)]
         values = [v for v in months_vals if v is not None]
-        total = sum(values)
-        media = total / len(values) if values else 0
+        total  = sum(values)
+        media  = total / len(values) if values else 0.0
         result.append(ProventosHistoricoMes(
             year=year,
             months=months_vals,
@@ -164,24 +185,26 @@ def get_historico_mensal(
 
 
 def get_list(
-    db: Session, portfolio_id: int,
+    db: Session,
+    portfolio_id: int,
     year: Optional[int] = None,
     status: Optional[str] = None,
     asset_type: Optional[str] = None,
 ) -> list[ProventoItem]:
     filters = [Dividend.portfolio_id == portfolio_id]
     if year:
-        filters.append(extract("year", Dividend.payment_date) == year)
+        filters.append(extract("year", AssetDividend.payment_date) == year)
     if status:
         filters.append(Dividend.status == status)
     if asset_type:
         filters.append(Asset.asset_type == asset_type)
 
     rows = (
-        db.query(Dividend, Asset)
-        .join(Asset, Asset.id == Dividend.asset_id)
+        db.query(Dividend, AssetDividend, Asset)
+        .join(AssetDividend, AssetDividend.id == Dividend.asset_dividend_id)
+        .join(Asset, Asset.id == AssetDividend.asset_id)
         .filter(and_(*filters))
-        .order_by(Dividend.payment_date.desc())
+        .order_by(AssetDividend.payment_date.desc())
         .all()
     )
 
@@ -190,14 +213,14 @@ def get_list(
             id=d.id,
             ticker=a.ticker,
             asset_type=a.asset_type,
-            dividend_type=d.dividend_type,
+            dividend_type=ad.dividend_type,
             status=d.status,
-            ex_date=d.ex_date,
-            payment_date=d.payment_date,
+            ex_date=ad.ex_date,
+            payment_date=ad.payment_date,
             quantity=float(d.quantity),
-            value_per_unit=float(d.value_per_unit),
-            total_value=float(d.total_value),
-            net_value=float(d.net_value),
+            value_per_unit=float(ad.value_per_unit),
+            total_value=float(d.total_value) if d.total_value else 0.0,
+            net_value=float(d.net_value) if d.net_value else 0.0,
         )
-        for d, a in rows
+        for d, ad, a in rows
     ]
