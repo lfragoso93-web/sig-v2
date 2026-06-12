@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import api from '@/services/api'
+import PasswordInput from '@/components/ui/PasswordInput'
 
 const schema = z.object({
   email: z.string().email('E-mail inválido'),
@@ -46,6 +47,7 @@ export default function Login() {
       >
         <h1 className="text-2xl font-bold mb-6 text-center">SIG v2</h1>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+
           <div>
             <label className="block text-sm mb-1" style={{ color: 'var(--color-text-muted)' }}>E-mail</label>
             <input
@@ -55,11 +57,11 @@ export default function Login() {
             />
             {errors.email && <p className="text-xs mt-1" style={{ color: 'var(--color-error)' }}>{errors.email.message}</p>}
           </div>
+
           <div>
             <label className="block text-sm mb-1" style={{ color: 'var(--color-text-muted)' }}>Senha</label>
-            <input
+            <PasswordInput
               {...register('password')}
-              type="password"
               className="input w-full"
             />
             {errors.password && <p className="text-xs mt-1" style={{ color: 'var(--color-error)' }}>{errors.password.message}</p>}
@@ -69,7 +71,9 @@ export default function Login() {
               </Link>
             </div>
           </div>
+
           {errors.root && <p className="text-sm text-center" style={{ color: 'var(--color-error)' }}>{errors.root.message}</p>}
+
           <button
             type="submit"
             disabled={isSubmitting}
@@ -77,10 +81,12 @@ export default function Login() {
           >
             {isSubmitting ? 'Entrando...' : 'Entrar'}
           </button>
+
           <p className="text-center text-sm" style={{ color: 'var(--color-text-muted)' }}>
             Não tem conta?{' '}
             <Link to="/auth/registro" className="hover:underline" style={{ color: 'var(--color-primary)' }}>Cadastre-se</Link>
           </p>
+
         </form>
       </div>
     </div>
