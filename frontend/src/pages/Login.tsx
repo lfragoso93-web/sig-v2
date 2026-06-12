@@ -40,55 +40,58 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--color-bg)' }}>
-      <div
-        className="w-full max-w-sm rounded-xl p-8 shadow-lg"
-        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
-      >
-        <h1 className="text-2xl font-bold mb-6 text-center">SIG v2</h1>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+      <h2 className="text-xl font-bold text-center" style={{ color: 'var(--color-text)' }}>Entrar</h2>
 
-          <div>
-            <label className="block text-sm mb-1" style={{ color: 'var(--color-text-muted)' }}>E-mail</label>
-            <input
-              {...register('email')}
-              type="email"
-              className="input w-full"
-            />
-            {errors.email && <p className="text-xs mt-1" style={{ color: 'var(--color-error)' }}>{errors.email.message}</p>}
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1" style={{ color: 'var(--color-text-muted)' }}>Senha</label>
-            <PasswordInput
-              {...register('password')}
-              className="input w-full"
-            />
-            {errors.password && <p className="text-xs mt-1" style={{ color: 'var(--color-error)' }}>{errors.password.message}</p>}
-            <div className="text-right mt-1">
-              <Link to="/auth/esqueceu-senha" className="text-xs hover:underline" style={{ color: 'var(--color-primary)' }}>
-                Esqueceu a senha?
-              </Link>
-            </div>
-          </div>
-
-          {errors.root && <p className="text-sm text-center" style={{ color: 'var(--color-error)' }}>{errors.root.message}</p>}
-
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="btn btn-primary w-full py-2 font-semibold"
-          >
-            {isSubmitting ? 'Entrando...' : 'Entrar'}
-          </button>
-
-          <p className="text-center text-sm" style={{ color: 'var(--color-text-muted)' }}>
-            Não tem conta?{' '}
-            <Link to="/auth/registro" className="hover:underline" style={{ color: 'var(--color-primary)' }}>Cadastre-se</Link>
-          </p>
-
-        </form>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm" style={{ color: 'var(--color-text-muted)' }}>E-mail</label>
+        <input
+          {...register('email')}
+          type="email"
+          autoComplete="email"
+          className="input w-full"
+          style={{ fontSize: 16 }}
+        />
+        {errors.email && <p className="text-xs" style={{ color: 'var(--color-error)' }}>{errors.email.message}</p>}
       </div>
-    </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Senha</label>
+        <PasswordInput
+          {...register('password')}
+          className="input w-full"
+          style={{ fontSize: 16 }}
+          autoComplete="current-password"
+        />
+        {errors.password && <p className="text-xs" style={{ color: 'var(--color-error)' }}>{errors.password.message}</p>}
+        <div className="text-right">
+          <Link
+            to="/auth/esqueceu-senha"
+            className="text-xs hover:underline"
+            style={{ color: 'var(--color-primary)' }}
+          >
+            Esqueceu a senha?
+          </Link>
+        </div>
+      </div>
+
+      {errors.root && (
+        <p className="text-sm text-center" style={{ color: 'var(--color-error)' }}>{errors.root.message}</p>
+      )}
+
+      <button
+        type="submit"
+        disabled={isSubmitting}
+        className="btn btn-primary w-full font-semibold"
+        style={{ minHeight: 44 }}
+      >
+        {isSubmitting ? 'Entrando...' : 'Entrar'}
+      </button>
+
+      <p className="text-center text-sm" style={{ color: 'var(--color-text-muted)' }}>
+        Não tem conta?{' '}
+        <Link to="/auth/registro" className="hover:underline" style={{ color: 'var(--color-primary)' }}>Cadastre-se</Link>
+      </p>
+    </form>
   )
 }

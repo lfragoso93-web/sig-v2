@@ -23,19 +23,32 @@ export default function AuthLayout() {
   if (token) return <Navigate to="/carteira" replace />
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bg px-4">
+    <div
+      className="flex flex-col items-center justify-center px-4 py-10"
+      style={{
+        minHeight: '100dvh',
+        background: 'var(--color-bg)',
+      }}
+    >
       <div className="w-full max-w-sm">
         {/* Header */}
         <div className="flex flex-col items-center gap-3 mb-8">
           <SigLogoLarge />
           <div className="text-center">
-            <h1 className="text-xl font-bold">SIG v2</h1>
-            <p className="text-sm text-muted">Sistema de Gestão de Investimentos</p>
+            <h1 className="text-xl font-bold" style={{ color: 'var(--color-text)' }}>SIG v2</h1>
+            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Sistema de Gestão de Investimentos</p>
           </div>
         </div>
 
         {/* Card */}
-        <div className="bg-surface border border-light-border dark:border-dark-border rounded-xl p-8 shadow-md">
+        <div
+          className="rounded-xl shadow-md"
+          style={{
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-border)',
+            padding: 'clamp(1.5rem, 5vw, 2rem)',
+          }}
+        >
           <Outlet />
         </div>
       </div>

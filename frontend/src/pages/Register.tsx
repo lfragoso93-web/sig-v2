@@ -3,6 +3,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useNavigate, Link } from 'react-router-dom'
 import api from '@/services/api'
+import PasswordInput from '@/components/ui/PasswordInput'
 
 const schema = z.object({
   name: z.string().min(2, 'Nome obrigatório'),
@@ -29,38 +30,61 @@ export default function Register() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--color-bg)' }}>
-      <div
-        className="w-full max-w-sm rounded-xl p-8 shadow-lg"
-        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
-      >
-        <h1 className="text-2xl font-bold mb-6 text-center">Criar conta</h1>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div>
-            <label className="block text-sm mb-1" style={{ color: 'var(--color-text-muted)' }}>Nome</label>
-            <input {...register('name')} className="input w-full" />
-            {errors.name && <p className="text-xs mt-1" style={{ color: 'var(--color-error)' }}>{errors.name.message}</p>}
-          </div>
-          <div>
-            <label className="block text-sm mb-1" style={{ color: 'var(--color-text-muted)' }}>E-mail</label>
-            <input {...register('email')} type="email" className="input w-full" />
-            {errors.email && <p className="text-xs mt-1" style={{ color: 'var(--color-error)' }}>{errors.email.message}</p>}
-          </div>
-          <div>
-            <label className="block text-sm mb-1" style={{ color: 'var(--color-text-muted)' }}>Senha</label>
-            <input {...register('password')} type="password" className="input w-full" />
-            {errors.password && <p className="text-xs mt-1" style={{ color: 'var(--color-error)' }}>{errors.password.message}</p>}
-          </div>
-          {errors.root && <p className="text-sm text-center" style={{ color: 'var(--color-error)' }}>{errors.root.message}</p>}
-          <button type="submit" disabled={isSubmitting} className="btn btn-primary w-full py-2 font-semibold">
-            {isSubmitting ? 'Criando...' : 'Criar conta'}
-          </button>
-          <p className="text-center text-sm" style={{ color: 'var(--color-text-muted)' }}>
-            Já tem conta?{' '}
-            <Link to="/auth/login" className="hover:underline" style={{ color: 'var(--color-primary)' }}>Entrar</Link>
-          </p>
-        </form>
+    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+      <h2 className="text-xl font-bold text-center" style={{ color: 'var(--color-text)' }}>Criar conta</h2>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Nome</label>
+        <input
+          {...register('name')}
+          type="text"
+          autoComplete="name"
+          className="input w-full"
+          style={{ fontSize: 16 }}
+        />
+        {errors.name && <p className="text-xs" style={{ color: 'var(--color-error)' }}>{errors.name.message}</p>}
       </div>
-    </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm" style={{ color: 'var(--color-text-muted)' }}>E-mail</label>
+        <input
+          {...register('email')}
+          type="email"
+          autoComplete="email"
+          className="input w-full"
+          style={{ fontSize: 16 }}
+        />
+        {errors.email && <p className="text-xs" style={{ color: 'var(--color-error)' }}>{errors.name.message}</p>}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Senha</label>
+        <PasswordInput
+          {...register('password')}
+          className="input w-full"
+          style={{ fontSize: 16 }}
+          autoComplete="new-password"
+        />
+        {errors.password && <p className="text-xs" style={{ color: 'var(--color-error)' }}>{errors.password.message}</p>}
+      </div>
+
+      {errors.root && (
+        <p className="text-sm text-center" style={{ color: 'var(--color-error)' }}>{errors.root.message}</p>
+      )}
+
+      <button
+        type="submit"
+        disabled={isSubmitting}
+        className="btn btn-primary w-full font-semibold"
+        style={{ minHeight: 44 }}
+      >
+        {isSubmitting ? 'Criando...' : 'Criar conta'}
+      </button>
+
+      <p className="text-center text-sm" style={{ color: 'var(--color-text-muted)' }}>
+        Já tem conta?{' '}
+        <Link to="/auth/login" className="hover:underline" style={{ color: 'var(--color-primary)' }}>Entrar</Link>
+      </p>
+    </form>
   )
 }
