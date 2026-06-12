@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Plus, Search, Trash2 } from 'lucide-react'
 import { useAppStore } from '@/store/appStore'
 import {
@@ -26,20 +27,27 @@ const ASSET_TYPES: { label: string; value: string }[] = [
 export default function Transacoes() {
   const { selectedPortfolioId } = useAppStore()
   const { data: portfolios = [] } = usePortfolios()
+  const [searchParams] = useSearchParams()
 
   const { data: transactions = [], isLoading } = useTransactions(selectedPortfolioId)
   const deleteTransaction = useDeleteTransaction()
 
   const [showModal, setShowModal]   = useState(false)
-  const [search, setSearch]         = useState('')
+  // Pré-popula o campo de busca com o ticker vindo do query param ?ticker=
+  const [search, setSearch]         = useState(() => searchParams.get('ticker') ?? '')
   const [typeFilter, setTypeFilter] = useState('')
   const [opFilter, setOpFilter]     = useState<'todos' | 'buy' | 'sell'>('todos')
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
 
+  // Atualiza o filtro se o param mudar (ex: navegacao entre ativos)
+  useEffect(() => {
+    const ticker = searchParams.get('ticker')
+    if (ticker) setSearch(ticker)
+  }, [searchParams])
+
   const filtered = useMemo(() => {
     return transactions.filter(t => {
       const matchSearch = t.ticker.toLowerCase().includes(search.toLowerCase())
-      // compara direto com o valor uppercase do enum
       const matchType   = !typeFilter || t.asset_type === typeFilter
       const matchOp     = opFilter === 'todos' || t.operation === opFilter
       return matchSearch && matchType && matchOp
@@ -78,6 +86,14 @@ export default function Transacoes() {
           <h1 className="text-xl font-bold">Transações</h1>
           <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
             {portfolioName} · {transactions.length} registro{transactions.length !== 1 ? 's' : ''}
+            {search && (
+              <span
+                className="ml-2 px-2 py-0.5 rounded-full text-xs font-medium"
+                style={{ background: 'var(--color-primary-highlight)', color: 'var(--color-primary)' }}
+              >
+                Filtrado: {search.toUpperCase()}
+              </span>
+            )}
           </p>
         </div>
         <button
@@ -98,6 +114,18 @@ export default function Transacoes() {
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
+          {/* Botao limpar filtro */}
+          {search && (
+            <button
+              type="button"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-xs"
+              style={{ color: 'var(--color-text-faint)' }}
+              onClick={() => setSearch('')}
+              title="Limpar filtro"
+            >
+              ×
+            </button>
+          )}
         </div>
 
         <select
