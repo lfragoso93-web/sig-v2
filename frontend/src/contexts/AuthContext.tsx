@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import api from '@/services/api'
 import { useTheme } from './ThemeContext'
 
-interface User {
+export interface User {
   id: number
   name: string
   email: string
   role: string
+  avatar_url?: string | null
 }
 
 interface AuthContextData {
@@ -16,6 +17,8 @@ interface AuthContextData {
   isAuthenticated: boolean
   login: (email: string, password: string) => Promise<void>
   logout: () => void
+  refreshUser: () => Promise<void>
+  setUser: React.Dispatch<React.SetStateAction<User | null>>
 }
 
 const AuthContext = createContext<AuthContextData>({} as AuthContextData)
@@ -26,15 +29,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate()
   const { setTheme } = useTheme()
 
+  const loadMe = async () => {
+    const { data } = await api.get('/users/me')
+    setUser(data)
+    setTheme(data.theme_preference ?? 'dark')
+    return data
+  }
+
   useEffect(() => {
     const token = localStorage.getItem('sig_token')
     if (token) {
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`
-      api.get('/users/me')
-        .then(({ data }) => {
-          setUser(data)
-          setTheme(data.theme_preference ?? 'dark')
-        })
+      loadMe()
         .catch(() => {
           localStorage.removeItem('sig_token')
           localStorage.removeItem('sig_refresh')
@@ -46,14 +52,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const login = async (email: string, password: string) => {
-    // Backend espera JSON com campos { email, password }
     const { data } = await api.post('/auth/login', { email, password })
     localStorage.setItem('sig_token', data.access_token)
     localStorage.setItem('sig_refresh', data.refresh_token)
     api.defaults.headers.common['Authorization'] = `Bearer ${data.access_token}`
-    const me = await api.get('/users/me')
-    setUser(me.data)
-    setTheme(me.data.theme_preference ?? 'dark')
+    await loadMe()
     navigate('/app/dashboard')
   }
 
@@ -65,8 +68,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     navigate('/')
   }
 
+  const refreshUser = async () => { await loadMe() }
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, isAuthenticated: !!user, login, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, isAuthenticated: !!user, login, logout, refreshUser, setUser }}>
       {children}
     </AuthContext.Provider>
   )
