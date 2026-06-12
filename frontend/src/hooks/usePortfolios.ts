@@ -43,6 +43,26 @@ export function useDeletePortfolio() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: number) => api.delete(`/portfolios/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: PORTFOLIOS_QUERY_KEY }),
+    onMutate: async (id: number) => {
+      // Cancela refetches pendentes para evitar sobrescrever o optimistic update
+      await qc.cancelQueries({ queryKey: PORTFOLIOS_QUERY_KEY })
+      const previous = qc.getQueryData<Portfolio[]>(PORTFOLIOS_QUERY_KEY)
+      // Remove otimisticamente da lista
+      qc.setQueryData<Portfolio[]>(
+        PORTFOLIOS_QUERY_KEY,
+        (old) => (old ?? []).filter((p) => p.id !== id),
+      )
+      return { previous }
+    },
+    onError: (_err, _id, context) => {
+      // Reverte em caso de erro
+      if (context?.previous) {
+        qc.setQueryData(PORTFOLIOS_QUERY_KEY, context.previous)
+      }
+    },
+    onSettled: () => {
+      // Garante sincronia final com o servidor
+      qc.invalidateQueries({ queryKey: PORTFOLIOS_QUERY_KEY })
+    },
   })
 }
