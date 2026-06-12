@@ -155,6 +155,8 @@ make down      # docker compose down
 make logs      # docker compose logs -f
 make restart   # down + up
 make migrate   # alembic upgrade head (dentro do container)
+make test      # pytest com requirements-test.txt (dentro do container)
+make lint      # ruff check app/
 ```
 
 ---
@@ -181,49 +183,66 @@ sig-v2/
 ├── .env.example
 ├── docker-compose.yml
 ├── docker-compose.prod.yml
-├── Makefile
+├── Makefile                        # targets: up, down, logs, restart, migrate, test, lint
 ├── README.md
 │
 ├── backend/
 │   ├── Dockerfile
-│   ├── entrypoint.sh           # roda alembic upgrade head antes de iniciar
+│   ├── entrypoint.sh
 │   ├── requirements.txt
+│   ├── requirements-test.txt          # pytest + pytest-asyncio + aiosqlite
+│   ├── pytest.ini                     # asyncio_mode=auto
 │   ├── alembic.ini
-│   ├── alembic/                # migrations (002 = ticker VARCHAR(100))
+│   ├── alembic/
+│   ├── tests/                         # ✅ suite pytest (Junho 2026)
+│   │   ├── conftest.py                  # fixtures SQLite async: engine, db, user, portfolio
+│   │   ├── test_portfolio_service.py    # PM, posições, CRUD carteiras (~14 testes)
+│   │   ├── test_transaction_service.py  # _calc_average_price (8 testes)
+│   │   ├── test_auth_service.py         # hash/verify senha, JWT (6 testes)
+│   │   ├── test_quotes_service.py       # roteamento BRAPI/yfinance/cripto (5 testes)
+│   │   └── test_dividend_service.py     # sum_dividends, cutoff, isolamento (4 testes)
 │   └── app/
 │       ├── main.py
 │       ├── core/
 │       ├── models/
 │       ├── schemas/
 │       ├── routers/
-│       │   ├── portfolios.py   # ✅ só HTTP — lógica delegada ao portfolio_service
-│       │   ├── transactions.py # ✅ limpo
+│       │   ├── portfolios.py        # ✅ só HTTP — lógica em portfolio_service
+│       │   ├── transactions.py      # ✅
 │       │   ├── assets.py
 │       │   ├── dividends.py
 │       │   ├── proventos.py
 │       │   ├── performance.py
 │       │   ├── admin.py
 │       │   └── [stubs: analysis, fixed_income, goals, irpf, fx]
-│       ├── services/
-│       │   ├── quotes_service.py   # ✅ ThreadPoolExecutor global + cripto paralelo
-│       │   ├── portfolio_service.py # ✅ contém calc_positions + sum_dividends
-│       │   └── [stubs: treasury_service]
-│       └── integrations/
-│           └── brapi.py
+│       └── services/
+│           ├── quotes_service.py       # ✅ ThreadPoolExecutor global + cripto paralelo
+│           ├── portfolio_service.py    # ✅ calc_positions + sum_dividends
+│           ├── auth_service.py         # ✅ hash_password, verify_password, create_access_token
+│           └── [stubs: treasury_service]
 │
 └── frontend/
     └── src/
+        ├── index.css                  # ✅ globals responsivos: overflow-x, safe-area, hover:none
+        ├── components/
+        │   └── layout/
+        │       ├── AppLayout.tsx        # ✅ p-3 pb-[76px] lg:p-5, sem <style> inline
+        │       ├── Sidebar.tsx          # ✅ drawer mobile com animação slide-in/out 280ms
+        │       ├── Topbar.tsx           # ✅ hamburger mobile + nome carteira + FAB desktop
+        │       ├── BottomNav.tsx        # ✅ bottom nav + FAB central (Novo Lançamento)
+        │       ├── AuthLayout.tsx       # ✅ responsivo, min-h-dvh, safe-area
+        │       └── UserMenu.tsx
         ├── pages/
-        │   ├── ResumePage.tsx       # ✅ ativo
-        │   ├── ProventosPage.tsx    # ✅ ativo
-        │   ├── RentabilidadePage.tsx # ✅ ativo
-        │   ├── Transacoes.tsx       # ✅ ativo
-        │   ├── Resumo.tsx           # ⚠️ obsoleto (stub vazio)
-        │   ├── Proventos.tsx        # ⚠️ obsoleto (stub vazio)
-        │   ├── Rentabilidade.tsx    # ⚠️ obsoleto (stub vazio)
-        │   └── TransacoesPage.tsx   # ⚠️ obsoleto (stub vazio)
-        └── services/
-            └── api.ts               # ⚠️ JWT em localStorage (aceito para uso privado)
+        │   ├── ResumePage.tsx           # ✅
+        │   ├── ProventosPage.tsx        # ✅
+        │   ├── RentabilidadePage.tsx    # ✅
+        │   ├── Transacoes.tsx           # ✅
+        │   ├── PatrimonioPage.tsx       # ✅
+        │   ├── Configuracoes.tsx        # ✅ perfil, avatar, senha, excluir conta
+        │   ├── AdminPanel.tsx           # ✅ CSS vars + editar role inline
+        │   └── [stubs: IRPFPage, AnalisePage, MetasPage]
+        └── store/
+            └── appStore.ts              # ✅ sidebarOpen, toggleSidebar, closeSidebar
 ```
 
 ---
@@ -244,8 +263,11 @@ sig-v2/
 | **Proventos** | Cadastro manual, histórico, consolidação |
 | **Eventos Corporativos** | Grupamento, desdobramento, bonificação |
 | **Rentabilidade** | Retorno por carteira (absoluto e %) |
-| **Admin** | Painel de usuários e configurações |
+| **Admin** | Painel de usuários, edição de role inline |
 | **PatrimonioPage** | KPIs, alocação por classe, donut chart, tabela de posições com filtro |
+| **Configurações** | Minha Conta: perfil, avatar, senha, excluir conta |
+| **Layout responsivo (base)** | Sidebar drawer mobile com slide-in 280ms, BottomNav + FAB, hamburger Topbar |
+| **Testes automatizados** | ~37 testes pytest; fixtures SQLite async; `make test` |
 
 ### 🚧 Parcialmente Implementado
 
@@ -258,15 +280,17 @@ sig-v2/
 | **Benchmarks** | Estrutura preparada | Integração CDI/IBOV/IPCA/IFIX |
 | **FX (câmbio)** | Router básico | USD/BRL em tempo real |
 | **Tesouro Direto — edição/exclusão** | Cadastro funcional | Editar/excluir; `treasury_service.py` quase vazio |
+| **Tabelas → Cards mobile** | Layout base pronto | Cards por posição/transação/provento no mobile |
+| **Modais bottom sheet** | `TransactionForm` responsivo | Drawer de baixo para cima no mobile |
+| **Gráficos responsivos** | Donut chart existente | `ResponsiveContainer` + legendas adaptativas |
 
 ### 🔧 Dívidas Técnicas Restantes
 
 | Item | Arquivo(s) | Ação |
 |---|---|---|
-| Testes automatizados (cobertura 0%) | — | Criar suite pytest; meta 70% nos serviços financeiros |
 | JWT em localStorage | `frontend/src/services/api.ts` | Migrar para HttpOnly Cookie antes de SaaS |
-| Cache em memória não escala multi-worker | `quotes_service.py` | Migrar para Redis (futuro) |
-| Arquivos duplicados (stubs vazios) | `Resumo.tsx`, `Proventos.tsx`, etc. | Deletar via `git rm` após confirmar que não há imports |
+| Cache em memória não escala multi-worker | `quotes_service.py` | Migrar para Redis (Fase 5) |
+| Cobertura de testes < 70% | `backend/tests/` | Ampliar nos próximos sprints |
 
 ---
 
@@ -284,6 +308,11 @@ sig-v2/
 | 6 | **Nome do ativo ausente no autocomplete** | Campo `name` ignorado | Corrigido para usar `item.name` |
 | 7 | **PatrimonioPage não carregava** | `usePositions(0)` com ID inválido | Usa `selectedPortfolioId` do store Zustand |
 | 8 | **Seletor de carteira duplicado** | Switcher próprio na página além do header | Removido da página |
+| 9 | **Rota Configurações quebrada** | Import `require()` dinâmico no UserMenu | Corrigido para import estático |
+| 10 | **Exclusão de carteira sem feedback imediato** | Sem optimistic update | `useDeletePortfolio` com optimistic update |
+| 11 | **Gráfico de patrimônio histórico vazio** | Hook chamava endpoint errado | `usePatrimonioHistory` usa `/equity-history` |
+| 12 | **Registro com erro de e-mail genérico** | `errors.name.message` no campo de e-mail | Corrigido para `errors.email.message` |
+| 13 | **Prefixo `/api/v1` duplicado no registro** | URL hard-coded com prefixo redundante | Removido prefixo duplicado |
 
 ---
 
@@ -353,6 +382,15 @@ Base URL: `http://localhost/api/v1`
 | GET | `/performance` | ✅ |
 | GET | `/performance/{portfolio_id}` | ✅ |
 
+### Usuário
+| Método | Rota | Status |
+|---|---|---|
+| GET | `/users/me` | ✅ |
+| PUT | `/users/me` | ✅ |
+| PUT | `/users/me/password` | ✅ |
+| PUT | `/users/me/avatar` | ✅ |
+| DELETE | `/users/me` | ✅ |
+
 ### Stubs (não implementados)
 | Rota | Módulo |
 |---|---|
@@ -360,6 +398,8 @@ Base URL: `http://localhost/api/v1`
 | `/irpf/*` | IRPF |
 | `/fixed-income/*` | Renda Fixa |
 | `/goals/*` | Metas |
+| `/fx/*` | Câmbio USD/BRL |
+| `/benchmarks/*` | CDI/IBOV/IPCA/IFIX |
 
 ---
 
@@ -390,8 +430,12 @@ Base URL: `http://localhost/api/v1`
 | `/carteira/transacoes` | `Transacoes.tsx` | ✅ |
 | `/carteira/proventos` | `ProventosPage.tsx` | ✅ |
 | `/carteira/rentabilidade` | `RentabilidadePage.tsx` | ✅ |
-| `/carteira/configuracoes` | `Configuracoes.tsx` | ✅ |
-| `/patrimonio` | `PatrimonioPage.tsx` | ✅ |
+| `/carteira/patrimonio` | `PatrimonioPage.tsx` | ✅ |
+| `/carteira/patrimonio/renda-variavel` | `PatrimonioPage.tsx` | ✅ |
+| `/carteira/patrimonio/tesouro` | `PatrimonioPage.tsx` | ✅ |
+| `/carteira/patrimonio/renda-fixa` | `PatrimonioPage.tsx` | 🚧 Stub |
+| `/carteira/configuracoes` | `Configuracoes.tsx` | ✅ perfil + senha |
+| `/admin` | `AdminPanel.tsx` | ✅ |
 | `/irpf` | `IRPFPage.tsx` | 🚧 Stub |
 | `/analise` | `AnalisePage.tsx` | 🚧 Stub |
 | `/metas` | `MetasPage.tsx` | 🚧 Stub |
@@ -423,21 +467,26 @@ Serviços: `frontend` (5173) · `backend` (8000) · `postgres` (5432) · `nginx`
 # Migrations
 docker compose exec backend alembic revision --autogenerate -m "descricao"
 docker compose exec backend alembic upgrade head
+
+# Testes
+make test
+# ou: docker compose exec backend bash -c "pip install -q -r requirements-test.txt && pytest tests/ -v"
 ```
 
 ---
 
 ## Análise de Qualidade do Código
 
-| Área | Nota |
-|---|---|
-| Arquitetura | 8,5/10 |
-| Modelagem Financeira | 8,5/10 |
-| Qualidade do Código | 8/10 ✅ |
-| Segurança | 7/10 |
-| Escalabilidade | 7,5/10 ✅ |
-| **Testabilidade** | **3/10** ⚠️ maior risco |
-| Maturidade Geral | 8/10 ✅ |
+| Área | Nota | Observação |
+|---|---|---|
+| Arquitetura | 8,5/10 | Sólida, bem separada em camadas |
+| Modelagem Financeira | 8,5/10 | Preço Médio Ponderado correto |
+| Qualidade do Código | 8/10 | Clean, delegação adequada |
+| Segurança | 7/10 | JWT em localStorage — risco em produção pública |
+| Escalabilidade | 7,5/10 | Cache em memória não escala multi-worker |
+| **Testabilidade** | **6/10** | Suite criada (~37 testes); meta 70% cobertura nos serviços |
+| Responsividade | 6/10 | Layout base responsivo concluído; tabelas/modais mobile pendentes |
+| Maturidade Geral | 8/10 | Boa base para evolução |
 
 ---
 
@@ -447,48 +496,76 @@ docker compose exec backend alembic upgrade head
 
 ---
 
-### Roadmap — 4 Fases
+### Roadmap — 5 Fases
 
-#### ✅ Fase 1 — Fundação (CONCLUÍDA em Junho 2026)
+#### ✅ Fase 1 — Fundação (CONCLUÍDA — Junho 2026)
 
-| Item | Status | Commit |
+| Item | Status | Detalhe |
 |---|---|---|
-| Mover lógica de `portfolios.py` → `portfolio_service.py` | ✅ | `8963106` |
-| `ThreadPoolExecutor` global para yfinance | ✅ | `c5a8d93` |
-| `asyncio.gather()` para cripto paralelo | ✅ | `c5a8d93` |
-| Migration Alembic formal `ticker VARCHAR(100)` | ✅ | já existia (`002`) |
-| Limpeza de arquivos duplicados frontend | ✅ | `98b24e2` |
-| **Testes automatizados (pytest)** | ⏳ **PENDENTE** | — |
-
-> ⚠️ **A suite de testes é o único item da Fase 1 ainda pendente.** É a maior dívida técnica do projeto. Implementar antes de avançar para a Fase 2.
+| Mover lógica `portfolios.py` → `portfolio_service.py` | ✅ | |
+| `ThreadPoolExecutor` global para yfinance | ✅ | |
+| `asyncio.gather()` para cripto paralelo | ✅ | |
+| Migration Alembic `ticker VARCHAR(100)` | ✅ | migration 002 |
+| Limpeza de arquivos duplicados frontend | ✅ | stubs removidos |
+| Suite de testes automatizados | ✅ | ~37 testes, `make test` |
 
 ---
 
-#### 🟡 Fase 2 — Core financeiro completo
+#### 🟡 Fase 2 — Core Financeiro Completo (Em andamento)
 
-1. **Suite pytest** — `backend/tests/` com fixtures SQLite async; cobertura alvo: 70% nos serviços financeiros
-2. **Renda Fixa** — CRUD completo (`fixed_income_service.py`) + tela frontend
-3. **Tesouro Direto — edição e exclusão** — completar `treasury_service.py`
-4. **FX (câmbio)** — USD/BRL em tempo real; usar na `PatrimonioPage` para BRL correto
-5. **Benchmarks CDI/IPCA/IBOV/IFIX** — tela de Rentabilidade com gráfico comparativo
-
----
-
-#### 🟢 Fase 3 — Valor estratégico
-
-6. **Metas financeiras** — CRUD + `MetasPage.tsx` com barra de progresso
-7. **IRPF** — apuração mensal (Preço Médio Ponderado), isenções ações ≤R$20k/mês, DARF, exportação CSV
-8. **Exportação de dados** — CSV/Excel de transações e posições
-9. **Engine de posições materializadas** — tabela `portfolio_positions` atualizada por evento
+| Item | Status | Próximo passo |
+|---|---|---|
+| **2.1 Testes automatizados** | ✅ Concluído | Ampliar cobertura para 70% |
+| **2.2 Renda Fixa CRUD** | ⏳ Pendente | `fixed_income_service.py` + `RendaFixaPage.tsx` |
+| **2.3 Tesouro Direto — edição/exclusão** | ⏳ Pendente | Completar `treasury_service.py` |
+| **2.4 FX USD/BRL** | ⏳ Pendente | `fx_service.py` + exibir BRL na PatrimonioPage |
+| **2.5 Benchmarks CDI/IBOV/IFIX/IPCA** | ⏳ Pendente | Integração BRAPI + BACEN + gráfico RentabilidadePage |
 
 ---
 
-#### 🔵 Fase 4 — Diferencial competitivo
+#### 🟠 Fase 3 — Responsividade Completa (Em andamento)
 
-10. **Análise IA (Gemini)** — `analysis_service.py`, prompts, `AnalisePage.tsx`
-11. **Importação via CSV** — histórico de transações de corretoras
-12. **HttpOnly Cookie** — migrar JWT de `localStorage` (obrigatório antes de SaaS)
-13. **Cache Redis** — substituir `_cache = {}` por Redis com TTL
+| Item | Status | Próximo passo |
+|---|---|---|
+| **3.1 AppLayout responsivo + Sidebar drawer** | ✅ Concluído | Slide-in 280ms, botão X, `sidebarOpen` store |
+| **3.2 Topbar + FAB + BottomNav** | ✅ Concluído | Hamburger, nome carteira mobile, FAB central |
+| **3.3 Tabelas → Cards mobile** | ⏳ Pendente | `hidden md:table` + cards por posição/transação |
+| **3.4 Gráficos responsivos** | ⏳ Pendente | `ResponsiveContainer` + legendas adaptativas |
+| **3.5 Modais bottom sheet** | ⏳ Pendente | `AddTransactionModal` como bottom sheet mobile |
+| **3.6 CSS global responsivo** | ✅ Concluído | `overflow-x`, `safe-area`, `hover:none`, `font-size: 16px` |
+
+---
+
+#### 🟡 Fase 4 — Valor Estratégico
+
+| Item | Status |
+|---|---|
+| **4.1 Metas financeiras** | ⏳ Pendente |
+| **4.2 IRPF** | ⏳ Pendente |
+| **4.3 Exportação CSV** | ⏳ Pendente |
+| **4.4 Engine de posições materializadas** | ⏳ Pendente |
+
+---
+
+#### 🟢 Fase 5 — Diferencial Competitivo
+
+| Item | Status |
+|---|---|
+| **5.1 Análise IA Gemini** | ⏳ Pendente |
+| **5.2 Importação CSV corretoras** | ⏳ Pendente |
+| **5.3 HttpOnly Cookie** | ⏳ Pendente |
+| **5.4 Cache Redis** | ⏳ Pendente |
+
+---
+
+### Próximos itens na fila (Sprint atual)
+
+```
+SPRINT 2 (próximo)
+  ├── [2.2] Renda Fixa CRUD completo (backend + frontend)
+  ├── [2.3] Tesouro Direto edição/exclusão
+  └── [3.3] Tabelas → Cards mobile
+```
 
 ---
 
@@ -505,3 +582,7 @@ docker compose exec backend alembic upgrade head
 **Cripto:** via BRAPI `/api/v2/crypto?coin={TICKER}&currency=BRL` → BRL direto. `asset_type = CRIPTO` → `_fetch_brapi_crypto()`, nunca yfinance.
 
 **Seleção de carteira:** `selectedPortfolioId` no store Zustand (`useAppStore`). Todas as páginas leem do store. Se `null`, exibir empty state.
+
+**Sidebar mobile:** controlada por `sidebarOpen` no `useAppStore`. `toggleSidebar()` no hamburguer da Topbar. Fecha automaticamente ao trocar de rota (`useEffect` em `location.pathname` dentro de `Sidebar.tsx`).
+
+**Testes:** rodar com `make test`. Fixtures em `backend/tests/conftest.py` (SQLite async em memória). Mocks de APIs externas via `unittest.mock.patch`.
