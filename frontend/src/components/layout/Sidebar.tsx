@@ -13,6 +13,7 @@ import {
   TrendingDown,
   Building2,
   Banknote,
+  X,
 } from 'lucide-react'
 import { usePortfolios, useCreatePortfolio } from '@/hooks/usePortfolios'
 import { useAppStore } from '@/store/appStore'
@@ -50,6 +51,10 @@ export default function Sidebar() {
   const [createdName, setCreatedName]     = useState<string | null>(null)
   const [error, setError]                 = useState<string | null>(null)
 
+  // Controle de montagem para animar entrada/saída
+  const [mounted, setMounted]   = useState(false)
+  const [visible, setVisible]   = useState(false)
+
   const isPatrimonioActive = location.pathname.startsWith('/carteira/patrimonio')
   const [patrimonioOpen, setPatrimonioOpen] = useState(isPatrimonioActive)
 
@@ -70,6 +75,19 @@ export default function Sidebar() {
       document.body.style.overflow = ''
     }
     return () => { document.body.style.overflow = '' }
+  }, [sidebarOpen])
+
+  // Animação: montar antes de tornar visível; desmontar após a saída
+  useEffect(() => {
+    if (sidebarOpen) {
+      setMounted(true)
+      // pequeno delay para o browser registrar o elemento antes da transição
+      requestAnimationFrame(() => requestAnimationFrame(() => setVisible(true)))
+    } else {
+      setVisible(false)
+      const t = setTimeout(() => setMounted(false), 280) // duração da transição
+      return () => clearTimeout(t)
+    }
   }, [sidebarOpen])
 
   const selected = portfolios.find(p => p.id === selectedPortfolioId)
@@ -146,12 +164,21 @@ export default function Sidebar() {
         borderColor: 'var(--color-divider)',
       }}
     >
-      {/* Logo */}
-      <div className="px-5 mb-6">
+      {/* Logo + botão fechar (mobile) */}
+      <div className="px-5 mb-6 flex items-center justify-between">
         <span className="text-base font-bold tracking-tight" style={{ color: 'var(--color-primary)' }}>
           SIG
           <span className="text-xs font-medium ml-1" style={{ color: 'var(--color-text-muted)' }}>v2</span>
         </span>
+        {/* Botão X — só aparece no drawer mobile */}
+        <button
+          onClick={closeSidebar}
+          className="lg:hidden flex items-center justify-center p-1 rounded-md transition-colors"
+          style={{ color: 'var(--color-text-muted)', minWidth: 32, minHeight: 32 }}
+          aria-label="Fechar menu"
+        >
+          <X size={16} />
+        </button>
       </div>
 
       {/* Seletor de carteira */}
@@ -291,9 +318,15 @@ export default function Sidebar() {
         {sidebarContent}
       </div>
 
-      {/* ── Mobile/Tablet: drawer overlay (<1024px) ── */}
-      {sidebarOpen && (
-        <div className="lg:hidden fixed inset-0 z-40 flex">
+      {/* ── Mobile/Tablet: drawer overlay (<1024px) com animação ── */}
+      {mounted && (
+        <div
+          className="lg:hidden fixed inset-0 z-40 flex"
+          style={{
+            transition: 'opacity 280ms ease',
+            opacity: visible ? 1 : 0,
+          }}
+        >
           {/* Overlay escuro */}
           <div
             className="absolute inset-0"
@@ -301,8 +334,14 @@ export default function Sidebar() {
             onClick={closeSidebar}
             aria-label="Fechar menu"
           />
-          {/* Painel da sidebar */}
-          <div className="relative z-50 h-full flex">
+          {/* Painel da sidebar — desliza da esquerda */}
+          <div
+            className="relative z-50 h-full flex"
+            style={{
+              transform: visible ? 'translateX(0)' : 'translateX(-100%)',
+              transition: 'transform 280ms cubic-bezier(0.4,0,0.2,1)',
+            }}
+          >
             {sidebarContent}
           </div>
         </div>
