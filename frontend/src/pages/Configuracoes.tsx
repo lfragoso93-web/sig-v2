@@ -7,6 +7,7 @@ import { usePortfolios, useCreatePortfolio, useUpdatePortfolio, useDeletePortfol
 import { useAuth } from '@/contexts/AuthContext'
 import { useUpdateProfile, useChangePassword, useUpdateAvatar, useDeleteAccount } from '@/hooks/useUser'
 import AdminPanel from '@/components/admin/AdminPanel'
+import PasswordInput from '@/components/ui/PasswordInput'
 
 // ── Helpers ────────────────────────────────────────────
 
@@ -107,19 +108,11 @@ function ProfileSection() {
       <div className="flex items-center gap-4">
         <div className="relative shrink-0">
           {avatarSrc ? (
-            <img
-              src={avatarSrc}
-              alt="Avatar"
-              className="w-16 h-16 rounded-full object-cover"
-              style={{ border: '2px solid var(--color-border)' }}
-            />
+            <img src={avatarSrc} alt="Avatar" className="w-16 h-16 rounded-full object-cover" style={{ border: '2px solid var(--color-border)' }} />
           ) : (
             <div
               className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold"
-              style={{
-                background: 'oklch(from var(--color-primary) l c h / 0.15)',
-                color:      'var(--color-primary)',
-              }}
+              style={{ background: 'oklch(from var(--color-primary) l c h / 0.15)', color: 'var(--color-primary)' }}
             >
               {(user?.name ?? user?.email ?? '?')[0].toUpperCase()}
             </div>
@@ -127,37 +120,18 @@ function ProfileSection() {
           <button
             onClick={() => fileRef.current?.click()}
             className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center shadow"
-            style={{
-              background: 'var(--color-primary)',
-              color:      'var(--color-text-inverse)',
-              border:     '2px solid var(--color-surface)',
-            }}
+            style={{ background: 'var(--color-primary)', color: 'var(--color-text-inverse)', border: '2px solid var(--color-surface)' }}
             title="Alterar foto"
             disabled={updateAvatar.isPending}
           >
-            {updateAvatar.isPending
-              ? <Loader2 size={11} className="animate-spin" />
-              : <Camera size={11} />}
+            {updateAvatar.isPending ? <Loader2 size={11} className="animate-spin" /> : <Camera size={11} />}
           </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleAvatarChange}
-          />
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
         </div>
         <div className="flex flex-col">
           <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{user?.name || '—'}</span>
           <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{user?.email}</span>
-          <span
-            className="text-xs mt-1 px-2 py-0.5 rounded-full self-start"
-            style={{
-              background: 'oklch(from var(--color-primary) l c h / 0.12)',
-              color:      'var(--color-primary)',
-              fontWeight: 500,
-            }}
-          >
+          <span className="text-xs mt-1 px-2 py-0.5 rounded-full self-start" style={{ background: 'oklch(from var(--color-primary) l c h / 0.12)', color: 'var(--color-primary)', fontWeight: 500 }}>
             {user?.role}
           </span>
         </div>
@@ -166,34 +140,16 @@ function ProfileSection() {
       {/* Campos */}
       <div className="flex flex-col gap-3">
         <FieldGroup label="Nome">
-          <input
-            className="input"
-            style={{ fontSize: 16 }}
-            value={name}
-            onChange={e => setName(e.target.value)}
-            placeholder="Seu nome"
-          />
+          <input className="input" style={{ fontSize: 16 }} value={name} onChange={e => setName(e.target.value)} placeholder="Seu nome" />
         </FieldGroup>
         <FieldGroup label="E-mail">
-          <input
-            type="email"
-            className="input"
-            style={{ fontSize: 16 }}
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            placeholder="seu@email.com"
-          />
+          <input type="email" className="input" style={{ fontSize: 16 }} value={email} onChange={e => setEmail(e.target.value)} placeholder="seu@email.com" />
         </FieldGroup>
       </div>
 
       {feedback && <SaveFeedback msg={feedback.msg} isError={feedback.isError} />}
 
-      <button
-        onClick={handleSave}
-        disabled={!dirty || updateProfile.isPending}
-        className="btn btn-primary self-start disabled:opacity-40"
-        style={{ minHeight: 38 }}
-      >
+      <button onClick={handleSave} disabled={!dirty || updateProfile.isPending} className="btn btn-primary self-start disabled:opacity-40" style={{ minHeight: 38 }}>
         {updateProfile.isPending ? <Loader2 size={14} className="animate-spin" /> : 'Salvar dados'}
       </button>
     </>
@@ -234,15 +190,10 @@ function PasswordSection() {
 
   return (
     <SectionCard>
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="flex items-center justify-between w-full"
-      >
+      <button onClick={() => setOpen(o => !o)} className="flex items-center justify-between w-full">
         <div className="flex items-center gap-2">
           <KeyRound size={15} style={{ color: 'var(--color-primary)' }} />
-          <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
-            Alterar senha
-          </h2>
+          <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Alterar senha</h2>
         </div>
         {open
           ? <ChevronUp size={14} style={{ color: 'var(--color-text-faint)' }} />
@@ -252,13 +203,31 @@ function PasswordSection() {
       {open && (
         <form onSubmit={handleSubmit} className="flex flex-col gap-3 mt-1">
           <FieldGroup label="Senha atual">
-            <input type="password" className="input" style={{ fontSize: 16 }} value={form.current} onChange={e => set('current', e.target.value)} required />
+            <PasswordInput
+              className="input w-full"
+              style={{ fontSize: 16 }}
+              value={form.current}
+              onChange={e => set('current', e.target.value)}
+              required
+            />
           </FieldGroup>
           <FieldGroup label="Nova senha">
-            <input type="password" className="input" style={{ fontSize: 16 }} value={form.next} onChange={e => set('next', e.target.value)} required />
+            <PasswordInput
+              className="input w-full"
+              style={{ fontSize: 16 }}
+              value={form.next}
+              onChange={e => set('next', e.target.value)}
+              required
+            />
           </FieldGroup>
           <FieldGroup label="Confirmar nova senha">
-            <input type="password" className="input" style={{ fontSize: 16 }} value={form.confirm} onChange={e => set('confirm', e.target.value)} required />
+            <PasswordInput
+              className="input w-full"
+              style={{ fontSize: 16 }}
+              value={form.confirm}
+              onChange={e => set('confirm', e.target.value)}
+              required
+            />
           </FieldGroup>
           {feedback && <SaveFeedback msg={feedback.msg} isError={feedback.isError} />}
           <button type="submit" disabled={changePassword.isPending} className="btn btn-primary self-start disabled:opacity-40" style={{ minHeight: 38 }}>
@@ -303,11 +272,7 @@ function CarteirasSection() {
       <SectionTitle icon={Wallet}>Carteiras</SectionTitle>
       <ul className="flex flex-col gap-2">
         {portfolios.map(p => (
-          <li
-            key={p.id}
-            className="flex items-center justify-between rounded-lg px-3 py-2 gap-2"
-            style={{ background: 'var(--color-surface-offset)', border: '1px solid var(--color-divider)' }}
-          >
+          <li key={p.id} className="flex items-center justify-between rounded-lg px-3 py-2 gap-2" style={{ background: 'var(--color-surface-offset)', border: '1px solid var(--color-divider)' }}>
             {editingId === p.id ? (
               <>
                 <input value={editName} onChange={e => setEditName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') confirmEdit(p.id); if (e.key === 'Escape') setEditingId(null) }} autoFocus className="input flex-1 text-sm" style={{ fontSize: 16 }} />
@@ -363,18 +328,13 @@ function DangerZone() {
   }
 
   return (
-    <section
-      className="rounded-xl p-5 flex flex-col gap-4"
-      style={{ border: '1px solid oklch(from var(--color-error) l c h / 0.3)', background: 'oklch(from var(--color-error) l c h / 0.04)' }}
-    >
+    <section className="rounded-xl p-5 flex flex-col gap-4" style={{ border: '1px solid oklch(from var(--color-error) l c h / 0.3)', background: 'oklch(from var(--color-error) l c h / 0.04)' }}>
       <button onClick={() => setOpen(o => !o)} className="flex items-center justify-between w-full">
         <div className="flex items-center gap-2">
           <AlertTriangle size={15} style={{ color: 'var(--color-error)' }} />
           <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-error)' }}>Zona de perigo</h2>
         </div>
-        {open
-          ? <ChevronUp size={14} style={{ color: 'var(--color-error)' }} />
-          : <ChevronDown size={14} style={{ color: 'var(--color-error)' }} />}
+        {open ? <ChevronUp size={14} style={{ color: 'var(--color-error)' }} /> : <ChevronDown size={14} style={{ color: 'var(--color-error)' }} />}
       </button>
       {open && (
         <div className="flex flex-col gap-3">
@@ -383,22 +343,10 @@ function DangerZone() {
             Todos os seus dados, carteiras e histórico serão apagados.
           </p>
           <FieldGroup label={`Digite seu e-mail (${user?.email}) para confirmar`}>
-            <input
-              type="email"
-              className="input"
-              style={{ fontSize: 16 }}
-              placeholder={user?.email}
-              value={confirm}
-              onChange={e => { setConfirm(e.target.value); setError(null) }}
-            />
+            <input type="email" className="input" style={{ fontSize: 16 }} placeholder={user?.email} value={confirm} onChange={e => { setConfirm(e.target.value); setError(null) }} />
           </FieldGroup>
           {error && <SaveFeedback msg={error} isError />}
-          <button
-            onClick={handleDelete}
-            disabled={confirm !== user?.email || deleteAccount.isPending}
-            className="btn self-start disabled:opacity-40"
-            style={{ background: 'var(--color-error)', color: '#fff', minHeight: 38 }}
-          >
+          <button onClick={handleDelete} disabled={confirm !== user?.email || deleteAccount.isPending} className="btn self-start disabled:opacity-40" style={{ background: 'var(--color-error)', color: '#fff', minHeight: 38 }}>
             {deleteAccount.isPending ? <Loader2 size={14} className="animate-spin" /> : 'Excluir minha conta'}
           </button>
         </div>
@@ -419,22 +367,10 @@ export default function Configuracoes() {
         <h1 className="text-xl font-bold">Configurações</h1>
         <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Gerencie seu perfil e carteiras</p>
       </div>
-
-      {/* 1. Minha Conta */}
-      <SectionCard>
-        <ProfileSection />
-      </SectionCard>
-
-      {/* 2. Alterar Senha */}
+      <SectionCard><ProfileSection /></SectionCard>
       <PasswordSection />
-
-      {/* 3. Carteiras */}
       <CarteirasSection />
-
-      {/* 4. Admin (superadmin only) */}
       {isSuperAdmin && <AdminPanel />}
-
-      {/* 5. Zona de perigo */}
       <DangerZone />
     </div>
   )
