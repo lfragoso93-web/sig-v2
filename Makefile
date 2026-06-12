@@ -1,37 +1,24 @@
-.PHONY: up down build restart logs migrate shell-backend shell-db
+.PHONY: up down logs restart migrate test lint
 
 up:
-	docker compose up -d
+	docker compose up -d --build
 
 down:
 	docker compose down
 
-build:
-	docker compose build --no-cache
-
-restart:
-	docker compose restart backend
-
 logs:
-	docker compose logs -f backend
-
-logs-all:
 	docker compose logs -f
+
+restart: down up
 
 migrate:
 	docker compose exec backend alembic upgrade head
 
-migration:
-	docker compose exec backend alembic revision --autogenerate -m "$(MSG)"
-
-shell-backend:
-	docker compose exec backend sh
-
-shell-db:
-	docker compose exec postgres psql -U sig_user -d sig_v2
-
-redis-cli:
-	docker compose exec redis redis-cli
-
+# Roda a suite de testes dentro do container backend
 test:
-	docker compose exec backend pytest -v
+	docker compose exec backend bash -c \
+	  "pip install -q -r requirements-test.txt && pytest tests/ -v --tb=short"
+
+# Lint com ruff (opcional, instale com pip install ruff)
+lint:
+	docker compose exec backend ruff check app/
