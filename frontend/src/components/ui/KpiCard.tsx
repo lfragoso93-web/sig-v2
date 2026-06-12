@@ -1,28 +1,42 @@
 import clsx from 'clsx'
-import { signClass } from '@/utils/format'
+import { formatPercent, signClass } from '@/utils/format'
 
 interface Props {
   label: string
   value: string
   subValue?: string
   subLabel?: string
-  change?: number
+  change?: number   // valor em percentual, ex: -1.81 ou 4.52
 }
 
 export default function KpiCard({ label, value, subValue, subLabel, change }: Props) {
   return (
-    <div className="rounded-xl bg-surface-900 border border-surface-700 p-4 flex flex-col gap-1">
-      <span className="text-xs text-slate-500 font-medium">{label}</span>
-      <div className="text-2xl font-bold tabular-nums tracking-tight text-slate-100">{value}</div>
+    <div className="card p-4 flex flex-col gap-1">
+      <span className="text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>
+        {label}
+      </span>
+      <div
+        className="text-2xl font-bold tabular-nums tracking-tight"
+        style={{ color: 'var(--color-text)' }}
+      >
+        {value}
+      </div>
       {subValue && (
-        <div className="text-sm font-medium text-slate-300 tabular-nums">{subValue}</div>
+        <div
+          className="text-sm font-medium tabular-nums"
+          style={{ color: 'var(--color-text-muted)' }}
+        >
+          {subValue}
+        </div>
       )}
       {subLabel && (
-        <div className="text-xs text-slate-500 truncate">{subLabel}</div>
+        <div className="text-xs truncate" style={{ color: 'var(--color-text-faint)' }}>
+          {subLabel}
+        </div>
       )}
       {change !== undefined && (
         <div className={clsx('text-xs font-semibold tabular-nums', signClass(change))}>
-          {change >= 0 ? '+' : ''}{change.toFixed(2)}%
+          {change >= 0 ? '+' : ''}{formatPercent(change)}
         </div>
       )}
     </div>
