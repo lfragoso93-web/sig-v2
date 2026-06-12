@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import api from '@/services/api'
 import { PORTFOLIOS_QUERY_KEY } from '@/hooks/usePortfolios'
 
-// ── Tipos ───────────────────────────────────────────────────────────────────
+// ── Tipos ──────────────────────────────────────────────────────────────────────────────────────
 
 export interface PortfolioDetail {
   id: number
@@ -52,7 +52,7 @@ export interface PositionItem {
   ticker: string
   name: string
   asset_type: string
-  asset_label: string        // label amigável vindo do backend
+  asset_label: string
   logo_url?: string
   quantity: number
   average_price: number
@@ -75,7 +75,7 @@ export interface PositionGroup {
   positions: PositionItem[]
 }
 
-// ── Constantes ──────────────────────────────────────────────────────────────────
+// ── Constantes ────────────────────────────────────────────────────────────────────────────────────
 
 const ASSET_LABELS: Record<string, string> = {
   ACAO:              'Ações',
@@ -102,7 +102,7 @@ const ASSET_COLORS: Record<string, string> = {
   OUTROS:            '#6b7280',
 }
 
-// ── Helper: mapeia RawPosition -> PositionGroup[] ─────────────────────────────
+// ── Helper: mapeia RawPosition -> PositionGroup[] ─────────────────────────────────────────
 
 interface RawPositionItem {
   ticker:         string
@@ -133,7 +133,6 @@ function toPositionGroups(raw: RawPositionItem[]): PositionGroup[] {
     const total_invested = items.reduce((s, p) => s + (p.total_invested ?? 0), 0)
     const variation_value   = total_value - total_invested
     const variation_percent = total_invested > 0 ? (variation_value / total_invested) * 100 : 0
-    // Label: usa o que vem do backend, ou fallback local
     const label = items[0]?.asset_label ?? ASSET_LABELS[asset_type] ?? asset_type
     return {
       asset_type,
@@ -164,7 +163,7 @@ function toPositionGroups(raw: RawPositionItem[]): PositionGroup[] {
   }).sort((a, b) => b.total_value - a.total_value)
 }
 
-// ── Hooks ─────────────────────────────────────────────────────────────────────
+// ── Hooks ─────────────────────────────────────────────────────────────────────────────────────
 
 export function usePortfolioList() {
   return useQuery<PortfolioDetail[]>({
@@ -228,20 +227,44 @@ export function usePositions(portfolioId: number | null) {
   })
 }
 
-export function usePatrimonioHistory(portfolioId: number | null, _months: number) {
+/**
+ * Histórico de evolução do patrimônio mensal.
+ * Endpoint: GET /portfolios/{id}/equity-history?period={months}m
+ * Retorna: { month: string, value: number }[]
+ * Caso o endpoint retorne formato diferente ({ date, value }),
+ * normaliza para { month, value } automaticamente.
+ */
+export function usePatrimonioHistory(portfolioId: number | null, months: number) {
+  const period = months >= 60 ? 'all' : `${months}m`
   return useQuery<PatrimonioHistoryPoint[]>({
-    queryKey: ['patrimonio-history', portfolioId, _months],
-    queryFn: () => Promise.resolve([]),
+    queryKey: ['patrimonio-history', portfolioId, months],
+    queryFn: () =>
+      api
+        .get(`/portfolios/${portfolioId}/equity-history`, { params: { period } })
+        .then(r => {
+          const raw: Array<{ month?: string; date?: string; value: number }> = r.data ?? []
+          return raw.map(item => ({
+            month: item.month ?? item.date ?? '',
+            value: item.value,
+          }))
+        }),
     enabled: !!portfolioId,
     staleTime: 60_000,
+    retry: false,
+    placeholderData: [],
   })
 }
 
-export function useEquityHistory(portfolioId: number | null, _period: EquityPeriod = '12m') {
+export function useEquityHistory(portfolioId: number | null, period: EquityPeriod = '12m') {
   return useQuery<EquityPoint[]>({
-    queryKey: ['equity-history', portfolioId, _period],
-    queryFn: () => Promise.resolve([]),
+    queryKey: ['equity-history', portfolioId, period],
+    queryFn: () =>
+      api
+        .get(`/portfolios/${portfolioId}/equity-history`, { params: { period } })
+        .then(r => r.data ?? []),
     enabled: !!portfolioId,
     staleTime: 60_000,
+    retry: false,
+    placeholderData: [],
   })
 }
