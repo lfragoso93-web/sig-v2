@@ -14,7 +14,6 @@ export default function AppLayout() {
     transactionModal, closeTransactionModal,
   } = useAppStore()
 
-  // Auto-seleciona a primeira carteira se nenhuma estiver selecionada
   const { data: portfolios } = usePortfolioList()
   useEffect(() => {
     if (!selectedPortfolioId && portfolios && portfolios.length > 0) {
@@ -29,35 +28,16 @@ export default function AppLayout() {
 
       {/* Conteúdo principal */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Topbar */}
         <Topbar />
 
-        {/* Página */}
-        <main
-          className="flex-1 overflow-y-auto"
-          style={{
-            // Padding adaptativo: menor no mobile, maior no desktop
-            padding: 'var(--space-3)',
-          }}
-        >
-          {/* Wrapper com padding desktop via breakpoint */}
-          <div className="lg:px-3 lg:py-2">
-            <Outlet />
-          </div>
+        {/* página — padding-bottom extra no mobile para não sobrepor BottomNav */}
+        <main className="flex-1 overflow-y-auto p-3 pb-[76px] lg:pb-3 lg:p-5">
+          <Outlet />
         </main>
 
         {/* Bottom Navigation — só mobile (<1024px) */}
         <BottomNav />
       </div>
-
-      {/* Espaçamento inferior no mobile para não sobrepor o BottomNav */}
-      <style>{`
-        @media (max-width: 1023px) {
-          main > div {
-            padding-bottom: 72px;
-          }
-        }
-      `}</style>
 
       {/* Modal global de lançamento */}
       {transactionModal.open && (
