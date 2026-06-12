@@ -2,7 +2,6 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import ProtectedRoute from '@/components/ProtectedRoute'
-// Layout CORRETO — tem Sidebar + auto-selecao de portfolio
 import AppLayout from '@/components/layout/AppLayout'
 import LoginPage from '@/pages/auth/LoginPage'
 import RegisterPage from '@/pages/auth/RegisterPage'
@@ -16,6 +15,7 @@ import LancamentosPage from '@/pages/LancamentosPage'
 import IRPFPage from '@/pages/IRPFPage'
 import Transacoes from '@/pages/Transacoes'
 import Configuracoes from '@/pages/Configuracoes'
+import TesouroDiretoPage from '@/pages/patrimonio/TesouroDiretoPage'
 
 export default function App() {
   return (
@@ -42,8 +42,12 @@ export default function App() {
                 <Route path="/carteira/rentabilidade" element={<RentabilidadePage />} />
                 <Route path="/carteira/configuracoes" element={<Configuracoes />} />
 
+                {/* Patrimônio e sub-rotas */}
+                <Route path="/patrimonio"                          element={<PatrimonioPage />} />
+                <Route path="/carteira/patrimonio"                 element={<PatrimonioPage />} />
+                <Route path="/carteira/patrimonio/tesouro"         element={<TesouroDiretoPage />} />
+
                 {/* Rotas sem /carteira */}
-                <Route path="/patrimonio"    element={<PatrimonioPage />} />
                 <Route path="/metas"         element={<MetasPage />} />
                 <Route path="/analise"       element={<AnalisePage />} />
                 <Route path="/irpf"          element={<IRPFPage />} />
