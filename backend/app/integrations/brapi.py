@@ -58,6 +58,24 @@ async def fetch_asset_info(ticker: str) -> Optional[dict]:
         return None
 
 
+async def fetch_logo_url(ticker: str) -> Optional[str]:
+    """
+    Retorna a URL do logo do ativo via BRAPI.
+    A BRAPI devolve o campo `logourl` no objeto de resultado do quote.
+    Silencioso em caso de erro — nunca deve quebrar o fluxo de criacao de ativo.
+    """
+    try:
+        info = await fetch_asset_info(ticker)
+        if not info:
+            return None
+        # BRAPI retorna 'logourl' (sem hifen) no resultado do quote
+        logo = info.get("logourl") or info.get("logo_url") or info.get("logo")
+        return str(logo) if logo else None
+    except Exception as e:
+        logger.warning(f"BRAPI fetch_logo_url error for {ticker}: {e}")
+        return None
+
+
 async def fetch_historical_price(ticker: str, date_str: str) -> Optional[float]:
     from datetime import date, timedelta
     headers = _auth_headers()
@@ -153,7 +171,6 @@ async def fetch_crypto_suggestions(q: str, limit: int = 10) -> list[dict]:
             )
             resp.raise_for_status()
             data  = resp.json()
-            # Resposta: { "coins": [{ "coin": "BTC", "name": "Bitcoin", ... }] }
             items = data.get("coins") or data.get("available") or (data if isinstance(data, list) else [])
             return items[:limit]
     except Exception as e:
@@ -180,9 +197,7 @@ def _yf_search_sync(q: str, limit: int = 10, asset_type: Optional[str] = None) -
             items  = search.quotes or []
 
         for item in items:
-            # yf.Search retorna dicts; yf.Lookup retorna DataFrame
             if hasattr(item, "to_dict"):
-                # e um objeto pandas-like, converte
                 row = item
                 ticker = str(getattr(row, "symbol", "") or "")
                 name   = str(getattr(row, "longname", "") or getattr(row, "shortname", "") or "")
