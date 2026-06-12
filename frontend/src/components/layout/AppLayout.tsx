@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
 import { Sun, Moon, Plus } from 'lucide-react'
 import Sidebar from './Sidebar'
@@ -8,8 +8,11 @@ import { useAppStore } from '@/store/appStore'
 import { usePortfolioList } from '@/hooks/usePortfolio'
 
 export default function AppLayout() {
-  const { theme, setTheme, selectedPortfolioId, setSelectedPortfolioId } = useAppStore()
-  const [showModal, setShowModal] = useState(false)
+  const {
+    theme, setTheme,
+    selectedPortfolioId, setSelectedPortfolioId,
+    transactionModal, openTransactionModal, closeTransactionModal,
+  } = useAppStore()
 
   // Auto-seleciona a primeira carteira se nenhuma estiver selecionada
   const { data: portfolios } = usePortfolioList()
@@ -35,9 +38,9 @@ export default function AppLayout() {
             background: 'var(--color-surface)',
           }}
         >
-          {/* Botão Novo Lançamento */}
+          {/* Botão Novo Lançamento — abre sem prefill */}
           <button
-            onClick={() => setShowModal(true)}
+            onClick={() => openTransactionModal()}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-brand-600 hover:bg-brand-500 text-white transition-colors duration-150"
           >
             <Plus size={14} />
@@ -77,9 +80,9 @@ export default function AppLayout() {
         </main>
       </div>
 
-      {/* Modal global de lançamento */}
-      {showModal && (
-        <AddTransactionModal onClose={() => setShowModal(false)} />
+      {/* Modal global de lançamento — controlado pelo store */}
+      {transactionModal.open && (
+        <AddTransactionModal onClose={closeTransactionModal} />
       )}
     </div>
   )
