@@ -1,18 +1,18 @@
 import { useState } from 'react'
-import { usePortfolioSummary, useEquityHistory } from '@/hooks/usePortfolio'
+import { usePortfolioSummary } from '@/hooks/usePortfolio'
 import { useAppStore } from '@/store/appStore'
 import { usePortfolioList } from '@/hooks/usePortfolio'
-import { formatBRL, formatPercent, signClass } from '@/utils/format'
+import { formatBRL, formatPercent } from '@/utils/format'
 import KpiCard from '@/components/ui/KpiCard'
 import clsx from 'clsx'
 
 type Period = '6m' | '12m' | '24m' | 'all'
 
 const PERIODS: { label: string; value: Period }[] = [
-  { label: '6M',    value: '6m'  },
-  { label: '12M',   value: '12m' },
-  { label: '24M',   value: '24m' },
-  { label: 'Tudo',  value: 'all' },
+  { label: '6M',   value: '6m'  },
+  { label: '12M',  value: '12m' },
+  { label: '24M',  value: '24m' },
+  { label: 'Tudo', value: 'all' },
 ]
 
 export default function RentabilidadePage() {
@@ -27,7 +27,7 @@ export default function RentabilidadePage() {
   if (!selectedPortfolioId) {
     return (
       <div className="flex items-center justify-center py-24">
-        <p className="text-sm text-slate-500">Selecione uma carteira na barra superior.</p>
+        <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Selecione uma carteira na barra superior.</p>
       </div>
     )
   }
@@ -36,21 +36,23 @@ export default function RentabilidadePage() {
     <div className="p-4 md:p-6 flex flex-col gap-5 max-w-[1400px] mx-auto">
       <div>
         <h1 className="text-xl font-bold">Rentabilidade</h1>
-        <p className="text-sm text-slate-500">{portfolioName} · Evolução e desempenho</p>
+        <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>{portfolioName} · Evolução e desempenho</p>
       </div>
 
       {/* Filtro de período */}
-      <div className="flex items-center gap-1 p-1 rounded-lg self-start" style={{ background: 'var(--color-surface-offset)' }}>
+      <div
+        className="flex items-center gap-1 p-1 rounded-lg self-start"
+        style={{ background: 'var(--color-surface-offset)' }}
+      >
         {PERIODS.map(p => (
           <button
             key={p.value}
             onClick={() => setPeriod(p.value)}
-            className={clsx(
-              'px-3 py-1 rounded text-xs font-medium transition-colors',
-              period === p.value
-                ? 'bg-brand-600/20 text-brand-400'
-                : 'text-slate-500 hover:text-slate-300'
-            )}
+            className="px-3 py-1 rounded text-xs font-medium transition-colors"
+            style={{
+              background: period === p.value ? 'oklch(from var(--color-primary) l c h / 0.15)' : 'transparent',
+              color: period === p.value ? 'var(--color-primary)' : 'var(--color-text-muted)',
+            }}
           >
             {p.label}
           </button>
@@ -61,7 +63,7 @@ export default function RentabilidadePage() {
       {isLoading ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-24 animate-pulse rounded-xl bg-surface-800" />
+            <div key={i} className="h-24 animate-pulse rounded-xl skeleton" />
           ))}
         </div>
       ) : summary ? (
@@ -91,14 +93,17 @@ export default function RentabilidadePage() {
           />
         </div>
       ) : (
-        <div className="py-12 text-center text-xs text-slate-500">
+        <div className="py-12 text-center text-xs" style={{ color: 'var(--color-text-muted)' }}>
           Nenhum dado. Adicione lançamentos para ver a rentabilidade.
         </div>
       )}
 
-      {/* Gráfico placeholder até implementar histórico */}
-      <div className="rounded-xl bg-surface-900 border border-surface-700 p-6 flex items-center justify-center h-52">
-        <p className="text-xs text-slate-500">Gráfico de evolução histórica — disponível em breve</p>
+      {/* Gráfico placeholder */}
+      <div
+        className="rounded-xl p-6 flex items-center justify-center h-52"
+        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+      >
+        <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Gráfico de evolução histórica — disponível em breve</p>
       </div>
     </div>
   )
