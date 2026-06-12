@@ -75,11 +75,12 @@ Browser
 
 ```
 GET /portfolios/{id}/positions
-  └─> _calc_raw_positions()   — calcula posições brutas do histórico de transações
-        └─> get_prices()       — quotes_service.py
-              ├─> BRAPI        — ACAO, FII, ETF_NACIONAL, TESOURO_DIRETO, RENDA_FIXA, CRIPTO
-              └─> yfinance     — STOCK, ETF_INTERNACIONAL
-                    └─> dict {ticker: price}  — retorna None para tickers sem cotação (não faz fallback para preço médio)
+  └─> portfolio_service.calc_positions()  — calcula posições via Preço Médio Ponderado
+        └─> quotes_service.get_prices()   — busca cotações em paralelo (asyncio.gather)
+              ├─> BRAPI                   — ACAO, FII, ETF_NACIONAL, TESOURO_DIRETO, RENDA_FIXA
+              ├─> BRAPI /v2/crypto        — CRIPTO em BRL (paralelo via asyncio.gather)
+              └─> yfinance                — STOCK, ETF_INTERNACIONAL (ThreadPoolExecutor global)
+                    └─> dict {ticker: price}  — tickers ausentes = cotação indisponível
 ```
 
 > **Importante:** quando a cotação não está disponível, `current_price` retorna `null` no payload e o frontend exibe `—`. O sistema **nunca** usa o preço médio como substituto do preço atual.
@@ -188,56 +189,41 @@ sig-v2/
 │   ├── entrypoint.sh           # roda alembic upgrade head antes de iniciar
 │   ├── requirements.txt
 │   ├── alembic.ini
-│   ├── alembic/                # migrations
+│   ├── alembic/                # migrations (002 = ticker VARCHAR(100))
 │   └── app/
-│       ├── main.py             # ponto de entrada FastAPI, registro de routers
-│       ├── core/               # config, database, deps, security
-│       ├── models/             # SQLAlchemy ORM models
-│       ├── schemas/            # Pydantic schemas
-│       ├── routers/            # endpoints organizados por domínio
-│       │   ├── auth.py
-│       │   ├── portfolios.py   # CRUD carteiras + /summary + /positions
-│       │   │                   # ⚠️ contém lógica de negócio que deve migrar para portfolio_service.py
-│       │   ├── transactions.py # CRUD transações (com migration inline de ticker VARCHAR(100))
-│       │   ├── assets.py       # cadastro de ativos + busca BRAPI + /tesouro/search
+│       ├── main.py
+│       ├── core/
+│       ├── models/
+│       ├── schemas/
+│       ├── routers/
+│       │   ├── portfolios.py   # ✅ só HTTP — lógica delegada ao portfolio_service
+│       │   ├── transactions.py # ✅ limpo
+│       │   ├── assets.py
 │       │   ├── dividends.py
 │       │   ├── proventos.py
 │       │   ├── performance.py
 │       │   ├── admin.py
 │       │   └── [stubs: analysis, fixed_income, goals, irpf, fx]
 │       ├── services/
-│       │   ├── quotes_service.py   # orquestrador de cotações (BRAPI + yfinance + cripto)
-│       │   │                       # ⚠️ cache em memória (_cache={}) — não escala para multi-instância
-│       │   │                       # ⚠️ ThreadPoolExecutor criado por chamada — deve ser global
-│       │   │                       # ⚠️ fetch de cripto é serial — deve usar asyncio.gather()
-│       │   ├── portfolio_service.py
+│       │   ├── quotes_service.py   # ✅ ThreadPoolExecutor global + cripto paralelo
+│       │   ├── portfolio_service.py # ✅ contém calc_positions + sum_dividends
 │       │   └── [stubs: treasury_service]
 │       └── integrations/
-│           └── brapi.py            # fetch_quotes + _auth_headers
+│           └── brapi.py
 │
 └── frontend/
     └── src/
-        ├── components/
-        │   ├── resume/
-        │   │   └── PositionTable.tsx   # tabela de posições agrupadas por classe
-        │   └── modals/
-        │       └── AddTransactionModal.tsx
-        ├── hooks/
-        │   ├── usePortfolio.ts         # usePositions, usePortfolioSummary, toPositionGroups
-        │   ├── useTransactions.ts
-        │   ├── useTesouroSearch.ts     # busca títulos TD com debounce 500ms, min 2 chars
-        │   └── useTreasuryPrice.ts
         ├── pages/
-        │   ├── ResumePage.tsx          # dashboard principal
-        │   ├── LancamentosPage.tsx     # modal de lançamento (Ação/FII/ETF/Stock/Tesouro)
-        │   ├── TransacoesPage.tsx
-        │   ├── ProventosPage.tsx
-        │   ├── PatrimonioPage.tsx      # painel de patrimônio consolidado com filtro por classe
-        │   └── RentabilidadePage.tsx
+        │   ├── ResumePage.tsx       # ✅ ativo
+        │   ├── ProventosPage.tsx    # ✅ ativo
+        │   ├── RentabilidadePage.tsx # ✅ ativo
+        │   ├── Transacoes.tsx       # ✅ ativo
+        │   ├── Resumo.tsx           # ⚠️ obsoleto (stub vazio)
+        │   ├── Proventos.tsx        # ⚠️ obsoleto (stub vazio)
+        │   ├── Rentabilidade.tsx    # ⚠️ obsoleto (stub vazio)
+        │   └── TransacoesPage.tsx   # ⚠️ obsoleto (stub vazio)
         └── services/
-            └── api.ts                  # axios instance com interceptor de refresh token
-                                        # ⚠️ JWT armazenado em localStorage (vulnerável a XSS)
-                                        #    aceito para uso privado — migrar para HttpOnly Cookie antes de SaaS
+            └── api.ts               # ⚠️ JWT em localStorage (aceito para uso privado)
 ```
 
 ---
@@ -250,61 +236,54 @@ sig-v2/
 |---|---|
 | **Autenticação** | Cadastro, login JWT, refresh token, recuperação de senha |
 | **Carteiras (Portfolios)** | CRUD completo, múltiplas carteiras por usuário |
-| **Transações** | Compra/venda de todos os tipos de ativo, cálculo de **Preço Médio Ponderado** |
-| **Tesouro Direto** | Busca autocomplete (BRAPI), campos específicos (indexador, taxa, vencimento, PU), salva com ticker slug até 100 chars |
-| **Posições** | Agrupadas por classe de ativo, preço médio ponderado, cotação atual (ou `—` quando indisponível), resultado absoluto e % |
-| **Cotações** | BRAPI para ativos nacionais; yfinance para STOCK/ETF_INT; BRAPI `/v2/crypto` para cripto em BRL |
+| **Transações** | Compra/venda de todos os tipos de ativo, Preço Médio Ponderado |
+| **Tesouro Direto** | Busca autocomplete (BRAPI), campos específicos, salva com ticker slug até 100 chars |
+| **Posições** | Agrupadas por classe, preço médio ponderado, cotação atual (ou `—`), resultado absoluto e % |
+| **Cotações** | BRAPI (nacionais); yfinance (STOCK/ETF_INT); BRAPI `/v2/crypto` (cripto BRL) — todas em paralelo |
 | **Resumo (Dashboard)** | Patrimônio total, total investido, lucro, variação, proventos 12m |
 | **Proventos** | Cadastro manual, histórico, consolidação |
-| **Eventos Corporativos** | Grupamento, desdobramento, bonificação com ajuste de posição |
+| **Eventos Corporativos** | Grupamento, desdobramento, bonificação |
 | **Rentabilidade** | Retorno por carteira (absoluto e %) |
-| **Admin** | Painel de usuários e configurações (is_superuser) |
-| **PatrimonioPage** | Conectada ao `selectedPortfolioId` do store; KPIs, alocação por classe, donut chart e tabela de posições; filtro de classe interativo |
+| **Admin** | Painel de usuários e configurações |
+| **PatrimonioPage** | KPIs, alocação por classe, donut chart, tabela de posições com filtro |
 
 ### 🚧 Parcialmente Implementado
 
 | Módulo | O que existe | O que falta |
 |---|---|---|
-| **IRPF** | Model + router stub | Service de apuração mensal, cálculo de DARF, exportação PDF/CSV |
-| **Análise IA (Gemini)** | Router stub | `analysis_service.py`, prompts, integração Gemini, tela frontend |
-| **Renda Fixa** | Model + router stub | CRUD completo backend + tela frontend |
-| **Metas (Goals)** | Model criado | CRUD backend + tela frontend com progresso |
-| **Benchmarks** | Estrutura preparada | Integração CDI/IBOV/IPCA/IFIX na tela de Rentabilidade |
-| **FX (câmbio)** | Router básico | USD/BRL em tempo real para consolidar patrimônio em BRL |
-| **Tesouro Direto — edição/exclusão** | Cadastro funcional | Editar e excluir títulos; `treasury_service.py` quase vazio |
+| **IRPF** | Model + router stub | Apuração, cálculo DARF, exportação |
+| **Análise IA (Gemini)** | Router stub | `analysis_service.py`, prompts, tela |
+| **Renda Fixa** | Model + router stub | CRUD backend + tela frontend |
+| **Metas (Goals)** | Model criado | CRUD backend + tela |
+| **Benchmarks** | Estrutura preparada | Integração CDI/IBOV/IPCA/IFIX |
+| **FX (câmbio)** | Router básico | USD/BRL em tempo real |
+| **Tesouro Direto — edição/exclusão** | Cadastro funcional | Editar/excluir; `treasury_service.py` quase vazio |
 
-### 🔧 Dívidas Técnicas Conhecidas
+### 🔧 Dívidas Técnicas Restantes
 
 | Item | Arquivo(s) | Ação |
 |---|---|---|
-| Lógica de negócio no router | `portfolios.py` (`_calc_raw_positions`, `_enrich_with_prices`, `_sum_dividends`) | Mover para `portfolio_service.py` — pré-requisito para testes |
-| Cache em memória (`_cache = {}`) | `quotes_service.py` | Não escala para multi-instância; migrar para Redis com TTL no futuro |
-| `ThreadPoolExecutor` criado por chamada | `quotes_service.py` | Mover para pool global reutilizável |
-| Fetch de cripto serial | `quotes_service.py` | Substituir loop `for` por `asyncio.gather()` |
-| JWT em localStorage | `frontend/src/services/api.ts` | Aceito para uso privado; migrar para HttpOnly Cookie antes de qualquer exposição pública |
-| Arquivos duplicados de páginas | `Resumo.tsx` vs `ResumePage.tsx`, etc. | Consolidar, remover legados |
-| `treasury_service.py` quase vazio | `services/treasury_service.py` | Implementar lógica de negócio |
-| Testes automatizados | — | Criar suite pytest no backend (cobertura atual: ~0%) |
-| Migration Alembic formal para `ticker VARCHAR(100)` | `transactions.py` tem migration inline | Criar migration Alembic real |
+| Testes automatizados (cobertura 0%) | — | Criar suite pytest; meta 70% nos serviços financeiros |
+| JWT em localStorage | `frontend/src/services/api.ts` | Migrar para HttpOnly Cookie antes de SaaS |
+| Cache em memória não escala multi-worker | `quotes_service.py` | Migrar para Redis (futuro) |
+| Arquivos duplicados (stubs vazios) | `Resumo.tsx`, `Proventos.tsx`, etc. | Deletar via `git rm` após confirmar que não há imports |
 
 ---
 
 ## Bugs Corrigidos (histórico)
 
-Registro de todos os bugs identificados e corrigidos durante o desenvolvimento:
-
 ### Sessão Junho 2026
 
 | # | Bug | Causa | Correção |
 |---|---|---|---|
-| 1 | **P. Atual = P. Médio na tabela de posições** | `prices.get(ticker) or avg_price` usava avg como fallback quando cotação falhava | `current_price = None` quando ausente; `result_abs = 0` sem cotação; frontend exibe `—` |
-| 2 | **Tesouro Direto não salvava** | Coluna `ticker VARCHAR(20)` truncava slugs como `tesouro-renda-aposentadoria-extra-01122065` (46 chars) | `String(100)` no model + migration inline `ALTER COLUMN ticker TYPE VARCHAR(100)` |
-| 3 | **Tesouro Renda+ não aparecia no autocomplete** | Interface `TreasuryItem` não tinha campo `slug`; `applyTDSuggestion` fazia `(item as any).slug` → `undefined` → ticker errado | Adicionado `slug: string \| null` na interface; debounce 700ms→500ms; mínimo 3 chars→2 chars |
-| 4 | **Cripto com valor errado** | `CRIPTO` estava em `INTL_TYPES` → cotação via yfinance em USD; frontend exibia em BRL | Movido para `BR_TYPES`; cripto via `_fetch_brapi_crypto()` separado (BRAPI `/v2/crypto?currency=BRL`) |
-| 5 | **Crash `Cannot read properties of undefined (reading 'map')`** | `PositionTable` usava `group.items` mas `PositionGroup` do hook usa `group.positions` | `PositionTable` importa `PositionGroup` diretamente de `usePortfolio.ts`; usa `group.positions` |
-| 6 | **Nome correto do ativo não aparecia no autocomplete** | Lógica de label display no AddTransactionModal não usava o campo `name` retornado pelo backend | Corrigido para usar `item.name` quando disponível |
-| 7 | **PatrimonioPage não carregava dados** | `portfolioId` caia para `portfolios?.[0]?.id ?? 0` antes da carteira ser selecionada; `usePositions(0)` disparava com ID inválido | `PatrimonioPage` passa a usar `selectedPortfolioId` do store Zustand diretamente, sem fallback; exibe empty state se nenhuma carteira selecionada |
-| 8 | **PatrimonioPage tinha seletor de carteira duplicado** | A página tinha um switcher de carteiras próprio, redundante com o seletor global do header | Removido o seletor da página; toda navegação de carteiras usa exclusivamente o header global |
+| 1 | **P. Atual = P. Médio na tabela de posições** | `prices.get(ticker) or avg_price` usava avg como fallback | `current_price = None`; frontend exibe `—` |
+| 2 | **Tesouro Direto não salvava** | `ticker VARCHAR(20)` truncava slugs longos | `String(100)` + migration 002 |
+| 3 | **Tesouro Renda+ sumia no autocomplete** | Interface sem campo `slug` | Adicionado `slug: string \| null`; debounce 500ms; mín. 2 chars |
+| 4 | **Cripto com valor errado** | `CRIPTO` em `INTL_TYPES` → yfinance USD | Movido para `BR_TYPES`; `_fetch_brapi_crypto()` BRL |
+| 5 | **Crash `Cannot read .map`** | `group.items` vs `group.positions` | `PositionTable` usa `group.positions` |
+| 6 | **Nome do ativo ausente no autocomplete** | Campo `name` ignorado | Corrigido para usar `item.name` |
+| 7 | **PatrimonioPage não carregava** | `usePositions(0)` com ID inválido | Usa `selectedPortfolioId` do store Zustand |
+| 8 | **Seletor de carteira duplicado** | Switcher próprio na página além do header | Removido da página |
 
 ---
 
@@ -314,13 +293,13 @@ Registro de todos os bugs identificados e corrigidos durante o desenvolvimento:
 |---|---|---|
 | `User` | `user.py` | Usuário do sistema |
 | `Portfolio` | `portfolio.py` | Carteira de investimentos |
-| `Asset` | `asset.py` | Ativo (ação, FII, cripto etc.) |
+| `Asset` | `asset.py` | Ativo |
 | `AssetPrice` | `asset_price.py` | Histórico de preços |
 | `Transaction` | `transaction.py` | Transações (ticker até 100 chars) |
 | `Dividend` | `dividend.py` | Proventos recebidos |
 | `CorporateEvent` | `corporate_event.py` | Eventos corporativos |
 | `FixedIncome` | `fixed_income.py` | Renda fixa |
-| `Treasury` | `treasury.py` | Títulos do Tesouro Direto |
+| `Treasury` | `treasury.py` | Tesouro Direto |
 | `Goal` | `goal.py` | Metas financeiras |
 | `IRPF` | `irpf.py` | Dados para IR |
 | `SystemConfig` | `system_config.py` | Configurações do sistema |
@@ -359,7 +338,7 @@ Base URL: `http://localhost/api/v1`
 | GET | `/assets` | ✅ |
 | POST | `/assets` | ✅ |
 | GET | `/assets/search?q=` | ✅ |
-| GET | `/assets/tesouro/search?q=` | ✅ busca títulos TD via BRAPI |
+| GET | `/assets/tesouro/search?q=` | ✅ |
 
 ### Proventos / Dividendos
 | Método | Rota | Status |
@@ -397,8 +376,6 @@ Base URL: `http://localhost/api/v1`
 | `ETF_INTERNACIONAL` | ETFs Internacionais | yfinance | USD |
 | `CRIPTO` | Criptomoedas | BRAPI `/v2/crypto?currency=BRL` | BRL |
 
-> **Normalização:** aliases como `ACAO`, `ETF_INT`, `TESOURO`, `CRIPTO` são normalizados em `_normalize_type()` no `portfolios.py`.
-
 ---
 
 ## Frontend — Páginas e Rotas
@@ -406,19 +383,18 @@ Base URL: `http://localhost/api/v1`
 | Rota | Página | Status |
 |---|---|---|
 | `/` | `Landing.tsx` | ✅ |
-| `/login` | `Login.tsx` | ✅ |
-| `/register` | `Register.tsx` | ✅ |
-| `/esqueceu-senha` | `EsqueceuSenha.tsx` | ✅ |
-| `/app/resumo` | `ResumePage.tsx` | ✅ Dashboard com tabela de posições agrupadas |
-| `/app/lancamentos` | `LancamentosPage.tsx` | ✅ Modal para todos os tipos de ativo incl. Tesouro |
-| `/app/transacoes` | `TransacoesPage.tsx` | ✅ |
-| `/app/proventos` | `ProventosPage.tsx` | ✅ |
-| `/app/rentabilidade` | `RentabilidadePage.tsx` | ✅ |
-| `/app/configuracoes` | `Configuracoes.tsx` | ✅ |
-| `/app/patrimonio` | `PatrimonioPage.tsx` | ✅ KPIs, alocação por classe, donut, posições filtradas |
-| `/app/irpf` | `IRPFPage.tsx` | 🚧 Stub |
-| `/app/analise` | `AnalisePage.tsx` | 🚧 Stub |
-| `/app/metas` | `MetasPage.tsx` | 🚧 Stub |
+| `/login` | `LoginPage.tsx` | ✅ |
+| `/register` | `RegisterPage.tsx` | ✅ |
+| `/carteira` | `ResumePage.tsx` | ✅ |
+| `/carteira/lancamentos` | `LancamentosPage.tsx` | ✅ |
+| `/carteira/transacoes` | `Transacoes.tsx` | ✅ |
+| `/carteira/proventos` | `ProventosPage.tsx` | ✅ |
+| `/carteira/rentabilidade` | `RentabilidadePage.tsx` | ✅ |
+| `/carteira/configuracoes` | `Configuracoes.tsx` | ✅ |
+| `/patrimonio` | `PatrimonioPage.tsx` | ✅ |
+| `/irpf` | `IRPFPage.tsx` | 🚧 Stub |
+| `/analise` | `AnalisePage.tsx` | 🚧 Stub |
+| `/metas` | `MetasPage.tsx` | 🚧 Stub |
 
 ---
 
@@ -430,32 +406,21 @@ Base URL: `http://localhost/api/v1`
 - **CORS**: configurado via `ALLOWED_ORIGINS`
 - **Isolamento de dados**: todos os endpoints filtram por `user_id` do token
 - **Admin routes**: protegidas por `is_superuser`
-- **⚠️ JWT em localStorage**: aceito para uso privado/pessoal. Para exposição pública (SaaS), migrar para HttpOnly Cookie emitido pelo backend — elimina vulnerabilidade XSS onde `document.cookie` não consegue acessar o token
+- **⚠️ JWT em localStorage**: aceito para uso privado/pessoal. Migrar para HttpOnly Cookie antes de exposição pública
 
 ---
 
 ## Docker e Infra
 
-### Desenvolvimento
-
 ```bash
-docker compose up -d --build
+docker compose up -d --build  # desenvolvimento
+docker compose -f docker-compose.prod.yml up -d --build  # produção
 ```
 
 Serviços: `frontend` (5173) · `backend` (8000) · `postgres` (5432) · `nginx` (80)
 
-### Produção
-
 ```bash
-docker compose -f docker-compose.prod.yml up -d --build
-```
-
-### Migrations
-
-O `entrypoint.sh` executa `alembic upgrade head` automaticamente ao subir.
-
-```bash
-# Criar nova migration
+# Migrations
 docker compose exec backend alembic revision --autogenerate -m "descricao"
 docker compose exec backend alembic upgrade head
 ```
@@ -464,37 +429,15 @@ docker compose exec backend alembic upgrade head
 
 ## Análise de Qualidade do Código
 
-> Resultado da inspeção dos módulos críticos realizada em Junho 2026.
-
 | Área | Nota |
 |---|---|
 | Arquitetura | 8,5/10 |
 | Modelagem Financeira | 8,5/10 |
-| Qualidade do Código | 7,5/10 |
+| Qualidade do Código | 8/10 ✅ |
 | Segurança | 7/10 |
-| Escalabilidade | 7/10 |
+| Escalabilidade | 7,5/10 ✅ |
 | **Testabilidade** | **3/10** ⚠️ maior risco |
-| Maturidade Geral | 7,5/10 |
-
-### Pontos positivos confirmados
-
-- Separação correta entre `BR_TYPES` / `INTL_TYPES` no `quotes_service.py`
-- `asyncio.gather()` para paralelizar chamadas BRAPI/yfinance — boa decisão arquitetural
-- `current_price = None` quando cotação indisponível — evita o erro clássico de usar preço médio como proxy do preço atual
-- Multi-carteira bem modelada
-- Stack moderna (FastAPI + React + TypeScript + PostgreSQL)
-
-### Problemas identificados (priorizados no Roadmap)
-
-| # | Problema | Arquivo | Prioridade |
-|---|---|---|---|
-| 1 | Lógica de negócio dentro do router (`_calc_raw_positions`, `_enrich_with_prices`, `_sum_dividends`) — dificulta testes e manutenção | `portfolios.py` | 🔴 Alta |
-| 2 | Ausência total de testes automatizados | — | 🔴 Alta |
-| 3 | Fetch de cripto serial (loop `for`) em vez de `asyncio.gather()` | `quotes_service.py` | 🔴 Alta (fácil de corrigir) |
-| 4 | `ThreadPoolExecutor` criado a cada chamada yfinance em vez de pool global | `quotes_service.py` | 🟡 Média |
-| 5 | Cache em memória (`_cache = {}`) não escala para multi-instância/multi-worker | `quotes_service.py` | 🟡 Média (irrelevante em instância única) |
-| 6 | JWT armazenado em `localStorage` — vulnerável a XSS | `api.ts` | 🟡 Média (aceito para uso privado) |
-| 7 | Performance do dashboard cresce linearmente com o número de transações — recalcula tudo a cada request | `portfolios.py` | 🟢 Baixa (irrelevante até ~10.000 transações) |
+| Maturidade Geral | 8/10 ✅ |
 
 ---
 
@@ -506,152 +449,59 @@ docker compose exec backend alembic upgrade head
 
 ### Roadmap — 4 Fases
 
-#### 🔴 Fase 1 — Fundação (sem isso tudo é frágil)
+#### ✅ Fase 1 — Fundação (CONCLUÍDA em Junho 2026)
 
-> Dívidas técnicas que, se ignoradas, encarecem cada feature futura. Fazer antes de qualquer nova funcionalidade.
+| Item | Status | Commit |
+|---|---|---|
+| Mover lógica de `portfolios.py` → `portfolio_service.py` | ✅ | `8963106` |
+| `ThreadPoolExecutor` global para yfinance | ✅ | `c5a8d93` |
+| `asyncio.gather()` para cripto paralelo | ✅ | `c5a8d93` |
+| Migration Alembic formal `ticker VARCHAR(100)` | ✅ | já existia (`002`) |
+| Limpeza de arquivos duplicados frontend | ✅ | `98b24e2` |
+| **Testes automatizados (pytest)** | ⏳ **PENDENTE** | — |
 
-1. **Mover lógica de negócio de `portfolios.py` para `portfolio_service.py`**
-   - Funções `_calc_raw_positions()`, `_enrich_with_prices()`, `_sum_dividends()` estão no router
-   - O router deve apenas receber a request e chamar `portfolio_service.get_positions()`
-   - **Pré-requisito obrigatório para os testes automatizados**
-
-2. **Suite de testes automatizados (pytest)**
-   - Criar `backend/tests/` com fixtures de banco em memória (SQLite async)
-   - Prioridade de cobertura:
-     - `_calc_raw_positions()` — cálculo de Preço Médio Ponderado (compra, venda parcial, venda total, eventos corporativos)
-     - `_sum_dividends()` — consolidação de proventos
-     - `quotes_service` — roteamento correto por tipo de ativo (BR vs INT vs CRIPTO)
-     - `transactions` — validação e persistência
-   - Meta mínima: **70% de cobertura nos serviços financeiros**
-   - Esses módulos já geraram bugs em produção — são os mais críticos
-
-3. **Paralelismo no fetch de cripto**
-   - `quotes_service.py`: substituir loop `for ticker in pairs: await client.get(...)` por `asyncio.gather()`
-   - Ganho potencial expressivo para carteiras com muitas criptomoedas
-
-4. **`ThreadPoolExecutor` global para yfinance**
-   - Mover `ThreadPoolExecutor(max_workers=4)` para escopo global do módulo
-   - Reutilizar em todas as chamadas em vez de recriar a cada request
-
-5. **Migration Alembic formal para `ticker VARCHAR(100)`**
-   - Atualmente existe apenas uma migration inline em `transactions.py` (`_ensure_migrations`)
-   - Criar `alembic revision --autogenerate -m "increase_ticker_length"` e remover a migration inline
-   - Arquivo: `backend/alembic/versions/`
-
-6. **Limpeza de arquivos duplicados no frontend**
-   - Pares legados: `Resumo.tsx` / `ResumePage.tsx`, `Transacoes.tsx` / `TransacoesPage.tsx`, etc.
-   - Verificar qual versão está registrada no router, remover a obsoleta
+> ⚠️ **A suite de testes é o único item da Fase 1 ainda pendente.** É a maior dívida técnica do projeto. Implementar antes de avançar para a Fase 2.
 
 ---
 
 #### 🟡 Fase 2 — Core financeiro completo
 
-> Gaps funcionais que afetam a exatidão dos dados hoje.
-
-7. **Renda Fixa — CRUD completo**
-   - Backend: `routers/fixed_income.py` é stub — implementar endpoints CRUD
-   - Criar `services/fixed_income_service.py` (não existe)
-   - Frontend: tela de cadastro/listagem, integrar ao modal de lançamentos
-   - Modelo já existe: `models/fixed_income.py`
-
-8. **Tesouro Direto — edição e exclusão**
-   - Cadastro via modal já funciona ✅
-   - Implementar `get`, `update`, `delete` em `treasury_service.py` (atualmente quase vazio)
-   - Adicionar ações de editar/excluir na tabela de posições do frontend
-
-9. **FX (câmbio) — USD→BRL em tempo real**
-   - `routers/fx.py` tem implementação básica
-   - Completar para buscar USD/BRL via BRAPI ou BCB e expor para o frontend
-   - Usar na `PatrimonioPage` para converter ativos em USD e exibir patrimônio total correto em BRL
-
-10. **Benchmarks CDI/IPCA/IBOV/IFIX na Rentabilidade**
-    - Integrar CDI e IPCA via API pública do Banco Central (SGS)
-    - IBOV e IFIX via BRAPI
-    - Exibir gráfico comparativo na `RentabilidadePage.tsx` ao lado do retorno da carteira
+1. **Suite pytest** — `backend/tests/` com fixtures SQLite async; cobertura alvo: 70% nos serviços financeiros
+2. **Renda Fixa** — CRUD completo (`fixed_income_service.py`) + tela frontend
+3. **Tesouro Direto — edição e exclusão** — completar `treasury_service.py`
+4. **FX (câmbio)** — USD/BRL em tempo real; usar na `PatrimonioPage` para BRL correto
+5. **Benchmarks CDI/IPCA/IBOV/IFIX** — tela de Rentabilidade com gráfico comparativo
 
 ---
 
 #### 🟢 Fase 3 — Valor estratégico
 
-> Features que elevam a utilidade do sistema para uso contínuo e planejamento financeiro de longo prazo.
-
-11. **Metas financeiras**
-    - Model `goal.py` já existe
-    - Implementar CRUD em `routers/goals.py` (stub)
-    - Frontend: `MetasPage.tsx` stub — tela com barra de progresso, valor atual vs. meta, prazo
-
-12. **IRPF — apuração e exportação**
-    - Módulo mais complexo — model e router stub existem
-    - Implementar: apuração mensal de ganho de capital usando **Preço Médio Ponderado** (consistente com o restante do sistema), isenções (ações até R$20k/mês), cálculo de DARF
-    - Exportação em CSV para preencher a declaração
-    - **⚠️ Deve usar o mesmo método de custo (Preço Médio Ponderado) que o restante do sistema — qualquer divergência gera erro no IR**
-
-13. **Exportação de dados**
-    - CSV/Excel de transações e posições
-    - Botão na `TransacoesPage.tsx` e na `PatrimonioPage.tsx`
-
-14. **Engine de posições materializadas (performance)**
-    - Criar tabela `portfolio_positions` atualizada por evento (transaction criada/deletada → recalcula posição)
-    - Elimina o recálculo completo a cada request ao dashboard
-    - Necessário quando a carteira ultrapassar ~5.000–10.000 transações
+6. **Metas financeiras** — CRUD + `MetasPage.tsx` com barra de progresso
+7. **IRPF** — apuração mensal (Preço Médio Ponderado), isenções ações ≤R$20k/mês, DARF, exportação CSV
+8. **Exportação de dados** — CSV/Excel de transações e posições
+9. **Engine de posições materializadas** — tabela `portfolio_positions` atualizada por evento
 
 ---
 
 #### 🔵 Fase 4 — Diferencial competitivo
 
-> Features que diferenciam o produto e só funcionam bem em cima de uma base financeira completa e testada.
-
-15. **Análise IA (Gemini)**
-    - Criar `services/analysis_service.py` com prompts de análise de carteira
-    - Conectar `GEMINI_API_KEY` do `.env`
-    - Implementar `routers/analysis.py` (stub)
-    - Página `AnalisePage.tsx` já existe como stub
-    - Sugestões de rebalanceamento, concentração setorial, comparação com benchmarks
-
-16. **Importação via CSV**
-    - Import de histórico de transações via CSV (formato padrão de corretoras)
-    - Muito mais viável que integração direta com corretoras (Open Finance tem barreira regulatória)
-    - Validar, mapear colunas e inserir em massa via endpoint `/portfolios/{id}/transactions/import`
-
-17. **Autenticação via HttpOnly Cookie (antes de SaaS)**
-    - Migrar JWT de `localStorage` para HttpOnly Cookie emitido pelo backend
-    - Requer: `Set-Cookie` no backend, CORS `credentials: true`, CSRF token
-    - **Obrigatório antes de qualquer exposição pública do sistema**
-
-18. **Cache Redis para cotações**
-    - Substituir `_cache = {}` em `quotes_service.py` por Redis com TTL
-    - Necessário apenas com múltiplos workers Uvicorn ou múltiplos containers
+10. **Análise IA (Gemini)** — `analysis_service.py`, prompts, `AnalisePage.tsx`
+11. **Importação via CSV** — histórico de transações de corretoras
+12. **HttpOnly Cookie** — migrar JWT de `localStorage` (obrigatório antes de SaaS)
+13. **Cache Redis** — substituir `_cache = {}` por Redis com TTL
 
 ---
 
 ### Contexto técnico importante para próximas sessões
 
-**Método de custo de aquisição:**
-- Sistema usa **Preço Médio Ponderado** — não FIFO
-- `avg_price = total_cost / qty_total` recalculado a cada compra
-- A cada venda: `total_cost -= avg_price * qty_vendida`
-- Módulo de IRPF **deve** usar este mesmo método
+**Método de custo de aquisição:** Preço Médio Ponderado. `avg_price = total_cost / qty_total`. A cada venda: `total_cost -= avg_price * qty_vendida`. Módulo de IRPF **deve** usar este mesmo método.
 
-**Padrão de cotações:**
-- `get_prices()` retorna `dict[str, float]` — tickers ausentes = cotação indisponível
-- Nunca usar `prices.get(ticker) or avg_price` — isso mascarava bugs (já corrigido)
-- `current_price: Optional[float]` no schema e no frontend
+**Padrão de cotações:** `get_prices()` retorna `dict[str, float]` — tickers ausentes = cotação indisponível. Nunca usar `prices.get(ticker) or avg_price`.
 
-**Padrão de posições:**
-- Backend retorna lista flat de `PositionItem` no endpoint `/positions`
-- `toPositionGroups()` em `usePortfolio.ts` agrupa por `asset_type` no frontend
-- `PositionGroup.positions` (não `.items`) é o campo com os itens do grupo
+**Padrão de posições:** backend retorna lista flat de `PositionItem`; `toPositionGroups()` em `usePortfolio.ts` agrupa por `asset_type`; campo é `group.positions` (não `.items`).
 
-**Tesouro Direto:**
-- Ticker salvo = slug da BRAPI (ex: `TESOURO-SELIC-01032031`) — até 100 chars
-- `useTesouroSearch` busca via `/assets/tesouro/search?q=` com debounce 500ms, mínimo 2 chars
-- Interface `TreasuryItem` inclui campo `slug` (obrigatório para o submit funcionar)
+**Tesouro Direto:** ticker = slug BRAPI (ex: `TESOURO-SELIC-01032031`); até 100 chars; `TreasuryItem` tem campo `slug` obrigatório.
 
-**Cripto:**
-- Cotações via BRAPI `/api/v2/crypto?coin={TICKER}&currency=BRL` — retorna em BRL diretamente
-- `asset_type = CRIPTO` → vai para `_fetch_brapi_crypto()`, não para yfinance
+**Cripto:** via BRAPI `/api/v2/crypto?coin={TICKER}&currency=BRL` → BRL direto. `asset_type = CRIPTO` → `_fetch_brapi_crypto()`, nunca yfinance.
 
-**Seleção de carteira:**
-- `selectedPortfolioId` vive no store Zustand (`useAppStore`)
-- Todas as páginas devem ler `selectedPortfolioId` do store — sem fallback para `portfolios[0]`
-- Se `portfolioId` for `null`, exibir empty state orientando o usuário a selecionar uma carteira no header
+**Seleção de carteira:** `selectedPortfolioId` no store Zustand (`useAppStore`). Todas as páginas leem do store. Se `null`, exibir empty state.
