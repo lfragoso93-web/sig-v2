@@ -17,7 +17,6 @@ export function usePortfolios() {
   return useQuery<Portfolio[]>({
     queryKey: PORTFOLIOS_QUERY_KEY,
     queryFn: () => api.get('/portfolios').then((r) => r.data),
-    // Evita refetch a cada re-render da Sidebar — lista de carteiras muda raramente
     staleTime: 30_000,
   })
 }
@@ -27,6 +26,23 @@ export function useCreatePortfolio() {
   return useMutation({
     mutationFn: (data: { name: string; description?: string }) =>
       api.post<Portfolio>('/portfolios', data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: PORTFOLIOS_QUERY_KEY }),
+  })
+}
+
+export function useUpdatePortfolio() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: number; name: string; description?: string }) =>
+      api.put<Portfolio>(`/portfolios/${id}`, data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: PORTFOLIOS_QUERY_KEY }),
+  })
+}
+
+export function useDeletePortfolio() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => api.delete(`/portfolios/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: PORTFOLIOS_QUERY_KEY }),
   })
 }
