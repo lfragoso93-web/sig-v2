@@ -11,6 +11,7 @@ import { useTesouroSearch, TreasuryItem } from '@/hooks/useTesouroSearch'
 import { useTickerSuggest, TickerSuggestion } from '@/hooks/useTickerSuggest'
 import { useTreasuryPrice } from '@/hooks/useTreasuryPrice'
 
+// Props mantidas para compatibilidade — onClose ainda pode ser passado diretamente
 interface Props {
   onClose: () => void
 }
@@ -25,16 +26,6 @@ type AssetTab = {
   tickerLabel:       string
   extraFields?:      'renda_fixa' | 'tesouro'
   brapiEnabled?:     boolean
-  /**
-   * Tipo passado ao endpoint /assets/suggest?asset_type=:
-   *   'stock'     -> acoes B3 via BRAPI
-   *   'fund'      -> FIIs via BRAPI
-   *   'etf'       -> ETFs B3 via BRAPI
-   *   'cripto'    -> criptos via BRAPI /v2/crypto/available
-   *   'stock_int' -> stocks internacionais via yfinance
-   *   'etf_int'   -> ETFs internacionais via yfinance
-   *   undefined   -> sem autocomplete de sugestoes
-   */
   brapiSuggestType?: string
 }
 
@@ -103,18 +94,24 @@ const inputCls = [
 
 export default function AddTransactionModal({ onClose }: Props) {
   const selectedPortfolioId = useAppStore(s => s.selectedPortfolioId)
+  const prefill             = useAppStore(s => s.transactionModal.prefill)
   const { mutateAsync, isPending } = useCreateTransaction()
 
-  const [activeTab, setActiveTab] = useState('acao')
+  // Determina aba inicial: prefill.tab tem prioridade
+  const initialTab = prefill?.tab ?? 'acao'
+
+  const [activeTab, setActiveTab] = useState(initialTab)
   const [operation, setOperation] = useState<'buy' | 'sell'>('buy')
-  const [ticker,    setTicker]    = useState('')
-  const [assetName, setAssetName] = useState('')
+  const [ticker,    setTicker]    = useState(prefill?.ticker    ?? '')
+  const [assetName, setAssetName] = useState(prefill?.assetName ?? '')
   const [quantity,  setQuantity]  = useState('')
   const [price,     setPrice]     = useState('')
   const [fees,      setFees]      = useState('')
   const [date,      setDate]      = useState(TODAY)
   const [notes,     setNotes]     = useState('')
-  const [currency,  setCurrency]  = useState('BRL')
+  const [currency,  setCurrency]  = useState(
+    () => TABS.find(t => t.key === initialTab)?.currency ?? 'BRL'
+  )
   const [error,     setError]     = useState<string | null>(null)
   const [success,   setSuccess]   = useState(false)
   const [priceFromBrapi, setPriceFromBrapi] = useState(false)
@@ -136,6 +133,11 @@ export default function AddTransactionModal({ onClose }: Props) {
   const isRF           = tab.extraFields === 'renda_fixa'
   const isTesouro      = tab.extraFields === 'tesouro'
   const indexerOptions = isTesouro ? TD_INDEXERS : RF_INDEXERS
+
+  // Titulo do modal muda quando vem com prefill de ticker
+  const modalTitle = prefill?.ticker
+    ? `Adicionar Cotas — ${prefill.ticker}`
+    : 'Novo Lançamento'
 
   // ── BRAPI cotacao (renda variavel) ────────────────────────────────────
   const { quote, loading: quoteLoading, error: quoteError } =
@@ -247,7 +249,11 @@ export default function AddTransactionModal({ onClose }: Props) {
     const t = TABS.find(t => t.key === key)!
     setActiveTab(key)
     setCurrency(t.currency)
-    setTicker(''); setAssetName(''); setPrice('')
+    // se veio com prefill, preserva o ticker ao trocar de aba
+    if (!prefill?.ticker) {
+      setTicker(''); setAssetName('')
+    }
+    setPrice('')
     setIndexer(''); setRate(''); setMaturity(''); setIssuer('')
     setActiveSlug(''); setPriceEdited(false)
     setPriceFromBrapi(false)
@@ -306,7 +312,9 @@ export default function AddTransactionModal({ onClose }: Props) {
 
   function handleReset() {
     setSuccess(false)
-    setTicker(''); setAssetName(''); setQuantity(''); setPrice('')
+    setTicker(prefill?.ticker ?? '')
+    setAssetName(prefill?.assetName ?? '')
+    setQuantity(''); setPrice('')
     setFees(''); setDate(TODAY); setNotes('')
     setIndexer(''); setRate(''); setMaturity(''); setIssuer('')
     setActiveSlug(''); setPriceEdited(false)
@@ -345,7 +353,7 @@ export default function AddTransactionModal({ onClose }: Props) {
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-surface-700">
-          <h2 className="text-sm font-semibold text-slate-100">Novo Lancamento</h2>
+          <h2 className="text-sm font-semibold text-slate-100">{modalTitle}</h2>
           <button onClick={onClose} className="p-1 rounded hover:bg-surface-700 text-slate-400 hover:text-slate-200 transition-colors" aria-label="Fechar">
             <X size={15} />
           </button>
@@ -404,7 +412,8 @@ export default function AddTransactionModal({ onClose }: Props) {
                       onChange={e => {
                         const v = e.target.value
                         setTicker(v)
-                        setAssetName('')
+                        // so limpa assetName se nao veio do prefill
+                        if (!prefill?.ticker) setAssetName('')
                         setPrice('')
                         setPriceFromBrapi(false)
                         setPriceEdited(false)
@@ -417,6 +426,8 @@ export default function AddTransactionModal({ onClose }: Props) {
                       placeholder={tab.tickerPlaceholder}
                       className={clsx(inputCls, 'pr-7')}
                       autoFocus
+                      // quando veio de prefill, o ticker ja e conhecido; permite ainda editar
+                      readOnly={false}
                     />
                     {anyLoading && (
                       <span className="absolute right-2 top-1/2 -translate-y-1/2">
