@@ -22,8 +22,8 @@ export default function Register() {
 
   const onSubmit = async (data: FormData) => {
     try {
-      await api.post('/api/v1/auth/register', data)
-      navigate('/auth/login')
+      await api.post('/auth/register', data)
+      navigate('/login')
     } catch {
       setError('root', { message: 'Erro ao cadastrar. Tente novamente.' })
     }
@@ -83,7 +83,7 @@ export default function Register() {
 
       <p className="text-center text-sm" style={{ color: 'var(--color-text-muted)' }}>
         Já tem conta?{' '}
-        <Link to="/auth/login" className="hover:underline" style={{ color: 'var(--color-primary)' }}>Entrar</Link>
+        <Link to="/login" className="hover:underline" style={{ color: 'var(--color-primary)' }}>Entrar</Link>
       </p>
     </form>
   )
