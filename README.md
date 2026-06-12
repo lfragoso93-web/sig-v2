@@ -2,7 +2,7 @@
 
 > Plataforma full-stack containerizada para gestão de carteiras de investimentos, com suporte a múltiplas carteiras, cotações automáticas, proventos, eventos corporativos e módulo de IRPF.
 
-**Última atualização da documentação:** Junho 2026
+**Última atualização da documentação:** 12 Jun 2026
 
 ---
 
@@ -204,16 +204,20 @@ sig-v2/
 │   └── app/
 │       ├── main.py
 │       ├── core/
+│       │   ├── security.py          # ⚠️ NÃO tem get_current_user — só JWT utilities
+│       │   └── deps.py              # ✅ get_current_user mora AQUI
 │       ├── models/
 │       ├── schemas/
 │       ├── routers/
 │       │   ├── portfolios.py        # ✅ só HTTP — lógica em portfolio_service
 │       │   ├── transactions.py      # ✅
-│       │   ├── assets.py
-│       │   ├── dividends.py
-│       │   ├── proventos.py
-│       │   ├── performance.py
-│       │   ├── admin.py
+│       │   ├── assets.py            # ✅
+│       │   ├── dividends.py         # ✅ (import corrigido em 12/06)
+│       │   ├── prices.py            # ✅ (import corrigido em 12/06)
+│       │   ├── proventos.py         # ✅
+│       │   ├── performance.py       # ✅
+│       │   ├── treasury.py          # ✅
+│       │   ├── admin.py             # ✅
 │       │   └── [stubs: analysis, fixed_income, goals, irpf, fx]
 │       └── services/
 │           ├── quotes_service.py       # ✅ ThreadPoolExecutor global + cripto paralelo
@@ -225,8 +229,10 @@ sig-v2/
     └── src/
         ├── index.css                  # ✅ globals responsivos: overflow-x, safe-area, hover:none
         ├── components/
+        │   ├── ui/
+        │   │   └── KpiCard.tsx          # ✅ ordem: label > valor R$ > variação % > subValue > subLabel
         │   └── layout/
-        │       ├── AppLayout.tsx        # ✅ p-3 pb-[76px] lg:p-5, sem <style> inline
+        │       ├── AppLayout.tsx        # ✅ AddTransactionModal GLOBAL aqui; p-3 pb-[76px] lg:p-5
         │       ├── Sidebar.tsx          # ✅ drawer mobile com animação slide-in/out 280ms
         │       ├── Topbar.tsx           # ✅ hamburger mobile + nome carteira + FAB desktop
         │       ├── BottomNav.tsx        # ✅ bottom nav + FAB central (Novo Lançamento)
@@ -238,12 +244,22 @@ sig-v2/
         │   ├── RentabilidadePage.tsx    # ✅
         │   ├── Transacoes.tsx           # ✅
         │   ├── PatrimonioPage.tsx       # ✅
+        │   ├── patrimonio/
+        │   │   └── TesouroDiretoPage.tsx  # ✅ usa openTransactionModal global (sem modal próprio)
         │   ├── Configuracoes.tsx        # ✅ perfil, avatar, senha, excluir conta
         │   ├── AdminPanel.tsx           # ✅ CSS vars + editar role inline
         │   └── [stubs: IRPFPage, AnalisePage, MetasPage]
+        ├── hooks/
+        │   └── useTreasury.ts           # ✅ CRUD Tesouro Direto
         └── store/
             └── appStore.ts              # ✅ sidebarOpen, toggleSidebar, closeSidebar
+                                         #    selectedPortfolioId, openTransactionModal(prefill?)
 ```
+
+> **⚠️ Armadilha recorrente — import `get_current_user`:**
+> `get_current_user` vive em `app.core.deps`, **NÃO** em `app.core.security`.
+> Qualquer novo router deve usar `from app.core.deps import get_current_user`.
+> `app.core.security` contém apenas utilitários JWT (criar/verificar tokens).
 
 ---
 
@@ -256,7 +272,7 @@ sig-v2/
 | **Autenticação** | Cadastro, login JWT, refresh token, recuperação de senha |
 | **Carteiras (Portfolios)** | CRUD completo, múltiplas carteiras por usuário |
 | **Transações** | Compra/venda de todos os tipos de ativo, Preço Médio Ponderado |
-| **Tesouro Direto** | Busca autocomplete (BRAPI), campos específicos, salva com ticker slug até 100 chars |
+| **Tesouro Direto** | Busca autocomplete (BRAPI), campos específicos, salva com ticker slug até 100 chars; cadastro via modal global |
 | **Posições** | Agrupadas por classe, preço médio ponderado, cotação atual (ou `—`), resultado absoluto e % |
 | **Cotações** | BRAPI (nacionais); yfinance (STOCK/ETF_INT); BRAPI `/v2/crypto` (cripto BRL) — todas em paralelo |
 | **Resumo (Dashboard)** | Patrimônio total, total investido, lucro, variação, proventos 12m |
@@ -265,9 +281,11 @@ sig-v2/
 | **Rentabilidade** | Retorno por carteira (absoluto e %) |
 | **Admin** | Painel de usuários, edição de role inline |
 | **PatrimonioPage** | KPIs, alocação por classe, donut chart, tabela de posições com filtro |
+| **KpiCard** | layout: label > valor R$ (grande) > variação % (colorida) > subValue > subLabel |
 | **Configurações** | Minha Conta: perfil, avatar, senha, excluir conta |
 | **Layout responsivo (base)** | Sidebar drawer mobile com slide-in 280ms, BottomNav + FAB, hamburger Topbar |
 | **Testes automatizados** | ~37 testes pytest; fixtures SQLite async; `make test` |
+| **AddTransactionModal global** | Montado no AppLayout; acessível via `openTransactionModal(prefill?)` do store |
 
 ### 🚧 Parcialmente Implementado
 
@@ -279,7 +297,7 @@ sig-v2/
 | **Metas (Goals)** | Model criado | CRUD backend + tela |
 | **Benchmarks** | Estrutura preparada | Integração CDI/IBOV/IPCA/IFIX |
 | **FX (câmbio)** | Router básico | USD/BRL em tempo real |
-| **Tesouro Direto — edição/exclusão** | Cadastro funcional | Editar/excluir; `treasury_service.py` quase vazio |
+| **Tesouro Direto — edição/exclusão** | Cadastro funcional; botão lápis abre modal com prefill | `treasury_service.py` quase vazio; edição real no backend pendente |
 | **Tabelas → Cards mobile** | Layout base pronto | Cards por posição/transação/provento no mobile |
 | **Modais bottom sheet** | `TransactionForm` responsivo | Drawer de baixo para cima no mobile |
 | **Gráficos responsivos** | Donut chart existente | `ResponsiveContainer` + legendas adaptativas |
@@ -296,7 +314,16 @@ sig-v2/
 
 ## Bugs Corrigidos (histórico)
 
-### Sessão Junho 2026
+### Sessão 12 Jun 2026 (2ª parte)
+
+| # | Bug | Causa | Correção |
+|---|---|---|---|
+| 14 | **Servidor não subia — `dividends.py`** | `from app.core.security import get_current_user` — função não existe em `security.py` | Corrigido para `from app.core.deps import get_current_user` |
+| 15 | **KpiCard: R$ e % na ordem errada** | `subLabel/subValue` apareciam antes da variação % | Reordenado: valor R$ > variação % > subValue > subLabel |
+| 16 | **TesouroDiretoPage com modal duplicado** | Tinha `EditModal` próprio além do `AddTransactionModal` global no AppLayout | Removido modal próprio; usa `openTransactionModal({ tab: 'tesouro', ticker })` do store |
+| 17 | **Servidor não subia — `prices.py`** | Mesmo erro: `from app.core.security import get_current_user` | Corrigido para `from app.core.deps import get_current_user` |
+
+### Sessão Junho 2026 (1ª parte)
 
 | # | Bug | Causa | Correção |
 |---|---|---|---|
@@ -369,6 +396,19 @@ Base URL: `http://localhost/api/v1`
 | GET | `/assets/search?q=` | ✅ |
 | GET | `/assets/tesouro/search?q=` | ✅ |
 
+### Tesouro Direto
+| Método | Rota | Status |
+|---|---|---|
+| GET | `/treasury` | ✅ |
+| POST | `/treasury` | ✅ |
+| DELETE | `/treasury/{id}` | ✅ |
+| PUT | `/treasury/{id}` | 🚧 backend pendente |
+
+### Preços
+| Método | Rota | Status |
+|---|---|---|
+| GET | `/prices/{ticker}/history` | ✅ |
+
 ### Proventos / Dividendos
 | Método | Rota | Status |
 |---|---|---|
@@ -432,8 +472,8 @@ Base URL: `http://localhost/api/v1`
 | `/carteira/rentabilidade` | `RentabilidadePage.tsx` | ✅ |
 | `/carteira/patrimonio` | `PatrimonioPage.tsx` | ✅ |
 | `/carteira/patrimonio/renda-variavel` | `PatrimonioPage.tsx` | ✅ |
-| `/carteira/patrimonio/tesouro` | `PatrimonioPage.tsx` | ✅ |
-| `/carteira/patrimonio/renda-fixa` | `PatrimonioPage.tsx` | 🚧 Stub |
+| `/carteira/patrimonio/tesouro` | `TesouroDiretoPage.tsx` | ✅ cadastro / lista / excluir |
+| `/carteira/patrimonio/renda-fixa` | `RendaFixaPage.tsx` | 🚧 Stub — próximo sprint |
 | `/carteira/configuracoes` | `Configuracoes.tsx` | ✅ perfil + senha |
 | `/admin` | `AdminPanel.tsx` | ✅ |
 | `/irpf` | `IRPFPage.tsx` | 🚧 Stub |
@@ -517,7 +557,7 @@ make test
 |---|---|---|
 | **2.1 Testes automatizados** | ✅ Concluído | Ampliar cobertura para 70% |
 | **2.2 Renda Fixa CRUD** | ⏳ Pendente | `fixed_income_service.py` + `RendaFixaPage.tsx` |
-| **2.3 Tesouro Direto — edição/exclusão** | ⏳ Pendente | Completar `treasury_service.py` |
+| **2.3 Tesouro Direto — edição real backend** | 🚧 Parcial | Frontend já usa `openTransactionModal`; falta `PUT /treasury/{id}` funcional no backend |
 | **2.4 FX USD/BRL** | ⏳ Pendente | `fx_service.py` + exibir BRL na PatrimonioPage |
 | **2.5 Benchmarks CDI/IBOV/IFIX/IPCA** | ⏳ Pendente | Integração BRAPI + BACEN + gráfico RentabilidadePage |
 
@@ -558,18 +598,25 @@ make test
 
 ---
 
-### Próximos itens na fila (Sprint atual)
+### 🚀 Próximos itens na fila (próximo sprint)
 
 ```
-SPRINT 2 (próximo)
-  ├── [2.2] Renda Fixa CRUD completo (backend + frontend)
-  ├── [2.3] Tesouro Direto edição/exclusão
-  └── [3.3] Tabelas → Cards mobile
+SPRINT 3 (próximo)
+  ├── [2.2] Renda Fixa CRUD completo (backend + RendaFixaPage.tsx)
+  ├── [2.3] Tesouro Direto — PUT /treasury/{id} funcional no backend
+  ├── [2.4] FX USD/BRL — fx_service.py + exibir conversão na PatrimonioPage
+  └── [3.3] Tabelas → Cards mobile (posições, transações)
 ```
 
 ---
 
 ### Contexto técnico importante para próximas sessões
+
+**⚠️ `get_current_user` mora em `app.core.deps`, não em `app.core.security`.**
+Qualquer novo router: `from app.core.deps import get_current_user`.
+`app.core.security` = apenas utilitários JWT (criar/verificar token). Esse erro já causou crash em `dividends.py` e `prices.py`.
+
+**Modal global de transações:** `AddTransactionModal` está montado dentro de `AppLayout.tsx` e **não** deve ser duplicado em sub-páginas. Para abri-lo, use `useAppStore(s => s.openTransactionModal)` com prefill opcional `{ tab, ticker, assetName }`.
 
 **Método de custo de aquisição:** Preço Médio Ponderado. `avg_price = total_cost / qty_total`. A cada venda: `total_cost -= avg_price * qty_vendida`. Módulo de IRPF **deve** usar este mesmo método.
 
@@ -577,12 +624,14 @@ SPRINT 2 (próximo)
 
 **Padrão de posições:** backend retorna lista flat de `PositionItem`; `toPositionGroups()` em `usePortfolio.ts` agrupa por `asset_type`; campo é `group.positions` (não `.items`).
 
-**Tesouro Direto:** ticker = slug BRAPI (ex: `TESOURO-SELIC-01032031`); até 100 chars; `TreasuryItem` tem campo `slug` obrigatório.
+**Tesouro Direto:** ticker = slug BRAPI (ex: `TESOURO-SELIC-01032031`); até 100 chars; `TreasuryItem` tem campo `slug` obrigatório. Botão lápis na tabela abre `AddTransactionModal` com `{ tab: 'tesouro', ticker: item.brapi_name }` — a edição real (PUT) no backend ainda não está implementada.
 
 **Cripto:** via BRAPI `/api/v2/crypto?coin={TICKER}&currency=BRL` → BRL direto. `asset_type = CRIPTO` → `_fetch_brapi_crypto()`, nunca yfinance.
 
 **Seleção de carteira:** `selectedPortfolioId` no store Zustand (`useAppStore`). Todas as páginas leem do store. Se `null`, exibir empty state.
 
 **Sidebar mobile:** controlada por `sidebarOpen` no `useAppStore`. `toggleSidebar()` no hamburguer da Topbar. Fecha automaticamente ao trocar de rota (`useEffect` em `location.pathname` dentro de `Sidebar.tsx`).
+
+**KpiCard — ordem dos campos:** label (muted) → valor principal R$ (2xl bold) → variação % (colorida) → subValue (secondary) → subLabel (faint). Não inverter.
 
 **Testes:** rodar com `make test`. Fixtures em `backend/tests/conftest.py` (SQLite async em memória). Mocks de APIs externas via `unittest.mock.patch`.
