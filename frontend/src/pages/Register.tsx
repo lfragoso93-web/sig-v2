@@ -54,7 +54,7 @@ export default function Register() {
           className="input w-full"
           style={{ fontSize: 16 }}
         />
-        {errors.email && <p className="text-xs" style={{ color: 'var(--color-error)' }}>{errors.name.message}</p>}
+        {errors.email && <p className="text-xs" style={{ color: 'var(--color-error)' }}>{errors.email.message}</p>}
       </div>
 
       <div className="flex flex-col gap-1.5">
