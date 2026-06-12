@@ -14,6 +14,7 @@ from app.routers import (
     analysis, fixed_income, quotes, treasury,
 )
 from app.routers import debug
+from app.routers import prices
 
 # Enums gerenciados pelo FastAPI no startup.
 # treasurytype foi removido: o novo modelo de Tesouro Direto nao usa enum.
@@ -39,7 +40,6 @@ async def _create_enums_raw() -> None:
         for enum_def in _ENUMS:
             type_name = enum_def[0]
             values = ", ".join(enum_def[1:])
-            # DO NOTHING e a captura de excecao garantem idempotencia
             sql = f"DO $$ BEGIN CREATE TYPE {type_name} AS ENUM ({values}); EXCEPTION WHEN duplicate_object THEN NULL; END $$;"
             await conn.execute(sql)
     finally:
@@ -93,6 +93,7 @@ app.include_router(performance.router,  prefix=f"{PREFIX}/performance", tags=["p
 app.include_router(assets.router,       prefix=f"{PREFIX}/assets",      tags=["assets"])
 app.include_router(fx.router,           prefix=f"{PREFIX}/fx",          tags=["fx"])
 app.include_router(quotes.router,       prefix=f"{PREFIX}/quotes",      tags=["quotes"])
+app.include_router(prices.router,       prefix=f"{PREFIX}/prices",      tags=["prices"])
 
 # Funcionalidades extras
 app.include_router(sync.router,         prefix=f"{PREFIX}/sync",        tags=["sync"])
