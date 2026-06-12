@@ -17,23 +17,33 @@
     font-family: 'Inter', system-ui, sans-serif;
     font-size: 0.875rem;
     line-height: 1.5;
-    @apply bg-light-50 text-gray-900 dark:bg-dark-800 dark:text-gray-100;
+    /* bg e text lêem as CSS vars — mudam automaticamente com o tema */
+    background-color: var(--color-bg);
+    color: var(--color-text);
     transition: background-color 200ms ease, color 200ms ease;
   }
 
   ::selection {
-    @apply bg-brand-primary/20 text-gray-900 dark:text-gray-100;
+    background: oklch(from var(--color-primary) l c h / 0.2);
+    color: var(--color-text);
   }
 
   :focus-visible {
-    @apply outline-2 outline-brand-primary outline-offset-2 rounded;
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+    border-radius: 0.25rem;
   }
 
   /* Scrollbar */
   ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { @apply bg-transparent; }
-  ::-webkit-scrollbar-thumb { @apply bg-gray-300 dark:bg-dark-border rounded-full; }
-  ::-webkit-scrollbar-thumb:hover { @apply bg-gray-400 dark:bg-dark-hover; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-surface-dynamic);
+  }
 
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
@@ -44,68 +54,106 @@
 }
 
 @layer components {
-  /* Tabela densa */
+  /* ── Tabela densa ───────────────────────────────────────────── */
   .table-dense th {
-    @apply px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide
-           border-b border-light-border dark:border-dark-border text-left;
+    @apply px-3 py-2 text-xs font-medium uppercase tracking-wide text-left;
+    color: var(--color-text-muted);
+    border-bottom: 1px solid var(--color-border);
   }
   .table-dense td {
-    @apply px-3 py-2 text-sm border-b border-light-border/50 dark:border-dark-border/50;
+    @apply px-3 py-2 text-sm;
+    border-bottom: 1px solid oklch(from var(--color-border) l c h / 0.5);
   }
-  .table-dense tr:last-child td { @apply border-b-0; }
+  .table-dense tr:last-child td { border-bottom: none; }
   .table-dense tbody tr {
-    @apply hover:bg-light-100 dark:hover:bg-dark-700 transition-colors duration-100;
+    transition: background-color 100ms ease;
+  }
+  .table-dense tbody tr:hover {
+    background-color: var(--color-surface-offset);
   }
 
-  /* Cards */
+  /* ── Cards ──────────────────────────────────────────────────── */
   .card {
-    @apply bg-white dark:bg-dark-600 border border-light-border dark:border-dark-border rounded-lg;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
   }
   .card-hover {
-    @apply card hover:border-gray-300 dark:hover:border-dark-hover transition-colors duration-150;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    transition: border-color 150ms ease;
+  }
+  .card-hover:hover {
+    border-color: var(--color-surface-dynamic);
   }
 
-  /* Badges */
+  /* ── Badges ─────────────────────────────────────────────────── */
   .badge {
     @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
   }
-  .badge-green  { @apply badge bg-green-500/15 text-green-500; }
-  .badge-red    { @apply badge bg-rose-500/15 text-rose-400; }
-  .badge-blue   { @apply badge bg-blue-500/15 text-blue-400; }
-  .badge-yellow { @apply badge bg-yellow-500/15 text-yellow-500; }
-  .badge-gray   { @apply badge bg-gray-500/10 text-gray-500 dark:text-gray-400; }
+  .badge-green  { @apply badge; background: oklch(from var(--color-success) l c h / 0.15); color: var(--color-success); }
+  .badge-red    { @apply badge; background: oklch(from var(--color-notification) l c h / 0.15); color: var(--color-notification); }
+  .badge-blue   { @apply badge; background: oklch(from var(--color-blue) l c h / 0.15); color: var(--color-blue); }
+  .badge-yellow { @apply badge; background: oklch(from var(--color-gold) l c h / 0.15); color: var(--color-gold); }
+  .badge-gray   { @apply badge; background: oklch(from var(--color-text-muted) l c h / 0.1); color: var(--color-text-muted); }
 
-  /* Botões */
+  /* ── Botões ─────────────────────────────────────────────────── */
   .btn {
     @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
-           transition-all duration-150 ease-smooth disabled:opacity-50 disabled:cursor-not-allowed;
+           transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed;
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
   }
   .btn-primary {
-    @apply btn bg-brand-primary hover:bg-brand-hover active:bg-brand-active text-white;
+    @apply btn;
+    background: var(--color-primary);
+    color: var(--color-text-inverse);
   }
+  .btn-primary:hover:not(:disabled) { background: var(--color-primary-hover); }
+  .btn-primary:active:not(:disabled) { background: var(--color-primary-active); }
+
   .btn-secondary {
-    @apply btn bg-light-200 hover:bg-light-300 dark:bg-dark-500 dark:hover:bg-dark-400
-           text-gray-700 dark:text-gray-200 border border-light-border dark:border-dark-border;
+    @apply btn;
+    background: var(--color-surface-offset);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
   }
+  .btn-secondary:hover:not(:disabled) { background: var(--color-surface-dynamic); }
+
   .btn-ghost {
-    @apply btn text-gray-600 dark:text-gray-400
-           hover:bg-light-100 dark:hover:bg-dark-700;
+    @apply btn;
+    background: transparent;
+    color: var(--color-text-muted);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--color-surface-2);
+    color: var(--color-text);
   }
 
-  /* Inputs */
+  /* ── Inputs ─────────────────────────────────────────────────── */
   .input {
     @apply w-full px-3 py-2 rounded-lg text-sm
-           bg-light-100 dark:bg-dark-700
-           border border-light-border dark:border-dark-border
-           text-gray-900 dark:text-gray-100
-           placeholder:text-gray-400 dark:placeholder:text-gray-500
-           focus:outline-none focus:ring-2 focus:ring-brand-primary/50 focus:border-brand-primary
+           focus:outline-none
            transition-colors duration-150;
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
   }
-  .input-error { @apply input border-rose-400 focus:ring-rose-400/30 focus:border-rose-400; }
+  .input::placeholder { color: var(--color-text-faint); }
+  .input:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px oklch(from var(--color-primary) l c h / 0.15);
+  }
+  .input-error {
+    @apply input;
+    border-color: var(--color-notification);
+  }
+  .input-error:focus {
+    box-shadow: 0 0 0 3px oklch(from var(--color-notification) l c h / 0.2);
+  }
 
-  /* Positive / Negative */
-  .text-positive { @apply text-green-500; }
-  .text-negative { @apply text-rose-400; }
-  .text-muted    { @apply text-gray-500 dark:text-gray-400; }
+  /* ── Utilitários semânticos ─────────────────────────────────── */
+  .text-positive { color: var(--color-success); }
+  .text-negative { color: var(--color-notification); }
+  .text-muted    { color: var(--color-text-muted); }
 }
