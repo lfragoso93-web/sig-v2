@@ -1,34 +1,34 @@
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer
+  ResponsiveContainer,
 } from 'recharts'
 import { formatBRL } from '@/utils/format'
 
-// Schema real retornado pelo backend/hook
 export interface PatrimonioHistoryPoint {
   month: string
   value: number
 }
 
-interface Props {
-  data: PatrimonioHistoryPoint[]
-}
-
-function CustomTooltip({
-  active, payload, label,
-}: {
+function CustomTooltip({ active, payload, label }: {
   active?: boolean
-  payload?: { value: number; name: string }[]
+  payload?: { value: number }[]
   label?: string
 }) {
   if (!active || !payload?.length) return null
   return (
-    <div className="bg-white dark:bg-dark-600 border border-light-border dark:border-dark-border rounded-lg p-3 shadow-lg text-xs">
-      <p className="font-semibold mb-2 text-gray-800 dark:text-gray-200">{label}</p>
+    <div
+      className="rounded-lg p-3 text-xs"
+      style={{
+        background:  'var(--color-surface)',
+        border:      '1px solid var(--color-border)',
+        boxShadow:   'var(--shadow-lg)',
+      }}
+    >
+      <p className="font-semibold mb-2" style={{ color: 'var(--color-text)' }}>{label}</p>
       <div className="flex items-center gap-2">
-        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#4f98a3' }} />
-        <span className="text-muted">Patrimônio:</span>
-        <span className="font-medium text-gray-800 dark:text-gray-200">
+        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--color-primary)' }} />
+        <span style={{ color: 'var(--color-text-muted)' }}>Patrimônio:</span>
+        <span className="font-medium" style={{ color: 'var(--color-text)' }}>
           {formatBRL(payload[0].value)}
         </span>
       </div>
@@ -36,30 +36,27 @@ function CustomTooltip({
   )
 }
 
-export default function PatrimonioBarChart({ data }: Props) {
+export default function PatrimonioBarChart({ data }: { data: PatrimonioHistoryPoint[] }) {
   if (!data || data.length === 0) return null
+  const tickStyle = { fontSize: 10, fill: 'var(--color-text-faint)' }
 
   return (
     <ResponsiveContainer width="100%" height={220}>
       <BarChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} barSize={14}>
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.1)" vertical={false} />
-        <XAxis
-          dataKey="month"
-          tick={{ fontSize: 10, fill: 'currentColor' }}
-          className="text-gray-400"
-          axisLine={false}
-          tickLine={false}
-        />
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-divider)" vertical={false} />
+        <XAxis dataKey="month" tick={tickStyle} axisLine={false} tickLine={false} />
         <YAxis
-          tick={{ fontSize: 10, fill: 'currentColor' }}
-          className="text-gray-400"
+          tick={tickStyle}
           axisLine={false}
           tickLine={false}
-          tickFormatter={(v: number) => formatBRL(v)}
+          tickFormatter={(v: number) => formatBRL(v, true)}
           width={60}
         />
-        <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(128,128,128,0.05)' }} />
-        <Bar dataKey="value" fill="#4f98a3" radius={[4, 4, 0, 0]} name="value" />
+        <Tooltip
+          content={<CustomTooltip />}
+          cursor={{ fill: 'oklch(from var(--color-text) l c h / 0.04)' }}
+        />
+        <Bar dataKey="value" fill="var(--color-primary)" radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   )

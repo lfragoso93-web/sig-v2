@@ -1,22 +1,28 @@
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import type { AssetTypeDistribution } from '@/hooks/usePortfolio'
 
-interface Props {
-  data: AssetTypeDistribution[]
-}
-
-function CustomTooltip({ active, payload }: any) {
+function CustomTooltip({ active, payload }: {
+  active?: boolean
+  payload?: { payload: AssetTypeDistribution }[]
+}) {
   if (!active || !payload?.length) return null
-  const d = payload[0].payload as AssetTypeDistribution
+  const d = payload[0].payload
   return (
-    <div className="bg-surface-900 border border-surface-700 rounded-lg p-3 shadow-lg text-xs">
-      <p className="font-semibold text-slate-200 mb-1">{d.label}</p>
-      <p className="text-slate-400">{d.percentage.toFixed(1)}%</p>
+    <div
+      className="rounded-lg p-3 text-xs"
+      style={{
+        background:  'var(--color-surface)',
+        border:      '1px solid var(--color-border)',
+        boxShadow:   'var(--shadow-lg)',
+      }}
+    >
+      <p className="font-semibold mb-1" style={{ color: 'var(--color-text)' }}>{d.label}</p>
+      <p style={{ color: 'var(--color-text-muted)' }}>{d.percentage.toFixed(1)}%</p>
     </div>
   )
 }
 
-export default function AssetDonutChart({ data }: Props) {
+export default function AssetDonutChart({ data }: { data: AssetTypeDistribution[] }) {
   if (!data || data.length === 0) return null
   return (
     <ResponsiveContainer width="100%" height={200}>
