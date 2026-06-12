@@ -18,10 +18,10 @@ import AssetDonutChart from '@/components/charts/AssetDonutChart'
 import PositionTable from '@/components/resume/PositionTable'
 
 const PERIOD_OPTIONS = [
-  { label: '6 Meses', value: 6 },
+  { label: '6 Meses',  value: 6  },
   { label: '12 Meses', value: 12 },
   { label: '24 Meses', value: 24 },
-  { label: 'Tudo', value: 60 },
+  { label: 'Tudo',     value: 60 },
 ]
 
 export default function ResumePage() {
@@ -31,7 +31,6 @@ export default function ResumePage() {
   const { data: portfolios, isLoading: loadingPortfolios } = usePortfolioList()
   const [period, setPeriod] = useState(12)
 
-  // Auto-seleciona o primeiro portfolio quando ainda nao ha selecao
   useEffect(() => {
     if (!globalPortfolioId && portfolios && portfolios.length > 0) {
       setGlobal(portfolios[0].id)
@@ -40,10 +39,10 @@ export default function ResumePage() {
 
   const portfolioId: number | null = globalPortfolioId ?? (portfolios?.[0]?.id ?? null)
 
-  const { data: summary,           isLoading: loadingSummary   } = usePortfolioSummary(portfolioId)
-  const { data: patrimonioHistory, isLoading: loadingHistory    } = usePatrimonioHistory(portfolioId, period)
-  const { data: distribution,      isLoading: loadingDist       } = useAssetDistribution(portfolioId)
-  const { data: positions,          isLoading: loadingPositions  } = usePositions(portfolioId)
+  const { data: summary,           isLoading: loadingSummary  } = usePortfolioSummary(portfolioId)
+  const { data: patrimonioHistory, isLoading: loadingHistory   } = usePatrimonioHistory(portfolioId, period)
+  const { data: distribution,      isLoading: loadingDist      } = useAssetDistribution(portfolioId)
+  const { data: positions,         isLoading: loadingPositions } = usePositions(portfolioId)
 
   const safeGanhoCapital = (summary as any)?.ganho_capital ?? summary?.lucro_total ?? 0
 
@@ -73,7 +72,7 @@ export default function ResumePage() {
       {/* Portfolio selector */}
       {portfolios.length > 1 && (
         <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500">Carteira:</span>
+          <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Carteira:</span>
           <div className="flex gap-1">
             {portfolios.map(p => (
               <button
@@ -83,8 +82,13 @@ export default function ResumePage() {
                   'px-3 py-1 rounded text-xs font-medium transition-colors',
                   portfolioId === p.id
                     ? 'bg-brand-600 text-white'
-                    : 'bg-surface-800 border border-surface-600 text-slate-400 hover:bg-surface-700'
+                    : 'border hover:bg-surface-600'
                 )}
+                style={portfolioId !== p.id ? {
+                  background: 'var(--color-surface-2)',
+                  borderColor: 'var(--color-border)',
+                  color: 'var(--color-text-muted)',
+                } : {}}
               >
                 {p.name}
               </button>
@@ -99,6 +103,7 @@ export default function ResumePage() {
           [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
         ) : summary ? (
           <>
+            {/* 1 - Patrimônio total */}
             <KpiCard
               label="Patrimônio total"
               value={formatBRL(summary.total_patrimonio ?? 0)}
@@ -106,33 +111,41 @@ export default function ResumePage() {
               subLabel="Valor investido"
               change={summary.variacao_percentual}
             />
+
+            {/* 2 - Lucro total */}
             <KpiCard
               label="Lucro total"
               value={formatBRL(summary.lucro_total ?? 0)}
               subLabel={`Ganho de Capital ${formatBRL(safeGanhoCapital)} · Dividendos ${formatBRL(summary.dividendos_recebidos_12m ?? 0)}`}
             />
+
+            {/* 3 - Proventos */}
             <KpiCard
               label="Proventos Recebidos (12m)"
               value={formatBRL(summary.dividendos_recebidos_12m ?? 0)}
               subValue={formatBRL(summary.total_proventos ?? 0)}
               subLabel="Total"
             />
-            <div className="rounded-xl bg-surface-900 border border-surface-700 p-4 flex flex-col gap-1">
-              <span className="text-xs text-slate-500 font-medium">Variação / Rentabilidade</span>
+
+            {/* 4 - Variação / Rentabilidade */}
+            <div className="card p-4 flex flex-col gap-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>
+                Variação / Rentabilidade
+              </span>
               <div className={clsx('text-2xl font-bold tabular-nums tracking-tight', signClass(summary.variacao_valor ?? 0))}>
                 {formatBRL(summary.variacao_valor ?? 0)}
               </div>
-              <div className={clsx('text-xs font-medium', signClass(summary.variacao_valor ?? 0))}>
-                {formatPercent(summary.variacao_percentual ?? 0)}
+              <div className={clsx('text-xs font-semibold tabular-nums', signClass(summary.variacao_percentual ?? 0))}>
+                {(summary.variacao_percentual ?? 0) >= 0 ? '+' : ''}{formatPercent(summary.variacao_percentual ?? 0)}
               </div>
               <div className={clsx('text-sm font-bold mt-1 tabular-nums', signClass(summary.rentabilidade_total ?? 0))}>
-                {formatPercent(summary.rentabilidade_total ?? 0)}{' '}
-                <span className="text-xs font-normal text-slate-500">rentabilidade</span>
+                {(summary.rentabilidade_total ?? 0) >= 0 ? '+' : ''}{formatPercent(summary.rentabilidade_total ?? 0)}{' '}
+                <span className="text-xs font-normal" style={{ color: 'var(--color-text-faint)' }}>rentabilidade</span>
               </div>
             </div>
           </>
         ) : (
-          <div className="col-span-4 py-6 text-center text-xs text-slate-500">
+          <div className="col-span-4 py-6 text-center text-xs" style={{ color: 'var(--color-text-muted)' }}>
             Nenhum dado. Adicione lançamentos para ver o resumo.
           </div>
         )}
@@ -140,11 +153,15 @@ export default function ResumePage() {
 
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="rounded-xl bg-surface-900 border border-surface-700 p-4 lg:col-span-2">
+
+        {/* Evolução do Patrimônio */}
+        <div className="card p-4 lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <BarChart2 size={16} className="text-brand-500" />
-              <span className="text-sm font-semibold text-slate-200">Evolução do Patrimônio</span>
+              <BarChart2 size={16} className="text-brand-400" />
+              <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                Evolução do Patrimônio
+              </span>
             </div>
             <div className="flex gap-1">
               {PERIOD_OPTIONS.map(opt => (
@@ -155,8 +172,9 @@ export default function ResumePage() {
                     'px-2.5 py-1 rounded text-xs font-medium transition-colors',
                     period === opt.value
                       ? 'bg-brand-600/20 text-brand-400'
-                      : 'text-slate-500 hover:text-slate-300'
+                      : 'hover:text-brand-400'
                   )}
+                  style={period !== opt.value ? { color: 'var(--color-text-muted)' } : {}}
                 >
                   {opt.label}
                 </button>
@@ -164,36 +182,46 @@ export default function ResumePage() {
             </div>
           </div>
           {loadingHistory ? (
-            <div className="h-52 animate-pulse bg-surface-800 rounded" />
+            <div className="h-52 animate-pulse rounded" style={{ background: 'var(--color-surface-offset)' }} />
           ) : patrimonioHistory?.length ? (
             <PatrimonioBarChart data={patrimonioHistory} />
           ) : (
-            <div className="h-52 flex items-center justify-center text-xs text-slate-500">Sem dados históricos ainda</div>
+            <div className="h-52 flex items-center justify-center text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              Sem dados históricos ainda
+            </div>
           )}
         </div>
 
-        <div className="rounded-xl bg-surface-900 border border-surface-700 p-4">
+        {/* Ativos na Carteira */}
+        <div className="card p-4">
           <div className="flex items-center gap-2 mb-4">
-            <Activity size={16} className="text-brand-500" />
-            <span className="text-sm font-semibold text-slate-200">Ativos na Carteira</span>
+            <Activity size={16} className="text-brand-400" />
+            <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+              Ativos na Carteira
+            </span>
           </div>
           {loadingDist ? (
-            <div className="h-52 animate-pulse bg-surface-800 rounded" />
+            <div className="h-52 animate-pulse rounded" style={{ background: 'var(--color-surface-offset)' }} />
           ) : distribution?.length ? (
             <AssetDonutChart data={distribution} />
           ) : (
-            <div className="h-52 flex items-center justify-center text-xs text-slate-500">Sem ativos</div>
+            <div className="h-52 flex items-center justify-center text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              Sem ativos
+            </div>
           )}
         </div>
       </div>
 
       {/* Posições */}
-      <div className="rounded-xl bg-surface-900 border border-surface-700 overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-surface-700">
-          <TrendingUp size={16} className="text-brand-500" />
-          <span className="text-sm font-semibold text-slate-200">Meus Ativos</span>
+      <div className="card overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: '1px solid var(--color-border)' }}>
+          <TrendingUp size={16} className="text-brand-400" />
+          <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Meus Ativos</span>
           {positions && (
-            <span className="ml-1 px-1.5 py-0.5 rounded bg-surface-700 text-slate-400 text-xs tabular-nums">
+            <span
+              className="ml-1 px-1.5 py-0.5 rounded text-xs tabular-nums"
+              style={{ background: 'var(--color-surface-offset)', color: 'var(--color-text-muted)' }}
+            >
               {positions.reduce((acc, g) => acc + (g.count ?? 0), 0)}
             </span>
           )}
@@ -202,7 +230,7 @@ export default function ResumePage() {
         {loadingPositions ? (
           <div className="p-4 flex flex-col gap-2">
             {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-10 animate-pulse bg-surface-800 rounded" />
+              <div key={i} className="h-10 animate-pulse rounded" style={{ background: 'var(--color-surface-offset)' }} />
             ))}
           </div>
         ) : positions && positions.length > 0 ? (
