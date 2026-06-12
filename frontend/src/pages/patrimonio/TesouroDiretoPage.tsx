@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import { useForm } from 'react-hook-form'
-import { useTreasury, TreasuryItem, TreasuryUpdate } from '../../hooks/useTreasury'
+import { useTreasury, TreasuryItem } from '../../hooks/useTreasury'
 import { useAppStore } from '../../store/appStore'
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -11,97 +10,6 @@ const fmtDate = (s: string | null | undefined) => {
   if (!s) return '—'
   const [y, m, d] = s.split('-')
   return `${d}/${m}/${y}`
-}
-
-// ── EditModal ───────────────────────────────────────────────────────────────
-interface EditModalProps {
-  item: TreasuryItem
-  onSave: (data: TreasuryUpdate) => Promise<void>
-  onClose: () => void
-}
-
-function EditModal({ item, onSave, onClose }: EditModalProps) {
-  const { register, handleSubmit, formState: { isSubmitting, errors } } = useForm<TreasuryUpdate>({
-    defaultValues: {
-      brapi_name: item.brapi_name,
-      invested_value: item.invested_value,
-      purchase_date: item.purchase_date,
-      maturity_date: item.maturity_date ?? undefined,
-      is_active: item.is_active,
-    },
-  })
-
-  const onSubmit = async (data: TreasuryUpdate) => {
-    await onSave(data)
-    onClose()
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50">
-      <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-t-2xl md:rounded-2xl p-6 shadow-xl">
-        <h2 className="text-lg font-semibold mb-4 text-gray-800 dark:text-white">Editar Tesouro Direto</h2>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-
-          <div>
-            <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Título</label>
-            <input
-              {...register('brapi_name', { required: 'Campo obrigatório' })}
-              className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-            />
-            {errors.brapi_name && <p className="text-red-500 text-xs mt-1">{errors.brapi_name.message}</p>}
-          </div>
-
-          <div>
-            <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Valor Investido (R$)</label>
-            <input
-              type="number"
-              step="0.01"
-              {...register('invested_value', { required: 'Campo obrigatório', valueAsNumber: true, min: { value: 0.01, message: 'Deve ser positivo' } })}
-              className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-            />
-            {errors.invested_value && <p className="text-red-500 text-xs mt-1">{errors.invested_value.message}</p>}
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Data de Compra</label>
-              <input
-                type="date"
-                {...register('purchase_date', { required: 'Obrigatório' })}
-                className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">Vencimento</label>
-              <input
-                type="date"
-                {...register('maturity_date')}
-                className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <input type="checkbox" id="is_active" {...register('is_active')} className="rounded" />
-            <label htmlFor="is_active" className="text-sm text-gray-700 dark:text-gray-300">Ativo</label>
-          </div>
-
-          <div className="flex gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 border rounded-lg py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-            >Cancelar</button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-            >{isSubmitting ? 'Salvando...' : 'Salvar'}</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
 }
 
 // ── DeleteConfirm ────────────────────────────────────────────────────────────
@@ -144,10 +52,10 @@ function DeleteConfirm({ item, onConfirm, onClose }: DeleteConfirmProps) {
 
 // ── TesouroDiretoPage ────────────────────────────────────────────────────────
 export default function TesouroDiretoPage() {
-  const portfolioId = useAppStore((s) => s.selectedPortfolioId)
-  const { items, loading, error, update, remove } = useTreasury()
+  const portfolioId        = useAppStore((s) => s.selectedPortfolioId)
+  const openTransactionModal = useAppStore((s) => s.openTransactionModal)
+  const { items, loading, error, remove } = useTreasury()
 
-  const [editItem, setEditItem] = useState<TreasuryItem | null>(null)
   const [deleteItem, setDeleteItem] = useState<TreasuryItem | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
 
@@ -159,15 +67,13 @@ export default function TesouroDiretoPage() {
     )
   }
 
-  const handleUpdate = async (data: TreasuryUpdate) => {
-    if (!editItem) return
-    setActionError(null)
-    try {
-      await update(editItem.id, data)
-    } catch (e: any) {
-      setActionError(e?.response?.data?.detail || 'Erro ao atualizar')
-      throw e
-    }
+  // Abre o AddTransactionModal global já existente, pré-preenchido com os dados do título
+  const handleEdit = (item: TreasuryItem) => {
+    openTransactionModal({
+      tab:       'tesouro',
+      ticker:    item.brapi_name,
+      assetName: item.brapi_name,
+    })
   }
 
   const handleDelete = async () => {
@@ -183,7 +89,15 @@ export default function TesouroDiretoPage() {
 
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto">
-      <h1 className="text-xl font-bold text-gray-800 dark:text-white mb-6">Tesouro Direto</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-xl font-bold text-gray-800 dark:text-white">Tesouro Direto</h1>
+        <button
+          onClick={() => openTransactionModal({ tab: 'tesouro' })}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+        >
+          + Novo Lançamento
+        </button>
+      </div>
 
       {actionError && (
         <div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
@@ -204,7 +118,9 @@ export default function TesouroDiretoPage() {
       {!loading && !error && items.length === 0 && (
         <div className="flex flex-col items-center justify-center h-48 text-gray-400">
           <p>Nenhum investimento em Tesouro Direto cadastrado.</p>
-          <p className="text-sm mt-1">Use o botão <strong>Novo Lançamento</strong> para adicionar.</p>
+          <p className="text-sm mt-1">
+            Clique em <strong>+ Novo Lançamento</strong> para adicionar.
+          </p>
         </div>
       )}
 
@@ -251,9 +167,10 @@ export default function TesouroDiretoPage() {
                   </td>
                   <td className="px-4 py-3 text-center">
                     <div className="flex items-center justify-center gap-2">
+                      {/* Lápis: abre AddTransactionModal já na aba Tesouro pré-preenchido */}
                       <button
-                        onClick={() => setEditItem(item)}
-                        title="Editar"
+                        onClick={() => handleEdit(item)}
+                        title="Adicionar novo lançamento para este título"
                         className="text-blue-500 hover:text-blue-700 p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -261,6 +178,7 @@ export default function TesouroDiretoPage() {
                             d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
                       </button>
+                      {/* Lixeira: confirmação local antes de excluir */}
                       <button
                         onClick={() => setDeleteItem(item)}
                         title="Excluir"
@@ -278,14 +196,6 @@ export default function TesouroDiretoPage() {
             </tbody>
           </table>
         </div>
-      )}
-
-      {editItem && (
-        <EditModal
-          item={editItem}
-          onSave={handleUpdate}
-          onClose={() => setEditItem(null)}
-        />
       )}
 
       {deleteItem && (
