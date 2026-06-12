@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.security import get_current_user
+from app.core.deps import get_current_user
 from app.models.asset_dividend import AssetDividend
 from app.models.dividend import Dividend, DividendStatus
 from app.models.portfolio import Portfolio
