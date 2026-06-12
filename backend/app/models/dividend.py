@@ -1,46 +1,90 @@
-from sqlalchemy import Column, Integer, String, Float, Date, ForeignKey, Enum as SAEnum
-from sqlalchemy.orm import relationship
+"""
+Dividend — provento recebido/a-receber por uma carteira especifica.
+Vinculado a AssetDividend (fonte global) + portfolio.
+Chave de negocio: (portfolio_id, asset_dividend_id).
+"""
+from sqlalchemy import (
+    Integer, Float, Numeric, ForeignKey,
+    Enum as SAEnum, UniqueConstraint,
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 import enum
+from decimal import Decimal
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.portfolio import Portfolio
+    from app.models.asset_dividend import AssetDividend
 
 
 class DividendType(str, enum.Enum):
-    DIVIDENDO   = "dividendo"
-    JCP         = "jcp"
-    RENDIMENTO  = "rendimento"
-    AMORTIZACAO = "amortizacao"
-    BONIFICACAO = "bonificacao"
-    OUTROS      = "outros"
-    # aliases lowercase para compatibilidade com routers antigos
-    dividendo   = "dividendo"
-    jcp         = "jcp"
-    rendimento  = "rendimento"
-    amortizacao = "amortizacao"
-    outro       = "outros"
+    DIVIDENDO   = "DIVIDENDO"
+    JCP         = "JCP"
+    RENDIMENTO  = "RENDIMENTO"
+    AMORTIZACAO = "AMORTIZACAO"
+    BONIFICACAO = "BONIFICACAO"
+    OUTROS      = "OUTROS"
 
 
 class DividendStatus(str, enum.Enum):
-    RECEBIDO  = "recebido"
-    A_RECEBER = "a_receber"
+    RECEBIDO  = "RECEBIDO"
+    A_RECEBER = "A_RECEBER"
 
 
 class Dividend(Base):
+    """
+    Provento de uma carteira especifica.
+    Gerado automaticamente a partir de AssetDividend quando a carteira
+    possui o ativo na data-ex.
+    """
     __tablename__ = "dividends"
+    __table_args__ = (
+        UniqueConstraint(
+            "portfolio_id", "asset_dividend_id",
+            name="uq_dividend_portfolio_asset_dividend"
+        ),
+    )
 
-    id           = Column(Integer, primary_key=True, index=True)
-    portfolio_id = Column(Integer, ForeignKey("portfolios.id", ondelete="CASCADE"), nullable=False)
-    # asset_id pode ser nulo para manter compatibilidade com registros manuais (ticker-based)
-    asset_id     = Column(Integer, ForeignKey("assets.id", ondelete="SET NULL"), nullable=True)
-    ticker       = Column(String(20), nullable=True, index=True)
-    asset_type   = Column(String(50), nullable=True)
-    dividend_type = Column("type", SAEnum(DividendType, values_callable=lambda x: [e.value for e in x]), nullable=True)
-    status       = Column(SAEnum(DividendStatus), nullable=True, default=DividendStatus.A_RECEBER)
-    amount       = Column(Float, nullable=True)   # valor por cota (alias antigo)
-    value_per_unit = Column(Float, nullable=True) # valor por cota (novo)
-    total_value  = Column(Float, nullable=True)
-    net_value    = Column(Float, nullable=True)
-    quantity     = Column(Float, nullable=False, default=0)
-    payment_date = Column(Date, nullable=True, index=True)
-    ex_date      = Column(Date, nullable=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
-    portfolio = relationship("Portfolio", back_populates="dividends")
+    portfolio_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("portfolios.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    asset_dividend_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("asset_dividends.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # Quantidade de cotas do investidor na data-ex
+    quantity: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+
+    # Valores calculados (quantity * value_per_unit)
+    total_value: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
+    net_value: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
+
+    status: Mapped[DividendStatus] = mapped_column(
+        SAEnum(DividendStatus),
+        nullable=False,
+        default=DividendStatus.A_RECEBER,
+        index=True,
+    )
+
+    # Relacionamentos
+    portfolio: Mapped["Portfolio"] = relationship("Portfolio", back_populates="dividends")
+    asset_dividend: Mapped["AssetDividend"] = relationship(
+        "AssetDividend", back_populates="portfolio_dividends"
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<Dividend portfolio={self.portfolio_id} "
+            f"asset_div={self.asset_dividend_id} qty={self.quantity} "
+            f"status={self.status}>"
+        )
