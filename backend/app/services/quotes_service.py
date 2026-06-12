@@ -15,17 +15,19 @@ from app.integrations.brapi import fetch_quotes as brapi_fetch_quotes
 
 logger = logging.getLogger(__name__)
 
-# ── Tipos por origem ────────────────────────────────────────────────────────────
-# Ativos nacionais + cripto → BRAPI (retorna BRL)
+# ── ThreadPoolExecutor global ────────────────────────────────────────────────
+# Reutilizado em todas as chamadas yfinance — não recria a cada request
+_YF_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix='yfinance')
+
+# ── Tipos por origem ────────────────────────────────────────────────────────
 BR_TYPES = {
     'ACAO', 'ACAO_NACIONAL', 'FII',
     'ETF_NACIONAL', 'TESOURO_DIRETO', 'RENDA_FIXA',
-    'CRIPTO', 'CRIPTOMOEDA',  # BRAPI tem endpoint cripto em BRL
+    'CRIPTO', 'CRIPTOMOEDA',
 }
-# Internacionais → yfinance
 INTL_TYPES = {'STOCK', 'ETF_INTERNACIONAL'}
 
-# ── Cache simples em memoria ─────────────────────────────────────────────────────
+# ── Cache simples em memoria ──────────────────────────────────────────────────
 CACHE_TTL = 300  # 5 minutos
 _cache: dict[str, tuple[float, float]] = {}  # {ticker: (price, expires_at)}
 
@@ -41,15 +43,14 @@ def _cache_set(ticker: str, price: float) -> None:
     _cache[ticker] = (price, time.time() + CACHE_TTL)
 
 
-# ── yfinance (sync em thread) ────────────────────────────────────────────────────
+# ── yfinance (sync em thread global) ─────────────────────────────────────────────
 
 def _to_yf_symbol(ticker: str, asset_type: str) -> str:
-    """Converte ticker interno para simbolo yfinance (apenas INTL)."""
     return ticker.upper()
 
 
 def _fetch_yf_sync(ticker_map: dict[str, str]) -> dict[str, float]:
-    """Executa yf.download em thread separada."""
+    """Executa yf.download em thread (usa pool global _YF_EXECUTOR)."""
     if not ticker_map:
         return {}
     yf_symbols = list(ticker_map.values())
@@ -80,60 +81,73 @@ def _fetch_yf_sync(ticker_map: dict[str, str]) -> dict[str, float]:
 
 
 async def _fetch_yfinance(ticker_asset_pairs: list[tuple[str, str]]) -> dict[str, float]:
-    """Busca cotacoes internacionais via yfinance (async wrapper)."""
+    """Busca cotações internacionais via yfinance (usa pool global)."""
     ticker_map = {
         ticker: _to_yf_symbol(ticker, asset_type)
         for ticker, asset_type in ticker_asset_pairs
     }
     loop = asyncio.get_event_loop()
-    with ThreadPoolExecutor(max_workers=1) as pool:
-        return await loop.run_in_executor(pool, _fetch_yf_sync, ticker_map)
+    return await loop.run_in_executor(_YF_EXECUTOR, _fetch_yf_sync, ticker_map)
 
 
 async def _noop() -> dict:
     return {}
 
 
-# ── BRAPI cripto ─────────────────────────────────────────────────────────────────
+# ── BRAPI cripto (paralelo com asyncio.gather) ──────────────────────────────────
+
+async def _fetch_single_crypto(client, ticker: str, headers: dict) -> tuple[str, Optional[float]]:
+    """Busca cotação de um único cripto. Retorna (ticker, price | None)."""
+    try:
+        resp = await client.get(
+            'https://brapi.dev/api/v2/crypto',
+            headers=headers,
+            params={'coin': ticker, 'currency': 'BRL'},
+        )
+        resp.raise_for_status()
+        data  = resp.json()
+        coins = data.get('coins') or []
+        if coins:
+            price = coins[0].get('regularMarketPrice') or coins[0].get('price')
+            if price:
+                return ticker, float(price)
+    except Exception as e:
+        logger.warning(f'BRAPI cripto price error for {ticker}: {e}')
+    return ticker, None
+
+
 async def _fetch_brapi_crypto(pairs: list[tuple[str, str]]) -> dict[str, float]:
-    """Busca cotacao de cripto via BRAPI /api/v2/crypto?coin=BTC&currency=BRL."""
+    """Busca cotação de todos os criptos em paralelo via asyncio.gather."""
     from app.integrations.brapi import _auth_headers
     import httpx
-    results: dict[str, float] = {}
+
+    if not pairs:
+        return {}
+
     headers = _auth_headers()
     async with httpx.AsyncClient(timeout=10.0) as client:
-        for ticker, _ in pairs:
-            try:
-                resp = await client.get(
-                    'https://brapi.dev/api/v2/crypto',
-                    headers=headers,
-                    params={'coin': ticker, 'currency': 'BRL'},
-                )
-                resp.raise_for_status()
-                data  = resp.json()
-                coins = data.get('coins') or []
-                if coins:
-                    price = coins[0].get('regularMarketPrice') or coins[0].get('price')
-                    if price:
-                        results[ticker] = float(price)
-            except Exception as e:
-                logger.warning(f'BRAPI cripto price error for {ticker}: {e}')
-    return results
+        tasks = [
+            _fetch_single_crypto(client, ticker, headers)
+            for ticker, _ in pairs
+        ]
+        results_raw = await asyncio.gather(*tasks, return_exceptions=False)
+
+    return {ticker: price for ticker, price in results_raw if price is not None}
 
 
-# ── API publica ────────────────────────────────────────────────────────────────────
+# ── API pública ──────────────────────────────────────────────────────────────────────────────
 
 async def get_prices(positions: list[dict]) -> dict[str, float]:
     """
     Recebe lista de dicts com 'ticker' e 'asset_type'.
     Retorna {ticker: current_price}.
-    Retorna dict parcial (ticker ausente = cotacao indisponivel, NAO usar avg como fallback).
-    Usa cache em memoria (5 min).
+    Tickers ausentes no resultado = cotação indisponível (nunca usar avg como fallback).
+    Usa cache em memória (5 min).
     """
-    br_tickers:    list[str]              = []
-    crypto_pairs:  list[tuple[str, str]]  = []
-    intl_pairs:    list[tuple[str, str]]  = []
-    cached:        dict[str, float]       = {}
+    br_tickers:   list[str]             = []
+    crypto_pairs: list[tuple[str, str]] = []
+    intl_pairs:   list[tuple[str, str]] = []
+    cached:       dict[str, float]      = {}
 
     for p in positions:
         ticker     = p['ticker']
@@ -150,18 +164,15 @@ async def get_prices(positions: list[dict]) -> dict[str, float]:
         elif asset_type in INTL_TYPES:
             intl_pairs.append((ticker, asset_type))
         else:
-            # tipo desconhecido: tenta BRAPI como fallback
-            br_tickers.append(ticker)
+            br_tickers.append(ticker)  # tipo desconhecido: tenta BRAPI
 
     br_results, crypto_results, intl_results = await asyncio.gather(
-        brapi_fetch_quotes(br_tickers) if br_tickers   else _noop(),
+        brapi_fetch_quotes(br_tickers)    if br_tickers   else _noop(),
         _fetch_brapi_crypto(crypto_pairs) if crypto_pairs else _noop(),
-        _fetch_yfinance(intl_pairs)    if intl_pairs   else _noop(),
+        _fetch_yfinance(intl_pairs)       if intl_pairs   else _noop(),
     )
-
-    all_prices = {**cached, **br_results, **crypto_results, **intl_results}
 
     for ticker, price in {**br_results, **crypto_results, **intl_results}.items():
         _cache_set(ticker, price)
 
-    return all_prices
+    return {**cached, **br_results, **crypto_results, **intl_results}
