@@ -29,30 +29,36 @@ export default function Register() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-950">
-      <div className="w-full max-w-sm bg-gray-900 rounded-xl p-8 shadow-lg">
-        <h1 className="text-2xl font-bold text-white mb-6 text-center">Criar conta</h1>
+    <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--color-bg)' }}>
+      <div
+        className="w-full max-w-sm rounded-xl p-8 shadow-lg"
+        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+      >
+        <h1 className="text-2xl font-bold mb-6 text-center">Criar conta</h1>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Nome</label>
-            <input {...register('name')} className="w-full bg-gray-800 text-white rounded-lg px-3 py-2 border border-gray-700 focus:outline-none focus:border-teal-500" />
-            {errors.name && <p className="text-red-400 text-xs mt-1">{errors.name.message}</p>}
+            <label className="block text-sm mb-1" style={{ color: 'var(--color-text-muted)' }}>Nome</label>
+            <input {...register('name')} className="input w-full" />
+            {errors.name && <p className="text-xs mt-1" style={{ color: 'var(--color-error)' }}>{errors.name.message}</p>}
           </div>
           <div>
-            <label className="block text-sm text-gray-400 mb-1">E-mail</label>
-            <input {...register('email')} type="email" className="w-full bg-gray-800 text-white rounded-lg px-3 py-2 border border-gray-700 focus:outline-none focus:border-teal-500" />
-            {errors.email && <p className="text-red-400 text-xs mt-1">{errors.email.message}</p>}
+            <label className="block text-sm mb-1" style={{ color: 'var(--color-text-muted)' }}>E-mail</label>
+            <input {...register('email')} type="email" className="input w-full" />
+            {errors.email && <p className="text-xs mt-1" style={{ color: 'var(--color-error)' }}>{errors.email.message}</p>}
           </div>
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Senha</label>
-            <input {...register('password')} type="password" className="w-full bg-gray-800 text-white rounded-lg px-3 py-2 border border-gray-700 focus:outline-none focus:border-teal-500" />
-            {errors.password && <p className="text-red-400 text-xs mt-1">{errors.password.message}</p>}
+            <label className="block text-sm mb-1" style={{ color: 'var(--color-text-muted)' }}>Senha</label>
+            <input {...register('password')} type="password" className="input w-full" />
+            {errors.password && <p className="text-xs mt-1" style={{ color: 'var(--color-error)' }}>{errors.password.message}</p>}
           </div>
-          {errors.root && <p className="text-red-400 text-sm text-center">{errors.root.message}</p>}
-          <button type="submit" disabled={isSubmitting} className="w-full bg-teal-600 hover:bg-teal-500 text-white font-semibold py-2 rounded-lg transition">
+          {errors.root && <p className="text-sm text-center" style={{ color: 'var(--color-error)' }}>{errors.root.message}</p>}
+          <button type="submit" disabled={isSubmitting} className="btn btn-primary w-full py-2 font-semibold">
             {isSubmitting ? 'Criando...' : 'Criar conta'}
           </button>
-          <p className="text-center text-gray-500 text-sm">Já tem conta? <Link to="/auth/login" className="text-teal-400 hover:underline">Entrar</Link></p>
+          <p className="text-center text-sm" style={{ color: 'var(--color-text-muted)' }}>
+            Já tem conta?{' '}
+            <Link to="/auth/login" className="hover:underline" style={{ color: 'var(--color-primary)' }}>Entrar</Link>
+          </p>
         </form>
       </div>
     </div>
