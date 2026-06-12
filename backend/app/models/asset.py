@@ -49,6 +49,9 @@ class Asset(Base, TimestampMixin):
     prices: Mapped[list["AssetPrice"]] = relationship(
         "AssetPrice", back_populates="asset", cascade="all, delete-orphan"
     )
+    asset_dividends: Mapped[list["AssetDividend"]] = relationship(
+        "AssetDividend", back_populates="asset", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
         return f"<Asset ticker={self.ticker} type={self.asset_type}>"

@@ -4,6 +4,7 @@ from app.models.portfolio import Portfolio
 from app.models.asset import Asset
 from app.models.transaction import Transaction
 from app.models.portfolio_position import PortfolioPosition
+from app.models.asset_dividend import AssetDividend
 from app.models.dividend import Dividend
 from app.models.fixed_income import FixedIncomeInvestment
 from app.models.treasury import TreasuryInvestment
@@ -18,6 +19,7 @@ __all__ = [
     "Asset",
     "Transaction",
     "PortfolioPosition",
+    "AssetDividend",
     "Dividend",
     "FixedIncomeInvestment",
     "TreasuryInvestment",
