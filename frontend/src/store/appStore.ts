@@ -17,6 +17,7 @@ interface AppState {
   theme: 'dark' | 'light'
   selectedPortfolioId: number | null
   transactionModal: ModalState
+  sidebarOpen: boolean
 
   setTheme: (t: 'dark' | 'light') => void
   setSelectedPortfolio: (id: number) => void
@@ -26,6 +27,10 @@ interface AppState {
   /** Abre o modal de lançamento, opcionalmente pré-preenchido */
   openTransactionModal: (prefill?: TransactionModalPrefill) => void
   closeTransactionModal: () => void
+
+  /** Controle da sidebar no mobile */
+  toggleSidebar: () => void
+  closeSidebar: () => void
 }
 
 export const useAppStore = create<AppState>()(
@@ -34,6 +39,7 @@ export const useAppStore = create<AppState>()(
       theme: 'dark',
       selectedPortfolioId: null,
       transactionModal: { open: false },
+      sidebarOpen: false,
 
       setTheme: (theme) => {
         document.documentElement.setAttribute('data-theme', theme)
@@ -48,6 +54,9 @@ export const useAppStore = create<AppState>()(
 
       closeTransactionModal: () =>
         set({ transactionModal: { open: false, prefill: undefined } }),
+
+      toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
+      closeSidebar:  () => set({ sidebarOpen: false }),
     }),
     {
       name: 'sig-app',
