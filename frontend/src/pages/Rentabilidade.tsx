@@ -1,2 +1,2 @@
-// ARQUIVO REMOVIDO — use RentabilidadePage.tsx
-export {};
+// ARQUIVO REMOVIDO — substituído por RentabilidadePage.tsx
+export {}

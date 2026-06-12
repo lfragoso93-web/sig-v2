@@ -1,2 +1,2 @@
-// ARQUIVO REMOVIDO — use Transacoes.tsx
-export {};
+// ARQUIVO REMOVIDO — substituído por Transacoes.tsx
+export {}

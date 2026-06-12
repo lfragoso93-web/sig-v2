@@ -1,2 +1,2 @@
-// ARQUIVO REMOVIDO — use ProventosPage.tsx
-export {};
+// ARQUIVO REMOVIDO — substituído por ProventosPage.tsx
+export {}
