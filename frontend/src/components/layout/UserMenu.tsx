@@ -97,7 +97,7 @@ export default function UserMenu() {
 
           <div style={{ padding: 'var(--space-1)' }}>
             <button
-              onClick={() => { setOpen(false); navigate('/app/configuracoes') }}
+              onClick={() => { setOpen(false); navigate('/carteira/configuracoes') }}
               style={{
                 width: '100%', display: 'flex', alignItems: 'center',
                 gap: 'var(--space-3)', padding: 'var(--space-2) var(--space-3)',
