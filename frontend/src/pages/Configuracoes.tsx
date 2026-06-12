@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import {
   Trash2, Plus, Pencil, Check, X, Loader2,
-  Camera, KeyRound, UserCircle, AlertTriangle, ChevronDown, ChevronUp,
+  Camera, KeyRound, UserCircle, AlertTriangle, ChevronDown, ChevronUp, Wallet,
 } from 'lucide-react'
 import { usePortfolios, useCreatePortfolio, useUpdatePortfolio, useDeletePortfolio } from '@/hooks/usePortfolios'
 import { useAuth } from '@/contexts/AuthContext'
@@ -70,7 +70,6 @@ function ProfileSection() {
   const [feedback, setFeedback] = useState<{ msg: string; isError: boolean } | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
 
-  // Sincroniza com user do contexto
   useEffect(() => {
     setName(user?.name  ?? '')
     setEmail(user?.email ?? '')
@@ -253,44 +252,16 @@ function PasswordSection() {
       {open && (
         <form onSubmit={handleSubmit} className="flex flex-col gap-3 mt-1">
           <FieldGroup label="Senha atual">
-            <input
-              type="password"
-              className="input"
-              style={{ fontSize: 16 }}
-              value={form.current}
-              onChange={e => set('current', e.target.value)}
-              required
-            />
+            <input type="password" className="input" style={{ fontSize: 16 }} value={form.current} onChange={e => set('current', e.target.value)} required />
           </FieldGroup>
           <FieldGroup label="Nova senha">
-            <input
-              type="password"
-              className="input"
-              style={{ fontSize: 16 }}
-              value={form.next}
-              onChange={e => set('next', e.target.value)}
-              required
-            />
+            <input type="password" className="input" style={{ fontSize: 16 }} value={form.next} onChange={e => set('next', e.target.value)} required />
           </FieldGroup>
           <FieldGroup label="Confirmar nova senha">
-            <input
-              type="password"
-              className="input"
-              style={{ fontSize: 16 }}
-              value={form.confirm}
-              onChange={e => set('confirm', e.target.value)}
-              required
-            />
+            <input type="password" className="input" style={{ fontSize: 16 }} value={form.confirm} onChange={e => set('confirm', e.target.value)} required />
           </FieldGroup>
-
           {feedback && <SaveFeedback msg={feedback.msg} isError={feedback.isError} />}
-
-          <button
-            type="submit"
-            disabled={changePassword.isPending}
-            className="btn btn-primary self-start disabled:opacity-40"
-            style={{ minHeight: 38 }}
-          >
+          <button type="submit" disabled={changePassword.isPending} className="btn btn-primary self-start disabled:opacity-40" style={{ minHeight: 38 }}>
             {changePassword.isPending ? <Loader2 size={14} className="animate-spin" /> : 'Alterar senha'}
           </button>
         </form>
@@ -329,8 +300,7 @@ function CarteirasSection() {
 
   return (
     <SectionCard>
-      <SectionTitle icon={require('lucide-react').Wallet}>Carteiras</SectionTitle>
-
+      <SectionTitle icon={Wallet}>Carteiras</SectionTitle>
       <ul className="flex flex-col gap-2">
         {portfolios.map(p => (
           <li
@@ -340,37 +310,17 @@ function CarteirasSection() {
           >
             {editingId === p.id ? (
               <>
-                <input
-                  value={editName}
-                  onChange={e => setEditName(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter')  confirmEdit(p.id)
-                    if (e.key === 'Escape') setEditingId(null)
-                  }}
-                  autoFocus
-                  className="input flex-1 text-sm"
-                  style={{ fontSize: 16 }}
-                />
+                <input value={editName} onChange={e => setEditName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') confirmEdit(p.id); if (e.key === 'Escape') setEditingId(null) }} autoFocus className="input flex-1 text-sm" style={{ fontSize: 16 }} />
                 <button onClick={() => confirmEdit(p.id)} disabled={isUpdating} className="p-1" style={{ color: 'var(--color-primary)' }} title="Salvar">
                   {isUpdating ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                 </button>
-                <button onClick={() => setEditingId(null)} className="p-1" style={{ color: 'var(--color-text-faint)' }} title="Cancelar">
-                  <X size={14} />
-                </button>
+                <button onClick={() => setEditingId(null)} className="p-1" style={{ color: 'var(--color-text-faint)' }} title="Cancelar"><X size={14} /></button>
               </>
             ) : (
               <>
                 <span className="text-sm flex-1 truncate" style={{ color: 'var(--color-text)' }}>{p.name}</span>
-                <button onClick={() => startEdit(p.id, p.name)} className="p-1" style={{ color: 'var(--color-text-faint)' }} title="Renomear">
-                  <Pencil size={14} />
-                </button>
-                <button
-                  onClick={() => handleDelete(p.id, p.name)}
-                  disabled={isDeleting && deletingId === p.id}
-                  className="p-1 disabled:opacity-50"
-                  style={{ color: 'var(--color-text-faint)' }}
-                  title="Excluir carteira"
-                >
+                <button onClick={() => startEdit(p.id, p.name)} className="p-1" style={{ color: 'var(--color-text-faint)' }} title="Renomear"><Pencil size={14} /></button>
+                <button onClick={() => handleDelete(p.id, p.name)} disabled={isDeleting && deletingId === p.id} className="p-1 disabled:opacity-50" style={{ color: 'var(--color-text-faint)' }} title="Excluir carteira">
                   {isDeleting && deletingId === p.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                 </button>
               </>
@@ -381,16 +331,8 @@ function CarteirasSection() {
           <li className="text-center text-sm py-4" style={{ color: 'var(--color-text-muted)' }}>Nenhuma carteira cadastrada.</li>
         )}
       </ul>
-
       <div className="flex gap-2">
-        <input
-          value={newName}
-          onChange={e => setNewName(e.target.value)}
-          placeholder="Nome da nova carteira"
-          className="input flex-1 text-sm"
-          style={{ fontSize: 16 }}
-          onKeyDown={e => e.key === 'Enter' && handleCreate()}
-        />
+        <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nome da nova carteira" className="input flex-1 text-sm" style={{ fontSize: 16 }} onKeyDown={e => e.key === 'Enter' && handleCreate()} />
         <button onClick={handleCreate} disabled={isCreating || !newName.trim()} className="btn btn-primary px-3 disabled:opacity-50" title="Criar carteira">
           {isCreating ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
         </button>
@@ -428,15 +370,12 @@ function DangerZone() {
       <button onClick={() => setOpen(o => !o)} className="flex items-center justify-between w-full">
         <div className="flex items-center gap-2">
           <AlertTriangle size={15} style={{ color: 'var(--color-error)' }} />
-          <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-error)' }}>
-            Zona de perigo
-          </h2>
+          <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-error)' }}>Zona de perigo</h2>
         </div>
         {open
           ? <ChevronUp size={14} style={{ color: 'var(--color-error)' }} />
           : <ChevronDown size={14} style={{ color: 'var(--color-error)' }} />}
       </button>
-
       {open && (
         <div className="flex flex-col gap-3">
           <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
@@ -458,15 +397,9 @@ function DangerZone() {
             onClick={handleDelete}
             disabled={confirm !== user?.email || deleteAccount.isPending}
             className="btn self-start disabled:opacity-40"
-            style={{
-              background: 'var(--color-error)',
-              color: '#fff',
-              minHeight: 38,
-            }}
+            style={{ background: 'var(--color-error)', color: '#fff', minHeight: 38 }}
           >
-            {deleteAccount.isPending
-              ? <Loader2 size={14} className="animate-spin" />
-              : 'Excluir minha conta'}
+            {deleteAccount.isPending ? <Loader2 size={14} className="animate-spin" /> : 'Excluir minha conta'}
           </button>
         </div>
       )}
