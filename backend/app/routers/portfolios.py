@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, text
 from datetime import date, timedelta
 from typing import Optional
 from pydantic import BaseModel
@@ -24,7 +24,7 @@ from app.services.portfolio_service import (
 router = APIRouter()
 
 
-# ── Schemas de resposta (mantidos aqui para não quebrar imports externos) ─────────────
+# ── Schemas de resposta ───────────────────────────────────────────────────────────────
 class PositionItem(BaseModel):
     ticker:         str
     asset_type:     str
@@ -54,7 +54,12 @@ class SummaryResponse(BaseModel):
     total_proventos:          float
 
 
-# ── CRUD ──────────────────────────────────────────────────────────────────────────────────
+class EquityHistoryPoint(BaseModel):
+    month: str   # formato YYYY-MM
+    value: float
+
+
+# ── CRUD ──────────────────────────────────────────────────────────────────────────────
 
 @router.get('/', response_model=list[PortfolioResponse])
 async def list_my_portfolios(
@@ -102,7 +107,7 @@ async def delete_my_portfolio(
     return MessageResponse(message='Carteira excluída com sucesso')
 
 
-# ── Summary ─────────────────────────────────────────────────────────────────────────────
+# ── Summary ──────────────────────────────────────────────────────────────────────────
 
 @router.get('/{portfolio_id}/summary', response_model=SummaryResponse)
 async def portfolio_summary(
@@ -110,7 +115,7 @@ async def portfolio_summary(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await _get_portfolio(db, portfolio_id, current_user.id)  # valida ownership
+    await _get_portfolio(db, portfolio_id, current_user.id)
 
     items          = await calc_positions(db, portfolio_id)
     total_invested = sum(i['total_invested'] for i in items)
@@ -139,7 +144,7 @@ async def portfolio_summary(
     )
 
 
-# ── Positions ───────────────────────────────────────────────────────────────────────────
+# ── Positions ────────────────────────────────────────────────────────────────────────
 
 @router.get('/{portfolio_id}/positions', response_model=list[PositionItem])
 async def portfolio_positions(
@@ -147,5 +152,76 @@ async def portfolio_positions(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await _get_portfolio(db, portfolio_id, current_user.id)  # valida ownership
+    await _get_portfolio(db, portfolio_id, current_user.id)
     return await calc_positions(db, portfolio_id)
+
+
+# ── Equity History ───────────────────────────────────────────────────────────────────
+
+@router.get('/{portfolio_id}/equity-history', response_model=list[EquityHistoryPoint])
+async def portfolio_equity_history(
+    portfolio_id: int,
+    period: str = Query(default='12m', description="Período: 6m | 12m | 24m | all"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Retorna a evolução do valor investido acumulado por mês.
+
+    Estratégia:
+      - Agrupa todas as transações por mês (YYYY-MM).
+      - Compras somam (qty * price + fees), vendas subtraem (qty * price - fees).
+      - Acumula mês a mês para representar o patrimônio investido histórico.
+      - Preenche meses sem transações para evitar lacunas no gráfico.
+    """
+    await _get_portfolio(db, portfolio_id, current_user.id)
+
+    # Determina data de corte com base no period
+    today = date.today()
+    if period == 'all':
+        since = None
+    elif period == '6m':
+        since = today - timedelta(days=183)
+    elif period == '24m':
+        since = today - timedelta(days=730)
+    else:  # padrão: 12m
+        since = today - timedelta(days=365)
+
+    # Query SQL: valor líquido movimentado por mês
+    where_clause = "WHERE portfolio_id = :pid"
+    params: dict = {'pid': portfolio_id}
+    if since:
+        where_clause += " AND date >= :since"
+        params['since'] = since
+
+    sql = text(f"""
+        SELECT
+            TO_CHAR(date, 'YYYY-MM') AS month,
+            SUM(
+                CASE
+                    WHEN operation = 'buy'  THEN quantity * price + COALESCE(fees, 0)
+                    WHEN operation = 'sell' THEN -(quantity * price - COALESCE(fees, 0))
+                    ELSE 0
+                END
+            ) AS net_value
+        FROM transactions
+        {where_clause}
+        GROUP BY month
+        ORDER BY month ASC
+    """)
+
+    result = await db.execute(sql, params)
+    rows = result.fetchall()
+
+    if not rows:
+        return []
+
+    # Acumula mês a mês
+    points: list[EquityHistoryPoint] = []
+    accumulated = 0.0
+    for row in rows:
+        month, net_value = row
+        accumulated += float(net_value or 0)
+        points.append(EquityHistoryPoint(month=month, value=round(accumulated, 2)))
+
+    return points
