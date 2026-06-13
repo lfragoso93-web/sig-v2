@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
-import { useCreateTransaction } from '@/hooks/useTransactions'
+import { useCreateTransaction, useUpdateTransaction, type Transaction } from '@/hooks/useTransactions'
 
 const ASSET_TYPES = [
   'Acao Nacional', 'FII', 'ETF Nacional', 'Tesouro Direto',
@@ -10,28 +10,35 @@ const ASSET_TYPES = [
 interface Props {
   portfolioId: number
   onClose: () => void
+  /** Se fornecido, abre em modo edição */
+  transaction?: Transaction
 }
 
-export default function ModalNovaTransacao({ portfolioId, onClose }: Props) {
+export default function ModalNovaTransacao({ portfolioId, onClose, transaction }: Props) {
+  const isEdit = !!transaction
   const createTx = useCreateTransaction()
+  const updateTx = useUpdateTransaction()
+  const isPending = createTx.isPending || updateTx.isPending
   const today = new Date().toISOString().split('T')[0]
 
   const [form, setForm] = useState({
-    ticker: '', asset_type: 'Acao Nacional',
-    operation: 'buy' as 'buy' | 'sell',
-    quantity: '', price: '', fees: '',
-    date: today, notes: '',
+    ticker:     transaction?.ticker     ?? '',
+    asset_type: transaction?.asset_type ?? 'Acao Nacional',
+    operation:  (transaction?.operation ?? 'buy') as 'buy' | 'sell',
+    quantity:   transaction?.quantity   != null ? String(transaction.quantity) : '',
+    price:      transaction?.price      != null ? String(transaction.price)    : '',
+    fees:       transaction?.fees       != null ? String(transaction.fees)     : '',
+    date:       transaction?.date       ?? today,
+    notes:      transaction?.notes      ?? '',
   })
   const [error, setError] = useState<string | null>(null)
 
-  // Fecha com Escape
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  // Impede scroll do body enquanto modal aberto
   useEffect(() => {
     document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = '' }
@@ -52,24 +59,30 @@ export default function ModalNovaTransacao({ portfolioId, onClose }: Props) {
     if (!form.ticker.trim()) { setError('Informe o ticker do ativo.'); return }
     if (qty <= 0)             { setError('Quantidade deve ser maior que zero.'); return }
     if (price <= 0)           { setError('Preço deve ser maior que zero.'); return }
+
+    const payload = {
+      ticker:     form.ticker.toUpperCase().trim(),
+      asset_type: form.asset_type,
+      operation:  form.operation,
+      quantity:   qty,
+      price,
+      fees:       fees || 0,
+      date:       form.date,
+      notes:      form.notes || undefined,
+    }
+
     try {
-      await createTx.mutateAsync({
-        portfolioId,
-        data: {
-          ticker:     form.ticker.toUpperCase().trim(),
-          asset_type: form.asset_type,
-          operation:  form.operation,
-          quantity:   qty, price, fees: fees || 0,
-          date:       form.date,
-          notes:      form.notes || undefined,
-        },
-      })
+      if (isEdit && transaction) {
+        await updateTx.mutateAsync({ portfolioId, id: transaction.id, data: payload })
+      } else {
+        await createTx.mutateAsync({ portfolioId, data: payload })
+      }
       onClose()
     } catch (err: any) {
       const detail = err?.response?.data?.detail
-      if (Array.isArray(detail)) setError(detail.map((d: any) => d.msg ?? JSON.stringify(d)).join(', '))
+      if (Array.isArray(detail))        setError(detail.map((d: any) => d.msg ?? JSON.stringify(d)).join(', '))
       else if (typeof detail === 'string') setError(detail)
-      else setError('Erro ao registrar transação. Verifique os dados e tente novamente.')
+      else setError('Erro ao salvar transação. Verifique os dados e tente novamente.')
     }
   }
 
@@ -79,32 +92,22 @@ export default function ModalNovaTransacao({ portfolioId, onClose }: Props) {
       style={{ background: 'oklch(0 0 0 / 0.45)' }}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      {/*
-        Mobile  : bottom sheet — desliza de baixo para cima, canto superior arredondado
-        Desktop : modal centralizado com max-w-lg, cantos totalmente arredondados
-      */}
       <div
         className={[
           'w-full flex flex-col',
-          // mobile
           'rounded-t-2xl max-h-[92dvh]',
-          // desktop
           'md:rounded-xl md:max-w-lg md:max-h-[90vh]',
         ].join(' ')}
         style={{
-          background:  'var(--color-surface)',
-          borderTop:   '1px solid var(--color-border)',
-          boxShadow:   'var(--shadow-lg)',
+          background: 'var(--color-surface)',
+          borderTop:  '1px solid var(--color-border)',
+          boxShadow:  'var(--shadow-lg)',
         }}
-        // Impede que clique dentro feche o modal
         onClick={e => e.stopPropagation()}
       >
-        {/* Alça visual no mobile */}
+        {/* Alça mobile */}
         <div className="flex justify-center pt-3 pb-1 md:hidden">
-          <div
-            className="w-10 h-1 rounded-full"
-            style={{ background: 'var(--color-text-faint)' }}
-          />
+          <div className="w-10 h-1 rounded-full" style={{ background: 'var(--color-text-faint)' }} />
         </div>
 
         {/* Header */}
@@ -112,17 +115,17 @@ export default function ModalNovaTransacao({ portfolioId, onClose }: Props) {
           className="flex items-center justify-between px-5 py-4 border-b shrink-0"
           style={{ borderColor: 'var(--color-divider)' }}
         >
-          <h2 className="text-base font-semibold">Nova transação</h2>
+          <h2 className="text-base font-semibold">
+            {isEdit ? 'Editar transação' : 'Nova transação'}
+          </h2>
           <button className="btn btn-ghost p-1.5 rounded" onClick={onClose} aria-label="Fechar">
             <X size={18} />
           </button>
         </div>
 
         {/* Body — scrollável */}
-        <form
-          onSubmit={handleSubmit}
-          className="flex-1 overflow-y-auto px-5 py-5 flex flex-col gap-4"
-        >
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-5 py-5 flex flex-col gap-4">
+
           {/* Operação */}
           <div className="flex gap-2">
             {(['buy', 'sell'] as const).map(op => (
@@ -141,7 +144,7 @@ export default function ModalNovaTransacao({ portfolioId, onClose }: Props) {
                   borderColor: form.operation === op
                     ? op === 'buy' ? 'var(--color-success)' : 'var(--color-notification)'
                     : 'var(--color-border)',
-                  minHeight: 44, // toque fácil
+                  minHeight: 44,
                 }}
               >
                 {op === 'buy' ? '▲ Compra' : '▼ Venda'}
@@ -149,7 +152,7 @@ export default function ModalNovaTransacao({ portfolioId, onClose }: Props) {
             ))}
           </div>
 
-          {/* Ticker + Tipo — 1 col mobile / 2 col desktop */}
+          {/* Ticker + Tipo */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium">Ticker <span style={{ color: 'var(--color-error)' }}>*</span></label>
@@ -176,7 +179,7 @@ export default function ModalNovaTransacao({ portfolioId, onClose }: Props) {
             </div>
           </div>
 
-          {/* Quantidade + Preço + Taxas — 2 col mobile / 3 col desktop */}
+          {/* Qtd + Preço + Taxas */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium">Quantidade <span style={{ color: 'var(--color-error)' }}>*</span></label>
@@ -215,7 +218,7 @@ export default function ModalNovaTransacao({ portfolioId, onClose }: Props) {
             </div>
           </div>
 
-          {/* Data + Notas — 1 col mobile / 2 col desktop */}
+          {/* Data + Notas */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium">Data <span style={{ color: 'var(--color-error)' }}>*</span></label>
@@ -268,17 +271,19 @@ export default function ModalNovaTransacao({ portfolioId, onClose }: Props) {
               type="button"
               className="flex-1 md:flex-none btn btn-secondary"
               onClick={onClose}
-              disabled={createTx.isPending}
+              disabled={isPending}
             >
               Cancelar
             </button>
             <button
               type="submit"
               className="flex-1 md:flex-none btn btn-primary"
-              disabled={createTx.isPending}
+              disabled={isPending}
               style={{ minHeight: 44 }}
             >
-              {createTx.isPending ? 'Salvando...' : 'Registrar'}
+              {isPending
+                ? (isEdit ? 'Salvando...' : 'Registrando...')
+                : (isEdit ? 'Salvar alterações' : 'Registrar')}
             </button>
           </div>
         </form>

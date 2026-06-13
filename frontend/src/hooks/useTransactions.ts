@@ -27,26 +27,24 @@ export interface TransactionCreate {
   notes?: string
 }
 
-const TX_KEY  = (pid: number | null) => ['transactions', pid]
+export interface TransactionUpdate extends Partial<TransactionCreate> {}
 
-// Todas as query keys que dependem de posições/resumo da carteira
+const TX_KEY = (pid: number | null) => ['transactions', pid]
+
 function invalidatePortfolioKeys(qc: ReturnType<typeof useQueryClient>, portfolioId: number) {
   qc.invalidateQueries({ queryKey: ['transactions',       portfolioId] })
   qc.invalidateQueries({ queryKey: ['portfolio-summary',  portfolioId] })
   qc.invalidateQueries({ queryKey: ['positions',          portfolioId] })
   qc.invalidateQueries({ queryKey: ['asset-distribution', portfolioId] })
   qc.invalidateQueries({ queryKey: ['patrimonio-history', portfolioId] })
-  // resumo usado no ResumePage (endpoint /portfolios/{id}/summary)
-  qc.invalidateQueries({ queryKey: ['summary', portfolioId] })
+  qc.invalidateQueries({ queryKey: ['summary',            portfolioId] })
 }
 
 export function useTransactions(portfolioId: number | null) {
   return useQuery<Transaction[]>({
     queryKey: TX_KEY(portfolioId),
     queryFn: () =>
-      api
-        .get(`/portfolios/${portfolioId}/transactions`)
-        .then((r) => r.data),
+      api.get(`/portfolios/${portfolioId}/transactions`).then(r => r.data),
     enabled: !!portfolioId,
   })
 }
@@ -55,9 +53,16 @@ export function useCreateTransaction() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ portfolioId, data }: { portfolioId: number; data: TransactionCreate }) =>
-      api
-        .post<Transaction>(`/portfolios/${portfolioId}/transactions`, data)
-        .then((r) => r.data),
+      api.post<Transaction>(`/portfolios/${portfolioId}/transactions`, data).then(r => r.data),
+    onSuccess: (_d, v) => invalidatePortfolioKeys(qc, v.portfolioId),
+  })
+}
+
+export function useUpdateTransaction() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ portfolioId, id, data }: { portfolioId: number; id: number; data: TransactionUpdate }) =>
+      api.put<Transaction>(`/portfolios/${portfolioId}/transactions/${id}`, data).then(r => r.data),
     onSuccess: (_d, v) => invalidatePortfolioKeys(qc, v.portfolioId),
   })
 }
@@ -66,9 +71,7 @@ export function useDeleteTransaction() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ portfolioId, id }: { portfolioId: number; id: number }) =>
-      api
-        .delete(`/portfolios/${portfolioId}/transactions/${id}`)
-        .then((r) => r.data),
+      api.delete(`/portfolios/${portfolioId}/transactions/${id}`).then(r => r.data),
     onSuccess: (_d, v) => invalidatePortfolioKeys(qc, v.portfolioId),
   })
 }

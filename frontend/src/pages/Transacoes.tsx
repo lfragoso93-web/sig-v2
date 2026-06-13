@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Plus, Search, Trash2 } from 'lucide-react'
+import { Plus, Search, Trash2, Pencil } from 'lucide-react'
 import { useAppStore } from '@/store/appStore'
 import {
   useTransactions,
@@ -23,11 +23,13 @@ const ASSET_TYPES: { label: string; value: string }[] = [
   { label: 'Renda Fixa',           value: 'RENDA_FIXA' },
 ]
 
-// ── Card mobile por transação ───────────────────────────────────
-function TransactionCard({ t, onDelete }: { t: Transaction; onDelete: () => void }) {
-  const isBuy = t.operation === 'buy'
-  const fees  = t.fees ?? 0
-  const total = t.quantity * t.price + (isBuy ? fees : -fees)
+// ── Card mobile por transação ───────────────────────────────────────────────
+function TransactionCard({
+  t, onDelete, onEdit,
+}: { t: Transaction; onDelete: () => void; onEdit: () => void }) {
+  const isBuy   = t.operation === 'buy'
+  const fees    = t.fees ?? 0
+  const total   = t.quantity * t.price + (isBuy ? fees : -fees)
   const opColor = isBuy ? 'var(--color-success)' : 'var(--color-notification)'
   const opBg    = isBuy
     ? 'oklch(from var(--color-success) l c h / 0.12)'
@@ -38,26 +40,33 @@ function TransactionCard({ t, onDelete }: { t: Transaction; onDelete: () => void
       className="rounded-xl p-3 flex flex-col gap-2"
       style={{ background: 'var(--color-surface-offset)', border: '1px solid var(--color-divider)' }}
     >
-      {/* Linha superior: ticker + op + lixeira */}
+      {/* Linha superior: ticker + op + ações */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <span className="font-bold text-sm" style={{ color: 'var(--color-text)' }}>{t.ticker}</span>
-          <span
-            className="px-2 py-0.5 rounded text-[10px] font-semibold"
-            style={{ background: opBg, color: opColor }}
-          >
+          <span className="px-2 py-0.5 rounded text-[10px] font-semibold" style={{ background: opBg, color: opColor }}>
             {isBuy ? 'Compra' : 'Venda'}
           </span>
           <span className={`asset-badge ${assetBadgeClass(t.asset_type)} text-[9px]`}>{t.asset_type}</span>
         </div>
-        <button
-          onClick={onDelete}
-          className="p-1.5 rounded transition-colors flex items-center justify-center"
-          style={{ color: 'var(--color-text-faint)', minWidth: 32, minHeight: 32 }}
-          aria-label="Excluir transação"
-        >
-          <Trash2 size={14} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onEdit}
+            className="p-1.5 rounded transition-colors flex items-center justify-center"
+            style={{ color: 'var(--color-text-muted)', minWidth: 32, minHeight: 32 }}
+            aria-label="Editar transação"
+          >
+            <Pencil size={13} />
+          </button>
+          <button
+            onClick={onDelete}
+            className="p-1.5 rounded transition-colors flex items-center justify-center"
+            style={{ color: 'var(--color-text-faint)', minWidth: 32, minHeight: 32 }}
+            aria-label="Excluir transação"
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
       </div>
 
       {/* Grade de dados */}
@@ -89,8 +98,10 @@ function TransactionCard({ t, onDelete }: { t: Transaction; onDelete: () => void
   )
 }
 
-// ── Linha desktop ──────────────────────────────────────────────────────
-function TransactionRow({ t, onDelete }: { t: Transaction; onDelete: () => void }) {
+// ── Linha desktop ──────────────────────────────────────────────────────────────
+function TransactionRow({
+  t, onDelete, onEdit,
+}: { t: Transaction; onDelete: () => void; onEdit: () => void }) {
   const isBuy = t.operation === 'buy'
   const fees  = t.fees ?? 0
   const total = t.quantity * t.price + (isBuy ? fees : -fees)
@@ -103,7 +114,9 @@ function TransactionRow({ t, onDelete }: { t: Transaction; onDelete: () => void 
         <span
           className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold"
           style={{
-            background: isBuy ? 'oklch(from var(--color-success) l c h / 0.12)' : 'oklch(from var(--color-notification) l c h / 0.12)',
+            background: isBuy
+              ? 'oklch(from var(--color-success) l c h / 0.12)'
+              : 'oklch(from var(--color-notification) l c h / 0.12)',
             color: isBuy ? 'var(--color-success)' : 'var(--color-notification)',
           }}
         >
@@ -112,21 +125,41 @@ function TransactionRow({ t, onDelete }: { t: Transaction; onDelete: () => void 
       </td>
       <td className="text-right text-sm tabular-nums">{t.quantity}</td>
       <td className="text-right text-sm tabular-nums">{formatBRL(t.price)}</td>
-      <td className="text-right text-sm tabular-nums" style={{ color: 'var(--color-text-muted)' }}>{fees > 0 ? formatBRL(fees) : '—'}</td>
+      <td className="text-right text-sm tabular-nums" style={{ color: 'var(--color-text-muted)' }}>
+        {fees > 0 ? formatBRL(fees) : '—'}
+      </td>
       <td className="text-right text-sm font-medium tabular-nums">{formatBRL(total)}</td>
       <td className="text-right pr-3">
-        <button onClick={onDelete} className="btn btn-ghost p-1 rounded" style={{ color: 'var(--color-text-faint)' }} aria-label="Excluir">
-          <Trash2 size={14} />
-        </button>
+        <div className="flex items-center justify-end gap-0.5">
+          <button
+            onClick={onEdit}
+            className="btn btn-ghost p-1.5 rounded"
+            style={{ color: 'var(--color-text-muted)' }}
+            aria-label="Editar"
+          >
+            <Pencil size={13} />
+          </button>
+          <button
+            onClick={onDelete}
+            className="btn btn-ghost p-1.5 rounded"
+            style={{ color: 'var(--color-text-faint)' }}
+            aria-label="Excluir"
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
       </td>
     </tr>
   )
 }
 
-// ── Modal confirmar exclusão ───────────────────────────────────────────
-function ConfirmDeleteModal({ onCancel, onConfirm, loading }: { onCancel: () => void; onConfirm: () => void; loading: boolean }) {
+// ── Modal confirmar exclusão ─────────────────────────────────────────────────
+function ConfirmDeleteModal({
+  onCancel, onConfirm, loading,
+}: { onCancel: () => void; onConfirm: () => void; loading: boolean }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: 'oklch(0 0 0 / 0.45)' }}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4"
+      style={{ background: 'oklch(0 0 0 / 0.45)' }}>
       <div className="w-full max-w-sm rounded-xl border p-6"
         style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', boxShadow: 'var(--shadow-lg)' }}>
         <h2 className="text-base font-semibold mb-2">Excluir transação?</h2>
@@ -135,7 +168,12 @@ function ConfirmDeleteModal({ onCancel, onConfirm, loading }: { onCancel: () => 
         </p>
         <div className="flex justify-end gap-2">
           <button className="btn btn-secondary" onClick={onCancel} disabled={loading}>Cancelar</button>
-          <button className="btn" style={{ background: 'var(--color-notification)', color: '#fff' }} onClick={onConfirm} disabled={loading}>
+          <button
+            className="btn"
+            style={{ background: 'var(--color-notification)', color: '#fff' }}
+            onClick={onConfirm}
+            disabled={loading}
+          >
             {loading ? 'Excluindo...' : 'Excluir'}
           </button>
         </div>
@@ -144,7 +182,7 @@ function ConfirmDeleteModal({ onCancel, onConfirm, loading }: { onCancel: () => 
   )
 }
 
-// ── Página principal ────────────────────────────────────────────────────
+// ── Página principal ───────────────────────────────────────────────────────────────────
 export default function Transacoes() {
   const { selectedPortfolioId } = useAppStore()
   const { data: portfolios = [] } = usePortfolios()
@@ -153,10 +191,11 @@ export default function Transacoes() {
   const { data: transactions = [], isLoading } = useTransactions(selectedPortfolioId)
   const deleteTransaction = useDeleteTransaction()
 
-  const [showModal, setShowModal]   = useState(false)
-  const [search, setSearch]         = useState(() => searchParams.get('ticker') ?? '')
-  const [typeFilter, setTypeFilter] = useState('')
-  const [opFilter, setOpFilter]     = useState<'todos' | 'buy' | 'sell'>('todos')
+  const [showModal, setShowModal]         = useState(false)
+  const [editingTx, setEditingTx]         = useState<Transaction | null>(null)
+  const [search, setSearch]               = useState(() => searchParams.get('ticker') ?? '')
+  const [typeFilter, setTypeFilter]       = useState('')
+  const [opFilter, setOpFilter]           = useState<'todos' | 'buy' | 'sell'>('todos')
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
 
   useEffect(() => {
@@ -173,8 +212,12 @@ export default function Transacoes() {
     })
   }, [transactions, search, typeFilter, opFilter])
 
-  const totalCompras = filtered.filter(t => t.operation === 'buy').reduce((s, t) => s + t.quantity * t.price + (t.fees ?? 0), 0)
-  const totalVendas  = filtered.filter(t => t.operation === 'sell').reduce((s, t) => s + t.quantity * t.price - (t.fees ?? 0), 0)
+  const totalCompras = filtered
+    .filter(t => t.operation === 'buy')
+    .reduce((s, t) => s + t.quantity * t.price + (t.fees ?? 0), 0)
+  const totalVendas = filtered
+    .filter(t => t.operation === 'sell')
+    .reduce((s, t) => s + t.quantity * t.price - (t.fees ?? 0), 0)
 
   async function handleDelete(id: number) {
     if (!selectedPortfolioId) return
@@ -186,7 +229,9 @@ export default function Transacoes() {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-3">
         <p className="text-sm font-medium">Nenhuma carteira selecionada</p>
-        <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Selecione ou crie uma carteira na barra lateral.</p>
+        <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+          Selecione ou crie uma carteira na barra lateral.
+        </p>
       </div>
     )
   }
@@ -202,15 +247,19 @@ export default function Transacoes() {
           <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
             {portfolioName} · {transactions.length} registro{transactions.length !== 1 ? 's' : ''}
             {search && (
-              <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-medium"
-                style={{ background: 'var(--color-primary-highlight)', color: 'var(--color-primary)' }}>
+              <span
+                className="ml-2 px-2 py-0.5 rounded-full text-xs font-medium"
+                style={{ background: 'var(--color-primary-highlight)', color: 'var(--color-primary)' }}
+              >
                 Filtrado: {search.toUpperCase()}
               </span>
             )}
           </p>
         </div>
-        {/* Botão Novo — só desktop; mobile usa FAB do BottomNav */}
-        <button className="hidden md:flex btn btn-primary items-center gap-1.5 text-sm" onClick={() => setShowModal(true)}>
+        <button
+          className="hidden md:flex btn btn-primary items-center gap-1.5 text-sm"
+          onClick={() => { setEditingTx(null); setShowModal(true) }}
+        >
           <Plus size={15} /> Nova transação
         </button>
       </div>
@@ -227,14 +276,23 @@ export default function Transacoes() {
             style={{ fontSize: 16 }}
           />
           {search && (
-            <button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 text-xs"
-              style={{ color: 'var(--color-text-faint)' }} onClick={() => setSearch('')} title="Limpar filtro">
+            <button type="button"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-xs"
+              style={{ color: 'var(--color-text-faint)' }}
+              onClick={() => setSearch('')}
+              title="Limpar filtro"
+            >
               ×
             </button>
           )}
         </div>
 
-        <select className="input text-sm" value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={{ fontSize: 16 }}>
+        <select
+          className="input text-sm"
+          value={typeFilter}
+          onChange={e => setTypeFilter(e.target.value)}
+          style={{ fontSize: 16 }}
+        >
           {ASSET_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
         </select>
 
@@ -244,8 +302,8 @@ export default function Transacoes() {
               className="px-3 py-1 rounded text-xs font-medium transition-colors"
               style={{
                 background: opFilter === op ? 'var(--color-surface)' : 'transparent',
-                color: opFilter === op ? 'var(--color-text)' : 'var(--color-text-muted)',
-                boxShadow: opFilter === op ? 'var(--shadow-sm)' : 'none',
+                color:      opFilter === op ? 'var(--color-text)'    : 'var(--color-text-muted)',
+                boxShadow:  opFilter === op ? 'var(--shadow-sm)'     : 'none',
                 minHeight: 32,
               }}
             >
@@ -256,7 +314,10 @@ export default function Transacoes() {
       </div>
 
       {/* Conteúdo */}
-      <div className="rounded-xl overflow-hidden" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+      <div
+        className="rounded-xl overflow-hidden"
+        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+      >
         {isLoading ? (
           <div className="p-4 flex flex-col gap-3">
             {Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton h-10 w-full rounded" />)}
@@ -270,13 +331,20 @@ export default function Transacoes() {
           </div>
         ) : (
           <>
-            {/* VIEW MOBILE: cards (<768px) */}
+            {/* VIEW MOBILE */}
             <div className="flex flex-col gap-2 p-3 md:hidden">
               {filtered.map(t => (
-                <TransactionCard key={t.id} t={t} onDelete={() => setConfirmDelete(t.id)} />
+                <TransactionCard
+                  key={t.id}
+                  t={t}
+                  onDelete={() => setConfirmDelete(t.id)}
+                  onEdit={() => { setEditingTx(t); setShowModal(true) }}
+                />
               ))}
-              {/* Rodapé mobile */}
-              <div className="flex justify-between text-xs pt-2" style={{ color: 'var(--color-text-muted)', borderTop: '1px solid var(--color-divider)' }}>
+              <div
+                className="flex justify-between text-xs pt-2"
+                style={{ color: 'var(--color-text-muted)', borderTop: '1px solid var(--color-divider)' }}
+              >
                 <span>{filtered.length} transação(ões)</span>
                 <span>
                   <span style={{ color: 'var(--color-success)' }}>C: {formatBRL(totalCompras)}</span>
@@ -286,7 +354,7 @@ export default function Transacoes() {
               </div>
             </div>
 
-            {/* VIEW DESKTOP: tabela (≥768px) */}
+            {/* VIEW DESKTOP */}
             <div className="hidden md:block overflow-x-auto">
               <table className="positions-table">
                 <thead>
@@ -302,7 +370,12 @@ export default function Transacoes() {
                 </thead>
                 <tbody>
                   {filtered.map(t => (
-                    <TransactionRow key={t.id} t={t} onDelete={() => setConfirmDelete(t.id)} />
+                    <TransactionRow
+                      key={t.id}
+                      t={t}
+                      onDelete={() => setConfirmDelete(t.id)}
+                      onEdit={() => { setEditingTx(t); setShowModal(true) }}
+                    />
                   ))}
                 </tbody>
                 <tfoot>
@@ -324,11 +397,20 @@ export default function Transacoes() {
         )}
       </div>
 
+      {/* Modais */}
       {showModal && selectedPortfolioId && (
-        <ModalNovaTransacao portfolioId={selectedPortfolioId} onClose={() => setShowModal(false)} />
+        <ModalNovaTransacao
+          portfolioId={selectedPortfolioId}
+          onClose={() => { setShowModal(false); setEditingTx(null) }}
+          transaction={editingTx ?? undefined}
+        />
       )}
       {confirmDelete !== null && (
-        <ConfirmDeleteModal onCancel={() => setConfirmDelete(null)} onConfirm={() => handleDelete(confirmDelete)} loading={deleteTransaction.isPending} />
+        <ConfirmDeleteModal
+          onCancel={() => setConfirmDelete(null)}
+          onConfirm={() => handleDelete(confirmDelete)}
+          loading={deleteTransaction.isPending}
+        />
       )}
     </div>
   )
