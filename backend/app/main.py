@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import asyncpg
 import asyncpg.exceptions
 
-from app.core.database import Base, engine
+from app.core.database import engine
 from app.core.config import settings
 from app.core.scheduler import start_scheduler
 from app.routers import (
@@ -48,9 +48,10 @@ async def _create_enums_raw() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Enums sao criados de forma idempotente (EXCEPTION WHEN duplicate_object THEN NULL)
+    # O schema de tabelas e 100% gerenciado pelo Alembic via entrypoint.sh
+    # NAO usar create_all aqui — conflita com sequences ja criadas pelo Alembic
     await _create_enums_raw()
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all, checkfirst=True)
     start_scheduler()
     yield
     await engine.dispose()
