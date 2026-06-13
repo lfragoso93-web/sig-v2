@@ -15,6 +15,10 @@ def _auth_headers() -> dict:
 
 
 async def fetch_quotes(tickers: list[str]) -> dict[str, float]:
+    """
+    Retorna apenas {ticker: price}.
+    Mantido para compatibilidade com quotes_service e demais usos.
+    """
     if not tickers:
         return {}
     results: dict[str, float] = {}
@@ -35,6 +39,42 @@ async def fetch_quotes(tickers: list[str]) -> dict[str, float]:
                         results[symbol] = float(price)
             except Exception as e:
                 logger.warning(f"BRAPI quote error for chunk {chunk}: {e}")
+    return results
+
+
+async def fetch_quotes_with_meta(tickers: list[str]) -> dict[str, dict]:
+    """
+    Retorna {ticker: {price: float, logo_url: str | None}}.
+    Usado por calc_positions para enriquecer posições com logo e cotação.
+    """
+    if not tickers:
+        return {}
+    results: dict[str, dict] = {}
+    chunks  = [tickers[i:i+50] for i in range(0, len(tickers), 50)]
+    headers = _auth_headers()
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        for chunk in chunks:
+            joined = ",".join(chunk)
+            url    = f"{BRAPI_BASE}/quote/{joined}"
+            try:
+                resp = await client.get(url, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+                for item in data.get("results", []):
+                    symbol = item.get("symbol", "")
+                    price  = item.get("regularMarketPrice")
+                    logo   = (
+                        item.get("logourl")
+                        or item.get("logo_url")
+                        or item.get("logo")
+                    )
+                    if symbol:
+                        results[symbol] = {
+                            "price":    float(price) if price is not None else None,
+                            "logo_url": str(logo) if logo else None,
+                        }
+            except Exception as e:
+                logger.warning(f"BRAPI quote meta error for chunk {chunk}: {e}")
     return results
 
 
@@ -68,7 +108,6 @@ async def fetch_logo_url(ticker: str) -> Optional[str]:
         info = await fetch_asset_info(ticker)
         if not info:
             return None
-        # BRAPI retorna 'logourl' (sem hifen) no resultado do quote
         logo = info.get("logourl") or info.get("logo_url") or info.get("logo")
         return str(logo) if logo else None
     except Exception as e:
@@ -137,10 +176,6 @@ async def fetch_ticker_suggestions(
     limit: int = 10,
     asset_type: Optional[str] = None,
 ) -> list[dict]:
-    """
-    Busca sugestoes de tickers da B3 via BRAPI /api/quote/list.
-    asset_type: 'stock' | 'fund' | 'etf' | 'bdr' | None (todos)
-    """
     headers = _auth_headers()
     try:
         params: dict = {"search": q, "limit": limit}
@@ -157,10 +192,6 @@ async def fetch_ticker_suggestions(
 
 
 async def fetch_crypto_suggestions(q: str, limit: int = 10) -> list[dict]:
-    """
-    Busca sugestoes de criptomoedas via BRAPI GET /api/v2/crypto/available?search={q}.
-    Retorna lista de dicts com coin, name.
-    """
     headers = _auth_headers()
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -179,11 +210,6 @@ async def fetch_crypto_suggestions(q: str, limit: int = 10) -> list[dict]:
 
 
 def _yf_search_sync(q: str, limit: int = 10, asset_type: Optional[str] = None) -> list[dict]:
-    """
-    Busca tickers internacionais via yfinance Search / Lookup.
-    asset_type: 'stock' | 'etf' | None (todos via Search)
-    Roda em thread (bloqueante).
-    """
     try:
         import yfinance as yf
         results = []
@@ -198,7 +224,7 @@ def _yf_search_sync(q: str, limit: int = 10, asset_type: Optional[str] = None) -
 
         for item in items:
             if hasattr(item, "to_dict"):
-                row = item
+                row    = item
                 ticker = str(getattr(row, "symbol", "") or "")
                 name   = str(getattr(row, "longname", "") or getattr(row, "shortname", "") or "")
                 kind   = str(getattr(row, "quoteType", "") or asset_type or "")

@@ -32,6 +32,7 @@ class PositionItem(BaseModel):
     quantity:       float
     avg_price:      float
     total_invested: float
+    logo_url:       Optional[str] = None
     current_price:  Optional[float]
     current_value:  float
     result_abs:     float
@@ -55,7 +56,7 @@ class SummaryResponse(BaseModel):
 
 
 class EquityHistoryPoint(BaseModel):
-    month: str   # formato YYYY-MM
+    month: str
     value: float
 
 
@@ -167,16 +168,10 @@ async def portfolio_equity_history(
 ):
     """
     Retorna a evolução do valor investido acumulado por mês.
-
-    Estratégia:
-      - Agrupa todas as transações por mês (YYYY-MM).
-      - Compras somam (qty * price + fees), vendas subtraem (qty * price - fees).
-      - Acumula mês a mês para representar o patrimônio investido histórico.
-      - Preenche meses sem transações para evitar lacunas no gráfico.
+    Agrupa transações por mês, acumula o capital líquido comprometido.
     """
     await _get_portfolio(db, portfolio_id, current_user.id)
 
-    # Determina data de corte com base no period
     today = date.today()
     if period == 'all':
         since = None
@@ -184,10 +179,9 @@ async def portfolio_equity_history(
         since = today - timedelta(days=183)
     elif period == '24m':
         since = today - timedelta(days=730)
-    else:  # padrão: 12m
+    else:
         since = today - timedelta(days=365)
 
-    # Query SQL: valor líquido movimentado por mês
     where_clause = "WHERE portfolio_id = :pid"
     params: dict = {'pid': portfolio_id}
     if since:
@@ -216,7 +210,6 @@ async def portfolio_equity_history(
     if not rows:
         return []
 
-    # Acumula mês a mês
     points: list[EquityHistoryPoint] = []
     accumulated = 0.0
     for row in rows:

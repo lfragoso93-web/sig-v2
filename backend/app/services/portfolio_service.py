@@ -11,9 +11,10 @@ from app.models.transaction import Transaction, OperationType
 from app.models.position import Position
 from app.schemas.portfolio import PortfolioCreate, PortfolioUpdate
 from app.services.quotes_service import get_prices
+from app.integrations.brapi import fetch_quotes_with_meta
 
 
-# ── Labels e normalização de tipos ──────────────────────────────────────────────────
+# ── Labels e normalização de tipos ──────────────────────────────────────────────
 ASSET_LABELS: dict[str, str] = {
     'ACAO':              'Ações',
     'ACAO_NACIONAL':     'Ações',
@@ -164,7 +165,7 @@ def enrich_with_prices(items: list[dict], prices: dict[str, float]) -> list[dict
         quantity       = item['quantity']
         total_invested = item['total_invested']
 
-        raw_price     = prices.get(ticker)  # None se ausente
+        raw_price     = prices.get(ticker)
         current_price = float(raw_price) if raw_price is not None else None
 
         effective_price = current_price if current_price is not None else avg_price
@@ -188,10 +189,71 @@ def enrich_with_prices(items: list[dict], prices: dict[str, float]) -> list[dict
 
 
 async def calc_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
-    """Orquestra: calcula posições brutas → busca cotações → enriquece."""
-    raw    = await calc_raw_positions(db, portfolio_id)
-    prices = await get_prices(raw)
-    return enrich_with_prices(raw, prices)
+    """
+    Orquestra: calcula posições brutas → busca cotações + logos (BR) → enriquece.
+
+    Para ativos BR (ações, FIIs, ETFs nacionais): usa fetch_quotes_with_meta
+    que retorna price + logo_url numa única chamada à BRAPI.
+    Para ativos internacionais/cripto: usa get_prices (sem logo).
+    """
+    from app.services.quotes_service import BR_TYPES, INTL_TYPES
+
+    raw = await calc_raw_positions(db, portfolio_id)
+    if not raw:
+        return []
+
+    # Separa tickers BR dos demais
+    br_tickers   = [p['ticker'] for p in raw if p['asset_type'].upper() in BR_TYPES]
+    intl_tickers = [p for p in raw if p['asset_type'].upper() not in BR_TYPES]
+
+    # Busca BR com meta (price + logo) e internacionais apenas price
+    import asyncio
+    br_meta, intl_prices = await asyncio.gather(
+        fetch_quotes_with_meta(br_tickers) if br_tickers else _empty_dict(),
+        get_prices(intl_tickers)           if intl_tickers else _empty_dict(),
+    )
+
+    enriched = []
+    for item in raw:
+        ticker         = item['ticker']
+        avg_price      = item['avg_price']
+        quantity       = item['quantity']
+        total_invested = item['total_invested']
+        asset_type     = item['asset_type'].upper()
+
+        # Obtém price e logo de acordo com a origem
+        if asset_type in BR_TYPES and ticker in br_meta:
+            meta          = br_meta[ticker]
+            current_price = meta['price']
+            logo_url      = meta['logo_url']
+        else:
+            current_price = intl_prices.get(ticker)
+            logo_url      = None
+
+        effective_price = current_price if current_price is not None else avg_price
+        current_value   = round(quantity * effective_price, 2)
+        result_abs      = round(current_value - total_invested, 2) if current_price is not None else 0.0
+        result_pct      = round(
+            (result_abs / total_invested * 100)
+            if total_invested > 0 and current_price is not None
+            else 0.0,
+            4,
+        )
+
+        enriched.append({
+            **item,
+            'logo_url':     logo_url,
+            'current_price': round(current_price, 6) if current_price is not None else None,
+            'current_value': current_value,
+            'result_abs':    result_abs,
+            'result_pct':    result_pct,
+        })
+
+    return enriched
+
+
+async def _empty_dict() -> dict:
+    return {}
 
 
 async def sum_dividends(
@@ -241,10 +303,6 @@ async def recalc_positions(portfolio_id: int, db: AsyncSession) -> None:
     """
     Recalcula preço médio ponderado e quantidade atual
     para cada ativo da carteira, a partir do histórico de transações.
-
-    Algoritmo:
-      - Compra: pm = (pm_ant * qt_ant + qt_nova * preco + fees) / (qt_ant + qt_nova)
-      - Venda:  pm não muda, apenas reduz quantidade
     """
     txs_result = await db.execute(
         select(Transaction)
