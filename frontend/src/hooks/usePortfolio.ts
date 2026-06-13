@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import api from '@/services/api'
 import { PORTFOLIOS_QUERY_KEY } from '@/hooks/usePortfolios'
 
-// ── Tipos ──────────────────────────────────────────────────────────────────────────────────────
+// ── Tipos ──────────────────────────────────────────────────────────────────────────────────
 
 export interface PortfolioDetail {
   id: number
@@ -28,8 +28,9 @@ export interface PortfolioSummaryData {
 }
 
 export interface PatrimonioHistoryPoint {
-  month: string
-  value: number
+  month:    string
+  value:    number  // capital aportado acumulado (= valor investido)
+  invested: number  // alias explícito para uso no gráfico
 }
 
 export interface EquityPoint {
@@ -75,7 +76,7 @@ export interface PositionGroup {
   positions: PositionItem[]
 }
 
-// ── Constantes ────────────────────────────────────────────────────────────────────────────────────
+// ── Constantes ───────────────────────────────────────────────────────────────────────────────
 
 const ASSET_LABELS: Record<string, string> = {
   ACAO:              'Ações',
@@ -102,12 +103,13 @@ const ASSET_COLORS: Record<string, string> = {
   OUTROS:            '#6b7280',
 }
 
-// ── Helper: mapeia RawPosition -> PositionGroup[] ─────────────────────────────────────────
+// ── Helper: mapeia RawPosition -> PositionGroup[] ─────────────────────────────────────────────
 
 interface RawPositionItem {
   ticker:         string
   asset_type:     string
   asset_label?:   string
+  logo_url?:      string | null
   quantity:       number
   avg_price:      number
   total_invested: number
@@ -148,6 +150,7 @@ function toPositionGroups(raw: RawPositionItem[]): PositionGroup[] {
         name:                p.ticker,
         asset_type:          p.asset_type,
         asset_label:         p.asset_label ?? ASSET_LABELS[p.asset_type] ?? p.asset_type,
+        logo_url:            p.logo_url ?? undefined,
         quantity:            p.quantity,
         average_price:       p.avg_price,
         current_price:       p.current_price ?? p.avg_price,
@@ -163,7 +166,7 @@ function toPositionGroups(raw: RawPositionItem[]): PositionGroup[] {
   }).sort((a, b) => b.total_value - a.total_value)
 }
 
-// ── Hooks ─────────────────────────────────────────────────────────────────────────────────────
+// ── Hooks ──────────────────────────────────────────────────────────────────────────────────
 
 export function usePortfolioList() {
   return useQuery<PortfolioDetail[]>({
@@ -227,13 +230,6 @@ export function usePositions(portfolioId: number | null) {
   })
 }
 
-/**
- * Histórico de evolução do patrimônio mensal.
- * Endpoint: GET /portfolios/{id}/equity-history?period={months}m
- * Retorna: { month: string, value: number }[]
- * Caso o endpoint retorne formato diferente ({ date, value }),
- * normaliza para { month, value } automaticamente.
- */
 export function usePatrimonioHistory(portfolioId: number | null, months: number) {
   const period = months >= 60 ? 'all' : `${months}m`
   return useQuery<PatrimonioHistoryPoint[]>({
@@ -242,10 +238,11 @@ export function usePatrimonioHistory(portfolioId: number | null, months: number)
       api
         .get(`/portfolios/${portfolioId}/equity-history`, { params: { period } })
         .then(r => {
-          const raw: Array<{ month?: string; date?: string; value: number }> = r.data ?? []
+          const raw: Array<{ month?: string; date?: string; value: number; invested?: number }> = r.data ?? []
           return raw.map(item => ({
-            month: item.month ?? item.date ?? '',
-            value: item.value,
+            month:    item.month ?? item.date ?? '',
+            value:    item.value,
+            invested: item.invested ?? item.value,
           }))
         }),
     enabled: !!portfolioId,

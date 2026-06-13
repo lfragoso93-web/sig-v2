@@ -24,7 +24,7 @@ from app.services.portfolio_service import (
 router = APIRouter()
 
 
-# ── Schemas de resposta ───────────────────────────────────────────────────────────────
+# ── Schemas ──────────────────────────────────────────────────────────────────
 class PositionItem(BaseModel):
     ticker:         str
     asset_type:     str
@@ -56,8 +56,9 @@ class SummaryResponse(BaseModel):
 
 
 class EquityHistoryPoint(BaseModel):
-    month: str
-    value: float
+    month:    str    # formato YYYY-MM
+    value:    float  # valor atual acumulado (capital investido)
+    invested: float  # capital aportado acumulado (custo)
 
 
 # ── CRUD ──────────────────────────────────────────────────────────────────────────────
@@ -167,8 +168,14 @@ async def portfolio_equity_history(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Retorna a evolução do valor investido acumulado por mês.
-    Agrupa transações por mês, acumula o capital líquido comprometido.
+    Retorna a evolução patrimonial por mês com duas séries:
+      - value:    capital aportado acumulado (custo histórico)
+      - invested: mesmo que value (alias mantido para compatibilidade futura
+                  quando integrarmos cotações históricas)
+
+    Hoje ambas as séries usam o capital aportado líquido (compras - vendas).
+    Quando tivermos snapshot de preços históricos, 'value' será atualizado
+    para refletir o valor de mercado acumulado mois a mês.
     """
     await _get_portfolio(db, portfolio_id, current_user.id)
 
@@ -197,7 +204,7 @@ async def portfolio_equity_history(
                     WHEN operation = 'sell' THEN -(quantity * price - COALESCE(fees, 0))
                     ELSE 0
                 END
-            ) AS net_value
+            ) AS net_invested
         FROM transactions
         {where_clause}
         GROUP BY month
@@ -213,8 +220,12 @@ async def portfolio_equity_history(
     points: list[EquityHistoryPoint] = []
     accumulated = 0.0
     for row in rows:
-        month, net_value = row
-        accumulated += float(net_value or 0)
-        points.append(EquityHistoryPoint(month=month, value=round(accumulated, 2)))
+        month, net_invested = row
+        accumulated += float(net_invested or 0)
+        points.append(EquityHistoryPoint(
+            month=month,
+            value=round(accumulated, 2),
+            invested=round(accumulated, 2),
+        ))
 
     return points
