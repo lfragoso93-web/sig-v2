@@ -6,6 +6,15 @@ export interface TransactionModalPrefill {
   tab?: string
   ticker?: string
   assetName?: string
+  /** Campos para modo edicao */
+  transactionId?: number
+  operation?: 'buy' | 'sell'
+  quantity?: number
+  price?: number
+  fees?: number
+  date?: string
+  notes?: string
+  currency?: string
 }
 
 interface ModalState {
@@ -24,11 +33,9 @@ interface AppState {
   setSelectedPortfolioId: (id: number) => void
   selectPortfolio: (id: number) => void
 
-  /** Abre o modal de lançamento, opcionalmente pré-preenchido */
   openTransactionModal: (prefill?: TransactionModalPrefill) => void
   closeTransactionModal: () => void
 
-  /** Controle da sidebar no mobile */
   toggleSidebar: () => void
   closeSidebar: () => void
 }

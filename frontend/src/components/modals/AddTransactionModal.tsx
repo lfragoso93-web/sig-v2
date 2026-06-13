@@ -4,14 +4,13 @@ import {
   Bitcoin, Banknote, BarChart2, CheckCircle2, Loader2, Zap,
 } from 'lucide-react'
 import clsx from 'clsx'
-import { useCreateTransaction } from '@/hooks/useTransactions'
+import { useCreateTransaction, useUpdateTransaction } from '@/hooks/useTransactions'
 import { useAppStore } from '@/store/appStore'
 import { useTickerQuote } from '@/hooks/useTickerQuote'
 import { useTesouroSearch, TreasuryItem } from '@/hooks/useTesouroSearch'
 import { useTickerSuggest, TickerSuggestion } from '@/hooks/useTickerSuggest'
 import { useTreasuryPrice } from '@/hooks/useTreasuryPrice'
 
-// Props mantidas para compatibilidade — onClose ainda pode ser passado diretamente
 interface Props {
   onClose: () => void
 }
@@ -95,22 +94,25 @@ const inputCls = [
 export default function AddTransactionModal({ onClose }: Props) {
   const selectedPortfolioId = useAppStore(s => s.selectedPortfolioId)
   const prefill             = useAppStore(s => s.transactionModal.prefill)
-  const { mutateAsync, isPending } = useCreateTransaction()
+  const { mutateAsync: createAsync, isPending: isCreating } = useCreateTransaction()
+  const { mutateAsync: updateAsync, isPending: isUpdating } = useUpdateTransaction()
+  const isPending = isCreating || isUpdating
 
-  // Determina aba inicial: prefill.tab tem prioridade
+  const isEditMode = !!prefill?.transactionId
+
   const initialTab = prefill?.tab ?? 'acao'
 
   const [activeTab, setActiveTab] = useState(initialTab)
-  const [operation, setOperation] = useState<'buy' | 'sell'>('buy')
+  const [operation, setOperation] = useState<'buy' | 'sell'>(prefill?.operation ?? 'buy')
   const [ticker,    setTicker]    = useState(prefill?.ticker    ?? '')
   const [assetName, setAssetName] = useState(prefill?.assetName ?? '')
-  const [quantity,  setQuantity]  = useState('')
-  const [price,     setPrice]     = useState('')
-  const [fees,      setFees]      = useState('')
-  const [date,      setDate]      = useState(TODAY)
-  const [notes,     setNotes]     = useState('')
+  const [quantity,  setQuantity]  = useState(prefill?.quantity  != null ? String(prefill.quantity)  : '')
+  const [price,     setPrice]     = useState(prefill?.price     != null ? String(prefill.price)     : '')
+  const [fees,      setFees]      = useState(prefill?.fees      != null ? String(prefill.fees)      : '')
+  const [date,      setDate]      = useState(prefill?.date      ?? TODAY)
+  const [notes,     setNotes]     = useState(prefill?.notes     ?? '')
   const [currency,  setCurrency]  = useState(
-    () => TABS.find(t => t.key === initialTab)?.currency ?? 'BRL'
+    prefill?.currency ?? TABS.find(t => t.key === initialTab)?.currency ?? 'BRL'
   )
   const [error,     setError]     = useState<string | null>(null)
   const [success,   setSuccess]   = useState(false)
@@ -122,7 +124,7 @@ export default function AddTransactionModal({ onClose }: Props) {
   const [maturity,   setMaturity]   = useState('')
   const [issuer,     setIssuer]     = useState('')
   const [activeSlug, setActiveSlug] = useState('')
-  const [priceEdited, setPriceEdited] = useState(false)
+  const [priceEdited, setPriceEdited] = useState(isEditMode) // em edicao nao sobrescreve preco
 
   // dropdown states
   const [showTDSuggestions, setShowTDSuggestions] = useState(false)
@@ -134,16 +136,18 @@ export default function AddTransactionModal({ onClose }: Props) {
   const isTesouro      = tab.extraFields === 'tesouro'
   const indexerOptions = isTesouro ? TD_INDEXERS : RF_INDEXERS
 
-  // Titulo do modal muda quando vem com prefill de ticker
-  const modalTitle = prefill?.ticker
-    ? `Adicionar Cotas — ${prefill.ticker}`
-    : 'Novo Lançamento'
+  const modalTitle = isEditMode
+    ? `Editar Lancamento — ${ticker}`
+    : prefill?.ticker
+      ? `Adicionar Cotas — ${prefill.ticker}`
+      : 'Novo Lancamento'
 
-  // ── BRAPI cotacao (renda variavel) ────────────────────────────────────
+  // ── BRAPI cotacao (apenas no modo criacao) ─────────────────────────────
   const { quote, loading: quoteLoading, error: quoteError } =
-    useTickerQuote(ticker, !!tab.brapiEnabled, date)
+    useTickerQuote(ticker, !!tab.brapiEnabled && !isEditMode, date)
 
   useEffect(() => {
+    if (isEditMode) return // nao sobrescreve campos em edicao
     if (!quote) { setPriceFromBrapi(false); return }
     if (quote.price !== null && !price) {
       setPrice(String(quote.price))
@@ -155,6 +159,7 @@ export default function AddTransactionModal({ onClose }: Props) {
 
   const prevDate = useRef(date)
   useEffect(() => {
+    if (isEditMode) return
     if (prevDate.current !== date && tab.brapiEnabled && ticker.length >= 2) {
       setPrice('')
       setPriceFromBrapi(false)
@@ -190,18 +195,18 @@ export default function AddTransactionModal({ onClose }: Props) {
     setPriceEdited(true)
   }
 
-  // ── Tesouro Direto autocomplete ───────────────────────────────────────
-  const { items: tdItems, loading: tdLoading } = useTesouroSearch(ticker, isTesouro)
+  // ── Tesouro Direto autocomplete ─────────────────────────────────────
+  const { items: tdItems, loading: tdLoading } = useTesouroSearch(ticker, isTesouro && !isEditMode)
 
   useEffect(() => {
     if (isTesouro && tdItems.length > 0) setShowTDSuggestions(true)
     else setShowTDSuggestions(false)
   }, [tdItems, isTesouro])
 
-  // ── RV / Cripto / Internacional autocomplete ──────────────────────────
+  // ── RV / Cripto / Internacional autocomplete ─────────────────────────
   const { items: rvItems, loading: rvLoading } = useTickerSuggest(
     ticker,
-    !!tab.brapiSuggestType,
+    !!tab.brapiSuggestType && !isEditMode,
     tab.brapiSuggestType,
   )
 
@@ -210,7 +215,6 @@ export default function AddTransactionModal({ onClose }: Props) {
     else setShowRVSuggestions(false)
   }, [rvItems, tab.brapiSuggestType])
 
-  // fecha dropdowns ao clicar fora
   useEffect(() => {
     function handler(e: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -226,8 +230,8 @@ export default function AddTransactionModal({ onClose }: Props) {
     setTicker(item.name)
     setAssetName(item.name)
     setActiveSlug((item as any).slug || item.ticker)
-    if (item.indexer)      setIndexer(item.indexer)
-    if (item.rate != null) setRate(String(item.rate))
+    if (item.indexer)       setIndexer(item.indexer)
+    if (item.rate != null)  setRate(String(item.rate))
     if (item.maturity_date) setMaturity(item.maturity_date.slice(0, 10))
     setPrice('')
     setPriceFromBrapi(false)
@@ -244,12 +248,10 @@ export default function AddTransactionModal({ onClose }: Props) {
     setShowRVSuggestions(false)
   }
 
-  // ── handlers gerais ───────────────────────────────────────────────────
   function handleTabChange(key: string) {
     const t = TABS.find(t => t.key === key)!
     setActiveTab(key)
     setCurrency(t.currency)
-    // se veio com prefill, preserva o ticker ao trocar de aba
     if (!prefill?.ticker) {
       setTicker(''); setAssetName('')
     }
@@ -288,21 +290,28 @@ export default function AddTransactionModal({ onClose }: Props) {
 
     const finalTicker = isTesouro && activeSlug ? activeSlug : ticker.trim().toUpperCase()
 
+    const payload = {
+      ticker:     finalTicker,
+      asset_type: tab.assetType,
+      operation,
+      quantity:   qty,
+      price:      prc,
+      fees:       fee,
+      date,
+      currency,
+      notes:      enrichedNotes || undefined,
+    }
+
     try {
-      await mutateAsync({
-        portfolioId: selectedPortfolioId,
-        data: {
-          ticker:     finalTicker,
-          asset_type: tab.assetType,
-          operation,
-          quantity:   qty,
-          price:      prc,
-          fees:       fee,
-          date,
-          currency,
-          notes:      enrichedNotes || undefined,
-        },
-      })
+      if (isEditMode && prefill?.transactionId) {
+        await updateAsync({
+          portfolioId: selectedPortfolioId,
+          id:          prefill.transactionId,
+          data:        payload,
+        })
+      } else {
+        await createAsync({ portfolioId: selectedPortfolioId, data: payload })
+      }
       setSuccess(true)
     } catch (err: any) {
       const msg = err?.response?.data?.detail
@@ -363,22 +372,28 @@ export default function AddTransactionModal({ onClose }: Props) {
         {success ? (
           <div className="flex flex-col items-center justify-center gap-4 py-14 px-6">
             <CheckCircle2 size={48} className="text-positive" />
-            <p className="text-sm font-medium text-slate-100">Lancamento registrado com sucesso!</p>
+            <p className="text-sm font-medium text-slate-100">
+              {isEditMode ? 'Lancamento atualizado com sucesso!' : 'Lancamento registrado com sucesso!'}
+            </p>
             <div className="flex gap-3">
-              <button onClick={handleReset} className="px-4 py-1.5 rounded-md text-xs font-medium bg-brand-600 hover:bg-brand-500 text-white transition-colors">Novo Lancamento</button>
-              <button onClick={onClose}    className="px-4 py-1.5 rounded-md text-xs font-medium bg-surface-700 hover:bg-surface-600 text-slate-200 transition-colors">Fechar</button>
+              {!isEditMode && (
+                <button onClick={handleReset} className="px-4 py-1.5 rounded-md text-xs font-medium bg-brand-600 hover:bg-brand-500 text-white transition-colors">Novo Lancamento</button>
+              )}
+              <button onClick={onClose} className="px-4 py-1.5 rounded-md text-xs font-medium bg-surface-700 hover:bg-surface-600 text-slate-200 transition-colors">Fechar</button>
             </div>
           </div>
         ) : (
           <form onSubmit={handleSubmit}>
 
-            {/* ABAS */}
+            {/* ABAS — desabilitadas em modo edicao (nao muda tipo de ativo) */}
             <div className="flex overflow-x-auto px-4 pt-4 pb-2 gap-1 scrollbar-hide">
               {TABS.map(t => (
-                <button key={t.key} type="button" onClick={() => handleTabChange(t.key)}
+                <button key={t.key} type="button"
+                  onClick={() => !isEditMode && handleTabChange(t.key)}
                   className={clsx(
                     'shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors duration-150 whitespace-nowrap',
                     activeTab === t.key ? 'bg-brand-600 text-white' : 'text-slate-400 hover:bg-surface-700 hover:text-slate-200',
+                    isEditMode && activeTab !== t.key && 'opacity-30 cursor-default',
                   )}
                 >
                   {t.icon}{t.label}
@@ -410,9 +425,9 @@ export default function AddTransactionModal({ onClose }: Props) {
                       type="text"
                       value={ticker}
                       onChange={e => {
+                        if (isEditMode) return // nao permite trocar ticker em edicao
                         const v = e.target.value
                         setTicker(v)
-                        // so limpa assetName se nao veio do prefill
                         if (!prefill?.ticker) setAssetName('')
                         setPrice('')
                         setPriceFromBrapi(false)
@@ -420,14 +435,13 @@ export default function AddTransactionModal({ onClose }: Props) {
                         if (isTesouro) setActiveSlug('')
                       }}
                       onFocus={() => {
-                        if (isTesouro && tdItems.length > 0) setShowTDSuggestions(true)
-                        if (tab.brapiSuggestType && rvItems.length > 0) setShowRVSuggestions(true)
+                        if (!isEditMode && isTesouro && tdItems.length > 0) setShowTDSuggestions(true)
+                        if (!isEditMode && tab.brapiSuggestType && rvItems.length > 0) setShowRVSuggestions(true)
                       }}
                       placeholder={tab.tickerPlaceholder}
-                      className={clsx(inputCls, 'pr-7')}
-                      autoFocus
-                      // quando veio de prefill, o ticker ja e conhecido; permite ainda editar
-                      readOnly={false}
+                      className={clsx(inputCls, 'pr-7', isEditMode && 'opacity-60 cursor-default')}
+                      readOnly={isEditMode}
+                      autoFocus={!isEditMode}
                     />
                     {anyLoading && (
                       <span className="absolute right-2 top-1/2 -translate-y-1/2">
@@ -435,7 +449,6 @@ export default function AddTransactionModal({ onClose }: Props) {
                       </span>
                     )}
 
-                    {/* Dropdown unificado */}
                     {showDropdown && dropdownItems.length > 0 && (
                       <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-md border border-surface-600 bg-surface-800 shadow-xl max-h-52 overflow-y-auto">
                         {dropdownItems.map((item, i) => (
@@ -575,7 +588,9 @@ export default function AddTransactionModal({ onClose }: Props) {
             <div className="flex justify-end gap-2.5 px-4 py-3 border-t border-surface-700">
               <button type="button" onClick={onClose} className="px-4 py-1.5 rounded-md text-xs font-medium bg-surface-700 hover:bg-surface-600 text-slate-300 transition-colors">Cancelar</button>
               <button type="submit" disabled={isPending} className="px-4 py-1.5 rounded-md text-xs font-medium bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white transition-colors">
-                {isPending ? 'Salvando...' : 'Salvar Lancamento'}
+                {isPending
+                  ? 'Salvando...'
+                  : isEditMode ? 'Salvar Alteracoes' : 'Salvar Lancamento'}
               </button>
             </div>
           </form>
