@@ -38,10 +38,14 @@ function buildMonthlyData(transactions: Transaction[]): MonthlyPoint[] {
 
     const fees = t.fees ?? 0
     const gross = t.quantity * t.price
-    const value = t.operation === 'buy' ? gross + fees : gross - fees
+    const value = gross + fees
 
-    if (t.operation === 'buy') acc[key].buy += value
-    else acc[key].sell += value
+    if (t.operation === 'buy') {
+      acc[key].buy += value
+    } else if (t.operation === 'sell') {
+      // vendas ficam negativas para ficar abaixo da linha zero
+      acc[key].sell -= value
+    }
   }
 
   return Object.values(acc).sort((a, b) => (a.month < b.month ? -1 : 1))
@@ -50,8 +54,11 @@ function buildMonthlyData(transactions: Transaction[]): MonthlyPoint[] {
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
 
-  const buy = payload.find((p: any) => p.dataKey === 'buy')?.value ?? 0
-  const sell = payload.find((p: any) => p.dataKey === 'sell')?.value ?? 0
+  const rawBuy = payload.find((p: any) => p.dataKey === 'buy')?.value ?? 0
+  const rawSell = payload.find((p: any) => p.dataKey === 'sell')?.value ?? 0
+
+  const buy = Math.max(0, rawBuy)
+  const sell = Math.abs(Math.min(0, rawSell))
 
   return (
     <div
