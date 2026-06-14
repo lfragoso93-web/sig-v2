@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Search, Trash2, Pencil, ChevronDown } from 'lucide-react'
+import { Search, Trash2, Pencil, ChevronDown, BarChart2 } from 'lucide-react'
 import { useAppStore } from '@/store/appStore'
 import {
   useTransactions,
@@ -9,6 +9,7 @@ import {
 } from '@/hooks/useTransactions'
 import { usePortfolios } from '@/hooks/usePortfolios'
 import { formatBRL, formatDate, assetBadgeClass } from '@/utils/format'
+import TransactionsBarChart from '@/components/charts/TransactionsBarChart'
 
 // Mapeia asset_type da API para a aba do AddTransactionModal
 function assetTypeToTab(assetType: string): string {
@@ -28,14 +29,14 @@ function assetTypeToTab(assetType: string): string {
 
 const ASSET_TYPES: { label: string; value: string }[] = [
   { label: 'Todos',               value: '' },
-  { label: 'Acoes',               value: 'ACAO_NACIONAL' },
-  { label: 'FII',                  value: 'FII' },
-  { label: 'ETF Nacional',         value: 'ETF_NACIONAL' },
-  { label: 'ETF Internacional',    value: 'ETF_INTERNACIONAL' },
-  { label: 'Tesouro Direto',       value: 'TESOURO_DIRETO' },
-  { label: 'Stock',                value: 'STOCK' },
-  { label: 'Criptomoeda',          value: 'CRIPTO' },
-  { label: 'Renda Fixa',           value: 'RENDA_FIXA' },
+  { label: 'Ações',               value: 'ACAO_NACIONAL' },
+  { label: 'FII',                 value: 'FII' },
+  { label: 'ETF Nacional',        value: 'ETF_NACIONAL' },
+  { label: 'ETF Internacional',   value: 'ETF_INTERNACIONAL' },
+  { label: 'Tesouro Direto',      value: 'TESOURO_DIRETO' },
+  { label: 'Stock',               value: 'STOCK' },
+  { label: 'Criptomoeda',         value: 'CRIPTO' },
+  { label: 'Renda Fixa',          value: 'RENDA_FIXA' },
 ]
 
 const ASSET_TYPE_LABEL: Record<string, string> = {
@@ -79,14 +80,14 @@ function TransactionCard({
           <button onClick={onEdit}
             className="p-1.5 rounded transition-colors flex items-center justify-center"
             style={{ color: 'var(--color-text-muted)', minWidth: 32, minHeight: 32 }}
-            aria-label="Editar transacao"
+            aria-label="Editar transação"
           >
             <Pencil size={13} />
           </button>
           <button onClick={onDelete}
             className="p-1.5 rounded transition-colors flex items-center justify-center"
             style={{ color: 'var(--color-text-faint)', minWidth: 32, minHeight: 32 }}
-            aria-label="Excluir transacao"
+            aria-label="Excluir transação"
           >
             <Trash2 size={13} />
           </button>
@@ -302,6 +303,21 @@ export default function Transacoes() {
         </div>
       </div>
 
+      {/* Gráfico de Consolidação de aportes */}
+      <div className="card p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <BarChart2 size={16} className="text-brand-400" />
+            <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+              Consolidação de aportes
+            </span>
+          </div>
+        </div>
+        <div className="h-56">
+          <TransactionsBarChart transactions={transactions} />
+        </div>
+      </div>
+
       {/* Filtros */}
       <div className="flex flex-wrap gap-2">
         <div className="relative">
@@ -346,7 +362,7 @@ export default function Transacoes() {
         </div>
       </div>
 
-      {/* Conteudo */}
+      {/* Conteúdo */}
       <div className="rounded-xl overflow-hidden" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
         {isLoading ? (
           <div className="p-4 flex flex-col gap-3">
