@@ -43,7 +43,7 @@ function buildMonthlyData(transactions: Transaction[]): MonthlyPoint[] {
     if (t.operation === 'buy') {
       acc[key].buy += value
     } else if (t.operation === 'sell') {
-      // vendas ficam negativas para ficar abaixo da linha zero
+      // vendas negativas para aparecerem abaixo da linha zero
       acc[key].sell -= value
     }
   }
@@ -118,19 +118,20 @@ export default function TransactionsBarChart({ transactions }: Props) {
         />
         <ReferenceLine y={0} stroke="var(--color-divider)" />
 
-        <Bar
-          dataKey="buy"
-          name="Compras"
-          stackId="flows"
-          fill="var(--color-success)"
-          radius={[4, 4, 0, 0]}
-        />
+        {/* Renderiza vendas primeiro para que compras fiquem visíveis acima da linha */}
         <Bar
           dataKey="sell"
           name="Vendas"
           stackId="flows"
           fill="var(--color-notification)"
           radius={[0, 0, 4, 4]}
+        />
+        <Bar
+          dataKey="buy"
+          name="Compras"
+          stackId="flows"
+          fill="var(--color-success)"
+          radius={[4, 4, 0, 0]}
         />
       </BarChart>
     </ResponsiveContainer>
