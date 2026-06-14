@@ -124,6 +124,8 @@ function PositionCard({ item }: PositionCardProps) {
   const hasQuote = item.variation_value !== 0 || item.current_price !== item.average_price
   const varColor = item.variation_value >= 0 ? 'var(--color-success)' : 'var(--color-error)'
 
+  const investedValue = item.invested_value ?? item.quantity * item.average_price
+
   return (
     <div
       className="rounded-xl p-3 flex flex-col gap-2"
@@ -160,6 +162,10 @@ function PositionCard({ item }: PositionCardProps) {
         <div>
           <div className="text-[10px]" style={cellFaint}>Preço Médio</div>
           <div className="font-medium tabular-nums" style={cellText}>{formatBRL(item.average_price)}</div>
+        </div>
+        <div>
+          <div className="text-[10px]" style={cellFaint}>Valor Investido</div>
+          <div className="font-medium tabular-nums" style={cellText}>{formatBRL(investedValue)}</div>
         </div>
         <div>
           <div className="text-[10px]" style={cellFaint}>Valor Atual</div>
@@ -273,6 +279,9 @@ export default function PositionTable({ groups }: Props) {
                   const name      = displayName(item.ticker, item.asset_type)
                   const isTesouro = item.asset_type.toUpperCase() === 'TESOURO_DIRETO' || item.asset_type.toUpperCase() === 'TESOURO'
                   const varColor  = item.variation_value >= 0 ? 'var(--color-success)' : 'var(--color-error)'
+
+                  const investedValue = item.invested_value ?? item.quantity * item.average_price
+
                   return (
                     <tr key={`${item.ticker}-${item.asset_type}-${item.id}`} className={rowHover}
                       style={{ borderBottom: '1px solid var(--color-divider)' }}>
@@ -296,7 +305,7 @@ export default function PositionTable({ groups }: Props) {
                       <td className="text-right px-4 py-2 tabular-nums">
                         <span style={hasQuote ? cellText : cellFaint}>{fmtPrice(item.current_price)}</span>
                       </td>
-                      <td className="text-right px-4 py-2 tabular-nums" style={cellText}>{formatBRL(item.current_value)}</td>
+                      <td className="text-right px-4 py-2 tabular-nums" style={cellText}>{formatBRL(investedValue)}</td>
                       <td className="text-right px-4 py-2 tabular-nums" style={cellText}>{formatBRL(item.current_value)}</td>
                       <td className="text-right px-4 py-2 tabular-nums">
                         {hasQuote ? (
