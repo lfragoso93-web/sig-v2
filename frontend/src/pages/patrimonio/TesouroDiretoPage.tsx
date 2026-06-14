@@ -91,12 +91,6 @@ export default function TesouroDiretoPage() {
     <div className="p-4 md:p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-bold text-gray-800 dark:text-white">Tesouro Direto</h1>
-        <button
-          onClick={() => openTransactionModal({ tab: 'tesouro' })}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-        >
-          + Novo Lançamento
-        </button>
       </div>
 
       {actionError && (
@@ -119,8 +113,7 @@ export default function TesouroDiretoPage() {
         <div className="flex flex-col items-center justify-center h-48 text-gray-400">
           <p>Nenhum investimento em Tesouro Direto cadastrado.</p>
           <p className="text-sm mt-1">
-            Clique em <strong>+ Novo Lançamento</strong> para adicionar.
-          </p>
+            Utilize o botão <strong>+ Novo Lançamento</strong> do topo da aplicação para adicionar.</p>
         </div>
       )}
 
