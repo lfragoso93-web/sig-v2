@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Plus, Search, Trash2, Pencil } from 'lucide-react'
+import { Search, Trash2, Pencil } from 'lucide-react'
 import { useAppStore } from '@/store/appStore'
 import {
   useTransactions,
@@ -262,12 +262,6 @@ export default function Transacoes() {
             )}
           </p>
         </div>
-        <button
-          className="hidden md:flex btn btn-primary items-center gap-1.5 text-sm"
-          onClick={() => openTransactionModal()}
-        >
-          <Plus size={15} /> Nova transacao
-        </button>
       </div>
 
       {/* Filtros */}
