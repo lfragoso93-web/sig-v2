@@ -8,7 +8,7 @@ from app.core.deps import get_current_user
 from app.models.user import User
 from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction
-from app.schemas.transaction import TransactionCreate, TransactionOut
+from app.schemas.transaction import TransactionCreate, TransactionOut, TransactionUpdate
 from app.services.dividend_backfill_service import backfill_dividends
 
 router = APIRouter()
@@ -78,6 +78,55 @@ async def create_transaction(
     # ─ Backfill de proventos em background — transparente ao usuário
     # Uma nova sessão é criada dentro do backfill para não reusar a sessão
     # já fechada pelo commit acima.
+    background_tasks.add_task(
+        _run_backfill,
+        portfolio_id = portfolio_id,
+        ticker       = ticker,
+        asset_type   = str(asset_type),
+    )
+
+    return tx
+
+
+@router.patch(
+    "/{portfolio_id}/transactions/{transaction_id}",
+    response_model=TransactionOut,
+)
+async def update_transaction(
+    portfolio_id: int,
+    transaction_id: int,
+    payload: TransactionUpdate,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await _get_portfolio(portfolio_id, current_user, db)
+
+    result = await db.execute(
+        select(Transaction).where(
+            Transaction.id == transaction_id,
+            Transaction.portfolio_id == portfolio_id,
+        )
+    )
+    tx = result.scalar_one_or_none()
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transação não encontrada.")
+
+    data = payload.model_dump(exclude_unset=True)
+
+    # Se alterar o ticker ou asset_type, usamos os novos valores no backfill
+    ticker     = data.get("ticker", tx.ticker).upper()
+    asset_type = data.get("asset_type", tx.asset_type)
+
+    for field, value in data.items():
+        if field == "ticker" and value is not None:
+            setattr(tx, field, value.upper())
+        elif value is not None:
+            setattr(tx, field, value)
+
+    await db.commit()
+    await db.refresh(tx)
+
     background_tasks.add_task(
         _run_backfill,
         portfolio_id = portfolio_id,
