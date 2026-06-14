@@ -62,7 +62,7 @@ export function useUpdateTransaction() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ portfolioId, id, data }: { portfolioId: number; id: number; data: TransactionUpdate }) =>
-      api.put<Transaction>(`/portfolios/${portfolioId}/transactions/${id}`, data).then(r => r.data),
+      api.patch<Transaction>(`/portfolios/${portfolioId}/transactions/${id}`, data).then(r => r.data),
     onSuccess: (_d, v) => invalidatePortfolioKeys(qc, v.portfolioId),
   })
 }
