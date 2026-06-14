@@ -95,7 +95,7 @@ async def create_transaction(
 async def update_transaction(
     portfolio_id: int,
     transaction_id: int,
-    payload: TransactionUpdate,
+    payload: TransactionCreate,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -112,17 +112,18 @@ async def update_transaction(
     if not tx:
         raise HTTPException(status_code=404, detail="Transação não encontrada.")
 
-    data = payload.model_dump(exclude_unset=True)
+    ticker     = payload.ticker.upper()
+    asset_type = payload.asset_type
 
-    # Se alterar o ticker ou asset_type, usamos os novos valores no backfill
-    ticker     = data.get("ticker", tx.ticker).upper()
-    asset_type = data.get("asset_type", tx.asset_type)
-
-    for field, value in data.items():
-        if field == "ticker" and value is not None:
-            setattr(tx, field, value.upper())
-        elif value is not None:
-            setattr(tx, field, value)
+    tx.ticker     = ticker
+    tx.asset_type = asset_type
+    tx.operation  = payload.operation
+    tx.quantity   = payload.quantity
+    tx.price      = payload.price
+    tx.fees       = payload.fees or 0.0
+    tx.date       = payload.date
+    tx.currency   = getattr(payload, "currency", "BRL") or "BRL"
+    tx.notes      = payload.notes
 
     await db.commit()
     await db.refresh(tx)
