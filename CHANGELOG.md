@@ -5,7 +5,61 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
-## [Unreleased] - 2026-06-14
+## [Unreleased] - Sprint 2 - 2026-06-15
+
+### Refatoracao (Refactor)
+
+#### transaction_service.py — Alinhamento com modelo atual
+- **Problema:** O servico usava campos legados (`asset_id`, `TransactionType`, `price_brl`, `transaction_date`) incompativeis com o modelo atual de `Transaction`.
+- **Solucao aplicada:** Servico completamente reescrito para usar o modelo atual:
+  - `ticker` (string direta, sem join em tabela `Asset`)
+  - `operation` (`OperationType.buy` / `OperationType.sell`)
+  - `date` (campo renomeado de `transaction_date`)
+  - `price` (preco unico em BRL; campo `price_brl` removido)
+  - Nenhum import de `Asset`, `TransactionType` ou `price_brl`
+- **Funcoes adicionadas:**
+  - `_calc_current_quantity(db, portfolio_id, ticker)` — calcula posicao atual em carteira para validacao de venda
+  - `get_transaction(db, tx_id, user_id)` — busca transacao individual por ID
+  - `update_transaction(db, tx_id, user_id, data)` — edicao de transacao existente
+- **Commit:** `c1434e56` — refactor(sprint2): alinhar transaction_service com modelo atual
+- **Status:** Concluido.
+
+#### Validacao de venda em create_transaction
+- **Problema:** Era possivel registrar uma venda com quantidade maior do que a posicao atual na carteira, sem qualquer aviso ou bloqueio.
+- **Solucao aplicada:** `create_transaction` agora verifica `_calc_current_quantity` antes de inserir. Se `data.quantity > current_qty`, retorna HTTP 400 com mensagem clara indicando posicao disponivel e quantidade tentada.
+- **Commit:** `c1434e56` — refactor(sprint2): alinhar transaction_service com modelo atual
+- **Status:** Concluido.
+
+---
+
+### Testes (Tests)
+
+#### test_transaction_service.py — Reescrita completa
+- **Problema:** Os testes importavam `TransactionType` (inexistente no modelo atual) e nao cobriam o novo helper `_calc_current_quantity`.
+- **Solucao aplicada:** Arquivo reescrito integralmente:
+  - Todos os mocks usam `OperationType.buy` / `OperationType.sell`
+  - Removida dependencia de `price_brl` — mocks usam apenas `price`
+  - Adicionada classe `TestCalcCurrentQuantity` com 5 cenarios: compras puras, venda parcial, venda total, sem transacoes, venda maior que estoque
+  - Adicionado teste `test_multiplas_compras_e_vendas` para validar PM apos ciclo compra-venda-compra
+- **Commit:** `18fbf392` — test(sprint2): reescrever testes de transaction_service com modelo atual
+- **Status:** Concluido.
+
+---
+
+### Arquivos modificados nesta sessao (Sprint 2)
+
+| Arquivo | Tipo de alteracao | Commit |
+|---|---|---|
+| `backend/app/services/transaction_service.py` | Refatoracao completa para modelo atual | `c1434e56` |
+| `backend/tests/test_transaction_service.py` | Reescrita dos testes | `18fbf392` |
+
+---
+
+### Todos os itens da Sprint 2 (sessao 15/06/2026) foram concluidos. Nenhuma pendencia em aberto.
+
+---
+
+## [Sessao anterior] - 2026-06-14
 
 ### Correcoes de bugs (Bug Fixes)
 
@@ -74,13 +128,9 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
-### Arquivos modificados nesta sessao
+### Arquivos modificados em 14/06/2026
 
 | Arquivo | Tipo de alteracao | Commit |
 |---|---|---|
 | `frontend/src/components/layout/Sidebar.tsx` | Remocao de subpaginas e submenu de Patrimonio | `408fa59` |
 | `frontend/src/pages/Transacoes.tsx` | Remocao do seletor de classes + correcao do bug de busca por grupo | `5602fae` |
-
----
-
-### Todos os itens da sessao de 14/06/2026 foram concluidos. Nenhuma pendencia em aberto.
