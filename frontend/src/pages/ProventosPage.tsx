@@ -1,65 +1,81 @@
 import { useState } from 'react'
-import clsx from 'clsx'
-import { TrendingUp, Target, Wallet, DollarSign } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 import { usePortfolioList } from '@/hooks/usePortfolio'
 import {
   useProventosSummary,
-  useProventosDistribution,
-  useProventosEvolucao,
+  useProventosDistribuicao,
   useProventosHistoricoMensal,
   useProventosList,
+  useSyncProventos,
 } from '@/hooks/useProventos'
-import { formatBRL, formatPercent } from '@/utils/format'
-import ProventosBarChart from '@/components/charts/ProventosBarChart'
+import { formatBRL } from '@/utils/format'
 import ProventosDonutChart from '@/components/charts/ProventosDonutChart'
 import ProventosHistoricoTable from '@/components/proventos/ProventosHistoricoTable'
 import MeusProventosTable from '@/components/proventos/MeusProventosTable'
-import EmptyState from '@/components/ui/EmptyState'
-
-const PERIOD_OPTIONS = [
-  { label: 'Últimos 12 meses', value: '12m' },
-  { label: 'Últimos 24 meses', value: '24m' },
-  { label: 'Este ano',         value: 'ytd' },
-  { label: 'Desde o início',   value: 'all' },
-]
 
 const ASSET_TYPE_OPTIONS = [
-  { label: 'Todos os tipos',       value: ''              },
-  { label: 'Ações',               value: 'ACAO_NACIONAL'  },
-  { label: 'FIIs',                 value: 'FII'           },
-  { label: 'ETFs Nacionais',       value: 'ETF_NACIONAL'  },
-  { label: 'Tesouro Direto',       value: 'TESOURO_DIRETO'},
-  { label: 'Stocks',               value: 'STOCK'         },
+  { label: 'Todos os tipos',       value: ''                  },
+  { label: 'Ações',               value: 'ACAO'               },
+  { label: 'FIIs',                 value: 'FII'               },
+  { label: 'ETFs Nacionais',       value: 'ETF_NACIONAL'      },
+  { label: 'Stocks',               value: 'STOCK'             },
   { label: 'ETFs Internacionais',  value: 'ETF_INTERNACIONAL' },
-  { label: 'Criptomoedas',         value: 'CRIPTO'        },
-  { label: 'Renda Fixa',           value: 'RENDA_FIXA'    },
 ]
 
-const YEARS = [new Date().getFullYear(), new Date().getFullYear() - 1, new Date().getFullYear() - 2]
+const YEARS = [
+  new Date().getFullYear(),
+  new Date().getFullYear() - 1,
+  new Date().getFullYear() - 2,
+]
 
 export default function ProventosPage() {
   const { data: portfolios } = usePortfolioList()
   const [selectedPortfolio, setSelectedPortfolio] = useState<number | null>(null)
   const portfolioId = selectedPortfolio ?? (portfolios?.[0]?.id ?? 0)
 
-  const [tipoGrafico,    setTipoGrafico]    = useState<'mensal' | 'anual'>('mensal')
-  const [period,         setPeriod]         = useState('12m')
-  const [assetTypeFilter,setAssetTypeFilter] = useState('')
-  const [statusFilter,   setStatusFilter]   = useState('')
-  const [yearFilter,     setYearFilter]     = useState<number | undefined>(undefined)
+  const [assetTypeFilter, setAssetTypeFilter] = useState('')
+  const [statusFilter,    setStatusFilter]    = useState('')  // '' | 'RECEBIDO' | 'A_RECEBER'
+  const [yearFilter,      setYearFilter]      = useState<number | undefined>(undefined)
 
   const { data: summary }      = useProventosSummary(portfolioId)
-  const { data: distribution } = useProventosDistribution(portfolioId)
-  const { data: evolucao,  isLoading: loadingEvolucao  } = useProventosEvolucao(portfolioId, tipoGrafico, period)
-  const { data: historico, isLoading: loadingHistorico } = useProventosHistoricoMensal(portfolioId, statusFilter, assetTypeFilter)
-  const { data: lista,     isLoading: loadingLista     } = useProventosList(portfolioId, yearFilter, statusFilter || undefined, assetTypeFilter || undefined)
+  const { data: distribuicao } = useProventosDistribuicao(portfolioId)
+  const { data: historico,  isLoading: loadingHistorico } = useProventosHistoricoMensal(
+    portfolioId,
+    statusFilter  || undefined,
+    assetTypeFilter || undefined,
+  )
+  const { data: lista, isLoading: loadingLista } = useProventosList(portfolioId, {
+    status:     statusFilter    || undefined,
+    year:       yearFilter,
+    asset_type: assetTypeFilter || undefined,
+    page_size:  100,
+  })
+
+  const sync = useSyncProventos(portfolioId || null)
 
   return (
     <div className="p-4 md:p-6 flex flex-col gap-5 max-w-[1400px] mx-auto">
 
+      {/* Cabecalho: titulo + botao sync */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <h1 className="text-base font-bold" style={{ color: 'var(--color-text)' }}>Proventos</h1>
+        <button
+          onClick={() => sync.mutate()}
+          disabled={sync.isPending || !portfolioId}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+          style={{
+            background: 'oklch(from var(--color-primary) l c h / 0.12)',
+            color: 'var(--color-primary)',
+          }}
+        >
+          <RefreshCw size={12} className={sync.isPending ? 'animate-spin' : ''} />
+          {sync.isPending ? 'Sincronizando…' : 'Sincronizar proventos'}
+        </button>
+      </div>
+
       {/* Seletor de carteira */}
       {(portfolios?.length ?? 0) > 1 && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Carteira:</span>
           {portfolios!.map(p => (
             <button
@@ -67,7 +83,9 @@ export default function ProventosPage() {
               onClick={() => setSelectedPortfolio(p.id)}
               className="px-3 py-1 rounded text-xs font-medium transition-colors"
               style={{
-                background: portfolioId === p.id ? 'oklch(from var(--color-primary) l c h / 0.15)' : 'var(--color-surface-offset)',
+                background: portfolioId === p.id
+                  ? 'oklch(from var(--color-primary) l c h / 0.15)'
+                  : 'var(--color-surface-offset)',
                 color: portfolioId === p.id ? 'var(--color-primary)' : 'var(--color-text-muted)',
               }}
             >
@@ -83,117 +101,119 @@ export default function ProventosPage() {
         {/* Painel esquerdo: KPIs + Donut */}
         <div className="flex flex-col gap-4">
           <div className="card p-4 flex flex-col gap-3">
-            {/* KPI: Total recebido */}
+
             <div>
               <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Total recebido</span>
               <div className="text-lg font-bold tabular-nums" style={{ color: 'var(--color-text)' }}>
                 {formatBRL(summary?.total_recebido ?? 0)}
               </div>
             </div>
+
             <div style={{ borderTop: '1px solid var(--color-divider)' }} />
-            {/* KPI: Média mensal */}
+
+            <div>
+              <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>A receber</span>
+              <div className="text-base font-bold tabular-nums" style={{ color: 'var(--color-primary)' }}>
+                {formatBRL(summary?.total_a_receber ?? 0)}
+              </div>
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--color-divider)' }} />
+
+            <div>
+              <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Últimos 12 meses</span>
+              <div className="text-base font-bold tabular-nums" style={{ color: 'var(--color-text)' }}>
+                {formatBRL(summary?.total_12m ?? 0)}
+              </div>
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--color-divider)' }} />
+
             <div>
               <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Média mensal (12m)</span>
               <div className="text-base font-bold tabular-nums" style={{ color: 'var(--color-text)' }}>
                 {formatBRL(summary?.media_mensal_12m ?? 0)}
               </div>
             </div>
-            <div style={{ borderTop: '1px solid var(--color-divider)' }} />
-            {/* KPI: Yield on Cost */}
-            <div>
-              <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Yield on Cost</span>
-              <div className="text-base font-bold tabular-nums" style={{ color: 'var(--color-primary)' }}>
-                {formatPercent(summary?.yield_on_cost ?? 0)}
-              </div>
-            </div>
           </div>
 
-          {/* Donut por tipo */}
-          {distribution && distribution.length > 0 ? (
+          {/* Donut por ativo */}
+          {(distribuicao?.length ?? 0) > 0 && (
             <div className="card p-4">
-              <p className="text-xs font-semibold mb-3">Por tipo de ativo</p>
-              <ProventosDonutChart data={distribution} />
+              <p className="text-xs font-semibold mb-3" style={{ color: 'var(--color-text)' }}>
+                Por ativo (12m)
+              </p>
+              <ProventosDonutChart data={distribuicao!} />
             </div>
-          ) : null}
+          )}
         </div>
 
-        {/* Conteúdo principal: gráficos + tabelas */}
+        {/* Conteudo principal */}
         <div className="lg:col-span-3 flex flex-col gap-5">
 
-          {/* Controles de período + tipo */}
+          {/* Filtros globais */}
           <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={period}
-              onChange={e => setPeriod(e.target.value)}
-              className="input text-xs"
+
+            {/* Filtro status: Todos / Recebidos / A Receber */}
+            <div
+              className="flex items-center gap-1 p-1 rounded-lg"
+              style={{ background: 'var(--color-surface-offset)' }}
             >
-              {PERIOD_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
+              {[{ label: 'Todos', value: '' }, { label: 'Recebidos', value: 'RECEBIDO' }, { label: 'A Receber', value: 'A_RECEBER' }].map(o => (
+                <button
+                  key={o.value}
+                  onClick={() => setStatusFilter(o.value)}
+                  className="px-3 py-1 rounded text-xs font-medium transition-colors"
+                  style={{
+                    background: statusFilter === o.value
+                      ? 'oklch(from var(--color-primary) l c h / 0.15)'
+                      : 'transparent',
+                    color: statusFilter === o.value ? 'var(--color-primary)' : 'var(--color-text-muted)',
+                  }}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Filtro tipo de ativo */}
             <select
               value={assetTypeFilter}
               onChange={e => setAssetTypeFilter(e.target.value)}
               className="input text-xs"
             >
-              {ASSET_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-            {/* Toggle mensal/anual */}
-            <div
-              className="flex items-center gap-1 p-1 rounded-lg"
-              style={{ background: 'var(--color-surface-offset)' }}
-            >
-              {(['mensal', 'anual'] as const).map(v => (
-                <button
-                  key={v}
-                  onClick={() => setTipoGrafico(v)}
-                  className="px-3 py-1 rounded text-xs font-medium transition-colors capitalize"
-                  style={{
-                    background: tipoGrafico === v ? 'oklch(from var(--color-primary) l c h / 0.15)' : 'transparent',
-                    color: tipoGrafico === v ? 'var(--color-primary)' : 'var(--color-text-muted)',
-                  }}
-                >
-                  {v}
-                </button>
+              {ASSET_TYPE_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
               ))}
-            </div>
+            </select>
           </div>
 
-          {/* Gráfico de evolução */}
+          {/* Historico mensal */}
           <div className="card p-4">
-            <p className="text-xs font-semibold mb-3">Evolução de proventos</p>
-            {loadingEvolucao ? (
-              <div className="h-48 skeleton rounded-lg" />
-            ) : evolucao && evolucao.length > 0 ? (
-              <ProventosBarChart data={evolucao} />
-            ) : (
-              <div className="h-48 flex items-center justify-center text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                Sem dados para o período selecionado.
-              </div>
-            )}
-          </div>
-
-          {/* Histórico mensal */}
-          <div className="card p-4">
-            <p className="text-xs font-semibold mb-3">Histórico mensal</p>
+            <p className="text-xs font-semibold mb-3" style={{ color: 'var(--color-text)' }}>Histórico mensal</p>
             {loadingHistorico ? (
               <div className="flex flex-col gap-2">
-                {[...Array(6)].map((_, i) => <div key={i} className="h-8 skeleton rounded" />)}
+                {[...Array(4)].map((_, i) => <div key={i} className="h-8 skeleton rounded" />)}
               </div>
             ) : (
               <ProventosHistoricoTable data={historico ?? []} />
             )}
           </div>
 
-          {/* Meus proventos (lista detalhada) */}
+          {/* Lista de proventos */}
           <div className="card p-4">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-semibold">Meus proventos</p>
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Meus proventos</p>
+
               {/* Filtro por ano */}
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => setYearFilter(undefined)}
                   className="px-2 py-0.5 rounded text-xs font-medium transition-colors"
                   style={{
-                    background: yearFilter === undefined ? 'oklch(from var(--color-primary) l c h / 0.15)' : 'transparent',
+                    background: yearFilter === undefined
+                      ? 'oklch(from var(--color-primary) l c h / 0.15)'
+                      : 'transparent',
                     color: yearFilter === undefined ? 'var(--color-primary)' : 'var(--color-text-muted)',
                   }}
                 >
@@ -205,7 +225,9 @@ export default function ProventosPage() {
                     onClick={() => setYearFilter(y)}
                     className="px-2 py-0.5 rounded text-xs font-medium transition-colors"
                     style={{
-                      background: yearFilter === y ? 'oklch(from var(--color-primary) l c h / 0.15)' : 'transparent',
+                      background: yearFilter === y
+                        ? 'oklch(from var(--color-primary) l c h / 0.15)'
+                        : 'transparent',
                       color: yearFilter === y ? 'var(--color-primary)' : 'var(--color-text-muted)',
                     }}
                   >
@@ -214,14 +236,23 @@ export default function ProventosPage() {
                 ))}
               </div>
             </div>
+
             {loadingLista ? (
               <div className="flex flex-col gap-2">
-                {[...Array(4)].map((_, i) => <div key={i} className="h-10 skeleton rounded" />)}
+                {[...Array(5)].map((_, i) => <div key={i} className="h-10 skeleton rounded" />)}
               </div>
             ) : (
-              <MeusProventosTable data={lista ?? []} />
+              <MeusProventosTable data={lista?.items ?? []} />
+            )}
+
+            {/* Rodape: total de registros */}
+            {(lista?.total ?? 0) > 0 && (
+              <p className="text-[10px] mt-3 text-right" style={{ color: 'var(--color-text-faint)' }}>
+                {lista!.total} provento{lista!.total !== 1 ? 's' : ''}
+              </p>
             )}
           </div>
+
         </div>
       </div>
     </div>
