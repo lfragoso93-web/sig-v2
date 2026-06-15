@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { usePortfolioSummary } from '@/hooks/usePortfolio'
+import { usePortfolioSummary, usePortfolioList } from '@/hooks/usePortfolio'
+import type { PortfolioListItem } from '@/hooks/usePortfolio'
 import { useAppStore } from '@/store/appStore'
-import { usePortfolioList } from '@/hooks/usePortfolio'
 import { formatBRL, formatPercent } from '@/utils/format'
 import KpiCard from '@/components/ui/KpiCard'
 
@@ -16,12 +16,12 @@ const PERIODS: { label: string; value: Period }[] = [
 
 export default function RentabilidadePage() {
   const { selectedPortfolioId } = useAppStore()
-  const { data: portfolios = [] } = usePortfolioList()
+  const { data: portfolios = [] as PortfolioListItem[] } = usePortfolioList()
   const [period, setPeriod] = useState<Period>('12m')
 
   const { data: summary, isLoading } = usePortfolioSummary(selectedPortfolioId)
 
-  const portfolioName = portfolios.find(p => p.id === selectedPortfolioId)?.name ?? 'Carteira'
+  const portfolioName = portfolios.find((p: PortfolioListItem) => p.id === selectedPortfolioId)?.name ?? 'Carteira'
 
   if (!selectedPortfolioId) {
     return (
@@ -39,7 +39,7 @@ export default function RentabilidadePage() {
       </div>
 
       <div className="flex items-center gap-1 p-1 rounded-lg self-start" style={{ background: 'var(--color-surface-offset)' }}>
-        {PERIODS.map(p => (
+        {PERIODS.map((p: { label: string; value: Period }) => (
           <button key={p.value} onClick={() => setPeriod(p.value)}
             className="px-3 py-1 rounded text-xs font-medium transition-colors"
             style={{
@@ -58,10 +58,10 @@ export default function RentabilidadePage() {
         </div>
       ) : summary ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <KpiCard label="Total investido" value={formatBRL(summary.total_investido ?? 0)} subLabel="Capital aportado" />
-          <KpiCard label="Patrimônio atual" value={formatBRL(summary.total_patrimonio ?? 0)} subLabel={`${formatBRL(summary.lucro_total ?? 0)} de resultado`} change={summary.variacao_percentual} />
-          <KpiCard label="Rentabilidade" value={formatPercent(summary.rentabilidade_total ?? 0)} subLabel={summary.rentabilidade_total >= 0 ? 'Ganho acumulado' : 'Perda acumulada'} change={summary.rentabilidade_total} />
-          <KpiCard label="Resultado" value={formatBRL(summary.variacao_valor ?? 0)} subLabel={formatPercent(summary.variacao_percentual ?? 0)} change={summary.variacao_percentual} />
+          <KpiCard label="Total investido"  value={formatBRL(summary.total_invested  ?? 0)} subLabel="Capital aportado" />
+          <KpiCard label="Patrimônio atual" value={formatBRL(summary.current_value   ?? 0)} subLabel={`${formatBRL(summary.total_gain ?? 0)} de resultado`} change={summary.total_gain_pct} />
+          <KpiCard label="Rentabilidade"    value={formatPercent(summary.total_gain_pct ?? 0)} subLabel={summary.total_gain_pct >= 0 ? 'Ganho acumulado' : 'Perda acumulada'} change={summary.total_gain_pct} />
+          <KpiCard label="Resultado"        value={formatBRL(summary.total_gain ?? 0)} subLabel={formatPercent(summary.total_gain_pct ?? 0)} change={summary.total_gain_pct} />
         </div>
       ) : (
         <div className="py-12 text-center text-xs" style={{ color: 'var(--color-text-muted)' }}>Nenhum dado. Adicione lançamentos para ver a rentabilidade.</div>
