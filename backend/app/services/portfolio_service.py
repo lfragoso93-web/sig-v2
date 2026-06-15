@@ -1,14 +1,178 @@
 import logging
+from datetime import date as DateType
+from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from fastapi import HTTPException
 from app.models.portfolio import Portfolio
-from app.models.transaction import Transaction
+from app.models.transaction import Transaction, OperationType
+from app.models.dividend import Dividend
 from app.schemas.portfolio import PortfolioCreate, PortfolioUpdate
 from app.services.quotes_service import get_current_price
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Mapa de normalizacao de tipos de ativo
+# ---------------------------------------------------------------------------
+_TYPE_MAP: dict[str, str] = {
+    "ACAO": "ACAO_NACIONAL",
+    "ACOES": "ACAO_NACIONAL",
+    "ETF_INT": "ETF_INTERNACIONAL",
+    "ETF_INTERNACIONAL": "ETF_INTERNACIONAL",
+    "TESOURO": "TESOURO_DIRETO",
+    "TESOURO_DIRETO": "TESOURO_DIRETO",
+    "STOCK": "STOCK",
+    "STOCKS": "STOCK",
+    "CRIPTO": "CRIPTO",
+    "CRIPTOMOEDA": "CRIPTO",
+    "FII": "FII",
+    "BDR": "BDR",
+    "RENDA_FIXA": "RENDA_FIXA",
+    "ETF_NACIONAL": "ETF_NACIONAL",
+}
+
+
+def normalize_type(asset_type: str | None) -> str:
+    """Normaliza string de tipo de ativo para o padrao interno."""
+    if not asset_type:
+        return ""
+    return _TYPE_MAP.get(asset_type.upper(), asset_type.upper())
+
+
+# ---------------------------------------------------------------------------
+# calc_raw_positions — PM ponderado, venda nao altera PM
+# ---------------------------------------------------------------------------
+
+async def calc_raw_positions(
+    db: AsyncSession,
+    portfolio_id: int,
+) -> list[dict]:
+    """
+    Calcula posicoes brutas a partir das transacoes.
+    - PM calculado apenas nas compras (fees incluidas no custo)
+    - Vendas reduzem quantidade e custo proporcional, sem alterar PM
+    - Posicoes zeradas sao excluidas
+    """
+    result = await db.execute(
+        select(Transaction)
+        .where(Transaction.portfolio_id == portfolio_id)
+        .order_by(Transaction.date)
+    )
+    transactions = result.scalars().all()
+
+    # state: ticker -> {quantity, total_cost, asset_type}
+    state: dict[str, dict] = {}
+
+    for tx in transactions:
+        ticker = str(tx.ticker)
+        qty = float(tx.quantity or 0)
+        price = float(tx.price or 0)
+        fees = float(tx.fees or 0)
+        op = tx.operation
+        asset_type = normalize_type(str(tx.asset_type or ""))
+
+        if ticker not in state:
+            state[ticker] = {"quantity": 0.0, "total_cost": 0.0, "asset_type": asset_type}
+
+        s = state[ticker]
+
+        if op == OperationType.buy or (hasattr(op, 'value') and op.value == 'buy') or str(op).lower() in ('buy', 'compra'):
+            cost = qty * price + fees
+            s["total_cost"] += cost
+            s["quantity"] += qty
+        elif op == OperationType.sell or (hasattr(op, 'value') and op.value == 'sell') or str(op).lower() in ('sell', 'venda'):
+            if s["quantity"] > 0:
+                # PM invariante: reduz custo proporcional
+                ratio = min(qty, s["quantity"]) / s["quantity"]
+                s["total_cost"] -= s["total_cost"] * ratio
+                s["quantity"] = max(0.0, s["quantity"] - qty)
+
+    positions = []
+    for ticker, s in state.items():
+        qty = s["quantity"]
+        if qty <= 1e-9:
+            continue
+        avg = s["total_cost"] / qty if qty else 0.0
+        positions.append({
+            "ticker": ticker,
+            "asset_type": s["asset_type"],
+            "asset_label": s["asset_type"].replace("_", " ").title(),
+            "quantity": qty,
+            "avg_price": round(avg, 8),
+            "total_invested": round(s["total_cost"], 8),
+        })
+
+    return positions
+
+
+# ---------------------------------------------------------------------------
+# enrich_with_prices — adiciona cotacao atual e calcula resultado
+# ---------------------------------------------------------------------------
+
+def enrich_with_prices(
+    positions: list[dict],
+    prices: dict[str, float],
+) -> list[dict]:
+    """
+    Recebe lista de posicoes brutas e dict {ticker: preco}.
+    Adiciona current_price, current_value, result_abs, result_pct.
+    Campos ficam None quando sem cotacao.
+    """
+    enriched = []
+    for p in positions:
+        ticker = p["ticker"]
+        price = prices.get(ticker)
+        item = dict(p)
+        if price is not None:
+            qty = p["quantity"]
+            invested = p["total_invested"]
+            cur_val = qty * price
+            result_abs = cur_val - invested
+            result_pct = (result_abs / invested * 100) if invested else 0.0
+            item["current_price"] = price
+            item["current_value"] = cur_val
+            item["result_abs"] = result_abs
+            item["result_pct"] = round(result_pct, 4)
+        else:
+            item["current_price"] = None
+            item["current_value"] = None
+            item["result_abs"] = None
+            item["result_pct"] = None
+        enriched.append(item)
+    return enriched
+
+
+# ---------------------------------------------------------------------------
+# sum_dividends
+# ---------------------------------------------------------------------------
+
+async def sum_dividends(
+    db: AsyncSession,
+    portfolio_id: int,
+    cutoff: DateType | None = None,
+) -> float:
+    """
+    Soma total_value dos Dividends da carteira.
+    Se cutoff informado, filtra por asset_dividend.ex_date >= cutoff.
+    """
+    from app.models.asset_dividend import AssetDividend
+
+    q = select(func.sum(Dividend.total_value)).where(
+        Dividend.portfolio_id == portfolio_id
+    )
+    if cutoff is not None:
+        q = q.join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id).where(
+            AssetDividend.ex_date >= cutoff
+        )
+    result = await db.execute(q)
+    total = result.scalar_one_or_none()
+    return float(total) if total is not None else 0.0
+
+
+# ---------------------------------------------------------------------------
+# CRUD de carteiras
+# ---------------------------------------------------------------------------
 
 async def list_portfolios(db: AsyncSession, user_id: int) -> list[Portfolio]:
     result = await db.execute(
@@ -52,38 +216,21 @@ async def delete_portfolio(db: AsyncSession, portfolio_id: int, user_id: int) ->
 
 async def get_portfolio_summary(db: AsyncSession, portfolio_id: int, user_id: int) -> dict:
     await get_portfolio(db, portfolio_id, user_id)
-
     result = await db.execute(
         select(Transaction).where(Transaction.portfolio_id == portfolio_id)
     )
     transactions = result.scalars().all()
 
-    total_invested = 0.0
-    positions: dict[str, dict] = {}
-    for tx in transactions:
-        ticker = tx.ticker
-        qty = float(tx.quantity or 0)
-        price = float(tx.price or 0)
-        fees = float(tx.fees or 0)
-        op = (tx.operation or "").lower()
-        if ticker not in positions:
-            positions[ticker] = {"quantity": 0.0, "avg_price": 0.0, "invested": 0.0}
-        p = positions[ticker]
-        if op in ("buy", "compra"):
-            p["quantity"] += qty
-            p["invested"] += qty * price + fees
-            total_invested += qty * price + fees
-        elif op in ("sell", "venda"):
-            p["quantity"] -= qty
-            p["invested"] -= qty * price
-            total_invested -= qty * price
+    positions_raw = await calc_raw_positions(db, portfolio_id)
+    total_invested = sum(p["total_invested"] for p in positions_raw)
 
     current_value = 0.0
-    for ticker, p in positions.items():
-        if p["quantity"] <= 0:
-            continue
-        price_now = await get_current_price(ticker)
-        current_value += p["quantity"] * (price_now or p["invested"] / max(p["quantity"], 1))
+    for p in positions_raw:
+        price_now = await get_current_price(p["ticker"])
+        if price_now:
+            current_value += p["quantity"] * price_now
+        else:
+            current_value += p["total_invested"]
 
     total_gain = current_value - total_invested
     total_gain_pct = (total_gain / total_invested * 100) if total_invested else 0.0
@@ -98,61 +245,34 @@ async def get_portfolio_summary(db: AsyncSession, portfolio_id: int, user_id: in
 
 async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: int) -> list[dict]:
     await get_portfolio(db, portfolio_id, user_id)
-    result = await db.execute(
-        select(Transaction).where(Transaction.portfolio_id == portfolio_id)
+    positions_raw = await calc_raw_positions(db, portfolio_id)
+
+    prices: dict[str, float] = {}
+    for p in positions_raw:
+        price = await get_current_price(p["ticker"])
+        if price:
+            prices[p["ticker"]] = price
+
+    enriched = enrich_with_prices(positions_raw, prices)
+
+    total_current = sum(
+        e["current_value"] for e in enriched if e["current_value"] is not None
     )
-    transactions = result.scalars().all()
-
-    positions: dict[str, dict] = {}
-    for tx in transactions:
-        ticker = tx.ticker
-        qty = float(tx.quantity or 0)
-        price = float(tx.price or 0)
-        fees = float(tx.fees or 0)
-        op = (tx.operation or "").lower()
-        if ticker not in positions:
-            positions[ticker] = {
-                "ticker": ticker,
-                "asset_type": tx.asset_type,
-                "quantity": 0.0,
-                "invested": 0.0,
-            }
-        p = positions[ticker]
-        if op in ("buy", "compra"):
-            p["quantity"] += qty
-            p["invested"] += qty * price + fees
-        elif op in ("sell", "venda"):
-            p["quantity"] -= qty
-
-    total_current = 0.0
-    enriched = []
-    for ticker, p in positions.items():
-        if p["quantity"] <= 0:
-            continue
-        price_now = await get_current_price(ticker)
-        avg = p["invested"] / p["quantity"] if p["quantity"] else 0
-        cur_val = p["quantity"] * (price_now or avg)
-        total_current += cur_val
-        enriched.append({"ticker": ticker, "data": p, "current_value": cur_val, "current_price": price_now or avg})
 
     result_list = []
     for e in enriched:
-        p = e["data"]
-        cur_val = e["current_value"]
-        avg = p["invested"] / p["quantity"] if p["quantity"] else 0
-        var_val = cur_val - p["invested"]
-        var_pct = (var_val / p["invested"] * 100) if p["invested"] else 0
+        cur_val = e["current_value"] or e["total_invested"]
         alloc = (cur_val / total_current * 100) if total_current else 0
         result_list.append({
-            "ticker": p["ticker"],
-            "asset_type": p["asset_type"],
-            "quantity": round(p["quantity"], 8),
-            "average_price": round(avg, 4),
-            "current_price": round(e["current_price"], 4),
-            "current_value": round(cur_val, 2),
-            "invested_value": round(p["invested"], 2),
-            "variation_value": round(var_val, 2),
-            "variation_percent": round(var_pct, 4),
+            "ticker": e["ticker"],
+            "asset_type": e["asset_type"],
+            "quantity": round(e["quantity"], 8),
+            "average_price": round(e["avg_price"], 4),
+            "current_price": e["current_price"],
+            "current_value": e["current_value"],
+            "invested_value": round(e["total_invested"], 2),
+            "result_abs": e["result_abs"],
+            "result_pct": e["result_pct"],
             "allocation_pct": round(alloc, 4),
         })
     return result_list
@@ -163,7 +283,8 @@ async def get_asset_distribution(db: AsyncSession, portfolio_id: int, user_id: i
     by_type: dict[str, float] = {}
     for p in positions:
         at = p.get("asset_type") or "OUTRO"
-        by_type[at] = by_type.get(at, 0) + p["current_value"]
+        val = p["current_value"] or p["invested_value"]
+        by_type[at] = by_type.get(at, 0) + val
     total = sum(by_type.values())
     return [
         {

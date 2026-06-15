@@ -18,6 +18,13 @@ class AssetType(str, enum.Enum):
     OUTRO = "OUTRO"
 
 
+class AssetCurrency(str, enum.Enum):
+    BRL = "BRL"
+    USD = "USD"
+    EUR = "EUR"
+    BTC = "BTC"
+
+
 class Asset(Base):
     __tablename__ = "assets"
 
@@ -32,8 +39,8 @@ class Asset(Base):
     brapi_ticker = Column(String, nullable=True)
     sector = Column(String, nullable=True)
     sub_sector = Column(String, nullable=True)
-    float_description = Column(Float, nullable=True)  # free float %
+    float_description = Column(Float, nullable=True)
 
     positions = relationship("PortfolioPosition", back_populates="asset")
     prices = relationship("AssetPrice", back_populates="asset")
-    dividends = relationship("AssetDividend", back_populates="asset")
+    asset_dividends = relationship("AssetDividend", back_populates="asset")
