@@ -47,7 +47,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 ## [Sprint 6] - 2026-06-15
 
 ### Objetivo
-Entregar proventos confiaveis para a pagina de Proventos: proventos dos ativos da carteira com valor por unidade, valor total pelo usuario, separados em recebidos e futuros.
+Entregar proventos confiaveis para a pagina de Proventos: proventos dos ativos da carteira com valor por unidade, valor total pelo usuario, separados em recebidos e futuros. Frontend conectado ao backend com filtros, historico e sincronizacao manual.
 
 ---
 
@@ -71,7 +71,7 @@ Entregar proventos confiaveis para a pagina de Proventos: proventos dos ativos d
 
 ---
 
-### Alteracoes
+### Alteracoes — Backend
 
 #### dividend_backfill_service.py — correcoes criticas
 - **`_net_qty_on_date`:** corrigido para filtrar por `(portfolio_id, ticker, date)` — `Transaction` nao tem `asset_id`.
@@ -111,6 +111,34 @@ Entregar proventos confiaveis para a pagina de Proventos: proventos dos ativos d
 
 ---
 
+### Alteracoes — Frontend
+
+#### frontend/src/services/proventosService.ts
+- `ProventosSummary` alinhada com backend: `total_recebido`, `total_a_receber`, `total_12m`, `media_mensal_12m`
+- `getDistribution` → `getDistribuicao`; URL corrigida para `/proventos/distribuicao`
+- `getEvolucao` removido (endpoint nao existe no backend)
+- `getList` agora aponta para `/portfolios/{id}/proventos`; retorna `ProventosListResponse` paginado
+- Adicionado `sync()` → `POST /portfolios/{id}/dividends/sync`
+- **Commit:** `c8ed7f85`
+
+#### frontend/src/hooks/useProventos.ts
+- `useProventosDistribution` renomeado para `useProventosDistribuicao`
+- `useProventosEvolucao` removido
+- `useProventosList` atualizado para receber params object e retornar `ProventosListResponse`
+- Adicionado `useSyncProventos` — mutation que invalida todas as queries de proventos ao completar
+- **Commit:** `a6b7ffef`
+
+#### frontend/src/pages/ProventosPage.tsx
+- KPIs corretos: `total_recebido`, `total_a_receber`, `total_12m`, `media_mensal_12m` (removido `yield_on_cost` inexistente)
+- `ACAO_NACIONAL` corrigido para `ACAO` no filtro de tipo de ativo
+- Toggle de status: **Todos / Recebidos / A Receber**
+- Botao **Sincronizar proventos** com spinner via `useSyncProventos`
+- `lista?.items` passado para `MeusProventosTable` (resposta paginada)
+- Rodape com contador de proventos listados
+- **Commit:** `670fc7bb`
+
+---
+
 ### Arquivos modificados na Sprint 6
 
 | Arquivo | Tipo de alteracao | Commit |
@@ -119,6 +147,9 @@ Entregar proventos confiaveis para a pagina de Proventos: proventos dos ativos d
 | `backend/app/services/proventos_service.py` | Reescrita — AsyncSession, sem schemas externos | `75790b79` |
 | `backend/app/routers/proventos.py` | Reescrita — async, 4 endpoints funcionais | `ff41314a` |
 | `backend/app/routers/dividends.py` | Novo endpoint POST /sync | `d2e7b5d5` |
+| `frontend/src/services/proventosService.ts` | Tipos e URLs alinhados com backend | `c8ed7f85` |
+| `frontend/src/hooks/useProventos.ts` | Hooks alinhados + useSyncProventos | `a6b7ffef` |
+| `frontend/src/pages/ProventosPage.tsx` | Pagina conectada — filtros, KPIs, sync | `670fc7bb` |
 
 ---
 
@@ -136,7 +167,7 @@ Entregar proventos confiaveis para a pagina de Proventos: proventos dos ativos d
 
 ### Estado da base apos Sprint 6
 
-Backend de proventos totalmente funcional e compativel com AsyncSession. Backfill corrigido para usar ticker (alinhado com modelo Transaction). Pagina de Proventos pode ser implementada no frontend consumindo os 4 endpoints de leitura + 1 de sync. Pronto para Sprint 7 (Rentabilidade).
+Backend e frontend de proventos totalmente funcionais. Backfill corrigido para usar ticker. Frontend conectado via service + hooks alinhados. Pagina exibe KPIs, historico mensal, lista filtrada e botao de sync. Pronto para Sprint 7 (Rentabilidade).
 
 ---
 

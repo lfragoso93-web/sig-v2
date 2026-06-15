@@ -77,61 +77,41 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 - ✅ Historico patrimonial com valor de mercado real
 - ✅ Scheduler orquestrado com ordem correta
 
-**Checklist de deploy:**
-1. `alembic upgrade head` (migrations 004 e 005)
-2. `POST /portfolios/{id}/evolution/backfill` para cada carteira
-3. Scheduler 19h00 mantem snapshots atualizados
-
 **Commits:** `bb258df8`, `14f4b50e`, `315325e9`, `9ea72604`, `9015538d`, `c335b513`, `b4573326`, `4a8fbda6`, `c8a57e83`, `f3a91f74`, `239bcd92`
 
 ---
 
 ## Sprint 6 - Proventos ✅ CONCLUIDA — 15 Jun 2026
 
-**Objetivo:** entregar proventos confiaveis para a pagina de Proventos. Cada provento exibe valor por unidade e valor total pelo usuario, separados em recebidos e futuros.
+**Objetivo:** entregar proventos confiaveis de ponta a ponta: backend com backfill correto e 4 endpoints + frontend conectado com filtros, historico mensal e sincronizacao manual.
 
 **Escopo executado:**
 
-### Modelo de dados (ja existia, consolidado)
-- `asset_dividends`: provento global do ativo (ex_date, payment_date, value_per_unit)
-- `dividends`: provento da carteira (quantity na data-ex, total_value, net_value, status)
-- Backfill via BRAPI (ACAO, FII, ETF_NACIONAL) e yfinance (STOCK, ETF_INTERNACIONAL)
-- SKIP_TYPES: CRIPTO, TESOURO_DIRETO, RENDA_FIXA
-
-### Correcoes criticas
-- `dividend_backfill_service.py`: `_net_qty_on_date` e `_portfolios_with_ticker` corrigidos para usar `ticker` (Transaction nao tem asset_id); tipos alinhados com `asset_types.py`
-
-### Novos servicos e endpoints
-- `proventos_service.py`: reescrito em AsyncSession — `get_summary`, `list_items`, `get_monthly_history`, `get_distribution`
+### Backend
+- `dividend_backfill_service.py`: `_net_qty_on_date` e `_portfolios_with_ticker` corrigidos para usar `ticker` (Transaction nao tem asset_id)
+- `proventos_service.py`: reescrito em AsyncSession — 4 funcoes: `get_summary`, `list_items`, `get_monthly_history`, `get_distribution`
 - `routers/proventos.py`: reescrito em async — 4 endpoints funcionais
-- `routers/dividends.py`: novo `POST /dividends/sync` — sincronizacao manual de todos os ativos da carteira
+- `routers/dividends.py`: novo `POST /dividends/sync` — sincronizacao manual, 202 Accepted
+
+### Frontend
+- `proventosService.ts`: tipos e URLs alinhados com backend; `sync()` adicionado
+- `useProventos.ts`: hooks alinhados; `useSyncProventos` adicionado
+- `ProventosPage.tsx`: KPIs corretos, toggle Recebidos/A Receber, botao Sincronizar, lista paginada
 
 **Criterios de aceite atendidos:**
-- ✅ Proventos exibem valor por unidade e valor total (quantity x value_per_unit)
-- ✅ Recebidos e futuros separados por status (RECEBIDO / A_RECEBER)
-- ✅ Backfill correto: quantity calculada na data-ex pelo ticker da carteira
-- ✅ Sincronizacao idempotente: rodar duas vezes nao duplica proventos
-- ✅ Backend async em todos os endpoints
+- ✅ Proventos exibem valor por unidade e valor total
+- ✅ Recebidos e futuros separados por status
+- ✅ Backfill correto: quantity calculada na data-ex pelo ticker
+- ✅ Sincronizacao idempotente
+- ✅ Frontend conectado e compilando
+- ✅ Filtros de status e tipo de ativo funcionais
 
-**Endpoints disponibilizados:**
-
-| Endpoint | Uso |
-|---|---|
-| `GET /portfolios/{id}/proventos/summary` | Cards de topo: total recebido, a receber, media 12m |
-| `GET /portfolios/{id}/proventos` | Tabela principal (filtros: status, year, asset_type) |
-| `GET /portfolios/{id}/proventos/historico-mensal` | Grid historico por ano/mes |
-| `GET /portfolios/{id}/proventos/distribuicao` | Grafico de distribuicao por ativo |
-| `POST /portfolios/{id}/dividends/sync` | Botao "Sincronizar" — 202 Accepted |
-
-**Commits:**
-- `73538f57` — fix: dividend_backfill_service — ticker + asset_types
-- `75790b79` — refactor: proventos_service — AsyncSession
-- `ff41314a` — refactor: routers/proventos.py — async
-- `d2e7b5d5` — feat: POST /dividends/sync
+**Commits backend:** `73538f57`, `75790b79`, `ff41314a`, `d2e7b5d5`
+**Commits frontend:** `c8ed7f85`, `a6b7ffef`, `670fc7bb`
 
 ---
 
-## Sprint 7 - Rentabilidade
+## Sprint 7 - Rentabilidade 🔜 PROXIMA
 
 **Objetivo:** calcular rentabilidade de forma util para decisao.
 
@@ -260,7 +240,7 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 | Sprint 3 — Padronizacao Async | ✅ Concluida |
 | Sprint 4 — Carteiras, Posicoes e Patrimonio | ✅ Concluida — 15 Jun 2026 |
 | Sprint 5 — Cotacoes e Integracoes | ✅ Concluida — 15 Jun 2026 |
-| Sprint 6 — Proventos | ✅ Concluida — 15 Jun 2026 |
+| Sprint 6 — Proventos (backend + frontend) | ✅ Concluida — 15 Jun 2026 |
 | Sprint 7 — Rentabilidade | 🔜 Proxima |
 | Sprint 8 — Historico Patrimonial (frontend) | ⏳ |
 | Sprint 9 — Patrimonio por Classe | ⏳ |
