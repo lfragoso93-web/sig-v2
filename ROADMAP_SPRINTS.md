@@ -43,7 +43,7 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 - Nenhum servico ativo importa `TransactionType` inexistente
 - Criacao e exclusao de transacoes atualizam o resumo
 - Validacao de venda ativa: impede vender mais do que a posicao atual
-- Commits: `c1434e56` (transaction_service), `18fbf392` (testes), `4a4908e7` (validacao venda)
+- Commits: `c1434e56`, `18fbf392`, `4a4908e7`
 
 ---
 
@@ -53,9 +53,7 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 
 **Criterios de aceite atendidos:**
 - Todos routers e services ativos usam `AsyncSession`
-- Nenhum endpoint ativo chama `db.query(...)` sobre `AsyncSession`
-- `performance_service.py` e `routers/performance.py` migrados
-- Commits: `297b7e8b` (performance_service), `07b89607` (router performance)
+- Commits: `297b7e8b`, `07b89607`
 
 ---
 
@@ -64,53 +62,65 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 **Objetivo:** consolidar o nucleo patrimonial como fonte confiavel do sistema.
 
 **Escopo executado:**
-- Revisao e correcao do calculo de Preco Medio Ponderado
-- Vendas reduzem custo proporcional sem alterar PM
-- Fees de venda nao entram no PM
-- Posicoes zeradas removidas (renda variavel e Tesouro Direto)
-- Tipos de ativo normalizados via `normalize_type()`
-- Resumo: `total_current`, `result_abs`, `result_pct` retornam `None` quando sem cotacao
-- Resumo calculado apenas sobre ativos com cotacao disponivel
-- Contrato da API: `PositionItem` e `SummaryResponse` com `Optional[float]` para campos dependentes de cotacao
-- Testes reescritos cobrindo todos os criterios de aceite (23 cenarios em `test_portfolio_service.py`)
+- PM ponderado correto; fees de venda nao afetam PM
+- Posicoes zeradas removidas; tipos normalizados
+- Resumo com `Optional[float]` para campos sem cotacao
+- 23 cenarios de teste em `test_portfolio_service.py`
 
-**Criterios de aceite atendidos:**
-- ✅ Calculos de posicao possuem testes
-- ✅ Ativos sem cotacao: `current_price = null`, sem usar PM como cotacao
-- ✅ `current_value`, `result_abs`, `result_pct` tambem `null` sem cotacao
-- ✅ Resumo bate com as posicoes (calcula sobre ativos com cotacao)
-- ✅ Carteiras de usuarios diferentes ficam isoladas
-- ✅ Tesouro Direto controlado por cotas (mesmo comportamento que renda variavel)
-- ✅ fees de venda nao alteram PM nem custo da posicao restante
-
-**Commits:**
-- `a73d9bd7` — refactor(sprint4): corrigir enrich_with_prices, recalc_positions e remover import Session morto
-- `38bed9b3` — refactor(sprint4): ajustar PositionItem e SummaryResponse para campos nullable
-- `680b489f` — test(sprint4): reescrever testes de portfolio_service cobrindo todos os criterios de aceite
-- `cc70de49` — docs(sprint4): registrar Sprint 4 no CHANGELOG
+**Commits:** `a73d9bd7`, `38bed9b3`, `680b489f`, `cc70de49`
 
 ---
 
-## Sprint 5 - Cotacoes e Integracoes de Mercado
+## Sprint 5 - Cotacoes e Integracoes de Mercado ✅ CONCLUIDA — 15 Jun 2026
 
-**Objetivo:** tornar cotacoes mais robustas e previsiveis.
+**Objetivo:** tornar cotacoes mais robustas e previsiveis; implementar historico patrimonial real via snapshots diarios.
 
-**Escopo:**
-- Revisar integracao BRAPI para acoes, FIIs, ETFs nacionais, cripto e Tesouro
-- Revisar yfinance para stocks e ETFs internacionais
-- Criar tratamento claro para falha externa
-- Padronizar cache em memoria ou Redis
-- Criar endpoint de cotacao por ticker, se necessario
-- Registrar logs suficientes para diagnosticar falhas de API externa
-- Revisar variaveis de ambiente usadas por integracoes
+**Escopo executado:**
 
-**Criterios de aceite:**
-- Falha em BRAPI/yfinance nao derruba endpoint de posicoes
-- Cotacoes ausentes retornam ausentes, nao valores inventados
-- Tickers internacionais e nacionais usam provedores corretos
-- Configuracoes ausentes sao tratadas com fallback claro
+### Pipeline de cotacoes — 3 camadas
+- `asset_types.py`: fonte unica de verdade para tipos de ativo (`INTL_TYPES`, `BRAPI_TYPES`, `NO_QUOTE_TYPES`).
+- `Asset.last_price`: campo adicionado (migration 004) — cache L1 no banco.
+- `quotes_service.py`: cache L1 (banco) → L2 (memoria 5min) → L3 (API externa).
+- `brapi.py`: refatorado com bulk, single e historical; sem raise em falha parcial.
+- `price_history_service.py`: OHLCV diario no banco (INSERT ON CONFLICT DO NOTHING).
+- `quote_service.py`: `update_all_quotes()` — atualiza `Asset.last_price` para todos os ativos.
 
-**Prioridade:** alta.
+### Snapshots diarios de patrimonio
+- `PortfolioSnapshot` model + migration 005.
+- `portfolio_snapshot_service.py`: backfill retroativo, refresh diario, get_daily_evolution, get_monthly_evolution.
+- `performance_service.py`: historico mensal usa snapshots reais (valor de mercado, nao custo).
+
+### Scheduler e endpoints
+- `scheduler.py`: 6 jobs; novo job 19h00 = update_all_quotes + refresh_today_snapshot por carteira.
+- `routers/performance.py`: 3 novos endpoints:
+  - `GET /{id}/evolution/daily?days=365`
+  - `GET /{id}/evolution/monthly?months=24`
+  - `POST /{id}/evolution/backfill?days_back=N`
+
+**Criterios de aceite atendidos:**
+- ✅ Falha em BRAPI/yfinance nao derruba endpoints de posicoes
+- ✅ Cotacoes ausentes retornam `None`, nao valores inventados
+- ✅ Nacionais via BRAPI, internacionais via yfinance
+- ✅ Historico patrimonial diferencia aporte e valor de mercado
+- ✅ Scheduler orquestrado com ordem correta (preco antes do snapshot)
+
+**Checklist de deploy:**
+1. `alembic upgrade head` (migrations 004 e 005)
+2. `POST /portfolios/{id}/evolution/backfill` para cada carteira existente
+3. Scheduler 19h00 mantem snapshots atualizados automaticamente
+
+**Commits:**
+- `bb258df8` — feat: asset_types.py
+- `14f4b50e` — feat: Asset.last_price + migration 004
+- `315325e9` — refactor: brapi.py
+- `9ea72604` — feat: price_history_service.py
+- `9015538d` — feat: quotes_service.py
+- `c335b513` — refactor: quote_service.py
+- `b4573326` — feat: PortfolioSnapshot + migration 005
+- `4a8fbda6` — feat: portfolio_snapshot_service.py
+- `c8a57e83` — refactor: performance_service.py
+- `f3a91f74` — feat: scheduler.py
+- `239bcd92` — feat: routers/performance.py
 
 ---
 
@@ -155,11 +165,13 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 
 **Objetivo:** evoluir o grafico de patrimonio de aportes acumulados para valor historico real.
 
-**Escopo:**
-- Snapshots diarios ou mensais da carteira
-- Valor investido e valor de mercado por data
-- Historico de precos quando disponivel
-- Periodos: 6m, 12m, 24m e tudo
+> **Nota:** a infraestrutura de snapshots foi antecipada na Sprint 5 (`portfolio_snapshot_service.py`, migration 005, endpoints de evolucao). Sprint 8 focara na integracao frontend (graficos) e refinamentos.
+
+**Escopo atualizado:**
+- Integrar endpoints `GET /evolution/daily` e `GET /evolution/monthly` no frontend
+- Grafico de linha (evolucao diaria) e grafico de barras (mensal)
+- Seletores de periodo: 6m, 12m, 24m, tudo
+- Comparativo: valor investido vs valor de mercado
 
 **Criterios de aceite:**
 - Grafico diferencia aporte acumulado e valor de mercado
@@ -214,7 +226,7 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 - Rendimentos isentos, JCP e tributaveis
 - Lucro/prejuizo realizado por mes
 - Exportacao relatorio anual
-- **Metodo:** Preco Medio Ponderado (mesmo que `portfolio_service.py`)
+- **Metodo:** Preco Medio Ponderado
 
 **Prioridade:** media.
 
@@ -267,10 +279,10 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 | Sprint 2 — Modelo de Transacoes | ✅ Concluida |
 | Sprint 3 — Padronizacao Async | ✅ Concluida |
 | Sprint 4 — Carteiras, Posicoes e Patrimonio | ✅ Concluida — 15 Jun 2026 |
-| Sprint 5 — Cotacoes e Integracoes | 🔜 Proxima |
-| Sprint 6 — Proventos | ⏳ |
+| Sprint 5 — Cotacoes e Integracoes | ✅ Concluida — 15 Jun 2026 |
+| Sprint 6 — Proventos | 🔜 Proxima |
 | Sprint 7 — Rentabilidade | ⏳ |
-| Sprint 8 — Historico Patrimonial | ⏳ |
+| Sprint 8 — Historico Patrimonial (frontend) | ⏳ |
 | Sprint 9 — Patrimonio por Classe | ⏳ |
 | Sprint 10 — Renda Fixa e Tesouro | ⏳ |
 | Sprint 11 — Metas e Alocacao | ⏳ |
