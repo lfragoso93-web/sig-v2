@@ -21,4 +21,5 @@ python-multipart==0.0.27
 apscheduler==3.10.4
 email-validator==2.2.0
 redis==5.2.1
-python-jose[cryptography]==3.3.0
+# python-jose 3.4.0 - fix CVE-2024-33663 (CRITICAL: algorithm confusion ECDSA)
+python-jose[cryptography]==3.4.0
