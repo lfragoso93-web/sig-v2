@@ -18,12 +18,14 @@ export interface Transaction {
 export interface TransactionCreate {
   ticker: string
   asset_type: string
-  operation: 'buy' | 'sell'
+  /** 'buy' | 'sell' ou tipo estendido (COMPRA/VENDA/BONIFICACAO…) */
+  operation: string
   quantity: number
   price: number
   fees?: number
   date: string
   currency?: string
+  fx_rate?: number
   notes?: string
 }
 
