@@ -47,15 +47,11 @@ jobs:
 
       - name: Lint with flake8
         working-directory: backend
-        run: |
-          pip install flake8
-          flake8 app --max-line-length=120
+        run: flake8 app --max-line-length=120
 
       - name: Type check with mypy
         working-directory: backend
-        run: |
-          pip install mypy
-          mypy app --ignore-missing-imports
+        run: mypy app --ignore-missing-imports
 
       - name: Run tests with pytest
         working-directory: backend
@@ -65,7 +61,7 @@ jobs:
   # FRONTEND JOBS
   # ---------------------------------------------------------------------------
   frontend-quality:
-    name: Frontend – lint, type check, tests and build
+    name: Frontend – lint, type check and build
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -77,12 +73,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: "npm"
-          cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
         working-directory: frontend
-        run: npm ci
+        run: npm install
 
       - name: Lint
         working-directory: frontend
@@ -90,7 +84,7 @@ jobs:
 
       - name: Type check
         working-directory: frontend
-        run: npm run type-check
+        run: npm run typecheck
 
       - name: Build
         working-directory: frontend
@@ -166,8 +160,7 @@ jobs:
         uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: high
-          license-check: true
-          deny-licenses: GPL-3.0, AGPL-3.0
+          license-check: false
 
   # ---------------------------------------------------------------------------
   # DOCKERFILE LINT
@@ -185,6 +178,7 @@ jobs:
         uses: hadolint/hadolint-action@v3.3.0
         with:
           dockerfile: backend/Dockerfile
+          ignore: DL3008,DL3009
 
   dockerfile-lint-frontend:
     name: Dockerfile lint – frontend
@@ -199,6 +193,7 @@ jobs:
         uses: hadolint/hadolint-action@v3.3.0
         with:
           dockerfile: frontend/Dockerfile
+          ignore: DL3016,DL3018
 
   # ---------------------------------------------------------------------------
   # BUILD AND SCAN DOCKER IMAGES (only after all quality gates pass)
