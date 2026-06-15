@@ -237,6 +237,17 @@ jobs:
     needs: [frontend-quality, dockerfile-lint-frontend, secrets-scan, trivy-repository-scan]
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # npm ci no Dockerfile exige package-lock.json no contexto de build.
+      # Como o lockfile nao esta no repositorio, geramos aqui antes do docker build.
+      - name: Generate package-lock.json
+        working-directory: frontend
+        run: npm install --package-lock-only --ignore-scripts
+
       - uses: docker/setup-buildx-action@v3
 
       - name: Build frontend image
@@ -329,6 +340,15 @@ jobs:
       image-digest: ${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Generate package-lock.json
+        working-directory: frontend
+        run: npm install --package-lock-only --ignore-scripts
+
       - uses: docker/setup-buildx-action@v3
 
       - id: meta
