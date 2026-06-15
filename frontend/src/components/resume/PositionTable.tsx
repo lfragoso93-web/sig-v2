@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  ChevronDown, ChevronRight, HelpCircle,
+  ChevronDown, ChevronRight,
   MoreHorizontal, Plus, List, BarChart2 as AnalyseIcon,
 } from 'lucide-react'
 import { formatBRL, formatPercent } from '@/utils/format'
@@ -227,9 +227,30 @@ export default function PositionTable({ groups }: Props) {
               <th className="text-right px-4 py-2 font-medium" style={cellMuted}>Qtd</th>
               <th className="text-right px-4 py-2 font-medium" style={cellMuted}>P. Médio</th>
               <th className="text-right px-4 py-2 font-medium" style={cellMuted}>
+                {/* Lucide não aceita prop title — usamos span wrapper */}
                 <span className="flex items-center justify-end gap-1">
                   P. Atual
-                  <HelpCircle size={10} style={cellFaint} title="Cotação via BRAPI/yfinance." />
+                  <span
+                    aria-label="Cotação via BRAPI/yfinance."
+                    title="Cotação via BRAPI/yfinance."
+                    style={{ display: 'inline-flex', alignItems: 'center', cursor: 'help' }}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="10" height="10"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={cellFaint}
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                      <path d="M12 17h.01" />
+                    </svg>
+                  </span>
                 </span>
               </th>
               <th className="text-right px-4 py-2 font-medium" style={cellMuted}>Total Inv.</th>
@@ -276,7 +297,7 @@ export default function PositionTable({ groups }: Props) {
                         <div className="flex items-center gap-2.5">
                           <AssetLogo ticker={item.ticker} assetType={item.asset_type} size={28} />
                           <div className="min-w-0">
-                            <div className="font-semibold truncate max-w-[180px]" style={cellText} title={item.ticker}>{name}</div>
+                            <div className="font-semibold truncate max-w-[180px]" style={cellText}>{name}</div>
                             <div className="text-[10px] truncate max-w-[180px]" style={cellFaint}>
                               {isTesouro ? item.ticker : item.asset_label}
                             </div>
@@ -300,7 +321,7 @@ export default function PositionTable({ groups }: Props) {
                             <div>{formatBRL(item.variation_value)}</div>
                             <div className="text-[10px]">{formatPercent(item.variation_percent)}</div>
                           </div>
-                        ) : <span style={cellFaint} title="Cotação indisponível">—</span>}
+                        ) : <span style={cellFaint} aria-label="Cotação indisponível">—</span>}
                       </td>
                       <td className="px-2 py-2 text-right">
                         <AssetMenu

@@ -66,7 +66,7 @@ export default function LancamentosPage() {
 
   async function handleDelete(id: number) {
     if (!selectedPortfolioId) return
-    await deleteTransaction.mutateAsync({ id, portfolio_id: selectedPortfolioId })
+    await deleteTransaction.mutateAsync({ id, portfolioId: selectedPortfolioId })
     setConfirmDelete(null)
   }
 
@@ -194,7 +194,7 @@ export default function LancamentosPage() {
                         <button onClick={() => setConfirmDelete(t.id)} className="p-1 rounded transition" style={{ color: 'var(--color-text-faint)' }}
                           onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-error)')}
                           onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-text-faint)')}
-                          title="Excluir"
+                          aria-label="Excluir"
                         >
                           <Trash2 size={13} />
                         </button>
@@ -209,7 +209,7 @@ export default function LancamentosPage() {
       )}
 
       {showModal && (
-        <AddTransactionModal portfolioId={selectedPortfolioId!} onClose={() => setShowModal(false)} />
+        <AddTransactionModal onClose={() => setShowModal(false)} />
       )}
     </div>
   )

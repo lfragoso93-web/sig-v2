@@ -8,7 +8,8 @@ export default function AppLayout() {
 
   return (
     <div className="min-h-screen flex flex-col bg-surface-900">
-      <Topbar onAddLancamento={() => setShowAddModal(true)} />
+      {/* Topbar gerencia abertura do modal via useAppStore internamente */}
+      <Topbar />
       <main className="flex-1 pt-14">
         <Outlet />
       </main>
