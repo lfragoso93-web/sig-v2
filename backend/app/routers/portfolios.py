@@ -24,7 +24,10 @@ from app.services.portfolio_service import (
 router = APIRouter()
 
 
-# ── Schemas ──────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Schemas
+# ---------------------------------------------------------------------------
+
 class PositionItem(BaseModel):
     ticker:         str
     asset_type:     str
@@ -32,36 +35,40 @@ class PositionItem(BaseModel):
     quantity:       float
     avg_price:      float
     total_invested: float
-    logo_url:       Optional[str] = None
-    current_price:  Optional[float]
-    current_value:  float
-    result_abs:     float
-    result_pct:     float
+    logo_url:       Optional[str]   = None
+    # Campos nullable: None quando cotacao indisponivel
+    current_price:  Optional[float] = None
+    current_value:  Optional[float] = None
+    result_abs:     Optional[float] = None
+    result_pct:     Optional[float] = None
 
 
 class SummaryResponse(BaseModel):
     total_invested:           float
-    total_current:            float
-    result_abs:               float
-    result_pct:               float
+    # Campos nullable: None quando nenhuma posicao tem cotacao disponivel
+    total_current:            Optional[float] = None
+    result_abs:               Optional[float] = None
+    result_pct:               Optional[float] = None
     positions_count:          int
-    total_patrimonio:         float
+    total_patrimonio:         Optional[float] = None
     total_investido:          float
-    lucro_total:              float
-    variacao_valor:           float
-    variacao_percentual:      float
-    rentabilidade_total:      float
+    lucro_total:              Optional[float] = None
+    variacao_valor:           Optional[float] = None
+    variacao_percentual:      Optional[float] = None
+    rentabilidade_total:      Optional[float] = None
     dividendos_recebidos_12m: float
     total_proventos:          float
 
 
 class EquityHistoryPoint(BaseModel):
-    month:    str    # formato YYYY-MM
-    value:    float  # valor atual acumulado (capital investido)
-    invested: float  # capital aportado acumulado (custo)
+    month:    str
+    value:    float
+    invested: float
 
 
-# ── CRUD ──────────────────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# CRUD
+# ---------------------------------------------------------------------------
 
 @router.get('/', response_model=list[PortfolioResponse])
 async def list_my_portfolios(
@@ -106,10 +113,12 @@ async def delete_my_portfolio(
     db: AsyncSession = Depends(get_db),
 ):
     await delete_portfolio(db, portfolio_id, current_user.id)
-    return MessageResponse(message='Carteira excluída com sucesso')
+    return MessageResponse(message='Carteira excluida com sucesso')
 
 
-# ── Summary ──────────────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Summary
+# ---------------------------------------------------------------------------
 
 @router.get('/{portfolio_id}/summary', response_model=SummaryResponse)
 async def portfolio_summary(
@@ -120,23 +129,36 @@ async def portfolio_summary(
     await _get_portfolio(db, portfolio_id, current_user.id)
 
     items          = await calc_positions(db, portfolio_id)
-    total_invested = sum(i['total_invested'] for i in items)
-    total_current  = sum(i['current_value']  for i in items)
-    result_abs     = round(total_current - total_invested, 2)
-    result_pct     = round((result_abs / total_invested * 100) if total_invested > 0 else 0.0, 4)
+    total_invested = round(sum(i['total_invested'] for i in items), 2)
+
+    # current_value pode ser None para ativos sem cotacao;
+    # total_current so e calculado se ao menos uma posicao tem cotacao.
+    values_with_quote = [i['current_value'] for i in items if i['current_value'] is not None]
+    total_current     = round(sum(values_with_quote), 2) if values_with_quote else None
+
+    if total_current is not None and total_invested > 0:
+        # Usa apenas o investido correspondente aos ativos com cotacao
+        invested_with_quote = round(
+            sum(i['total_invested'] for i in items if i['current_value'] is not None), 2
+        )
+        result_abs = round(total_current - invested_with_quote, 2)
+        result_pct = round((result_abs / invested_with_quote * 100) if invested_with_quote > 0 else 0.0, 4)
+    else:
+        result_abs = None
+        result_pct = None
 
     cutoff          = date.today() - timedelta(days=365)
     proventos_12m   = await sum_dividends(db, portfolio_id, cutoff=cutoff)
     total_proventos = await sum_dividends(db, portfolio_id)
 
     return SummaryResponse(
-        total_invested           = round(total_invested, 2),
-        total_current            = round(total_current,  2),
+        total_invested           = total_invested,
+        total_current            = total_current,
         result_abs               = result_abs,
         result_pct               = result_pct,
         positions_count          = len(items),
-        total_patrimonio         = round(total_current,  2),
-        total_investido          = round(total_invested, 2),
+        total_patrimonio         = total_current,
+        total_investido          = total_invested,
         lucro_total              = result_abs,
         variacao_valor           = result_abs,
         variacao_percentual      = result_pct,
@@ -146,7 +168,9 @@ async def portfolio_summary(
     )
 
 
-# ── Positions ────────────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Positions
+# ---------------------------------------------------------------------------
 
 @router.get('/{portfolio_id}/positions', response_model=list[PositionItem])
 async def portfolio_positions(
@@ -158,24 +182,21 @@ async def portfolio_positions(
     return await calc_positions(db, portfolio_id)
 
 
-# ── Equity History ───────────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Equity History
+# ---------------------------------------------------------------------------
 
 @router.get('/{portfolio_id}/equity-history', response_model=list[EquityHistoryPoint])
 async def portfolio_equity_history(
     portfolio_id: int,
-    period: str = Query(default='12m', description="Período: 6m | 12m | 24m | all"),
+    period: str = Query(default='12m', description="Periodo: 6m | 12m | 24m | all"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Retorna a evolução patrimonial por mês com duas séries:
-      - value:    capital aportado acumulado (custo histórico)
-      - invested: mesmo que value (alias mantido para compatibilidade futura
-                  quando integrarmos cotações históricas)
-
-    Hoje ambas as séries usam o capital aportado líquido (compras - vendas).
-    Quando tivermos snapshot de preços históricos, 'value' será atualizado
-    para refletir o valor de mercado acumulado mois a mês.
+    Evolucao patrimonial mensal.
+    Hoje ambas as series (value e invested) usam capital aportado liquido.
+    Na Sprint 8 (historico patrimonial), 'value' sera atualizado para valor de mercado.
     """
     await _get_portfolio(db, portfolio_id, current_user.id)
 
@@ -212,7 +233,7 @@ async def portfolio_equity_history(
     """)
 
     result = await db.execute(sql, params)
-    rows = result.fetchall()
+    rows   = result.fetchall()
 
     if not rows:
         return []
@@ -223,9 +244,9 @@ async def portfolio_equity_history(
         month, net_invested = row
         accumulated += float(net_invested or 0)
         points.append(EquityHistoryPoint(
-            month=month,
-            value=round(accumulated, 2),
-            invested=round(accumulated, 2),
+            month    = month,
+            value    = round(accumulated, 2),
+            invested = round(accumulated, 2),
         ))
 
     return points
