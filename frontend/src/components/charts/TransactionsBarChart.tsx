@@ -43,7 +43,8 @@ function buildMonthlyData(transactions: Transaction[]): MonthlyPoint[] {
     if (t.operation === 'buy') {
       acc[key].buy += value
     } else if (t.operation === 'sell') {
-      // vendas negativas para aparecerem abaixo da linha zero
+      // vendas negativas para aparecerem abaixo da linha zero no gráfico,
+      // mas não afetam o valor de compra
       acc[key].sell -= value
     }
   }
@@ -54,11 +55,12 @@ function buildMonthlyData(transactions: Transaction[]): MonthlyPoint[] {
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
 
+  // No payload, o Recharts passa o valor exato usado no gráfico (buy positivo, sell negativo).
   const rawBuy = payload.find((p: any) => p.dataKey === 'buy')?.value ?? 0
   const rawSell = payload.find((p: any) => p.dataKey === 'sell')?.value ?? 0
 
   const buy = Math.max(0, rawBuy)
-  const sell = Math.abs(Math.min(0, rawSell))
+  const sell = Math.abs(rawSell)
 
   return (
     <div
@@ -118,7 +120,7 @@ export default function TransactionsBarChart({ transactions }: Props) {
         />
         <ReferenceLine y={0} stroke="var(--color-divider)" />
 
-        {/* Renderiza vendas primeiro para que compras fiquem visíveis acima da linha */}
+        {/* Vendas negativas abaixo da linha zero */}
         <Bar
           dataKey="sell"
           name="Vendas"
@@ -126,6 +128,7 @@ export default function TransactionsBarChart({ transactions }: Props) {
           fill="var(--color-notification)"
           radius={[0, 0, 4, 4]}
         />
+        {/* Compras positivas acima da linha zero */}
         <Bar
           dataKey="buy"
           name="Compras"
