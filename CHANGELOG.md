@@ -5,6 +5,83 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [Referencias Tecnicas] - Anotacoes para sprints futuras
+
+### Fonte: https://www.traders.com.br/blog/posts/api-financeira-python-mercado-como-usar
+
+Levantamento de APIs e tecnicas financeiras em Python com aproveitamento direto no SIG v2.
+
+---
+
+#### Sprint 5 (Cotacoes e Integracoes de Mercado) — referencias
+
+**yfinance com sufixo `.SA` para acoes brasileiras**
+- Acoes BR devem usar ticker com sufixo `.SA` (ex: `PETR4.SA`). Acoes internacionais nao usam sufixo.
+- Revisar `quotes_service.py` para garantir padronizacao consistente do sufixo ao chamar yfinance.
+- Exemplo:
+  ```python
+  import yfinance as yf
+  ticker = yf.Ticker("PETR4.SA")
+  hist = ticker.history(period="1mo")
+  ```
+- **Aplicacao:** `backend/app/services/quotes_service.py` — padronizar logica de montagem do ticker antes da chamada yfinance.
+
+**Cache local com Parquet para historico de cotacoes**
+- Salvar cotacoes historicas em `.parquet` e atualizar apenas incrementalmente reduz chamadas externas e melhora performance do `price_history_service.py`.
+- Estrategia: verificar se ja existe historico local; se sim, buscar apenas datas ausentes; concatenar e salvar.
+- **Aplicacao:** Sprint 5 e Sprint 8 (Historico Patrimonial).
+
+---
+
+#### Sprint 10 (Renda Fixa e Tesouro Direto) — referencias
+
+**Tesouro Direto via CSV oficial (B3/Tesouro Nacional)**
+- O Tesouro disponibiliza CSV publico com historico completo de precos e taxas de todos os titulos, atualizado diariamente. Nao depende de BRAPI nem yfinance.
+- URL do arquivo:
+  ```
+  https://www.tesourodireto.com.br/json/br/com/b3/tesouro/tesouro-direto/1/TesouroDireto_HistoricoTaxaPreco.csv
+  ```
+- Exemplo de leitura:
+  ```python
+  import pandas as pd
+  url = "https://www.tesourodireto.com.br/json/br/com/b3/tesouro/tesouro-direto/1/TesouroDireto_HistoricoTaxaPreco.csv"
+  td = pd.read_csv(url, sep=';', encoding='latin-1', decimal=',', thousands='.')
+  ```
+- **Aplicacao:** `treasury_service.py` — usar como fonte primaria de preco atual e historico de titulos do Tesouro Direto.
+
+**Banco Central via `python-bcb` (Selic, IPCA, CDI, cambio, IGPM)**
+- Biblioteca `python-bcb` acessa o SGS (Sistema Gerenciador de Series Temporais) do Bacen de forma simples e oficial.
+- Instalacao: `pip install python-bcb`
+- Exemplos:
+  ```python
+  from bcb import sgs
+  # Selic diaria (codigo 11)
+  selic = sgs.get({'Selic': 11}, start='2020-01-01')
+  # IPCA mensal (codigo 433)
+  ipca = sgs.get({'IPCA': 433}, start='2020-01-01')
+  # CDI diario (codigo 12)
+  cdi = sgs.get({'CDI': 12}, start='2020-01-01')
+  # Dolar PTAX (codigo 1)
+  ptax = sgs.get({'PTAX': 1}, start='2020-01-01')
+  ```
+- **Aplicacao:**
+  - `backend/requirements.txt` — adicionar `python-bcb`
+  - Sprint 10: indexadores de renda fixa (CDI, IPCA+, Selic, prefixado, IGPM+)
+  - Sprint 12 (IRPF): correcao monetaria e rendimentos tributaveis
+  - Sprint 5: fallback de cambio USD/BRL via PTAX oficial
+
+---
+
+#### Resumo de dependencias a adicionar nas sprints futuras
+
+| Biblioteca | Sprint | Uso |
+|---|---|---|
+| `python-bcb` | Sprint 5 / Sprint 10 | Selic, IPCA, CDI, PTAX via Bacen |
+| `pandas` (ja existe?) | Sprint 5 / Sprint 10 | Leitura do CSV do Tesouro e cache Parquet |
+| `pyarrow` ou `fastparquet` | Sprint 5 / Sprint 8 | Cache de cotacoes em Parquet |
+
+---
+
 ## [Unreleased] - Sprint 2 - 2026-06-15
 
 ### Refatoracao (Refactor)
