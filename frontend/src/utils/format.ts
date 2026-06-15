@@ -1,8 +1,17 @@
 import numeral from 'numeral'
 
 // ── Moeda ──────────────────────────────────────────────────────────────────────────────
+// Usamos Intl.NumberFormat para garantir símbolo "R$" e formatação consistente em pt-BR
+const brFormatter = new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})
+
 export function formatCurrency(value: number): string {
-  return numeral(value).format('R$ 0,0.00')
+  if (!Number.isFinite(value)) return brFormatter.format(0)
+  return brFormatter.format(value)
 }
 
 /** Alias BRL — usado em PositionsTable e outros componentes */
