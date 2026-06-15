@@ -3,58 +3,54 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models.dividend import Dividend
 from app.models.transaction import Transaction
-from app.core.asset_types import BR_ASSET_TYPES
+from app.core.asset_types import BR_TYPES
 
 logger = logging.getLogger(__name__)
 
 
-async def backfill_dividends(db: AsyncSession, portfolio_id: int) -> int:
+async def backfill_dividends_from_transactions(
+    db: AsyncSession,
+    portfolio_id: int,
+) -> int:
     """
-    Tenta preencher proventos faltantes consultando yfinance.
-    Retorna a quantidade de proventos inseridos.
+    Gera registros de Dividend a partir de transacoes do tipo DIVIDENDO/JCP
+    que ainda nao possuem entrada correspondente na tabela dividends.
     """
-    try:
-        from app.integrations.yfinance_client import get_dividends as yf_dividends
-    except ImportError:
-        logger.warning("yfinance não disponível para backfill")
-        return 0
+    from app.models.transaction import TransactionType
 
     result = await db.execute(
-        select(Transaction.ticker).distinct()
-        .where(Transaction.portfolio_id == portfolio_id)
+        select(Transaction).where(
+            Transaction.portfolio_id == portfolio_id,
+            Transaction.transaction_type.in_([
+                TransactionType.DIVIDENDO,
+                TransactionType.JCP,
+                TransactionType.RENDIMENTO,
+            ]),
+        )
     )
-    tickers = [row[0] for row in result.fetchall()]
+    transactions = result.scalars().all()
 
     inserted = 0
-    for ticker in tickers:
-        try:
-            dividends = yf_dividends(ticker)
-            for dt, amount in dividends.items():
-                exists = await db.execute(
-                    select(Dividend).where(
-                        Dividend.portfolio_id == portfolio_id,
-                        Dividend.ticker == ticker,
-                        Dividend.date == dt.date(),
-                    )
-                )
-                if exists.scalar_one_or_none():
-                    continue
-                div = Dividend(
-                    portfolio_id=portfolio_id,
-                    ticker=ticker,
-                    amount=float(amount),
-                    date=dt.date(),
-                    source="yfinance_backfill",
-                )
-                db.add(div)
-                inserted += 1
-        except Exception as exc:
-            logger.warning(f"Erro backfill {ticker}: {exc}")
+    for tx in transactions:
+        existing = await db.execute(
+            select(Dividend).where(
+                Dividend.ticker == tx.ticker,
+                Dividend.date == tx.transaction_date,
+            )
+        )
+        if existing.scalar_one_or_none():
+            continue
 
-    if inserted:
-        await db.commit()
+        div = Dividend(
+            ticker=tx.ticker,
+            date=tx.transaction_date,
+            value_per_unit=tx.unit_price,
+            total_received=tx.total_cost,
+            portfolio_id=portfolio_id,
+        )
+        db.add(div)
+        inserted += 1
+
+    await db.commit()
+    logger.info(f"[DividendBackfill] portfolio {portfolio_id}: {inserted} dividendos inseridos")
     return inserted
-
-
-def is_br_type(asset_type: str) -> bool:
-    return asset_type in BR_ASSET_TYPES

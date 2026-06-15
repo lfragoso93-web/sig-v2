@@ -1,60 +1,46 @@
+import logging
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select
 from app.models.dividend import Dividend
 from app.schemas.dividend import DividendCreate
-from fastapi import HTTPException
+
+logger = logging.getLogger(__name__)
 
 
 async def create_dividend(
     db: AsyncSession,
-    portfolio_id: int,
-    user_id: int,
     data: DividendCreate,
+    portfolio_id: int,
 ) -> Dividend:
+    existing = await db.execute(
+        select(Dividend).where(
+            Dividend.ticker == data.ticker,
+            Dividend.ex_date == data.ex_date,
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise ValueError("Dividendo ja existe para este ticker e data ex")
+
     div = Dividend(
-        portfolio_id=portfolio_id,
         ticker=data.ticker,
-        asset_type=getattr(data, "asset_type", None),
-        type=getattr(data, "type", "dividendo"),
-        amount=data.amount,
-        quantity=getattr(data, "quantity", None),
-        payment_date=getattr(data, "payment_date", None),
-        date=data.date,
+        ex_date=data.ex_date,
+        payment_date=data.payment_date,
+        value_per_unit=data.value_per_unit,
+        dividend_type=data.dividend_type,
+        portfolio_id=portfolio_id,
     )
     db.add(div)
     await db.commit()
     await db.refresh(div)
+    logger.info(f"[DividendService] Criado dividendo {div.ticker} ex={div.ex_date}")
     return div
 
 
 async def list_dividends(
     db: AsyncSession,
     portfolio_id: int,
-    user_id: int,
 ) -> list[Dividend]:
     result = await db.execute(
-        select(Dividend)
-        .where(Dividend.portfolio_id == portfolio_id)
-        .order_by(Dividend.date.desc())
+        select(Dividend).where(Dividend.portfolio_id == portfolio_id)
     )
     return list(result.scalars().all())
-
-
-async def delete_dividend(
-    db: AsyncSession,
-    dividend_id: int,
-    portfolio_id: int,
-    user_id: int,
-) -> bool:
-    result = await db.execute(
-        select(Dividend).where(
-            Dividend.id == dividend_id,
-            Dividend.portfolio_id == portfolio_id,
-        )
-    )
-    div = result.scalar_one_or_none()
-    if not div:
-        raise HTTPException(status_code=404, detail="Provento não encontrado")
-    await db.execute(delete(Dividend).where(Dividend.id == dividend_id))
-    await db.commit()
-    return True
