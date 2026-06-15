@@ -1,12 +1,12 @@
 import { useEffect } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { RefreshCw } from 'lucide-react'
-import { TransactionCreate } from '@/services/transactionService'
 import { useCreateTransaction } from '@/hooks/useTransactions'
 import { useUsdBrl } from '@/hooks/useFxRate'
 import { formatBRL, formatUSD } from '@/utils/format'
+import type { TransactionCreate } from '@/hooks/useTransactions'
 
-// ── Configuração por tipo de ativo ────────────────────────────────────
+// ── Configuração por tipo de ativo ──────────────────────────────────────────────────
 type AssetConfig = { label: string; currency: 'BRL' | 'USD'; qtyStep: string; qtyDefault: string; isRendaFixa?: boolean }
 
 const ASSET_CONFIGS: Record<string, AssetConfig> = {
@@ -34,10 +34,12 @@ const TX_TYPES = [
   { value: 'GRUPAMENTO',    label: 'Grupamento' },
 ] as const
 
-const label    = { color: 'var(--color-text-muted)', fontSize: 12, fontWeight: 500, marginBottom: 4, display: 'block' }
-const errStyle = { color: 'var(--color-error)', fontSize: 11, marginTop: 2 }
+const labelStyle = { color: 'var(--color-text-muted)', fontSize: 12, fontWeight: 500, marginBottom: 4, display: 'block' }
+const errStyle   = { color: 'var(--color-error)', fontSize: 11, marginTop: 2 }
 const inputStyle = { fontSize: 16 }
 
+// FormValues extende TransactionCreate (que já tem currency opcional)
+// e adiciona campos auxiliares de UI que NÃO vão para o payload final
 interface FormValues extends TransactionCreate {
   fx_rate_input: string
   issuer?: string
@@ -53,7 +55,7 @@ interface Props { portfolioId: number; onClose: () => void }
 
 export default function TransactionForm({ portfolioId, onClose }: Props) {
   const { data: fxData, isLoading: loadingFx } = useUsdBrl()
-  const { mutate: createTx, isPending } = useCreateTransaction(portfolioId)
+  const { mutate: createTx, isPending } = useCreateTransaction()
 
   const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm<FormValues>({
     defaultValues: {
@@ -72,18 +74,20 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
   const fxRateInput = watch('fx_rate_input')
   const fxRate      = parseFloat(fxRateInput) || fxData?.rate || 0
 
-  const cfg = ASSET_CONFIGS[assetType] ?? ASSET_CONFIGS.ACAO_NACIONAL
-  const isUSD = cfg.currency === 'USD'
+  const cfg         = ASSET_CONFIGS[assetType] ?? ASSET_CONFIGS.ACAO_NACIONAL
+  const isUSD       = cfg.currency === 'USD'
   const isRendaFixa = !!cfg.isRendaFixa
 
   useEffect(() => {
     if (fxData?.rate && !fxRateInput) setValue('fx_rate_input', String(fxData.rate.toFixed(4)))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fxData])
 
   useEffect(() => {
-    setValue('currency', cfg.currency)
+    // Não usa setValue('currency') pois currency é montado no onSubmit via cfg.currency
     setValue('quantity', parseFloat(cfg.qtyDefault))
     setValue('price', 0)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assetType])
 
   const priceBrl  = isUSD ? price * fxRate : price
@@ -91,8 +95,20 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
   const totalOrig = qty * price + fees
 
   function onSubmit(data: FormValues) {
+    // Monta o payload limpo: remove campos de UI e injeta currency + fx_rate
+    const { fx_rate_input, issuer: _i, bond_type: _bt, indexer: _ix,
+            cdi_rate: _cr, bond_form: _bf, maturity_date: _md,
+            daily_liquidity: _dl, ...txData } = data
+
     createTx(
-      { ...data, currency: cfg.currency, fx_rate: isUSD ? parseFloat(data.fx_rate_input) : undefined },
+      {
+        portfolioId,
+        data: {
+          ...txData,
+          currency: cfg.currency,
+          ...(isUSD && { fx_rate: parseFloat(fx_rate_input) }),
+        },
+      },
       { onSuccess: onClose },
     )
   }
@@ -146,7 +162,7 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
       </div>
 
       <div>
-        <label style={label}>Tipo de ativo</label>
+        <label style={labelStyle}>Tipo de ativo</label>
         <select className="input mt-1" style={inputStyle} {...register('asset_type')}>
           {Object.entries(ASSET_CONFIGS).map(([v, c]) => (
             <option key={v} value={v}>{c.label}</option>
@@ -158,11 +174,11 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label style={label}>Emissor</label>
+              <label style={labelStyle}>Emissor</label>
               <input className="input mt-1" style={inputStyle} placeholder="Ex: Banco XP" {...register('issuer')} />
             </div>
             <div>
-              <label style={label}>Tipo de título</label>
+              <label style={labelStyle}>Tipo de título</label>
               <select className="input mt-1" style={inputStyle} {...register('bond_type')}>
                 {BOND_TYPES.map(b => <option key={b}>{b}</option>)}
               </select>
@@ -171,13 +187,13 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label style={label}>Indexador</label>
+              <label style={labelStyle}>Indexador</label>
               <select className="input mt-1" style={inputStyle} {...register('indexer')}>
                 {INDEXERS.map(i => <option key={i}>{i}</option>)}
               </select>
             </div>
             <div>
-              <label style={label}>Taxa do CDI (%)</label>
+              <label style={labelStyle}>Taxa do CDI (%)</label>
               <input type="number" step="0.01" className="input mt-1" style={inputStyle}
                 placeholder="100" {...register('cdi_rate', { valueAsNumber: true })} />
             </div>
@@ -185,13 +201,13 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label style={label}>Forma <span style={{ color: 'var(--color-text-faint)' }}>(Opcional)</span></label>
+              <label style={labelStyle}>Forma <span style={{ color: 'var(--color-text-faint)' }}>(Opcional)</span></label>
               <select className="input mt-1" style={inputStyle} {...register('bond_form')}>
                 {BOND_FORMS.map(f => <option key={f}>{f}</option>)}
               </select>
             </div>
             <div>
-              <label style={label}>Valor (Opcional)</label>
+              <label style={labelStyle}>Valor (Opcional)</label>
               <input type="number" step="0.01" className="input mt-1" style={inputStyle} placeholder="0,00"
                 {...register('price', { valueAsNumber: true })} />
             </div>
@@ -199,17 +215,17 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-center">
             <div>
-              <label style={label}>Data da transação</label>
+              <label style={labelStyle}>Data da transação</label>
               <input type="date" className="input mt-1" style={inputStyle} {...register('transaction_date')} />
             </div>
             <div>
-              <label style={label}>Data de vencimento</label>
+              <label style={labelStyle}>Data de vencimento</label>
               <input type="date" className="input mt-1" style={inputStyle} {...register('maturity_date')} />
             </div>
           </div>
 
           <div className="flex items-center justify-between">
-            <label style={{ ...label, marginBottom: 0 }}>Liquidez diária</label>
+            <label style={{ ...labelStyle, marginBottom: 0 }}>Liquidez diária</label>
             <Controller
               control={control} name="daily_liquidity"
               render={({ field }) => (
@@ -236,7 +252,7 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label style={label}>Ativo</label>
+              <label style={labelStyle}>Ativo</label>
               <input
                 className="input mt-1 uppercase placeholder:normal-case"
                 style={inputStyle}
@@ -247,14 +263,14 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
               {errors.ticker && <p style={errStyle}>{errors.ticker.message}</p>}
             </div>
             <div>
-              <label style={label}>Data da transação</label>
+              <label style={labelStyle}>Data da transação</label>
               <input type="date" className="input mt-1" style={inputStyle} {...register('transaction_date', { required: true })} />
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label style={label}>Quantidade</label>
+              <label style={labelStyle}>Quantidade</label>
               <input
                 type="number" step={cfg.qtyStep} min={cfg.qtyStep}
                 className="input mt-1" style={inputStyle}
@@ -264,7 +280,7 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
               {errors.quantity && <p style={errStyle}>Obrigatório</p>}
             </div>
             <div>
-              <label style={label}>Preço em {isUSD ? 'US$' : 'R$'}</label>
+              <label style={labelStyle}>Preço em {isUSD ? 'US$' : 'R$'}</label>
               <input
                 type="number" step={isUSD ? '0.00000001' : '0.01'} min="0"
                 className="input mt-1" style={inputStyle}
@@ -317,7 +333,7 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
           )}
 
           <div>
-            <label style={label}>Outros custos (R$) <span style={{ color: 'var(--color-text-faint)' }}>(Opcional)</span></label>
+            <label style={labelStyle}>Outros custos (R$) <span style={{ color: 'var(--color-text-faint)' }}>(Opcional)</span></label>
             <input
               type="number" step="0.01" min="0"
               className="input mt-1" style={inputStyle}
