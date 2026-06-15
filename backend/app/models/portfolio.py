@@ -35,6 +35,9 @@ class Portfolio(Base, TimestampMixin):
     goals: Mapped[list["Goal"]] = relationship(
         "Goal", back_populates="portfolio", cascade="all, delete-orphan"
     )
+    snapshots: Mapped[list["PortfolioSnapshot"]] = relationship(
+        "PortfolioSnapshot", back_populates="portfolio", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
         return f"<Portfolio id={self.id} name={self.name} user_id={self.user_id}>"
