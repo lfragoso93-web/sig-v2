@@ -1,6 +1,5 @@
 import logging
 from datetime import date as DateType
-from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from fastapi import HTTPException
@@ -41,19 +40,13 @@ def normalize_type(asset_type: str | None) -> str:
 
 
 # ---------------------------------------------------------------------------
-# calc_raw_positions — PM ponderado, venda nao altera PM
+# calc_raw_positions - PM ponderado, venda nao altera PM
 # ---------------------------------------------------------------------------
 
 async def calc_raw_positions(
     db: AsyncSession,
     portfolio_id: int,
 ) -> list[dict]:
-    """
-    Calcula posicoes brutas a partir das transacoes.
-    - PM calculado apenas nas compras (fees incluidas no custo)
-    - Vendas reduzem quantidade e custo proporcional, sem alterar PM
-    - Posicoes zeradas sao excluidas
-    """
     result = await db.execute(
         select(Transaction)
         .where(Transaction.portfolio_id == portfolio_id)
@@ -61,7 +54,6 @@ async def calc_raw_positions(
     )
     transactions = result.scalars().all()
 
-    # state: ticker -> {quantity, total_cost, asset_type}
     state: dict[str, dict] = {}
 
     for tx in transactions:
@@ -78,12 +70,10 @@ async def calc_raw_positions(
         s = state[ticker]
 
         if op == OperationType.buy or (hasattr(op, 'value') and op.value == 'buy') or str(op).lower() in ('buy', 'compra'):
-            cost = qty * price + fees
-            s["total_cost"] += cost
+            s["total_cost"] += qty * price + fees
             s["quantity"] += qty
         elif op == OperationType.sell or (hasattr(op, 'value') and op.value == 'sell') or str(op).lower() in ('sell', 'venda'):
             if s["quantity"] > 0:
-                # PM invariante: reduz custo proporcional
                 ratio = min(qty, s["quantity"]) / s["quantity"]
                 s["total_cost"] -= s["total_cost"] * ratio
                 s["quantity"] = max(0.0, s["quantity"] - qty)
@@ -107,18 +97,13 @@ async def calc_raw_positions(
 
 
 # ---------------------------------------------------------------------------
-# enrich_with_prices — adiciona cotacao atual e calcula resultado
+# enrich_with_prices
 # ---------------------------------------------------------------------------
 
 def enrich_with_prices(
     positions: list[dict],
     prices: dict[str, float],
 ) -> list[dict]:
-    """
-    Recebe lista de posicoes brutas e dict {ticker: preco}.
-    Adiciona current_price, current_value, result_abs, result_pct.
-    Campos ficam None quando sem cotacao.
-    """
     enriched = []
     for p in positions:
         ticker = p["ticker"]
@@ -152,10 +137,6 @@ async def sum_dividends(
     portfolio_id: int,
     cutoff: DateType | None = None,
 ) -> float:
-    """
-    Soma total_value dos Dividends da carteira.
-    Se cutoff informado, filtra por asset_dividend.ex_date >= cutoff.
-    """
     from app.models.asset_dividend import AssetDividend
 
     q = select(func.sum(Dividend.total_value)).where(
@@ -216,11 +197,6 @@ async def delete_portfolio(db: AsyncSession, portfolio_id: int, user_id: int) ->
 
 async def get_portfolio_summary(db: AsyncSession, portfolio_id: int, user_id: int) -> dict:
     await get_portfolio(db, portfolio_id, user_id)
-    result = await db.execute(
-        select(Transaction).where(Transaction.portfolio_id == portfolio_id)
-    )
-    transactions = result.scalars().all()
-
     positions_raw = await calc_raw_positions(db, portfolio_id)
     total_invested = sum(p["total_invested"] for p in positions_raw)
 
