@@ -12,6 +12,7 @@ from app.models.asset_price import AssetPrice
 from app.models.irpf import IRPFRecord, IRPFLoss
 from app.models.goal import Goal, GoalAllocation
 from app.models.system_config import SystemConfig
+from app.models.portfolio_snapshot import PortfolioSnapshot
 
 __all__ = [
     "User",
@@ -29,4 +30,5 @@ __all__ = [
     "Goal",
     "GoalAllocation",
     "SystemConfig",
+    "PortfolioSnapshot",
 ]
