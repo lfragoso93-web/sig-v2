@@ -1,4 +1,4 @@
-import redis.asyncio as redis
+import redis.asyncio as redis  # type: ignore[import-untyped]
 from app.core.config import settings
 import json
 import logging
@@ -23,7 +23,7 @@ async def get_redis() -> redis.Redis | None:
             await _redis_client.ping()
             logger.info("Redis conectado com sucesso")
         except Exception:
-            logger.warning("Redis indisponível — cache desativado")
+            logger.warning("Redis indisponivel - cache desativado")
             _redis_client = None
     return _redis_client
 
