@@ -55,20 +55,12 @@ Levantamento de APIs e tecnicas financeiras em Python com aproveitamento direto 
 - Exemplos:
   ```python
   from bcb import sgs
-  # Selic diaria (codigo 11)
   selic = sgs.get({'Selic': 11}, start='2020-01-01')
-  # IPCA mensal (codigo 433)
-  ipca = sgs.get({'IPCA': 433}, start='2020-01-01')
-  # CDI diario (codigo 12)
-  cdi = sgs.get({'CDI': 12}, start='2020-01-01')
-  # Dolar PTAX (codigo 1)
-  ptax = sgs.get({'PTAX': 1}, start='2020-01-01')
+  ipca  = sgs.get({'IPCA': 433}, start='2020-01-01')
+  cdi   = sgs.get({'CDI': 12}, start='2020-01-01')
+  ptax  = sgs.get({'PTAX': 1}, start='2020-01-01')
   ```
-- **Aplicacao:**
-  - `backend/requirements.txt` — adicionar `python-bcb`
-  - Sprint 10: indexadores de renda fixa (CDI, IPCA+, Selic, prefixado, IGPM+)
-  - Sprint 12 (IRPF): correcao monetaria e rendimentos tributaveis
-  - Sprint 5: fallback de cambio USD/BRL via PTAX oficial
+- **Aplicacao:** `requirements.txt` / Sprint 10 (indexadores) / Sprint 12 (IRPF) / Sprint 5 (cambio PTAX).
 
 ---
 
@@ -84,6 +76,22 @@ Levantamento de APIs e tecnicas financeiras em Python com aproveitamento direto 
 
 ## [Unreleased] - Sprint 2 - 2026-06-15
 
+### Correcao pos-auditoria (Bug Fix)
+
+#### routers/transactions.py — Validacao de venda nao era executada
+- **Problema identificado em auditoria:** O `transaction_service.py` refatorado na Sprint 2 nao era chamado em nenhum lugar. O router `transactions.py` implementava tudo diretamente com `AsyncSession`, ignorando o service e, consequentemente, toda a validacao de venda implementada.
+- **Raiz do problema:** Service usa `Session` sincrona; router usa `AsyncSession`. Os dois nao eram compativeis e nao estavam conectados.
+- **Solucao aplicada em `backend/app/routers/transactions.py`:**
+  - Adicionado helper async `_calc_current_quantity(db, portfolio_id, ticker, exclude_tx_id)` usando `AsyncSession` + `select()`.
+  - Parametro `exclude_tx_id` garante que ao **editar** uma venda existente, a propria transacao nao conta no calculo (evita falso bloqueio).
+  - Adicionado helper `_validate_sell(db, portfolio_id, ticker, quantity, exclude_tx_id)` que levanta HTTP 400 com mensagem detalhada se `quantity > posicao_atual`.
+  - `create_transaction`: chama `_validate_sell` antes do `db.add(tx)` quando `operation == "sell"`.
+  - `update_transaction`: chama `_validate_sell` com `exclude_tx_id=transaction_id` antes do `db.commit()`.
+- **Commit:** `4a4908e7` — fix(sprint2): integrar validacao de venda no router async (create e update)
+- **Status:** Concluido.
+
+---
+
 ### Refatoracao (Refactor)
 
 #### transaction_service.py — Alinhamento com modelo atual
@@ -95,44 +103,37 @@ Levantamento de APIs e tecnicas financeiras em Python com aproveitamento direto 
   - `price` (preco unico em BRL; campo `price_brl` removido)
   - Nenhum import de `Asset`, `TransactionType` ou `price_brl`
 - **Funcoes adicionadas:**
-  - `_calc_current_quantity(db, portfolio_id, ticker)` — calcula posicao atual em carteira para validacao de venda
-  - `get_transaction(db, tx_id, user_id)` — busca transacao individual por ID
-  - `update_transaction(db, tx_id, user_id, data)` — edicao de transacao existente
+  - `_calc_current_quantity(db, portfolio_id, ticker)` — versao sincrona para uso nos testes unitarios
+  - `get_transaction`, `update_transaction` — funcoes que estavam faltando
 - **Commit:** `c1434e56` — refactor(sprint2): alinhar transaction_service com modelo atual
-- **Status:** Concluido.
+- **Status:** Concluido (servico usado como referencia logica; router e a fonte de verdade async).
 
-#### Validacao de venda em create_transaction
-- **Problema:** Era possivel registrar uma venda com quantidade maior do que a posicao atual na carteira, sem qualquer aviso ou bloqueio.
-- **Solucao aplicada:** `create_transaction` agora verifica `_calc_current_quantity` antes de inserir. Se `data.quantity > current_qty`, retorna HTTP 400 com mensagem clara indicando posicao disponivel e quantidade tentada.
-- **Commit:** `c1434e56` — refactor(sprint2): alinhar transaction_service com modelo atual
-- **Status:** Concluido.
+#### Validacao de venda
+- **Commit:** `c1434e56` + `4a4908e7`
+- **Status:** Ativa e funcional no router async.
 
 ---
 
 ### Testes (Tests)
 
 #### test_transaction_service.py — Reescrita completa
-- **Problema:** Os testes importavam `TransactionType` (inexistente no modelo atual) e nao cobriam o novo helper `_calc_current_quantity`.
-- **Solucao aplicada:** Arquivo reescrito integralmente:
-  - Todos os mocks usam `OperationType.buy` / `OperationType.sell`
-  - Removida dependencia de `price_brl` — mocks usam apenas `price`
-  - Adicionada classe `TestCalcCurrentQuantity` com 5 cenarios: compras puras, venda parcial, venda total, sem transacoes, venda maior que estoque
-  - Adicionado teste `test_multiplas_compras_e_vendas` para validar PM apos ciclo compra-venda-compra
+- **Solucao aplicada:** Arquivo reescrito integralmente com `OperationType.buy/sell`, sem `TransactionType` ou `price_brl`. 13 cenarios cobrindo `_calc_average_price` e `_calc_current_quantity`.
 - **Commit:** `18fbf392` — test(sprint2): reescrever testes de transaction_service com modelo atual
 - **Status:** Concluido.
 
 ---
 
-### Arquivos modificados nesta sessao (Sprint 2)
+### Arquivos modificados na Sprint 2 (completo)
 
 | Arquivo | Tipo de alteracao | Commit |
 |---|---|---|
 | `backend/app/services/transaction_service.py` | Refatoracao completa para modelo atual | `c1434e56` |
 | `backend/tests/test_transaction_service.py` | Reescrita dos testes | `18fbf392` |
+| `backend/app/routers/transactions.py` | Validacao de venda async integrada | `4a4908e7` |
 
 ---
 
-### Todos os itens da Sprint 2 (sessao 15/06/2026) foram concluidos. Nenhuma pendencia em aberto.
+### Sprint 2 encerrada. Todas as pendencias resolvidas. Proxima: Sprint 3.
 
 ---
 
@@ -141,66 +142,45 @@ Levantamento de APIs e tecnicas financeiras em Python com aproveitamento direto 
 ### Correcoes de bugs (Bug Fixes)
 
 #### Resumo — Total Investido incorreto
-- **Problema:** A coluna "Total Inv." na pagina Resumo exibia o mesmo valor de "Valor Atual", pois estava usando `current_value` (preco atual * quantidade) em vez de `total_invested` (preco medio * quantidade).
-- **Solucao aplicada:** Separados os campos no calculo de posicao: `totalInvestido = quantidade * precoMedio` e `valorAtual = quantidade * precoAtual`. No frontend, cada coluna aponta para o campo correto da API.
+- **Problema:** A coluna "Total Inv." na pagina Resumo exibia o mesmo valor de "Valor Atual", pois estava usando `current_value` em vez de `total_invested`.
+- **Solucao aplicada:** `totalInvestido = quantidade * precoMedio` e `valorAtual = quantidade * precoAtual`.
 - **Status:** Concluido.
 
 #### Resumo — Remocao do seletor de carteiras duplicado
-- **Problema:** A pagina Resumo exibia um seletor de carteiras proprio, causando confusao com o seletor global que ja existe na sidebar.
-- **Solucao aplicada:** Seletor de carteiras removido da pagina Resumo. O unico ponto de selecao de carteira e o dropdown na sidebar.
+- **Solucao aplicada:** Seletor removido da pagina Resumo. Unico ponto e o dropdown na sidebar.
 - **Status:** Concluido.
 
 #### Patrimonio > Tesouro — Botao de novo lancamento removido
-- **Problema:** A subpagina de Tesouro Direto dentro de Patrimonio exibia um botao local `+ Novo Lancamento` que nao deveria existir.
-- **Solucao aplicada:** Botao removido. Toda criacao de ativo passa exclusivamente pelo botao `+ Novo Lancamento` no header global da aplicacao.
 - **Status:** Concluido.
 
 #### Transacoes — Botao "Nova transacao" removido
-- **Problema:** A pagina de Transacoes possuia um botao proprio `+ Nova transacao`, criando dois pontos de entrada para o mesmo fluxo.
-- **Solucao aplicada:** Botao removido. O fluxo de criacao foi centralizado no header global.
 - **Status:** Concluido.
 
 #### Modal de edicao — Unificacao com modal de novo lancamento
-- **Problema:** Existiam dois modais distintos: um para "Novo Lancamento" (header) e outro para edicao de transacoes existentes. Isso gerava inconsistencia visual e de comportamento.
-- **Solucao aplicada:** Unificado em um unico componente `TransactionModal` com prop `mode: 'create' | 'edit'`. No modo edicao, o modal abre pre-preenchido com os dados da transacao via `initialData`. O contexto global `useTransactionModal` expoe `openCreate()` e `openEdit(transaction)`, chamados respectivamente pelo header e pelos botoes de edicao nas tabelas.
+- **Solucao aplicada:** Unico componente `TransactionModal` com prop `mode: 'create' | 'edit'`.
 - **Status:** Concluido.
 
 #### Transacoes — Pagina reorganizada com tabelas por classe e grafico
-- **Problema:** A pagina de Transacoes listava todos os ativos em uma unica tabela misturada, sem separacao por classe e sem visao grafica de aportes.
-- **Solucao aplicada:** Transacoes agora exibem:
-  - Grafico de barras mensais no topo (Compras em verde / Vendas em rosa), identico ao modelo de referencia do sistema SIG v1.
-  - Tabelas separadas por classe de ativo (Acoes, FIIs, ETFs Nacionais, ETFs Internacionais, Stocks, Tesouro Direto, Renda Fixa, Criptomoedas), cada uma com accordion expand/collapse e busca interna por ticker.
+- **Solucao aplicada:** Grafico de barras mensais + tabelas separadas por classe com accordion e busca interna.
 - **Status:** Concluido.
 
 #### Transacoes — Remocao do seletor de classe nos filtros globais
-- **Problema:** Os filtros globais da pagina de Transacoes incluiam um `<select>` para filtrar por classe de ativo, redundante pois as transacoes ja estao separadas por classe em tabelas proprias.
-- **Solucao aplicada:** Select de classe removido de `frontend/src/pages/Transacoes.tsx`. Os filtros globais passaram a ser apenas: busca por ticker e toggle Todos / Compras / Vendas.
-- **Commit:** `5602fae` — fix(transacoes): remover seletor de classes e corrigir bug de tabela sumindo ao buscar no grupo.
+- **Commit:** `5602fae`
 - **Status:** Concluido.
 
 #### Transacoes — Bug: tabela some ao digitar no filtro interno do grupo
-- **Problema:** Ao digitar no input de busca dentro do header de um grupo (ex: buscar "PETR" dentro da tabela de Acoes), o grupo inteiro desaparecia da tela. Ao apagar o texto, voltava. O bug ocorria em desktop e mobile.
-- **Causa raiz:** O bloco `if (groupList.length === 0) return null` estava posicionado antes da renderizacao do container do grupo. Quando a busca interna filtrava todos os itens, o componente inteiro (incluindo header e input) era desmontado.
-- **Solucao aplicada em `frontend/src/pages/Transacoes.tsx`:**
-  - O container do grupo sempre e renderizado, independentemente do resultado do filtro interno.
-  - O conteudo interno verifica `groupList`: se vazia, exibe mensagem `"Nenhum ticker encontrado neste grupo."` inline.
-  - `handleGroupSearchChange` forca o grupo a ficar aberto ao digitar (`setOpenGroups → true`).
-- **Commit:** `5602fae` — fix(transacoes): remover seletor de classes e corrigir bug de tabela sumindo ao buscar no grupo.
+- **Causa raiz:** `if (groupList.length === 0) return null` desmontava o container inteiro.
+- **Solucao aplicada:** Container sempre renderizado; conteudo vazio exibe mensagem inline.
+- **Commit:** `5602fae`
 - **Status:** Concluido.
 
 ---
 
-### Refatoracao de navegacao (Navigation Refactor)
+### Refatoracao de navegacao
 
 #### Patrimonio — Subpaginas removidas, pagina consolidada
-- **Problema:** Patrimonio tinha tres subpaginas separadas (Renda Variavel, Tesouro Direto, Renda Fixa) acessiveis por submenu na sidebar, causando confusao de navegacao nos usuarios.
-- **Solucao aplicada em `frontend/src/components/layout/Sidebar.tsx`:**
-  - Removido o array `NAV_PATRIMONIO_SUBS` com as rotas `/carteira/patrimonio/renda-variavel`, `/carteira/patrimonio/tesouro` e `/carteira/patrimonio/renda-fixa`.
-  - Removido o bloco de submenu expansivel (accordion) do item Patrimonio na sidebar.
-  - Patrimonio agora e um item de navegacao direto, sem filhos, apontando para `/carteira/patrimonio`.
-  - Removidos imports nao utilizados: `TrendingDown`, `Building2`, `Banknote`, `ChevronDown` (do menu patrimonio) e estado `patrimonioOpen`.
-- **Resultado:** O usuario ve Patrimonio como um item simples na sidebar. A pagina `PatrimonioPage` exibe o conteudo consolidado: KPIs, alocacao por classe, grafico donut e tabela de posicoes filtrada por classe, com cada classe de renda variavel exibida separadamente.
-- **Commit:** `408fa59` — fix(nav): remover subpaginas de Patrimonio da sidebar e deixar apenas Patrimonio consolidado.
+- **Solucao aplicada:** Submenu removido da sidebar. Patrimonio e item direto apontando para `/carteira/patrimonio`.
+- **Commit:** `408fa59`
 - **Status:** Concluido.
 
 ---
