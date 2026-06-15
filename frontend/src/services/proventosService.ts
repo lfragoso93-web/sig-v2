@@ -1,6 +1,6 @@
 import api from './api'
 
-// ─── Tipos alinhados com backend (proventos_service.py) ───────────────────────
+// ─── Tipos alinhados com backend (proventos_service.py) ────────────────────────────────────────────
 
 export interface ProventosSummary {
   total_recebido: number
@@ -44,7 +44,14 @@ export interface ProventosListResponse {
   items: ProventoItem[]
 }
 
-// ─── Service ──────────────────────────────────────────────────────────────────
+/** Ponto de evolução mensal de proventos — usado em ProventosBarChart */
+export interface ProventosEvolucao {
+  month: string       // ex: 'Jan/25'
+  recebido: number
+  a_receber: number
+}
+
+// ─── Service ─────────────────────────────────────────────────────────────────────────────────
 
 export const proventosService = {
   getSummary: (portfolioId: number) =>

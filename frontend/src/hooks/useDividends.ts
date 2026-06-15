@@ -8,6 +8,8 @@ export interface Dividend {
   asset_type: string
   type: string
   amount: number
+  quantity: number
+  payment_date: string
   date: string
   created_at: string
 }
@@ -36,7 +38,6 @@ export function useDividends(portfolioId: number | null) {
 
 /**
  * Resumo de dividendos: total recebido, projeção e breakdown mensal.
- * Endpoint: GET /dividends/{portfolioId}/summary
  */
 export function useDividendSummary(portfolioId: number | null) {
   return useQuery<DividendSummary>({
@@ -48,14 +49,15 @@ export function useDividendSummary(portfolioId: number | null) {
   })
 }
 
-export function useCreateDividend() {
+export function useCreateDividend(portfolioId?: number) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (data: Omit<Dividend, 'id' | 'created_at'>) =>
       api.post<Dividend>('/dividends', data).then((r) => r.data),
     onSuccess: (_d, v) => {
-      qc.invalidateQueries({ queryKey: KEY(v.portfolio_id) })
-      qc.invalidateQueries({ queryKey: ['dividends-summary', v.portfolio_id] })
+      const pid = portfolioId ?? v.portfolio_id
+      qc.invalidateQueries({ queryKey: KEY(pid) })
+      qc.invalidateQueries({ queryKey: ['dividends-summary', pid] })
     },
   })
 }
