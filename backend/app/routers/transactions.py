@@ -1,6 +1,6 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select
 from typing import List
 
 from app.core.database import get_db
@@ -8,15 +8,11 @@ from app.core.deps import get_current_user
 from app.models.user import User
 from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction, OperationType
-from app.schemas.transaction import TransactionCreate, TransactionOut, TransactionUpdate
+from app.schemas.transaction import TransactionCreate, TransactionOut
 from app.services.dividend_backfill_service import backfill_dividends
 
 router = APIRouter()
 
-
-# ---------------------------------------------------------------------------
-# Helpers internos
-# ---------------------------------------------------------------------------
 
 async def _get_portfolio(portfolio_id: int, user: User, db: AsyncSession) -> Portfolio:
     result = await db.execute(
@@ -37,10 +33,6 @@ async def _calc_current_quantity(
     ticker: str,
     exclude_tx_id: int | None = None,
 ) -> float:
-    """
-    Retorna a quantidade atual em carteira para um ticker (async).
-    exclude_tx_id: ignora uma transacao especifica (util ao editar).
-    """
     stmt = select(Transaction.operation, Transaction.quantity).where(
         Transaction.portfolio_id == portfolio_id,
         Transaction.ticker == ticker,
@@ -67,7 +59,6 @@ async def _validate_sell(
     quantity: float,
     exclude_tx_id: int | None = None,
 ) -> None:
-    """Levanta HTTP 400 se a venda ultrapassar a posicao atual."""
     current_qty = await _calc_current_quantity(db, portfolio_id, ticker, exclude_tx_id)
     if quantity > current_qty:
         raise HTTPException(
@@ -78,10 +69,6 @@ async def _validate_sell(
             ),
         )
 
-
-# ---------------------------------------------------------------------------
-# Endpoints
-# ---------------------------------------------------------------------------
 
 @router.get("/{portfolio_id}/transactions", response_model=List[TransactionOut])
 async def list_transactions(
@@ -112,24 +99,23 @@ async def create_transaction(
 ):
     await _get_portfolio(portfolio_id, current_user, db)
 
-    ticker     = payload.ticker.upper()
+    ticker = payload.ticker.upper()
     asset_type = payload.asset_type
 
-    # Validacao de venda: impede venda maior que posicao atual
     if str(payload.operation) in ("sell", OperationType.sell):
         await _validate_sell(db, portfolio_id, ticker, payload.quantity)
 
     tx = Transaction(
-        portfolio_id = portfolio_id,
-        ticker       = ticker,
-        asset_type   = asset_type,
-        operation    = payload.operation,
-        quantity     = payload.quantity,
-        price        = payload.price,
-        fees         = payload.fees or 0.0,
-        date         = payload.date,
-        currency     = getattr(payload, "currency", "BRL") or "BRL",
-        notes        = payload.notes,
+        portfolio_id=portfolio_id,
+        ticker=ticker,
+        asset_type=asset_type,
+        operation=payload.operation,
+        quantity=payload.quantity,
+        price=payload.price,
+        fees=payload.fees or 0.0,
+        date=payload.date,
+        currency=getattr(payload, "currency", "BRL") or "BRL",
+        notes=payload.notes,
     )
     db.add(tx)
     await db.commit()
@@ -137,9 +123,9 @@ async def create_transaction(
 
     background_tasks.add_task(
         _run_backfill,
-        portfolio_id = portfolio_id,
-        ticker       = ticker,
-        asset_type   = str(asset_type),
+        portfolio_id=portfolio_id,
+        ticker=ticker,
+        asset_type=str(asset_type),
     )
 
     return tx
@@ -169,31 +155,30 @@ async def update_transaction(
     if not tx:
         raise HTTPException(status_code=404, detail="Transacao nao encontrada.")
 
-    ticker     = payload.ticker.upper()
+    ticker = payload.ticker.upper()
     asset_type = payload.asset_type
 
-    # Validacao de venda ao editar: exclui a propria transacao do calculo
     if str(payload.operation) in ("sell", OperationType.sell):
         await _validate_sell(db, portfolio_id, ticker, payload.quantity, exclude_tx_id=transaction_id)
 
-    tx.ticker     = ticker
+    tx.ticker = ticker
     tx.asset_type = asset_type
-    tx.operation  = payload.operation
-    tx.quantity   = payload.quantity
-    tx.price      = payload.price
-    tx.fees       = payload.fees or 0.0
-    tx.date       = payload.date
-    tx.currency   = getattr(payload, "currency", "BRL") or "BRL"
-    tx.notes      = payload.notes
+    tx.operation = payload.operation
+    tx.quantity = payload.quantity
+    tx.price = payload.price
+    tx.fees = payload.fees or 0.0
+    tx.date = payload.date
+    tx.currency = getattr(payload, "currency", "BRL") or "BRL"
+    tx.notes = payload.notes
 
     await db.commit()
     await db.refresh(tx)
 
     background_tasks.add_task(
         _run_backfill,
-        portfolio_id = portfolio_id,
-        ticker       = ticker,
-        asset_type   = str(asset_type),
+        portfolio_id=portfolio_id,
+        ticker=ticker,
+        asset_type=str(asset_type),
     )
 
     return tx
@@ -222,7 +207,7 @@ async def delete_transaction(
     if not tx:
         raise HTTPException(status_code=404, detail="Transacao nao encontrada.")
 
-    ticker     = tx.ticker
+    ticker = tx.ticker
     asset_type = tx.asset_type
 
     await db.delete(tx)
@@ -230,23 +215,18 @@ async def delete_transaction(
 
     background_tasks.add_task(
         _run_backfill,
-        portfolio_id = portfolio_id,
-        ticker       = ticker,
-        asset_type   = str(asset_type),
+        portfolio_id=portfolio_id,
+        ticker=ticker,
+        asset_type=str(asset_type),
     )
 
 
 async def _run_backfill(portfolio_id: int, ticker: str, asset_type: str) -> None:
-    """
-    Abre sessao independente para o backfill.
-    BackgroundTasks nao recebem Depends, entao o ciclo de vida
-    da sessao e gerenciado manualmente aqui.
-    """
     from app.core.database import AsyncSessionLocal
     async with AsyncSessionLocal() as db:
         await backfill_dividends(
-            db           = db,
-            portfolio_id = portfolio_id,
-            ticker       = ticker,
-            asset_type   = asset_type,
+            db=db,
+            portfolio_id=portfolio_id,
+            ticker=ticker,
+            asset_type=asset_type,
         )
