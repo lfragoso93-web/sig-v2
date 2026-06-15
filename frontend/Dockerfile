@@ -5,8 +5,8 @@ WORKDIR /app
 
 COPY package*.json ./
 
-# usa npm install (funciona com ou sem lock file)
-RUN npm install
+# npm ci requires package-lock.json — ensures reproducible installs
+RUN npm ci
 
 COPY . .
 
