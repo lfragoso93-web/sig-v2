@@ -1,7 +1,6 @@
 import numeral from 'numeral'
 
 // ── Moeda ──────────────────────────────────────────────────────────────────────────────
-// Usamos Intl.NumberFormat para garantir símbolo "R$" e formatação consistente em pt-BR
 const brFormatter = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
   currency: 'BRL',
@@ -9,9 +8,17 @@ const brFormatter = new Intl.NumberFormat('pt-BR', {
   maximumFractionDigits: 2,
 })
 
-export function formatCurrency(value: number): string {
+const brFormatterShort = new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+  notation: 'compact',
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 1,
+})
+
+export function formatCurrency(value: number, short?: boolean): string {
   if (!Number.isFinite(value)) return brFormatter.format(0)
-  return brFormatter.format(value)
+  return short ? brFormatterShort.format(value) : brFormatter.format(value)
 }
 
 /** Alias BRL — usado em PositionsTable e outros componentes */
@@ -21,7 +28,7 @@ export function formatUSD(value: number): string {
   return numeral(value).format('$ 0,0.00')
 }
 
-// ── Percentual ────────────────────────────────────────────────────────────────────
+// ── Percentual ────────────────────────────────────────────────────────────────
 export function formatPercent(value: number): string {
   return numeral(value / 100).format('0.00%')
 }
@@ -55,7 +62,6 @@ export function signClass(value: number): string {
 }
 
 // ── Badge por tipo de ativo ─────────────────────────────────────────────────────────────
-// Normaliza para uppercase antes de mapear — cobre todos os formatos do banco
 export function assetBadgeClass(assetType: string): string {
   if (!assetType) return 'badge-default'
   const map: Record<string, string> = {
@@ -74,6 +80,5 @@ export function assetBadgeClass(assetType: string): string {
     'CRIPTOMOEDA':       'badge-cripto',
     'RENDA_FIXA':        'badge-renda-fixa',
   }
-  // já estava uppercase mas garantimos
   return map[assetType.toUpperCase()] ?? 'badge-default'
 }

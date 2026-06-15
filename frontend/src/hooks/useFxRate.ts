@@ -9,3 +9,8 @@ export function useFxRate(from: string, to: string) {
     staleTime: 5 * 60 * 1000,
   })
 }
+
+/** Alias conveniente para o par USD/BRL */
+export function useUsdBrl() {
+  return useFxRate('USD', 'BRL')
+}
