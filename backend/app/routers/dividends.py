@@ -1,11 +1,16 @@
 """
-Router de proventos.
-Todos os endpoints sao async e usam o novo modelo AssetDividend.
+Router de proventos (dividends).
+Endpoints:
+  GET   /portfolios/{id}/dividends          -> lista paginada com filtros
+  GET   /portfolios/{id}/dividends/summary  -> totais por tipo
+  PATCH /portfolios/{id}/dividends/{div_id} -> atualiza status manualmente
+  POST  /portfolios/{id}/dividends/sync     -> sincroniza proventos de todos
+                                               os ativos da carteira (manual)
 """
 from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +19,7 @@ from app.core.deps import get_current_user
 from app.models.asset_dividend import AssetDividend
 from app.models.dividend import Dividend, DividendStatus
 from app.models.portfolio import Portfolio
+from app.models.transaction import Transaction
 from app.models.user import User
 from app.services.dividend_service import (
     get_dividend_summary,
@@ -37,6 +43,19 @@ async def _get_portfolio(portfolio_id: int, user: User, db: AsyncSession) -> Por
     if not p:
         raise HTTPException(status_code=404, detail="Carteira nao encontrada.")
     return p
+
+
+async def _run_backfill(portfolio_id: int, ticker: str, asset_type: str) -> None:
+    """Abre sessao independente para o backfill (BackgroundTask)."""
+    from app.core.database import AsyncSessionLocal
+    from app.services.dividend_backfill_service import backfill_dividends
+    async with AsyncSessionLocal() as db:
+        await backfill_dividends(
+            db=db,
+            portfolio_id=portfolio_id,
+            ticker=ticker,
+            asset_type=asset_type,
+        )
 
 
 # -- endpoints ----------------------------------------------------------------
@@ -105,3 +124,46 @@ async def patch_dividend_status(
     if not div:
         raise HTTPException(status_code=404, detail="Provento nao encontrado.")
     return {"id": div.id, "status": div.status}
+
+
+@router.post(
+    "/portfolios/{portfolio_id}/dividends/sync",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def sync_portfolio_dividends(
+    portfolio_id: int,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Sincroniza proventos de todos os ativos da carteira.
+    Dispara um BackgroundTask por ticker distinto encontrado nas transacoes.
+    Retorna imediatamente com 202 Accepted.
+    """
+    await _get_portfolio(portfolio_id, current_user, db)
+
+    # Busca todos os tickers distintos da carteira
+    result = await db.execute(
+        select(Transaction.ticker, Transaction.asset_type)
+        .where(Transaction.portfolio_id == portfolio_id)
+        .distinct()
+    )
+    tickers = result.fetchall()  # lista de (ticker, asset_type)
+
+    if not tickers:
+        return {"message": "Nenhum ativo encontrado na carteira.", "queued": 0}
+
+    for ticker, asset_type in tickers:
+        background_tasks.add_task(
+            _run_backfill,
+            portfolio_id=portfolio_id,
+            ticker=ticker,
+            asset_type=str(asset_type),
+        )
+
+    return {
+        "message": "Sincronizacao de proventos iniciada em background.",
+        "queued": len(tickers),
+        "tickers": [t for t, _ in tickers],
+    }
