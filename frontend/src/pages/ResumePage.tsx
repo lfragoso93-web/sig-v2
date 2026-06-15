@@ -69,34 +69,6 @@ export default function ResumePage() {
   return (
     <div className="p-4 md:p-6 flex flex-col gap-5 max-w-[1400px] mx-auto">
 
-      {/* Portfolio selector */}
-      {portfolios.length > 1 && (
-        <div className="flex items-center gap-2">
-          <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Carteira:</span>
-          <div className="flex gap-1">
-            {portfolios.map(p => (
-              <button
-                key={p.id}
-                onClick={() => setGlobal(p.id)}
-                className={clsx(
-                  'px-3 py-1 rounded text-xs font-medium transition-colors',
-                  portfolioId === p.id
-                    ? 'bg-brand-600 text-white'
-                    : 'border hover:bg-surface-600'
-                )}
-                style={portfolioId !== p.id ? {
-                  background: 'var(--color-surface-2)',
-                  borderColor: 'var(--color-border)',
-                  color: 'var(--color-text-muted)',
-                } : {}}
-              >
-                {p.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {loadingSummary ? (
