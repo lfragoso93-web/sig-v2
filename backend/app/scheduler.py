@@ -11,6 +11,7 @@ from app.core.cache import cache_set
 from app.integrations.brapi import get_quotes_bulk
 from app.models.asset import Asset, AssetType
 from app.models.dividend import Dividend, DividendStatus
+from app.models.portfolio import Portfolio
 from app.models.portfolio_position import PortfolioPosition
 from app.models.transaction import Transaction
 from app.services.corporate_event_service import (
@@ -18,6 +19,8 @@ from app.services.corporate_event_service import (
 )
 from app.services.dividend_backfill_service import backfill_dividends
 from app.services.price_history_service import persist_daily_prices
+from app.services.quote_service import update_all_quotes
+from app.services.portfolio_snapshot_service import refresh_today_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +39,7 @@ PRICE_HISTORY_TYPES = {
 scheduler = AsyncIOScheduler(timezone="America/Sao_Paulo")
 
 
-# ── helpers ──────────────────────────────────────────────────────────────────
+# ── helpers ─────────────────────────────────────────────────────────────────────────
 
 async def _get_active_brapi_assets() -> list[Asset]:
     async with AsyncSessionLocal() as db:
@@ -90,7 +93,19 @@ async def _get_price_history_tickers() -> list[tuple[str, AssetType]]:
     ]
 
 
-# ── Jobs ────────────────────────────────────────────────────────────────────
+async def _get_active_portfolio_ids() -> list[int]:
+    """Retorna IDs de todas as carteiras ativas com pelo menos 1 transacao."""
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(Portfolio.id)
+            .join(Transaction, Transaction.portfolio_id == Portfolio.id)
+            .where(Portfolio.is_active == True)
+            .distinct()
+        )
+        return [row.id for row in result.all()]
+
+
+# ── Jobs ────────────────────────────────────────────────────────────────────────
 
 async def job_update_quotes():
     """Atualiza cotacoes de todos os ativos nacionais em carteira no Redis."""
@@ -134,6 +149,46 @@ async def job_persist_price_history():
             logger.error(f"[Scheduler] Erro persist price {ticker}: {e}")
 
     logger.info(f"[Scheduler] Historico: {total} registros inseridos, {errors} erros.")
+
+
+async def job_update_all_quotes_and_snapshots():
+    """
+    Job diario (19h00, apos fechamento B3):
+      1. Atualiza Asset.last_price de todos os ativos (update_all_quotes).
+      2. Gera/atualiza o snapshot do dia para cada carteira ativa
+         (refresh_today_snapshot).
+
+    Ordem importa: cotacoes primeiro, snapshot depois —
+    o snapshot usa Asset.last_price como fallback se AssetPrice ainda nao
+    tiver o fechamento do dia atual.
+    """
+    logger.info("[Scheduler] Iniciando update_all_quotes + snapshots do dia...")
+
+    # Passo 1: atualiza cotacoes de todos os ativos
+    try:
+        async with AsyncSessionLocal() as db:
+            await update_all_quotes(db)
+        logger.info("[Scheduler] update_all_quotes concluido.")
+    except Exception as e:
+        logger.error(f"[Scheduler] Erro em update_all_quotes: {e}")
+
+    # Passo 2: snapshot diario de cada carteira ativa
+    portfolio_ids = await _get_active_portfolio_ids()
+    ok = 0
+    errors = 0
+    for pid in portfolio_ids:
+        try:
+            async with AsyncSessionLocal() as db:
+                await refresh_today_snapshot(db, pid)
+            ok += 1
+        except Exception as e:
+            errors += 1
+            logger.error(f"[Scheduler] Erro snapshot portfolio={pid}: {e}")
+
+    logger.info(
+        f"[Scheduler] Snapshots do dia: {ok} ok, {errors} erros "
+        f"({len(portfolio_ids)} carteiras ativas)."
+    )
 
 
 async def job_sync_corporate_events():
@@ -205,10 +260,10 @@ async def job_update_dividend_status():
     logger.info(f"[Scheduler] {updated} proventos marcados como RECEBIDO.")
 
 
-# ── Init ────────────────────────────────────────────────────────────────────────
+# ── Init ───────────────────────────────────────────────────────────────────────────
 
 def init_scheduler():
-    # Cotacoes: a cada 5 minutos
+    # Cotacoes Redis: a cada 5 minutos
     scheduler.add_job(
         job_update_quotes,
         IntervalTrigger(minutes=5),
@@ -221,6 +276,16 @@ def init_scheduler():
         job_persist_price_history,
         CronTrigger(hour=18, minute=30, timezone="America/Sao_Paulo"),
         id="persist_price_history",
+        replace_existing=True,
+    )
+
+    # Cotacoes DB (last_price) + snapshots diarios: 19h00
+    # Roda 30min apos persist_price_history para garantir que AssetPrice
+    # do dia ja esta salvo antes de calcular o snapshot.
+    scheduler.add_job(
+        job_update_all_quotes_and_snapshots,
+        CronTrigger(hour=19, minute=0, timezone="America/Sao_Paulo"),
+        id="update_all_quotes_and_snapshots",
         replace_existing=True,
     )
 
@@ -249,4 +314,4 @@ def init_scheduler():
     )
 
     scheduler.start()
-    logger.info("[Scheduler] 5 jobs registrados e scheduler iniciado.")
+    logger.info("[Scheduler] 6 jobs registrados e scheduler iniciado.")
