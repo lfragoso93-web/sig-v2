@@ -34,9 +34,9 @@ export default function PatrimonioBarChart({ data, loading }: Props) {
   }
 
   const chartData = data.map(d => ({
-    name:      shortDate(d.date),
-    value:     d.value,
-    invested:  d.invested ?? 0,   // garante number, nunca undefined
+    name:     shortDate(d.date),
+    value:    d.value,
+    invested: d.invested ?? 0,
   }))
 
   return (
@@ -49,7 +49,7 @@ export default function PatrimonioBarChart({ data, loading }: Props) {
           axisLine={false} tickLine={false}
         />
         <YAxis
-          tickFormatter={(v: number) => formatBRL(v, 0)}
+          tickFormatter={(v: number) => formatBRL(v, true)}
           tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }}
           axisLine={false} tickLine={false} width={72}
         />
