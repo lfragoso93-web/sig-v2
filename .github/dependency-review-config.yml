@@ -1,0 +1,12 @@
+# Configuracao do dependency-review-action
+# Ref: https://github.com/actions/dependency-review-action
+
+fail-on-severity: high
+
+# Desabilitado: pacotes internos sem SPDX declarado geram falso-positivo
+license-check: false
+
+# Licencas explicitamente bloqueadas se license-check for reabilitado
+deny-licenses:
+  - GPL-3.0
+  - AGPL-3.0

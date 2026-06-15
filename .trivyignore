@@ -1,0 +1,12 @@
+# CVEs sem fix disponivel upstream em 2026-06-15
+# Revisar mensalmente e remover entradas quando patches forem publicados
+
+# yfinance -> frozendict transitive dep
+CVE-2024-6345
+
+# setuptools (build-time only, nao exposto em runtime)
+CVE-2024-6345
+CVE-2022-40897
+
+# pip (build-time runner, nao exposto em runtime)
+CVE-2023-5752

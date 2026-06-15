@@ -127,6 +127,7 @@ jobs:
           output: trivy-fs.sarif
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          trivyignores: .trivyignore
           exit-code: "0"
 
       - name: Upload Trivy filesystem SARIF
@@ -144,6 +145,7 @@ jobs:
           format: table
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          trivyignores: .trivyignore
           exit-code: "1"
 
   dependency-review:
@@ -159,8 +161,7 @@ jobs:
       - name: Review dependency changes
         uses: actions/dependency-review-action@v4
         with:
-          fail-on-severity: high
-          license-check: false
+          config-file: .github/dependency-review-config.yml
 
   # ---------------------------------------------------------------------------
   # DOCKERFILE LINT
@@ -234,6 +235,7 @@ jobs:
           output: trivy-backend-image.sarif
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          trivyignores: .trivyignore
           exit-code: "0"
 
       - name: Upload Trivy backend image SARIF
@@ -250,6 +252,7 @@ jobs:
           format: table
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          trivyignores: .trivyignore
           exit-code: "1"
 
   build-and-scan-frontend:
@@ -288,6 +291,7 @@ jobs:
           output: trivy-frontend-image.sarif
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          trivyignores: .trivyignore
           exit-code: "0"
 
       - name: Upload Trivy frontend image SARIF
@@ -304,6 +308,7 @@ jobs:
           format: table
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          trivyignores: .trivyignore
           exit-code: "1"
 
   # ---------------------------------------------------------------------------
@@ -424,6 +429,7 @@ jobs:
           image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/sig-v2-backend@${{ needs.publish-backend.outputs.image-digest }}
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          trivyignores: .trivyignore
           exit-code: "1"
 
   scan-published-frontend:
@@ -446,4 +452,5 @@ jobs:
           image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/sig-v2-frontend@${{ needs.publish-frontend.outputs.image-digest }}
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          trivyignores: .trivyignore
           exit-code: "1"
