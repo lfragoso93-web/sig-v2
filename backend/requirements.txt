@@ -12,6 +12,8 @@ alembic==1.14.0
 httpx==0.27.2
 yfinance==0.2.40
 # PyJWT 2.12.0 - fix CVE-2026-32597
+# python-jose removido: dependencia pyasn1<0.5.0 conflita com fix CVE-2026-30922
+# toda logica JWT usa PyJWT diretamente via app.core.security
 PyJWT[crypto]==2.12.0
 # cryptography 46.0.5 - fix CVE-2026-26007
 cryptography==46.0.5
@@ -22,8 +24,3 @@ python-multipart==0.0.27
 apscheduler==3.10.4
 email-validator==2.2.0
 redis==5.2.1
-# python-jose 3.4.0 - fix CVE-2024-33663 (CRITICAL: algorithm confusion ECDSA)
-python-jose[cryptography]==3.4.0
-# pyasn1 0.6.3 - fix CVE-2026-30922 (DoS via unbounded recursion)
-# dependencia transitiva do python-jose pinada explicitamente
-pyasn1==0.6.3

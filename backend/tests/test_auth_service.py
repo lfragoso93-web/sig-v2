@@ -1,7 +1,7 @@
 """Testes para auth_service — hash e verificacao de senhas e tokens."""
 import pytest
+import jwt
 from app.core.security import hash_password, verify_password, create_access_token
-from jose import jwt
 from app.core.config import settings
 
 
