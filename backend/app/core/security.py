@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from jose import JWTError, jwt
+import jwt
+import jwt.exceptions
 from passlib.context import CryptContext
 from app.core.config import settings
 
@@ -36,5 +37,5 @@ def create_refresh_token(subject: str) -> str:
 def decode_token(token: str) -> Optional[dict]:
     try:
         return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-    except JWTError:
+    except jwt.exceptions.InvalidTokenError:
         return None
