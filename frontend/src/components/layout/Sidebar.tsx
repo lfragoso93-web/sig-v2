@@ -5,14 +5,10 @@ import {
   ArrowLeftRight,
   Landmark,
   Settings,
-  ChevronDown,
   Briefcase,
   Plus,
   CheckCircle2,
   Wallet,
-  TrendingDown,
-  Building2,
-  Banknote,
   X,
 } from 'lucide-react'
 import { usePortfolios, useCreatePortfolio } from '@/hooks/usePortfolios'
@@ -21,20 +17,15 @@ import { useState, useEffect } from 'react'
 import Modal from '@/components/ui/Modal'
 
 const NAV_TOP = [
-  { to: '/carteira',                  icon: LayoutDashboard,  label: 'Resumo'        },
-]
-
-const NAV_PATRIMONIO_SUBS = [
-  { to: '/carteira/patrimonio/renda-variavel', icon: TrendingDown, label: 'Renda Variável' },
-  { to: '/carteira/patrimonio/tesouro',        icon: Building2,    label: 'Tesouro Direto' },
-  { to: '/carteira/patrimonio/renda-fixa',     icon: Banknote,     label: 'Renda Fixa'     },
+  { to: '/carteira',           icon: LayoutDashboard, label: 'Resumo'     },
+  { to: '/carteira/patrimonio',icon: Wallet,          label: 'Patrimônio' },
 ]
 
 const NAV_BOTTOM = [
-  { to: '/carteira/rentabilidade',    icon: TrendingUp,        label: 'Rentabilidade' },
-  { to: '/carteira/transacoes',       icon: ArrowLeftRight,    label: 'Transações'    },
-  { to: '/carteira/proventos',        icon: Landmark,          label: 'Proventos'     },
-  { to: '/carteira/configuracoes',    icon: Settings,          label: 'Configurações' },
+  { to: '/carteira/rentabilidade', icon: TrendingUp,     label: 'Rentabilidade' },
+  { to: '/carteira/transacoes',    icon: ArrowLeftRight, label: 'Transações'    },
+  { to: '/carteira/proventos',     icon: Landmark,       label: 'Proventos'     },
+  { to: '/carteira/configuracoes', icon: Settings,       label: 'Configurações' },
 ]
 
 export default function Sidebar() {
@@ -47,20 +38,13 @@ export default function Sidebar() {
   const [dropdownOpen, setDropdownOpen]   = useState(false)
   const [modalOpen, setModalOpen]         = useState(false)
   const [name, setName]                   = useState('')
-  const [description, setDescription]    = useState('')
+  const [description, setDescription]     = useState('')
   const [createdName, setCreatedName]     = useState<string | null>(null)
   const [error, setError]                 = useState<string | null>(null)
 
   // Controle de montagem para animar entrada/saída
   const [mounted, setMounted]   = useState(false)
   const [visible, setVisible]   = useState(false)
-
-  const isPatrimonioActive = location.pathname.startsWith('/carteira/patrimonio')
-  const [patrimonioOpen, setPatrimonioOpen] = useState(isPatrimonioActive)
-
-  useEffect(() => {
-    if (isPatrimonioActive) setPatrimonioOpen(true)
-  }, [isPatrimonioActive])
 
   // Fecha sidebar no mobile ao trocar de rota
   useEffect(() => {
@@ -81,11 +65,10 @@ export default function Sidebar() {
   useEffect(() => {
     if (sidebarOpen) {
       setMounted(true)
-      // pequeno delay para o browser registrar o elemento antes da transição
       requestAnimationFrame(() => requestAnimationFrame(() => setVisible(true)))
     } else {
       setVisible(false)
-      const t = setTimeout(() => setMounted(false), 280) // duração da transição
+      const t = setTimeout(() => setMounted(false), 280)
       return () => clearTimeout(t)
     }
   }, [sidebarOpen])
@@ -170,7 +153,6 @@ export default function Sidebar() {
           SIG
           <span className="text-xs font-medium ml-1" style={{ color: 'var(--color-text-muted)' }}>v2</span>
         </span>
-        {/* Botão X — só aparece no drawer mobile */}
         <button
           onClick={closeSidebar}
           className="lg:hidden flex items-center justify-center p-1 rounded-md transition-colors"
@@ -198,14 +180,6 @@ export default function Sidebar() {
               {selected?.name ?? 'Selecionar carteira'}
             </span>
           </div>
-          <ChevronDown
-            size={13}
-            style={{
-              flexShrink: 0,
-              transition: 'transform var(--transition-interactive)',
-              transform: dropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-            }}
-          />
         </button>
 
         {dropdownOpen && (
@@ -251,55 +225,11 @@ export default function Sidebar() {
       {/* Nav */}
       <nav className="flex flex-col gap-0.5 px-3 flex-1">
         {NAV_TOP.map(({ to, icon: Icon, label }) => (
-          <NavLink key={to} to={to} end className={navLinkClass} style={navLinkStyle}>
+          <NavLink key={to} to={to} end={to === '/carteira'} className={navLinkClass} style={navLinkStyle}>
             <Icon size={15} />
             {label}
           </NavLink>
         ))}
-
-        {/* Patrimônio (com submenu) */}
-        <div>
-          <button
-            onClick={() => {
-              navigate('/carteira/patrimonio')
-              setPatrimonioOpen(o => !o)
-            }}
-            className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors"
-            style={{
-              background: isPatrimonioActive
-                ? 'oklch(from var(--color-primary) l c h / 0.1)'
-                : 'transparent',
-              color: isPatrimonioActive
-                ? 'var(--color-primary)'
-                : 'var(--color-text-muted)',
-              fontWeight: isPatrimonioActive ? 600 : 400,
-            }}
-          >
-            <span className="flex items-center gap-2.5">
-              <Wallet size={15} />
-              Patrimônio
-            </span>
-            <ChevronDown
-              size={13}
-              style={{
-                transition: 'transform var(--transition-interactive)',
-                transform: patrimonioOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                flexShrink: 0,
-              }}
-            />
-          </button>
-
-          {patrimonioOpen && (
-            <div className="flex flex-col gap-0.5 mt-0.5 ml-3 pl-3" style={{ borderLeft: '1px solid var(--color-divider)' }}>
-              {NAV_PATRIMONIO_SUBS.map(({ to, icon: Icon, label }) => (
-                <NavLink key={to} to={to} className={navLinkClass} style={navLinkStyle}>
-                  <Icon size={14} />
-                  <span className="text-xs">{label}</span>
-                </NavLink>
-              ))}
-            </div>
-          )}
-        </div>
 
         {NAV_BOTTOM.map(({ to, icon: Icon, label }) => (
           <NavLink key={to} to={to} className={navLinkClass} style={navLinkStyle}>
@@ -313,12 +243,12 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* ── Desktop: sidebar fixa (≥1024px) ── */}
+      {/* Desktop: sidebar fixa (≥1024px) */}
       <div className="hidden lg:flex h-full">
         {sidebarContent}
       </div>
 
-      {/* ── Mobile/Tablet: drawer overlay (<1024px) com animação ── */}
+      {/* Mobile/Tablet: drawer overlay (<1024px) com animação */}
       {mounted && (
         <div
           className="lg:hidden fixed inset-0 z-40 flex"
@@ -327,14 +257,12 @@ export default function Sidebar() {
             opacity: visible ? 1 : 0,
           }}
         >
-          {/* Overlay escuro */}
           <div
             className="absolute inset-0"
             style={{ background: 'rgba(0,0,0,0.5)' }}
             onClick={closeSidebar}
             aria-label="Fechar menu"
           />
-          {/* Painel da sidebar — desliza da esquerda */}
           <div
             className="relative z-50 h-full flex"
             style={{
