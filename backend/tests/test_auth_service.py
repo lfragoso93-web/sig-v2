@@ -1,6 +1,6 @@
-"""Testes para auth_service — hash e verificação de senhas."""
+"""Testes para auth_service — hash e verificacao de senhas e tokens."""
 import pytest
-from app.services.auth_service import hash_password, verify_password, create_access_token
+from app.core.security import hash_password, verify_password, create_access_token
 from jose import jwt
 from app.core.config import settings
 
@@ -34,16 +34,16 @@ class TestPasswordHash:
 class TestCreateAccessToken:
 
     def test_token_decodificavel(self):
-        token = create_access_token({"sub": "42"})
+        token = create_access_token(subject="42")
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         assert payload["sub"] == "42"
 
     def test_token_contem_exp(self):
-        token = create_access_token({"sub": "1"})
+        token = create_access_token(subject="1")
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         assert "exp" in payload
 
     def test_token_distinto_para_dados_distintos(self):
-        t1 = create_access_token({"sub": "1"})
-        t2 = create_access_token({"sub": "2"})
+        t1 = create_access_token(subject="1")
+        t2 = create_access_token(subject="2")
         assert t1 != t2

@@ -116,6 +116,27 @@ async def _fetch_yfinance_current(
     return await loop.run_in_executor(_YF_EXECUTOR, _fetch_yf_current_sync, ticker_map)
 
 
+# ---------------------------------------------------------------------------
+# Aliases mockáveis pelos testes
+# ---------------------------------------------------------------------------
+
+async def _fetch_brapi(tickers: list[str]) -> dict[str, float]:
+    """Wrapper mockável sobre brapi_fetch_quotes."""
+    return await brapi_fetch_quotes(tickers)
+
+
+async def _fetch_brapi_crypto(tickers: list[str]) -> dict[str, float]:
+    """Wrapper mockável sobre brapi_fetch_crypto."""
+    return await brapi_fetch_crypto(tickers)
+
+
+async def _fetch_yfinance(
+    pairs: list[tuple[str, AssetType]],
+) -> dict[str, float]:
+    """Wrapper mockável sobre _fetch_yfinance_current."""
+    return await _fetch_yfinance_current(pairs)
+
+
 async def _noop() -> dict:
     return {}
 
@@ -160,9 +181,9 @@ async def get_prices(
             br_tickers.append(ticker)
 
     br_results, crypto_results, intl_results = await asyncio.gather(
-        brapi_fetch_quotes(br_tickers) if br_tickers else _noop(),
-        brapi_fetch_crypto(crypto_tickers) if crypto_tickers else _noop(),
-        _fetch_yfinance_current(intl_pairs) if intl_pairs else _noop(),
+        _fetch_brapi(br_tickers) if br_tickers else _noop(),
+        _fetch_brapi_crypto(crypto_tickers) if crypto_tickers else _noop(),
+        _fetch_yfinance(intl_pairs) if intl_pairs else _noop(),
     )
 
     for p in positions:
@@ -184,7 +205,7 @@ async def get_prices(
     fallback_results: dict[str, float] = {}
     if br_fallback:
         logger.info(f"[quotes_service] BRAPI sem resposta para {[t for t, _ in br_fallback]} - tentando yfinance")
-        fallback_results = await _fetch_yfinance_current(br_fallback)
+        fallback_results = await _fetch_yfinance(br_fallback)
 
     fresh = {**br_results, **crypto_results, **intl_results, **fallback_results}
 
