@@ -1,5 +1,6 @@
 # 2026-06-15 security update
-fastapi==0.115.0
+# fastapi 0.115.5 -> starlette 0.41.0 (fix CVE-2024-47874: DoS multipart)
+fastapi==0.115.5
 uvicorn[standard]==0.32.0
 sqlalchemy==2.0.36
 psycopg2-binary==2.9.10
@@ -23,3 +24,6 @@ email-validator==2.2.0
 redis==5.2.1
 # python-jose 3.4.0 - fix CVE-2024-33663 (CRITICAL: algorithm confusion ECDSA)
 python-jose[cryptography]==3.4.0
+# pyasn1 0.6.3 - fix CVE-2026-30922 (DoS via unbounded recursion)
+# dependencia transitiva do python-jose pinada explicitamente
+pyasn1==0.6.3
