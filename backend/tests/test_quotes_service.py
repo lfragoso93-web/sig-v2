@@ -2,12 +2,21 @@
 import pytest
 from unittest.mock import AsyncMock, patch
 
+from app.services import quotes_service
 from app.services.quotes_service import get_prices
 
 
 BR_ITEMS = [{"ticker": "PETR4",  "asset_type": "ACAO_NACIONAL"}]
 INTL_ITEMS = [{"ticker": "AAPL",    "asset_type": "STOCK"}]
 CRIPTO_ITEMS = [{"ticker": "BTC",     "asset_type": "CRIPTO"}]
+
+
+@pytest.fixture(autouse=True)
+def limpar_mem_cache():
+    """Garante que o cache em memoria e limpo antes de cada teste."""
+    quotes_service._mem_cache.clear()
+    yield
+    quotes_service._mem_cache.clear()
 
 
 @pytest.mark.asyncio
@@ -71,10 +80,10 @@ class TestGetPrices:
     async def test_ticker_ausente_nao_aparece_no_resultado(
         self,
     ):
-        """Se a API não retorna o ticker, ele não deve estar no dict final."""
+        """Se a API nao retorna o ticker, ele nao deve estar no dict final."""
         with patch(
             "app.services.quotes_service._fetch_brapi",
-            new=AsyncMock(return_value={}),  # vazio = ticker indisponível
+            new=AsyncMock(return_value={}),  # vazio = ticker indisponivel
         ), patch(
             "app.services.quotes_service._fetch_yfinance",
             new=AsyncMock(return_value={}),
