@@ -1,6 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
-from sqlalchemy.orm import Session
 from collections import defaultdict
 from datetime import date, timedelta
 from typing import Optional
@@ -14,10 +13,13 @@ from app.services.quotes_service import get_prices
 from app.integrations.brapi import fetch_quotes_with_meta
 
 
-# ── Labels e normalização de tipos ──────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Labels e normalizacao de tipos
+# ---------------------------------------------------------------------------
+
 ASSET_LABELS: dict[str, str] = {
-    'ACAO':              'Ações',
-    'ACAO_NACIONAL':     'Ações',
+    'ACAO':              'Acoes',
+    'ACAO_NACIONAL':     'Acoes',
     'FII':               'FIIs',
     'ETF_NACIONAL':      'ETFs Nacionais',
     'ETF_INT':           'ETFs Internacionais',
@@ -48,7 +50,7 @@ def normalize_type(raw: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# CRUD assíncrono (usado pelos routers)
+# CRUD assincrono
 # ---------------------------------------------------------------------------
 
 async def list_portfolios(db: AsyncSession, user_id: int) -> list[Portfolio]:
@@ -69,7 +71,7 @@ async def get_portfolio(db: AsyncSession, portfolio_id: int, user_id: int) -> Po
     if not portfolio:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Carteira não encontrada',
+            detail='Carteira nao encontrada',
         )
     return portfolio
 
@@ -104,79 +106,113 @@ async def delete_portfolio(
 
 
 # ---------------------------------------------------------------------------
-# Lógica financeira — Preço Médio Ponderado
+# Logica financeira — Preco Medio Ponderado
+#
+# Regras confirmadas (Sprint 4):
+#   - PM so e atualizado em COMPRAS: PM = (qty_atual*PM_atual + qty*preco + fees) / (qty_atual + qty)
+#   - VENDA: qty diminui, total_cost diminui proporcionalmente (total_cost -= PM * qty_vendida)
+#     O PM resultante e matematicamente identico ao anterior.
+#   - fees de VENDA nao entram no PM — afetam apenas lucro realizado.
+#   - Posicao zerada: qty <= 1e-9 — some da carteira.
+#   - Sem cotacao: current_price=None, current_value=None, result_abs=None, result_pct=None.
+#     NUNCA usar PM como fallback de cotacao.
 # ---------------------------------------------------------------------------
 
 async def calc_raw_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
     """
-    Calcula posições brutas (sem cotação) a partir do histórico de transações.
-    Usa Preço Médio Ponderado: avg = total_cost / qty.
-    A cada venda: total_cost -= avg * qty_vendida.
+    Calcula posicoes brutas (sem cotacao) a partir do historico de transacoes.
+    Retorna apenas posicoes com quantidade > 0.
     """
     result = await db.execute(
         select(Transaction)
         .where(Transaction.portfolio_id == portfolio_id)
-        .order_by(Transaction.date)
+        .order_by(Transaction.date.asc(), Transaction.id.asc())
     )
     txs = result.scalars().all()
 
+    # estado: (ticker, asset_type_normalizado) -> {qty, total_cost}
     pos: dict[tuple, dict] = {}
+
     for tx in txs:
-        raw_type = tx.asset_type or 'OUTROS'
-        norm     = normalize_type(raw_type)
-        key      = (tx.ticker, norm)
+        norm = normalize_type(tx.asset_type or 'OUTROS')
+        key  = (tx.ticker, norm)
         if key not in pos:
-            pos[key] = {'qty': 0.0, 'total_cost': 0.0, 'ticker': tx.ticker, 'asset_type': norm}
+            pos[key] = {
+                'ticker':     tx.ticker,
+                'asset_type': norm,
+                'qty':        0.0,
+                'total_cost': 0.0,
+            }
         p = pos[key]
+
+        qty_tx = float(tx.quantity)
+        price  = float(tx.price)
+        fees   = float(tx.fees or 0.0)
+
         if tx.operation == OperationType.buy:
-            p['total_cost'] += tx.quantity * tx.price + (tx.fees or 0)
-            p['qty']        += tx.quantity
+            # PM = (custo_atual + custo_nova_compra_com_taxa) / (qty_atual + qty_nova)
+            p['total_cost'] += qty_tx * price + fees
+            p['qty']        += qty_tx
         else:
-            if p['qty'] > 0:
-                avg = p['total_cost'] / p['qty']
-                p['total_cost'] -= avg * tx.quantity
-            p['qty'] -= tx.quantity
+            # Venda: reduz qty e custo proporcional. PM nao muda.
+            # fees de venda NAO entram no custo da posicao restante.
+            if p['qty'] > 1e-9:
+                pm = p['total_cost'] / p['qty']
+                p['total_cost'] -= pm * qty_tx
+                p['total_cost']  = max(p['total_cost'], 0.0)  # guard contra float drift
+            p['qty'] -= qty_tx
+            p['qty']  = max(p['qty'], 0.0)  # guard contra float drift
 
     items = []
     for p in pos.values():
-        if p['qty'] > 1e-9:
-            avg       = p['total_cost'] / p['qty'] if p['qty'] > 0 else 0.0
+        qty = p['qty']
+        if qty > 1e-9:
+            pm        = p['total_cost'] / qty
             total_inv = round(p['total_cost'], 2)
             items.append({
                 'ticker':         p['ticker'],
                 'asset_type':     p['asset_type'],
                 'asset_label':    ASSET_LABELS.get(p['asset_type'], p['asset_type']),
-                'quantity':       round(p['qty'], 8),
-                'avg_price':      round(avg, 6),
+                'quantity':       round(qty, 8),
+                'avg_price':      round(pm, 6),
                 'total_invested': total_inv,
             })
     return items
 
 
-def enrich_with_prices(items: list[dict], prices: dict[str, float]) -> list[dict]:
+def enrich_with_prices(
+    items: list[dict],
+    prices: dict[str, float | None],
+) -> list[dict]:
     """
-    Enriquece posições brutas com cotação atual.
-    current_price = None quando cotação indisponível — NUNCA usa avg como fallback.
+    Enriquece posicoes brutas com cotacao atual.
+
+    Regra: se cotacao indisponivel:
+      current_price  = None
+      current_value  = None   (NUNCA usar PM como fallback)
+      result_abs     = None
+      result_pct     = None
     """
     enriched = []
     for item in items:
         ticker         = item['ticker']
-        avg_price      = item['avg_price']
         quantity       = item['quantity']
         total_invested = item['total_invested']
 
         raw_price     = prices.get(ticker)
         current_price = float(raw_price) if raw_price is not None else None
 
-        effective_price = current_price if current_price is not None else avg_price
-        current_value   = round(quantity * effective_price, 2)
-        result_abs      = round(current_value - total_invested, 2) if current_price is not None else 0.0
-        result_pct      = round(
-            (result_abs / total_invested * 100)
-            if total_invested > 0 and current_price is not None
-            else 0.0,
-            4,
-        )
+        if current_price is not None:
+            current_value = round(quantity * current_price, 2)
+            result_abs    = round(current_value - total_invested, 2)
+            result_pct    = round(
+                (result_abs / total_invested * 100) if total_invested > 0 else 0.0,
+                4,
+            )
+        else:
+            current_value = None
+            result_abs    = None
+            result_pct    = None
 
         enriched.append({
             **item,
@@ -190,60 +226,56 @@ def enrich_with_prices(items: list[dict], prices: dict[str, float]) -> list[dict
 
 async def calc_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
     """
-    Orquestra: calcula posições brutas → busca cotações + logos (BR) → enriquece.
-
-    Para ativos BR (ações, FIIs, ETFs nacionais): usa fetch_quotes_with_meta
-    que retorna price + logo_url numa única chamada à BRAPI.
-    Para ativos internacionais/cripto: usa get_prices (sem logo).
+    Orquestra: posicoes brutas -> cotacoes (BR com logo, internacionais sem) -> enriquece.
     """
-    from app.services.quotes_service import BR_TYPES, INTL_TYPES
+    from app.services.quotes_service import BR_TYPES
+    import asyncio
 
     raw = await calc_raw_positions(db, portfolio_id)
     if not raw:
         return []
 
-    # Separa tickers BR dos demais
     br_tickers   = [p['ticker'] for p in raw if p['asset_type'].upper() in BR_TYPES]
-    intl_tickers = [p for p in raw if p['asset_type'].upper() not in BR_TYPES]
+    intl_items   = [p for p in raw if p['asset_type'].upper() not in BR_TYPES]
+    intl_tickers = [p['ticker'] for p in intl_items]
 
-    # Busca BR com meta (price + logo) e internacionais apenas price
-    import asyncio
     br_meta, intl_prices = await asyncio.gather(
-        fetch_quotes_with_meta(br_tickers) if br_tickers else _empty_dict(),
-        get_prices(intl_tickers)           if intl_tickers else _empty_dict(),
+        fetch_quotes_with_meta(br_tickers) if br_tickers   else _empty_dict(),
+        get_prices(intl_items)             if intl_tickers else _empty_dict(),
     )
 
     enriched = []
     for item in raw:
-        ticker         = item['ticker']
-        avg_price      = item['avg_price']
-        quantity       = item['quantity']
-        total_invested = item['total_invested']
-        asset_type     = item['asset_type'].upper()
+        ticker     = item['ticker']
+        quantity   = item['quantity']
+        total_inv  = item['total_invested']
+        asset_type = item['asset_type'].upper()
 
-        # Obtém price e logo de acordo com a origem
-        if asset_type in BR_TYPES and ticker in br_meta:
+        from app.services.quotes_service import BR_TYPES as _BR
+        if asset_type in _BR and ticker in br_meta:
             meta          = br_meta[ticker]
-            current_price = meta['price']
-            logo_url      = meta['logo_url']
+            current_price = meta.get('price')
+            logo_url      = meta.get('logo_url')
         else:
             current_price = intl_prices.get(ticker)
             logo_url      = None
 
-        effective_price = current_price if current_price is not None else avg_price
-        current_value   = round(quantity * effective_price, 2)
-        result_abs      = round(current_value - total_invested, 2) if current_price is not None else 0.0
-        result_pct      = round(
-            (result_abs / total_invested * 100)
-            if total_invested > 0 and current_price is not None
-            else 0.0,
-            4,
-        )
+        if current_price is not None:
+            current_value = round(quantity * float(current_price), 2)
+            result_abs    = round(current_value - total_inv, 2)
+            result_pct    = round(
+                (result_abs / total_inv * 100) if total_inv > 0 else 0.0,
+                4,
+            )
+        else:
+            current_value = None
+            result_abs    = None
+            result_pct    = None
 
         enriched.append({
             **item,
-            'logo_url':     logo_url,
-            'current_price': round(current_price, 6) if current_price is not None else None,
+            'logo_url':      logo_url,
+            'current_price': round(float(current_price), 6) if current_price is not None else None,
             'current_value': current_value,
             'result_abs':    result_abs,
             'result_pct':    result_pct,
@@ -296,13 +328,19 @@ async def sum_dividends(
 
 
 # ---------------------------------------------------------------------------
-# Recálculo de posições materializadas (usado internamente após transações)
+# Recalculo de posicoes materializadas (Position table)
 # ---------------------------------------------------------------------------
 
 async def recalc_positions(portfolio_id: int, db: AsyncSession) -> None:
     """
-    Recalcula preço médio ponderado e quantidade atual
-    para cada ativo da carteira, a partir do histórico de transações.
+    Recalcula PM ponderado e quantidade atual para cada ativo da carteira,
+    a partir do historico completo de transacoes.
+
+    Regras aplicadas:
+      - PM atualizado apenas em compras
+      - Venda: qty diminui, avg_price permanece (PM invariante em vendas)
+      - fees de venda nao alteram PM
+      - Posicoes com qty <= 1e-9 sao removidas da tabela Position
     """
     txs_result = await db.execute(
         select(Transaction)
@@ -311,21 +349,30 @@ async def recalc_positions(portfolio_id: int, db: AsyncSession) -> None:
     )
     txs = txs_result.scalars().all()
 
+    # estado: ticker -> {qty, avg_price, total_cost, asset_type}
     state: dict[str, dict] = defaultdict(
-        lambda: {'qty': 0.0, 'avg_price': 0.0, 'asset_type': ''}
+        lambda: {'qty': 0.0, 'avg_price': 0.0, 'total_cost': 0.0, 'asset_type': ''}
     )
 
     for tx in txs:
-        s = state[tx.ticker]
-        s['asset_type'] = tx.asset_type
+        s      = state[tx.ticker]
+        s['asset_type'] = normalize_type(tx.asset_type or 'OUTROS')
+
+        qty_tx = float(tx.quantity)
+        price  = float(tx.price)
+        fees   = float(tx.fees or 0.0)  # guard contra None
 
         if tx.operation == OperationType.buy:
-            total_cost = s['qty'] * s['avg_price'] + tx.quantity * tx.price + tx.fees
-            new_qty    = s['qty'] + tx.quantity
-            s['avg_price'] = total_cost / new_qty if new_qty > 0 else 0
-            s['qty']       = new_qty
+            new_cost       = s['total_cost'] + qty_tx * price + fees
+            new_qty        = s['qty'] + qty_tx
+            s['avg_price'] = new_cost / new_qty if new_qty > 0 else 0.0
+            s['total_cost'] = new_cost
+            s['qty']        = new_qty
         else:
-            s['qty'] = max(s['qty'] - tx.quantity, 0)
+            # PM nao muda; apenas qty e total_cost diminuem
+            cost_reduction  = s['avg_price'] * qty_tx
+            s['total_cost'] = max(s['total_cost'] - cost_reduction, 0.0)
+            s['qty']        = max(s['qty'] - qty_tx, 0.0)
 
     active = {k: v for k, v in state.items() if v['qty'] > 1e-9}
 
@@ -334,10 +381,12 @@ async def recalc_positions(portfolio_id: int, db: AsyncSession) -> None:
     )
     existing = {p.ticker: p for p in existing_result.scalars().all()}
 
+    # Remove posicoes zeradas da tabela
     for ticker in list(existing.keys()):
         if ticker not in active:
             await db.delete(existing[ticker])
 
+    # Upsert posicoes ativas
     for ticker, data in active.items():
         if ticker in existing:
             pos           = existing[ticker]
@@ -345,11 +394,11 @@ async def recalc_positions(portfolio_id: int, db: AsyncSession) -> None:
             pos.avg_price = data['avg_price']
         else:
             pos = Position(
-                portfolio_id=portfolio_id,
-                ticker=ticker,
-                asset_type=data['asset_type'],
-                quantity=data['qty'],
-                avg_price=data['avg_price'],
+                portfolio_id = portfolio_id,
+                ticker       = ticker,
+                asset_type   = data['asset_type'],
+                quantity     = data['qty'],
+                avg_price    = data['avg_price'],
             )
             db.add(pos)
 
