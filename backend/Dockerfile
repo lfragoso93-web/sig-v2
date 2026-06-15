@@ -3,10 +3,10 @@ FROM python:3.12-slim AS deps
 
 WORKDIR /app
 
-# Install system dependencies with pinned apt and cleanup in same layer
+# Install system dependencies (sem pin de versao do gcc - compativel com Debian trixie)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        gcc=4:12.2.0-3 \
+        gcc \
         libpq-dev \
         curl \
     && apt-get clean \
