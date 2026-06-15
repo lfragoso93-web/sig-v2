@@ -1,6 +1,7 @@
 # 2026-06-15 security update
-# fastapi 0.115.5 -> starlette 0.41.0 (fix CVE-2024-47874: DoS multipart)
-fastapi==0.115.5
+# fastapi 0.120.0 - remove cap starlette<0.49.0, puxa starlette>=0.49.1
+# fix CVE-2025-62727 (DoS via Range header merging em starlette)
+fastapi==0.120.0
 uvicorn[standard]==0.32.0
 sqlalchemy==2.0.36
 psycopg2-binary==2.9.10
