@@ -1,70 +1,71 @@
+import redis.asyncio as redis
+from app.core.config import settings
 import json
 import logging
-from typing import Optional, Any
-from app.core.config import settings
 
 logger = logging.getLogger(__name__)
-_redis = None
+
+_redis_client: redis.Redis | None = None
 
 
-async def get_redis():
-    global _redis
-    if _redis is None:
+async def get_redis() -> redis.Redis | None:
+    global _redis_client
+    if _redis_client is None:
         try:
-            import redis.asyncio as aioredis
-            _redis = await aioredis.from_url(
-                settings.REDIS_URL,
-                encoding="utf-8",
+            _redis_client = redis.Redis(
+                host=settings.REDIS_HOST,
+                port=settings.REDIS_PORT,
+                db=0,
                 decode_responses=True,
+                socket_connect_timeout=2,
+                socket_timeout=2,
             )
-        except Exception as e:
-            logger.error(f"[Cache] Falha ao conectar Redis: {e}")
-            return None
-    return _redis
+            await _redis_client.ping()
+            logger.info("Redis conectado com sucesso")
+        except Exception:
+            logger.warning("Redis indisponível — cache desativado")
+            _redis_client = None
+    return _redis_client
 
 
-async def cache_set(key: str, value: Any, ttl: int = 300) -> bool:
-    r = await get_redis()
-    if not r:
-        return False
-    try:
-        await r.setex(key, ttl, json.dumps(value, default=str))
-        return True
-    except Exception as e:
-        logger.error(f"[Cache] Erro ao setar {key}: {e}")
-        return False
-
-
-async def cache_get(key: str) -> Optional[Any]:
-    r = await get_redis()
-    if not r:
+async def cache_get(key: str) -> dict | None:
+    client = await get_redis()
+    if not client:
         return None
     try:
-        raw = await r.get(key)
-        return json.loads(raw) if raw else None
-    except Exception as e:
-        logger.error(f"[Cache] Erro ao buscar {key}: {e}")
+        data = await client.get(key)
+        return json.loads(data) if data else None
+    except Exception:
         return None
 
 
-async def cache_delete(key: str) -> bool:
-    r = await get_redis()
-    if not r:
-        return False
+async def cache_set(key: str, value: dict, ttl: int = 300) -> None:
+    client = await get_redis()
+    if not client:
+        return
     try:
-        await r.delete(key)
-        return True
-    except Exception as e:
-        return False
+        await client.setex(key, ttl, json.dumps(value))
+    except Exception:
+        pass
 
 
-async def cache_flush_pattern(pattern: str) -> int:
-    r = await get_redis()
-    if not r:
-        return 0
+async def cache_delete(key: str) -> None:
+    client = await get_redis()
+    if not client:
+        return
     try:
-        keys = await r.keys(pattern)
-        return await r.delete(*keys) if keys else 0
-    except Exception as e:
-        logger.error(f"[Cache] Erro ao flush {pattern}: {e}")
-        return 0
+        await client.delete(key)
+    except Exception:
+        pass
+
+
+async def cache_delete_pattern(pattern: str) -> None:
+    client = await get_redis()
+    if not client:
+        return
+    try:
+        keys = await client.keys(pattern)
+        if keys:
+            await client.delete(*keys)
+    except Exception:
+        pass

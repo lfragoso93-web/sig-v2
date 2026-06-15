@@ -1,112 +1,43 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.core.database import get_db
-from app.core.deps import get_current_user
+from app.core.auth import get_current_user
 from app.models.user import User
-from app.schemas.treasury import TreasuryCreate, TreasuryUpdate, TreasuryResponse
-from app.services import treasury_service
-from app.services.portfolio_service import get_portfolio
-
-router = APIRouter()
-
-
-# ---------- helper: valida posse da carteira ---------------------------------
-
-async def _check_portfolio_ownership(
-    portfolio_id: int,
-    current_user: User,
-    db: AsyncSession,
-) -> None:
-    await get_portfolio(db, portfolio_id, current_user.id)
-
-
-# ---------- CRUD endpoints ---------------------------------------------------
-# Prefix registrado em main.py: /api/v1/portfolios
-# Logo os paths aqui são apenas os suffixes: /{portfolio_id}/treasury/...
-
-@router.get(
-    "/{portfolio_id}/treasury",
-    response_model=list[TreasuryResponse],
-    summary="Lista investimentos em Tesouro Direto de uma carteira",
+from app.schemas.treasury import TreasuryCreate, TreasuryResponse
+from app.services.treasury_service import (
+    create_treasury,
+    list_treasury,
+    delete_treasury,
 )
-async def list_treasury(
+
+router = APIRouter(prefix="/portfolios/{portfolio_id}/treasury", tags=["treasury"])
+
+
+@router.get("/", response_model=list[TreasuryResponse])
+async def list_treasury_investments(
     portfolio_id: int,
-    only_active: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _check_portfolio_ownership(portfolio_id, current_user, db)
-    investments = await treasury_service.get_treasury_by_portfolio(db, portfolio_id, only_active)
-    return await treasury_service.enrich_with_current_prices(investments)
+    return await list_treasury(db, portfolio_id, current_user.id)
 
 
-@router.post(
-    "/{portfolio_id}/treasury",
-    response_model=TreasuryResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Cadastra novo investimento em Tesouro Direto",
-)
-async def create_treasury(
+@router.post("/", response_model=TreasuryResponse, status_code=status.HTTP_201_CREATED)
+async def add_treasury(
     portfolio_id: int,
-    body: TreasuryCreate,
+    data: TreasuryCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _check_portfolio_ownership(portfolio_id, current_user, db)
-    investment = await treasury_service.create_treasury(
-        db, portfolio_id, body.model_dump()
-    )
-    enriched = await treasury_service.enrich_with_current_prices([investment])
-    return enriched[0]
+    return await create_treasury(db, portfolio_id, current_user.id, data)
 
 
-@router.get(
-    "/{portfolio_id}/treasury/{investment_id}",
-    response_model=TreasuryResponse,
-    summary="Detalhe de um investimento em Tesouro Direto",
-)
-async def get_treasury(
+@router.delete("/{treasury_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_treasury(
     portfolio_id: int,
-    investment_id: int,
+    treasury_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _check_portfolio_ownership(portfolio_id, current_user, db)
-    investment = await treasury_service.get_treasury_by_id(db, investment_id, portfolio_id)
-    enriched = await treasury_service.enrich_with_current_prices([investment])
-    return enriched[0]
-
-
-@router.patch(
-    "/{portfolio_id}/treasury/{investment_id}",
-    response_model=TreasuryResponse,
-    summary="Atualiza investimento em Tesouro Direto",
-)
-async def update_treasury(
-    portfolio_id: int,
-    investment_id: int,
-    body: TreasuryUpdate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    await _check_portfolio_ownership(portfolio_id, current_user, db)
-    data = body.model_dump(exclude_unset=True)
-    investment = await treasury_service.update_treasury(db, investment_id, portfolio_id, data)
-    enriched = await treasury_service.enrich_with_current_prices([investment])
-    return enriched[0]
-
-
-@router.delete(
-    "/{portfolio_id}/treasury/{investment_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    summary="Remove investimento em Tesouro Direto",
-)
-async def delete_treasury(
-    portfolio_id: int,
-    investment_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    await _check_portfolio_ownership(portfolio_id, current_user, db)
-    await treasury_service.delete_treasury(db, investment_id, portfolio_id)
+    await delete_treasury(db, treasury_id, portfolio_id, current_user.id)
+    return None
