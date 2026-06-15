@@ -26,30 +26,24 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-# ---------- Lista estatica de titulos do Tesouro Direto --------------------
-
 _TESOURO_STATIC: list[dict] = [
-    # Tesouro Selic
-    {"bondType": "Tesouro Selic",    "indexer": "selic",     "maturityDate": "2026-03-01", "slug": "tesouro-selic-01032026"},
-    {"bondType": "Tesouro Selic",    "indexer": "selic",     "maturityDate": "2027-03-01", "slug": "tesouro-selic-01032027"},
-    {"bondType": "Tesouro Selic",    "indexer": "selic",     "maturityDate": "2029-03-01", "slug": "tesouro-selic-01032029"},
-    {"bondType": "Tesouro Selic",    "indexer": "selic",     "maturityDate": "2031-03-01", "slug": "tesouro-selic-01032031"},
-    # Tesouro Prefixado
+    {"bondType": "Tesouro Selic", "indexer": "selic", "maturityDate": "2026-03-01", "slug": "tesouro-selic-01032026"},
+    {"bondType": "Tesouro Selic", "indexer": "selic", "maturityDate": "2027-03-01", "slug": "tesouro-selic-01032027"},
+    {"bondType": "Tesouro Selic", "indexer": "selic", "maturityDate": "2029-03-01", "slug": "tesouro-selic-01032029"},
+    {"bondType": "Tesouro Selic", "indexer": "selic", "maturityDate": "2031-03-01", "slug": "tesouro-selic-01032031"},
     {"bondType": "Tesouro Prefixado", "indexer": "prefixado", "maturityDate": "2027-01-01", "slug": "tesouro-prefixado-01012027"},
     {"bondType": "Tesouro Prefixado", "indexer": "prefixado", "maturityDate": "2029-01-01", "slug": "tesouro-prefixado-01012029"},
     {"bondType": "Tesouro Prefixado", "indexer": "prefixado", "maturityDate": "2031-01-01", "slug": "tesouro-prefixado-01012031"},
     {"bondType": "Tesouro Prefixado com Juros Semestrais", "indexer": "prefixado", "maturityDate": "2033-01-01", "slug": "tesouro-prefixado-com-juros-semestrais-01012033"},
     {"bondType": "Tesouro Prefixado com Juros Semestrais", "indexer": "prefixado", "maturityDate": "2035-01-01", "slug": "tesouro-prefixado-com-juros-semestrais-01012035"},
-    # Tesouro IPCA+
-    {"bondType": "Tesouro IPCA+",    "indexer": "ipca",      "maturityDate": "2029-05-15", "slug": "tesouro-ipca-15052029"},
-    {"bondType": "Tesouro IPCA+",    "indexer": "ipca",      "maturityDate": "2032-08-15", "slug": "tesouro-ipca-15082032"},
-    {"bondType": "Tesouro IPCA+",    "indexer": "ipca",      "maturityDate": "2035-05-15", "slug": "tesouro-ipca-15052035"},
-    {"bondType": "Tesouro IPCA+",    "indexer": "ipca",      "maturityDate": "2045-05-15", "slug": "tesouro-ipca-15052045"},
+    {"bondType": "Tesouro IPCA+", "indexer": "ipca", "maturityDate": "2029-05-15", "slug": "tesouro-ipca-15052029"},
+    {"bondType": "Tesouro IPCA+", "indexer": "ipca", "maturityDate": "2032-08-15", "slug": "tesouro-ipca-15082032"},
+    {"bondType": "Tesouro IPCA+", "indexer": "ipca", "maturityDate": "2035-05-15", "slug": "tesouro-ipca-15052035"},
+    {"bondType": "Tesouro IPCA+", "indexer": "ipca", "maturityDate": "2045-05-15", "slug": "tesouro-ipca-15052045"},
     {"bondType": "Tesouro IPCA+ com Juros Semestrais", "indexer": "ipca", "maturityDate": "2030-08-15", "slug": "tesouro-ipca-com-juros-semestrais-15082030"},
     {"bondType": "Tesouro IPCA+ com Juros Semestrais", "indexer": "ipca", "maturityDate": "2040-08-15", "slug": "tesouro-ipca-com-juros-semestrais-15082040"},
     {"bondType": "Tesouro IPCA+ com Juros Semestrais", "indexer": "ipca", "maturityDate": "2055-05-15", "slug": "tesouro-ipca-com-juros-semestrais-15052055"},
     {"bondType": "Tesouro IPCA+ com Juros Semestrais", "indexer": "ipca", "maturityDate": "2060-08-15", "slug": "tesouro-ipca-com-juros-semestrais-15082060"},
-    # Tesouro Renda+
     {"bondType": "Tesouro Renda+ Aposentadoria Extra", "indexer": "ipca", "maturityDate": "2030-12-01", "slug": "tesouro-renda-aposentadoria-extra-01122030"},
     {"bondType": "Tesouro Renda+ Aposentadoria Extra", "indexer": "ipca", "maturityDate": "2035-12-01", "slug": "tesouro-renda-aposentadoria-extra-01122035"},
     {"bondType": "Tesouro Renda+ Aposentadoria Extra", "indexer": "ipca", "maturityDate": "2040-12-01", "slug": "tesouro-renda-aposentadoria-extra-01122040"},
@@ -58,60 +52,55 @@ _TESOURO_STATIC: list[dict] = [
     {"bondType": "Tesouro Renda+ Aposentadoria Extra", "indexer": "ipca", "maturityDate": "2055-12-01", "slug": "tesouro-renda-aposentadoria-extra-01122055"},
     {"bondType": "Tesouro Renda+ Aposentadoria Extra", "indexer": "ipca", "maturityDate": "2060-12-01", "slug": "tesouro-renda-aposentadoria-extra-01122060"},
     {"bondType": "Tesouro Renda+ Aposentadoria Extra", "indexer": "ipca", "maturityDate": "2065-12-01", "slug": "tesouro-renda-aposentadoria-extra-01122065"},
-    # Tesouro Educa+
-    {"bondType": "Tesouro Educa+",   "indexer": "ipca",      "maturityDate": "2026-12-01", "slug": "tesouro-educa-01122026"},
-    {"bondType": "Tesouro Educa+",   "indexer": "ipca",      "maturityDate": "2030-12-01", "slug": "tesouro-educa-01122030"},
-    {"bondType": "Tesouro Educa+",   "indexer": "ipca",      "maturityDate": "2035-12-01", "slug": "tesouro-educa-01122035"},
-    {"bondType": "Tesouro Educa+",   "indexer": "ipca",      "maturityDate": "2037-12-01", "slug": "tesouro-educa-01122037"},
+    {"bondType": "Tesouro Educa+", "indexer": "ipca", "maturityDate": "2026-12-01", "slug": "tesouro-educa-01122026"},
+    {"bondType": "Tesouro Educa+", "indexer": "ipca", "maturityDate": "2030-12-01", "slug": "tesouro-educa-01122030"},
+    {"bondType": "Tesouro Educa+", "indexer": "ipca", "maturityDate": "2035-12-01", "slug": "tesouro-educa-01122035"},
+    {"bondType": "Tesouro Educa+", "indexer": "ipca", "maturityDate": "2037-12-01", "slug": "tesouro-educa-01122037"},
 ]
 
 _SLUG_INDEX: dict[str, dict] = {item["slug"]: item for item in _TESOURO_STATIC if "slug" in item}
 
 
-# ---------- modelos de resposta -------------------------------------------
-
 class TickerQuoteResponse(BaseModel):
-    ticker:      str
-    name:        Optional[str]   = None
-    price:       Optional[float] = None
-    currency:    str             = "BRL"
-    asset_type:  Optional[str]   = None
-    source:      str             = "brapi"
-    price_date:  Optional[str]   = None
+    ticker: str
+    name: Optional[str] = None
+    price: Optional[float] = None
+    currency: str = "BRL"
+    asset_type: Optional[str] = None
+    source: str = "brapi"
+    price_date: Optional[str] = None
 
 
 class TreasuryItem(BaseModel):
-    name:          str
-    ticker:        str
-    slug:          Optional[str]   = None
-    indexer:       str
-    rate:          Optional[float] = None
-    maturity_date: Optional[str]   = None
-    price:         Optional[float] = None
+    name: str
+    ticker: str
+    slug: Optional[str] = None
+    indexer: str
+    rate: Optional[float] = None
+    maturity_date: Optional[str] = None
+    price: Optional[float] = None
 
 
 class TreasuryPriceResponse(BaseModel):
-    slug:       str
-    price:      Optional[float]
+    slug: str
+    price: Optional[float]
     price_date: str
-    source:     str = "brapi"
+    source: str = "brapi"
 
 
 class TickerSuggestion(BaseModel):
     ticker: str
-    name:   str
-    type:   Optional[str] = None
+    name: str
+    type: Optional[str] = None
 
-
-# ---------- helpers -----------------------------------------------------------
 
 def _detect_type_from_brapi(info: dict) -> Optional[str]:
-    qt     = (info.get("quoteType") or "").upper()
+    qt = (info.get("quoteType") or "").upper()
     ticker = (info.get("symbol") or "").upper()
     mapping = {
-        "EQUITY":     "ACAO",
-        "ETF":        "ETF_NACIONAL",
-        "FUND":       "FII",
+        "EQUITY": "ACAO",
+        "ETF": "ETF_NACIONAL",
+        "FUND": "FII",
         "MUTUALFUND": "FII",
     }
     detected = mapping.get(qt)
@@ -126,26 +115,26 @@ def _yf_fetch_sync(ticker: str, date_str: Optional[str] = None) -> Optional[dict
         from datetime import date, timedelta
         t = yf.Ticker(ticker)
         if date_str:
-            ref   = date.fromisoformat(date_str)
+            ref = date.fromisoformat(date_str)
             start = (ref - timedelta(days=5)).isoformat()
-            end   = (ref + timedelta(days=1)).isoformat()
-            hist  = t.history(start=start, end=end, interval="1d")
+            end = (ref + timedelta(days=1)).isoformat()
+            hist = t.history(start=start, end=end, interval="1d")
             price = float(hist["Close"].iloc[-1]) if not hist.empty else None
         else:
-            info  = t.info
+            info = t.info
             price = info.get("regularMarketPrice") or info.get("currentPrice") or info.get("previousClose")
             price = float(price) if price else None
         if not price:
             return None
         info = t.info
-        qt   = (info.get("quoteType") or "").upper()
+        qt = (info.get("quoteType") or "").upper()
         asset_map = {
             "EQUITY": "STOCK", "ETF": "ETF_INTERNACIONAL", "CRYPTOCURRENCY": "CRIPTO",
         }
         return {
-            "price":      price,
-            "name":       info.get("longName") or info.get("shortName"),
-            "currency":   (info.get("currency") or "USD").upper(),
+            "price": price,
+            "name": info.get("longName") or info.get("shortName"),
+            "currency": (info.get("currency") or "USD").upper(),
             "asset_type": asset_map.get(qt),
         }
     except Exception as e:
@@ -182,13 +171,13 @@ def _parse_treasury_item(raw: dict) -> Optional[TreasuryItem]:
     else:
         maturity = None
 
-    year         = maturity[:4] if maturity else ""
+    year = maturity[:4] if maturity else ""
     display_name = f"{bond_type} {year}".strip() if year else bond_type
-    slug         = raw.get("slug") or raw.get("symbol")
-    ticker       = slug or display_name
+    slug = raw.get("slug") or raw.get("symbol")
+    ticker = slug or display_name
 
     indexer_raw = (raw.get("indexer") or "").lower()
-    bond_upper  = bond_type.upper()
+    bond_upper = bond_type.upper()
     if indexer_raw == "ipca" or "IPCA" in bond_upper or "RENDA+" in bond_upper or "EDUCA+" in bond_upper:
         indexer = "IPCA+"
     elif indexer_raw == "selic" or "SELIC" in bond_upper:
@@ -222,8 +211,6 @@ def _parse_treasury_item(raw: dict) -> Optional[TreasuryItem]:
         price=price,
     )
 
-
-# ---------- endpoints ---------------------------------------------------------
 
 @router.get("/search", response_model=list[AssetResponse])
 async def search_assets_endpoint(
@@ -261,13 +248,6 @@ async def suggest_tickers(
     ),
     _=Depends(get_current_user),
 ):
-    """
-    Autocomplete de tickers.
-    - B3 (stock/fund/etf/bdr): BRAPI /api/quote/list
-    - Cripto: BRAPI /api/v2/crypto/available
-    - Internacionais (stock_int/etf_int): yfinance Search/Lookup em thread
-    """
-    # --- Cripto via BRAPI ---
     if asset_type == "cripto":
         raw = await fetch_crypto_suggestions(q.strip(), limit)
         result = []
@@ -278,22 +258,20 @@ async def suggest_tickers(
                 result.append(TickerSuggestion(ticker=coin.upper(), name=name, type="cripto"))
         return result
 
-    # --- Internacionais via yfinance ---
     if asset_type in ("stock_int", "etf_int"):
         yf_type = "stock" if asset_type == "stock_int" else "etf"
-        raw     = await _yf_search_async(q.strip(), limit, yf_type)
+        raw = await _yf_search_async(q.strip(), limit, yf_type)
         return [
             TickerSuggestion(ticker=item["ticker"], name=item["name"], type=item.get("type"))
             for item in raw
         ]
 
-    # --- B3 via BRAPI ---
-    raw    = await fetch_ticker_suggestions(q.strip(), limit, asset_type)
+    raw = await fetch_ticker_suggestions(q.strip(), limit, asset_type)
     result = []
     for item in raw:
         ticker = item.get("stock") or item.get("ticker") or item.get("symbol")
-        name   = item.get("name") or item.get("longName") or item.get("shortName") or ""
-        kind   = item.get("type") or item.get("assetType")
+        name = item.get("name") or item.get("longName") or item.get("shortName") or ""
+        kind = item.get("type") or item.get("assetType")
         if ticker:
             result.append(TickerSuggestion(ticker=ticker.upper(), name=name, type=kind))
     return result
@@ -305,12 +283,12 @@ async def search_treasury(
     _=Depends(get_current_user),
 ):
     api_items = await fetch_treasury_list()
-    raw_list  = api_items if api_items else _TESOURO_STATIC
-    parsed    = [_parse_treasury_item(i) for i in raw_list]
-    parsed    = [i for i in parsed if i is not None]
+    raw_list = api_items if api_items else _TESOURO_STATIC
+    parsed = [_parse_treasury_item(i) for i in raw_list]
+    parsed = [i for i in parsed if i is not None]
     if q.strip():
         q_lower = q.strip().lower()
-        parsed  = [i for i in parsed if q_lower in i.name.lower() or q_lower in (i.slug or "").lower()]
+        parsed = [i for i in parsed if q_lower in i.name.lower() or q_lower in (i.slug or "").lower()]
     return parsed
 
 
@@ -320,9 +298,9 @@ async def get_treasury_price(
     date: str = Query(...),
     _=Depends(get_current_user),
 ):
-    today    = __import__('datetime').date.today().isoformat()
+    today = __import__('datetime').date.today().isoformat()
     use_hist = date != today
-    price    = None
+    price = None
 
     if use_hist:
         price = await fetch_treasury_price_by_date(slug, date)
@@ -346,8 +324,8 @@ async def get_ticker_quote(
     date: Optional[str] = Query(None),
     _=Depends(get_current_user),
 ):
-    t        = ticker.strip().upper()
-    today    = __import__('datetime').date.today().isoformat()
+    t = ticker.strip().upper()
+    today = __import__('datetime').date.today().isoformat()
     use_hist = date and date != today
 
     if use_hist:
@@ -361,25 +339,25 @@ async def get_ticker_quote(
     info = await fetch_asset_info(t)
     if info and info.get("regularMarketPrice"):
         return TickerQuoteResponse(
-            ticker     = t,
-            name       = info.get("longName") or info.get("shortName"),
-            price      = float(info["regularMarketPrice"]),
-            currency   = (info.get("currency") or "BRL").upper(),
-            asset_type = _detect_type_from_brapi(info),
-            source     = "brapi",
-            price_date = today,
+            ticker=t,
+            name=info.get("longName") or info.get("shortName"),
+            price=float(info["regularMarketPrice"]),
+            currency=(info.get("currency") or "BRL").upper(),
+            asset_type=_detect_type_from_brapi(info),
+            source="brapi",
+            price_date=today,
         )
 
     yf_info = await _yf_fetch_async(t, date if use_hist else None)
     if yf_info and yf_info.get("price"):
         return TickerQuoteResponse(
-            ticker     = t,
-            name       = yf_info.get("name"),
-            price      = yf_info["price"],
-            currency   = yf_info.get("currency", "USD"),
-            asset_type = yf_info.get("asset_type"),
-            source     = "yfinance",
-            price_date = date or today,
+            ticker=t,
+            name=yf_info.get("name"),
+            price=yf_info["price"],
+            currency=yf_info.get("currency", "USD"),
+            asset_type=yf_info.get("asset_type"),
+            source="yfinance",
+            price_date=date or today,
         )
 
     raise HTTPException(status_code=404, detail=f"Ticker '{t}' nao encontrado.")

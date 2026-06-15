@@ -5,7 +5,6 @@ from app.core.security import verify_password, get_password_hash, create_jwt_tok
 from app.models.user import User
 from app.schemas.auth import LoginRequest, TokenResponse
 from app.services.user_service import get_user_by_email
-from sqlalchemy import select
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -16,7 +15,7 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
     if not user or not verify_password(data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Credenciais inválidas",
+            detail="Credenciais invalidas",
         )
     token = create_jwt_token({"sub": str(user.id)})
     return TokenResponse(access_token=token, token_type="bearer")
@@ -28,7 +27,7 @@ async def register(data: LoginRequest, db: AsyncSession = Depends(get_db)):
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="E-mail já cadastrado",
+            detail="E-mail ja cadastrado",
         )
     hashed = get_password_hash(data.password)
     user = User(email=data.email, hashed_password=hashed)

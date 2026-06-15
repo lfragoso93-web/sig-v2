@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 import datetime
@@ -9,7 +9,7 @@ class IRPFReport(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=False)
-    year = Column(Integer, nullable=False)  # ano de referência
+    year = Column(Integer, nullable=False)  # ano de referencia
     data = Column(String, nullable=True)  # JSON serializado
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 

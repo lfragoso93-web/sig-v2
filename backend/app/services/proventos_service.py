@@ -1,17 +1,5 @@
 """
-proventos_service.py
---------------------
-Agregacoes e leituras de proventos para a pagina de Proventos.
-Todos os metodos sao async e usam AsyncSession + select().
-
-Responsabilidades:
-  - summary: totais recebidos/a-receber, media mensal
-  - list_items: listagem paginada por carteira (recebidos + futuros)
-  - monthly_history: historico mensal agrupado por ano
-  - distribution: distribuicao por ativo (% do total)
-
-Nao importa schemas externos — retorna dicts puros.
-O router e responsavel por serializar a resposta.
+proventos_service.py — agregacoes e leituras de proventos.
 """
 from __future__ import annotations
 
@@ -30,22 +18,10 @@ from app.models.dividend import Dividend, DividendStatus
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Summary
-# ---------------------------------------------------------------------------
-
 async def get_summary(db: AsyncSession, portfolio_id: int) -> dict:
-    """
-    Retorna:
-      - total_recebido: soma net_value status=RECEBIDO
-      - total_a_receber: soma net_value status=A_RECEBER
-      - total_12m: recebido nos ultimos 12 meses (payment_date)
-      - media_mensal_12m: total_12m / 12
-    """
     today = date.today()
     start_12m = today - relativedelta(months=12)
 
-    # total recebido (all time)
     res = await db.execute(
         select(func.sum(Dividend.net_value))
         .join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
@@ -56,7 +32,6 @@ async def get_summary(db: AsyncSession, portfolio_id: int) -> dict:
     )
     total_recebido = float(res.scalar_one() or 0.0)
 
-    # total a receber (futuro)
     res = await db.execute(
         select(func.sum(Dividend.net_value))
         .join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
@@ -67,7 +42,6 @@ async def get_summary(db: AsyncSession, portfolio_id: int) -> dict:
     )
     total_a_receber = float(res.scalar_one() or 0.0)
 
-    # total recebido ultimos 12 meses
     res = await db.execute(
         select(func.sum(Dividend.net_value))
         .join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
@@ -80,16 +54,12 @@ async def get_summary(db: AsyncSession, portfolio_id: int) -> dict:
     total_12m = float(res.scalar_one() or 0.0)
 
     return {
-        "total_recebido":    total_recebido,
-        "total_a_receber":   total_a_receber,
-        "total_12m":         total_12m,
-        "media_mensal_12m":  round(total_12m / 12, 2),
+        "total_recebido": total_recebido,
+        "total_a_receber": total_a_receber,
+        "total_12m": total_12m,
+        "media_mensal_12m": round(total_12m / 12, 2),
     }
 
-
-# ---------------------------------------------------------------------------
-# Listagem de proventos (recebidos + futuros)
-# ---------------------------------------------------------------------------
 
 async def list_items(
     db: AsyncSession,
@@ -100,12 +70,6 @@ async def list_items(
     page: int = 1,
     page_size: int = 50,
 ) -> dict:
-    """
-    Lista proventos da carteira com filtros opcionais.
-    Retorna cada item com:
-      ticker, asset_type, dividend_type, ex_date, payment_date,
-      value_per_unit, quantity, total_value, net_value, status
-    """
     base = (
         select(
             Dividend.id,
@@ -133,13 +97,11 @@ async def list_items(
     if asset_type:
         base = base.where(Asset.asset_type == asset_type)
 
-    # total sem paginacao
     count_res = await db.execute(
         select(func.count()).select_from(base.subquery())
     )
     total = count_res.scalar_one()
 
-    # paginacao + ordem: mais recentes primeiro
     stmt = (
         base
         .order_by(AssetDividend.ex_date.desc())
@@ -150,17 +112,17 @@ async def list_items(
 
     items = [
         {
-            "id":             row.id,
-            "ticker":         row.ticker,
-            "asset_type":     row.asset_type,
-            "dividend_type":  row.dividend_type,
-            "ex_date":        row.ex_date,
-            "payment_date":   row.payment_date,
+            "id": row.id,
+            "ticker": row.ticker,
+            "asset_type": row.asset_type,
+            "dividend_type": row.dividend_type,
+            "ex_date": row.ex_date,
+            "payment_date": row.payment_date,
             "value_per_unit": float(row.value_per_unit),
-            "quantity":       float(row.quantity),
-            "total_value":    float(row.total_value) if row.total_value else 0.0,
-            "net_value":      float(row.net_value)   if row.net_value   else 0.0,
-            "status":         row.status,
+            "quantity": float(row.quantity),
+            "total_value": float(row.total_value) if row.total_value else 0.0,
+            "net_value": float(row.net_value) if row.net_value else 0.0,
+            "status": row.status,
         }
         for row in rows
     ]
@@ -168,23 +130,15 @@ async def list_items(
     return {"total": total, "page": page, "page_size": page_size, "items": items}
 
 
-# ---------------------------------------------------------------------------
-# Historico mensal
-# ---------------------------------------------------------------------------
-
 async def get_monthly_history(
     db: AsyncSession,
     portfolio_id: int,
     status: Optional[DividendStatus] = None,
     asset_type: Optional[str] = None,
 ) -> list[dict]:
-    """
-    Retorna historico por ano, com totais mensais (indices 0-11 = jan-dez).
-    Agrupa por payment_date.
-    """
     stmt = (
         select(
-            extract("year",  AssetDividend.payment_date).label("year"),
+            extract("year", AssetDividend.payment_date).label("year"),
             extract("month", AssetDividend.payment_date).label("month"),
             func.sum(Dividend.net_value).label("total"),
         )
@@ -213,30 +167,22 @@ async def get_monthly_history(
     for year in sorted(data.keys(), reverse=True):
         months_vals = [data[year].get(m) for m in range(1, 13)]
         values = [v for v in months_vals if v is not None]
-        total  = sum(values)
-        media  = total / len(values) if values else 0.0
+        total = sum(values)
+        media = total / len(values) if values else 0.0
         result.append({
-            "year":   year,
-            "months": months_vals,  # lista com 12 posicoes; None = sem provento
-            "total":  round(total, 2),
-            "media":  round(media, 2),
+            "year": year,
+            "months": months_vals,
+            "total": round(total, 2),
+            "media": round(media, 2),
         })
     return result
 
-
-# ---------------------------------------------------------------------------
-# Distribuicao por ativo
-# ---------------------------------------------------------------------------
 
 async def get_distribution(
     db: AsyncSession,
     portfolio_id: int,
     months: int = 12,
 ) -> list[dict]:
-    """
-    Retorna distribuicao percentual de proventos recebidos por ticker
-    nos ultimos N meses.
-    """
     start = date.today() - relativedelta(months=months)
 
     stmt = (
@@ -259,9 +205,9 @@ async def get_distribution(
     grand_total = sum(float(r.total) for r in rows) or 1.0
     return [
         {
-            "ticker":     r.ticker,
+            "ticker": r.ticker,
             "asset_type": r.asset_type,
-            "total":      round(float(r.total), 2),
+            "total": round(float(r.total), 2),
             "percentage": round(float(r.total) / grand_total * 100, 2),
         }
         for r in rows

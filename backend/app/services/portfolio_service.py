@@ -1,7 +1,7 @@
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction
 from app.schemas.portfolio import PortfolioCreate, PortfolioUpdate
@@ -31,7 +31,7 @@ async def get_portfolio(db: AsyncSession, portfolio_id: int, user_id: int) -> Po
     )
     portfolio = result.scalar_one_or_none()
     if not portfolio:
-        raise HTTPException(status_code=404, detail="Carteira não encontrada")
+        raise HTTPException(status_code=404, detail="Carteira nao encontrada")
     return portfolio
 
 
@@ -177,7 +177,6 @@ async def get_asset_distribution(db: AsyncSession, portfolio_id: int, user_id: i
 
 
 async def get_patrimonio_history(db: AsyncSession, portfolio_id: int, user_id: int, months: int = 12) -> list[dict]:
-    """Retorna histórico mensal simplificado com base nas transações."""
     await get_portfolio(db, portfolio_id, user_id)
     result = await db.execute(
         select(

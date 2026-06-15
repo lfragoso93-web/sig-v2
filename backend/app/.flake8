@@ -1,0 +1,8 @@
+[flake8]
+max-line-length = 120
+extend-ignore = E501
+
+per-file-ignores =
+    # Models SQLAlchemy: F821 sao forward references validas em runtime
+    models/*.py: F821
+    models/base.py: F401

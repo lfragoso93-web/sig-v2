@@ -1,6 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from app.core.database import get_db
 from app.core.auth import get_current_user
 from app.models.user import User
@@ -42,5 +41,5 @@ async def remove_dividend(
 ):
     deleted = await delete_dividend(db, dividend_id, portfolio_id, current_user.id)
     if not deleted:
-        raise HTTPException(status_code=404, detail="Provento não encontrado")
+        raise HTTPException(status_code=404, detail="Provento nao encontrado")
     return None
