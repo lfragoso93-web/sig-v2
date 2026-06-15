@@ -1,4 +1,5 @@
 name: SIG v2 CI/CD
+# Workflow validation run — triggered via PR ci/validate-workflow
 
 on:
   push:
