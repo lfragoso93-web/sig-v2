@@ -17,12 +17,11 @@ import logging
 from dataclasses import dataclass, field
 from typing import Optional
 
-from sqlalchemy import extract, func
-from sqlalchemy.orm import Session
+from sqlalchemy import extract, func, select, case as sa_case
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.integrations.fx_rate import get_usd_brl
 from app.integrations.brapi import fetch_quote_single
-from app.models.asset import Asset
 from app.models.transaction import Transaction, OperationType
 from app.models.portfolio import Portfolio
 
@@ -78,14 +77,14 @@ async def _fetch_price_brl(ticker: str, asset_type: str, fx_current: float) -> f
             return float(price) * fx_current
         return float(price)
     except Exception as e:
-        logger.warning(f"Cotacao indisponivel para {ticker}: {e}")
+        logger.warning("Cotacao indisponivel para %s: %s", ticker, e)
         return 0.0
 
 
 # ─── Calculo por ativo ─────────────────────────────────────────────────────────
 
 async def calc_asset_performance(
-    db: Session,
+    db: AsyncSession,
     portfolio_id: int,
     ticker: str,
     asset_type: str,
@@ -94,15 +93,15 @@ async def calc_asset_performance(
     """Calcula rentabilidade de um ativo dentro de uma carteira."""
     is_usd = asset_type in USD_TYPES
 
-    txs = (
-        db.query(Transaction)
-        .filter(
+    result = await db.execute(
+        select(Transaction)
+        .where(
             Transaction.portfolio_id == portfolio_id,
             Transaction.ticker == ticker,
         )
         .order_by(Transaction.date.asc())
-        .all()
     )
+    txs = result.scalars().all()
 
     qty = 0.0
     cost_brl = 0.0
@@ -110,31 +109,29 @@ async def calc_asset_performance(
 
     for tx in txs:
         unit_price = float(tx.price)
-        qty_tx = float(tx.quantity)
-        # converte para BRL se for ativo USD (usa fx_current como aproximacao)
-        unit_brl = unit_price * fx_current if is_usd else unit_price
+        qty_tx     = float(tx.quantity)
+        unit_brl   = unit_price * fx_current if is_usd else unit_price
 
         if tx.operation == OperationType.buy:
-            qty += qty_tx
+            qty      += qty_tx
             cost_brl += qty_tx * unit_brl
-
         elif tx.operation == OperationType.sell:
             sold = min(qty_tx, qty)
             if qty > 0:
-                avg_brl = _safe_div(cost_brl, qty)
+                avg_brl       = _safe_div(cost_brl, qty)
                 realized_pnl += sold * (unit_brl - avg_brl)
-                cost_brl -= sold * avg_brl
-            qty -= sold
-            qty = max(qty, 0.0)
-            cost_brl = max(cost_brl, 0.0)
+                cost_brl     -= sold * avg_brl
+            qty      -= sold
+            qty       = max(qty, 0.0)
+            cost_brl  = max(cost_brl, 0.0)
 
     current_price_brl = await _fetch_price_brl(ticker, asset_type, fx_current)
 
-    avg_price_brl = _safe_div(cost_brl, qty)
-    current_value = qty * current_price_brl
+    avg_price_brl  = _safe_div(cost_brl, qty)
+    current_value  = qty * current_price_brl
     unrealized_pnl = current_value - cost_brl
-    total_pnl = unrealized_pnl + realized_pnl
-    return_pct = _safe_div(total_pnl, cost_brl) * 100 if cost_brl else 0.0
+    total_pnl      = unrealized_pnl + realized_pnl
+    return_pct     = _safe_div(total_pnl, cost_brl) * 100 if cost_brl else 0.0
 
     return AssetPerformance(
         ticker=ticker,
@@ -156,27 +153,29 @@ async def calc_asset_performance(
 # ─── Calculo por carteira ──────────────────────────────────────────────────────
 
 async def calc_portfolio_performance(
-    db: Session,
+    db: AsyncSession,
     portfolio_id: int,
     user_id: int,
 ) -> PortfolioPerformance:
     """Calcula rentabilidade consolidada de uma carteira."""
-    portfolio = (
-        db.query(Portfolio)
-        .filter(Portfolio.id == portfolio_id, Portfolio.user_id == user_id)
-        .first()
+    port_result = await db.execute(
+        select(Portfolio).where(
+            Portfolio.id == portfolio_id,
+            Portfolio.user_id == user_id,
+        )
     )
+    portfolio = port_result.scalar_one_or_none()
     if not portfolio:
         from fastapi import HTTPException
         raise HTTPException(404, "Carteira nao encontrada")
 
     # tickers distintos na carteira
-    rows = (
-        db.query(Transaction.ticker, Transaction.asset_type)
-        .filter(Transaction.portfolio_id == portfolio_id)
+    rows_result = await db.execute(
+        select(Transaction.ticker, Transaction.asset_type)
+        .where(Transaction.portfolio_id == portfolio_id)
         .distinct()
-        .all()
     )
+    rows = rows_result.all()
 
     fx_current = await get_usd_brl()
 
@@ -206,10 +205,10 @@ async def calc_portfolio_performance(
         by_type[t]["pnl"]     += p.total_pnl
         by_type[t]["count"]   += 1
     for t, v in by_type.items():
-        v["return_pct"]      = _safe_div(v["pnl"], v["cost"]) * 100
-        v["allocation_pct"]  = _safe_div(v["current"], total_current) * 100
+        v["return_pct"]     = _safe_div(v["pnl"], v["cost"]) * 100
+        v["allocation_pct"] = _safe_div(v["current"], total_current) * 100
 
-    history = _build_monthly_history(db, portfolio_id)
+    history = await _build_monthly_history(db, portfolio_id)
 
     return PortfolioPerformance(
         portfolio_id=portfolio_id,
@@ -228,12 +227,10 @@ async def calc_portfolio_performance(
 
 # ─── Evolucao mensal ──────────────────────────────────────────────────────────
 
-def _build_monthly_history(db: Session, portfolio_id: int) -> list[dict]:
-    """Retorna aporte mensal acumulado para grafico de evolucao do patrimônio."""
-    from sqlalchemy import case as sa_case
-
-    rows = (
-        db.query(
+async def _build_monthly_history(db: AsyncSession, portfolio_id: int) -> list[dict]:
+    """Retorna aporte mensal acumulado para grafico de evolucao do patrimonio."""
+    result = await db.execute(
+        select(
             extract("year",  Transaction.date).label("year"),
             extract("month", Transaction.date).label("month"),
             func.sum(
@@ -251,11 +248,11 @@ def _build_monthly_history(db: Session, portfolio_id: int) -> list[dict]:
                 )
             ).label("outflow"),
         )
-        .filter(Transaction.portfolio_id == portfolio_id)
+        .where(Transaction.portfolio_id == portfolio_id)
         .group_by("year", "month")
         .order_by("year", "month")
-        .all()
     )
+    rows = result.all()
 
     history = []
     cumulative = 0.0
@@ -263,9 +260,9 @@ def _build_monthly_history(db: Session, portfolio_id: int) -> list[dict]:
         net = float(r.inflow or 0) - float(r.outflow or 0)
         cumulative += net
         history.append({
-            "period": f"{int(r.year):04d}-{int(r.month):02d}",
-            "inflow": float(r.inflow or 0),
-            "outflow": float(r.outflow or 0),
+            "period":      f"{int(r.year):04d}-{int(r.month):02d}",
+            "inflow":      float(r.inflow  or 0),
+            "outflow":     float(r.outflow or 0),
             "net_invested": cumulative,
         })
     return history
