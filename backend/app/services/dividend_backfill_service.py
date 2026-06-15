@@ -10,7 +10,10 @@ Fluxo:
 Fontes:
   ACAO / FII / ETF_NACIONAL  -> BRAPI  /quote/{ticker}?dividends=true
   STOCK / ETF_INTERNACIONAL  -> yfinance ticker.dividends
-  CRIPTO / TESOURO / RENDA_FIXA -> ignorado
+  CRIPTO / TESOURO_DIRETO / RENDA_FIXA -> ignorado (SKIP_TYPES)
+
+Tipos importados de asset_types.py (fonte unica de verdade).
+Transaction usa (portfolio_id, ticker, asset_type) — sem asset_id.
 """
 from __future__ import annotations
 
@@ -26,17 +29,28 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.asset_types import BR_TYPES, INTL_TYPES
 from app.models.asset import Asset, AssetType
 from app.models.asset_dividend import AssetDividend
 from app.models.dividend import Dividend, DividendStatus, DividendType
-from app.models.transaction import Transaction
+from app.models.transaction import Transaction, OperationType
 
 logger = logging.getLogger(__name__)
 
-# Tipos suportados
-BRAPI_TYPES = {AssetType.ACAO, AssetType.FII, AssetType.ETF_NACIONAL}
-YF_TYPES    = {AssetType.STOCK, AssetType.ETF_INTERNACIONAL}
-SKIP_TYPES  = {AssetType.CRIPTO, AssetType.TESOURO_DIRETO, AssetType.RENDA_FIXA}
+# Tipos que têm dividendos via API
+BRAPI_TYPES: frozenset[AssetType] = frozenset({
+    AssetType.ACAO,
+    AssetType.FII,
+    AssetType.ETF_NACIONAL,
+})
+YF_TYPES: frozenset[AssetType] = INTL_TYPES  # STOCK, ETF_INTERNACIONAL
+
+# Tipos sem dividendos via API — ignorados silenciosamente
+SKIP_TYPES: frozenset[AssetType] = frozenset({
+    AssetType.CRIPTO,
+    AssetType.TESOURO_DIRETO,
+    AssetType.RENDA_FIXA,
+})
 
 BRAPI_TYPE_MAP: dict[str, DividendType] = {
     "DIVIDENDO":   DividendType.DIVIDENDO,
@@ -113,7 +127,6 @@ async def _upsert_asset_dividend(
     result = await db.execute(stmt)
     asset_div_id = result.scalar_one()
     await db.flush()
-    # Recarrega objeto
     ad = await db.get(AssetDividend, asset_div_id)
     return ad
 
@@ -121,40 +134,47 @@ async def _upsert_asset_dividend(
 async def _net_qty_on_date(
     db: AsyncSession,
     portfolio_id: int,
-    asset_id: int,
+    ticker: str,
     ex_date: date,
 ) -> float:
-    """Quantidade liquida (compras - vendas) antes ou na data-ex."""
+    """
+    Quantidade liquida (compras - vendas) do ticker na carteira até a data-ex.
+    Transaction usa (portfolio_id, ticker) — sem asset_id.
+    """
     result = await db.execute(
         select(Transaction).where(
             Transaction.portfolio_id == portfolio_id,
-            Transaction.asset_id == asset_id,
+            Transaction.ticker == ticker,
             Transaction.date <= ex_date,
         )
     )
     txs = result.scalars().all()
     qty = sum(
-        t.quantity if t.operation in ("compra", "buy") else -t.quantity
+        t.quantity if t.operation == OperationType.buy else -t.quantity
         for t in txs
     )
     return max(float(qty), 0.0)
 
 
-async def _portfolios_with_asset(
-    db: AsyncSession, asset_id: int
+async def _portfolios_with_ticker(
+    db: AsyncSession, ticker: str
 ) -> list[int]:
-    """Retorna portfolio_ids que possuem o ativo (qualquer transacao)."""
+    """
+    Retorna portfolio_ids que possuem o ticker (qualquer transacao).
+    Transaction usa ticker — sem asset_id.
+    """
     result = await db.execute(
         select(Transaction.portfolio_id)
-        .where(Transaction.asset_id == asset_id)
+        .where(Transaction.ticker == ticker)
         .distinct()
     )
-    return [r for r in result.scalars().all()]
+    return list(result.scalars().all())
 
 
 async def _upsert_portfolio_dividend(
     db: AsyncSession,
     portfolio_id: int,
+    ticker: str,
     asset_dividend: AssetDividend,
     quantity: float,
 ) -> None:
@@ -194,15 +214,15 @@ async def _upsert_portfolio_dividend(
 async def _process_raw_dividends(
     db: AsyncSession,
     asset: Asset,
-    raw_dividends: list[dict],  # [{ex_date, payment_date, value_per_unit, dividend_type, source}]
+    raw_dividends: list[dict],
 ) -> int:
     """
     Para cada provento bruto:
     1. Upsert em asset_dividends
-    2. Para cada carteira com o ativo, upsert em dividends
-    Retorna total de registros em asset_dividends processados.
+    2. Para cada carteira com o ticker, upsert em dividends com qty na data-ex
+    Retorna total de asset_dividends processados.
     """
-    portfolio_ids = await _portfolios_with_asset(db, asset.id)
+    portfolio_ids = await _portfolios_with_ticker(db, asset.ticker)
     synced = 0
 
     for raw in raw_dividends:
@@ -220,8 +240,8 @@ async def _process_raw_dividends(
         )
 
         for pid in portfolio_ids:
-            qty = await _net_qty_on_date(db, pid, asset.id, ex_date)
-            await _upsert_portfolio_dividend(db, pid, ad, qty)
+            qty = await _net_qty_on_date(db, pid, asset.ticker, ex_date)
+            await _upsert_portfolio_dividend(db, pid, asset.ticker, ad, qty)
 
         synced += 1
 
@@ -234,7 +254,7 @@ async def _process_raw_dividends(
 async def _fetch_brapi(
     db: AsyncSession, asset: Asset
 ) -> int:
-    ticker = asset.brapi_ticker or asset.ticker
+    ticker = getattr(asset, "brapi_ticker", None) or asset.ticker
     try:
         async with httpx.AsyncClient(timeout=20) as client:
             resp = await client.get(
@@ -265,10 +285,10 @@ async def _fetch_brapi(
         div_type     = BRAPI_TYPE_MAP.get(div_type_raw, DividendType.OUTROS)
 
         raw.append({
-            "ex_date":      date.fromisoformat(ex_str[:10]),
-            "payment_date": date.fromisoformat(pay_str[:10]) if pay_str else None,
+            "ex_date":        date.fromisoformat(ex_str[:10]),
+            "payment_date":   date.fromisoformat(pay_str[:10]) if pay_str else None,
             "value_per_unit": value,
-            "dividend_type": div_type,
+            "dividend_type":  div_type,
             "source": "brapi",
         })
 
@@ -302,10 +322,10 @@ async def _fetch_yfinance(
 
     raw = [
         {
-            "ex_date":       ex_date,
-            "payment_date":  ex_date,
+            "ex_date":        ex_date,
+            "payment_date":   ex_date,
             "value_per_unit": value,
-            "dividend_type": DividendType.DIVIDENDO,
+            "dividend_type":  DividendType.DIVIDENDO,
             "source": "yfinance",
         }
         for ex_date, value in rows
@@ -326,7 +346,7 @@ async def backfill_dividends(
     """
     Chamado como BackgroundTask apos criar/deletar uma transacao.
     Busca historico completo, faz upsert em asset_dividends e gera
-    Dividends para todas as carteiras com o ativo.
+    Dividends para todas as carteiras com o ticker.
     Silencioso em caso de erro.
     """
     try:
