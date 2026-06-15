@@ -27,7 +27,7 @@ export interface TransactionCreate {
   notes?: string
 }
 
-export interface TransactionUpdate extends Partial<TransactionCreate> {}
+export type TransactionUpdate = Partial<TransactionCreate>
 
 const TX_KEY = (pid: number | null) => ['transactions', pid]
 

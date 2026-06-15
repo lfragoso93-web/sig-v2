@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Search, Trash2, TrendingUp, ArrowDownLeft, ArrowUpRight, FileText } from 'lucide-react'
+import { Search, Trash2, ArrowDownLeft, ArrowUpRight, FileText } from 'lucide-react'
 import { useAppStore } from '@/store/appStore'
 import { useTransactions, useDeleteTransaction, type Transaction } from '@/hooks/useTransactions'
 import { usePortfolios } from '@/hooks/usePortfolios'
@@ -23,7 +23,6 @@ const ASSET_LABELS: Record<string, string> = {
   TESOURO_DIRETO: 'Tesouro', RENDA_FIXA: 'Renda Fixa', CRIPTO: 'Cripto',
 }
 
-// Tokens CSS — funcionam em ambos os temas
 const ASSET_COLORS: Record<string, { bg: string; text: string }> = {
   ACAO:              { bg: 'var(--color-blue-highlight)',    text: 'var(--color-blue)'    },
   FII:               { bg: 'var(--color-purple-highlight)', text: 'var(--color-purple)'  },
@@ -84,8 +83,6 @@ export default function LancamentosPage() {
 
   return (
     <div className="px-4 py-5 max-w-screen-xl mx-auto flex flex-col gap-4">
-
-      {/* Cabeçalho */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-base font-semibold">Lançamentos</h1>
@@ -96,9 +93,7 @@ export default function LancamentosPage() {
         </div>
       </div>
 
-      {/* Filtros */}
       <div className="flex flex-wrap gap-2">
-        {/* busca */}
         <div className="relative">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-text-faint)' }} />
           <input
@@ -108,31 +103,18 @@ export default function LancamentosPage() {
             className="input pl-8 text-xs w-44"
           />
         </div>
-
-        {/* tipo de ativo */}
-        <select
-          value={typeFilter}
-          onChange={e => setTypeFilter(e.target.value)}
-          className="input text-xs"
-        >
+        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="input text-xs">
           {ALL_TYPES.map(t => (
             <option key={t} value={t}>{t === 'Todos' ? 'Todos os tipos' : (ASSET_LABELS[t] ?? t)}</option>
           ))}
         </select>
-
-        {/* operação */}
-        <select
-          value={opFilter}
-          onChange={e => setOpFilter(e.target.value as typeof opFilter)}
-          className="input text-xs"
-        >
+        <select value={opFilter} onChange={e => setOpFilter(e.target.value as typeof opFilter)} className="input text-xs">
           <option value="todos">Compra + Venda</option>
           <option value="buy">Apenas Compras</option>
           <option value="sell">Apenas Vendas</option>
         </select>
       </div>
 
-      {/* KPIs rápidos */}
       <div className="grid grid-cols-3 gap-3">
         <div className="rounded-xl p-3 flex flex-col gap-0.5" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
           <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Total de registros</span>
@@ -152,7 +134,6 @@ export default function LancamentosPage() {
         </div>
       </div>
 
-      {/* Tabela */}
       {isLoading ? (
         <div className="flex flex-col gap-2">
           {[...Array(5)].map((_, i) => <div key={i} className="h-12 rounded-lg skeleton" />)}
@@ -186,62 +167,31 @@ export default function LancamentosPage() {
                 const clr = ASSET_COLORS[t.asset_type] ?? FALLBACK_COLOR
                 const isConfirming = confirmDelete === t.id
                 return (
-                  <tr
-                    key={t.id}
-                    style={{
-                      background: idx % 2 === 0 ? 'var(--color-surface)' : 'var(--color-surface-2)',
-                      borderBottom: '1px solid var(--color-divider)',
-                    }}
-                  >
+                  <tr key={t.id} style={{ background: idx % 2 === 0 ? 'var(--color-surface)' : 'var(--color-surface-2)', borderBottom: '1px solid var(--color-divider)' }}>
                     <td className="px-3 py-2 tabular-nums" style={{ color: 'var(--color-text-muted)' }}>{fmtDate(t.date)}</td>
                     <td className="px-3 py-2 font-semibold">{t.ticker}</td>
                     <td className="px-3 py-2">
-                      <span
-                        className="px-1.5 py-0.5 rounded text-xs font-medium"
-                        style={{ background: clr.bg, color: clr.text }}
-                      >
+                      <span className="px-1.5 py-0.5 rounded text-xs font-medium" style={{ background: clr.bg, color: clr.text }}>
                         {ASSET_LABELS[t.asset_type] ?? t.asset_type}
                       </span>
                     </td>
                     <td className="px-3 py-2">
-                      <span
-                        className="flex items-center gap-1 text-xs font-medium"
-                        style={{ color: t.operation === 'buy' ? 'var(--color-success)' : 'var(--color-warning)' }}
-                      >
-                        {t.operation === 'buy'
-                          ? <><ArrowDownLeft size={11} /> Compra</>
-                          : <><ArrowUpRight size={11} /> Venda</>}
+                      <span className="flex items-center gap-1 text-xs font-medium" style={{ color: t.operation === 'buy' ? 'var(--color-success)' : 'var(--color-warning)' }}>
+                        {t.operation === 'buy' ? <><ArrowDownLeft size={11} /> Compra</> : <><ArrowUpRight size={11} /> Venda</>}
                       </span>
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums">{fmtNum(t.quantity)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{fmtBRL(t.price)}</td>
                     <td className="px-3 py-2 text-right tabular-nums font-medium">{fmtBRL(t.quantity * t.price)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums" style={{ color: 'var(--color-text-muted)' }}>
-                      {t.fees ? fmtBRL(t.fees) : '—'}
-                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums" style={{ color: 'var(--color-text-muted)' }}>{t.fees ? fmtBRL(t.fees) : '—'}</td>
                     <td className="px-2 py-2 text-right">
                       {isConfirming ? (
                         <div className="flex items-center gap-1 justify-end">
-                          <button
-                            onClick={() => handleDelete(t.id)}
-                            className="text-xs px-2 py-0.5 rounded font-medium"
-                            style={{ background: 'var(--color-error-highlight)', color: 'var(--color-error)' }}
-                          >
-                            Confirmar
-                          </button>
-                          <button
-                            onClick={() => setConfirmDelete(null)}
-                            className="text-xs px-2 py-0.5 rounded"
-                            style={{ color: 'var(--color-text-muted)' }}
-                          >
-                            Cancelar
-                          </button>
+                          <button onClick={() => handleDelete(t.id)} className="text-xs px-2 py-0.5 rounded font-medium" style={{ background: 'var(--color-error-highlight)', color: 'var(--color-error)' }}>Confirmar</button>
+                          <button onClick={() => setConfirmDelete(null)} className="text-xs px-2 py-0.5 rounded" style={{ color: 'var(--color-text-muted)' }}>Cancelar</button>
                         </div>
                       ) : (
-                        <button
-                          onClick={() => setConfirmDelete(t.id)}
-                          className="p-1 rounded transition"
-                          style={{ color: 'var(--color-text-faint)' }}
+                        <button onClick={() => setConfirmDelete(t.id)} className="p-1 rounded transition" style={{ color: 'var(--color-text-faint)' }}
                           onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-error)')}
                           onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-text-faint)')}
                           title="Excluir"
@@ -259,10 +209,7 @@ export default function LancamentosPage() {
       )}
 
       {showModal && (
-        <AddTransactionModal
-          portfolioId={selectedPortfolioId!}
-          onClose={() => setShowModal(false)}
-        />
+        <AddTransactionModal portfolioId={selectedPortfolioId!} onClose={() => setShowModal(false)} />
       )}
     </div>
   )

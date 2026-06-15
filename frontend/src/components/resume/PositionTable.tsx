@@ -25,7 +25,6 @@ const cellMuted    = { color: 'var(--color-text-muted)' }
 const cellFaint    = { color: 'var(--color-text-faint)' }
 const rowHover     = 'hover:bg-[var(--color-surface-offset)] transition-colors'
 const groupRowBg   = 'cursor-pointer transition-colors'
-const dividerStyle = { borderColor: 'var(--color-divider)' }
 const surfaceStyle = { background: 'var(--color-surface-offset)', borderColor: 'var(--color-divider)' }
 const dropdownBg   = { background: 'var(--color-surface)', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-lg)' }
 
@@ -42,7 +41,6 @@ function displayName(ticker: string, assetType: string): string {
   return ticker
 }
 
-// ── Dropdown de opções ─────────────────────────────────────────────────
 interface AssetMenuProps { ticker: string; assetLabel: string; assetType: string }
 
 function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
@@ -113,7 +111,6 @@ function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
   )
 }
 
-// ── Card mobile por ativo ───────────────────────────────────────────────
 interface PositionCardProps {
   item: PositionGroup['positions'][number]
 }
@@ -123,7 +120,6 @@ function PositionCard({ item }: PositionCardProps) {
   const name = displayName(item.ticker, item.asset_type)
   const hasQuote = item.variation_value !== 0 || item.current_price !== item.average_price
   const varColor = item.variation_value >= 0 ? 'var(--color-success)' : 'var(--color-error)'
-
   const investedValue = item.invested_value ?? item.quantity * item.average_price
 
   return (
@@ -131,7 +127,6 @@ function PositionCard({ item }: PositionCardProps) {
       className="rounded-xl p-3 flex flex-col gap-2"
       style={{ background: 'var(--color-surface-offset)', border: '1px solid var(--color-divider)' }}
     >
-      {/* Cabeçalho do card */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <AssetLogo ticker={item.ticker} assetType={item.asset_type} size={32} />
@@ -149,7 +144,6 @@ function PositionCard({ item }: PositionCardProps) {
         />
       </div>
 
-      {/* Dados em grade 2x2 */}
       <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
         <div>
           <div className="text-[10px]" style={cellFaint}>Qtd</div>
@@ -187,7 +181,6 @@ function PositionCard({ item }: PositionCardProps) {
   )
 }
 
-// ── Componente principal ────────────────────────────────────────────────
 export default function PositionTable({ groups }: Props) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>(
     Object.fromEntries((groups ?? []).map(g => [g.label, true]))
@@ -198,11 +191,9 @@ export default function PositionTable({ groups }: Props) {
 
   return (
     <>
-      {/* ── VIEW MOBILE: cards (<768px) ── */}
       <div className="flex flex-col gap-4 md:hidden">
         {groups.map(group => (
           <div key={group.label}>
-            {/* Cabeçalho do grupo */}
             <button
               onClick={() => toggle(group.label)}
               className="w-full flex items-center gap-2 px-1 py-2 text-xs font-semibold transition-colors"
@@ -217,8 +208,6 @@ export default function PositionTable({ groups }: Props) {
                 {group.count}
               </span>
             </button>
-
-            {/* Cards das posições */}
             {expanded[group.label] && (
               <div className="flex flex-col gap-2">
                 {(group.positions ?? []).map(item => (
@@ -230,7 +219,6 @@ export default function PositionTable({ groups }: Props) {
         ))}
       </div>
 
-      {/* ── VIEW DESKTOP: tabela (≥768px) ── */}
       <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
@@ -279,7 +267,6 @@ export default function PositionTable({ groups }: Props) {
                   const name      = displayName(item.ticker, item.asset_type)
                   const isTesouro = item.asset_type.toUpperCase() === 'TESOURO_DIRETO' || item.asset_type.toUpperCase() === 'TESOURO'
                   const varColor  = item.variation_value >= 0 ? 'var(--color-success)' : 'var(--color-error)'
-
                   const investedValue = item.invested_value ?? item.quantity * item.average_price
 
                   return (

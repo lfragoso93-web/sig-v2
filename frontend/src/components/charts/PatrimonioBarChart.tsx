@@ -1,6 +1,6 @@
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, ReferenceLine,
+  Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { formatBRL } from '@/utils/format'
 import type { PatrimonioHistoryPoint } from '@/hooks/usePortfolio'
@@ -32,7 +32,6 @@ function CustomTooltip({ active, payload, label }: {
     >
       <p className="font-semibold mb-2" style={{ color: 'var(--color-text)' }}>{label}</p>
 
-      {/* Valor atual */}
       <div className="flex items-center justify-between gap-4 mb-1">
         <div className="flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full" style={{ background: 'var(--color-primary)' }} />
@@ -43,7 +42,6 @@ function CustomTooltip({ active, payload, label }: {
         </span>
       </div>
 
-      {/* Valor investido */}
       <div className="flex items-center justify-between gap-4 mb-1">
         <div className="flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full" style={{ background: 'oklch(from var(--color-primary) l c h / 0.45)' }} />
@@ -54,7 +52,6 @@ function CustomTooltip({ active, payload, label }: {
         </span>
       </div>
 
-      {/* Ganho / Perda */}
       <div
         className="flex items-center justify-between gap-4 mt-2 pt-2"
         style={{ borderTop: '1px solid var(--color-divider)' }}
@@ -78,10 +75,8 @@ export default function PatrimonioBarChart({ data }: { data: PatrimonioHistoryPo
 
   const tickStyle = { fontSize: 10, fill: 'var(--color-text-faint)' }
 
-  // Cor das barras: verde se value >= invested, vermelho se abaixo
   const barData = data.map(d => ({
     ...d,
-    // fill dinâmico por célula — passado via Cell ou via função
     _gain: d.value >= d.invested,
   }))
 
@@ -102,23 +97,17 @@ export default function PatrimonioBarChart({ data }: { data: PatrimonioHistoryPo
           cursor={{ fill: 'oklch(from var(--color-text) l c h / 0.04)' }}
         />
 
-        {/* Barra do patrimônio — cor dinâmica por ponto */}
         <Bar
           dataKey="value"
           name="value"
           radius={[4, 4, 0, 0]}
           fill="var(--color-primary)"
         >
-          {barData.map((entry, index) => (
-            <rect
-              key={`cell-${index}`}
-              // Recharts não suporta Cell com fill dinâmico direto no ComposedChart;
-              // usamos o fill padrão e sobrescrevemos via Cell abaixo
-            />
+          {barData.map((_entry, index) => (
+            <rect key={`cell-${index}`} />
           ))}
         </Bar>
 
-        {/* Linha do valor investido — mais suave que a barra */}
         <Line
           type="monotone"
           dataKey="invested"

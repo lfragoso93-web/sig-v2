@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { RefreshCw } from 'lucide-react'
 import { TransactionCreate } from '@/services/transactionService'
@@ -34,12 +34,10 @@ const TX_TYPES = [
   { value: 'GRUPAMENTO',    label: 'Grupamento' },
 ] as const
 
-// ── Helpers de estilo ───────────────────────────────────────────────────
 const label    = { color: 'var(--color-text-muted)', fontSize: 12, fontWeight: 500, marginBottom: 4, display: 'block' }
 const errStyle = { color: 'var(--color-error)', fontSize: 11, marginTop: 2 }
-const inputStyle = { fontSize: 16 } // previne zoom no iOS
+const inputStyle = { fontSize: 16 }
 
-// ── Types ───────────────────────────────────────────────────────────────
 interface FormValues extends TransactionCreate {
   fx_rate_input: string
   issuer?: string
@@ -53,7 +51,6 @@ interface FormValues extends TransactionCreate {
 
 interface Props { portfolioId: number; onClose: () => void }
 
-// ── Componente ───────────────────────────────────────────────────────────
 export default function TransactionForm({ portfolioId, onClose }: Props) {
   const { data: fxData, isLoading: loadingFx } = useUsdBrl()
   const { mutate: createTx, isPending } = useCreateTransaction(portfolioId)
@@ -100,14 +97,12 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
     )
   }
 
-  // cores dinâmicas do tipo de transação
   const buyActive  = txType === 'COMPRA'
   const sellActive = txType === 'VENDA'
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4 p-1">
 
-      {/* Compra / Venda toggle */}
       <div
         className="flex rounded-lg overflow-hidden border"
         style={{ borderColor: 'var(--color-border)' }}
@@ -134,7 +129,6 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
         ))}
       </div>
 
-      {/* Outros tipos */}
       <div className="flex gap-2 flex-wrap">
         {TX_TYPES.slice(2).map(t => (
           <button
@@ -151,7 +145,6 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
         ))}
       </div>
 
-      {/* Tipo de ativo */}
       <div>
         <label style={label}>Tipo de ativo</label>
         <select className="input mt-1" style={inputStyle} {...register('asset_type')}>
@@ -161,7 +154,6 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
         </select>
       </div>
 
-      {/* ── RENDA FIXA ──────────────────────────────────────────────────────── */}
       {isRendaFixa && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -240,10 +232,8 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
         </>
       )}
 
-      {/* ── DEMAIS ATIVOS ──────────────────────────────────────────────────────── */}
       {!isRendaFixa && (
         <>
-          {/* Ativo + Data — 1 col mobile / 2 col desktop */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label style={label}>Ativo</label>
@@ -262,7 +252,6 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
             </div>
           </div>
 
-          {/* Qtd + Preço — 1 col mobile / 2 col desktop */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label style={label}>Quantidade</label>
@@ -286,7 +275,6 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
             </div>
           </div>
 
-          {/* Cotação USD/BRL */}
           {isUSD && (
             <div
               className="rounded-lg p-3"
@@ -328,7 +316,6 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
             </div>
           )}
 
-          {/* Taxas */}
           <div>
             <label style={label}>Outros custos (R$) <span style={{ color: 'var(--color-text-faint)' }}>(Opcional)</span></label>
             <input
@@ -341,7 +328,6 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
         </>
       )}
 
-      {/* Total calculado */}
       <div
         className="flex items-center justify-between px-4 py-3 rounded-lg"
         style={{ background: 'var(--color-surface-offset)' }}
@@ -357,7 +343,6 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
         </span>
       </div>
 
-      {/* Botões — full width mobile, alinhados direita desktop */}
       <div className="flex gap-2 pb-safe">
         <button
           type="button"
