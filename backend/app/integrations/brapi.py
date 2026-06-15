@@ -1,5 +1,6 @@
 import httpx
 import logging
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 from app.core.config import settings
 
@@ -13,6 +14,8 @@ def _auth_headers() -> dict:
         return {"Authorization": f"Bearer {settings.BRAPI_TOKEN}"}
     return {}
 
+
+# ── Cotações atuais ───────────────────────────────────────────────────────────────────
 
 async def fetch_quotes(tickers: list[str]) -> dict[str, float]:
     """
@@ -83,6 +86,132 @@ async def fetch_quote_single(ticker: str) -> Optional[float]:
     return result.get(ticker)
 
 
+# ── Histórico diário de preços (BRAPI Pro) ───────────────────────────────────────
+
+async def fetch_price_history(
+    ticker: str,
+    date_from: str,
+    date_to: str,
+) -> list[tuple[datetime, float]]:
+    """
+    Busca histórico diário de fechamento via BRAPI Pro.
+    Suporta: ações BR, FIIs, ETFs nacionais, cripto (via /quote/{ticker}).
+
+    Retorna lista de (datetime_utc, close_price) ordenada por data asc.
+    Retorna [] se BRAPI falhar (sem lançar exceção — fallback para yfinance).
+
+    Uso:
+        rows = await fetch_price_history("PETR4", "2025-01-01", "2026-01-01")
+        rows = await fetch_price_history("BTC",   "2025-06-01", "2025-06-15")
+    """
+    headers = _auth_headers()
+    url = (
+        f"{BRAPI_BASE}/quote/{ticker}"
+        f"?range=custom&interval=1d"
+        f"&from={date_from}&to={date_to}"
+    )
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            resp = await client.get(url, headers=headers)
+            resp.raise_for_status()
+            data    = resp.json()
+            results = data.get("results", [])
+            if not results:
+                logger.warning(f"BRAPI price_history: sem resultados para {ticker} ({date_from} a {date_to})")
+                return []
+
+            history = results[0].get("historicalDataPrice", [])
+            if not history:
+                # Sem histórico mas tem preço atual: retorna snapshot do dia
+                price = results[0].get("regularMarketPrice")
+                if price:
+                    now = datetime.now(timezone.utc).replace(
+                        hour=18, minute=0, second=0, microsecond=0
+                    )
+                    return [(now, float(price))]
+                return []
+
+            rows: list[tuple[datetime, float]] = []
+            for entry in history:
+                close = entry.get("close") or entry.get("adjclose")
+                ts_raw = entry.get("date") or entry.get("timestamp")
+                if close is None or ts_raw is None:
+                    continue
+                # ts_raw pode ser epoch (int) ou string ISO
+                if isinstance(ts_raw, (int, float)):
+                    dt = datetime.fromtimestamp(ts_raw, tz=timezone.utc)
+                else:
+                    try:
+                        dt = datetime.fromisoformat(str(ts_raw))
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=timezone.utc)
+                    except ValueError:
+                        continue
+                rows.append((dt, float(close)))
+
+            rows.sort(key=lambda x: x[0])
+            logger.info(f"BRAPI price_history: {ticker} — {len(rows)} registros ({date_from} a {date_to})")
+            return rows
+
+    except Exception as e:
+        logger.warning(f"BRAPI fetch_price_history error for {ticker}: {e}")
+        return []
+
+
+async def fetch_historical_price(ticker: str, date_str: str) -> Optional[float]:
+    """
+    Retorna o preco de fechamento de um ativo em uma data específica.
+    Consulta uma janela de 5 dias antes para cobrir fins de semana/feriados.
+    """
+    ref_date  = date.fromisoformat(date_str)
+    date_from = (ref_date - timedelta(days=5)).isoformat()
+    rows = await fetch_price_history(ticker, date_from, date_str)
+    if rows:
+        return rows[-1][1]  # ultimo fechamento disponivel na janela
+    return None
+
+
+# ── Cripto (BRAPI Pro) ─────────────────────────────────────────────────────────────────
+
+async def fetch_crypto_quote(tickers: list[str]) -> dict[str, float]:
+    """
+    Busca cotação atual de criptomoedas via BRAPI Pro (/api/v2/crypto).
+    Retorna {ticker: price_brl}.
+
+    Centraliza a lógica que antes estava inline em quotes_service.py.
+    Tickers sem cotação ficam ausentes no resultado (nunca retorna None como valor).
+    """
+    if not tickers:
+        return {}
+
+    headers = _auth_headers()
+    results: dict[str, float] = {}
+
+    # BRAPI v2/crypto aceita múltiplos coins separados por vírgula
+    joined = ",".join(t.upper() for t in tickers)
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(
+                f"{BRAPI_BASE}/v2/crypto",
+                headers=headers,
+                params={"coin": joined, "currency": "BRL"},
+            )
+            resp.raise_for_status()
+            data  = resp.json()
+            coins = data.get("coins") or []
+            for coin in coins:
+                symbol = coin.get("coin") or coin.get("symbol") or ""
+                price  = coin.get("regularMarketPrice") or coin.get("price")
+                if symbol and price is not None:
+                    results[symbol.upper()] = float(price)
+    except Exception as e:
+        logger.warning(f"BRAPI fetch_crypto_quote error for {tickers}: {e}")
+
+    return results
+
+
+# ── Informações do ativo ──────────────────────────────────────────────────────────────
+
 async def fetch_asset_info(ticker: str) -> Optional[dict]:
     headers = _auth_headers()
     url = f"{BRAPI_BASE}/quote/{ticker}?modules=summaryProfile,defaultKeyStatistics"
@@ -101,8 +230,7 @@ async def fetch_asset_info(ticker: str) -> Optional[dict]:
 async def fetch_logo_url(ticker: str) -> Optional[str]:
     """
     Retorna a URL do logo do ativo via BRAPI.
-    A BRAPI devolve o campo `logourl` no objeto de resultado do quote.
-    Silencioso em caso de erro — nunca deve quebrar o fluxo de criacao de ativo.
+    Silencioso em caso de erro — nunca deve quebrar o fluxo de criação de ativo.
     """
     try:
         info = await fetch_asset_info(ticker)
@@ -115,43 +243,14 @@ async def fetch_logo_url(ticker: str) -> Optional[str]:
         return None
 
 
-async def fetch_historical_price(ticker: str, date_str: str) -> Optional[float]:
-    from datetime import date, timedelta
-    headers = _auth_headers()
-    try:
-        ref_date  = date.fromisoformat(date_str)
-        date_from = (ref_date - timedelta(days=5)).isoformat()
-        date_to   = ref_date.isoformat()
-        url = (
-            f"{BRAPI_BASE}/quote/{ticker}"
-            f"?range=custom&interval=1d"
-            f"&from={date_from}&to={date_to}"
-        )
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(url, headers=headers)
-            resp.raise_for_status()
-            data    = resp.json()
-            results = data.get("results", [])
-            if not results:
-                return None
-            history = results[0].get("historicalDataPrice", [])
-            if not history:
-                return results[0].get("regularMarketPrice")
-            last  = history[-1]
-            close = last.get("close") or last.get("adjclose")
-            return float(close) if close else None
-    except Exception as e:
-        logger.warning(f"BRAPI historical price error for {ticker} on {date_str}: {e}")
-        return None
-
+# ── Tesouro Direto ────────────────────────────────────────────────────────────────────
 
 async def fetch_treasury_price_by_date(slug: str, date_str: str) -> Optional[float]:
-    from datetime import date, timedelta
     headers = _auth_headers()
     try:
         ref_date  = date.fromisoformat(date_str)
         date_from = (ref_date - timedelta(days=5)).isoformat()
-        date_to   = ref_date.isoformat()
+        date_to   = date_str
         url = (
             f"{BRAPI_BASE}/v2/treasury/{slug}/historical"
             f"?from={date_from}&to={date_to}"
@@ -170,6 +269,28 @@ async def fetch_treasury_price_by_date(slug: str, date_str: str) -> Optional[flo
         logger.warning(f"BRAPI treasury historical error for {slug} on {date_str}: {e}")
         return None
 
+
+async def fetch_treasury_list() -> list[dict]:
+    headers = _auth_headers()
+    url = f"{BRAPI_BASE}/v2/treasury/list"
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(url, headers=headers)
+            resp.raise_for_status()
+            data  = resp.json()
+            items = (
+                data.get("treasuries")
+                or data.get("data")
+                or data.get("results")
+                or (data if isinstance(data, list) else [])
+            )
+            return items if isinstance(items, list) else []
+    except Exception as e:
+        logger.warning(f"BRAPI treasury list error: {e}")
+        return []
+
+
+# ── Busca / sugestões de ticker ────────────────────────────────────────────────────────
 
 async def fetch_ticker_suggestions(
     q: str,
@@ -239,24 +360,4 @@ def _yf_search_sync(q: str, limit: int = 10, asset_type: Optional[str] = None) -
         return results[:limit]
     except Exception as e:
         logger.warning(f"yfinance search error for q={q!r} type={asset_type!r}: {e}")
-        return []
-
-
-async def fetch_treasury_list() -> list[dict]:
-    headers = _auth_headers()
-    url = f"{BRAPI_BASE}/v2/treasury/list"
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(url, headers=headers)
-            resp.raise_for_status()
-            data  = resp.json()
-            items = (
-                data.get("treasuries")
-                or data.get("data")
-                or data.get("results")
-                or (data if isinstance(data, list) else [])
-            )
-            return items if isinstance(items, list) else []
-    except Exception as e:
-        logger.warning(f"BRAPI treasury list error: {e}")
         return []
