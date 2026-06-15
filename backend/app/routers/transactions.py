@@ -1,18 +1,22 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from typing import List
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
 from app.models.portfolio import Portfolio
-from app.models.transaction import Transaction
+from app.models.transaction import Transaction, OperationType
 from app.schemas.transaction import TransactionCreate, TransactionOut, TransactionUpdate
 from app.services.dividend_backfill_service import backfill_dividends
 
 router = APIRouter()
 
+
+# ---------------------------------------------------------------------------
+# Helpers internos
+# ---------------------------------------------------------------------------
 
 async def _get_portfolio(portfolio_id: int, user: User, db: AsyncSession) -> Portfolio:
     result = await db.execute(
@@ -23,9 +27,61 @@ async def _get_portfolio(portfolio_id: int, user: User, db: AsyncSession) -> Por
     )
     p = result.scalar_one_or_none()
     if not p:
-        raise HTTPException(status_code=404, detail="Carteira não encontrada.")
+        raise HTTPException(status_code=404, detail="Carteira nao encontrada.")
     return p
 
+
+async def _calc_current_quantity(
+    db: AsyncSession,
+    portfolio_id: int,
+    ticker: str,
+    exclude_tx_id: int | None = None,
+) -> float:
+    """
+    Retorna a quantidade atual em carteira para um ticker (async).
+    exclude_tx_id: ignora uma transacao especifica (util ao editar).
+    """
+    stmt = select(Transaction.operation, Transaction.quantity).where(
+        Transaction.portfolio_id == portfolio_id,
+        Transaction.ticker == ticker,
+    )
+    if exclude_tx_id is not None:
+        stmt = stmt.where(Transaction.id != exclude_tx_id)
+
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    qty = 0.0
+    for op, q in rows:
+        if op == OperationType.buy or op == "buy":
+            qty += float(q)
+        elif op == OperationType.sell or op == "sell":
+            qty -= float(q)
+    return max(qty, 0.0)
+
+
+async def _validate_sell(
+    db: AsyncSession,
+    portfolio_id: int,
+    ticker: str,
+    quantity: float,
+    exclude_tx_id: int | None = None,
+) -> None:
+    """Levanta HTTP 400 se a venda ultrapassar a posicao atual."""
+    current_qty = await _calc_current_quantity(db, portfolio_id, ticker, exclude_tx_id)
+    if quantity > current_qty:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Quantidade insuficiente para venda de {ticker}. "
+                f"Posicao atual: {current_qty:.4f} | Tentativa: {quantity:.4f}"
+            ),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
 
 @router.get("/{portfolio_id}/transactions", response_model=List[TransactionOut])
 async def list_transactions(
@@ -59,6 +115,10 @@ async def create_transaction(
     ticker     = payload.ticker.upper()
     asset_type = payload.asset_type
 
+    # Validacao de venda: impede venda maior que posicao atual
+    if str(payload.operation) in ("sell", OperationType.sell):
+        await _validate_sell(db, portfolio_id, ticker, payload.quantity)
+
     tx = Transaction(
         portfolio_id = portfolio_id,
         ticker       = ticker,
@@ -75,9 +135,6 @@ async def create_transaction(
     await db.commit()
     await db.refresh(tx)
 
-    # ─ Backfill de proventos em background — transparente ao usuário
-    # Uma nova sessão é criada dentro do backfill para não reusar a sessão
-    # já fechada pelo commit acima.
     background_tasks.add_task(
         _run_backfill,
         portfolio_id = portfolio_id,
@@ -110,10 +167,14 @@ async def update_transaction(
     )
     tx = result.scalar_one_or_none()
     if not tx:
-        raise HTTPException(status_code=404, detail="Transação não encontrada.")
+        raise HTTPException(status_code=404, detail="Transacao nao encontrada.")
 
     ticker     = payload.ticker.upper()
     asset_type = payload.asset_type
+
+    # Validacao de venda ao editar: exclui a propria transacao do calculo
+    if str(payload.operation) in ("sell", OperationType.sell):
+        await _validate_sell(db, portfolio_id, ticker, payload.quantity, exclude_tx_id=transaction_id)
 
     tx.ticker     = ticker
     tx.asset_type = asset_type
@@ -159,7 +220,7 @@ async def delete_transaction(
     )
     tx = result.scalar_one_or_none()
     if not tx:
-        raise HTTPException(status_code=404, detail="Transação não encontrada.")
+        raise HTTPException(status_code=404, detail="Transacao nao encontrada.")
 
     ticker     = tx.ticker
     asset_type = tx.asset_type
@@ -167,7 +228,6 @@ async def delete_transaction(
     await db.delete(tx)
     await db.commit()
 
-    # Reprocessa proventos após exclusão — recalcula quantidades na data-ex
     background_tasks.add_task(
         _run_backfill,
         portfolio_id = portfolio_id,
@@ -178,14 +238,14 @@ async def delete_transaction(
 
 async def _run_backfill(portfolio_id: int, ticker: str, asset_type: str) -> None:
     """
-    Wrapper que abre uma sessão independente para o backfill.
-    BackgroundTasks do FastAPI não recebem Depends, então gerenciamos
-    o ciclo de vida da sessão manualmente aqui.
+    Abre sessao independente para o backfill.
+    BackgroundTasks nao recebem Depends, entao o ciclo de vida
+    da sessao e gerenciado manualmente aqui.
     """
     from app.core.database import AsyncSessionLocal
     async with AsyncSessionLocal() as db:
         await backfill_dividends(
-            db          = db,
+            db           = db,
             portfolio_id = portfolio_id,
             ticker       = ticker,
             asset_type   = asset_type,
