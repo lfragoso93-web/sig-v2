@@ -1,168 +1,208 @@
-from datetime import date, timedelta
-from dateutil.relativedelta import relativedelta
-from sqlalchemy.orm import Session
-from sqlalchemy import func, extract, and_
-from app.models.dividend import Dividend, DividendStatus
-from app.models.asset_dividend import AssetDividend
-from app.models.asset import Asset
-from app.schemas.dividend import (
-    ProventosSummary, ProventoDistribution,
-    ProventosEvolucao, ProventosHistoricoMes, ProventoItem
-)
+"""
+proventos_service.py
+--------------------
+Agregacoes e leituras de proventos para a pagina de Proventos.
+Todos os metodos sao async e usam AsyncSession + select().
+
+Responsabilidades:
+  - summary: totais recebidos/a-receber, media mensal
+  - list_items: listagem paginada por carteira (recebidos + futuros)
+  - monthly_history: historico mensal agrupado por ano
+  - distribution: distribuicao por ativo (% do total)
+
+Nao importa schemas externos — retorna dicts puros.
+O router e responsavel por serializar a resposta.
+"""
+from __future__ import annotations
+
+import logging
+from datetime import date
 from typing import Optional
 
+from dateutil.relativedelta import relativedelta
+from sqlalchemy import extract, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-def _period_start(period: str) -> date:
-    today = date.today()
-    if period == "12m":
-        return today - relativedelta(months=12)
-    elif period == "24m":
-        return today - relativedelta(months=24)
-    elif period == "ytd":
-        return date(today.year, 1, 1)
-    else:
-        return date(2000, 1, 1)
+from app.models.asset import Asset
+from app.models.asset_dividend import AssetDividend
+from app.models.dividend import Dividend, DividendStatus
+
+logger = logging.getLogger(__name__)
 
 
-def get_summary(db: Session, portfolio_id: int) -> ProventosSummary:
+# ---------------------------------------------------------------------------
+# Summary
+# ---------------------------------------------------------------------------
+
+async def get_summary(db: AsyncSession, portfolio_id: int) -> dict:
+    """
+    Retorna:
+      - total_recebido: soma net_value status=RECEBIDO
+      - total_a_receber: soma net_value status=A_RECEBER
+      - total_12m: recebido nos ultimos 12 meses (payment_date)
+      - media_mensal_12m: total_12m / 12
+    """
     today = date.today()
     start_12m = today - relativedelta(months=12)
 
-    base = (
-        db.query(Dividend)
-        .join(AssetDividend, AssetDividend.id == Dividend.asset_dividend_id)
-        .filter(Dividend.portfolio_id == portfolio_id)
+    # total recebido (all time)
+    res = await db.execute(
+        select(func.sum(Dividend.net_value))
+        .join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
+        .where(
+            Dividend.portfolio_id == portfolio_id,
+            Dividend.status == DividendStatus.RECEBIDO,
+        )
     )
+    total_recebido = float(res.scalar_one() or 0.0)
 
-    total_carteira = (
-        base.filter(Dividend.status == DividendStatus.RECEBIDO)
-        .with_entities(func.sum(Dividend.net_value))
-        .scalar() or 0.0
+    # total a receber (futuro)
+    res = await db.execute(
+        select(func.sum(Dividend.net_value))
+        .join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
+        .where(
+            Dividend.portfolio_id == portfolio_id,
+            Dividend.status == DividendStatus.A_RECEBER,
+        )
     )
+    total_a_receber = float(res.scalar_one() or 0.0)
 
-    total_12m = (
-        base.filter(
+    # total recebido ultimos 12 meses
+    res = await db.execute(
+        select(func.sum(Dividend.net_value))
+        .join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
+        .where(
+            Dividend.portfolio_id == portfolio_id,
             Dividend.status == DividendStatus.RECEBIDO,
             AssetDividend.payment_date >= start_12m,
         )
-        .with_entities(func.sum(Dividend.net_value))
-        .scalar() or 0.0
     )
+    total_12m = float(res.scalar_one() or 0.0)
 
-    media_mensal = float(total_12m) / 12
-
-    return ProventosSummary(
-        media_mensal=media_mensal,
-        meta_mensal=0.0,
-        meta_percent=0.0,
-        total_12m=float(total_12m),
-        total_carteira=float(total_carteira),
-    )
+    return {
+        "total_recebido":    total_recebido,
+        "total_a_receber":   total_a_receber,
+        "total_12m":         total_12m,
+        "media_mensal_12m":  round(total_12m / 12, 2),
+    }
 
 
-def get_distribution(
-    db: Session, portfolio_id: int, months: int = 12
-) -> list[ProventoDistribution]:
-    start = date.today() - relativedelta(months=months)
+# ---------------------------------------------------------------------------
+# Listagem de proventos (recebidos + futuros)
+# ---------------------------------------------------------------------------
 
-    rows = (
-        db.query(Asset.ticker, func.sum(Dividend.net_value).label("total"))
-        .join(AssetDividend, AssetDividend.id == Dividend.asset_dividend_id)
-        .join(Asset, Asset.id == AssetDividend.asset_id)
-        .filter(
-            Dividend.portfolio_id == portfolio_id,
-            AssetDividend.payment_date >= start,
-        )
-        .group_by(Asset.ticker)
-        .order_by(func.sum(Dividend.net_value).desc())
-        .all()
-    )
-
-    grand_total = sum(float(r.total) for r in rows) or 1.0
-    return [
-        ProventoDistribution(
-            ticker=r.ticker,
-            total=float(r.total),
-            percentage=float(r.total) / grand_total * 100,
-        )
-        for r in rows
-    ]
-
-
-def get_evolucao(
-    db: Session,
+async def list_items(
+    db: AsyncSession,
     portfolio_id: int,
-    tipo: str,
-    period: str,
+    status: Optional[DividendStatus] = None,
+    year: Optional[int] = None,
     asset_type: Optional[str] = None,
-) -> list[ProventosEvolucao]:
-    start = _period_start(period)
-
-    filters = [
-        Dividend.portfolio_id == portfolio_id,
-        AssetDividend.payment_date >= start,
-    ]
-    if asset_type:
-        filters.append(Asset.asset_type == asset_type)
-
-    rows = (
-        db.query(
-            AssetDividend.payment_date,
+    page: int = 1,
+    page_size: int = 50,
+) -> dict:
+    """
+    Lista proventos da carteira com filtros opcionais.
+    Retorna cada item com:
+      ticker, asset_type, dividend_type, ex_date, payment_date,
+      value_per_unit, quantity, total_value, net_value, status
+    """
+    base = (
+        select(
+            Dividend.id,
+            Dividend.portfolio_id,
+            Dividend.quantity,
+            Dividend.total_value,
             Dividend.net_value,
             Dividend.status,
+            AssetDividend.ex_date,
+            AssetDividend.payment_date,
+            AssetDividend.value_per_unit,
+            AssetDividend.dividend_type,
+            Asset.ticker,
+            Asset.asset_type,
         )
-        .join(AssetDividend, AssetDividend.id == Dividend.asset_dividend_id)
-        .join(Asset, Asset.id == AssetDividend.asset_id)
-        .filter(and_(*filters))
-        .all()
+        .join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
+        .join(Asset, AssetDividend.asset_id == Asset.id)
+        .where(Dividend.portfolio_id == portfolio_id)
     )
 
-    buckets: dict[str, dict] = {}
-    for row in rows:
-        if row.payment_date is None:
-            continue
-        key = (
-            row.payment_date.strftime("%b/%Y") if tipo == "mensal"
-            else str(row.payment_date.year)
-        )
-        if key not in buckets:
-            buckets[key] = {"recebido": 0.0, "a_receber": 0.0}
-        if row.status == DividendStatus.RECEBIDO:
-            buckets[key]["recebido"] += float(row.net_value)
-        else:
-            buckets[key]["a_receber"] += float(row.net_value)
+    if status:
+        base = base.where(Dividend.status == status)
+    if year:
+        base = base.where(extract("year", AssetDividend.ex_date) == year)
+    if asset_type:
+        base = base.where(Asset.asset_type == asset_type)
 
-    return [
-        ProventosEvolucao(month=k, recebido=v["recebido"], a_receber=v["a_receber"])
-        for k, v in buckets.items()
+    # total sem paginacao
+    count_res = await db.execute(
+        select(func.count()).select_from(base.subquery())
+    )
+    total = count_res.scalar_one()
+
+    # paginacao + ordem: mais recentes primeiro
+    stmt = (
+        base
+        .order_by(AssetDividend.ex_date.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    rows = (await db.execute(stmt)).fetchall()
+
+    items = [
+        {
+            "id":             row.id,
+            "ticker":         row.ticker,
+            "asset_type":     row.asset_type,
+            "dividend_type":  row.dividend_type,
+            "ex_date":        row.ex_date,
+            "payment_date":   row.payment_date,
+            "value_per_unit": float(row.value_per_unit),
+            "quantity":       float(row.quantity),
+            "total_value":    float(row.total_value) if row.total_value else 0.0,
+            "net_value":      float(row.net_value)   if row.net_value   else 0.0,
+            "status":         row.status,
+        }
+        for row in rows
     ]
 
+    return {"total": total, "page": page, "page_size": page_size, "items": items}
 
-def get_historico_mensal(
-    db: Session,
+
+# ---------------------------------------------------------------------------
+# Historico mensal
+# ---------------------------------------------------------------------------
+
+async def get_monthly_history(
+    db: AsyncSession,
     portfolio_id: int,
-    status: Optional[str] = None,
+    status: Optional[DividendStatus] = None,
     asset_type: Optional[str] = None,
-) -> list[ProventosHistoricoMes]:
-    filters = [Dividend.portfolio_id == portfolio_id]
-    if status:
-        filters.append(Dividend.status == status)
-    if asset_type:
-        filters.append(Asset.asset_type == asset_type)
-
-    rows = (
-        db.query(
+) -> list[dict]:
+    """
+    Retorna historico por ano, com totais mensais (indices 0-11 = jan-dez).
+    Agrupa por payment_date.
+    """
+    stmt = (
+        select(
             extract("year",  AssetDividend.payment_date).label("year"),
             extract("month", AssetDividend.payment_date).label("month"),
             func.sum(Dividend.net_value).label("total"),
         )
-        .join(AssetDividend, AssetDividend.id == Dividend.asset_dividend_id)
-        .join(Asset, Asset.id == AssetDividend.asset_id)
-        .filter(and_(*filters))
-        .group_by("year", "month")
-        .order_by("year", "month")
-        .all()
+        .join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
+        .join(Asset, AssetDividend.asset_id == Asset.id)
+        .where(
+            Dividend.portfolio_id == portfolio_id,
+            AssetDividend.payment_date.isnot(None),
+        )
     )
+
+    if status:
+        stmt = stmt.where(Dividend.status == status)
+    if asset_type:
+        stmt = stmt.where(Asset.asset_type == asset_type)
+
+    stmt = stmt.group_by("year", "month").order_by("year", "month")
+    rows = (await db.execute(stmt)).fetchall()
 
     data: dict[int, dict[int, float]] = {}
     for r in rows:
@@ -175,52 +215,54 @@ def get_historico_mensal(
         values = [v for v in months_vals if v is not None]
         total  = sum(values)
         media  = total / len(values) if values else 0.0
-        result.append(ProventosHistoricoMes(
-            year=year,
-            months=months_vals,
-            total=total,
-            media=media,
-        ))
+        result.append({
+            "year":   year,
+            "months": months_vals,  # lista com 12 posicoes; None = sem provento
+            "total":  round(total, 2),
+            "media":  round(media, 2),
+        })
     return result
 
 
-def get_list(
-    db: Session,
+# ---------------------------------------------------------------------------
+# Distribuicao por ativo
+# ---------------------------------------------------------------------------
+
+async def get_distribution(
+    db: AsyncSession,
     portfolio_id: int,
-    year: Optional[int] = None,
-    status: Optional[str] = None,
-    asset_type: Optional[str] = None,
-) -> list[ProventoItem]:
-    filters = [Dividend.portfolio_id == portfolio_id]
-    if year:
-        filters.append(extract("year", AssetDividend.payment_date) == year)
-    if status:
-        filters.append(Dividend.status == status)
-    if asset_type:
-        filters.append(Asset.asset_type == asset_type)
+    months: int = 12,
+) -> list[dict]:
+    """
+    Retorna distribuicao percentual de proventos recebidos por ticker
+    nos ultimos N meses.
+    """
+    start = date.today() - relativedelta(months=months)
 
-    rows = (
-        db.query(Dividend, AssetDividend, Asset)
-        .join(AssetDividend, AssetDividend.id == Dividend.asset_dividend_id)
-        .join(Asset, Asset.id == AssetDividend.asset_id)
-        .filter(and_(*filters))
-        .order_by(AssetDividend.payment_date.desc())
-        .all()
-    )
-
-    return [
-        ProventoItem(
-            id=d.id,
-            ticker=a.ticker,
-            asset_type=a.asset_type,
-            dividend_type=ad.dividend_type,
-            status=d.status,
-            ex_date=ad.ex_date,
-            payment_date=ad.payment_date,
-            quantity=float(d.quantity),
-            value_per_unit=float(ad.value_per_unit),
-            total_value=float(d.total_value) if d.total_value else 0.0,
-            net_value=float(d.net_value) if d.net_value else 0.0,
+    stmt = (
+        select(
+            Asset.ticker,
+            Asset.asset_type,
+            func.sum(Dividend.net_value).label("total"),
         )
-        for d, ad, a in rows
+        .join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
+        .join(Asset, AssetDividend.asset_id == Asset.id)
+        .where(
+            Dividend.portfolio_id == portfolio_id,
+            AssetDividend.payment_date >= start,
+        )
+        .group_by(Asset.ticker, Asset.asset_type)
+        .order_by(func.sum(Dividend.net_value).desc())
+    )
+    rows = (await db.execute(stmt)).fetchall()
+
+    grand_total = sum(float(r.total) for r in rows) or 1.0
+    return [
+        {
+            "ticker":     r.ticker,
+            "asset_type": r.asset_type,
+            "total":      round(float(r.total), 2),
+            "percentage": round(float(r.total) / grand_total * 100, 2),
+        }
+        for r in rows
     ]
