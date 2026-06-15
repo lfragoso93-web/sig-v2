@@ -25,36 +25,53 @@ export interface PositionGroup {
   positions: PositionItem[]
 }
 
-/** Distribuição por tipo de ativo (usada em AllocationChart / AssetDonutChart) */
+/** Distribuição por tipo de ativo */
 export interface AssetDistribution {
   asset_type: string
   label: string
   value: number
   percentage: number
+  color?: string
 }
 
 /** @deprecated use AssetDistribution */
 export type AssetTypeDistribution = AssetDistribution
 
+/**
+ * Resumo financeiro de um portfólio.
+ * Campos EN alinhados com a API REST; campos PT-BR mantidos como opcionais
+ * para compatibilidade com componentes legados.
+ */
 export interface PortfolioSummary {
+  // — campos EN (canônicos) —
   total_invested: number
   current_value: number
   total_gain: number
   total_gain_pct: number
   daily_change?: number
   daily_change_pct?: number
+
+  // — campos PT-BR (alias / legado) —
+  total_patrimonio?: number
+  total_investido?: number
+  lucro_total?: number
+  variacao_valor?: number
+  variacao_percentual?: number
+  rentabilidade_total?: number
+  dividendos_recebidos_12m?: number
+  total_proventos?: number
 }
 
-/** Portfolio mínimo para listagem (Topbar, selects) */
+/** Portfolio mínimo para listagem */
 export interface PortfolioListItem {
   id: number
   name: string
   description?: string
 }
 
-/** Ponto de histórico de patrimônio para o gráfico de barra */
+/** Ponto de histórico de patrimônio */
 export interface PatrimonioHistoryPoint {
-  date: string      // 'YYYY-MM' ou 'YYYY-MM-DD'
+  date: string
   value: number
   invested?: number
 }
@@ -101,7 +118,7 @@ export function usePortfolioList() {
   })
 }
 
-/** Histórico de patrimônio mensal para gráfico de barras */
+/** Histórico de patrimônio mensal */
 export function usePatrimonioHistory(portfolioId: number | null, months = 12) {
   return useQuery<PatrimonioHistoryPoint[]>({
     queryKey: ['patrimonio-history', portfolioId, months],
