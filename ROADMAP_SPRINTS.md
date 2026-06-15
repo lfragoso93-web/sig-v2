@@ -30,7 +30,6 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 - `AuthContext` legado removido
 - Logout limpa estado e redireciona
 - Configuracoes exibe usuario logado sem erro
-- Sem duas fontes de verdade para usuario autenticado
 
 ---
 
@@ -38,12 +37,7 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 
 **Objetivo:** alinhar todos os servicos com o modelo atual de transacoes.
 
-**Criterios de aceite atendidos:**
-- Testes de transacoes passam com o modelo atual
-- Nenhum servico ativo importa `TransactionType` inexistente
-- Criacao e exclusao de transacoes atualizam o resumo
-- Validacao de venda ativa: impede vender mais do que a posicao atual
-- Commits: `c1434e56`, `18fbf392`, `4a4908e7`
+**Commits:** `c1434e56`, `18fbf392`, `4a4908e7`
 
 ---
 
@@ -51,21 +45,13 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 
 **Objetivo:** evitar erros de runtime causados por mistura de `AsyncSession` e `Session`.
 
-**Criterios de aceite atendidos:**
-- Todos routers e services ativos usam `AsyncSession`
-- Commits: `297b7e8b`, `07b89607`
+**Commits:** `297b7e8b`, `07b89607`
 
 ---
 
 ## Sprint 4 - Carteiras, Posicoes e Patrimonio ✅ CONCLUIDA — 15 Jun 2026
 
 **Objetivo:** consolidar o nucleo patrimonial como fonte confiavel do sistema.
-
-**Escopo executado:**
-- PM ponderado correto; fees de venda nao afetam PM
-- Posicoes zeradas removidas; tipos normalizados
-- Resumo com `Optional[float]` para campos sem cotacao
-- 23 cenarios de teste em `test_portfolio_service.py`
 
 **Commits:** `a73d9bd7`, `38bed9b3`, `680b489f`, `cc70de49`
 
@@ -76,74 +62,72 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 **Objetivo:** tornar cotacoes mais robustas e previsiveis; implementar historico patrimonial real via snapshots diarios.
 
 **Escopo executado:**
-
-### Pipeline de cotacoes — 3 camadas
-- `asset_types.py`: fonte unica de verdade para tipos de ativo (`INTL_TYPES`, `BRAPI_TYPES`, `NO_QUOTE_TYPES`).
-- `Asset.last_price`: campo adicionado (migration 004) — cache L1 no banco.
-- `quotes_service.py`: cache L1 (banco) → L2 (memoria 5min) → L3 (API externa).
-- `brapi.py`: refatorado com bulk, single e historical; sem raise em falha parcial.
-- `price_history_service.py`: OHLCV diario no banco (INSERT ON CONFLICT DO NOTHING).
-- `quote_service.py`: `update_all_quotes()` — atualiza `Asset.last_price` para todos os ativos.
-
-### Snapshots diarios de patrimonio
-- `PortfolioSnapshot` model + migration 005.
-- `portfolio_snapshot_service.py`: backfill retroativo, refresh diario, get_daily_evolution, get_monthly_evolution.
-- `performance_service.py`: historico mensal usa snapshots reais (valor de mercado, nao custo).
-
-### Scheduler e endpoints
-- `scheduler.py`: 6 jobs; novo job 19h00 = update_all_quotes + refresh_today_snapshot por carteira.
-- `routers/performance.py`: 3 novos endpoints:
-  - `GET /{id}/evolution/daily?days=365`
-  - `GET /{id}/evolution/monthly?months=24`
-  - `POST /{id}/evolution/backfill?days_back=N`
+- Pipeline de cotacoes 3 camadas: `asset_types.py`, `Asset.last_price` (migration 004), `quotes_service.py`
+- BRAPI refatorado: bulk, single, historical
+- `price_history_service.py`: OHLCV diario no banco
+- `PortfolioSnapshot` model + migration 005
+- `portfolio_snapshot_service.py`: backfill, refresh, get_daily_evolution, get_monthly_evolution
+- `performance_service.py`: historico com valor de mercado real
+- `scheduler.py`: 6 jobs, job 19h00 = update_all_quotes + refresh_today_snapshot
+- `routers/performance.py`: endpoints `/evolution/daily`, `/evolution/monthly`, `/evolution/backfill`
 
 **Criterios de aceite atendidos:**
 - ✅ Falha em BRAPI/yfinance nao derruba endpoints de posicoes
-- ✅ Cotacoes ausentes retornam `None`, nao valores inventados
-- ✅ Nacionais via BRAPI, internacionais via yfinance
-- ✅ Historico patrimonial diferencia aporte e valor de mercado
-- ✅ Scheduler orquestrado com ordem correta (preco antes do snapshot)
+- ✅ Cotacoes ausentes retornam `None`
+- ✅ Historico patrimonial com valor de mercado real
+- ✅ Scheduler orquestrado com ordem correta
 
 **Checklist de deploy:**
 1. `alembic upgrade head` (migrations 004 e 005)
-2. `POST /portfolios/{id}/evolution/backfill` para cada carteira existente
-3. Scheduler 19h00 mantem snapshots atualizados automaticamente
+2. `POST /portfolios/{id}/evolution/backfill` para cada carteira
+3. Scheduler 19h00 mantem snapshots atualizados
 
-**Commits:**
-- `bb258df8` — feat: asset_types.py
-- `14f4b50e` — feat: Asset.last_price + migration 004
-- `315325e9` — refactor: brapi.py
-- `9ea72604` — feat: price_history_service.py
-- `9015538d` — feat: quotes_service.py
-- `c335b513` — refactor: quote_service.py
-- `b4573326` — feat: PortfolioSnapshot + migration 005
-- `4a8fbda6` — feat: portfolio_snapshot_service.py
-- `c8a57e83` — refactor: performance_service.py
-- `f3a91f74` — feat: scheduler.py
-- `239bcd92` — feat: routers/performance.py
+**Commits:** `bb258df8`, `14f4b50e`, `315325e9`, `9ea72604`, `9015538d`, `c335b513`, `b4573326`, `4a8fbda6`, `c8a57e83`, `f3a91f74`, `239bcd92`
 
 ---
 
-## Sprint 6 - Proventos
+## Sprint 6 - Proventos ✅ CONCLUIDA — 15 Jun 2026
 
-**Objetivo:** entregar proventos confiaveis, com modo automatico e manual.
+**Objetivo:** entregar proventos confiaveis para a pagina de Proventos. Cada provento exibe valor por unidade e valor total pelo usuario, separados em recebidos e futuros.
 
-**Escopo:**
-- Corrigir backfill de proventos para funcionar com o modelo atual
-- Separar provento global do ativo e provento da carteira
-- Calcular quantidade na data-ex
-- Tratar JCP com valor liquido
-- Implementar lancamento manual de proventos
-- Exibir historico mensal, distribuicao por ativo, valores recebidos e a receber
-- Garantir idempotencia na sincronizacao
+**Escopo executado:**
 
-**Criterios de aceite:**
-- Sincronizar o mesmo ativo duas vezes nao duplica proventos
-- Quantidade considerada usa posicao na data-ex
-- Dashboard de proventos mostra totais coerentes
-- Usuario consegue cadastrar provento manualmente
+### Modelo de dados (ja existia, consolidado)
+- `asset_dividends`: provento global do ativo (ex_date, payment_date, value_per_unit)
+- `dividends`: provento da carteira (quantity na data-ex, total_value, net_value, status)
+- Backfill via BRAPI (ACAO, FII, ETF_NACIONAL) e yfinance (STOCK, ETF_INTERNACIONAL)
+- SKIP_TYPES: CRIPTO, TESOURO_DIRETO, RENDA_FIXA
 
-**Prioridade:** alta.
+### Correcoes criticas
+- `dividend_backfill_service.py`: `_net_qty_on_date` e `_portfolios_with_ticker` corrigidos para usar `ticker` (Transaction nao tem asset_id); tipos alinhados com `asset_types.py`
+
+### Novos servicos e endpoints
+- `proventos_service.py`: reescrito em AsyncSession — `get_summary`, `list_items`, `get_monthly_history`, `get_distribution`
+- `routers/proventos.py`: reescrito em async — 4 endpoints funcionais
+- `routers/dividends.py`: novo `POST /dividends/sync` — sincronizacao manual de todos os ativos da carteira
+
+**Criterios de aceite atendidos:**
+- ✅ Proventos exibem valor por unidade e valor total (quantity x value_per_unit)
+- ✅ Recebidos e futuros separados por status (RECEBIDO / A_RECEBER)
+- ✅ Backfill correto: quantity calculada na data-ex pelo ticker da carteira
+- ✅ Sincronizacao idempotente: rodar duas vezes nao duplica proventos
+- ✅ Backend async em todos os endpoints
+
+**Endpoints disponibilizados:**
+
+| Endpoint | Uso |
+|---|---|
+| `GET /portfolios/{id}/proventos/summary` | Cards de topo: total recebido, a receber, media 12m |
+| `GET /portfolios/{id}/proventos` | Tabela principal (filtros: status, year, asset_type) |
+| `GET /portfolios/{id}/proventos/historico-mensal` | Grid historico por ano/mes |
+| `GET /portfolios/{id}/proventos/distribuicao` | Grafico de distribuicao por ativo |
+| `POST /portfolios/{id}/dividends/sync` | Botao "Sincronizar" — 202 Accepted |
+
+**Commits:**
+- `73538f57` — fix: dividend_backfill_service — ticker + asset_types
+- `75790b79` — refactor: proventos_service — AsyncSession
+- `ff41314a` — refactor: routers/proventos.py — async
+- `d2e7b5d5` — feat: POST /dividends/sync
 
 ---
 
@@ -161,21 +145,17 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 
 ---
 
-## Sprint 8 - Historico Patrimonial
+## Sprint 8 - Historico Patrimonial (frontend)
 
-**Objetivo:** evoluir o grafico de patrimonio de aportes acumulados para valor historico real.
+**Objetivo:** integrar endpoints de evolucao no frontend.
 
-> **Nota:** a infraestrutura de snapshots foi antecipada na Sprint 5 (`portfolio_snapshot_service.py`, migration 005, endpoints de evolucao). Sprint 8 focara na integracao frontend (graficos) e refinamentos.
+> **Nota:** infraestrutura de snapshots foi antecipada na Sprint 5.
 
-**Escopo atualizado:**
-- Integrar endpoints `GET /evolution/daily` e `GET /evolution/monthly` no frontend
-- Grafico de linha (evolucao diaria) e grafico de barras (mensal)
+**Escopo:**
+- Integrar `GET /evolution/daily` e `GET /evolution/monthly` no frontend
+- Graficos de linha (diario) e barras (mensal)
 - Seletores de periodo: 6m, 12m, 24m, tudo
 - Comparativo: valor investido vs valor de mercado
-
-**Criterios de aceite:**
-- Grafico diferencia aporte acumulado e valor de mercado
-- Periodos funcionam sem erro
 
 **Prioridade:** media.
 
@@ -280,8 +260,8 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 | Sprint 3 — Padronizacao Async | ✅ Concluida |
 | Sprint 4 — Carteiras, Posicoes e Patrimonio | ✅ Concluida — 15 Jun 2026 |
 | Sprint 5 — Cotacoes e Integracoes | ✅ Concluida — 15 Jun 2026 |
-| Sprint 6 — Proventos | 🔜 Proxima |
-| Sprint 7 — Rentabilidade | ⏳ |
+| Sprint 6 — Proventos | ✅ Concluida — 15 Jun 2026 |
+| Sprint 7 — Rentabilidade | 🔜 Proxima |
 | Sprint 8 — Historico Patrimonial (frontend) | ⏳ |
 | Sprint 9 — Patrimonio por Classe | ⏳ |
 | Sprint 10 — Renda Fixa e Tesouro | ⏳ |

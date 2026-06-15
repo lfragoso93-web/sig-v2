@@ -44,6 +44,102 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [Sprint 6] - 2026-06-15
+
+### Objetivo
+Entregar proventos confiaveis para a pagina de Proventos: proventos dos ativos da carteira com valor por unidade, valor total pelo usuario, separados em recebidos e futuros.
+
+---
+
+### Decisoes de modelagem (Sprint 6)
+
+#### Modelo de dois niveis — mantido e consolidado
+
+| Tabela | Papel |
+|---|---|
+| `asset_dividends` | Provento global do ativo (ex_date, payment_date, value_per_unit, source). Alimentado pelo backfill via BRAPI/yfinance. |
+| `dividends` | Provento da carteira especifica. Vincula portfolio + asset_dividend. Armazena quantity (cotas na data-ex), total_value e net_value calculados, status (RECEBIDO/A_RECEBER). |
+
+#### Regras de calculo
+- `total_value = quantity * value_per_unit`
+- `net_value = total_value * 0.85` para JCP (IR 15%); `= total_value` para os demais
+- `status = RECEBIDO` se `payment_date <= hoje`; caso contrario `A_RECEBER`
+- `quantity` = posicao liquida (compras - vendas) na data-ex, calculada a partir de `Transaction` por `(portfolio_id, ticker, date <= ex_date)`
+
+#### Tipos sem proventos via API (SKIP_TYPES)
+- `CRIPTO`, `TESOURO_DIRETO`, `RENDA_FIXA` — ignorados silenciosamente pelo backfill
+
+---
+
+### Alteracoes
+
+#### dividend_backfill_service.py — correcoes criticas
+- **`_net_qty_on_date`:** corrigido para filtrar por `(portfolio_id, ticker, date)` — `Transaction` nao tem `asset_id`.
+- **`_portfolios_with_asset`:** renomeado para `_portfolios_with_ticker`; busca por `ticker` em vez de `asset_id`.
+- **`_upsert_portfolio_dividend`:** assinatura atualizada para receber `ticker`.
+- **Tipos alinhados com `asset_types.py`:** `YF_TYPES = INTL_TYPES` (importado); `SKIP_TYPES` consolidado.
+- **`OperationType.buy`:** comparacao via enum em vez de string livre.
+- **Commit:** `73538f57`
+
+#### proventos_service.py — reescrita completa
+- Migrado de `Session` sincrona + `db.query()` para `AsyncSession` + `select()`.
+- Removidos imports de schemas inexistentes (`app.schemas.dividend`).
+- Retorna dicts puros — o router serializa.
+- **Funcoes disponiveis:**
+  - `get_summary(db, portfolio_id)` — total_recebido, total_a_receber, total_12m, media_mensal_12m
+  - `list_items(db, portfolio_id, status, year, asset_type, page, page_size)` — listagem paginada com todos os campos
+  - `get_monthly_history(db, portfolio_id, status, asset_type)` — historico por ano/mes
+  - `get_distribution(db, portfolio_id, months)` — distribuicao percentual por ativo
+- **Commit:** `75790b79`
+
+#### routers/proventos.py — reescrita completa
+- Migrado de sincrono para `async def` + `AsyncSession`.
+- Removido prefixo `/api/v1` hardcoded (gerenciado pelo `main.py`).
+- Removidos schemas inexistentes; resposta e o dict puro do service.
+- Validacao de `status` via `DividendStatus` enum — retorna 422 com mensagem clara.
+- **Endpoints disponibilizados:**
+  - `GET /portfolios/{id}/proventos/summary`
+  - `GET /portfolios/{id}/proventos` (filtros: status, year, asset_type, page)
+  - `GET /portfolios/{id}/proventos/historico-mensal`
+  - `GET /portfolios/{id}/proventos/distribuicao`
+- **Commit:** `ff41314a`
+
+#### routers/dividends.py — novo endpoint de sync manual
+- **`POST /portfolios/{id}/dividends/sync`:** busca todos os tickers distintos da carteira via `Transaction` e dispara um `BackgroundTask` por ticker chamando `_run_backfill`. Retorna 202 Accepted com lista de tickers enfileirados.
+- Reutiliza `_run_backfill` (sessao independente, mesmo padrao de `transactions.py`).
+- **Commit:** `d2e7b5d5`
+
+---
+
+### Arquivos modificados na Sprint 6
+
+| Arquivo | Tipo de alteracao | Commit |
+|---|---|---|
+| `backend/app/services/dividend_backfill_service.py` | Correcao critica — ticker em vez de asset_id; alinhamento tipos | `73538f57` |
+| `backend/app/services/proventos_service.py` | Reescrita — AsyncSession, sem schemas externos | `75790b79` |
+| `backend/app/routers/proventos.py` | Reescrita — async, 4 endpoints funcionais | `ff41314a` |
+| `backend/app/routers/dividends.py` | Novo endpoint POST /sync | `d2e7b5d5` |
+
+---
+
+### Contrato dos endpoints de proventos
+
+| Endpoint | Resposta |
+|---|---|
+| `GET /proventos/summary` | `{ total_recebido, total_a_receber, total_12m, media_mensal_12m }` |
+| `GET /proventos` | `{ total, page, page_size, items: [{ticker, value_per_unit, quantity, total_value, net_value, status, ex_date, payment_date, ...}] }` |
+| `GET /proventos/historico-mensal` | `[{ year, months: [null|float x12], total, media }]` |
+| `GET /proventos/distribuicao` | `[{ ticker, asset_type, total, percentage }]` |
+| `POST /dividends/sync` | `{ message, queued, tickers }` — 202 Accepted |
+
+---
+
+### Estado da base apos Sprint 6
+
+Backend de proventos totalmente funcional e compativel com AsyncSession. Backfill corrigido para usar ticker (alinhado com modelo Transaction). Pagina de Proventos pode ser implementada no frontend consumindo os 4 endpoints de leitura + 1 de sync. Pronto para Sprint 7 (Rentabilidade).
+
+---
+
 ## [Sprint 5] - 2026-06-15
 
 ### Objetivo
@@ -53,7 +149,7 @@ Tornar cotacoes mais robustas e previsiveis, estruturar o pipeline de precos com
 
 ### Decisoes de arquitetura (Sprint 5)
 
-#### Pipeline de cotacoes — 3 camadas (L1 → L2 → L3)
+#### Pipeline de cotacoes — 3 camadas (L1 -> L2 -> L3)
 
 | Camada | Fonte | Escopo | TTL |
 |---|---|---|---|
@@ -62,94 +158,15 @@ Tornar cotacoes mais robustas e previsiveis, estruturar o pipeline de precos com
 | L3 | BRAPI / yfinance (API externa) | Nacionais / Internacionais | Sob demanda |
 
 - Falha em L3 nao derruba nenhum endpoint; retorna `None` e loga o erro.
-- Tipos nacionais: `ACAO`, `FII`, `ETF_NACIONAL`, `CRIPTO` → BRAPI.
-- Tipos internacionais: `STOCK`, `ETF_INTERNACIONAL` → yfinance (sufixo `.SA` apenas para BR).
-- `TESOURO_DIRETO`, `RENDA_FIXA` → sem cotacao de mercado, retornam `None`.
+- Tipos nacionais: `ACAO`, `FII`, `ETF_NACIONAL`, `CRIPTO` -> BRAPI.
+- Tipos internacionais: `STOCK`, `ETF_INTERNACIONAL` -> yfinance.
+- `TESOURO_DIRETO`, `RENDA_FIXA` -> sem cotacao de mercado, retornam `None`.
 
 #### Snapshots diarios — `PortfolioSnapshot`
 
 - Tabela `portfolio_snapshots` (migration `005`) armazena o valor de mercado calculado por carteira por dia.
 - `backfill_snapshots()`: retroativo desde a 1a transacao, idempotente, pula fds e dias ja existentes.
 - `refresh_today_snapshot()`: atualiza/cria o snapshot do dia atual (chamado pelo scheduler).
-- `get_daily_evolution()` e `get_monthly_evolution()`: leituras para o frontend.
-- Historico mensal do `performance_service` passou a usar snapshots reais (valor de mercado) em vez de custo acumulado.
-
----
-
-### Alteracoes
-
-#### asset_types.py — fonte unica de verdade para tipos de ativo
-- `INTL_TYPES`, `BRAPI_TYPES`, `NO_QUOTE_TYPES` centralizados.
-- Todos os services derivam de `asset_types.py`; nenhum define lista manual.
-- **Commit:** `bb258df8`
-
-#### Asset model + migration 004 — campo `last_price`
-- Adicionado `last_price: Optional[Numeric]` no modelo `Asset`.
-- Migration `004_add_last_price_to_assets.py`.
-- **Commit:** `14f4b50e`
-
-#### brapi.py — refatoracao da integracao BRAPI
-- `get_quotes_bulk()`: busca em lote com fallback gracioso por ticker.
-- `get_quote_single()`: busca individual.
-- `get_historical_prices()`: OHLCV diario para historico.
-- Sem `raise` em falha parcial; retorna lista com o que foi possivel obter.
-- **Commit:** `315325e9`
-
-#### price_history_service.py — historico OHLCV no banco
-- `persist_daily_prices()`: INSERT ON CONFLICT DO NOTHING — idempotente.
-- `get_price_at_date()`: busca preco de fechamento em data especifica.
-- Suporte a `AssetType` nacionais e internacionais via yfinance.
-- **Commit:** `9ea72604`
-
-#### quotes_service.py — cache L1/L2/L3 unificado
-- `get_prices(positions, db)`: entrada em lote `[{ticker, asset_type}]`, saida `{ticker: price}`.
-- Ordem de resolucao: L1 banco → L2 memoria → L3 API.
-- `invalidate(ticker)` e `invalidate_all()` para testes e forcas de refresh.
-- **Commit:** `9015538d`
-
-#### quote_service.py — `update_all_quotes(db)`
-- Percorre todos os `Asset` do banco, busca cotacao via L3 e atualiza `Asset.last_price`.
-- Usado pelo scheduler (job das 19h00) e disponivel como chamada manual.
-- **Commit:** `c335b513`
-
-#### PortfolioSnapshot model + migration 005
-- Tabela `portfolio_snapshots`: `portfolio_id`, `snapshot_date`, `market_value`, `cost_basis`, `invested_total`, `unrealized_pnl`, `realized_pnl`, `total_pnl`, `return_pct`.
-- Unique constraint `(portfolio_id, snapshot_date)`.
-- **Commit:** `b4573326`
-
-#### portfolio_snapshot_service.py — snapshots diarios
-- `_build_positions_at(portfolio_id, D)`: reconstroi posicoes FIFO ate a data D.
-- `_calc_totals(portfolio_id, D)`: valor de mercado por ticker via `get_price_at_date()`.
-- `backfill_snapshots(db, portfolio_id, days_back)`: retroativo, idempotente, commit a cada 30 dias.
-- `refresh_today_snapshot(db, portfolio_id)`: atualiza snapshot do dia atual.
-- `get_daily_evolution(db, portfolio_id, days)`: serie diaria para grafico de linha.
-- `get_monthly_evolution(db, portfolio_id, months)`: fechamento do ultimo dia util de cada mes.
-- **Commit:** `4a8fbda6`
-
-#### performance_service.py — refatoracao de cotacoes e historico
-- `_fetch_price_brl()` substituido por `_fetch_prices_brl()` (lote via `quotes_service.get_prices(db=db)`).
-- `calc_asset_performance()` recebe `prices_brl` pre-buscado — elimina N chamadas de API no loop.
-- `_build_monthly_history()` substituido por `get_monthly_evolution()` — historico com valor de mercado real.
-- `USD_TYPES` derivado de `INTL_TYPES` (fonte unica de verdade).
-- **Commit:** `c8a57e83`
-
-#### scheduler.py — jobs integrados
-- Adicionado helper `_get_active_portfolio_ids()` (carteiras ativas com transacoes).
-- Novo job `job_update_all_quotes_and_snapshots()` (19h00):
-  - Passo 1: `update_all_quotes(db)` — atualiza `Asset.last_price`.
-  - Passo 2: `refresh_today_snapshot(db, pid)` para cada carteira ativa.
-- Roda 30min apos `persist_price_history` (18h30) para garantir que `AssetPrice` do dia esta no banco.
-- Total: 6 jobs registrados.
-- **Commit:** `f3a91f74`
-
-#### routers/performance.py — endpoints de evolucao patrimonial
-- `GET /{id}/evolution/daily?days=365` → serie diaria (`SnapshotPoint`).
-- `GET /{id}/evolution/monthly?months=24` → fechamento mensal (`SnapshotPointMonthly`).
-- `POST /{id}/evolution/backfill?days_back=N` → popula historico retroativo (`BackfillOut`).
-- `HistoryPoint` substituido por `SnapshotPointMonthly` (campos de mercado real).
-- `get_asset_performance` atualizado para passar `prices_brl` dict (nova assinatura).
-- Helper `_assert_portfolio_owner()` adicionado.
-- **Commit:** `239bcd92`
 
 ---
 
@@ -173,70 +190,12 @@ Tornar cotacoes mais robustas e previsiveis, estruturar o pipeline de precos com
 
 ---
 
-### Checklist de deploy — Sprint 5
-
-1. `alembic upgrade head` — aplica migrations `004` e `005`
-2. `POST /portfolios/{id}/evolution/backfill` para cada carteira — popula historico retroativo
-3. Scheduler das 19h00 passa a manter snapshots atualizados automaticamente
-
----
-
-### Estado da base apos Sprint 5
-
-Pipeline de cotacoes com 3 camadas de cache (banco → memoria → API). Historico patrimonial via snapshots diarios reais. Rentabilidade com historico de mercado. Scheduler com 6 jobs orquestrados. Frontend pode consumir evolucao diaria e mensal com valor de mercado real. Pronto para Sprint 6 (Proventos).
-
----
-
 ## [Sprint 4] - 2026-06-15
 
 ### Objetivo
 Consolidar o nucleo patrimonial como fonte confiavel do sistema.
 
----
-
-### Decisoes de modelagem confirmadas (Sprint 4)
-
-#### Regras de Preco Medio Ponderado
-
-| Evento | Comportamento |
-|---|---|
-| Compra | PM recalculado: `(custo_atual + qty*preco + fees) / (qty_atual + qty)` |
-| Venda | PM invariante. `qty` diminui. `total_cost -= PM * qty_vendida`. |
-| `fees` de venda | NAO entram no PM. Afetam apenas lucro realizado. |
-| Posicao zerada | `qty <= 1e-9` — some da carteira (renda variavel E Tesouro Direto). |
-| Sem cotacao | `current_price=None`, `current_value=None`, `result_abs=None`, `result_pct=None`. Nunca usar PM como fallback. |
-
----
-
 ### Alteracoes
-
-#### portfolio_service.py — Correcoes e consolidacao
-- **Removido:** import morto `from sqlalchemy.orm import Session`.
-- **`calc_raw_positions`:**
-  - Adicionado `max(..., 0.0)` em `total_cost` e `qty` apos venda (guard contra float drift).
-  - Ordem de transacoes agora usa `.order_by(date.asc(), id.asc())` para desempate deterministico.
-  - `fees=None` tratado com `float(tx.fees or 0.0)`.
-- **`enrich_with_prices`:**
-  - Corrigido: sem cotacao, `current_value`, `result_abs` e `result_pct` retornam `None`.
-- **`recalc_positions`:**
-  - `tx.fees or 0.0` adicionado para evitar crash quando `fees=None`.
-  - Logica de venda consolidada: `total_cost -= avg_price * qty_tx` + `max(..., 0.0)`.
-- **`calc_positions`:**
-  - Logica de enriquecimento unificada com a mesma semantica de `enrich_with_prices`.
-- **Commit:** `a73d9bd7`
-
-#### routers/portfolios.py — Campos nullable no contrato da API
-- `PositionItem`: `current_price`, `current_value`, `result_abs`, `result_pct` → `Optional[float] = None`.
-- `SummaryResponse`: `total_current`, `result_abs`, `result_pct` → `Optional[float] = None`.
-- **Commit:** `38bed9b3`
-
-#### test_portfolio_service.py — Reescrita com criterios de aceite Sprint 4
-- 23 cenarios cobrindo PM, vendas, fees, tipos de ativo, isolamento entre carteiras.
-- **Commit:** `680b489f`
-
----
-
-### Arquivos modificados na Sprint 4
 
 | Arquivo | Tipo de alteracao | Commit |
 |---|---|---|
@@ -250,22 +209,22 @@ Consolidar o nucleo patrimonial como fonte confiavel do sistema.
 
 ### Refatoracao — Padronizacao total para AsyncSession
 
-#### performance_service.py
-- Migracao de `Session` para `AsyncSession`.
-- **Commit:** `297b7e8b`
-
-#### routers/performance.py
-- Migracao para `AsyncSession`; lookup de ativo via `Transaction`.
-- **Commit:** `07b89607`
+| Arquivo | Commit |
+|---|---|
+| `backend/app/services/performance_service.py` | `297b7e8b` |
+| `backend/app/routers/performance.py` | `07b89607` |
 
 ---
 
 ## [Sprint 2] - 2026-06-15
 
 ### Correcao pos-auditoria
-- `routers/transactions.py`: validacao de venda. **Commit:** `4a4908e7`
-- `transaction_service.py`: alinhamento com modelo atual. **Commit:** `c1434e56`
-- `test_transaction_service.py`: reescrita completa. **Commit:** `18fbf392`
+
+| Arquivo | Commit |
+|---|---|
+| `backend/app/services/transaction_service.py` | `c1434e56` |
+| `backend/tests/test_transaction_service.py` | `18fbf392` |
+| `backend/app/routers/transactions.py` | `4a4908e7` |
 
 ---
 
