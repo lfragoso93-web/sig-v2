@@ -1,0 +1,311 @@
+name: SIG v2 CI/CD
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: ["**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  security-events: write
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# ---------------------------------------------------------------------------
+# BACKEND JOBS
+# ---------------------------------------------------------------------------
+jobs:
+  backend-quality:
+    name: Backend – lint, type check and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+
+      - name: Lint with flake8
+        working-directory: backend
+        run: |
+          pip install flake8
+          flake8 app --max-line-length=120
+
+      - name: Type check with mypy
+        working-directory: backend
+        run: |
+          pip install mypy
+          mypy app --ignore-missing-imports
+
+      - name: Run tests with pytest
+        working-directory: backend
+        run: pytest
+
+  # ---------------------------------------------------------------------------
+  # FRONTEND JOBS
+  # ---------------------------------------------------------------------------
+  frontend-quality:
+    name: Frontend – lint, type check, tests and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Type check
+        working-directory: frontend
+        run: npm run type-check
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+  # ---------------------------------------------------------------------------
+  # SECURITY JOBS
+  # ---------------------------------------------------------------------------
+  secrets-scan:
+    name: Secret scan – Gitleaks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan hardcoded secrets with Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  trivy-repository-scan:
+    name: Dependency, secret and IaC scan – Trivy filesystem
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Trivy filesystem scan and generate SARIF
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-fs.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+
+      - name: Upload Trivy filesystem SARIF
+        if: ${{ hashFiles('trivy-fs.sarif') != '' }}
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-fs.sarif
+
+      - name: Run Trivy filesystem scan (gate)
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+  dependency-review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: ${{ github.event_name == 'pull_request' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          license-check: true
+          deny-licenses: GPL-3.0, AGPL-3.0
+
+  # ---------------------------------------------------------------------------
+  # DOCKERFILE LINT
+  # ---------------------------------------------------------------------------
+  dockerfile-lint-backend:
+    name: Dockerfile lint – backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Lint backend Dockerfile with Hadolint
+        uses: hadolint/hadolint-action@v3.3.0
+        with:
+          dockerfile: backend/Dockerfile
+
+  dockerfile-lint-frontend:
+    name: Dockerfile lint – frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Lint frontend Dockerfile with Hadolint
+        uses: hadolint/hadolint-action@v3.3.0
+        with:
+          dockerfile: frontend/Dockerfile
+
+  # ---------------------------------------------------------------------------
+  # BUILD AND SCAN DOCKER IMAGES (only after all quality gates pass)
+  # ---------------------------------------------------------------------------
+  build-and-scan-backend:
+    name: Build and scan backend Docker image
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs:
+      - backend-quality
+      - dockerfile-lint-backend
+      - secrets-scan
+      - trivy-repository-scan
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend Docker image locally
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          load: true
+          push: false
+          tags: sig-v2-backend:ci-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy image scan and generate SARIF
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: sig-v2-backend:ci-${{ github.sha }}
+          format: sarif
+          output: trivy-backend-image.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+
+      - name: Upload Trivy backend image SARIF
+        if: ${{ hashFiles('trivy-backend-image.sarif') != '' }}
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-backend-image.sarif
+
+      - name: Run Trivy backend image scan (gate)
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: sig-v2-backend:ci-${{ github.sha }}
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+  build-and-scan-frontend:
+    name: Build and scan frontend Docker image
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs:
+      - frontend-quality
+      - dockerfile-lint-frontend
+      - secrets-scan
+      - trivy-repository-scan
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build frontend Docker image locally
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          load: true
+          push: false
+          tags: sig-v2-frontend:ci-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy image scan and generate SARIF
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: sig-v2-frontend:ci-${{ github.sha }}
+          format: sarif
+          output: trivy-frontend-image.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+
+      - name: Upload Trivy frontend image SARIF
+        if: ${{ hashFiles('trivy-frontend-image.sarif') != '' }}
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-frontend-image.sarif
+
+      - name: Run Trivy frontend image scan (gate)
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: sig-v2-frontend:ci-${{ github.sha }}
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
