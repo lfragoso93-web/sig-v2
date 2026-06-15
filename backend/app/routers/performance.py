@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
@@ -9,7 +10,6 @@ from app.services.performance_service import (
     PortfolioPerformance,
     AssetPerformance,
 )
-from app.models.asset import Asset
 from app.integrations.fx_rate import get_usd_brl
 from pydantic import BaseModel
 from typing import Optional
@@ -17,7 +17,7 @@ from typing import Optional
 router = APIRouter(prefix="/api/v1/portfolios", tags=["performance"])
 
 
-# ─── Schemas de resposta ────────────────────────────────────────────────
+# ─── Schemas de resposta ─────────────────────────────────────────────────
 
 class AssetPerfOut(BaseModel):
     ticker: str
@@ -67,12 +67,12 @@ class PortfolioPerfOut(BaseModel):
     history: list[HistoryPoint]
 
 
-# ─── Endpoints ─────────────────────────────────────────────────────────────────
+# ─── Endpoints ──────────────────────────────────────────────────────────────────
 
 @router.get("/{portfolio_id}/performance", response_model=PortfolioPerfOut)
 async def get_portfolio_performance(
     portfolio_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Retorna rentabilidade completa da carteira."""
@@ -132,17 +132,28 @@ async def get_portfolio_performance(
 async def get_asset_performance(
     portfolio_id: int,
     ticker: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Rentabilidade de um ativo especifico dentro da carteira."""
-    asset = db.query(Asset).filter(Asset.ticker == ticker.upper()).first()
-    if not asset:
-        raise HTTPException(404, "Ativo nao encontrado")
+    from app.models.transaction import Transaction
+
+    # Verifica se o ticker existe em transacoes da carteira (sem depender da tabela Asset)
+    result = await db.execute(
+        select(Transaction.ticker, Transaction.asset_type)
+        .where(
+            Transaction.portfolio_id == portfolio_id,
+            Transaction.ticker == ticker.upper(),
+        )
+        .limit(1)
+    )
+    row = result.first()
+    if not row:
+        raise HTTPException(404, "Ativo nao encontrado nesta carteira")
 
     fx = await get_usd_brl()
     ap = await calc_asset_performance(
-        db, portfolio_id, asset.ticker, asset.asset_type, fx
+        db, portfolio_id, row.ticker, row.asset_type, fx
     )
 
     return AssetPerfOut(
