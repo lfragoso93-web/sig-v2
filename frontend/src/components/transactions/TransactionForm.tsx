@@ -6,8 +6,14 @@ import { useUsdBrl } from '@/hooks/useFxRate'
 import { formatBRL, formatUSD } from '@/utils/format'
 import type { TransactionCreate } from '@/hooks/useTransactions'
 
-// ── Configuração por tipo de ativo ──────────────────────────────────────────────────
-type AssetConfig = { label: string; currency: 'BRL' | 'USD'; qtyStep: string; qtyDefault: string; isRendaFixa?: boolean }
+// ── Configuração por tipo de ativo ────────────────────────────────────
+type AssetConfig = {
+  label: string
+  currency: 'BRL' | 'USD'
+  qtyStep: string
+  qtyDefault: string
+  isRendaFixa?: boolean
+}
 
 const ASSET_CONFIGS: Record<string, AssetConfig> = {
   ACAO_NACIONAL:     { label: 'Ações',              currency: 'BRL', qtyStep: '1',          qtyDefault: '1' },
@@ -22,9 +28,9 @@ const ASSET_CONFIGS: Record<string, AssetConfig> = {
   RENDA_FIXA:        { label: 'Renda Fixa',          currency: 'BRL', qtyStep: '0.01',       qtyDefault: '0.01', isRendaFixa: true },
 }
 
-const BOND_TYPES  = ['CDB','LCI','LCA','LC','LIG','CRI','CRA','Debenture','PGBL','VGBL','Outro']
-const INDEXERS    = ['CDI','IPCA','IGP-M','Prefixado','SELIC','Outro']
-const BOND_FORMS  = ['Pós-fixado','Prefixado','Híbrido']
+const BOND_TYPES = ['CDB','LCI','LCA','LC','LIG','CRI','CRA','Debenture','PGBL','VGBL','Outro']
+const INDEXERS   = ['CDI','IPCA','IGP-M','Prefixado','SELIC','Outro']
+const BOND_FORMS = ['Pós-fixado','Prefixado','Híbrido']
 
 const TX_TYPES = [
   { value: 'COMPRA',        label: 'Compra' },
@@ -38,8 +44,6 @@ const labelStyle = { color: 'var(--color-text-muted)', fontSize: 12, fontWeight:
 const errStyle   = { color: 'var(--color-error)', fontSize: 11, marginTop: 2 }
 const inputStyle = { fontSize: 16 }
 
-// FormValues extende TransactionCreate (que já tem currency opcional)
-// e adiciona campos auxiliares de UI que NÃO vão para o payload final
 interface FormValues extends TransactionCreate {
   fx_rate_input: string
   issuer?: string
@@ -80,35 +84,33 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
 
   useEffect(() => {
     if (fxData?.rate && !fxRateInput) setValue('fx_rate_input', String(fxData.rate.toFixed(4)))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fxData])
+  }, [fxData, fxRateInput, setValue])
 
   useEffect(() => {
-    // Não usa setValue('currency') pois currency é montado no onSubmit via cfg.currency
     setValue('quantity', parseFloat(cfg.qtyDefault))
     setValue('price', 0)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assetType])
+  }, [assetType, cfg.qtyDefault, setValue])
 
   const priceBrl  = isUSD ? price * fxRate : price
   const totalBrl  = qty * priceBrl + fees
   const totalOrig = qty * price + fees
 
   function onSubmit(data: FormValues) {
-    // Monta o payload limpo: remove campos de UI e injeta currency + fx_rate
-    const { fx_rate_input, issuer: _i, bond_type: _bt, indexer: _ix,
-            cdi_rate: _cr, bond_form: _bf, maturity_date: _md,
-            daily_liquidity: _dl, ...txData } = data
-
+    // Separa campos auxiliares de UI do payload real
+    const payload: TransactionCreate & { fx_rate?: number } = {
+      ticker:           data.ticker,
+      asset_type:       data.asset_type,
+      operation:        data.operation,
+      quantity:         data.quantity,
+      price:            data.price,
+      fees:             data.fees,
+      date:             data.date,
+      notes:            data.notes,
+      currency:         cfg.currency,
+      ...(isUSD && { fx_rate: parseFloat(data.fx_rate_input) }),
+    }
     createTx(
-      {
-        portfolioId,
-        data: {
-          ...txData,
-          currency: cfg.currency,
-          ...(isUSD && { fx_rate: parseFloat(fx_rate_input) }),
-        },
-      },
+      { portfolioId, data: payload },
       { onSuccess: onClose },
     )
   }
@@ -295,8 +297,8 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
             <div
               className="rounded-lg p-3"
               style={{
-                background:   'oklch(from var(--color-primary) l c h / 0.07)',
-                border:       '1px solid oklch(from var(--color-primary) l c h / 0.2)',
+                background: 'oklch(from var(--color-primary) l c h / 0.07)',
+                border:     '1px solid oklch(from var(--color-primary) l c h / 0.2)',
               }}
             >
               <div className="flex items-center justify-between mb-2">
