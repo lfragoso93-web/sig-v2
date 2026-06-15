@@ -11,7 +11,6 @@ import { usePortfolios } from '@/hooks/usePortfolios'
 import { formatBRL, formatDate, assetBadgeClass } from '@/utils/format'
 import TransactionsBarChart from '@/components/charts/TransactionsBarChart'
 
-// Mapeia asset_type da API para a aba do AddTransactionModal
 function assetTypeToTab(assetType: string): string {
   const map: Record<string, string> = {
     ACAO:              'acao',
@@ -26,18 +25,6 @@ function assetTypeToTab(assetType: string): string {
   }
   return map[assetType] ?? 'acao'
 }
-
-const ASSET_TYPES: { label: string; value: string }[] = [
-  { label: 'Todos',               value: '' },
-  { label: 'Ações',               value: 'ACAO_NACIONAL' },
-  { label: 'FII',                 value: 'FII' },
-  { label: 'ETF Nacional',        value: 'ETF_NACIONAL' },
-  { label: 'ETF Internacional',   value: 'ETF_INTERNACIONAL' },
-  { label: 'Tesouro Direto',      value: 'TESOURO_DIRETO' },
-  { label: 'Stock',               value: 'STOCK' },
-  { label: 'Criptomoeda',         value: 'CRIPTO' },
-  { label: 'Renda Fixa',          value: 'RENDA_FIXA' },
-]
 
 const ASSET_TYPE_LABEL: Record<string, string> = {
   ACAO:              'Ações',
@@ -189,7 +176,7 @@ function ConfirmDeleteModal({ onCancel, onConfirm, loading }: { onCancel: () => 
   )
 }
 
-// ── Pagina principal ──────────────────────────────────────────────────────────
+// ── Página principal ──────────────────────────────────────────────────────────
 export default function Transacoes() {
   const { selectedPortfolioId, openTransactionModal } = useAppStore()
   const { data: portfolios = [] } = usePortfolios()
@@ -198,18 +185,16 @@ export default function Transacoes() {
   const { data: transactions = [], isLoading } = useTransactions(selectedPortfolioId)
   const deleteTransaction = useDeleteTransaction()
 
+  // Filtros globais (ticker global + compra/venda) — sem seletor de classe
   const [search, setSearch]               = useState(() => searchParams.get('ticker') ?? '')
-  const [typeFilter, setTypeFilter]       = useState('')
   const [opFilter, setOpFilter]           = useState<'todos' | 'buy' | 'sell'>('todos')
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
   const [openGroups, setOpenGroups]       = useState<Record<string, boolean>>({})
+  // busca interna por grupo — chave: assetType
   const [groupSearch, setGroupSearch]     = useState<Record<string, string>>({})
 
   function toggleGroup(assetType: string) {
-    setOpenGroups(prev => ({
-      ...prev,
-      [assetType]: !(prev[assetType] ?? true),
-    }))
+    setOpenGroups(prev => ({ ...prev, [assetType]: !(prev[assetType] ?? true) }))
   }
 
   function isGroupOpen(assetType: string) {
@@ -218,6 +203,8 @@ export default function Transacoes() {
 
   function handleGroupSearchChange(assetType: string, value: string) {
     setGroupSearch(prev => ({ ...prev, [assetType]: value }))
+    // garante que o grupo fique aberto ao digitar
+    setOpenGroups(prev => ({ ...prev, [assetType]: true }))
   }
 
   useEffect(() => {
@@ -225,15 +212,16 @@ export default function Transacoes() {
     if (ticker) setSearch(ticker)
   }, [searchParams])
 
+  // Filtragem global (ticker + op) — classe é tratada por grupo
   const filtered = useMemo(() => {
     return transactions.filter(t => {
-      const matchSearch = t.ticker.toLowerCase().includes(search.toLowerCase())
-      const matchType   = !typeFilter || t.asset_type === typeFilter
+      const matchSearch = !search || t.ticker.toLowerCase().includes(search.toLowerCase())
       const matchOp     = opFilter === 'todos' || t.operation === opFilter
-      return matchSearch && matchType && matchOp
+      return matchSearch && matchOp
     })
-  }, [transactions, search, typeFilter, opFilter])
+  }, [transactions, search, opFilter])
 
+  // Agrupa pelo asset_type após filtragem global
   const groupedByType = useMemo(() => {
     const groups: Record<string, Transaction[]> = {}
     for (const t of filtered) {
@@ -318,7 +306,7 @@ export default function Transacoes() {
         </div>
       </div>
 
-      {/* Filtros */}
+      {/* Filtros globais — apenas ticker e compra/venda; sem seletor de classe */}
       <div className="flex flex-wrap gap-2">
         <div className="relative">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-text-muted)' }} />
@@ -340,10 +328,6 @@ export default function Transacoes() {
             </button>
           )}
         </div>
-
-        <select className="input text-sm" value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={{ fontSize: 16 }}>
-          {ASSET_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-        </select>
 
         <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: 'var(--color-surface-offset)' }}>
           {(['todos', 'buy', 'sell'] as const).map(op => (
@@ -381,15 +365,15 @@ export default function Transacoes() {
             <div className="flex flex-col gap-3 p-3 md:hidden">
               {Object.entries(groupedByType).map(([assetType, list]) => {
                 const query = (groupSearch[assetType] ?? '').toLowerCase()
+                // filtra itens pelo busca interna do grupo
                 const groupList = query
                   ? list.filter(t => t.ticker.toLowerCase().includes(query))
                   : list
 
-                if (groupList.length === 0) return null
-
                 const open = isGroupOpen(assetType)
 
                 return (
+                  // grupo sempre renderizado; apenas os itens internos são filtrados
                   <div key={assetType} className="flex flex-col rounded-xl" style={{ background: 'var(--color-surface-offset)', border: '1px solid var(--color-border)' }}>
                     <div className="flex items-center justify-between px-3 py-2 border-b" style={{ borderColor: 'var(--color-divider)' }}>
                       <button
@@ -406,7 +390,7 @@ export default function Transacoes() {
                           {ASSET_TYPE_LABEL[assetType] ?? assetType}
                         </span>
                         <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
-                          · {groupList.length} transação(ões)
+                          · {groupList.length} de {list.length} transação(ões)
                         </span>
                       </button>
                       <input
@@ -419,14 +403,20 @@ export default function Transacoes() {
 
                     {open && (
                       <div className="flex flex-col gap-2 p-3">
-                        {groupList.map(t => (
-                          <TransactionCard
-                            key={t.id}
-                            t={t}
-                            onDelete={() => setConfirmDelete(t.id)}
-                            onEdit={() => handleEdit(t)}
-                          />
-                        ))}
+                        {groupList.length === 0 ? (
+                          <p className="text-xs text-center py-4" style={{ color: 'var(--color-text-muted)' }}>
+                            Nenhum ticker encontrado neste grupo.
+                          </p>
+                        ) : (
+                          groupList.map(t => (
+                            <TransactionCard
+                              key={t.id}
+                              t={t}
+                              onDelete={() => setConfirmDelete(t.id)}
+                              onEdit={() => handleEdit(t)}
+                            />
+                          ))
+                        )}
                       </div>
                     )}
                   </div>
@@ -452,11 +442,10 @@ export default function Transacoes() {
                   ? list.filter(t => t.ticker.toLowerCase().includes(query))
                   : list
 
-                if (groupList.length === 0) return null
-
                 const open = isGroupOpen(assetType)
 
                 return (
+                  // grupo sempre renderizado; a tabela interna respeita o filtro
                   <div key={assetType} className="overflow-x-auto rounded-xl"
                     style={{ background: 'var(--color-surface-offset)', border: '1px solid var(--color-border)' }}
                   >
@@ -476,7 +465,7 @@ export default function Transacoes() {
                             {ASSET_TYPE_LABEL[assetType] ?? assetType}
                           </span>
                           <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                            · {groupList.length} transação(ões)
+                            · {groupList.length} de {list.length} transação(ões)
                           </span>
                         </button>
                       </div>
@@ -489,29 +478,37 @@ export default function Transacoes() {
                     </div>
 
                     {open && (
-                      <table className="positions-table">
-                        <thead>
-                          <tr>
-                            <th>Data</th><th>Ativo</th><th>Tipo</th>
-                            <th className="text-center">Op.</th>
-                            <th className="text-right">Qtd</th>
-                            <th className="text-right">Preço unit.</th>
-                            <th className="text-right">Taxas</th>
-                            <th className="text-right">Total</th>
-                            <th />
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {groupList.map(t => (
-                            <TransactionRow
-                              key={t.id}
-                              t={t}
-                              onDelete={() => setConfirmDelete(t.id)}
-                              onEdit={() => handleEdit(t)}
-                            />
-                          ))}
-                        </tbody>
-                      </table>
+                      <>
+                        {groupList.length === 0 ? (
+                          <p className="text-xs text-center py-6" style={{ color: 'var(--color-text-muted)' }}>
+                            Nenhum ticker encontrado neste grupo.
+                          </p>
+                        ) : (
+                          <table className="positions-table">
+                            <thead>
+                              <tr>
+                                <th>Data</th><th>Ativo</th><th>Tipo</th>
+                                <th className="text-center">Op.</th>
+                                <th className="text-right">Qtd</th>
+                                <th className="text-right">Preço unit.</th>
+                                <th className="text-right">Taxas</th>
+                                <th className="text-right">Total</th>
+                                <th />
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {groupList.map(t => (
+                                <TransactionRow
+                                  key={t.id}
+                                  t={t}
+                                  onDelete={() => setConfirmDelete(t.id)}
+                                  onEdit={() => handleEdit(t)}
+                                />
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                      </>
                     )}
                   </div>
                 )
