@@ -1,0 +1,10 @@
+[flake8]
+max-line-length = 120
+extend-ignore =
+    # E501 já coberto por max-line-length
+    E501
+
+per-file-ignores =
+    # Models SQLAlchemy usam forward references em relationship() — F821 é falso positivo
+    app/models/*.py: F821
+    app/models/base.py: F401
