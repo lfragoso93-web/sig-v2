@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
-from app.core.auth import get_current_user
+from app.core.deps import get_current_user
 from app.models.user import User
 from app.schemas.portfolio import PortfolioCreate, PortfolioUpdate, PortfolioResponse
 from app.services.portfolio_service import (
