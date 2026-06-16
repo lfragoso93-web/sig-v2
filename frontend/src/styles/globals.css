@@ -83,15 +83,35 @@
     border-color: var(--color-surface-dynamic);
   }
 
-  /* ── Badges ────────────────────────────────────────────────── */
+  /* ── Badges (base inlined para compatibilidade TW v4) ───── */
   .badge {
     @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
   }
-  .badge-green  { @apply badge; background: oklch(from var(--color-success) l c h / 0.15); color: var(--color-success); }
-  .badge-red    { @apply badge; background: oklch(from var(--color-notification) l c h / 0.15); color: var(--color-notification); }
-  .badge-blue   { @apply badge; background: oklch(from var(--color-blue) l c h / 0.15); color: var(--color-blue); }
-  .badge-yellow { @apply badge; background: oklch(from var(--color-gold) l c h / 0.15); color: var(--color-gold); }
-  .badge-gray   { @apply badge; background: oklch(from var(--color-text-muted) l c h / 0.1); color: var(--color-text-muted); }
+  .badge-green {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
+    background: oklch(from var(--color-success) l c h / 0.15);
+    color: var(--color-success);
+  }
+  .badge-red {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
+    background: oklch(from var(--color-notification) l c h / 0.15);
+    color: var(--color-notification);
+  }
+  .badge-blue {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
+    background: oklch(from var(--color-blue) l c h / 0.15);
+    color: var(--color-blue);
+  }
+  .badge-yellow {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
+    background: oklch(from var(--color-gold) l c h / 0.15);
+    color: var(--color-gold);
+  }
+  .badge-gray {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
+    background: oklch(from var(--color-text-muted) l c h / 0.1);
+    color: var(--color-text-muted);
+  }
 
   /* ── Botões ────────────────────────────────────────────────── */
   .btn {
@@ -100,7 +120,9 @@
     transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
   }
   .btn-primary {
-    @apply btn;
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
+           transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed;
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
     background: var(--color-primary);
     color: var(--color-text-inverse);
   }
@@ -108,7 +130,9 @@
   .btn-primary:active:not(:disabled) { background: var(--color-primary-active); }
 
   .btn-secondary {
-    @apply btn;
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
+           transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed;
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
     background: var(--color-surface-offset);
     color: var(--color-text);
     border: 1px solid var(--color-border);
@@ -116,7 +140,9 @@
   .btn-secondary:hover:not(:disabled) { background: var(--color-surface-dynamic); }
 
   .btn-ghost {
-    @apply btn;
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
+           transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed;
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
     background: transparent;
     color: var(--color-text-muted);
   }
@@ -140,8 +166,12 @@
     box-shadow: 0 0 0 3px oklch(from var(--color-primary) l c h / 0.15);
   }
   .input-error {
-    @apply input;
+    @apply w-full px-3 py-2 rounded-lg text-sm
+           focus:outline-none
+           transition-colors duration-150;
+    background: var(--color-surface-2);
     border-color: var(--color-notification);
+    color: var(--color-text);
   }
   .input-error:focus {
     box-shadow: 0 0 0 3px oklch(from var(--color-notification) l c h / 0.2);
