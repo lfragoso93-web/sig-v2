@@ -18,7 +18,7 @@ yfinance==0.2.40
 # PyJWT 2.12.0 - fix CVE-2026-32597
 # python-jose removido: dependencia pyasn1<0.5.0 conflita com fix CVE-2026-30922
 # toda logica JWT usa PyJWT diretamente via app.core.security
-PyJWT[crypto]==2.12.0
+PyJWT[crypto]==2.13.0
 # cryptography 49.0.0 - GHSA-537c-gmf6-5ccf exige >=48.0.1
 # OpenSSL estaticamente linkado nas wheels 46.x/47.x estava vulneravel
 cryptography==49.0.0
