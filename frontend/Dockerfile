@@ -13,7 +13,11 @@ COPY . .
 RUN npm run build
 
 # ── Stage 2: Serve com Nginx ───────────────────────────────────────────────────
-FROM nginx:1.27-alpine AS runtime
+# nginx:1.28-alpine usa Alpine 3.22 com openssl, libxml2, libpng, musl atualizados
+# apk upgrade garante que qualquer pacote residual sem patch seja atualizado
+FROM nginx:1.28-alpine AS runtime
+
+RUN apk upgrade --no-cache
 
 # Remove config padrão e copia a nossa
 RUN rm /etc/nginx/conf.d/default.conf
