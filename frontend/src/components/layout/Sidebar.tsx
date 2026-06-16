@@ -8,6 +8,7 @@ import {
   Briefcase,
   Plus,
   CheckCircle2,
+  ChevronDown,
   Wallet,
   X,
 } from 'lucide-react'
@@ -17,8 +18,8 @@ import { useState, useEffect } from 'react'
 import Modal from '@/components/ui/Modal'
 
 const NAV_TOP = [
-  { to: '/carteira',           icon: LayoutDashboard, label: 'Resumo'     },
-  { to: '/carteira/patrimonio',icon: Wallet,          label: 'Patrimônio' },
+  { to: '/carteira',            icon: LayoutDashboard, label: 'Resumo'     },
+  { to: '/carteira/patrimonio', icon: Wallet,           label: 'Patrimônio' },
 ]
 
 const NAV_BOTTOM = [
@@ -35,23 +36,18 @@ export default function Sidebar() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  const [dropdownOpen, setDropdownOpen]   = useState(false)
-  const [modalOpen, setModalOpen]         = useState(false)
-  const [name, setName]                   = useState('')
-  const [description, setDescription]     = useState('')
-  const [createdName, setCreatedName]     = useState<string | null>(null)
-  const [error, setError]                 = useState<string | null>(null)
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [modalOpen, setModalOpen]       = useState(false)
+  const [name, setName]                 = useState('')
+  const [description, setDescription]   = useState('')
+  const [createdName, setCreatedName]   = useState<string | null>(null)
+  const [error, setError]               = useState<string | null>(null)
 
-  // Controle de montagem para animar entrada/saída
-  const [mounted, setMounted]   = useState(false)
-  const [visible, setVisible]   = useState(false)
+  const [mounted, setMounted] = useState(false)
+  const [visible, setVisible] = useState(false)
 
-  // Fecha sidebar no mobile ao trocar de rota
-  useEffect(() => {
-    closeSidebar()
-  }, [location.pathname])
+  useEffect(() => { closeSidebar() }, [location.pathname])
 
-  // Bloqueia scroll do body quando sidebar está aberta no mobile
   useEffect(() => {
     if (sidebarOpen) {
       document.body.style.overflow = 'hidden'
@@ -61,7 +57,6 @@ export default function Sidebar() {
     return () => { document.body.style.overflow = '' }
   }, [sidebarOpen])
 
-  // Animação: montar antes de tornar visível; desmontar após a saída
   useEffect(() => {
     if (sidebarOpen) {
       setMounted(true)
@@ -141,14 +136,15 @@ export default function Sidebar() {
 
   const sidebarContent = (
     <aside
-      className="flex flex-col h-full w-56 shrink-0 border-r py-5"
+      className="flex flex-col h-full shrink-0 border-r py-5"
       style={{
+        width:       'var(--sidebar-width, 240px)',
         background:  'var(--color-surface)',
         borderColor: 'var(--color-divider)',
       }}
     >
       {/* Logo + botão fechar (mobile) */}
-      <div className="px-5 mb-6 flex items-center justify-between">
+      <div className="px-5 mb-5 flex items-center justify-between">
         <span className="text-base font-bold tracking-tight" style={{ color: 'var(--color-primary)' }}>
           SIG
           <span className="text-xs font-medium ml-1" style={{ color: 'var(--color-text-muted)' }}>v2</span>
@@ -164,76 +160,97 @@ export default function Sidebar() {
       </div>
 
       {/* Seletor de carteira */}
-      <div className="px-3 mb-4">
+      <div className="px-3 mb-4 relative">
         <button
           onClick={() => setDropdownOpen(o => !o)}
-          className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm border transition-colors"
+          className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm border transition-colors"
           style={{
             background:  'var(--color-surface-offset)',
             borderColor: 'var(--color-border)',
             color:       'var(--color-text)',
+            minHeight:   40,
           }}
         >
           <div className="flex items-center gap-2 min-w-0">
-            <Briefcase size={13} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
-            <span className="truncate text-xs font-medium">
+            <Briefcase size={14} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
+            <span className="truncate text-sm font-medium">
               {selected?.name ?? 'Selecionar carteira'}
             </span>
           </div>
+          <ChevronDown
+            size={14}
+            style={{
+              color: 'var(--color-text-muted)',
+              flexShrink: 0,
+              transform: dropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform 180ms ease',
+            }}
+          />
         </button>
 
         {dropdownOpen && (
           <div
-            className="mt-1 rounded-lg border overflow-hidden"
+            className="absolute left-3 right-3 mt-1 rounded-lg border overflow-hidden z-10"
             style={{
               background:  'var(--color-surface-2)',
               borderColor: 'var(--color-border)',
               boxShadow:   'var(--shadow-md)',
             }}
           >
-            {portfolios.map(p => (
-              <button
-                key={p.id}
-                onClick={() => { setSelectedPortfolio(p.id); setDropdownOpen(false) }}
-                className="w-full text-left px-3 py-2 text-xs transition-colors"
-                style={{
-                  background: selectedPortfolioId === p.id
-                    ? 'oklch(from var(--color-primary) l c h / 0.1)'
-                    : 'transparent',
-                  color:      selectedPortfolioId === p.id
-                    ? 'var(--color-primary)'
-                    : 'var(--color-text)',
-                  fontWeight: selectedPortfolioId === p.id ? 600 : 400,
-                }}
-              >
-                {p.name}
-              </button>
-            ))}
+            {portfolios.length === 0 ? (
+              <p className="px-3 py-3 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                Nenhuma carteira cadastrada.
+              </p>
+            ) : (
+              portfolios.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => { setSelectedPortfolio(p.id); setDropdownOpen(false) }}
+                  className="w-full text-left px-3 py-2.5 text-sm transition-colors"
+                  style={{
+                    background: selectedPortfolioId === p.id
+                      ? 'oklch(from var(--color-primary) l c h / 0.1)'
+                      : 'transparent',
+                    color: selectedPortfolioId === p.id
+                      ? 'var(--color-primary)'
+                      : 'var(--color-text)',
+                    fontWeight: selectedPortfolioId === p.id ? 600 : 400,
+                  }}
+                >
+                  {p.name}
+                </button>
+              ))
+            )}
             <div style={{ borderTop: '1px solid var(--color-divider)' }}>
               <button
                 onClick={openModal}
-                className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 transition-colors"
+                className="w-full text-left px-3 py-2.5 text-sm flex items-center gap-2 transition-colors"
                 style={{ color: 'var(--color-primary)', fontWeight: 500 }}
               >
-                <Plus size={12} /> Nova carteira
+                <Plus size={13} /> Nova carteira
               </button>
             </div>
           </div>
         )}
       </div>
 
+      {/* Divisor */}
+      <div className="mx-3 mb-3" style={{ borderTop: '1px solid var(--color-divider)' }} />
+
       {/* Nav */}
       <nav className="flex flex-col gap-0.5 px-3 flex-1">
         {NAV_TOP.map(({ to, icon: Icon, label }) => (
           <NavLink key={to} to={to} end={to === '/carteira'} className={navLinkClass} style={navLinkStyle}>
-            <Icon size={15} />
+            <Icon size={16} />
             {label}
           </NavLink>
         ))}
 
+        <div className="my-1" style={{ borderTop: '1px solid var(--color-divider)' }} />
+
         {NAV_BOTTOM.map(({ to, icon: Icon, label }) => (
           <NavLink key={to} to={to} className={navLinkClass} style={navLinkStyle}>
-            <Icon size={15} />
+            <Icon size={16} />
             {label}
           </NavLink>
         ))}
@@ -296,6 +313,7 @@ export default function Sidebar() {
             </p>
             <div style={{ display: 'flex', gap: 'var(--space-3)', width: '100%' }}>
               <button
+                type="button"
                 onClick={handleCreateAnother}
                 style={{
                   flex: 1, padding: 'var(--space-2) var(--space-3)',
@@ -309,6 +327,7 @@ export default function Sidebar() {
                 Criar outra
               </button>
               <button
+                type="button"
                 onClick={handleGoToResumo}
                 style={{
                   flex: 1, padding: 'var(--space-2) var(--space-3)',
