@@ -29,3 +29,7 @@ class AssetRead(AssetBase):
 
     class Config:
         from_attributes = True
+
+
+# Alias para compatibilidade com routers que importam AssetResponse
+AssetResponse = AssetRead
