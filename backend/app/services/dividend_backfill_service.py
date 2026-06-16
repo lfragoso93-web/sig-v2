@@ -5,7 +5,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.models.transaction import Transaction, OperationType
+from app.models.transaction import Transaction
 from app.models.asset_dividend import AssetDividend
 from app.models.dividend import Dividend, DividendStatus
 
@@ -201,7 +201,6 @@ async def backfill_dividends(
 
     for raw in raw_dividends:
         try:
-            # Normaliza datas — BRAPI usa paymentDate/approvedOn; yfinance usa paymentDate
             pay_str = raw.get("paymentDate") or raw.get("approvedOn") or ""
             ex_str = raw.get("lastDatePrior") or pay_str
 
