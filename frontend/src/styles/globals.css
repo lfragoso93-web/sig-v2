@@ -1,7 +1,3 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
 @layer base {
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -17,7 +13,6 @@
     font-family: 'Inter', system-ui, sans-serif;
     font-size: 0.875rem;
     line-height: 1.5;
-    /* bg e text lêem as CSS vars — mudam automaticamente com o tema */
     background-color: var(--color-bg);
     color: var(--color-text);
     transition: background-color 200ms ease, color 200ms ease;
@@ -72,7 +67,7 @@
     background-color: var(--color-surface-offset);
   }
 
-  /* ── Cards ──────────────────────────────────────────────────── */
+  /* ── Cards ────────────────────────────────────────────────── */
   .card {
     background: var(--color-surface);
     border: 1px solid var(--color-border);
@@ -88,7 +83,7 @@
     border-color: var(--color-surface-dynamic);
   }
 
-  /* ── Badges ─────────────────────────────────────────────────── */
+  /* ── Badges ────────────────────────────────────────────────── */
   .badge {
     @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
   }
@@ -98,7 +93,7 @@
   .badge-yellow { @apply badge; background: oklch(from var(--color-gold) l c h / 0.15); color: var(--color-gold); }
   .badge-gray   { @apply badge; background: oklch(from var(--color-text-muted) l c h / 0.1); color: var(--color-text-muted); }
 
-  /* ── Botões ─────────────────────────────────────────────────── */
+  /* ── Botões ────────────────────────────────────────────────── */
   .btn {
     @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
            transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed;
@@ -130,7 +125,7 @@
     color: var(--color-text);
   }
 
-  /* ── Inputs ─────────────────────────────────────────────────── */
+  /* ── Inputs ────────────────────────────────────────────────── */
   .input {
     @apply w-full px-3 py-2 rounded-lg text-sm
            focus:outline-none
@@ -152,7 +147,7 @@
     box-shadow: 0 0 0 3px oklch(from var(--color-notification) l c h / 0.2);
   }
 
-  /* ── Utilitários semânticos ─────────────────────────────────── */
+  /* ── Utilitários semânticos ────────────────────────────────────── */
   .text-positive { color: var(--color-success); }
   .text-negative { color: var(--color-notification); }
   .text-muted    { color: var(--color-text-muted); }
