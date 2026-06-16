@@ -1,7 +1,6 @@
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from sqlalchemy.orm import joinedload
 from app.models.dividend import Dividend
 from app.models.portfolio import Portfolio
 from app.schemas.dividend import DividendCreate
