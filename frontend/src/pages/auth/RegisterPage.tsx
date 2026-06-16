@@ -40,6 +40,10 @@ const errorStyle: React.CSSProperties = {
   fontSize: 'var(--text-xs)', color: 'var(--color-error)', margin: 0,
 }
 
+const focusBorder = (e: React.FocusEvent<HTMLInputElement>) => {
+  e.target.style.borderColor = 'var(--color-primary)'
+}
+
 export default function RegisterPage() {
   const navigate = useNavigate()
   const [showPass, setShowPass] = useState(false)
@@ -62,11 +66,6 @@ export default function RegisterPage() {
       const err = e as { response?: { data?: { detail?: string } } }
       setApiError(err?.response?.data?.detail ?? 'Erro ao criar conta.')
     }
-  }
-
-  const focusBorder  = (e: React.FocusEvent<HTMLInputElement>) => { e.target.style.borderColor = 'var(--color-primary)' }
-  const blurBorder   = (e: React.FocusEvent<HTMLInputElement>, hasErr: boolean) => {
-    e.target.style.borderColor = hasErr ? 'var(--color-error)' : 'var(--color-border)'
   }
 
   return (
@@ -109,8 +108,9 @@ export default function RegisterPage() {
                 type="text" autoComplete="name" placeholder="Seu nome completo"
                 style={errors.name ? fieldError : field}
                 onFocus={focusBorder}
-                onBlur={e => blurBorder(e, !!errors.name)}
-                {...register('name')}
+                {...register('name', {
+                  onBlur: e => (e.target.style.borderColor = errors.name ? 'var(--color-error)' : 'var(--color-border)'),
+                })}
               />
               {errors.name && <p style={errorStyle}>{errors.name.message}</p>}
             </div>
@@ -122,8 +122,9 @@ export default function RegisterPage() {
                 type="email" autoComplete="email" placeholder="seu@email.com"
                 style={errors.email ? fieldError : field}
                 onFocus={focusBorder}
-                onBlur={e => blurBorder(e, !!errors.email)}
-                {...register('email')}
+                {...register('email', {
+                  onBlur: e => (e.target.style.borderColor = errors.email ? 'var(--color-error)' : 'var(--color-border)'),
+                })}
               />
               {errors.email && <p style={errorStyle}>{errors.email.message}</p>}
             </div>
@@ -137,8 +138,9 @@ export default function RegisterPage() {
                   placeholder="Mínimo 8 caracteres"
                   style={{ ...(errors.password ? fieldError : field), paddingRight: '2.5rem' }}
                   onFocus={focusBorder}
-                  onBlur={e => blurBorder(e, !!errors.password)}
-                  {...register('password')}
+                  {...register('password', {
+                    onBlur: e => (e.target.style.borderColor = errors.password ? 'var(--color-error)' : 'var(--color-border)'),
+                  })}
                 />
                 <button type="button" onClick={() => setShowPass(p => !p)} style={{
                   position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)',
@@ -158,8 +160,9 @@ export default function RegisterPage() {
                 type="password" placeholder="Repita a senha"
                 style={errors.confirmPassword ? fieldError : field}
                 onFocus={focusBorder}
-                onBlur={e => blurBorder(e, !!errors.confirmPassword)}
-                {...register('confirmPassword')}
+                {...register('confirmPassword', {
+                  onBlur: e => (e.target.style.borderColor = errors.confirmPassword ? 'var(--color-error)' : 'var(--color-border)'),
+                })}
               />
               {errors.confirmPassword && <p style={errorStyle}>{errors.confirmPassword.message}</p>}
             </div>

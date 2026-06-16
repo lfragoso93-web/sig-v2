@@ -99,8 +99,9 @@ export default function LoginPage() {
                 placeholder="seu@email.com"
                 style={errors.email ? fieldError : field}
                 onFocus={e => (e.target.style.borderColor = 'var(--color-primary)')}
-                onBlur={e  => (e.target.style.borderColor  = errors.email ? 'var(--color-error)' : 'var(--color-border)')}
-                {...register('email')}
+                {...register('email', {
+                  onBlur: e => (e.target.style.borderColor = errors.email ? 'var(--color-error)' : 'var(--color-border)'),
+                })}
               />
               {errors.email && (
                 <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-error)', margin: 0 }}>
@@ -124,8 +125,9 @@ export default function LoginPage() {
                   placeholder="••••••••"
                   style={{ ...(errors.password ? fieldError : field), paddingRight: '2.5rem' }}
                   onFocus={e => (e.target.style.borderColor = 'var(--color-primary)')}
-                  onBlur={e  => (e.target.style.borderColor  = errors.password ? 'var(--color-error)' : 'var(--color-border)')}
-                  {...register('password')}
+                  {...register('password', {
+                    onBlur: e => (e.target.style.borderColor = errors.password ? 'var(--color-error)' : 'var(--color-border)'),
+                  })}
                 />
                 <button
                   type="button"
