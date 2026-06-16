@@ -44,6 +44,39 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [Sessao] - 2026-06-15 (fim de dia)
+
+### Manutencao e estabilizacao pos-upgrade
+
+Sessao dedicada a limpeza de PRs obsoletos, correcao de bugs criticos de inicializacao do backend e atualizacao da infraestrutura Docker/CI.
+
+#### PRs fechados (obsoletos)
+- **PR #2** fechado — pacotes pip (`python-multipart`, `pytest`, `python-jose`) ja estavam atualizados na `main` com versoes mais recentes.
+- **PR #3** fechado — Vite 5→8, Tailwind 3→4, TypeScript 5→6 ja aplicados diretamente na `main`.
+
+#### PR mergeado
+- **PR #4** mergeado (squash) — GitHub Actions core group: `checkout v6`, `setup-python v6`, `setup-node v6`, `dependency-review v5`. Commit: `450377b9`.
+
+#### Correcoes de bugs — Backend
+
+| Arquivo | Problema | Correcao | Commit |
+|---|---|---|---|
+| `backend/app/routers/auth.py` | `ImportError`: `get_password_hash` e `create_jwt_token` inexistentes em `security.py` (renomeados na migracao passlib→bcrypt nativo) | `get_password_hash` → `hash_password`; `create_jwt_token({...})` → `create_access_token(subject=str(...))` | `3f98e74f` |
+| `backend/app/routers/portfolios.py` | `ModuleNotFoundError: No module named 'app.core.auth'` — modulo renomeado para `deps.py` | `from app.core.auth` → `from app.core.deps` | `d8bc50a5` |
+
+#### Correcoes de infraestrutura
+
+| Arquivo | Problema | Correcao | Commit |
+|---|---|---|---|
+| `frontend/Dockerfile` | `npm ci` falha sem `package-lock.json` no repositorio | Fallback condicional: `if [ -f package-lock.json ]; then npm ci; else npm install; fi` | `1b4eb493` |
+| `frontend/package-lock.json` | Arquivo ausente — impedia builds reproduziveis | Gerado localmente e commitado | `8d7a99a9` |
+
+#### Seguranca
+- `reset_pwd.py` removido do repositorio — continha senha `Admin@123` em texto claro. Commit: `febaae6e`.
+- ⚠️ Arquivo ainda presente no historico do git (commit `8d7a99a9`). Recomendado usar `git filter-repo` para limpeza completa e trocar a senha nos ambientes.
+
+---
+
 ## [Sprint 6] - 2026-06-15
 
 ### Objetivo
@@ -136,32 +169,6 @@ Entregar proventos confiaveis para a pagina de Proventos: proventos dos ativos d
 - `lista?.items` passado para `MeusProventosTable` (resposta paginada)
 - Rodape com contador de proventos listados
 - **Commit:** `670fc7bb`
-
----
-
-### Arquivos modificados na Sprint 6
-
-| Arquivo | Tipo de alteracao | Commit |
-|---|---|---|
-| `backend/app/services/dividend_backfill_service.py` | Correcao critica — ticker em vez de asset_id; alinhamento tipos | `73538f57` |
-| `backend/app/services/proventos_service.py` | Reescrita — AsyncSession, sem schemas externos | `75790b79` |
-| `backend/app/routers/proventos.py` | Reescrita — async, 4 endpoints funcionais | `ff41314a` |
-| `backend/app/routers/dividends.py` | Novo endpoint POST /sync | `d2e7b5d5` |
-| `frontend/src/services/proventosService.ts` | Tipos e URLs alinhados com backend | `c8ed7f85` |
-| `frontend/src/hooks/useProventos.ts` | Hooks alinhados + useSyncProventos | `a6b7ffef` |
-| `frontend/src/pages/ProventosPage.tsx` | Pagina conectada — filtros, KPIs, sync | `670fc7bb` |
-
----
-
-### Contrato dos endpoints de proventos
-
-| Endpoint | Resposta |
-|---|---|
-| `GET /proventos/summary` | `{ total_recebido, total_a_receber, total_12m, media_mensal_12m }` |
-| `GET /proventos` | `{ total, page, page_size, items: [{ticker, value_per_unit, quantity, total_value, net_value, status, ex_date, payment_date, ...}] }` |
-| `GET /proventos/historico-mensal` | `[{ year, months: [null|float x12], total, media }]` |
-| `GET /proventos/distribuicao` | `[{ ticker, asset_type, total, percentage }]` |
-| `POST /dividends/sync` | `{ message, queued, tickers }` — 202 Accepted |
 
 ---
 

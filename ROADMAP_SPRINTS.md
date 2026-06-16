@@ -111,6 +111,25 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 
 ---
 
+## [Manutencao] - 15 Jun 2026 (pos-sprint) ✅ CONCLUIDA
+
+**Objetivo:** estabilizar a infraestrutura apos upgrade massivo de dependencias.
+
+**Executado:**
+- PRs #2 e #3 fechados (obsoletos — ja aplicados na main com versoes mais recentes)
+- PR #4 mergeado — GitHub Actions: checkout v6, setup-python v6, setup-node v6, dependency-review v5
+- `frontend/Dockerfile` corrigido — fallback `npm install` quando `package-lock.json` ausente
+- `frontend/package-lock.json` adicionado ao repositorio
+- `routers/auth.py` — correcao de imports: `get_password_hash`→`hash_password`, `create_jwt_token`→`create_access_token`
+- `routers/portfolios.py` — correcao de import: `app.core.auth`→`app.core.deps`
+- `reset_pwd.py` removido (senha exposta em texto claro)
+
+**Commits:** `450377b9`, `1b4eb493`, `8d7a99a9`, `febaae6e`, `3f98e74f`, `d8bc50a5`
+
+**Pendente (seguranca):** historico do git ainda contem `reset_pwd.py` com senha `Admin@123` no commit `8d7a99a9`. Executar `git filter-repo` e trocar a senha nos ambientes.
+
+---
+
 ## Sprint 7 - Rentabilidade 🔜 PROXIMA
 
 **Objetivo:** calcular rentabilidade de forma util para decisao.
@@ -241,6 +260,7 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 | Sprint 4 — Carteiras, Posicoes e Patrimonio | ✅ Concluida — 15 Jun 2026 |
 | Sprint 5 — Cotacoes e Integracoes | ✅ Concluida — 15 Jun 2026 |
 | Sprint 6 — Proventos (backend + frontend) | ✅ Concluida — 15 Jun 2026 |
+| Manutencao pos-sprint — Infra e hotfixes | ✅ Concluida — 15 Jun 2026 |
 | Sprint 7 — Rentabilidade | 🔜 Proxima |
 | Sprint 8 — Historico Patrimonial (frontend) | ⏳ |
 | Sprint 9 — Patrimonio por Classe | ⏳ |
