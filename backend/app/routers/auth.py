@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
-from app.core.security import verify_password, hash_password, create_access_token
+from app.core.security import verify_password, hash_password, create_access_token, create_refresh_token
 from app.models.user import User
 from app.schemas.auth import LoginRequest, TokenResponse
 from app.services.user_service import get_user_by_email
@@ -17,8 +17,13 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciais invalidas",
         )
-    token = create_access_token(subject=str(user.id))
-    return TokenResponse(access_token=token, token_type="bearer")
+    access_token = create_access_token(subject=str(user.id))
+    refresh_token = create_refresh_token(subject=str(user.id))
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+    )
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
@@ -34,5 +39,10 @@ async def register(data: LoginRequest, db: AsyncSession = Depends(get_db)):
     db.add(user)
     await db.commit()
     await db.refresh(user)
-    token = create_access_token(subject=str(user.id))
-    return TokenResponse(access_token=token, token_type="bearer")
+    access_token = create_access_token(subject=str(user.id))
+    refresh_token = create_refresh_token(subject=str(user.id))
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+    )
