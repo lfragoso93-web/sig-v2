@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
-from app.core.security import verify_password, get_password_hash, create_jwt_token
+from app.core.security import verify_password, hash_password, create_access_token
 from app.models.user import User
 from app.schemas.auth import LoginRequest, TokenResponse
 from app.services.user_service import get_user_by_email
@@ -17,7 +17,7 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciais invalidas",
         )
-    token = create_jwt_token({"sub": str(user.id)})
+    token = create_access_token(subject=str(user.id))
     return TokenResponse(access_token=token, token_type="bearer")
 
 
@@ -29,10 +29,10 @@ async def register(data: LoginRequest, db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="E-mail ja cadastrado",
         )
-    hashed = get_password_hash(data.password)
+    hashed = hash_password(data.password)
     user = User(email=data.email, hashed_password=hashed)
     db.add(user)
     await db.commit()
     await db.refresh(user)
-    token = create_jwt_token({"sub": str(user.id)})
+    token = create_access_token(subject=str(user.id))
     return TokenResponse(access_token=token, token_type="bearer")
