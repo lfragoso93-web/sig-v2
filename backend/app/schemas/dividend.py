@@ -18,3 +18,7 @@ class DividendRead(DividendCreate):
 
     class Config:
         from_attributes = True
+
+
+# Alias de compatibilidade usado pelos routers
+DividendResponse = DividendRead
