@@ -1,28 +1,31 @@
 from pydantic import BaseModel
-from app.models.asset import AssetType, AssetCurrency
 from typing import Optional
-from datetime import datetime
+from app.models.asset import AssetType
 
 
-class AssetCreate(BaseModel):
+class AssetBase(BaseModel):
     ticker: str
     name: str
     asset_type: AssetType
-    currency: AssetCurrency = AssetCurrency.BRL
-    brapi_ticker: Optional[str] = None
     sector: Optional[str] = None
+    currency: Optional[str] = None
+
+
+class AssetCreate(AssetBase):
+    pass
+
+
+class AssetUpdate(BaseModel):
+    name: Optional[str] = None
+    sector: Optional[str] = None
+    currency: Optional[str] = None
     logo_url: Optional[str] = None
 
 
-class AssetResponse(BaseModel):
+class AssetRead(AssetBase):
     id: int
-    ticker: str
-    name: str
-    asset_type: AssetType
-    currency: AssetCurrency
-    brapi_ticker: Optional[str] = None
-    sector: Optional[str] = None
     logo_url: Optional[str] = None
-    created_at: datetime
+    last_price: Optional[float] = None
 
-    model_config = {"from_attributes": True}
+    class Config:
+        from_attributes = True

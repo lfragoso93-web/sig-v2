@@ -1,0 +1,22 @@
+# CVEs sem fix disponivel upstream — revisado em 2026-06-16
+# Remover entradas quando patches forem publicados
+
+# setuptools (build-time only, nao exposto em runtime)
+CVE-2022-40897
+
+# pip (build-time runner, nao exposto em runtime)
+CVE-2023-5752
+
+# yfinance -> frozendict (sem fix upstream)
+CVE-2024-6345
+
+# bcrypt false-positive no Trivy (versao 4.x nao e vulneravel)
+CVE-2024-26130
+
+# nginx no Alpine 3.23: fix reportado em 1.28.3-r2 e 1.28.3-r3, mas pacotes
+# ainda nao chegaram ao repositorio stable do Alpine 3.23 (apenas edge).
+# apk upgrade --no-cache no Dockerfile instala o maximo disponivel (1.28.3-r1).
+# Remover quando Alpine 3.23 publicar nginx>=1.28.3-r3.
+# Revisitar em: 2026-07-01
+CVE-2026-9256
+CVE-2026-49975

@@ -1,135 +1,80 @@
 import {
-  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, ReferenceLine,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
-import { formatBRL } from '@/utils/format'
 import type { PatrimonioHistoryPoint } from '@/hooks/usePortfolio'
+import { formatBRL } from '@/utils/format'
 
-// Tooltip customizado com 3 linhas: Patrimônio, Investido, Ganho/Perda
-function CustomTooltip({ active, payload, label }: {
-  active?: boolean
-  payload?: Array<{ name: string; value: number; color: string }>[]
-  label?: string
-}) {
-  if (!active || !payload?.length) return null
-
-  const byName: Record<string, number> = {}
-  ;(payload as any[]).forEach((p: any) => { byName[p.name] = p.value })
-
-  const patrimonio = byName['value']    ?? 0
-  const investido  = byName['invested'] ?? 0
-  const diff       = patrimonio - investido
-  const isGain     = diff >= 0
-
-  return (
-    <div
-      className="rounded-lg p-3 text-xs min-w-[180px]"
-      style={{
-        background: 'var(--color-surface)',
-        border:     '1px solid var(--color-border)',
-        boxShadow:  'var(--shadow-lg)',
-      }}
-    >
-      <p className="font-semibold mb-2" style={{ color: 'var(--color-text)' }}>{label}</p>
-
-      {/* Valor atual */}
-      <div className="flex items-center justify-between gap-4 mb-1">
-        <div className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full" style={{ background: 'var(--color-primary)' }} />
-          <span style={{ color: 'var(--color-text-muted)' }}>Patrimônio</span>
-        </div>
-        <span className="font-semibold tabular-nums" style={{ color: 'var(--color-text)' }}>
-          {formatBRL(patrimonio)}
-        </span>
-      </div>
-
-      {/* Valor investido */}
-      <div className="flex items-center justify-between gap-4 mb-1">
-        <div className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full" style={{ background: 'oklch(from var(--color-primary) l c h / 0.45)' }} />
-          <span style={{ color: 'var(--color-text-muted)' }}>Investido</span>
-        </div>
-        <span className="font-medium tabular-nums" style={{ color: 'var(--color-text-muted)' }}>
-          {formatBRL(investido)}
-        </span>
-      </div>
-
-      {/* Ganho / Perda */}
-      <div
-        className="flex items-center justify-between gap-4 mt-2 pt-2"
-        style={{ borderTop: '1px solid var(--color-divider)' }}
-      >
-        <span style={{ color: 'var(--color-text-faint)' }}>
-          {isGain ? 'Ganho' : 'Perda'}
-        </span>
-        <span
-          className="font-semibold tabular-nums"
-          style={{ color: isGain ? 'var(--color-success)' : 'var(--color-notification)' }}
-        >
-          {isGain ? '+' : ''}{formatBRL(diff)}
-        </span>
-      </div>
-    </div>
-  )
+interface Props {
+  data: PatrimonioHistoryPoint[]
+  loading?: boolean
 }
 
-export default function PatrimonioBarChart({ data }: { data: PatrimonioHistoryPoint[] }) {
-  if (!data || data.length === 0) return null
+function shortDate(d: string) {
+  const parts = d.split('-')
+  if (parts.length >= 2) {
+    const months = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+    const m = parseInt(parts[1], 10) - 1
+    return months[m] ?? d
+  }
+  return d
+}
 
-  const tickStyle = { fontSize: 10, fill: 'var(--color-text-faint)' }
+export default function PatrimonioBarChart({ data, loading }: Props) {
+  if (loading) {
+    return <div className="skeleton h-64 w-full rounded-xl" />
+  }
 
-  // Cor das barras: verde se value >= invested, vermelho se abaixo
-  const barData = data.map(d => ({
-    ...d,
-    // fill dinâmico por célula — passado via Cell ou via função
-    _gain: d.value >= d.invested,
+  if (!data.length) {
+    return (
+      <div className="flex items-center justify-center h-48" style={{ color: 'var(--color-text-faint)' }}>
+        <p className="text-sm">Sem histórico de patrimônio</p>
+      </div>
+    )
+  }
+
+  const chartData = data.map(d => ({
+    name:     shortDate(d.date),
+    value:    d.value,
+    invested: d.invested ?? 0,
   }))
 
   return (
-    <ResponsiveContainer width="100%" height={220}>
-      <ComposedChart data={barData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} barSize={14}>
+    <ResponsiveContainer width="100%" height={260}>
+      <BarChart data={chartData} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--color-divider)" vertical={false} />
-        <XAxis dataKey="month" tick={tickStyle} axisLine={false} tickLine={false} />
+        <XAxis
+          dataKey="name"
+          tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }}
+          axisLine={false} tickLine={false}
+        />
         <YAxis
-          tick={tickStyle}
-          axisLine={false}
-          tickLine={false}
           tickFormatter={(v: number) => formatBRL(v, true)}
-          width={60}
+          tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }}
+          axisLine={false} tickLine={false} width={72}
         />
         <Tooltip
-          content={<CustomTooltip />}
-          cursor={{ fill: 'oklch(from var(--color-text) l c h / 0.04)' }}
+          formatter={(value: number, name: string) => [
+            formatBRL(value),
+            name === 'value' ? 'Patrimônio' : 'Investido',
+          ]}
+          contentStyle={{
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 8,
+            fontSize: 12,
+          }}
         />
-
-        {/* Barra do patrimônio — cor dinâmica por ponto */}
-        <Bar
-          dataKey="value"
-          name="value"
-          radius={[4, 4, 0, 0]}
-          fill="var(--color-primary)"
-        >
-          {barData.map((entry, index) => (
-            <rect
-              key={`cell-${index}`}
-              // Recharts não suporta Cell com fill dinâmico direto no ComposedChart;
-              // usamos o fill padrão e sobrescrevemos via Cell abaixo
-            />
-          ))}
-        </Bar>
-
-        {/* Linha do valor investido — mais suave que a barra */}
-        <Line
-          type="monotone"
-          dataKey="invested"
-          name="invested"
-          stroke="oklch(from var(--color-primary) l c h / 0.40)"
-          strokeWidth={2}
-          strokeDasharray="4 3"
-          dot={false}
-          activeDot={{ r: 4, fill: 'oklch(from var(--color-primary) l c h / 0.40)' }}
+        <Legend
+          formatter={(v: string) => (
+            <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+              {v === 'value' ? 'Patrimônio' : 'Investido'}
+            </span>
+          )}
         />
-      </ComposedChart>
+        <Bar dataKey="value"    fill="var(--color-primary)" radius={[4,4,0,0]} maxBarSize={40} />
+        <Bar dataKey="invested" fill="var(--color-teal)"    radius={[4,4,0,0]} maxBarSize={40} opacity={0.6} />
+      </BarChart>
     </ResponsiveContainer>
   )
 }

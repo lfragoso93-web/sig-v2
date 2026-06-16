@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -48,9 +49,6 @@ async def _create_enums_raw() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Enums sao criados de forma idempotente (EXCEPTION WHEN duplicate_object THEN NULL)
-    # O schema de tabelas e 100% gerenciado pelo Alembic via entrypoint.sh
-    # NAO usar create_all aqui — conflita com sequences ja criadas pelo Alembic
     await _create_enums_raw()
     start_scheduler()
     yield
@@ -103,7 +101,6 @@ app.include_router(irpf.router,         prefix=f"{PREFIX}/irpf",        tags=["i
 app.include_router(analysis.router,     prefix=f"{PREFIX}/analysis",    tags=["analysis"])
 app.include_router(fixed_income.router, prefix=f"{PREFIX}/fixed-income", tags=["fixed_income"])
 
-import os
 if os.getenv("ADMIN_SECRET"):
     app.include_router(debug.router, prefix=f"{PREFIX}/debug", tags=["debug"])
 

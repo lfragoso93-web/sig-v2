@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { formatBRL, formatDateShort } from '@/utils/format'
+import { formatBRL } from '@/utils/format'
 
 interface MonthPoint { month: string; amount: number }
 interface Props { data: MonthPoint[] }
@@ -12,7 +12,7 @@ export default function DividendChart({ data }: Props) {
   const chartW = WIDTH  - PAD.left - PAD.right
   const chartH = HEIGHT - PAD.top  - PAD.bottom
 
-  const { bars, yTicks, maxV } = useMemo(() => {
+  const { bars, yTicks } = useMemo(() => {
     const maxV   = Math.max(...data.map(d => d.amount), 1)
     const barW   = Math.max(6, (chartW / data.length) * 0.55)
     const gap    = chartW / data.length
@@ -30,7 +30,7 @@ export default function DividendChart({ data }: Props) {
       return { v, y }
     })
 
-    return { bars, yTicks, maxV }
+    return { bars, yTicks }
   }, [data])
 
   return (
@@ -39,7 +39,6 @@ export default function DividendChart({ data }: Props) {
       style={{ width: '100%', height: 'auto' }}
       aria-label="Gráfico de proventos mensais"
     >
-      {/* Grid horizontal */}
       {yTicks.map((t, i) => (
         <g key={i}>
           <line
@@ -57,10 +56,8 @@ export default function DividendChart({ data }: Props) {
         </g>
       ))}
 
-      {/* Barras */}
       {bars.map((b, i) => (
         <g key={i}>
-          {/* Barra */}
           <rect
             x={b.x} y={b.y}
             width={b.barW} height={b.barH}
@@ -68,7 +65,6 @@ export default function DividendChart({ data }: Props) {
             fill="var(--color-gold)"
             opacity="0.85"
           />
-          {/* Valor no topo da barra (só se couber) */}
           {b.barH > 20 && (
             <text
               x={b.x + b.barW / 2}
@@ -81,7 +77,6 @@ export default function DividendChart({ data }: Props) {
               {formatBRL(b.amount).replace('R$\u00a0', '')}
             </text>
           )}
-          {/* Label mês */}
           <text
             x={b.x + b.barW / 2}
             y={PAD.top + chartH + 14}

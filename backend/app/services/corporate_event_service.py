@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def _parse_brapi_event_id(event: dict, ticker: str) -> str:
-    return f"{ticker}_{event.get('type','')}_{event.get('exDividendDate','')}_{event.get('rate','')}"
+    return f"{ticker}_{event.get('type', '')}_{event.get('exDividendDate', '')}_{event.get('rate', '')}"
 
 
 def _infer_event_type(event_type: str, ratio: float) -> CorporateEventType:
@@ -138,7 +138,6 @@ async def _apply_event_to_position(
     else:
         return
 
-    # Transacao automatica para auditoria
     db.add(Transaction(
         portfolio_id=position.portfolio_id,
         asset_id=event.asset_id,

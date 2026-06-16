@@ -49,7 +49,7 @@ export default function Sidebar() {
   // Fecha sidebar no mobile ao trocar de rota
   useEffect(() => {
     closeSidebar()
-  }, [location.pathname]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [location.pathname])
 
   // Bloqueia scroll do body quando sidebar está aberta no mobile
   useEffect(() => {

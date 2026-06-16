@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  ChevronDown, ChevronRight, HelpCircle,
+  ChevronDown, ChevronRight,
   MoreHorizontal, Plus, List, BarChart2 as AnalyseIcon,
 } from 'lucide-react'
 import { formatBRL, formatPercent } from '@/utils/format'
@@ -25,7 +25,6 @@ const cellMuted    = { color: 'var(--color-text-muted)' }
 const cellFaint    = { color: 'var(--color-text-faint)' }
 const rowHover     = 'hover:bg-[var(--color-surface-offset)] transition-colors'
 const groupRowBg   = 'cursor-pointer transition-colors'
-const dividerStyle = { borderColor: 'var(--color-divider)' }
 const surfaceStyle = { background: 'var(--color-surface-offset)', borderColor: 'var(--color-divider)' }
 const dropdownBg   = { background: 'var(--color-surface)', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-lg)' }
 
@@ -42,7 +41,6 @@ function displayName(ticker: string, assetType: string): string {
   return ticker
 }
 
-// ── Dropdown de opções ─────────────────────────────────────────────────
 interface AssetMenuProps { ticker: string; assetLabel: string; assetType: string }
 
 function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
@@ -113,7 +111,6 @@ function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
   )
 }
 
-// ── Card mobile por ativo ───────────────────────────────────────────────
 interface PositionCardProps {
   item: PositionGroup['positions'][number]
 }
@@ -123,7 +120,6 @@ function PositionCard({ item }: PositionCardProps) {
   const name = displayName(item.ticker, item.asset_type)
   const hasQuote = item.variation_value !== 0 || item.current_price !== item.average_price
   const varColor = item.variation_value >= 0 ? 'var(--color-success)' : 'var(--color-error)'
-
   const investedValue = item.invested_value ?? item.quantity * item.average_price
 
   return (
@@ -131,7 +127,6 @@ function PositionCard({ item }: PositionCardProps) {
       className="rounded-xl p-3 flex flex-col gap-2"
       style={{ background: 'var(--color-surface-offset)', border: '1px solid var(--color-divider)' }}
     >
-      {/* Cabeçalho do card */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <AssetLogo ticker={item.ticker} assetType={item.asset_type} size={32} />
@@ -149,7 +144,6 @@ function PositionCard({ item }: PositionCardProps) {
         />
       </div>
 
-      {/* Dados em grade 2x2 */}
       <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
         <div>
           <div className="text-[10px]" style={cellFaint}>Qtd</div>
@@ -187,7 +181,6 @@ function PositionCard({ item }: PositionCardProps) {
   )
 }
 
-// ── Componente principal ────────────────────────────────────────────────
 export default function PositionTable({ groups }: Props) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>(
     Object.fromEntries((groups ?? []).map(g => [g.label, true]))
@@ -198,11 +191,9 @@ export default function PositionTable({ groups }: Props) {
 
   return (
     <>
-      {/* ── VIEW MOBILE: cards (<768px) ── */}
       <div className="flex flex-col gap-4 md:hidden">
         {groups.map(group => (
           <div key={group.label}>
-            {/* Cabeçalho do grupo */}
             <button
               onClick={() => toggle(group.label)}
               className="w-full flex items-center gap-2 px-1 py-2 text-xs font-semibold transition-colors"
@@ -217,8 +208,6 @@ export default function PositionTable({ groups }: Props) {
                 {group.count}
               </span>
             </button>
-
-            {/* Cards das posições */}
             {expanded[group.label] && (
               <div className="flex flex-col gap-2">
                 {(group.positions ?? []).map(item => (
@@ -230,7 +219,6 @@ export default function PositionTable({ groups }: Props) {
         ))}
       </div>
 
-      {/* ── VIEW DESKTOP: tabela (≥768px) ── */}
       <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
@@ -239,9 +227,30 @@ export default function PositionTable({ groups }: Props) {
               <th className="text-right px-4 py-2 font-medium" style={cellMuted}>Qtd</th>
               <th className="text-right px-4 py-2 font-medium" style={cellMuted}>P. Médio</th>
               <th className="text-right px-4 py-2 font-medium" style={cellMuted}>
+                {/* Lucide não aceita prop title — usamos span wrapper */}
                 <span className="flex items-center justify-end gap-1">
                   P. Atual
-                  <HelpCircle size={10} style={cellFaint} title="Cotação via BRAPI/yfinance." />
+                  <span
+                    aria-label="Cotação via BRAPI/yfinance."
+                    title="Cotação via BRAPI/yfinance."
+                    style={{ display: 'inline-flex', alignItems: 'center', cursor: 'help' }}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="10" height="10"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={cellFaint}
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                      <path d="M12 17h.01" />
+                    </svg>
+                  </span>
                 </span>
               </th>
               <th className="text-right px-4 py-2 font-medium" style={cellMuted}>Total Inv.</th>
@@ -279,7 +288,6 @@ export default function PositionTable({ groups }: Props) {
                   const name      = displayName(item.ticker, item.asset_type)
                   const isTesouro = item.asset_type.toUpperCase() === 'TESOURO_DIRETO' || item.asset_type.toUpperCase() === 'TESOURO'
                   const varColor  = item.variation_value >= 0 ? 'var(--color-success)' : 'var(--color-error)'
-
                   const investedValue = item.invested_value ?? item.quantity * item.average_price
 
                   return (
@@ -289,7 +297,7 @@ export default function PositionTable({ groups }: Props) {
                         <div className="flex items-center gap-2.5">
                           <AssetLogo ticker={item.ticker} assetType={item.asset_type} size={28} />
                           <div className="min-w-0">
-                            <div className="font-semibold truncate max-w-[180px]" style={cellText} title={item.ticker}>{name}</div>
+                            <div className="font-semibold truncate max-w-[180px]" style={cellText}>{name}</div>
                             <div className="text-[10px] truncate max-w-[180px]" style={cellFaint}>
                               {isTesouro ? item.ticker : item.asset_label}
                             </div>
@@ -313,7 +321,7 @@ export default function PositionTable({ groups }: Props) {
                             <div>{formatBRL(item.variation_value)}</div>
                             <div className="text-[10px]">{formatPercent(item.variation_percent)}</div>
                           </div>
-                        ) : <span style={cellFaint} title="Cotação indisponível">—</span>}
+                        ) : <span style={cellFaint} aria-label="Cotação indisponível">—</span>}
                       </td>
                       <td className="px-2 py-2 text-right">
                         <AssetMenu

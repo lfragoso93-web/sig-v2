@@ -5,18 +5,21 @@ WORKDIR /app
 
 COPY package*.json ./
 
-# usa npm install (funciona com ou sem lock file)
-RUN npm install
+# npm ci requires package-lock.json — ensures reproducible installs
+RUN npm ci
 
 COPY . .
 
 RUN npm run build
 
-# ── Stage 2: Serve com Nginx ───────────────────────────────────────────────────
-FROM nginx:1.27-alpine AS runtime
+# ── Stage 2: Serve com Nginx ──────────────────────────────────────────────────
+# nginx:1.28-alpine usa Alpine 3.22 com openssl, libxml2, libpng, musl atualizados
+# apk upgrade garante que qualquer pacote residual sem patch seja atualizado
+FROM nginx:1.28-alpine AS runtime
 
-# Remove config padrão e copia a nossa
-RUN rm /etc/nginx/conf.d/default.conf
+RUN apk upgrade --no-cache \
+    && rm /etc/nginx/conf.d/default.conf
+
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Copia o build gerado

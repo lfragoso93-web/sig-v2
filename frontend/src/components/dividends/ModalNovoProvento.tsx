@@ -28,10 +28,9 @@ export default function ModalNovoProvento({ portfolioId, onClose }: Props) {
     ticker:       '',
     asset_type:   'FII',
     type:         'dividendo',
-    amount:       '',   // valor por cota
-    quantity:     '',   // quantidade de cotas
+    amount:       '',
+    quantity:     '',
     payment_date: today,
-    ex_date:      '',
   })
   const [error, setError] = useState<string | null>(null)
 
@@ -59,13 +58,14 @@ export default function ModalNovoProvento({ portfolioId, onClose }: Props) {
 
     try {
       await createDiv.mutateAsync({
+        portfolio_id: portfolioId,
         ticker:       form.ticker.toUpperCase().trim(),
         asset_type:   form.asset_type,
-        type:         form.type as any,
+        type:         form.type,
         amount,
         quantity,
         payment_date: form.payment_date,
-        ex_date:      form.ex_date || null,
+        date:         form.payment_date,
       })
       onClose()
     } catch (err: any) {
@@ -83,7 +83,6 @@ export default function ModalNovoProvento({ portfolioId, onClose }: Props) {
         className="w-full max-w-lg rounded-xl border shadow-xl"
         style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', boxShadow: 'var(--shadow-lg)' }}
       >
-        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--color-divider)' }}>
           <h2 className="text-base font-semibold">Lançar provento</h2>
           <button className="btn btn-ghost p-1 rounded" onClick={onClose} aria-label="Fechar"><X size={18} /></button>
@@ -91,7 +90,6 @@ export default function ModalNovoProvento({ portfolioId, onClose }: Props) {
 
         <form onSubmit={handleSubmit} className="px-6 py-5 flex flex-col gap-4">
 
-          {/* Ticker + Tipo de ativo */}
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium">Ticker <span className="text-red-500">*</span></label>
@@ -111,14 +109,12 @@ export default function ModalNovoProvento({ portfolioId, onClose }: Props) {
             </div>
           </div>
 
-          {/* Tipo de provento */}
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium">Tipo de provento</label>
             <div className="flex flex-wrap gap-2">
               {DIVIDEND_TYPES.map(dt => (
                 <button
-                  key={dt.value}
-                  type="button"
+                  key={dt.value} type="button"
                   onClick={() => set('type', dt.value)}
                   className="px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors"
                   style={{
@@ -135,54 +131,35 @@ export default function ModalNovoProvento({ portfolioId, onClose }: Props) {
             </div>
           </div>
 
-          {/* Valor/cota + Quantidade */}
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium">Valor por cota (R$) <span className="text-red-500">*</span></label>
               <input
-                type="number" min="0" step="any"
-                className="input"
-                placeholder="0,00"
-                value={form.amount}
-                onChange={e => set('amount', e.target.value)}
-                required
+                type="number" min="0" step="any" className="input"
+                placeholder="0,00" value={form.amount}
+                onChange={e => set('amount', e.target.value)} required
               />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium">Quantidade de cotas <span className="text-red-500">*</span></label>
               <input
-                type="number" min="0" step="any"
-                className="input"
-                placeholder="0"
-                value={form.quantity}
-                onChange={e => set('quantity', e.target.value)}
-                required
+                type="number" min="0" step="any" className="input"
+                placeholder="0" value={form.quantity}
+                onChange={e => set('quantity', e.target.value)} required
               />
             </div>
           </div>
 
-          {/* Datas */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">Data de pagamento <span className="text-red-500">*</span></label>
-              <input
-                type="date" className="input"
-                value={form.payment_date}
-                onChange={e => set('payment_date', e.target.value)}
-                required
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">Data com <span style={{ color: 'var(--color-text-muted)' }}>(opcional)</span></label>
-              <input
-                type="date" className="input"
-                value={form.ex_date}
-                onChange={e => set('ex_date', e.target.value)}
-              />
-            </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium">Data de pagamento <span className="text-red-500">*</span></label>
+            <input
+              type="date" className="input"
+              value={form.payment_date}
+              onChange={e => set('payment_date', e.target.value)}
+              required
+            />
           </div>
 
-          {/* Total */}
           <div
             className="flex items-center justify-between px-4 py-3 rounded-lg"
             style={{ background: 'var(--color-surface-offset)' }}

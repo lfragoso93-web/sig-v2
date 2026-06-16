@@ -5,6 +5,9 @@ import api from '@/services/api'
 
 export interface Position {
   ticker: string
+  asset_id?: number
+  asset_type?: string
+  name?: string
   quantity: number
   avg_price: number
   current_price: number
@@ -48,7 +51,6 @@ export function usePortfolioSummary(portfolioId: number | null) {
 /**
  * Histórico de evolução do patrimônio para o gráfico de linha.
  * Endpoint: GET /portfolios/{id}/equity-history?period={period}
- * Retorna: EquityPoint[]
  */
 export function useEquityHistory(
   portfolioId: number | null,
@@ -61,8 +63,6 @@ export function useEquityHistory(
         .get(`/portfolios/${portfolioId}/equity-history`, { params: { period } })
         .then((r) => r.data),
     enabled: !!portfolioId,
-    // Se o endpoint ainda não existir no backend, retorna array vazio
-    // em vez de quebrar a UI
     retry: false,
     placeholderData: [],
   })

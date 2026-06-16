@@ -1,13 +1,18 @@
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { RefreshCw } from 'lucide-react'
-import { TransactionCreate } from '@/services/transactionService'
 import { useCreateTransaction } from '@/hooks/useTransactions'
 import { useUsdBrl } from '@/hooks/useFxRate'
 import { formatBRL, formatUSD } from '@/utils/format'
 
 // ── Configuração por tipo de ativo ────────────────────────────────────
-type AssetConfig = { label: string; currency: 'BRL' | 'USD'; qtyStep: string; qtyDefault: string; isRendaFixa?: boolean }
+type AssetConfig = {
+  label: string
+  currency: 'BRL' | 'USD'
+  qtyStep: string
+  qtyDefault: string
+  isRendaFixa?: boolean
+}
 
 const ASSET_CONFIGS: Record<string, AssetConfig> = {
   ACAO_NACIONAL:     { label: 'Ações',              currency: 'BRL', qtyStep: '1',          qtyDefault: '1' },
@@ -22,9 +27,9 @@ const ASSET_CONFIGS: Record<string, AssetConfig> = {
   RENDA_FIXA:        { label: 'Renda Fixa',          currency: 'BRL', qtyStep: '0.01',       qtyDefault: '0.01', isRendaFixa: true },
 }
 
-const BOND_TYPES  = ['CDB','LCI','LCA','LC','LIG','CRI','CRA','Debenture','PGBL','VGBL','Outro']
-const INDEXERS    = ['CDI','IPCA','IGP-M','Prefixado','SELIC','Outro']
-const BOND_FORMS  = ['Pós-fixado','Prefixado','Híbrido']
+const BOND_TYPES = ['CDB','LCI','LCA','LC','LIG','CRI','CRA','Debenture','PGBL','VGBL','Outro']
+const INDEXERS   = ['CDI','IPCA','IGP-M','Prefixado','SELIC','Outro']
+const BOND_FORMS = ['Pós-fixado','Prefixado','Híbrido']
 
 const TX_TYPES = [
   { value: 'COMPRA',        label: 'Compra' },
@@ -32,31 +37,39 @@ const TX_TYPES = [
   { value: 'BONIFICACAO',   label: 'Bonificação' },
   { value: 'DESDOBRAMENTO', label: 'Desdobramento' },
   { value: 'GRUPAMENTO',    label: 'Grupamento' },
-] as const
+]
 
-// ── Helpers de estilo ───────────────────────────────────────────────────
-const label    = { color: 'var(--color-text-muted)', fontSize: 12, fontWeight: 500, marginBottom: 4, display: 'block' }
-const errStyle = { color: 'var(--color-error)', fontSize: 11, marginTop: 2 }
-const inputStyle = { fontSize: 16 } // previne zoom no iOS
+const labelStyle = { color: 'var(--color-text-muted)', fontSize: 12, fontWeight: 500, marginBottom: 4, display: 'block' }
+const errStyle   = { color: 'var(--color-error)', fontSize: 11, marginTop: 2 }
+const inputStyle = { fontSize: 16 }
 
-// ── Types ───────────────────────────────────────────────────────────────
-interface FormValues extends TransactionCreate {
+// FormValues é autocontido — não estende TransactionCreate para evitar conflito de chaves
+interface FormValues {
+  transaction_type: string
+  asset_type: string
+  ticker: string
+  transaction_date: string
+  quantity: number
+  price: number
+  fees: number
+  currency: string
+  notes: string
   fx_rate_input: string
-  issuer?: string
-  bond_type?: string
-  indexer?: string
-  cdi_rate?: number
-  bond_form?: string
-  maturity_date?: string
-  daily_liquidity?: boolean
+  // Renda Fixa extras
+  issuer: string
+  bond_type: string
+  indexer: string
+  cdi_rate: number
+  bond_form: string
+  maturity_date: string
+  daily_liquidity: boolean
 }
 
 interface Props { portfolioId: number; onClose: () => void }
 
-// ── Componente ───────────────────────────────────────────────────────────
 export default function TransactionForm({ portfolioId, onClose }: Props) {
   const { data: fxData, isLoading: loadingFx } = useUsdBrl()
-  const { mutate: createTx, isPending } = useCreateTransaction(portfolioId)
+  const { mutate: createTx, isPending } = useCreateTransaction()
 
   const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm<FormValues>({
     defaultValues: {
@@ -64,50 +77,70 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
       asset_type: 'ACAO_NACIONAL',
       transaction_date: new Date().toISOString().slice(0, 10),
       fees: 0, daily_liquidity: false, fx_rate_input: '',
+      ticker: '', notes: '', currency: 'BRL',
+      issuer: '', bond_type: '', indexer: '', bond_form: '', maturity_date: '',
     },
   })
 
-  const assetType   = watch('asset_type')
-  const txType      = watch('transaction_type')
-  const qty         = Number(watch('quantity')) || 0
-  const price       = Number(watch('price'))    || 0
-  const fees        = Number(watch('fees'))     || 0
-  const fxRateInput = watch('fx_rate_input')
-  const fxRate      = parseFloat(fxRateInput) || fxData?.rate || 0
+  const assetType      = watch('asset_type')
+  const txType         = watch('transaction_type')
+  const qty            = Number(watch('quantity')) || 0
+  const price          = Number(watch('price'))    || 0
+  const fees           = Number(watch('fees'))     || 0
+  const fxRateInput    = watch('fx_rate_input')
+  const fxRate         = parseFloat(fxRateInput) || fxData?.rate || 0
 
-  const cfg = ASSET_CONFIGS[assetType] ?? ASSET_CONFIGS.ACAO_NACIONAL
-  const isUSD = cfg.currency === 'USD'
-  const isRendaFixa = !!cfg.isRendaFixa
+  const cfg            = ASSET_CONFIGS[assetType] ?? ASSET_CONFIGS.ACAO_NACIONAL
+  const isUSD          = cfg.currency === 'USD'
+  const isRendaFixa    = !!cfg.isRendaFixa
 
   useEffect(() => {
     if (fxData?.rate && !fxRateInput) setValue('fx_rate_input', String(fxData.rate.toFixed(4)))
-  }, [fxData])
+  }, [fxData, fxRateInput, setValue])
 
   useEffect(() => {
-    setValue('currency', cfg.currency)
     setValue('quantity', parseFloat(cfg.qtyDefault))
     setValue('price', 0)
-  }, [assetType])
+  }, [assetType, cfg.qtyDefault, setValue])
 
   const priceBrl  = isUSD ? price * fxRate : price
   const totalBrl  = qty * priceBrl + fees
   const totalOrig = qty * price + fees
 
+  // Mapeia transaction_type do form (COMPRA/VENDA/…) para operation da API (buy/sell)
+  function toOperation(txType: string): string {
+    if (txType === 'COMPRA') return 'buy'
+    if (txType === 'VENDA')  return 'sell'
+    return txType.toLowerCase()
+  }
+
   function onSubmit(data: FormValues) {
     createTx(
-      { ...data, currency: cfg.currency, fx_rate: isUSD ? parseFloat(data.fx_rate_input) : undefined },
+      {
+        portfolioId,
+        data: {
+          ticker:     data.ticker,
+          asset_type: data.asset_type,
+          operation:  toOperation(data.transaction_type),
+          quantity:   data.quantity,
+          price:      data.price,
+          fees:       data.fees,
+          date:       data.transaction_date,
+          notes:      data.notes || undefined,
+          currency:   cfg.currency,
+          ...(isUSD && { fx_rate: parseFloat(data.fx_rate_input) }),
+        },
+      },
       { onSuccess: onClose },
     )
   }
 
-  // cores dinâmicas do tipo de transação
   const buyActive  = txType === 'COMPRA'
   const sellActive = txType === 'VENDA'
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4 p-1">
 
-      {/* Compra / Venda toggle */}
       <div
         className="flex rounded-lg overflow-hidden border"
         style={{ borderColor: 'var(--color-border)' }}
@@ -134,7 +167,6 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
         ))}
       </div>
 
-      {/* Outros tipos */}
       <div className="flex gap-2 flex-wrap">
         {TX_TYPES.slice(2).map(t => (
           <button
@@ -151,9 +183,8 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
         ))}
       </div>
 
-      {/* Tipo de ativo */}
       <div>
-        <label style={label}>Tipo de ativo</label>
+        <label style={labelStyle}>Tipo de ativo</label>
         <select className="input mt-1" style={inputStyle} {...register('asset_type')}>
           {Object.entries(ASSET_CONFIGS).map(([v, c]) => (
             <option key={v} value={v}>{c.label}</option>
@@ -161,16 +192,15 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
         </select>
       </div>
 
-      {/* ── RENDA FIXA ──────────────────────────────────────────────────────── */}
       {isRendaFixa && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label style={label}>Emissor</label>
+              <label style={labelStyle}>Emissor</label>
               <input className="input mt-1" style={inputStyle} placeholder="Ex: Banco XP" {...register('issuer')} />
             </div>
             <div>
-              <label style={label}>Tipo de título</label>
+              <label style={labelStyle}>Tipo de título</label>
               <select className="input mt-1" style={inputStyle} {...register('bond_type')}>
                 {BOND_TYPES.map(b => <option key={b}>{b}</option>)}
               </select>
@@ -179,13 +209,13 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label style={label}>Indexador</label>
+              <label style={labelStyle}>Indexador</label>
               <select className="input mt-1" style={inputStyle} {...register('indexer')}>
                 {INDEXERS.map(i => <option key={i}>{i}</option>)}
               </select>
             </div>
             <div>
-              <label style={label}>Taxa do CDI (%)</label>
+              <label style={labelStyle}>Taxa do CDI (%)</label>
               <input type="number" step="0.01" className="input mt-1" style={inputStyle}
                 placeholder="100" {...register('cdi_rate', { valueAsNumber: true })} />
             </div>
@@ -193,13 +223,13 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label style={label}>Forma <span style={{ color: 'var(--color-text-faint)' }}>(Opcional)</span></label>
+              <label style={labelStyle}>Forma <span style={{ color: 'var(--color-text-faint)' }}>(Opcional)</span></label>
               <select className="input mt-1" style={inputStyle} {...register('bond_form')}>
                 {BOND_FORMS.map(f => <option key={f}>{f}</option>)}
               </select>
             </div>
             <div>
-              <label style={label}>Valor (Opcional)</label>
+              <label style={labelStyle}>Valor (Opcional)</label>
               <input type="number" step="0.01" className="input mt-1" style={inputStyle} placeholder="0,00"
                 {...register('price', { valueAsNumber: true })} />
             </div>
@@ -207,17 +237,17 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-center">
             <div>
-              <label style={label}>Data da transação</label>
+              <label style={labelStyle}>Data da transação</label>
               <input type="date" className="input mt-1" style={inputStyle} {...register('transaction_date')} />
             </div>
             <div>
-              <label style={label}>Data de vencimento</label>
+              <label style={labelStyle}>Data de vencimento</label>
               <input type="date" className="input mt-1" style={inputStyle} {...register('maturity_date')} />
             </div>
           </div>
 
           <div className="flex items-center justify-between">
-            <label style={{ ...label, marginBottom: 0 }}>Liquidez diária</label>
+            <label style={{ ...labelStyle, marginBottom: 0 }}>Liquidez diária</label>
             <Controller
               control={control} name="daily_liquidity"
               render={({ field }) => (
@@ -225,9 +255,7 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
                   type="button" role="switch" aria-checked={field.value}
                   onClick={() => field.onChange(!field.value)}
                   className="relative inline-flex h-5 w-9 rounded-full transition-colors"
-                  style={{
-                    background: field.value ? 'var(--color-success)' : 'var(--color-divider)',
-                  }}
+                  style={{ background: field.value ? 'var(--color-success)' : 'var(--color-divider)' }}
                 >
                   <span
                     className="inline-block h-4 w-4 rounded-full bg-white shadow transition-transform mt-0.5"
@@ -240,13 +268,11 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
         </>
       )}
 
-      {/* ── DEMAIS ATIVOS ──────────────────────────────────────────────────────── */}
       {!isRendaFixa && (
         <>
-          {/* Ativo + Data — 1 col mobile / 2 col desktop */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label style={label}>Ativo</label>
+              <label style={labelStyle}>Ativo</label>
               <input
                 className="input mt-1 uppercase placeholder:normal-case"
                 style={inputStyle}
@@ -257,25 +283,23 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
               {errors.ticker && <p style={errStyle}>{errors.ticker.message}</p>}
             </div>
             <div>
-              <label style={label}>Data da transação</label>
+              <label style={labelStyle}>Data da transação</label>
               <input type="date" className="input mt-1" style={inputStyle} {...register('transaction_date', { required: true })} />
             </div>
           </div>
 
-          {/* Qtd + Preço — 1 col mobile / 2 col desktop */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label style={label}>Quantidade</label>
+              <label style={labelStyle}>Quantidade</label>
               <input
                 type="number" step={cfg.qtyStep} min={cfg.qtyStep}
-                className="input mt-1" style={inputStyle}
-                inputMode="decimal"
+                className="input mt-1" style={inputStyle} inputMode="decimal"
                 {...register('quantity', { required: true, valueAsNumber: true })}
               />
               {errors.quantity && <p style={errStyle}>Obrigatório</p>}
             </div>
             <div>
-              <label style={label}>Preço em {isUSD ? 'US$' : 'R$'}</label>
+              <label style={labelStyle}>Preço em {isUSD ? 'US$' : 'R$'}</label>
               <input
                 type="number" step={isUSD ? '0.00000001' : '0.01'} min="0"
                 className="input mt-1" style={inputStyle}
@@ -286,13 +310,12 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
             </div>
           </div>
 
-          {/* Cotação USD/BRL */}
           {isUSD && (
             <div
               className="rounded-lg p-3"
               style={{
-                background:   'oklch(from var(--color-primary) l c h / 0.07)',
-                border:       '1px solid oklch(from var(--color-primary) l c h / 0.2)',
+                background: 'oklch(from var(--color-primary) l c h / 0.07)',
+                border:     '1px solid oklch(from var(--color-primary) l c h / 0.2)',
               }}
             >
               <div className="flex items-center justify-between mb-2">
@@ -303,8 +326,7 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
                 <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>US$ 1,00 =</span>
                 <input
                   type="number" step="0.0001" min="0.01"
-                  className="input py-1 text-xs w-28" style={inputStyle}
-                  inputMode="decimal"
+                  className="input py-1 text-xs w-28" style={inputStyle} inputMode="decimal"
                   {...register('fx_rate_input', { required: isUSD })}
                 />
                 <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>R$</span>
@@ -312,8 +334,7 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
                   <button
                     type="button"
                     onClick={() => setValue('fx_rate_input', String(fxData.rate.toFixed(4)))}
-                    className="text-xs ml-auto"
-                    style={{ color: 'var(--color-primary)' }}
+                    className="text-xs ml-auto" style={{ color: 'var(--color-primary)' }}
                   >
                     Usar atual ({fxData.rate.toFixed(4)})
                   </button>
@@ -328,9 +349,8 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
             </div>
           )}
 
-          {/* Taxas */}
           <div>
-            <label style={label}>Outros custos (R$) <span style={{ color: 'var(--color-text-faint)' }}>(Opcional)</span></label>
+            <label style={labelStyle}>Outros custos (R$) <span style={{ color: 'var(--color-text-faint)' }}>(Opcional)</span></label>
             <input
               type="number" step="0.01" min="0"
               className="input mt-1" style={inputStyle}
@@ -341,7 +361,6 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
         </>
       )}
 
-      {/* Total calculado */}
       <div
         className="flex items-center justify-between px-4 py-3 rounded-lg"
         style={{ background: 'var(--color-surface-offset)' }}
@@ -357,27 +376,16 @@ export default function TransactionForm({ portfolioId, onClose }: Props) {
         </span>
       </div>
 
-      {/* Botões — full width mobile, alinhados direita desktop */}
       <div className="flex gap-2 pb-safe">
-        <button
-          type="button"
-          onClick={onClose}
-          className="flex-1 md:flex-none btn btn-secondary"
-          style={{ minHeight: 44 }}
-        >
+        <button type="button" onClick={onClose} className="flex-1 md:flex-none btn btn-secondary" style={{ minHeight: 44 }}>
           Cancelar
         </button>
         <button
-          type="submit"
-          disabled={isPending}
+          type="submit" disabled={isPending}
           className="flex-1 md:flex-none btn btn-primary"
           style={{
             minHeight: 44,
-            background: buyActive
-              ? 'var(--color-success)'
-              : sellActive
-                ? 'var(--color-notification)'
-                : 'var(--color-primary)',
+            background: buyActive ? 'var(--color-success)' : sellActive ? 'var(--color-notification)' : 'var(--color-primary)',
             color: '#fff',
           }}
         >

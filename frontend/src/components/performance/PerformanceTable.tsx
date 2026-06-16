@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { ChevronUp, ChevronDown } from 'lucide-react'
 import type { Position } from '@/hooks/usePerformance'
 import { formatBRL, formatPct, assetBadgeClass } from '@/utils/format'
 
@@ -7,12 +9,9 @@ interface Props {
 
 type SortKey = 'gain_pct' | 'gain' | 'current_value' | 'invested'
 
-import { useState } from 'react'
-import { ChevronUp, ChevronDown } from 'lucide-react'
-
 export default function PerformanceTable({ positions }: Props) {
-  const [sortKey, setSortKey]   = useState<SortKey>('gain_pct')
-  const [sortAsc, setSortAsc]   = useState(false)
+  const [sortKey, setSortKey] = useState<SortKey>('gain_pct')
+  const [sortAsc, setSortAsc] = useState(false)
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortAsc(a => !a)
@@ -27,8 +26,8 @@ export default function PerformanceTable({ positions }: Props) {
   function SortIcon({ k }: { k: SortKey }) {
     if (sortKey !== k) return <ChevronDown size={12} style={{ opacity: 0.3 }} />
     return sortAsc
-      ? <ChevronUp size={12} style={{ color: 'var(--color-primary)' }} />
-      : <ChevronDown size={12} style={{ color: 'var(--color-primary)' }} />
+      ? <ChevronUp    size={12} style={{ color: 'var(--color-primary)' }} />
+      : <ChevronDown  size={12} style={{ color: 'var(--color-primary)' }} />
   }
 
   function Th({ label, k }: { label: string; k: SortKey }) {
@@ -56,26 +55,30 @@ export default function PerformanceTable({ positions }: Props) {
           <thead>
             <tr>
               <th className="text-left">Ativo</th>
-              <Th label="Investido"    k="invested"      />
-              <Th label="Valor atual"  k="current_value" />
-              <Th label="Resultado"    k="gain"          />
-              <Th label="Rentab. %"    k="gain_pct"      />
+              <Th label="Investido"   k="invested"      />
+              <Th label="Valor atual" k="current_value" />
+              <Th label="Resultado"   k="gain"          />
+              <Th label="Rentab. %"   k="gain_pct"      />
             </tr>
           </thead>
           <tbody>
             {sorted.map(p => {
-              const pos = p.gain >= 0
+              const pos   = p.gain >= 0
               const color = pos ? 'var(--color-success)' : 'var(--color-notification)'
+              // asset_type pode ser undefined no tipo Position — usa fallback ''
+              const assetType = p.asset_type ?? ''
               return (
-                <tr key={p.asset_id}>
+                <tr key={p.ticker}>
                   <td>
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-sm">{p.ticker}</span>
-                      <span className={`asset-badge ${assetBadgeClass(p.asset_type)}`}>
-                        {p.asset_type}
+                      <span className={`asset-badge ${assetBadgeClass(assetType)}`}>
+                        {assetType}
                       </span>
                     </div>
-                    <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{p.name}</p>
+                    {p.name && (
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{p.name}</p>
+                    )}
                   </td>
                   <td className="text-right text-sm">{formatBRL(p.invested)}</td>
                   <td className="text-right text-sm font-medium">{formatBRL(p.current_value)}</td>
@@ -85,10 +88,7 @@ export default function PerformanceTable({ positions }: Props) {
                   <td className="text-right">
                     <span
                       className="inline-flex items-center justify-end px-2 py-0.5 rounded text-xs font-semibold"
-                      style={{
-                        background: `oklch(from ${color} l c h / 0.12)`,
-                        color,
-                      }}
+                      style={{ background: `oklch(from ${color} l c h / 0.12)`, color }}
                     >
                       {formatPct(p.gain_pct)}
                     </span>
@@ -97,8 +97,6 @@ export default function PerformanceTable({ positions }: Props) {
               )
             })}
           </tbody>
-
-          {/* Totais */}
           <tfoot>
             <tr style={{ borderTop: '2px solid var(--color-divider)', background: 'var(--color-surface-offset)' }}>
               <td className="text-sm font-semibold py-3 px-3">Total</td>
@@ -108,8 +106,10 @@ export default function PerformanceTable({ positions }: Props) {
               <td className="text-right text-sm font-semibold">
                 {formatBRL(sorted.reduce((s, p) => s + p.current_value, 0))}
               </td>
-              <td className="text-right text-sm font-semibold"
-                style={{ color: sorted.reduce((s, p) => s + p.gain, 0) >= 0 ? 'var(--color-success)' : 'var(--color-notification)' }}>
+              <td
+                className="text-right text-sm font-semibold"
+                style={{ color: sorted.reduce((s, p) => s + p.gain, 0) >= 0 ? 'var(--color-success)' : 'var(--color-notification)' }}
+              >
                 {formatBRL(sorted.reduce((s, p) => s + p.gain, 0))}
               </td>
               <td />

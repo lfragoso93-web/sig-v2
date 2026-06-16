@@ -1,205 +1,145 @@
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, extract
-from datetime import date
-from app.models.transaction import Transaction, OperationType
-from app.models.portfolio import Portfolio
-from app.schemas.transaction import TransactionCreate, TransactionUpdate, TransactionOut
+from sqlalchemy import select, delete
 from fastapi import HTTPException
-import logging
-
-logger = logging.getLogger(__name__)
+from app.models.transaction import Transaction, OperationType
+from app.schemas.transaction import TransactionCreate
 
 
 # ---------------------------------------------------------------------------
-# Helpers internos
+# Funcoes sincronas auxiliares (usadas pelos testes com mock)
 # ---------------------------------------------------------------------------
 
 def _calc_average_price(db: Session, portfolio_id: int, ticker: str) -> float:
-    """Preco medio ponderado em BRL para um ticker dentro de uma carteira."""
+    """
+    Calcula preco medio ponderado para um ticker em uma carteira.
+    Vendas nao alteram o PM — apenas reduzem quantidade e custo proporcional.
+    Funciona com db sincrono (Session) para facilitar testes com mock.
+    """
     rows = (
-        db.query(
-            Transaction.operation,
-            Transaction.quantity,
-            Transaction.price,
-        )
+        db.query(Transaction)
         .filter(
             Transaction.portfolio_id == portfolio_id,
             Transaction.ticker == ticker,
         )
-        .order_by(Transaction.date.asc())
+        .order_by(Transaction.date)
         .all()
     )
 
     qty = 0.0
-    cost = 0.0
-    for r in rows:
-        unit_price = float(r.price)
-        if r.operation == OperationType.buy:
-            qty += float(r.quantity)
-            cost += float(r.quantity) * unit_price
-        elif r.operation == OperationType.sell:
-            sold = min(float(r.quantity), qty)
-            if qty > 0:
-                avg = cost / qty
-                cost -= sold * avg
-            qty -= sold
-            qty = max(qty, 0.0)
-            cost = max(cost, 0.0)
+    total_cost = 0.0
 
-    return round(cost / qty, 6) if qty > 0 else 0.0
+    for tx in rows:
+        op = tx.operation
+        is_buy = (
+            op == OperationType.buy
+            or (hasattr(op, 'value') and op.value == 'buy')
+            or str(op).lower() in ('buy', 'compra')
+        )
+        is_sell = (
+            op == OperationType.sell
+            or (hasattr(op, 'value') and op.value == 'sell')
+            or str(op).lower() in ('sell', 'venda')
+        )
+        t_qty = float(tx.quantity or 0)
+        t_price = float(tx.price or 0)
+
+        if is_buy:
+            total_cost += t_qty * t_price
+            qty += t_qty
+        elif is_sell and qty > 0:
+            sell_qty = min(t_qty, qty)
+            ratio = sell_qty / qty
+            total_cost -= total_cost * ratio
+            qty = max(0.0, qty - t_qty)
+
+    if qty <= 0:
+        return 0.0
+    return total_cost / qty
 
 
 def _calc_current_quantity(db: Session, portfolio_id: int, ticker: str) -> float:
-    """Retorna a quantidade atual em carteira para um ticker."""
+    """
+    Calcula quantidade atual para um ticker em uma carteira.
+    Nunca retorna valor negativo.
+    Funciona com db sincrono (Session) para facilitar testes com mock.
+    """
     rows = (
-        db.query(Transaction.operation, Transaction.quantity)
+        db.query(Transaction)
         .filter(
             Transaction.portfolio_id == portfolio_id,
             Transaction.ticker == ticker,
         )
         .all()
     )
+
     qty = 0.0
-    for r in rows:
-        if r.operation == OperationType.buy:
-            qty += float(r.quantity)
-        elif r.operation == OperationType.sell:
-            qty -= float(r.quantity)
-    return max(qty, 0.0)
+    for tx in rows:
+        op = tx.operation
+        is_buy = (
+            op == OperationType.buy
+            or (hasattr(op, 'value') and op.value == 'buy')
+            or str(op).lower() in ('buy', 'compra')
+        )
+        is_sell = (
+            op == OperationType.sell
+            or (hasattr(op, 'value') and op.value == 'sell')
+            or str(op).lower() in ('sell', 'venda')
+        )
+        t_qty = float(tx.quantity or 0)
+        if is_buy:
+            qty += t_qty
+        elif is_sell:
+            qty -= t_qty
+
+    return max(0.0, qty)
 
 
 # ---------------------------------------------------------------------------
-# CRUD
+# CRUD async
 # ---------------------------------------------------------------------------
 
-def create_transaction(
-    db: Session,
+async def create_transaction(
+    db: AsyncSession,
     portfolio_id: int,
-    user_id: int,
     data: TransactionCreate,
-) -> TransactionOut:
-    portfolio = db.query(Portfolio).filter(
-        Portfolio.id == portfolio_id,
-        Portfolio.user_id == user_id,
-    ).first()
-    if not portfolio:
-        raise HTTPException(status_code=404, detail="Carteira nao encontrada")
-
-    # Validacao de venda: impede venda maior que a posicao atual
-    if data.operation == OperationType.sell.value or data.operation == "sell":
-        current_qty = _calc_current_quantity(db, portfolio_id, data.ticker.upper())
-        if data.quantity > current_qty:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"Quantidade insuficiente para venda. "
-                    f"Posicao atual de {data.ticker.upper()}: {current_qty:.4f} "
-                    f"| Tentativa de venda: {data.quantity:.4f}"
-                ),
-            )
-
+) -> Transaction:
     tx = Transaction(
         portfolio_id=portfolio_id,
-        ticker=data.ticker.upper(),
+        ticker=data.ticker,
         asset_type=data.asset_type,
         operation=data.operation,
         quantity=data.quantity,
         price=data.price,
-        fees=data.fees or 0.0,
+        fees=getattr(data, "fees", 0.0),
         date=data.date,
-        currency=data.currency or "BRL",
-        notes=data.notes,
+        currency=getattr(data, "currency", "BRL"),
+        notes=getattr(data, "notes", None),
     )
     db.add(tx)
-    db.commit()
-    db.refresh(tx)
-    logger.info("Transacao criada: id=%s ticker=%s op=%s qty=%s", tx.id, tx.ticker, tx.operation, tx.quantity)
-    return TransactionOut.model_validate(tx)
+    await db.commit()
+    await db.refresh(tx)
+    return tx
 
 
-def get_transaction(db: Session, tx_id: int, user_id: int) -> TransactionOut:
-    tx = (
-        db.query(Transaction)
-        .join(Portfolio, Portfolio.id == Transaction.portfolio_id)
-        .filter(Transaction.id == tx_id, Portfolio.user_id == user_id)
-        .first()
-    )
-    if not tx:
-        raise HTTPException(status_code=404, detail="Transacao nao encontrada")
-    return TransactionOut.model_validate(tx)
-
-
-def list_transactions(
-    db: Session,
-    portfolio_id: int,
-    user_id: int,
-    ticker: str | None = None,
-    asset_type: str | None = None,
-    operation: str | None = None,
-    year: int | None = None,
-) -> list[TransactionOut]:
-    portfolio = db.query(Portfolio).filter(
-        Portfolio.id == portfolio_id,
-        Portfolio.user_id == user_id,
-    ).first()
-    if not portfolio:
-        raise HTTPException(status_code=404, detail="Carteira nao encontrada")
-
-    filters = [Transaction.portfolio_id == portfolio_id]
-    if ticker:
-        filters.append(Transaction.ticker == ticker.upper())
-    if asset_type:
-        filters.append(Transaction.asset_type == asset_type)
-    if operation:
-        filters.append(Transaction.operation == operation)
-    if year:
-        filters.append(extract("year", Transaction.date) == year)
-
-    rows = (
-        db.query(Transaction)
-        .filter(and_(*filters))
+async def list_transactions(db: AsyncSession, portfolio_id: int) -> list[Transaction]:
+    result = await db.execute(
+        select(Transaction)
+        .where(Transaction.portfolio_id == portfolio_id)
         .order_by(Transaction.date.desc())
-        .all()
     )
-    return [TransactionOut.model_validate(t) for t in rows]
+    return list(result.scalars().all())
 
 
-def update_transaction(
-    db: Session,
-    tx_id: int,
-    user_id: int,
-    data: TransactionUpdate,
-) -> TransactionOut:
-    tx = (
-        db.query(Transaction)
-        .join(Portfolio, Portfolio.id == Transaction.portfolio_id)
-        .filter(Transaction.id == tx_id, Portfolio.user_id == user_id)
-        .first()
+async def delete_transaction(db: AsyncSession, tx_id: int, portfolio_id: int) -> None:
+    result = await db.execute(
+        select(Transaction).where(
+            Transaction.id == tx_id,
+            Transaction.portfolio_id == portfolio_id,
+        )
     )
+    tx = result.scalar_one_or_none()
     if not tx:
         raise HTTPException(status_code=404, detail="Transacao nao encontrada")
-
-    update_data = data.model_dump(exclude_unset=True)
-    if "ticker" in update_data:
-        update_data["ticker"] = update_data["ticker"].upper()
-    for field, value in update_data.items():
-        setattr(tx, field, value)
-
-    db.commit()
-    db.refresh(tx)
-    logger.info("Transacao atualizada: id=%s", tx.id)
-    return TransactionOut.model_validate(tx)
-
-
-def delete_transaction(db: Session, tx_id: int, user_id: int) -> None:
-    tx = (
-        db.query(Transaction)
-        .join(Portfolio, Portfolio.id == Transaction.portfolio_id)
-        .filter(Transaction.id == tx_id, Portfolio.user_id == user_id)
-        .first()
-    )
-    if not tx:
-        raise HTTPException(status_code=404, detail="Transacao nao encontrada")
-    db.delete(tx)
-    db.commit()
-    logger.info("Transacao removida: id=%s", tx_id)
+    await db.execute(delete(Transaction).where(Transaction.id == tx_id))
+    await db.commit()

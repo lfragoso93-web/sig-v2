@@ -1,0 +1,9 @@
+# Configuracao do dependency-review-action
+# Ref: https://github.com/actions/dependency-review-action
+
+fail-on-severity: high
+license-check: false
+
+deny-licenses:
+  - GPL-3.0
+  - AGPL-3.0

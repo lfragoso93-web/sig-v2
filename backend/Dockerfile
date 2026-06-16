@@ -1,20 +1,37 @@
-# ---- build stage ----
-FROM python:3.12-slim AS base
+# ---- deps stage ----
+FROM python:3.12-slim AS deps
 
 WORKDIR /app
 
-# Dependencias de sistema minimas
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc libpq-dev curl \
+# Install system dependencies (sem pin de versao do gcc - compativel com Debian trixie)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        gcc \
+        libpq-dev \
+        curl \
+    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+# ---- runtime stage ----
+FROM python:3.12-slim AS runtime
 
-# ---- runtime ----
-FROM base AS runtime
+WORKDIR /app
+
+# Install only runtime system deps
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libpq5 \
+        curl \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy installed Python packages and app from deps stage
+COPY --from=deps /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=deps /usr/local/bin /usr/local/bin
+COPY . .
 
 EXPOSE 8000
 
