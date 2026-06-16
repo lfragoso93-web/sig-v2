@@ -3,9 +3,29 @@ from sqlalchemy import select
 from fastapi import HTTPException
 from decimal import Decimal
 from datetime import date
+from typing import Any
 
 from app.models.treasury import TreasuryInvestment
 from app.integrations.brapi import fetch_treasury_list
+
+
+# ---------- helpers ----------------------------------------------------------
+
+async def _assert_portfolio_owner(
+    db: AsyncSession,
+    portfolio_id: int,
+    user_id: int,
+) -> None:
+    """Valida que o portfolio pertence ao user. Lanca 403 se nao."""
+    from app.models.portfolio import Portfolio
+    result = await db.execute(
+        select(Portfolio).where(
+            Portfolio.id == portfolio_id,
+            Portfolio.user_id == user_id,
+        )
+    )
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=403, detail="Acesso negado ao portfolio.")
 
 
 # ---------- CREATE -----------------------------------------------------------
@@ -13,15 +33,18 @@ from app.integrations.brapi import fetch_treasury_list
 async def create_treasury(
     db: AsyncSession,
     portfolio_id: int,
-    data: dict,
+    user_id: int,
+    data: Any,
 ) -> TreasuryInvestment:
+    await _assert_portfolio_owner(db, portfolio_id, user_id)
+    payload = data.model_dump() if hasattr(data, "model_dump") else dict(data)
     investment = TreasuryInvestment(
         portfolio_id=portfolio_id,
-        brapi_name=data["brapi_name"],
-        invested_value=Decimal(str(data["invested_value"])),
-        purchase_date=data["purchase_date"],
-        maturity_date=data.get("maturity_date"),
-        is_active=data.get("is_active", True),
+        brapi_name=payload["brapi_name"],
+        invested_value=Decimal(str(payload["invested_value"])),
+        purchase_date=payload["purchase_date"],
+        maturity_date=payload.get("maturity_date"),
+        is_active=payload.get("is_active", True),
     )
     db.add(investment)
     await db.commit()
@@ -30,6 +53,18 @@ async def create_treasury(
 
 
 # ---------- READ -------------------------------------------------------------
+
+async def list_treasury(
+    db: AsyncSession,
+    portfolio_id: int,
+    user_id: int,
+    only_active: bool = False,
+) -> list[dict]:
+    """Lista os investimentos de Tesouro Direto de uma carteira, enriquecidos com cotacao atual."""
+    await _assert_portfolio_owner(db, portfolio_id, user_id)
+    investments = await get_treasury_by_portfolio(db, portfolio_id, only_active)
+    return await enrich_with_current_prices(investments)
+
 
 async def get_treasury_by_portfolio(
     db: AsyncSession,
@@ -57,7 +92,7 @@ async def get_treasury_by_id(
     result = await db.execute(stmt)
     obj = result.scalar_one_or_none()
     if not obj:
-        raise HTTPException(status_code=404, detail="Investimento de Tesouro não encontrado.")
+        raise HTTPException(status_code=404, detail="Investimento de Tesouro n\u00e3o encontrado.")
     return obj
 
 
@@ -93,33 +128,25 @@ async def delete_treasury(
     db: AsyncSession,
     investment_id: int,
     portfolio_id: int,
+    user_id: int | None = None,
 ) -> None:
+    if user_id is not None:
+        await _assert_portfolio_owner(db, portfolio_id, user_id)
     obj = await get_treasury_by_id(db, investment_id, portfolio_id)
     await db.delete(obj)
     await db.commit()
 
 
-# ---------- ENRIQUECIMENTO COM COTAÇÃO ATUAL (BRAPI) -------------------------
+# ---------- ENRIQUECIMENTO COM COTACAO ATUAL (BRAPI) -------------------------
 
 async def enrich_with_current_prices(
     investments: list[TreasuryInvestment],
 ) -> list[dict]:
-    """
-    Busca os preços atuais da BRAPI uma vez e monta a resposta com PL calculado.
-    current_price = preco unitario atual do titulo.
-    valor_atual   = current_price (o preco da BRAPI ja representa o valor de face atual).
-    Para Tesouro Direto o valor do titulo varia por unidade;
-    como o usuario cadastra valor investido (nao quantidade), usamos:
-      valor_atual      = current_price  (referencia de preco atual)
-      lucro_prejuizo   = None  (nao e calculavel sem quantidade)
-    Se quiser P&L real, o usuario devera informar quantidade futuramente.
-    """
     try:
         brapi_items = await fetch_treasury_list() or []
     except Exception:
         brapi_items = []
 
-    # Monta mapa slug/name -> preco
     price_map: dict[str, float] = {}
     for item in brapi_items:
         slug = (item.get("slug") or item.get("symbol") or "").strip()
@@ -135,7 +162,6 @@ async def enrich_with_current_prices(
     result = []
     for inv in investments:
         current_price = price_map.get(inv.brapi_name)
-
         result.append({
             "id": inv.id,
             "portfolio_id": inv.portfolio_id,
@@ -145,7 +171,7 @@ async def enrich_with_current_prices(
             "maturity_date": inv.maturity_date.isoformat() if isinstance(inv.maturity_date, date) else inv.maturity_date,
             "is_active": inv.is_active,
             "current_price": current_price,
-            "valor_atual": None,   # necessita quantidade para calcular
+            "valor_atual": None,
             "lucro_prejuizo": None,
             "rentabilidade_pct": None,
             "created_at": inv.created_at.isoformat() if hasattr(inv, "created_at") and inv.created_at else None,
