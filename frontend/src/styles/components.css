@@ -1,83 +1,10 @@
-/* ─── Inputs ──────────────────────────────────────────────────────────────── */
-.input {
-  width: 100%;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-2);
-  color: var(--color-text);
-  font-size: var(--text-sm);
-  line-height: 1.5;
-  transition: border-color var(--transition-interactive),
-              box-shadow var(--transition-interactive);
-}
+/* =========================================================
+   SIG v2 — Components
+   Apenas componentes NÃO definidos em globals.css
+   .btn e .input vivem exclusivamente em globals.css
+   ========================================================= */
 
-.input::placeholder {
-  color: var(--color-text-faint);
-}
-
-.input:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px oklch(from var(--color-primary) l c h / 0.15);
-}
-
-/* ─── Botões ──────────────────────────────────────────────────────────────── */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  line-height: 1.5;
-  cursor: pointer;
-  transition: background var(--transition-interactive),
-              color var(--transition-interactive),
-              box-shadow var(--transition-interactive);
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: var(--color-primary);
-  color: #fff;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--color-primary-hover);
-}
-
-.btn-primary:active:not(:disabled) {
-  background: var(--color-primary-active);
-}
-
-.btn-secondary {
-  background: var(--color-surface-offset);
-  color: var(--color-text);
-  border: 1px solid var(--color-border);
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: var(--color-surface-dynamic);
-}
-
-.btn-ghost {
-  background: transparent;
-  color: var(--color-text-muted);
-}
-
-.btn-ghost:hover:not(:disabled) {
-  background: var(--color-surface-2);
-  color: var(--color-text);
-}
-
-/* ─── KPI Card ────────────────────────────────────────────────────────────── */
+/* ─── KPI Card ──────────────────────────────────────────────────────── */
 .kpi-card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -101,6 +28,7 @@
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
+  color: var(--color-text);
 }
 
 .kpi-change {
@@ -111,7 +39,7 @@
 .kpi-change.positive { color: var(--color-success); }
 .kpi-change.negative { color: var(--color-notification); }
 
-/* ─── Tabela de posições ──────────────────────────────────────────────────── */
+/* ─── Tabela de posições ────────────────────────────────────────────── */
 .positions-table {
   width: 100%;
   border-collapse: collapse;
@@ -133,6 +61,7 @@
   padding: var(--space-3);
   border-bottom: 1px solid var(--color-divider);
   font-variant-numeric: tabular-nums;
+  color: var(--color-text);
 }
 
 .positions-table tr:last-child td {
@@ -143,7 +72,7 @@
   background: var(--color-surface-offset);
 }
 
-/* ─── Badge tipo de ativo ─────────────────────────────────────────────────── */
+/* ─── Badge tipo de ativo ──────────────────────────────────────────────── */
 .asset-badge {
   display: inline-flex;
   align-items: center;
@@ -153,15 +82,17 @@
   font-weight: 500;
 }
 
-.asset-badge.acao      { background: oklch(from var(--color-blue) l c h / 0.12);   color: var(--color-blue); }
-.asset-badge.fii       { background: oklch(from var(--color-gold) l c h / 0.15);   color: var(--color-gold); }
-.asset-badge.etf       { background: oklch(from var(--color-purple) l c h / 0.12); color: var(--color-purple); }
-.asset-badge.tesouro   { background: oklch(from var(--color-success) l c h / 0.12); color: var(--color-success); }
-.asset-badge.stock     { background: oklch(from var(--color-primary) l c h / 0.12); color: var(--color-primary); }
-.asset-badge.cripto    { background: oklch(from var(--color-orange) l c h / 0.12); color: var(--color-orange); }
+.asset-badge.acao       { background: oklch(from var(--color-blue)    l c h / 0.12); color: var(--color-blue); }
+.asset-badge.fii        { background: oklch(from var(--color-gold)    l c h / 0.15); color: var(--color-gold); }
+.asset-badge.etf        { background: oklch(from var(--color-purple)  l c h / 0.12); color: var(--color-purple); }
+.asset-badge.etf_br     { background: oklch(from var(--color-purple)  l c h / 0.12); color: var(--color-purple); }
+.asset-badge.etf_int    { background: oklch(from var(--color-blue)    l c h / 0.12); color: var(--color-blue); }
+.asset-badge.tesouro    { background: oklch(from var(--color-success) l c h / 0.12); color: var(--color-success); }
+.asset-badge.stock      { background: oklch(from var(--color-primary) l c h / 0.12); color: var(--color-primary); }
+.asset-badge.cripto     { background: oklch(from var(--color-orange)  l c h / 0.12); color: var(--color-orange); }
 .asset-badge.renda-fixa { background: oklch(from var(--color-warning) l c h / 0.12); color: var(--color-warning); }
 
-/* ─── Skeleton ────────────────────────────────────────────────────────────── */
+/* ─── Skeleton ──────────────────────────────────────────────────────────── */
 @keyframes shimmer {
   0%   { background-position: -200% 0; }
   100% { background-position:  200% 0; }
