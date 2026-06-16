@@ -23,7 +23,7 @@ PyJWT[crypto]==2.13.0
 # OpenSSL estaticamente linkado nas wheels 46.x/47.x estava vulneravel
 cryptography==49.0.0
 passlib[bcrypt]==1.7.4
-bcrypt==4.2.0
+bcrypt==5.0.0
 # python-multipart 0.0.30 - GHSA-5rvq-cxj2-64vf (CVE-2026-53539)
 # QuerystringParser O(N^2) com separador semicolon - fix trata apenas & como separador
 # versoes 0.0.27-0.0.29 ainda afetadas
