@@ -9,12 +9,15 @@ class DividendType(str, enum.Enum):
     JCP = "JCP"
     RENDIMENTO = "RENDIMENTO"
     AMORTIZACAO = "AMORTIZACAO"
+    BONIFICACAO = "BONIFICACAO"
+    OUTROS = "OUTROS"
 
 
 class DividendStatus(str, enum.Enum):
     RECEBIDO = "RECEBIDO"
     PENDENTE = "PENDENTE"
     CANCELADO = "CANCELADO"
+    A_RECEBER = "A_RECEBER"
 
 
 class Dividend(Base):
