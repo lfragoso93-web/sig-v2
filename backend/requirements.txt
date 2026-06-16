@@ -24,8 +24,10 @@ PyJWT[crypto]==2.12.0
 cryptography==49.0.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.2.0
-# python-multipart 0.0.27 - fix CVE-2024-53981
-python-multipart==0.0.27
+# python-multipart 0.0.30 - GHSA-5rvq-cxj2-64vf (CVE-2026-53539)
+# QuerystringParser O(N^2) com separador semicolon - fix trata apenas & como separador
+# versoes 0.0.27-0.0.29 ainda afetadas
+python-multipart==0.0.30
 apscheduler==3.10.4
 email-validator==2.2.0
 redis==5.2.1
