@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
-from app.core.security import verify_password, hash_password, create_access_token, create_refresh_token
-from app.models.user import User
+from app.core.security import create_access_token, create_refresh_token
 from app.schemas.auth import LoginRequest, TokenResponse
-from app.services.user_service import get_user_by_email
+from app.schemas.user import UserCreate
+from app.services.user_service import get_user_by_email, create_user
+from app.core.security import verify_password
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -17,6 +18,11 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciais invalidas",
         )
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Conta desativada. Entre em contato com o administrador.",
+        )
     access_token = create_access_token(subject=str(user.id))
     refresh_token = create_refresh_token(subject=str(user.id))
     return TokenResponse(
@@ -27,18 +33,12 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-async def register(data: LoginRequest, db: AsyncSession = Depends(get_db)):
-    existing = await get_user_by_email(db, data.email)
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="E-mail ja cadastrado",
-        )
-    hashed = hash_password(data.password)
-    user = User(email=data.email, hashed_password=hashed)
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
+async def register(data: UserCreate, db: AsyncSession = Depends(get_db)):
+    """
+    Cadastro público. Usa UserCreate (name obrigatório, min 8 chars na senha).
+    Delega para create_user que já valida e-mail duplicado.
+    """
+    user = await create_user(db, data)
     access_token = create_access_token(subject=str(user.id))
     refresh_token = create_refresh_token(subject=str(user.id))
     return TokenResponse(
