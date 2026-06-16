@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
@@ -13,10 +14,16 @@ router = APIRouter(prefix="/api/v1/sync", tags=["sync"])
 async def sync_proventos(
     portfolio_id: int,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    p = db.query(Portfolio).filter(Portfolio.id == portfolio_id, Portfolio.user_id == current_user.id).first()
+    result = await db.execute(
+        select(Portfolio).where(
+            Portfolio.id == portfolio_id,
+            Portfolio.user_id == current_user.id,
+        )
+    )
+    p = result.scalar_one_or_none()
     if not p:
         raise HTTPException(404, "Carteira não encontrada")
 
