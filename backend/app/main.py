@@ -41,7 +41,15 @@ async def _create_enums_raw() -> None:
         for enum_def in _ENUMS:
             type_name = enum_def[0]
             values = ", ".join(enum_def[1:])
-            sql = f"DO $$ BEGIN CREATE TYPE {type_name} AS ENUM ({values}); EXCEPTION WHEN duplicate_object THEN NULL; END $$;"
+            # Verifica via pg_type antes de criar para evitar UniqueViolationError
+            # independente do comportamento de captura de exceção do asyncpg
+            sql = (
+                f"DO $$ BEGIN "
+                f"IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '{type_name}') THEN "
+                f"CREATE TYPE {type_name} AS ENUM ({values}); "
+                f"END IF; "
+                f"END $$;"
+            )
             await conn.execute(sql)
     finally:
         await conn.close()
