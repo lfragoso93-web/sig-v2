@@ -7,11 +7,27 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Eye, EyeOff, TrendingUp } from 'lucide-react'
 
 const schema = z.object({
-  email: z.string().email('E-mail inválido'),
+  email:    z.string().email('E-mail inválido'),
   password: z.string().min(6, 'Mínimo 6 caracteres'),
 })
-
 type FormData = z.infer<typeof schema>
+
+const field: React.CSSProperties = {
+  width: '100%',
+  padding: '0.625rem 0.75rem',
+  borderRadius: 'var(--radius-md)',
+  border: '1px solid var(--color-border)',
+  background: 'var(--color-surface-2)',
+  color: 'var(--color-text)',
+  fontSize: '16px',
+  outline: 'none',
+  boxSizing: 'border-box',
+}
+
+const fieldError: React.CSSProperties = {
+  ...field,
+  borderColor: 'var(--color-error)',
+}
 
 export default function LoginPage() {
   const { login } = useAuth()
@@ -33,79 +49,153 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-light-100 dark:bg-dark-900 p-4">
-      <div className="w-full max-w-sm">
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'var(--color-bg)',
+      padding: '1rem',
+    }}>
+      <div style={{ width: '100%', maxWidth: 380 }}>
+
         {/* Logo */}
-        <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 rounded-xl bg-brand-primary/10 flex items-center justify-center mb-3">
-            <TrendingUp size={24} className="text-brand-primary" />
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '2rem' }}>
+          <div style={{
+            width: 48, height: 48,
+            borderRadius: 'var(--radius-xl)',
+            background: 'oklch(from var(--color-primary) l c h / 0.12)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            marginBottom: '0.75rem',
+          }}>
+            <TrendingUp size={24} color="var(--color-primary)" />
           </div>
-          <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">SIG v2</h1>
-          <p className="text-sm text-muted mt-1">Sistema de Investimentos</p>
+          <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: 'var(--color-text)', margin: 0 }}>SIG v2</h1>
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', margin: '0.25rem 0 0' }}>
+            Sistema de Gestão de Investimentos
+          </p>
         </div>
 
-        <div className="card p-6 shadow-lg">
-          <h2 className="text-base font-semibold mb-6 text-gray-900 dark:text-gray-100">Entrar</h2>
+        {/* Card */}
+        <div style={{
+          background: 'var(--color-surface)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius-xl)',
+          padding: '1.5rem',
+          boxShadow: 'var(--shadow-lg)',
+        }}>
+          <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 1.5rem' }}>
+            Entrar
+          </h2>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                E-mail
-              </label>
+          <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+
+            {/* E-mail */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+              <label style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text)' }}>E-mail</label>
               <input
                 type="email"
                 autoComplete="email"
                 placeholder="seu@email.com"
-                className={errors.email ? 'input-error' : 'input'}
+                style={errors.email ? fieldError : field}
+                onFocus={e => (e.target.style.borderColor = 'var(--color-primary)')}
+                onBlur={e  => (e.target.style.borderColor  = errors.email ? 'var(--color-error)' : 'var(--color-border)')}
                 {...register('email')}
               />
               {errors.email && (
-                <p className="text-xs text-rose-400 mt-1">{errors.email.message}</p>
+                <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-error)', margin: 0 }}>
+                  {errors.email.message}
+                </p>
               )}
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                Senha
-              </label>
-              <div className="relative">
+            {/* Senha */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text)' }}>Senha</label>
+                <Link to="/esqueceu-senha" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-primary)', textDecoration: 'none' }}>
+                  Esqueceu a senha?
+                </Link>
+              </div>
+              <div style={{ position: 'relative' }}>
                 <input
                   type={showPass ? 'text' : 'password'}
                   autoComplete="current-password"
                   placeholder="••••••••"
-                  className={errors.password ? 'input-error pr-10' : 'input pr-10'}
+                  style={{ ...(errors.password ? fieldError : field), paddingRight: '2.5rem' }}
+                  onFocus={e => (e.target.style.borderColor = 'var(--color-primary)')}
+                  onBlur={e  => (e.target.style.borderColor  = errors.password ? 'var(--color-error)' : 'var(--color-border)')}
                   {...register('password')}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPass(p => !p)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                  style={{
+                    position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)',
+                    background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                    color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center',
+                  }}
                   aria-label={showPass ? 'Ocultar senha' : 'Mostrar senha'}
                 >
                   {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
               {errors.password && (
-                <p className="text-xs text-rose-400 mt-1">{errors.password.message}</p>
+                <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-error)', margin: 0 }}>
+                  {errors.password.message}
+                </p>
               )}
             </div>
 
+            {/* Erro da API */}
             {apiError && (
-              <p className="text-xs text-rose-400 bg-rose-500/10 px-3 py-2 rounded-lg">
+              <p style={{
+                fontSize: 'var(--text-xs)', color: 'var(--color-error)',
+                background: 'oklch(from var(--color-error) l c h / 0.08)',
+                border: '1px solid oklch(from var(--color-error) l c h / 0.2)',
+                borderRadius: 'var(--radius-md)', padding: '0.5rem 0.75rem', margin: 0,
+              }}>
                 {apiError}
               </p>
             )}
 
-            <button type="submit" disabled={isSubmitting} className="btn-primary justify-center mt-2">
-              {isSubmitting ? (
-                <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-              ) : 'Entrar'}
+            {/* Submit */}
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              style={{
+                width: '100%',
+                padding: '0.625rem',
+                borderRadius: 'var(--radius-md)',
+                border: 'none',
+                background: isSubmitting ? 'var(--color-primary-highlight)' : 'var(--color-primary)',
+                color: 'var(--color-text-inverse)',
+                fontSize: 'var(--text-sm)', fontWeight: 600,
+                cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                gap: '0.5rem', marginTop: '0.5rem',
+                transition: 'background 150ms ease',
+              }}
+            >
+              {isSubmitting
+                ? <span style={{
+                    width: 16, height: 16,
+                    border: '2px solid rgba(255,255,255,0.3)',
+                    borderTopColor: 'white',
+                    borderRadius: '50%',
+                    animation: 'spin 0.7s linear infinite',
+                    display: 'inline-block',
+                  }} />
+                : 'Entrar'
+              }
             </button>
           </form>
 
-          <p className="text-xs text-center text-muted mt-4">
+          <p style={{ fontSize: 'var(--text-xs)', textAlign: 'center', color: 'var(--color-text-muted)', marginTop: '1rem', marginBottom: 0 }}>
             Não tem conta?{' '}
-            <Link to="/register" className="text-brand-primary hover:underline">Cadastrar</Link>
+            <Link to="/register" style={{ color: 'var(--color-primary)', textDecoration: 'none', fontWeight: 500 }}>
+              Cadastre-se
+            </Link>
           </p>
         </div>
       </div>

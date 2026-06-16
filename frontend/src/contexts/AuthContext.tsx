@@ -57,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('sig_refresh', data.refresh_token)
     api.defaults.headers.common['Authorization'] = `Bearer ${data.access_token}`
     await loadMe()
-    navigate('/app/dashboard')
+    navigate('/carteira')
   }
 
   const logout = () => {
@@ -65,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('sig_refresh')
     delete api.defaults.headers.common['Authorization']
     setUser(null)
-    navigate('/')
+    navigate('/login')
   }
 
   const refreshUser = async () => { await loadMe() }
