@@ -3,9 +3,6 @@ import ReactDOM from 'react-dom/client'
 import { RouterProvider } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { router } from '@/router'
-import '@/styles/tokens.css'
-import '@/styles/base.css'
-import '@/styles/components.css'
 import '@/index.css'
 
 // Aplica o tema salvo ANTES do primeiro render para evitar flash branco
