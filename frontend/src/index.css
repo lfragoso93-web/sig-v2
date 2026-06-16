@@ -4,8 +4,103 @@
 @import "./styles/globals.css";
 @import "./styles/components.css";
 
+/*
+  ── Tailwind v4: @theme ─────────────────────────────────────────────
+  No TW v4 o tailwind.config.js é ignorado. Tokens customizados
+  devem ser declarados aqui via @theme para gerar as classes utilitárias
+  (bg-*, text-*, border-*, etc.).
+  Os valores apontam para as CSS vars definidas em tokens.css,
+  garantindo que light/dark mudam automaticamente.
+  ──────────────────────────────────────────────────────────────────── */
+@theme {
+  /* ── Superfícies ───────────────────────────────────────── */
+  --color-bg:               var(--color-bg);
+  --color-surface:          var(--color-surface);
+  --color-surface-2:        var(--color-surface-2);
+  --color-surface-offset:   var(--color-surface-offset);
+  --color-surface-offset-2: var(--color-surface-offset-2);
+  --color-surface-dynamic:  var(--color-surface-dynamic);
+  --color-border:           var(--color-border);
+  --color-divider:          var(--color-divider);
+
+  /* Aliases numéricos legados (dark-* / light-* / surface-*) */
+  --color-surface-950: var(--color-bg);
+  --color-surface-900: var(--color-bg);
+  --color-surface-800: var(--color-surface);
+  --color-surface-700: var(--color-surface-2);
+  --color-surface-600: var(--color-surface-offset);
+  --color-surface-500: var(--color-surface-offset-2);
+  --color-dark-900:    var(--color-bg);
+  --color-dark-800:    var(--color-surface);
+  --color-dark-700:    var(--color-surface-2);
+  --color-dark-600:    var(--color-surface-offset);
+  --color-dark-500:    var(--color-surface-offset-2);
+  --color-dark-400:    var(--color-surface-offset);
+  --color-dark-border: var(--color-border);
+  --color-dark-hover:  var(--color-surface-dynamic);
+  --color-light-50:     var(--color-bg);
+  --color-light-100:    var(--color-surface);
+  --color-light-200:    var(--color-surface-2);
+  --color-light-300:    var(--color-surface-offset);
+  --color-light-border: var(--color-border);
+
+  /* ── Texto ─────────────────────────────────────────────── */
+  --color-text:         var(--color-text);
+  --color-text-muted:   var(--color-text-muted);
+  --color-text-faint:   var(--color-text-faint);
+  --color-text-inverse: var(--color-text-inverse);
+
+  /* ── Primária (brand / teal) ────────────────────────────── */
+  --color-brand-primary:   var(--color-primary);
+  --color-brand-hover:     var(--color-primary-hover);
+  --color-brand-active:    var(--color-primary-active);
+  --color-brand-highlight: var(--color-primary-highlight);
+  /* escala numérica teal */
+  --color-brand-50:  #edfaf7;
+  --color-brand-100: #d2f4ec;
+  --color-brand-200: #a9e8d9;
+  --color-brand-300: #71d6bf;
+  --color-brand-400: #38bda0;
+  --color-brand-500: #1fa287;
+  --color-brand-600: #15826d;
+  --color-brand-700: #136759;
+  --color-brand-800: #135248;
+  --color-brand-900: #13443d;
+  --color-brand-950: #052923;
+
+  /* ── Semânticas ─────────────────────────────────────────── */
+  --color-positive: var(--color-success);
+  --color-negative: var(--color-notification);
+  --color-warning:  var(--color-warning);
+  --color-neutral:  var(--color-text-muted);
+  --color-info:     var(--color-blue);
+
+  /* ── Chart ──────────────────────────────────────────────── */
+  --color-chart-green:     var(--color-success);
+  --color-chart-pink:      var(--color-notification);
+  --color-chart-blue:      var(--color-blue);
+  --color-chart-orange:    var(--color-orange);
+  --color-chart-purple:    var(--color-purple);
+  --color-chart-gold:      var(--color-gold);
+
+  /* ── Tipografia ─────────────────────────────────────────── */
+  --font-family-sans:    'Inter', system-ui, sans-serif;
+  --font-family-display: 'Inter', system-ui, sans-serif;
+  --font-family-mono:    'JetBrains Mono', 'Fira Code', monospace;
+
+  /* ── Raios (border-radius) ──────────────────────────────── */
+  --radius-sm:   0.375rem;
+  --radius-md:   0.5rem;
+  --radius-lg:   0.75rem;
+  --radius-xl:   1rem;
+  --radius-full: 9999px;
+
+  /* ── Transição ──────────────────────────────────────────── */
+  --ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 :root {
-  --font-body: 'Inter', system-ui, sans-serif;
+  --font-body:    'Inter', system-ui, sans-serif;
   --font-display: 'Inter', system-ui, sans-serif;
 }
 
@@ -32,7 +127,6 @@ table {
 }
 
 /* ── Tipografia mínima em inputs (evita zoom iOS) ─────── */
-/* Aplicado apenas a campos de formulário, nunca a botões  */
 input,
 select,
 textarea {
@@ -46,11 +140,3 @@ textarea {
     opacity: 1;
   }
 }
-
-/* ── Breakpoints de referência (comentário documental) ── */
-/*
-  sm:  640px  — não utilizado no projeto
-  md:  768px  — tablet / colapso da sidebar
-  lg: 1024px  — desktop (sidebar fixa)
-  xl: 1280px  — desktop largo
-*/
