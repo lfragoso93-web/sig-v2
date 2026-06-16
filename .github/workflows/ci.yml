@@ -153,6 +153,11 @@ jobs:
           fail-on-severity: high
           license-check: false
           deny-licenses: GPL-3.0,AGPL-3.0
+          # GHSA-xgmm-8j9v-c9wx: PyJWT JWK/HMAC confusion — falso positivo.
+          # O projeto usa jwt.decode() com algorithms=[settings.ALGORITHM] (HS256
+          # fixo via SECRET_KEY simetrico). Nenhuma chave publica JWK e aceita.
+          # Ver: backend/app/core/security.py -> decode_token()
+          allow-ghsas: GHSA-xgmm-8j9v-c9wx
 
   # ---------------------------------------------------------------------------
   # DOCKERFILE LINT
@@ -259,9 +264,8 @@ jobs:
           push: false
           pull: true
           tags: sig-v2-frontend:ci-${{ github.sha }}
-          # cache-from apenas para as layers de build (node), nao para runtime (nginx)
           # pull:true garante que nginx:1.28-alpine seja sempre re-puxado do Docker Hub
-          # e que o apk upgrade receba os patches mais recentes disponíveis
+          # e que o apk upgrade receba os patches mais recentes disponiveis
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
