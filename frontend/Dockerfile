@@ -5,8 +5,8 @@ WORKDIR /app
 
 COPY package*.json ./
 
-# npm ci requires package-lock.json — ensures reproducible installs
-RUN npm ci
+# Usa npm ci se package-lock.json existir, senão npm install
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 COPY . .
 
