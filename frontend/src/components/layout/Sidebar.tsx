@@ -16,6 +16,7 @@ import { usePortfolios, useCreatePortfolio } from '@/hooks/usePortfolios'
 import { useAppStore } from '@/store/appStore'
 import { useState, useEffect } from 'react'
 import Modal from '@/components/ui/Modal'
+import LogoSGI from '@/components/ui/LogoSGI'
 
 const NAV_TOP = [
   { to: '/carteira',            icon: LayoutDashboard, label: 'Resumo'     },
@@ -60,381 +61,240 @@ export default function Sidebar() {
   useEffect(() => {
     if (sidebarOpen) {
       setMounted(true)
-      requestAnimationFrame(() => requestAnimationFrame(() => setVisible(true)))
+      requestAnimationFrame(() => setVisible(true))
     } else {
       setVisible(false)
-      const t = setTimeout(() => setMounted(false), 280)
+      const t = setTimeout(() => setMounted(false), 250)
       return () => clearTimeout(t)
     }
   }, [sidebarOpen])
 
   const selected = portfolios.find(p => p.id === selectedPortfolioId)
 
-  function openModal() {
-    setName('')
-    setDescription('')
-    setCreatedName(null)
-    setError(null)
-    setDropdownOpen(false)
-    setModalOpen(true)
-  }
-
-  function handleClose() {
-    setModalOpen(false)
-    setCreatedName(null)
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!name.trim()) return
-    setError(null)
+  const handleCreate = async () => {
+    if (!name.trim()) { setError('Informe um nome.'); return }
     try {
-      const created = await createPortfolio.mutateAsync({
-        name: name.trim(),
-        description: description.trim() || undefined,
-      })
-      setSelectedPortfolio(created.id)
-      setCreatedName(created.name)
+      const p = await createPortfolio.mutateAsync({ name: name.trim(), description: description.trim() || undefined })
       await refetch()
-    } catch (err: any) {
-      const detail = err?.response?.data?.detail
-      let msg: string
-      if (Array.isArray(detail)) {
-        msg = detail.map((e: any) => e.msg ?? JSON.stringify(e)).join(', ')
-      } else if (typeof detail === 'string') {
-        msg = detail
-      } else if (detail) {
-        msg = JSON.stringify(detail)
-      } else {
-        msg = 'Erro ao criar carteira. Tente novamente.'
-      }
-      setError(msg)
+      setSelectedPortfolio(p.id)
+      navigate('/carteira')
+      setCreatedName(p.name)
+      setTimeout(() => { setCreatedName(null); setModalOpen(false); setName(''); setDescription('') }, 1800)
+    } catch {
+      setError('Erro ao criar carteira.')
     }
   }
 
-  function handleCreateAnother() {
-    setName('')
-    setDescription('')
-    setCreatedName(null)
-    setError(null)
-  }
-
-  function handleGoToResumo() {
-    handleClose()
-    navigate('/carteira')
-  }
-
-  const navLinkStyle = ({ isActive }: { isActive: boolean }) => ({
-    background: isActive ? 'oklch(from var(--color-primary) l c h / 0.1)' : 'transparent',
-    color: isActive ? 'var(--color-primary)' : 'var(--color-text-muted)',
-  })
-
-  const navLinkClass = ({ isActive }: { isActive: boolean }) =>
-    `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
-      isActive ? 'font-semibold' : 'font-normal'
-    }`
+  const navLink = (to: string, Icon: React.ElementType, label: string) => (
+    <NavLink
+      key={to}
+      to={to}
+      end={to === '/carteira'}
+      className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-150"
+      style={({ isActive }) => ({
+        background: isActive ? 'oklch(from var(--color-primary) l c h / 0.1)' : 'transparent',
+        color:      isActive ? 'var(--color-primary)' : 'var(--color-text-muted)',
+      })}
+    >
+      <Icon size={15} />
+      {label}
+    </NavLink>
+  )
 
   const sidebarContent = (
-    <aside
-      className="flex flex-col h-full shrink-0 border-r py-5"
+    <div
+      className="flex flex-col h-full"
       style={{
-        width:       'var(--sidebar-width, 240px)',
-        background:  'var(--color-surface)',
-        borderColor: 'var(--color-divider)',
+        width: 220,
+        background: 'var(--color-surface)',
+        borderRight: '1px solid oklch(from var(--color-text) l c h / 0.07)',
+        padding: '16px 8px',
       }}
     >
-      {/* Logo + botão fechar (mobile) */}
-      <div className="px-5 mb-5 flex items-center justify-between">
-        <span className="text-base font-bold tracking-tight" style={{ color: 'var(--color-primary)' }}>
-          SIG
-          <span className="text-xs font-medium ml-1" style={{ color: 'var(--color-text-muted)' }}>v2</span>
-        </span>
+      {/* ── Logo + fechar mobile ───────────────────────────────── */}
+      <div className="flex items-center justify-between px-2 mb-5">
+        <LogoSGI size={24} />
         <button
           onClick={closeSidebar}
-          className="lg:hidden flex items-center justify-center p-1 rounded-md transition-colors"
-          style={{ color: 'var(--color-text-muted)', minWidth: 32, minHeight: 32 }}
+          className="lg:hidden flex items-center justify-center rounded-lg transition-colors"
+          style={{ color: 'var(--color-text-muted)', width: 28, height: 28 }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-surface-offset)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
           aria-label="Fechar menu"
         >
-          <X size={16} />
+          <X size={15} />
         </button>
       </div>
 
-      {/* Seletor de carteira */}
-      <div className="px-3 mb-4 relative">
+      {/* ── Seletor de carteira ───────────────────────────────── */}
+      <div className="px-1 mb-3 relative">
         <button
           onClick={() => setDropdownOpen(o => !o)}
-          className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm border transition-colors"
+          className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors"
           style={{
             background:  'var(--color-surface-offset)',
-            borderColor: 'var(--color-border)',
+            border:      '1px solid oklch(from var(--color-text) l c h / 0.08)',
             color:       'var(--color-text)',
-            minHeight:   40,
+            minHeight:   36,
           }}
         >
           <div className="flex items-center gap-2 min-w-0">
-            <Briefcase size={14} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
+            <Briefcase size={13} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
             <span className="truncate text-sm font-medium">
               {selected?.name ?? 'Selecionar carteira'}
             </span>
           </div>
           <ChevronDown
-            size={14}
+            size={13}
             style={{
               color: 'var(--color-text-muted)',
-              flexShrink: 0,
               transform: dropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-              transition: 'transform 180ms ease',
+              transition: 'transform 150ms ease',
+              flexShrink: 0,
             }}
           />
         </button>
 
+        {/* Dropdown carteiras */}
         {dropdownOpen && (
           <div
-            className="absolute left-3 right-3 mt-1 rounded-lg border overflow-hidden z-10"
+            className="absolute left-1 right-1 mt-1 rounded-lg overflow-hidden z-50"
             style={{
-              background:  'var(--color-surface-2)',
-              borderColor: 'var(--color-border)',
-              boxShadow:   'var(--shadow-md)',
+              background: 'var(--color-surface-2)',
+              border: '1px solid oklch(from var(--color-text) l c h / 0.08)',
+              boxShadow: 'var(--shadow-md)',
             }}
           >
-            {portfolios.length === 0 ? (
-              <p className="px-3 py-3 text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                Nenhuma carteira cadastrada.
-              </p>
-            ) : (
-              portfolios.map(p => (
-                <button
-                  key={p.id}
-                  onClick={() => { setSelectedPortfolio(p.id); setDropdownOpen(false) }}
-                  className="w-full text-left px-3 py-2.5 text-sm transition-colors"
-                  style={{
-                    background: selectedPortfolioId === p.id
-                      ? 'oklch(from var(--color-primary) l c h / 0.1)'
-                      : 'transparent',
-                    color: selectedPortfolioId === p.id
-                      ? 'var(--color-primary)'
-                      : 'var(--color-text)',
-                    fontWeight: selectedPortfolioId === p.id ? 600 : 400,
-                  }}
-                >
-                  {p.name}
-                </button>
-              ))
-            )}
-            <div style={{ borderTop: '1px solid var(--color-divider)' }}>
+            {portfolios.map(p => (
               <button
-                onClick={openModal}
-                className="w-full text-left px-3 py-2.5 text-sm flex items-center gap-2 transition-colors"
-                style={{ color: 'var(--color-primary)', fontWeight: 500 }}
+                key={p.id}
+                onClick={() => { setSelectedPortfolio(p.id); setDropdownOpen(false) }}
+                className="w-full flex items-center justify-between px-3 py-2 text-sm transition-colors"
+                style={{
+                  color: 'var(--color-text)',
+                  background: p.id === selectedPortfolioId ? 'oklch(from var(--color-primary) l c h / 0.08)' : 'transparent',
+                }}
+                onMouseEnter={e => { if (p.id !== selectedPortfolioId) e.currentTarget.style.background = 'var(--color-surface-offset)' }}
+                onMouseLeave={e => { if (p.id !== selectedPortfolioId) e.currentTarget.style.background = 'transparent' }}
               >
-                <Plus size={13} /> Nova carteira
+                <span className="truncate">{p.name}</span>
+                {p.id === selectedPortfolioId && (
+                  <CheckCircle2 size={13} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
+                )}
               </button>
-            </div>
+            ))}
+            <div style={{ borderTop: '1px solid oklch(from var(--color-text) l c h / 0.06)', margin: '2px 0' }} />
+            <button
+              onClick={() => { setModalOpen(true); setDropdownOpen(false) }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors"
+              style={{ color: 'var(--color-primary)' }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'oklch(from var(--color-primary) l c h / 0.06)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+            >
+              <Plus size={13} />
+              Nova carteira
+            </button>
           </div>
         )}
       </div>
 
-      {/* Divisor */}
-      <div className="mx-3 mb-3" style={{ borderTop: '1px solid var(--color-divider)' }} />
-
-      {/* Nav */}
-      <nav className="flex flex-col gap-0.5 px-3 flex-1">
-        {NAV_TOP.map(({ to, icon: Icon, label }) => (
-          <NavLink key={to} to={to} end={to === '/carteira'} className={navLinkClass} style={navLinkStyle}>
-            <Icon size={16} />
-            {label}
-          </NavLink>
-        ))}
-
-        <div className="my-1" style={{ borderTop: '1px solid var(--color-divider)' }} />
-
-        {NAV_BOTTOM.map(({ to, icon: Icon, label }) => (
-          <NavLink key={to} to={to} className={navLinkClass} style={navLinkStyle}>
-            <Icon size={16} />
-            {label}
-          </NavLink>
-        ))}
+      {/* ── Nav principal ───────────────────────────────────── */}
+      <nav className="flex flex-col gap-0.5">
+        {NAV_TOP.map(({ to, icon, label }) => navLink(to, icon, label))}
       </nav>
-    </aside>
+
+      <div
+        style={{
+          margin: '12px 12px',
+          height: 1,
+          background: 'oklch(from var(--color-text) l c h / 0.06)',
+        }}
+      />
+
+      <nav className="flex flex-col gap-0.5">
+        {NAV_BOTTOM.map(({ to, icon, label }) => navLink(to, icon, label))}
+      </nav>
+    </div>
   )
 
   return (
     <>
-      {/* Desktop: sidebar fixa (≥1024px) */}
-      <div className="hidden lg:flex h-full">
+      {/* Desktop: sidebar fixa */}
+      <aside className="hidden lg:flex h-full">
         {sidebarContent}
-      </div>
+      </aside>
 
-      {/* Mobile/Tablet: drawer overlay (<1024px) com animação */}
+      {/* Mobile: overlay + drawer */}
       {mounted && (
-        <div
-          className="lg:hidden fixed inset-0 z-40 flex"
-          style={{
-            transition: 'opacity 280ms ease',
-            opacity: visible ? 1 : 0,
-          }}
-        >
+        <>
           <div
-            className="absolute inset-0"
-            style={{ background: 'rgba(0,0,0,0.5)' }}
+            className="fixed inset-0 z-40 lg:hidden"
+            style={{
+              background: 'oklch(0 0 0 / 0.45)',
+              opacity: visible ? 1 : 0,
+              transition: 'opacity 250ms ease',
+            }}
             onClick={closeSidebar}
-            aria-label="Fechar menu"
           />
-          <div
-            className="relative z-50 h-full flex"
+          <aside
+            className="fixed top-0 left-0 h-full z-50 lg:hidden"
             style={{
               transform: visible ? 'translateX(0)' : 'translateX(-100%)',
-              transition: 'transform 280ms cubic-bezier(0.4,0,0.2,1)',
+              transition: 'transform 250ms cubic-bezier(0.16, 1, 0.3, 1)',
             }}
           >
             {sidebarContent}
-          </div>
-        </div>
+          </aside>
+        </>
       )}
 
-      {/* Modal Nova Carteira */}
-      <Modal open={modalOpen} onClose={handleClose} title="Nova carteira" size="sm">
-        {createdName ? (
-          <div style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center',
-            gap: 'var(--space-4)', textAlign: 'center', padding: 'var(--space-4) 0',
-          }}>
-            <CheckCircle2 size={48} style={{ color: 'var(--color-success)' }} />
-            <div>
-              <p style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', margin: 0 }}>
-                Carteira criada com sucesso!
-              </p>
-              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', margin: 0, marginTop: '4px' }}>
-                <strong style={{ color: 'var(--color-primary)' }}>{createdName}</strong> está pronta para uso.
+      {/* Modal nova carteira */}
+      {modalOpen && (
+        <Modal
+          title="Nova carteira"
+          onClose={() => { setModalOpen(false); setName(''); setDescription(''); setError(null) }}
+        >
+          {createdName ? (
+            <div className="flex flex-col items-center gap-3 py-4">
+              <CheckCircle2 size={32} style={{ color: 'var(--color-success)' }} />
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                Carteira “{createdName}” criada!
               </p>
             </div>
-            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', margin: 0 }}>
-              O que deseja fazer agora?
-            </p>
-            <div style={{ display: 'flex', gap: 'var(--space-3)', width: '100%' }}>
+          ) : (
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Nome *</label>
+                <input
+                  className="input w-full"
+                  placeholder="Minha carteira"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleCreate()}
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Descrição</label>
+                <input
+                  className="input w-full"
+                  placeholder="Opcional"
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                />
+              </div>
+              {error && <p className="text-xs" style={{ color: 'var(--color-notification)' }}>{error}</p>}
               <button
-                type="button"
-                onClick={handleCreateAnother}
-                style={{
-                  flex: 1, padding: 'var(--space-2) var(--space-3)',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--color-border)',
-                  background: 'var(--color-surface-offset)',
-                  color: 'var(--color-text)',
-                  fontSize: 'var(--text-xs)', fontWeight: 500, cursor: 'pointer',
-                }}
-              >
-                Criar outra
-              </button>
-              <button
-                type="button"
-                onClick={handleGoToResumo}
-                style={{
-                  flex: 1, padding: 'var(--space-2) var(--space-3)',
-                  borderRadius: 'var(--radius-md)',
-                  border: 'none',
-                  background: 'var(--color-primary)',
-                  color: 'var(--color-text-inverse)',
-                  fontSize: 'var(--text-xs)', fontWeight: 500, cursor: 'pointer',
-                }}
-              >
-                Ir ao Resumo
-              </button>
-            </div>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-              <label style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text)' }}>
-                Nome <span style={{ color: 'var(--color-error)' }}>*</span>
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="Ex: Carteira Principal"
-                required
-                autoFocus
-                style={{
-                  width: '100%',
-                  padding: 'var(--space-2) var(--space-3)',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--color-border)',
-                  background: 'var(--color-surface-2)',
-                  color: 'var(--color-text)',
-                  fontSize: '16px',
-                  outline: 'none',
-                }}
-                onFocus={e => (e.target.style.borderColor = 'var(--color-primary)')}
-                onBlur={e  => (e.target.style.borderColor = 'var(--color-border)')}
-              />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-              <label style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-muted)' }}>
-                Descrição <span style={{ color: 'var(--color-text-faint)' }}>(opcional)</span>
-              </label>
-              <textarea
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                placeholder="Ex: Foco em FIIs e ações pagadoras de dividendos"
-                rows={3}
-                style={{
-                  width: '100%',
-                  padding: 'var(--space-2) var(--space-3)',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--color-border)',
-                  background: 'var(--color-surface-2)',
-                  color: 'var(--color-text)',
-                  fontSize: '16px',
-                  resize: 'vertical',
-                  outline: 'none',
-                  fontFamily: 'inherit',
-                }}
-                onFocus={e => (e.target.style.borderColor = 'var(--color-primary)')}
-                onBlur={e  => (e.target.style.borderColor = 'var(--color-border)')}
-              />
-            </div>
-            {error && (
-              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-error)', margin: 0 }}>
-                {error}
-              </p>
-            )}
-            <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'flex-end' }}>
-              <button
-                type="button"
-                onClick={handleClose}
-                style={{
-                  padding: 'var(--space-2) var(--space-4)',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--color-border)',
-                  background: 'var(--color-surface-offset)',
-                  color: 'var(--color-text)',
-                  fontSize: 'var(--text-xs)', fontWeight: 500, cursor: 'pointer',
-                }}
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={createPortfolio.isPending || !name.trim()}
-                style={{
-                  padding: 'var(--space-2) var(--space-4)',
-                  borderRadius: 'var(--radius-md)',
-                  border: 'none',
-                  background: (createPortfolio.isPending || !name.trim())
-                    ? 'var(--color-primary-highlight)'
-                    : 'var(--color-primary)',
-                  color: 'var(--color-text-inverse)',
-                  fontSize: 'var(--text-xs)', fontWeight: 500,
-                  cursor: (createPortfolio.isPending || !name.trim()) ? 'not-allowed' : 'pointer',
-                }}
+                onClick={handleCreate}
+                disabled={createPortfolio.isPending}
+                className="btn btn-primary w-full"
               >
                 {createPortfolio.isPending ? 'Criando...' : 'Criar carteira'}
               </button>
             </div>
-          </form>
-        )}
-      </Modal>
+          )}
+        </Modal>
+      )}
     </>
   )
 }
