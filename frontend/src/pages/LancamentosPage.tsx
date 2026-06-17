@@ -74,25 +74,33 @@ export default function LancamentosPage() {
 
   if (!selectedPortfolioId) {
     return (
-      <div className="flex flex-col items-center justify-center py-28 gap-3">
-        <FileText size={36} style={{ color: 'var(--color-text-faint)' }} />
-        <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Selecione uma carteira para ver os lançamentos.</p>
+      <div className="page-container">
+        <div className="flex flex-col items-center justify-center py-28 gap-3">
+          <FileText size={36} style={{ color: 'var(--color-text-faint)' }} />
+          <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Selecione uma carteira para ver os lançamentos.</p>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="px-4 py-5 max-w-screen-xl mx-auto flex flex-col gap-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+    <div className="page-container">
+
+      {/* Cabeçalho */}
+      <div className="page-header">
         <div>
-          <h1 className="text-base font-semibold">Lançamentos</h1>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+          <h1 className="page-title">Lançamentos</h1>
+          <p className="page-subtitle">
             {portfolioName && <span className="font-medium">{portfolioName} · </span>}
             {transactions.length} registro{transactions.length !== 1 ? 's' : ''}
           </p>
         </div>
+        <button className="btn btn-primary text-xs" onClick={() => setShowModal(true)}>
+          + Novo Lançamento
+        </button>
       </div>
 
+      {/* Filtros */}
       <div className="flex flex-wrap gap-2">
         <div className="relative">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-text-faint)' }} />
@@ -115,25 +123,27 @@ export default function LancamentosPage() {
         </select>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-xl p-3 flex flex-col gap-0.5" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+      {/* Resumo rápido */}
+      <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+        <div className="card" style={{ padding: '12px 16px' }}>
           <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Total de registros</span>
-          <span className="text-lg font-bold tabular-nums">{filtered.length}</span>
+          <div className="text-base font-bold tabular-nums mt-1">{filtered.length}</div>
         </div>
-        <div className="rounded-xl p-3 flex flex-col gap-0.5" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+        <div className="card" style={{ padding: '12px 16px' }}>
           <span className="text-xs flex items-center gap-1" style={{ color: 'var(--color-success)' }}>
             <ArrowDownLeft size={11} /> Compras
           </span>
-          <span className="text-lg font-bold tabular-nums" style={{ color: 'var(--color-success)' }}>{fmtBRL(totalCompras)}</span>
+          <div className="text-base font-bold tabular-nums mt-1" style={{ color: 'var(--color-success)' }}>{fmtBRL(totalCompras)}</div>
         </div>
-        <div className="rounded-xl p-3 flex flex-col gap-0.5" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+        <div className="card" style={{ padding: '12px 16px' }}>
           <span className="text-xs flex items-center gap-1" style={{ color: 'var(--color-warning)' }}>
             <ArrowUpRight size={11} /> Vendas
           </span>
-          <span className="text-lg font-bold tabular-nums" style={{ color: 'var(--color-warning)' }}>{fmtBRL(totalVendas)}</span>
+          <div className="text-base font-bold tabular-nums mt-1" style={{ color: 'var(--color-warning)' }}>{fmtBRL(totalVendas)}</div>
         </div>
       </div>
 
+      {/* Tabela */}
       {isLoading ? (
         <div className="flex flex-col gap-2">
           {[...Array(5)].map((_, i) => <div key={i} className="h-12 rounded-lg skeleton" />)}
@@ -147,7 +157,7 @@ export default function LancamentosPage() {
           </p>
         </div>
       ) : (
-        <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
+        <div className="card overflow-hidden">
           <table className="w-full text-xs">
             <thead>
               <tr style={{ background: 'var(--color-surface-offset)', borderBottom: '1px solid var(--color-divider)' }}>
@@ -191,7 +201,10 @@ export default function LancamentosPage() {
                           <button onClick={() => setConfirmDelete(null)} className="text-xs px-2 py-0.5 rounded" style={{ color: 'var(--color-text-muted)' }}>Cancelar</button>
                         </div>
                       ) : (
-                        <button onClick={() => setConfirmDelete(t.id)} className="p-1 rounded transition" style={{ color: 'var(--color-text-faint)' }}
+                        <button
+                          onClick={() => setConfirmDelete(t.id)}
+                          className="p-1 rounded transition"
+                          style={{ color: 'var(--color-text-faint)' }}
                           onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-error)')}
                           onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-text-faint)')}
                           aria-label="Excluir"
