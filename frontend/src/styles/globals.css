@@ -29,16 +29,13 @@
     border-radius: 0.25rem;
   }
 
-  /* Scrollbar */
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb {
     background: var(--color-border);
     border-radius: 9999px;
   }
-  ::-webkit-scrollbar-thumb:hover {
-    background: var(--color-surface-dynamic);
-  }
+  ::-webkit-scrollbar-thumb:hover { background: var(--color-surface-dynamic); }
 
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
@@ -49,39 +46,40 @@
 }
 
 @layer components {
-  /* ── Tabela densa ────────────────────────────────────────────── */
-  .table-dense th {
-    @apply px-3 py-2 text-xs font-medium uppercase tracking-wide text-left;
-    color: var(--color-text-muted);
-    border-bottom: 1px solid var(--color-border);
-  }
-  .table-dense td {
-    @apply px-3 py-2 text-sm;
-    border-bottom: 1px solid oklch(from var(--color-border) l c h / 0.5);
-  }
-  .table-dense tr:last-child td { border-bottom: none; }
-  .table-dense tbody tr {
-    transition: background-color 100ms ease;
-  }
-  .table-dense tbody tr:hover {
-    background-color: var(--color-surface-offset);
-  }
 
-  /* ── Cards ────────────────────────────────────────────────── */
+  /* ── Cards ───────────────────────────────────────────────── */
+  /* Borda alpha-blended: sutil em ambos os temas, sem o traço grosseiro */
   .card {
     background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
+    border: 1px solid oklch(from var(--color-text) l c h / 0.08);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-sm);
   }
   .card-hover {
     background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    transition: border-color 150ms ease;
+    border: 1px solid oklch(from var(--color-text) l c h / 0.08);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-sm);
+    transition: border-color 150ms ease, box-shadow 150ms ease;
   }
   .card-hover:hover {
-    border-color: var(--color-surface-dynamic);
+    border-color: oklch(from var(--color-text) l c h / 0.14);
+    box-shadow: var(--shadow-md);
   }
+
+  /* ── Tabela densa ───────────────────────────────────────────── */
+  .table-dense th {
+    @apply px-3 py-2 text-xs font-medium uppercase tracking-wide text-left;
+    color: var(--color-text-muted);
+    border-bottom: 1px solid oklch(from var(--color-text) l c h / 0.08);
+  }
+  .table-dense td {
+    @apply px-3 py-2 text-sm;
+    border-bottom: 1px solid oklch(from var(--color-text) l c h / 0.05);
+  }
+  .table-dense tr:last-child td { border-bottom: none; }
+  .table-dense tbody tr { transition: background-color 100ms ease; }
+  .table-dense tbody tr:hover { background-color: var(--color-surface-offset); }
 
   /* ── Badges ─────────────────────────────────────────────── */
   .badge {
@@ -113,9 +111,7 @@
     color: var(--color-text-muted);
   }
 
-  /* ── Botões ───────────────────────────────────────────────── */
-
-  /* Base compartilhada — layout, spacing, radius, transition */
+  /* ── Botões ─────────────────────────────────────────────── */
   .btn {
     display: inline-flex;
     align-items: center;
@@ -132,12 +128,8 @@
                 color 150ms cubic-bezier(0.16, 1, 0.3, 1),
                 opacity 150ms ease;
   }
-  .btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-  /* Variáveis de cor por tipo — sobrepoem apenas background/color */
   .btn-primary {
     background: var(--color-primary);
     color: #ffffff;
@@ -148,7 +140,7 @@
   .btn-secondary {
     background: var(--color-surface-offset);
     color: var(--color-text);
-    border: 1px solid var(--color-border);
+    border: 1px solid oklch(from var(--color-text) l c h / 0.1);
   }
   .btn-secondary:hover:not(:disabled) { background: var(--color-surface-dynamic); }
 
@@ -161,13 +153,11 @@
     color: var(--color-text);
   }
 
-  /* ── Inputs ────────────────────────────────────────────────── */
+  /* ── Inputs ──────────────────────────────────────────────── */
   .input {
-    @apply w-full px-3 py-2 rounded-lg text-sm
-           focus:outline-none
-           transition-colors duration-150;
+    @apply w-full px-3 py-2 rounded-lg text-sm focus:outline-none transition-colors duration-150;
     background: var(--color-surface-2);
-    border: 1px solid var(--color-border);
+    border: 1px solid oklch(from var(--color-text) l c h / 0.1);
     color: var(--color-text);
   }
   .input::placeholder { color: var(--color-text-faint); }
@@ -176,18 +166,16 @@
     box-shadow: 0 0 0 3px oklch(from var(--color-primary) l c h / 0.15);
   }
   .input-error {
-    @apply w-full px-3 py-2 rounded-lg text-sm
-           focus:outline-none
-           transition-colors duration-150;
+    @apply w-full px-3 py-2 rounded-lg text-sm focus:outline-none transition-colors duration-150;
     background: var(--color-surface-2);
-    border-color: var(--color-notification);
+    border: 1px solid oklch(from var(--color-notification) l c h / 0.5);
     color: var(--color-text);
   }
   .input-error:focus {
     box-shadow: 0 0 0 3px oklch(from var(--color-notification) l c h / 0.2);
   }
 
-  /* ── Utilitários semânticos ─────────────────────────────────────── */
+  /* ── Utilitários semânticos ─────────────────────────────────── */
   .text-positive { color: var(--color-success); }
   .text-negative { color: var(--color-notification); }
   .text-muted    { color: var(--color-text-muted); }
