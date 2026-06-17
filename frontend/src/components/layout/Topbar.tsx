@@ -19,29 +19,22 @@ export default function Topbar() {
     <header
       className="flex items-center justify-between shrink-0"
       style={{
-        height:       '52px',
-        padding:      '0 20px',
+        height:       'var(--topbar-height, 56px)',
+        padding:      '0 clamp(1rem, 2vw, 1.5rem)',
         gap:          '12px',
-        borderBottom: '1px solid oklch(from var(--color-text) l c h / 0.07)',
         background:   'var(--color-surface)',
+        borderBottom: '1px solid oklch(from var(--color-text) l c h / 0.07)',
+        /* Sombra sutil para separar o header do conteúdo */
+        boxShadow:    '0 1px 4px oklch(0.18 0.01 80 / 0.05)',
       }}
     >
-      {/* ── Esquerda ───────────────────────────────────────── */}
+      {/* ── Esquerda ───────────────────────────────────────────── */}
       <div className="flex items-center min-w-0" style={{ gap: 10 }}>
 
         {/* Hamburger — mobile only */}
         <button
           onClick={toggleSidebar}
-          className="lg:hidden flex items-center justify-center rounded-lg transition-colors"
-          style={{
-            color:      'var(--color-text-muted)',
-            width:      34,
-            height:     34,
-            background: 'transparent',
-            flexShrink: 0,
-          }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-surface-offset)')}
-          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+          className="lg:hidden btn-icon"
           aria-label="Abrir menu"
         >
           <Menu size={18} />
@@ -49,7 +42,7 @@ export default function Topbar() {
 
         {/* Logo — desktop */}
         <div className="hidden lg:flex">
-          <LogoSGI size={26} />
+          <LogoSGI size={28} />
         </div>
 
         {/* Nome da carteira — mobile */}
@@ -57,10 +50,11 @@ export default function Topbar() {
           <span
             className="lg:hidden truncate"
             style={{
-              fontSize:   'var(--text-xs)',
-              fontWeight: 600,
+              fontSize:   'var(--text-sm)',
+              fontWeight: 550,
               maxWidth:   160,
               color:      'var(--color-text)',
+              letterSpacing: '-0.005em',
             }}
           >
             {selectedName}
@@ -68,26 +62,22 @@ export default function Topbar() {
         )}
       </div>
 
-      {/* ── Direita ───────────────────────────────────────── */}
+      {/* ── Direita ───────────────────────────────────────────── */}
       <div className="flex items-center shrink-0" style={{ gap: 6 }}>
 
         {/* Botão Novo Lançamento — desktop */}
         <button
           onClick={() => openTransactionModal()}
-          className="hidden lg:inline-flex items-center transition-colors duration-150"
+          className="hidden lg:inline-flex items-center btn btn-primary"
           style={{
-            background:    'var(--color-primary)',
-            color:         '#ffffff',
-            height:        32,
-            padding:       '0 14px',
-            borderRadius:  'var(--radius-lg)',
-            fontSize:      'var(--text-xs)',
-            fontWeight:    600,
-            letterSpacing: '0.01em',
-            gap:           6,
+            height:     34,
+            padding:    '0 14px',
+            fontSize:   'var(--text-xs)',
+            fontWeight: 600,
+            gap:        6,
+            /* Sombra colorida para dar presença ao CTA */
+            boxShadow:  '0 1px 4px oklch(from var(--color-primary) 0.3 c h / 0.45)',
           }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-primary-hover)')}
-          onMouseLeave={e => (e.currentTarget.style.background = 'var(--color-primary)')}
           aria-label="Novo lançamento"
         >
           <Plus size={13} strokeWidth={2.5} />
@@ -99,9 +89,9 @@ export default function Topbar() {
           className="hidden lg:block"
           style={{
             width:      1,
-            height:     18,
-            background: 'oklch(from var(--color-text) l c h / 0.09)',
-            margin:     '0 2px',
+            height:     20,
+            background: 'oklch(from var(--color-text) l c h / 0.08)',
+            margin:     '0 4px',
             flexShrink: 0,
           }}
         />
@@ -109,19 +99,12 @@ export default function Topbar() {
         {/* Toggle tema */}
         <button
           onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          className="flex items-center justify-center rounded-lg transition-colors"
-          style={{
-            color:      'var(--color-text-muted)',
-            width:      34,
-            height:     34,
-            background: 'transparent',
-            flexShrink: 0,
-          }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-surface-offset)')}
-          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+          className="btn-icon"
           aria-label="Alternar tema"
         >
-          {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+          {theme === 'dark'
+            ? <Sun  size={16} strokeWidth={1.75} />
+            : <Moon size={16} strokeWidth={1.75} />}
         </button>
 
         {/* Menu do usuário */}
