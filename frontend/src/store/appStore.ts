@@ -1,12 +1,10 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage } from 'zustand/middleware'
 
 export interface TransactionModalPrefill {
-  /** chave da aba (ex: 'acao', 'fii', 'tesouro', 'cripto', etc.) */
   tab?: string
   ticker?: string
   assetName?: string
-  /** Campos para modo edicao */
   transactionId?: number
   operation?: 'buy' | 'sell'
   quantity?: number
@@ -32,6 +30,7 @@ interface AppState {
   setSelectedPortfolio: (id: number) => void
   setSelectedPortfolioId: (id: number) => void
   selectPortfolio: (id: number) => void
+  clearSelectedPortfolio: () => void
 
   openTransactionModal: (prefill?: TransactionModalPrefill) => void
   closeTransactionModal: () => void
@@ -55,6 +54,7 @@ export const useAppStore = create<AppState>()(
       setSelectedPortfolio:   (id) => set({ selectedPortfolioId: id }),
       setSelectedPortfolioId: (id) => set({ selectedPortfolioId: id }),
       selectPortfolio:        (id) => set({ selectedPortfolioId: id }),
+      clearSelectedPortfolio: ()  => set({ selectedPortfolioId: null }),
 
       openTransactionModal: (prefill) =>
         set({ transactionModal: { open: true, prefill } }),
@@ -67,9 +67,13 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'sig-app',
+      storage: createJSONStorage(() => localStorage),
+      // IMPORTANTE: NÃO persistir selectedPortfolioId.
+      // Se persistido, ao trocar de usuário (logout + login diferente)
+      // o ID da carteira do usuário anterior permanece e causa 404
+      // silencioso em todas as queries, deixando as páginas em branco.
       partialize: (state) => ({
         theme: state.theme,
-        selectedPortfolioId: state.selectedPortfolioId,
       }),
     }
   )

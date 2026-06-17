@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import api from '@/services/api'
 import { useTheme } from './ThemeContext'
 import { useAuthStore } from '@/store/authStore'
+import { useAppStore } from '@/store/appStore'
 
 export interface User {
   id: number
@@ -31,6 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate()
   const { setTheme } = useTheme()
   const authStore = useAuthStore()
+  const clearSelectedPortfolio = useAppStore((s) => s.clearSelectedPortfolio)
 
   const loadMe = async (): Promise<User> => {
     const { data } = await api.get<User>('/users/me')
@@ -46,32 +48,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`
       loadMe()
         .catch(() => {
+          // Token inválido/expirado — limpa tudo
           authStore.logout()
           localStorage.removeItem('sig_token')
           localStorage.removeItem('sig_refresh')
+          localStorage.removeItem('sig-auth')
         })
         .finally(() => setIsLoading(false))
     } else {
       setIsLoading(false)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const login = async (email: string, password: string) => {
-    // 1. Autentica e obtém tokens
     const { data: tokens } = await api.post<{
       access_token: string
       refresh_token: string
     }>('/auth/login', { email, password })
 
-    // 2. Persiste tokens
     localStorage.setItem('sig_token', tokens.access_token)
     localStorage.setItem('sig_refresh', tokens.refresh_token)
     api.defaults.headers.common['Authorization'] = `Bearer ${tokens.access_token}`
 
-    // 3. Carrega dados do usuário
     const me = await loadMe()
 
-    // 4. Sincroniza com Zustand (usado pelo interceptor do axios)
     authStore.login(tokens.access_token, {
       id: me.id,
       email: me.email,
@@ -86,10 +87,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     localStorage.removeItem('sig_token')
     localStorage.removeItem('sig_refresh')
+    localStorage.removeItem('sig-auth')
     delete api.defaults.headers.common['Authorization']
     authStore.logout()
+    clearSelectedPortfolio()
     setUser(null)
-    navigate('/login')
+    // Usa replace para garantir que o histórico seja limpo
+    // e o navigate funcione mesmo se o contexto estiver sendo desmontado
+    try {
+      navigate('/login', { replace: true })
+    } catch {
+      window.location.replace('/login')
+    }
   }
 
   const refreshUser = async () => { await loadMe() }
