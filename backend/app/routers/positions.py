@@ -12,7 +12,7 @@ from app.models.position import Position
 from app.schemas.position import PositionOut, PortfolioSummary
 from app.services.quote_service import update_quotes_for_portfolio
 
-router = APIRouter(prefix="/portfolios/{portfolio_id}/positions", tags=["positions"])
+router = APIRouter(tags=["positions"])
 
 
 async def _get_portfolio(portfolio_id: int, user: User, db: AsyncSession) -> Portfolio:
@@ -28,7 +28,7 @@ async def _get_portfolio(portfolio_id: int, user: User, db: AsyncSession) -> Por
     return p
 
 
-@router.get("", response_model=List[PositionOut])
+@router.get("/{portfolio_id}/positions", response_model=List[PositionOut])
 async def list_positions(
     portfolio_id: int,
     refresh: bool = False,
@@ -36,15 +36,9 @@ async def list_positions(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Lista posicoes consolidadas da carteira.
-    ?refresh=true dispara atualizacao de cotacoes via BRAPI antes de retornar.
-    """
     await _get_portfolio(portfolio_id, current_user, db)
-
     if refresh:
         await update_quotes_for_portfolio(portfolio_id, db)
-
     result = await db.execute(
         select(Position)
         .where(Position.portfolio_id == portfolio_id)
@@ -53,27 +47,20 @@ async def list_positions(
     return result.scalars().all()
 
 
-@router.get("/summary", response_model=PortfolioSummary)
+@router.get("/{portfolio_id}/positions/summary", response_model=PortfolioSummary)
 async def portfolio_summary(
     portfolio_id: int,
     refresh: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Resumo consolidado da carteira:
-    total investido, valor atual, rentabilidade %.
-    """
     portfolio = await _get_portfolio(portfolio_id, current_user, db)
-
     if refresh:
         await update_quotes_for_portfolio(portfolio_id, db)
-
     result = await db.execute(
         select(Position).where(Position.portfolio_id == portfolio_id)
     )
     positions = result.scalars().all()
-
     total_invested = sum(
         (p.average_price or Decimal(0)) * (p.quantity or Decimal(0))
         for p in positions
@@ -90,7 +77,6 @@ async def portfolio_summary(
     realized_profit = sum(
         p.realized_profit or Decimal(0) for p in positions
     )
-
     return PortfolioSummary(
         portfolio_id=portfolio.id,
         portfolio_name=portfolio.name,

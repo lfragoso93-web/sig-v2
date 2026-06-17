@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from app.integrations.fx_rate import get_usd_brl
 
-router = APIRouter(prefix="/api/v1/fx", tags=["fx"])
+router = APIRouter(tags=["fx"])
 
 
 @router.get("/usd-brl")

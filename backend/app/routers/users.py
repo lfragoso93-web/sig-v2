@@ -6,7 +6,7 @@ from app.models.user import User
 from app.schemas.user import UserResponse, UserUpdate
 from app.services.user_service import update_user
 
-router = APIRouter(prefix="/users", tags=["users"])
+router = APIRouter(tags=["users"])
 
 
 @router.get("/me", response_model=UserResponse)

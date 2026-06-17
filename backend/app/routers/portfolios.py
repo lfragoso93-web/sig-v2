@@ -16,7 +16,7 @@ from app.services.portfolio_service import (
     get_patrimonio_history,
 )
 
-router = APIRouter(prefix="/portfolios", tags=["portfolios"])
+router = APIRouter(tags=["portfolios"])
 
 
 @router.get("/", response_model=list[PortfolioResponse])
