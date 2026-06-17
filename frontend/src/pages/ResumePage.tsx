@@ -18,18 +18,18 @@ import AssetDonutChart from '@/components/charts/AssetDonutChart'
 import PositionTable from '@/components/resume/PositionTable'
 
 const PERIOD_OPTIONS = [
-  { label: '6 Meses',  value: 6  },
-  { label: '12 Meses', value: 12 },
-  { label: '24 Meses', value: 24 },
-  { label: 'Tudo',     value: 60 },
+  { label: '6M',   value: 6  },
+  { label: '12M',  value: 12 },
+  { label: '24M',  value: 24 },
+  { label: 'Tudo', value: 60 },
 ]
 
 export default function ResumePage() {
   const globalPortfolioId = useAppStore(s => s.selectedPortfolioId)
   const setGlobal         = useAppStore(s => s.setSelectedPortfolioId)
+  const [period, setPeriod] = useState(12)
 
   const { data: portfolios, isLoading: loadingPortfolios } = usePortfolioList()
-  const [period, setPeriod] = useState(12)
 
   useEffect(() => {
     if (!globalPortfolioId && portfolios && portfolios.length > 0) {
@@ -44,16 +44,28 @@ export default function ResumePage() {
   const { data: distribution,      isLoading: loadingDist      } = useAssetDistribution(portfolioId)
   const { data: positions,         isLoading: loadingPositions } = usePositions(portfolioId)
 
-  const safeGanhoCapital = (summary as any)?.ganho_capital ?? summary?.lucro_total ?? 0
+  // Valores normalizados — suporta campos EN e PT-BR
+  const s = summary as any
+  const patrimonio    = s?.total_patrimonio   ?? s?.current_value         ?? 0
+  const investido     = s?.total_investido    ?? s?.total_invested        ?? 0
+  const lucroTotal    = s?.lucro_total        ?? s?.total_gain            ?? 0
+  const ganhoCapital  = s?.ganho_capital      ?? s?.total_gain            ?? 0
+  const dividendos12m = s?.dividendos_recebidos_12m ?? 0
+  const totalProv     = s?.total_proventos    ?? 0
+  const variacaoVal   = s?.variacao_valor     ?? s?.total_gain            ?? 0
+  const variacaoPct   = s?.variacao_percentual ?? s?.total_gain_pct       ?? 0
+  const rentabilidade = s?.rentabilidade_total ?? s?.total_gain_pct      ?? 0
 
+  // ── Loading inicial (carteiras) ────────────────────────────────────
   if (loadingPortfolios) {
     return (
-      <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="p-4 md:p-6 grid grid-cols-2 md:grid-cols-4 gap-3">
         {[...Array(4)].map((_, i) => <SkeletonCard key={i} />)}
       </div>
     )
   }
 
+  // ── Sem carteiras ──────────────────────────────────────────────────
   if (!portfolios?.length) {
     return (
       <div className="p-6">
@@ -69,84 +81,80 @@ export default function ResumePage() {
   return (
     <div className="p-4 md:p-6 flex flex-col gap-5 max-w-[1400px] mx-auto">
 
-      {/* KPI Cards */}
+      {/* ── KPI Cards (4 simétricos) ──────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {loadingSummary ? (
           [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
-        ) : summary ? (
-          <>
-            {/* 1 - Patrimônio total */}
-            <KpiCard
-              label="Patrimônio total"
-              value={formatBRL(summary.total_patrimonio ?? 0)}
-              subValue={formatBRL(summary.total_investido ?? 0)}
-              subLabel="Valor investido"
-              change={summary.variacao_percentual}
-            />
-
-            {/* 2 - Lucro total */}
-            <KpiCard
-              label="Lucro total"
-              value={formatBRL(summary.lucro_total ?? 0)}
-              subLabel={`Ganho de Capital ${formatBRL(safeGanhoCapital)} · Dividendos ${formatBRL(summary.dividendos_recebidos_12m ?? 0)}`}
-            />
-
-            {/* 3 - Proventos */}
-            <KpiCard
-              label="Proventos Recebidos (12m)"
-              value={formatBRL(summary.dividendos_recebidos_12m ?? 0)}
-              subValue={formatBRL(summary.total_proventos ?? 0)}
-              subLabel="Total"
-            />
-
-            {/* 4 - Variação / Rentabilidade */}
-            <div className="card p-4 flex flex-col gap-1">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>
-                Variação / Rentabilidade
-              </span>
-              <div className={clsx('text-2xl font-bold tabular-nums tracking-tight', signClass(summary.variacao_valor ?? 0))}>
-                {formatBRL(summary.variacao_valor ?? 0)}
-              </div>
-              <div className={clsx('text-xs font-semibold tabular-nums', signClass(summary.variacao_percentual ?? 0))}>
-                {(summary.variacao_percentual ?? 0) >= 0 ? '+' : ''}{formatPercent(summary.variacao_percentual ?? 0)}
-              </div>
-              <div className={clsx('text-sm font-bold mt-1 tabular-nums', signClass(summary.rentabilidade_total ?? 0))}>
-                {(summary.rentabilidade_total ?? 0) >= 0 ? '+' : ''}{formatPercent(summary.rentabilidade_total ?? 0)}{' '}
-                <span className="text-xs font-normal" style={{ color: 'var(--color-text-faint)' }}>rentabilidade</span>
-              </div>
-            </div>
-          </>
         ) : (
-          <div className="col-span-4 py-6 text-center text-xs" style={{ color: 'var(--color-text-muted)' }}>
-            Nenhum dado. Adicione lançamentos para ver o resumo.
-          </div>
+          <>
+            {/* 1 — Patrimônio */}
+            <KpiCard
+              label="Patrimônio Total"
+              value={formatBRL(patrimonio)}
+              subValue={formatBRL(investido)}
+              subLabel="Valor investido"
+              change={variacaoPct}
+            />
+
+            {/* 2 — Resultado */}
+            <KpiCard
+              label="Resultado"
+              value={formatBRL(lucroTotal)}
+              valueColor={signClass(lucroTotal)}
+              subLabel={`Capital ${formatBRL(ganhoCapital)} · Proventos ${formatBRL(totalProv)}`}
+              bottomLine={
+                <span className={clsx('text-xs font-semibold tabular-nums', signClass(rentabilidade))}>
+                  {rentabilidade >= 0 ? '+' : ''}{formatPercent(rentabilidade)} rentabilidade
+                </span>
+              }
+            />
+
+            {/* 3 — Proventos */}
+            <KpiCard
+              label="Proventos (12m)"
+              value={formatBRL(dividendos12m)}
+              subValue={formatBRL(totalProv)}
+              subLabel="Total acumulado"
+            />
+
+            {/* 4 — Variação */}
+            <KpiCard
+              label="Variação"
+              value={formatBRL(variacaoVal)}
+              valueColor={signClass(variacaoVal)}
+              change={variacaoPct}
+              bottomLine={
+                <span className={clsx('text-xs font-semibold tabular-nums', signClass(rentabilidade))}>
+                  {rentabilidade >= 0 ? '+' : ''}{formatPercent(rentabilidade)} total
+                </span>
+              }
+            />
+          </>
         )}
       </div>
 
-      {/* Charts row */}
+      {/* ── Charts ────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
         {/* Evolução do Patrimônio */}
         <div className="card p-4 lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <BarChart2 size={16} className="text-brand-400" />
+              <BarChart2 size={15} style={{ color: 'var(--color-primary)' }} />
               <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
                 Evolução do Patrimônio
               </span>
             </div>
-            <div className="flex gap-1">
+            <div className="flex gap-0.5">
               {PERIOD_OPTIONS.map(opt => (
                 <button
                   key={opt.value}
                   onClick={() => setPeriod(opt.value)}
-                  className={clsx(
-                    'px-2.5 py-1 rounded text-xs font-medium transition-colors',
-                    period === opt.value
-                      ? 'bg-brand-600/20 text-brand-400'
-                      : 'hover:text-brand-400'
-                  )}
-                  style={period !== opt.value ? { color: 'var(--color-text-muted)' } : {}}
+                  className="px-2.5 py-1 rounded text-xs font-medium transition-colors"
+                  style={{
+                    background: period === opt.value ? 'oklch(from var(--color-primary) l c h / 0.15)' : 'transparent',
+                    color: period === opt.value ? 'var(--color-primary)' : 'var(--color-text-muted)',
+                  }}
                 >
                   {opt.label}
                 </button>
@@ -154,11 +162,17 @@ export default function ResumePage() {
             </div>
           </div>
           {loadingHistory ? (
-            <div className="h-52 animate-pulse rounded" style={{ background: 'var(--color-surface-offset)' }} />
+            <div
+              className="h-52 animate-pulse rounded-lg"
+              style={{ background: 'var(--color-surface-offset)' }}
+            />
           ) : patrimonioHistory?.length ? (
             <PatrimonioBarChart data={patrimonioHistory} />
           ) : (
-            <div className="h-52 flex items-center justify-center text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            <div
+              className="h-52 flex items-center justify-center text-xs"
+              style={{ color: 'var(--color-text-muted)' }}
+            >
               Sem dados históricos ainda
             </div>
           )}
@@ -167,32 +181,46 @@ export default function ResumePage() {
         {/* Ativos na Carteira */}
         <div className="card p-4">
           <div className="flex items-center gap-2 mb-4">
-            <Activity size={16} className="text-brand-400" />
+            <Activity size={15} style={{ color: 'var(--color-primary)' }} />
             <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-              Ativos na Carteira
+              Distribuição
             </span>
           </div>
           {loadingDist ? (
-            <div className="h-52 animate-pulse rounded" style={{ background: 'var(--color-surface-offset)' }} />
+            <div
+              className="h-52 animate-pulse rounded-lg"
+              style={{ background: 'var(--color-surface-offset)' }}
+            />
           ) : distribution?.length ? (
             <AssetDonutChart data={distribution} />
           ) : (
-            <div className="h-52 flex items-center justify-center text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            <div
+              className="h-52 flex items-center justify-center text-xs"
+              style={{ color: 'var(--color-text-muted)' }}
+            >
               Sem ativos
             </div>
           )}
         </div>
       </div>
 
-      {/* Posições */}
+      {/* ── Posições ──────────────────────────────────────────────── */}
       <div className="card overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: '1px solid var(--color-border)' }}>
-          <TrendingUp size={16} className="text-brand-400" />
-          <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Meus Ativos</span>
+        <div
+          className="flex items-center gap-2 px-4 py-3"
+          style={{ borderBottom: '1px solid var(--color-border)' }}
+        >
+          <TrendingUp size={15} style={{ color: 'var(--color-primary)' }} />
+          <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+            Meus Ativos
+          </span>
           {positions && (
             <span
               className="ml-1 px-1.5 py-0.5 rounded text-xs tabular-nums"
-              style={{ background: 'var(--color-surface-offset)', color: 'var(--color-text-muted)' }}
+              style={{
+                background: 'var(--color-surface-offset)',
+                color: 'var(--color-text-muted)',
+              }}
             >
               {positions.reduce((acc, g) => acc + (g.count ?? 0), 0)}
             </span>
@@ -202,7 +230,11 @@ export default function ResumePage() {
         {loadingPositions ? (
           <div className="p-4 flex flex-col gap-2">
             {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-10 animate-pulse rounded" style={{ background: 'var(--color-surface-offset)' }} />
+              <div
+                key={i}
+                className="h-10 animate-pulse rounded"
+                style={{ background: 'var(--color-surface-offset)' }}
+              />
             ))}
           </div>
         ) : positions && positions.length > 0 ? (
