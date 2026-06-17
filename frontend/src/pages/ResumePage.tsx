@@ -44,7 +44,6 @@ export default function ResumePage() {
   const { data: distribution,      isLoading: loadingDist      } = useAssetDistribution(portfolioId)
   const { data: positions,         isLoading: loadingPositions } = usePositions(portfolioId)
 
-  // Valores normalizados — suporta campos EN e PT-BR
   const s = summary as any
   const patrimonio    = s?.total_patrimonio   ?? s?.current_value         ?? 0
   const investido     = s?.total_investido    ?? s?.total_invested        ?? 0
@@ -56,19 +55,19 @@ export default function ResumePage() {
   const variacaoPct   = s?.variacao_percentual ?? s?.total_gain_pct       ?? 0
   const rentabilidade = s?.rentabilidade_total ?? s?.total_gain_pct      ?? 0
 
-  // ── Loading inicial (carteiras) ────────────────────────────────────
   if (loadingPortfolios) {
     return (
-      <div className="p-4 md:p-6 grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[...Array(4)].map((_, i) => <SkeletonCard key={i} />)}
+      <div className="page-container">
+        <div className="kpi-grid">
+          {[...Array(4)].map((_, i) => <SkeletonCard key={i} />)}
+        </div>
       </div>
     )
   }
 
-  // ── Sem carteiras ──────────────────────────────────────────────────
   if (!portfolios?.length) {
     return (
-      <div className="p-6">
+      <div className="page-container">
         <EmptyState
           icon={PackageOpen}
           title="Nenhuma carteira encontrada"
@@ -79,15 +78,14 @@ export default function ResumePage() {
   }
 
   return (
-    <div className="p-4 md:p-6 flex flex-col gap-5 max-w-[1400px] mx-auto">
+    <div className="page-container">
 
-      {/* ── KPI Cards (4 simétricos) ──────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* KPI Cards */}
+      <div className="kpi-grid">
         {loadingSummary ? (
           [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
         ) : (
           <>
-            {/* 1 — Patrimônio */}
             <KpiCard
               label="Patrimônio Total"
               value={formatBRL(patrimonio)}
@@ -95,29 +93,23 @@ export default function ResumePage() {
               subLabel="Valor investido"
               change={variacaoPct}
             />
-
-            {/* 2 — Resultado */}
             <KpiCard
               label="Resultado"
               value={formatBRL(lucroTotal)}
               valueColor={signClass(lucroTotal)}
-              subLabel={`Capital ${formatBRL(ganhoCapital)} · Proventos ${formatBRL(totalProv)}`}
+              subLabel={`Capital ${formatBRL(ganhoCapital)} · Prov. ${formatBRL(totalProv)}`}
               bottomLine={
                 <span className={clsx('text-xs font-semibold tabular-nums', signClass(rentabilidade))}>
-                  {rentabilidade >= 0 ? '+' : ''}{formatPercent(rentabilidade)} rentabilidade
+                  {rentabilidade >= 0 ? '+' : ''}{formatPercent(rentabilidade)} rentab.
                 </span>
               }
             />
-
-            {/* 3 — Proventos */}
             <KpiCard
               label="Proventos (12m)"
               value={formatBRL(dividendos12m)}
               subValue={formatBRL(totalProv)}
               subLabel="Total acumulado"
             />
-
-            {/* 4 — Variação */}
             <KpiCard
               label="Variação"
               value={formatBRL(variacaoVal)}
@@ -133,17 +125,15 @@ export default function ResumePage() {
         )}
       </div>
 
-      {/* ── Charts ────────────────────────────────────────────────── */}
+      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
         {/* Evolução do Patrimônio */}
         <div className="card p-4 lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <BarChart2 size={15} style={{ color: 'var(--color-primary)' }} />
-              <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-                Evolução do Patrimônio
-              </span>
+              <BarChart2 size={14} style={{ color: 'var(--color-primary)' }} />
+              <span className="section-card-title">Evolução do Patrimônio</span>
             </div>
             <div className="flex gap-0.5">
               {PERIOD_OPTIONS.map(opt => (
@@ -162,65 +152,43 @@ export default function ResumePage() {
             </div>
           </div>
           {loadingHistory ? (
-            <div
-              className="h-52 animate-pulse rounded-lg"
-              style={{ background: 'var(--color-surface-offset)' }}
-            />
+            <div className="h-52 animate-pulse rounded-lg" style={{ background: 'var(--color-surface-offset)' }} />
           ) : patrimonioHistory?.length ? (
             <PatrimonioBarChart data={patrimonioHistory} />
           ) : (
-            <div
-              className="h-52 flex items-center justify-center text-xs"
-              style={{ color: 'var(--color-text-muted)' }}
-            >
+            <div className="h-52 flex items-center justify-center text-xs" style={{ color: 'var(--color-text-muted)' }}>
               Sem dados históricos ainda
             </div>
           )}
         </div>
 
-        {/* Ativos na Carteira */}
+        {/* Distribuição */}
         <div className="card p-4">
           <div className="flex items-center gap-2 mb-4">
-            <Activity size={15} style={{ color: 'var(--color-primary)' }} />
-            <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-              Distribuição
-            </span>
+            <Activity size={14} style={{ color: 'var(--color-primary)' }} />
+            <span className="section-card-title">Distribuição</span>
           </div>
           {loadingDist ? (
-            <div
-              className="h-52 animate-pulse rounded-lg"
-              style={{ background: 'var(--color-surface-offset)' }}
-            />
+            <div className="h-52 animate-pulse rounded-lg" style={{ background: 'var(--color-surface-offset)' }} />
           ) : distribution?.length ? (
             <AssetDonutChart data={distribution} />
           ) : (
-            <div
-              className="h-52 flex items-center justify-center text-xs"
-              style={{ color: 'var(--color-text-muted)' }}
-            >
+            <div className="h-52 flex items-center justify-center text-xs" style={{ color: 'var(--color-text-muted)' }}>
               Sem ativos
             </div>
           )}
         </div>
       </div>
 
-      {/* ── Posições ──────────────────────────────────────────────── */}
+      {/* Posições */}
       <div className="card overflow-hidden">
-        <div
-          className="flex items-center gap-2 px-4 py-3"
-          style={{ borderBottom: '1px solid var(--color-border)' }}
-        >
-          <TrendingUp size={15} style={{ color: 'var(--color-primary)' }} />
-          <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-            Meus Ativos
-          </span>
+        <div className="section-card-header">
+          <TrendingUp size={14} style={{ color: 'var(--color-primary)' }} />
+          <span className="section-card-title">Meus Ativos</span>
           {positions && (
             <span
-              className="ml-1 px-1.5 py-0.5 rounded text-xs tabular-nums"
-              style={{
-                background: 'var(--color-surface-offset)',
-                color: 'var(--color-text-muted)',
-              }}
+              className="px-1.5 py-0.5 rounded text-xs tabular-nums"
+              style={{ background: 'var(--color-surface-offset)', color: 'var(--color-text-muted)' }}
             >
               {positions.reduce((acc, g) => acc + (g.count ?? 0), 0)}
             </span>
@@ -230,11 +198,7 @@ export default function ResumePage() {
         {loadingPositions ? (
           <div className="p-4 flex flex-col gap-2">
             {[...Array(5)].map((_, i) => (
-              <div
-                key={i}
-                className="h-10 animate-pulse rounded"
-                style={{ background: 'var(--color-surface-offset)' }}
-              />
+              <div key={i} className="h-10 animate-pulse rounded" style={{ background: 'var(--color-surface-offset)' }} />
             ))}
           </div>
         ) : positions && positions.length > 0 ? (
