@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
-import { TrendingUp, TrendingDown, BarChart2, RefreshCw, Wallet } from 'lucide-react'
-import clsx from 'clsx'
+import { BarChart2, RefreshCw, Wallet } from 'lucide-react'
 import {
   usePortfolioSummary,
   useAssetDistribution,
@@ -14,6 +13,7 @@ import SkeletonCard from '@/components/ui/SkeletonCard'
 import EmptyState from '@/components/ui/EmptyState'
 import AssetDonutChart from '@/components/charts/AssetDonutChart'
 import PositionTable from '@/components/resume/PositionTable'
+import clsx from 'clsx'
 
 const ASSET_TYPE_LABELS: Record<string, string> = {
   ACAO: 'Ações', ACAO_NACIONAL: 'Ações', FII: 'FIIs',
@@ -21,7 +21,6 @@ const ASSET_TYPE_LABELS: Record<string, string> = {
   TESOURO_DIRETO: 'Tesouro Direto', RENDA_FIXA: 'Renda Fixa', CRIPTO: 'Cripto',
 }
 
-// Cores semanticas usando tokens CSS — funcionam em light e dark
 const ASSET_TYPE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   ACAO:              { bg: 'var(--color-blue-highlight)',   text: 'var(--color-blue)',   border: 'var(--color-blue-highlight)' },
   ACAO_NACIONAL:     { bg: 'var(--color-blue-highlight)',   text: 'var(--color-blue)',   border: 'var(--color-blue-highlight)' },
@@ -79,39 +78,52 @@ export default function PatrimonioPage() {
   }
 
   return (
-    <div className="px-4 py-5 max-w-screen-xl mx-auto flex flex-col gap-5">
+    <div className="page-container">
 
       {/* Cabeçalho */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="page-header">
         <div>
-          <h1 className="text-base font-semibold">Patrimônio</h1>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>Visão consolidada dos ativos da carteira selecionada</p>
+          <h1 className="page-title">Patrimônio</h1>
+          <p className="page-subtitle">Visão consolidada dos ativos da carteira selecionada</p>
         </div>
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="kpi-grid">
         {loadingSummary ? (
           [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
         ) : summary ? (
           <>
-            <KpiCard label="Patrimônio Total" value={formatBRL(summary.total_patrimonio ?? 0)} subValue={formatBRL(summary.total_investido ?? 0)} subLabel="Valor investido" change={summary.variacao_percentual} />
-            <KpiCard label="Resultado" value={formatBRL(summary.lucro_total ?? 0)} subLabel="Ganho de capital + proventos" />
-            <KpiCard label="Proventos (12m)" value={formatBRL(summary.dividendos_recebidos_12m ?? 0)} subValue={formatBRL(summary.total_proventos ?? 0)} subLabel="Total recebido" />
-            <div className="rounded-xl p-4 flex flex-col gap-1" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-              <span className="text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>Variação</span>
-              <div className={clsx('text-xl font-bold tabular-nums tracking-tight', signClass(summary.variacao_valor ?? 0))}>
-                {formatBRL(summary.variacao_valor ?? 0)}
-              </div>
-              <div className={clsx('text-xs font-medium flex items-center gap-1', signClass(summary.variacao_valor ?? 0))}>
-                {(summary.variacao_valor ?? 0) >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
-                {formatPercent(summary.variacao_percentual ?? 0)}
-              </div>
-              <div className={clsx('text-sm font-bold mt-1 tabular-nums', signClass(summary.rentabilidade_total ?? 0))}>
-                {formatPercent(summary.rentabilidade_total ?? 0)}
-                <span className="text-xs font-normal ml-1" style={{ color: 'var(--color-text-muted)' }}>rentab.</span>
-              </div>
-            </div>
+            <KpiCard
+              label="Patrimônio Total"
+              value={formatBRL(summary.total_patrimonio ?? 0)}
+              subValue={formatBRL(summary.total_investido ?? 0)}
+              subLabel="Valor investido"
+              change={summary.variacao_percentual}
+            />
+            <KpiCard
+              label="Resultado"
+              value={formatBRL(summary.lucro_total ?? 0)}
+              valueColor={signClass(summary.lucro_total ?? 0)}
+              subLabel="Ganho de capital + proventos"
+            />
+            <KpiCard
+              label="Proventos (12m)"
+              value={formatBRL(summary.dividendos_recebidos_12m ?? 0)}
+              subValue={formatBRL(summary.total_proventos ?? 0)}
+              subLabel="Total recebido"
+            />
+            <KpiCard
+              label="Variação"
+              value={formatBRL(summary.variacao_valor ?? 0)}
+              valueColor={signClass(summary.variacao_valor ?? 0)}
+              change={summary.variacao_percentual}
+              bottomLine={
+                <span className={clsx('text-xs font-semibold tabular-nums', signClass(summary.rentabilidade_total ?? 0))}>
+                  {(summary.rentabilidade_total ?? 0) >= 0 ? '+' : ''}{formatPercent(summary.rentabilidade_total ?? 0)} rentab.
+                </span>
+              }
+            />
           </>
         ) : (
           <div className="col-span-4 py-8 text-center text-xs" style={{ color: 'var(--color-text-muted)' }}>
@@ -122,10 +134,10 @@ export default function PatrimonioPage() {
 
       {/* Breakdown por classe + donut */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 rounded-xl overflow-hidden" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-          <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: '1px solid var(--color-divider)' }}>
-            <BarChart2 size={15} style={{ color: 'var(--color-primary)' }} />
-            <span className="text-xs font-semibold">Alocação por Classe</span>
+        <div className="lg:col-span-2 card overflow-hidden">
+          <div className="section-card-header">
+            <BarChart2 size={14} style={{ color: 'var(--color-primary)' }} />
+            <span className="section-card-title">Alocação por Classe</span>
           </div>
           {loadingPositions ? (
             <div className="p-4 flex flex-col gap-2">
@@ -136,7 +148,7 @@ export default function PatrimonioPage() {
               Nenhum ativo encontrado. Adicione lançamentos para visualizar sua alocação.
             </div>
           ) : (
-            <div style={{ borderTop: 'none' }}>
+            <div>
               {typeBreakdown.map(({ type, total, count, pct }) => {
                 const clr = ASSET_TYPE_COLORS[type] ?? FALLBACK_COLOR
                 const isActive = activeTypeFilter === type
@@ -185,9 +197,9 @@ export default function PatrimonioPage() {
         </div>
 
         {/* Donut */}
-        <div className="rounded-xl overflow-hidden" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-          <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: '1px solid var(--color-divider)' }}>
-            <span className="text-xs font-semibold">Distribuição</span>
+        <div className="card overflow-hidden">
+          <div className="section-card-header">
+            <span className="section-card-title">Distribuição</span>
           </div>
           {loadingDist ? (
             <div className="h-52 flex items-center justify-center">
@@ -202,22 +214,22 @@ export default function PatrimonioPage() {
       </div>
 
       {/* Tabela de posições */}
-      <div className="rounded-xl overflow-hidden" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-        <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid var(--color-divider)' }}>
-          <span className="text-xs font-semibold">Posições</span>
+      <div className="card overflow-hidden">
+        <div className="section-card-header" style={{ justifyContent: 'space-between' }}>
           <div className="flex items-center gap-2">
+            <span className="section-card-title">Posições</span>
             <span
-              className="ml-1 px-1.5 py-0.5 rounded text-xs tabular-nums"
+              className="px-1.5 py-0.5 rounded text-xs tabular-nums"
               style={{ background: 'var(--color-surface-dynamic)', color: 'var(--color-text-muted)' }}
             >
               {filteredPositions.reduce((s: number, g: PositionGroup) => s + g.count, 0)}
             </span>
-            {activeTypeFilter && (
-              <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                Filtrado por: <span className="font-medium" style={{ color: 'var(--color-text)' }}>{ASSET_TYPE_LABELS[activeTypeFilter] ?? activeTypeFilter}</span>
-              </span>
-            )}
           </div>
+          {activeTypeFilter && (
+            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              Filtrado por: <span className="font-medium" style={{ color: 'var(--color-text)' }}>{ASSET_TYPE_LABELS[activeTypeFilter] ?? activeTypeFilter}</span>
+            </span>
+          )}
         </div>
         {loadingPositions ? (
           <div className="p-4 flex flex-col gap-2">
