@@ -1,79 +1,119 @@
 /**
- * LogoSGI — marca do Sistema de Gestão de Investimentos
- * Compatível com qualquer tamanho: 16px até 200px.
- * Usa currentColor para funcionar em light/dark mode.
+ * LogoSGI — marca visual do SIG v2
+ *
+ * Variantes:
+ *   <LogoSGI size={24} iconOnly />          → só ícone (favicon/sidebar colapsada)
+ *   <LogoSGI size={26} />                   → ícone + wordmark (sidebar desktop)
+ *   <LogoSGI size={40} variant="auth" />    → ícone grande + nome + subtítulo (login)
  */
+
 interface Props {
-  /** Altura do componente (width é proporcional). Default: 28 */
+  /** Altura do ícone em px. Default: 28 */
   size?: number
-  /** Se true, exibe apenas o ícone sem o wordmark */
+  /** Exibe apenas o ícone, sem wordmark */
   iconOnly?: boolean
+  /** Variante de contexto: altera proporções do texto */
+  variant?: 'default' | 'auth'
   className?: string
 }
 
-export default function LogoSGI({ size = 28, iconOnly = false, className }: Props) {
-  const iconSize = size
-  const ratio    = iconSize / 28
+export default function LogoSGI({
+  size = 28,
+  iconOnly = false,
+  variant = 'default',
+  className,
+}: Props) {
+  const isAuth = variant === 'auth'
+  const r      = size / 28   // fator de escala
 
   return (
     <span
-      className={`inline-flex items-center gap-[${Math.round(6 * ratio)}px] select-none ${className ?? ''}`}
-      style={{ gap: Math.round(7 * ratio) }}
-      aria-label="SGI — Sistema de Gestão de Investimentos"
+      className={`inline-flex items-center select-none ${className ?? ''}`}
+      style={{ gap: Math.round(8 * r) }}
+      aria-label="SIG — Sistema de Gestão de Investimentos"
     >
-      {/* ── Ícone: mini sparkline estilizado dentro de quadrado arredondado ── */}
+      {/* ── Ícone ────────────────────────────────────────────── */}
       <svg
-        width={iconSize}
-        height={iconSize}
-        viewBox="0 0 28 28"
+        width={size}
+        height={size}
+        viewBox="0 0 32 32"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         aria-hidden="true"
+        style={{ flexShrink: 0 }}
       >
-        {/* Fundo arredondado — teal semitransparente */}
-        <rect
-          x="0" y="0" width="28" height="28" rx="7"
-          fill="var(--color-primary)"
-          opacity="1"
-        />
-        {/* Sparkline ascendente — 3 barras de alturas diferentes */}
-        <rect x="5"  y="17" width="4" height="6"  rx="1.5" fill="white" opacity="0.55" />
-        <rect x="12" y="12" width="4" height="11" rx="1.5" fill="white" opacity="0.78" />
-        <rect x="19" y="6"  width="4" height="17" rx="1.5" fill="white" opacity="1"    />
-        {/* Linha de tendência diagonal */}
-        <path
-          d="M7 18 L14 13 L21 7"
+        {/* Fundo com cantos arredondados — teal sólido */}
+        <rect width="32" height="32" rx="8" fill="var(--color-primary)" />
+
+        {/* Barras de fundo: representam volume / base de dados */}
+        <rect x="5"  y="20" width="4" height="7"  rx="1.5" fill="white" opacity="0.22" />
+        <rect x="11" y="15" width="4" height="12" rx="1.5" fill="white" opacity="0.22" />
+        <rect x="17" y="11" width="4" height="16" rx="1.5" fill="white" opacity="0.22" />
+        <rect x="23" y="7"  width="4" height="20" rx="1.5" fill="white" opacity="0.22" />
+
+        {/* Linha de tendência ascendente — destaque principal */}
+        <polyline
+          points="5,23 11,17 17,13 23,9"
           stroke="white"
-          strokeWidth="1.5"
+          strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
-          opacity="0.9"
+          opacity="0.95"
         />
+
+        {/* Ponto de destaque no pico */}
+        <circle cx="23" cy="9" r="2.2" fill="white" />
+
+        {/* Ponto inicial da linha */}
+        <circle cx="5" cy="23" r="1.4" fill="white" opacity="0.6" />
       </svg>
 
-      {/* ── Wordmark ── */}
+      {/* ── Wordmark ─────────────────────────────────────────── */}
       {!iconOnly && (
         <span
           style={{
-            fontSize:      Math.round(13 * ratio),
-            fontWeight:    700,
-            letterSpacing: '-0.02em',
+            display:       'flex',
+            flexDirection: 'column',
             lineHeight:    1,
-            color:         'var(--color-text)',
+            gap:           isAuth ? Math.round(4 * r) : 0,
           }}
         >
-          SGI
+          {/* Nome principal */}
           <span
             style={{
-              marginLeft:  Math.round(3 * ratio),
-              fontSize:    Math.round(10 * ratio),
-              fontWeight:  500,
-              color:       'var(--color-text-muted)',
-              letterSpacing: '0',
+              fontSize:      isAuth ? Math.round(20 * r) : Math.round(13 * r),
+              fontWeight:    700,
+              letterSpacing: '-0.02em',
+              color:         'var(--color-text)',
             }}
           >
-            Investimentos
+            SIG
+            <span
+              style={{
+                marginLeft:    Math.round(3 * r),
+                fontSize:      isAuth ? Math.round(11 * r) : Math.round(9.5 * r),
+                fontWeight:    500,
+                color:         'var(--color-text-muted)',
+                letterSpacing: '0',
+              }}
+            >
+              v2
+            </span>
           </span>
+
+          {/* Subtítulo — apenas na variante auth */}
+          {isAuth && (
+            <span
+              style={{
+                fontSize:      Math.round(11 * r),
+                fontWeight:    400,
+                color:         'var(--color-text-muted)',
+                letterSpacing: '0.01em',
+              }}
+            >
+              Sistema de Gestão de Investimentos
+            </span>
+          )}
         </span>
       )}
     </span>
