@@ -1,22 +1,6 @@
 import { Outlet, Navigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
-
-function SigLogoLarge() {
-  return (
-    <svg viewBox="0 0 48 48" fill="none" aria-label="SIG v2" className="w-12 h-12">
-      <rect width="48" height="48" rx="13" fill="var(--color-primary)" />
-      <polyline
-        points="8,34 19,21 26,27 40,13"
-        stroke="white"
-        strokeWidth="3.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-      <circle cx="40" cy="13" r="3" fill="white" />
-    </svg>
-  )
-}
+import LogoSGI from '@/components/ui/LogoSGI'
 
 export default function AuthLayout() {
   const token = useAuthStore((s) => s.token)
@@ -24,33 +8,39 @@ export default function AuthLayout() {
 
   return (
     <div
-      className="flex flex-col items-center justify-center px-4 py-10"
+      className="flex flex-col items-center justify-center px-4 py-12"
       style={{
         minHeight: '100dvh',
         background: 'var(--color-bg)',
       }}
     >
       <div className="w-full max-w-sm">
-        {/* Header */}
-        <div className="flex flex-col items-center gap-3 mb-8">
-          <SigLogoLarge />
-          <div className="text-center">
-            <h1 className="text-xl font-bold" style={{ color: 'var(--color-text)' }}>SIG v2</h1>
-            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Sistema de Gestão de Investimentos</p>
-          </div>
+
+        {/* ── Header com logo ─────────────────────────────── */}
+        <div className="flex flex-col items-center gap-5 mb-10">
+          <LogoSGI size={44} variant="auth" />
         </div>
 
-        {/* Card */}
+        {/* ── Card de conteúdo (login/registro) ───────────── */}
         <div
-          className="rounded-xl shadow-md"
           style={{
-            background: 'var(--color-surface)',
-            border: '1px solid var(--color-border)',
-            padding: 'clamp(1.5rem, 5vw, 2rem)',
+            background:   'var(--color-surface)',
+            border:       '1px solid oklch(from var(--color-text) l c h / 0.08)',
+            borderRadius: 'var(--radius-xl)',
+            boxShadow:    'var(--shadow-md)',
+            padding:      'clamp(1.5rem, 5vw, 2rem)',
           }}
         >
           <Outlet />
         </div>
+
+        {/* ── Rodapé discreto ─────────────────────────────── */}
+        <p
+          className="text-center mt-6"
+          style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-faint)' }}
+        >
+          SIG v2 &mdash; Uso interno
+        </p>
       </div>
     </div>
   )
