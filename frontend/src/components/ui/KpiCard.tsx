@@ -22,17 +22,18 @@ export default function KpiCard({
 }: Props) {
   return (
     <div
-      className="card flex flex-col gap-0.5"
-      style={{ padding: '14px 16px 12px' }}
+      className="card flex flex-col"
+      style={{ padding: '14px 16px', minHeight: '96px', gap: '2px' }}
     >
       {/* Rótulo */}
       <span
         style={{
-          fontSize: '0.7rem',
+          fontSize: '0.68rem',
           fontWeight: 500,
-          letterSpacing: '0.06em',
+          letterSpacing: '0.07em',
           textTransform: 'uppercase',
           color: 'var(--color-text-faint)',
+          lineHeight: 1,
         }}
       >
         {label}
@@ -40,11 +41,11 @@ export default function KpiCard({
 
       {/* Valor principal */}
       <div
-        className={clsx('tabular-nums tracking-tight leading-none', valueColor ?? '')}
+        className={clsx('tabular-nums tracking-tight leading-tight', valueColor ?? '')}
         style={{
-          fontSize: '1.35rem',
+          fontSize: '1.05rem',
           fontWeight: 700,
-          marginTop: '4px',
+          marginTop: '6px',
           color: !valueColor ? 'var(--color-text)' : undefined,
         }}
       >
@@ -55,7 +56,7 @@ export default function KpiCard({
       {change !== undefined && (
         <div
           className={clsx('tabular-nums', signClass(change))}
-          style={{ fontSize: '0.72rem', fontWeight: 600, marginTop: '2px' }}
+          style={{ fontSize: '0.7rem', fontWeight: 600, marginTop: '2px', lineHeight: 1 }}
         >
           {change >= 0 ? '+' : ''}{formatPercent(change)}
         </div>
@@ -66,10 +67,11 @@ export default function KpiCard({
         <div
           className="tabular-nums"
           style={{
-            fontSize: '0.8rem',
+            fontSize: '0.78rem',
             fontWeight: 500,
-            marginTop: '4px',
+            marginTop: '5px',
             color: 'var(--color-text-muted)',
+            lineHeight: 1,
           }}
         >
           {subValue}
@@ -80,7 +82,7 @@ export default function KpiCard({
       {subLabel && (
         <div
           className="truncate"
-          style={{ fontSize: '0.68rem', color: 'var(--color-text-faint)', marginTop: '1px' }}
+          style={{ fontSize: '0.67rem', color: 'var(--color-text-faint)', marginTop: '2px', lineHeight: 1.2 }}
         >
           {subLabel}
         </div>
@@ -90,7 +92,7 @@ export default function KpiCard({
       {bottomLine && (
         <div
           style={{
-            marginTop: '8px',
+            marginTop: 'auto',
             paddingTop: '8px',
             borderTop: '1px solid oklch(from var(--color-text) l c h / 0.07)',
           }}
