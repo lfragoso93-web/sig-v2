@@ -1,7 +1,8 @@
-import { Sun, Moon, Menu } from 'lucide-react'
+import { Sun, Moon, Menu, Plus } from 'lucide-react'
 import { useAppStore } from '@/store/appStore'
 import UserMenu from './UserMenu'
 import { usePortfolios } from '@/hooks/usePortfolios'
+import LogoSGI from '@/components/ui/LogoSGI'
 
 export default function Topbar() {
   const {
@@ -16,58 +17,98 @@ export default function Topbar() {
 
   return (
     <header
-      className="flex items-center justify-between gap-2 px-3 lg:px-5 shrink-0"
+      className="flex items-center justify-between gap-3 shrink-0"
       style={{
-        height: '52px',
-        borderBottom: '1px solid var(--color-divider)',
+        height: '48px',
+        padding: '0 16px',
+        borderBottom: '1px solid oklch(from var(--color-text) l c h / 0.07)',
         background: 'var(--color-surface)',
       }}
     >
-      {/* Esquerda: hamburger (mobile) + logo/carteira */}
-      <div className="flex items-center gap-2 min-w-0">
-        {/* Hamburger — só aparece em <lg */}
+      {/* ── Esquerda ──────────────────────────────────────────── */}
+      <div className="flex items-center gap-2.5 min-w-0">
+
+        {/* Hamburger — mobile only */}
         <button
           onClick={toggleSidebar}
-          className="lg:hidden flex items-center justify-center p-1.5 rounded-md transition-colors"
-          style={{ color: 'var(--color-text-muted)', minWidth: 36, minHeight: 36 }}
+          className="lg:hidden flex items-center justify-center rounded-lg transition-colors"
+          style={{
+            color: 'var(--color-text-muted)',
+            width: 32, height: 32,
+            background: 'transparent',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-surface-offset)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
           aria-label="Abrir menu"
         >
-          <Menu size={20} />
+          <Menu size={18} />
         </button>
 
-        {/* Nome da carteira selecionada — só mobile */}
+        {/* Logo SGI — desktop */}
+        <div className="hidden lg:flex">
+          <LogoSGI size={26} />
+        </div>
+
+        {/* Nome da carteira — mobile */}
         {selectedName && (
           <span
-            className="lg:hidden text-xs font-medium truncate max-w-[140px]"
-            style={{ color: 'var(--color-text-muted)' }}
+            className="lg:hidden text-xs font-semibold truncate max-w-[160px]"
+            style={{ color: 'var(--color-text)' }}
           >
             {selectedName}
           </span>
         )}
       </div>
 
-      {/* Direita: tema + user menu + botão novo lançamento (desktop) */}
-      <div className="flex items-center gap-2 shrink-0">
-        {/* Botão Novo Lançamento — só desktop (mobile usa FAB) */}
+      {/* ── Direita ──────────────────────────────────────────── */}
+      <div className="flex items-center gap-1.5 shrink-0">
+
+        {/* Botão Novo Lançamento — desktop */}
         <button
           onClick={() => openTransactionModal()}
-          className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors duration-150"
+          className="hidden lg:flex items-center gap-1.5 transition-colors duration-150"
           style={{
-            background: 'var(--color-primary)',
-            color: 'var(--color-text-inverse)',
+            background:   'var(--color-primary)',
+            color:        '#ffffff',
+            height:       30,
+            padding:      '0 12px',
+            borderRadius: '8px',
+            fontSize:     '0.75rem',
+            fontWeight:   600,
+            letterSpacing: '0.01em',
           }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-primary-hover)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'var(--color-primary)')}
+          aria-label="Novo lançamento"
         >
-          + Novo Lançamento
+          <Plus size={13} strokeWidth={2.5} />
+          Lançamento
         </button>
+
+        {/* Divider visual */}
+        <div
+          className="hidden lg:block"
+          style={{
+            width: 1, height: 18,
+            background: 'oklch(from var(--color-text) l c h / 0.1)',
+            margin: '0 4px',
+          }}
+        />
 
         {/* Toggle tema */}
         <button
           onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          className="flex items-center justify-center p-1.5 rounded-md transition-colors"
-          style={{ color: 'var(--color-text-muted)', minWidth: 36, minHeight: 36 }}
+          className="flex items-center justify-center rounded-lg transition-colors"
+          style={{
+            color: 'var(--color-text-muted)',
+            width: 32, height: 32,
+            background: 'transparent',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-surface-offset)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
           aria-label="Alternar tema"
         >
-          {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+          {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
         </button>
 
         {/* Menu do usuário */}
