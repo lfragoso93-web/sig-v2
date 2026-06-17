@@ -10,10 +10,10 @@ from app.services.dividend_service import (
     delete_dividend,
 )
 
-router = APIRouter(prefix="/portfolios/{portfolio_id}/dividends", tags=["dividends"])
+router = APIRouter(tags=["dividends"])
 
 
-@router.get("/", response_model=list[DividendResponse])
+@router.get("/{portfolio_id}/dividends", response_model=list[DividendResponse])
 async def get_dividends(
     portfolio_id: int,
     db: AsyncSession = Depends(get_db),
@@ -22,7 +22,7 @@ async def get_dividends(
     return await list_dividends(db, portfolio_id, current_user.id)
 
 
-@router.post("/", response_model=DividendResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/{portfolio_id}/dividends", response_model=DividendResponse, status_code=status.HTTP_201_CREATED)
 async def add_dividend(
     portfolio_id: int,
     data: DividendCreate,
@@ -32,7 +32,7 @@ async def add_dividend(
     return await create_dividend(db, portfolio_id, current_user.id, data)
 
 
-@router.delete("/{dividend_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{portfolio_id}/dividends/{dividend_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_dividend(
     portfolio_id: int,
     dividend_id: int,
