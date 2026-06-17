@@ -1,9 +1,8 @@
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useNavigate, Link } from 'react-router-dom'
-import { useAuthStore } from '@/store/authStore'
-import api from '@/services/api'
+import { Link } from 'react-router-dom'
+import { useAuth } from '@/contexts/AuthContext'
 import PasswordInput from '@/components/ui/PasswordInput'
 
 const schema = z.object({
@@ -14,8 +13,7 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>
 
 export default function Login() {
-  const navigate = useNavigate()
-  const login = useAuthStore((s) => s.login)
+  const { login } = useAuth()
 
   const { register, handleSubmit, formState: { errors, isSubmitting }, setError } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -23,17 +21,7 @@ export default function Login() {
 
   const onSubmit = async (data: FormData) => {
     try {
-      const res = await api.post('/auth/login', {
-        email: data.email,
-        password: data.password,
-      })
-      api.defaults.headers.common['Authorization'] = `Bearer ${res.data.access_token}`
-      if (res.data.refresh_token) {
-        localStorage.setItem('sig_refresh', res.data.refresh_token)
-      }
-      const me = await api.get('/users/me')
-      login(res.data.access_token, me.data)
-      navigate('/carteira')
+      await login(data.email, data.password)
     } catch {
       setError('root', { message: 'E-mail ou senha inválidos' })
     }
