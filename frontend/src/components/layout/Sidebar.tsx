@@ -22,19 +22,6 @@ const NAV_SYSTEM = [
   { to: '/carteira/configuracoes', icon: Settings, label: 'Configurações' },
 ]
 
-/* — Label de seção: mais legível (0.68rem vs 0.65rem), margem top maior */
-const secLabel: React.CSSProperties = {
-  fontSize:      '0.68rem',
-  fontWeight:    600,
-  letterSpacing: '0.07em',
-  textTransform: 'uppercase',
-  color:         'var(--color-text-faint)',
-  padding:       '0 12px',
-  marginBottom:  4,
-  marginTop:     12,
-  userSelect:    'none',
-}
-
 export default function Sidebar() {
   const { data: portfolios = [], refetch } = usePortfolios()
   const { selectedPortfolioId, setSelectedPortfolio, sidebarOpen, closeSidebar } = useAppStore()
@@ -62,7 +49,7 @@ export default function Sidebar() {
       requestAnimationFrame(() => setVisible(true))
     } else {
       setVisible(false)
-      const t = setTimeout(() => setMounted(false), 250)
+      const t = setTimeout(() => setMounted(false), 260)
       return () => clearTimeout(t)
     }
   }, [sidebarOpen])
@@ -81,21 +68,27 @@ export default function Sidebar() {
     } catch { setError('Erro ao criar carteira.') }
   }
 
-  /* — Nav item: padding 8px 12px (era 7px 10px), icon 15px (era 14px) */
+  /* — Item de navegação — */
   const NavItem = ({ to, icon: Icon, label }: { to: string; icon: React.ElementType; label: string }) => (
     <NavLink
-      to={to} end={to === '/carteira'}
-      className="flex items-center gap-2.5 rounded-lg font-medium transition-all duration-150"
+      to={to}
+      end={to === '/carteira'}
+      className="flex items-center gap-3 rounded-lg font-medium transition-all"
       style={({ isActive }) => ({
-        padding:    '8px 12px',
-        fontSize:   '0.8125rem',
-        background: isActive ? 'oklch(from var(--color-primary) l c h / 0.1)' : 'transparent',
-        color:      isActive ? 'var(--color-primary)' : 'var(--color-text-muted)',
+        padding:         '9px 14px',
+        fontSize:        'var(--text-sm)',
+        fontWeight:      isActive ? 550 : 450,
+        letterSpacing:   isActive ? '-0.005em' : '0',
+        background:      isActive
+          ? 'oklch(from var(--color-primary) l c h / 0.11)'
+          : 'transparent',
+        color: isActive ? 'var(--color-primary)' : 'var(--color-text-muted)',
+        transition: 'all 140ms cubic-bezier(0.16, 1, 0.3, 1)',
       })}
       onMouseEnter={e => {
         const el = e.currentTarget as HTMLElement
         if (!el.getAttribute('aria-current')) {
-          el.style.background = 'var(--color-surface-offset)'
+          el.style.background = 'oklch(from var(--color-text) l c h / 0.05)'
           el.style.color = 'var(--color-text)'
         }
       }}
@@ -107,71 +100,102 @@ export default function Sidebar() {
         }
       }}
     >
-      <Icon size={15} strokeWidth={1.75} style={{ flexShrink: 0 }} />
+      <Icon size={16} strokeWidth={1.75} style={{ flexShrink: 0 }} />
       <span className="truncate">{label}</span>
     </NavLink>
   )
 
+  /* — Label de seção — */
+  const SectionLabel = ({ children }: { children: React.ReactNode }) => (
+    <p style={{
+      fontSize:      '0.68rem',
+      fontWeight:    600,
+      letterSpacing: '0.08em',
+      textTransform: 'uppercase',
+      color:         'var(--color-text-faint)',
+      padding:       '0 14px',
+      marginBottom:  2,
+      marginTop:     14,
+      userSelect:    'none',
+    }}>{children}</p>
+  )
+
   const Divider = () => (
-    <div style={{ height: 1, margin: '6px 12px', background: 'oklch(from var(--color-text) l c h / 0.07)' }} />
+    <div style={{
+      height:     1,
+      margin:     '8px 14px',
+      background: 'oklch(from var(--color-text) l c h / 0.07)',
+    }} />
   )
 
   const sidebarContent = (
     <div
       className="flex flex-col h-full overflow-y-auto"
       style={{
-        width:       'var(--sidebar-width, 240px)',
+        width:       'var(--sidebar-width, 256px)',
         background:  'var(--color-surface)',
         borderRight: '1px solid oklch(from var(--color-text) l c h / 0.07)',
-        padding:     '16px 10px 18px',
+        padding:     '18px 10px 20px',
       }}
     >
-      {/* ── Header ─────────────────────────────────────────── */}
+      {/* ── Header ──────────────────────────────────────────── */}
       <div
         className="flex items-center justify-between"
-        style={{ padding: '0 2px', marginBottom: 18 }}
+        style={{ padding: '0 4px', marginBottom: 20 }}
       >
-        <LogoSGI size={26} />
+        <LogoSGI size={28} />
         <button
           onClick={closeSidebar}
-          className="lg:hidden flex items-center justify-center rounded-lg"
-          style={{ color: 'var(--color-text-faint)', width: 28, height: 28 }}
-          onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-text-muted)')}
-          onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-text-faint)')}
+          className="lg:hidden btn-icon"
           aria-label="Fechar menu"
         >
-          <X size={14} />
+          <X size={15} />
         </button>
       </div>
 
-      {/* ── Seletor de carteira ──────────────────────────── */}
-      <div className="relative" style={{ marginBottom: 12 }}>
+      {/* ── Seletor de carteira ───────────────────────────── */}
+      <div className="relative" style={{ marginBottom: 14 }}>
         <button
           onClick={() => setDropdownOpen(o => !o)}
-          className="w-full flex items-center justify-between rounded-lg transition-colors duration-150"
+          className="w-full flex items-center justify-between rounded-xl transition-all"
           style={{
-            padding:    '8px 12px',
-            background: dropdownOpen ? 'var(--color-surface-offset)' : 'oklch(from var(--color-text) l c h / 0.04)',
-            border:     '1px solid oklch(from var(--color-text) l c h / 0.09)',
+            padding:    '10px 14px',
+            background: dropdownOpen
+              ? 'oklch(from var(--color-primary) l c h / 0.09)'
+              : 'oklch(from var(--color-text) l c h / 0.04)',
+            border:     dropdownOpen
+              ? '1px solid oklch(from var(--color-primary) l c h / 0.25)'
+              : '1px solid oklch(from var(--color-text) l c h / 0.08)',
             color:      'var(--color-text)',
-            minHeight:  36,
+            minHeight:  40,
+            transition: 'all 150ms cubic-bezier(0.16, 1, 0.3, 1)',
           }}
-          onMouseEnter={e => { if (!dropdownOpen) e.currentTarget.style.background = 'var(--color-surface-offset)' }}
-          onMouseLeave={e => { if (!dropdownOpen) e.currentTarget.style.background = 'oklch(from var(--color-text) l c h / 0.04)' }}
+          onMouseEnter={e => {
+            if (!dropdownOpen) {
+              e.currentTarget.style.background = 'oklch(from var(--color-text) l c h / 0.07)'
+              e.currentTarget.style.borderColor = 'oklch(from var(--color-text) l c h / 0.12)'
+            }
+          }}
+          onMouseLeave={e => {
+            if (!dropdownOpen) {
+              e.currentTarget.style.background = 'oklch(from var(--color-text) l c h / 0.04)'
+              e.currentTarget.style.borderColor = 'oklch(from var(--color-text) l c h / 0.08)'
+            }
+          }}
         >
-          <div className="flex items-center gap-2 min-w-0">
-            <Briefcase size={12} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
-            <span className="truncate" style={{ fontSize: '0.8125rem', fontWeight: 500 }}>
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Briefcase size={13} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
+            <span className="truncate" style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>
               {selected?.name ?? 'Selecionar carteira'}
             </span>
           </div>
           <ChevronDown
-            size={12}
+            size={13}
             style={{
-              color:      'var(--color-text-faint)',
+              color:      'var(--color-text-muted)',
               flexShrink: 0,
               transform:  dropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-              transition: 'transform 150ms ease',
+              transition: 'transform 200ms cubic-bezier(0.16, 1, 0.3, 1)',
             }}
           />
         </button>
@@ -180,59 +204,78 @@ export default function Sidebar() {
           <div
             className="absolute left-0 right-0 z-50"
             style={{
-              top:          'calc(100% + 4px)',
-              background:   'var(--color-surface)',
-              border:       '1px solid oklch(from var(--color-text) l c h / 0.09)',
-              borderRadius: 'var(--radius-lg)',
-              boxShadow:    'var(--shadow-md)',
+              top:          'calc(100% + 6px)',
+              background:   'var(--color-surface-2)',
+              border:       '1px solid oklch(from var(--color-text) l c h / 0.08)',
+              borderRadius: 'var(--radius-xl)',
+              boxShadow:    'var(--shadow-lg)',
               overflow:     'hidden',
             }}
           >
-            <div style={{ padding: 4 }}>
+            <div style={{ padding: 6 }}>
               {portfolios.map(p => (
                 <button
                   key={p.id}
                   onClick={() => { setSelectedPortfolio(p.id); setDropdownOpen(false) }}
-                  className="w-full flex items-center justify-between rounded-md transition-colors"
+                  className="w-full flex items-center justify-between rounded-lg transition-all"
                   style={{
-                    padding:    '7px 10px',
-                    fontSize:   '0.8125rem',
-                    color:      'var(--color-text)',
-                    background: p.id === selectedPortfolioId ? 'oklch(from var(--color-primary) l c h / 0.09)' : 'transparent',
+                    padding:    '8px 12px',
+                    fontSize:   'var(--text-sm)',
+                    fontWeight: p.id === selectedPortfolioId ? 500 : 400,
+                    color:      p.id === selectedPortfolioId ? 'var(--color-primary)' : 'var(--color-text)',
+                    background: p.id === selectedPortfolioId
+                      ? 'oklch(from var(--color-primary) l c h / 0.08)'
+                      : 'transparent',
+                    transition: 'all 120ms ease',
                   }}
-                  onMouseEnter={e => { if (p.id !== selectedPortfolioId) e.currentTarget.style.background = 'var(--color-surface-offset)' }}
-                  onMouseLeave={e => { if (p.id !== selectedPortfolioId) e.currentTarget.style.background = 'transparent' }}
+                  onMouseEnter={e => {
+                    if (p.id !== selectedPortfolioId)
+                      e.currentTarget.style.background = 'oklch(from var(--color-text) l c h / 0.05)'
+                  }}
+                  onMouseLeave={e => {
+                    if (p.id !== selectedPortfolioId)
+                      e.currentTarget.style.background = 'transparent'
+                  }}
                 >
                   <span className="truncate">{p.name}</span>
                   {p.id === selectedPortfolioId && (
-                    <CheckCircle2 size={12} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
+                    <CheckCircle2 size={13} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
                   )}
                 </button>
               ))}
             </div>
-            <div style={{ borderTop: '1px solid oklch(from var(--color-text) l c h / 0.06)', padding: 4 }}>
+            <div style={{
+              borderTop: '1px solid oklch(from var(--color-text) l c h / 0.06)',
+              padding: 6,
+            }}>
               <button
                 onClick={() => { setModalOpen(true); setDropdownOpen(false) }}
-                className="w-full flex items-center gap-2 rounded-md transition-colors"
-                style={{ padding: '7px 10px', fontSize: '0.8125rem', color: 'var(--color-primary)' }}
+                className="w-full flex items-center gap-2 rounded-lg transition-all"
+                style={{
+                  padding:  '8px 12px',
+                  fontSize: 'var(--text-sm)',
+                  color:    'var(--color-primary)',
+                  fontWeight: 500,
+                }}
                 onMouseEnter={e => (e.currentTarget.style.background = 'oklch(from var(--color-primary) l c h / 0.07)')}
                 onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
               >
-                <Plus size={12} />Nova carteira
+                <Plus size={13} />
+                Nova carteira
               </button>
             </div>
           </div>
         )}
       </div>
 
-      {/* ── Navegação ──────────────────────────────────────── */}
-      <nav className="flex flex-col gap-px flex-1">
-        <p style={secLabel}>Carteira</p>
+      {/* ── Navegação ──────────────────────────────────────────── */}
+      <nav className="flex flex-col gap-0.5 flex-1">
+        <SectionLabel>Carteira</SectionLabel>
         {NAV_MAIN.map(item => <NavItem key={item.to} {...item} />)}
 
         <Divider />
 
-        <p style={secLabel}>Análise</p>
+        <SectionLabel>Análise</SectionLabel>
         {NAV_ANALYTICS.map(item => <NavItem key={item.to} {...item} />)}
 
         <div className="flex-1" />
@@ -253,9 +296,10 @@ export default function Sidebar() {
           <div
             className="fixed inset-0 z-40 lg:hidden"
             style={{
-              background: 'oklch(0 0 0 / 0.4)',
+              background: 'oklch(0 0 0 / 0.45)',
+              backdropFilter: 'blur(4px)',
               opacity:    visible ? 1 : 0,
-              transition: 'opacity 250ms ease',
+              transition: 'opacity 260ms ease',
             }}
             onClick={closeSidebar}
           />
@@ -263,7 +307,8 @@ export default function Sidebar() {
             className="fixed top-0 left-0 h-full z-50 lg:hidden"
             style={{
               transform:  visible ? 'translateX(0)' : 'translateX(-100%)',
-              transition: 'transform 250ms cubic-bezier(0.16, 1, 0.3, 1)',
+              transition: 'transform 260ms cubic-bezier(0.16, 1, 0.3, 1)',
+              boxShadow:  'var(--shadow-xl)',
             }}
           >
             {sidebarContent}
@@ -279,16 +324,16 @@ export default function Sidebar() {
           {createdName ? (
             <div className="flex flex-col items-center gap-3 py-4">
               <CheckCircle2 size={28} style={{ color: 'var(--color-success)' }} />
-              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+              <p style={{ fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--color-text)' }}>
                 Carteira "{createdName}" criada!
               </p>
             </div>
           ) : (
             <div className="flex flex-col gap-4">
               <div>
-                <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-text-muted)' }}>Nome *</label>
+                <label className="block mb-1.5" style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-muted)' }}>Nome *</label>
                 <input
-                  className="input w-full"
+                  className="input"
                   placeholder="Ex: Carteira Principal"
                   value={name}
                   onChange={e => setName(e.target.value)}
@@ -297,15 +342,15 @@ export default function Sidebar() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-text-muted)' }}>Descrição</label>
+                <label className="block mb-1.5" style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-muted)' }}>Descrição</label>
                 <input
-                  className="input w-full"
+                  className="input"
                   placeholder="Opcional"
                   value={description}
                   onChange={e => setDescription(e.target.value)}
                 />
               </div>
-              {error && <p className="text-xs" style={{ color: 'var(--color-notification)' }}>{error}</p>}
+              {error && <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-notification)' }}>{error}</p>}
               <button
                 onClick={handleCreate}
                 disabled={createPortfolio.isPending}
