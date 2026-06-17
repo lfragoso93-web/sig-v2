@@ -4,7 +4,7 @@
    ============================================================ */
 
 :root, [data-theme="light"] {
-  /* ── Superfícies ──────────────────────────────────────────── */
+  /* ── Superfícies ─────────────────────────────────────── */
   --color-bg:               #f7f6f2;
   --color-surface:          #f9f8f5;
   --color-surface-2:        #fbfbf9;
@@ -14,75 +14,75 @@
   --color-divider:          #dcd9d5;
   --color-border:           #d4d1ca;
 
-  /* ── Texto ────────────────────────────────────────────────── */
+  /* ── Texto ──────────────────────────────────────────── */
   --color-text:         #28251d;
   --color-text-muted:   #7a7974;
   --color-text-faint:   #bab9b4;
   --color-text-inverse: #f9f8f4;
 
-  /* ── Primária (Teal) ──────────────────────────────────────── */
+  /* ── Primária (Teal) ───────────────────────────────── */
   --color-primary:           #01696f;
   --color-primary-hover:     #0c4e54;
   --color-primary-active:    #0f3638;
   --color-primary-highlight: #cedcd8;
 
-  /* ── Sucesso ──────────────────────────────────────────────── */
+  /* ── Sucesso ───────────────────────────────────────── */
   --color-success:           #437a22;
   --color-success-hover:     #2e5c10;
   --color-success-active:    #1e3f0a;
   --color-success-highlight: #d4dfcc;
 
-  /* ── Erro / Perigo ───────────────────────────────────────── */
+  /* ── Erro ───────────────────────────────────────────── */
   --color-error:           #a12c7b;
   --color-error-hover:     #7d1e5e;
   --color-error-active:    #561740;
   --color-error-highlight: #e0ced7;
 
-  /* ── Warning ─────────────────────────────────────────────── */
+  /* ── Warning ───────────────────────────────────────── */
   --color-warning:           #964219;
   --color-warning-hover:     #713417;
   --color-warning-active:    #4b2614;
   --color-warning-highlight: #ddcfc6;
 
-  /* ── Notification ────────────────────────────────────────── */
+  /* ── Notification ──────────────────────────────────── */
   --color-notification:           #a13544;
   --color-notification-hover:     #782b33;
   --color-notification-active:    #521f24;
   --color-notification-highlight: #dececb;
 
-  /* ── Cores de dados (charts) ──────────────────────────────── */
-  --color-blue:           #006494;
-  --color-blue-hover:     #0b5177;
-  --color-blue-highlight: #c6d8e4;
+  /* ── Cores de dados (charts) ─────────────────────────── */
+  --color-blue:             #006494;
+  --color-blue-hover:       #0b5177;
+  --color-blue-highlight:   #c6d8e4;
 
   --color-orange:           #da7101;
   --color-orange-hover:     #c55700;
   --color-orange-highlight: #e7d7c4;
 
-  --color-gold:           #d19900;
-  --color-gold-hover:     #b07a00;
-  --color-gold-highlight: #e9e0c6;
+  --color-gold:             #d19900;
+  --color-gold-hover:       #b07a00;
+  --color-gold-highlight:   #e9e0c6;
 
   --color-purple:           #7a39bb;
   --color-purple-hover:     #5f2699;
   --color-purple-highlight: #dacfde;
 
-  /* ── Raios ────────────────────────────────────────────────── */
+  /* ── Raios ──────────────────────────────────────────── */
   --radius-sm:   0.375rem;
   --radius-md:   0.5rem;
   --radius-lg:   0.75rem;
   --radius-xl:   1rem;
   --radius-full: 9999px;
 
-  /* ── Sombras ──────────────────────────────────────────────── */
+  /* ── Sombras ───────────────────────────────────────── */
   --shadow-sm: 0 1px 2px oklch(0.2 0.01 80 / 0.06);
   --shadow-md: 0 4px 12px oklch(0.2 0.01 80 / 0.08);
   --shadow-lg: 0 12px 32px oklch(0.2 0.01 80 / 0.12);
 
-  /* ── Transições ───────────────────────────────────────────── */
+  /* ── Transições ────────────────────────────────────── */
   --transition-interactive: 180ms cubic-bezier(0.16, 1, 0.3, 1);
 
-  /* ── Tipografia ───────────────────────────────────────────── */
+  /* ── Tipografia ─────────────────────────────────────── */
   --text-xs:   clamp(0.75rem,  0.7rem  + 0.25vw, 0.875rem);
   --text-sm:   clamp(0.875rem, 0.8rem  + 0.35vw, 1rem);
   --text-base: clamp(1rem,     0.95rem + 0.25vw, 1.125rem);
@@ -90,11 +90,18 @@
   --text-xl:   clamp(1.5rem,   1.2rem  + 1.25vw, 2.25rem);
   --text-2xl:  clamp(2rem,     1.2rem  + 2.5vw,  3.5rem);
 
-  --font-body:    'Inter', 'Helvetica Neue', sans-serif;
-  --font-display: 'Inter', 'Helvetica Neue', sans-serif;
+  /*
+   * General Sans (Fontshare) — sans-serif geométrico limpo.
+   * Carregada no index.html via CDN Fontshare.
+   * Usada tanto para body (legibilidade em 14–16px)
+   * quanto para headings/display (peso 600–700 no SIG).
+   * Inter mantida como fallback robusto.
+   */
+  --font-body:    'General Sans', 'Inter', 'Helvetica Neue', sans-serif;
+  --font-display: 'General Sans', 'Inter', 'Helvetica Neue', sans-serif;
   --font-mono:    'JetBrains Mono', 'Fira Code', monospace;
 
-  /* ── Espaçamento (4px grid) ────────────────────────────────── */
+  /* ── Espaçamento (grid de 4px) ─────────────────────────── */
   --space-1:  0.25rem;
   --space-2:  0.5rem;
   --space-3:  0.75rem;
@@ -108,18 +115,18 @@
   --space-20: 5rem;
   --space-24: 6rem;
 
-  /* ── Larguras de conteúdo ─────────────────────────────────── */
+  /* ── Larguras de conteúdo ─────────────────────────────── */
   --content-narrow:  640px;
   --content-default: 960px;
   --content-wide:    1200px;
   --content-full:    100%;
 
-  /* ── Sidebar ──────────────────────────────────────────────── */
+  /* ── Sidebar ────────────────────────────────────────── */
   --sidebar-width:           240px;
   --sidebar-width-collapsed: 64px;
 }
 
-/* ── Dark Mode (preferência do sistema, sem tema explicitado) ──── */
+/* ── Dark Mode (preferência do sistema) ────────────────────────── */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
     --color-bg:               #171614;
@@ -161,17 +168,17 @@
     --color-notification-active:    #a53142;
     --color-notification-highlight: #574848;
 
-    --color-blue:           #5591c7;
-    --color-blue-hover:     #3b78ab;
-    --color-blue-highlight: #3a4550;
+    --color-blue:             #5591c7;
+    --color-blue-hover:       #3b78ab;
+    --color-blue-highlight:   #3a4550;
 
     --color-orange:           #fdab43;
     --color-orange-hover:     #fec47e;
     --color-orange-highlight: #564b3e;
 
-    --color-gold:           #e8af34;
-    --color-gold-hover:     #fdc551;
-    --color-gold-highlight: #4d4332;
+    --color-gold:             #e8af34;
+    --color-gold-hover:       #fdc551;
+    --color-gold-highlight:   #4d4332;
 
     --color-purple:           #a86fdf;
     --color-purple-hover:     #9250d0;
@@ -183,7 +190,7 @@
   }
 }
 
-/* ── Dark Mode (tema explicitado via data-theme) ─────────────── */
+/* ── Dark Mode (tema explícito via data-theme) ────────────────── */
 [data-theme="dark"] {
   --color-bg:               #171614;
   --color-surface:          #1c1b19;
@@ -224,17 +231,17 @@
   --color-notification-active:    #a53142;
   --color-notification-highlight: #574848;
 
-  --color-blue:           #5591c7;
-  --color-blue-hover:     #3b78ab;
-  --color-blue-highlight: #3a4550;
+  --color-blue:             #5591c7;
+  --color-blue-hover:       #3b78ab;
+  --color-blue-highlight:   #3a4550;
 
   --color-orange:           #fdab43;
   --color-orange-hover:     #fec47e;
   --color-orange-highlight: #564b3e;
 
-  --color-gold:           #e8af34;
-  --color-gold-hover:     #fdc551;
-  --color-gold-highlight: #4d4332;
+  --color-gold:             #e8af34;
+  --color-gold-hover:       #fdc551;
+  --color-gold-highlight:   #4d4332;
 
   --color-purple:           #a86fdf;
   --color-purple-hover:     #9250d0;
