@@ -1,5 +1,5 @@
 import logging
-from datetime import date as DateType
+from datetime import date as DateType, datetime, timezone, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from fastapi import HTTPException
@@ -7,7 +7,7 @@ from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction, OperationType
 from app.models.dividend import Dividend
 from app.schemas.portfolio import PortfolioCreate, PortfolioUpdate
-from app.services.quotes_service import get_current_price
+from app.services.quotes_service import get_prices
 
 logger = logging.getLogger(__name__)
 
@@ -31,9 +31,20 @@ _TYPE_MAP: dict[str, str] = {
     "ETF_NACIONAL": "ETF_NACIONAL",
 }
 
+_TYPE_LABEL: dict[str, str] = {
+    "ACAO_NACIONAL": "Ações",
+    "FII": "FIIs",
+    "ETF_NACIONAL": "ETFs Nacionais",
+    "ETF_INTERNACIONAL": "ETFs Internacionais",
+    "STOCK": "Stocks",
+    "BDR": "BDRs",
+    "CRIPTO": "Criptomoedas",
+    "RENDA_FIXA": "Renda Fixa",
+    "TESOURO_DIRETO": "Tesouro Direto",
+}
+
 
 def normalize_type(asset_type: str | None) -> str:
-    """Normaliza string de tipo de ativo para o padrao interno."""
     if not asset_type:
         return ""
     return _TYPE_MAP.get(asset_type.upper(), asset_type.upper())
@@ -69,10 +80,21 @@ async def calc_raw_positions(
 
         s = state[ticker]
 
-        if op == OperationType.buy or (hasattr(op, 'value') and op.value == 'buy') or str(op).lower() in ('buy', 'compra'):
+        is_buy = (
+            op == OperationType.buy
+            or (hasattr(op, 'value') and op.value == 'buy')
+            or str(op).lower() in ('buy', 'compra')
+        )
+        is_sell = (
+            op == OperationType.sell
+            or (hasattr(op, 'value') and op.value == 'sell')
+            or str(op).lower() in ('sell', 'venda')
+        )
+
+        if is_buy:
             s["total_cost"] += qty * price + fees
             s["quantity"] += qty
-        elif op == OperationType.sell or (hasattr(op, 'value') and op.value == 'sell') or str(op).lower() in ('sell', 'venda'):
+        elif is_sell:
             if s["quantity"] > 0:
                 ratio = min(qty, s["quantity"]) / s["quantity"]
                 s["total_cost"] -= s["total_cost"] * ratio
@@ -87,7 +109,7 @@ async def calc_raw_positions(
         positions.append({
             "ticker": ticker,
             "asset_type": s["asset_type"],
-            "asset_label": s["asset_type"].replace("_", " ").title(),
+            "asset_label": _TYPE_LABEL.get(s["asset_type"], s["asset_type"].replace("_", " ").title()),
             "quantity": qty,
             "avg_price": round(avg, 8),
             "total_invested": round(s["total_cost"], 8),
@@ -97,7 +119,7 @@ async def calc_raw_positions(
 
 
 # ---------------------------------------------------------------------------
-# enrich_with_prices
+# enrich_with_prices — batch unico, com asset_type e db
 # ---------------------------------------------------------------------------
 
 def enrich_with_prices(
@@ -121,11 +143,23 @@ def enrich_with_prices(
             item["result_pct"] = round(result_pct, 4)
         else:
             item["current_price"] = None
-            item["current_value"] = None
-            item["result_abs"] = None
-            item["result_pct"] = None
+            item["current_value"] = p["total_invested"]
+            item["result_abs"] = 0.0
+            item["result_pct"] = 0.0
         enriched.append(item)
     return enriched
+
+
+async def _fetch_prices_batch(
+    db: AsyncSession,
+    positions_raw: list[dict],
+) -> dict[str, float]:
+    """Busca precos em batch passando asset_type e db corretamente."""
+    price_input = [
+        {"ticker": p["ticker"], "asset_type": p["asset_type"]}
+        for p in positions_raw
+    ]
+    return await get_prices(price_input, db)
 
 
 # ---------------------------------------------------------------------------
@@ -198,24 +232,46 @@ async def delete_portfolio(db: AsyncSession, portfolio_id: int, user_id: int) ->
 async def get_portfolio_summary(db: AsyncSession, portfolio_id: int, user_id: int) -> dict:
     await get_portfolio(db, portfolio_id, user_id)
     positions_raw = await calc_raw_positions(db, portfolio_id)
+
     total_invested = sum(p["total_invested"] for p in positions_raw)
+
+    # Busca cotacoes em batch com asset_type correto
+    prices = await _fetch_prices_batch(db, positions_raw)
 
     current_value = 0.0
     for p in positions_raw:
-        price_now = await get_current_price(p["ticker"])
+        price_now = prices.get(p["ticker"])
         if price_now:
             current_value += p["quantity"] * price_now
         else:
             current_value += p["total_invested"]
 
+    # Proventos
+    cutoff_12m = (datetime.now(timezone.utc) - timedelta(days=365)).date()
+    dividendos_12m = await sum_dividends(db, portfolio_id, cutoff=cutoff_12m)
+    total_proventos = await sum_dividends(db, portfolio_id)
+
     total_gain = current_value - total_invested
     total_gain_pct = (total_gain / total_invested * 100) if total_invested else 0.0
+    total_patrimonio = current_value + total_proventos
+    lucro_total = total_gain + total_proventos
 
     return {
+        # Campos canonicos EN
         "total_invested": round(total_invested, 2),
         "current_value": round(current_value, 2),
         "total_gain": round(total_gain, 2),
         "total_gain_pct": round(total_gain_pct, 4),
+        # Aliases PT-BR para o frontend
+        "total_patrimonio": round(total_patrimonio, 2),
+        "total_investido": round(total_invested, 2),
+        "lucro_total": round(lucro_total, 2),
+        "variacao_valor": round(total_gain, 2),
+        "variacao_percentual": round(total_gain_pct, 4),
+        "rentabilidade_total": round(total_gain_pct, 4),
+        "dividendos_recebidos_12m": round(dividendos_12m, 2),
+        "total_proventos": round(total_proventos, 2),
+        "ganho_capital": round(total_gain, 2),
     }
 
 
@@ -223,49 +279,68 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
     await get_portfolio(db, portfolio_id, user_id)
     positions_raw = await calc_raw_positions(db, portfolio_id)
 
-    prices: dict[str, float] = {}
-    for p in positions_raw:
-        price = await get_current_price(p["ticker"])
-        if price:
-            prices[p["ticker"]] = price
-
+    # Busca cotacoes em batch com asset_type correto
+    prices = await _fetch_prices_batch(db, positions_raw)
     enriched = enrich_with_prices(positions_raw, prices)
 
     total_current = sum(
         e["current_value"] for e in enriched if e["current_value"] is not None
     )
 
-    result_list = []
+    # Agrupa por tipo de ativo (formato esperado pelo frontend: PositionGroup[])
+    groups: dict[str, dict] = {}
     for e in enriched:
+        at = e["asset_type"] or "OUTRO"
+        label = _TYPE_LABEL.get(at, at.replace("_", " ").title())
         cur_val = e["current_value"] or e["total_invested"]
         alloc = (cur_val / total_current * 100) if total_current else 0
-        result_list.append({
+
+        if at not in groups:
+            groups[at] = {"label": label, "count": 0, "total_value": 0.0, "positions": []}
+
+        groups[at]["count"] += 1
+        groups[at]["total_value"] += cur_val
+        groups[at]["positions"].append({
             "ticker": e["ticker"],
-            "asset_type": e["asset_type"],
+            "asset_type": at,
+            "asset_label": label,
             "quantity": round(e["quantity"], 8),
             "average_price": round(e["avg_price"], 4),
             "current_price": e["current_price"],
-            "current_value": e["current_value"],
+            "current_value": round(cur_val, 2),
             "invested_value": round(e["total_invested"], 2),
-            "result_abs": e["result_abs"],
-            "result_pct": e["result_pct"],
+            "variation_value": round(e["result_abs"] or 0, 2),
+            "variation_percent": round(e["result_pct"] or 0, 4),
             "allocation_pct": round(alloc, 4),
         })
-    return result_list
+
+    # Ordena grupos por valor decrescente
+    sorted_groups = sorted(groups.values(), key=lambda g: g["total_value"], reverse=True)
+    for g in sorted_groups:
+        g["total_value"] = round(g["total_value"], 2)
+
+    return sorted_groups
 
 
 async def get_asset_distribution(db: AsyncSession, portfolio_id: int, user_id: int) -> list[dict]:
-    positions = await get_portfolio_positions(db, portfolio_id, user_id)
+    positions_raw = await calc_raw_positions(db, portfolio_id)
+    if not positions_raw:
+        return []
+
+    prices = await _fetch_prices_batch(db, positions_raw)
+    enriched = enrich_with_prices(positions_raw, prices)
+
     by_type: dict[str, float] = {}
-    for p in positions:
-        at = p.get("asset_type") or "OUTRO"
-        val = p["current_value"] or p["invested_value"]
+    for e in enriched:
+        at = e.get("asset_type") or "OUTRO"
+        val = e["current_value"] or e["total_invested"]
         by_type[at] = by_type.get(at, 0) + val
+
     total = sum(by_type.values())
     return [
         {
             "asset_type": at,
-            "label": at.replace("_", " ").title(),
+            "label": _TYPE_LABEL.get(at, at.replace("_", " ").title()),
             "value": round(v, 2),
             "percentage": round(v / total * 100, 4) if total else 0,
         }
