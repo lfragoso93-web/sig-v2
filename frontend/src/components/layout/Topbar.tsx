@@ -17,25 +17,28 @@ export default function Topbar() {
 
   return (
     <header
-      className="flex items-center justify-between gap-3 shrink-0"
+      className="flex items-center justify-between shrink-0"
       style={{
-        height: '48px',
-        padding: '0 16px',
+        height:       '52px',
+        padding:      '0 20px',
+        gap:          '12px',
         borderBottom: '1px solid oklch(from var(--color-text) l c h / 0.07)',
-        background: 'var(--color-surface)',
+        background:   'var(--color-surface)',
       }}
     >
-      {/* ── Esquerda ──────────────────────────────────────────── */}
-      <div className="flex items-center gap-2.5 min-w-0">
+      {/* ── Esquerda ───────────────────────────────────────── */}
+      <div className="flex items-center min-w-0" style={{ gap: 10 }}>
 
         {/* Hamburger — mobile only */}
         <button
           onClick={toggleSidebar}
           className="lg:hidden flex items-center justify-center rounded-lg transition-colors"
           style={{
-            color: 'var(--color-text-muted)',
-            width: 32, height: 32,
+            color:      'var(--color-text-muted)',
+            width:      34,
+            height:     34,
             background: 'transparent',
+            flexShrink: 0,
           }}
           onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-surface-offset)')}
           onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
@@ -44,7 +47,7 @@ export default function Topbar() {
           <Menu size={18} />
         </button>
 
-        {/* Logo SGI — desktop */}
+        {/* Logo — desktop */}
         <div className="hidden lg:flex">
           <LogoSGI size={26} />
         </div>
@@ -52,30 +55,36 @@ export default function Topbar() {
         {/* Nome da carteira — mobile */}
         {selectedName && (
           <span
-            className="lg:hidden text-xs font-semibold truncate max-w-[160px]"
-            style={{ color: 'var(--color-text)' }}
+            className="lg:hidden truncate"
+            style={{
+              fontSize:   'var(--text-xs)',
+              fontWeight: 600,
+              maxWidth:   160,
+              color:      'var(--color-text)',
+            }}
           >
             {selectedName}
           </span>
         )}
       </div>
 
-      {/* ── Direita ──────────────────────────────────────────── */}
-      <div className="flex items-center gap-1.5 shrink-0">
+      {/* ── Direita ───────────────────────────────────────── */}
+      <div className="flex items-center shrink-0" style={{ gap: 6 }}>
 
         {/* Botão Novo Lançamento — desktop */}
         <button
           onClick={() => openTransactionModal()}
-          className="hidden lg:flex items-center gap-1.5 transition-colors duration-150"
+          className="hidden lg:inline-flex items-center transition-colors duration-150"
           style={{
-            background:   'var(--color-primary)',
-            color:        '#ffffff',
-            height:       30,
-            padding:      '0 12px',
-            borderRadius: '8px',
-            fontSize:     '0.75rem',
-            fontWeight:   600,
+            background:    'var(--color-primary)',
+            color:         '#ffffff',
+            height:        32,
+            padding:       '0 14px',
+            borderRadius:  'var(--radius-lg)',
+            fontSize:      'var(--text-xs)',
+            fontWeight:    600,
             letterSpacing: '0.01em',
+            gap:           6,
           }}
           onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-primary-hover)')}
           onMouseLeave={e => (e.currentTarget.style.background = 'var(--color-primary)')}
@@ -85,13 +94,15 @@ export default function Topbar() {
           Lançamento
         </button>
 
-        {/* Divider visual */}
+        {/* Divisor visual */}
         <div
           className="hidden lg:block"
           style={{
-            width: 1, height: 18,
-            background: 'oklch(from var(--color-text) l c h / 0.1)',
-            margin: '0 4px',
+            width:      1,
+            height:     18,
+            background: 'oklch(from var(--color-text) l c h / 0.09)',
+            margin:     '0 2px',
+            flexShrink: 0,
           }}
         />
 
@@ -100,9 +111,11 @@ export default function Topbar() {
           onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
           className="flex items-center justify-center rounded-lg transition-colors"
           style={{
-            color: 'var(--color-text-muted)',
-            width: 32, height: 32,
+            color:      'var(--color-text-muted)',
+            width:      34,
+            height:     34,
             background: 'transparent',
+            flexShrink: 0,
           }}
           onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-surface-offset)')}
           onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
