@@ -22,12 +22,12 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// Logout automático em 401
+// Logout automático em 401 — exceto na rota de login (credenciais erradas)
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401) {
-      // Limpa store + persist storage antes do redirect
+    const isLoginRoute = err.config?.url?.includes('/auth/login')
+    if (err.response?.status === 401 && !isLoginRoute) {
       useAuthStore.getState().logout()
       localStorage.removeItem('sig-auth')
       window.location.replace('/login')
