@@ -7,7 +7,7 @@ from app.schemas.user import UserCreate
 from app.services.user_service import get_user_by_email, create_user
 from app.core.security import verify_password
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(tags=["auth"])
 
 
 @router.post("/login", response_model=TokenResponse)
