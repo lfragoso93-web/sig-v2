@@ -3,17 +3,11 @@ import { formatPercent, signClass } from '@/utils/format'
 
 interface Props {
   label: string
-  /** Valor principal — sempre exibido grande */
   value: string
-  /** Cor opcional para o valor principal (ex: signClass) */
   valueColor?: string
-  /** Variação percentual exibida logo abaixo do valor */
   change?: number
-  /** Segunda linha em destaque (ex: valor investido) */
   subValue?: string
-  /** Legenda / descrição auxiliar */
   subLabel?: string
-  /** Linha extra no rodapé do card (ex: rentabilidade total) */
   bottomLine?: React.ReactNode
 }
 
@@ -27,29 +21,42 @@ export default function KpiCard({
   bottomLine,
 }: Props) {
   return (
-    <div className="card p-4 flex flex-col gap-1 min-h-[96px]">
+    <div
+      className="card flex flex-col gap-0.5"
+      style={{ padding: '14px 16px 12px' }}
+    >
       {/* Rótulo */}
       <span
-        className="text-xs font-medium uppercase tracking-wide"
-        style={{ color: 'var(--color-text-muted)' }}
+        style={{
+          fontSize: '0.7rem',
+          fontWeight: 500,
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          color: 'var(--color-text-faint)',
+        }}
       >
         {label}
       </span>
 
       {/* Valor principal */}
       <div
-        className={clsx(
-          'text-xl font-bold tabular-nums tracking-tight leading-tight',
-          valueColor ?? ''
-        )}
-        style={!valueColor ? { color: 'var(--color-text)' } : undefined}
+        className={clsx('tabular-nums tracking-tight leading-none', valueColor ?? '')}
+        style={{
+          fontSize: '1.35rem',
+          fontWeight: 700,
+          marginTop: '4px',
+          color: !valueColor ? 'var(--color-text)' : undefined,
+        }}
       >
         {value}
       </div>
 
       {/* Variação % */}
       {change !== undefined && (
-        <div className={clsx('text-xs font-semibold tabular-nums', signClass(change))}>
+        <div
+          className={clsx('tabular-nums', signClass(change))}
+          style={{ fontSize: '0.72rem', fontWeight: 600, marginTop: '2px' }}
+        >
           {change >= 0 ? '+' : ''}{formatPercent(change)}
         </div>
       )}
@@ -57,8 +64,13 @@ export default function KpiCard({
       {/* Segundo valor */}
       {subValue && (
         <div
-          className="text-sm font-medium tabular-nums mt-0.5"
-          style={{ color: 'var(--color-text-muted)' }}
+          className="tabular-nums"
+          style={{
+            fontSize: '0.8rem',
+            fontWeight: 500,
+            marginTop: '4px',
+            color: 'var(--color-text-muted)',
+          }}
         >
           {subValue}
         </div>
@@ -67,16 +79,22 @@ export default function KpiCard({
       {/* Legenda auxiliar */}
       {subLabel && (
         <div
-          className="text-xs truncate"
-          style={{ color: 'var(--color-text-faint)' }}
+          className="truncate"
+          style={{ fontSize: '0.68rem', color: 'var(--color-text-faint)', marginTop: '1px' }}
         >
           {subLabel}
         </div>
       )}
 
-      {/* Linha extra no rodapé (rentabilidade, etc.) */}
+      {/* Rodapé extra */}
       {bottomLine && (
-        <div className="mt-auto pt-2" style={{ borderTop: '1px solid var(--color-divider)' }}>
+        <div
+          style={{
+            marginTop: '8px',
+            paddingTop: '8px',
+            borderTop: '1px solid oklch(from var(--color-text) l c h / 0.07)',
+          }}
+        >
           {bottomLine}
         </div>
       )}
