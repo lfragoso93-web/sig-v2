@@ -57,21 +57,22 @@ export interface PositionGroup {
   positions: PositionItem[]
 }
 
+// Nota: baseURL do axios já inclui /api/v1 — não repetir o prefixo aqui
 export const portfolioService = {
   getSummary: (portfolioId: number) =>
-    api.get<PortfolioSummary>(`/api/v1/portfolios/${portfolioId}/summary`).then(r => r.data),
+    api.get<PortfolioSummary>(`/portfolios/${portfolioId}/summary`).then(r => r.data),
 
   getPatrimonioHistory: (portfolioId: number, months = 12) =>
-    api.get<PatrimonioHistorico[]>(`/api/v1/portfolios/${portfolioId}/patrimonio-history`, {
+    api.get<PatrimonioHistorico[]>(`/portfolios/${portfolioId}/patrimonio-history`, {
       params: { months },
     }).then(r => r.data),
 
   getAssetDistribution: (portfolioId: number) =>
-    api.get<AssetTypeDistribution[]>(`/api/v1/portfolios/${portfolioId}/asset-distribution`).then(r => r.data),
+    api.get<AssetTypeDistribution[]>(`/portfolios/${portfolioId}/asset-distribution`).then(r => r.data),
 
   getPositions: (portfolioId: number) =>
-    api.get<PositionGroup[]>(`/api/v1/portfolios/${portfolioId}/positions`).then(r => r.data),
+    api.get<PositionGroup[]>(`/portfolios/${portfolioId}/positions`).then(r => r.data),
 
   listPortfolios: () =>
-    api.get<{ id: number; name: string }[]>('/api/v1/portfolios').then(r => r.data),
+    api.get<{ id: number; name: string }[]>('/portfolios').then(r => r.data),
 }
