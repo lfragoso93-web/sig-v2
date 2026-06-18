@@ -13,8 +13,8 @@ from app.services.portfolio_service import (
     get_portfolio_summary,
     get_portfolio_positions,
     get_asset_distribution,
-    get_patrimonio_history,
 )
+from app.services.portfolio_snapshot_service import get_monthly_evolution
 
 router = APIRouter(tags=["portfolios"])
 
@@ -99,4 +99,9 @@ async def patrimonio_history(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return await get_patrimonio_history(db, portfolio_id, current_user.id, months)
+    """
+    Evolucao patrimonial mensal com valor de mercado real via snapshots diarios.
+    Substitui o calculo antigo baseado em SUM(qty*price) que retornava aporte, nao patrimonio.
+    """
+    await get_portfolio(db, portfolio_id, current_user.id)
+    return await get_monthly_evolution(db, portfolio_id, months=months)
