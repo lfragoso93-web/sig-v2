@@ -6,7 +6,8 @@ from app.core.security import decode_token
 from app.models.user import User
 from sqlalchemy import select
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+# tokenUrl deve bater com o prefixo real registrado no main.py
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 
 async def get_current_user(
