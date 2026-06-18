@@ -1,16 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import {
-  ChevronDown, ChevronRight,
-  MoreHorizontal, Plus, List, BarChart2 as AnalyseIcon,
-} from 'lucide-react'
+import { MoreHorizontal, Plus, List, BarChart2 as AnalyseIcon } from 'lucide-react'
 import { formatBRL, formatPercent } from '@/utils/format'
 import { formatTreasuryName } from '@/utils/treasury'
 import AssetLogo from '@/components/ui/AssetLogo'
 import { useAppStore } from '@/store/appStore'
 import type { PositionGroup } from '@/hooks/usePortfolio'
 
-// ─── helpers ────────────────────────────────────────────────────────────────
+// ── helpers ────────────────────────────────────────────────────────────────
 function assetTypeToTab(assetType: string): string {
   const map: Record<string, string> = {
     ACAO: 'acao', FII: 'fii', ETF_NACIONAL: 'etf_br',
@@ -38,12 +35,12 @@ function displayName(ticker: string, assetType: string): string {
   return ticker
 }
 
-// ─── style tokens ────────────────────────────────────────────────────────────
+// ── style tokens ───────────────────────────────────────────────────────────────
 const cellText  = { color: 'var(--color-text)' }
 const cellMuted = { color: 'var(--color-text-muted)' }
 const cellFaint = { color: 'var(--color-text-faint)' }
 
-// ─── AssetMenu ───────────────────────────────────────────────────────────────
+// ── AssetMenu ─────────────────────────────────────────────────────────────────
 interface AssetMenuProps { ticker: string; assetLabel: string; assetType: string }
 
 function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
@@ -76,12 +73,16 @@ function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
   ]
 
   return (
-    <div ref={ref} className="relative inline-block">
+    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); setOpen(v => !v) }}
-        className="p-1.5 rounded transition-colors"
-        style={{ color: 'var(--color-text-faint)', minWidth: 32, minHeight: 32 }}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          width: 28, height: 28, borderRadius: 'var(--radius-md)',
+          border: 'none', background: 'transparent',
+          color: 'var(--color-text-faint)', cursor: 'pointer', flexShrink: 0,
+        }}
         onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-text-muted)')}
         onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-text-faint)')}
         aria-label="Opções"
@@ -89,27 +90,34 @@ function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
         <MoreHorizontal size={14} />
       </button>
       {open && (
-        <div
-          className="absolute right-0 top-full z-50 mt-1 w-52 rounded-lg overflow-hidden"
-          style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-lg)' }}
-        >
+        <div style={{
+          position: 'absolute', right: 0, top: '100%', zIndex: 50, marginTop: 4,
+          width: 210, borderRadius: 'var(--radius-lg)', overflow: 'hidden',
+          background: 'var(--color-surface)', boxShadow: 'var(--shadow-lg)',
+          border: '1px solid oklch(from var(--color-text) l c h / 0.1)',
+        }}>
           {items.map((item, i) => (
             <button
               key={i} type="button" onClick={item.onClick}
-              className="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs transition-colors"
-              style={cellMuted}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                padding: '8px 12px', border: 'none', background: 'transparent',
+                cursor: 'pointer', textAlign: 'left',
+                fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)',
+                borderBottom: i < items.length - 1 ? '1px solid oklch(from var(--color-text) l c h / 0.06)' : 'none',
+              }}
               onMouseEnter={e => { e.currentTarget.style.background = 'var(--color-surface-offset)'; e.currentTarget.style.color = 'var(--color-text)' }}
               onMouseLeave={e => { e.currentTarget.style.background = ''; e.currentTarget.style.color = 'var(--color-text-muted)' }}
             >
               <span style={cellFaint}>{item.icon}</span>
-              <span className="flex-1 text-left">{item.label}</span>
+              <span style={{ flex: 1 }}>{item.label}</span>
               {item.badge && (
-                <span
-                  className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full"
-                  style={{ background: 'var(--color-primary-highlight)', color: 'var(--color-primary)' }}
-                >
-                  {item.badge}
-                </span>
+                <span style={{
+                  fontSize: '0.65rem', fontWeight: 600, padding: '1px 6px',
+                  borderRadius: 'var(--radius-full)',
+                  background: 'oklch(from var(--color-primary) l c h / 0.12)',
+                  color: 'var(--color-primary)',
+                }}>{item.badge}</span>
               )}
             </button>
           ))}
@@ -119,7 +127,7 @@ function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
   )
 }
 
-// ─── PositionCard (mobile) ────────────────────────────────────────────────────
+// ── PositionCard (mobile) ───────────────────────────────────────────────────────────
 interface PositionCardProps { item: PositionGroup['positions'][number] }
 
 function PositionCard({ item }: PositionCardProps) {
@@ -130,49 +138,43 @@ function PositionCard({ item }: PositionCardProps) {
   const investedValue = item.invested_value ?? item.quantity * item.average_price
 
   return (
-    <div
-      className="rounded-xl p-4 flex flex-col gap-3"
-      style={{ background: 'var(--color-surface-offset)', border: '1px solid var(--color-divider)' }}
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2.5 min-w-0">
+    <div style={{
+      borderRadius: 'var(--radius-xl)', padding: '1rem',
+      background: 'var(--color-surface-offset)',
+      border: '1px solid oklch(from var(--color-text) l c h / 0.07)',
+      display: 'flex', flexDirection: 'column', gap: '0.75rem',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
           <AssetLogo ticker={item.ticker} assetType={item.asset_type} size={34} />
-          <div className="min-w-0">
-            <div className="font-semibold text-sm leading-tight" style={cellText}>{name}</div>
-            <div className="text-[11px] mt-0.5 truncate" style={cellFaint}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)', ...cellText }}>{name}</div>
+            <div style={{ fontSize: '0.68rem', marginTop: 2, color: 'var(--color-text-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {isTesouro ? item.ticker : item.asset_label}
             </div>
           </div>
         </div>
-        <AssetMenu
-          ticker={item.ticker}
-          assetLabel={isTesouro ? item.ticker : (item.asset_label ?? item.ticker)}
-          assetType={item.asset_type}
-        />
+        <AssetMenu ticker={item.ticker} assetLabel={isTesouro ? item.ticker : (item.asset_label ?? item.ticker)} assetType={item.asset_type} />
       </div>
 
-      {/* Grid de métricas */}
-      <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-xs">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.625rem 1rem' }}>
         {[
-          { label: 'Qtd',           value: fmtQty(item.quantity) },
-          { label: 'P. Médio',      value: formatBRL(item.average_price) },
-          { label: 'Total Inv.',    value: formatBRL(investedValue) },
-          { label: 'Valor Atual',   value: formatBRL(item.current_value) },
+          { label: 'Qtd',         value: fmtQty(item.quantity)        },
+          { label: 'P. Médio',   value: formatBRL(item.average_price) },
+          { label: 'Total Inv.',  value: formatBRL(investedValue)     },
+          { label: 'Valor Atual', value: formatBRL(item.current_value) },
         ].map(({ label, value }) => (
           <div key={label}>
-            <div className="text-[10px] mb-0.5" style={cellFaint}>{label}</div>
-            <div className="font-medium tabular-nums" style={cellText}>{value}</div>
+            <div style={{ fontSize: '0.65rem', marginBottom: 2, color: 'var(--color-text-faint)' }}>{label}</div>
+            <div style={{ fontWeight: 500, fontSize: 'var(--text-xs)', ...cellText, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
           </div>
         ))}
-
-        {/* Resultado — ocupa linha inteira */}
-        <div className="col-span-2">
-          <div className="text-[10px] mb-0.5" style={cellFaint}>Resultado</div>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <div style={{ fontSize: '0.65rem', marginBottom: 2, color: 'var(--color-text-faint)' }}>Resultado</div>
           {hasQuote ? (
-            <div className="font-semibold tabular-nums" style={{ color: varColor }}>
+            <div style={{ fontWeight: 600, fontSize: 'var(--text-xs)', color: varColor, fontVariantNumeric: 'tabular-nums' }}>
               {formatBRL(item.variation_value)}
-              <span className="ml-1.5 text-[10px] font-medium opacity-80">
+              <span style={{ marginLeft: 6, fontSize: '0.65rem', fontWeight: 500, opacity: 0.8 }}>
                 ({formatPercent(item.variation_percent)})
               </span>
             </div>
@@ -185,226 +187,177 @@ function PositionCard({ item }: PositionCardProps) {
   )
 }
 
-// ─── PositionTable (desktop) ─────────────────────────────────────────────────
-interface Props { groups: PositionGroup[] }
-
-export default function PositionTable({ groups }: Props) {
-  const [expanded, setExpanded] = useState<Record<string, boolean>>(
-    Object.fromEntries((groups ?? []).map(g => [g.label, true]))
-  )
-  const toggle = (label: string) => setExpanded(prev => ({ ...prev, [label]: !prev[label] }))
-
-  if (!groups || groups.length === 0) return null
+// ── ClassTable — tabela de uma classe de ativo ──────────────────────────────────────────
+function ClassTable({ group }: { group: PositionGroup }) {
+  const COLS = [
+    { key: 'ativo',      label: 'Ativo',       align: 'left',  width: '30%' },
+    { key: 'qtd',        label: 'Qtd',         align: 'right', width: '8%'  },
+    { key: 'pm',         label: 'P. Médio',   align: 'right', width: '11%' },
+    { key: 'pa',         label: 'P. Atual',    align: 'right', width: '11%', info: 'Cotação via BRAPI/yfinance' },
+    { key: 'inv',        label: 'Total Inv.',  align: 'right', width: '13%' },
+    { key: 'atual',      label: 'Valor Atual', align: 'right', width: '13%' },
+    { key: 'resultado',  label: 'Resultado',   align: 'right', width: '11%' },
+    { key: 'acoes',      label: '',            align: 'right', width: '3%'  },
+  ]
 
   return (
-    <>
-      {/* ── Mobile: cards empilhados ── */}
-      <div className="flex flex-col gap-4 p-4 md:hidden">
-        {groups.map(group => (
-          <div key={group.label}>
-            <button
-              onClick={() => toggle(group.label)}
-              className="w-full flex items-center gap-2 px-1 py-2 text-xs font-semibold transition-colors"
-              style={cellText}
-            >
-              {expanded[group.label]
-                ? <ChevronDown size={13} style={cellFaint} />
-                : <ChevronRight size={13} style={cellFaint} />}
-              {group.label}
-              <span
-                className="ml-1 px-1.5 py-0.5 rounded text-[10px]"
-                style={{ background: 'var(--color-surface-dynamic)', color: 'var(--color-text-muted)' }}
-              >
-                {group.count}
-              </span>
-            </button>
-            {expanded[group.label] && (
-              <div className="flex flex-col gap-2">
-                {(group.positions ?? []).map(item => (
-                  <PositionCard key={`${item.ticker}-${item.asset_type}-${item.id}`} item={item} />
-                ))}
-              </div>
-            )}
-          </div>
+    <div className="card" style={{ overflow: 'hidden' }}>
+      {/* Header da tabela: título da classe à esquerda */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '0.75rem 1.25rem',
+        borderBottom: '1px solid oklch(from var(--color-text) l c h / 0.06)',
+      }}>
+        <span style={{
+          fontSize: 'var(--text-sm)', fontWeight: 600,
+          letterSpacing: '-0.005em', color: 'var(--color-text)',
+        }}>
+          {group.label}
+        </span>
+        <span style={{
+          fontSize: 'var(--text-xs)', fontWeight: 500,
+          color: 'var(--color-text-muted)',
+          background: 'var(--color-surface-offset)',
+          border: '1px solid oklch(from var(--color-text) l c h / 0.07)',
+          borderRadius: 'var(--radius-full)', padding: '1px 8px',
+        }}>
+          {group.count}
+        </span>
+      </div>
+
+      {/* Cards mobile */}
+      <div className="md:hidden" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '1rem' }}>
+        {group.positions.map(item => (
+          <PositionCard key={`${item.ticker}-${item.id}`} item={item} />
         ))}
       </div>
 
-      {/* ── Desktop: tabela ── */}
+      {/* Tabela desktop */}
       <div className="hidden md:block">
-        <table className="w-full text-xs border-collapse" style={{ tableLayout: 'fixed' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 'var(--text-xs)' }}>
           <colgroup>
-            {/* Ativo: espaço generoso, absorve overflow do layout */}
-            <col style={{ width: '30%' }} />
-            {/* Qtd */}
-            <col style={{ width: '8%' }} />
-            {/* P. Médio */}
-            <col style={{ width: '11%' }} />
-            {/* P. Atual */}
-            <col style={{ width: '11%' }} />
-            {/* Total Inv. */}
-            <col style={{ width: '13%' }} />
-            {/* Valor Atual */}
-            <col style={{ width: '13%' }} />
-            {/* Resultado */}
-            <col style={{ width: '11%' }} />
-            {/* Ações */}
-            <col style={{ width: '3%' }} />
+            {COLS.map(c => <col key={c.key} style={{ width: c.width }} />)}
           </colgroup>
-
           <thead>
-            <tr style={{ borderBottom: '1px solid var(--color-divider)' }}>
-              {[
-                { label: 'Ativo',       align: 'left'  },
-                { label: 'Qtd',         align: 'right' },
-                { label: 'P. Médio',    align: 'right' },
-                { label: 'P. Atual',    align: 'right', tooltip: true },
-                { label: 'Total Inv.',  align: 'right' },
-                { label: 'Valor Atual', align: 'right' },
-                { label: 'Resultado',   align: 'right' },
-                { label: '',            align: 'right' },
-              ].map(({ label, align, tooltip }) => (
+            <tr style={{ borderBottom: '1px solid oklch(from var(--color-text) l c h / 0.06)' }}>
+              {COLS.map(col => (
                 <th
-                  key={label}
-                  className={`px-4 py-3 font-medium whitespace-nowrap text-${align}`}
-                  style={cellMuted}
+                  key={col.key}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    textAlign: col.align as any,
+                    fontWeight: 500,
+                    fontSize: '0.68rem',
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                    color: 'var(--color-text-muted)',
+                    whiteSpace: 'nowrap',
+                  }}
                 >
-                  {tooltip ? (
-                    <span className="inline-flex items-center justify-end gap-1">
-                      {label}
-                      <span
-                        aria-label="Cotação via BRAPI/yfinance."
-                        title="Cotação via BRAPI/yfinance."
-                        style={{ display: 'inline-flex', alignItems: 'center', cursor: 'help' }}
-                      >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="10" height="10" viewBox="0 0 24 24"
-                          fill="none" stroke="currentColor" strokeWidth="2"
-                          strokeLinecap="round" strokeLinejoin="round"
-                          style={cellFaint}
-                        >
+                  {col.info ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3 }}>
+                      {col.label}
+                      <span title={col.info} style={{ cursor: 'help', display: 'inline-flex', alignItems: 'center' }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24"
+                          fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                          style={cellFaint}>
                           <circle cx="12" cy="12" r="10" />
                           <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
                           <path d="M12 17h.01" />
                         </svg>
                       </span>
                     </span>
-                  ) : label}
+                  ) : col.label}
                 </th>
               ))}
             </tr>
           </thead>
-
           <tbody>
-            {groups.map(group => (
-              <>
-                {/* Linha de grupo */}
+            {group.positions.map(item => {
+              const hasQuote      = item.current_price !== item.average_price || item.variation_value !== 0
+              const name          = displayName(item.ticker, item.asset_type)
+              const isTesouro     = item.asset_type.toUpperCase() === 'TESOURO_DIRETO' || item.asset_type.toUpperCase() === 'TESOURO'
+              const varColor      = item.variation_value >= 0 ? 'var(--color-success)' : 'var(--color-notification)'
+              const investedValue = item.invested_value ?? item.quantity * item.average_price
+
+              return (
                 <tr
-                  key={`g-${group.label}`}
-                  onClick={() => toggle(group.label)}
-                  className="cursor-pointer transition-colors"
-                  style={{ background: 'var(--color-surface-offset)', borderBottom: '1px solid var(--color-divider)' }}
-                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-surface-offset-2)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'var(--color-surface-offset)')}
+                  key={`${item.ticker}-${item.id}`}
+                  style={{ borderBottom: '1px solid oklch(from var(--color-text) l c h / 0.045)' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'oklch(from var(--color-primary) l c h / 0.03)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = '')}
                 >
-                  <td colSpan={8} className="px-4 py-2.5">
-                    <div className="flex items-center gap-2">
-                      {expanded[group.label]
-                        ? <ChevronDown  size={13} style={cellFaint} />
-                        : <ChevronRight size={13} style={cellFaint} />}
-                      <span className="font-semibold text-xs" style={cellText}>{group.label}</span>
-                      <span
-                        className="px-1.5 py-0.5 rounded text-[10px]"
-                        style={{ background: 'var(--color-surface-dynamic)', color: 'var(--color-text-muted)' }}
-                      >
-                        {group.count}
-                      </span>
+                  {/* Ativo */}
+                  <td style={{ padding: '0.75rem 1rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <AssetLogo ticker={item.ticker} assetType={item.asset_type} size={28} />
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...cellText }}>{name}</div>
+                        <div style={{ fontSize: '0.65rem', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...cellFaint }}>
+                          {isTesouro ? item.ticker : item.asset_label}
+                        </div>
+                      </div>
                     </div>
                   </td>
+                  {/* Qtd */}
+                  <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
+                    {fmtQty(item.quantity)}
+                  </td>
+                  {/* P. Médio */}
+                  <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
+                    {formatBRL(item.average_price)}
+                  </td>
+                  {/* P. Atual */}
+                  <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                    <span style={hasQuote ? cellText : cellFaint}>{fmtPrice(item.current_price)}</span>
+                  </td>
+                  {/* Total Inv. */}
+                  <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
+                    {formatBRL(investedValue)}
+                  </td>
+                  {/* Valor Atual */}
+                  <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
+                    {formatBRL(item.current_value)}
+                  </td>
+                  {/* Resultado */}
+                  <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                    {hasQuote ? (
+                      <div style={{ color: varColor }}>
+                        <div style={{ fontWeight: 600 }}>{formatBRL(item.variation_value)}</div>
+                        <div style={{ fontSize: '0.65rem', fontWeight: 500, opacity: 0.8 }}>{formatPercent(item.variation_percent)}</div>
+                      </div>
+                    ) : (
+                      <span style={cellFaint}>—</span>
+                    )}
+                  </td>
+                  {/* Ações */}
+                  <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>
+                    <AssetMenu
+                      ticker={item.ticker}
+                      assetLabel={isTesouro ? item.ticker : (item.asset_label ?? item.ticker)}
+                      assetType={item.asset_type}
+                    />
+                  </td>
                 </tr>
-
-                {/* Linhas de posição */}
-                {expanded[group.label] && (group.positions ?? []).map(item => {
-                  const hasQuote     = item.current_price !== item.average_price || item.variation_value !== 0
-                  const name         = displayName(item.ticker, item.asset_type)
-                  const isTesouro    = item.asset_type.toUpperCase() === 'TESOURO_DIRETO' || item.asset_type.toUpperCase() === 'TESOURO'
-                  const varColor     = item.variation_value >= 0 ? 'var(--color-success)' : 'var(--color-error)'
-                  const investedValue = item.invested_value ?? item.quantity * item.average_price
-
-                  return (
-                    <tr
-                      key={`${item.ticker}-${item.asset_type}-${item.id}`}
-                      className="transition-colors"
-                      style={{ borderBottom: '1px solid var(--color-divider)' }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-surface-offset)')}
-                      onMouseLeave={e => (e.currentTarget.style.background = '')}
-                    >
-                      {/* Ativo */}
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2.5">
-                          <AssetLogo ticker={item.ticker} assetType={item.asset_type} size={28} />
-                          <div className="min-w-0">
-                            <div className="font-semibold leading-tight truncate" style={cellText}>{name}</div>
-                            <div className="text-[10px] mt-0.5 truncate" style={cellFaint}>
-                              {isTesouro ? item.ticker : item.asset_label}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Qtd */}
-                      <td className="text-right px-4 py-3 tabular-nums whitespace-nowrap" style={cellText}>
-                        {fmtQty(item.quantity)}
-                      </td>
-
-                      {/* P. Médio */}
-                      <td className="text-right px-4 py-3 tabular-nums whitespace-nowrap" style={cellText}>
-                        {formatBRL(item.average_price)}
-                      </td>
-
-                      {/* P. Atual */}
-                      <td className="text-right px-4 py-3 tabular-nums whitespace-nowrap">
-                        <span style={hasQuote ? cellText : cellFaint}>{fmtPrice(item.current_price)}</span>
-                      </td>
-
-                      {/* Total Inv. */}
-                      <td className="text-right px-4 py-3 tabular-nums whitespace-nowrap" style={cellText}>
-                        {formatBRL(investedValue)}
-                      </td>
-
-                      {/* Valor Atual */}
-                      <td className="text-right px-4 py-3 tabular-nums whitespace-nowrap" style={cellText}>
-                        {formatBRL(item.current_value)}
-                      </td>
-
-                      {/* Resultado — valor + % na mesma célula */}
-                      <td className="text-right px-4 py-3 tabular-nums whitespace-nowrap">
-                        {hasQuote ? (
-                          <div style={{ color: varColor }}>
-                            <div className="font-semibold leading-tight">{formatBRL(item.variation_value)}</div>
-                            <div className="text-[10px] font-medium opacity-80">{formatPercent(item.variation_percent)}</div>
-                          </div>
-                        ) : (
-                          <span style={cellFaint} aria-label="Cotação indisponível">—</span>
-                        )}
-                      </td>
-
-                      {/* Ações */}
-                      <td className="px-2 py-3 text-right">
-                        <AssetMenu
-                          ticker={item.ticker}
-                          assetLabel={isTesouro ? item.ticker : (item.asset_label ?? item.ticker)}
-                          assetType={item.asset_type}
-                        />
-                      </td>
-                    </tr>
-                  )
-                })}
-              </>
-            ))}
+              )
+            })}
           </tbody>
         </table>
       </div>
-    </>
+    </div>
+  )
+}
+
+// ── PositionTable — exibe uma ClassTable por grupo ────────────────────────────────────
+interface Props { groups: PositionGroup[] }
+
+export default function PositionTable({ groups }: Props) {
+  if (!groups || groups.length === 0) return null
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      {groups.map(group => (
+        <ClassTable key={group.label} group={group} />
+      ))}
+    </div>
   )
 }
