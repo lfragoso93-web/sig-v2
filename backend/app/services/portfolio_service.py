@@ -52,7 +52,6 @@ async def calc_raw_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
         price = float(tx.price or 0)
         fees = float(tx.fees or 0)
         op = tx.operation
-        # Preserva o asset_type exato da transacao ("ACAO", "FII", etc.)
         asset_type = _asset_type_str(tx.asset_type)
 
         if ticker not in state:
@@ -215,7 +214,6 @@ async def get_portfolio_summary(db: AsyncSession, portfolio_id: int, user_id: in
         price_now = prices.get(p["ticker"])
         current_value += (p["quantity"] * price_now) if price_now else p["total_invested"]
 
-    # Proventos
     cutoff_12m = (datetime.now(timezone.utc) - timedelta(days=365)).date()
     dividendos_12m = await sum_dividends(db, portfolio_id, cutoff=cutoff_12m)
     total_proventos = await sum_dividends(db, portfolio_id)
@@ -225,12 +223,10 @@ async def get_portfolio_summary(db: AsyncSession, portfolio_id: int, user_id: in
     lucro_total = total_gain + total_proventos
 
     return {
-        # EN (canonicos)
         "total_invested": round(total_invested, 2),
         "current_value": round(current_value, 2),
         "total_gain": round(total_gain, 2),
         "total_gain_pct": round(total_gain_pct, 4),
-        # PT-BR (aliases para o frontend)
         "total_patrimonio": round(current_value, 2),
         "total_investido": round(total_invested, 2),
         "lucro_total": round(lucro_total, 2),
@@ -252,7 +248,6 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
 
     total_current = sum(e["current_value"] for e in enriched if e["current_value"] is not None)
 
-    # Agrupa por tipo de ativo -> PositionGroup[]
     groups: dict[str, dict] = {}
     for e in enriched:
         at = e["asset_type"] or "OUTRO"
@@ -307,27 +302,4 @@ async def get_asset_distribution(db: AsyncSession, portfolio_id: int, user_id: i
             "percentage": round(v / total * 100, 4) if total else 0,
         }
         for at, v in sorted(by_type.items(), key=lambda x: x[1], reverse=True)
-    ]
-
-
-async def get_patrimonio_history(db: AsyncSession, portfolio_id: int, user_id: int, months: int = 12) -> list[dict]:
-    await get_portfolio(db, portfolio_id, user_id)
-    result = await db.execute(
-        select(
-            func.date_trunc("month", Transaction.date).label("month"),
-            func.sum(Transaction.quantity * Transaction.price).label("invested"),
-        )
-        .where(Transaction.portfolio_id == portfolio_id)
-        .group_by(func.date_trunc("month", Transaction.date))
-        .order_by(func.date_trunc("month", Transaction.date))
-        .limit(months)
-    )
-    rows = result.fetchall()
-    return [
-        {
-            "date": str(row.month)[:7],
-            "value": round(float(row.invested or 0), 2),
-            "invested": round(float(row.invested or 0), 2),
-        }
-        for row in rows
     ]
