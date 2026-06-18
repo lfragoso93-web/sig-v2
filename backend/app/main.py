@@ -17,8 +17,6 @@ from app.routers import (
 from app.routers import debug
 from app.routers import prices
 
-# Enums gerenciados pelo FastAPI no startup.
-# treasurytype foi removido: o novo modelo de Tesouro Direto nao usa enum.
 _ENUMS: list[tuple] = [
     ("userrole",           "'user'", "'superadmin'"),
     ("dividendstatus",     "'RECEBIDO'", "'A_RECEBER'"),
@@ -36,8 +34,8 @@ _ENUMS: list[tuple] = [
 
 async def _create_enums_raw() -> None:
     """Cria enums no PostgreSQL de forma idempotente.
-    Usa try/except por enum para tolerar bancos pre-existentes
-    sem depender do comportamento do bloco DO $$ com asyncpg.
+    Verifica existencia via pg_type antes de tentar criar,
+    evitando qualquer excecao de conflito independente da versao do asyncpg.
     """
     dsn = settings.ASYNC_DATABASE_URL.replace("postgresql+asyncpg", "postgresql")
     conn = await asyncpg.connect(dsn)
@@ -45,13 +43,15 @@ async def _create_enums_raw() -> None:
         for enum_def in _ENUMS:
             type_name = enum_def[0]
             values = ", ".join(enum_def[1:])
-            try:
+            # Verifica primeiro — zero risco de excecao por duplicidade
+            exists = await conn.fetchval(
+                "SELECT EXISTS(SELECT 1 FROM pg_type WHERE typname = $1)",
+                type_name,
+            )
+            if not exists:
                 await conn.execute(
                     f"CREATE TYPE {type_name} AS ENUM ({values});"
                 )
-            except asyncpg.exceptions.DuplicateObjectError:
-                # Enum ja existe — comportamento esperado em restarts e upgrades
-                pass
     finally:
         await conn.close()
 
