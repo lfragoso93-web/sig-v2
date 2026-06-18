@@ -3,13 +3,12 @@ import { Outlet } from 'react-router-dom'
 import { useAppStore } from '@/store/appStore'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
-import TransactionModalWrapper from './TransactionModalWrapper'
+import AddTransactionModal from '@/components/modals/AddTransactionModal'
 
 export default function AppLayout() {
-  const { sidebarOpen, closeSidebar } = useAppStore()
+  const { sidebarOpen, closeSidebar, transactionModal, closeTransactionModal } = useAppStore()
   const overlayRef = useRef<HTMLDivElement>(null)
 
-  // Fecha sidebar mobile ao clicar no overlay
   useEffect(() => {
     const el = overlayRef.current
     if (!el) return
@@ -42,7 +41,6 @@ export default function AppLayout() {
               position: 'fixed', inset: 0, zIndex: 40,
               background: 'oklch(0.1 0.01 240 / 0.55)',
               backdropFilter: 'blur(2px)',
-              display: 'block',
             }}
             className="lg:hidden"
             aria-hidden="true"
@@ -56,7 +54,7 @@ export default function AppLayout() {
         <main
           style={{
             flex:       1,
-            minWidth:   0,          /* evita overflow em flex */
+            minWidth:   0,
             overflowY:  'auto',
             overflowX:  'hidden',
             height:     '100%',
@@ -67,7 +65,10 @@ export default function AppLayout() {
         </main>
       </div>
 
-      <TransactionModalWrapper />
+      {/* Modal global de transação */}
+      {transactionModal.open && (
+        <AddTransactionModal onClose={closeTransactionModal} />
+      )}
     </div>
   )
 }
