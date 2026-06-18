@@ -10,7 +10,7 @@ import AssetLogo from '@/components/ui/AssetLogo'
 import { useAppStore } from '@/store/appStore'
 import type { PositionGroup } from '@/hooks/usePortfolio'
 
-// ─── helpers ───────────────────────────────────────────────────────────────
+// ─── helpers ────────────────────────────────────────────────────────────────
 function assetTypeToTab(assetType: string): string {
   const map: Record<string, string> = {
     ACAO: 'acao', FII: 'fii', ETF_NACIONAL: 'etf_br',
@@ -38,12 +38,12 @@ function displayName(ticker: string, assetType: string): string {
   return ticker
 }
 
-// ─── style tokens ──────────────────────────────────────────────────────────
+// ─── style tokens ────────────────────────────────────────────────────────────
 const cellText  = { color: 'var(--color-text)' }
 const cellMuted = { color: 'var(--color-text-muted)' }
 const cellFaint = { color: 'var(--color-text-faint)' }
 
-// ─── AssetMenu ─────────────────────────────────────────────────────────────
+// ─── AssetMenu ───────────────────────────────────────────────────────────────
 interface AssetMenuProps { ticker: string; assetLabel: string; assetType: string }
 
 function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
@@ -119,7 +119,7 @@ function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
   )
 }
 
-// ─── PositionCard (mobile) ─────────────────────────────────────────────────
+// ─── PositionCard (mobile) ────────────────────────────────────────────────────
 interface PositionCardProps { item: PositionGroup['positions'][number] }
 
 function PositionCard({ item }: PositionCardProps) {
@@ -185,7 +185,7 @@ function PositionCard({ item }: PositionCardProps) {
   )
 }
 
-// ─── PositionTable (desktop) ───────────────────────────────────────────────
+// ─── PositionTable (desktop) ─────────────────────────────────────────────────
 interface Props { groups: PositionGroup[] }
 
 export default function PositionTable({ groups }: Props) {
@@ -377,7 +377,7 @@ export default function PositionTable({ groups }: Props) {
                         {formatBRL(item.current_value)}
                       </td>
 
-                      {/* Resultado — valor + % na mesma linha */}
+                      {/* Resultado — valor + % na mesma célula */}
                       <td className="text-right px-4 py-3 tabular-nums whitespace-nowrap">
                         {hasQuote ? (
                           <div style={{ color: varColor }}>
