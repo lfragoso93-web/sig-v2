@@ -1,7 +1,7 @@
 """Cria tabela asset_dividends (proventos globais por ativo) e refatora dividends.
 
 Revision ID: 003_asset_dividends_refactor
-Revises: 002_transactions_ticker_100_currency
+Revises: 002_ticker_currency
 Create Date: 2026-06-12
 
 Motivacao:
@@ -21,7 +21,7 @@ import sqlalchemy as sa
 from sqlalchemy import text
 
 revision = '003_asset_dividends_refactor'
-down_revision = '002_transactions_ticker_100_currency'
+down_revision = '002_ticker_currency'
 branch_labels = None
 depends_on = None
 
@@ -60,11 +60,10 @@ def upgrade() -> None:
     # 2. Refatora tabela dividends                                         #
     # ------------------------------------------------------------------ #
 
-    # 2a. Limpa dados antigos (nao ha dados criticos — proventos sao
-    #     reprocessados pelo backfill automaticamente)
+    # 2a. Limpa dados antigos
     conn.execute(text("TRUNCATE TABLE dividends RESTART IDENTITY CASCADE"))
 
-    # 2b. Remove colunas antigas que nao existem mais no model
+    # 2b. Remove colunas antigas
     for col in [
         "ticker", "asset_type", "type", "amount",
         "value_per_unit", "ex_date", "payment_date",
@@ -83,7 +82,7 @@ def upgrade() -> None:
             REFERENCES asset_dividends(id) ON DELETE CASCADE
     """))
 
-    # 2d. Garante que quantity existe (pode ter sido quantity_held antes)
+    # 2d. Garante que quantity existe
     conn.execute(text("""
         ALTER TABLE dividends
         ADD COLUMN IF NOT EXISTS quantity DOUBLE PRECISION NOT NULL DEFAULT 0
@@ -117,7 +116,7 @@ def upgrade() -> None:
             UNIQUE (portfolio_id, asset_dividend_id)
         """))
     except Exception:
-        pass  # ja existe
+        pass
 
     # 2h. Indexes
     conn.execute(text(
@@ -137,7 +136,6 @@ def upgrade() -> None:
 def downgrade() -> None:
     conn = op.get_bind()
 
-    # Reverte dividends para estrutura anterior (colunas basicas)
     conn.execute(text("TRUNCATE TABLE dividends RESTART IDENTITY CASCADE"))
 
     for col in ["asset_dividend_id", "total_value", "net_value", "status"]:
@@ -146,7 +144,6 @@ def downgrade() -> None:
         except Exception:
             pass
 
-    # Restaura colunas antigas minimas para nao quebrar o sistema
     conn.execute(text("""
         ALTER TABLE dividends
         ADD COLUMN IF NOT EXISTS ticker       VARCHAR(20),
@@ -157,5 +154,4 @@ def downgrade() -> None:
         ADD COLUMN IF NOT EXISTS ex_date      DATE
     """))
 
-    # Remove asset_dividends
     conn.execute(text("DROP TABLE IF EXISTS asset_dividends CASCADE"))
