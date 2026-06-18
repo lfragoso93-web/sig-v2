@@ -1,19 +1,17 @@
 """
-Router de posicoes — usa PortfolioPosition (model atual) e delega calculos
-para portfolio_service.get_portfolio_positions / get_portfolio_summary.
-
-Os endpoints /{portfolio_id}/positions e /{portfolio_id}/positions/summary
-expostos aqui sao aliases para compatibilidade; a fonte de verdade sao os
-endpoints equivalentes em portfolios.py.
+Router de posicoes — delega calculos para portfolio_service e usa schemas
+alinhados com o contrato atual (PositionOut, AssetGroupOut, PortfolioSummary).
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from typing import List
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
 from app.models.portfolio import Portfolio
+from app.schemas.position import AssetGroupOut, PortfolioSummary
 from app.services.portfolio_service import (
     get_portfolio_positions,
     get_portfolio_summary,
@@ -36,7 +34,7 @@ async def _get_portfolio(portfolio_id: int, user: User, db: AsyncSession) -> Por
     return p
 
 
-@router.get("/{portfolio_id}/positions")
+@router.get("/{portfolio_id}/positions", response_model=List[AssetGroupOut])
 async def list_positions(
     portfolio_id: int,
     refresh: bool = False,
@@ -45,7 +43,6 @@ async def list_positions(
 ):
     """
     Lista posicoes agrupadas por tipo de ativo com preco atual e variacao.
-    Delega para portfolio_service.get_portfolio_positions (calc_raw_positions + get_prices).
     """
     await _get_portfolio(portfolio_id, current_user, db)
     if refresh:
@@ -53,7 +50,7 @@ async def list_positions(
     return await get_portfolio_positions(db, portfolio_id, current_user.id)
 
 
-@router.get("/{portfolio_id}/positions/summary")
+@router.get("/{portfolio_id}/positions/summary", response_model=PortfolioSummary)
 async def portfolio_summary(
     portfolio_id: int,
     refresh: bool = False,
@@ -62,7 +59,6 @@ async def portfolio_summary(
 ):
     """
     Resumo consolidado da carteira com patrimonio, retorno e proventos.
-    Delega para portfolio_service.get_portfolio_summary.
     """
     await _get_portfolio(portfolio_id, current_user, db)
     if refresh:
