@@ -4,14 +4,22 @@ Revision ID: 006_refactor_transactions_ticker_based
 Revises: 005_portfolio_snapshots
 Create Date: 2026-06-18
 
-Racionale:
-  A estrutura original usava asset_id (FK para assets), transaction_type enum,
-  unit_price e total_cost. A nova estrutura usa ticker (string livre), asset_type,
-  operation enum (buy/sell), price e currency — sem FK para assets, permitindo
-  registrar ativos que ainda n\u00e3o est\u00e3o cadastrados na tabela assets.
+Estado do banco ANTES desta migration:
+  Colunas existentes:
+    id, portfolio_id, asset_id (FK assets), transaction_type (enum),
+    date, quantity, unit_price, total_cost, fees, broker, notes,
+    is_day_trade, created_at, updated_at,
+    currency (adicionada pela 002)
+
+Esta migration:
+  - Adiciona: ticker, asset_type, operation (enum operationtype), price
+  - Migra dados existentes
+  - Remove: asset_id, transaction_type, unit_price, total_cost, broker, is_day_trade
+  - currency ja existe (002) — nao toca
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import text
 
 revision = '006_refactor_transactions_ticker_based'
 down_revision = '005_portfolio_snapshots'
@@ -20,62 +28,77 @@ depends_on = None
 
 
 def upgrade() -> None:
+    conn = op.get_bind()
+
     # 1. Cria enum operationtype se nao existir
-    op.execute("""
+    conn.execute(text("""
         DO $$ BEGIN
             CREATE TYPE operationtype AS ENUM ('buy', 'sell');
         EXCEPTION WHEN duplicate_object THEN null;
         END $$;
-    """)
+    """))
 
-    # 2. Adiciona colunas novas como nullable primeiro
-    op.add_column('transactions', sa.Column('ticker',     sa.String(30),  nullable=True))
-    op.add_column('transactions', sa.Column('asset_type', sa.String(30),  nullable=True))
-    op.add_column('transactions', sa.Column('operation',  sa.Enum('buy', 'sell', name='operationtype'), nullable=True))
-    op.add_column('transactions', sa.Column('price',      sa.Numeric(18, 8), nullable=True))
-    op.add_column('transactions', sa.Column('currency',   sa.String(10), nullable=True, server_default='BRL'))
+    # 2. Adiciona colunas novas (IF NOT EXISTS para idempotencia)
+    conn.execute(text("""
+        ALTER TABLE transactions
+        ADD COLUMN IF NOT EXISTS ticker VARCHAR(30) NULL;
+    """))
+    conn.execute(text("""
+        ALTER TABLE transactions
+        ADD COLUMN IF NOT EXISTS asset_type VARCHAR(30) NULL;
+    """))
+    conn.execute(text("""
+        ALTER TABLE transactions
+        ADD COLUMN IF NOT EXISTS price NUMERIC(18, 8) NULL;
+    """))
+    # operation precisa de tratamento especial por ser enum
+    try:
+        conn.execute(text("""
+            ALTER TABLE transactions
+            ADD COLUMN operation operationtype NULL;
+        """))
+    except Exception:
+        pass  # coluna ja existe
 
-    # 3. Migra dados existentes (se houver) a partir do JOIN com assets
-    op.execute("""
+    # 3. Migra dados existentes via JOIN com assets
+    conn.execute(text("""
         UPDATE transactions t
         SET
             ticker     = COALESCE(a.ticker, 'DESCONHECIDO'),
             asset_type = COALESCE(a.asset_type::text, 'OUTRO'),
             operation  = CASE
-                             WHEN t.transaction_type IN ('COMPRA', 'TRANSFERENCIA_ENTRADA', 'BONIFICACAO', 'DESDOBRAMENTO') THEN 'buy'::operationtype
+                             WHEN t.transaction_type::text IN (
+                                 'COMPRA','TRANSFERENCIA_ENTRADA',
+                                 'BONIFICACAO','DESDOBRAMENTO'
+                             ) THEN 'buy'::operationtype
                              ELSE 'sell'::operationtype
                          END,
-            price      = COALESCE(t.unit_price, 0),
-            currency   = 'BRL'
+            price      = COALESCE(t.unit_price, 0)
         FROM assets a
-        WHERE t.asset_id = a.id;
-    """)
+        WHERE t.asset_id = a.id
+          AND t.ticker IS NULL;
+    """))
 
-    # 4. Preenche linhas sem asset_id (caso existam)
-    op.execute("""
+    # 4. Preenche linhas sem asset_id correspondente
+    conn.execute(text("""
         UPDATE transactions
         SET
             ticker     = 'DESCONHECIDO',
             asset_type = 'OUTRO',
             operation  = 'buy'::operationtype,
-            price      = 0,
-            currency   = 'BRL'
+            price      = 0
         WHERE ticker IS NULL;
-    """)
+    """))
 
     # 5. Torna novas colunas NOT NULL
-    op.alter_column('transactions', 'ticker',     nullable=False)
-    op.alter_column('transactions', 'asset_type', nullable=False)
-    op.alter_column('transactions', 'operation',  nullable=False)
-    op.alter_column('transactions', 'price',      nullable=False)
-    op.alter_column('transactions', 'currency',   nullable=False, server_default='BRL')
+    conn.execute(text("ALTER TABLE transactions ALTER COLUMN ticker     SET NOT NULL;"))
+    conn.execute(text("ALTER TABLE transactions ALTER COLUMN asset_type SET NOT NULL;"))
+    conn.execute(text("ALTER TABLE transactions ALTER COLUMN operation  SET NOT NULL;"))
+    conn.execute(text("ALTER TABLE transactions ALTER COLUMN price      SET NOT NULL;"))
+    # currency ja e NOT NULL (002 criou com NOT NULL DEFAULT 'BRL')
 
-    # 6. Adiciona coluna notes se nao existir (era nullable na 001, mantemos)
-    # Ja existe na 001, nada a fazer.
-
-    # 7. Remove colunas antigas
-    # Remove FK constraint asset_id antes de dropar a coluna
-    op.execute("""
+    # 6. Remove FK de asset_id dinamicamente (nome do constraint pode variar)
+    conn.execute(text("""
         DO $$ DECLARE
             r RECORD;
         BEGIN
@@ -89,35 +112,41 @@ def upgrade() -> None:
                 EXECUTE 'ALTER TABLE transactions DROP CONSTRAINT ' || quote_ident(r.conname);
             END LOOP;
         END $$;
-    """)
+    """))
 
-    op.drop_index('ix_transactions_asset_id', table_name='transactions', if_exists=True)
-    op.drop_column('transactions', 'asset_id')
-    op.drop_column('transactions', 'transaction_type')
-    op.drop_column('transactions', 'unit_price')
-    op.drop_column('transactions', 'total_cost')
-    op.drop_column('transactions', 'broker')
-    op.drop_column('transactions', 'is_day_trade')
+    # 7. Remove index asset_id se existir
+    conn.execute(text("""
+        DROP INDEX IF EXISTS ix_transactions_asset_id;
+    """))
 
-    # 8. Cria indice no ticker para performance
-    op.create_index('ix_transactions_ticker', 'transactions', ['ticker'])
+    # 8. Remove colunas antigas
+    for col in ('asset_id', 'transaction_type', 'unit_price', 'total_cost', 'broker', 'is_day_trade'):
+        conn.execute(text(f"ALTER TABLE transactions DROP COLUMN IF EXISTS {col};"))
+
+    # 9. Cria index no ticker
+    conn.execute(text("""
+        CREATE INDEX IF NOT EXISTS ix_transactions_ticker ON transactions (ticker);
+    """))
 
 
 def downgrade() -> None:
-    # Revert: recria colunas antigas como nullable, dropa novas
-    op.drop_index('ix_transactions_ticker', table_name='transactions')
+    conn = op.get_bind()
 
-    op.add_column('transactions', sa.Column('asset_id',        sa.Integer(), nullable=True))
-    op.add_column('transactions', sa.Column('transaction_type', sa.String(50), nullable=True))
-    op.add_column('transactions', sa.Column('unit_price',      sa.Numeric(18, 8), nullable=True))
-    op.add_column('transactions', sa.Column('total_cost',      sa.Numeric(18, 2), nullable=True))
-    op.add_column('transactions', sa.Column('broker',          sa.String(100), nullable=True))
-    op.add_column('transactions', sa.Column('is_day_trade',    sa.Boolean(), nullable=True, server_default='false'))
+    conn.execute(text("DROP INDEX IF EXISTS ix_transactions_ticker;"))
 
-    op.drop_column('transactions', 'ticker')
-    op.drop_column('transactions', 'asset_type')
-    op.drop_column('transactions', 'operation')
-    op.drop_column('transactions', 'price')
-    op.drop_column('transactions', 'currency')
+    for col, definition in [
+        ('asset_id',        'INTEGER NULL'),
+        ('transaction_type','VARCHAR(50) NULL'),
+        ('unit_price',      'NUMERIC(18,8) NULL'),
+        ('total_cost',      'NUMERIC(18,2) NULL'),
+        ('broker',          'VARCHAR(100) NULL'),
+        ('is_day_trade',    'BOOLEAN NOT NULL DEFAULT false'),
+    ]:
+        conn.execute(text(
+            f"ALTER TABLE transactions ADD COLUMN IF NOT EXISTS {col} {definition};"
+        ))
 
-    op.execute('DROP TYPE IF EXISTS operationtype')
+    for col in ('ticker', 'asset_type', 'operation', 'price'):
+        conn.execute(text(f"ALTER TABLE transactions DROP COLUMN IF EXISTS {col};"))
+
+    conn.execute(text("DROP TYPE IF EXISTS operationtype;"))
