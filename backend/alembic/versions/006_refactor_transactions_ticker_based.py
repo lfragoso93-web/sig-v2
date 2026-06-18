@@ -1,6 +1,6 @@
 """Refatora tabela transactions para estrutura ticker-based
 
-Revision ID: 006_refactor_transactions_ticker_based
+Revision ID: 006_tx_ticker_based
 Revises: 005_portfolio_snapshots
 Create Date: 2026-06-18
 
@@ -21,7 +21,7 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import text
 
-revision = '006_refactor_transactions_ticker_based'
+revision = '006_tx_ticker_based'
 down_revision = '005_portfolio_snapshots'
 branch_labels = None
 depends_on = None
@@ -41,7 +41,7 @@ def upgrade() -> None:
     # 2. Adiciona colunas novas (IF NOT EXISTS para idempotencia)
     conn.execute(text("""
         ALTER TABLE transactions
-        ADD COLUMN IF NOT EXISTS ticker VARCHAR(30) NULL;
+        ADD COLUMN IF NOT EXISTS ticker VARCHAR(100) NULL;
     """))
     conn.execute(text("""
         ALTER TABLE transactions
@@ -95,7 +95,6 @@ def upgrade() -> None:
     conn.execute(text("ALTER TABLE transactions ALTER COLUMN asset_type SET NOT NULL;"))
     conn.execute(text("ALTER TABLE transactions ALTER COLUMN operation  SET NOT NULL;"))
     conn.execute(text("ALTER TABLE transactions ALTER COLUMN price      SET NOT NULL;"))
-    # currency ja e NOT NULL (002 criou com NOT NULL DEFAULT 'BRL')
 
     # 6. Remove FK de asset_id dinamicamente (nome do constraint pode variar)
     conn.execute(text("""
@@ -115,9 +114,7 @@ def upgrade() -> None:
     """))
 
     # 7. Remove index asset_id se existir
-    conn.execute(text("""
-        DROP INDEX IF EXISTS ix_transactions_asset_id;
-    """))
+    conn.execute(text("DROP INDEX IF EXISTS ix_transactions_asset_id;"))
 
     # 8. Remove colunas antigas
     for col in ('asset_id', 'transaction_type', 'unit_price', 'total_cost', 'broker', 'is_day_trade'):
