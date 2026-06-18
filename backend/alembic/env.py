@@ -9,8 +9,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from app.core.database import Base
 from app.core.config import settings
 
-# Importa todos os models para o metadata reconhecer as tabelas
-from app.models import user, portfolio, transaction, dividend, position  # noqa
+# Importa todos os models para o Alembic detectar as tabelas automaticamente
+import app.models  # noqa — o __init__.py já importa todos os models
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
