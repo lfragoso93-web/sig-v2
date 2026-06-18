@@ -3,8 +3,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
-import asyncpg
-import asyncpg.exceptions
 
 from app.core.database import engine
 from app.core.config import settings
@@ -18,45 +16,11 @@ from app.routers import (
 from app.routers import debug
 from app.routers import prices
 
-# Enums gerenciados pelo FastAPI no startup.
-# treasurytype foi removido: o novo modelo de Tesouro Direto nao usa enum.
-_ENUMS: list[tuple] = [
-    ("userrole",           "'user'", "'superadmin'"),
-    ("dividendstatus",     "'RECEBIDO'", "'A_RECEBER'"),
-    ("dividendtype",       "'DIVIDENDO'", "'JCP'", "'RENDIMENTO'", "'AMORTIZACAO'", "'BONIFICACAO'", "'OUTROS'"),
-    ("assettype",          "'ACAO'", "'FII'", "'ETF_NACIONAL'", "'TESOURO_DIRETO'", "'STOCK'", "'ETF_INTERNACIONAL'", "'CRIPTO'", "'RENDA_FIXA'"),
-    ("assetcurrency",      "'BRL'", "'USD'", "'EUR'", "'BTC'"),
-    ("corporateeventtype", "'DESDOBRAMENTO'", "'GRUPAMENTO'", "'BONIFICACAO'"),
-    ("corporateeventstatus", "'PENDENTE'", "'APLICADO'", "'IGNORADO'"),
-    ("fixedincometype",    "'CDB'", "'LCI'", "'LCA'", "'LCI_LCA'", "'CRI'", "'CRA'", "'DEBENTURE'", "'POUPANCA'", "'OUTROS'"),
-    ("indexertype",        "'CDI'", "'IPCA_PLUS'", "'SELIC'", "'PREFIXADO'", "'IGPM_PLUS'"),
-    ("irpfmarket",         "'ACOES'", "'DAY_TRADE'", "'FII'", "'ETF'", "'CRIPTO'", "'RENDA_FIXA'", "'STOCKS'"),
-    ("goaltype",           "'PATRIMONIO_ALVO'", "'ALOCACAO'", "'DY_MENSAL'", "'RENTABILIDADE'", "'APORTE_MENSAL'"),
-]
-
-
-async def _create_enums_raw() -> None:
-    dsn = settings.ASYNC_DATABASE_URL.replace("postgresql+asyncpg", "postgresql")
-    conn = await asyncpg.connect(dsn)
-    try:
-        for enum_def in _ENUMS:
-            type_name = enum_def[0]
-            values = ", ".join(enum_def[1:])
-            sql = (
-                f"DO $$ BEGIN "
-                f"IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '{type_name}') THEN "
-                f"CREATE TYPE {type_name} AS ENUM ({values}); "
-                f"END IF; "
-                f"END $$;"
-            )
-            await conn.execute(sql)
-    finally:
-        await conn.close()
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await _create_enums_raw()
+    # Enums e tabelas são criados pelo alembic upgrade head (entrypoint.sh).
+    # Nada a fazer aqui além de iniciar o scheduler.
     start_scheduler()
     yield
     await engine.dispose()
@@ -71,9 +35,7 @@ app = FastAPI(
 
 
 def custom_openapi():
-    """Substitui o schema OpenAPI padrão para adicionar HTTPBearer ao lado
-    do OAuth2PasswordBearer. Isso permite colar um token JWT diretamente no
-    botão Authorize do Swagger sem precisar do fluxo OAuth2 form-data."""
+    """Adiciona HTTPBearer ao Swagger para facilitar testes com JWT."""
     if app.openapi_schema:
         return app.openapi_schema
     schema = get_openapi(
@@ -83,14 +45,12 @@ def custom_openapi():
         routes=app.routes,
     )
     schema.setdefault("components", {}).setdefault("securitySchemes", {})
-    # Adiciona HTTPBearer — colar token no campo "Value: Bearer <token>"
     schema["components"]["securitySchemes"]["HTTPBearer"] = {
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT",
         "description": "Cole aqui o access_token obtido em POST /api/v1/auth/login",
     }
-    # Aplica HTTPBearer como security global (todos os endpoints)
     schema["security"] = [
         {"OAuth2PasswordBearer": []},
         {"HTTPBearer": []},
