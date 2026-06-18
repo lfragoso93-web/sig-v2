@@ -13,7 +13,38 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+    """
+    Verifica senha contra hash bcrypt.
+
+    Compatibilidade com hashes legados gerados pelo passlib:
+    - passlib usava prefixo '$2b$' mas com cost factor e salt no formato
+      ligeiramente diferente em algumas versões, resultando em hashes que
+      bcrypt>=4.x não consegue verificar diretamente.
+    - Tentativa 1: verificação normal com bcrypt nativo.
+    - Tentativa 2: se o hash começa com '$2b$', tenta também com prefixo
+      '$2y$' (formato PHP/passlib antigo) para máxima compatibilidade.
+    - Retorna False silenciosamente em qualquer erro de formato.
+    """
+    try:
+        plain_bytes  = plain.encode("utf-8")
+        hashed_bytes = hashed.encode("utf-8")
+        return bcrypt.checkpw(plain_bytes, hashed_bytes)
+    except Exception:
+        pass
+
+    # Fallback: tenta prefixo alternativo para hashes passlib legados
+    try:
+        plain_bytes = plain.encode("utf-8")
+        if hashed.startswith("$2b$"):
+            alt = ("$2y$" + hashed[4:]).encode("utf-8")
+            return bcrypt.checkpw(plain_bytes, alt)
+        if hashed.startswith("$2y$"):
+            alt = ("$2b$" + hashed[4:]).encode("utf-8")
+            return bcrypt.checkpw(plain_bytes, alt)
+    except Exception:
+        pass
+
+    return False
 
 
 def create_access_token(
