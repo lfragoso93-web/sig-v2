@@ -1,19 +1,130 @@
-import { Sun, Moon, Menu, Plus } from 'lucide-react'
+import { Sun, Moon, Menu, Plus, Briefcase, ChevronDown, CheckCircle2 } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
 import { useAppStore } from '@/store/appStore'
 import UserMenu from './UserMenu'
 import { usePortfolios } from '@/hooks/usePortfolios'
 import LogoSGI from '@/components/ui/LogoSGI'
 
+function PortfolioSelector() {
+  const { data: portfolios = [] } = usePortfolios()
+  const { selectedPortfolioId, setSelectedPortfolio } = useAppStore()
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  const selected = portfolios.find(p => p.id === selectedPortfolioId)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  if (!portfolios.length) return null
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-2 rounded-lg transition-all"
+        style={{
+          padding:    '5px 10px',
+          height:     32,
+          background: open
+            ? 'oklch(from var(--color-primary) l c h / 0.1)'
+            : 'oklch(from var(--color-text) l c h / 0.05)',
+          border: open
+            ? '1px solid oklch(from var(--color-primary) l c h / 0.3)'
+            : '1px solid oklch(from var(--color-text) l c h / 0.09)',
+          color:      'var(--color-text)',
+          transition: 'all 150ms cubic-bezier(0.16,1,0.3,1)',
+          maxWidth:   220,
+        }}
+        onMouseEnter={e => {
+          if (!open) {
+            e.currentTarget.style.background = 'oklch(from var(--color-text) l c h / 0.08)'
+            e.currentTarget.style.borderColor = 'oklch(from var(--color-text) l c h / 0.13)'
+          }
+        }}
+        onMouseLeave={e => {
+          if (!open) {
+            e.currentTarget.style.background = 'oklch(from var(--color-text) l c h / 0.05)'
+            e.currentTarget.style.borderColor = 'oklch(from var(--color-text) l c h / 0.09)'
+          }
+        }}
+        aria-label="Selecionar carteira"
+      >
+        <Briefcase size={12} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
+        <span className="truncate" style={{ fontSize: 'var(--text-xs)', fontWeight: 550, maxWidth: 140 }}>
+          {selected?.name ?? 'Carteira'}
+        </span>
+        <ChevronDown
+          size={11}
+          style={{
+            color:     'var(--color-text-muted)',
+            flexShrink: 0,
+            transform:  open ? 'rotate(180deg)' : 'rotate(0deg)',
+            transition: 'transform 180ms cubic-bezier(0.16,1,0.3,1)',
+          }}
+        />
+      </button>
+
+      {open && (
+        <div
+          className="absolute left-0 z-50"
+          style={{
+            top:          'calc(100% + 6px)',
+            minWidth:     180,
+            background:   'var(--color-surface-2)',
+            border:       '1px solid oklch(from var(--color-text) l c h / 0.08)',
+            borderRadius: 'var(--radius-xl)',
+            boxShadow:    'var(--shadow-lg)',
+            overflow:     'hidden',
+            padding:       6,
+          }}
+        >
+          {portfolios.map(p => (
+            <button
+              key={p.id}
+              onClick={() => { setSelectedPortfolio(p.id); setOpen(false) }}
+              className="w-full flex items-center justify-between rounded-lg transition-all"
+              style={{
+                padding:    '7px 11px',
+                fontSize:   'var(--text-xs)',
+                fontWeight: p.id === selectedPortfolioId ? 550 : 400,
+                color:      p.id === selectedPortfolioId ? 'var(--color-primary)' : 'var(--color-text)',
+                background: p.id === selectedPortfolioId
+                  ? 'oklch(from var(--color-primary) l c h / 0.08)'
+                  : 'transparent',
+              }}
+              onMouseEnter={e => {
+                if (p.id !== selectedPortfolioId)
+                  e.currentTarget.style.background = 'oklch(from var(--color-text) l c h / 0.05)'
+              }}
+              onMouseLeave={e => {
+                if (p.id !== selectedPortfolioId)
+                  e.currentTarget.style.background = 'transparent'
+              }}
+            >
+              <span className="truncate">{p.name}</span>
+              {p.id === selectedPortfolioId && (
+                <CheckCircle2 size={12} style={{ color: 'var(--color-primary)', flexShrink: 0, marginLeft: 6 }} />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Topbar() {
   const {
     theme, setTheme,
     toggleSidebar,
-    selectedPortfolioId,
     openTransactionModal,
   } = useAppStore()
-
-  const { data: portfolios = [] } = usePortfolios()
-  const selectedName = portfolios.find(p => p.id === selectedPortfolioId)?.name
 
   return (
     <header
@@ -21,17 +132,19 @@ export default function Topbar() {
       style={{
         height:       'var(--topbar-height, 56px)',
         padding:      '0 clamp(1rem, 2vw, 1.5rem)',
-        gap:          '12px',
+        gap:          12,
         background:   'var(--color-surface)',
         borderBottom: '1px solid oklch(from var(--color-text) l c h / 0.07)',
-        /* Sombra sutil para separar o header do conteúdo */
         boxShadow:    '0 1px 4px oklch(0.18 0.01 80 / 0.05)',
+        /* garante que a topbar fique acima do sidebar */
+        position:     'relative',
+        zIndex:       30,
       }}
     >
-      {/* ── Esquerda ───────────────────────────────────────────── */}
+      {/* ── Esquerda: hamburger + logo + seletor ───────── */}
       <div className="flex items-center min-w-0" style={{ gap: 10 }}>
 
-        {/* Hamburger — mobile only */}
+        {/* Hamburger — mobile */}
         <button
           onClick={toggleSidebar}
           className="lg:hidden btn-icon"
@@ -40,43 +153,39 @@ export default function Topbar() {
           <Menu size={18} />
         </button>
 
-        {/* Logo — desktop */}
-        <div className="hidden lg:flex">
-          <LogoSGI size={28} />
-        </div>
+        {/* Logo */}
+        <LogoSGI size={28} />
 
-        {/* Nome da carteira — mobile */}
-        {selectedName && (
-          <span
-            className="lg:hidden truncate"
-            style={{
-              fontSize:   'var(--text-sm)',
-              fontWeight: 550,
-              maxWidth:   160,
-              color:      'var(--color-text)',
-              letterSpacing: '-0.005em',
-            }}
-          >
-            {selectedName}
-          </span>
-        )}
+        {/* Separador visual */}
+        <div
+          className="hidden sm:block"
+          style={{
+            width:      1,
+            height:     18,
+            background: 'oklch(from var(--color-text) l c h / 0.1)',
+            flexShrink: 0,
+          }}
+        />
+
+        {/* Seletor de carteira */}
+        <div className="hidden sm:block">
+          <PortfolioSelector />
+        </div>
       </div>
 
-      {/* ── Direita ───────────────────────────────────────────── */}
+      {/* ── Direita: CTA + tema + user ─────────────── */}
       <div className="flex items-center shrink-0" style={{ gap: 6 }}>
 
-        {/* Botão Novo Lançamento — desktop */}
         <button
           onClick={() => openTransactionModal()}
-          className="hidden lg:inline-flex items-center btn btn-primary"
+          className="hidden sm:inline-flex items-center btn btn-primary"
           style={{
-            height:     34,
-            padding:    '0 14px',
-            fontSize:   'var(--text-xs)',
+            height:    34,
+            padding:   '0 14px',
+            fontSize:  'var(--text-xs)',
             fontWeight: 600,
-            gap:        6,
-            /* Sombra colorida para dar presença ao CTA */
-            boxShadow:  '0 1px 4px oklch(from var(--color-primary) 0.3 c h / 0.45)',
+            gap:       6,
+            boxShadow: '0 1px 4px oklch(from var(--color-primary) 0.3 c h / 0.45)',
           }}
           aria-label="Novo lançamento"
         >
@@ -84,9 +193,8 @@ export default function Topbar() {
           Lançamento
         </button>
 
-        {/* Divisor visual */}
         <div
-          className="hidden lg:block"
+          className="hidden sm:block"
           style={{
             width:      1,
             height:     20,
@@ -96,7 +204,6 @@ export default function Topbar() {
           }}
         />
 
-        {/* Toggle tema */}
         <button
           onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
           className="btn-icon"
@@ -107,7 +214,6 @@ export default function Topbar() {
             : <Moon size={16} strokeWidth={1.75} />}
         </button>
 
-        {/* Menu do usuário */}
         <UserMenu />
       </div>
     </header>
