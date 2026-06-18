@@ -1,0 +1,40 @@
+/**
+ * Hook para buscar dados do módulo IRPF.
+ * Expõe: useIRPFAnos, useIRPFReport
+ */
+import { useQuery } from '@tanstack/react-query'
+import api from '@/services/api'
+import type {
+  IRPFReportOut,
+} from '@/types/irpf'
+
+export function useIRPFAnos(portfolioId: number | null) {
+  return useQuery<number[]>({
+    queryKey: ['irpf-anos', portfolioId],
+    queryFn: async () => {
+      const res = await api.get(`/portfolios/${portfolioId}/irpf/anos`)
+      return res.data
+    },
+    enabled: !!portfolioId,
+    staleTime: 1000 * 60 * 5,
+  })
+}
+
+export function useIRPFReport(
+  portfolioId: number | null,
+  year: number | null,
+  refresh = false,
+) {
+  return useQuery<IRPFReportOut>({
+    queryKey: ['irpf-report', portfolioId, year, refresh],
+    queryFn: async () => {
+      const res = await api.get(
+        `/portfolios/${portfolioId}/irpf/${year}`,
+        { params: { refresh } },
+      )
+      return res.data
+    },
+    enabled: !!portfolioId && !!year,
+    staleTime: 1000 * 60 * 5,
+  })
+}
