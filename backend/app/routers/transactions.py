@@ -14,6 +14,17 @@ from app.services.dividend_backfill_service import backfill_dividends
 router = APIRouter()
 
 
+def _to_operation(value: str) -> OperationType:
+    """Converte string 'buy'/'sell' para OperationType com segurança."""
+    try:
+        return OperationType(value)
+    except ValueError:
+        raise HTTPException(
+            status_code=422,
+            detail=f"operation inválida: '{value}'. Use 'buy' ou 'sell'.",
+        )
+
+
 async def _get_portfolio(portfolio_id: int, user: User, db: AsyncSession) -> Portfolio:
     result = await db.execute(
         select(Portfolio).where(
@@ -23,7 +34,7 @@ async def _get_portfolio(portfolio_id: int, user: User, db: AsyncSession) -> Por
     )
     p = result.scalar_one_or_none()
     if not p:
-        raise HTTPException(status_code=404, detail="Carteira nao encontrada.")
+        raise HTTPException(status_code=404, detail="Carteira não encontrada.")
     return p
 
 
@@ -45,9 +56,10 @@ async def _calc_current_quantity(
 
     qty = 0.0
     for op, q in rows:
-        if op == OperationType.buy or op == "buy":
+        op_val = op.value if isinstance(op, OperationType) else str(op)
+        if op_val == "buy":
             qty += float(q)
-        elif op == OperationType.sell or op == "sell":
+        elif op_val == "sell":
             qty -= float(q)
     return max(qty, 0.0)
 
@@ -65,7 +77,7 @@ async def _validate_sell(
             status_code=400,
             detail=(
                 f"Quantidade insuficiente para venda de {ticker}. "
-                f"Posicao atual: {current_qty:.4f} | Tentativa: {quantity:.4f}"
+                f"Posição atual: {current_qty:.4f} | Tentativa: {quantity:.4f}"
             ),
         )
 
@@ -99,22 +111,23 @@ async def create_transaction(
 ):
     await _get_portfolio(portfolio_id, current_user, db)
 
-    ticker = payload.ticker.upper()
+    ticker = payload.ticker.strip().upper()
     asset_type = payload.asset_type
+    operation = _to_operation(payload.operation)
 
-    if str(payload.operation) in ("sell", OperationType.sell):
+    if operation == OperationType.sell:
         await _validate_sell(db, portfolio_id, ticker, payload.quantity)
 
     tx = Transaction(
         portfolio_id=portfolio_id,
         ticker=ticker,
         asset_type=asset_type,
-        operation=payload.operation,
+        operation=operation,
         quantity=payload.quantity,
         price=payload.price,
         fees=payload.fees or 0.0,
         date=payload.date,
-        currency=getattr(payload, "currency", "BRL") or "BRL",
+        currency=payload.currency or "BRL",
         notes=payload.notes,
     )
     db.add(tx)
@@ -153,22 +166,23 @@ async def update_transaction(
     )
     tx = result.scalar_one_or_none()
     if not tx:
-        raise HTTPException(status_code=404, detail="Transacao nao encontrada.")
+        raise HTTPException(status_code=404, detail="Transação não encontrada.")
 
-    ticker = payload.ticker.upper()
+    ticker = payload.ticker.strip().upper()
     asset_type = payload.asset_type
+    operation = _to_operation(payload.operation)
 
-    if str(payload.operation) in ("sell", OperationType.sell):
+    if operation == OperationType.sell:
         await _validate_sell(db, portfolio_id, ticker, payload.quantity, exclude_tx_id=transaction_id)
 
     tx.ticker = ticker
     tx.asset_type = asset_type
-    tx.operation = payload.operation
+    tx.operation = operation          # ← OperationType, não string
     tx.quantity = payload.quantity
     tx.price = payload.price
     tx.fees = payload.fees or 0.0
     tx.date = payload.date
-    tx.currency = getattr(payload, "currency", "BRL") or "BRL"
+    tx.currency = payload.currency or "BRL"
     tx.notes = payload.notes
 
     await db.commit()
@@ -205,7 +219,7 @@ async def delete_transaction(
     )
     tx = result.scalar_one_or_none()
     if not tx:
-        raise HTTPException(status_code=404, detail="Transacao nao encontrada.")
+        raise HTTPException(status_code=404, detail="Transação não encontrada.")
 
     ticker = tx.ticker
     asset_type = tx.asset_type
@@ -222,11 +236,18 @@ async def delete_transaction(
 
 
 async def _run_backfill(portfolio_id: int, ticker: str, asset_type: str) -> None:
-    from app.core.database import AsyncSessionLocal
-    async with AsyncSessionLocal() as db:
-        await backfill_dividends(
-            db=db,
-            portfolio_id=portfolio_id,
-            ticker=ticker,
-            asset_type=asset_type,
+    """Abre sessão própria para o background task de backfill de dividendos."""
+    try:
+        from app.core.database import AsyncSessionLocal
+        async with AsyncSessionLocal() as db:
+            await backfill_dividends(
+                db=db,
+                portfolio_id=portfolio_id,
+                ticker=ticker,
+                asset_type=asset_type,
+            )
+    except Exception as exc:  # noqa: BLE001
+        import logging
+        logging.getLogger(__name__).error(
+            "[backfill] erro para %s/%s: %s", ticker, portfolio_id, exc
         )
