@@ -13,6 +13,7 @@ import RentabilidadePage from '@/pages/RentabilidadePage'
 import Transacoes        from '@/pages/Transacoes'
 import Configuracoes     from '@/pages/Configuracoes'
 import ProventosPage    from '@/pages/ProventosPage'
+import IRPFPage         from '@/pages/IRPFPage'
 
 // Patrimônio
 import PatrimonioPage         from '@/pages/patrimonio/PatrimonioPage'
@@ -49,9 +50,10 @@ export const router = createBrowserRouter([
       { path: 'rentabilidade',     element: <RentabilidadePage /> },
       { path: 'transacoes',        element: <Transacoes /> },
       { path: 'proventos',         element: <ProventosPage /> },
+      { path: 'irpf',              element: <IRPFPage /> },
       { path: 'configuracoes',     element: <Configuracoes /> },
 
-      // Módulo Patrimônio — PatrimonioPage renderiza o Outlet das sub-abas
+      // Módulo Patrimônio
       {
         path: 'patrimonio',
         element: <PatrimonioPage />,
