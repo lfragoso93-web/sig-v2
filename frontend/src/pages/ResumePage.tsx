@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { BarChart2, TrendingUp, DollarSign, Activity, PackageOpen, Briefcase } from 'lucide-react'
+import { BarChart2, TrendingUp, DollarSign, Activity, Briefcase } from 'lucide-react'
 import clsx from 'clsx'
 import {
   usePortfolioList,
@@ -18,17 +18,74 @@ import AssetDonutChart from '@/components/charts/AssetDonutChart'
 import PositionTable from '@/components/resume/PositionTable'
 import CreatePortfolioModal from '@/components/modals/CreatePortfolioModal'
 
+// ── Opções dos selects ──
 const PERIOD_OPTIONS = [
-  { label: '6M',   value: 6  },
-  { label: '12M',  value: 12 },
-  { label: '24M',  value: 24 },
-  { label: 'Tudo', value: 60 },
+  { label: 'Últimos 6 meses',  value: 6  },
+  { label: 'Últimos 12 meses', value: 12 },
+  { label: 'Últimos 24 meses', value: 24 },
+  { label: 'Todo período',     value: 60 },
 ]
 
+const ASSET_CLASS_ALL = 'all'
+const ASSET_CLASS_OPTIONS = [
+  { label: 'Todas as classes',     value: ASSET_CLASS_ALL },
+  { label: 'Ações',               value: 'ACAO'           },
+  { label: 'FIIs',                 value: 'FII'            },
+  { label: 'ETF Nacional',         value: 'ETF_NACIONAL'   },
+  { label: 'ETF Internacional',    value: 'ETF_INTERNACIONAL' },
+  { label: 'Stock / Int’l',        value: 'STOCK'          },
+  { label: 'Tesouro Direto',       value: 'TESOURO_DIRETO' },
+  { label: 'Renda Fixa',           value: 'RENDA_FIXA'     },
+  { label: 'Cripto',               value: 'CRIPTO'         },
+]
+
+// ── Componente de select reutilizável ──
+function ChartSelect({
+  value, onChange, options,
+}: {
+  value: string | number
+  onChange: (v: string) => void
+  options: { label: string; value: string | number }[]
+}) {
+  return (
+    <select
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      style={{
+        padding: '4px 8px',
+        paddingRight: '24px',
+        height: 28,
+        borderRadius: 'var(--radius-md)',
+        border: '1px solid oklch(from var(--color-text) l c h / 0.1)',
+        background: 'var(--color-surface-2)',
+        color: 'var(--color-text)',
+        fontSize: 'var(--text-xs)',
+        fontWeight: 500,
+        cursor: 'pointer',
+        outline: 'none',
+        appearance: 'none',
+        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E")`,
+        backgroundRepeat: 'no-repeat',
+        backgroundPosition: 'right 7px center',
+        minWidth: 0,
+      }}
+      onFocus={e => (e.target.style.borderColor = 'var(--color-primary)')}
+      onBlur={e  => (e.target.style.borderColor  = 'oklch(from var(--color-text) l c h / 0.1)')}
+    >
+      {options.map(o => (
+        <option key={o.value} value={o.value}>{o.label}</option>
+      ))}
+    </select>
+  )
+}
+
+// ── Página principal ──
 export default function ResumePage() {
   const globalPortfolioId = useAppStore(s => s.selectedPortfolioId)
   const setGlobal         = useAppStore(s => s.setSelectedPortfolioId)
-  const [period, setPeriod]           = useState(12)
+
+  const [period,          setPeriod]          = useState(12)
+  const [assetClass,      setAssetClass]      = useState(ASSET_CLASS_ALL)
   const [showCreateModal, setShowCreateModal] = useState(false)
 
   const { data: portfolios, isLoading: loadingPortfolios } = usePortfolioList()
@@ -41,10 +98,12 @@ export default function ResumePage() {
 
   const portfolioId: number | null = globalPortfolioId ?? (portfolios?.[0]?.id ?? null)
 
-  const { data: summary,           isLoading: loadingSummary  } = usePortfolioSummary(portfolioId)
-  const { data: patrimonioHistory, isLoading: loadingHistory   } = usePatrimonioHistory(portfolioId, period)
-  const { data: distribution,      isLoading: loadingDist      } = useAssetDistribution(portfolioId)
-  const { data: positions,         isLoading: loadingPositions } = usePositions(portfolioId)
+  const activeAssetType = assetClass === ASSET_CLASS_ALL ? null : assetClass
+
+  const { data: summary,           isLoading: loadingSummary    } = usePortfolioSummary(portfolioId)
+  const { data: patrimonioHistory, isLoading: loadingHistory     } = usePatrimonioHistory(portfolioId, period, activeAssetType)
+  const { data: distribution,      isLoading: loadingDist        } = useAssetDistribution(portfolioId)
+  const { data: positions,         isLoading: loadingPositions   } = usePositions(portfolioId)
 
   const s = summary as any
   const patrimonio    = s?.total_patrimonio    ?? s?.current_value   ?? 0
@@ -57,6 +116,7 @@ export default function ResumePage() {
   const variacaoPct   = s?.variacao_percentual ?? s?.total_gain_pct  ?? 0
   const rentabilidade = s?.rentabilidade_total ?? s?.total_gain_pct  ?? 0
 
+  // ── Loading geral ──
   if (loadingPortfolios) {
     return (
       <div className="page-container">
@@ -67,13 +127,11 @@ export default function ResumePage() {
     )
   }
 
+  // ── Usuário sem carteira ──
   if (!portfolios?.length) {
     return (
       <div className="page-container">
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          minHeight: '60vh',
-        }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
           <EmptyState
             icon={Briefcase}
             title="Você ainda não tem uma carteira"
@@ -81,10 +139,7 @@ export default function ResumePage() {
             action={{ label: '+ Criar minha carteira', onClick: () => setShowCreateModal(true) }}
           />
         </div>
-
-        {showCreateModal && (
-          <CreatePortfolioModal onClose={() => setShowCreateModal(false)} />
-        )}
+        {showCreateModal && <CreatePortfolioModal onClose={() => setShowCreateModal(false)} />}
       </div>
     )
   }
@@ -92,7 +147,7 @@ export default function ResumePage() {
   return (
     <div className="page-container">
 
-      {/* KPI Cards */}
+      {/* ── KPI Cards ── */}
       <div className="kpi-grid">
         {loadingSummary ? (
           [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
@@ -137,59 +192,107 @@ export default function ResumePage() {
         )}
       </div>
 
-      {/* Charts */}
+      {/* ── Gráficos ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+        {/* Evolução Patrimonial */}
         <div className="card p-4 lg:col-span-2">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <BarChart2 size={14} style={{ color: 'var(--color-primary)' }} />
-              <span className="section-card-title">Evolução do Patrimônio</span>
+
+          {/* Header do card — título + dois selects */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '0.5rem',
+            marginBottom: '1rem',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <BarChart2 size={14} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
+              <span className="section-card-title">Evolução Patrimonial</span>
+
+              {/* Badge mostrando qual classe está filtrada */}
+              {assetClass !== ASSET_CLASS_ALL && (
+                <span style={{
+                  fontSize: '0.68rem', fontWeight: 600,
+                  color: 'var(--color-primary)',
+                  background: 'oklch(from var(--color-primary) l c h / 0.1)',
+                  border: '1px solid oklch(from var(--color-primary) l c h / 0.2)',
+                  borderRadius: 'var(--radius-full)',
+                  padding: '1px 8px',
+                }}>
+                  {ASSET_CLASS_OPTIONS.find(o => o.value === assetClass)?.label}
+                </span>
+              )}
             </div>
-            <div className="flex gap-0.5">
-              {PERIOD_OPTIONS.map(opt => (
-                <button
-                  key={opt.value}
-                  onClick={() => setPeriod(opt.value)}
-                  className="px-2.5 py-1 rounded text-xs font-medium transition-colors"
-                  style={{
-                    background: period === opt.value ? 'oklch(from var(--color-primary) l c h / 0.15)' : 'transparent',
-                    color: period === opt.value ? 'var(--color-primary)' : 'var(--color-text-muted)',
-                  }}
-                >
-                  {opt.label}
-                </button>
-              ))}
+
+            {/* Selects */}
+            <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
+              <ChartSelect
+                value={assetClass}
+                onChange={v => setAssetClass(v)}
+                options={ASSET_CLASS_OPTIONS}
+              />
+              <ChartSelect
+                value={period}
+                onChange={v => setPeriod(Number(v))}
+                options={PERIOD_OPTIONS}
+              />
             </div>
           </div>
+
+          {/* Gráfico */}
           {loadingHistory ? (
-            <div className="h-52 animate-pulse rounded-lg" style={{ background: 'var(--color-surface-offset)' }} />
+            <div
+              className="animate-pulse rounded-lg"
+              style={{ height: 220, background: 'var(--color-surface-offset)' }}
+            />
           ) : patrimonioHistory?.length ? (
-            <PatrimonioBarChart data={patrimonioHistory} />
+            <PatrimonioBarChart
+              data={patrimonioHistory}
+              singleSeries={assetClass !== ASSET_CLASS_ALL}
+            />
           ) : (
-            <div className="h-52 flex items-center justify-center text-xs" style={{ color: 'var(--color-text-muted)' }}>
-              Sem dados históricos ainda
+            <div
+              style={{
+                height: 220, display: 'flex',
+                alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-faint)' }}>
+                Sem dados históricos para esta seleção
+              </span>
             </div>
           )}
         </div>
 
+        {/* Distribuição */}
         <div className="card p-4">
-          <div className="flex items-center gap-2 mb-4">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '1rem' }}>
             <Activity size={14} style={{ color: 'var(--color-primary)' }} />
             <span className="section-card-title">Distribuição</span>
           </div>
           {loadingDist ? (
-            <div className="h-52 animate-pulse rounded-lg" style={{ background: 'var(--color-surface-offset)' }} />
+            <div
+              className="animate-pulse rounded-lg"
+              style={{ height: 220, background: 'var(--color-surface-offset)' }}
+            />
           ) : distribution?.length ? (
             <AssetDonutChart data={distribution} />
           ) : (
-            <div className="h-52 flex items-center justify-center text-xs" style={{ color: 'var(--color-text-muted)' }}>
-              Sem ativos
+            <div
+              style={{
+                height: 220, display: 'flex',
+                alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-faint)' }}>Sem ativos</span>
             </div>
           )}
         </div>
       </div>
 
-      {/* Posições */}
+      {/* ── Posições ── */}
       <div className="card overflow-hidden">
         <div className="section-card-header">
           <TrendingUp size={14} style={{ color: 'var(--color-primary)' }} />
