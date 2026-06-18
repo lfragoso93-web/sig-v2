@@ -35,22 +35,23 @@ _ENUMS: list[tuple] = [
 
 
 async def _create_enums_raw() -> None:
+    """Cria enums no PostgreSQL de forma idempotente.
+    Usa try/except por enum para tolerar bancos pre-existentes
+    sem depender do comportamento do bloco DO $$ com asyncpg.
+    """
     dsn = settings.ASYNC_DATABASE_URL.replace("postgresql+asyncpg", "postgresql")
     conn = await asyncpg.connect(dsn)
     try:
         for enum_def in _ENUMS:
             type_name = enum_def[0]
             values = ", ".join(enum_def[1:])
-            # Verifica via pg_type antes de criar para evitar UniqueViolationError
-            # independente do comportamento de captura de exceção do asyncpg
-            sql = (
-                f"DO $$ BEGIN "
-                f"IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '{type_name}') THEN "
-                f"CREATE TYPE {type_name} AS ENUM ({values}); "
-                f"END IF; "
-                f"END $$;"
-            )
-            await conn.execute(sql)
+            try:
+                await conn.execute(
+                    f"CREATE TYPE {type_name} AS ENUM ({values});"
+                )
+            except asyncpg.exceptions.DuplicateObjectError:
+                # Enum ja existe — comportamento esperado em restarts e upgrades
+                pass
     finally:
         await conn.close()
 
