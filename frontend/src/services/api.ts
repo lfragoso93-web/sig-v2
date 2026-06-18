@@ -28,7 +28,10 @@ api.interceptors.response.use(
   (err) => {
     const isLoginRoute = err.config?.url?.includes('/auth/login')
     if (err.response?.status === 401 && !isLoginRoute) {
+      // Limpa TODOS os tokens para evitar loop de re-hidrataÃ§Ã£o
       useAuthStore.getState().logout()
+      localStorage.removeItem('sig_token')
+      localStorage.removeItem('sig_refresh')
       localStorage.removeItem('sig-auth')
       window.location.replace('/login')
     }
