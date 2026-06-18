@@ -32,6 +32,24 @@ def _asset_type_str(value) -> str:
     return str(value or "").upper()
 
 
+def _is_buy(op) -> bool:
+    """
+    Verifica se a operacao e compra.
+    SAEnum com values_callable garante que op chega como OperationType.buy,
+    mas mantemos fallback de string para registros legados no banco.
+    """
+    if isinstance(op, OperationType):
+        return op == OperationType.buy
+    return str(op).lower() in ("buy", "compra")
+
+
+def _is_sell(op) -> bool:
+    """Verifica se a operacao e venda. Mesma logica de _is_buy."""
+    if isinstance(op, OperationType):
+        return op == OperationType.sell
+    return str(op).lower() in ("sell", "venda")
+
+
 # ---------------------------------------------------------------------------
 # calc_raw_positions - PM ponderado, venda nao altera PM
 # ---------------------------------------------------------------------------
@@ -59,21 +77,10 @@ async def calc_raw_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
 
         s = state[ticker]
 
-        is_buy = (
-            op == OperationType.buy
-            or (hasattr(op, 'value') and op.value == 'buy')
-            or str(op).lower() in ('buy', 'compra')
-        )
-        is_sell = (
-            op == OperationType.sell
-            or (hasattr(op, 'value') and op.value == 'sell')
-            or str(op).lower() in ('sell', 'venda')
-        )
-
-        if is_buy:
+        if _is_buy(op):
             s["total_cost"] += qty * price + fees
             s["quantity"] += qty
-        elif is_sell:
+        elif _is_sell(op):
             if s["quantity"] > 0:
                 ratio = min(qty, s["quantity"]) / s["quantity"]
                 s["total_cost"] -= s["total_cost"] * ratio
