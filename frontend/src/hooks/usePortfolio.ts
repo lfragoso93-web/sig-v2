@@ -37,21 +37,13 @@ export interface AssetDistribution {
 /** @deprecated use AssetDistribution */
 export type AssetTypeDistribution = AssetDistribution
 
-/**
- * Resumo financeiro de um portfólio.
- * Campos EN alinhados com a API REST; campos PT-BR mantidos como opcionais
- * para compatibilidade com componentes legados.
- */
 export interface PortfolioSummary {
-  // — campos EN (canônicos) —
   total_invested: number
   current_value: number
   total_gain: number
   total_gain_pct: number
   daily_change?: number
   daily_change_pct?: number
-
-  // — campos PT-BR (alias / legado) —
   total_patrimonio?: number
   total_investido?: number
   lucro_total?: number
@@ -62,7 +54,6 @@ export interface PortfolioSummary {
   total_proventos?: number
 }
 
-/** Portfolio mínimo para listagem */
 export interface PortfolioListItem {
   id: number
   name: string
@@ -118,13 +109,22 @@ export function usePortfolioList() {
   })
 }
 
-/** Histórico de patrimônio mensal */
-export function usePatrimonioHistory(portfolioId: number | null, months = 12) {
+/** Histórico de patrimônio mensal (total ou por classe de ativo) */
+export function usePatrimonioHistory(
+  portfolioId: number | null,
+  months = 12,
+  assetType?: string | null,
+) {
   return useQuery<PatrimonioHistoryPoint[]>({
-    queryKey: ['patrimonio-history', portfolioId, months],
+    queryKey: ['patrimonio-history', portfolioId, months, assetType ?? 'all'],
     queryFn: () =>
       api
-        .get(`/portfolios/${portfolioId}/patrimonio-history`, { params: { months } })
+        .get(`/portfolios/${portfolioId}/patrimonio-history`, {
+          params: {
+            months,
+            ...(assetType ? { asset_type: assetType } : {}),
+          },
+        })
         .then(r => r.data),
     enabled: !!portfolioId,
     placeholderData: [],

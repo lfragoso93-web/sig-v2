@@ -1,6 +1,6 @@
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer,
 } from 'recharts'
 import type { PatrimonioHistoryPoint } from '@/hooks/usePortfolio'
 import { formatBRL } from '@/utils/format'
@@ -8,27 +8,30 @@ import { formatBRL } from '@/utils/format'
 interface Props {
   data: PatrimonioHistoryPoint[]
   loading?: boolean
+  /** Quando verdadeiro, exibe apenas o valor (sem "investido") — útil no modo classe de ativo */
+  singleSeries?: boolean
 }
+
+const MONTHS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
 
 function shortDate(d: string) {
-  const parts = d.split('-')
-  if (parts.length >= 2) {
-    const months = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
-    const m = parseInt(parts[1], 10) - 1
-    return months[m] ?? d
-  }
-  return d
+  const [, m, day] = d.split('-')
+  if (!m) return d
+  const label = MONTHS[parseInt(m, 10) - 1] ?? m
+  return day ? `${label}/${day}` : label
 }
 
-export default function PatrimonioBarChart({ data, loading }: Props) {
-  if (loading) {
-    return <div className="skeleton h-64 w-full rounded-xl" />
-  }
+export default function PatrimonioBarChart({ data, loading, singleSeries }: Props) {
+  if (loading) return <div className="skeleton h-64 w-full rounded-xl" />
 
   if (!data.length) {
     return (
-      <div className="flex items-center justify-center h-48" style={{ color: 'var(--color-text-faint)' }}>
-        <p className="text-sm">Sem histórico de patrimônio</p>
+      <div
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 208 }}
+      >
+        <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-faint)' }}>
+          Sem histórico para o período selecionado
+        </p>
       </div>
     )
   }
@@ -40,18 +43,33 @@ export default function PatrimonioBarChart({ data, loading }: Props) {
   }))
 
   return (
-    <ResponsiveContainer width="100%" height={260}>
-      <BarChart data={chartData} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-divider)" vertical={false} />
+    <ResponsiveContainer width="100%" height={220}>
+      <AreaChart data={chartData} margin={{ top: 6, right: 4, left: 4, bottom: 0 }}>
+        <defs>
+          <linearGradient id="gradValue" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor="var(--color-primary)" stopOpacity={0.25} />
+            <stop offset="100%" stopColor="var(--color-primary)" stopOpacity={0.01} />
+          </linearGradient>
+          <linearGradient id="gradInvested" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor="var(--color-primary)" stopOpacity={0.1} />
+            <stop offset="100%" stopColor="var(--color-primary)" stopOpacity={0.01} />
+          </linearGradient>
+        </defs>
+
+        <CartesianGrid
+          strokeDasharray="3 3"
+          stroke="oklch(from var(--color-text) l c h / 0.07)"
+          vertical={false}
+        />
         <XAxis
           dataKey="name"
-          tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }}
+          tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }}
           axisLine={false} tickLine={false}
         />
         <YAxis
           tickFormatter={(v: number) => formatBRL(v, true)}
-          tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }}
-          axisLine={false} tickLine={false} width={72}
+          tick={{ fontSize: 9, fill: 'var(--color-text-muted)' }}
+          axisLine={false} tickLine={false} width={68}
         />
         <Tooltip
           formatter={(value: number, name: string) => [
@@ -59,22 +77,39 @@ export default function PatrimonioBarChart({ data, loading }: Props) {
             name === 'value' ? 'Patrimônio' : 'Investido',
           ]}
           contentStyle={{
-            background: 'var(--color-surface)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 8,
-            fontSize: 12,
+            background: 'var(--color-surface-2)',
+            border: '1px solid oklch(from var(--color-text) l c h / 0.1)',
+            borderRadius: 8, fontSize: 11,
+            color: 'var(--color-text)',
           }}
+          cursor={{ stroke: 'var(--color-primary)', strokeWidth: 1, strokeDasharray: '4 2' }}
         />
-        <Legend
-          formatter={(v: string) => (
-            <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-              {v === 'value' ? 'Patrimônio' : 'Investido'}
-            </span>
-          )}
+
+        {/* Área principal: patrimônio total */}
+        <Area
+          type="monotone"
+          dataKey="value"
+          stroke="var(--color-primary)"
+          strokeWidth={2}
+          fill="url(#gradValue)"
+          dot={false}
+          activeDot={{ r: 4, fill: 'var(--color-primary)', strokeWidth: 0 }}
         />
-        <Bar dataKey="value"    fill="var(--color-primary)" radius={[4,4,0,0]} maxBarSize={40} />
-        <Bar dataKey="invested" fill="var(--color-teal)"    radius={[4,4,0,0]} maxBarSize={40} opacity={0.6} />
-      </BarChart>
+
+        {/* Área secundaria: valor investido (apenas modo total) */}
+        {!singleSeries && (
+          <Area
+            type="monotone"
+            dataKey="invested"
+            stroke="oklch(from var(--color-primary) l c h / 0.45)"
+            strokeWidth={1.5}
+            strokeDasharray="4 3"
+            fill="url(#gradInvested)"
+            dot={false}
+            activeDot={{ r: 3, fill: 'oklch(from var(--color-primary) l c h / 0.7)', strokeWidth: 0 }}
+          />
+        )}
+      </AreaChart>
     </ResponsiveContainer>
   )
 }
