@@ -2,6 +2,7 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 import asyncpg
 import asyncpg.exceptions
 
@@ -41,8 +42,6 @@ async def _create_enums_raw() -> None:
         for enum_def in _ENUMS:
             type_name = enum_def[0]
             values = ", ".join(enum_def[1:])
-            # Verifica via pg_type antes de criar para evitar UniqueViolationError
-            # independente do comportamento de captura de exceção do asyncpg
             sql = (
                 f"DO $$ BEGIN "
                 f"IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '{type_name}') THEN "
@@ -69,6 +68,38 @@ app = FastAPI(
     version="2.0.0",
     lifespan=lifespan,
 )
+
+
+def custom_openapi():
+    """Substitui o schema OpenAPI padrão para adicionar HTTPBearer ao lado
+    do OAuth2PasswordBearer. Isso permite colar um token JWT diretamente no
+    botão Authorize do Swagger sem precisar do fluxo OAuth2 form-data."""
+    if app.openapi_schema:
+        return app.openapi_schema
+    schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    schema.setdefault("components", {}).setdefault("securitySchemes", {})
+    # Adiciona HTTPBearer — colar token no campo "Value: Bearer <token>"
+    schema["components"]["securitySchemes"]["HTTPBearer"] = {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Cole aqui o access_token obtido em POST /api/v1/auth/login",
+    }
+    # Aplica HTTPBearer como security global (todos os endpoints)
+    schema["security"] = [
+        {"OAuth2PasswordBearer": []},
+        {"HTTPBearer": []},
+    ]
+    app.openapi_schema = schema
+    return schema
+
+
+app.openapi = custom_openapi  # type: ignore[method-assign]
 
 _cors_origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
 
