@@ -17,7 +17,7 @@ import yfinance as yf
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.asset_types import BR_TYPES, INTL_TYPES, yf_ticker
+from app.core.asset_types import BR_TYPES, INTL_TYPES, NO_QUOTE_TYPES, yf_ticker
 from app.integrations.brapi import (
     fetch_quotes as brapi_fetch_quotes,
     fetch_crypto_quote as brapi_fetch_crypto,
@@ -117,23 +117,23 @@ async def _fetch_yfinance_current(
 
 
 # ---------------------------------------------------------------------------
-# Aliases mockáveis pelos testes
+# Aliases mockaveis pelos testes
 # ---------------------------------------------------------------------------
 
 async def _fetch_brapi(tickers: list[str]) -> dict[str, float]:
-    """Wrapper mockável sobre brapi_fetch_quotes."""
+    """Wrapper mockavel sobre brapi_fetch_quotes."""
     return await brapi_fetch_quotes(tickers)
 
 
 async def _fetch_brapi_crypto(tickers: list[str]) -> dict[str, float]:
-    """Wrapper mockável sobre brapi_fetch_crypto."""
+    """Wrapper mockavel sobre brapi_fetch_crypto."""
     return await brapi_fetch_crypto(tickers)
 
 
 async def _fetch_yfinance(
     pairs: list[tuple[str, AssetType]],
 ) -> dict[str, float]:
-    """Wrapper mockável sobre _fetch_yfinance_current."""
+    """Wrapper mockavel sobre _fetch_yfinance_current."""
     return await _fetch_yfinance_current(pairs)
 
 
@@ -159,6 +159,11 @@ async def get_prices(
         except ValueError:
             asset_type = None
 
+        # Tipos sem cotacao de mercado (Tesouro, Renda Fixa, Outro) — pular silenciosamente
+        if asset_type in NO_QUOTE_TYPES:
+            logger.debug(f"[quotes_service] {ticker} ({raw_type}) sem cotacao de mercado — ignorado")
+            continue
+
         mem_val = _mem_get(ticker)
         if mem_val is not None:
             resolved[ticker] = mem_val
@@ -178,6 +183,8 @@ async def get_prices(
         elif asset_type in INTL_TYPES:
             intl_pairs.append((ticker, asset_type))
         else:
+            # Tipo desconhecido — tenta BRAPI como ultimo recurso e loga aviso
+            logger.warning(f"[quotes_service] asset_type desconhecido para {ticker} ({raw_type}) — tentando BRAPI")
             br_tickers.append(ticker)
 
     br_results, crypto_results, intl_results = await asyncio.gather(
@@ -228,10 +235,18 @@ async def get_prices(
 
 async def get_current_price(
     ticker: str,
-    asset_type: str = "ACAO",
+    asset_type: Optional[str] = None,
     db: Optional[AsyncSession] = None,
 ) -> Optional[float]:
-    """Conveniencia: busca preco de um unico ticker."""
+    """
+    Conveniencia: busca preco de um unico ticker.
+
+    `asset_type` deve sempre ser passado para garantir o provedor correto.
+    Se omitido, retorna None e loga aviso — evita silenciosamente usar ACAO como default.
+    """
+    if asset_type is None:
+        logger.warning(f"[quotes_service] get_current_price chamado sem asset_type para {ticker} — retornando None")
+        return None
     result = await get_prices([{"ticker": ticker, "asset_type": asset_type}], db)
     return result.get(ticker)
 
@@ -240,7 +255,7 @@ async def update_all_quotes(db: AsyncSession) -> int:
     """Atualiza last_price de todos os ativos cadastrados. Retorna quantidade atualizada."""
     result = await db.execute(select(Asset))
     assets = result.scalars().all()
-    positions = [{"ticker": a.ticker, "asset_type": a.asset_type.value} for a in assets]
+    positions = [{"ticker": a.ticker, "asset_type": a.asset_type} for a in assets]
     prices = await get_prices(positions, db)
     await db.commit()
     return len(prices)
