@@ -40,6 +40,18 @@ const cellText  = { color: 'var(--color-text)' }
 const cellMuted = { color: 'var(--color-text-muted)' }
 const cellFaint = { color: 'var(--color-text-faint)' }
 
+// ── hook de breakpoint ─────────────────────────────────────────────────────────
+function useIsDesktop(breakpoint = 768) {
+  const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= breakpoint)
+  useEffect(() => {
+    const mq = window.matchMedia(`(min-width: ${breakpoint}px)`)
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [breakpoint])
+  return isDesktop
+}
+
 // ── AssetMenu ─────────────────────────────────────────────────────────────────
 interface AssetMenuProps { ticker: string; assetLabel: string; assetType: string }
 
@@ -133,7 +145,7 @@ interface PositionCardProps { item: PositionGroup['positions'][number] }
 function PositionCard({ item }: PositionCardProps) {
   const isTesouro = item.asset_type.toUpperCase() === 'TESOURO_DIRETO' || item.asset_type.toUpperCase() === 'TESOURO'
   const name = displayName(item.ticker, item.asset_type)
-  const hasQuote = item.variation_value !== 0 || item.current_price !== item.average_price
+  const hasQuote = item.current_price !== null && item.current_price !== undefined && item.current_price !== item.average_price
   const varColor = item.variation_value >= 0 ? 'var(--color-success)' : 'var(--color-error)'
   const investedValue = item.invested_value ?? item.quantity * item.average_price
 
@@ -162,7 +174,7 @@ function PositionCard({ item }: PositionCardProps) {
           { label: 'Qtd',         value: fmtQty(item.quantity)        },
           { label: 'P. Médio',   value: formatBRL(item.average_price) },
           { label: 'Total Inv.',  value: formatBRL(investedValue)     },
-          { label: 'Valor Atual', value: formatBRL(item.current_value) },
+          { label: 'Valor Atual', value: fmtPrice(item.current_price !== null && item.current_price !== undefined ? item.current_value : null) },
         ].map(({ label, value }) => (
           <div key={label}>
             <div style={{ fontSize: '0.65rem', marginBottom: 2, color: 'var(--color-text-faint)' }}>{label}</div>
@@ -189,6 +201,8 @@ function PositionCard({ item }: PositionCardProps) {
 
 // ── ClassTable — tabela de uma classe de ativo ──────────────────────────────────────────
 function ClassTable({ group }: { group: PositionGroup }) {
+  const isDesktop = useIsDesktop()
+
   const COLS = [
     { key: 'ativo',      label: 'Ativo',       align: 'left',  width: '30%' },
     { key: 'qtd',        label: 'Qtd',         align: 'right', width: '8%'  },
@@ -202,7 +216,7 @@ function ClassTable({ group }: { group: PositionGroup }) {
 
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
-      {/* Header da tabela: título da classe à esquerda */}
+      {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8,
         padding: '0.75rem 1.25rem',
@@ -225,15 +239,17 @@ function ClassTable({ group }: { group: PositionGroup }) {
         </span>
       </div>
 
-      {/* Cards mobile */}
-      <div className="md:hidden" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '1rem' }}>
-        {group.positions.map(item => (
-          <PositionCard key={`${item.ticker}-${item.id}`} item={item} />
-        ))}
-      </div>
+      {/* Mobile: cards */}
+      {!isDesktop && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '1rem' }}>
+          {group.positions.map(item => (
+            <PositionCard key={`${item.ticker}-${item.id ?? item.ticker}`} item={item} />
+          ))}
+        </div>
+      )}
 
-      {/* Tabela desktop */}
-      <div className="hidden md:block">
+      {/* Desktop: tabela */}
+      {isDesktop && (
         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 'var(--text-xs)' }}>
           <colgroup>
             {COLS.map(c => <col key={c.key} style={{ width: c.width }} />)}
@@ -274,7 +290,7 @@ function ClassTable({ group }: { group: PositionGroup }) {
           </thead>
           <tbody>
             {group.positions.map(item => {
-              const hasQuote      = item.current_price !== item.average_price || item.variation_value !== 0
+              const hasQuote      = item.current_price !== null && item.current_price !== undefined
               const name          = displayName(item.ticker, item.asset_type)
               const isTesouro     = item.asset_type.toUpperCase() === 'TESOURO_DIRETO' || item.asset_type.toUpperCase() === 'TESOURO'
               const varColor      = item.variation_value >= 0 ? 'var(--color-success)' : 'var(--color-notification)'
@@ -282,7 +298,7 @@ function ClassTable({ group }: { group: PositionGroup }) {
 
               return (
                 <tr
-                  key={`${item.ticker}-${item.id}`}
+                  key={`${item.ticker}-${item.id ?? item.ticker}`}
                   style={{ borderBottom: '1px solid oklch(from var(--color-text) l c h / 0.045)' }}
                   onMouseEnter={e => (e.currentTarget.style.background = 'oklch(from var(--color-primary) l c h / 0.03)')}
                   onMouseLeave={e => (e.currentTarget.style.background = '')}
@@ -317,7 +333,7 @@ function ClassTable({ group }: { group: PositionGroup }) {
                   </td>
                   {/* Valor Atual */}
                   <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
-                    {formatBRL(item.current_value)}
+                    {hasQuote ? formatBRL(item.current_value) : <span style={cellFaint}>—</span>}
                   </td>
                   {/* Resultado */}
                   <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
@@ -343,7 +359,7 @@ function ClassTable({ group }: { group: PositionGroup }) {
             })}
           </tbody>
         </table>
-      </div>
+      )}
     </div>
   )
 }
