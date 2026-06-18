@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000,http://localhost:80,http://localhost"
 
+    # Superadmin seed — criado automaticamente no startup se não existir
+    SUPERADMIN_EMAIL: str = "admin@sig.local"
+    SUPERADMIN_PASSWORD: str = "Admin@1234!"
+    SUPERADMIN_NAME: str = "Super Admin"
+
     class Config:
         env_file = ".env"
         case_sensitive = True
