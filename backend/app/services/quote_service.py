@@ -1,27 +1,24 @@
 """
-Orquestrador de cotações (Sprint 5).
+Orquestrador de cotacoes (Sprint 5).
 
 Responsabilidades:
   - update_quotes_for_portfolio(): atualiza Asset.last_price de todos os ativos
-    de uma carteira sem tocar na tabela `positions` (legada).
-  - update_all_quotes(): versao para o scheduler — atualiza todos os ativos
-    distintos cadastrados na tabela `assets`.
+    de uma carteira via Transaction (nao usa PortfolioPosition legada).
   - get_price_for_transaction(): retorna o preco de um ativo em uma data
-    específica, consultando o banco primeiro (L1/L2) e a API só se necessario.
-    Usado pelo transaction_service ao registrar operacoes retroativas.
+    especifica. Usado pelo transaction_service ao registrar operacoes retroativas.
 
-O que NAO faz mais:
-  - Nao grava current_price / current_value em `positions` (tabela legada).
-  - Nao importa fetch_international_quotes / yfinance_client diretamente.
+O que NAO faz:
+  - update_all_quotes() foi removido — usar quotes_service.update_all_quotes()
+    que e a versao canonica com cache L1/L2/L3.
+  - Nao importa PortfolioPosition (model legado).
   - Nao define seus proprios sets de tipos — usa asset_types.py.
 """
 import logging
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.asset_types import ALL_TYPES
-from app.models.asset import Asset, AssetType
-from app.models.portfolio_position import PortfolioPosition
+from app.models.asset import AssetType
+from app.models.transaction import Transaction
 from app.services.quotes_service import get_prices
 from app.services.price_history_service import get_price_at_date
 
@@ -36,65 +33,39 @@ async def update_quotes_for_portfolio(
     Atualiza Asset.last_price para todos os ativos de uma carteira.
     Retorna o numero de ativos atualizados.
 
+    Usa Transaction como fonte de verdade (substitui PortfolioPosition legada).
     Fluxo:
-      1. Busca PortfolioPositions da carteira.
+      1. Busca tickers e asset_types distintos das transacoes da carteira.
       2. Monta lista de {ticker, asset_type} para get_prices().
-      3. get_prices() consulta L1/L2 do cache e só vai à API para o que expirou.
+      3. get_prices() consulta L1/L2 do cache e so vai a API para o que expirou.
       4. Persiste last_price em Asset via _db_set() interno do quotes_service.
       5. Commit unico ao final.
     """
     result = await db.execute(
-        select(PortfolioPosition)
-        .where(PortfolioPosition.portfolio_id == portfolio_id)
+        select(Transaction.ticker, Transaction.asset_type)
+        .where(Transaction.portfolio_id == portfolio_id)
+        .distinct()
     )
-    pp_list = result.scalars().all()
+    rows = result.all()
 
-    if not pp_list:
+    if not rows:
         return 0
 
     positions_payload = [
-        {"ticker": pp.asset.ticker, "asset_type": pp.asset.asset_type.value}
-        for pp in pp_list
-        if pp.asset is not None
+        {"ticker": r.ticker, "asset_type": r.asset_type}
+        for r in rows
+        if r.ticker
     ]
 
     quotes = await get_prices(positions_payload, db=db)
     await db.commit()
 
-    updated = sum(1 for pp in pp_list if pp.asset and pp.asset.ticker in quotes)
+    updated = sum(1 for r in rows if r.ticker in quotes)
     logger.info(
         f"[quote_service] Portfolio {portfolio_id}: "
-        f"{updated}/{len(pp_list)} ativos com cotação atualizada"
+        f"{updated}/{len(rows)} ativos com cotacao atualizada"
     )
     return updated
-
-
-async def update_all_quotes(db: AsyncSession) -> None:
-    """
-    Scheduler: atualiza last_price de todos os ativos distintos em `assets`.
-    Só processa tipos reconhecidos em ALL_TYPES.
-    Usa get_prices() com db para aproveitar cache L1 e evitar requests redundantes.
-    """
-    result = await db.execute(
-        select(Asset).where(Asset.asset_type.in_(list(ALL_TYPES)))
-    )
-    assets = result.scalars().all()
-
-    if not assets:
-        return
-
-    positions_payload = [
-        {"ticker": a.ticker, "asset_type": a.asset_type.value}
-        for a in assets
-    ]
-
-    quotes = await get_prices(positions_payload, db=db)
-    await db.commit()
-
-    updated = sum(1 for a in assets if a.ticker in quotes)
-    logger.info(
-        f"[quote_service] scheduler: {updated}/{len(assets)} ativos atualizados"
-    )
 
 
 async def get_price_for_transaction(
