@@ -5,6 +5,11 @@ Estrategia de cache em 3 camadas:
   L1 - Asset.last_price no banco (TTL = PRICE_TTL_SECONDS).
   L2 - Cache em memoria processo (TTL = MEM_CACHE_TTL).
   L3 - API externa: BRAPI Pro ou yfinance.
+
+Resiliencia:
+  Cada chamada externa e envolta em _with_retry() — 3 tentativas com
+  backoff exponencial (1s, 2s). Falha total retorna {} sem propagar excecao,
+  mantendo degradacao graciosa (posicao fica sem preco corrente mas nao quebra).
 """
 import asyncio
 import logging
@@ -30,8 +35,45 @@ logger = logging.getLogger(__name__)
 PRICE_TTL_SECONDS = 900
 MEM_CACHE_TTL = 60
 
+_RETRY_ATTEMPTS = 3
+_RETRY_BASE_DELAY = 1.0  # segundos; duplica a cada tentativa
+
 _mem_cache: dict[str, tuple[float, float]] = {}
 
+
+# ---------------------------------------------------------------------------
+# Retry helper
+# ---------------------------------------------------------------------------
+
+async def _with_retry(coro_fn, *args, label: str = "") -> dict[str, float]:
+    """
+    Executa coro_fn(*args) com ate _RETRY_ATTEMPTS tentativas.
+    Backoff exponencial: 1s, 2s entre tentativas.
+    Retorna {} se todas as tentativas falharem (degradacao graciosa).
+    """
+    delay = _RETRY_BASE_DELAY
+    for attempt in range(1, _RETRY_ATTEMPTS + 1):
+        try:
+            return await coro_fn(*args)
+        except Exception as e:
+            if attempt < _RETRY_ATTEMPTS:
+                logger.warning(
+                    "[quotes_service] %s tentativa %d/%d falhou: %s — retry em %.0fs",
+                    label, attempt, _RETRY_ATTEMPTS, e, delay,
+                )
+                await asyncio.sleep(delay)
+                delay *= 2
+            else:
+                logger.error(
+                    "[quotes_service] %s todas as tentativas esgotadas: %s",
+                    label, e,
+                )
+    return {}
+
+
+# ---------------------------------------------------------------------------
+# Cache L1 / L2
+# ---------------------------------------------------------------------------
 
 def _mem_get(ticker: str) -> Optional[float]:
     entry = _mem_cache.get(ticker)
@@ -78,6 +120,10 @@ async def _db_set(
         await db.flush()
 
 
+# ---------------------------------------------------------------------------
+# Fetch L3 — chamadas externas
+# ---------------------------------------------------------------------------
+
 def _fetch_yf_current_sync(ticker_map: dict[str, str]) -> dict[str, float]:
     if not ticker_map:
         return {}
@@ -117,29 +163,33 @@ async def _fetch_yfinance_current(
 
 
 # ---------------------------------------------------------------------------
-# Aliases mockaveis pelos testes
+# Aliases mockaveis pelos testes — agora com retry embutido
 # ---------------------------------------------------------------------------
 
 async def _fetch_brapi(tickers: list[str]) -> dict[str, float]:
-    """Wrapper mockavel sobre brapi_fetch_quotes."""
-    return await brapi_fetch_quotes(tickers)
+    """Wrapper com retry sobre brapi_fetch_quotes."""
+    return await _with_retry(brapi_fetch_quotes, tickers, label="BRAPI")
 
 
 async def _fetch_brapi_crypto(tickers: list[str]) -> dict[str, float]:
-    """Wrapper mockavel sobre brapi_fetch_crypto."""
-    return await brapi_fetch_crypto(tickers)
+    """Wrapper com retry sobre brapi_fetch_crypto."""
+    return await _with_retry(brapi_fetch_crypto, tickers, label="BRAPI-crypto")
 
 
 async def _fetch_yfinance(
     pairs: list[tuple[str, AssetType]],
 ) -> dict[str, float]:
-    """Wrapper mockavel sobre _fetch_yfinance_current."""
-    return await _fetch_yfinance_current(pairs)
+    """Wrapper com retry sobre _fetch_yfinance_current."""
+    return await _with_retry(_fetch_yfinance_current, pairs, label="yfinance")
 
 
 async def _noop() -> dict:
     return {}
 
+
+# ---------------------------------------------------------------------------
+# get_prices — orquestrador principal
+# ---------------------------------------------------------------------------
 
 async def get_prices(
     positions: list[dict],
@@ -159,7 +209,6 @@ async def get_prices(
         except ValueError:
             asset_type = None
 
-        # Tipos sem cotacao de mercado (Tesouro, Renda Fixa, Outro) — pular silenciosamente
         if asset_type in NO_QUOTE_TYPES:
             logger.debug(f"[quotes_service] {ticker} ({raw_type}) sem cotacao de mercado — ignorado")
             continue
@@ -183,10 +232,10 @@ async def get_prices(
         elif asset_type in INTL_TYPES:
             intl_pairs.append((ticker, asset_type))
         else:
-            # Tipo desconhecido — tenta BRAPI como ultimo recurso e loga aviso
             logger.warning(f"[quotes_service] asset_type desconhecido para {ticker} ({raw_type}) — tentando BRAPI")
             br_tickers.append(ticker)
 
+    # Chamadas externas em paralelo — cada uma ja tem retry embutido
     br_results, crypto_results, intl_results = await asyncio.gather(
         _fetch_brapi(br_tickers) if br_tickers else _noop(),
         _fetch_brapi_crypto(crypto_tickers) if crypto_tickers else _noop(),
@@ -240,9 +289,7 @@ async def get_current_price(
 ) -> Optional[float]:
     """
     Conveniencia: busca preco de um unico ticker.
-
-    `asset_type` deve sempre ser passado para garantir o provedor correto.
-    Se omitido, retorna None e loga aviso — evita silenciosamente usar ACAO como default.
+    asset_type deve ser sempre passado para garantir o provedor correto.
     """
     if asset_type is None:
         logger.warning(f"[quotes_service] get_current_price chamado sem asset_type para {ticker} — retornando None")
