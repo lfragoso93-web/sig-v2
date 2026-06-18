@@ -3,7 +3,6 @@ import {
   X, TrendingUp, Building2, Globe, Landmark,
   Bitcoin, Banknote, BarChart2, CheckCircle2, Loader2, Zap, ArrowDownCircle, ArrowUpCircle,
 } from 'lucide-react'
-import clsx from 'clsx'
 import { useCreateTransaction, useUpdateTransaction } from '@/hooks/useTransactions'
 import { useAppStore } from '@/store/appStore'
 import { useTickerQuote } from '@/hooks/useTickerQuote'
@@ -36,10 +35,7 @@ const RF_INDEXERS = ['CDI', 'IPCA', 'Prefixado', 'SELIC', 'IGP-M', 'Outro']
 const TD_INDEXERS = ['IPCA+', 'Prefixado', 'SELIC']
 const TODAY       = new Date().toISOString().split('T')[0]
 
-// ── Estilos compartilhados (design tokens) ──────────────────────────────────
-const fieldStyle: React.CSSProperties = {
-  display: 'flex', flexDirection: 'column', gap: '0.3rem',
-}
+const fieldStyle: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: '0.3rem' }
 const labelStyle: React.CSSProperties = {
   fontSize: 'var(--text-xs)', fontWeight: 500,
   color: 'var(--color-text-muted)', letterSpacing: '0.01em',
@@ -60,11 +56,12 @@ const inputFocusStyle: React.CSSProperties = {
   boxShadow: '0 0 0 3px oklch(from var(--color-primary) l c h / 0.14)',
 }
 
-function Field({ label, required, badge, children }: {
-  label: string; required?: boolean; badge?: React.ReactNode; children: React.ReactNode
+function Field({ label, required, badge, children, style }: {
+  label: string; required?: boolean; badge?: React.ReactNode;
+  children: React.ReactNode; style?: React.CSSProperties
 }) {
   return (
-    <div style={fieldStyle}>
+    <div style={{ ...fieldStyle, ...style }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
         <label style={labelStyle}>
           {label}{required && <span style={{ color: 'var(--color-notification)', marginLeft: 2 }}>*</span>}
@@ -112,6 +109,27 @@ function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   )
 }
 
+// ── Extrai mensagem amigável do erro do backend ───────────────────────────────────
+function extractErrorMessage(err: unknown): string {
+  const e = err as {
+    response?: { status?: number; data?: { detail?: unknown } }
+    message?: string
+  }
+  const detail = e?.response?.data?.detail
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    // Pydantic ValidationError
+    return detail.map((d: any) => d?.msg ?? JSON.stringify(d)).join('; ')
+  }
+  if (e?.response?.status === 422)
+    return 'Dados inválidos. Verifique o ticker, tipo de ativo e a data.'
+  if (e?.response?.status === 400) return typeof detail === 'string' ? detail : 'Operação inválida.'
+  if (e?.response?.status === 401) return 'Sessão expirada. Faça login novamente.'
+  if (e?.response?.status === 404) return 'Carteira não encontrada.'
+  if (e?.message) return e.message
+  return 'Erro ao salvar lançamento. Tente novamente.'
+}
+
 export default function AddTransactionModal({ onClose }: Props) {
   const selectedPortfolioId                                = useAppStore(s => s.selectedPortfolioId)
   const prefill                                            = useAppStore(s => s.transactionModal.prefill)
@@ -150,11 +168,10 @@ export default function AddTransactionModal({ onClose }: Props) {
   const indexerOptions = isTesouro ? TD_INDEXERS : RF_INDEXERS
   const modalTitle     = isEditMode ? `Editar — ${ticker}` : prefill?.ticker ? `Adicionar Cotas — ${prefill.ticker}` : 'Novo Lançamento'
 
-  const { quote,       loading: quoteLoading,    error: quoteError }  = useTickerQuote(ticker, !!tab.brapiEnabled && !isEditMode, date)
-  const { items: tdItems, loading: tdLoading }                         = useTesouroSearch(ticker, isTesouro && !isEditMode)
-  const { items: rvItems, loading: rvLoading }                         = useTickerSuggest(ticker, !!tab.brapiSuggestType && !isEditMode, tab.brapiSuggestType)
-  const { price: tdPrice, loading: tdPriceLoading }                    = useTreasuryPrice(activeSlug, date, isTesouro && !!activeSlug && !priceEdited)
-
+  const { quote, loading: quoteLoading, error: quoteError } = useTickerQuote(ticker, !!tab.brapiEnabled && !isEditMode, date)
+  const { items: tdItems, loading: tdLoading }               = useTesouroSearch(ticker, isTesouro && !isEditMode)
+  const { items: rvItems, loading: rvLoading }               = useTickerSuggest(ticker, !!tab.brapiSuggestType && !isEditMode, tab.brapiSuggestType)
+  const { price: tdPrice, loading: tdPriceLoading }          = useTreasuryPrice(activeSlug, date, isTesouro && !!activeSlug && !priceEdited)
   const anyLoading = quoteLoading || tdLoading || rvLoading || tdPriceLoading
 
   useEffect(() => {
@@ -226,13 +243,19 @@ export default function AddTransactionModal({ onClose }: Props) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault(); setError(null)
-    if (!selectedPortfolioId) { setError('Selecione uma carteira antes de lançar.'); return }
+
+    if (!selectedPortfolioId) {
+      setError('Selecione uma carteira antes de lançar.')
+      return
+    }
+
     const qty = parseFloat(quantity)
     const prc = parseFloat(price)
     const fee = parseFloat(fees || '0')
-    if (!ticker.trim())         { setError('Informe o ticker/código do ativo.'); return }
-    if (isNaN(qty) || qty <= 0) { setError('Quantidade deve ser maior que zero.'); return }
-    if (isNaN(prc) || prc <= 0) { setError('Preço deve ser maior que zero.'); return }
+
+    if (!ticker.trim())          { setError('Informe o ticker/código do ativo.'); return }
+    if (isNaN(qty) || qty <= 0)  { setError('Quantidade deve ser maior que zero.'); return }
+    if (isNaN(prc) || prc <= 0)  { setError('Preço deve ser maior que zero.'); return }
     if ((isRF || isTesouro) && !indexer) { setError('Selecione o indexador.'); return }
 
     let enrichedNotes = notes.trim()
@@ -249,9 +272,15 @@ export default function AddTransactionModal({ onClose }: Props) {
 
     const finalTicker = isTesouro && activeSlug ? activeSlug : ticker.trim().toUpperCase()
     const payload = {
-      ticker: finalTicker, asset_type: tab.assetType, operation,
-      quantity: qty, price: prc, fees: fee, date, currency,
-      notes: enrichedNotes || undefined,
+      ticker:     finalTicker,
+      asset_type: tab.assetType,
+      operation,
+      quantity:   qty,
+      price:      prc,
+      fees:       isNaN(fee) ? 0 : fee,
+      date,
+      currency,
+      notes:      enrichedNotes || undefined,
     }
 
     try {
@@ -262,9 +291,7 @@ export default function AddTransactionModal({ onClose }: Props) {
       }
       setSuccess(true)
     } catch (err: unknown) {
-      const e = err as { response?: { data?: { detail?: unknown } } }
-      const msg = e?.response?.data?.detail
-      setError(typeof msg === 'string' ? msg : 'Erro ao salvar lançamento. Tente novamente.')
+      setError(extractErrorMessage(err))
     }
   }
 
@@ -282,8 +309,8 @@ export default function AddTransactionModal({ onClose }: Props) {
         .toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     : null
 
-  const showDropdown   = showTDSugg || showRVSugg
-  const dropdownItems  = showTDSugg
+  const showDropdown  = showTDSugg || showRVSugg
+  const dropdownItems = showTDSugg
     ? tdItems.map(item => ({
         label:    item.name,
         sublabel: `${item.indexer}${item.rate ? ` ${item.rate}% a.a.` : ''}${item.maturity_date ? ` • venc. ${item.maturity_date.slice(0, 7)}` : ''}`,
@@ -294,21 +321,17 @@ export default function AddTransactionModal({ onClose }: Props) {
         onSelect: () => applyRVSuggestion(item),
       }))
 
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 50,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: '1rem',
     }}>
-      {/* Backdrop */}
       <div
         style={{ position: 'absolute', inset: 0, background: 'oklch(0.1 0.01 240 / 0.65)', backdropFilter: 'blur(6px)' }}
-        onClick={onClose}
-        aria-hidden
+        onClick={onClose} aria-hidden
       />
 
-      {/* Modal */}
       <div style={{
         position: 'relative', zIndex: 10,
         width: '100%', maxWidth: 500,
@@ -321,7 +344,7 @@ export default function AddTransactionModal({ onClose }: Props) {
         maxHeight: '92dvh',
       }}>
 
-        {/* ── Header ── */}
+        {/* Header */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '1rem 1.25rem',
@@ -347,7 +370,7 @@ export default function AddTransactionModal({ onClose }: Props) {
           </button>
         </div>
 
-        {/* ── SUCCESS ── */}
+        {/* Success */}
         {success ? (
           <div style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center',
@@ -371,19 +394,11 @@ export default function AddTransactionModal({ onClose }: Props) {
             </div>
             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
               {!isEditMode && (
-                <button
-                  onClick={handleReset}
-                  className="btn btn-secondary"
-                  style={{ fontSize: 'var(--text-xs)', padding: '0.4375rem 1rem' }}
-                >
+                <button onClick={handleReset} className="btn btn-secondary" style={{ fontSize: 'var(--text-xs)', padding: '0.4375rem 1rem' }}>
                   Novo lançamento
                 </button>
               )}
-              <button
-                onClick={onClose}
-                className="btn btn-primary"
-                style={{ fontSize: 'var(--text-xs)', padding: '0.4375rem 1rem' }}
-              >
+              <button onClick={onClose} className="btn btn-primary" style={{ fontSize: 'var(--text-xs)', padding: '0.4375rem 1rem' }}>
                 Fechar
               </button>
             </div>
@@ -391,12 +406,11 @@ export default function AddTransactionModal({ onClose }: Props) {
         ) : (
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
 
-            {/* ── Abas de ativo ── */}
+            {/* Abas */}
             <div style={{
               display: 'flex', gap: 4, overflowX: 'auto',
               padding: '0.875rem 1.25rem 0',
-              flexShrink: 0,
-              scrollbarWidth: 'none',
+              flexShrink: 0, scrollbarWidth: 'none',
             }}>
               {TABS.map(t => {
                 const isActive = activeTab === t.key
@@ -419,8 +433,7 @@ export default function AddTransactionModal({ onClose }: Props) {
                       fontSize: 'var(--text-xs)', fontWeight: isActive ? 600 : 400,
                       cursor: isEditMode && !isActive ? 'default' : 'pointer',
                       opacity: isEditMode && !isActive ? 0.35 : 1,
-                      transition: 'all 150ms ease',
-                      whiteSpace: 'nowrap',
+                      transition: 'all 150ms ease', whiteSpace: 'nowrap',
                     }}
                   >
                     {t.icon}{t.label}
@@ -429,43 +442,35 @@ export default function AddTransactionModal({ onClose }: Props) {
               })}
             </div>
 
-            {/* Linha separadora */}
             <div style={{ height: 1, background: 'oklch(from var(--color-text) l c h / 0.07)', margin: '0.625rem 1.25rem 0', flexShrink: 0 }} />
 
-            {/* ── Campos ── */}
+            {/* Campos */}
             <div style={{
               flex: 1, overflowY: 'auto', overflowX: 'hidden',
               padding: '1rem 1.25rem',
               display: 'flex', flexDirection: 'column', gap: '0.875rem',
             }}>
 
-              {/* Toggle Compra / Venda */}
+              {/* Toggle Compra/Venda */}
               <div style={{
                 display: 'grid', gridTemplateColumns: '1fr 1fr',
                 borderRadius: 'var(--radius-lg)',
                 border: '1px solid oklch(from var(--color-text) l c h / 0.1)',
-                overflow: 'hidden',
-                background: 'var(--color-surface-2)',
+                overflow: 'hidden', background: 'var(--color-surface-2)',
               }}>
                 {(['buy', 'sell'] as const).map(op => {
-                  const isSel   = operation === op
-                  const isBuy   = op === 'buy'
-                  const color   = isBuy ? 'var(--color-success)' : 'var(--color-notification)'
+                  const isSel = operation === op
+                  const isBuy = op === 'buy'
+                  const color = isBuy ? 'var(--color-success)' : 'var(--color-notification)'
                   return (
-                    <button
-                      key={op} type="button"
-                      onClick={() => setOperation(op)}
+                    <button key={op} type="button" onClick={() => setOperation(op)}
                       style={{
                         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                        padding: '0.5625rem',
-                        border: 'none',
-                        background: isSel
-                          ? `oklch(from ${color} l c h / 0.14)`
-                          : 'transparent',
+                        padding: '0.5625rem', border: 'none',
+                        background: isSel ? `oklch(from ${color} l c h / 0.14)` : 'transparent',
                         color: isSel ? color : 'var(--color-text-muted)',
                         fontSize: 'var(--text-xs)', fontWeight: isSel ? 600 : 400,
-                        cursor: 'pointer',
-                        transition: 'all 150ms ease',
+                        cursor: 'pointer', transition: 'all 150ms ease',
                       }}
                     >
                       {isBuy
@@ -479,11 +484,10 @@ export default function AddTransactionModal({ onClose }: Props) {
 
               {/* Ticker + Moeda */}
               <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <Field label={tab.tickerLabel} style={{ flex: 1 } as any}>
+                <Field label={tab.tickerLabel} style={{ flex: 1 }}>
                   <div ref={dropdownRef} style={{ position: 'relative' }}>
                     <Input
-                      type="text"
-                      value={ticker}
+                      type="text" value={ticker}
                       onChange={e => {
                         if (isEditMode) return
                         const v = e.target.value
@@ -508,22 +512,16 @@ export default function AddTransactionModal({ onClose }: Props) {
                         <Loader2 size={13} style={{ color: 'var(--color-primary)', animation: 'spin 1s linear infinite' }} />
                       </span>
                     )}
-
-                    {/* Autocomplete dropdown */}
                     {showDropdown && dropdownItems.length > 0 && (
                       <div style={{
                         position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 60,
                         background: 'var(--color-surface-2)',
                         border: '1px solid oklch(from var(--color-text) l c h / 0.1)',
-                        borderRadius: 'var(--radius-lg)',
-                        boxShadow: 'var(--shadow-lg)',
-                        overflow: 'hidden',
-                        maxHeight: 200, overflowY: 'auto',
+                        borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-lg)',
+                        overflow: 'hidden', maxHeight: 200, overflowY: 'auto',
                       }}>
                         {dropdownItems.map((item, i) => (
-                          <button
-                            key={i} type="button"
-                            onMouseDown={item.onSelect}
+                          <button key={i} type="button" onMouseDown={item.onSelect}
                             style={{
                               width: '100%', textAlign: 'left',
                               padding: '0.5rem 0.75rem',
@@ -535,9 +533,7 @@ export default function AddTransactionModal({ onClose }: Props) {
                             onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                           >
                             <span style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text)' }}>{item.label}</span>
-                            {item.sublabel && (
-                              <span style={{ display: 'block', fontSize: '0.68rem', color: 'var(--color-text-muted)', marginTop: 1 }}>{item.sublabel}</span>
-                            )}
+                            {item.sublabel && <span style={{ display: 'block', fontSize: '0.68rem', color: 'var(--color-text-muted)', marginTop: 1 }}>{item.sublabel}</span>}
                           </button>
                         ))}
                       </div>
@@ -547,7 +543,7 @@ export default function AddTransactionModal({ onClose }: Props) {
                   {quoteError && !quoteLoading && <p style={{ fontSize: '0.68rem', color: 'var(--color-text-muted)', margin: 0 }}>{quoteError}</p>}
                 </Field>
 
-                <Field label="Moeda" style={{ width: 86 } as any}>
+                <Field label="Moeda" style={{ width: 86 }}>
                   <Select value={currency} onChange={e => setCurrency(e.target.value)}>
                     <option value="BRL">BRL</option>
                     <option value="USD">USD</option>
@@ -570,23 +566,23 @@ export default function AddTransactionModal({ onClose }: Props) {
                     {isTesouro ? 'Dados do Título' : 'Dados do Ativo'}
                   </p>
                   <div style={{ display: 'flex', gap: '0.75rem' }}>
-                    <Field label="Indexador" required style={{ flex: 1 } as any}>
+                    <Field label="Indexador" required style={{ flex: 1 }}>
                       <Select value={indexer} onChange={e => setIndexer(e.target.value)}>
                         <option value="">Selecionar…</option>
                         {indexerOptions.map(o => <option key={o} value={o}>{o}</option>)}
                       </Select>
                     </Field>
-                    <Field label="Taxa (% a.a.)" style={{ width: 100 } as any}>
+                    <Field label="Taxa (% a.a.)" style={{ width: 100 }}>
                       <Input type="number" value={rate} onChange={e => setRate(e.target.value)}
                         placeholder={isTesouro ? 'ex: 5.82' : 'ex: 110'} min="0" step="any" />
                     </Field>
                   </div>
                   <div style={{ display: 'flex', gap: '0.75rem' }}>
-                    <Field label="Vencimento" style={{ flex: 1 } as any}>
+                    <Field label="Vencimento" style={{ flex: 1 }}>
                       <Input type="date" value={maturity} onChange={e => setMaturity(e.target.value)} />
                     </Field>
                     {isRF && (
-                      <Field label="Emissor" style={{ flex: 1 } as any}>
+                      <Field label="Emissor" style={{ flex: 1 }}>
                         <Input type="text" value={issuer} onChange={e => setIssuer(e.target.value)} placeholder="ex: Banco XP" />
                       </Field>
                     )}
@@ -596,13 +592,13 @@ export default function AddTransactionModal({ onClose }: Props) {
 
               {/* Quantidade + Preço */}
               <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <Field label={isRF || isTesouro ? 'Qtd / Cotas' : 'Quantidade'} style={{ flex: 1 } as any}>
+                <Field label={isRF || isTesouro ? 'Qtd / Cotas' : 'Quantidade'} style={{ flex: 1 }}>
                   <Input type="number" value={quantity} onChange={e => setQuantity(e.target.value)}
                     placeholder="0" min="0" step="any" />
                 </Field>
                 <Field
                   label={`${isRF || isTesouro ? 'PU / Preço unit.' : 'Preço'} (${currency})`}
-                  style={{ flex: 1 } as any}
+                  style={{ flex: 1 }}
                   badge={priceFromBrapi && (
                     <span style={{
                       display: 'flex', alignItems: 'center', gap: 3,
@@ -627,11 +623,11 @@ export default function AddTransactionModal({ onClose }: Props) {
 
               {/* Taxas + Data */}
               <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <Field label="Taxas / Corretagem" style={{ flex: 1 } as any}>
+                <Field label="Taxas / Corretagem" style={{ flex: 1 }}>
                   <Input type="number" value={fees} onChange={e => setFees(e.target.value)}
                     placeholder="0,00" min="0" step="any" />
                 </Field>
-                <Field label="Data da operação" style={{ flex: 1 } as any}>
+                <Field label="Data da operação" style={{ flex: 1 }}>
                   <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
                 </Field>
               </div>
@@ -655,10 +651,8 @@ export default function AddTransactionModal({ onClose }: Props) {
               {/* Observações */}
               <Field label="Observações" badge={<span style={{ fontSize: '0.68rem', color: 'var(--color-text-faint)' }}>opcional</span>}>
                 <textarea
-                  value={notes}
-                  onChange={e => setNotes(e.target.value)}
-                  rows={2}
-                  placeholder="Anotações sobre o lançamento…"
+                  value={notes} onChange={e => setNotes(e.target.value)}
+                  rows={2} placeholder="Anotações sobre o lançamento…"
                   style={{ ...inputStyle, resize: 'none', lineHeight: 1.5 }}
                   onFocus={e => Object.assign(e.target.style, inputFocusStyle)}
                   onBlur={e  => { e.target.style.borderColor = 'oklch(from var(--color-text) l c h / 0.11)'; e.target.style.boxShadow = 'none' }}
@@ -678,25 +672,19 @@ export default function AddTransactionModal({ onClose }: Props) {
               )}
             </div>
 
-            {/* ── Footer ── */}
+            {/* Footer */}
             <div style={{
               display: 'flex', justifyContent: 'flex-end', gap: '0.5rem',
               padding: '0.875rem 1.25rem',
               borderTop: '1px solid oklch(from var(--color-text) l c h / 0.07)',
               flexShrink: 0,
             }}>
-              <button
-                type="button" onClick={onClose}
-                className="btn btn-secondary"
-                style={{ fontSize: 'var(--text-xs)', padding: '0.4375rem 1rem' }}
-              >
+              <button type="button" onClick={onClose} className="btn btn-secondary"
+                style={{ fontSize: 'var(--text-xs)', padding: '0.4375rem 1rem' }}>
                 Cancelar
               </button>
-              <button
-                type="submit" disabled={isPending}
-                className="btn btn-primary"
-                style={{ fontSize: 'var(--text-xs)', padding: '0.4375rem 1.125rem', fontWeight: 650 }}
-              >
+              <button type="submit" disabled={isPending} className="btn btn-primary"
+                style={{ fontSize: 'var(--text-xs)', padding: '0.4375rem 1.125rem', fontWeight: 650 }}>
                 {isPending ? 'Salvando…' : isEditMode ? 'Salvar Alterações' : 'Salvar Lançamento'}
               </button>
             </div>
