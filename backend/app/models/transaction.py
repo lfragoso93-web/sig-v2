@@ -16,7 +16,12 @@ class Transaction(Base):
     portfolio_id = Column(Integer, ForeignKey("portfolios.id", ondelete="CASCADE"), nullable=False)
     ticker = Column(String(100), nullable=False, index=True)
     asset_type = Column(String(50), nullable=False)
-    operation: Column = Column(SAEnum(OperationType), nullable=False)
+    # values_callable garante que o banco armazena/le "buy"/"sell" (string pura),
+    # eliminando ambiguidade entre OperationType.buy e "OperationType.buy"
+    operation: Column = Column(
+        SAEnum(OperationType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
     quantity = Column(Float, nullable=False)
     price = Column(Float, nullable=False)
     fees = Column(Float, default=0.0)
