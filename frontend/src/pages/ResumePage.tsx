@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { BarChart2, TrendingUp, DollarSign, Activity, PackageOpen } from 'lucide-react'
+import { BarChart2, TrendingUp, DollarSign, Activity, PackageOpen, Briefcase } from 'lucide-react'
 import clsx from 'clsx'
 import {
   usePortfolioList,
@@ -16,6 +16,7 @@ import EmptyState from '@/components/ui/EmptyState'
 import PatrimonioBarChart from '@/components/charts/PatrimonioBarChart'
 import AssetDonutChart from '@/components/charts/AssetDonutChart'
 import PositionTable from '@/components/resume/PositionTable'
+import CreatePortfolioModal from '@/components/modals/CreatePortfolioModal'
 
 const PERIOD_OPTIONS = [
   { label: '6M',   value: 6  },
@@ -27,7 +28,8 @@ const PERIOD_OPTIONS = [
 export default function ResumePage() {
   const globalPortfolioId = useAppStore(s => s.selectedPortfolioId)
   const setGlobal         = useAppStore(s => s.setSelectedPortfolioId)
-  const [period, setPeriod] = useState(12)
+  const [period, setPeriod]           = useState(12)
+  const [showCreateModal, setShowCreateModal] = useState(false)
 
   const { data: portfolios, isLoading: loadingPortfolios } = usePortfolioList()
 
@@ -45,15 +47,15 @@ export default function ResumePage() {
   const { data: positions,         isLoading: loadingPositions } = usePositions(portfolioId)
 
   const s = summary as any
-  const patrimonio    = s?.total_patrimonio   ?? s?.current_value         ?? 0
-  const investido     = s?.total_investido    ?? s?.total_invested        ?? 0
-  const lucroTotal    = s?.lucro_total        ?? s?.total_gain            ?? 0
-  const ganhoCapital  = s?.ganho_capital      ?? s?.total_gain            ?? 0
+  const patrimonio    = s?.total_patrimonio    ?? s?.current_value   ?? 0
+  const investido     = s?.total_investido     ?? s?.total_invested  ?? 0
+  const lucroTotal    = s?.lucro_total         ?? s?.total_gain      ?? 0
+  const ganhoCapital  = s?.ganho_capital       ?? s?.total_gain      ?? 0
   const dividendos12m = s?.dividendos_recebidos_12m ?? 0
-  const totalProv     = s?.total_proventos    ?? 0
-  const variacaoVal   = s?.variacao_valor     ?? s?.total_gain            ?? 0
-  const variacaoPct   = s?.variacao_percentual ?? s?.total_gain_pct       ?? 0
-  const rentabilidade = s?.rentabilidade_total ?? s?.total_gain_pct      ?? 0
+  const totalProv     = s?.total_proventos     ?? 0
+  const variacaoVal   = s?.variacao_valor      ?? s?.total_gain      ?? 0
+  const variacaoPct   = s?.variacao_percentual ?? s?.total_gain_pct  ?? 0
+  const rentabilidade = s?.rentabilidade_total ?? s?.total_gain_pct  ?? 0
 
   if (loadingPortfolios) {
     return (
@@ -68,11 +70,21 @@ export default function ResumePage() {
   if (!portfolios?.length) {
     return (
       <div className="page-container">
-        <EmptyState
-          icon={PackageOpen}
-          title="Nenhuma carteira encontrada"
-          description="Crie sua primeira carteira para começar a registrar seus investimentos."
-        />
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          minHeight: '60vh',
+        }}>
+          <EmptyState
+            icon={Briefcase}
+            title="Você ainda não tem uma carteira"
+            description="Crie sua primeira carteira para começar a registrar e acompanhar seus investimentos."
+            action={{ label: '+ Criar minha carteira', onClick: () => setShowCreateModal(true) }}
+          />
+        </div>
+
+        {showCreateModal && (
+          <CreatePortfolioModal onClose={() => setShowCreateModal(false)} />
+        )}
       </div>
     )
   }
@@ -127,8 +139,6 @@ export default function ResumePage() {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-        {/* Evolução do Patrimônio */}
         <div className="card p-4 lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -162,7 +172,6 @@ export default function ResumePage() {
           )}
         </div>
 
-        {/* Distribuição */}
         <div className="card p-4">
           <div className="flex items-center gap-2 mb-4">
             <Activity size={14} style={{ color: 'var(--color-primary)' }} />
@@ -194,7 +203,6 @@ export default function ResumePage() {
             </span>
           )}
         </div>
-
         {loadingPositions ? (
           <div className="p-4 flex flex-col gap-2">
             {[...Array(5)].map((_, i) => (
