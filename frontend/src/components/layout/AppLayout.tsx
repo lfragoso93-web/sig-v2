@@ -1,69 +1,73 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { Outlet } from 'react-router-dom'
+import { useAppStore } from '@/store/appStore'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
-import BottomNav from './BottomNav'
-import AddTransactionModal from '@/components/modals/AddTransactionModal'
-import { useAppStore } from '@/store/appStore'
-import { usePortfolioList } from '@/hooks/usePortfolio'
+import TransactionModalWrapper from './TransactionModalWrapper'
 
 export default function AppLayout() {
-  const {
-    selectedPortfolioId, setSelectedPortfolioId,
-    transactionModal, closeTransactionModal,
-  } = useAppStore()
+  const { sidebarOpen, closeSidebar } = useAppStore()
+  const overlayRef = useRef<HTMLDivElement>(null)
 
-  const { data: portfolios } = usePortfolioList()
+  // Fecha sidebar mobile ao clicar no overlay
   useEffect(() => {
-    if (!selectedPortfolioId && portfolios && portfolios.length > 0) {
-      setSelectedPortfolioId(portfolios[0].id)
-    }
-  }, [portfolios, selectedPortfolioId, setSelectedPortfolioId])
+    const el = overlayRef.current
+    if (!el) return
+    const handler = (e: MouseEvent) => { if (e.target === el) closeSidebar() }
+    el.addEventListener('click', handler)
+    return () => el.removeEventListener('click', handler)
+  }, [closeSidebar])
 
   return (
     <div
-      className="flex flex-col h-screen overflow-hidden"
-      style={{ background: 'var(--color-bg)' }}
+      style={{
+        display:       'flex',
+        flexDirection: 'column',
+        height:        '100dvh',
+        overflow:      'hidden',
+        background:    'var(--color-bg)',
+      }}
     >
-      {/* ── Topbar — full width, acima de tudo ── */}
+      {/* Topbar */}
       <Topbar />
 
-      {/* ── Sidebar + conteúdo principal ── */}
-      <div className="flex flex-1 overflow-hidden">
+      {/* Body: sidebar + main */}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
+
+        {/* Overlay mobile */}
+        {sidebarOpen && (
+          <div
+            ref={overlayRef}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 40,
+              background: 'oklch(0.1 0.01 240 / 0.55)',
+              backdropFilter: 'blur(2px)',
+              display: 'block',
+            }}
+            className="lg:hidden"
+            aria-hidden="true"
+          />
+        )}
+
+        {/* Sidebar */}
         <Sidebar />
 
-        <div className="flex flex-col flex-1 overflow-hidden">
-          {/*
-            overflow-x: auto no <main> para que tabelas largas
-            possam rolar horizontalmente sem cortar colunas.
-            overflow-y: auto para o scroll vertical normal da página.
-          */}
-          <main
-            className="flex-1 overflow-y-auto overflow-x-auto"
-            style={{
-              padding:       'clamp(0.75rem, 1.5vw, 1.25rem)',
-              paddingBottom: 'calc(clamp(0.75rem, 1.5vw, 1.25rem) + env(safe-area-inset-bottom, 0px))',
-            }}
-          >
-            <div
-              style={{
-                /* largura mínima garante que tabelas com muitas colunas
-                   nunca comprimam as células — usam scroll horizontal */
-                minWidth: 0,
-              }}
-            >
-              <Outlet />
-            </div>
-          </main>
-
-          {/* Nav bottom mobile */}
-          <BottomNav />
-        </div>
+        {/* Main content — expande em qualquer largura */}
+        <main
+          style={{
+            flex:       1,
+            minWidth:   0,          /* evita overflow em flex */
+            overflowY:  'auto',
+            overflowX:  'hidden',
+            height:     '100%',
+            background: 'var(--color-bg)',
+          }}
+        >
+          <Outlet />
+        </main>
       </div>
 
-      {transactionModal.open && (
-        <AddTransactionModal onClose={closeTransactionModal} />
-      )}
+      <TransactionModalWrapper />
     </div>
   )
 }
