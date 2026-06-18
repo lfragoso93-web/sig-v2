@@ -1,6 +1,6 @@
 """Aumenta ticker para VARCHAR(100) em assets e adiciona coluna currency em transactions.
 
-Revision ID: 002_transactions_ticker_100_currency
+Revision ID: 002_ticker_currency
 Revises: 001_initial_schema
 Create Date: 2026-06-11
 
@@ -15,12 +15,16 @@ Motivação:
 CORREÇÃO (2026-06-16):
   - ALTER TABLE agora aponta para assets.ticker (coluna correta, criada na 001 como VARCHAR(30))
   - transactions.ticker nunca existiu — removido do upgrade/downgrade
+
+CORREÇÃO (2026-06-18):
+  - revision renomeado de 002_transactions_ticker_100_currency para 002_ticker_currency
+    pois VARCHAR(32) do alembic_version não suporta IDs > 32 chars
 """
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import text
 
-revision = '002_transactions_ticker_100_currency'
+revision = '002_ticker_currency'
 down_revision = '001_initial_schema'
 branch_labels = None
 depends_on = None
@@ -30,7 +34,6 @@ def upgrade() -> None:
     conn = op.get_bind()
 
     # 1. Aumenta assets.ticker de VARCHAR(30) para VARCHAR(100)
-    #    Idempotente: ALTER COLUMN TYPE para tipo maior é sempre seguro no PG
     try:
         conn.execute(text(
             "ALTER TABLE assets ALTER COLUMN ticker TYPE VARCHAR(100)"
@@ -51,8 +54,6 @@ def upgrade() -> None:
 def downgrade() -> None:
     conn = op.get_bind()
 
-    # Reverte assets.ticker para VARCHAR(30)
-    # Atenção: pode truncar dados existentes com ticker > 30 chars
     try:
         conn.execute(text(
             "ALTER TABLE assets ALTER COLUMN ticker TYPE VARCHAR(30)"
@@ -60,7 +61,6 @@ def downgrade() -> None:
     except Exception:
         pass
 
-    # Remove coluna currency de transactions
     try:
         conn.execute(text(
             "ALTER TABLE transactions DROP COLUMN IF EXISTS currency"
