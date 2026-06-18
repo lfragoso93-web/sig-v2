@@ -30,9 +30,10 @@ class _TickerState:
         self.cost = Decimal("0")
         self.realized_pnl = Decimal("0")
 
-    def buy(self, qty: Decimal, price: Decimal) -> None:
+    def buy(self, qty: Decimal, price: Decimal, fees: Decimal = Decimal("0")) -> None:
+        """Acumula quantidade e custo total incluindo taxas (alinhado com portfolio_service)."""
         self.qty += qty
-        self.cost += qty * price
+        self.cost += qty * price + fees
 
     def sell(self, qty: Decimal, price: Decimal) -> None:
         sold = min(qty, self.qty)
@@ -46,6 +47,7 @@ class _TickerState:
 
     @property
     def avg_price(self) -> Decimal:
+        """Preco medio ponderado incluindo taxas."""
         return self.cost / self.qty if self.qty > 0 else Decimal("0")
 
 
@@ -76,8 +78,9 @@ async def _build_positions_at(
         s = states[key]
         qty = Decimal(str(tx.quantity))
         price = Decimal(str(tx.price))
+        fees = Decimal(str(tx.fees or 0))
         if tx.operation == OperationType.buy:
-            s.buy(qty, price)
+            s.buy(qty, price, fees)  # fees incluidas no custo
         elif tx.operation == OperationType.sell:
             s.sell(qty, price)
 
@@ -125,12 +128,17 @@ async def _calc_totals(
         cost_basis += state.cost
         realized_pnl += state.realized_pnl
 
+    # invested_total: fluxo liquido de caixa incluindo taxas de compra
+    # buy  -> saida de caixa: price*qty + fees
+    # sell -> entrada de caixa: price*qty (fees de venda nao alteram custo de aquisicao)
     invested_result = await db.execute(
         select(
             func.sum(
                 func.case(
-                    (Transaction.operation == OperationType.buy,
-                     Transaction.price * Transaction.quantity),
+                    (
+                        Transaction.operation == OperationType.buy,
+                        Transaction.price * Transaction.quantity + func.coalesce(Transaction.fees, 0),
+                    ),
                     else_=-(Transaction.price * Transaction.quantity),
                 )
             )
