@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   X, TrendingUp, Building2, Globe, Landmark,
-  Bitcoin, Banknote, BarChart2, CheckCircle2, Loader2, Zap,
+  Bitcoin, Banknote, BarChart2, CheckCircle2, Loader2, Zap, ArrowDownCircle, ArrowUpCircle,
 } from 'lucide-react'
 import clsx from 'clsx'
 import { useCreateTransaction, useUpdateTransaction } from '@/hooks/useTransactions'
@@ -11,148 +11,155 @@ import { useTesouroSearch, TreasuryItem } from '@/hooks/useTesouroSearch'
 import { useTickerSuggest, TickerSuggestion } from '@/hooks/useTickerSuggest'
 import { useTreasuryPrice } from '@/hooks/useTreasuryPrice'
 
-interface Props {
-  onClose: () => void
-}
+interface Props { onClose: () => void }
 
 type AssetTab = {
-  key:               string
-  label:             string
-  icon:              React.ReactNode
-  assetType:         string
-  currency:          string
-  tickerPlaceholder: string
-  tickerLabel:       string
-  extraFields?:      'renda_fixa' | 'tesouro'
-  brapiEnabled?:     boolean
-  brapiSuggestType?: string
+  key: string; label: string; icon: React.ReactNode
+  assetType: string; currency: string
+  tickerPlaceholder: string; tickerLabel: string
+  extraFields?: 'renda_fixa' | 'tesouro'
+  brapiEnabled?: boolean; brapiSuggestType?: string
 }
 
 const TABS: AssetTab[] = [
-  {
-    key: 'acao',       label: 'Acao',       icon: <TrendingUp size={13} />,
-    assetType: 'ACAO',              currency: 'BRL',
-    tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: PETR4 ou Petrobras',
-    brapiEnabled: true,  brapiSuggestType: 'stock',
-  },
-  {
-    key: 'fii',        label: 'FII',        icon: <Building2  size={13} />,
-    assetType: 'FII',               currency: 'BRL',
-    tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: MXRF11 ou Maxi Renda',
-    brapiEnabled: true,  brapiSuggestType: 'fund',
-  },
-  {
-    key: 'etf_br',     label: 'ETF BR',     icon: <BarChart2  size={13} />,
-    assetType: 'ETF_NACIONAL',      currency: 'BRL',
-    tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: BOVA11 ou IVVB11',
-    brapiEnabled: true,  brapiSuggestType: 'etf',
-  },
-  {
-    key: 'stock',      label: 'Stock',      icon: <Globe      size={13} />,
-    assetType: 'STOCK',             currency: 'USD',
-    tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: AAPL ou Apple',
-    brapiEnabled: true,  brapiSuggestType: 'stock_int',
-  },
-  {
-    key: 'etf_int',    label: 'ETF INT',    icon: <Globe      size={13} />,
-    assetType: 'ETF_INTERNACIONAL', currency: 'USD',
-    tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: VTI ou Vanguard',
-    brapiEnabled: true,  brapiSuggestType: 'etf_int',
-  },
-  {
-    key: 'tesouro',    label: 'Tesouro',    icon: <Landmark   size={13} />,
-    assetType: 'TESOURO_DIRETO',    currency: 'BRL',
-    tickerLabel: 'Titulo',      tickerPlaceholder: 'ex: Tesouro IPCA 2029',
-    brapiEnabled: false, brapiSuggestType: undefined, extraFields: 'tesouro',
-  },
-  {
-    key: 'renda_fixa', label: 'Renda Fixa', icon: <Banknote   size={13} />,
-    assetType: 'RENDA_FIXA',        currency: 'BRL',
-    tickerLabel: 'Codigo/Nome', tickerPlaceholder: 'ex: CDB XP 110% CDI',
-    brapiEnabled: false, brapiSuggestType: undefined, extraFields: 'renda_fixa',
-  },
-  {
-    key: 'cripto',     label: 'Cripto',     icon: <Bitcoin    size={13} />,
-    assetType: 'CRIPTO',            currency: 'BRL',
-    tickerLabel: 'Ticker',      tickerPlaceholder: 'ex: BTC ou Bitcoin',
-    brapiEnabled: true,  brapiSuggestType: 'cripto',
-  },
+  { key: 'acao',       label: 'Ação',       icon: <TrendingUp size={12} />, assetType: 'ACAO',              currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: PETR4 ou Petrobras',    brapiEnabled: true,  brapiSuggestType: 'stock'     },
+  { key: 'fii',        label: 'FII',        icon: <Building2  size={12} />, assetType: 'FII',               currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: MXRF11 ou Maxi Renda',  brapiEnabled: true,  brapiSuggestType: 'fund'      },
+  { key: 'etf_br',     label: 'ETF BR',     icon: <BarChart2  size={12} />, assetType: 'ETF_NACIONAL',      currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: BOVA11 ou IVVB11',      brapiEnabled: true,  brapiSuggestType: 'etf'       },
+  { key: 'stock',      label: 'Stock',      icon: <Globe      size={12} />, assetType: 'STOCK',             currency: 'USD', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: AAPL ou Apple',         brapiEnabled: true,  brapiSuggestType: 'stock_int' },
+  { key: 'etf_int',    label: 'ETF INT',    icon: <Globe      size={12} />, assetType: 'ETF_INTERNACIONAL', currency: 'USD', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: VTI ou Vanguard',       brapiEnabled: true,  brapiSuggestType: 'etf_int'   },
+  { key: 'tesouro',    label: 'Tesouro',    icon: <Landmark   size={12} />, assetType: 'TESOURO_DIRETO',    currency: 'BRL', tickerLabel: 'Título',       tickerPlaceholder: 'ex: Tesouro IPCA 2029',     brapiEnabled: false, extraFields: 'tesouro'        },
+  { key: 'renda_fixa', label: 'Renda Fixa', icon: <Banknote   size={12} />, assetType: 'RENDA_FIXA',        currency: 'BRL', tickerLabel: 'Código/Nome',  tickerPlaceholder: 'ex: CDB XP 110% CDI',       brapiEnabled: false, extraFields: 'renda_fixa'     },
+  { key: 'cripto',     label: 'Cripto',     icon: <Bitcoin    size={12} />, assetType: 'CRIPTO',            currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: BTC ou Bitcoin',        brapiEnabled: true,  brapiSuggestType: 'cripto'    },
 ]
 
 const RF_INDEXERS = ['CDI', 'IPCA', 'Prefixado', 'SELIC', 'IGP-M', 'Outro']
 const TD_INDEXERS = ['IPCA+', 'Prefixado', 'SELIC']
-const TODAY = new Date().toISOString().split('T')[0]
+const TODAY       = new Date().toISOString().split('T')[0]
 
-const inputCls = [
-  'w-full rounded-md px-3 py-2 text-xs',
-  'bg-surface-800 border border-surface-600',
-  'text-slate-200 placeholder-slate-500',
-  'focus:outline-none focus:ring-1 focus:ring-brand-500 focus:border-brand-500',
-  'transition-colors duration-150',
-].join(' ')
+// ── Estilos compartilhados (design tokens) ──────────────────────────────────
+const fieldStyle: React.CSSProperties = {
+  display: 'flex', flexDirection: 'column', gap: '0.3rem',
+}
+const labelStyle: React.CSSProperties = {
+  fontSize: 'var(--text-xs)', fontWeight: 500,
+  color: 'var(--color-text-muted)', letterSpacing: '0.01em',
+}
+const inputStyle: React.CSSProperties = {
+  width: '100%', padding: '0.5rem 0.75rem',
+  borderRadius: 'var(--radius-md)',
+  border: '1px solid oklch(from var(--color-text) l c h / 0.11)',
+  background: 'var(--color-surface-2)',
+  color: 'var(--color-text)',
+  fontSize: 'var(--text-xs)',
+  outline: 'none',
+  transition: 'border-color 150ms ease, box-shadow 150ms ease',
+  boxSizing: 'border-box',
+}
+const inputFocusStyle: React.CSSProperties = {
+  borderColor: 'var(--color-primary)',
+  boxShadow: '0 0 0 3px oklch(from var(--color-primary) l c h / 0.14)',
+}
+
+function Field({ label, required, badge, children }: {
+  label: string; required?: boolean; badge?: React.ReactNode; children: React.ReactNode
+}) {
+  return (
+    <div style={fieldStyle}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+        <label style={labelStyle}>
+          {label}{required && <span style={{ color: 'var(--color-notification)', marginLeft: 2 }}>*</span>}
+        </label>
+        {badge}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function Input(props: React.InputHTMLAttributes<HTMLInputElement> & { highlight?: boolean }) {
+  const { highlight, style, onFocus, onBlur, ...rest } = props
+  return (
+    <input
+      {...rest}
+      style={{
+        ...inputStyle,
+        ...(highlight ? { borderColor: 'oklch(from var(--color-primary) l c h / 0.5)' } : {}),
+        ...style,
+      }}
+      onFocus={e => { Object.assign(e.target.style, inputFocusStyle); onFocus?.(e) }}
+      onBlur={e  => {
+        e.target.style.borderColor = highlight ? 'oklch(from var(--color-primary) l c h / 0.5)' : 'oklch(from var(--color-text) l c h / 0.11)'
+        e.target.style.boxShadow = 'none'
+        onBlur?.(e)
+      }}
+    />
+  )
+}
+
+function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  const { style, onFocus, onBlur, ...rest } = props
+  return (
+    <select
+      {...rest}
+      style={{ ...inputStyle, ...style }}
+      onFocus={e => { Object.assign(e.target.style, inputFocusStyle); onFocus?.(e) }}
+      onBlur={e  => {
+        e.target.style.borderColor = 'oklch(from var(--color-text) l c h / 0.11)'
+        e.target.style.boxShadow = 'none'
+        onBlur?.(e)
+      }}
+    />
+  )
+}
 
 export default function AddTransactionModal({ onClose }: Props) {
-  const selectedPortfolioId = useAppStore(s => s.selectedPortfolioId)
-  const prefill             = useAppStore(s => s.transactionModal.prefill)
+  const selectedPortfolioId                                = useAppStore(s => s.selectedPortfolioId)
+  const prefill                                            = useAppStore(s => s.transactionModal.prefill)
   const { mutateAsync: createAsync, isPending: isCreating } = useCreateTransaction()
   const { mutateAsync: updateAsync, isPending: isUpdating } = useUpdateTransaction()
-  const isPending = isCreating || isUpdating
-
+  const isPending  = isCreating || isUpdating
   const isEditMode = !!prefill?.transactionId
-
   const initialTab = prefill?.tab ?? 'acao'
 
-  const [activeTab, setActiveTab] = useState(initialTab)
-  const [operation, setOperation] = useState<'buy' | 'sell'>(prefill?.operation ?? 'buy')
-  const [ticker,    setTicker]    = useState(prefill?.ticker    ?? '')
-  const [assetName, setAssetName] = useState(prefill?.assetName ?? '')
-  const [quantity,  setQuantity]  = useState(prefill?.quantity  != null ? String(prefill.quantity)  : '')
-  const [price,     setPrice]     = useState(prefill?.price     != null ? String(prefill.price)     : '')
-  const [fees,      setFees]      = useState(prefill?.fees      != null ? String(prefill.fees)      : '')
-  const [date,      setDate]      = useState(prefill?.date      ?? TODAY)
-  const [notes,     setNotes]     = useState(prefill?.notes     ?? '')
-  const [currency,  setCurrency]  = useState(
-    prefill?.currency ?? TABS.find(t => t.key === initialTab)?.currency ?? 'BRL'
-  )
-  const [error,     setError]     = useState<string | null>(null)
-  const [success,   setSuccess]   = useState(false)
+  const [activeTab,     setActiveTab]     = useState(initialTab)
+  const [operation,     setOperation]     = useState<'buy' | 'sell'>(prefill?.operation ?? 'buy')
+  const [ticker,        setTicker]        = useState(prefill?.ticker    ?? '')
+  const [assetName,     setAssetName]     = useState(prefill?.assetName ?? '')
+  const [quantity,      setQuantity]      = useState(prefill?.quantity  != null ? String(prefill.quantity)  : '')
+  const [price,         setPrice]         = useState(prefill?.price     != null ? String(prefill.price)     : '')
+  const [fees,          setFees]          = useState(prefill?.fees      != null ? String(prefill.fees)      : '')
+  const [date,          setDate]          = useState(prefill?.date      ?? TODAY)
+  const [notes,         setNotes]         = useState(prefill?.notes     ?? '')
+  const [currency,      setCurrency]      = useState(prefill?.currency  ?? TABS.find(t => t.key === initialTab)?.currency ?? 'BRL')
+  const [error,         setError]         = useState<string | null>(null)
+  const [success,       setSuccess]       = useState(false)
   const [priceFromBrapi, setPriceFromBrapi] = useState(false)
-
-  // campos extra RF / Tesouro
-  const [indexer,    setIndexer]    = useState('')
-  const [rate,       setRate]       = useState('')
-  const [maturity,   setMaturity]   = useState('')
-  const [issuer,     setIssuer]     = useState('')
-  const [activeSlug, setActiveSlug] = useState('')
-  const [priceEdited, setPriceEdited] = useState(isEditMode) // em edicao nao sobrescreve preco
-
-  // dropdown states
-  const [showTDSuggestions, setShowTDSuggestions] = useState(false)
-  const [showRVSuggestions, setShowRVSuggestions] = useState(false)
-  const dropdownRef = useRef<HTMLDivElement>(null)
+  const [indexer,       setIndexer]       = useState('')
+  const [rate,          setRate]          = useState('')
+  const [maturity,      setMaturity]      = useState('')
+  const [issuer,        setIssuer]        = useState('')
+  const [activeSlug,    setActiveSlug]    = useState('')
+  const [priceEdited,   setPriceEdited]   = useState(isEditMode)
+  const [showTDSugg,    setShowTDSugg]    = useState(false)
+  const [showRVSugg,    setShowRVSugg]    = useState(false)
+  const dropdownRef                        = useRef<HTMLDivElement>(null)
 
   const tab            = TABS.find(t => t.key === activeTab)!
   const isRF           = tab.extraFields === 'renda_fixa'
   const isTesouro      = tab.extraFields === 'tesouro'
   const indexerOptions = isTesouro ? TD_INDEXERS : RF_INDEXERS
+  const modalTitle     = isEditMode ? `Editar — ${ticker}` : prefill?.ticker ? `Adicionar Cotas — ${prefill.ticker}` : 'Novo Lançamento'
 
-  const modalTitle = isEditMode
-    ? `Editar Lancamento — ${ticker}`
-    : prefill?.ticker
-      ? `Adicionar Cotas — ${prefill.ticker}`
-      : 'Novo Lancamento'
+  const { quote,       loading: quoteLoading,    error: quoteError }  = useTickerQuote(ticker, !!tab.brapiEnabled && !isEditMode, date)
+  const { items: tdItems, loading: tdLoading }                         = useTesouroSearch(ticker, isTesouro && !isEditMode)
+  const { items: rvItems, loading: rvLoading }                         = useTickerSuggest(ticker, !!tab.brapiSuggestType && !isEditMode, tab.brapiSuggestType)
+  const { price: tdPrice, loading: tdPriceLoading }                    = useTreasuryPrice(activeSlug, date, isTesouro && !!activeSlug && !priceEdited)
 
-  // ── BRAPI cotacao (apenas no modo criacao) ─────────────────────────────
-  const { quote, loading: quoteLoading, error: quoteError } =
-    useTickerQuote(ticker, !!tab.brapiEnabled && !isEditMode, date)
+  const anyLoading = quoteLoading || tdLoading || rvLoading || tdPriceLoading
 
   useEffect(() => {
-    if (isEditMode) return // nao sobrescreve campos em edicao
-    if (!quote) { setPriceFromBrapi(false); return }
-    if (quote.price !== null && !price) {
-      setPrice(String(quote.price))
-      setPriceFromBrapi(true)
-    }
+    if (isEditMode || !quote) { setPriceFromBrapi(false); return }
+    if (quote.price !== null && !price) { setPrice(String(quote.price)); setPriceFromBrapi(true) }
     if (quote.name && !assetName) setAssetName(quote.name)
     if (quote.currency) setCurrency(quote.currency.toUpperCase())
   }, [quote])
@@ -161,65 +168,33 @@ export default function AddTransactionModal({ onClose }: Props) {
   useEffect(() => {
     if (isEditMode) return
     if (prevDate.current !== date && tab.brapiEnabled && ticker.length >= 2) {
-      setPrice('')
-      setPriceFromBrapi(false)
-      setPriceEdited(false)
+      setPrice(''); setPriceFromBrapi(false); setPriceEdited(false)
     }
     prevDate.current = date
   }, [date])
 
-  // ── PU Tesouro por data ────────────────────────────────────────────
-  const { price: tdPrice, loading: tdPriceLoading } = useTreasuryPrice(
-    activeSlug,
-    date,
-    isTesouro && !!activeSlug && !priceEdited,
-  )
-
   useEffect(() => {
     if (tdPrice !== null && tdPrice !== undefined && isTesouro && !priceEdited) {
-      setPrice(String(tdPrice))
-      setPriceFromBrapi(true)
+      setPrice(String(tdPrice)); setPriceFromBrapi(true)
     }
   }, [tdPrice, isTesouro, priceEdited])
 
   useEffect(() => {
-    if (isTesouro && activeSlug && !priceEdited) {
-      setPrice('')
-      setPriceFromBrapi(false)
-    }
+    if (isTesouro && activeSlug && !priceEdited) { setPrice(''); setPriceFromBrapi(false) }
   }, [date, isTesouro, activeSlug])
 
-  function handlePriceChange(v: string) {
-    setPrice(v)
-    setPriceFromBrapi(false)
-    setPriceEdited(true)
-  }
-
-  // ── Tesouro Direto autocomplete ─────────────────────────────────────
-  const { items: tdItems, loading: tdLoading } = useTesouroSearch(ticker, isTesouro && !isEditMode)
-
   useEffect(() => {
-    if (isTesouro && tdItems.length > 0) setShowTDSuggestions(true)
-    else setShowTDSuggestions(false)
+    if (isTesouro && tdItems.length > 0) setShowTDSugg(true); else setShowTDSugg(false)
   }, [tdItems, isTesouro])
 
-  // ── RV / Cripto / Internacional autocomplete ─────────────────────────
-  const { items: rvItems, loading: rvLoading } = useTickerSuggest(
-    ticker,
-    !!tab.brapiSuggestType && !isEditMode,
-    tab.brapiSuggestType,
-  )
-
   useEffect(() => {
-    if (tab.brapiSuggestType && rvItems.length > 0) setShowRVSuggestions(true)
-    else setShowRVSuggestions(false)
+    if (tab.brapiSuggestType && rvItems.length > 0) setShowRVSugg(true); else setShowRVSugg(false)
   }, [rvItems, tab.brapiSuggestType])
 
   useEffect(() => {
-    function handler(e: MouseEvent) {
+    const handler = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setShowTDSuggestions(false)
-        setShowRVSuggestions(false)
+        setShowTDSugg(false); setShowRVSugg(false)
       }
     }
     document.addEventListener('mousedown', handler)
@@ -227,53 +202,37 @@ export default function AddTransactionModal({ onClose }: Props) {
   }, [])
 
   function applyTDSuggestion(item: TreasuryItem) {
-    setTicker(item.name)
-    setAssetName(item.name)
+    setTicker(item.name); setAssetName(item.name)
     setActiveSlug((item as any).slug || item.ticker)
-    if (item.indexer)       setIndexer(item.indexer)
-    if (item.rate != null)  setRate(String(item.rate))
+    if (item.indexer) setIndexer(item.indexer)
+    if (item.rate != null) setRate(String(item.rate))
     if (item.maturity_date) setMaturity(item.maturity_date.slice(0, 10))
-    setPrice('')
-    setPriceFromBrapi(false)
-    setPriceEdited(false)
-    setShowTDSuggestions(false)
+    setPrice(''); setPriceFromBrapi(false); setPriceEdited(false); setShowTDSugg(false)
   }
 
   function applyRVSuggestion(item: TickerSuggestion) {
-    setTicker(item.ticker)
-    setAssetName(item.name)
-    setPrice('')
-    setPriceFromBrapi(false)
-    setPriceEdited(false)
-    setShowRVSuggestions(false)
+    setTicker(item.ticker); setAssetName(item.name)
+    setPrice(''); setPriceFromBrapi(false); setPriceEdited(false); setShowRVSugg(false)
   }
 
   function handleTabChange(key: string) {
     const t = TABS.find(t => t.key === key)!
-    setActiveTab(key)
-    setCurrency(t.currency)
-    if (!prefill?.ticker) {
-      setTicker(''); setAssetName('')
-    }
-    setPrice('')
-    setIndexer(''); setRate(''); setMaturity(''); setIssuer('')
-    setActiveSlug(''); setPriceEdited(false)
-    setPriceFromBrapi(false)
-    setShowTDSuggestions(false)
-    setShowRVSuggestions(false)
-    setError(null)
+    setActiveTab(key); setCurrency(t.currency)
+    if (!prefill?.ticker) { setTicker(''); setAssetName('') }
+    setPrice(''); setIndexer(''); setRate(''); setMaturity(''); setIssuer('')
+    setActiveSlug(''); setPriceEdited(false); setPriceFromBrapi(false)
+    setShowTDSugg(false); setShowRVSugg(false); setError(null)
   }
 
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setError(null)
-    if (!selectedPortfolioId) { setError('Selecione uma carteira antes de lancar.'); return }
+    e.preventDefault(); setError(null)
+    if (!selectedPortfolioId) { setError('Selecione uma carteira antes de lançar.'); return }
     const qty = parseFloat(quantity)
     const prc = parseFloat(price)
     const fee = parseFloat(fees || '0')
-    if (!ticker.trim())         { setError('Informe o ticker/codigo do ativo.'); return }
+    if (!ticker.trim())         { setError('Informe o ticker/código do ativo.'); return }
     if (isNaN(qty) || qty <= 0) { setError('Quantidade deve ser maior que zero.'); return }
-    if (isNaN(prc) || prc <= 0) { setError('Preco deve ser maior que zero.'); return }
+    if (isNaN(prc) || prc <= 0) { setError('Preço deve ser maior que zero.'); return }
     if ((isRF || isTesouro) && !indexer) { setError('Selecione o indexador.'); return }
 
     let enrichedNotes = notes.trim()
@@ -289,48 +248,33 @@ export default function AddTransactionModal({ onClose }: Props) {
     }
 
     const finalTicker = isTesouro && activeSlug ? activeSlug : ticker.trim().toUpperCase()
-
     const payload = {
-      ticker:     finalTicker,
-      asset_type: tab.assetType,
-      operation,
-      quantity:   qty,
-      price:      prc,
-      fees:       fee,
-      date,
-      currency,
-      notes:      enrichedNotes || undefined,
+      ticker: finalTicker, asset_type: tab.assetType, operation,
+      quantity: qty, price: prc, fees: fee, date, currency,
+      notes: enrichedNotes || undefined,
     }
 
     try {
       if (isEditMode && prefill?.transactionId) {
-        await updateAsync({
-          portfolioId: selectedPortfolioId,
-          id:          prefill.transactionId,
-          data:        payload,
-        })
+        await updateAsync({ portfolioId: selectedPortfolioId, id: prefill.transactionId, data: payload })
       } else {
         await createAsync({ portfolioId: selectedPortfolioId, data: payload })
       }
       setSuccess(true)
-    } catch (err: any) {
-      const msg = err?.response?.data?.detail
-      setError(typeof msg === 'string' ? msg : 'Erro ao salvar lancamento. Tente novamente.')
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: unknown } } }
+      const msg = e?.response?.data?.detail
+      setError(typeof msg === 'string' ? msg : 'Erro ao salvar lançamento. Tente novamente.')
     }
   }
 
   function handleReset() {
     setSuccess(false)
-    setTicker(prefill?.ticker ?? '')
-    setAssetName(prefill?.assetName ?? '')
-    setQuantity(''); setPrice('')
-    setFees(''); setDate(TODAY); setNotes('')
+    setTicker(prefill?.ticker ?? ''); setAssetName(prefill?.assetName ?? '')
+    setQuantity(''); setPrice(''); setFees(''); setDate(TODAY); setNotes('')
     setIndexer(''); setRate(''); setMaturity(''); setIssuer('')
-    setActiveSlug(''); setPriceEdited(false)
-    setPriceFromBrapi(false)
-    setShowTDSuggestions(false)
-    setShowRVSuggestions(false)
-    setError(null)
+    setActiveSlug(''); setPriceEdited(false); setPriceFromBrapi(false)
+    setShowTDSugg(false); setShowRVSugg(false); setError(null)
   }
 
   const total = quantity && price
@@ -338,259 +282,422 @@ export default function AddTransactionModal({ onClose }: Props) {
         .toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     : null
 
-  const anyLoading   = quoteLoading || tdLoading || rvLoading || tdPriceLoading
-  const showDropdown = showTDSuggestions || showRVSuggestions
+  const showDropdown   = showTDSugg || showRVSugg
+  const dropdownItems  = showTDSugg
+    ? tdItems.map(item => ({
+        label:    item.name,
+        sublabel: `${item.indexer}${item.rate ? ` ${item.rate}% a.a.` : ''}${item.maturity_date ? ` • venc. ${item.maturity_date.slice(0, 7)}` : ''}`,
+        onSelect: () => applyTDSuggestion(item),
+      }))
+    : rvItems.map(item => ({
+        label: item.ticker, sublabel: item.name,
+        onSelect: () => applyRVSuggestion(item),
+      }))
 
-  const dropdownItems: Array<{ label: string; sublabel: string; onSelect: () => void }> =
-    showTDSuggestions
-      ? tdItems.map(item => ({
-          label:    item.name,
-          sublabel: `${item.indexer}${item.rate ? ` ${item.rate}% a.a.` : ''}${item.maturity_date ? ` • venc. ${item.maturity_date.slice(0, 7)}` : ''}`,
-          onSelect: () => applyTDSuggestion(item),
-        }))
-      : rvItems.map(item => ({
-          label:    item.ticker,
-          sublabel: item.name,
-          onSelect: () => applyRVSuggestion(item),
-        }))
-
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 50,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '1rem',
+    }}>
+      {/* Backdrop */}
+      <div
+        style={{ position: 'absolute', inset: 0, background: 'oklch(0.1 0.01 240 / 0.65)', backdropFilter: 'blur(6px)' }}
+        onClick={onClose}
+        aria-hidden
+      />
 
-      <div className="relative z-10 w-full max-w-lg rounded-xl bg-surface-900 border border-surface-700 shadow-2xl overflow-hidden">
+      {/* Modal */}
+      <div style={{
+        position: 'relative', zIndex: 10,
+        width: '100%', maxWidth: 500,
+        background: 'var(--color-surface)',
+        border: '1px solid oklch(from var(--color-text) l c h / 0.08)',
+        borderRadius: 'var(--radius-xl)',
+        boxShadow: 'var(--shadow-lg)',
+        overflow: 'hidden',
+        display: 'flex', flexDirection: 'column',
+        maxHeight: '92dvh',
+      }}>
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-surface-700">
-          <h2 className="text-sm font-semibold text-slate-100">{modalTitle}</h2>
-          <button onClick={onClose} className="p-1 rounded hover:bg-surface-700 text-slate-400 hover:text-slate-200 transition-colors" aria-label="Fechar">
+        {/* ── Header ── */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '1rem 1.25rem',
+          borderBottom: '1px solid oklch(from var(--color-text) l c h / 0.07)',
+          flexShrink: 0,
+        }}>
+          <span style={{ fontSize: 'var(--text-sm)', fontWeight: 650, color: 'var(--color-text)', letterSpacing: '-0.01em' }}>
+            {modalTitle}
+          </span>
+          <button
+            onClick={onClose}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: 28, height: 28, borderRadius: 'var(--radius-md)',
+              border: 'none', background: 'transparent',
+              color: 'var(--color-text-muted)', cursor: 'pointer',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'oklch(from var(--color-text) l c h / 0.07)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+            aria-label="Fechar"
+          >
             <X size={15} />
           </button>
         </div>
 
-        {/* SUCCESS */}
+        {/* ── SUCCESS ── */}
         {success ? (
-          <div className="flex flex-col items-center justify-center gap-4 py-14 px-6">
-            <CheckCircle2 size={48} className="text-positive" />
-            <p className="text-sm font-medium text-slate-100">
-              {isEditMode ? 'Lancamento atualizado com sucesso!' : 'Lancamento registrado com sucesso!'}
-            </p>
-            <div className="flex gap-3">
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            justifyContent: 'center', gap: '1rem',
+            padding: '3rem 1.5rem', textAlign: 'center',
+          }}>
+            <div style={{
+              width: 52, height: 52, borderRadius: '50%',
+              background: 'oklch(from var(--color-success) l c h / 0.12)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <CheckCircle2 size={26} style={{ color: 'var(--color-success)' }} />
+            </div>
+            <div>
+              <p style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', margin: 0 }}>
+                {isEditMode ? 'Lançamento atualizado!' : 'Lançamento registrado!'}
+              </p>
+              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginTop: 4 }}>
+                {isEditMode ? 'As alterações foram salvas com sucesso.' : 'O lançamento foi adicionado à sua carteira.'}
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
               {!isEditMode && (
-                <button onClick={handleReset} className="px-4 py-1.5 rounded-md text-xs font-medium bg-brand-600 hover:bg-brand-500 text-white transition-colors">Novo Lancamento</button>
+                <button
+                  onClick={handleReset}
+                  className="btn btn-secondary"
+                  style={{ fontSize: 'var(--text-xs)', padding: '0.4375rem 1rem' }}
+                >
+                  Novo lançamento
+                </button>
               )}
-              <button onClick={onClose} className="px-4 py-1.5 rounded-md text-xs font-medium bg-surface-700 hover:bg-surface-600 text-slate-200 transition-colors">Fechar</button>
+              <button
+                onClick={onClose}
+                className="btn btn-primary"
+                style={{ fontSize: 'var(--text-xs)', padding: '0.4375rem 1rem' }}
+              >
+                Fechar
+              </button>
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
 
-            {/* ABAS — desabilitadas em modo edicao (nao muda tipo de ativo) */}
-            <div className="flex overflow-x-auto px-4 pt-4 pb-2 gap-1 scrollbar-hide">
-              {TABS.map(t => (
-                <button key={t.key} type="button"
-                  onClick={() => !isEditMode && handleTabChange(t.key)}
-                  className={clsx(
-                    'shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors duration-150 whitespace-nowrap',
-                    activeTab === t.key ? 'bg-brand-600 text-white' : 'text-slate-400 hover:bg-surface-700 hover:text-slate-200',
-                    isEditMode && activeTab !== t.key && 'opacity-30 cursor-default',
-                  )}
-                >
-                  {t.icon}{t.label}
-                </button>
-              ))}
+            {/* ── Abas de ativo ── */}
+            <div style={{
+              display: 'flex', gap: 4, overflowX: 'auto',
+              padding: '0.875rem 1.25rem 0',
+              flexShrink: 0,
+              scrollbarWidth: 'none',
+            }}>
+              {TABS.map(t => {
+                const isActive = activeTab === t.key
+                return (
+                  <button
+                    key={t.key} type="button"
+                    onClick={() => !isEditMode && handleTabChange(t.key)}
+                    style={{
+                      flexShrink: 0,
+                      display: 'flex', alignItems: 'center', gap: 5,
+                      padding: '5px 10px',
+                      borderRadius: 'var(--radius-lg)',
+                      border: isActive
+                        ? '1px solid oklch(from var(--color-primary) l c h / 0.3)'
+                        : '1px solid transparent',
+                      background: isActive
+                        ? 'oklch(from var(--color-primary) l c h / 0.12)'
+                        : 'transparent',
+                      color: isActive ? 'var(--color-primary)' : 'var(--color-text-muted)',
+                      fontSize: 'var(--text-xs)', fontWeight: isActive ? 600 : 400,
+                      cursor: isEditMode && !isActive ? 'default' : 'pointer',
+                      opacity: isEditMode && !isActive ? 0.35 : 1,
+                      transition: 'all 150ms ease',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {t.icon}{t.label}
+                  </button>
+                )
+              })}
             </div>
 
-            <div className="mx-4 border-t border-surface-700" />
+            {/* Linha separadora */}
+            <div style={{ height: 1, background: 'oklch(from var(--color-text) l c h / 0.07)', margin: '0.625rem 1.25rem 0', flexShrink: 0 }} />
 
-            {/* CAMPOS */}
-            <div className="px-4 py-4 flex flex-col gap-3 max-h-[70vh] overflow-y-auto">
+            {/* ── Campos ── */}
+            <div style={{
+              flex: 1, overflowY: 'auto', overflowX: 'hidden',
+              padding: '1rem 1.25rem',
+              display: 'flex', flexDirection: 'column', gap: '0.875rem',
+            }}>
 
               {/* Toggle Compra / Venda */}
-              <div className="flex rounded-lg overflow-hidden border border-surface-600 text-xs font-semibold">
-                <button type="button" onClick={() => setOperation('buy')}
-                  className={clsx('flex-1 py-2 transition-colors duration-150', operation === 'buy' ? 'bg-positive text-white' : 'bg-surface-800 text-slate-400 hover:bg-surface-700 hover:text-slate-200')}
-                >Compra</button>
-                <button type="button" onClick={() => setOperation('sell')}
-                  className={clsx('flex-1 py-2 transition-colors duration-150', operation === 'sell' ? 'bg-negative text-white' : 'bg-surface-800 text-slate-400 hover:bg-surface-700 hover:text-slate-200')}
-                >Venda</button>
+              <div style={{
+                display: 'grid', gridTemplateColumns: '1fr 1fr',
+                borderRadius: 'var(--radius-lg)',
+                border: '1px solid oklch(from var(--color-text) l c h / 0.1)',
+                overflow: 'hidden',
+                background: 'var(--color-surface-2)',
+              }}>
+                {(['buy', 'sell'] as const).map(op => {
+                  const isSel   = operation === op
+                  const isBuy   = op === 'buy'
+                  const color   = isBuy ? 'var(--color-success)' : 'var(--color-notification)'
+                  return (
+                    <button
+                      key={op} type="button"
+                      onClick={() => setOperation(op)}
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        padding: '0.5625rem',
+                        border: 'none',
+                        background: isSel
+                          ? `oklch(from ${color} l c h / 0.14)`
+                          : 'transparent',
+                        color: isSel ? color : 'var(--color-text-muted)',
+                        fontSize: 'var(--text-xs)', fontWeight: isSel ? 600 : 400,
+                        cursor: 'pointer',
+                        transition: 'all 150ms ease',
+                      }}
+                    >
+                      {isBuy
+                        ? <ArrowDownCircle size={13} style={{ flexShrink: 0 }} />
+                        : <ArrowUpCircle   size={13} style={{ flexShrink: 0 }} />}
+                      {isBuy ? 'Compra' : 'Venda'}
+                    </button>
+                  )
+                })}
               </div>
 
               {/* Ticker + Moeda */}
-              <div className="flex gap-3">
-                <div className="flex-1" ref={dropdownRef}>
-                  <label className="block text-xs text-slate-400 mb-1">{tab.tickerLabel}</label>
-                  <div className="relative">
-                    <input
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <Field label={tab.tickerLabel} style={{ flex: 1 } as any}>
+                  <div ref={dropdownRef} style={{ position: 'relative' }}>
+                    <Input
                       type="text"
                       value={ticker}
                       onChange={e => {
-                        if (isEditMode) return // nao permite trocar ticker em edicao
+                        if (isEditMode) return
                         const v = e.target.value
                         setTicker(v)
                         if (!prefill?.ticker) setAssetName('')
-                        setPrice('')
-                        setPriceFromBrapi(false)
-                        setPriceEdited(false)
+                        setPrice(''); setPriceFromBrapi(false); setPriceEdited(false)
                         if (isTesouro) setActiveSlug('')
                       }}
                       onFocus={() => {
-                        if (!isEditMode && isTesouro && tdItems.length > 0) setShowTDSuggestions(true)
-                        if (!isEditMode && tab.brapiSuggestType && rvItems.length > 0) setShowRVSuggestions(true)
+                        if (!isEditMode) {
+                          if (isTesouro && tdItems.length > 0) setShowTDSugg(true)
+                          if (tab.brapiSuggestType && rvItems.length > 0) setShowRVSugg(true)
+                        }
                       }}
                       placeholder={tab.tickerPlaceholder}
-                      className={clsx(inputCls, 'pr-7', isEditMode && 'opacity-60 cursor-default')}
+                      style={{ paddingRight: anyLoading ? '2.25rem' : '0.75rem', opacity: isEditMode ? 0.65 : 1 }}
                       readOnly={isEditMode}
                       autoFocus={!isEditMode}
                     />
                     {anyLoading && (
-                      <span className="absolute right-2 top-1/2 -translate-y-1/2">
-                        <Loader2 size={13} className="animate-spin text-brand-400" />
+                      <span style={{ position: 'absolute', right: '0.625rem', top: '50%', transform: 'translateY(-50%)' }}>
+                        <Loader2 size={13} style={{ color: 'var(--color-primary)', animation: 'spin 1s linear infinite' }} />
                       </span>
                     )}
 
+                    {/* Autocomplete dropdown */}
                     {showDropdown && dropdownItems.length > 0 && (
-                      <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-md border border-surface-600 bg-surface-800 shadow-xl max-h-52 overflow-y-auto">
+                      <div style={{
+                        position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 60,
+                        background: 'var(--color-surface-2)',
+                        border: '1px solid oklch(from var(--color-text) l c h / 0.1)',
+                        borderRadius: 'var(--radius-lg)',
+                        boxShadow: 'var(--shadow-lg)',
+                        overflow: 'hidden',
+                        maxHeight: 200, overflowY: 'auto',
+                      }}>
                         {dropdownItems.map((item, i) => (
                           <button
-                            key={i}
-                            type="button"
+                            key={i} type="button"
                             onMouseDown={item.onSelect}
-                            className="w-full text-left px-3 py-2 text-xs hover:bg-surface-700 transition-colors border-b border-surface-700 last:border-0"
+                            style={{
+                              width: '100%', textAlign: 'left',
+                              padding: '0.5rem 0.75rem',
+                              background: 'transparent', border: 'none',
+                              borderBottom: i < dropdownItems.length - 1 ? '1px solid oklch(from var(--color-text) l c h / 0.06)' : 'none',
+                              cursor: 'pointer',
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.background = 'oklch(from var(--color-primary) l c h / 0.07)')}
+                            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                           >
-                            <span className="font-medium text-slate-200">{item.label}</span>
+                            <span style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text)' }}>{item.label}</span>
                             {item.sublabel && (
-                              <span className="ml-2 text-slate-500">{item.sublabel}</span>
+                              <span style={{ display: 'block', fontSize: '0.68rem', color: 'var(--color-text-muted)', marginTop: 1 }}>{item.sublabel}</span>
                             )}
                           </button>
                         ))}
                       </div>
                     )}
                   </div>
+                  {assetName  && <p style={{ fontSize: '0.68rem', color: 'var(--color-text-muted)', margin: 0 }}>{assetName}</p>}
+                  {quoteError && !quoteLoading && <p style={{ fontSize: '0.68rem', color: 'var(--color-text-muted)', margin: 0 }}>{quoteError}</p>}
+                </Field>
 
-                  {assetName && (
-                    <p className="mt-1 text-xs text-slate-500 truncate">{assetName}</p>
-                  )}
-                  {quoteError && !quoteLoading && (
-                    <p className="mt-1 text-xs text-slate-500">{quoteError}</p>
-                  )}
-                </div>
-
-                <div className="w-24">
-                  <label className="block text-xs text-slate-400 mb-1">Moeda</label>
-                  <select value={currency} onChange={e => setCurrency(e.target.value)} className={inputCls}>
+                <Field label="Moeda" style={{ width: 86 } as any}>
+                  <Select value={currency} onChange={e => setCurrency(e.target.value)}>
                     <option value="BRL">BRL</option>
                     <option value="USD">USD</option>
                     <option value="EUR">EUR</option>
                     <option value="BTC">BTC</option>
-                  </select>
-                </div>
+                  </Select>
+                </Field>
               </div>
 
-              {/* Campos extras RF / Tesouro */}
+              {/* Campos RF / Tesouro */}
               {(isRF || isTesouro) && (
-                <div className="rounded-lg border border-surface-600 bg-surface-800/50 px-3 py-3 flex flex-col gap-3">
-                  <p className="text-xs font-medium text-slate-400">
-                    {isTesouro ? 'Dados do Titulo' : 'Dados do Ativo'}
+                <div style={{
+                  borderRadius: 'var(--radius-lg)',
+                  border: '1px solid oklch(from var(--color-primary) l c h / 0.15)',
+                  background: 'oklch(from var(--color-primary) l c h / 0.04)',
+                  padding: '0.875rem',
+                  display: 'flex', flexDirection: 'column', gap: '0.75rem',
+                }}>
+                  <p style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-primary)', margin: 0 }}>
+                    {isTesouro ? 'Dados do Título' : 'Dados do Ativo'}
                   </p>
-                  <div className="flex gap-3">
-                    <div className="flex-1">
-                      <label className="block text-xs text-slate-400 mb-1">Indexador <span className="text-red-400">*</span></label>
-                      <select value={indexer} onChange={e => setIndexer(e.target.value)} className={inputCls}>
-                        <option value="">Selecionar...</option>
+                  <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <Field label="Indexador" required style={{ flex: 1 } as any}>
+                      <Select value={indexer} onChange={e => setIndexer(e.target.value)}>
+                        <option value="">Selecionar…</option>
                         {indexerOptions.map(o => <option key={o} value={o}>{o}</option>)}
-                      </select>
-                    </div>
-                    <div className="w-32">
-                      <label className="block text-xs text-slate-400 mb-1">Taxa <span className="text-slate-600">(% a.a.)</span></label>
-                      <input type="number" value={rate} onChange={e => setRate(e.target.value)} placeholder={isTesouro ? 'ex: 5.82' : 'ex: 110'} min="0" step="any" className={inputCls} />
-                    </div>
+                      </Select>
+                    </Field>
+                    <Field label="Taxa (% a.a.)" style={{ width: 100 } as any}>
+                      <Input type="number" value={rate} onChange={e => setRate(e.target.value)}
+                        placeholder={isTesouro ? 'ex: 5.82' : 'ex: 110'} min="0" step="any" />
+                    </Field>
                   </div>
-                  <div className="flex gap-3">
-                    <div className="flex-1">
-                      <label className="block text-xs text-slate-400 mb-1">Vencimento</label>
-                      <input type="date" value={maturity} onChange={e => setMaturity(e.target.value)} className={inputCls} />
-                    </div>
+                  <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <Field label="Vencimento" style={{ flex: 1 } as any}>
+                      <Input type="date" value={maturity} onChange={e => setMaturity(e.target.value)} />
+                    </Field>
                     {isRF && (
-                      <div className="flex-1">
-                        <label className="block text-xs text-slate-400 mb-1">Emissor</label>
-                        <input type="text" value={issuer} onChange={e => setIssuer(e.target.value)} placeholder="ex: Banco XP" className={inputCls} />
-                      </div>
+                      <Field label="Emissor" style={{ flex: 1 } as any}>
+                        <Input type="text" value={issuer} onChange={e => setIssuer(e.target.value)} placeholder="ex: Banco XP" />
+                      </Field>
                     )}
                   </div>
                 </div>
               )}
 
-              {/* Quantidade + Preco */}
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className="block text-xs text-slate-400 mb-1">
-                    {isRF || isTesouro ? 'Qtd / Cotas' : 'Quantidade'}
-                  </label>
-                  <input type="number" value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="0" min="0" step="any" className={inputCls} />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs text-slate-400">
-                      {isRF || isTesouro ? 'PU / Preco unit.' : 'Preco'}
-                      <span className="text-slate-600 ml-1">({currency})</span>
-                    </label>
-                    {priceFromBrapi && (
-                      <span className="flex items-center gap-0.5 text-[10px] font-medium text-brand-400 bg-brand-500/10 border border-brand-500/20 rounded px-1.5 py-0.5">
-                        <Zap size={9} />BRAPI
-                      </span>
-                    )}
-                  </div>
-                  <input
-                    type="number"
-                    value={price}
-                    onChange={e => handlePriceChange(e.target.value)}
-                    placeholder="0,00"
-                    min="0"
-                    step="any"
-                    className={clsx(inputCls, priceFromBrapi && 'border-brand-500/50')}
+              {/* Quantidade + Preço */}
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <Field label={isRF || isTesouro ? 'Qtd / Cotas' : 'Quantidade'} style={{ flex: 1 } as any}>
+                  <Input type="number" value={quantity} onChange={e => setQuantity(e.target.value)}
+                    placeholder="0" min="0" step="any" />
+                </Field>
+                <Field
+                  label={`${isRF || isTesouro ? 'PU / Preço unit.' : 'Preço'} (${currency})`}
+                  style={{ flex: 1 } as any}
+                  badge={priceFromBrapi && (
+                    <span style={{
+                      display: 'flex', alignItems: 'center', gap: 3,
+                      fontSize: '0.65rem', fontWeight: 600,
+                      color: 'var(--color-primary)',
+                      background: 'oklch(from var(--color-primary) l c h / 0.1)',
+                      border: '1px solid oklch(from var(--color-primary) l c h / 0.2)',
+                      borderRadius: 'var(--radius-full)', padding: '1px 6px',
+                    }}>
+                      <Zap size={8} /> BRAPI
+                    </span>
+                  )}
+                >
+                  <Input
+                    type="number" value={price}
+                    onChange={e => { setPrice(e.target.value); setPriceFromBrapi(false); setPriceEdited(true) }}
+                    placeholder="0,00" min="0" step="any"
+                    highlight={priceFromBrapi}
                   />
-                </div>
+                </Field>
               </div>
 
               {/* Taxas + Data */}
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className="block text-xs text-slate-400 mb-1">Taxas / Corretagem</label>
-                  <input type="number" value={fees} onChange={e => setFees(e.target.value)} placeholder="0,00" min="0" step="any" className={inputCls} />
-                </div>
-                <div className="flex-1">
-                  <label className="block text-xs text-slate-400 mb-1">Data da operacao</label>
-                  <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inputCls} />
-                </div>
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <Field label="Taxas / Corretagem" style={{ flex: 1 } as any}>
+                  <Input type="number" value={fees} onChange={e => setFees(e.target.value)}
+                    placeholder="0,00" min="0" step="any" />
+                </Field>
+                <Field label="Data da operação" style={{ flex: 1 } as any}>
+                  <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
+                </Field>
               </div>
 
-              {/* Total preview */}
+              {/* Total estimado */}
               {total && (
-                <div className="rounded-lg bg-surface-800 border border-surface-700 px-3 py-2 flex justify-between items-center">
-                  <span className="text-xs text-slate-500">Total estimado</span>
-                  <span className="text-xs font-semibold text-slate-100">{currency} {total}</span>
+                <div style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '0.625rem 0.875rem',
+                  borderRadius: 'var(--radius-lg)',
+                  background: 'oklch(from var(--color-primary) l c h / 0.07)',
+                  border: '1px solid oklch(from var(--color-primary) l c h / 0.15)',
+                }}>
+                  <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Total estimado</span>
+                  <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--color-text)', fontVariantNumeric: 'tabular-nums' }}>
+                    {currency} {total}
+                  </span>
                 </div>
               )}
 
-              {/* Observacoes */}
-              <div>
-                <label className="block text-xs text-slate-400 mb-1">Observacoes <span className="text-slate-600">(opcional)</span></label>
-                <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Anotacoes sobre o lancamento..." className={inputCls + ' resize-none'} />
-              </div>
+              {/* Observações */}
+              <Field label="Observações" badge={<span style={{ fontSize: '0.68rem', color: 'var(--color-text-faint)' }}>opcional</span>}>
+                <textarea
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  rows={2}
+                  placeholder="Anotações sobre o lançamento…"
+                  style={{ ...inputStyle, resize: 'none', lineHeight: 1.5 }}
+                  onFocus={e => Object.assign(e.target.style, inputFocusStyle)}
+                  onBlur={e  => { e.target.style.borderColor = 'oklch(from var(--color-text) l c h / 0.11)'; e.target.style.boxShadow = 'none' }}
+                />
+              </Field>
 
+              {/* Erro */}
               {error && (
-                <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-md px-3 py-2">{error}</p>
+                <div style={{
+                  fontSize: 'var(--text-xs)', color: 'var(--color-notification)',
+                  background: 'oklch(from var(--color-notification) l c h / 0.08)',
+                  border: '1px solid oklch(from var(--color-notification) l c h / 0.2)',
+                  borderRadius: 'var(--radius-md)', padding: '0.5rem 0.75rem',
+                }}>
+                  {error}
+                </div>
               )}
             </div>
 
-            {/* Footer */}
-            <div className="flex justify-end gap-2.5 px-4 py-3 border-t border-surface-700">
-              <button type="button" onClick={onClose} className="px-4 py-1.5 rounded-md text-xs font-medium bg-surface-700 hover:bg-surface-600 text-slate-300 transition-colors">Cancelar</button>
-              <button type="submit" disabled={isPending} className="px-4 py-1.5 rounded-md text-xs font-medium bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white transition-colors">
-                {isPending
-                  ? 'Salvando...'
-                  : isEditMode ? 'Salvar Alteracoes' : 'Salvar Lancamento'}
+            {/* ── Footer ── */}
+            <div style={{
+              display: 'flex', justifyContent: 'flex-end', gap: '0.5rem',
+              padding: '0.875rem 1.25rem',
+              borderTop: '1px solid oklch(from var(--color-text) l c h / 0.07)',
+              flexShrink: 0,
+            }}>
+              <button
+                type="button" onClick={onClose}
+                className="btn btn-secondary"
+                style={{ fontSize: 'var(--text-xs)', padding: '0.4375rem 1rem' }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit" disabled={isPending}
+                className="btn btn-primary"
+                style={{ fontSize: 'var(--text-xs)', padding: '0.4375rem 1.125rem', fontWeight: 650 }}
+              >
+                {isPending ? 'Salvando…' : isEditMode ? 'Salvar Alterações' : 'Salvar Lançamento'}
               </button>
             </div>
           </form>
