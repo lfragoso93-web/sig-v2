@@ -12,26 +12,28 @@ from app.integrations.brapi import get_quotes_bulk
 from app.models.asset import Asset, AssetType
 from app.models.dividend import Dividend, DividendStatus
 from app.models.portfolio import Portfolio
-from app.models.portfolio_position import PortfolioPosition
 from app.models.transaction import Transaction
 from app.services.corporate_event_service import (
     sync_corporate_events_for_asset, apply_pending_events
 )
 from app.services.dividend_backfill_service import backfill_dividends
 from app.services.price_history_service import persist_daily_prices
-from app.services.quote_service import update_all_quotes
+from app.services.quotes_service import update_all_quotes  # canônico com cache L1/L2/L3
 from app.services.portfolio_snapshot_service import refresh_today_snapshot
 
 logger = logging.getLogger(__name__)
 
+# Tipos atendidos por BRAPI (inclui BDR — negocia na B3)
 BRAPI_ASSET_TYPES = {
     AssetType.ACAO,
     AssetType.FII,
     AssetType.ETF_NACIONAL,
+    AssetType.BDR,
 }
 
 PRICE_HISTORY_TYPES = {
     AssetType.ACAO, AssetType.FII, AssetType.ETF_NACIONAL,
+    AssetType.BDR,
     AssetType.STOCK, AssetType.ETF_INTERNACIONAL,
 }
 
@@ -39,13 +41,13 @@ scheduler = AsyncIOScheduler(timezone="America/Sao_Paulo")
 
 
 async def _get_active_brapi_assets() -> list[Asset]:
+    """Retorna ativos BR ativos via Transaction (sem depender de PortfolioPosition legada)."""
     async with AsyncSessionLocal() as db:
         result = await db.execute(
             select(Asset)
-            .join(PortfolioPosition, PortfolioPosition.asset_id == Asset.id)
+            .join(Transaction, Transaction.ticker == Asset.ticker)
             .where(
-                PortfolioPosition.quantity > 0,
-                Asset.asset_type.in_(BRAPI_ASSET_TYPES),
+                Asset.asset_type.in_([t.value for t in BRAPI_ASSET_TYPES]),
             )
             .distinct()
         )
@@ -79,7 +81,7 @@ async def _get_price_history_tickers() -> list[tuple[str, AssetType]]:
         )
         rows = result.all()
     return [
-        (r.ticker, r.asset_type)
+        (r.ticker, AssetType(r.asset_type))
         for r in rows
         if r.ticker and AssetType(r.asset_type) in PRICE_HISTORY_TYPES
     ]
@@ -90,7 +92,7 @@ async def _get_active_portfolio_ids() -> list[int]:
         result = await db.execute(
             select(Portfolio.id)
             .join(Transaction, Transaction.portfolio_id == Portfolio.id)
-            .where(Portfolio.is_active is True)
+            .where(Portfolio.is_active.is_(True))
             .distinct()
         )
         return [row.id for row in result.all()]
@@ -119,9 +121,8 @@ async def job_persist_price_history():
 
     total = 0
     errors = 0
-    for ticker, asset_type_str in pairs:
+    for ticker, asset_type in pairs:
         try:
-            asset_type = AssetType(asset_type_str)
             async with AsyncSessionLocal() as db:
                 inserted = await persist_daily_prices(
                     db, ticker, asset_type, days_back=2
@@ -139,7 +140,7 @@ async def job_update_all_quotes_and_snapshots():
 
     try:
         async with AsyncSessionLocal() as db:
-            await update_all_quotes(db)
+            await update_all_quotes(db)  # quotes_service — canonico com cache L1/L2/L3
         logger.info("[Scheduler] update_all_quotes concluido.")
     except Exception as e:
         logger.error(f"[Scheduler] Erro em update_all_quotes: {e}")
