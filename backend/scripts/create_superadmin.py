@@ -17,11 +17,11 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.core.config import settings        # noqa: E402
-from app.core.database import async_session # noqa: E402
-from app.core.security import hash_password # noqa: E402
-from app.models.user import User, UserRole  # noqa: E402
-from sqlalchemy import select               # noqa: E402
+from app.core.config import settings           # noqa: E402
+from app.core.database import AsyncSessionLocal # noqa: E402
+from app.core.security import hash_password    # noqa: E402
+from app.models.user import User, UserRole     # noqa: E402
+from sqlalchemy import select                  # noqa: E402
 
 
 async def main() -> None:
@@ -31,7 +31,7 @@ async def main() -> None:
 
     print(f"[seed] Configurando superadmin: {email}")
 
-    async with async_session() as db:
+    async with AsyncSessionLocal() as db:
         result = await db.execute(select(User).where(User.email == email))
         user   = result.scalar_one_or_none()
         new_hash = hash_password(password)
