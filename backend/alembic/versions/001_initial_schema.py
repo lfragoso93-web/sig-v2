@@ -14,307 +14,308 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Cria ENUMs de forma idempotente (IF NOT EXISTS — Postgres 9.1+)
+    op.execute("CREATE TYPE IF NOT EXISTS userrole AS ENUM ('user', 'superadmin')")
+    op.execute("CREATE TYPE IF NOT EXISTS assettype AS ENUM ('ACAO','FII','ETF_NACIONAL','TESOURO_DIRETO','STOCK','ETF_INTERNACIONAL','CRIPTO','RENDA_FIXA')")
+    op.execute("CREATE TYPE IF NOT EXISTS assetcurrency AS ENUM ('BRL','USD','EUR','BTC')")
+    op.execute("CREATE TYPE IF NOT EXISTS transactiontype AS ENUM ('COMPRA','VENDA','DESDOBRAMENTO','GRUPAMENTO','BONIFICACAO','TRANSFERENCIA_ENTRADA','TRANSFERENCIA_SAIDA')")
+    op.execute("CREATE TYPE IF NOT EXISTS dividendtype AS ENUM ('DIVIDENDO','JCP','RENDIMENTO','AMORTIZACAO','FRACAO','OUTROS')")
+    op.execute("CREATE TYPE IF NOT EXISTS fixedincometype AS ENUM ('CDB','LCI','LCA','LCI_LCA','CRI','CRA','DEBENTURE','POUPANCA','OUTROS')")
+    op.execute("CREATE TYPE IF NOT EXISTS indexertype AS ENUM ('CDI','IPCA_PLUS','SELIC','PREFIXADO','IGPM_PLUS')")
+    op.execute("CREATE TYPE IF NOT EXISTS treasurytype AS ENUM ('Tesouro Selic','Tesouro Prefixado','Tesouro Prefixado com Juros Semestrais','Tesouro IPCA+','Tesouro IPCA+ com Juros Semestrais','Tesouro IGP-M+ com Juros Semestrais','Tesouro Renda+','Tesouro Educa+')")
+    op.execute("CREATE TYPE IF NOT EXISTS irpfmarket AS ENUM ('ACOES','DAY_TRADE','FII','ETF','CRIPTO','RENDA_FIXA','STOCKS')")
+    op.execute("CREATE TYPE IF NOT EXISTS goaltype AS ENUM ('PATRIMONIO_ALVO','ALOCACAO','DY_MENSAL','RENTABILIDADE','APORTE_MENSAL')")
+
     # === USERS ===
-    op.create_table(
-        'users',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('name', sa.String(150), nullable=False),
-        sa.Column('email', sa.String(255), nullable=False),
-        sa.Column('hashed_password', sa.String(255), nullable=False),
-        sa.Column('role', sa.Enum('user', 'superadmin', name='userrole'), nullable=False, server_default='user'),
-        sa.Column('is_active', sa.Boolean(), nullable=False, server_default='true'),
-        sa.Column('avatar_url', sa.String(500), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.PrimaryKeyConstraint('id'),
-    )
-    op.create_index('ix_users_id', 'users', ['id'])
-    op.create_index('ix_users_email', 'users', ['email'], unique=True)
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(150) NOT NULL,
+            email VARCHAR(255) NOT NULL,
+            hashed_password VARCHAR(255) NOT NULL,
+            role userrole NOT NULL DEFAULT 'user',
+            is_active BOOLEAN NOT NULL DEFAULT true,
+            avatar_url VARCHAR(500),
+            created_at TIMESTAMPTZ DEFAULT now(),
+            updated_at TIMESTAMPTZ DEFAULT now()
+        )
+    """)
+    op.execute("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_email ON users (email)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_users_id ON users (id)")
 
     # === PORTFOLIOS ===
-    op.create_table(
-        'portfolios',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('user_id', sa.Integer(), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('name', sa.String(150), nullable=False),
-        sa.Column('description', sa.Text(), nullable=True),
-        sa.Column('is_active', sa.Boolean(), nullable=False, server_default='true'),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.PrimaryKeyConstraint('id'),
-    )
-    op.create_index('ix_portfolios_id', 'portfolios', ['id'])
-    op.create_index('ix_portfolios_user_id', 'portfolios', ['user_id'])
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS portfolios (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name VARCHAR(150) NOT NULL,
+            description TEXT,
+            is_active BOOLEAN NOT NULL DEFAULT true,
+            created_at TIMESTAMPTZ DEFAULT now(),
+            updated_at TIMESTAMPTZ DEFAULT now()
+        )
+    """)
+    op.execute("CREATE INDEX IF NOT EXISTS ix_portfolios_id ON portfolios (id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_portfolios_user_id ON portfolios (user_id)")
 
     # === ASSETS ===
-    op.create_table(
-        'assets',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('ticker', sa.String(30), nullable=False),
-        sa.Column('name', sa.String(200), nullable=False),
-        sa.Column('asset_type', sa.Enum(
-            'ACAO','FII','ETF_NACIONAL','TESOURO_DIRETO','STOCK',
-            'ETF_INTERNACIONAL','CRIPTO','RENDA_FIXA', name='assettype'
-        ), nullable=False),
-        sa.Column('currency', sa.Enum('BRL','USD','EUR','BTC', name='assetcurrency'), nullable=False, server_default='BRL'),
-        sa.Column('brapi_ticker', sa.String(50), nullable=True),
-        sa.Column('sector', sa.String(100), nullable=True),
-        sa.Column('logo_url', sa.String(500), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('ticker', 'asset_type', name='uq_asset_ticker_type'),
-    )
-    op.create_index('ix_assets_id', 'assets', ['id'])
-    op.create_index('ix_assets_ticker', 'assets', ['ticker'])
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS assets (
+            id SERIAL PRIMARY KEY,
+            ticker VARCHAR(30) NOT NULL,
+            name VARCHAR(200) NOT NULL,
+            asset_type assettype NOT NULL,
+            currency assetcurrency NOT NULL DEFAULT 'BRL',
+            brapi_ticker VARCHAR(50),
+            sector VARCHAR(100),
+            logo_url VARCHAR(500),
+            created_at TIMESTAMPTZ DEFAULT now(),
+            updated_at TIMESTAMPTZ DEFAULT now(),
+            CONSTRAINT uq_asset_ticker_type UNIQUE (ticker, asset_type)
+        )
+    """)
+    op.execute("CREATE INDEX IF NOT EXISTS ix_assets_id ON assets (id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_assets_ticker ON assets (ticker)")
 
     # === TRANSACTIONS ===
-    op.create_table(
-        'transactions',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('portfolio_id', sa.Integer(), sa.ForeignKey('portfolios.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('asset_id', sa.Integer(), sa.ForeignKey('assets.id', ondelete='RESTRICT'), nullable=False),
-        sa.Column('transaction_type', sa.Enum(
-            'COMPRA','VENDA','DESDOBRAMENTO','GRUPAMENTO',
-            'BONIFICACAO','TRANSFERENCIA_ENTRADA','TRANSFERENCIA_SAIDA',
-            name='transactiontype'
-        ), nullable=False),
-        sa.Column('date', sa.Date(), nullable=False),
-        sa.Column('quantity', sa.Numeric(18, 8), nullable=False),
-        sa.Column('unit_price', sa.Numeric(18, 8), nullable=False),
-        sa.Column('total_cost', sa.Numeric(18, 2), nullable=False),
-        sa.Column('fees', sa.Numeric(18, 2), nullable=False, server_default='0'),
-        sa.Column('broker', sa.String(100), nullable=True),
-        sa.Column('notes', sa.Text(), nullable=True),
-        sa.Column('is_day_trade', sa.Boolean(), nullable=False, server_default='false'),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.PrimaryKeyConstraint('id'),
-    )
-    op.create_index('ix_transactions_id', 'transactions', ['id'])
-    op.create_index('ix_transactions_portfolio_id', 'transactions', ['portfolio_id'])
-    op.create_index('ix_transactions_asset_id', 'transactions', ['asset_id'])
-    op.create_index('ix_transactions_date', 'transactions', ['date'])
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS transactions (
+            id SERIAL PRIMARY KEY,
+            portfolio_id INTEGER NOT NULL REFERENCES portfolios(id) ON DELETE CASCADE,
+            asset_id INTEGER NOT NULL REFERENCES assets(id) ON DELETE RESTRICT,
+            transaction_type transactiontype NOT NULL,
+            date DATE NOT NULL,
+            quantity NUMERIC(18,8) NOT NULL,
+            unit_price NUMERIC(18,8) NOT NULL,
+            total_cost NUMERIC(18,2) NOT NULL,
+            fees NUMERIC(18,2) NOT NULL DEFAULT 0,
+            broker VARCHAR(100),
+            notes TEXT,
+            is_day_trade BOOLEAN NOT NULL DEFAULT false,
+            created_at TIMESTAMPTZ DEFAULT now(),
+            updated_at TIMESTAMPTZ DEFAULT now()
+        )
+    """)
+    op.execute("CREATE INDEX IF NOT EXISTS ix_transactions_id ON transactions (id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_transactions_portfolio_id ON transactions (portfolio_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_transactions_asset_id ON transactions (asset_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_transactions_date ON transactions (date)")
 
     # === PORTFOLIO POSITIONS ===
-    op.create_table(
-        'portfolio_positions',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('portfolio_id', sa.Integer(), sa.ForeignKey('portfolios.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('asset_id', sa.Integer(), sa.ForeignKey('assets.id', ondelete='RESTRICT'), nullable=False),
-        sa.Column('quantity', sa.Numeric(18, 8), nullable=False, server_default='0'),
-        sa.Column('average_price', sa.Numeric(18, 8), nullable=False, server_default='0'),
-        sa.Column('total_invested', sa.Numeric(18, 2), nullable=False, server_default='0'),
-        sa.Column('realized_profit', sa.Numeric(18, 2), nullable=False, server_default='0'),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('portfolio_id', 'asset_id', name='uq_position_portfolio_asset'),
-    )
-    op.create_index('ix_portfolio_positions_id', 'portfolio_positions', ['id'])
-    op.create_index('ix_portfolio_positions_portfolio_id', 'portfolio_positions', ['portfolio_id'])
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS portfolio_positions (
+            id SERIAL PRIMARY KEY,
+            portfolio_id INTEGER NOT NULL REFERENCES portfolios(id) ON DELETE CASCADE,
+            asset_id INTEGER NOT NULL REFERENCES assets(id) ON DELETE RESTRICT,
+            quantity NUMERIC(18,8) NOT NULL DEFAULT 0,
+            average_price NUMERIC(18,8) NOT NULL DEFAULT 0,
+            total_invested NUMERIC(18,2) NOT NULL DEFAULT 0,
+            realized_profit NUMERIC(18,2) NOT NULL DEFAULT 0,
+            created_at TIMESTAMPTZ DEFAULT now(),
+            updated_at TIMESTAMPTZ DEFAULT now(),
+            CONSTRAINT uq_position_portfolio_asset UNIQUE (portfolio_id, asset_id)
+        )
+    """)
+    op.execute("CREATE INDEX IF NOT EXISTS ix_portfolio_positions_id ON portfolio_positions (id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_portfolio_positions_portfolio_id ON portfolio_positions (portfolio_id)")
 
     # === DIVIDENDS ===
-    op.create_table(
-        'dividends',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('portfolio_id', sa.Integer(), sa.ForeignKey('portfolios.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('asset_id', sa.Integer(), sa.ForeignKey('assets.id', ondelete='RESTRICT'), nullable=False),
-        sa.Column('dividend_type', sa.Enum('DIVIDENDO','JCP','RENDIMENTO','AMORTIZACAO','FRACAO','OUTROS', name='dividendtype'), nullable=False),
-        sa.Column('date_ex', sa.Date(), nullable=False),
-        sa.Column('date_payment', sa.Date(), nullable=True),
-        sa.Column('quantity_on_date', sa.Numeric(18, 8), nullable=False),
-        sa.Column('value_per_share', sa.Numeric(18, 8), nullable=False),
-        sa.Column('total_value', sa.Numeric(18, 2), nullable=False),
-        sa.Column('is_projected', sa.Boolean(), nullable=False, server_default='false'),
-        sa.Column('ir_withheld', sa.Numeric(18, 2), nullable=False, server_default='0'),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.PrimaryKeyConstraint('id'),
-    )
-    op.create_index('ix_dividends_id', 'dividends', ['id'])
-    op.create_index('ix_dividends_portfolio_id', 'dividends', ['portfolio_id'])
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS dividends (
+            id SERIAL PRIMARY KEY,
+            portfolio_id INTEGER NOT NULL REFERENCES portfolios(id) ON DELETE CASCADE,
+            asset_id INTEGER NOT NULL REFERENCES assets(id) ON DELETE RESTRICT,
+            dividend_type dividendtype NOT NULL,
+            date_ex DATE NOT NULL,
+            date_payment DATE,
+            quantity_on_date NUMERIC(18,8) NOT NULL,
+            value_per_share NUMERIC(18,8) NOT NULL,
+            total_value NUMERIC(18,2) NOT NULL,
+            is_projected BOOLEAN NOT NULL DEFAULT false,
+            ir_withheld NUMERIC(18,2) NOT NULL DEFAULT 0,
+            created_at TIMESTAMPTZ DEFAULT now(),
+            updated_at TIMESTAMPTZ DEFAULT now()
+        )
+    """)
+    op.execute("CREATE INDEX IF NOT EXISTS ix_dividends_id ON dividends (id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_dividends_portfolio_id ON dividends (portfolio_id)")
 
     # === FIXED INCOME ===
-    op.create_table(
-        'fixed_income_investments',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('portfolio_id', sa.Integer(), sa.ForeignKey('portfolios.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('name', sa.String(200), nullable=False),
-        sa.Column('institution', sa.String(150), nullable=False),
-        sa.Column('fixed_income_type', sa.Enum('CDB','LCI','LCA','LCI_LCA','CRI','CRA','DEBENTURE','POUPANCA','OUTROS', name='fixedincometype'), nullable=False),
-        sa.Column('indexer', sa.Enum('CDI','IPCA_PLUS','SELIC','PREFIXADO','IGPM_PLUS', name='indexertype'), nullable=False),
-        sa.Column('rate', sa.Numeric(10, 4), nullable=False),
-        sa.Column('invested_amount', sa.Numeric(18, 2), nullable=False),
-        sa.Column('date_start', sa.Date(), nullable=False),
-        sa.Column('date_maturity', sa.Date(), nullable=True),
-        sa.Column('is_active', sa.Boolean(), nullable=False, server_default='true'),
-        sa.Column('is_ir_exempt', sa.Boolean(), nullable=False, server_default='false'),
-        sa.Column('notes', sa.Text(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.PrimaryKeyConstraint('id'),
-    )
-    op.create_index('ix_fixed_income_investments_id', 'fixed_income_investments', ['id'])
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS fixed_income_investments (
+            id SERIAL PRIMARY KEY,
+            portfolio_id INTEGER NOT NULL REFERENCES portfolios(id) ON DELETE CASCADE,
+            name VARCHAR(200) NOT NULL,
+            institution VARCHAR(150) NOT NULL,
+            fixed_income_type fixedincometype NOT NULL,
+            indexer indexertype NOT NULL,
+            rate NUMERIC(10,4) NOT NULL,
+            invested_amount NUMERIC(18,2) NOT NULL,
+            date_start DATE NOT NULL,
+            date_maturity DATE,
+            is_active BOOLEAN NOT NULL DEFAULT true,
+            is_ir_exempt BOOLEAN NOT NULL DEFAULT false,
+            notes TEXT,
+            created_at TIMESTAMPTZ DEFAULT now(),
+            updated_at TIMESTAMPTZ DEFAULT now()
+        )
+    """)
+    op.execute("CREATE INDEX IF NOT EXISTS ix_fixed_income_investments_id ON fixed_income_investments (id)")
 
     # === TREASURY ===
-    op.create_table(
-        'treasury_investments',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('portfolio_id', sa.Integer(), sa.ForeignKey('portfolios.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('treasury_type', sa.Enum(
-            'Tesouro Selic','Tesouro Prefixado','Tesouro Prefixado com Juros Semestrais',
-            'Tesouro IPCA+','Tesouro IPCA+ com Juros Semestrais',
-            'Tesouro IGP-M+ com Juros Semestrais','Tesouro Renda+','Tesouro Educa+',
-            name='treasurytype'
-        ), nullable=False),
-        sa.Column('brapi_name', sa.String(100), nullable=False),
-        sa.Column('date_purchase', sa.Date(), nullable=False),
-        sa.Column('date_maturity', sa.Date(), nullable=False),
-        sa.Column('quantity', sa.Numeric(18, 8), nullable=False),
-        sa.Column('purchase_price', sa.Numeric(18, 6), nullable=False),
-        sa.Column('invested_amount', sa.Numeric(18, 2), nullable=False),
-        sa.Column('rate_at_purchase', sa.Numeric(10, 4), nullable=False),
-        sa.Column('is_active', sa.Boolean(), nullable=False, server_default='true'),
-        sa.Column('spread_rate', sa.Numeric(10, 4), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.PrimaryKeyConstraint('id'),
-    )
-    op.create_index('ix_treasury_investments_id', 'treasury_investments', ['id'])
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS treasury_investments (
+            id SERIAL PRIMARY KEY,
+            portfolio_id INTEGER NOT NULL REFERENCES portfolios(id) ON DELETE CASCADE,
+            treasury_type treasurytype NOT NULL,
+            brapi_name VARCHAR(100) NOT NULL,
+            date_purchase DATE NOT NULL,
+            date_maturity DATE NOT NULL,
+            quantity NUMERIC(18,8) NOT NULL,
+            purchase_price NUMERIC(18,6) NOT NULL,
+            invested_amount NUMERIC(18,2) NOT NULL,
+            rate_at_purchase NUMERIC(10,4) NOT NULL,
+            is_active BOOLEAN NOT NULL DEFAULT true,
+            spread_rate NUMERIC(10,4),
+            created_at TIMESTAMPTZ DEFAULT now(),
+            updated_at TIMESTAMPTZ DEFAULT now()
+        )
+    """)
+    op.execute("CREATE INDEX IF NOT EXISTS ix_treasury_investments_id ON treasury_investments (id)")
 
     # === ASSET PRICES ===
-    op.create_table(
-        'asset_prices',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('asset_id', sa.Integer(), sa.ForeignKey('assets.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('timestamp', sa.DateTime(timezone=True), nullable=False),
-        sa.Column('open', sa.Numeric(18, 8), nullable=True),
-        sa.Column('high', sa.Numeric(18, 8), nullable=True),
-        sa.Column('low', sa.Numeric(18, 8), nullable=True),
-        sa.Column('close', sa.Numeric(18, 8), nullable=False),
-        sa.Column('volume', sa.Numeric(24, 2), nullable=True),
-        sa.Column('source', sa.String(30), nullable=False, server_default='brapi'),
-        sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('asset_id', 'timestamp', name='uq_price_asset_timestamp'),
-    )
-    op.create_index('ix_asset_prices_id', 'asset_prices', ['id'])
-    op.create_index('ix_asset_prices_asset_id', 'asset_prices', ['asset_id'])
-    op.create_index('ix_asset_prices_timestamp', 'asset_prices', ['timestamp'])
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS asset_prices (
+            id SERIAL PRIMARY KEY,
+            asset_id INTEGER NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+            timestamp TIMESTAMPTZ NOT NULL,
+            open NUMERIC(18,8),
+            high NUMERIC(18,8),
+            low NUMERIC(18,8),
+            close NUMERIC(18,8) NOT NULL,
+            volume NUMERIC(24,2),
+            source VARCHAR(30) NOT NULL DEFAULT 'brapi',
+            CONSTRAINT uq_price_asset_timestamp UNIQUE (asset_id, timestamp)
+        )
+    """)
+    op.execute("CREATE INDEX IF NOT EXISTS ix_asset_prices_id ON asset_prices (id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_asset_prices_asset_id ON asset_prices (asset_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_asset_prices_timestamp ON asset_prices (timestamp)")
 
     # === IRPF RECORDS ===
-    op.create_table(
-        'irpf_records',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('user_id', sa.Integer(), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('year', sa.Integer(), nullable=False),
-        sa.Column('month', sa.Integer(), nullable=False),
-        sa.Column('market', sa.Enum('ACOES','DAY_TRADE','FII','ETF','CRIPTO','RENDA_FIXA','STOCKS', name='irpfmarket'), nullable=False),
-        sa.Column('gross_profit', sa.Numeric(18, 2), nullable=False, server_default='0'),
-        sa.Column('loss_offset', sa.Numeric(18, 2), nullable=False, server_default='0'),
-        sa.Column('taxable_profit', sa.Numeric(18, 2), nullable=False, server_default='0'),
-        sa.Column('ir_rate', sa.Numeric(6, 4), nullable=False, server_default='0'),
-        sa.Column('ir_due', sa.Numeric(18, 2), nullable=False, server_default='0'),
-        sa.Column('ir_withheld', sa.Numeric(18, 2), nullable=False, server_default='0'),
-        sa.Column('ir_to_pay', sa.Numeric(18, 2), nullable=False, server_default='0'),
-        sa.Column('is_exempt', sa.Boolean(), nullable=False, server_default='false'),
-        sa.Column('darf_code', sa.String(10), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.PrimaryKeyConstraint('id'),
-    )
-    op.create_index('ix_irpf_records_id', 'irpf_records', ['id'])
-    op.create_index('ix_irpf_records_user_id', 'irpf_records', ['user_id'])
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS irpf_records (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            year INTEGER NOT NULL,
+            month INTEGER NOT NULL,
+            market irpfmarket NOT NULL,
+            gross_profit NUMERIC(18,2) NOT NULL DEFAULT 0,
+            loss_offset NUMERIC(18,2) NOT NULL DEFAULT 0,
+            taxable_profit NUMERIC(18,2) NOT NULL DEFAULT 0,
+            ir_rate NUMERIC(6,4) NOT NULL DEFAULT 0,
+            ir_due NUMERIC(18,2) NOT NULL DEFAULT 0,
+            ir_withheld NUMERIC(18,2) NOT NULL DEFAULT 0,
+            ir_to_pay NUMERIC(18,2) NOT NULL DEFAULT 0,
+            is_exempt BOOLEAN NOT NULL DEFAULT false,
+            darf_code VARCHAR(10),
+            created_at TIMESTAMPTZ DEFAULT now(),
+            updated_at TIMESTAMPTZ DEFAULT now()
+        )
+    """)
+    op.execute("CREATE INDEX IF NOT EXISTS ix_irpf_records_id ON irpf_records (id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_irpf_records_user_id ON irpf_records (user_id)")
 
     # === IRPF LOSSES ===
-    op.create_table(
-        'irpf_losses',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('user_id', sa.Integer(), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('market', sa.Enum('ACOES','DAY_TRADE','FII','ETF','CRIPTO','RENDA_FIXA','STOCKS', name='irpfmarket'), nullable=False),
-        sa.Column('year', sa.Integer(), nullable=False),
-        sa.Column('month', sa.Integer(), nullable=False),
-        sa.Column('accumulated_loss', sa.Numeric(18, 2), nullable=False, server_default='0'),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.PrimaryKeyConstraint('id'),
-    )
-    op.create_index('ix_irpf_losses_id', 'irpf_losses', ['id'])
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS irpf_losses (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            market irpfmarket NOT NULL,
+            year INTEGER NOT NULL,
+            month INTEGER NOT NULL,
+            accumulated_loss NUMERIC(18,2) NOT NULL DEFAULT 0,
+            created_at TIMESTAMPTZ DEFAULT now(),
+            updated_at TIMESTAMPTZ DEFAULT now()
+        )
+    """)
+    op.execute("CREATE INDEX IF NOT EXISTS ix_irpf_losses_id ON irpf_losses (id)")
 
     # === GOALS ===
-    op.create_table(
-        'goals',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('portfolio_id', sa.Integer(), sa.ForeignKey('portfolios.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('name', sa.String(150), nullable=False),
-        sa.Column('goal_type', sa.Enum('PATRIMONIO_ALVO','ALOCACAO','DY_MENSAL','RENTABILIDADE','APORTE_MENSAL', name='goaltype'), nullable=False),
-        sa.Column('target_value', sa.Numeric(18, 2), nullable=False),
-        sa.Column('target_date', sa.Date(), nullable=True),
-        sa.Column('description', sa.Text(), nullable=True),
-        sa.Column('is_active', sa.Boolean(), nullable=False, server_default='true'),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.PrimaryKeyConstraint('id'),
-    )
-    op.create_index('ix_goals_id', 'goals', ['id'])
-    op.create_index('ix_goals_portfolio_id', 'goals', ['portfolio_id'])
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS goals (
+            id SERIAL PRIMARY KEY,
+            portfolio_id INTEGER NOT NULL REFERENCES portfolios(id) ON DELETE CASCADE,
+            name VARCHAR(150) NOT NULL,
+            goal_type goaltype NOT NULL,
+            target_value NUMERIC(18,2) NOT NULL,
+            target_date DATE,
+            description TEXT,
+            is_active BOOLEAN NOT NULL DEFAULT true,
+            created_at TIMESTAMPTZ DEFAULT now(),
+            updated_at TIMESTAMPTZ DEFAULT now()
+        )
+    """)
+    op.execute("CREATE INDEX IF NOT EXISTS ix_goals_id ON goals (id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_goals_portfolio_id ON goals (portfolio_id)")
 
     # === GOAL ALLOCATIONS ===
-    op.create_table(
-        'goal_allocations',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('goal_id', sa.Integer(), sa.ForeignKey('goals.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('asset_type', sa.String(30), nullable=False),
-        sa.Column('target_percentage', sa.Numeric(6, 3), nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.PrimaryKeyConstraint('id'),
-    )
-    op.create_index('ix_goal_allocations_id', 'goal_allocations', ['id'])
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS goal_allocations (
+            id SERIAL PRIMARY KEY,
+            goal_id INTEGER NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
+            asset_type VARCHAR(30) NOT NULL,
+            target_percentage NUMERIC(6,3) NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT now(),
+            updated_at TIMESTAMPTZ DEFAULT now()
+        )
+    """)
+    op.execute("CREATE INDEX IF NOT EXISTS ix_goal_allocations_id ON goal_allocations (id)")
 
     # === SYSTEM CONFIG ===
-    op.create_table(
-        'system_configs',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('key', sa.String(100), nullable=False),
-        sa.Column('value', sa.Text(), nullable=False),
-        sa.Column('description', sa.Text(), nullable=True),
-        sa.Column('is_public', sa.Boolean(), nullable=False, server_default='false'),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.PrimaryKeyConstraint('id'),
-    )
-    op.create_index('ix_system_configs_id', 'system_configs', ['id'])
-    op.create_index('ix_system_configs_key', 'system_configs', ['key'], unique=True)
-
-    # === SEED: configurações padrão ===
     op.execute("""
-        INSERT INTO system_configs (key, value, description, is_public) VALUES
-        ('app_name', 'SGI', 'Nome do sistema', true),
-        ('app_tagline', 'Sistema de Gestão de Investimentos', 'Subtítulo do sistema', true),
-        ('allow_registration', 'true', 'Permite auto-registro de novos usuários', true),
-        ('max_portfolios_per_user', '10', 'Limite de carteiras por usuário', false),
-        ('ai_analysis_enabled', 'true', 'Habilita análise com IA (Gemini)', false),
-        ('maintenance_mode', 'false', 'Modo manutenção — bloqueia acesso de usuários', true)
+        CREATE TABLE IF NOT EXISTS system_configs (
+            id SERIAL PRIMARY KEY,
+            key VARCHAR(100) NOT NULL,
+            value TEXT NOT NULL,
+            description TEXT,
+            is_public BOOLEAN NOT NULL DEFAULT false,
+            created_at TIMESTAMPTZ DEFAULT now(),
+            updated_at TIMESTAMPTZ DEFAULT now()
+        )
+    """)
+    op.execute("CREATE INDEX IF NOT EXISTS ix_system_configs_id ON system_configs (id)")
+    op.execute("CREATE UNIQUE INDEX IF NOT EXISTS ix_system_configs_key ON system_configs (key)")
+
+    # === SEED: configurações padrão (ignora se já existir) ===
+    op.execute("""
+        INSERT INTO system_configs (key, value, description, is_public)
+        VALUES
+            ('app_name', 'SGI', 'Nome do sistema', true),
+            ('app_tagline', 'Sistema de Gestão de Investimentos', 'Subtítulo do sistema', true),
+            ('allow_registration', 'true', 'Permite auto-registro de novos usuários', true),
+            ('max_portfolios_per_user', '10', 'Limite de carteiras por usuário', false),
+            ('ai_analysis_enabled', 'true', 'Habilita análise com IA (Gemini)', false),
+            ('maintenance_mode', 'false', 'Modo manutenção — bloqueia acesso de usuários', true)
+        ON CONFLICT (key) DO NOTHING
     """)
 
 
 def downgrade() -> None:
-    op.drop_table('system_configs')
-    op.drop_table('goal_allocations')
-    op.drop_table('goals')
-    op.drop_table('irpf_losses')
-    op.drop_table('irpf_records')
-    op.drop_table('asset_prices')
-    op.drop_table('treasury_investments')
-    op.drop_table('fixed_income_investments')
-    op.drop_table('dividends')
-    op.drop_table('portfolio_positions')
-    op.drop_table('transactions')
-    op.drop_table('assets')
-    op.drop_table('portfolios')
-    op.drop_table('users')
-    # Drop enums
+    op.execute('DROP TABLE IF EXISTS system_configs')
+    op.execute('DROP TABLE IF EXISTS goal_allocations')
+    op.execute('DROP TABLE IF EXISTS goals')
+    op.execute('DROP TABLE IF EXISTS irpf_losses')
+    op.execute('DROP TABLE IF EXISTS irpf_records')
+    op.execute('DROP TABLE IF EXISTS asset_prices')
+    op.execute('DROP TABLE IF EXISTS treasury_investments')
+    op.execute('DROP TABLE IF EXISTS fixed_income_investments')
+    op.execute('DROP TABLE IF EXISTS dividends')
+    op.execute('DROP TABLE IF EXISTS portfolio_positions')
+    op.execute('DROP TABLE IF EXISTS transactions')
+    op.execute('DROP TABLE IF EXISTS assets')
+    op.execute('DROP TABLE IF EXISTS portfolios')
+    op.execute('DROP TABLE IF EXISTS users')
     for enum_name in ['userrole','assettype','assetcurrency','transactiontype',
                       'dividendtype','fixedincometype','indexertype','treasurytype',
                       'irpfmarket','goaltype']:
