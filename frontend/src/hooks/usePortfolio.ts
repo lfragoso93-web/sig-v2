@@ -23,6 +23,14 @@ export interface PositionGroup {
   label: string
   count: number
   total_value: number
+  /** Soma do valor investido em todos os ativos da classe */
+  total_invested?: number
+  /** Variação total da classe: (total_value - total_invested) / total_invested */
+  variation_pct?: number
+  /** Rentabilidade da classe incluindo proventos (opcional, vindo do backend) */
+  rentabilidade_pct?: number
+  /** Meta de alocação definida pelo usuário para esta classe (ex: 30 = 30%) */
+  target_pct?: number
   positions: PositionItem[]
 }
 
