@@ -91,9 +91,11 @@ async def _db_get_fresh(
     ticker: str,
     asset_type: AssetType,
 ) -> Optional[float]:
+    # Usa asset_type.value para comparar string vs string (Column e String no banco)
+    asset_type_str = asset_type.value if isinstance(asset_type, AssetType) else str(asset_type)
     result = await db.execute(
         select(Asset.last_price, Asset.last_price_updated_at)
-        .where(Asset.ticker == ticker, Asset.asset_type == asset_type)
+        .where(Asset.ticker == ticker, Asset.asset_type == asset_type_str)
     )
     row = result.first()
     if not row or row.last_price is None or row.last_price_updated_at is None:
@@ -110,8 +112,10 @@ async def _db_set(
     asset_type: AssetType,
     price: float,
 ) -> None:
+    # Usa asset_type.value para comparar string vs string (Column e String no banco)
+    asset_type_str = asset_type.value if isinstance(asset_type, AssetType) else str(asset_type)
     result = await db.execute(
-        select(Asset).where(Asset.ticker == ticker, Asset.asset_type == asset_type)
+        select(Asset).where(Asset.ticker == ticker, Asset.asset_type == asset_type_str)
     )
     asset = result.scalar_one_or_none()
     if asset:
