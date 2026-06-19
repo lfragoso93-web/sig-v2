@@ -156,15 +156,28 @@ async def _fetch_prices_batch(db: AsyncSession, positions_raw: list[dict]) -> di
 # ---------------------------------------------------------------------------
 
 async def sum_dividends(db: AsyncSession, portfolio_id: int, cutoff: DateType | None = None) -> float:
+    """
+    Soma os proventos recebidos. Isolado com try/except + rollback para evitar
+    que InFailedSQLTransactionError (causado por erro em outra query da mesma sessao)
+    quebre o endpoint /summary com 500.
+    """
     from app.models.asset_dividend import AssetDividend
     q = select(func.sum(Dividend.total_value)).where(Dividend.portfolio_id == portfolio_id)
     if cutoff is not None:
         q = q.join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id).where(
             AssetDividend.ex_date >= cutoff
         )
-    result = await db.execute(q)
-    total = result.scalar_one_or_none()
-    return float(total) if total is not None else 0.0
+    try:
+        result = await db.execute(q)
+        total = result.scalar_one_or_none()
+        return float(total) if total is not None else 0.0
+    except Exception as e:
+        logger.warning(f"[portfolio_service] sum_dividends falhou (sessao abortada?): {e} — retornando 0.0")
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+        return 0.0
 
 
 # ---------------------------------------------------------------------------
