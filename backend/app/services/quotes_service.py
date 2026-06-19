@@ -10,6 +10,11 @@ Resiliencia:
   Cada chamada externa e envolta em _with_retry() — 3 tentativas com
   backoff exponencial (1s, 2s). Falha total retorna {} sem propagar excecao,
   mantendo degradacao graciosa (posicao fica sem preco corrente mas nao quebra).
+
+Tesouro Direto:
+  Usa fetch_treasury_list() para obter buyPrice atual de cada titulo.
+  O ticker no banco corresponde ao slug BRAPI (ex: "tesouro-ipca-2029").
+  O buyPrice e o preco unitario do titulo hoje (PU atual).
 """
 import asyncio
 import logging
@@ -22,10 +27,11 @@ import yfinance as yf
 from sqlalchemy import select, cast, String
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.asset_types import BR_TYPES, INTL_TYPES, NO_QUOTE_TYPES, yf_ticker
+from app.core.asset_types import BR_TYPES, INTL_TYPES, NO_QUOTE_TYPES, TREASURY_TYPES, yf_ticker
 from app.integrations.brapi import (
     fetch_quotes as brapi_fetch_quotes,
     fetch_crypto_quote as brapi_fetch_crypto,
+    fetch_treasury_list as brapi_fetch_treasury_list,
 )
 from app.models.asset import Asset, AssetType
 from app.services.price_history_service import _YF_EXECUTOR  # pool global compartilhado
@@ -91,8 +97,6 @@ async def _db_get_fresh(
     ticker: str,
     asset_type: AssetType,
 ) -> Optional[float]:
-    # cast(Asset.asset_type, String) resolve UndefinedFunctionError:
-    # asset_type no PostgreSQL e ENUM nativo — nao pode comparar com VARCHAR sem cast.
     asset_type_str = asset_type.value if isinstance(asset_type, AssetType) else str(asset_type)
     result = await db.execute(
         select(Asset.last_price, Asset.last_price_updated_at)
@@ -116,7 +120,6 @@ async def _db_set(
     asset_type: AssetType,
     price: float,
 ) -> None:
-    # cast(Asset.asset_type, String) — mesma razao que _db_get_fresh
     asset_type_str = asset_type.value if isinstance(asset_type, AssetType) else str(asset_type)
     result = await db.execute(
         select(Asset).where(
@@ -174,6 +177,48 @@ async def _fetch_yfinance_current(
 
 
 # ---------------------------------------------------------------------------
+# Fetch Tesouro Direto — buyPrice via fetch_treasury_list
+# ---------------------------------------------------------------------------
+
+async def _fetch_treasury_prices(slugs: list[str]) -> dict[str, float]:
+    """
+    Busca o buyPrice atual de titulos do Tesouro Direto via BRAPI treasury list.
+    O slug (ticker no banco) e comparado contra os campos slug/bondType/name da API.
+    Retorna {slug: buyPrice}.
+    """
+    if not slugs:
+        return {}
+    try:
+        items = await brapi_fetch_treasury_list() or []
+    except Exception as e:
+        logger.warning(f"[quotes_service] fetch_treasury_list falhou: {e}")
+        return {}
+
+    price_map: dict[str, float] = {}
+    for item in items:
+        api_slug = (item.get("slug") or "").strip().lower()
+        api_name = (item.get("bondType") or item.get("name") or "").strip().lower()
+        price = item.get("buyPrice") or item.get("basePrice") or item.get("sellPrice")
+        if price is None:
+            continue
+        p = float(price)
+        if api_slug:
+            price_map[api_slug] = p
+        if api_name:
+            price_map[api_name] = p
+
+    results: dict[str, float] = {}
+    for slug in slugs:
+        key = slug.strip().lower()
+        if key in price_map:
+            results[slug] = price_map[key]
+        else:
+            logger.warning(f"[quotes_service] Tesouro slug sem cotacao BRAPI: {slug!r}")
+
+    return results
+
+
+# ---------------------------------------------------------------------------
 # Aliases mockaveis pelos testes — agora com retry embutido
 # ---------------------------------------------------------------------------
 
@@ -209,6 +254,7 @@ async def get_prices(
     br_tickers: list[str] = []
     crypto_tickers: list[str] = []
     intl_pairs: list[tuple[str, AssetType]] = []
+    treasury_slugs: list[str] = []
     br_fallback: list[tuple[str, AssetType]] = []
     resolved: dict[str, float] = {}
 
@@ -236,7 +282,10 @@ async def get_prices(
                 _mem_set(ticker, db_val)
                 continue
 
-        if asset_type == AssetType.CRIPTO:
+        # Roteamento por tipo
+        if asset_type in TREASURY_TYPES:
+            treasury_slugs.append(ticker)
+        elif asset_type == AssetType.CRIPTO:
             crypto_tickers.append(ticker)
         elif asset_type in BR_TYPES:
             br_tickers.append(ticker)
@@ -247,10 +296,11 @@ async def get_prices(
             br_tickers.append(ticker)
 
     # Chamadas externas em paralelo — cada uma ja tem retry embutido
-    br_results, crypto_results, intl_results = await asyncio.gather(
+    br_results, crypto_results, intl_results, treasury_results = await asyncio.gather(
         _fetch_brapi(br_tickers) if br_tickers else _noop(),
         _fetch_brapi_crypto(crypto_tickers) if crypto_tickers else _noop(),
         _fetch_yfinance(intl_pairs) if intl_pairs else _noop(),
+        _fetch_treasury_prices(treasury_slugs) if treasury_slugs else _noop(),
     )
 
     for p in positions:
@@ -274,7 +324,7 @@ async def get_prices(
         logger.info(f"[quotes_service] BRAPI sem resposta para {[t for t, _ in br_fallback]} - tentando yfinance")
         fallback_results = await _fetch_yfinance(br_fallback)
 
-    fresh = {**br_results, **crypto_results, **intl_results, **fallback_results}
+    fresh = {**br_results, **crypto_results, **intl_results, **treasury_results, **fallback_results}
 
     for p in positions:
         ticker = p["ticker"]
