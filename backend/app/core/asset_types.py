@@ -30,11 +30,16 @@ INTL_TYPES: frozenset[AssetType] = frozenset({
 })
 
 # ── Ativos sem cotação de mercado disponível via API ─────────────────────────
-# TESOURO_DIRETO e RENDA_FIXA usam endpoints próprios; OUTRO não tem ticker
+# RENDA_FIXA não tem ticker de mercado; OUTRO não tem ticker
+# TESOURO_DIRETO foi removido daqui: usa fetch_treasury_list para buyPrice atual
 NO_QUOTE_TYPES: frozenset[AssetType] = frozenset({
-    AssetType.TESOURO_DIRETO,
     AssetType.RENDA_FIXA,
     AssetType.OUTRO,
+})
+
+# ── Tipos que usam o endpoint de Tesouro Direto da BRAPI (não /quote/{ticker}) ──
+TREASURY_TYPES: frozenset[AssetType] = frozenset({
+    AssetType.TESOURO_DIRETO,
 })
 
 # ── Todos os tipos reconhecidos ───────────────────────────────────────────────
@@ -80,6 +85,8 @@ def provider_for(asset_type: AssetType) -> str:
     """Retorna o provedor primário para o tipo de ativo."""
     if asset_type in NO_QUOTE_TYPES:
         return "none"
+    if asset_type in TREASURY_TYPES:
+        return "brapi_treasury"
     if asset_type in INTL_TYPES:
         return "yfinance"
     if asset_type in BR_TYPES:
