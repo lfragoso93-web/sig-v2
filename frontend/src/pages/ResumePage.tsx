@@ -33,7 +33,7 @@ const ASSET_CLASS_OPTIONS = [
   { label: 'FIIs',                 value: 'FII'                  },
   { label: 'ETF Nacional',         value: 'ETF_NACIONAL'         },
   { label: 'ETF Internacional',    value: 'ETF_INTERNACIONAL'    },
-  { label: 'Stock / Int’l',        value: 'STOCK'                },
+  { label: 'Stock / Int\'l',        value: 'STOCK'                },
   { label: 'Tesouro Direto',       value: 'TESOURO_DIRETO'       },
   { label: 'Renda Fixa',           value: 'RENDA_FIXA'           },
   { label: 'Cripto',               value: 'CRIPTO'               },
@@ -109,7 +109,9 @@ export default function ResumePage() {
   const dividendos12m = s?.dividendos_recebidos_12m ?? 0
   const totalProv     = s?.total_proventos     ?? 0
   const variacaoVal   = s?.variacao_valor      ?? s?.total_gain      ?? 0
+  // variacaoPct: apenas ganho de capital / investido
   const variacaoPct   = s?.variacao_percentual ?? s?.total_gain_pct  ?? 0
+  // rentabilidade: lucro total (capital + proventos) / investido
   const rentabilidade = s?.rentabilidade_total ?? s?.total_gain_pct  ?? 0
 
   if (loadingPortfolios) {
@@ -160,6 +162,7 @@ export default function ResumePage() {
               valueColor={signClass(lucroTotal)}
               subLabel={`Capital ${formatBRL(ganhoCapital)} · Prov. ${formatBRL(totalProv)}`}
               bottomLine={
+                // rentabilidade = (capital + proventos) / investido
                 <span className={clsx('text-xs font-semibold tabular-nums', signClass(rentabilidade))}>
                   {rentabilidade >= 0 ? '+' : ''}{formatPercent(rentabilidade)} rentab.
                 </span>
@@ -177,8 +180,9 @@ export default function ResumePage() {
               valueColor={signClass(variacaoVal)}
               change={variacaoPct}
               bottomLine={
-                <span className={clsx('text-xs font-semibold tabular-nums', signClass(rentabilidade))}>
-                  {rentabilidade >= 0 ? '+' : ''}{formatPercent(rentabilidade)} total
+                // variacaoPct = ganho de capital / investido (sem proventos)
+                <span className={clsx('text-xs font-semibold tabular-nums', signClass(variacaoPct))}>
+                  {variacaoPct >= 0 ? '+' : ''}{formatPercent(variacaoPct)} capital
                 </span>
               }
             />
@@ -245,7 +249,7 @@ export default function ResumePage() {
         </div>
       </div>
 
-      {/* ── Separador “Meus Ativos” ── */}
+      {/* ── Separador "Meus Ativos" ── */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: '0.75rem',
         marginTop: '0.25rem',
