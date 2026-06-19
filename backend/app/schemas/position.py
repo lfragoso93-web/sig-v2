@@ -1,9 +1,6 @@
 """
 Schemas de posicao alinhados com o contrato do portfolio_service
 (calc_raw_positions + enrich_with_prices).
-
-Nao depende do model Position legado nem de PortfolioPosition diretamente -
-recebe dicionarios do service e os valida via Pydantic.
 """
 from pydantic import BaseModel
 from typing import Optional
@@ -28,17 +25,21 @@ class PositionOut(BaseModel):
     variation_value:   Optional[float] = None
     variation_percent: Optional[float] = None
     allocation_pct:    float
-    logo_url:          Optional[str]   = None   # URL do logo coletado pelo onboarding
+    logo_url:          Optional[str]   = None
 
 
 class AssetGroupOut(BaseModel):
     """
     Grupo de posicoes por tipo de ativo (ex: Acoes, FIIs).
+    Inclui total_invested, variation_pct e target_pct quando disponiveis.
     """
-    label:       str
-    count:       int
-    total_value: float
-    positions:   list[PositionOut] = []
+    label:          str
+    count:          int
+    total_value:    float
+    total_invested: Optional[float] = None
+    variation_pct:  Optional[float] = None
+    target_pct:     Optional[float] = None
+    positions:      list[PositionOut] = []
 
 
 class PortfolioSummary(BaseModel):
@@ -62,3 +63,13 @@ class PortfolioSummary(BaseModel):
 
 # Alias mantido para imports existentes em outros modulos
 PositionResponse = PositionOut
+
+
+# ── Schemas para metas por classe ────────────────────────────────────────────
+class ClassTargetOut(BaseModel):
+    asset_type: str
+    target_pct: float
+
+
+class ClassTargetIn(BaseModel):
+    target_pct: float

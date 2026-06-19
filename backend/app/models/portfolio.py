@@ -44,6 +44,9 @@ class Portfolio(Base, TimestampMixin):
     corporate_events: Mapped[list["CorporateEvent"]] = relationship(
         "CorporateEvent", back_populates="portfolio", cascade="all, delete-orphan"
     )
+    class_targets: Mapped[list["PortfolioClassTarget"]] = relationship(
+        "PortfolioClassTarget", back_populates="portfolio", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
         return f"<Portfolio id={self.id} name={self.name} user_id={self.user_id}>"
