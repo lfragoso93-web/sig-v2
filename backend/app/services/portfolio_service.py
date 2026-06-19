@@ -105,8 +105,12 @@ async def calc_raw_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
 def enrich_with_prices(positions: list[dict], prices: dict[str, float]) -> list[dict]:
     """
     Enriquece posicoes com preco atual.
-    Quando o preco nao esta disponivel, current_price=None e current_value=None
-    para que o frontend diferencie "sem cotacao" de "vale R$ 0".
+    Quando o preco nao esta disponivel:
+      - current_price = None
+      - current_value = None
+      - result_abs    = None  (sem cotacao nao e possivel calcular resultado)
+      - result_pct    = None
+    Isso permite ao frontend diferenciar "sem cotacao" de "resultado zero".
     """
     enriched = []
     for p in positions:
@@ -124,11 +128,11 @@ def enrich_with_prices(positions: list[dict], prices: dict[str, float]) -> list[
             item["result_abs"] = round(result_abs, 2)
             item["result_pct"] = round(result_pct, 4)
         else:
-            # Sem cotacao: deixa explicito como None para o schema/frontend
+            # Sem cotacao: todos os campos de preco/resultado sao None
             item["current_price"] = None
             item["current_value"] = None
-            item["result_abs"] = 0.0
-            item["result_pct"] = 0.0
+            item["result_abs"] = None
+            item["result_pct"] = None
         enriched.append(item)
     return enriched
 
@@ -227,6 +231,8 @@ async def get_portfolio_summary(db: AsyncSession, portfolio_id: int, user_id: in
     total_gain = current_value - total_invested
     total_gain_pct = (total_gain / total_invested * 100) if total_invested else 0.0
     lucro_total = total_gain + total_proventos
+    # Rentabilidade total inclui ganho de capital + proventos no percentual
+    rentabilidade_total_pct = (lucro_total / total_invested * 100) if total_invested else 0.0
 
     return {
         "total_invested": round(total_invested, 2),
@@ -238,7 +244,7 @@ async def get_portfolio_summary(db: AsyncSession, portfolio_id: int, user_id: in
         "lucro_total": round(lucro_total, 2),
         "variacao_valor": round(total_gain, 2),
         "variacao_percentual": round(total_gain_pct, 4),
-        "rentabilidade_total": round(total_gain_pct, 4),
+        "rentabilidade_total": round(rentabilidade_total_pct, 4),
         "dividendos_recebidos_12m": round(dividendos_12m, 2),
         "total_proventos": round(total_proventos, 2),
         "ganho_capital": round(total_gain, 2),
@@ -271,17 +277,17 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
         groups[at]["count"] += 1
         groups[at]["total_value"] += val_for_alloc
         groups[at]["positions"].append({
-            "id": idx + 1,  # id sintetico para chave React
+            "id": idx + 1,
             "ticker": e["ticker"],
             "asset_type": at,
             "asset_label": label,
             "quantity": round(e["quantity"], 8),
             "average_price": round(e["avg_price"], 4),
-            "current_price": e["current_price"],   # None quando sem cotacao
-            "current_value": e["current_value"],    # None quando sem cotacao
+            "current_price": e["current_price"],     # None quando sem cotacao
+            "current_value": e["current_value"],     # None quando sem cotacao
             "invested_value": round(e["total_invested"], 2),
-            "variation_value": round(e["result_abs"] or 0, 2),
-            "variation_percent": round(e["result_pct"] or 0, 4),
+            "variation_value": e["result_abs"],       # None quando sem cotacao
+            "variation_percent": e["result_pct"],     # None quando sem cotacao
             "allocation_pct": round(alloc, 4),
         })
 
