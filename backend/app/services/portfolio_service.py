@@ -6,13 +6,14 @@ from fastapi import HTTPException
 from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction, OperationType
 from app.models.dividend import Dividend
+from app.models.asset import Asset
 from app.schemas.portfolio import PortfolioCreate, PortfolioUpdate
 from app.services.quotes_service import get_prices
 
 logger = logging.getLogger(__name__)
 
 _TYPE_LABEL: dict[str, str] = {
-    "ACAO": "Ações",
+    "ACAO": "A\u00e7\u00f5es",
     "FII": "FIIs",
     "ETF_NACIONAL": "ETFs Nacionais",
     "ETF_INTERNACIONAL": "ETFs Internacionais",
@@ -103,15 +104,6 @@ async def calc_raw_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def enrich_with_prices(positions: list[dict], prices: dict[str, float]) -> list[dict]:
-    """
-    Enriquece posicoes com preco atual.
-    Quando o preco nao esta disponivel:
-      - current_price = None
-      - current_value = None
-      - result_abs    = None  (sem cotacao nao e possivel calcular resultado)
-      - result_pct    = None
-    Isso permite ao frontend diferenciar "sem cotacao" de "resultado zero".
-    """
     enriched = []
     for p in positions:
         ticker = p["ticker"]
@@ -128,7 +120,6 @@ def enrich_with_prices(positions: list[dict], prices: dict[str, float]) -> list[
             item["result_abs"] = round(result_abs, 2)
             item["result_pct"] = round(result_pct, 4)
         else:
-            # Sem cotacao: todos os campos de preco/resultado sao None
             item["current_price"] = None
             item["current_value"] = None
             item["result_abs"] = None
@@ -151,16 +142,24 @@ async def _fetch_prices_batch(db: AsyncSession, positions_raw: list[dict]) -> di
         return {}
 
 
+async def _fetch_logos_batch(db: AsyncSession, tickers: list[str]) -> dict[str, str | None]:
+    """
+    Retorna mapa ticker -> logo_url para os tickers informados.
+    Tickers sem Asset no banco ou sem logo retornam None.
+    """
+    if not tickers:
+        return {}
+    result = await db.execute(
+        select(Asset.ticker, Asset.logo_url).where(Asset.ticker.in_(tickers))
+    )
+    return {row.ticker: row.logo_url for row in result.all()}
+
+
 # ---------------------------------------------------------------------------
 # sum_dividends
 # ---------------------------------------------------------------------------
 
 async def sum_dividends(db: AsyncSession, portfolio_id: int, cutoff: DateType | None = None) -> float:
-    """
-    Soma os proventos recebidos. Isolado com try/except + rollback para evitar
-    que InFailedSQLTransactionError (causado por erro em outra query da mesma sessao)
-    quebre o endpoint /summary com 500.
-    """
     from app.models.asset_dividend import AssetDividend
     q = select(func.sum(Dividend.total_value)).where(Dividend.portfolio_id == portfolio_id)
     if cutoff is not None:
@@ -172,7 +171,7 @@ async def sum_dividends(db: AsyncSession, portfolio_id: int, cutoff: DateType | 
         total = result.scalar_one_or_none()
         return float(total) if total is not None else 0.0
     except Exception as e:
-        logger.warning(f"[portfolio_service] sum_dividends falhou (sessao abortada?): {e} — retornando 0.0")
+        logger.warning(f"[portfolio_service] sum_dividends falhou (sessao abortada?): {e} \u2014 retornando 0.0")
         try:
             await db.rollback()
         except Exception:
@@ -234,7 +233,6 @@ async def get_portfolio_summary(db: AsyncSession, portfolio_id: int, user_id: in
     current_value = 0.0
     for p in positions_raw:
         price_now = prices.get(p["ticker"])
-        # Fallback para total_invested quando sem preco (soma patrimonial)
         current_value += (p["quantity"] * price_now) if price_now else p["total_invested"]
 
     cutoff_12m = (datetime.now(timezone.utc) - timedelta(days=365)).date()
@@ -244,7 +242,6 @@ async def get_portfolio_summary(db: AsyncSession, portfolio_id: int, user_id: in
     total_gain = current_value - total_invested
     total_gain_pct = (total_gain / total_invested * 100) if total_invested else 0.0
     lucro_total = total_gain + total_proventos
-    # Rentabilidade total inclui ganho de capital + proventos no percentual
     rentabilidade_total_pct = (lucro_total / total_invested * 100) if total_invested else 0.0
 
     return {
@@ -271,7 +268,10 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
     prices = await _fetch_prices_batch(db, positions_raw)
     enriched = enrich_with_prices(positions_raw, prices)
 
-    # Para o calculo de alocacao, usa current_value quando disponivel, senao total_invested
+    # Busca logos em batch (uma query so para todos os tickers)
+    tickers = [e["ticker"] for e in enriched]
+    logos = await _fetch_logos_batch(db, tickers)
+
     total_current = sum(
         (e["current_value"] if e["current_value"] is not None else e["total_invested"])
         for e in enriched
@@ -296,12 +296,13 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
             "asset_label": label,
             "quantity": round(e["quantity"], 8),
             "average_price": round(e["avg_price"], 4),
-            "current_price": e["current_price"],     # None quando sem cotacao
-            "current_value": e["current_value"],     # None quando sem cotacao
+            "current_price": e["current_price"],
+            "current_value": e["current_value"],
             "invested_value": round(e["total_invested"], 2),
-            "variation_value": e["result_abs"],       # None quando sem cotacao
-            "variation_percent": e["result_pct"],     # None quando sem cotacao
+            "variation_value": e["result_abs"],
+            "variation_percent": e["result_pct"],
             "allocation_pct": round(alloc, 4),
+            "logo_url": logos.get(e["ticker"]),   # None se ainda nao coletado
         })
 
     sorted_groups = sorted(groups.values(), key=lambda g: g["total_value"], reverse=True)

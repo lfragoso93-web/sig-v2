@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import api from '@/services/api'
 
-// ── Tipos ───────────────────────────────────────────────────────────────────────────────
+// ── Tipos ─────────────────────────────────────────────────────────────────────────────────────────
 
 export interface PositionItem {
   id: number
@@ -16,6 +16,7 @@ export interface PositionItem {
   variation_value: number
   variation_percent: number
   allocation_pct: number
+  logo_url?: string | null   // URL do logo coletado pelo onboarding (null = ainda nao disponivel)
 }
 
 export interface PositionGroup {
@@ -67,7 +68,7 @@ export interface PatrimonioHistoryPoint {
   invested?: number
 }
 
-// ── Hooks ───────────────────────────────────────────────────────────────────────────────
+// ── Hooks ─────────────────────────────────────────────────────────────────────────────────────────
 
 export function usePositions(portfolioId: number | null) {
   return useQuery<PositionGroup[]>({
