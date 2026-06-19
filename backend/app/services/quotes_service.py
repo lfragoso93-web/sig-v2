@@ -19,7 +19,7 @@ from decimal import Decimal
 from typing import Optional
 
 import yfinance as yf
-from sqlalchemy import select
+from sqlalchemy import select, cast, String
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.asset_types import BR_TYPES, INTL_TYPES, NO_QUOTE_TYPES, yf_ticker
@@ -91,11 +91,15 @@ async def _db_get_fresh(
     ticker: str,
     asset_type: AssetType,
 ) -> Optional[float]:
-    # Usa asset_type.value para comparar string vs string (Column e String no banco)
+    # cast(Asset.asset_type, String) resolve UndefinedFunctionError:
+    # asset_type no PostgreSQL e ENUM nativo — nao pode comparar com VARCHAR sem cast.
     asset_type_str = asset_type.value if isinstance(asset_type, AssetType) else str(asset_type)
     result = await db.execute(
         select(Asset.last_price, Asset.last_price_updated_at)
-        .where(Asset.ticker == ticker, Asset.asset_type == asset_type_str)
+        .where(
+            Asset.ticker == ticker,
+            cast(Asset.asset_type, String) == asset_type_str,
+        )
     )
     row = result.first()
     if not row or row.last_price is None or row.last_price_updated_at is None:
@@ -112,10 +116,13 @@ async def _db_set(
     asset_type: AssetType,
     price: float,
 ) -> None:
-    # Usa asset_type.value para comparar string vs string (Column e String no banco)
+    # cast(Asset.asset_type, String) — mesma razao que _db_get_fresh
     asset_type_str = asset_type.value if isinstance(asset_type, AssetType) else str(asset_type)
     result = await db.execute(
-        select(Asset).where(Asset.ticker == ticker, Asset.asset_type == asset_type_str)
+        select(Asset).where(
+            Asset.ticker == ticker,
+            cast(Asset.asset_type, String) == asset_type_str,
+        )
     )
     asset = result.scalar_one_or_none()
     if asset:
