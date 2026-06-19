@@ -7,7 +7,7 @@ import AssetLogo from '@/components/ui/AssetLogo'
 import { useAppStore } from '@/store/appStore'
 import type { PositionGroup } from '@/hooks/usePortfolio'
 
-// ── helpers ────────────────────────────────────────────────────────────────
+// ── helpers ──────────────────────────────────────────────────────────────────────────
 function assetTypeToTab(assetType: string): string {
   const map: Record<string, string> = {
     ACAO: 'acao', FII: 'fii', ETF_NACIONAL: 'etf_br',
@@ -35,12 +35,12 @@ function displayName(ticker: string, assetType: string): string {
   return ticker
 }
 
-// ── style tokens ───────────────────────────────────────────────────────────────
+// ── style tokens ──────────────────────────────────────────────────────────────────────────
 const cellText  = { color: 'var(--color-text)' }
 const cellMuted = { color: 'var(--color-text-muted)' }
 const cellFaint = { color: 'var(--color-text-faint)' }
 
-// ── hook de breakpoint ─────────────────────────────────────────────────────────
+// ── hook de breakpoint ────────────────────────────────────────────────────────────────────────
 function useIsDesktop(breakpoint = 768) {
   const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= breakpoint)
   useEffect(() => {
@@ -52,7 +52,7 @@ function useIsDesktop(breakpoint = 768) {
   return isDesktop
 }
 
-// ── AssetMenu ─────────────────────────────────────────────────────────────────
+// ── AssetMenu ─────────────────────────────────────────────────────────────────────────────
 interface AssetMenuProps { ticker: string; assetLabel: string; assetType: string }
 
 function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
@@ -139,14 +139,17 @@ function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
   )
 }
 
-// ── PositionCard (mobile) ───────────────────────────────────────────────────────────
+// ── PositionCard (mobile) ─────────────────────────────────────────────────────────────────────────
 interface PositionCardProps { item: PositionGroup['positions'][number] }
 
 function PositionCard({ item }: PositionCardProps) {
   const isTesouro = item.asset_type.toUpperCase() === 'TESOURO_DIRETO' || item.asset_type.toUpperCase() === 'TESOURO'
   const name = displayName(item.ticker, item.asset_type)
-  const hasQuote = item.current_price !== null && item.current_price !== undefined && item.current_price !== item.average_price
-  const varColor = item.variation_value >= 0 ? 'var(--color-success)' : 'var(--color-error)'
+  // hasQuote: basta current_price nao ser null/undefined — remover comparacao com average_price
+  // que escondia resultado quando variacao era exatamente zero
+  const hasQuote = item.current_price !== null && item.current_price !== undefined
+  // fallback ?? 0 para variation_value nullable
+  const varColor = (item.variation_value ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-error)'
   const investedValue = item.invested_value ?? item.quantity * item.average_price
 
   return (
@@ -185,9 +188,9 @@ function PositionCard({ item }: PositionCardProps) {
           <div style={{ fontSize: '0.65rem', marginBottom: 2, color: 'var(--color-text-faint)' }}>Resultado</div>
           {hasQuote ? (
             <div style={{ fontWeight: 600, fontSize: 'var(--text-xs)', color: varColor, fontVariantNumeric: 'tabular-nums' }}>
-              {formatBRL(item.variation_value)}
+              {formatBRL(item.variation_value ?? 0)}
               <span style={{ marginLeft: 6, fontSize: '0.65rem', fontWeight: 500, opacity: 0.8 }}>
-                ({formatPercent(item.variation_percent)})
+                ({formatPercent(item.variation_percent ?? 0)})
               </span>
             </div>
           ) : (
@@ -199,7 +202,7 @@ function PositionCard({ item }: PositionCardProps) {
   )
 }
 
-// ── ClassTable — tabela de uma classe de ativo ──────────────────────────────────────────
+// ── ClassTable — tabela de uma classe de ativo ────────────────────────────────────────────────────────
 function ClassTable({ group }: { group: PositionGroup }) {
   const isDesktop = useIsDesktop()
 
@@ -293,7 +296,8 @@ function ClassTable({ group }: { group: PositionGroup }) {
               const hasQuote      = item.current_price !== null && item.current_price !== undefined
               const name          = displayName(item.ticker, item.asset_type)
               const isTesouro     = item.asset_type.toUpperCase() === 'TESOURO_DIRETO' || item.asset_type.toUpperCase() === 'TESOURO'
-              const varColor      = item.variation_value >= 0 ? 'var(--color-success)' : 'var(--color-notification)'
+              // fallback ?? 0 para variation_value nullable
+              const varColor      = (item.variation_value ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-notification)'
               const investedValue = item.invested_value ?? item.quantity * item.average_price
 
               return (
@@ -339,8 +343,8 @@ function ClassTable({ group }: { group: PositionGroup }) {
                   <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
                     {hasQuote ? (
                       <div style={{ color: varColor }}>
-                        <div style={{ fontWeight: 600 }}>{formatBRL(item.variation_value)}</div>
-                        <div style={{ fontSize: '0.65rem', fontWeight: 500, opacity: 0.8 }}>{formatPercent(item.variation_percent)}</div>
+                        <div style={{ fontWeight: 600 }}>{formatBRL(item.variation_value ?? 0)}</div>
+                        <div style={{ fontSize: '0.65rem', fontWeight: 500, opacity: 0.8 }}>{formatPercent(item.variation_percent ?? 0)}</div>
                       </div>
                     ) : (
                       <span style={cellFaint}>—</span>
@@ -364,7 +368,7 @@ function ClassTable({ group }: { group: PositionGroup }) {
   )
 }
 
-// ── PositionTable — exibe uma ClassTable por grupo ────────────────────────────────────
+// ── PositionTable — exibe uma ClassTable por grupo ────────────────────────────────────────────────
 interface Props { groups: PositionGroup[] }
 
 export default function PositionTable({ groups }: Props) {
