@@ -44,6 +44,60 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [Sessao] - 2026-06-18 (fim de dia)
+
+### Hotfix — Tabela de ativos (PositionTable)
+
+Sessao dedicada a correcao de tres bugs visuais e de dados na tabela de ativos do Resumo da carteira.
+
+#### Problemas identificados
+
+| # | Sintoma | Causa raiz |
+|---|---|---|
+| 1 | Cards grandes + linha de tabela aparecendo juntos | `md:hidden` / `hidden md:block` do Tailwind sem breakpoints configurados — ambos os blocos eram renderizados simultaneamente |
+| 2 | Coluna "P. Atual" sempre exibindo `—` | `quotes_service.get_prices` retorna `None` para ativos sem cotacao recente na tabela `assets`; comportamento correto, mas revelou dependencia de L1 (DB cache) vazio |
+| 3 | Coluna "Valor Atual" repetindo o "Total Investido" | `enrich_with_prices` fazia fallback `current_value = total_invested` quando `price is None`, mascarando a ausencia de cotacao |
+
+#### Correcoes aplicadas
+
+**Frontend — `frontend/src/components/resume/PositionTable.tsx`**
+- Substituido `className="md:hidden"` / `className="hidden md:block"` por hook `useIsDesktop()` com `window.matchMedia('(min-width: 768px)')`
+- Renderizacao condicional: `{!isDesktop && <cards>}` e `{isDesktop && <tabela>}` — nunca os dois simultaneamente
+- Coluna "Valor Atual" na tabela desktop agora exibe `—` quando `current_price === null`
+- Card mobile: "Valor Atual" exibe `—` quando `current_price === null` (nao mais repete investido)
+- `hasQuote` corrigido: `current_price !== null && current_price !== undefined` (antes comparava com `average_price`)
+- Chave React corrigida: `item.id ?? item.ticker` (antes podia usar `item.id` undefined)
+- **Commit:** `f82c6dc3`
+
+**Backend — `backend/app/services/portfolio_service.py`**
+- `enrich_with_prices`: quando `price is None`, agora retorna `current_price=None` e `current_value=None` em vez de `current_value=total_invested`
+- `get_portfolio_positions`: expoe `current_price=None` / `current_value=None` explicitamente no payload
+- Calculo de alocacao e soma de `total_current` usa `current_value or total_invested` (fallback so para alocacao percentual, nao para exibicao)
+- Adicionado campo `id` sintetico (`idx + 1`) em cada posicao para uso como chave React
+- **Commit:** `25754acb`
+
+**Backend — `backend/app/schemas/position.py`**
+- `PositionOut.current_value` alterado de `float` para `Optional[float]` — reflete ausencia de cotacao
+- `PositionOut.id` adicionado como `Optional[int]` — id sintetico para chave React
+- **Commit:** `25754acb`
+
+#### Comportamento apos os hotfixes
+
+| Campo | Sem cotacao | Com cotacao |
+|---|---|---|
+| P. Atual | `—` | `R$ XX,XX` |
+| Valor Atual | `—` | `R$ XX,XX` |
+| Resultado | `—` | `+R$ X,XX (+X,XX%)` |
+| Layout | Cards (mobile) | Tabela (desktop) — nunca ambos juntos |
+
+#### Pendente (roadmap Sprint 7)
+
+- Investigar por que `quotes_service` nao esta populando `Asset.last_price` para os ativos da carteira (L1 sempre vazio)
+- Revisar logica de rentabilidade: calculo de resultado, variacao percentual e rentabilidade total
+- Ver secao Sprint 7 em [ROADMAP_SPRINTS.md](./ROADMAP_SPRINTS.md)
+
+---
+
 ## [Sessao] - 2026-06-15 (fim de dia)
 
 ### Manutencao e estabilizacao pos-upgrade
@@ -191,8 +245,8 @@ Tornar cotacoes mais robustas e previsiveis, estruturar o pipeline de precos com
 
 | Camada | Fonte | Escopo | TTL |
 |---|---|---|---|
-| L1 | `Asset.last_price` (banco) | Todos os ativos | Sem expirar — atualizado pelo scheduler |
-| L2 | Cache em memoria (dict global) | Todos os ativos | 5 min |
+| L1 | `Asset.last_price` (banco) | Todos os ativos | 15 min (PRICE_TTL_SECONDS=900) |
+| L2 | Cache em memoria (dict global) | Todos os ativos | 1 min (MEM_CACHE_TTL=60) |
 | L3 | BRAPI / yfinance (API externa) | Nacionais / Internacionais | Sob demanda |
 
 - Falha em L3 nao derruba nenhum endpoint; retorna `None` e loga o erro.
