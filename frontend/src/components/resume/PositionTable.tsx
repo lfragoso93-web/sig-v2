@@ -145,10 +145,7 @@ interface PositionCardProps { item: PositionGroup['positions'][number] }
 function PositionCard({ item }: PositionCardProps) {
   const isTesouro = item.asset_type.toUpperCase() === 'TESOURO_DIRETO' || item.asset_type.toUpperCase() === 'TESOURO'
   const name = displayName(item.ticker, item.asset_type)
-  // hasQuote: basta current_price nao ser null/undefined — remover comparacao com average_price
-  // que escondia resultado quando variacao era exatamente zero
   const hasQuote = item.current_price !== null && item.current_price !== undefined
-  // fallback ?? 0 para variation_value nullable
   const varColor = (item.variation_value ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-error)'
   const investedValue = item.invested_value ?? item.quantity * item.average_price
 
@@ -161,7 +158,7 @@ function PositionCard({ item }: PositionCardProps) {
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-          <AssetLogo ticker={item.ticker} assetType={item.asset_type} size={34} />
+          <AssetLogo ticker={item.ticker} assetType={item.asset_type} size={34} logoUrl={item.logo_url} />
           <div style={{ minWidth: 0 }}>
             <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)', ...cellText }}>{name}</div>
             <div style={{ fontSize: '0.68rem', marginTop: 2, color: 'var(--color-text-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -296,7 +293,6 @@ function ClassTable({ group }: { group: PositionGroup }) {
               const hasQuote      = item.current_price !== null && item.current_price !== undefined
               const name          = displayName(item.ticker, item.asset_type)
               const isTesouro     = item.asset_type.toUpperCase() === 'TESOURO_DIRETO' || item.asset_type.toUpperCase() === 'TESOURO'
-              // fallback ?? 0 para variation_value nullable
               const varColor      = (item.variation_value ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-notification)'
               const investedValue = item.invested_value ?? item.quantity * item.average_price
 
@@ -310,7 +306,7 @@ function ClassTable({ group }: { group: PositionGroup }) {
                   {/* Ativo */}
                   <td style={{ padding: '0.75rem 1rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <AssetLogo ticker={item.ticker} assetType={item.asset_type} size={28} />
+                      <AssetLogo ticker={item.ticker} assetType={item.asset_type} size={28} logoUrl={item.logo_url} />
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...cellText }}>{name}</div>
                         <div style={{ fontSize: '0.65rem', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...cellFaint }}>
