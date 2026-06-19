@@ -5,11 +5,17 @@ interface Props {
   ticker: string
   assetType: string
   size?: number
+  logoUrl?: string | null   // URL do logo persistido pelo onboarding (prioridade maxima)
 }
 
 /**
- * Tipos que têm logo na BRAPI: ativos nacionais (ações, FIIs, ETFs nacionais, Tesouro).
- * Internacionais e cripto não têm — usam fallback imediato.
+ * Renderiza o logo do ativo em cascata:
+ *   1. logoUrl (do banco, coletado pelo onboarding) — maior fidelidade
+ *   2. BRAPI favicon ({ticker}.png) — funciona bem para ativos BR
+ *   3. Icone SVG por tipo — fallback final sem rede
+ *
+ * Tipos sem suporte BRAPI (CRIPTO, STOCK, ETF_INT, TESOURO) vao direto
+ * para o fallback de icone quando logoUrl nao estiver disponivel.
  */
 const BRAPI_SUPPORTED_TYPES = new Set([
   'ACAO_NACIONAL', 'ACAO', 'ACOES',
@@ -30,14 +36,17 @@ function FallbackIcon({ assetType, size }: { assetType: string; size: number }) 
   return <BarChart2 size={size} style={iconStyle} />
 }
 
-export default function AssetLogo({ ticker, assetType, size = 24 }: Props) {
+export default function AssetLogo({ ticker, assetType, size = 24, logoUrl }: Props) {
   const norm = assetType.toUpperCase()
-  const canUseBrapi = BRAPI_SUPPORTED_TYPES.has(norm)
+  const canUseBrapi = BRAPI_SUPPORTED_TYPES.has(norm) && norm !== 'TESOURO_DIRETO' && norm !== 'TESOURO'
 
-  // Para Tesouro e tipos sem suporte BRAPI vai direto ao fallback
-  const [imgError, setImgError] = useState(
-    !canUseBrapi || norm === 'TESOURO_DIRETO' || norm === 'TESOURO'
+  // Determina a URL inicial a usar: logoUrl do banco tem prioridade
+  const initialSrc = logoUrl || (canUseBrapi
+    ? `https://brapi.dev/favicon/${ticker.replace(/[^A-Z0-9]/gi, '').toUpperCase()}.png`
+    : null
   )
+
+  const [src, setSrc] = useState<string | null>(initialSrc)
 
   const containerStyle: React.CSSProperties = {
     width: size,
@@ -51,7 +60,7 @@ export default function AssetLogo({ ticker, assetType, size = 24 }: Props) {
     background: 'var(--color-surface-offset)',
   }
 
-  if (imgError) {
+  if (!src) {
     return (
       <div style={containerStyle}>
         <FallbackIcon assetType={assetType} size={Math.round(size * 0.55)} />
@@ -59,18 +68,26 @@ export default function AssetLogo({ ticker, assetType, size = 24 }: Props) {
     )
   }
 
-  // Remove sufixos como F (PETR4F) e normaliza para uppercase
-  const cleanTicker = ticker.replace(/[^A-Z0-9]/gi, '').toUpperCase()
+  // Se estava usando logoUrl e falhou, tenta BRAPI como segundo passo
+  const handleError = () => {
+    if (src === logoUrl && canUseBrapi) {
+      // Falhou no logo do banco: tenta BRAPI favicon
+      setSrc(`https://brapi.dev/favicon/${ticker.replace(/[^A-Z0-9]/gi, '').toUpperCase()}.png`)
+    } else {
+      // Falhou em tudo: icone SVG
+      setSrc(null)
+    }
+  }
 
   return (
     <div style={containerStyle}>
       <img
-        src={`https://brapi.dev/favicon/${cleanTicker}.png`}
+        src={src}
         alt={ticker}
         width={size}
         height={size}
         loading="lazy"
-        onError={() => setImgError(true)}
+        onError={handleError}
         style={{ width: size, height: size, objectFit: 'contain', display: 'block' }}
       />
     </div>
