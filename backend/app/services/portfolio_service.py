@@ -9,6 +9,7 @@ from app.models.dividend import Dividend
 from app.models.asset import Asset
 from app.schemas.portfolio import PortfolioCreate, PortfolioUpdate
 from app.services.quotes_service import get_prices
+from app.services.class_target_service import get_targets_map
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +26,6 @@ _TYPE_LABEL: dict[str, str] = {
     "OUTRO": "Outros",
 }
 
-# Tipos para os quais o calculo de valor_atual e qty * current_price
-# (todos os tipos com cotacao de mercado, incluindo Tesouro Direto)
 _MARKET_PRICE_TYPES = {
     "ACAO", "FII", "ETF_NACIONAL", "ETF_INTERNACIONAL",
     "STOCK", "BDR", "CRIPTO", "TESOURO_DIRETO",
@@ -111,22 +110,6 @@ async def calc_raw_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def enrich_with_prices(positions: list[dict], prices: dict[str, float]) -> list[dict]:
-    """
-    Enriquece cada posicao com preco atual e metricas calculadas.
-
-    Para todos os tipos com cotacao de mercado (incluindo TESOURO_DIRETO):
-        valor_atual    = quantity * current_price   (PU atual * qtd de titulos)
-        result_abs     = valor_atual - total_invested
-        result_pct     = result_abs / total_invested * 100
-
-    Para tipos sem cotacao (RENDA_FIXA, OUTRO):
-        current_price  = None
-        valor_atual    = total_invested  (sem marcacao a mercado)
-        result_abs/pct = None
-
-    O campo average_price para Tesouro e o PU medio de compra
-    (total_invested / quantity), calculado em calc_raw_positions.
-    """
     enriched = []
     for p in positions:
         ticker = p["ticker"]
@@ -146,7 +129,6 @@ def enrich_with_prices(positions: list[dict], prices: dict[str, float]) -> list[
             item["result_pct"] = round(result_pct, 4)
         else:
             item["current_price"] = None
-            # Para tipos sem cotacao: usar total_invested como valor atual
             item["current_value"] = round(p["total_invested"], 2) if asset_type not in _MARKET_PRICE_TYPES else None
             item["result_abs"] = None
             item["result_pct"] = None
@@ -169,10 +151,6 @@ async def _fetch_prices_batch(db: AsyncSession, positions_raw: list[dict]) -> di
 
 
 async def _fetch_logos_batch(db: AsyncSession, tickers: list[str]) -> dict[str, str | None]:
-    """
-    Retorna mapa ticker -> logo_url para os tickers informados.
-    Tickers sem Asset no banco ou sem logo retornam None.
-    """
     if not tickers:
         return {}
     result = await db.execute(
@@ -197,7 +175,7 @@ async def sum_dividends(db: AsyncSession, portfolio_id: int, cutoff: DateType | 
         total = result.scalar_one_or_none()
         return float(total) if total is not None else 0.0
     except Exception as e:
-        logger.warning(f"[portfolio_service] sum_dividends falhou (sessao abortada?): {e} \u2014 retornando 0.0")
+        logger.warning(f"[portfolio_service] sum_dividends falhou: {e} \u2014 retornando 0.0")
         try:
             await db.rollback()
         except Exception:
@@ -298,6 +276,9 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
     tickers = [e["ticker"] for e in enriched]
     logos = await _fetch_logos_batch(db, tickers)
 
+    # Busca metas por classe da carteira
+    targets_map = await get_targets_map(db, portfolio_id)
+
     total_current = sum(
         (e["current_value"] if e["current_value"] is not None else e["total_invested"])
         for e in enriched
@@ -311,10 +292,17 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
         alloc = (val_for_alloc / total_current * 100) if total_current else 0
 
         if at not in groups:
-            groups[at] = {"label": label, "count": 0, "total_value": 0.0, "positions": []}
+            groups[at] = {
+                "label": label,
+                "count": 0,
+                "total_value": 0.0,
+                "total_invested": 0.0,
+                "positions": [],
+            }
 
         groups[at]["count"] += 1
         groups[at]["total_value"] += val_for_alloc
+        groups[at]["total_invested"] += e["total_invested"]
         groups[at]["positions"].append({
             "id": idx + 1,
             "ticker": e["ticker"],
@@ -334,6 +322,16 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
     sorted_groups = sorted(groups.values(), key=lambda g: g["total_value"], reverse=True)
     for g in sorted_groups:
         g["total_value"] = round(g["total_value"], 2)
+        g["total_invested"] = round(g["total_invested"], 2)
+        # Calcula variation_pct do grupo
+        inv = g["total_invested"]
+        cur = g["total_value"]
+        # So calcula se algum ativo do grupo tem cotacao
+        has_quote = any(p["current_price"] is not None for p in g["positions"])
+        g["variation_pct"] = round((cur - inv) / inv * 100, 4) if (has_quote and inv > 0) else None
+        # Injeta meta do usuario, se existir
+        g["target_pct"] = targets_map.get(g["positions"][0]["asset_type"]) if g["positions"] else None
+
     return sorted_groups
 
 
