@@ -3,6 +3,7 @@
 Revision ID: 007
 Revises: 006_tx_ticker_based
 Create Date: 2026-06-19
+
 """
 from alembic import op
 import sqlalchemy as sa
@@ -14,11 +15,9 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        'assets',
-        sa.Column('logo_url', sa.String(), nullable=True),
-    )
+    # Usa SQL nativo para garantir idempotência (evita DuplicateColumn se a coluna já existir)
+    op.execute("ALTER TABLE assets ADD COLUMN IF NOT EXISTS logo_url VARCHAR")
 
 
 def downgrade() -> None:
-    op.drop_column('assets', 'logo_url')
+    op.execute("ALTER TABLE assets DROP COLUMN IF EXISTS logo_url")
