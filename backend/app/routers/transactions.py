@@ -9,7 +9,10 @@ from app.models.user import User
 from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction, OperationType
 from app.schemas.transaction import TransactionCreate, TransactionOut
+from app.schemas.asset import AssetCreate
+from app.services.asset_service import get_or_create_asset
 from app.services.dividend_backfill_service import backfill_dividends
+from app.services.asset_onboarding_service import run_onboarding
 
 router = APIRouter()
 
@@ -134,12 +137,26 @@ async def create_transaction(
     await db.commit()
     await db.refresh(tx)
 
-    background_tasks.add_task(
-        _run_backfill,
-        portfolio_id=portfolio_id,
+    # Garante que o Asset existe e detecta se e a primeira vez do ticker
+    asset_data = AssetCreate(
         ticker=ticker,
-        asset_type=str(asset_type),
+        name=ticker,
+        asset_type=asset_type,
     )
+    _, is_new = await get_or_create_asset(db, asset_data)
+
+    if is_new:
+        # Primeira transacao deste ticker: onboarding completo em background
+        # (preco historico 5 anos + proventos historicos + logo)
+        background_tasks.add_task(run_onboarding, ticker, str(asset_type))
+    else:
+        # Ativo ja existe: apenas backfill de dividendos desta carteira
+        background_tasks.add_task(
+            _run_backfill,
+            portfolio_id=portfolio_id,
+            ticker=ticker,
+            asset_type=str(asset_type),
+        )
 
     return tx
 
@@ -177,7 +194,7 @@ async def update_transaction(
 
     tx.ticker = ticker
     tx.asset_type = asset_type
-    tx.operation = operation          # ← OperationType, não string
+    tx.operation = operation
     tx.quantity = payload.quantity
     tx.price = payload.price
     tx.fees = payload.fees or 0.0
