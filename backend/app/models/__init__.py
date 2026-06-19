@@ -12,7 +12,7 @@ from app.models.goal import Goal
 from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.irpf import IRPFReport
 from app.models.corporate_event import CorporateEvent
-from app.models.config import Config
+from app.models.config import AppConfig
 from app.models.system_config import SystemConfig
 from app.models.portfolio_class_target import PortfolioClassTarget
 
@@ -21,5 +21,5 @@ __all__ = [
     'Asset', 'AssetPrice', 'Dividend', 'AssetDividend',
     'FixedIncomeInvestment', 'TreasuryInvestment', 'Goal',
     'PortfolioSnapshot', 'IRPFReport', 'CorporateEvent',
-    'Config', 'SystemConfig', 'PortfolioClassTarget',
+    'AppConfig', 'SystemConfig', 'PortfolioClassTarget',
 ]
