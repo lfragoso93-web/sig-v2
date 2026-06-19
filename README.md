@@ -107,10 +107,36 @@ Veja `.env.example` para a lista completa. As principais:
 | Proventos (backfill, listagem, historico, sync manual) | ✅ Funcional |
 | Painel Admin (usuarios, roles, configuracoes) | ✅ Funcional |
 | Scheduler (jobs diarios: cotacoes, snapshots) | ✅ Funcional |
-| Rentabilidade | 🔜 Sprint 7 |
-| Renda Fixa e Tesouro Direto (frontend) | ⏳ Sprint 9/10 |
+| Tabela de ativos — layout responsivo (mobile/desktop) | ✅ Corrigido 18 Jun 2026 |
+| Rentabilidade | 🔜 Sprint 7 — iniciar 19 Jun 2026 |
+| Renda Fixa e Tesouro Direto (frontend) | ⏳ Sprint 10 |
 | Metas e Alocacao | ⏳ Sprint 11 |
 | IRPF | ⏳ Sprint 12 |
+
+---
+
+## Convencoes de layout responsivo
+
+O projeto **nao depende de classes Tailwind com breakpoints** (`md:hidden`, `hidden md:block`) para alternar layouts. Todo comportamento responsivo e implementado via hook `useIsDesktop()` (`window.matchMedia`) com renderizacao condicional React. Isso garante que mobile e desktop nunca sejam renderizados simultaneamente.
+
+```tsx
+// padrao correto
+const isDesktop = useIsDesktop()   // hook com MediaQueryList
+return isDesktop ? <Tabela /> : <Cards />
+```
+
+---
+
+## Convencao de campos opcionais de cotacao
+
+Quando o servico de cotacoes nao retorna preco para um ativo, os campos abaixo chegam como `null` tanto no backend quanto no frontend:
+
+| Campo | Tipo | Significado quando null |
+|---|---|---|
+| `current_price` | `float \| null` | Cotacao indisponivel |
+| `current_value` | `float \| null` | Valor de mercado indisponivel |
+
+O frontend exibe `—` nesses casos. **Nunca** repete o `invested_value` no lugar do `current_value`.
 
 ---
 
@@ -136,7 +162,8 @@ Veja [ROADMAP_SPRINTS.md](./ROADMAP_SPRINTS.md) para o roadmap completo e [CHANG
 | Sprint | Status |
 |---|---|
 | Sprint 0 a 6 + Manutencao | ✅ Concluidas |
-| Sprint 7 — Rentabilidade | 🔜 Proxima |
+| Hotfix 18 Jun — Tabela de ativos | ✅ Concluido |
+| Sprint 7 — Rentabilidade | 🔜 Proxima (19 Jun 2026) |
 | Sprints 8 a 15 | ⏳ Planejadas |
 
 ---
