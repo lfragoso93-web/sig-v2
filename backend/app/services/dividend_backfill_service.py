@@ -269,3 +269,17 @@ async def backfill_all_tickers(
         await backfill_dividends(db, portfolio_id, ticker, asset_type)
         queued.append(ticker)
     return queued
+
+
+async def run_backfill(
+    db: AsyncSession,
+    ticker: str,
+    asset_type,
+) -> None:
+    """
+    Alias usado pelo asset_onboarding_service.
+    Chama backfill_dividends sem portfolio_id especifico (usa portfolio_id=0
+    pois backfill_dividends busca todos os portfolios do ticker internamente).
+    """
+    asset_type_str = asset_type.value if hasattr(asset_type, 'value') else str(asset_type)
+    await backfill_dividends(db, portfolio_id=0, ticker=ticker, asset_type=asset_type_str)
