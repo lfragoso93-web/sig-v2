@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MoreHorizontal, Plus, List, BarChart2 as AnalyseIcon, ChevronDown } from 'lucide-react'
+import { MoreHorizontal, Plus, List, BarChart2 as AnalyseIcon, ChevronDown, Target } from 'lucide-react'
 import { formatBRL, formatPercent } from '@/utils/format'
 import { formatTreasuryName } from '@/utils/treasury'
 import AssetLogo from '@/components/ui/AssetLogo'
 import { useAppStore } from '@/store/appStore'
+import { useSetClassTarget } from '@/hooks/useClassTargets'
 import type { PositionGroup } from '@/hooks/usePortfolio'
 
 // ── helpers ─────────────────────────────────────────────────────────────────────────────────
@@ -35,12 +36,11 @@ function displayName(ticker: string, assetType: string): string {
   return ticker
 }
 
-// Calcula variação da classe a partir das posições se o backend não trouxer
 function calcGroupVariation(group: PositionGroup): { variationPct: number | null; totalInvested: number } {
-  if (group.variation_pct !== undefined) return { variationPct: group.variation_pct, totalInvested: group.total_invested ?? 0 }
-  let inv = 0
-  let cur = 0
-  let hasQuote = false
+  if (group.variation_pct !== undefined && group.variation_pct !== null) {
+    return { variationPct: group.variation_pct, totalInvested: group.total_invested ?? 0 }
+  }
+  let inv = 0; let cur = 0; let hasQuote = false
   for (const p of group.positions) {
     const invested = p.invested_value ?? p.quantity * p.average_price
     inv += invested
@@ -55,7 +55,6 @@ function calcGroupVariation(group: PositionGroup): { variationPct: number | null
 
 // ── style tokens ────────────────────────────────────────────────────────────────────────────────────────
 const cellText  = { color: 'var(--color-text)' }
-const cellMuted = { color: 'var(--color-text-muted)' }
 const cellFaint = { color: 'var(--color-text-faint)' }
 
 // ── hook de breakpoint ───────────────────────────────────────────────────────────────────────────────────────────
@@ -186,7 +185,6 @@ function PositionCard({ item }: PositionCardProps) {
         </div>
         <AssetMenu ticker={item.ticker} assetLabel={isTesouro ? item.ticker : (item.asset_label ?? item.ticker)} assetType={item.asset_type} />
       </div>
-
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.625rem 1rem' }}>
         {[
           { label: 'Qtd',         value: fmtQty(item.quantity)        },
@@ -217,149 +215,245 @@ function PositionCard({ item }: PositionCardProps) {
   )
 }
 
+// ── TargetModal — popover inline para editar a meta da classe ───────────────────────────────────────
+interface TargetModalProps {
+  assetType: string
+  label: string
+  currentTarget: number | null
+  portfolioId: number
+  onClose: () => void
+}
+
+function TargetModal({ assetType, label, currentTarget, portfolioId, onClose }: TargetModalProps) {
+  const [value, setValue] = useState(String(currentTarget ?? ''))
+  const { mutate, isPending } = useSetClassTarget(portfolioId)
+  const ref = useRef<HTMLDivElement>(null)
+
+  // Fecha ao clicar fora
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [onClose])
+
+  const handleSave = () => {
+    const num = parseFloat(value.replace(',', '.'))
+    if (isNaN(num) || num < 0 || num > 100) return
+    mutate({ asset_type: assetType, target_pct: num }, { onSuccess: onClose })
+  }
+
+  return (
+    <div
+      ref={ref}
+      onClick={e => e.stopPropagation()}
+      style={{
+        position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 60,
+        width: 220, borderRadius: 'var(--radius-lg)',
+        background: 'var(--color-surface)', boxShadow: 'var(--shadow-lg)',
+        border: '1px solid oklch(from var(--color-text) l c h / 0.1)',
+        padding: '14px 16px',
+      }}
+    >
+      <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, marginBottom: 10, ...cellText }}>
+        Meta de alocação — {label}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <input
+          autoFocus
+          type="number"
+          min={0} max={100} step={0.5}
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') onClose() }}
+          placeholder="ex: 30"
+          style={{
+            flex: 1, padding: '6px 10px',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid oklch(from var(--color-text) l c h / 0.15)',
+            background: 'var(--color-surface-offset)',
+            color: 'var(--color-text)',
+            fontSize: 'var(--text-sm)',
+            outline: 'none',
+          }}
+        />
+        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', flexShrink: 0 }}>%</span>
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            flex: 1, padding: '5px 0',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid oklch(from var(--color-text) l c h / 0.12)',
+            background: 'transparent',
+            color: 'var(--color-text-muted)',
+            fontSize: 'var(--text-xs)', cursor: 'pointer',
+          }}
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={isPending}
+          style={{
+            flex: 1, padding: '5px 0',
+            borderRadius: 'var(--radius-md)',
+            border: 'none',
+            background: 'var(--color-primary)',
+            color: '#fff',
+            fontSize: 'var(--text-xs)', cursor: 'pointer',
+            opacity: isPending ? 0.7 : 1,
+          }}
+        >
+          {isPending ? 'Salvando…' : 'Salvar'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── ClassGroupHeader — barra clicável com dados da classe ──────────────────────────────────────────────
 interface ClassGroupHeaderProps {
   group: PositionGroup
   collapsed: boolean
   onToggle: () => void
+  portfolioId: number
 }
 
-function ClassGroupHeader({ group, collapsed, onToggle }: ClassGroupHeaderProps) {
+function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGroupHeaderProps) {
   const { variationPct, totalInvested } = calcGroupVariation(group)
   const rentabilidade = group.rentabilidade_pct ?? null
   const target = group.target_pct ?? null
+  const assetType = group.positions[0]?.asset_type ?? ''
+  const [showTargetModal, setShowTargetModal] = useState(false)
 
-  const varColor = variationPct === null
-    ? 'var(--color-text-faint)'
+  const varColor = variationPct === null ? 'var(--color-text-faint)'
     : variationPct >= 0 ? 'var(--color-success)' : 'var(--color-error)'
-
-  const rentColor = rentabilidade === null
-    ? 'var(--color-text-faint)'
+  const rentColor = rentabilidade === null ? 'var(--color-text-faint)'
     : rentabilidade >= 0 ? 'var(--color-success)' : 'var(--color-error)'
 
-  // Separação visual entre pills
   const Divider = () => (
     <span style={{ width: 1, height: 12, background: 'oklch(from var(--color-text) l c h / 0.1)', flexShrink: 0 }} />
   )
 
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      style={{
-        width: '100%',
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: '0.75rem 1.25rem',
-        borderBottom: collapsed ? 'none' : '1px solid oklch(from var(--color-text) l c h / 0.06)',
-        background: 'transparent',
-        border: collapsed ? 'none' : undefined,
-        borderBottomColor: collapsed ? undefined : 'oklch(from var(--color-text) l c h / 0.06)',
-        cursor: 'pointer',
-        textAlign: 'left',
-        transition: 'background 0.15s',
-      }}
-      onMouseEnter={e => (e.currentTarget.style.background = 'oklch(from var(--color-primary) l c h / 0.03)')}
-      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-    >
-      {/* Chevron */}
-      <span style={{
-        display: 'flex', alignItems: 'center', flexShrink: 0,
-        color: 'var(--color-text-faint)',
-        transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
-        transition: 'transform 0.2s',
-      }}>
-        <ChevronDown size={14} />
-      </span>
-
-      {/* Label da classe */}
-      <span style={{
-        fontSize: 'var(--text-sm)', fontWeight: 600,
-        letterSpacing: '-0.005em', color: 'var(--color-text)',
-        flexShrink: 0,
-      }}>
-        {group.label}
-      </span>
-
-      {/* Pills de info — overflow:hidden para mobile */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 6,
-        flex: 1, overflow: 'hidden', minWidth: 0,
-        flexWrap: 'nowrap',
-      }}>
-        {/* Qtd ativos */}
-        <Divider />
+    <div style={{ position: 'relative' }}>
+      <button
+        type="button"
+        onClick={onToggle}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+          padding: '0.75rem 1.25rem',
+          borderBottom: collapsed ? 'none' : '1px solid oklch(from var(--color-text) l c h / 0.06)',
+          background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left',
+          transition: 'background 0.15s',
+        }}
+        onMouseEnter={e => (e.currentTarget.style.background = 'oklch(from var(--color-primary) l c h / 0.03)')}
+        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+      >
+        {/* Chevron */}
         <span style={{
-          fontSize: 'var(--text-xs)', fontWeight: 500,
-          color: 'var(--color-text-muted)',
-          background: 'var(--color-surface-offset)',
-          border: '1px solid oklch(from var(--color-text) l c h / 0.07)',
-          borderRadius: 'var(--radius-full)', padding: '1px 8px',
-          whiteSpace: 'nowrap', flexShrink: 0,
+          display: 'flex', alignItems: 'center', flexShrink: 0,
+          color: 'var(--color-text-faint)',
+          transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+          transition: 'transform 0.2s',
         }}>
-          {group.count} {group.count === 1 ? 'ativo' : 'ativos'}
+          <ChevronDown size={14} />
         </span>
 
-        {/* Valor total */}
-        <Divider />
-        <span style={{
-          fontSize: 'var(--text-xs)', fontWeight: 600,
-          color: 'var(--color-text)',
-          fontVariantNumeric: 'tabular-nums',
-          whiteSpace: 'nowrap', flexShrink: 0,
-        }}>
-          {formatBRL(group.total_value)}
+        {/* Label */}
+        <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, letterSpacing: '-0.005em', ...cellText, flexShrink: 0 }}>
+          {group.label}
         </span>
 
-        {/* Variação % */}
-        {variationPct !== null && (
-          <>
-            <Divider />
-            <span style={{
-              fontSize: 'var(--text-xs)', fontWeight: 600,
-              color: varColor,
-              fontVariantNumeric: 'tabular-nums',
-              whiteSpace: 'nowrap', flexShrink: 0,
-            }}>
-              {variationPct >= 0 ? '+' : ''}{formatPercent(variationPct)}
-            </span>
-          </>
-        )}
+        {/* Pills */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, overflow: 'hidden', minWidth: 0, flexWrap: 'nowrap' }}>
+          {/* Qtd ativos */}
+          <Divider />
+          <span style={{
+            fontSize: 'var(--text-xs)', fontWeight: 500,
+            color: 'var(--color-text-muted)',
+            background: 'var(--color-surface-offset)',
+            border: '1px solid oklch(from var(--color-text) l c h / 0.07)',
+            borderRadius: 'var(--radius-full)', padding: '1px 8px',
+            whiteSpace: 'nowrap', flexShrink: 0,
+          }}>
+            {group.count} {group.count === 1 ? 'ativo' : 'ativos'}
+          </span>
 
-        {/* Rentabilidade (se disponível via backend) */}
-        {rentabilidade !== null && (
-          <>
-            <Divider />
-            <span style={{
-              fontSize: '0.68rem', fontWeight: 500,
-              color: rentColor,
-              fontVariantNumeric: 'tabular-nums',
-              whiteSpace: 'nowrap', flexShrink: 0,
-            }}>
-              {rentabilidade >= 0 ? '+' : ''}{formatPercent(rentabilidade)} rentab.
-            </span>
-          </>
-        )}
+          {/* Valor total */}
+          <Divider />
+          <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, ...cellText, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', flexShrink: 0 }}>
+            {formatBRL(group.total_value)}
+          </span>
 
-        {/* Meta do usuário */}
-        {target !== null && (
-          <>
-            <Divider />
-            <span style={{
+          {/* Variação % */}
+          {variationPct !== null && (
+            <><Divider />
+              <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: varColor, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                {variationPct >= 0 ? '+' : ''}{formatPercent(variationPct)}
+              </span>
+            </>
+          )}
+
+          {/* Rentabilidade */}
+          {rentabilidade !== null && (
+            <><Divider />
+              <span style={{ fontSize: '0.68rem', fontWeight: 500, color: rentColor, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                {rentabilidade >= 0 ? '+' : ''}{formatPercent(rentabilidade)} rentab.
+              </span>
+            </>
+          )}
+
+          {/* Meta — botão que abre o popover, para o clique de collapse */}
+          <Divider />
+          <span
+            role="button"
+            tabIndex={0}
+            title="Definir meta de alocação"
+            onClick={e => { e.stopPropagation(); setShowTargetModal(v => !v) }}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); setShowTargetModal(v => !v) } }}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
               fontSize: '0.68rem', fontWeight: 500,
-              color: 'var(--color-text-muted)',
+              color: target !== null ? 'var(--color-primary)' : 'var(--color-text-faint)',
               whiteSpace: 'nowrap', flexShrink: 0,
-            }}>
-              Meta: {target}%
-            </span>
-          </>
-        )}
-      </div>
-    </button>
+              cursor: 'pointer',
+              padding: '2px 6px',
+              borderRadius: 'var(--radius-full)',
+              border: `1px solid ${target !== null ? 'oklch(from var(--color-primary) l c h / 0.25)' : 'oklch(from var(--color-text) l c h / 0.1)'}`,
+              background: target !== null ? 'oklch(from var(--color-primary) l c h / 0.08)' : 'transparent',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'oklch(from var(--color-primary) l c h / 0.12)' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = target !== null ? 'oklch(from var(--color-primary) l c h / 0.08)' : 'transparent' }}
+          >
+            <Target size={10} />
+            {target !== null ? `Meta: ${target}%` : 'Definir meta'}
+          </span>
+        </div>
+      </button>
+
+      {/* Popover de edição da meta */}
+      {showTargetModal && (
+        <TargetModal
+          assetType={assetType}
+          label={group.label}
+          currentTarget={target}
+          portfolioId={portfolioId}
+          onClose={() => setShowTargetModal(false)}
+        />
+      )}
+    </div>
   )
 }
 
-// ── ClassTable — tabela de uma classe de ativo ─────────────────────────────────────────────────────────────────────
-function ClassTable({ group }: { group: PositionGroup }) {
+// ── ClassTable ───────────────────────────────────────────────────────────────────────────────────────────────────────
+function ClassTable({ group, portfolioId }: { group: PositionGroup; portfolioId: number }) {
   const isDesktop = useIsDesktop()
   const [collapsed, setCollapsed] = useState(false)
 
@@ -376,17 +470,15 @@ function ClassTable({ group }: { group: PositionGroup }) {
 
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
-      {/* Header clicável */}
       <ClassGroupHeader
         group={group}
         collapsed={collapsed}
         onToggle={() => setCollapsed(v => !v)}
+        portfolioId={portfolioId}
       />
 
-      {/* Conteúdo colapsável */}
       {!collapsed && (
         <>
-          {/* Mobile: cards */}
           {!isDesktop && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '1rem' }}>
               {group.positions.map(item => (
@@ -394,8 +486,6 @@ function ClassTable({ group }: { group: PositionGroup }) {
               ))}
             </div>
           )}
-
-          {/* Desktop: tabela */}
           {isDesktop && (
             <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 'var(--text-xs)' }}>
               <colgroup>
@@ -404,29 +494,13 @@ function ClassTable({ group }: { group: PositionGroup }) {
               <thead>
                 <tr style={{ borderBottom: '1px solid oklch(from var(--color-text) l c h / 0.06)' }}>
                   {COLS.map(col => (
-                    <th
-                      key={col.key}
-                      style={{
-                        padding: '0.5rem 1rem',
-                        textAlign: col.align as any,
-                        fontWeight: 500,
-                        fontSize: '0.68rem',
-                        letterSpacing: '0.04em',
-                        textTransform: 'uppercase',
-                        color: 'var(--color-text-muted)',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
+                    <th key={col.key} style={{ padding: '0.5rem 1rem', textAlign: col.align as any, fontWeight: 500, fontSize: '0.68rem', letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
                       {col.info ? (
                         <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3 }}>
                           {col.label}
                           <span title={col.info} style={{ cursor: 'help', display: 'inline-flex', alignItems: 'center' }}>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24"
-                              fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                              style={cellFaint}>
-                              <circle cx="12" cy="12" r="10" />
-                              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-                              <path d="M12 17h.01" />
+                            <svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={cellFaint}>
+                              <circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><path d="M12 17h.01" />
                             </svg>
                           </span>
                         </span>
@@ -437,12 +511,11 @@ function ClassTable({ group }: { group: PositionGroup }) {
               </thead>
               <tbody>
                 {group.positions.map(item => {
-                  const hasQuote      = item.current_price !== null && item.current_price !== undefined
-                  const name          = displayName(item.ticker, item.asset_type)
-                  const isTesouro     = item.asset_type.toUpperCase() === 'TESOURO_DIRETO' || item.asset_type.toUpperCase() === 'TESOURO'
-                  const varColor      = (item.variation_value ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-notification)'
+                  const hasQuote = item.current_price !== null && item.current_price !== undefined
+                  const name = displayName(item.ticker, item.asset_type)
+                  const isTesouro = item.asset_type.toUpperCase() === 'TESOURO_DIRETO' || item.asset_type.toUpperCase() === 'TESOURO'
+                  const varColor = (item.variation_value ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-notification)'
                   const investedValue = item.invested_value ?? item.quantity * item.average_price
-
                   return (
                     <tr
                       key={`${item.ticker}-${item.id ?? item.ticker}`}
@@ -450,7 +523,6 @@ function ClassTable({ group }: { group: PositionGroup }) {
                       onMouseEnter={e => (e.currentTarget.style.background = 'oklch(from var(--color-primary) l c h / 0.03)')}
                       onMouseLeave={e => (e.currentTarget.style.background = '')}
                     >
-                      {/* Ativo */}
                       <td style={{ padding: '0.75rem 1rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <AssetLogo ticker={item.ticker} assetType={item.asset_type} size={28} logoUrl={item.logo_url} />
@@ -462,44 +534,25 @@ function ClassTable({ group }: { group: PositionGroup }) {
                           </div>
                         </div>
                       </td>
-                      {/* Qtd */}
-                      <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
-                        {fmtQty(item.quantity)}
-                      </td>
-                      {/* P. Médio */}
-                      <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
-                        {formatBRL(item.average_price)}
-                      </td>
-                      {/* P. Atual */}
+                      <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>{fmtQty(item.quantity)}</td>
+                      <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>{formatBRL(item.average_price)}</td>
                       <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
                         <span style={hasQuote ? cellText : cellFaint}>{fmtPrice(item.current_price)}</span>
                       </td>
-                      {/* Total Inv. */}
-                      <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
-                        {formatBRL(investedValue)}
-                      </td>
-                      {/* Valor Atual */}
+                      <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>{formatBRL(investedValue)}</td>
                       <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
                         {hasQuote ? formatBRL(item.current_value) : <span style={cellFaint}>—</span>}
                       </td>
-                      {/* Resultado */}
                       <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
                         {hasQuote ? (
                           <div style={{ color: varColor }}>
                             <div style={{ fontWeight: 600 }}>{formatBRL(item.variation_value ?? 0)}</div>
                             <div style={{ fontSize: '0.65rem', fontWeight: 500, opacity: 0.8 }}>{formatPercent(item.variation_percent ?? 0)}</div>
                           </div>
-                        ) : (
-                          <span style={cellFaint}>—</span>
-                        )}
+                        ) : <span style={cellFaint}>—</span>}
                       </td>
-                      {/* Ações */}
                       <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>
-                        <AssetMenu
-                          ticker={item.ticker}
-                          assetLabel={isTesouro ? item.ticker : (item.asset_label ?? item.ticker)}
-                          assetType={item.asset_type}
-                        />
+                        <AssetMenu ticker={item.ticker} assetLabel={isTesouro ? item.ticker : (item.asset_label ?? item.ticker)} assetType={item.asset_type} />
                       </td>
                     </tr>
                   )
@@ -513,15 +566,15 @@ function ClassTable({ group }: { group: PositionGroup }) {
   )
 }
 
-// ── PositionTable — exibe uma ClassTable por grupo ─────────────────────────────────────────────────────────
-interface Props { groups: PositionGroup[] }
+// ── PositionTable ───────────────────────────────────────────────────────────────────────────────────────────────────────
+interface Props { groups: PositionGroup[]; portfolioId: number }
 
-export default function PositionTable({ groups }: Props) {
+export default function PositionTable({ groups, portfolioId }: Props) {
   if (!groups || groups.length === 0) return null
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       {groups.map(group => (
-        <ClassTable key={group.label} group={group} />
+        <ClassTable key={group.label} group={group} portfolioId={portfolioId} />
       ))}
     </div>
   )

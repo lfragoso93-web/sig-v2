@@ -17,6 +17,7 @@ from app.routers import (
 )
 from app.routers import debug
 from app.routers import prices
+from app.routers import class_targets
 
 
 @asynccontextmanager
@@ -34,7 +35,6 @@ app = FastAPI(
 )
 
 
-# ── Handler global: expõe traceback no body para facilitar diagnóstico ────────
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     tb = traceback.format_exc()
@@ -88,31 +88,32 @@ app.add_middleware(
 PREFIX = "/api/v1"
 
 # Auth & Users
-app.include_router(auth.router,         prefix=f"{PREFIX}/auth",        tags=["auth"])
-app.include_router(users.router,        prefix=f"{PREFIX}/users",       tags=["users"])
-app.include_router(admin.router,        prefix=f"{PREFIX}/admin",       tags=["admin"])
+app.include_router(auth.router,            prefix=f"{PREFIX}/auth",         tags=["auth"])
+app.include_router(users.router,           prefix=f"{PREFIX}/users",        tags=["users"])
+app.include_router(admin.router,           prefix=f"{PREFIX}/admin",        tags=["admin"])
 
 # Core financeiro
-app.include_router(portfolios.router,   prefix=f"{PREFIX}/portfolios",  tags=["portfolios"])
-app.include_router(transactions.router, prefix=f"{PREFIX}/portfolios",  tags=["transactions"])
-app.include_router(treasury.router,     prefix=f"{PREFIX}/portfolios",  tags=["treasury"])
-app.include_router(positions.router,    prefix=f"{PREFIX}/positions",   tags=["positions"])
-app.include_router(dividends.router,    prefix=f"{PREFIX}/dividends",   tags=["dividends"])
-app.include_router(proventos.router,    prefix=f"{PREFIX}/proventos",   tags=["proventos"])
-app.include_router(performance.router,  prefix=f"{PREFIX}/performance", tags=["performance"])
+app.include_router(portfolios.router,      prefix=f"{PREFIX}/portfolios",   tags=["portfolios"])
+app.include_router(transactions.router,    prefix=f"{PREFIX}/portfolios",   tags=["transactions"])
+app.include_router(treasury.router,        prefix=f"{PREFIX}/portfolios",   tags=["treasury"])
+app.include_router(positions.router,       prefix=f"{PREFIX}/positions",    tags=["positions"])
+app.include_router(dividends.router,       prefix=f"{PREFIX}/dividends",    tags=["dividends"])
+app.include_router(proventos.router,       prefix=f"{PREFIX}/proventos",    tags=["proventos"])
+app.include_router(performance.router,     prefix=f"{PREFIX}/performance",  tags=["performance"])
+app.include_router(class_targets.router,   prefix=f"{PREFIX}/portfolios",   tags=["class-targets"])
 
 # Dados de mercado
-app.include_router(assets.router,       prefix=f"{PREFIX}/assets",      tags=["assets"])
-app.include_router(fx.router,           prefix=f"{PREFIX}/fx",          tags=["fx"])
-app.include_router(quotes.router,       prefix=f"{PREFIX}/quotes",      tags=["quotes"])
-app.include_router(prices.router,       prefix=f"{PREFIX}/prices",      tags=["prices"])
+app.include_router(assets.router,          prefix=f"{PREFIX}/assets",       tags=["assets"])
+app.include_router(fx.router,              prefix=f"{PREFIX}/fx",           tags=["fx"])
+app.include_router(quotes.router,          prefix=f"{PREFIX}/quotes",       tags=["quotes"])
+app.include_router(prices.router,          prefix=f"{PREFIX}/prices",       tags=["prices"])
 
 # Funcionalidades extras
-app.include_router(sync.router,         prefix=f"{PREFIX}/sync",        tags=["sync"])
-app.include_router(goals.router,        prefix=f"{PREFIX}/goals",       tags=["goals"])
-app.include_router(irpf.router,         prefix=f"{PREFIX}/irpf",        tags=["irpf"])
-app.include_router(analysis.router,     prefix=f"{PREFIX}/analysis",    tags=["analysis"])
-app.include_router(fixed_income.router, prefix=f"{PREFIX}/fixed-income", tags=["fixed_income"])
+app.include_router(sync.router,            prefix=f"{PREFIX}/sync",         tags=["sync"])
+app.include_router(goals.router,           prefix=f"{PREFIX}/goals",        tags=["goals"])
+app.include_router(irpf.router,            prefix=f"{PREFIX}/irpf",         tags=["irpf"])
+app.include_router(analysis.router,        prefix=f"{PREFIX}/analysis",     tags=["analysis"])
+app.include_router(fixed_income.router,    prefix=f"{PREFIX}/fixed-income", tags=["fixed_income"])
 
 if os.getenv("ADMIN_SECRET"):
     app.include_router(debug.router, prefix=f"{PREFIX}/debug", tags=["debug"])
