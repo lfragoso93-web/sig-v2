@@ -40,6 +40,7 @@ class Asset(Base):
     sector = Column(String, nullable=True)
     sub_sector = Column(String, nullable=True)
     float_description = Column(Float, nullable=True)
+    logo_url = Column(String, nullable=True)  # URL do logo — preenchido pelo asset_onboarding_service
 
     positions = relationship("PortfolioPosition", back_populates="asset")
     prices = relationship("AssetPrice", back_populates="asset")
