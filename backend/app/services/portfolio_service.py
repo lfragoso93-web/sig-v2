@@ -26,32 +26,25 @@ _TYPE_LABEL: dict[str, str] = {
 
 
 def _asset_type_str(value) -> str:
-    """Extrai string do asset_type seja ele enum ou str."""
     if hasattr(value, 'value'):
         return str(value.value)
     return str(value or "").upper()
 
 
 def _is_buy(op) -> bool:
-    """
-    Verifica se a operacao e compra.
-    SAEnum com values_callable garante que op chega como OperationType.buy,
-    mas mantemos fallback de string para registros legados no banco.
-    """
     if isinstance(op, OperationType):
         return op == OperationType.buy
     return str(op).lower() in ("buy", "compra")
 
 
 def _is_sell(op) -> bool:
-    """Verifica se a operacao e venda. Mesma logica de _is_buy."""
     if isinstance(op, OperationType):
         return op == OperationType.sell
     return str(op).lower() in ("sell", "venda")
 
 
 # ---------------------------------------------------------------------------
-# calc_raw_positions - PM ponderado, venda nao altera PM
+# calc_raw_positions
 # ---------------------------------------------------------------------------
 
 async def calc_raw_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
@@ -110,6 +103,11 @@ async def calc_raw_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def enrich_with_prices(positions: list[dict], prices: dict[str, float]) -> list[dict]:
+    """
+    Enriquece posicoes com preco atual.
+    Quando o preco nao esta disponivel, current_price=None e current_value=None
+    para que o frontend diferencie "sem cotacao" de "vale R$ 0".
+    """
     enriched = []
     for p in positions:
         ticker = p["ticker"]
@@ -122,12 +120,13 @@ def enrich_with_prices(positions: list[dict], prices: dict[str, float]) -> list[
             result_abs = cur_val - invested
             result_pct = (result_abs / invested * 100) if invested else 0.0
             item["current_price"] = price
-            item["current_value"] = cur_val
-            item["result_abs"] = result_abs
+            item["current_value"] = round(cur_val, 2)
+            item["result_abs"] = round(result_abs, 2)
             item["result_pct"] = round(result_pct, 4)
         else:
+            # Sem cotacao: deixa explicito como None para o schema/frontend
             item["current_price"] = None
-            item["current_value"] = p["total_invested"]
+            item["current_value"] = None
             item["result_abs"] = 0.0
             item["result_pct"] = 0.0
         enriched.append(item)
@@ -135,7 +134,6 @@ def enrich_with_prices(positions: list[dict], prices: dict[str, float]) -> list[
 
 
 async def _fetch_prices_batch(db: AsyncSession, positions_raw: list[dict]) -> dict[str, float]:
-    """Busca precos em batch passando asset_type (string do enum) e db."""
     if not positions_raw:
         return {}
     price_input = [
@@ -219,6 +217,7 @@ async def get_portfolio_summary(db: AsyncSession, portfolio_id: int, user_id: in
     current_value = 0.0
     for p in positions_raw:
         price_now = prices.get(p["ticker"])
+        # Fallback para total_invested quando sem preco (soma patrimonial)
         current_value += (p["quantity"] * price_now) if price_now else p["total_invested"]
 
     cutoff_12m = (datetime.now(timezone.utc) - timedelta(days=365)).date()
@@ -253,28 +252,33 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
     prices = await _fetch_prices_batch(db, positions_raw)
     enriched = enrich_with_prices(positions_raw, prices)
 
-    total_current = sum(e["current_value"] for e in enriched if e["current_value"] is not None)
+    # Para o calculo de alocacao, usa current_value quando disponivel, senao total_invested
+    total_current = sum(
+        (e["current_value"] if e["current_value"] is not None else e["total_invested"])
+        for e in enriched
+    )
 
     groups: dict[str, dict] = {}
-    for e in enriched:
+    for idx, e in enumerate(enriched):
         at = e["asset_type"] or "OUTRO"
         label = _TYPE_LABEL.get(at, at.replace("_", " ").title())
-        cur_val = e["current_value"] or e["total_invested"]
-        alloc = (cur_val / total_current * 100) if total_current else 0
+        val_for_alloc = e["current_value"] if e["current_value"] is not None else e["total_invested"]
+        alloc = (val_for_alloc / total_current * 100) if total_current else 0
 
         if at not in groups:
             groups[at] = {"label": label, "count": 0, "total_value": 0.0, "positions": []}
 
         groups[at]["count"] += 1
-        groups[at]["total_value"] += cur_val
+        groups[at]["total_value"] += val_for_alloc
         groups[at]["positions"].append({
+            "id": idx + 1,  # id sintetico para chave React
             "ticker": e["ticker"],
             "asset_type": at,
             "asset_label": label,
             "quantity": round(e["quantity"], 8),
             "average_price": round(e["avg_price"], 4),
-            "current_price": e["current_price"],
-            "current_value": round(cur_val, 2),
+            "current_price": e["current_price"],   # None quando sem cotacao
+            "current_value": e["current_value"],    # None quando sem cotacao
             "invested_value": round(e["total_invested"], 2),
             "variation_value": round(e["result_abs"] or 0, 2),
             "variation_percent": round(e["result_pct"] or 0, 4),
@@ -297,7 +301,7 @@ async def get_asset_distribution(db: AsyncSession, portfolio_id: int, user_id: i
     by_type: dict[str, float] = {}
     for e in enriched:
         at = e.get("asset_type") or "OUTRO"
-        val = e["current_value"] or e["total_invested"]
+        val = e["current_value"] if e["current_value"] is not None else e["total_invested"]
         by_type[at] = by_type.get(at, 0) + val
 
     total = sum(by_type.values())
