@@ -2,26 +2,26 @@
 Schemas de posicao alinhados com o contrato do portfolio_service
 (calc_raw_positions + enrich_with_prices).
 
-Nao depende do model Position legado nem de PortfolioPosition diretamente —
+Nao depende do model Position legado nem de PortfolioPosition diretamente -
 recebe dicionarios do service e os valida via Pydantic.
 """
 from pydantic import BaseModel
-from decimal import Decimal
 from typing import Optional
 
 
 class PositionOut(BaseModel):
     """
     Posicao individual de um ativo na carteira, enriquecida com preco atual.
-    Campos de preco/variacao sao None quando cotacao nao esta disponivel.
+    current_price e current_value sao None quando cotacao nao esta disponivel.
     """
+    id:               Optional[int]   = None   # id sintetico para chave React
     ticker:           str
     asset_type:       str
     asset_label:      str
     quantity:         float
     average_price:    float
-    current_price:    Optional[float] = None
-    current_value:    float
+    current_price:    Optional[float] = None   # None = sem cotacao
+    current_value:    Optional[float] = None   # None = sem cotacao
     invested_value:   float
     variation_value:  float
     variation_percent: float
