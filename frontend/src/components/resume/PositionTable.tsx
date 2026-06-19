@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MoreHorizontal, Plus, List, BarChart2 as AnalyseIcon } from 'lucide-react'
+import { MoreHorizontal, Plus, List, BarChart2 as AnalyseIcon, ChevronDown } from 'lucide-react'
 import { formatBRL, formatPercent } from '@/utils/format'
 import { formatTreasuryName } from '@/utils/treasury'
 import AssetLogo from '@/components/ui/AssetLogo'
 import { useAppStore } from '@/store/appStore'
 import type { PositionGroup } from '@/hooks/usePortfolio'
 
-// ── helpers ──────────────────────────────────────────────────────────────────────────
+// ── helpers ─────────────────────────────────────────────────────────────────────────────────
 function assetTypeToTab(assetType: string): string {
   const map: Record<string, string> = {
     ACAO: 'acao', FII: 'fii', ETF_NACIONAL: 'etf_br',
@@ -35,12 +35,30 @@ function displayName(ticker: string, assetType: string): string {
   return ticker
 }
 
-// ── style tokens ──────────────────────────────────────────────────────────────────────────
+// Calcula variação da classe a partir das posições se o backend não trouxer
+function calcGroupVariation(group: PositionGroup): { variationPct: number | null; totalInvested: number } {
+  if (group.variation_pct !== undefined) return { variationPct: group.variation_pct, totalInvested: group.total_invested ?? 0 }
+  let inv = 0
+  let cur = 0
+  let hasQuote = false
+  for (const p of group.positions) {
+    const invested = p.invested_value ?? p.quantity * p.average_price
+    inv += invested
+    if (p.current_price !== null && p.current_price !== undefined) {
+      cur += p.current_value ?? 0
+      hasQuote = true
+    }
+  }
+  if (!hasQuote || inv === 0) return { variationPct: null, totalInvested: inv }
+  return { variationPct: ((cur - inv) / inv) * 100, totalInvested: inv }
+}
+
+// ── style tokens ────────────────────────────────────────────────────────────────────────────────────────
 const cellText  = { color: 'var(--color-text)' }
 const cellMuted = { color: 'var(--color-text-muted)' }
 const cellFaint = { color: 'var(--color-text-faint)' }
 
-// ── hook de breakpoint ────────────────────────────────────────────────────────────────────────
+// ── hook de breakpoint ───────────────────────────────────────────────────────────────────────────────────────────
 function useIsDesktop(breakpoint = 768) {
   const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= breakpoint)
   useEffect(() => {
@@ -52,7 +70,7 @@ function useIsDesktop(breakpoint = 768) {
   return isDesktop
 }
 
-// ── AssetMenu ─────────────────────────────────────────────────────────────────────────────
+// ── AssetMenu ──────────────────────────────────────────────────────────────────────────────────────────
 interface AssetMenuProps { ticker: string; assetLabel: string; assetType: string }
 
 function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
@@ -139,7 +157,7 @@ function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
   )
 }
 
-// ── PositionCard (mobile) ─────────────────────────────────────────────────────────────────────────
+// ── PositionCard (mobile) ───────────────────────────────────────────────────────────────────────────────────
 interface PositionCardProps { item: PositionGroup['positions'][number] }
 
 function PositionCard({ item }: PositionCardProps) {
@@ -199,9 +217,151 @@ function PositionCard({ item }: PositionCardProps) {
   )
 }
 
-// ── ClassTable — tabela de uma classe de ativo ────────────────────────────────────────────────────────
+// ── ClassGroupHeader — barra clicável com dados da classe ──────────────────────────────────────────────
+interface ClassGroupHeaderProps {
+  group: PositionGroup
+  collapsed: boolean
+  onToggle: () => void
+}
+
+function ClassGroupHeader({ group, collapsed, onToggle }: ClassGroupHeaderProps) {
+  const { variationPct, totalInvested } = calcGroupVariation(group)
+  const rentabilidade = group.rentabilidade_pct ?? null
+  const target = group.target_pct ?? null
+
+  const varColor = variationPct === null
+    ? 'var(--color-text-faint)'
+    : variationPct >= 0 ? 'var(--color-success)' : 'var(--color-error)'
+
+  const rentColor = rentabilidade === null
+    ? 'var(--color-text-faint)'
+    : rentabilidade >= 0 ? 'var(--color-success)' : 'var(--color-error)'
+
+  // Separação visual entre pills
+  const Divider = () => (
+    <span style={{ width: 1, height: 12, background: 'oklch(from var(--color-text) l c h / 0.1)', flexShrink: 0 }} />
+  )
+
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      style={{
+        width: '100%',
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '0.75rem 1.25rem',
+        borderBottom: collapsed ? 'none' : '1px solid oklch(from var(--color-text) l c h / 0.06)',
+        background: 'transparent',
+        border: collapsed ? 'none' : undefined,
+        borderBottomColor: collapsed ? undefined : 'oklch(from var(--color-text) l c h / 0.06)',
+        cursor: 'pointer',
+        textAlign: 'left',
+        transition: 'background 0.15s',
+      }}
+      onMouseEnter={e => (e.currentTarget.style.background = 'oklch(from var(--color-primary) l c h / 0.03)')}
+      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+    >
+      {/* Chevron */}
+      <span style={{
+        display: 'flex', alignItems: 'center', flexShrink: 0,
+        color: 'var(--color-text-faint)',
+        transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+        transition: 'transform 0.2s',
+      }}>
+        <ChevronDown size={14} />
+      </span>
+
+      {/* Label da classe */}
+      <span style={{
+        fontSize: 'var(--text-sm)', fontWeight: 600,
+        letterSpacing: '-0.005em', color: 'var(--color-text)',
+        flexShrink: 0,
+      }}>
+        {group.label}
+      </span>
+
+      {/* Pills de info — overflow:hidden para mobile */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 6,
+        flex: 1, overflow: 'hidden', minWidth: 0,
+        flexWrap: 'nowrap',
+      }}>
+        {/* Qtd ativos */}
+        <Divider />
+        <span style={{
+          fontSize: 'var(--text-xs)', fontWeight: 500,
+          color: 'var(--color-text-muted)',
+          background: 'var(--color-surface-offset)',
+          border: '1px solid oklch(from var(--color-text) l c h / 0.07)',
+          borderRadius: 'var(--radius-full)', padding: '1px 8px',
+          whiteSpace: 'nowrap', flexShrink: 0,
+        }}>
+          {group.count} {group.count === 1 ? 'ativo' : 'ativos'}
+        </span>
+
+        {/* Valor total */}
+        <Divider />
+        <span style={{
+          fontSize: 'var(--text-xs)', fontWeight: 600,
+          color: 'var(--color-text)',
+          fontVariantNumeric: 'tabular-nums',
+          whiteSpace: 'nowrap', flexShrink: 0,
+        }}>
+          {formatBRL(group.total_value)}
+        </span>
+
+        {/* Variação % */}
+        {variationPct !== null && (
+          <>
+            <Divider />
+            <span style={{
+              fontSize: 'var(--text-xs)', fontWeight: 600,
+              color: varColor,
+              fontVariantNumeric: 'tabular-nums',
+              whiteSpace: 'nowrap', flexShrink: 0,
+            }}>
+              {variationPct >= 0 ? '+' : ''}{formatPercent(variationPct)}
+            </span>
+          </>
+        )}
+
+        {/* Rentabilidade (se disponível via backend) */}
+        {rentabilidade !== null && (
+          <>
+            <Divider />
+            <span style={{
+              fontSize: '0.68rem', fontWeight: 500,
+              color: rentColor,
+              fontVariantNumeric: 'tabular-nums',
+              whiteSpace: 'nowrap', flexShrink: 0,
+            }}>
+              {rentabilidade >= 0 ? '+' : ''}{formatPercent(rentabilidade)} rentab.
+            </span>
+          </>
+        )}
+
+        {/* Meta do usuário */}
+        {target !== null && (
+          <>
+            <Divider />
+            <span style={{
+              fontSize: '0.68rem', fontWeight: 500,
+              color: 'var(--color-text-muted)',
+              whiteSpace: 'nowrap', flexShrink: 0,
+            }}>
+              Meta: {target}%
+            </span>
+          </>
+        )}
+      </div>
+    </button>
+  )
+}
+
+// ── ClassTable — tabela de uma classe de ativo ─────────────────────────────────────────────────────────────────────
 function ClassTable({ group }: { group: PositionGroup }) {
   const isDesktop = useIsDesktop()
+  const [collapsed, setCollapsed] = useState(false)
 
   const COLS = [
     { key: 'ativo',      label: 'Ativo',       align: 'left',  width: '30%' },
@@ -216,155 +376,144 @@ function ClassTable({ group }: { group: PositionGroup }) {
 
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
-      {/* Header */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: '0.75rem 1.25rem',
-        borderBottom: '1px solid oklch(from var(--color-text) l c h / 0.06)',
-      }}>
-        <span style={{
-          fontSize: 'var(--text-sm)', fontWeight: 600,
-          letterSpacing: '-0.005em', color: 'var(--color-text)',
-        }}>
-          {group.label}
-        </span>
-        <span style={{
-          fontSize: 'var(--text-xs)', fontWeight: 500,
-          color: 'var(--color-text-muted)',
-          background: 'var(--color-surface-offset)',
-          border: '1px solid oklch(from var(--color-text) l c h / 0.07)',
-          borderRadius: 'var(--radius-full)', padding: '1px 8px',
-        }}>
-          {group.count}
-        </span>
-      </div>
+      {/* Header clicável */}
+      <ClassGroupHeader
+        group={group}
+        collapsed={collapsed}
+        onToggle={() => setCollapsed(v => !v)}
+      />
 
-      {/* Mobile: cards */}
-      {!isDesktop && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '1rem' }}>
-          {group.positions.map(item => (
-            <PositionCard key={`${item.ticker}-${item.id ?? item.ticker}`} item={item} />
-          ))}
-        </div>
-      )}
-
-      {/* Desktop: tabela */}
-      {isDesktop && (
-        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 'var(--text-xs)' }}>
-          <colgroup>
-            {COLS.map(c => <col key={c.key} style={{ width: c.width }} />)}
-          </colgroup>
-          <thead>
-            <tr style={{ borderBottom: '1px solid oklch(from var(--color-text) l c h / 0.06)' }}>
-              {COLS.map(col => (
-                <th
-                  key={col.key}
-                  style={{
-                    padding: '0.5rem 1rem',
-                    textAlign: col.align as any,
-                    fontWeight: 500,
-                    fontSize: '0.68rem',
-                    letterSpacing: '0.04em',
-                    textTransform: 'uppercase',
-                    color: 'var(--color-text-muted)',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {col.info ? (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3 }}>
-                      {col.label}
-                      <span title={col.info} style={{ cursor: 'help', display: 'inline-flex', alignItems: 'center' }}>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24"
-                          fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                          style={cellFaint}>
-                          <circle cx="12" cy="12" r="10" />
-                          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-                          <path d="M12 17h.01" />
-                        </svg>
-                      </span>
-                    </span>
-                  ) : col.label}
-                </th>
+      {/* Conteúdo colapsável */}
+      {!collapsed && (
+        <>
+          {/* Mobile: cards */}
+          {!isDesktop && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '1rem' }}>
+              {group.positions.map(item => (
+                <PositionCard key={`${item.ticker}-${item.id ?? item.ticker}`} item={item} />
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {group.positions.map(item => {
-              const hasQuote      = item.current_price !== null && item.current_price !== undefined
-              const name          = displayName(item.ticker, item.asset_type)
-              const isTesouro     = item.asset_type.toUpperCase() === 'TESOURO_DIRETO' || item.asset_type.toUpperCase() === 'TESOURO'
-              const varColor      = (item.variation_value ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-notification)'
-              const investedValue = item.invested_value ?? item.quantity * item.average_price
+            </div>
+          )}
 
-              return (
-                <tr
-                  key={`${item.ticker}-${item.id ?? item.ticker}`}
-                  style={{ borderBottom: '1px solid oklch(from var(--color-text) l c h / 0.045)' }}
-                  onMouseEnter={e => (e.currentTarget.style.background = 'oklch(from var(--color-primary) l c h / 0.03)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = '')}
-                >
-                  {/* Ativo */}
-                  <td style={{ padding: '0.75rem 1rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <AssetLogo ticker={item.ticker} assetType={item.asset_type} size={28} logoUrl={item.logo_url} />
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...cellText }}>{name}</div>
-                        <div style={{ fontSize: '0.65rem', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...cellFaint }}>
-                          {isTesouro ? item.ticker : item.asset_label}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  {/* Qtd */}
-                  <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
-                    {fmtQty(item.quantity)}
-                  </td>
-                  {/* P. Médio */}
-                  <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
-                    {formatBRL(item.average_price)}
-                  </td>
-                  {/* P. Atual */}
-                  <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                    <span style={hasQuote ? cellText : cellFaint}>{fmtPrice(item.current_price)}</span>
-                  </td>
-                  {/* Total Inv. */}
-                  <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
-                    {formatBRL(investedValue)}
-                  </td>
-                  {/* Valor Atual */}
-                  <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
-                    {hasQuote ? formatBRL(item.current_value) : <span style={cellFaint}>—</span>}
-                  </td>
-                  {/* Resultado */}
-                  <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                    {hasQuote ? (
-                      <div style={{ color: varColor }}>
-                        <div style={{ fontWeight: 600 }}>{formatBRL(item.variation_value ?? 0)}</div>
-                        <div style={{ fontSize: '0.65rem', fontWeight: 500, opacity: 0.8 }}>{formatPercent(item.variation_percent ?? 0)}</div>
-                      </div>
-                    ) : (
-                      <span style={cellFaint}>—</span>
-                    )}
-                  </td>
-                  {/* Ações */}
-                  <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>
-                    <AssetMenu
-                      ticker={item.ticker}
-                      assetLabel={isTesouro ? item.ticker : (item.asset_label ?? item.ticker)}
-                      assetType={item.asset_type}
-                    />
-                  </td>
+          {/* Desktop: tabela */}
+          {isDesktop && (
+            <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 'var(--text-xs)' }}>
+              <colgroup>
+                {COLS.map(c => <col key={c.key} style={{ width: c.width }} />)}
+              </colgroup>
+              <thead>
+                <tr style={{ borderBottom: '1px solid oklch(from var(--color-text) l c h / 0.06)' }}>
+                  {COLS.map(col => (
+                    <th
+                      key={col.key}
+                      style={{
+                        padding: '0.5rem 1rem',
+                        textAlign: col.align as any,
+                        fontWeight: 500,
+                        fontSize: '0.68rem',
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                        color: 'var(--color-text-muted)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {col.info ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3 }}>
+                          {col.label}
+                          <span title={col.info} style={{ cursor: 'help', display: 'inline-flex', alignItems: 'center' }}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24"
+                              fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                              style={cellFaint}>
+                              <circle cx="12" cy="12" r="10" />
+                              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                              <path d="M12 17h.01" />
+                            </svg>
+                          </span>
+                        </span>
+                      ) : col.label}
+                    </th>
+                  ))}
                 </tr>
-              )
-            })}
-          </tbody>
-        </table>
+              </thead>
+              <tbody>
+                {group.positions.map(item => {
+                  const hasQuote      = item.current_price !== null && item.current_price !== undefined
+                  const name          = displayName(item.ticker, item.asset_type)
+                  const isTesouro     = item.asset_type.toUpperCase() === 'TESOURO_DIRETO' || item.asset_type.toUpperCase() === 'TESOURO'
+                  const varColor      = (item.variation_value ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-notification)'
+                  const investedValue = item.invested_value ?? item.quantity * item.average_price
+
+                  return (
+                    <tr
+                      key={`${item.ticker}-${item.id ?? item.ticker}`}
+                      style={{ borderBottom: '1px solid oklch(from var(--color-text) l c h / 0.045)' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'oklch(from var(--color-primary) l c h / 0.03)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = '')}
+                    >
+                      {/* Ativo */}
+                      <td style={{ padding: '0.75rem 1rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <AssetLogo ticker={item.ticker} assetType={item.asset_type} size={28} logoUrl={item.logo_url} />
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...cellText }}>{name}</div>
+                            <div style={{ fontSize: '0.65rem', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...cellFaint }}>
+                              {isTesouro ? item.ticker : item.asset_label}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      {/* Qtd */}
+                      <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
+                        {fmtQty(item.quantity)}
+                      </td>
+                      {/* P. Médio */}
+                      <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
+                        {formatBRL(item.average_price)}
+                      </td>
+                      {/* P. Atual */}
+                      <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                        <span style={hasQuote ? cellText : cellFaint}>{fmtPrice(item.current_price)}</span>
+                      </td>
+                      {/* Total Inv. */}
+                      <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
+                        {formatBRL(investedValue)}
+                      </td>
+                      {/* Valor Atual */}
+                      <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
+                        {hasQuote ? formatBRL(item.current_value) : <span style={cellFaint}>—</span>}
+                      </td>
+                      {/* Resultado */}
+                      <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                        {hasQuote ? (
+                          <div style={{ color: varColor }}>
+                            <div style={{ fontWeight: 600 }}>{formatBRL(item.variation_value ?? 0)}</div>
+                            <div style={{ fontSize: '0.65rem', fontWeight: 500, opacity: 0.8 }}>{formatPercent(item.variation_percent ?? 0)}</div>
+                          </div>
+                        ) : (
+                          <span style={cellFaint}>—</span>
+                        )}
+                      </td>
+                      {/* Ações */}
+                      <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>
+                        <AssetMenu
+                          ticker={item.ticker}
+                          assetLabel={isTesouro ? item.ticker : (item.asset_label ?? item.ticker)}
+                          assetType={item.asset_type}
+                        />
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+        </>
       )}
     </div>
   )
 }
 
-// ── PositionTable — exibe uma ClassTable por grupo ────────────────────────────────────────────────
+// ── PositionTable — exibe uma ClassTable por grupo ─────────────────────────────────────────────────────────
 interface Props { groups: PositionGroup[] }
 
 export default function PositionTable({ groups }: Props) {
