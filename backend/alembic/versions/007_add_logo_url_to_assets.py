@@ -1,14 +1,14 @@
 """add logo_url to assets
 
 Revision ID: 007
-Revises: 006
+Revises: 006_tx_ticker_based
 Create Date: 2026-06-19
 """
 from alembic import op
 import sqlalchemy as sa
 
 revision = '007'
-down_revision = '006'
+down_revision = '006_tx_ticker_based'
 branch_labels = None
 depends_on = None
 
