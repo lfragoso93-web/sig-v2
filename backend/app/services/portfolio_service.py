@@ -26,6 +26,20 @@ _TYPE_LABEL: dict[str, str] = {
     "OUTRO": "Outros",
 }
 
+# Paleta de cores fixa por classe — alinhada com o frontend (PALETTE no AssetDonutChart)
+_TYPE_COLOR: dict[str, str] = {
+    "ACAO": "#6366f1",
+    "FII": "#10b981",
+    "ETF_NACIONAL": "#f59e0b",
+    "ETF_INTERNACIONAL": "#3b82f6",
+    "STOCK": "#ec4899",
+    "BDR": "#8b5cf6",
+    "CRIPTO": "#14b8a6",
+    "RENDA_FIXA": "#f97316",
+    "TESOURO_DIRETO": "#06b6d4",
+    "OUTRO": "#6b7280",
+}
+
 _MARKET_PRICE_TYPES = {
     "ACAO", "FII", "ETF_NACIONAL", "ETF_INTERNACIONAL",
     "STOCK", "BDR", "CRIPTO", "TESOURO_DIRETO",
@@ -276,7 +290,6 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
     tickers = [e["ticker"] for e in enriched]
     logos = await _fetch_logos_batch(db, tickers)
 
-    # Busca metas por classe da carteira
     targets_map = await get_targets_map(db, portfolio_id)
 
     total_current = sum(
@@ -323,13 +336,10 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
     for g in sorted_groups:
         g["total_value"] = round(g["total_value"], 2)
         g["total_invested"] = round(g["total_invested"], 2)
-        # Calcula variation_pct do grupo
         inv = g["total_invested"]
         cur = g["total_value"]
-        # So calcula se algum ativo do grupo tem cotacao
         has_quote = any(p["current_price"] is not None for p in g["positions"])
         g["variation_pct"] = round((cur - inv) / inv * 100, 4) if (has_quote and inv > 0) else None
-        # Injeta meta do usuario, se existir
         g["target_pct"] = targets_map.get(g["positions"][0]["asset_type"]) if g["positions"] else None
 
     return sorted_groups
@@ -355,6 +365,7 @@ async def get_asset_distribution(db: AsyncSession, portfolio_id: int, user_id: i
             "label": _TYPE_LABEL.get(at, at.replace("_", " ").title()),
             "value": round(v, 2),
             "percentage": round(v / total * 100, 4) if total else 0,
+            "color": _TYPE_COLOR.get(at, "#6b7280"),
         }
         for at, v in sorted(by_type.items(), key=lambda x: x[1], reverse=True)
     ]
