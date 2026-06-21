@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, delete
 from fastapi import HTTPException
 from app.models.transaction import Transaction, OperationType
+from app.models.asset import Asset
 from app.schemas.transaction import TransactionCreate
 
 
@@ -99,6 +100,20 @@ def _calc_current_quantity(db: Session, portfolio_id: int, ticker: str) -> float
 # CRUD async
 # ---------------------------------------------------------------------------
 
+async def _upsert_asset(db: AsyncSession, ticker: str, asset_type: str) -> None:
+    """
+    Garante que exista um registro na tabela assets para o ticker.
+    Necessario para que quotes_service._db_get_fresh encontre o Asset
+    e o cache L1 possa ser populado apos a primeira cotacao via L3.
+    Nao sobrescreve last_price nem outros campos ja preenchidos.
+    """
+    result = await db.execute(
+        select(Asset).where(Asset.ticker == ticker)
+    )
+    if result.scalar_one_or_none() is None:
+        db.add(Asset(ticker=ticker, asset_type=asset_type))
+
+
 async def create_transaction(
     db: AsyncSession,
     portfolio_id: int,
@@ -117,6 +132,8 @@ async def create_transaction(
         notes=getattr(data, "notes", None),
     )
     db.add(tx)
+    # Garante registro em assets para habilitar cache L1 de cotacoes
+    await _upsert_asset(db, data.ticker, str(data.asset_type))
     await db.commit()
     await db.refresh(tx)
     return tx
