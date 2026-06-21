@@ -97,8 +97,9 @@ app.include_router(portfolios.router,      prefix=f"{PREFIX}/portfolios",   tags
 app.include_router(transactions.router,    prefix=f"{PREFIX}/portfolios",   tags=["transactions"])
 app.include_router(treasury.router,        prefix=f"{PREFIX}/portfolios",   tags=["treasury"])
 app.include_router(positions.router,       prefix=f"{PREFIX}/positions",    tags=["positions"])
-app.include_router(dividends.router,       prefix=f"{PREFIX}/dividends",    tags=["dividends"])
-app.include_router(proventos.router,       prefix=f"{PREFIX}/proventos",    tags=["proventos"])
+app.include_router(dividends.router,       prefix=f"{PREFIX}/portfolios",   tags=["dividends"])
+# proventos router ja tem prefix="/portfolios/{portfolio_id}/proventos" internamente
+app.include_router(proventos.router,       prefix=f"{PREFIX}",              tags=["proventos"])
 app.include_router(performance.router,     prefix=f"{PREFIX}/performance",  tags=["performance"])
 app.include_router(class_targets.router,   prefix=f"{PREFIX}/portfolios",   tags=["class-targets"])
 
