@@ -31,7 +31,6 @@ class _TickerState:
         self.realized_pnl = Decimal("0")
 
     def buy(self, qty: Decimal, price: Decimal, fees: Decimal = Decimal("0")) -> None:
-        """Acumula quantidade e custo total incluindo taxas (alinhado com portfolio_service)."""
         self.qty += qty
         self.cost += qty * price + fees
 
@@ -47,7 +46,6 @@ class _TickerState:
 
     @property
     def avg_price(self) -> Decimal:
-        """Preco medio ponderado incluindo taxas."""
         return self.cost / self.qty if self.qty > 0 else Decimal("0")
 
 
@@ -80,7 +78,7 @@ async def _build_positions_at(
         price = Decimal(str(tx.price))
         fees = Decimal(str(tx.fees or 0))
         if tx.operation == OperationType.buy:
-            s.buy(qty, price, fees)  # fees incluidas no custo
+            s.buy(qty, price, fees)
         elif tx.operation == OperationType.sell:
             s.sell(qty, price)
 
@@ -128,9 +126,6 @@ async def _calc_totals(
         cost_basis += state.cost
         realized_pnl += state.realized_pnl
 
-    # invested_total: fluxo liquido de caixa incluindo taxas de compra
-    # buy  -> saida de caixa: price*qty + fees
-    # sell -> entrada de caixa: price*qty (fees de venda nao alteram custo de aquisicao)
     invested_result = await db.execute(
         select(
             func.sum(
@@ -323,6 +318,11 @@ async def get_monthly_evolution(
     rows = result.scalars().all()
     return [
         {
+            # Campos alinhados com o frontend (PatrimonioHistoryPoint)
+            "date": r.snapshot_date.strftime("%Y-%m-%d"),
+            "value": float(r.market_value),
+            "invested": float(r.invested_total),
+            # Campos extras mantidos para outros consumidores
             "period": r.snapshot_date.strftime("%Y-%m"),
             "market_value": float(r.market_value),
             "cost_basis": float(r.cost_basis),
