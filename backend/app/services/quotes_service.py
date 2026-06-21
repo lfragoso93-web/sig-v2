@@ -120,6 +120,11 @@ async def _db_set(
     asset_type: AssetType,
     price: float,
 ) -> None:
+    """
+    Upsert de last_price na tabela assets.
+    Cria o registro se ainda nao existir (garante que L1 seja populado
+    mesmo para ativos cadastrados somente via Transaction).
+    """
     asset_type_str = asset_type.value if isinstance(asset_type, AssetType) else str(asset_type)
     result = await db.execute(
         select(Asset).where(
@@ -128,10 +133,27 @@ async def _db_set(
         )
     )
     asset = result.scalar_one_or_none()
+    now = datetime.now(timezone.utc)
+    price_decimal = Decimal(str(round(price, 8)))
+
     if asset:
-        asset.last_price = Decimal(str(round(price, 8)))
-        asset.last_price_updated_at = datetime.now(timezone.utc)
-        await db.flush()
+        asset.last_price = price_decimal
+        asset.last_price_updated_at = now
+    else:
+        # Cria Asset minimo para que proximas chamadas encontrem L1
+        asset = Asset(
+            ticker=ticker,
+            asset_type=asset_type_str,
+            last_price=price_decimal,
+            last_price_updated_at=now,
+        )
+        db.add(asset)
+        logger.info(
+            "[quotes_service] Asset criado automaticamente via upsert: %s (%s)",
+            ticker, asset_type_str,
+        )
+
+    await db.flush()
 
 
 # ---------------------------------------------------------------------------
