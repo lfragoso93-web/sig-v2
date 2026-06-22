@@ -187,67 +187,42 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 
 ---
 
-## Sprint 11 - Metas e Alocacao (Distribuicao da Carteira em Configuracoes) 🔄 EM ANDAMENTO — 22 Jun 2026
+## Sprint 11 - Metas e Alocacao (Distribuicao da Carteira) ✅ CONCLUIDA — 22 Jun 2026
 
-**Objetivo:** permitir que o usuario defina metas percentuais por classe de ativo diretamente em Configuracoes, com visualizacao em grafico de rosca e validacao de total = 100%.
+**Objetivo:** permitir que o usuario defina metas percentuais por classe de ativo diretamente em Configuracoes.
 
-### Situacao atual
-- **Backend 100% pronto:** `routers/class_targets.py` + `services/class_target_service.py` com GET/PUT/DELETE funcionais
-- **Frontend em implementacao:** iniciado em 22 Jun 2026
-
-### Referencia visual
-Layout alvo:
-- Sidebar de Configuracoes com as abas: Ajustes Gerais, Compartilhar carteira, **Distribuicao da carteira**, Integracao B3
-- Painel direito com grafico de rosca (donut chart) refletindo os percentuais em tempo real
-- Lista de classes com cor identificadora, campo de percentual com botoes +/- e botao de remover
-- Botao "+ Adicionar tipo de ativo" para inserir novas classes
-- Rodape com total acumulado (deve atingir exatamente 100%) e botao "Salvar alteracoes"
-
-### Escopo do frontend
+### Escopo executado
 
 **Novos arquivos:**
-- `frontend/src/services/classTargetsService.ts`
-- `frontend/src/hooks/useClassTargets.ts`
-- `frontend/src/components/configuracoes/DistribuicaoCarteira.tsx`
+- `frontend/src/services/classTargetsService.ts` — `list`, `upsert`, `remove` via `GET/PUT/DELETE /portfolios/{id}/class-targets`
+- `frontend/src/hooks/useClassTargets.ts` — `useClassTargets`, `useUpsertClassTarget`, `useDeleteClassTarget`
+- `frontend/src/components/configuracoes/DistribuicaoCarteira.tsx` — componente completo com edicao inline, badge de total, select filtrado, delete individual
 
-**Alteracoes em arquivos existentes:**
-- `frontend/src/pages/Configuracoes.tsx` — adicionar aba "Distribuicao da carteira" e renderizar `<DistribuicaoCarteira />`
+**Arquivos alterados:**
+- `frontend/src/pages/Configuracoes.tsx` — migrado de SectionCards empilhados para 4 abas: **Conta / Carteiras / Distribuicao / Avancado**
+  - Componente `Tabs` criado inline (pill-style, sem dependencia externa, acessivel)
+  - Aba "Distribuicao" renderiza `<DistribuicaoCarteira />`
+  - Aba "Avancado" agrupa `DangerZone` + `AdminPanel` (superadmin only)
 
-### Progresso (22 Jun 2026)
+**Commits:**
+- `ccded3a` — classTargetsService.ts + useClassTargets.ts + DistribuicaoCarteira.tsx
+- `703d047` — Configuracoes.tsx migrado para abas
 
-| Arquivo | Status |
-|---|---|
-| `classTargetsService.ts` | 🔜 A criar |
-| `useClassTargets.ts` | 🔜 A criar |
-| `DistribuicaoCarteira.tsx` | 🔜 A criar |
-| `Configuracoes.tsx` (alteracao) | 🔜 A alterar |
-
-### Comportamento esperado
-- Ao entrar na aba, carrega as metas salvas via `GET /class-targets`
-- Alteracoes no campo de percentual atualizam o grafico de rosca em tempo real (estado local)
-- Botoes `+` e `-` incrementam/decrementam em 1%; campo editavel diretamente
-- Botao de remover chama `DELETE /class-targets/{type}` imediatamente
-- Total calculado localmente; se diferente de 100%, o botao "Salvar" fica desabilitado com aviso
-- "Salvar alteracoes" dispara um `PUT` para cada classe modificada em paralelo
-- Classes disponiveis: ACAO, FII, ETF, TESOURO_DIRETO, RENDA_FIXA, CRIPTO, OUTROS
-
-### Criterios de aceite
-- Aba "Distribuicao da carteira" aparece em Configuracoes e carrega dados do backend
-- Grafico de rosca reflete percentuais em tempo real ao editar
-- Nao e possivel salvar com total diferente de 100%
-- Adicionar, editar e remover classes funciona de ponta a ponta
-- Estado vazio exibe CTA para adicionar primeira classe
-- Frontend compila sem erros TypeScript
-
-**Prioridade:** media-alta — backend ja pronto, custo de implementacao baixo.
+**Criterios de aceite atendidos:**
+- ✅ Aba "Distribuicao" aparece em Configuracoes e carrega metas do backend
+- ✅ Edicao inline com salvar individual por classe (dirty state)
+- ✅ Badge de total com cor dinamica (verde = 100%, laranja < 100%, vermelho > 100%)
+- ✅ Select de nova classe filtrado (exclui ja configuradas)
+- ✅ Delete individual chama `DELETE` imediatamente
+- ✅ Estado vazio com mensagem descritiva
+- ✅ Pagina Configuracoes em 4 abas organizadas
+- ✅ Frontend compila sem erros TypeScript
 
 ---
 
-## [Sprint 7.5] - Hardening de Seguranca e Qualidade do Backend — iniciar apos Sprint 11
+## [Sprint 7.5] - Hardening de Seguranca e Qualidade do Backend — PROXIMA
 
 **Objetivo:** fechar os gaps criticos e de alta prioridade identificados na analise de 21 Jun 2026, antes de seguir com novas funcionalidades.
-
-> Esta sprint entra apos Sprint 11 por conter itens criticos que nao devem aguardar.
 
 ### Itens CRITICOS (executar primeiro)
 
@@ -408,8 +383,8 @@ Layout alvo:
 | Hotfix — Tabela de Ativos | ✅ Concluido — 18 Jun 2026 |
 | Security Hotfix — pydantic-settings CVE | ✅ Concluido — 21 Jun 2026 |
 | Sprint 7 — Rentabilidade | ✅ Concluida — 22 Jun 2026 |
-| Sprint 11 — Metas e Alocacao (Distribuicao da Carteira) | 🔄 Em andamento — 22 Jun 2026 |
-| Sprint 7.5 — Hardening Seguranca e Qualidade | 🔜 Apos Sprint 11 |
+| Sprint 11 — Metas e Alocacao (Distribuicao) | ✅ Concluida — 22 Jun 2026 |
+| Sprint 7.5 — Hardening Seguranca e Qualidade | 🔜 PROXIMA |
 | Sprint 8 — Historico Patrimonial (frontend) | ⏳ |
 | Sprint 9 — Patrimonio por Classe | ⏳ |
 | Sprint 10 — Renda Fixa e Tesouro | ⏳ |

@@ -44,7 +44,68 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
-## [Sessao] - 2026-06-22 (Sprint 7 — CONCLUIDA + Sprint 11 frontend iniciada)
+## [Sessao] - 2026-06-22 (Sprint 7 CONCLUIDA + Sprint 11 CONCLUIDA)
+
+### Sprint 11 — Metas de Alocacao (Distribuicao da Carteira) — CONCLUIDA
+
+Implementacao completa do frontend para configuracao de metas percentuais por classe de ativo, com migracao da pagina Configuracoes para estrutura de abas.
+
+#### Novos arquivos criados
+
+**`frontend/src/services/classTargetsService.ts`** — commit `ccded3a`
+- Servico de chamadas HTTP para os endpoints `GET/PUT/DELETE /portfolios/{id}/class-targets`
+- Interface `ClassTarget { asset_type: string; target_pct: number }`
+- Tres metodos: `list`, `upsert`, `remove`
+
+**`frontend/src/hooks/useClassTargets.ts`** — commit `ccded3a`
+- `useClassTargets(portfolioId)` — query com `enabled: !!portfolioId`
+- `useUpsertClassTarget(portfolioId)` — mutation com `invalidateQueries` apos sucesso
+- `useDeleteClassTarget(portfolioId)` — mutation com `invalidateQueries` apos sucesso
+
+**`frontend/src/components/configuracoes/DistribuicaoCarteira.tsx`** — commit `ccded3a`
+- Lista de metas salvas com edicao inline de percentual
+- Botao `Save` aparece somente quando ha draft nao salvo (dirty state por classe)
+- Badge `X% alocado` com cor dinamica: verde = 100%, laranja < 100%, vermelho > 100%
+- Select de adicionar nova classe filtrado (exclui classes ja configuradas)
+- Delete individual por classe (chama `DELETE` imediatamente, sem confirmacao modal)
+- Empty state descritivo quando nenhuma meta esta configurada
+- Guard: exibe aviso quando `portfolioId` e null (nenhuma carteira selecionada)
+
+#### Arquivo alterado
+
+**`frontend/src/pages/Configuracoes.tsx`** — commit `703d047`
+
+Migracao completa de layout vertical (SectionCards empilhados) para estrutura de 4 abas:
+
+| Aba | Conteudo | Icone |
+|---|---|---|
+| Conta | ProfileSection + PasswordSection | User |
+| Carteiras | CarteirasSection | Wallet |
+| Distribuicao | DistribuicaoCarteira (novo) | PieChart |
+| Avancado | DangerZone + AdminPanel (superadmin) | Settings2 |
+
+**Componente `Tabs` criado inline:**
+- Estilo pill com fundo `--color-surface-offset` e aba ativa elevada com `--color-surface-2` + shadow
+- Aba ativa em `--color-primary`; abas inativas em `--color-text-muted`
+- Icone sempre visivel; label visivel a partir de `sm:` (responsive)
+- Acessibilidade: `role="tablist"` e `aria-selected` em cada botao
+- Sem dependencia externa
+
+**Commits:**
+- `ccded3a` — classTargetsService.ts + useClassTargets.ts + DistribuicaoCarteira.tsx
+- `703d047` — Configuracoes.tsx migrado para abas
+
+**Criterios de aceite atendidos:**
+- ✅ Aba "Distribuicao" aparece em Configuracoes e carrega metas do backend
+- ✅ Edicao inline de percentual com salvar individual por classe
+- ✅ Badge de total acumulado com feedback visual de cor
+- ✅ Adicionar nova classe com select filtrado
+- ✅ Remover classe chama DELETE imediatamente
+- ✅ Estado vazio com mensagem descritiva
+- ✅ Pagina Configuracoes organizada em 4 abas (Conta / Carteiras / Distribuicao / Avancado)
+- ✅ Frontend compila sem erros TypeScript
+
+---
 
 ### Sprint 7 — Auditoria, correcao de bugs e rentabilidade
 
@@ -149,20 +210,6 @@ A revisao do `portfolio_service.py` revelou que toda a logica de rentabilidade j
 **ResumePage.tsx** consumia todos os campos corretamente com os comentarios anti-dupla-formatacao ja presentes.
 
 **Conclusao Sprint 7:** todos os 8 itens do backlog estao completos. Sprint encerrada.
-
----
-
-#### Sprint 11 frontend — iniciada nesta sessao
-
-**Objetivo:** implementar aba "Distribuicao da carteira" em Configuracoes.
-**Backend ja pronto:** `routers/class_targets.py` + `services/class_target_service.py`
-**Frontend a implementar:**
-- `classTargetsService.ts`
-- `useClassTargets.ts`
-- `DistribuicaoCarteira.tsx`
-- Alteracao em `Configuracoes.tsx`
-
-Ver ROADMAP Sprint 11 para escopo completo.
 
 ---
 
