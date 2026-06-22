@@ -24,7 +24,7 @@ from decimal import Decimal
 from typing import Optional
 
 import yfinance as yf
-from sqlalchemy import select, cast, String
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.asset_types import BR_TYPES, INTL_TYPES, NO_QUOTE_TYPES, TREASURY_TYPES, yf_ticker
@@ -95,15 +95,16 @@ def _mem_set(ticker: str, price: float) -> None:
 async def _db_get_fresh(
     db: AsyncSession,
     ticker: str,
-    asset_type: AssetType,
+    asset_type: AssetType,  # mantido na assinatura para compatibilidade, mas nao usado no filtro
 ) -> Optional[float]:
-    asset_type_str = asset_type.value if isinstance(asset_type, AssetType) else str(asset_type)
+    """
+    Busca last_price do Asset pelo ticker apenas.
+    Asset.ticker e unique=True, entao a busca por ticker e suficiente e evita
+    miss por divergencia de asset_type entre Transaction e a tabela assets.
+    """
     result = await db.execute(
         select(Asset.last_price, Asset.last_price_updated_at)
-        .where(
-            Asset.ticker == ticker,
-            cast(Asset.asset_type, String) == asset_type_str,
-        )
+        .where(Asset.ticker == ticker)
     )
     row = result.first()
     if not row or row.last_price is None or row.last_price_updated_at is None:
@@ -122,19 +123,17 @@ async def _db_set(
 ) -> None:
     """
     Upsert de last_price na tabela assets.
+    Busca por ticker apenas (unique=True) para evitar duplicatas.
     Cria o registro se ainda nao existir (garante que L1 seja populado
     mesmo para ativos cadastrados somente via Transaction).
     """
-    asset_type_str = asset_type.value if isinstance(asset_type, AssetType) else str(asset_type)
     result = await db.execute(
-        select(Asset).where(
-            Asset.ticker == ticker,
-            cast(Asset.asset_type, String) == asset_type_str,
-        )
+        select(Asset).where(Asset.ticker == ticker)
     )
     asset = result.scalar_one_or_none()
     now = datetime.now(timezone.utc)
     price_decimal = Decimal(str(round(price, 8)))
+    asset_type_str = asset_type.value if isinstance(asset_type, AssetType) else str(asset_type)
 
     if asset:
         asset.last_price = price_decimal
@@ -286,6 +285,10 @@ async def get_prices(
         try:
             asset_type = AssetType(raw_type) if isinstance(raw_type, str) else raw_type
         except ValueError:
+            logger.warning(
+                "[quotes_service] asset_type desconhecido para %s (%r) — ignorando cotacao",
+                ticker, raw_type,
+            )
             asset_type = None
 
         if asset_type in NO_QUOTE_TYPES:
