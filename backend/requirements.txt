@@ -11,7 +11,9 @@ psycopg2-binary==2.9.12
 asyncpg==0.31.0
 pydantic==2.13.4
 pydantic[email]==2.13.4
-pydantic-settings==2.14.1
+# pydantic-settings 2.14.2 - fix GHSA-4xgf-cpjx-pc3j
+# NestedSecretsSettingsSource seguia symlinks fora de secrets_dir (leitura arbitraria de arquivos)
+pydantic-settings==2.14.2
 alembic==1.18.4
 httpx==0.27.2
 yfinance==0.2.40
@@ -30,5 +32,5 @@ python-multipart==0.0.32
 apscheduler==3.10.4
 email-validator==2.2.0
 redis==5.2.1
-# reportlab: geração de PDF no módulo IRPF
+# reportlab: geracao de PDF no modulo IRPF
 reportlab==4.2.5
