@@ -46,6 +46,25 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Sessao] - 2026-06-22 (Sprint 7 CONCLUIDA + Sprint 11 CONCLUIDA)
 
+### Hotfix — Build Render: MISSING_EXPORT useSetClassTarget
+
+**Arquivo:** `frontend/src/components/resume/PositionTable.tsx`
+
+**Problema:** `PositionTable.tsx` importava `useSetClassTarget` — nome que nunca existiu em `useClassTargets.ts`. O hook correto exportado e `useUpsertClassTarget`. O erro passou pelo `tsc` local (possivel cache) mas foi capturado pelo Rolldown/Vite no build de producao do Render:
+
+```
+[MISSING_EXPORT] "useSetClassTarget" is not exported by "src/hooks/useClassTargets.ts"
+   src/components/resume/PositionTable.tsx:8:10
+```
+
+**Correcao:**
+- Linha 8 (import): `useSetClassTarget` → `useUpsertClassTarget`
+- Uso no `TargetModal`: `const { mutate, isPending } = useSetClassTarget(portfolioId)` → `useUpsertClassTarget(portfolioId)`
+
+**Commit:** `d66bb70` — deploy realizado com sucesso apos o fix.
+
+---
+
 ### Sprint 11 — Metas de Alocacao (Distribuicao da Carteira) — CONCLUIDA
 
 Implementacao completa do frontend para configuracao de metas percentuais por classe de ativo, com migracao da pagina Configuracoes para estrutura de abas.
