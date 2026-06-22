@@ -1,6 +1,6 @@
 import numeral from 'numeral'
 
-// ── Moeda ────────────────────────────────────────────────────────────────────────────
+// -- Moeda -------------------------------------------------------------------
 const brFormatter = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
   currency: 'BRL',
@@ -28,10 +28,10 @@ export function formatCurrency(value: number, short?: boolean): string {
   return short ? brFormatterShort.format(value) : brFormatter.format(value)
 }
 
-/** Alias BRL — usado em PositionsTable e outros componentes */
+/** Alias BRL -- usado em PositionsTable e outros componentes */
 export const formatBRL = formatCurrency
 
-/** Formata valor em USD com símbolo correto: US$ 1,234.56 */
+/** Formata valor em USD com simbolo correto: US$ 1,234.56 */
 export function formatUSD(value: number): string {
   if (!Number.isFinite(value)) return usdFormatter.format(0)
   return usdFormatter.format(value)
@@ -39,29 +39,29 @@ export function formatUSD(value: number): string {
 
 /**
  * Escolhe o formatador correto conforme a moeda do ativo.
- * Ativos USD (STOCK, ETF_INTERNACIONAL) exibem preços unitários em USD.
+ * Ativos USD (STOCK, ETF_INTERNACIONAL) exibem precos unitarios em USD.
  * Todos os demais usam BRL.
  */
 export function fmtMoney(value: number | null | undefined, currency?: string | null): string {
-  if (value === null || value === undefined || !Number.isFinite(value)) return '—'
+  if (value === null || value === undefined || !Number.isFinite(value)) return '--'
   if (currency === 'USD') return formatUSD(value)
   return formatBRL(value)
 }
 
-// ── Percentual ──────────────────────────────────────────────────────────────────────
+// -- Percentual --------------------------------------------------------------
 export function formatPercent(value: number): string {
   return numeral(value / 100).format('0.00%')
 }
 
-/** Alias usado em vários componentes */
+/** Alias usado em varios componentes */
 export const formatPct = formatPercent
 
-// ── Quantidade ──────────────────────────────────────────────────────────────────────────
+// -- Quantidade --------------------------------------------------------------
 export function formatQuantity(value: number): string {
   return numeral(value).format('0,0.####')
 }
 
-// ── Data ────────────────────────────────────────────────────────────────────────────────
+// -- Data --------------------------------------------------------------------
 export function formatDate(dateStr: string): string {
   if (!dateStr) return '-'
   const d = new Date(dateStr)
@@ -74,7 +74,7 @@ export function formatDateShort(dateStr: string): string {
   return d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })
 }
 
-// ── Classe de cor por sinal ───────────────────────────────────────────────────────────────────
+// -- Classe de cor por sinal -------------------------------------------------
 const numFmt = numeral
 void numFmt
 export function signClass(value: number): string {
@@ -83,7 +83,7 @@ export function signClass(value: number): string {
   return 'text-gray-400'
 }
 
-// ── Badge por tipo de ativo ───────────────────────────────────────────────────────────────────
+// -- Badge por tipo de ativo -------------------------------------------------
 export function assetBadgeClass(assetType: string): string {
   if (!assetType) return 'badge-default'
   const map: Record<string, string> = {
