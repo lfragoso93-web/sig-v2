@@ -44,6 +44,109 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [Sessao] - 2026-06-22 (cont.) — Sprint 7.5 parcial + Bugfixes
+
+### Sprint 7.5 — Hardening de Seguranca (C1–C3 concluidos)
+
+---
+
+#### C1 — Traceback exposto em producao removido
+
+**Arquivo:** `backend/app/main.py`
+
+**Problema:** o `global_exception_handler` retornava o stack trace completo na resposta JSON em qualquer ambiente, expondo detalhes internos do servidor para o cliente.
+
+**Correcao:** handler reescrito para logar o traceback internamente via `logging.error` e retornar apenas mensagem generica ao cliente. Em ambiente `DEBUG=true` o detalhe continua visivel.
+
+---
+
+#### C2 — `debug.py` — audit log + rate limiting
+
+**Arquivo:** `backend/app/routers/debug.py`
+
+**Problema:** endpoints de reset de senha e criacao de usuario com qualquer role estavam ativos sem controle, sem log e sem throttling.
+
+**Correcao:**
+- `_audit_log()` estruturado adicionado: timestamp, endpoint, IP, user-agent, resultado
+- Rate limit de 5 req/min por IP aplicado via `slowapi` em todos os 3 endpoints
+- Todos os endpoints recebem `Request` para capturar IP + UA no audit
+- Variavel `DEBUG_RATE_LIMIT` no `.env` permite ajustar o limite (default `5/minute`)
+- Processo de desativacao documentado no cabecalho do arquivo
+
+**Commit:** `59ba7ff`
+
+---
+
+#### C3 — Refresh token blacklist + endpoints `/refresh` e `/logout`
+
+**Arquivos:**
+- `backend/app/core/token_blacklist.py` — novo
+- `backend/app/core/security.py` — `jti` adicionado ao payload
+- `backend/app/routers/auth.py` — `/refresh` e `/logout` implementados
+- `backend/app/schemas/auth.py` — `RefreshRequest` adicionado
+
+**Problema:** logout nao invalidava o refresh token; token permanecia valido ate expirar (7 dias).
+
+**Correcao:**
+- `token_blacklist.py`: blacklist em memoria com TTL automatico (expurga tokens vencidos a cada insercao, sem dependencia de Redis); thread-safe via `asyncio.Lock`
+- `security.py`: `jti` (UUID) adicionado no payload de refresh tokens
+- `POST /auth/refresh`: valida `jti` + blacklist, emite novo par access+refresh
+- `POST /auth/logout`: invalida refresh token via `jti` na blacklist
+- Fix adicional: `/refresh` corrigido para usar `get_user_by_id` em vez de `get_user_by_email` (commit `c9e5b96`)
+- Fix adicional: `MessageResponse` restaurado em `auth.py` apos sobrescrita no C3 (commit `71084de`)
+
+**Commits:** `9ff0e40` + `c9e5b96` + `71084de`
+
+---
+
+### Bugfixes — 22 Jun 2026
+
+---
+
+#### B1 — Modal de lancamento de ativos: abas ocultas em desktop (Renda Fixa, Cripto)
+
+**Arquivo:** `frontend/src/components/modals/TransactionModal.tsx` (ou equivalente com as abas de tipo de ativo)
+
+**Problema:** o container de abas usava `overflow: hidden` + `flexShrink: 0` sem `flexWrap`. Com 8 abas e `maxWidth: 500px`, as ultimas abas (Renda Fixa, Cripto) transbordavam para fora da area visivel no scroll horizontal sem o usuario perceber, tornando impossivel selecionar esses tipos.
+
+**Correcao:** adicionado `flexWrap: 'wrap'` e `rowGap: 4` no container de abas para que elas quebrem em ate 2 linhas em vez de desaparecer.
+
+**Commit:** `ffeb622`
+
+---
+
+#### B2 — PositionTable: Stocks e ETF INT exibiam valores com simbolo R$ sem conversao
+
+**Arquivo:** `frontend/src/components/resume/PositionTable.tsx`
+
+**Problema:** `formatBRL` era chamado diretamente em todos os campos de preco e valor, independente da `currency` do ativo. Stocks e ETF Internacionais (ativos USD) apareciam com `R$` e com o valor bruto em USD sem conversao para BRL.
+
+**Comportamento correto definido:**
+- Colunas de preco unitario (P. Medio, P. Atual) e valores individuais: exibir na moeda original do ativo (`USD` → `$`, `BRL` → `R$`)
+- Header do grupo (Investido / Atual): exibir em BRL, pois o backend ja converte via `fx_rate` nos campos `total_invested` / `total_value` do `PositionGroup`
+
+**Correcao:**
+- `fmtMoney(value, currency)` adicionado em `format.ts`: chama `formatUSD` se `currency === 'USD'`, senao `formatBRL`
+- `formatUSD` implementado com `Intl.NumberFormat('en-US', { currency: 'USD' })`
+- `PositionTable` e `PositionCard` (mobile) atualizados para usar `fmtMoney(value, position.currency)` nas colunas unitarias
+- Totais do grupo (`total_invested`, `total_value`) continuam com `formatBRL`
+
+**Commit:** `2b5542b`
+
+---
+
+#### B3 — Transacoes.tsx: preco e total de ativos USD exibidos com R$
+
+**Arquivo:** `frontend/src/pages/Transacoes.tsx`
+
+**Problema:** `TransactionRow` (desktop) e `TransactionCard` (mobile) chamavam `formatBRL(t.price)` e `formatBRL(total)` sem verificar `t.currency`. Stocks comprados em USD apareciam com `R$`.
+
+**Correcao:** substituido `formatBRL(t.price)` por `fmtMoney(t.price, t.currency)` e `formatBRL(total)` por `fmtMoney(total, t.currency)` em ambos os componentes. Totalizadores do rodape (Compras / Vendas) permanecem em BRL pois sao agregados da pagina atual.
+
+**Commit:** `2b5542b` (mesmo commit do B2)
+
+---
+
 ## [Sessao] - 2026-06-22 (Sprint 7 CONCLUIDA + Sprint 11 CONCLUIDA)
 
 ### Hotfix — Build Render: MISSING_EXPORT useSetClassTarget
