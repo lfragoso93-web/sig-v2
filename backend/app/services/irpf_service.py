@@ -18,12 +18,10 @@ Aliquotas (vigentes 2024-base):
   Isencao acoes swing:     vendas mensais <= R$20.000
   JCP retencao:            15%
 """
-import json
 import logging
 from collections import defaultdict
 from datetime import date, datetime, timezone
 from io import BytesIO
-from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,7 +30,6 @@ from app.models.irpf import IRPFReport
 from app.models.transaction import Transaction, OperationType
 from app.models.dividend import Dividend, DividendStatus
 from app.models.asset_dividend import AssetDividend
-from app.models.portfolio import Portfolio
 from app.schemas.irpf import (
     BemDireito,
     VendaMensal,
@@ -51,7 +48,7 @@ logger = logging.getLogger(__name__)
 
 ALIQ_SWING = 0.15
 ALIQ_DAY_TRADE = 0.20
-ISENCO_ACOES_MENSAL = 20_000.0
+ISENCAO_ACOES_MENSAL = 20_000.0
 
 # Codigos IRPF por tipo de ativo
 _CODIGO_IRPF: dict[str, tuple[str, str]] = {
@@ -103,8 +100,6 @@ async def _get_usd_brl_rate(tx_date: date) -> float:
     try:
         from app.services.price_history_service import get_price_at_date
         from app.models.asset import AssetType
-        # USDBRL=X e o ticker do yfinance para dolar comercial
-        # Usamos None como db pois nao temos sessao aqui; se falhar usa fallback
         rate = await get_price_at_date(None, "USDBRL=X", AssetType.ETF_INTERNACIONAL, str(tx_date))
         if rate and rate > 0:
             return rate
@@ -137,8 +132,6 @@ async def calc_bens_direitos(
     )
     txs = result.scalars().all()
 
-    # Calcula custo medio por ticker usando FIFO simplificado (custo medio)
-    # estrutura: {ticker: {"qty": float, "cost": float, "asset_type": str, "currency": str}}
     positions: dict[str, dict] = {}
 
     for tx in txs:
@@ -149,9 +142,6 @@ async def calc_bens_direitos(
 
         price_brl = tx.price
         if currency != "BRL" and at in _INTL_TYPES:
-            # Para internacionais: preco ja deve estar em USD; multiplica pela taxa do dia
-            # Se ja vier em BRL (usuario digitou convertido), mantemos
-            # Convencao: se currency == "USD", converte
             rate = await _get_usd_brl_rate(tx.date)
             price_brl = tx.price * rate
 
@@ -211,7 +201,6 @@ async def calc_ganhos_capital(
     start = date(year, 1, 1)
     end = date(year, 12, 31)
 
-    # Todas as transacoes do ano para detectar day trade
     all_tx_result = await db.execute(
         select(Transaction).where(
             Transaction.portfolio_id == portfolio_id,
@@ -222,7 +211,6 @@ async def calc_ganhos_capital(
     all_txs = all_tx_result.scalars().all()
     day_trade_keys = _detect_day_trades(all_txs)
 
-    # Custo medio acumulado ate inicio do ano (posicoes abertas)
     prev_result = await db.execute(
         select(Transaction).where(
             Transaction.portfolio_id == portfolio_id,
@@ -253,7 +241,6 @@ async def calc_ganhos_capital(
             avg_costs[t]["qty"] = max(0.0, avg_costs[t]["qty"] - tx.quantity)
             avg_costs[t]["cost"] = avg_costs[t]["qty"] * avg
 
-    # Agrupa vendas por mes
     vendas_por_mes: dict[str, list] = defaultdict(list)
     compras_no_ano: dict[str, dict] = {}
 
@@ -297,14 +284,12 @@ async def calc_ganhos_capital(
             avg_costs[t]["qty"] = max(0.0, avg_costs[t]["qty"] - tx.quantity)
             avg_costs[t]["cost"] = avg_costs[t]["qty"] * avg
 
-    # Consolida por mes com regras fiscais
     prejuizo_acumulado = 0.0
     resultado: list[GanhoCapitalMensal] = []
 
     for mes in sorted(vendas_por_mes.keys()):
         vendas = vendas_por_mes[mes]
 
-        # Separa swing e day trade
         swing_acoes = [v for v in vendas if not v["is_day_trade"] and v["asset_type"] in _ACAO_TYPES]
         swing_outros = [v for v in vendas if not v["is_day_trade"] and v["asset_type"] not in _ACAO_TYPES]
         day_trades = [v for v in vendas if v["is_day_trade"]]
@@ -317,10 +302,8 @@ async def calc_ganhos_capital(
         lucro_swing = lucro_swing_acoes + lucro_swing_outros
         lucro_dt = sum(v["lucro_bruto"] for v in day_trades)
 
-        # Aplica isencao apenas em acoes com vendas <= 20k
         base_swing = max(0.0, lucro_swing - isencao)
 
-        # Compensa prejuizo acumulado
         if base_swing > 0 and prejuizo_acumulado < 0:
             compensacao = min(base_swing, abs(prejuizo_acumulado))
             base_swing -= compensacao
@@ -337,9 +320,8 @@ async def calc_ganhos_capital(
 
         total_vendas = sum(v["total_venda_brl"] for v in vendas)
         total_custo = sum(v["custo_aquisicao"] * v["quantidade"] for v in vendas)
-        ir_retido = 0.0  # FIIs tem 0.5% retido na fonte no momento da venda
+        ir_retido = 0.0
 
-        # Flag isencao nas vendas de acoes quando elegivel
         vendas_out = []
         for v in vendas:
             eh_isento = (
@@ -397,7 +379,6 @@ async def calc_rendimentos(
     start = date(year, 1, 1)
     end = date(year, 12, 31)
 
-    # Busca dividendos recebidos no ano (payment_date dentro do ano)
     div_result = await db.execute(
         select(Dividend, AssetDividend)
         .join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
@@ -502,7 +483,6 @@ async def generate_irpf_report(
         resumo=resumo,
     )
 
-    # Persiste / atualiza no banco
     existing = await db.execute(
         select(IRPFReport).where(
             IRPFReport.portfolio_id == portfolio_id,
@@ -586,12 +566,10 @@ def generate_irpf_pdf(report: IRPFReportOut) -> bytes:
 
     story = []
 
-    # Cabecalho
     story.append(Paragraph(f"Relatorio IRPF {report.ano}", title_style))
     story.append(Paragraph(f"Carteira ID: {report.portfolio_id} | Gerado em: {date.today().strftime('%d/%m/%Y')}", normal))
     story.append(Spacer(1, 0.4 * cm))
 
-    # Resumo
     story.append(Paragraph("Resumo Anual", h2_style))
     r = report.resumo
     resumo_data = [
@@ -612,7 +590,6 @@ def generate_irpf_pdf(report: IRPFReportOut) -> bytes:
     story.append(_table(resumo_data, col_widths=[11 * cm, 5 * cm]))
     story.append(PageBreak())
 
-    # Bens e Direitos
     story.append(Paragraph("Bens e Direitos (posicao em 31/12)", h2_style))
     if report.bens_direitos:
         bd_data = [["Codigo", "Ticker", "Tipo", "Qtd", "Custo Medio", "Custo Total"]]
@@ -624,7 +601,6 @@ def generate_irpf_pdf(report: IRPFReportOut) -> bytes:
         story.append(Paragraph("Nenhuma posicao encontrada.", normal))
     story.append(PageBreak())
 
-    # Ganhos de Capital
     story.append(Paragraph("Ganhos de Capital Mensais", h2_style))
     for gm in report.ganhos_mensais:
         story.append(Paragraph(f"Mes: {gm.mes}", styles["Heading3"]))
@@ -639,7 +615,6 @@ def generate_irpf_pdf(report: IRPFReportOut) -> bytes:
         story.append(Paragraph("Nenhuma venda no ano.", normal))
     story.append(PageBreak())
 
-    # Rendimentos Isentos
     story.append(Paragraph("Rendimentos Isentos - Dividendos", h2_style))
     if report.dividendos:
         div_data = [["Ticker", "Tipo", "Total Recebido", "Qtd Pagamentos"]]
@@ -650,7 +625,6 @@ def generate_irpf_pdf(report: IRPFReportOut) -> bytes:
         story.append(Paragraph("Nenhum dividendo recebido no ano.", normal))
     story.append(Spacer(1, 0.5 * cm))
 
-    # JCP
     story.append(Paragraph("JCP - Juros sobre Capital Proprio", h2_style))
     if report.jcp:
         jcp_data = [["Ticker", "Total Bruto", "IR Retido (15%)", "Total Liquido"]]

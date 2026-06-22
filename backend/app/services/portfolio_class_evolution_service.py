@@ -8,7 +8,7 @@ import logging
 from datetime import date, timedelta
 from decimal import Decimal
 
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset, AssetType
@@ -35,7 +35,6 @@ async def get_monthly_evolution_by_class(
     today = date.today()
     since = today - timedelta(days=months * 31)
 
-    # Coleta todos os tickers da carteira que pertencem a esta classe
     result = await db.execute(
         select(Transaction.ticker)
         .join(Asset, Asset.ticker == Transaction.ticker)
@@ -49,7 +48,6 @@ async def get_monthly_evolution_by_class(
     if not tickers:
         return []
 
-    # Gera lista de meses a processar
     months_to_process: list[tuple[int, int]] = []
     cursor = date(since.year, since.month, 1)
     while cursor <= today:
@@ -64,12 +62,10 @@ async def get_monthly_evolution_by_class(
     for year, month in months_to_process:
         target = min(_month_end(year, month), today)
 
-        # Recalcula posicoes no fim do mes para cada ticker da classe
         market_val = Decimal("0")
         invested_val = Decimal("0")
 
         for ticker in tickers:
-            # Qty e custo acumulado ate target
             txs_result = await db.execute(
                 select(Transaction)
                 .where(
@@ -102,7 +98,6 @@ async def get_monthly_evolution_by_class(
             if qty <= 0:
                 continue
 
-            # Busca cotacao
             asset_result = await db.execute(select(Asset).where(Asset.ticker == ticker))
             asset = asset_result.scalar_one_or_none()
             a_type = AssetType(asset_type) if asset is None else asset.asset_type

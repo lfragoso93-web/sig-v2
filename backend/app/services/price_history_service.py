@@ -17,7 +17,7 @@ Convencao de timezone:
 import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone, date as DateType
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional
 
@@ -33,12 +33,10 @@ from app.models.asset_price import AssetPrice
 
 logger = logging.getLogger(__name__)
 
-# Executor global para chamadas yfinance (nao recria a cada request)
 _YF_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="yfinance_hist")
 
 PRICE_TTL_SECONDS = 900  # 15 minutos
 
-# Horario de fechamento BR em UTC (18:00 BRT = 21:00 UTC)
 _BR_CLOSE_HOUR_UTC = 21
 
 
@@ -52,8 +50,7 @@ def _parse_date_utc(date_str: str) -> datetime:
     Aceita: "YYYY-MM-DD", "YYYY-MM-DDTHH:MM:SS", "YYYY-MM-DDTHH:MM:SS+HH:MM".
     Sempre retorna datetime aware em UTC.
     """
-    # Extrai apenas a parte da data para evitar ambiguidade de offset
-    date_part = date_str[:10]  # "YYYY-MM-DD"
+    date_part = date_str[:10]
     return datetime(
         int(date_part[0:4]),
         int(date_part[5:7]),
@@ -163,8 +160,6 @@ async def persist_daily_prices(
         source = "yfinance"
 
     else:
-        # Snapshot pontual via BRAPI para tipos sem historico (ex: CRIPTO sem BRAPI_HISTORY)
-        # Timestamp usa 21:00 UTC = 18:00 BRT (horario de fechamento BR)
         from app.integrations.brapi import fetch_quotes as brapi_fetch_quotes
         result = await brapi_fetch_quotes([ticker])
         price = result.get(ticker)
@@ -180,7 +175,6 @@ async def persist_daily_prices(
 
     inserted = 0
     for ts, close in rows:
-        # Garante que todos os timestamps persistidos sao UTC-aware
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=timezone.utc)
         await _upsert_price(db, asset.id, ts, close, source)
@@ -205,15 +199,10 @@ async def get_price_at_date(
 ) -> Optional[float]:
     """
     Retorna preco de fechamento de um ativo em ou antes de target_date.
-
-    target_date aceita "YYYY-MM-DD" ou ISO com offset — _parse_date_utc()
-    normaliza para UTC midnight antes de qualquer comparacao.
-    Janela de busca: [ref - 5 dias, ref + 23:59:59] para cobrir fechamentos
-    em qualquer fuso sem vazar para o dia seguinte.
     """
-    ref = _parse_date_utc(target_date)                        # UTC midnight do dia alvo
+    ref = _parse_date_utc(target_date)
     since = ref - timedelta(days=5)
-    until = ref + timedelta(hours=23, minutes=59, seconds=59)  # fim do dia alvo em UTC
+    until = ref + timedelta(hours=23, minutes=59, seconds=59)
 
     asset_result = await db.execute(
         select(Asset).where(Asset.ticker == ticker, Asset.asset_type == asset_type)

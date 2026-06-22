@@ -24,8 +24,6 @@ from app.schemas.irpf import (
     IRPFReportOut,
     BemDireito,
     GanhoCapitalMensal,
-    RendimentoIsento,
-    JCPItem,
 )
 from app.services.irpf_service import (
     generate_irpf_report,
