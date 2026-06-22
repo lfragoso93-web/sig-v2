@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 
 _TYPE_LABEL: dict[str, str] = {
     "ACAO": "Ações",
-    "ACAO_NACIONAL": "Ações",
     "FII": "FIIs",
     "ETF_NACIONAL": "ETFs Nacionais",
     "ETF_INTERNACIONAL": "ETFs Internacionais",
@@ -30,7 +29,6 @@ _TYPE_LABEL: dict[str, str] = {
 # Paleta de cores fixa por classe — alinhada com o frontend (PALETTE no AssetDonutChart)
 _TYPE_COLOR: dict[str, str] = {
     "ACAO": "#6366f1",
-    "ACAO_NACIONAL": "#6366f1",
     "FII": "#10b981",
     "ETF_NACIONAL": "#f59e0b",
     "ETF_INTERNACIONAL": "#3b82f6",
@@ -43,42 +41,38 @@ _TYPE_COLOR: dict[str, str] = {
 }
 
 _MARKET_PRICE_TYPES = {
-    "ACAO", "ACAO_NACIONAL", "FII", "ETF_NACIONAL", "ETF_INTERNACIONAL",
+    "ACAO", "FII", "ETF_NACIONAL", "ETF_INTERNACIONAL",
     "STOCK", "BDR", "CRIPTO", "TESOURO_DIRETO",
 }
 
-# Mapa de aliases para o tipo canônico
+# Mapa de normalização para o valor canônico do enum AssetType.
+# Apenas aliases legítimos de entrada externa (ex: dados históricos antigos).
+# NUNCA mapear para valores fora do enum AssetType (ex: ACAO_NACIONAL não existe no enum).
 _TYPE_ALIASES: dict[str, str] = {
-    "ACAO": "ACAO_NACIONAL",
-    "ACOES": "ACAO_NACIONAL",
-    "ACAO_NACIONAL": "ACAO_NACIONAL",
+    "ACAO_NACIONAL": "ACAO",   # alias legado → valor correto do enum
+    "ACOES": "ACAO",
     "ETF_INT": "ETF_INTERNACIONAL",
-    "ETF_INTERNACIONAL": "ETF_INTERNACIONAL",
     "ETF": "ETF_NACIONAL",
-    "ETF_NACIONAL": "ETF_NACIONAL",
     "TESOURO": "TESOURO_DIRETO",
-    "TESOURO_DIRETO": "TESOURO_DIRETO",
     "STOCKS": "STOCK",
-    "STOCK": "STOCK",
     "CRIPTOMOEDA": "CRIPTO",
-    "CRIPTO": "CRIPTO",
-    "FII": "FII",
-    "BDR": "BDR",
-    "RENDA_FIXA": "RENDA_FIXA",
-    "OUTRO": "OUTRO",
 }
 
 
 def normalize_type(asset_type) -> str:
     """
-    Normaliza aliases de asset_type para o valor canônico usado no sistema.
+    Normaliza aliases de asset_type para o valor canônico do enum AssetType.
+
+    Garante que o valor retornado seja sempre reconhecido por AssetType(value),
+    evitando ValueError silencioso no quotes_service que causa L1 ser ignorado.
 
     Exemplos:
-        "ACAO"     -> "ACAO_NACIONAL"
-        "ETF_INT"  -> "ETF_INTERNACIONAL"
-        "TESOURO"  -> "TESOURO_DIRETO"
-        "STOCKS"   -> "STOCK"
-        None       -> ""
+        "ACAO_NACIONAL" -> "ACAO"
+        "ETF_INT"       -> "ETF_INTERNACIONAL"
+        "TESOURO"       -> "TESOURO_DIRETO"
+        "STOCKS"        -> "STOCK"
+        "FII"           -> "FII"  (sem alias, retorna como está)
+        None            -> ""
     """
     if asset_type is None:
         return ""
@@ -87,9 +81,8 @@ def normalize_type(asset_type) -> str:
 
 
 def _asset_type_str(value) -> str:
-    if hasattr(value, 'value'):
-        return str(value.value)
-    return str(value or "").upper()
+    raw = value.value if hasattr(value, "value") else str(value or "").upper()
+    return normalize_type(raw)
 
 
 def _is_buy(op) -> bool:
