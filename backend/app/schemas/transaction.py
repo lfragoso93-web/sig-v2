@@ -1,5 +1,5 @@
 from pydantic import BaseModel, field_validator
-from typing import Optional
+from typing import Optional, List
 from datetime import date
 
 VALID_OPERATIONS = {"buy", "sell"}
@@ -103,3 +103,11 @@ class TransactionOut(BaseModel):
     notes:        Optional[str]
 
     model_config = {"from_attributes": True}
+
+
+class PagedTransactions(BaseModel):
+    items:     List[TransactionOut]
+    total:     int
+    page:      int
+    page_size: int
+    pages:     int
