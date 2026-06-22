@@ -115,6 +115,74 @@ Veja `.env.example` para a lista completa. As principais:
 
 ---
 
+## Fluxo de Desenvolvimento
+
+Todo desenvolvimento novo acontece na branch `stable-15jun`. A `main` e a branch de producao e so recebe codigo via Pull Request com CI verde.
+
+### Regra geral
+
+```
+stable-15jun  ──●──●──●──●──── PR ──▶  main
+                feat  fix  fix        (CI verde)
+                                           │
+                ◀──── pull origin main ────┘
+```
+
+### 1. Antes de comecar qualquer tarefa
+
+Sempre sincronize a branch local com o remoto:
+
+```bash
+git checkout stable-15jun
+git pull origin stable-15jun
+```
+
+### 2. Durante o desenvolvimento
+
+Commits pequenos e descritivos seguindo Conventional Commits:
+
+```
+feat(scope): descricao curta
+fix(scope): descricao curta
+chore(scope): descricao curta
+```
+
+### 3. Antes de abrir o PR
+
+Rode localmente para garantir que o CI vai passar:
+
+```bash
+# Frontend
+cd frontend
+npm run typecheck   # zero erros TS
+npm run lint        # zero warnings ESLint
+
+# Backend
+cd backend
+flake8 app/         # zero erros F401/F821
+```
+
+### 4. Abrir o Pull Request
+
+PR sempre de `stable-15jun` → `main`. Titulo e descricao devem resumir os commits do ciclo.
+
+### 5. Apos o merge — sincronizar a stable-15jun
+
+```bash
+git checkout stable-15jun
+git pull origin main
+git push origin stable-15jun
+```
+
+### Regras de ouro
+
+- **Nunca commitar direto na `main`** — tudo passa por PR
+- **CI deve estar verde** antes de solicitar merge (typecheck + lint)
+- **Commits atomicos** — um problema/feature por commit, facilita rollback
+- **Sincronize a `stable-15jun` imediatamente apos cada merge** para evitar divergencias acumuladas
+
+---
+
 ## Convencoes de layout responsivo
 
 O projeto **nao depende de classes Tailwind com breakpoints** (`md:hidden`, `hidden md:block`) para alternar layouts. Todo comportamento responsivo e implementado via hook `useIsDesktop()` (`window.matchMedia`) com renderizacao condicional React. Isso garante que mobile e desktop nunca sejam renderizados simultaneamente.
