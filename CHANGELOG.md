@@ -206,6 +206,21 @@ Sessao dedicada a leitura cruzada da documentacao (README, ROADMAP, CHANGELOG) c
 
 ---
 
+#### A2 — Paginacao server-side no endpoint de transacoes
+
+**Arquivos alterados:**
+- `backend/app/schemas/transaction.py` — novo schema `PagedTransactions { items, total, page, page_size, pages }`
+- `backend/app/services/transaction_service.py` — novo servico com `COUNT` + `OFFSET/LIMIT`
+- `backend/app/routers/transactions.py` — `GET /{portfolio_id}/transactions` aceita `page`, `page_size`, `ticker`, `operation`, `date_from`, `date_to`
+- `frontend/src/hooks/useTransactions.ts` — interface `PagedTransactions` + `TransactionFilters`; hook retorna `PagedTransactions` em vez de `Transaction[]`; `placeholderData: prev => prev` para evitar flash ao virar pagina
+- `frontend/src/pages/Transacoes.tsx` — filtros server-side via `queryKey`; `totalRecords` vem do servidor; componente `Pagination` com `ChevronLeft/Right`; agrupamento client-side mantido sobre a pagina atual (<=50 itens)
+
+**Breaking change:** endpoint antes retornava `List[TransactionOut]` (array puro), agora retorna `{ items, total, page, page_size, pages }`. Frontend ja adaptado.
+
+**Commits:** `a00a1aa` (backend) · `27d0f7b` (frontend)
+
+---
+
 #### Sprint 7 — logica de rentabilidade (backend)
 
 **Status: IMPLEMENTADA E REVISADA em `portfolio_service.py`**
@@ -228,7 +243,7 @@ A revisao do `portfolio_service.py` revelou que toda a logica de rentabilidade j
 
 **ResumePage.tsx** consumia todos os campos corretamente com os comentarios anti-dupla-formatacao ja presentes.
 
-**Conclusao Sprint 7:** todos os 8 itens do backlog estao completos. Sprint encerrada.
+**Conclusao Sprint 7:** todos os itens do backlog estao completos. Sprint encerrada.
 
 ---
 
