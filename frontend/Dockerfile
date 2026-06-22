@@ -1,4 +1,4 @@
-# ── Stage 1: Build ───────────────────────────────────────────────────────────────────────────────
+# ── Stage 1: Build ────────────────────────────────────────────────────────────
 FROM node:20-alpine AS build
 
 WORKDIR /app
@@ -16,13 +16,16 @@ ENV VITE_API_URL=$VITE_API_URL
 
 RUN npm run build
 
-# ── Stage 2: Serve com Nginx ───────────────────────────────────────────────────────────────────
-# Pin de patch do Alpine para garantir que apk instale nginx>=1.28.3-r4
+# ── Stage 2: Serve com Nginx ──────────────────────────────────────────────────
+# Pin de patch do Alpine para garantir repositorio com nginx>=1.28.3-r4
 # (CVE-2026-42055 CRITICAL, fixed em 1.28.3-r4)
 FROM nginx:1.28-alpine3.23 AS runtime
 
-RUN apk upgrade --no-cache \
-    && apk add --no-cache 'nginx>=1.28.3-r4' \
+# Atualiza nginx e todos os seus modulos atomicamente para evitar conflito
+# de dependencia entre nginx-r4 e nginx-module-*-r1.
+# apk upgrade --no-cache cobre o restante do sistema.
+RUN apk upgrade --no-cache nginx nginx-module-* \
+    && apk upgrade --no-cache \
     && rm /etc/nginx/conf.d/default.conf
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
