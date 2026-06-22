@@ -51,29 +51,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Hidratação inicial: prioriza o store Zustand (persistência confiável),
   // só recorre ao localStorage como fallback para sessões antigas.
   // Se o token existir mas /users/me retornar 401, limpa tudo sem loop.
+  // Deps vazias são intencionais: executa apenas na montagem do componente.
   useEffect(() => {
-    // O interceptor do axios já injeta o token via authStore.getState().token;
-    // só precisamos garantir que ele está no header antes da primeira chamada.
     const token = authStore.token ?? localStorage.getItem('sig_token')
     if (!token) {
       setIsLoading(false)
       return
     }
 
-    // Garante que o header está setado antes de chamar /users/me
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`
 
     loadMe()
       .catch(() => {
-        // Token inválido ou expirado — limpa tudo sem redirecionar
-        // (o interceptor 401 do axios já cuida do redirect se necessário)
         authStore.logout()
         clearAllTokens()
         delete api.defaults.headers.common['Authorization']
       })
       .finally(() => setIsLoading(false))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, []) // eslint-disable-line -- deps vazias intencionais (executa só na montagem)
 
   const login = async (email: string, password: string) => {
     const { data: tokens } = await api.post<{
@@ -81,14 +76,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refresh_token: string
     }>('/auth/login', { email, password })
 
-    // Persiste tokens
     localStorage.setItem('sig_token', tokens.access_token)
     localStorage.setItem('sig_refresh', tokens.refresh_token)
     api.defaults.headers.common['Authorization'] = `Bearer ${tokens.access_token}`
 
     const me = await loadMe()
 
-    // Sincroniza Zustand store (inclui persistência em sig-auth)
     authStore.login(tokens.access_token, {
       id: me.id,
       email: me.email,
