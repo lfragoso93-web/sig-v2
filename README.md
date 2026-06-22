@@ -98,20 +98,25 @@ Veja `.env.example` para a lista completa. As principais:
 
 | Modulo | Status |
 |---|---|
-| Autenticacao (login, registro, JWT, refresh) | ✅ Funcional |
+| Autenticacao (login, registro, JWT, refresh, logout, blacklist) | ✅ Funcional |
 | Gestao de carteiras (CRUD) | ✅ Funcional |
-| Transacoes (compra/venda, validacao de saldo) | ✅ Funcional |
+| Transacoes (compra/venda, validacao de saldo, paginacao server-side) | ✅ Funcional |
 | Posicoes e patrimonio (preco medio, valor de mercado) | ✅ Funcional |
-| Cotacoes (BRAPI + yfinance, cache L1/L2/L3) | ✅ Funcional |
+| Cotacoes (BRAPI + yfinance, cache L1/L2/L3 com savepoint) | ✅ Funcional |
 | Historico patrimonial (snapshots diarios) | ✅ Funcional |
 | Proventos (backfill, listagem, historico, sync manual) | ✅ Funcional |
-| Painel Admin (usuarios, roles, configuracoes) | ✅ Funcional |
+| Rentabilidade (por ativo, por grupo, total com e sem proventos) | ✅ Funcional — 22 Jun 2026 |
+| Metas de alocacao por classe (Distribuicao da Carteira) | ✅ Funcional — 22 Jun 2026 |
+| Painel Admin (usuarios, roles, configuracoes em abas) | ✅ Funcional |
 | Scheduler (jobs diarios: cotacoes, snapshots) | ✅ Funcional |
-| Tabela de ativos — layout responsivo (mobile/desktop) | ✅ Corrigido 18 Jun 2026 |
-| Rentabilidade | 🔜 Sprint 7 — iniciar 19 Jun 2026 |
-| Renda Fixa e Tesouro Direto (frontend) | ⏳ Sprint 10 |
-| Metas e Alocacao | ⏳ Sprint 11 |
-| IRPF | ⏳ Sprint 12 |
+| Refresh token blacklist + endpoint /logout | ✅ Funcional — 22 Jun 2026 |
+| Audit log + rate limiting (debug.py) | ✅ Funcional — 22 Jun 2026 |
+| IRPF (backend + frontend basico) | ✅ Implementado (revisao na Sprint 12) |
+| Exibicao de ativos USD com simbolo correto (Stocks/ETF INT) | ✅ Corrigido — 22 Jun 2026 |
+| Modal de lancamento — todas as classes de ativo visiveis | ✅ Corrigido — 22 Jun 2026 |
+| Historico patrimonial (frontend — graficos) | 🔜 Sprint 8 |
+| Renda Fixa e Tesouro Direto (frontend completo) | ⏳ Sprint 10 |
+| IRPF (revisao e testes completos) | ⏳ Sprint 12 |
 
 ---
 
@@ -208,6 +213,18 @@ O frontend exibe `—` nesses casos. **Nunca** repete o `invested_value` no luga
 
 ---
 
+## Convencao de moeda — ativos internacionais
+
+Ativos com `currency = "USD"` (STOCK, ETF_INTERNACIONAL) exibem preco e valores unitarios em USD com simbolo correto (`$`). Os totais do grupo (Investido / Atual) sao exibidos em BRL, pois o backend ja converte via `fx_rate`.
+
+```ts
+// padrao correto
+fmtMoney(value, position.currency)   // USD → formatUSD, BRL → formatBRL
+formatBRL(group.total_invested)       // total do grupo sempre em BRL
+```
+
+---
+
 ## Seguranca — Nota importante
 
 O arquivo `reset_pwd.py` foi removido do repositorio em 15/06/2026 pois continha uma senha em texto claro. O arquivo ainda existe no historico do git (commit `8d7a99a9`). Caso o repositorio seja publico, recomenda-se:
@@ -231,8 +248,12 @@ Veja [ROADMAP_SPRINTS.md](./ROADMAP_SPRINTS.md) para o roadmap completo e [CHANG
 |---|---|
 | Sprint 0 a 6 + Manutencao | ✅ Concluidas |
 | Hotfix 18 Jun — Tabela de ativos | ✅ Concluido |
-| Sprint 7 — Rentabilidade | 🔜 Proxima (19 Jun 2026) |
-| Sprints 8 a 15 | ⏳ Planejadas |
+| Security Hotfix 21 Jun — pydantic-settings CVE | ✅ Concluido |
+| Sprint 7 — Rentabilidade | ✅ Concluida — 22 Jun 2026 |
+| Sprint 11 — Metas e Alocacao | ✅ Concluida — 22 Jun 2026 |
+| Sprint 7.5 — Hardening de Seguranca (C1–C3, A1–A4) | 🔜 Proxima |
+| Sprint 8 — Historico Patrimonial (frontend) | ⏳ Planejada |
+| Sprints 9 a 15 | ⏳ Planejadas |
 
 ---
 
