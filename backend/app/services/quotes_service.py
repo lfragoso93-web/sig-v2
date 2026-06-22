@@ -11,6 +11,13 @@ Resiliencia:
   backoff exponencial (1s, 2s). Falha total retorna {} sem propagar excecao,
   mantendo degradacao graciosa (posicao fica sem preco corrente mas nao quebra).
 
+Rate limiting (BRAPI):
+  _fetch_brapi e _fetch_brapi_crypto adquirem um token do brapi_limiter antes
+  de cada chamada. O limiter e um token bucket in-memory (asyncio-safe) com
+  rate e burst configurados via BRAPI_RATE_LIMIT / BRAPI_RATE_BURST no .env.
+  Defaults: 2 req/s, burst 5 — conservador para o plano gratuito BRAPI.
+  Para o plano Pro, elevar para BRAPI_RATE_LIMIT=10, BRAPI_RATE_BURST=20.
+
 Tesouro Direto:
   Usa fetch_treasury_list() para obter buyPrice atual de cada titulo.
   O ticker no banco corresponde ao slug BRAPI (ex: "tesouro-ipca-2029").
@@ -34,6 +41,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.asset_types import BR_TYPES, INTL_TYPES, NO_QUOTE_TYPES, TREASURY_TYPES, yf_ticker
+from app.core.rate_limiter import brapi_limiter
 from app.integrations.brapi import (
     fetch_quotes as brapi_fetch_quotes,
     fetch_crypto_quote as brapi_fetch_crypto,
@@ -272,23 +280,25 @@ async def _fetch_treasury_prices(slugs: list[str]) -> dict[str, float]:
 
 
 # ---------------------------------------------------------------------------
-# Aliases mockaveis pelos testes — agora com retry embutido
+# Aliases mockaveis pelos testes — rate limiting embutido + retry
 # ---------------------------------------------------------------------------
 
 async def _fetch_brapi(tickers: list[str]) -> dict[str, float]:
-    """Wrapper com retry sobre brapi_fetch_quotes."""
+    """Adquire token do rate limiter antes de chamar BRAPI quotes."""
+    await brapi_limiter.acquire()
     return await _with_retry(brapi_fetch_quotes, tickers, label="BRAPI")
 
 
 async def _fetch_brapi_crypto(tickers: list[str]) -> dict[str, float]:
-    """Wrapper com retry sobre brapi_fetch_crypto."""
+    """Adquire token do rate limiter antes de chamar BRAPI crypto."""
+    await brapi_limiter.acquire()
     return await _with_retry(brapi_fetch_crypto, tickers, label="BRAPI-crypto")
 
 
 async def _fetch_yfinance(
     pairs: list[tuple[str, AssetType]],
 ) -> dict[str, float]:
-    """Wrapper com retry sobre _fetch_yfinance_current."""
+    """Wrapper com retry sobre _fetch_yfinance_current (sem rate limit — yfinance e local)."""
     return await _with_retry(_fetch_yfinance_current, pairs, label="yfinance")
 
 
@@ -357,7 +367,7 @@ async def get_prices(
             logger.warning(f"[quotes_service] asset_type desconhecido para {ticker} ({raw_type}) — tentando BRAPI")
             br_tickers.append(ticker)
 
-    # Chamadas externas em paralelo — cada uma ja tem retry embutido
+    # Chamadas externas em paralelo — cada uma ja tem rate limit + retry embutido
     br_results, crypto_results, intl_results, treasury_results = await asyncio.gather(
         _fetch_brapi(br_tickers) if br_tickers else _noop(),
         _fetch_brapi_crypto(crypto_tickers) if crypto_tickers else _noop(),
