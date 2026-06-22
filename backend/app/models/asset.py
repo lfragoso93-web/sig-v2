@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Numeric, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Float, DateTime, Numeric
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 import datetime
@@ -28,14 +28,8 @@ class AssetCurrency(str, enum.Enum):
 class Asset(Base):
     __tablename__ = "assets"
 
-    # unique(ticker, asset_type) — ver migration 008
-    # Permite que o mesmo ticker exista com tipos diferentes (ex: PETR4 ACAO e BDR)
-    __table_args__ = (
-        UniqueConstraint("ticker", "asset_type", name="uq_assets_ticker_asset_type"),
-    )
-
     id = Column(Integer, primary_key=True, index=True)
-    ticker = Column(String, nullable=False, index=True)  # index=True, unique=False
+    ticker = Column(String, unique=True, nullable=False, index=True)
     name = Column(String, nullable=True)
     asset_type = Column(String, nullable=False)
     currency = Column(String, default="BRL")
