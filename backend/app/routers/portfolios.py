@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Optional
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
@@ -15,6 +16,7 @@ from app.services.portfolio_service import (
     get_asset_distribution,
 )
 from app.services.portfolio_snapshot_service import get_monthly_evolution
+from app.services.portfolio_class_evolution_service import get_monthly_evolution_by_class
 
 router = APIRouter(tags=["portfolios"])
 
@@ -96,12 +98,18 @@ async def asset_distribution(
 async def patrimonio_history(
     portfolio_id: int,
     months: int = 12,
+    asset_type: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Evolucao patrimonial mensal com valor de mercado real via snapshots diarios.
-    Substitui o calculo antigo baseado em SUM(qty*price) que retornava aporte, nao patrimonio.
+    Evolucao patrimonial mensal.
+    Sem asset_type: usa snapshots diarios (patrimonio total real).
+    Com asset_type: calcula mes a mes somando qty*preco para a classe filtrada.
     """
     await get_portfolio(db, portfolio_id, current_user.id)
+    if asset_type:
+        return await get_monthly_evolution_by_class(
+            db, portfolio_id, months=months, asset_type=asset_type
+        )
     return await get_monthly_evolution(db, portfolio_id, months=months)
