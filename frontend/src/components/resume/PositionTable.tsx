@@ -8,7 +8,7 @@ import { useAppStore } from '@/store/appStore'
 import { useSetClassTarget } from '@/hooks/useClassTargets'
 import type { PositionGroup } from '@/hooks/usePortfolio'
 
-// ── helpers ─────────────────────────────────────────────────────────────────────────────────
+// ── helpers ──────────────────────────────────────────────────────────────────────────────────────
 function assetTypeToTab(assetType: string): string {
   const map: Record<string, string> = {
     ACAO: 'acao', FII: 'fii', ETF_NACIONAL: 'etf_br',
@@ -53,11 +53,11 @@ function calcGroupVariation(group: PositionGroup): { variationPct: number | null
   return { variationPct: ((cur - inv) / inv) * 100, totalInvested: inv }
 }
 
-// ── style tokens ────────────────────────────────────────────────────────────────────────────────────────
+// ── style tokens ────────────────────────────────────────────────────────────────────────────────────────────────────
 const cellText  = { color: 'var(--color-text)' }
 const cellFaint = { color: 'var(--color-text-faint)' }
 
-// ── hook de breakpoint ───────────────────────────────────────────────────────────────────────────────────────────
+// ── hook de breakpoint ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
 function useIsDesktop(breakpoint = 768) {
   const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= breakpoint)
   useEffect(() => {
@@ -69,7 +69,7 @@ function useIsDesktop(breakpoint = 768) {
   return isDesktop
 }
 
-// ── AssetMenu ──────────────────────────────────────────────────────────────────────────────────────────
+// ── AssetMenu ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 interface AssetMenuProps { ticker: string; assetLabel: string; assetType: string }
 
 function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
@@ -156,7 +156,7 @@ function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
   )
 }
 
-// ── PositionCard (mobile) ───────────────────────────────────────────────────────────────────────────────────
+// ── PositionCard (mobile) ─────────────────────────────────────────────────────────────────────────────────────────────────────
 interface PositionCardProps { item: PositionGroup['positions'][number] }
 
 function PositionCard({ item }: PositionCardProps) {
@@ -215,7 +215,7 @@ function PositionCard({ item }: PositionCardProps) {
   )
 }
 
-// ── TargetModal — popover inline para editar a meta da classe ───────────────────────────────────────
+// ── TargetModal ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 interface TargetModalProps {
   assetType: string
   label: string
@@ -229,7 +229,6 @@ function TargetModal({ assetType, label, currentTarget, portfolioId, onClose }: 
   const { mutate, isPending } = useSetClassTarget(portfolioId)
   const ref = useRef<HTMLDivElement>(null)
 
-  // Fecha ao clicar fora
   useEffect(() => {
     function handler(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose()
@@ -316,7 +315,7 @@ function TargetModal({ assetType, label, currentTarget, portfolioId, onClose }: 
   )
 }
 
-// ── ClassGroupHeader — barra clicável com dados da classe ──────────────────────────────────────────────
+// ── ClassGroupHeader ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 interface ClassGroupHeaderProps {
   group: PositionGroup
   collapsed: boolean
@@ -331,6 +330,9 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
   const assetType = group.positions[0]?.asset_type ?? ''
   const [showTargetModal, setShowTargetModal] = useState(false)
 
+  // supress unused warning — totalInvested used only in calcGroupVariation
+  void totalInvested
+
   const varColor = variationPct === null ? 'var(--color-text-faint)'
     : variationPct >= 0 ? 'var(--color-success)' : 'var(--color-error)'
   const rentColor = rentabilidade === null ? 'var(--color-text-faint)'
@@ -338,6 +340,14 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
 
   const Divider = () => (
     <span style={{ width: 1, height: 12, background: 'oklch(from var(--color-text) l c h / 0.1)', flexShrink: 0 }} />
+  )
+
+  // Label inline: prefixo antes do valor
+  const LabeledValue = ({ label, children }: { label: string; children: React.ReactNode }) => (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap', flexShrink: 0 }}>
+      <span style={{ fontSize: '0.65rem', color: 'var(--color-text-faint)' }}>{label}</span>
+      {children}
+    </span>
   )
 
   return (
@@ -365,13 +375,14 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
           <ChevronDown size={14} />
         </span>
 
-        {/* Label */}
+        {/* Label da classe */}
         <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, letterSpacing: '-0.005em', ...cellText, flexShrink: 0 }}>
           {group.label}
         </span>
 
-        {/* Pills */}
+        {/* Pills com labels */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, overflow: 'hidden', minWidth: 0, flexWrap: 'nowrap' }}>
+
           {/* Qtd ativos */}
           <Divider />
           <span style={{
@@ -385,31 +396,47 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
             {group.count} {group.count === 1 ? 'ativo' : 'ativos'}
           </span>
 
-          {/* Valor total */}
+          {/* Valor total investido */}
           <Divider />
-          <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, ...cellText, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', flexShrink: 0 }}>
-            {formatBRL(group.total_value)}
-          </span>
+          <LabeledValue label="Invest.">
+            <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, ...cellText, fontVariantNumeric: 'tabular-nums' }}>
+              {formatBRL(group.total_invested ?? group.total_value)}
+            </span>
+          </LabeledValue>
+
+          {/* Valor atual */}
+          <Divider />
+          <LabeledValue label="Atual">
+            <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, ...cellText, fontVariantNumeric: 'tabular-nums' }}>
+              {formatBRL(group.total_value)}
+            </span>
+          </LabeledValue>
 
           {/* Variação % */}
           {variationPct !== null && (
-            <><Divider />
-              <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: varColor, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                {variationPct >= 0 ? '+' : ''}{formatPercent(variationPct)}
-              </span>
+            <>
+              <Divider />
+              <LabeledValue label="Var.">
+                <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: varColor, fontVariantNumeric: 'tabular-nums' }}>
+                  {variationPct >= 0 ? '+' : ''}{formatPercent(variationPct)}
+                </span>
+              </LabeledValue>
             </>
           )}
 
-          {/* Rentabilidade */}
+          {/* Rentabilidade total */}
           {rentabilidade !== null && (
-            <><Divider />
-              <span style={{ fontSize: '0.68rem', fontWeight: 500, color: rentColor, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                {rentabilidade >= 0 ? '+' : ''}{formatPercent(rentabilidade)} rentab.
-              </span>
+            <>
+              <Divider />
+              <LabeledValue label="Rentab.">
+                <span style={{ fontSize: '0.68rem', fontWeight: 500, color: rentColor, fontVariantNumeric: 'tabular-nums' }}>
+                  {rentabilidade >= 0 ? '+' : ''}{formatPercent(rentabilidade)}
+                </span>
+              </LabeledValue>
             </>
           )}
 
-          {/* Meta — botão que abre o popover, para o clique de collapse */}
+          {/* Definir meta */}
           <Divider />
           <span
             role="button"
@@ -452,7 +479,7 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
   )
 }
 
-// ── ClassTable ───────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── ClassTable ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 function ClassTable({ group, portfolioId }: { group: PositionGroup; portfolioId: number }) {
   const isDesktop = useIsDesktop()
   const [collapsed, setCollapsed] = useState(false)
@@ -566,7 +593,7 @@ function ClassTable({ group, portfolioId }: { group: PositionGroup; portfolioId:
   )
 }
 
-// ── PositionTable ───────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── PositionTable ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 interface Props { groups: PositionGroup[]; portfolioId: number }
 
 export default function PositionTable({ groups, portfolioId }: Props) {
