@@ -211,11 +211,23 @@ async def _fetch_logos_batch(db: AsyncSession, tickers: list[str]) -> dict[str, 
 # ---------------------------------------------------------------------------
 
 async def sum_dividends(db: AsyncSession, portfolio_id: int, cutoff: DateType | None = None) -> float:
+    """
+    Soma os dividendos de um portfolio.
+
+    Quando `cutoff` é informado, filtra apenas dividendos cujo AssetDividend.ex_date >= cutoff.
+    Usa LEFT JOIN para preservar dividendos manuais (asset_dividend_id IS NULL):
+      - Dividendos vinculados a um AssetDividend com ex_date >= cutoff → incluídos
+      - Dividendos vinculados a um AssetDividend com ex_date < cutoff  → excluídos
+      - Dividendos sem AssetDividend (manuais, asset_dividend_id IS NULL) → sempre incluídos no período
+    """
     from app.models.asset_dividend import AssetDividend
     q = select(func.sum(Dividend.total_value)).where(Dividend.portfolio_id == portfolio_id)
     if cutoff is not None:
-        q = q.join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id).where(
-            AssetDividend.ex_date >= cutoff
+        q = (
+            q.outerjoin(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
+            .where(
+                (AssetDividend.ex_date >= cutoff) | (Dividend.asset_dividend_id.is_(None))
+            )
         )
     try:
         result = await db.execute(q)
@@ -373,6 +385,9 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
         cur = g["total_value"]
         has_quote = any(p["current_price"] is not None for p in g["positions"])
         g["variation_pct"] = round((cur - inv) / inv * 100, 4) if (has_quote and inv > 0) else None
+        # rentabilidade_pct por grupo: ainda não inclui proventos por grupo (sprint futura)
+        # campo exposto como None para o frontend não quebrar
+        g["rentabilidade_pct"] = None
         g["target_pct"] = targets_map.get(g["positions"][0]["asset_type"]) if g["positions"] else None
 
     return sorted_groups
