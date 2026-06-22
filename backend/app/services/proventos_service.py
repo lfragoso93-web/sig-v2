@@ -8,7 +8,7 @@ from datetime import date
 from typing import Optional
 
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import extract, func, select, case
+from sqlalchemy import extract, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset
@@ -108,7 +108,6 @@ async def list_items(
         )
         .join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
         .join(Asset, AssetDividend.asset_id == Asset.id)
-        # Filtra apenas proventos a partir da data de compra do ativo na carteira
         .join(
             first_buy,
             (first_buy.c.portfolio_id == Dividend.portfolio_id)
