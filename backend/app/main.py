@@ -5,6 +5,10 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from app.core.database import engine
 from app.core.config import settings
@@ -21,6 +25,17 @@ from app.routers import class_targets
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Rate limiter (slowapi)
+# Usa Redis se REDIS_URL estiver configurado; fallback para memoria.
+# ---------------------------------------------------------------------------
+_storage_uri = settings.REDIS_URL if settings.REDIS_URL else "memory://"
+limiter = Limiter(
+    key_func=get_remote_address,
+    storage_uri=_storage_uri,
+    default_limits=[],
+)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -35,6 +50,15 @@ app = FastAPI(
     version="2.0.0",
     lifespan=lifespan,
 )
+
+# Injeta o limiter no state para que @limiter.limit() funcione nos routers
+app.state.limiter = limiter
+
+# Handler de 429 — retorna JSON padrao em vez de HTML
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Middleware slowapi (necessario para key_func acessar o request)
+app.add_middleware(SlowAPIMiddleware)
 
 
 @app.exception_handler(Exception)

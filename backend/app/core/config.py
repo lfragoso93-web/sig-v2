@@ -21,10 +21,14 @@ class Settings(BaseSettings):
     BRAPI_BASE_URL: str = "https://brapi.dev/api"
     # Rate limiting para chamadas BRAPI (token bucket in-memory).
     # Plano gratuito BRAPI: ~2 req/s. Plano Pro: pode subir para 10+.
-    # BRAPI_RATE_LIMIT: tokens adicionados por segundo.
-    # BRAPI_RATE_BURST: pico maximo permitido (bucket cheio no startup).
     BRAPI_RATE_LIMIT: float = 2.0
     BRAPI_RATE_BURST: int = 5
+
+    # Rate limiting de endpoints publicos (slowapi)
+    # Formato slowapi: "N/period" onde period = second | minute | hour
+    # Exemplos: "10/minute", "3/second", "100/hour"
+    LOGIN_RATE_LIMIT: str = "10/minute"
+    REGISTER_RATE_LIMIT: str = "5/minute"
 
     # Redis (opcional)
     REDIS_URL: Optional[str] = "redis://redis:6379/0"
