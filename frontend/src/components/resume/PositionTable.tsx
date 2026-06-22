@@ -5,7 +5,7 @@ import { formatBRL, formatPercent } from '@/utils/format'
 import { formatTreasuryName } from '@/utils/treasury'
 import AssetLogo from '@/components/ui/AssetLogo'
 import { useAppStore } from '@/store/appStore'
-import { useSetClassTarget } from '@/hooks/useClassTargets'
+import { useUpsertClassTarget } from '@/hooks/useClassTargets'
 import type { PositionGroup } from '@/hooks/usePortfolio'
 
 // ── helpers ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -262,7 +262,8 @@ interface TargetModalProps {
 
 function TargetModal({ assetType, label, currentTarget, portfolioId, onClose }: TargetModalProps) {
   const [value, setValue] = useState(String(currentTarget ?? ''))
-  const { mutate, isPending } = useSetClassTarget(portfolioId)
+  // useUpsertClassTarget é o nome correto exportado por useClassTargets.ts
+  const { mutate, isPending } = useUpsertClassTarget(portfolioId)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
