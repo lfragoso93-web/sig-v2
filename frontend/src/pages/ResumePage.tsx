@@ -32,7 +32,7 @@ const ASSET_CLASS_OPTIONS = [
   { label: 'FIIs',                 value: 'FII'                  },
   { label: 'ETF Nacional',         value: 'ETF_NACIONAL'         },
   { label: 'ETF Internacional',    value: 'ETF_INTERNACIONAL'    },
-  { label: 'Stock / Int\'l',        value: 'STOCK'                },
+  { label: "Stock / Int\'l",        value: 'STOCK'                },
   { label: 'Tesouro Direto',       value: 'TESOURO_DIRETO'       },
   { label: 'Renda Fixa',           value: 'RENDA_FIXA'           },
   { label: 'Cripto',               value: 'CRIPTO'               },
@@ -153,18 +153,11 @@ export default function ResumePage() {
               subLabel="Valor investido"
               change={variacaoPct}
             />
-            {/*
-              KPI Resultado:
-              - value = ganho de capital + total de proventos históricos (= lucro bruto total)
-              - subLabel = detalha ganho de capital separado de proventos dos últimos 12 meses
-                para que o usuário entenda a composição sem confundir com proventos de todo período
-              - bottomLine = rentabilidade total (ganho + proventos) / investido
-            */}
             <KpiCard
               label="Resultado total"
               value={formatBRL(lucroTotal)}
               valueColor={signClass(lucroTotal)}
-              subLabel={`Capital ${formatBRL(ganhoCapital)} · Prov. 12m ${formatBRL(dividendos12m)}`}
+              subLabel={`Capital ${formatBRL(ganhoCapital)} · Prov. 12m ${formatBRL(dividendos12m)}`}
               bottomLine={
                 <span
                   title="Rentabilidade = (ganho de capital + todos os proventos) / valor investido"
