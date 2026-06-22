@@ -4,17 +4,13 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from sqlalchemy.pool import StaticPool
 
 from app.models.portfolio import Portfolio
-from app.models.transaction import Transaction, OperationType
-from app.models.position import Position
+from app.models.transaction import Transaction, OperationType  # noqa: F401
+from app.models.portfolio_position import PortfolioPosition  # noqa: F401
 
 # Import Base de todos os modelos para criar as tabelas no SQLite de teste
 from app.models.user import User
 from app.models.asset import Asset
 from app.models.dividend import Dividend
-
-# Base declarativa unificada
-from sqlalchemy.orm import DeclarativeBase
-
 
 DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
