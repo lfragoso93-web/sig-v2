@@ -242,6 +242,42 @@ async def sum_dividends(db: AsyncSession, portfolio_id: int, cutoff: DateType | 
         return 0.0
 
 
+async def sum_dividends_for_tickers(
+    db: AsyncSession,
+    portfolio_id: int,
+    tickers: list[str],
+) -> float:
+    """
+    Soma os proventos recebidos apenas para os tickers ainda em carteira.
+
+    Usado em get_portfolio_summary para evitar superestimativa de
+    rentabilidade_total_pct causada por proventos históricos de ativos
+    já vendidos (cujo custo foi removido de total_invested).
+
+    Se `tickers` for vazio, retorna 0.0 sem executar query.
+    """
+    if not tickers:
+        return 0.0
+    q = (
+        select(func.sum(Dividend.total_value))
+        .where(
+            Dividend.portfolio_id == portfolio_id,
+            Dividend.ticker.in_(tickers),
+        )
+    )
+    try:
+        result = await db.execute(q)
+        total = result.scalar_one_or_none()
+        return float(total) if total is not None else 0.0
+    except Exception as e:
+        logger.warning(f"[portfolio_service] sum_dividends_for_tickers falhou: {e} — retornando 0.0")
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+        return 0.0
+
+
 # ---------------------------------------------------------------------------
 # CRUD de carteiras
 # ---------------------------------------------------------------------------
@@ -294,6 +330,13 @@ async def get_portfolio_summary(db: AsyncSession, portfolio_id: int, user_id: in
     prices = await _fetch_prices_batch(db, positions_raw)
     enriched = enrich_with_prices(positions_raw, prices)
 
+    # P1: identifica ativos sem cotação para expor flag ao frontend
+    tickers_without_price = [
+        e["ticker"] for e in enriched
+        if e.get("current_price") is None and e["asset_type"] in _MARKET_PRICE_TYPES
+    ]
+    has_partial_prices = len(tickers_without_price) > 0
+
     current_value = 0.0
     for e in enriched:
         val = e.get("current_value")
@@ -303,9 +346,14 @@ async def get_portfolio_summary(db: AsyncSession, portfolio_id: int, user_id: in
     dividendos_12m = await sum_dividends(db, portfolio_id, cutoff=cutoff_12m)
     total_proventos = await sum_dividends(db, portfolio_id)
 
+    # P2: rentabilidade_total usa apenas proventos dos tickers ainda em carteira,
+    # evitando superestimativa por proventos históricos de ativos já vendidos.
+    tickers_em_carteira = [p["ticker"] for p in positions_raw]
+    proventos_em_carteira = await sum_dividends_for_tickers(db, portfolio_id, tickers_em_carteira)
+
     total_gain = current_value - total_invested
     total_gain_pct = (total_gain / total_invested * 100) if total_invested else 0.0
-    lucro_total = total_gain + total_proventos
+    lucro_total = total_gain + proventos_em_carteira
     rentabilidade_total_pct = (lucro_total / total_invested * 100) if total_invested else 0.0
 
     return {
@@ -321,7 +369,11 @@ async def get_portfolio_summary(db: AsyncSession, portfolio_id: int, user_id: in
         "rentabilidade_total": round(rentabilidade_total_pct, 4),
         "dividendos_recebidos_12m": round(dividendos_12m, 2),
         "total_proventos": round(total_proventos, 2),
+        "proventos_em_carteira": round(proventos_em_carteira, 2),
         "ganho_capital": round(total_gain, 2),
+        # P1: flags para o frontend exibir aviso de precificação parcial
+        "has_partial_prices": has_partial_prices,
+        "assets_without_price": tickers_without_price,
     }
 
 
@@ -385,7 +437,7 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
         cur = g["total_value"]
         has_quote = any(p["current_price"] is not None for p in g["positions"])
         g["variation_pct"] = round((cur - inv) / inv * 100, 4) if (has_quote and inv > 0) else None
-        # rentabilidade_pct por grupo: ainda não inclui proventos por grupo (sprint futura)
+        # rentabilidade_pct por grupo: ainda não inclui proventos por grupo (sprint P3)
         # campo exposto como None para o frontend não quebrar
         g["rentabilidade_pct"] = None
         g["target_pct"] = targets_map.get(g["positions"][0]["asset_type"]) if g["positions"] else None
