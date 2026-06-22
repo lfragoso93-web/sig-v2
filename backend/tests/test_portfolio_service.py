@@ -60,8 +60,13 @@ def make_tx(
 # ---------------------------------------------------------------------------
 
 class TestNormalizeType:
-    def test_acao_para_acao_nacional(self):
-        assert normalize_type("ACAO") == "ACAO_NACIONAL"
+    def test_acao_canonico_passthrough(self):
+        """"ACAO" ja e o valor canonico do enum — deve retornar igual."""
+        assert normalize_type("ACAO") == "ACAO"
+
+    def test_acao_nacional_para_acao(self):
+        """"ACAO_NACIONAL" e alias legado — deve ser normalizado para "ACAO"."""
+        assert normalize_type("ACAO_NACIONAL") == "ACAO"
 
     def test_etf_int_para_etf_internacional(self):
         assert normalize_type("ETF_INT") == "ETF_INTERNACIONAL"
@@ -87,7 +92,12 @@ class TestNormalizeType:
         assert normalize_type("OUTRO") == "OUTRO"
 
     def test_case_insensitive(self):
-        assert normalize_type("acao") == "ACAO_NACIONAL"
+        """Entrada em lowercase deve normalizar para o canonico "ACAO"."""
+        assert normalize_type("acao") == "ACAO"
+
+    def test_case_insensitive_alias_legado(self):
+        """Alias legado em lowercase tambem deve ser normalizado."""
+        assert normalize_type("acao_nacional") == "ACAO"
 
     def test_none_retorna_string_vazia(self):
         assert normalize_type(None) == ""
@@ -256,6 +266,9 @@ class TestEnrichWithPrices:
         self, ticker="PETR4", qty=10.0, avg=30.0, invested=300.0,
         asset_type="ACAO_NACIONAL"
     ):
+        """Helper usa asset_type="ACAO_NACIONAL" (alias legado) intencionalmente
+        para garantir que enrich_with_prices normalize antes de checar _MARKET_PRICE_TYPES.
+        """
         return {
             "ticker": ticker,
             "asset_type": asset_type,
