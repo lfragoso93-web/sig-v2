@@ -15,6 +15,14 @@ export interface Transaction {
   notes?: string
 }
 
+export interface PagedTransactions {
+  items:     Transaction[]
+  total:     number
+  page:      number
+  page_size: number
+  pages:     number
+}
+
 export interface TransactionCreate {
   ticker: string
   asset_type: string
@@ -31,7 +39,17 @@ export interface TransactionCreate {
 
 export type TransactionUpdate = Partial<TransactionCreate>
 
-const TX_KEY = (pid: number | null) => ['transactions', pid]
+export interface TransactionFilters {
+  page?:       number
+  page_size?:  number
+  ticker?:     string
+  operation?:  'buy' | 'sell' | null
+  date_from?:  string | null
+  date_to?:    string | null
+}
+
+const TX_KEY = (pid: number | null, filters?: TransactionFilters) =>
+  ['transactions', pid, filters ?? {}]
 
 function invalidatePortfolioKeys(qc: ReturnType<typeof useQueryClient>, portfolioId: number) {
   qc.invalidateQueries({ queryKey: ['transactions',       portfolioId] })
@@ -42,12 +60,27 @@ function invalidatePortfolioKeys(qc: ReturnType<typeof useQueryClient>, portfoli
   qc.invalidateQueries({ queryKey: ['summary',            portfolioId] })
 }
 
-export function useTransactions(portfolioId: number | null) {
-  return useQuery<Transaction[]>({
-    queryKey: TX_KEY(portfolioId),
-    queryFn: () =>
-      api.get(`/portfolios/${portfolioId}/transactions`).then(r => r.data),
+export function useTransactions(
+  portfolioId: number | null,
+  filters: TransactionFilters = {},
+) {
+  return useQuery<PagedTransactions>({
+    queryKey: TX_KEY(portfolioId, filters),
+    queryFn: () => {
+      const params: Record<string, string | number> = {
+        page:      filters.page      ?? 1,
+        page_size: filters.page_size ?? 50,
+      }
+      if (filters.ticker)     params.ticker    = filters.ticker
+      if (filters.operation)  params.operation = filters.operation
+      if (filters.date_from)  params.date_from = filters.date_from
+      if (filters.date_to)    params.date_to   = filters.date_to
+      return api
+        .get(`/portfolios/${portfolioId}/transactions`, { params })
+        .then(r => r.data)
+    },
     enabled: !!portfolioId,
+    placeholderData: prev => prev,
   })
 }
 
