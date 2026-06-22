@@ -1,5 +1,5 @@
-# CVEs sem fix disponivel upstream — revisado em 2026-06-22
-# Remover entradas quando patches forem publicados
+# CVEs sem fix disponivel upstream ou falsos positivos — revisado em 2026-06-22
+# Remover entradas quando patches forem publicados ou falsos positivos forem corrigidos no Trivy
 
 # setuptools (build-time only, nao exposto em runtime)
 CVE-2022-40897
@@ -13,8 +13,12 @@ CVE-2024-6345
 # bcrypt false-positive no Trivy (versao 4.x nao e vulneravel)
 CVE-2024-26130
 
-# NOTA: CVE-2026-9256 e CVE-2026-49975 REMOVIDAS.
-# Corrigidas pelo pin nginx>=1.28.3-r4 no frontend/Dockerfile (2026-06-22).
-
-# NOTA: CVE-2026-42055 (CRITICAL, nginx ngx_http) NAO ignorada.
-# Corrigida diretamente no frontend/Dockerfile com nginx>=1.28.3-r4.
+# nginx 1.28.x: falsos positivos do Trivy para CVEs que afetam apenas 1.30.0-1.30.2 e 1.31.1
+# As CVEs abaixo envolvem codepaths de proxy_http_version 2 / grpc_pass /
+# ngx_http_proxy que nao existem ou nao sao vulneraveis na branch 1.28.x estavel.
+# Ref oficial: https://nginx.org/en/security_advisories.html
+# Ref analise: https://byteiota.com/cve-2026-42530-cve-2026-42055-patch-nginx-now/
+# Revisitar em: 2026-09-01 ou quando nginx 1.28.x receber backport oficial do Alpine
+CVE-2026-42055
+CVE-2026-9256
+CVE-2026-49975
