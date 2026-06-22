@@ -328,7 +328,7 @@ def downgrade() -> None:
     op.execute('DROP TABLE IF EXISTS assets')
     op.execute('DROP TABLE IF EXISTS portfolios')
     op.execute('DROP TABLE IF EXISTS users')
-    for enum_name in ['userrole','assettype','assetcurrency','transactiontype',
-                      'dividendtype','fixedincometype','indexertype','treasurytype',
-                      'irpfmarket','goaltype']:
+    for enum_name in ['userrole', 'assettype', 'assetcurrency', 'transactiontype',
+                      'dividendtype', 'fixedincometype', 'indexertype', 'treasurytype',
+                      'irpfmarket', 'goaltype']:
         op.execute(f'DROP TYPE IF EXISTS {enum_name}')
