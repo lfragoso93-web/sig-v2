@@ -109,9 +109,7 @@ export default function ResumePage() {
   const dividendos12m = s?.dividendos_recebidos_12m ?? 0
   const totalProv     = s?.total_proventos     ?? 0
   const variacaoVal   = s?.variacao_valor      ?? s?.total_gain      ?? 0
-  // variacaoPct: apenas ganho de capital / investido
   const variacaoPct   = s?.variacao_percentual ?? s?.total_gain_pct  ?? 0
-  // rentabilidade: lucro total (capital + proventos) / investido
   const rentabilidade = s?.rentabilidade_total ?? s?.total_gain_pct  ?? 0
 
   if (loadingPortfolios) {
@@ -162,7 +160,6 @@ export default function ResumePage() {
               valueColor={signClass(lucroTotal)}
               subLabel={`Capital ${formatBRL(ganhoCapital)} · Prov. ${formatBRL(totalProv)}`}
               bottomLine={
-                // rentabilidade = (capital + proventos) / investido
                 <span className={clsx('text-xs font-semibold tabular-nums', signClass(rentabilidade))}>
                   {rentabilidade >= 0 ? '+' : ''}{formatPercent(rentabilidade)} rentab.
                 </span>
@@ -180,7 +177,6 @@ export default function ResumePage() {
               valueColor={signClass(variacaoVal)}
               change={variacaoPct}
               bottomLine={
-                // variacaoPct = ganho de capital / investido (sem proventos)
                 <span className={clsx('text-xs font-semibold tabular-nums', signClass(variacaoPct))}>
                   {variacaoPct >= 0 ? '+' : ''}{formatPercent(variacaoPct)} capital
                 </span>
@@ -274,16 +270,16 @@ export default function ResumePage() {
         <div style={{ flex: 1, height: 1, background: 'oklch(from var(--color-text) l c h / 0.07)' }} />
       </div>
 
-      {/* Tabelas por classe — uma por grupo */}
+      {/* Tabelas por classe */}
       {loadingPositions ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           {[...Array(3)].map((_, i) => (
             <div key={i} className="animate-pulse rounded-xl" style={{ height: 120, background: 'var(--color-surface-offset)' }} />
           ))}
         </div>
-      ) : positions && positions.length > 0 ? (
-        <PositionTable groups={positions} />
-      ) : (
+      ) : positions && positions.length > 0 && portfolioId ? (
+        <PositionTable groups={positions} portfolioId={portfolioId} />
+      ) : positions && positions.length > 0 ? null : (
         <div className="card">
           <EmptyState
             icon={DollarSign}
