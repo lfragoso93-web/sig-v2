@@ -9,7 +9,7 @@ from app.core.security import (
 from app.core.token_blacklist import blacklist_token, is_blacklisted
 from app.schemas.auth import LoginRequest, RefreshRequest, TokenResponse
 from app.schemas.user import UserCreate
-from app.services.user_service import get_user_by_email, create_user
+from app.services.user_service import get_user_by_email, get_user_by_id, create_user
 
 router = APIRouter(tags=["auth"])
 
@@ -108,16 +108,15 @@ async def refresh(data: RefreshRequest, db: AsyncSession = Depends(get_db)):
     # Invalida o token atual imediatamente (rotation — evita reuso)
     await blacklist_token(jti, payload["exp"])
 
-    user_id = payload["sub"]
-    user = await get_user_by_email(db, None, user_id=int(user_id))
+    user = await get_user_by_id(db, int(payload["sub"]))
     if not user or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuario nao encontrado ou inativo.",
         )
 
-    new_access  = create_access_token(subject=user_id)
-    new_refresh = create_refresh_token(subject=user_id)
+    new_access  = create_access_token(subject=payload["sub"])
+    new_refresh = create_refresh_token(subject=payload["sub"])
     return TokenResponse(
         access_token=new_access,
         refresh_token=new_refresh,
