@@ -118,7 +118,6 @@ function extractErrorMessage(err: unknown): string {
   const detail = e?.response?.data?.detail
   if (typeof detail === 'string') return detail
   if (Array.isArray(detail)) {
-    // Pydantic ValidationError
     return detail.map((d: any) => d?.msg ?? JSON.stringify(d)).join('; ')
   }
   if (e?.response?.status === 422)
@@ -406,11 +405,12 @@ export default function AddTransactionModal({ onClose }: Props) {
         ) : (
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
 
-            {/* Abas */}
+            {/* Abas — flexWrap para não perder Renda Fixa/Cripto fora do viewport */}
             <div style={{
-              display: 'flex', gap: 4, overflowX: 'auto',
+              display: 'flex', gap: 4, rowGap: 4,
+              flexWrap: 'wrap',
               padding: '0.875rem 1.25rem 0',
-              flexShrink: 0, scrollbarWidth: 'none',
+              flexShrink: 0,
             }}>
               {TABS.map(t => {
                 const isActive = activeTab === t.key
