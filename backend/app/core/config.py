@@ -19,6 +19,16 @@ class Settings(BaseSettings):
     # BRAPI
     BRAPI_TOKEN: Optional[str] = None
     BRAPI_BASE_URL: str = "https://brapi.dev/api"
+    BRAPI_RATE_LIMIT: float = 2.0
+    BRAPI_RATE_BURST: int = 5
+
+    # Rate limiting de endpoints publicos (slowapi)
+    LOGIN_RATE_LIMIT: str = "10/minute"
+    REGISTER_RATE_LIMIT: str = "5/minute"
+
+    # Rate limiting do router de debug
+    # Mais restritivo que login — endpoints permitem acoes criticas (reset senha, criar user)
+    DEBUG_RATE_LIMIT: str = "5/minute"
 
     # Redis (opcional)
     REDIS_URL: Optional[str] = "redis://redis:6379/0"
@@ -28,7 +38,7 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000,http://localhost:80,http://localhost"
 
-    # Superadmin seed — criado automaticamente no startup se não existir
+    # Superadmin seed
     SUPERADMIN_EMAIL: str = "admin@sig.local"
     SUPERADMIN_PASSWORD: str = "Admin@1234!"
     SUPERADMIN_NAME: str = "Super Admin"

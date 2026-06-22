@@ -31,15 +31,19 @@ class PositionOut(BaseModel):
 class AssetGroupOut(BaseModel):
     """
     Grupo de posicoes por tipo de ativo (ex: Acoes, FIIs).
-    Inclui total_invested, variation_pct e target_pct quando disponiveis.
+    Inclui total_invested, variation_pct, rentabilidade_pct e target_pct quando disponiveis.
+
+    rentabilidade_pct: variacao de capital do grupo em %. None enquanto nao houver
+    calculo de proventos por grupo (sprint futura).
     """
-    label:          str
-    count:          int
-    total_value:    float
-    total_invested: Optional[float] = None
-    variation_pct:  Optional[float] = None
-    target_pct:     Optional[float] = None
-    positions:      list[PositionOut] = []
+    label:             str
+    count:             int
+    total_value:       float
+    total_invested:    Optional[float] = None
+    variation_pct:     Optional[float] = None
+    rentabilidade_pct: Optional[float] = None
+    target_pct:        Optional[float] = None
+    positions:         list[PositionOut] = []
 
 
 class PortfolioSummary(BaseModel):
@@ -65,7 +69,7 @@ class PortfolioSummary(BaseModel):
 PositionResponse = PositionOut
 
 
-# ── Schemas para metas por classe ────────────────────────────────────────────
+# ── Schemas para metas por classe ─────────────────────────────────────────────────────────────────────────────────
 class ClassTargetOut(BaseModel):
     asset_type: str
     target_pct: float

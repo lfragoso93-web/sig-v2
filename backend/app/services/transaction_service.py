@@ -1,21 +1,35 @@
+"""
+Servico de listagem de transacoes com paginacao e filtros.
+
+Tambem exporta helpers sincronos de calculo de preco medio e
+quantidade atual, usados por portfolio_service e pelos testes unitarios.
+"""
+from datetime import date as DateType
+from typing import Optional
+
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
-from sqlalchemy import select, delete
-from fastapi import HTTPException
+
 from app.models.transaction import Transaction, OperationType
-from app.models.asset import Asset
-from app.schemas.transaction import TransactionCreate
 
 
 # ---------------------------------------------------------------------------
-# Funcoes sincronas auxiliares (usadas pelos testes com mock)
+# Helpers sincronos (Session normal — usados por servicos legados e testes)
 # ---------------------------------------------------------------------------
 
-def _calc_average_price(db: Session, portfolio_id: int, ticker: str) -> float:
+def _calc_average_price(
+    db: Session,
+    portfolio_id: int,
+    ticker: str,
+) -> float:
     """
-    Calcula preco medio ponderado para um ticker em uma carteira.
-    Vendas nao alteram o PM — apenas reduzem quantidade e custo proporcional.
-    Funciona com db sincrono (Session) para facilitar testes com mock.
+    Calcula o preco medio ponderado atual de um ativo na carteira.
+
+    Regra:
+      - Compras aumentam custo total e quantidade.
+      - Vendas reduzem quantidade (pro-rata do PM vigente), sem alterar PM.
+      - Se quantidade chegar a zero ou negativo, retorna 0.0.
     """
     rows = (
         db.query(Transaction)
@@ -27,43 +41,31 @@ def _calc_average_price(db: Session, portfolio_id: int, ticker: str) -> float:
         .all()
     )
 
-    qty = 0.0
-    total_cost = 0.0
+    total_qty: float  = 0.0
+    total_cost: float = 0.0
 
-    for tx in rows:
-        op = tx.operation
-        is_buy = (
-            op == OperationType.buy
-            or (hasattr(op, 'value') and op.value == 'buy')
-            or str(op).lower() in ('buy', 'compra')
-        )
-        is_sell = (
-            op == OperationType.sell
-            or (hasattr(op, 'value') and op.value == 'sell')
-            or str(op).lower() in ('sell', 'venda')
-        )
-        t_qty = float(tx.quantity or 0)
-        t_price = float(tx.price or 0)
+    for row in rows:
+        if row.operation == OperationType.buy:
+            total_qty  += float(row.quantity)
+            total_cost += float(row.quantity) * float(row.price)
+        elif row.operation == OperationType.sell:
+            sold = min(float(row.quantity), total_qty)  # nunca abaixo de zero
+            pm = total_cost / total_qty if total_qty > 0 else 0.0
+            total_qty  -= sold
+            total_cost -= sold * pm
 
-        if is_buy:
-            total_cost += t_qty * t_price
-            qty += t_qty
-        elif is_sell and qty > 0:
-            sell_qty = min(t_qty, qty)
-            ratio = sell_qty / qty
-            total_cost -= total_cost * ratio
-            qty = max(0.0, qty - t_qty)
-
-    if qty <= 0:
+    if total_qty <= 0:
         return 0.0
-    return total_cost / qty
+    return total_cost / total_qty
 
 
-def _calc_current_quantity(db: Session, portfolio_id: int, ticker: str) -> float:
+def _calc_current_quantity(
+    db: Session,
+    portfolio_id: int,
+    ticker: str,
+) -> float:
     """
-    Calcula quantidade atual para um ticker em uma carteira.
-    Nunca retorna valor negativo.
-    Funciona com db sincrono (Session) para facilitar testes com mock.
+    Retorna a quantidade atual do ativo na carteira (nunca negativa).
     """
     rows = (
         db.query(Transaction)
@@ -74,89 +76,86 @@ def _calc_current_quantity(db: Session, portfolio_id: int, ticker: str) -> float
         .all()
     )
 
-    qty = 0.0
-    for tx in rows:
-        op = tx.operation
-        is_buy = (
-            op == OperationType.buy
-            or (hasattr(op, 'value') and op.value == 'buy')
-            or str(op).lower() in ('buy', 'compra')
-        )
-        is_sell = (
-            op == OperationType.sell
-            or (hasattr(op, 'value') and op.value == 'sell')
-            or str(op).lower() in ('sell', 'venda')
-        )
-        t_qty = float(tx.quantity or 0)
-        if is_buy:
-            qty += t_qty
-        elif is_sell:
-            qty -= t_qty
+    qty: float = 0.0
+    for row in rows:
+        if row.operation == OperationType.buy:
+            qty += float(row.quantity)
+        elif row.operation == OperationType.sell:
+            qty -= float(row.quantity)
 
     return max(0.0, qty)
 
 
 # ---------------------------------------------------------------------------
-# CRUD async
+# Listagem paginada async (usada pelos routers)
 # ---------------------------------------------------------------------------
 
-async def _upsert_asset(db: AsyncSession, ticker: str, asset_type: str) -> None:
-    """
-    Garante que exista um registro na tabela assets para o ticker.
-    Necessario para que quotes_service._db_get_fresh encontre o Asset
-    e o cache L1 possa ser populado apos a primeira cotacao via L3.
-    Nao sobrescreve last_price nem outros campos ja preenchidos.
-    """
-    result = await db.execute(
-        select(Asset).where(Asset.ticker == ticker)
-    )
-    if result.scalar_one_or_none() is None:
-        db.add(Asset(ticker=ticker, asset_type=asset_type))
-
-
-async def create_transaction(
+async def list_transactions_paginated(
     db: AsyncSession,
     portfolio_id: int,
-    data: TransactionCreate,
-) -> Transaction:
-    tx = Transaction(
-        portfolio_id=portfolio_id,
-        ticker=data.ticker,
-        asset_type=data.asset_type,
-        operation=data.operation,
-        quantity=data.quantity,
-        price=data.price,
-        fees=getattr(data, "fees", 0.0),
-        date=data.date,
-        currency=getattr(data, "currency", "BRL"),
-        notes=getattr(data, "notes", None),
-    )
-    db.add(tx)
-    # Garante registro em assets para habilitar cache L1 de cotacoes
-    await _upsert_asset(db, data.ticker, str(data.asset_type))
-    await db.commit()
-    await db.refresh(tx)
-    return tx
+    page: int = 1,
+    page_size: int = 50,
+    ticker: Optional[str] = None,
+    operation: Optional[str] = None,
+    date_from: Optional[DateType] = None,
+    date_to: Optional[DateType] = None,
+) -> dict:
+    """
+    Lista transacoes de uma carteira com paginacao e filtros opcionais.
 
-
-async def list_transactions(db: AsyncSession, portfolio_id: int) -> list[Transaction]:
-    result = await db.execute(
+    Retorna:
+        {
+            items: list[Transaction],
+            total: int,
+            page: int,
+            page_size: int,
+            pages: int,
+        }
+    """
+    base = (
         select(Transaction)
         .where(Transaction.portfolio_id == portfolio_id)
-        .order_by(Transaction.date.desc())
     )
-    return list(result.scalars().all())
-
-
-async def delete_transaction(db: AsyncSession, tx_id: int, portfolio_id: int) -> None:
-    result = await db.execute(
-        select(Transaction).where(
-            Transaction.id == tx_id,
-            Transaction.portfolio_id == portfolio_id,
-        )
+    count_base = (
+        select(func.count())
+        .select_from(Transaction)
+        .where(Transaction.portfolio_id == portfolio_id)
     )
-    tx = result.scalar_one_or_none()
-    if not tx:
-        raise HTTPException(status_code=404, detail="Transacao nao encontrada")
-    await db.execute(delete(Transaction).where(Transaction.id == tx_id))
-    await db.commit()
+
+    if ticker:
+        t = ticker.strip().upper()
+        base = base.where(Transaction.ticker == t)
+        count_base = count_base.where(Transaction.ticker == t)
+
+    if operation:
+        try:
+            op_enum = OperationType(operation.lower())
+            base = base.where(Transaction.operation == op_enum)
+            count_base = count_base.where(Transaction.operation == op_enum)
+        except ValueError:
+            pass  # filtro ignorado silenciosamente; validacao fica no router
+
+    if date_from:
+        base = base.where(Transaction.date >= date_from)
+        count_base = count_base.where(Transaction.date >= date_from)
+
+    if date_to:
+        base = base.where(Transaction.date <= date_to)
+        count_base = count_base.where(Transaction.date <= date_to)
+
+    total_result = await db.execute(count_base)
+    total = total_result.scalar_one()
+
+    base = base.order_by(Transaction.date.desc()).offset((page - 1) * page_size).limit(page_size)
+    result = await db.execute(base)
+    items = list(result.scalars().all())
+
+    pages = max(1, -(-total // page_size))  # ceil division
+
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "pages": pages,
+    }

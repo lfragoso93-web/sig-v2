@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Search, Trash2, Pencil, ChevronDown, BarChart2 } from 'lucide-react'
+import { Search, Trash2, Pencil, ChevronDown, BarChart2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useAppStore } from '@/store/appStore'
 import {
   useTransactions,
@@ -154,7 +154,7 @@ function TransactionRow({
   )
 }
 
-// ── Modal confirmar exclusao ────────────────────────────────────────────────
+// ── Modal confirmar exclusão ────────────────────────────────────────────────
 function ConfirmDeleteModal({ onCancel, onConfirm, loading }: { onCancel: () => void; onConfirm: () => void; loading: boolean }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4"
@@ -176,21 +176,68 @@ function ConfirmDeleteModal({ onCancel, onConfirm, loading }: { onCancel: () => 
   )
 }
 
+// ── Paginação ─────────────────────────────────────────────────────────────
+function Pagination({
+  page, pages, onPrev, onNext,
+}: { page: number; pages: number; onPrev: () => void; onNext: () => void }) {
+  if (pages <= 1) return null
+  return (
+    <div className="flex items-center justify-end gap-2 pt-2 pr-1">
+      <button
+        className="btn btn-ghost p-1.5 rounded"
+        style={{ color: page <= 1 ? 'var(--color-text-faint)' : 'var(--color-text-muted)', minWidth: 32, minHeight: 32 }}
+        onClick={onPrev}
+        disabled={page <= 1}
+        aria-label="Página anterior"
+      >
+        <ChevronLeft size={14} />
+      </button>
+      <span className="text-xs tabular-nums" style={{ color: 'var(--color-text-muted)' }}>
+        {page} / {pages}
+      </span>
+      <button
+        className="btn btn-ghost p-1.5 rounded"
+        style={{ color: page >= pages ? 'var(--color-text-faint)' : 'var(--color-text-muted)', minWidth: 32, minHeight: 32 }}
+        onClick={onNext}
+        disabled={page >= pages}
+        aria-label="Próxima página"
+      >
+        <ChevronRight size={14} />
+      </button>
+    </div>
+  )
+}
+
 // ── Página principal ──────────────────────────────────────────────────────────
 export default function Transacoes() {
   const { selectedPortfolioId, openTransactionModal } = useAppStore()
   const { data: portfolios = [] } = usePortfolios()
   const [searchParams] = useSearchParams()
 
-  const { data: transactions = [], isLoading } = useTransactions(selectedPortfolioId)
+  // Filtros server-side
+  const [search, setSearch]     = useState(() => searchParams.get('ticker') ?? '')
+  const [opFilter, setOpFilter] = useState<'todos' | 'buy' | 'sell'>('todos')
+  const [page, setPage]         = useState(1)
+
+  // Ao mudar filtros volta para pág 1
+  function handleSearchChange(v: string) { setSearch(v); setPage(1) }
+  function handleOpChange(v: 'todos' | 'buy' | 'sell') { setOpFilter(v); setPage(1) }
+
+  const { data: paged, isLoading } = useTransactions(selectedPortfolioId, {
+    page,
+    page_size: 50,
+    ticker:    search    || undefined,
+    operation: opFilter !== 'todos' ? opFilter : undefined,
+  })
+
+  const transactions = paged?.items    ?? []
+  const totalRecords = paged?.total    ?? 0
+  const totalPages   = paged?.pages    ?? 1
+
   const deleteTransaction = useDeleteTransaction()
 
-  // Filtros globais (ticker global + compra/venda) — sem seletor de classe
-  const [search, setSearch]               = useState(() => searchParams.get('ticker') ?? '')
-  const [opFilter, setOpFilter]           = useState<'todos' | 'buy' | 'sell'>('todos')
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
   const [openGroups, setOpenGroups]       = useState<Record<string, boolean>>({})
-  // busca interna por grupo — chave: assetType
   const [groupSearch, setGroupSearch]     = useState<Record<string, string>>({})
 
   function toggleGroup(assetType: string) {
@@ -203,38 +250,28 @@ export default function Transacoes() {
 
   function handleGroupSearchChange(assetType: string, value: string) {
     setGroupSearch(prev => ({ ...prev, [assetType]: value }))
-    // garante que o grupo fique aberto ao digitar
     setOpenGroups(prev => ({ ...prev, [assetType]: true }))
   }
 
   useEffect(() => {
     const ticker = searchParams.get('ticker')
-    if (ticker) setSearch(ticker)
+    if (ticker) { setSearch(ticker); setPage(1) }
   }, [searchParams])
 
-  // Filtragem global (ticker + op) — classe é tratada por grupo
-  const filtered = useMemo(() => {
-    return transactions.filter(t => {
-      const matchSearch = !search || t.ticker.toLowerCase().includes(search.toLowerCase())
-      const matchOp     = opFilter === 'todos' || t.operation === opFilter
-      return matchSearch && matchOp
-    })
-  }, [transactions, search, opFilter])
-
-  // Agrupa pelo asset_type após filtragem global
+  // Agrupamento client-side sobre a página atual (≤50 itens) — leve e correto
   const groupedByType = useMemo(() => {
     const groups: Record<string, Transaction[]> = {}
-    for (const t of filtered) {
+    for (const t of transactions) {
       if (!groups[t.asset_type]) groups[t.asset_type] = []
       groups[t.asset_type].push(t)
     }
     return groups
-  }, [filtered])
+  }, [transactions])
 
-  const totalCompras = filtered
+  const totalCompras = transactions
     .filter(t => t.operation === 'buy')
     .reduce((s, t) => s + t.quantity * t.price + (t.fees ?? 0), 0)
-  const totalVendas = filtered
+  const totalVendas = transactions
     .filter(t => t.operation === 'sell')
     .reduce((s, t) => s + t.quantity * t.price - (t.fees ?? 0), 0)
 
@@ -278,7 +315,7 @@ export default function Transacoes() {
         <div>
           <h1 className="text-xl font-bold">Transações</h1>
           <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-            {portfolioName} · {transactions.length} registro{transactions.length !== 1 ? 's' : ''}
+            {portfolioName} · {totalRecords} registro{totalRecords !== 1 ? 's' : ''}
             {search && (
               <span
                 className="ml-2 px-2 py-0.5 rounded-full text-xs font-medium"
@@ -306,7 +343,7 @@ export default function Transacoes() {
         </div>
       </div>
 
-      {/* Filtros globais — apenas ticker e compra/venda; sem seletor de classe */}
+      {/* Filtros server-side */}
       <div className="flex flex-wrap gap-2">
         <div className="relative">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-text-muted)' }} />
@@ -314,14 +351,14 @@ export default function Transacoes() {
             className="input pl-8 w-40 text-sm"
             placeholder="Buscar ticker…"
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => handleSearchChange(e.target.value)}
             style={{ fontSize: 16 }}
           />
           {search && (
             <button type="button"
               className="absolute right-2 top-1/2 -translate-y-1/2 text-xs"
               style={{ color: 'var(--color-text-faint)' }}
-              onClick={() => setSearch('')}
+              onClick={() => handleSearchChange('')}
               title="Limpar filtro"
             >
               ×
@@ -331,7 +368,7 @@ export default function Transacoes() {
 
         <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: 'var(--color-surface-offset)' }}>
           {(['todos', 'buy', 'sell'] as const).map(op => (
-            <button key={op} onClick={() => setOpFilter(op)}
+            <button key={op} onClick={() => handleOpChange(op)}
               className="px-3 py-1 rounded text-xs font-medium transition-colors"
               style={{
                 background: opFilter === op ? 'var(--color-surface)' : 'transparent',
@@ -352,43 +389,31 @@ export default function Transacoes() {
           <div className="p-4 flex flex-col gap-3">
             {Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton h-10 w-full rounded" />)}
           </div>
-        ) : filtered.length === 0 ? (
+        ) : transactions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <p className="text-sm font-medium mb-1">Nenhuma transação encontrada</p>
             <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-              {transactions.length === 0 ? 'Registre sua primeira transação.' : 'Tente ajustar os filtros.'}
+              {totalRecords === 0 ? 'Registre sua primeira transação.' : 'Tente ajustar os filtros.'}
             </p>
           </div>
         ) : (
           <>
-            {/* VIEW MOBILE - grupos por classe */}
+            {/* VIEW MOBILE */}
             <div className="flex flex-col gap-3 p-3 md:hidden">
               {Object.entries(groupedByType).map(([assetType, list]) => {
                 const query = (groupSearch[assetType] ?? '').toLowerCase()
-                // filtra itens pelo busca interna do grupo
                 const groupList = query
                   ? list.filter(t => t.ticker.toLowerCase().includes(query))
                   : list
-
                 const open = isGroupOpen(assetType)
-
                 return (
-                  // grupo sempre renderizado; apenas os itens internos são filtrados
                   <div key={assetType} className="flex flex-col rounded-xl" style={{ background: 'var(--color-surface-offset)', border: '1px solid var(--color-border)' }}>
                     <div className="flex items-center justify-between px-3 py-2 border-b" style={{ borderColor: 'var(--color-divider)' }}>
-                      <button
-                        type="button"
-                        className="flex items-center gap-2 text-left"
-                        onClick={() => toggleGroup(assetType)}
-                      >
-                        <ChevronDown
-                          size={14}
-                          className="transition-transform"
+                      <button type="button" className="flex items-center gap-2 text-left" onClick={() => toggleGroup(assetType)}>
+                        <ChevronDown size={14} className="transition-transform"
                           style={{ transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', color: 'var(--color-text-muted)' }}
                         />
-                        <span className="text-xs font-semibold">
-                          {ASSET_TYPE_LABEL[assetType] ?? assetType}
-                        </span>
+                        <span className="text-xs font-semibold">{ASSET_TYPE_LABEL[assetType] ?? assetType}</span>
                         <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
                           · {groupList.length} de {list.length} transação(ões)
                         </span>
@@ -400,7 +425,6 @@ export default function Transacoes() {
                         onChange={e => handleGroupSearchChange(assetType, e.target.value)}
                       />
                     </div>
-
                     {open && (
                       <div className="flex flex-col gap-2 p-3">
                         {groupList.length === 0 ? (
@@ -409,9 +433,7 @@ export default function Transacoes() {
                           </p>
                         ) : (
                           groupList.map(t => (
-                            <TransactionCard
-                              key={t.id}
-                              t={t}
+                            <TransactionCard key={t.id} t={t}
                               onDelete={() => setConfirmDelete(t.id)}
                               onEdit={() => handleEdit(t)}
                             />
@@ -422,48 +444,40 @@ export default function Transacoes() {
                   </div>
                 )
               })}
-
               <div className="flex justify-between text-xs pt-2"
                 style={{ color: 'var(--color-text-muted)', borderTop: '1px solid var(--color-divider)' }}>
-                <span>{filtered.length} transação(ões)</span>
+                <span>{totalRecords} transação(ões)</span>
                 <span>
                   <span style={{ color: 'var(--color-success)' }}>C: {formatBRL(totalCompras)}</span>
                   {' · '}
                   <span style={{ color: 'var(--color-notification)' }}>V: {formatBRL(totalVendas)}</span>
                 </span>
               </div>
+              <Pagination page={page} pages={totalPages}
+                onPrev={() => setPage(p => Math.max(1, p - 1))}
+                onNext={() => setPage(p => Math.min(totalPages, p + 1))}
+              />
             </div>
 
-            {/* VIEW DESKTOP - um bloco por classe de ativo */}
+            {/* VIEW DESKTOP */}
             <div className="hidden md:flex flex-col gap-4 p-3">
               {Object.entries(groupedByType).map(([assetType, list]) => {
                 const query = (groupSearch[assetType] ?? '').toLowerCase()
                 const groupList = query
                   ? list.filter(t => t.ticker.toLowerCase().includes(query))
                   : list
-
                 const open = isGroupOpen(assetType)
-
                 return (
-                  // grupo sempre renderizado; a tabela interna respeita o filtro
                   <div key={assetType} className="overflow-x-auto rounded-xl"
                     style={{ background: 'var(--color-surface-offset)', border: '1px solid var(--color-border)' }}
                   >
                     <div className="px-4 pt-3 pb-2 flex items-center justify-between border-b" style={{ borderColor: 'var(--color-divider)' }}>
                       <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          className="flex items-center gap-2 text-left"
-                          onClick={() => toggleGroup(assetType)}
-                        >
-                          <ChevronDown
-                            size={14}
-                            className="transition-transform"
+                        <button type="button" className="flex items-center gap-2 text-left" onClick={() => toggleGroup(assetType)}>
+                          <ChevronDown size={14} className="transition-transform"
                             style={{ transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', color: 'var(--color-text-muted)' }}
                           />
-                          <span className="text-sm font-semibold">
-                            {ASSET_TYPE_LABEL[assetType] ?? assetType}
-                          </span>
+                          <span className="text-sm font-semibold">{ASSET_TYPE_LABEL[assetType] ?? assetType}</span>
                           <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
                             · {groupList.length} de {list.length} transação(ões)
                           </span>
@@ -476,7 +490,6 @@ export default function Transacoes() {
                         onChange={e => handleGroupSearchChange(assetType, e.target.value)}
                       />
                     </div>
-
                     {open && (
                       <>
                         {groupList.length === 0 ? (
@@ -498,9 +511,7 @@ export default function Transacoes() {
                             </thead>
                             <tbody>
                               {groupList.map(t => (
-                                <TransactionRow
-                                  key={t.id}
-                                  t={t}
+                                <TransactionRow key={t.id} t={t}
                                   onDelete={() => setConfirmDelete(t.id)}
                                   onEdit={() => handleEdit(t)}
                                 />
@@ -513,8 +524,11 @@ export default function Transacoes() {
                   </div>
                 )
               })}
-
-              <div className="flex justify-end text-xs pr-1 pb-1" style={{ color: 'var(--color-text-muted)' }}>
+              <div className="flex justify-between items-center text-xs pr-1 pb-1" style={{ color: 'var(--color-text-muted)' }}>
+                <Pagination page={page} pages={totalPages}
+                  onPrev={() => setPage(p => Math.max(1, p - 1))}
+                  onNext={() => setPage(p => Math.min(totalPages, p + 1))}
+                />
                 <span>
                   <span style={{ color: 'var(--color-success)' }}>C: {formatBRL(totalCompras)}</span>
                   {' · '}

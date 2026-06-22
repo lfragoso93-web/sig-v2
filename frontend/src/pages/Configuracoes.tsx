@@ -1,21 +1,21 @@
 import { useState, useRef, useEffect } from 'react'
 import {
   Trash2, Plus, Pencil, Check, X, Loader2,
-  Camera, KeyRound, UserCircle, AlertTriangle, ChevronDown, ChevronUp, Wallet,
+  Camera, KeyRound, UserCircle, AlertTriangle, ChevronDown, ChevronUp,
+  Wallet, User, PieChart, Settings2,
 } from 'lucide-react'
 import { usePortfolios, useCreatePortfolio, useUpdatePortfolio, useDeletePortfolio } from '@/hooks/usePortfolios'
 import { useAuth } from '@/contexts/AuthContext'
 import { useUpdateProfile, useChangePassword, useUpdateAvatar, useDeleteAccount } from '@/hooks/useUser'
 import AdminPanel from '@/components/admin/AdminPanel'
 import PasswordInput from '@/components/ui/PasswordInput'
+import DistribuicaoCarteira from '@/components/configuracoes/DistribuicaoCarteira'
 
 // ── Helpers ────────────────────────────────────────────
 
 function SectionCard({ children }: { children: React.ReactNode }) {
   return (
-    <section
-      className="card p-5 flex flex-col gap-4"
-    >
+    <section className="card p-5 flex flex-col gap-4">
       {children}
     </section>
   )
@@ -54,6 +54,49 @@ function SaveFeedback({ msg, isError }: { msg: string; isError?: boolean }) {
     >
       {msg}
     </p>
+  )
+}
+
+// ── Tabs ───────────────────────────────────────────────
+
+type TabId = 'conta' | 'carteiras' | 'distribuicao' | 'avancado'
+
+const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
+  { id: 'conta',        label: 'Conta',        icon: User      },
+  { id: 'carteiras',    label: 'Carteiras',    icon: Wallet    },
+  { id: 'distribuicao', label: 'Distribuição', icon: PieChart  },
+  { id: 'avancado',     label: 'Avançado',     icon: Settings2 },
+]
+
+function Tabs({ active, onChange }: { active: TabId; onChange: (t: TabId) => void }) {
+  return (
+    <div
+      role="tablist"
+      className="flex gap-1 rounded-xl p-1"
+      style={{ background: 'var(--color-surface-offset)', border: '1px solid var(--color-divider)' }}
+    >
+      {TABS.map(t => {
+        const isActive = t.id === active
+        return (
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={isActive}
+            onClick={() => onChange(t.id)}
+            className="flex items-center gap-1.5 flex-1 justify-center rounded-lg px-3 py-2 text-xs font-medium transition-all"
+            style={{
+              background:  isActive ? 'var(--color-surface-2)' : 'transparent',
+              color:       isActive ? 'var(--color-primary)'   : 'var(--color-text-muted)',
+              boxShadow:   isActive ? 'var(--shadow-sm)'        : 'none',
+              fontWeight:  isActive ? 600 : 500,
+            }}
+          >
+            <t.icon size={13} />
+            <span className="hidden sm:inline">{t.label}</span>
+          </button>
+        )
+      })}
+    </div>
   )
 }
 
@@ -103,7 +146,6 @@ function ProfileSection() {
     <>
       <SectionTitle icon={UserCircle}>Minha conta</SectionTitle>
 
-      {/* Avatar */}
       <div className="flex items-center gap-4">
         <div className="relative shrink-0">
           {avatarSrc ? (
@@ -136,7 +178,6 @@ function ProfileSection() {
         </div>
       </div>
 
-      {/* Campos */}
       <div className="flex flex-col gap-3">
         <FieldGroup label="Nome">
           <input className="input" style={{ fontSize: 16 }} value={name} onChange={e => setName(e.target.value)} placeholder="Seu nome" />
@@ -249,7 +290,7 @@ function CarteirasSection() {
   }
 
   return (
-    <SectionCard>
+    <>
       <SectionTitle icon={Wallet}>Carteiras</SectionTitle>
       <ul className="flex flex-col gap-2">
         {portfolios.map(p => (
@@ -283,7 +324,7 @@ function CarteirasSection() {
           {isCreating ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
         </button>
       </div>
-    </SectionCard>
+    </>
   )
 }
 
@@ -341,6 +382,7 @@ function DangerZone() {
 export default function Configuracoes() {
   const { user } = useAuth()
   const isSuperAdmin = user?.role === 'superadmin'
+  const [activeTab, setActiveTab] = useState<TabId>('conta')
 
   return (
     <div className="page-container max-w-2xl pb-24">
@@ -350,11 +392,32 @@ export default function Configuracoes() {
           <p className="page-subtitle">Gerencie seu perfil e carteiras</p>
         </div>
       </div>
-      <SectionCard><ProfileSection /></SectionCard>
-      <PasswordSection />
-      <CarteirasSection />
-      {isSuperAdmin && <AdminPanel />}
-      <DangerZone />
+
+      <Tabs active={activeTab} onChange={setActiveTab} />
+
+      <div className="mt-4">
+        {activeTab === 'conta' && (
+          <div className="flex flex-col gap-4">
+            <SectionCard><ProfileSection /></SectionCard>
+            <PasswordSection />
+          </div>
+        )}
+
+        {activeTab === 'carteiras' && (
+          <SectionCard><CarteirasSection /></SectionCard>
+        )}
+
+        {activeTab === 'distribuicao' && (
+          <SectionCard><DistribuicaoCarteira /></SectionCard>
+        )}
+
+        {activeTab === 'avancado' && (
+          <div className="flex flex-col gap-4">
+            {isSuperAdmin && <AdminPanel />}
+            <DangerZone />
+          </div>
+        )}
+      </div>
     </div>
   )
 }

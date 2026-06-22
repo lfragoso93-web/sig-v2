@@ -16,7 +16,7 @@ from app.services.portfolio_service import (
     get_portfolio_positions,
     get_portfolio_summary,
 )
-from app.services.quote_service import update_quotes_for_portfolio
+from app.services.quotes_service import update_quotes_for_portfolio
 
 router = APIRouter(tags=["positions"])
 

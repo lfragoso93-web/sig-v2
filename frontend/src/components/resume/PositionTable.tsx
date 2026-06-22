@@ -1,14 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MoreHorizontal, Plus, List, BarChart2 as AnalyseIcon, ChevronDown, Target, Clock } from 'lucide-react'
-import { formatBRL, formatPercent } from '@/utils/format'
+import { formatBRL, formatPercent, fmtMoney } from '@/utils/format'
 import { formatTreasuryName } from '@/utils/treasury'
 import AssetLogo from '@/components/ui/AssetLogo'
 import { useAppStore } from '@/store/appStore'
-import { useSetClassTarget } from '@/hooks/useClassTargets'
+import { useUpsertClassTarget } from '@/hooks/useClassTargets'
 import type { PositionGroup } from '@/hooks/usePortfolio'
 
-// ── helpers ──────────────────────────────────────────────────────────────────────────────────────────────
+// ── helpers ────────────────────────────────────────────────────────────────────────────────────────────────────────
+const USD_TYPES = new Set(['STOCK', 'ETF_INTERNACIONAL'])
+
+function isUsdAsset(assetType: string): boolean {
+  return USD_TYPES.has(assetType.toUpperCase())
+}
+
 function assetTypeToTab(assetType: string): string {
   const map: Record<string, string> = {
     ACAO: 'acao', FII: 'fii', ETF_NACIONAL: 'etf_br',
@@ -23,11 +29,6 @@ function fmtQty(v: number) {
   return v % 1 === 0
     ? v.toLocaleString('pt-BR')
     : v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 8 })
-}
-
-function fmtPrice(val: number | null | undefined): string {
-  if (val === null || val === undefined) return '—'
-  return formatBRL(val)
 }
 
 function displayName(ticker: string, assetType: string): string {
@@ -56,8 +57,6 @@ function calcGroupVariation(group: PositionGroup): { variationPct: number | null
 /**
  * Retorna uma string legible do timestamp da cotação mais recente
  * entre todas as posições do grupo.
- * Usa o campo `quote_updated_at` se existir no PositionItem (extensão opt.).
- * Caso não exista, retorna null (sem exibir nada).
  */
 function getGroupQuoteTimestamp(group: PositionGroup): string | null {
   const timestamps: number[] = []
@@ -76,24 +75,21 @@ function getGroupQuoteTimestamp(group: PositionGroup): string | null {
   const diffMin = Math.floor(diffMs / 60_000)
   const diffH   = Math.floor(diffMs / 3_600_000)
 
-  // Mesmo dia
   if (d.toDateString() === now.toDateString()) {
     if (diffMin < 1)  return 'agora mesmo'
     if (diffMin < 60) return `há ${diffMin} min`
     if (diffH < 24)   return `há ${diffH}h`
   }
-  // Ontem
   const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1)
   if (d.toDateString() === yesterday.toDateString()) return 'ontem'
-  // Data passada
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
 }
 
-// ── style tokens ──────────────────────────────────────────────────────────────────────────────────────────────
+// ── style tokens ────────────────────────────────────────────────────────────────────────────────────────────────────────
 const cellText  = { color: 'var(--color-text)' }
 const cellFaint = { color: 'var(--color-text-faint)' }
 
-// ── hook de breakpoint ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── hook de breakpoint ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
 function useIsDesktop(breakpoint = 768) {
   const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= breakpoint)
   useEffect(() => {
@@ -105,7 +101,7 @@ function useIsDesktop(breakpoint = 768) {
   return isDesktop
 }
 
-// ── AssetMenu ────────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── AssetMenu ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
 interface AssetMenuProps { ticker: string; assetLabel: string; assetType: string }
 
 function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
@@ -192,7 +188,7 @@ function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
   )
 }
 
-// ── PositionCard (mobile) ───────────────────────────────────────────────────────────────────────────────────────────────
+// ── PositionCard (mobile) ─────────────────────────────────────────────────────────────────────────────────────────────────
 interface PositionCardProps { item: PositionGroup['positions'][number] }
 
 function PositionCard({ item }: PositionCardProps) {
@@ -201,6 +197,9 @@ function PositionCard({ item }: PositionCardProps) {
   const hasQuote = item.current_price !== null && item.current_price !== undefined
   const varColor = (item.variation_value ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-error)'
   const investedValue = item.invested_value ?? item.quantity * item.average_price
+  // Para ativos USD (STOCK/ETF_INT), preços unitários ficam em USD;
+  // os valores convertidos (invested_value, current_value) já chegam em BRL do backend
+  const currency = isUsdAsset(item.asset_type) ? 'USD' : 'BRL'
 
   return (
     <div style={{
@@ -223,10 +222,12 @@ function PositionCard({ item }: PositionCardProps) {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.625rem 1rem' }}>
         {[
-          { label: 'Qtd',         value: fmtQty(item.quantity)        },
-          { label: 'P. Médio',   value: formatBRL(item.average_price) },
-          { label: 'Total Inv.',  value: formatBRL(investedValue)     },
-          { label: 'Valor Atual', value: fmtPrice(item.current_price !== null && item.current_price !== undefined ? item.current_value : null) },
+          { label: 'Qtd',         value: fmtQty(item.quantity)                                      },
+          // P. Médio e P. Atual em USD para ativos internacionais
+          { label: 'P. Médio',   value: fmtMoney(item.average_price, currency)                    },
+          // Total Inv. e Valor Atual: o backend já converte para BRL via fx_rate
+          { label: 'Total Inv.',  value: fmtMoney(investedValue, 'BRL')                            },
+          { label: 'Valor Atual', value: hasQuote ? fmtMoney(item.current_value ?? null, 'BRL') : '—' },
         ].map(({ label, value }) => (
           <div key={label}>
             <div style={{ fontSize: '0.65rem', marginBottom: 2, color: 'var(--color-text-faint)' }}>{label}</div>
@@ -237,7 +238,7 @@ function PositionCard({ item }: PositionCardProps) {
           <div style={{ fontSize: '0.65rem', marginBottom: 2, color: 'var(--color-text-faint)' }}>Resultado</div>
           {hasQuote ? (
             <div style={{ fontWeight: 600, fontSize: 'var(--text-xs)', color: varColor, fontVariantNumeric: 'tabular-nums' }}>
-              {formatBRL(item.variation_value ?? 0)}
+              {fmtMoney(item.variation_value ?? null, 'BRL')}
               <span style={{ marginLeft: 6, fontSize: '0.65rem', fontWeight: 500, opacity: 0.8 }}>
                 ({formatPercent(item.variation_percent ?? 0)})
               </span>
@@ -251,7 +252,7 @@ function PositionCard({ item }: PositionCardProps) {
   )
 }
 
-// ── TargetModal ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── TargetModal ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 interface TargetModalProps {
   assetType: string
   label: string
@@ -262,7 +263,7 @@ interface TargetModalProps {
 
 function TargetModal({ assetType, label, currentTarget, portfolioId, onClose }: TargetModalProps) {
   const [value, setValue] = useState(String(currentTarget ?? ''))
-  const { mutate, isPending } = useSetClassTarget(portfolioId)
+  const { mutate, isPending } = useUpsertClassTarget(portfolioId)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -351,7 +352,7 @@ function TargetModal({ assetType, label, currentTarget, portfolioId, onClose }: 
   )
 }
 
-// ── ClassGroupHeader ──────────────────────────────────────────────────────────────────────────────────────────────
+// ── ClassGroupHeader ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 interface ClassGroupHeaderProps {
   group: PositionGroup
   collapsed: boolean
@@ -384,6 +385,7 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
     </span>
   )
 
+  // Header sempre em BRL: total_value e total_invested do grupo já chegam convertidos pelo backend
   return (
     <div style={{ position: 'relative' }}>
       <button
@@ -493,7 +495,7 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
   )
 }
 
-// ── ClassTable ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── ClassTable ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 function ClassTable({ group, portfolioId }: { group: PositionGroup; portfolioId: number }) {
   const isDesktop = useIsDesktop()
   const [collapsed, setCollapsed] = useState(false)
@@ -558,6 +560,8 @@ function ClassTable({ group, portfolioId }: { group: PositionGroup; portfolioId:
                   const isTesouro = item.asset_type.toUpperCase() === 'TESOURO_DIRETO' || item.asset_type.toUpperCase() === 'TESOURO'
                   const varColor = (item.variation_value ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-notification)'
                   const investedValue = item.invested_value ?? item.quantity * item.average_price
+                  // Preços unitários: USD para STOCK/ETF_INT; BRL demais
+                  const currency = isUsdAsset(item.asset_type) ? 'USD' : 'BRL'
                   return (
                     <tr
                       key={`${item.ticker}-${item.id ?? item.ticker}`}
@@ -577,18 +581,26 @@ function ClassTable({ group, portfolioId }: { group: PositionGroup; portfolioId:
                         </div>
                       </td>
                       <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>{fmtQty(item.quantity)}</td>
-                      <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>{formatBRL(item.average_price)}</td>
-                      <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                        <span style={hasQuote ? cellText : cellFaint}>{fmtPrice(item.current_price)}</span>
-                      </td>
-                      <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>{formatBRL(investedValue)}</td>
+                      {/* P. Médio e P. Atual: símbolo USD para ativos internacionais */}
                       <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
-                        {hasQuote ? formatBRL(item.current_value) : <span style={cellFaint}>—</span>}
+                        {fmtMoney(item.average_price, currency)}
+                      </td>
+                      <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                        <span style={hasQuote ? cellText : cellFaint}>
+                          {hasQuote ? fmtMoney(item.current_price, currency) : '—'}
+                        </span>
+                      </td>
+                      {/* Total Inv. e Valor Atual: sempre BRL (backend já converteu via fx_rate) */}
+                      <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
+                        {fmtMoney(investedValue, 'BRL')}
+                      </td>
+                      <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
+                        {hasQuote ? fmtMoney(item.current_value ?? null, 'BRL') : <span style={cellFaint}>—</span>}
                       </td>
                       <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
                         {hasQuote ? (
                           <div style={{ color: varColor }}>
-                            <div style={{ fontWeight: 600 }}>{formatBRL(item.variation_value ?? 0)}</div>
+                            <div style={{ fontWeight: 600 }}>{fmtMoney(item.variation_value ?? null, 'BRL')}</div>
                             <div style={{ fontSize: '0.65rem', fontWeight: 500, opacity: 0.8 }}>{formatPercent(item.variation_percent ?? 0)}</div>
                           </div>
                         ) : <span style={cellFaint}>—</span>}
@@ -603,7 +615,7 @@ function ClassTable({ group, portfolioId }: { group: PositionGroup; portfolioId:
             </table>
           )}
 
-          {/* Rodapé com timestamp da cotação — exibido apenas se o campo existir nos dados */}
+          {/* Rodapé com timestamp da cotação */}
           {quoteTimestamp && (
             <div style={{
               display: 'flex', alignItems: 'center', gap: 4,
@@ -623,7 +635,7 @@ function ClassTable({ group, portfolioId }: { group: PositionGroup; portfolioId:
   )
 }
 
-// ── PositionTable ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── PositionTable ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 interface Props { groups: PositionGroup[]; portfolioId: number }
 
 export default function PositionTable({ groups, portfolioId }: Props) {

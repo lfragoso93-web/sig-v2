@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+import uuid
 import jwt
 import jwt.exceptions
 import bcrypt
@@ -18,11 +19,11 @@ def verify_password(plain: str, hashed: str) -> bool:
 
     Compatibilidade com hashes legados gerados pelo passlib:
     - passlib usava prefixo '$2b$' mas com cost factor e salt no formato
-      ligeiramente diferente em algumas versões, resultando em hashes que
-      bcrypt>=4.x não consegue verificar diretamente.
-    - Tentativa 1: verificação normal com bcrypt nativo.
-    - Tentativa 2: se o hash começa com '$2b$', tenta também com prefixo
-      '$2y$' (formato PHP/passlib antigo) para máxima compatibilidade.
+      ligeiramente diferente em algumas versoes, resultando em hashes que
+      bcrypt>=4.x nao consegue verificar diretamente.
+    - Tentativa 1: verificacao normal com bcrypt nativo.
+    - Tentativa 2: se o hash comeca com '$2b$', tenta tambem com prefixo
+      '$2y$' (formato PHP/passlib antigo) para maxima compatibilidade.
     - Retorna False silenciosamente em qualquer erro de formato.
     """
     try:
@@ -60,8 +61,14 @@ def create_access_token(
 
 
 def create_refresh_token(subject: str) -> str:
+    """Cria refresh token com jti (UUID) para suporte a blacklist."""
     expire = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-    payload = {"sub": subject, "exp": expire, "type": "refresh"}
+    payload = {
+        "sub": subject,
+        "exp": expire,
+        "type": "refresh",
+        "jti": str(uuid.uuid4()),  # identificador unico para blacklist
+    }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 

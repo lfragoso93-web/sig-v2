@@ -1,10 +1,14 @@
-import os
+import logging
 import traceback
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from app.core.database import engine
 from app.core.config import settings
@@ -18,6 +22,19 @@ from app.routers import (
 from app.routers import debug
 from app.routers import prices
 from app.routers import class_targets
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Rate limiter (slowapi)
+# Usa Redis se REDIS_URL estiver configurado; fallback para memoria.
+# ---------------------------------------------------------------------------
+_storage_uri = settings.REDIS_URL if settings.REDIS_URL else "memory://"
+limiter = Limiter(
+    key_func=get_remote_address,
+    storage_uri=_storage_uri,
+    default_limits=[],
+)
 
 
 @asynccontextmanager
@@ -34,18 +51,46 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Injeta o limiter no state para que @limiter.limit() funcione nos routers
+app.state.limiter = limiter
+
+
+# Wrapper com assinatura compativel com add_exception_handler (mypy exige
+# Callable[[Request, Exception], Response | Awaitable[Response]]).
+def _rate_limit_handler(request: Request, exc: Exception) -> Response:
+    return _rate_limit_exceeded_handler(request, exc)  # type: ignore[arg-type]
+
+
+# Handler de 429 -- retorna JSON padrao em vez de HTML
+app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
+
+# Middleware slowapi (necessario para key_func acessar o request)
+app.add_middleware(SlowAPIMiddleware)
+
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     tb = traceback.format_exc()
+    logger.error(
+        "Unhandled exception on %s %s: %s\n%s",
+        request.method,
+        request.url,
+        exc,
+        tb,
+    )
+    if settings.APP_DEBUG:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail": str(exc),
+                "type": type(exc).__name__,
+                "traceback": tb,
+                "path": str(request.url),
+            },
+        )
     return JSONResponse(
         status_code=500,
-        content={
-            "detail": str(exc),
-            "type": type(exc).__name__,
-            "traceback": tb,
-            "path": str(request.url),
-        },
+        content={"detail": "Erro interno no servidor. Contate o suporte."},
     )
 
 
@@ -116,10 +161,10 @@ app.include_router(irpf.router,            prefix=f"{PREFIX}/irpf",         tags
 app.include_router(analysis.router,        prefix=f"{PREFIX}/analysis",     tags=["analysis"])
 app.include_router(fixed_income.router,    prefix=f"{PREFIX}/fixed-income", tags=["fixed_income"])
 
-if os.getenv("ADMIN_SECRET"):
+if settings.APP_DEBUG or __import__('os').getenv("ADMIN_SECRET"):
     app.include_router(debug.router, prefix=f"{PREFIX}/debug", tags=["debug"])
 
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "version": "2.0.0"}
+    return {"status": "ok", "version": "2.0.0", "debug": settings.APP_DEBUG}

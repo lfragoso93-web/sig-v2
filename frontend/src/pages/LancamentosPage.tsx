@@ -40,8 +40,12 @@ const ALL_TYPES = ['Todos', ...Object.keys(ASSET_LABELS)]
 export default function LancamentosPage() {
   const { selectedPortfolioId } = useAppStore()
   const { data: portfolios = [] } = usePortfolios()
-  const { data: transactions = [], isLoading } = useTransactions(selectedPortfolioId)
+  const { data: txData, isLoading } = useTransactions(selectedPortfolioId)
   const deleteTransaction = useDeleteTransaction()
+
+  // PagedTransactions tem .items (Transaction[]) e .total (number)
+  const transactions: Transaction[] = txData?.items ?? []
+  const totalCount: number         = txData?.total  ?? 0
 
   const [showModal,     setShowModal]     = useState(false)
   const [search,        setSearch]        = useState('')
@@ -49,7 +53,7 @@ export default function LancamentosPage() {
   const [opFilter,      setOpFilter]      = useState<'todos' | 'buy' | 'sell'>('todos')
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
 
-  const filtered = useMemo(() => transactions.filter(t => {
+  const filtered = useMemo(() => transactions.filter((t: Transaction) => {
     const matchSearch = t.ticker.toLowerCase().includes(search.toLowerCase())
     const matchType   = typeFilter === 'Todos' || t.asset_type === typeFilter
     const matchOp     = opFilter  === 'todos'  || t.operation  === opFilter
@@ -57,11 +61,13 @@ export default function LancamentosPage() {
   }), [transactions, search, typeFilter, opFilter])
 
   const totalCompras = useMemo(() =>
-    filtered.filter(t => t.operation === 'buy').reduce((s, t) => s + t.quantity * t.price + (t.fees ?? 0), 0)
+    filtered.filter((t: Transaction) => t.operation === 'buy')
+            .reduce((s: number, t: Transaction) => s + t.quantity * t.price + (t.fees ?? 0), 0)
   , [filtered])
 
   const totalVendas = useMemo(() =>
-    filtered.filter(t => t.operation === 'sell').reduce((s, t) => s + t.quantity * t.price - (t.fees ?? 0), 0)
+    filtered.filter((t: Transaction) => t.operation === 'sell')
+            .reduce((s: number, t: Transaction) => s + t.quantity * t.price - (t.fees ?? 0), 0)
   , [filtered])
 
   async function handleDelete(id: number) {
@@ -92,7 +98,7 @@ export default function LancamentosPage() {
           <h1 className="page-title">Lançamentos</h1>
           <p className="page-subtitle">
             {portfolioName && <span className="font-medium">{portfolioName} · </span>}
-            {transactions.length} registro{transactions.length !== 1 ? 's' : ''}
+            {totalCount} registro{totalCount !== 1 ? 's' : ''}
           </p>
         </div>
         <button className="btn btn-primary text-xs" onClick={() => setShowModal(true)}>

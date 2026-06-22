@@ -13,13 +13,13 @@ usar os sets abaixo para evitar divergência entre arquivos.
 from app.models.asset import AssetType
 
 # ── Ativos que usam BRAPI como provedor primário ──────────────────────────────
+# RENDA_FIXA removido daqui — não tem cotação de mercado (está em NO_QUOTE_TYPES)
 BR_TYPES: frozenset[AssetType] = frozenset({
     AssetType.ACAO,
     AssetType.FII,
     AssetType.ETF_NACIONAL,
     AssetType.BDR,           # BDR negocia na B3 — provedor BRAPI
     AssetType.TESOURO_DIRETO,
-    AssetType.RENDA_FIXA,
     AssetType.CRIPTO,
 })
 
@@ -30,7 +30,7 @@ INTL_TYPES: frozenset[AssetType] = frozenset({
 })
 
 # ── Ativos sem cotação de mercado disponível via API ─────────────────────────
-# RENDA_FIXA não tem ticker de mercado; OUTRO não tem ticker
+# RENDA_FIXA não tem ticker de mercado; OUTRO não tem ticker definido
 # TESOURO_DIRETO foi removido daqui: usa fetch_treasury_list para buyPrice atual
 NO_QUOTE_TYPES: frozenset[AssetType] = frozenset({
     AssetType.RENDA_FIXA,

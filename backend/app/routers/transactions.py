@@ -1,18 +1,21 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from datetime import date as DateType
+from typing import Optional
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from typing import List
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
 from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction, OperationType
-from app.schemas.transaction import TransactionCreate, TransactionOut
+from app.schemas.transaction import TransactionCreate, TransactionOut, PagedTransactions
 from app.schemas.asset import AssetCreate
 from app.services.asset_service import get_or_create_asset
 from app.services.dividend_backfill_service import backfill_dividends
 from app.services.asset_onboarding_service import run_onboarding
+from app.services.transaction_service import list_transactions_paginated
 
 router = APIRouter()
 
@@ -84,19 +87,40 @@ async def _validate_sell(
         )
 
 
-@router.get("/{portfolio_id}/transactions", response_model=List[TransactionOut])
+@router.get("/{portfolio_id}/transactions", response_model=PagedTransactions)
 async def list_transactions(
     portfolio_id: int,
+    page: int = Query(1, ge=1, description="Número da página (inicia em 1)"),
+    page_size: int = Query(50, ge=1, le=200, description="Itens por página (máx 200)"),
+    ticker: Optional[str] = Query(None, description="Filtrar por ticker (ex: PETR4)"),
+    operation: Optional[str] = Query(None, description="Filtrar por operação: buy | sell"),
+    date_from: Optional[DateType] = Query(None, description="Data inicial (YYYY-MM-DD)"),
+    date_to: Optional[DateType] = Query(None, description="Data final (YYYY-MM-DD)"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """
+    Lista transações da carteira com paginação e filtros opcionais.
+    Retorna envelope: { items, total, page, page_size, pages }
+    """
     await _get_portfolio(portfolio_id, current_user, db)
-    result = await db.execute(
-        select(Transaction)
-        .where(Transaction.portfolio_id == portfolio_id)
-        .order_by(Transaction.date.desc())
+
+    if operation and operation.lower() not in {"buy", "sell"}:
+        raise HTTPException(
+            status_code=422,
+            detail=f"operation inválida: '{operation}'. Use 'buy' ou 'sell'.",
+        )
+
+    return await list_transactions_paginated(
+        db=db,
+        portfolio_id=portfolio_id,
+        page=page,
+        page_size=page_size,
+        ticker=ticker,
+        operation=operation,
+        date_from=date_from,
+        date_to=date_to,
     )
-    return result.scalars().all()
 
 
 @router.post(
@@ -141,19 +165,15 @@ async def create_transaction(
         name=ticker,
         asset_type=asset_type,
     )
-    _, is_new = await get_or_create_asset(db, asset_data)
+    await get_or_create_asset(db, asset_data)
 
-    if is_new:
-        background_tasks.add_task(run_onboarding, ticker, str(asset_type))
-    else:
-        background_tasks.add_task(
-            _run_backfill,
-            portfolio_id=portfolio_id,
-            ticker=ticker,
-            asset_type=str(asset_type),
-        )
-
-    # Recalcula snapshots históricos para o gráfico patrimonial ficar populado
+    background_tasks.add_task(run_onboarding, ticker, str(asset_type))
+    background_tasks.add_task(
+        _run_backfill,
+        portfolio_id=portfolio_id,
+        ticker=ticker,
+        asset_type=str(asset_type),
+    )
     background_tasks.add_task(_run_snapshot_backfill, portfolio_id=portfolio_id)
 
     return tx
@@ -203,6 +223,7 @@ async def update_transaction(
     await db.commit()
     await db.refresh(tx)
 
+    background_tasks.add_task(run_onboarding, ticker, str(asset_type))
     background_tasks.add_task(
         _run_backfill,
         portfolio_id=portfolio_id,
@@ -253,7 +274,6 @@ async def delete_transaction(
 
 
 async def _run_backfill(portfolio_id: int, ticker: str, asset_type: str) -> None:
-    """Background task: backfill de dividendos para a carteira."""
     try:
         from app.core.database import AsyncSessionLocal
         async with AsyncSessionLocal() as db:
@@ -271,10 +291,6 @@ async def _run_backfill(portfolio_id: int, ticker: str, asset_type: str) -> None
 
 
 async def _run_snapshot_backfill(portfolio_id: int) -> None:
-    """
-    Background task: recalcula snapshots diários do patrimônio.
-    Roda somente nos dias que ainda não têm snapshot para evitar custo excessivo.
-    """
     try:
         from app.core.database import AsyncSessionLocal
         from app.services.portfolio_snapshot_service import backfill_snapshots
