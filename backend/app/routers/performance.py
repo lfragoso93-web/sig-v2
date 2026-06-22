@@ -5,10 +5,10 @@ from app.core.auth import get_current_user
 from app.models.user import User
 from app.services.performance_service import get_portfolio_performance
 
-router = APIRouter(prefix="/portfolios/{portfolio_id}/performance", tags=["performance"])
+router = APIRouter(tags=["performance"])
 
 
-@router.get("/")
+@router.get("/{portfolio_id}/performance")
 async def portfolio_performance(
     portfolio_id: int,
     db: AsyncSession = Depends(get_db),

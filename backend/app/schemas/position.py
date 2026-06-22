@@ -1,53 +1,75 @@
+"""
+Schemas de posicao alinhados com o contrato do portfolio_service
+(calc_raw_positions + enrich_with_prices).
+"""
 from pydantic import BaseModel
-from decimal import Decimal
 from typing import Optional
-from datetime import datetime
 
 
-class AssetMinimal(BaseModel):
-    """Subconjunto de Asset embutido na resposta de posição."""
-    id:           int
-    ticker:       str
-    name:         str
-    asset_type:   str
-    brapi_ticker: Optional[str] = None
-
-    class Config:
-        from_attributes = True
-
-
-class PositionResponse(BaseModel):
-    """Posição individual enriquecida com preço atual (quando disponível)."""
-    id:                    int
-    portfolio_id:          int
-    asset_id:              int
-    asset:                 AssetMinimal
-    quantity:              Decimal
-    average_price:         Decimal
-    total_invested:        Decimal
-    realized_profit:       Decimal
-    current_price:         Optional[Decimal] = None
-    current_value:         Optional[Decimal] = None
-    unrealized_profit:     Optional[Decimal] = None
-    unrealized_profit_pct: Optional[Decimal] = None
-    updated_at:            Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
+class PositionOut(BaseModel):
+    """
+    Posicao individual de um ativo na carteira, enriquecida com preco atual.
+    current_price, current_value, variation_value e variation_percent sao
+    None quando cotacao nao esta disponivel.
+    logo_url e None enquanto o onboarding nao foi executado para o ativo.
+    """
+    id:                Optional[int]   = None
+    ticker:            str
+    asset_type:        str
+    asset_label:       str
+    quantity:          float
+    average_price:     float
+    current_price:     Optional[float] = None
+    current_value:     Optional[float] = None
+    invested_value:    float
+    variation_value:   Optional[float] = None
+    variation_percent: Optional[float] = None
+    allocation_pct:    float
+    logo_url:          Optional[str]   = None
 
 
-# Alias mantido para retrocompatibilidade interna
-PositionOut = PositionResponse
+class AssetGroupOut(BaseModel):
+    """
+    Grupo de posicoes por tipo de ativo (ex: Acoes, FIIs).
+    Inclui total_invested, variation_pct e target_pct quando disponiveis.
+    """
+    label:          str
+    count:          int
+    total_value:    float
+    total_invested: Optional[float] = None
+    variation_pct:  Optional[float] = None
+    target_pct:     Optional[float] = None
+    positions:      list[PositionOut] = []
 
 
 class PortfolioSummary(BaseModel):
-    """Resumo completo da carteira retornado pelo endpoint /summary."""
-    portfolio_id:       int
-    portfolio_name:     str
-    total_invested:     Decimal
-    current_value:      Optional[Decimal] = None
-    total_return:       Optional[Decimal] = None
-    total_return_pct:   Optional[Decimal] = None
-    realized_profit:    Decimal
-    positions_count:    int
-    positions:          list[PositionResponse] = []
+    """
+    Resumo consolidado da carteira retornado por /positions/summary.
+    """
+    total_invested:           float
+    current_value:            float
+    total_gain:               float
+    total_gain_pct:           float
+    total_patrimonio:         float
+    total_investido:          float
+    lucro_total:              float
+    variacao_valor:           float
+    variacao_percentual:      float
+    rentabilidade_total:      float
+    dividendos_recebidos_12m: float
+    total_proventos:          float
+    ganho_capital:            float
+
+
+# Alias mantido para imports existentes em outros modulos
+PositionResponse = PositionOut
+
+
+# ── Schemas para metas por classe ────────────────────────────────────────────
+class ClassTargetOut(BaseModel):
+    asset_type: str
+    target_pct: float
+
+
+class ClassTargetIn(BaseModel):
+    target_pct: float

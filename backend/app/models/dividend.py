@@ -24,13 +24,20 @@ class Dividend(Base):
     __tablename__ = "dividends"
 
     id = Column(Integer, primary_key=True, index=True)
-    # FK para o provento global do ativo
     asset_dividend_id = Column(Integer, ForeignKey("asset_dividends.id", ondelete="CASCADE"), nullable=True, index=True)
     portfolio_id = Column(Integer, ForeignKey("portfolios.id", ondelete="CASCADE"), nullable=False, index=True)
     quantity = Column(Numeric(20, 8), nullable=True)
     total_value = Column(Numeric(20, 8), nullable=True)
     net_value = Column(Numeric(20, 8), nullable=True)
-    status = Column(SAEnum(DividendStatus, values_callable=lambda x: [e.value for e in x]), nullable=False, default="RECEBIDO")
+    status = Column(
+        SAEnum(
+            DividendStatus,
+            values_callable=lambda x: [e.value for e in x],
+            native_enum=False,   # armazena como VARCHAR — sem tipo PG nativo
+        ),
+        nullable=False,
+        default="RECEBIDO",
+    )
     # campos legados (backfill)
     ticker = Column(String, nullable=True, index=True)
     ex_date = Column(Date, nullable=True)

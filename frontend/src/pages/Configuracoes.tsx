@@ -14,8 +14,7 @@ import PasswordInput from '@/components/ui/PasswordInput'
 function SectionCard({ children }: { children: React.ReactNode }) {
   return (
     <section
-      className="rounded-xl p-5 flex flex-col gap-4"
-      style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+      className="card p-5 flex flex-col gap-4"
     >
       {children}
     </section>
@@ -128,7 +127,7 @@ function ProfileSection() {
           </button>
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
         </div>
-        <div className="flex flex-col">
+        <div className="flex flex-col gap-0.5">
           <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{user?.name || '—'}</span>
           <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{user?.email}</span>
           <span className="text-xs mt-1 px-2 py-0.5 rounded-full self-start" style={{ background: 'oklch(from var(--color-primary) l c h / 0.12)', color: 'var(--color-primary)', fontWeight: 500 }}>
@@ -203,31 +202,13 @@ function PasswordSection() {
       {open && (
         <form onSubmit={handleSubmit} className="flex flex-col gap-3 mt-1">
           <FieldGroup label="Senha atual">
-            <PasswordInput
-              className="input w-full"
-              style={{ fontSize: 16 }}
-              value={form.current}
-              onChange={e => set('current', e.target.value)}
-              required
-            />
+            <PasswordInput className="input w-full" style={{ fontSize: 16 }} value={form.current} onChange={e => set('current', e.target.value)} required />
           </FieldGroup>
           <FieldGroup label="Nova senha">
-            <PasswordInput
-              className="input w-full"
-              style={{ fontSize: 16 }}
-              value={form.next}
-              onChange={e => set('next', e.target.value)}
-              required
-            />
+            <PasswordInput className="input w-full" style={{ fontSize: 16 }} value={form.next} onChange={e => set('next', e.target.value)} required />
           </FieldGroup>
           <FieldGroup label="Confirmar nova senha">
-            <PasswordInput
-              className="input w-full"
-              style={{ fontSize: 16 }}
-              value={form.confirm}
-              onChange={e => set('confirm', e.target.value)}
-              required
-            />
+            <PasswordInput className="input w-full" style={{ fontSize: 16 }} value={form.confirm} onChange={e => set('confirm', e.target.value)} required />
           </FieldGroup>
           {feedback && <SaveFeedback msg={feedback.msg} isError={feedback.isError} />}
           <button type="submit" disabled={changePassword.isPending} className="btn btn-primary self-start disabled:opacity-40" style={{ minHeight: 38 }}>
@@ -328,7 +309,7 @@ function DangerZone() {
   }
 
   return (
-    <section className="rounded-xl p-5 flex flex-col gap-4" style={{ border: '1px solid oklch(from var(--color-error) l c h / 0.3)', background: 'oklch(from var(--color-error) l c h / 0.04)' }}>
+    <section className="card p-5 flex flex-col gap-4" style={{ border: '1px solid oklch(from var(--color-error) l c h / 0.3)', background: 'oklch(from var(--color-error) l c h / 0.04)' }}>
       <button onClick={() => setOpen(o => !o)} className="flex items-center justify-between w-full">
         <div className="flex items-center gap-2">
           <AlertTriangle size={15} style={{ color: 'var(--color-error)' }} />
@@ -362,10 +343,12 @@ export default function Configuracoes() {
   const isSuperAdmin = user?.role === 'superadmin'
 
   return (
-    <div className="p-4 md:p-6 max-w-lg mx-auto flex flex-col gap-5 pb-24">
-      <div>
-        <h1 className="text-xl font-bold">Configurações</h1>
-        <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Gerencie seu perfil e carteiras</p>
+    <div className="page-container max-w-2xl pb-24">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Configurações</h1>
+          <p className="page-subtitle">Gerencie seu perfil e carteiras</p>
+        </div>
       </div>
       <SectionCard><ProfileSection /></SectionCard>
       <PasswordSection />

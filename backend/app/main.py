@@ -1,9 +1,10 @@
 import os
+import traceback
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-import asyncpg
-import asyncpg.exceptions
+from fastapi.openapi.utils import get_openapi
 
 from app.core.database import engine
 from app.core.config import settings
@@ -16,48 +17,11 @@ from app.routers import (
 )
 from app.routers import debug
 from app.routers import prices
-
-# Enums gerenciados pelo FastAPI no startup.
-# treasurytype foi removido: o novo modelo de Tesouro Direto nao usa enum.
-_ENUMS: list[tuple] = [
-    ("userrole",           "'user'", "'superadmin'"),
-    ("dividendstatus",     "'RECEBIDO'", "'A_RECEBER'"),
-    ("dividendtype",       "'DIVIDENDO'", "'JCP'", "'RENDIMENTO'", "'AMORTIZACAO'", "'BONIFICACAO'", "'OUTROS'"),
-    ("assettype",          "'ACAO'", "'FII'", "'ETF_NACIONAL'", "'TESOURO_DIRETO'", "'STOCK'", "'ETF_INTERNACIONAL'", "'CRIPTO'", "'RENDA_FIXA'"),
-    ("assetcurrency",      "'BRL'", "'USD'", "'EUR'", "'BTC'"),
-    ("corporateeventtype", "'DESDOBRAMENTO'", "'GRUPAMENTO'", "'BONIFICACAO'"),
-    ("corporateeventstatus", "'PENDENTE'", "'APLICADO'", "'IGNORADO'"),
-    ("fixedincometype",    "'CDB'", "'LCI'", "'LCA'", "'LCI_LCA'", "'CRI'", "'CRA'", "'DEBENTURE'", "'POUPANCA'", "'OUTROS'"),
-    ("indexertype",        "'CDI'", "'IPCA_PLUS'", "'SELIC'", "'PREFIXADO'", "'IGPM_PLUS'"),
-    ("irpfmarket",         "'ACOES'", "'DAY_TRADE'", "'FII'", "'ETF'", "'CRIPTO'", "'RENDA_FIXA'", "'STOCKS'"),
-    ("goaltype",           "'PATRIMONIO_ALVO'", "'ALOCACAO'", "'DY_MENSAL'", "'RENTABILIDADE'", "'APORTE_MENSAL'"),
-]
-
-
-async def _create_enums_raw() -> None:
-    dsn = settings.ASYNC_DATABASE_URL.replace("postgresql+asyncpg", "postgresql")
-    conn = await asyncpg.connect(dsn)
-    try:
-        for enum_def in _ENUMS:
-            type_name = enum_def[0]
-            values = ", ".join(enum_def[1:])
-            # Verifica via pg_type antes de criar para evitar UniqueViolationError
-            # independente do comportamento de captura de exceção do asyncpg
-            sql = (
-                f"DO $$ BEGIN "
-                f"IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '{type_name}') THEN "
-                f"CREATE TYPE {type_name} AS ENUM ({values}); "
-                f"END IF; "
-                f"END $$;"
-            )
-            await conn.execute(sql)
-    finally:
-        await conn.close()
+from app.routers import class_targets
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await _create_enums_raw()
     start_scheduler()
     yield
     await engine.dispose()
@@ -69,6 +33,47 @@ app = FastAPI(
     version="2.0.0",
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    tb = traceback.format_exc()
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": str(exc),
+            "type": type(exc).__name__,
+            "traceback": tb,
+            "path": str(request.url),
+        },
+    )
+
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    schema.setdefault("components", {}).setdefault("securitySchemes", {})
+    schema["components"]["securitySchemes"]["HTTPBearer"] = {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Cole aqui o access_token obtido em POST /api/v1/auth/login",
+    }
+    schema["security"] = [
+        {"OAuth2PasswordBearer": []},
+        {"HTTPBearer": []},
+    ]
+    app.openapi_schema = schema
+    return schema
+
+
+app.openapi = custom_openapi  # type: ignore[method-assign]
 
 _cors_origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
 
@@ -83,31 +88,33 @@ app.add_middleware(
 PREFIX = "/api/v1"
 
 # Auth & Users
-app.include_router(auth.router,         prefix=f"{PREFIX}/auth",        tags=["auth"])
-app.include_router(users.router,        prefix=f"{PREFIX}/users",       tags=["users"])
-app.include_router(admin.router,        prefix=f"{PREFIX}/admin",       tags=["admin"])
+app.include_router(auth.router,            prefix=f"{PREFIX}/auth",         tags=["auth"])
+app.include_router(users.router,           prefix=f"{PREFIX}/users",        tags=["users"])
+app.include_router(admin.router,           prefix=f"{PREFIX}/admin",        tags=["admin"])
 
 # Core financeiro
-app.include_router(portfolios.router,   prefix=f"{PREFIX}/portfolios",  tags=["portfolios"])
-app.include_router(transactions.router, prefix=f"{PREFIX}/portfolios",  tags=["transactions"])
-app.include_router(treasury.router,     prefix=f"{PREFIX}/portfolios",  tags=["treasury"])
-app.include_router(positions.router,    prefix=f"{PREFIX}/positions",   tags=["positions"])
-app.include_router(dividends.router,    prefix=f"{PREFIX}/dividends",   tags=["dividends"])
-app.include_router(proventos.router,    prefix=f"{PREFIX}/proventos",   tags=["proventos"])
-app.include_router(performance.router,  prefix=f"{PREFIX}/performance", tags=["performance"])
+app.include_router(portfolios.router,      prefix=f"{PREFIX}/portfolios",   tags=["portfolios"])
+app.include_router(transactions.router,    prefix=f"{PREFIX}/portfolios",   tags=["transactions"])
+app.include_router(treasury.router,        prefix=f"{PREFIX}/portfolios",   tags=["treasury"])
+app.include_router(positions.router,       prefix=f"{PREFIX}/positions",    tags=["positions"])
+app.include_router(dividends.router,       prefix=f"{PREFIX}/portfolios",   tags=["dividends"])
+# proventos router ja tem prefix="/portfolios/{portfolio_id}/proventos" internamente
+app.include_router(proventos.router,       prefix=f"{PREFIX}",              tags=["proventos"])
+app.include_router(performance.router,     prefix=f"{PREFIX}/performance",  tags=["performance"])
+app.include_router(class_targets.router,   prefix=f"{PREFIX}/portfolios",   tags=["class-targets"])
 
 # Dados de mercado
-app.include_router(assets.router,       prefix=f"{PREFIX}/assets",      tags=["assets"])
-app.include_router(fx.router,           prefix=f"{PREFIX}/fx",          tags=["fx"])
-app.include_router(quotes.router,       prefix=f"{PREFIX}/quotes",      tags=["quotes"])
-app.include_router(prices.router,       prefix=f"{PREFIX}/prices",      tags=["prices"])
+app.include_router(assets.router,          prefix=f"{PREFIX}/assets",       tags=["assets"])
+app.include_router(fx.router,              prefix=f"{PREFIX}/fx",           tags=["fx"])
+app.include_router(quotes.router,          prefix=f"{PREFIX}/quotes",       tags=["quotes"])
+app.include_router(prices.router,          prefix=f"{PREFIX}/prices",       tags=["prices"])
 
 # Funcionalidades extras
-app.include_router(sync.router,         prefix=f"{PREFIX}/sync",        tags=["sync"])
-app.include_router(goals.router,        prefix=f"{PREFIX}/goals",       tags=["goals"])
-app.include_router(irpf.router,         prefix=f"{PREFIX}/irpf",        tags=["irpf"])
-app.include_router(analysis.router,     prefix=f"{PREFIX}/analysis",    tags=["analysis"])
-app.include_router(fixed_income.router, prefix=f"{PREFIX}/fixed-income", tags=["fixed_income"])
+app.include_router(sync.router,            prefix=f"{PREFIX}/sync",         tags=["sync"])
+app.include_router(goals.router,           prefix=f"{PREFIX}/goals",        tags=["goals"])
+app.include_router(irpf.router,            prefix=f"{PREFIX}/irpf",         tags=["irpf"])
+app.include_router(analysis.router,        prefix=f"{PREFIX}/analysis",     tags=["analysis"])
+app.include_router(fixed_income.router,    prefix=f"{PREFIX}/fixed-income", tags=["fixed_income"])
 
 if os.getenv("ADMIN_SECRET"):
     app.include_router(debug.router, prefix=f"{PREFIX}/debug", tags=["debug"])

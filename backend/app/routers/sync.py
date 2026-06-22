@@ -7,7 +7,7 @@ from app.models.user import User
 from app.models.portfolio import Portfolio
 from app.integrations.brapi_dividends import sync_dividends_for_portfolio
 
-router = APIRouter(prefix="/api/v1/sync", tags=["sync"])
+router = APIRouter(tags=["sync"])
 
 
 @router.post("/proventos/{portfolio_id}")
@@ -26,6 +26,5 @@ async def sync_proventos(
     p = result.scalar_one_or_none()
     if not p:
         raise HTTPException(404, "Carteira não encontrada")
-
     background_tasks.add_task(sync_dividends_for_portfolio, db, portfolio_id)
     return {"message": "Sincronização de proventos iniciada em background"}

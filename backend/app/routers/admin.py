@@ -2,8 +2,12 @@ from fastapi import APIRouter, Depends, Query, status, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.security import hash_password
 from app.models.user import User, UserRole
-from app.schemas.user import UserCreate, UserListResponse, UserResponse, UserAdminUpdate
+from app.schemas.user import (
+    UserCreate, UserListResponse, UserResponse,
+    UserAdminUpdate, AdminResetPasswordRequest,
+)
 from app.schemas.auth import MessageResponse
 from app.schemas.config import SystemConfigResponse, SystemConfigUpdate, SystemConfigBulkUpdate
 from app.schemas.pagination import PaginatedResponse
@@ -26,7 +30,7 @@ def require_superadmin(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
-# ── Gestão de Usuários ───────────────────────────────────────────────
+# ── Gestão de Usuários ───────────────────────────────────────────
 
 @router.get("/users", response_model=PaginatedResponse[UserListResponse])
 async def admin_list_users(
@@ -114,7 +118,30 @@ async def admin_toggle_user_active(
     return user
 
 
-# ── Estatísticas do sistema ───────────────────────────────────────
+@router.post("/users/{user_id}/reset-password", response_model=MessageResponse)
+async def admin_reset_password(
+    user_id: int,
+    data: AdminResetPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
+):
+    """
+    Redefine a senha de qualquer usuário com um novo hash bcrypt v5.
+    Usado para migrar usuários cujas senhas foram criadas com passlib/bcrypt<5
+    e que não conseguem mais autenticar após a atualização de dependência.
+    """
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    user.hashed_password = hash_password(data.new_password)
+    await db.commit()
+    await db.refresh(user)
+    return MessageResponse(
+        message=f"Senha do usuário {user.email} redefinida com sucesso"
+    )
+
+
+# ── Estatísticas do sistema ───────────────────────────────
 
 @router.get("/stats")
 async def admin_stats(
@@ -130,7 +157,7 @@ async def admin_stats(
     }
 
 
-# ── Configurações do sistema ──────────────────────────────────
+# ── Configurações do sistema ──────────────────────────────
 
 @router.get("/config", response_model=list[SystemConfigResponse])
 async def admin_list_configs(

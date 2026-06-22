@@ -8,14 +8,33 @@ from datetime import date
 from typing import Optional
 
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import extract, func, select
+from sqlalchemy import extract, func, select, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
 from app.models.dividend import Dividend, DividendStatus
+from app.models.transaction import Transaction, OperationType
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Subquery: menor data de compra por ticker/portfolio
+# ---------------------------------------------------------------------------
+
+def _first_buy_subquery():
+    """Subquery que retorna a primeira data de compra (buy) por portfolio_id + ticker."""
+    return (
+        select(
+            Transaction.portfolio_id.label("portfolio_id"),
+            Transaction.ticker.label("ticker"),
+            func.min(Transaction.date).label("first_buy"),
+        )
+        .where(Transaction.operation == OperationType.buy)
+        .group_by(Transaction.portfolio_id, Transaction.ticker)
+        .subquery()
+    )
 
 
 async def get_summary(db: AsyncSession, portfolio_id: int) -> dict:
@@ -70,6 +89,8 @@ async def list_items(
     page: int = 1,
     page_size: int = 50,
 ) -> dict:
+    first_buy = _first_buy_subquery()
+
     base = (
         select(
             Dividend.id,
@@ -87,7 +108,16 @@ async def list_items(
         )
         .join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
         .join(Asset, AssetDividend.asset_id == Asset.id)
-        .where(Dividend.portfolio_id == portfolio_id)
+        # Filtra apenas proventos a partir da data de compra do ativo na carteira
+        .join(
+            first_buy,
+            (first_buy.c.portfolio_id == Dividend.portfolio_id)
+            & (first_buy.c.ticker == Asset.ticker),
+        )
+        .where(
+            Dividend.portfolio_id == portfolio_id,
+            AssetDividend.ex_date >= first_buy.c.first_buy,
+        )
     )
 
     if status:
@@ -136,6 +166,8 @@ async def get_monthly_history(
     status: Optional[DividendStatus] = None,
     asset_type: Optional[str] = None,
 ) -> list[dict]:
+    first_buy = _first_buy_subquery()
+
     stmt = (
         select(
             extract("year", AssetDividend.payment_date).label("year"),
@@ -144,9 +176,15 @@ async def get_monthly_history(
         )
         .join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
         .join(Asset, AssetDividend.asset_id == Asset.id)
+        .join(
+            first_buy,
+            (first_buy.c.portfolio_id == Dividend.portfolio_id)
+            & (first_buy.c.ticker == Asset.ticker),
+        )
         .where(
             Dividend.portfolio_id == portfolio_id,
             AssetDividend.payment_date.isnot(None),
+            AssetDividend.ex_date >= first_buy.c.first_buy,
         )
     )
 

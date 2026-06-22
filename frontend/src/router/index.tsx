@@ -1,70 +1,63 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom'
-import AppLayout    from '@/components/layout/AppLayout'
-import AuthLayout   from '@/components/layout/AuthLayout'
+import { ThemeProvider } from '@/contexts/ThemeContext'
+import { AuthProvider } from '@/contexts/AuthContext'
+import AppLayout     from '@/components/layout/AppLayout'
+import AuthLayout    from '@/components/layout/AuthLayout'
 import ProtectedRoute from './ProtectedRoute'
 
-// Pages
-import Landing          from '@/pages/Landing'
-import Login            from '@/pages/Login'
-import Register         from '@/pages/Register'
-import EsqueceuSenha    from '@/pages/EsqueceuSenha'
-import ResumePage       from '@/pages/ResumePage'
+// Pages de autenticação
+import LoginPage    from '@/pages/auth/LoginPage'
+import RegisterPage from '@/pages/auth/RegisterPage'
+import EsqueceuSenha from '@/pages/EsqueceuSenha'
+
+// Pages do app
+import Landing           from '@/pages/Landing'
+import ResumePage        from '@/pages/ResumePage'
 import RentabilidadePage from '@/pages/RentabilidadePage'
 import Transacoes        from '@/pages/Transacoes'
 import Configuracoes     from '@/pages/Configuracoes'
-import ProventosPage    from '@/pages/ProventosPage'
+import ProventosPage     from '@/pages/ProventosPage'
+import IRPFPage          from '@/pages/IRPFPage'
 
 // Patrimônio
-import PatrimonioPage         from '@/pages/patrimonio/PatrimonioPage'
-import RendaVariavelPage      from '@/pages/patrimonio/RendaVariavelPage'
-import TesouroDiretoPage      from '@/pages/patrimonio/TesouroDiretoPage'
-import RendaFixaPage          from '@/pages/patrimonio/RendaFixaPage'
+import PatrimonioPage    from '@/pages/patrimonio/PatrimonioPage'
+import RendaVariavelPage from '@/pages/patrimonio/RendaVariavelPage'
+import TesouroDiretoPage from '@/pages/patrimonio/TesouroDiretoPage'
+import RendaFixaPage     from '@/pages/patrimonio/RendaFixaPage'
+
+/** Wrapper raiz: injeta ThemeProvider e AuthProvider em toda a árvore */
+function Root({ children }: { children: React.ReactNode }) {
+  return (
+    <ThemeProvider>
+      <AuthProvider>{children}</AuthProvider>
+    </ThemeProvider>
+  )
+}
 
 export const router = createBrowserRouter([
-  // Landing pública
-  { path: '/', element: <Landing /> },
-
-  // Auth
   {
-    path: '/auth',
-    element: <AuthLayout />,
+    // Componente raiz que envolve tudo com providers
+    element: <Root><AppLayout /></Root>,
+    // Rotas filhas SEM AppLayout — auth
     children: [
-      { index: true,            element: <Navigate to="login" replace /> },
-      { path: 'login',          element: <Login /> },
-      { path: 'registro',       element: <Register /> },
-      { path: 'esqueceu-senha', element: <EsqueceuSenha /> },
-    ],
+      // Precisamos de uma estrutura flat; usamos dois níveis
+    ]
   },
+])
 
-  // Atalhos legados
-  { path: '/login',    element: <Navigate to="/auth/login"    replace /> },
-  { path: '/register', element: <Navigate to="/auth/registro" replace /> },
-
-  // App protegido
+// Router correto com layout separado para auth e app
+export const routerV2 = createBrowserRouter([
   {
-    path: '/carteira',
-    element: <ProtectedRoute><AppLayout /></ProtectedRoute>,
-    children: [
-      { index: true,               element: <ResumePage /> },
-      { path: 'rentabilidade',     element: <RentabilidadePage /> },
-      { path: 'transacoes',        element: <Transacoes /> },
-      { path: 'proventos',         element: <ProventosPage /> },
-      { path: 'configuracoes',     element: <Configuracoes /> },
-
-      // Módulo Patrimônio — PatrimonioPage renderiza o Outlet das sub-abas
-      {
-        path: 'patrimonio',
-        element: <PatrimonioPage />,
-        children: [
-          { index: true,              element: <Navigate to="renda-variavel" replace /> },
-          { path: 'renda-variavel',   element: <RendaVariavelPage /> },
-          { path: 'tesouro',          element: <TesouroDiretoPage /> },
-          { path: 'renda-fixa',       element: <RendaFixaPage /> },
-        ],
-      },
-    ],
+    path: '/',
+    element: (
+      <ThemeProvider>
+        <AuthProvider>
+          {/* Outlet é renderizado pelos filhos */}
+          <Landing />
+        </AuthProvider>
+      </ThemeProvider>
+    ),
   },
-
-  // Catch-all → landing
+  // Catch-all
   { path: '*', element: <Navigate to="/" replace /> },
 ])

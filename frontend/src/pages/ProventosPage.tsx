@@ -10,6 +10,7 @@ import {
   useSyncProventos,
 } from '@/hooks/useProventos'
 import { formatBRL } from '@/utils/format'
+import KpiCard from '@/components/ui/KpiCard'
 import ProventosDonutChart from '@/components/charts/ProventosDonutChart'
 import ProventosHistoricoTable from '@/components/proventos/ProventosHistoricoTable'
 import MeusProventosTable from '@/components/proventos/MeusProventosTable'
@@ -55,10 +56,14 @@ export default function ProventosPage() {
   const sync = useSyncProventos(portfolioId || null)
 
   return (
-    <div className="p-4 md:p-6 flex flex-col gap-5 max-w-[1400px] mx-auto">
+    <div className="page-container">
 
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <h1 className="text-base font-bold" style={{ color: 'var(--color-text)' }}>Proventos</h1>
+      {/* Cabeçalho */}
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Proventos</h1>
+          <p className="page-subtitle">Rendimentos recebidos e a receber da carteira</p>
+        </div>
         <button
           onClick={() => sync.mutate()}
           disabled={sync.isPending || !portfolioId}
@@ -70,6 +75,7 @@ export default function ProventosPage() {
         </button>
       </div>
 
+      {/* Seletor de carteira (múltiplas) */}
       {(portfolios?.length ?? 0) > 1 && (
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Carteira:</span>
@@ -91,40 +97,44 @@ export default function ProventosPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
+      {/* KPIs — 4 cards simétricos */}
+      <div className="kpi-grid">
+        <KpiCard
+          label="Total recebido"
+          value={formatBRL(summary?.total_recebido ?? 0)}
+        />
+        <KpiCard
+          label="A receber"
+          value={formatBRL(summary?.total_a_receber ?? 0)}
+          valueColor="text-primary"
+        />
+        <KpiCard
+          label="Últimos 12 meses"
+          value={formatBRL(summary?.total_12m ?? 0)}
+        />
+        <KpiCard
+          label="Média mensal (12m)"
+          value={formatBRL(summary?.media_mensal_12m ?? 0)}
+        />
+      </div>
 
-        <div className="flex flex-col gap-4">
-          <div className="card p-4 flex flex-col gap-3">
-            <div>
-              <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Total recebido</span>
-              <div className="text-lg font-bold tabular-nums">{formatBRL(summary?.total_recebido ?? 0)}</div>
+      {/* Corpo — gráfico donut + tabelas */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+
+        {/* Coluna lateral — donut */}
+        {(distribuicao?.length ?? 0) > 0 && (
+          <div className="card p-4">
+            <div className="section-card-header">
+              <span className="text-xs font-semibold">Por ativo (12m)</span>
             </div>
-            <div style={{ borderTop: '1px solid var(--color-divider)' }} />
-            <div>
-              <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>A receber</span>
-              <div className="text-base font-bold tabular-nums" style={{ color: 'var(--color-primary)' }}>{formatBRL(summary?.total_a_receber ?? 0)}</div>
-            </div>
-            <div style={{ borderTop: '1px solid var(--color-divider)' }} />
-            <div>
-              <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Últimos 12 meses</span>
-              <div className="text-base font-bold tabular-nums">{formatBRL(summary?.total_12m ?? 0)}</div>
-            </div>
-            <div style={{ borderTop: '1px solid var(--color-divider)' }} />
-            <div>
-              <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Média mensal (12m)</span>
-              <div className="text-base font-bold tabular-nums">{formatBRL(summary?.media_mensal_12m ?? 0)}</div>
-            </div>
+            <ProventosDonutChart data={distribuicao!} />
           </div>
+        )}
 
-          {(distribuicao?.length ?? 0) > 0 && (
-            <div className="card p-4">
-              <p className="text-xs font-semibold mb-3" style={{ color: 'var(--color-text)' }}>Por ativo (12m)</p>
-              <ProventosDonutChart data={distribuicao!} />
-            </div>
-          )}
-        </div>
+        {/* Coluna principal */}
+        <div className="lg:col-span-3 flex flex-col gap-4">
 
-        <div className="lg:col-span-3 flex flex-col gap-5">
+          {/* Filtros */}
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: 'var(--color-surface-offset)' }}>
               {[{ label: 'Todos', value: '' }, { label: 'Recebidos', value: 'RECEBIDO' }, { label: 'A Receber', value: 'A_RECEBER' }].map(o => (
@@ -143,18 +153,24 @@ export default function ProventosPage() {
             </select>
           </div>
 
-          <div className="card p-4">
-            <p className="text-xs font-semibold mb-3" style={{ color: 'var(--color-text)' }}>Histórico mensal</p>
-            {loadingHistorico ? (
-              <div className="flex flex-col gap-2">{[...Array(4)].map((_, i) => <div key={i} className="h-8 skeleton rounded" />)}</div>
-            ) : (
-              <ProventosHistoricoTable data={historico ?? []} />
-            )}
+          {/* Histórico mensal */}
+          <div className="card overflow-hidden">
+            <div className="section-card-header">
+              <span className="text-xs font-semibold">Histórico mensal</span>
+            </div>
+            <div className="p-4">
+              {loadingHistorico ? (
+                <div className="flex flex-col gap-2">{[...Array(4)].map((_, i) => <div key={i} className="h-8 skeleton rounded" />)}</div>
+              ) : (
+                <ProventosHistoricoTable data={historico ?? []} />
+              )}
+            </div>
           </div>
 
-          <div className="card p-4">
-            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-              <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Meus proventos</p>
+          {/* Lista de proventos */}
+          <div className="card overflow-hidden">
+            <div className="section-card-header">
+              <span className="text-xs font-semibold">Meus proventos</span>
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => setYearFilter(undefined)}
@@ -175,17 +191,20 @@ export default function ProventosPage() {
                 ))}
               </div>
             </div>
-            {loadingLista ? (
-              <div className="flex flex-col gap-2">{[...Array(5)].map((_, i) => <div key={i} className="h-10 skeleton rounded" />)}</div>
-            ) : (
-              <MeusProventosTable data={lista?.items ?? []} />
-            )}
-            {(lista?.total ?? 0) > 0 && (
-              <p className="text-[10px] mt-3 text-right" style={{ color: 'var(--color-text-faint)' }}>
-                {lista!.total} provento{lista!.total !== 1 ? 's' : ''}
-              </p>
-            )}
+            <div className="p-4">
+              {loadingLista ? (
+                <div className="flex flex-col gap-2">{[...Array(5)].map((_, i) => <div key={i} className="h-10 skeleton rounded" />)}</div>
+              ) : (
+                <MeusProventosTable data={lista?.items ?? []} />
+              )}
+              {(lista?.total ?? 0) > 0 && (
+                <p className="text-[10px] mt-3 text-right" style={{ color: 'var(--color-text-faint)' }}>
+                  {lista!.total} provento{lista!.total !== 1 ? 's' : ''}
+                </p>
+              )}
+            </div>
           </div>
+
         </div>
       </div>
     </div>

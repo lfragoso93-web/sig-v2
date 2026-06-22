@@ -5,11 +5,20 @@ from app.models.asset import Asset, AssetType
 from app.schemas.asset import AssetCreate
 
 
-async def get_or_create_asset(db: AsyncSession, data: AssetCreate) -> Asset:
+async def get_or_create_asset(
+    db: AsyncSession,
+    data: AssetCreate,
+) -> tuple[Asset, bool]:
+    """
+    Retorna (asset, is_new).
+    is_new=True indica que o ativo foi criado agora pela primeira vez.
+    O router deve usar is_new para disparar o BackgroundTask de onboarding.
+    """
     result = await db.execute(select(Asset).where(Asset.ticker == data.ticker))
     asset = result.scalar_one_or_none()
     if asset:
-        return asset
+        return asset, False
+
     asset = Asset(
         ticker=data.ticker,
         name=data.name,
@@ -19,7 +28,7 @@ async def get_or_create_asset(db: AsyncSession, data: AssetCreate) -> Asset:
     db.add(asset)
     await db.commit()
     await db.refresh(asset)
-    return asset
+    return asset, True
 
 
 async def list_assets(db: AsyncSession) -> list[Asset]:

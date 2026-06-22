@@ -1,16 +1,20 @@
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import decode_token
 from app.models.user import User
 from sqlalchemy import select
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+# HTTPBearer lê o header Authorization: Bearer <token> diretamente,
+# sem depender do fluxo OAuth2 form-data. Funciona no Swagger (HTTPBearer scheme)
+# e em qualquer cliente que mande o header manualmente.
+# auto_error=False permite retornar 401 customizado em vez do default do FastAPI.
+_bearer = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
     db: AsyncSession = Depends(get_db),
 ) -> User:
     credentials_exception = HTTPException(
@@ -18,7 +22,11 @@ async def get_current_user(
         detail="Token inválido ou expirado",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    payload = decode_token(token)
+
+    if not credentials or not credentials.credentials:
+        raise credentials_exception
+
+    payload = decode_token(credentials.credentials)
     if not payload or payload.get("type") != "access":
         raise credentials_exception
 

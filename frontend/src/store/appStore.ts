@@ -25,6 +25,7 @@ interface AppState {
   selectedPortfolioId: number | null
   transactionModal: ModalState
   sidebarOpen: boolean
+  sidebarCollapsed: boolean
 
   setTheme: (t: 'dark' | 'light') => void
   setSelectedPortfolio: (id: number) => void
@@ -37,6 +38,7 @@ interface AppState {
 
   toggleSidebar: () => void
   closeSidebar: () => void
+  toggleSidebarCollapsed: () => void
 }
 
 export const useAppStore = create<AppState>()(
@@ -46,6 +48,7 @@ export const useAppStore = create<AppState>()(
       selectedPortfolioId: null,
       transactionModal: { open: false },
       sidebarOpen: false,
+      sidebarCollapsed: false,
 
       setTheme: (theme) => {
         document.documentElement.setAttribute('data-theme', theme)
@@ -62,18 +65,18 @@ export const useAppStore = create<AppState>()(
       closeTransactionModal: () =>
         set({ transactionModal: { open: false, prefill: undefined } }),
 
-      toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
-      closeSidebar:  () => set({ sidebarOpen: false }),
+      toggleSidebar:          () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
+      closeSidebar:           () => set({ sidebarOpen: false }),
+      toggleSidebarCollapsed: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
     }),
     {
       name: 'sig-app',
       storage: createJSONStorage(() => localStorage),
-      // IMPORTANTE: NÃO persistir selectedPortfolioId.
-      // Se persistido, ao trocar de usuário (logout + login diferente)
-      // o ID da carteira do usuário anterior permanece e causa 404
-      // silencioso em todas as queries, deixando as páginas em branco.
       partialize: (state) => ({
-        theme: state.theme,
+        theme:               state.theme,
+        sidebarCollapsed:    state.sidebarCollapsed,
+        // Persiste a carteira selecionada para evitar flash de "sem carteira" no reload
+        selectedPortfolioId: state.selectedPortfolioId,
       }),
     }
   )

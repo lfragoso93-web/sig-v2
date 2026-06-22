@@ -30,3 +30,5 @@ python-multipart==0.0.32
 apscheduler==3.10.4
 email-validator==2.2.0
 redis==5.2.1
+# reportlab: geração de PDF no módulo IRPF
+reportlab==4.2.5

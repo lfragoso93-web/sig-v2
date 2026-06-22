@@ -1,35 +1,71 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { Outlet } from 'react-router-dom'
+import { useAppStore } from '@/store/appStore'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
-import BottomNav from './BottomNav'
 import AddTransactionModal from '@/components/modals/AddTransactionModal'
-import { useAppStore } from '@/store/appStore'
-import { usePortfolioList } from '@/hooks/usePortfolio'
 
 export default function AppLayout() {
-  const {
-    selectedPortfolioId, setSelectedPortfolioId,
-    transactionModal, closeTransactionModal,
-  } = useAppStore()
+  const { sidebarOpen, closeSidebar, transactionModal, closeTransactionModal } = useAppStore()
+  const overlayRef = useRef<HTMLDivElement>(null)
 
-  const { data: portfolios } = usePortfolioList()
   useEffect(() => {
-    if (!selectedPortfolioId && portfolios && portfolios.length > 0) {
-      setSelectedPortfolioId(portfolios[0].id)
-    }
-  }, [portfolios, selectedPortfolioId, setSelectedPortfolioId])
+    const el = overlayRef.current
+    if (!el) return
+    const handler = (e: MouseEvent) => { if (e.target === el) closeSidebar() }
+    el.addEventListener('click', handler)
+    return () => el.removeEventListener('click', handler)
+  }, [closeSidebar])
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: 'var(--color-bg)' }}>
-      <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Topbar />
-        <main className="flex-1 overflow-y-auto p-3 pb-[76px] lg:pb-3 lg:p-5">
+    <div
+      style={{
+        display:       'flex',
+        flexDirection: 'column',
+        height:        '100dvh',
+        overflow:      'hidden',
+        background:    'var(--color-bg)',
+      }}
+    >
+      {/* Topbar */}
+      <Topbar />
+
+      {/* Body: sidebar + main */}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
+
+        {/* Overlay mobile */}
+        {sidebarOpen && (
+          <div
+            ref={overlayRef}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 40,
+              background: 'oklch(0.1 0.01 240 / 0.55)',
+              backdropFilter: 'blur(2px)',
+            }}
+            className="lg:hidden"
+            aria-hidden="true"
+          />
+        )}
+
+        {/* Sidebar */}
+        <Sidebar />
+
+        {/* Main content — expande em qualquer largura */}
+        <main
+          style={{
+            flex:       1,
+            minWidth:   0,
+            overflowY:  'auto',
+            overflowX:  'hidden',
+            height:     '100%',
+            background: 'var(--color-bg)',
+          }}
+        >
           <Outlet />
         </main>
-        <BottomNav />
       </div>
+
+      {/* Modal global de transação */}
       {transactionModal.open && (
         <AddTransactionModal onClose={closeTransactionModal} />
       )}

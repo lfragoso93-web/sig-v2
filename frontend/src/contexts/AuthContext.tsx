@@ -26,6 +26,13 @@ interface AuthContextData {
 
 const AuthContext = createContext<AuthContextData>({} as AuthContextData)
 
+/** Limpa todos os artefatos de sessão do localStorage de forma centralizada */
+function clearAllTokens() {
+  localStorage.removeItem('sig_token')
+  localStorage.removeItem('sig_refresh')
+  localStorage.removeItem('sig-auth')
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -41,23 +48,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return data
   }
 
-  // Hidratação inicial: se já tem token no store/localStorage, carrega o usuário
+  // Hidratação inicial: prioriza o store Zustand (persistência confiável),
+  // só recorre ao localStorage como fallback para sessões antigas.
+  // Se o token existir mas /users/me retornar 401, limpa tudo sem loop.
   useEffect(() => {
+    // O interceptor do axios já injeta o token via authStore.getState().token;
+    // só precisamos garantir que ele está no header antes da primeira chamada.
     const token = authStore.token ?? localStorage.getItem('sig_token')
-    if (token) {
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`
-      loadMe()
-        .catch(() => {
-          // Token inválido/expirado — limpa tudo
-          authStore.logout()
-          localStorage.removeItem('sig_token')
-          localStorage.removeItem('sig_refresh')
-          localStorage.removeItem('sig-auth')
-        })
-        .finally(() => setIsLoading(false))
-    } else {
+    if (!token) {
       setIsLoading(false)
+      return
     }
+
+    // Garante que o header está setado antes de chamar /users/me
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`
+
+    loadMe()
+      .catch(() => {
+        // Token inválido ou expirado — limpa tudo sem redirecionar
+        // (o interceptor 401 do axios já cuida do redirect se necessário)
+        authStore.logout()
+        clearAllTokens()
+        delete api.defaults.headers.common['Authorization']
+      })
+      .finally(() => setIsLoading(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -67,12 +81,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refresh_token: string
     }>('/auth/login', { email, password })
 
+    // Persiste tokens
     localStorage.setItem('sig_token', tokens.access_token)
     localStorage.setItem('sig_refresh', tokens.refresh_token)
     api.defaults.headers.common['Authorization'] = `Bearer ${tokens.access_token}`
 
     const me = await loadMe()
 
+    // Sincroniza Zustand store (inclui persistência em sig-auth)
     authStore.login(tokens.access_token, {
       id: me.id,
       email: me.email,
@@ -85,15 +101,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = () => {
-    localStorage.removeItem('sig_token')
-    localStorage.removeItem('sig_refresh')
-    localStorage.removeItem('sig-auth')
+    clearAllTokens()
     delete api.defaults.headers.common['Authorization']
     authStore.logout()
     clearSelectedPortfolio()
     setUser(null)
-    // Usa replace para garantir que o histórico seja limpo
-    // e o navigate funcione mesmo se o contexto estiver sendo desmontado
     try {
       navigate('/login', { replace: true })
     } catch {

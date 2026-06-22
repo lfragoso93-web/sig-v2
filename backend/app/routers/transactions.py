@@ -9,9 +9,22 @@ from app.models.user import User
 from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction, OperationType
 from app.schemas.transaction import TransactionCreate, TransactionOut
+from app.schemas.asset import AssetCreate
+from app.services.asset_service import get_or_create_asset
 from app.services.dividend_backfill_service import backfill_dividends
+from app.services.asset_onboarding_service import run_onboarding
 
 router = APIRouter()
+
+
+def _to_operation(value: str) -> OperationType:
+    try:
+        return OperationType(value)
+    except ValueError:
+        raise HTTPException(
+            status_code=422,
+            detail=f"operation inválida: '{value}'. Use 'buy' ou 'sell'.",
+        )
 
 
 async def _get_portfolio(portfolio_id: int, user: User, db: AsyncSession) -> Portfolio:
@@ -23,7 +36,7 @@ async def _get_portfolio(portfolio_id: int, user: User, db: AsyncSession) -> Por
     )
     p = result.scalar_one_or_none()
     if not p:
-        raise HTTPException(status_code=404, detail="Carteira nao encontrada.")
+        raise HTTPException(status_code=404, detail="Carteira não encontrada.")
     return p
 
 
@@ -45,9 +58,10 @@ async def _calc_current_quantity(
 
     qty = 0.0
     for op, q in rows:
-        if op == OperationType.buy or op == "buy":
+        op_val = op.value if isinstance(op, OperationType) else str(op)
+        if op_val == "buy":
             qty += float(q)
-        elif op == OperationType.sell or op == "sell":
+        elif op_val == "sell":
             qty -= float(q)
     return max(qty, 0.0)
 
@@ -65,7 +79,7 @@ async def _validate_sell(
             status_code=400,
             detail=(
                 f"Quantidade insuficiente para venda de {ticker}. "
-                f"Posicao atual: {current_qty:.4f} | Tentativa: {quantity:.4f}"
+                f"Posição atual: {current_qty:.4f} | Tentativa: {quantity:.4f}"
             ),
         )
 
@@ -99,34 +113,48 @@ async def create_transaction(
 ):
     await _get_portfolio(portfolio_id, current_user, db)
 
-    ticker = payload.ticker.upper()
+    ticker = payload.ticker.strip().upper()
     asset_type = payload.asset_type
+    operation = _to_operation(payload.operation)
 
-    if str(payload.operation) in ("sell", OperationType.sell):
+    if operation == OperationType.sell:
         await _validate_sell(db, portfolio_id, ticker, payload.quantity)
 
     tx = Transaction(
         portfolio_id=portfolio_id,
         ticker=ticker,
         asset_type=asset_type,
-        operation=payload.operation,
+        operation=operation,
         quantity=payload.quantity,
         price=payload.price,
         fees=payload.fees or 0.0,
         date=payload.date,
-        currency=getattr(payload, "currency", "BRL") or "BRL",
+        currency=payload.currency or "BRL",
         notes=payload.notes,
     )
     db.add(tx)
     await db.commit()
     await db.refresh(tx)
 
-    background_tasks.add_task(
-        _run_backfill,
-        portfolio_id=portfolio_id,
+    asset_data = AssetCreate(
         ticker=ticker,
-        asset_type=str(asset_type),
+        name=ticker,
+        asset_type=asset_type,
     )
+    _, is_new = await get_or_create_asset(db, asset_data)
+
+    if is_new:
+        background_tasks.add_task(run_onboarding, ticker, str(asset_type))
+    else:
+        background_tasks.add_task(
+            _run_backfill,
+            portfolio_id=portfolio_id,
+            ticker=ticker,
+            asset_type=str(asset_type),
+        )
+
+    # Recalcula snapshots históricos para o gráfico patrimonial ficar populado
+    background_tasks.add_task(_run_snapshot_backfill, portfolio_id=portfolio_id)
 
     return tx
 
@@ -153,22 +181,23 @@ async def update_transaction(
     )
     tx = result.scalar_one_or_none()
     if not tx:
-        raise HTTPException(status_code=404, detail="Transacao nao encontrada.")
+        raise HTTPException(status_code=404, detail="Transação não encontrada.")
 
-    ticker = payload.ticker.upper()
+    ticker = payload.ticker.strip().upper()
     asset_type = payload.asset_type
+    operation = _to_operation(payload.operation)
 
-    if str(payload.operation) in ("sell", OperationType.sell):
+    if operation == OperationType.sell:
         await _validate_sell(db, portfolio_id, ticker, payload.quantity, exclude_tx_id=transaction_id)
 
     tx.ticker = ticker
     tx.asset_type = asset_type
-    tx.operation = payload.operation
+    tx.operation = operation
     tx.quantity = payload.quantity
     tx.price = payload.price
     tx.fees = payload.fees or 0.0
     tx.date = payload.date
-    tx.currency = getattr(payload, "currency", "BRL") or "BRL"
+    tx.currency = payload.currency or "BRL"
     tx.notes = payload.notes
 
     await db.commit()
@@ -180,6 +209,7 @@ async def update_transaction(
         ticker=ticker,
         asset_type=str(asset_type),
     )
+    background_tasks.add_task(_run_snapshot_backfill, portfolio_id=portfolio_id)
 
     return tx
 
@@ -205,7 +235,7 @@ async def delete_transaction(
     )
     tx = result.scalar_one_or_none()
     if not tx:
-        raise HTTPException(status_code=404, detail="Transacao nao encontrada.")
+        raise HTTPException(status_code=404, detail="Transação não encontrada.")
 
     ticker = tx.ticker
     asset_type = tx.asset_type
@@ -219,14 +249,43 @@ async def delete_transaction(
         ticker=ticker,
         asset_type=str(asset_type),
     )
+    background_tasks.add_task(_run_snapshot_backfill, portfolio_id=portfolio_id)
 
 
 async def _run_backfill(portfolio_id: int, ticker: str, asset_type: str) -> None:
-    from app.core.database import AsyncSessionLocal
-    async with AsyncSessionLocal() as db:
-        await backfill_dividends(
-            db=db,
-            portfolio_id=portfolio_id,
-            ticker=ticker,
-            asset_type=asset_type,
+    """Background task: backfill de dividendos para a carteira."""
+    try:
+        from app.core.database import AsyncSessionLocal
+        async with AsyncSessionLocal() as db:
+            await backfill_dividends(
+                db=db,
+                portfolio_id=portfolio_id,
+                ticker=ticker,
+                asset_type=asset_type,
+            )
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).error(
+            "[backfill_dividends] erro para %s/%s: %s", ticker, portfolio_id, exc
+        )
+
+
+async def _run_snapshot_backfill(portfolio_id: int) -> None:
+    """
+    Background task: recalcula snapshots diários do patrimônio.
+    Roda somente nos dias que ainda não têm snapshot para evitar custo excessivo.
+    """
+    try:
+        from app.core.database import AsyncSessionLocal
+        from app.services.portfolio_snapshot_service import backfill_snapshots
+        async with AsyncSessionLocal() as db:
+            count = await backfill_snapshots(db=db, portfolio_id=portfolio_id)
+            import logging
+            logging.getLogger(__name__).info(
+                "[snapshot_backfill] portfolio=%s — %s snapshots processados", portfolio_id, count
+            )
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).error(
+            "[snapshot_backfill] erro para portfolio %s: %s", portfolio_id, exc
         )

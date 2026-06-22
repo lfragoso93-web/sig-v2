@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import api from '@/services/api'
+import { PORTFOLIOS_QUERY_KEY } from '@/hooks/usePortfolios'
 
-// ── Tipos ───────────────────────────────────────────────────────────────────────────────
+// ── Tipos ─────────────────────────────────────────────────────────────────────────────────────────
 
 export interface PositionItem {
   id: number
@@ -16,16 +17,20 @@ export interface PositionItem {
   variation_value: number
   variation_percent: number
   allocation_pct: number
+  logo_url?: string | null
 }
 
 export interface PositionGroup {
   label: string
   count: number
   total_value: number
+  total_invested?: number
+  variation_pct?: number
+  rentabilidade_pct?: number
+  target_pct?: number
   positions: PositionItem[]
 }
 
-/** Distribuição por tipo de ativo */
 export interface AssetDistribution {
   asset_type: string
   label: string
@@ -37,21 +42,13 @@ export interface AssetDistribution {
 /** @deprecated use AssetDistribution */
 export type AssetTypeDistribution = AssetDistribution
 
-/**
- * Resumo financeiro de um portfólio.
- * Campos EN alinhados com a API REST; campos PT-BR mantidos como opcionais
- * para compatibilidade com componentes legados.
- */
 export interface PortfolioSummary {
-  // — campos EN (canônicos) —
   total_invested: number
   current_value: number
   total_gain: number
   total_gain_pct: number
   daily_change?: number
   daily_change_pct?: number
-
-  // — campos PT-BR (alias / legado) —
   total_patrimonio?: number
   total_investido?: number
   lucro_total?: number
@@ -62,21 +59,19 @@ export interface PortfolioSummary {
   total_proventos?: number
 }
 
-/** Portfolio mínimo para listagem */
 export interface PortfolioListItem {
   id: number
   name: string
   description?: string
 }
 
-/** Ponto de histórico de patrimônio */
 export interface PatrimonioHistoryPoint {
   date: string
   value: number
   invested?: number
 }
 
-// ── Hooks ───────────────────────────────────────────────────────────────────────────────
+// ── Hooks ─────────────────────────────────────────────────────────────────────────────────────────
 
 export function usePositions(portfolioId: number | null) {
   return useQuery<PositionGroup[]>({
@@ -110,21 +105,34 @@ export function usePortfolioSummaryData(portfolioId: number | null) {
 /** Alias para componentes que importam usePortfolioSummary */
 export const usePortfolioSummary = usePortfolioSummaryData
 
-/** Lista todas as carteiras do usuário */
+/**
+ * Lista todas as carteiras do usuário.
+ * Usa o mesmo queryKey de usePortfolios (PORTFOLIOS_QUERY_KEY = ['portfolios'])
+ * para compartilhar cache com o Topbar e evitar double-fetch.
+ */
 export function usePortfolioList() {
   return useQuery<PortfolioListItem[]>({
-    queryKey: ['portfolio-list'],
+    queryKey: PORTFOLIOS_QUERY_KEY,
     queryFn: () => api.get('/portfolios').then(r => r.data),
+    staleTime: 30_000,
   })
 }
 
-/** Histórico de patrimônio mensal */
-export function usePatrimonioHistory(portfolioId: number | null, months = 12) {
+export function usePatrimonioHistory(
+  portfolioId: number | null,
+  months = 12,
+  assetType?: string | null,
+) {
   return useQuery<PatrimonioHistoryPoint[]>({
-    queryKey: ['patrimonio-history', portfolioId, months],
+    queryKey: ['patrimonio-history', portfolioId, months, assetType ?? 'all'],
     queryFn: () =>
       api
-        .get(`/portfolios/${portfolioId}/patrimonio-history`, { params: { months } })
+        .get(`/portfolios/${portfolioId}/patrimonio-history`, {
+          params: {
+            months,
+            ...(assetType ? { asset_type: assetType } : {}),
+          },
+        })
         .then(r => r.data),
     enabled: !!portfolioId,
     placeholderData: [],
