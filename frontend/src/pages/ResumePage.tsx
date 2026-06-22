@@ -86,14 +86,12 @@ export default function ResumePage() {
 
   const { data: portfolios, isLoading: loadingPortfolios } = usePortfolioList()
 
-  // Se nenhuma carteira está selecionada no store, seleciona a primeira automaticamente
   useEffect(() => {
     if (!globalPortfolioId && portfolios && portfolios.length > 0) {
       setGlobal(portfolios[0].id)
     }
   }, [globalPortfolioId, portfolios, setGlobal])
 
-  // Garante que o id usado é sempre válido: prefere o store, fallback para o primeiro da lista
   const portfolioId: number | null = globalPortfolioId ?? (portfolios?.[0]?.id ?? null)
   const activeAssetType = assetClass === ASSET_CLASS_ALL ? null : assetClass
 
@@ -155,13 +153,24 @@ export default function ResumePage() {
               subLabel="Valor investido"
               change={variacaoPct}
             />
+            {/*
+              KPI Resultado:
+              - value = ganho de capital + total de proventos históricos (= lucro bruto total)
+              - subLabel = detalha ganho de capital separado de proventos dos últimos 12 meses
+                para que o usuário entenda a composição sem confundir com proventos de todo período
+              - bottomLine = rentabilidade total (ganho + proventos) / investido
+            */}
             <KpiCard
-              label="Resultado"
+              label="Resultado total"
               value={formatBRL(lucroTotal)}
               valueColor={signClass(lucroTotal)}
-              subLabel={`Capital ${formatBRL(ganhoCapital)} · Prov. ${formatBRL(totalProv)}`}
+              subLabel={`Capital ${formatBRL(ganhoCapital)} · Prov. 12m ${formatBRL(dividendos12m)}`}
               bottomLine={
-                <span className={clsx('text-xs font-semibold tabular-nums', signClass(rentabilidade))}>
+                <span
+                  title="Rentabilidade = (ganho de capital + todos os proventos) / valor investido"
+                  className={clsx('text-xs font-semibold tabular-nums', signClass(rentabilidade))}
+                  style={{ cursor: 'help' }}
+                >
                   {rentabilidade >= 0 ? '+' : ''}{formatPercent(rentabilidade)} rentab.
                 </span>
               }
@@ -273,7 +282,6 @@ export default function ResumePage() {
 
       {/* Tabelas por classe */}
       {loadingPositions || !portfolioId ? (
-        // Exibe skeletons enquanto carrega OU enquanto portfolioId ainda não resolveu
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           {[...Array(3)].map((_, i) => (
             <div key={i} className="animate-pulse rounded-xl" style={{ height: 120, background: 'var(--color-surface-offset)' }} />
