@@ -14,7 +14,8 @@ from app.services.class_target_service import get_targets_map
 logger = logging.getLogger(__name__)
 
 _TYPE_LABEL: dict[str, str] = {
-    "ACAO": "A\u00e7\u00f5es",
+    "ACAO": "Ações",
+    "ACAO_NACIONAL": "Ações",
     "FII": "FIIs",
     "ETF_NACIONAL": "ETFs Nacionais",
     "ETF_INTERNACIONAL": "ETFs Internacionais",
@@ -29,6 +30,7 @@ _TYPE_LABEL: dict[str, str] = {
 # Paleta de cores fixa por classe — alinhada com o frontend (PALETTE no AssetDonutChart)
 _TYPE_COLOR: dict[str, str] = {
     "ACAO": "#6366f1",
+    "ACAO_NACIONAL": "#6366f1",
     "FII": "#10b981",
     "ETF_NACIONAL": "#f59e0b",
     "ETF_INTERNACIONAL": "#3b82f6",
@@ -41,9 +43,47 @@ _TYPE_COLOR: dict[str, str] = {
 }
 
 _MARKET_PRICE_TYPES = {
-    "ACAO", "FII", "ETF_NACIONAL", "ETF_INTERNACIONAL",
+    "ACAO", "ACAO_NACIONAL", "FII", "ETF_NACIONAL", "ETF_INTERNACIONAL",
     "STOCK", "BDR", "CRIPTO", "TESOURO_DIRETO",
 }
+
+# Mapa de aliases para o tipo canônico
+_TYPE_ALIASES: dict[str, str] = {
+    "ACAO": "ACAO_NACIONAL",
+    "ACOES": "ACAO_NACIONAL",
+    "ACAO_NACIONAL": "ACAO_NACIONAL",
+    "ETF_INT": "ETF_INTERNACIONAL",
+    "ETF_INTERNACIONAL": "ETF_INTERNACIONAL",
+    "ETF": "ETF_NACIONAL",
+    "ETF_NACIONAL": "ETF_NACIONAL",
+    "TESOURO": "TESOURO_DIRETO",
+    "TESOURO_DIRETO": "TESOURO_DIRETO",
+    "STOCKS": "STOCK",
+    "STOCK": "STOCK",
+    "CRIPTOMOEDA": "CRIPTO",
+    "CRIPTO": "CRIPTO",
+    "FII": "FII",
+    "BDR": "BDR",
+    "RENDA_FIXA": "RENDA_FIXA",
+    "OUTRO": "OUTRO",
+}
+
+
+def normalize_type(asset_type) -> str:
+    """
+    Normaliza aliases de asset_type para o valor canônico usado no sistema.
+
+    Exemplos:
+        "ACAO"     -> "ACAO_NACIONAL"
+        "ETF_INT"  -> "ETF_INTERNACIONAL"
+        "TESOURO"  -> "TESOURO_DIRETO"
+        "STOCKS"   -> "STOCK"
+        None       -> ""
+    """
+    if asset_type is None:
+        return ""
+    key = str(asset_type).upper().strip()
+    return _TYPE_ALIASES.get(key, key)
 
 
 def _asset_type_str(value) -> str:
@@ -189,7 +229,7 @@ async def sum_dividends(db: AsyncSession, portfolio_id: int, cutoff: DateType | 
         total = result.scalar_one_or_none()
         return float(total) if total is not None else 0.0
     except Exception as e:
-        logger.warning(f"[portfolio_service] sum_dividends falhou: {e} \u2014 retornando 0.0")
+        logger.warning(f"[portfolio_service] sum_dividends falhou: {e} — retornando 0.0")
         try:
             await db.rollback()
         except Exception:
