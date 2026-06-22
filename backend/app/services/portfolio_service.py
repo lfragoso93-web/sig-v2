@@ -433,10 +433,22 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
     for g in sorted_groups:
         g["total_value"] = round(g["total_value"], 2)
         g["total_invested"] = round(g["total_invested"], 2)
-        inv = g["total_invested"]
-        cur = g["total_value"]
-        has_quote = any(p["current_price"] is not None for p in g["positions"])
-        g["variation_pct"] = round((cur - inv) / inv * 100, 4) if (has_quote and inv > 0) else None
+
+        # P4: variation_pct calculado apenas sobre posições com cotação real.
+        # Separa o subgrupo cotado para evitar distorção em grupos mistos
+        # (ativos com cotação + ativos sem cotação no mesmo grupo).
+        #
+        # quoted_cur  = soma de current_value dos ativos COM cotação
+        # quoted_inv  = soma de invested_value dos mesmos ativos (base de custo coerente)
+        # Se nenhum ativo do grupo tem cotação → None
+        quoted_positions = [p for p in g["positions"] if p["current_price"] is not None]
+        if quoted_positions:
+            quoted_cur = sum(p["current_value"] for p in quoted_positions)
+            quoted_inv = sum(p["invested_value"] for p in quoted_positions)
+            g["variation_pct"] = round((quoted_cur - quoted_inv) / quoted_inv * 100, 4) if quoted_inv > 0 else None
+        else:
+            g["variation_pct"] = None
+
         # rentabilidade_pct por grupo: ainda não inclui proventos por grupo (sprint P3)
         # campo exposto como None para o frontend não quebrar
         g["rentabilidade_pct"] = None
