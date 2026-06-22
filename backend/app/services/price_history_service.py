@@ -3,8 +3,8 @@ Servico de historico de precos.
 
 Estrategia de busca (por camadas):
   L1 - banco (asset_prices): consulta primeiro; so busca externamente o delta faltante.
-  L2 - BRAPI Pro (primario BR): fetch_price_history() para acoes, FIIs, ETFs, cripto.
-  L3 - yfinance (fallback BR + primario INTL): usado quando BRAPI retorna vazio.
+  L2 - BRAPI Pro (primario): tentado para todos os tipos de ativo.
+  L3 - yfinance (fallback): usado quando BRAPI retorna vazio ou tipo e puramente internacional.
 
 Usado pelo scheduler (job diario) e pelo endpoint GET /prices/{ticker}/history.
 Tambem chamado por quotes_service ao adicionar transacao retroativa.
@@ -26,7 +26,7 @@ from sqlalchemy import select, func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.asset_types import BRAPI_HISTORY_TYPES, INTL_TYPES, yf_ticker
+from app.core.asset_types import INTL_TYPES, NO_QUOTE_TYPES, yf_ticker
 from app.integrations.brapi import fetch_price_history as brapi_fetch_history
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
@@ -81,8 +81,13 @@ async def _upsert_price(
 
 
 async def _get_or_create_asset(db: AsyncSession, ticker: str, asset_type: AssetType) -> Asset:
+    """
+    Busca Asset por ticker apenas (unique=True) para evitar miss quando
+    asset_type da transacao diverge do valor salvo na tabela assets.
+    Cria o registro somente se nao existir.
+    """
     result = await db.execute(
-        select(Asset).where(Asset.ticker == ticker, Asset.asset_type == asset_type)
+        select(Asset).where(Asset.ticker == ticker)
     )
     asset = result.scalar_one_or_none()
     if asset is None:
@@ -133,6 +138,18 @@ async def persist_daily_prices(
     asset_type: AssetType,
     days_back: int = 365,
 ) -> int:
+    """
+    Persiste historico de precos diarios para um ativo.
+
+    Estrategia:
+      1. BRAPI Pro: tentado sempre como fonte primaria (BR e INTL).
+      2. yfinance: fallback quando BRAPI retorna vazio.
+      3. Snapshot atual como ultimo recurso (ex: Tesouro sem serie historica na BRAPI).
+    """
+    if asset_type in NO_QUOTE_TYPES:
+        logger.debug(f"[PriceHistory] {ticker} ({asset_type}) sem cotacao de mercado — ignorado")
+        return 0
+
     asset = await _get_or_create_asset(db, ticker, asset_type)
     last_ts = await _last_saved_ts(db, asset.id)
 
@@ -146,32 +163,52 @@ async def persist_daily_prices(
     rows: list[tuple[datetime, float]] = []
     source: str = "brapi"
 
-    if asset_type in BRAPI_HISTORY_TYPES:
+    # ------------------------------------------------------------------
+    # L2: BRAPI Pro — primario para todos os tipos
+    # ------------------------------------------------------------------
+    try:
         rows = await brapi_fetch_history(ticker, date_from, date_to)
-        source = "brapi"
+    except Exception as e:
+        logger.warning(f"[PriceHistory] BRAPI excecao para {ticker}: {e}")
+        rows = []
 
-        if not rows:
-            logger.info(f"[PriceHistory] BRAPI vazio para {ticker} - tentando yfinance fallback")
+    # ------------------------------------------------------------------
+    # L3: yfinance — fallback universal quando BRAPI retorna vazio
+    # ------------------------------------------------------------------
+    if not rows:
+        logger.info(
+            f"[PriceHistory] BRAPI vazio para {ticker} ({asset_type}) "
+            f"— tentando yfinance fallback"
+        )
+        try:
             rows = await _fetch_yf_history(ticker, asset_type, days_back)
-            source = "yfinance_br_fallback"
+            source = "yfinance_fallback"
+        except Exception as e:
+            logger.warning(f"[PriceHistory] yfinance excecao para {ticker}: {e}")
+            rows = []
 
-    elif asset_type in INTL_TYPES:
-        rows = await _fetch_yf_history(ticker, asset_type, days_back)
-        source = "yfinance"
-
-    else:
-        from app.integrations.brapi import fetch_quotes as brapi_fetch_quotes
-        result = await brapi_fetch_quotes([ticker])
-        price = result.get(ticker)
-        if price:
-            ts = _now_utc().replace(
-                hour=_BR_CLOSE_HOUR_UTC,
-                minute=0,
-                second=0,
-                microsecond=0,
-            )
-            rows = [(ts, price)]
-        source = "brapi_snapshot"
+    # ------------------------------------------------------------------
+    # Snapshot atual como ultimo recurso (ex: Tesouro sem serie historica)
+    # ------------------------------------------------------------------
+    if not rows:
+        logger.info(
+            f"[PriceHistory] sem historico para {ticker} — tentando snapshot de preco atual"
+        )
+        try:
+            from app.integrations.brapi import fetch_quotes as brapi_fetch_quotes
+            result = await brapi_fetch_quotes([ticker])
+            price = result.get(ticker)
+            if price:
+                ts = _now_utc().replace(
+                    hour=_BR_CLOSE_HOUR_UTC,
+                    minute=0,
+                    second=0,
+                    microsecond=0,
+                )
+                rows = [(ts, price)]
+                source = "brapi_snapshot"
+        except Exception as e:
+            logger.warning(f"[PriceHistory] snapshot fallback falhou para {ticker}: {e}")
 
     inserted = 0
     for ts, close in rows:
@@ -205,7 +242,7 @@ async def get_price_at_date(
     until = ref + timedelta(hours=23, minutes=59, seconds=59)
 
     asset_result = await db.execute(
-        select(Asset).where(Asset.ticker == ticker, Asset.asset_type == asset_type)
+        select(Asset).where(Asset.ticker == ticker)
     )
     asset = asset_result.scalar_one_or_none()
 
@@ -228,7 +265,7 @@ async def get_price_at_date(
     await persist_daily_prices(db, ticker, asset_type, days_back=days_needed)
 
     asset_result = await db.execute(
-        select(Asset).where(Asset.ticker == ticker, Asset.asset_type == asset_type)
+        select(Asset).where(Asset.ticker == ticker)
     )
     asset = asset_result.scalar_one_or_none()
     if not asset:
@@ -255,14 +292,14 @@ async def get_price_history(
     days: int = 90,
 ) -> list[dict]:
     asset_result = await db.execute(
-        select(Asset).where(Asset.ticker == ticker, Asset.asset_type == asset_type)
+        select(Asset).where(Asset.ticker == ticker)
     )
     asset = asset_result.scalar_one_or_none()
 
     if asset is None:
         await persist_daily_prices(db, ticker, asset_type, days_back=days)
         asset_result = await db.execute(
-            select(Asset).where(Asset.ticker == ticker, Asset.asset_type == asset_type)
+            select(Asset).where(Asset.ticker == ticker)
         )
         asset = asset_result.scalar_one_or_none()
         if asset is None:
