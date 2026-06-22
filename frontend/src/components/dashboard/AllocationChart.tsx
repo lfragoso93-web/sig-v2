@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
-import type { ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent'
 import { formatBRL } from '@/utils/format'
 
 const COLORS: Record<string, string> = {
@@ -56,6 +55,11 @@ export default function AllocationChart({ data, loading }: Props) {
     )
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tooltipFormatter = (value: any): [string, string] => {
+    return [typeof value === 'number' ? formatBRL(value) : '-', 'Valor']
+  }
+
   return (
     <ResponsiveContainer width="100%" height={260}>
       <PieChart>
@@ -71,10 +75,7 @@ export default function AllocationChart({ data, loading }: Props) {
           ))}
         </Pie>
         <Tooltip
-          formatter={(value: ValueType, _name: NameType) => {
-            if (typeof value !== 'number') return ['-', 'Valor']
-            return [formatBRL(value), 'Valor']
-          }}
+          formatter={tooltipFormatter}
           contentStyle={{
             background: 'var(--color-surface)',
             border: '1px solid var(--color-border)',

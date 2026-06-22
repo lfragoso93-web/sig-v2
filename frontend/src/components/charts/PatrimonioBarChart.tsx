@@ -2,7 +2,6 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from 'recharts'
-import type { ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent'
 import type { PatrimonioHistoryPoint } from '@/hooks/usePortfolio'
 import { formatBRL } from '@/utils/format'
 
@@ -43,6 +42,13 @@ export default function PatrimonioBarChart({ data, loading, singleSeries }: Prop
     invested: d.invested ?? 0,
   }))
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tooltipFormatter = (value: any, name: any): [string, string] => {
+    const formatted = typeof value === 'number' ? formatBRL(value) : '-'
+    const label = name === 'value' ? 'Patrimônio' : 'Investido'
+    return [formatted, label]
+  }
+
   return (
     <ResponsiveContainer width="100%" height={220}>
       <AreaChart data={chartData} margin={{ top: 6, right: 4, left: 4, bottom: 0 }}>
@@ -73,13 +79,7 @@ export default function PatrimonioBarChart({ data, loading, singleSeries }: Prop
           axisLine={false} tickLine={false} width={68}
         />
         <Tooltip
-          formatter={(value: ValueType, name: NameType) => {
-            if (typeof value !== 'number') return ['-', String(name)]
-            return [
-              formatBRL(value),
-              name === 'value' ? 'Patrimônio' : 'Investido',
-            ]
-          }}
+          formatter={tooltipFormatter}
           contentStyle={{
             background: 'var(--color-surface-2)',
             border: '1px solid oklch(from var(--color-text) l c h / 0.1)',
@@ -89,7 +89,6 @@ export default function PatrimonioBarChart({ data, loading, singleSeries }: Prop
           cursor={{ stroke: 'var(--color-primary)', strokeWidth: 1, strokeDasharray: '4 2' }}
         />
 
-        {/* Área principal: patrimônio total */}
         <Area
           type="monotone"
           dataKey="value"
@@ -100,7 +99,6 @@ export default function PatrimonioBarChart({ data, loading, singleSeries }: Prop
           activeDot={{ r: 4, fill: 'var(--color-primary)', strokeWidth: 0 }}
         />
 
-        {/* Área secundaria: valor investido (apenas modo total) */}
         {!singleSeries && (
           <Area
             type="monotone"
