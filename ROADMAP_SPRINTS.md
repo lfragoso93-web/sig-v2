@@ -142,7 +142,13 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 
 ---
 
-## Sprint 7 - Rentabilidade 🔜 PROXIMA — iniciar 19 Jun 2026
+## [Security Hotfix] - 21 Jun 2026 ✅ CONCLUIDO
+
+- `pydantic-settings` atualizado `2.14.1` → `2.14.2` (GHSA-4xgf-cpjx-pc3j) — PR #25 mergeado
+
+---
+
+## Sprint 7 - Rentabilidade 🔜 PROXIMA — iniciar 22 Jun 2026
 
 **Objetivo:** calcular rentabilidade de forma util e confiavel para decisao do usuario.
 
@@ -177,6 +183,78 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 - KPI "Resultado" e "Variacao" mostram valores coerentes
 
 **Prioridade:** alta.
+
+---
+
+## [Sprint 7.5] - Hardening de Seguranca e Qualidade do Backend — iniciar 22 Jun 2026
+
+**Objetivo:** fechar os gaps criticos e de alta prioridade identificados na analise de 21 Jun 2026, antes de seguir com novas funcionalidades.
+
+> Esta sprint entra entre Sprint 7 e Sprint 8 por conter itens criticos que nao devem aguardar.
+
+### Itens CRITICOS (executar primeiro)
+
+**C1 — Traceback exposto em producao (`main.py`)**
+- O `global_exception_handler` retorna stack trace completo na resposta JSON
+- Correcao: logar internamente via `logging.error` e retornar apenas mensagem generica ao cliente
+- Diferenciar ambiente: traceback visivel apenas em `DEBUG=true`
+
+**C2 — Router `debug.py` sem controle de ciclo de vida**
+- Endpoints de reset de senha e criacao de usuario com qualquer role estao ativos sempre que `ADMIN_SECRET` existir
+- Correcao: adicionar audit log de acesso, rate limiting (max 5 req/min), e documentar processo de desativacao
+- Avaliar migrar funcionalidade para painel admin autenticado
+
+**C3 — Refresh token sem blacklist / revogacao**
+- Logout nao invalida o refresh token; token permanece valido ate expirar (7 dias)
+- Correcao: criar tabela `revoked_tokens` no banco (ou usar Redis) e checar em `decode_token`
+- Garantir que logout chame endpoint de revogacao
+
+### Itens de ALTA PRIORIDADE
+
+**A1 — Rate limiting no endpoint de login**
+- `POST /auth/login` sem throttling permite brute force ilimitado
+- Correcao: adicionar `slowapi` ou middleware de rate limit — sugestao: 10 tentativas/minuto por IP
+
+**A2 — Paginacao nos endpoints de listagem**
+- `GET /transactions`, `GET /assets` e similares sem `limit/offset` — queries sem LIMIT podem sobrecarregar banco
+- Correcao: adicionar parametros `page` e `page_size` (default 50) em todos os endpoints de listagem
+
+**A3 — Routers stub ativos sem implementacao**
+- `analysis.py`, `fixed_income.py`, `goals.py`, `quotes.py` estao registrados com apenas 77–78 bytes
+- Correcao: ou implementar o minimo (retornar `501 Not Implemented` com mensagem clara) ou remover o registro do `main.py` ate a sprint correspondente
+
+**A4 — Consolidar `quote_service.py` e `quotes_service.py`**
+- Dois servicos de cotacao com responsabilidades sobrepostas (3,2 KB vs 13,6 KB)
+- Correcao: unificar em `quotes_service.py` e remover `quote_service.py`, ajustando todos os imports
+
+### Itens de MEDIA PRIORIDADE
+
+**M1 — Health check real**
+- `GET /health` retorna `{"status": "ok"}` hardcoded sem verificar banco ou Redis
+- Correcao: testar `SELECT 1` no banco e ping no Redis; retornar `503` se algum falhar
+
+**M2 — Scheduler com isolamento de falha por job**
+- Uma excecao nao tratada em um job pode silenciar os demais
+- Correcao: envolver cada job em `try/except` com log estruturado; usar `misfire_grace_time`
+
+**M3 — Cache no `performance_service.py`**
+- Recalcula rentabilidade a cada requisicao sem cache
+- Correcao: adicionar TTL de 5 minutos no Redis usando o padrao ja existente em `cache.py`
+
+**M4 — Timeout no `logo_service.py`**
+- Requisicoes HTTP externas sem timeout configurado
+- Correcao: adicionar `timeout=httpx.Timeout(5.0)` nas chamadas do `httpx.AsyncClient`
+
+**Criterios de aceite:**
+- C1: erro 500 retorna mensagem generica; traceback aparece apenas em logs do servidor
+- C2: toda chamada ao debug router gera log com IP, timestamp e endpoint acessado
+- C3: token revogado apos logout retorna 401 em qualquer endpoint protegido
+- A1: mais de 10 tentativas de login do mesmo IP em 1 minuto retornam 429
+- A2: todos os endpoints de listagem aceitam e respeitam `page`/`page_size`
+- A3: endpoints stub retornam `501` ou sao removidos do router
+- M1: `/health` retorna `503` se banco ou Redis estiverem inaccessiveis
+
+**Prioridade:** alta — executar antes da Sprint 8.
 
 ---
 
@@ -298,7 +376,9 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 | Sprint 6 — Proventos (backend + frontend) | ✅ Concluida — 15 Jun 2026 |
 | Manutencao pos-sprint — Infra e hotfixes | ✅ Concluida — 15 Jun 2026 |
 | Hotfix — Tabela de Ativos | ✅ Concluido — 18 Jun 2026 |
-| Sprint 7 — Rentabilidade | 🔜 Proxima — 19 Jun 2026 |
+| Security Hotfix — pydantic-settings CVE | ✅ Concluido — 21 Jun 2026 |
+| Sprint 7 — Rentabilidade | 🔜 Proxima — 22 Jun 2026 |
+| Sprint 7.5 — Hardening Seguranca e Qualidade | 🔜 Apos Sprint 7 |
 | Sprint 8 — Historico Patrimonial (frontend) | ⏳ |
 | Sprint 9 — Patrimonio por Classe | ⏳ |
 | Sprint 10 — Renda Fixa e Tesouro | ⏳ |
