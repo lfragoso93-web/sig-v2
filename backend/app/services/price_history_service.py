@@ -26,7 +26,7 @@ from sqlalchemy import select, func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.asset_types import INTL_TYPES, NO_QUOTE_TYPES, yf_ticker
+from app.core.asset_types import NO_QUOTE_TYPES, yf_ticker
 from app.integrations.brapi import fetch_price_history as brapi_fetch_history
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
