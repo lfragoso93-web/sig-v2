@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import api from '@/services/api'
+import { PORTFOLIOS_QUERY_KEY } from '@/hooks/usePortfolios'
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────────────────────────
 
@@ -16,25 +17,20 @@ export interface PositionItem {
   variation_value: number
   variation_percent: number
   allocation_pct: number
-  logo_url?: string | null   // URL do logo coletado pelo onboarding (null = ainda nao disponivel)
+  logo_url?: string | null
 }
 
 export interface PositionGroup {
   label: string
   count: number
   total_value: number
-  /** Soma do valor investido em todos os ativos da classe */
   total_invested?: number
-  /** Variação total da classe: (total_value - total_invested) / total_invested */
   variation_pct?: number
-  /** Rentabilidade da classe incluindo proventos (opcional, vindo do backend) */
   rentabilidade_pct?: number
-  /** Meta de alocação definida pelo usuário para esta classe (ex: 30 = 30%) */
   target_pct?: number
   positions: PositionItem[]
 }
 
-/** Distribuição por tipo de ativo */
 export interface AssetDistribution {
   asset_type: string
   label: string
@@ -69,7 +65,6 @@ export interface PortfolioListItem {
   description?: string
 }
 
-/** Ponto de histórico de patrimônio */
 export interface PatrimonioHistoryPoint {
   date: string
   value: number
@@ -110,15 +105,19 @@ export function usePortfolioSummaryData(portfolioId: number | null) {
 /** Alias para componentes que importam usePortfolioSummary */
 export const usePortfolioSummary = usePortfolioSummaryData
 
-/** Lista todas as carteiras do usuário */
+/**
+ * Lista todas as carteiras do usuário.
+ * Usa o mesmo queryKey de usePortfolios (PORTFOLIOS_QUERY_KEY = ['portfolios'])
+ * para compartilhar cache com o Topbar e evitar double-fetch.
+ */
 export function usePortfolioList() {
   return useQuery<PortfolioListItem[]>({
-    queryKey: ['portfolio-list'],
+    queryKey: PORTFOLIOS_QUERY_KEY,
     queryFn: () => api.get('/portfolios').then(r => r.data),
+    staleTime: 30_000,
   })
 }
 
-/** Histórico de patrimônio mensal (total ou por classe de ativo) */
 export function usePatrimonioHistory(
   portfolioId: number | null,
   months = 12,
