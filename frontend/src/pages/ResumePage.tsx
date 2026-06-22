@@ -18,7 +18,6 @@ import AssetDonutChart from '@/components/charts/AssetDonutChart'
 import PositionTable from '@/components/resume/PositionTable'
 import CreatePortfolioModal from '@/components/modals/CreatePortfolioModal'
 
-// ── Opções dos selects ──
 const PERIOD_OPTIONS = [
   { label: 'Últimos 6 meses',  value: 6  },
   { label: 'Últimos 12 meses', value: 12 },
@@ -87,12 +86,14 @@ export default function ResumePage() {
 
   const { data: portfolios, isLoading: loadingPortfolios } = usePortfolioList()
 
+  // Se nenhuma carteira está selecionada no store, seleciona a primeira automaticamente
   useEffect(() => {
     if (!globalPortfolioId && portfolios && portfolios.length > 0) {
       setGlobal(portfolios[0].id)
     }
   }, [globalPortfolioId, portfolios, setGlobal])
 
+  // Garante que o id usado é sempre válido: prefere o store, fallback para o primeiro da lista
   const portfolioId: number | null = globalPortfolioId ?? (portfolios?.[0]?.id ?? null)
   const activeAssetType = assetClass === ASSET_CLASS_ALL ? null : assetClass
 
@@ -271,15 +272,16 @@ export default function ResumePage() {
       </div>
 
       {/* Tabelas por classe */}
-      {loadingPositions ? (
+      {loadingPositions || !portfolioId ? (
+        // Exibe skeletons enquanto carrega OU enquanto portfolioId ainda não resolveu
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           {[...Array(3)].map((_, i) => (
             <div key={i} className="animate-pulse rounded-xl" style={{ height: 120, background: 'var(--color-surface-offset)' }} />
           ))}
         </div>
-      ) : positions && positions.length > 0 && portfolioId ? (
+      ) : positions && positions.length > 0 ? (
         <PositionTable groups={positions} portfolioId={portfolioId} />
-      ) : positions && positions.length > 0 ? null : (
+      ) : (
         <div className="card">
           <EmptyState
             icon={DollarSign}
