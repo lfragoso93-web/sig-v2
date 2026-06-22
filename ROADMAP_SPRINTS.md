@@ -148,27 +148,35 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 
 ---
 
-## Sprint 7 - Rentabilidade 🔜 PROXIMA — iniciar 22 Jun 2026
+## Sprint 7 - Rentabilidade 🔄 EM ANDAMENTO — iniciada 22 Jun 2026
 
 **Objetivo:** calcular rentabilidade de forma util e confiavel para decisao do usuario.
 
-**Ponto de partida (investigacoes pendentes do hotfix 18/06):**
+### Progresso (22 Jun 2026)
 
-1. **Cotacoes L1 vazio** — `_db_get_fresh` busca `Asset.last_price` por `ticker + AssetType(raw_type)`. Verificar se os registros de `Asset` existem com o `asset_type` correto apos as migrations. Se a tabela `assets` nao for populada pelo fluxo de transacoes, o L1 nunca tera dados e o sistema cairia sempre no L3 (BRAPI/yfinance). Consequencia: tickers sem cotacao viram `current_price = None`.
+| # | Item | Status | Commits |
+|---|---|---|---|
+| 1 | L1 vazio — `_db_set` sem commit fora do scheduler | ✅ Corrigido | `f18a0a8` |
+| 2 | `sum_dividends` ignorava proventos manuais (LEFT JOIN) | ✅ Corrigido | `18ddf58` |
+| 3 | `rentabilidade_pct` ausente em `AssetGroupOut` | ✅ Corrigido | `8e05e0d` |
+| 4 | Dupla formatacao de percentual em `ResumePage.tsx` | ✅ Corrigido | `ec36720` |
+| 5 | Logica de rentabilidade por ativo | 🔜 Pendente | — |
+| 6 | `total_gain` / `total_gain_pct` no `PortfolioSummary` | 🔜 Pendente | — |
+| 7 | Lucro realizado (ativos vendidos) contabilizado | 🔜 Pendente | — |
+| 8 | Proventos contribuindo para rentabilidade total | 🔜 Pendente | — |
 
-2. **Logica de rentabilidade** — revisar todo o fluxo:
-   - `variation_value` e `variation_percent` em `PositionOut`
-   - `total_gain` e `total_gain_pct` no `PortfolioSummary`
-   - `rentabilidade_total` no KPI card
-   - Garantir que lucro realizado (ativos vendidos) seja contabilizado
-   - Garantir que proventos contribuam para rentabilidade total
+### Arquivos ja revisados
 
-**Arquivos para revisar na Sprint 7:**
+| Arquivo | Status |
+|---|---|
+| `backend/app/services/quotes_service.py` | ✅ Revisado e corrigido (L1) |
+| `backend/app/models/asset.py` | ✅ Revisado — `asset_type` e String; `last_price` populado via savepoint |
+| `backend/app/core/asset_types.py` | ✅ Revisado — sem inconsistencias |
+
+### Arquivos para revisar (pendentes)
 
 | Arquivo | O que verificar |
 |---|---|
-| `backend/app/services/quotes_service.py` | Por que L1 (`_db_get_fresh`) nao encontra precos — checar `Asset.asset_type` vs string que vem da transacao |
-| `backend/app/models/asset.py` | Se `asset_type` e `AssetType` enum ou string; se `last_price` e populado em algum momento |
 | `backend/app/services/portfolio_service.py` | `enrich_with_prices`, `get_portfolio_summary`, calculo de `variation_value`/`variation_percent` |
 | `backend/app/routers/positions.py` | Fluxo completo de `refresh=True` — testa se `update_quotes_for_portfolio` resolve L1 |
 | `frontend/src/pages/ResumePage.tsx` | KPI cards de Resultado, Variacao, Rentabilidade — alinhar com campos reais do backend |
@@ -186,7 +194,7 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 
 ---
 
-## [Sprint 7.5] - Hardening de Seguranca e Qualidade do Backend — iniciar 22 Jun 2026
+## [Sprint 7.5] - Hardening de Seguranca e Qualidade do Backend — iniciar apos Sprint 7
 
 **Objetivo:** fechar os gaps criticos e de alta prioridade identificados na analise de 21 Jun 2026, antes de seguir com novas funcionalidades.
 
@@ -305,7 +313,7 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 
 **Objetivo:** permitir que o usuario defina metas percentuais por classe de ativo diretamente em Configuracoes, com visualizacao em grafico de rosca e validacao de total = 100%.
 
-> **Situacao atual (21 Jun 2026):**
+> **Situacao atual (22 Jun 2026):**
 > - **Backend 100% pronto:** `routers/class_targets.py` + `services/class_target_service.py` com GET/PUT/DELETE funcionais
 > - **Frontend ausente:** `Configuracoes.tsx` nao possui a aba "Distribuicao da Carteira" nem qualquer integracao com os endpoints de class-targets
 
@@ -349,17 +357,22 @@ O layout alvo e o seguinte (conforme print de 21 Jun 2026):
 
 ---
 
-## Sprint 12 - IRPF
+## Sprint 12 - IRPF ⚠️ BACKEND + FRONTEND BASICO JA IMPLEMENTADOS
 
-**Objetivo:** gerar informacoes uteis para declaracao anual.
+**Objetivo:** revisar, testar e completar o modulo de IRPF ja existente.
 
-**Escopo:**
-- Posicao em 31/12 por ativo
-- Bens e Direitos
-- Rendimentos isentos, JCP e tributaveis
-- Lucro/prejuizo realizado por mes
-- Exportacao relatorio anual
-- **Metodo:** Preco Medio Ponderado
+> **Situacao atual (22 Jun 2026 — auditoria):**
+> - `irpf_service.py` (24 KB) — implementado
+> - `routers/irpf.py` (5.6 KB) — implementado
+> - `IRPFPage.tsx` (23.6 KB) — implementado
+> - Status documentado anteriormente como Sprint futura (⏳) estava incorreto
+
+**Escopo real da Sprint 12 (revisao e completude):**
+- Auditar cobertura do `irpf_service.py`: posicao em 31/12, Bens e Direitos, rendimentos isentos, JCP, tributaveis
+- Verificar calculo de lucro/prejuizo realizado por mes (Preco Medio Ponderado)
+- Validar `IRPFPage.tsx`: exportacao de relatorio anual, alinhamento de campos com backend
+- Adicionar testes para os calculos criticos de IR
+- Documentar o fluxo de geracao do relatorio
 
 **Prioridade:** media.
 
@@ -417,13 +430,13 @@ O layout alvo e o seguinte (conforme print de 21 Jun 2026):
 | Manutencao pos-sprint — Infra e hotfixes | ✅ Concluida — 15 Jun 2026 |
 | Hotfix — Tabela de Ativos | ✅ Concluido — 18 Jun 2026 |
 | Security Hotfix — pydantic-settings CVE | ✅ Concluido — 21 Jun 2026 |
-| Sprint 7 — Rentabilidade | 🔜 Proxima — 22 Jun 2026 |
+| Sprint 7 — Rentabilidade | 🔄 Em andamento — 22 Jun 2026 |
 | Sprint 7.5 — Hardening Seguranca e Qualidade | 🔜 Apos Sprint 7 |
 | Sprint 8 — Historico Patrimonial (frontend) | ⏳ |
 | Sprint 9 — Patrimonio por Classe | ⏳ |
 | Sprint 10 — Renda Fixa e Tesouro | ⏳ |
 | Sprint 11 — Metas e Alocacao (Distribuicao da Carteira) | ⏳ |
-| Sprint 12 — IRPF | ⏳ |
+| Sprint 12 — IRPF (revisar implementacao existente) | ⏳ |
 | Sprint 13 — Analise da Carteira | ⏳ |
 | Sprint 14 — Administracao | ⏳ |
 | Sprint 15 — Qualidade, CI e Release | ⏳ |

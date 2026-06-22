@@ -44,6 +44,94 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [Sessao] - 2026-06-22 (Sprint 7 — inicio)
+
+### Auditoria inicial e correcoes de bugs
+
+Sessao dedicada a leitura cruzada da documentacao (README, ROADMAP, CHANGELOG) com o codigo real da branch `stable-15jun`, identificacao de divergencias e correcao dos bugs mapeados.
+
+#### Divergencias encontradas na auditoria
+
+| # | Item | Status doc | Status real | Acao |
+|---|---|---|---|---|
+| 1 | `irpf_service.py` + `IRPFPage.tsx` + `routers/irpf.py` | ROADMAP listava como Sprint 12 (⏳) | Ja implementado (24 KB + 23.6 KB + 5.6 KB) | ROADMAP atualizado para refletir status real |
+| 2 | `Proventos.tsx` (69 bytes) | Nao documentado | Arquivo stub/redirect coexistindo com `ProventosPage.tsx` | Identificado como wrapper de roteamento |
+| 3 | `analysis.py`, `fixed_income.py`, `goals.py`, `quotes.py` (77-78 bytes) | Item A3 do Sprint 7.5 | Confirmado: stubs ativos sem implementacao | Pendente Sprint 7.5 |
+| 4 | L1 (`_db_get_fresh`) nunca populado fora do scheduler | Mapeado no hotfix 18/06 | Confirmado: `_db_set` usava apenas `flush()` sem savepoint | Corrigido — ver abaixo |
+
+---
+
+#### Bug 1 — `sum_dividends` ignorava proventos manuais (sem `asset_dividend_id`)
+
+**Arquivo:** `backend/app/services/proventos_service.py`
+
+**Problema:** `INNER JOIN` em `asset_dividends` excluia dividendos manuais (sem `asset_dividend_id`), zerando silenciosamente o `total_12m` quando a carteira tinha so proventos manuais.
+
+**Correcao:** substituido por `OUTERJOIN` com condicao `(ex_date >= cutoff) OR (asset_dividend_id IS NULL)`. Adicionado `g["rentabilidade_pct"] = None` no loop de grupos para contrato completo.
+
+**Commit:** `18ddf58`
+
+---
+
+#### Bug 2 — `rentabilidade_pct` ausente no schema `AssetGroupOut`
+
+**Arquivo:** `backend/app/schemas/portfolio.py`
+
+**Problema:** campo `rentabilidade_pct` nao existia em `AssetGroupOut`; o backend nao serializava o campo para o frontend, gerando erro silencioso na leitura.
+
+**Correcao:** adicionado `rentabilidade_pct: Optional[float] = None` ao schema Pydantic `AssetGroupOut`.
+
+**Commit:** `8e05e0d`
+
+---
+
+#### Bug 3 — dupla formatacao de percentual em `ResumePage.tsx`
+
+**Arquivo:** `frontend/src/pages/ResumePage.tsx`
+
+**Problema:** `KpiCard` ja chama `formatPercent(change)` internamente; passar `formatPercent(variacaoPct)` como `change` resultava em dupla formatacao (`"15.23%"` virava `"1523.00%"`).
+
+**Correcao:** adicionados comentarios inline documentando que `variacaoPct` e `rentabilidade` devem chegar **brutos** (escala `15.23 = 15,23%`) ao `KpiCard`, sem segunda chamada ao `formatPercent`.
+
+**Commit:** `ec36720`
+
+---
+
+#### Bug 4 (raiz) — L1 de cotacoes nunca populado fora do scheduler
+
+**Arquivo:** `backend/app/services/quotes_service.py`
+
+**Problema (raiz):** `_db_set` usava apenas `await db.flush()` — o dado ficava visivel apenas dentro da transacao corrente. Chamadas de `get_portfolio_positions` e `get_portfolio_summary` nao faziam `commit` apos `get_prices`, descartando o `last_price` ao final da request. Na proxima chamada, L1 voltava vazio e o sistema ia para L3 (BRAPI/yfinance) novamente.
+
+**Problema secundario:** a fase de persistencia fazia um segundo `AssetType(raw_type)` que podia lancar `ValueError` silenciosamente, impedindo que `_db_set` fosse chamado para ativos com `asset_type` nao canonico.
+
+**Correcao:**
+- `_db_set` reescrito para usar `begin_nested()` (SAVEPOINT SQL). O savepoint commita o `last_price` imediatamente, independente da transacao principal do chamador.
+- Se o savepoint falhar (conflito de constraint, etc.), apenas ele faz rollback — a transacao principal nao e afetada. Log de warning emitido.
+- `type_map: dict[str, AssetType | None]` adicionado em `get_prices` para reutilizar o `asset_type` ja resolvido na fase de roteamento, eliminando o segundo `try/except ValueError`.
+- Ativos com `asset_type` invalido recebem log de warning em vez de falhar silenciosamente.
+
+**Fluxo apos a correcao:**
+```
+1a requisicao (L1 vazio):
+  get_portfolio_positions -> get_prices -> L3 (BRAPI/yfinance)
+                                        -> _db_set -> begin_nested() -> COMMIT savepoint
+                                        -> L1 populado imediatamente
+
+2a requisicao (ate 15 min depois):
+  get_prices -> _db_get_fresh -> L1 hit -> retorna sem chamar L3
+```
+
+**Commit:** `f18a0a8`
+
+---
+
+#### Observacao sobre IRPF
+
+Auditoria revelou que `irpf_service.py` (24 KB), `routers/irpf.py` (5.6 KB) e `IRPFPage.tsx` (23.6 KB) ja estavam implementados, contradizendo o ROADMAP que listava IRPF como Sprint 12 (⏳). ROADMAP atualizado para refletir o status real: **backend + frontend basico implementados**, sprint 12 reservada para revisao e testes.
+
+---
+
 ## [Sessao] - 2026-06-18 (fim de dia)
 
 ### Hotfix — Tabela de ativos (PositionTable)
