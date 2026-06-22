@@ -2,7 +2,7 @@ import logging
 import traceback
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -54,8 +54,15 @@ app = FastAPI(
 # Injeta o limiter no state para que @limiter.limit() funcione nos routers
 app.state.limiter = limiter
 
-# Handler de 429 — retorna JSON padrao em vez de HTML
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Wrapper com assinatura compativel com add_exception_handler (mypy exige
+# Callable[[Request, Exception], Response | Awaitable[Response]]).
+def _rate_limit_handler(request: Request, exc: Exception) -> Response:
+    return _rate_limit_exceeded_handler(request, exc)  # type: ignore[arg-type]
+
+
+# Handler de 429 -- retorna JSON padrao em vez de HTML
+app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
 
 # Middleware slowapi (necessario para key_func acessar o request)
 app.add_middleware(SlowAPIMiddleware)
