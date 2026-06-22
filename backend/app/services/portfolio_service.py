@@ -160,7 +160,9 @@ def enrich_with_prices(positions: list[dict], prices: dict[str, float]) -> list[
     enriched = []
     for p in positions:
         ticker = p["ticker"]
-        asset_type = p.get("asset_type", "")
+        # Normaliza o tipo antes de checar _MARKET_PRICE_TYPES para garantir que
+        # aliases legados (ex: "ACAO_NACIONAL") sejam tratados como seu canônico ("ACAO").
+        asset_type = normalize_type(p.get("asset_type", ""))
         price = prices.get(ticker)
         item = dict(p)
 
