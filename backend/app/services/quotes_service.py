@@ -24,7 +24,7 @@ from decimal import Decimal
 from typing import Optional
 
 import yfinance as yf
-from sqlalchemy import select, cast, String
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.asset_types import BR_TYPES, INTL_TYPES, NO_QUOTE_TYPES, TREASURY_TYPES, yf_ticker
@@ -92,17 +92,29 @@ def _mem_set(ticker: str, price: float) -> None:
     _mem_cache[ticker] = (price, time.time() + MEM_CACHE_TTL)
 
 
+def _asset_type_str(asset_type) -> str:
+    """Retorna o valor string do asset_type, seja enum ou string pura."""
+    if isinstance(asset_type, AssetType):
+        return asset_type.value
+    return str(asset_type)
+
+
 async def _db_get_fresh(
     db: AsyncSession,
     ticker: str,
-    asset_type: AssetType,
+    asset_type,
 ) -> Optional[float]:
-    asset_type_str = asset_type.value if isinstance(asset_type, AssetType) else str(asset_type)
+    """
+    Busca last_price em Asset por (ticker, asset_type).
+    Compara asset_type como string — evita problemas de cast() no SQLite.
+    Retorna None se ausente ou expirado (> PRICE_TTL_SECONDS).
+    """
+    at_str = _asset_type_str(asset_type)
     result = await db.execute(
         select(Asset.last_price, Asset.last_price_updated_at)
         .where(
             Asset.ticker == ticker,
-            cast(Asset.asset_type, String) == asset_type_str,
+            Asset.asset_type == at_str,
         )
     )
     row = result.first()
@@ -117,19 +129,20 @@ async def _db_get_fresh(
 async def _db_set(
     db: AsyncSession,
     ticker: str,
-    asset_type: AssetType,
+    asset_type,
     price: float,
 ) -> None:
     """
-    Upsert de last_price na tabela assets.
-    Cria o registro se ainda nao existir (garante que L1 seja populado
-    mesmo para ativos cadastrados somente via Transaction).
+    Upsert de last_price na tabela assets por (ticker, asset_type).
+    Cria o registro se ainda nao existir — garante que L1 seja populado
+    mesmo para ativos cadastrados somente via Transaction.
+    Usa a constraint uq_assets_ticker_asset_type (migration 008).
     """
-    asset_type_str = asset_type.value if isinstance(asset_type, AssetType) else str(asset_type)
+    at_str = _asset_type_str(asset_type)
     result = await db.execute(
         select(Asset).where(
             Asset.ticker == ticker,
-            cast(Asset.asset_type, String) == asset_type_str,
+            Asset.asset_type == at_str,
         )
     )
     asset = result.scalar_one_or_none()
@@ -140,17 +153,16 @@ async def _db_set(
         asset.last_price = price_decimal
         asset.last_price_updated_at = now
     else:
-        # Cria Asset minimo para que proximas chamadas encontrem L1
         asset = Asset(
             ticker=ticker,
-            asset_type=asset_type_str,
+            asset_type=at_str,
             last_price=price_decimal,
             last_price_updated_at=now,
         )
         db.add(asset)
         logger.info(
             "[quotes_service] Asset criado automaticamente via upsert: %s (%s)",
-            ticker, asset_type_str,
+            ticker, at_str,
         )
 
     await db.flush()
@@ -382,10 +394,45 @@ async def get_current_price(
 
 
 async def update_all_quotes(db: AsyncSession) -> int:
-    """Atualiza last_price de todos os ativos cadastrados. Retorna quantidade atualizada."""
-    result = await db.execute(select(Asset))
+    """
+    Atualiza last_price de todos os ativos com cotacao de mercado.
+
+    Bootstrap automatico: se a tabela assets estiver vazia (nenhum ativo
+    cadastrado manualmente), carrega os tickers distintos de Transaction
+    e popula L1 pela primeira vez. Isso resolve o caso em que o usuario
+    so lancu transacoes e nunca executou onboarding de ativos.
+    """
+    from app.models.transaction import Transaction
+
+    result = await db.execute(
+        select(Asset).where(
+            Asset.asset_type.notin_([at.value for at in NO_QUOTE_TYPES])
+        )
+    )
     assets = result.scalars().all()
-    positions = [{"ticker": a.ticker, "asset_type": a.asset_type} for a in assets]
+
+    if not assets:
+        # Bootstrap: deriva posicoes unicas das transacoes
+        logger.info("[quotes_service] tabela assets vazia — bootstrap a partir de Transaction")
+        tx_result = await db.execute(
+            select(Transaction.ticker, Transaction.asset_type).distinct()
+        )
+        positions = [
+            {"ticker": row.ticker, "asset_type": str(row.asset_type)}
+            for row in tx_result.all()
+            if row.ticker and row.asset_type
+        ]
+    else:
+        positions = [
+            {"ticker": a.ticker, "asset_type": a.asset_type}
+            for a in assets
+        ]
+
+    if not positions:
+        logger.info("[quotes_service] update_all_quotes: nenhuma posicao para atualizar")
+        return 0
+
     prices = await get_prices(positions, db)
     await db.commit()
+    logger.info("[quotes_service] update_all_quotes: %d precos atualizados", len(prices))
     return len(prices)
