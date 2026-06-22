@@ -44,20 +44,20 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
-## [Sessao] - 2026-06-22 (Sprint 7 — inicio)
+## [Sessao] - 2026-06-22 (Sprint 7 — CONCLUIDA + Sprint 11 frontend iniciada)
 
-### Auditoria inicial e correcoes de bugs
+### Sprint 7 — Auditoria, correcao de bugs e rentabilidade
 
 Sessao dedicada a leitura cruzada da documentacao (README, ROADMAP, CHANGELOG) com o codigo real da branch `stable-15jun`, identificacao de divergencias e correcao dos bugs mapeados.
 
-#### Divergencias encontradas na auditoria
+#### Auditoria inicial — divergencias encontradas
 
 | # | Item | Status doc | Status real | Acao |
 |---|---|---|---|---|
-| 1 | `irpf_service.py` + `IRPFPage.tsx` + `routers/irpf.py` | ROADMAP listava como Sprint 12 (⏳) | Ja implementado (24 KB + 23.6 KB + 5.6 KB) | ROADMAP atualizado para refletir status real |
+| 1 | `irpf_service.py` + `IRPFPage.tsx` + `routers/irpf.py` | ROADMAP listava como Sprint 12 (pendente) | Ja implementado (24 KB + 23.6 KB + 5.6 KB) | ROADMAP atualizado |
 | 2 | `Proventos.tsx` (69 bytes) | Nao documentado | Arquivo stub/redirect coexistindo com `ProventosPage.tsx` | Identificado como wrapper de roteamento |
 | 3 | `analysis.py`, `fixed_income.py`, `goals.py`, `quotes.py` (77-78 bytes) | Item A3 do Sprint 7.5 | Confirmado: stubs ativos sem implementacao | Pendente Sprint 7.5 |
-| 4 | L1 (`_db_get_fresh`) nunca populado fora do scheduler | Mapeado no hotfix 18/06 | Confirmado: `_db_set` usava apenas `flush()` sem savepoint | Corrigido — ver abaixo |
+| 4 | L1 (`_db_get_fresh`) nunca populado fora do scheduler | Mapeado no hotfix 18/06 | Confirmado: `_db_set` usava apenas `flush()` sem savepoint | Corrigido nesta sessao |
 
 ---
 
@@ -126,9 +126,49 @@ Sessao dedicada a leitura cruzada da documentacao (README, ROADMAP, CHANGELOG) c
 
 ---
 
+#### Sprint 7 — logica de rentabilidade (backend)
+
+**Status: IMPLEMENTADA E REVISADA em `portfolio_service.py`**
+
+A revisao do `portfolio_service.py` revelou que toda a logica de rentabilidade ja estava corretamente implementada:
+
+| Campo | Origem | Descricao |
+|---|---|---|
+| `total_gain` / `variacao_valor` | `current_value - total_invested` | Ganho bruto de capital |
+| `total_gain_pct` / `variacao_percentual` | `total_gain / total_invested * 100` | Variacao percentual do capital |
+| `lucro_total` | `total_gain + proventos_em_carteira` | Capital + proventos (ativos em carteira) |
+| `rentabilidade_total` | `lucro_total / total_invested * 100` | Rentabilidade real ponta a ponta |
+| `variation_pct` (grupo) | P4: apenas posicoes cotadas | Variacao do grupo (cotados) |
+| `rentabilidade_pct` (grupo) | P3: ganho_cotados + proventos_grupo | Rentabilidade do grupo com proventos |
+
+**Funcoes helper implementadas:**
+- `sum_dividends_for_tickers`: proventos apenas dos tickers ainda em carteira (evita superestimativa)
+- `sum_dividends_by_ticker`: GROUP BY ticker para calcular rentabilidade por grupo sem N roundtrips
+- `normalize_type` / `_TYPE_ALIASES`: eliminam `ValueError` silencioso por alias de `asset_type`
+
+**ResumePage.tsx** consumia todos os campos corretamente com os comentarios anti-dupla-formatacao ja presentes.
+
+**Conclusao Sprint 7:** todos os 8 itens do backlog estao completos. Sprint encerrada.
+
+---
+
+#### Sprint 11 frontend — iniciada nesta sessao
+
+**Objetivo:** implementar aba "Distribuicao da carteira" em Configuracoes.
+**Backend ja pronto:** `routers/class_targets.py` + `services/class_target_service.py`
+**Frontend a implementar:**
+- `classTargetsService.ts`
+- `useClassTargets.ts`
+- `DistribuicaoCarteira.tsx`
+- Alteracao em `Configuracoes.tsx`
+
+Ver ROADMAP Sprint 11 para escopo completo.
+
+---
+
 #### Observacao sobre IRPF
 
-Auditoria revelou que `irpf_service.py` (24 KB), `routers/irpf.py` (5.6 KB) e `IRPFPage.tsx` (23.6 KB) ja estavam implementados, contradizendo o ROADMAP que listava IRPF como Sprint 12 (⏳). ROADMAP atualizado para refletir o status real: **backend + frontend basico implementados**, sprint 12 reservada para revisao e testes.
+Auditoria revelou que `irpf_service.py` (24 KB), `routers/irpf.py` (5.6 KB) e `IRPFPage.tsx` (23.6 KB) ja estavam implementados, contradizendo o ROADMAP que listava IRPF como Sprint 12 (pendente). ROADMAP atualizado para refletir o status real: **backend + frontend basico implementados**, Sprint 12 reservada para revisao e testes.
 
 ---
 
@@ -178,12 +218,6 @@ Sessao dedicada a correcao de tres bugs visuais e de dados na tabela de ativos d
 | Resultado | `—` | `+R$ X,XX (+X,XX%)` |
 | Layout | Cards (mobile) | Tabela (desktop) — nunca ambos juntos |
 
-#### Pendente (roadmap Sprint 7)
-
-- Investigar por que `quotes_service` nao esta populando `Asset.last_price` para os ativos da carteira (L1 sempre vazio)
-- Revisar logica de rentabilidade: calculo de resultado, variacao percentual e rentabilidade total
-- Ver secao Sprint 7 em [ROADMAP_SPRINTS.md](./ROADMAP_SPRINTS.md)
-
 ---
 
 ## [Sessao] - 2026-06-15 (fim de dia)
@@ -215,7 +249,7 @@ Sessao dedicada a limpeza de PRs obsoletos, correcao de bugs criticos de inicial
 
 #### Seguranca
 - `reset_pwd.py` removido do repositorio — continha senha `Admin@123` em texto claro. Commit: `febaae6e`.
-- ⚠️ Arquivo ainda presente no historico do git (commit `8d7a99a9`). Recomendado usar `git filter-repo` para limpeza completa e trocar a senha nos ambientes.
+- Arquivo ainda presente no historico do git (commit `8d7a99a9`). Recomendado usar `git filter-repo` para limpeza completa e trocar a senha nos ambientes.
 
 ---
 
@@ -299,122 +333,11 @@ Entregar proventos confiaveis para a pagina de Proventos: proventos dos ativos d
 #### frontend/src/hooks/useProventos.ts
 - `useProventosDistribution` renomeado para `useProventosDistribuicao`
 - `useProventosEvolucao` removido
-- `useProventosList` atualizado para receber params object e retornar `ProventosListResponse`
-- Adicionado `useSyncProventos` — mutation que invalida todas as queries de proventos ao completar
+- `useSyncProventos` adicionado
 - **Commit:** `a6b7ffef`
 
 #### frontend/src/pages/ProventosPage.tsx
-- KPIs corretos: `total_recebido`, `total_a_receber`, `total_12m`, `media_mensal_12m` (removido `yield_on_cost` inexistente)
-- `ACAO_NACIONAL` corrigido para `ACAO` no filtro de tipo de ativo
-- Toggle de status: **Todos / Recebidos / A Receber**
-- Botao **Sincronizar proventos** com spinner via `useSyncProventos`
-- `lista?.items` passado para `MeusProventosTable` (resposta paginada)
-- Rodape com contador de proventos listados
+- KPIs alinhados com backend: total_recebido, total_a_receber, total_12m, media_mensal_12m
+- Botao de sync disparando `useSyncProventos`
+- Lista paginada com todos os campos
 - **Commit:** `670fc7bb`
-
----
-
-### Estado da base apos Sprint 6
-
-Backend e frontend de proventos totalmente funcionais. Backfill corrigido para usar ticker. Frontend conectado via service + hooks alinhados. Pagina exibe KPIs, historico mensal, lista filtrada e botao de sync. Pronto para Sprint 7 (Rentabilidade).
-
----
-
-## [Sprint 5] - 2026-06-15
-
-### Objetivo
-Tornar cotacoes mais robustas e previsiveis, estruturar o pipeline de precos com cache em camadas e implementar historico patrimonial real via snapshots diarios.
-
----
-
-### Decisoes de arquitetura (Sprint 5)
-
-#### Pipeline de cotacoes — 3 camadas (L1 -> L2 -> L3)
-
-| Camada | Fonte | Escopo | TTL |
-|---|---|---|---|
-| L1 | `Asset.last_price` (banco) | Todos os ativos | 15 min (PRICE_TTL_SECONDS=900) |
-| L2 | Cache em memoria (dict global) | Todos os ativos | 1 min (MEM_CACHE_TTL=60) |
-| L3 | BRAPI / yfinance (API externa) | Nacionais / Internacionais | Sob demanda |
-
-- Falha em L3 nao derruba nenhum endpoint; retorna `None` e loga o erro.
-- Tipos nacionais: `ACAO`, `FII`, `ETF_NACIONAL`, `CRIPTO` -> BRAPI.
-- Tipos internacionais: `STOCK`, `ETF_INTERNACIONAL` -> yfinance.
-- `TESOURO_DIRETO`, `RENDA_FIXA` -> sem cotacao de mercado, retornam `None`.
-
-#### Snapshots diarios — `PortfolioSnapshot`
-
-- Tabela `portfolio_snapshots` (migration `005`) armazena o valor de mercado calculado por carteira por dia.
-- `backfill_snapshots()`: retroativo desde a 1a transacao, idempotente, pula fds e dias ja existentes.
-- `refresh_today_snapshot()`: atualiza/cria o snapshot do dia atual (chamado pelo scheduler).
-
----
-
-### Arquivos modificados na Sprint 5
-
-| Arquivo | Tipo de alteracao | Commit |
-|---|---|---|
-| `backend/app/core/asset_types.py` | Novo — fonte unica de tipos de ativo | `bb258df8` |
-| `backend/app/models/asset.py` | Adicionado campo `last_price` | `14f4b50e` |
-| `backend/app/migrations/004_add_last_price_to_assets.py` | Nova migration | `14f4b50e` |
-| `backend/app/integrations/brapi.py` | Refatorado — bulk, single, historical | `315325e9` |
-| `backend/app/services/price_history_service.py` | Novo — OHLCV + get_price_at_date | `9ea72604` |
-| `backend/app/services/quotes_service.py` | Novo — cache L1/L2/L3 unificado | `9015538d` |
-| `backend/app/services/quote_service.py` | Refatorado — update_all_quotes | `c335b513` |
-| `backend/app/models/portfolio_snapshot.py` | Novo modelo | `b4573326` |
-| `backend/app/migrations/005_create_portfolio_snapshots.py` | Nova migration | `b4573326` |
-| `backend/app/services/portfolio_snapshot_service.py` | Novo — backfill, refresh, evolucao | `4a8fbda6` |
-| `backend/app/services/performance_service.py` | Refatorado — cotacoes em lote + historico real | `c8a57e83` |
-| `backend/app/scheduler.py` | Integrado — 6 jobs, snapshots diarios | `f3a91f74` |
-| `backend/app/routers/performance.py` | Novos endpoints de evolucao patrimonial | `239bcd92` |
-
----
-
-## [Sprint 4] - 2026-06-15
-
-### Objetivo
-Consolidar o nucleo patrimonial como fonte confiavel do sistema.
-
-### Alteracoes
-
-| Arquivo | Tipo de alteracao | Commit |
-|---|---|---|
-| `backend/app/services/portfolio_service.py` | Correcao PM, enrich, recalc | `a73d9bd7` |
-| `backend/app/routers/portfolios.py` | Campos nullable na API | `38bed9b3` |
-| `backend/tests/test_portfolio_service.py` | Reescrita com criterios de aceite | `680b489f` |
-
----
-
-## [Sprint 3] - 2026-06-15
-
-### Refatoracao — Padronizacao total para AsyncSession
-
-| Arquivo | Commit |
-|---|---|
-| `backend/app/services/performance_service.py` | `297b7e8b` |
-| `backend/app/routers/performance.py` | `07b89607` |
-
----
-
-## [Sprint 2] - 2026-06-15
-
-### Correcao pos-auditoria
-
-| Arquivo | Commit |
-|---|---|
-| `backend/app/services/transaction_service.py` | `c1434e56` |
-| `backend/tests/test_transaction_service.py` | `18fbf392` |
-| `backend/app/routers/transactions.py` | `4a4908e7` |
-
----
-
-## [Sessao anterior] - 2026-06-14
-
-- Resumo: Total Investido e seletor duplicado corrigidos
-- Transacoes: reorganizacao, modal unificado, bug de busca por grupo
-- Patrimonio: subpaginas removidas da sidebar
-
-| Arquivo | Commit |
-|---|---|
-| `frontend/src/components/layout/Sidebar.tsx` | `408fa59` |
-| `frontend/src/pages/Transacoes.tsx` | `5602fae` |

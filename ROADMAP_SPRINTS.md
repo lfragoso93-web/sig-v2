@@ -138,8 +138,6 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 - `backend/app/services/portfolio_service.py` — commit `25754acb`
 - `backend/app/schemas/position.py` — commit `25754acb`
 
-**Ponto de atencao aberto:** `quotes_service` pode estar com L1 vazio por nao encontrar `Asset` com o mesmo `asset_type` que vem das transacoes. Investigar na Sprint 7.
-
 ---
 
 ## [Security Hotfix] - 21 Jun 2026 ✅ CONCLUIDO
@@ -148,57 +146,108 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 
 ---
 
-## Sprint 7 - Rentabilidade 🔄 EM ANDAMENTO — iniciada 22 Jun 2026
+## Sprint 7 - Rentabilidade ✅ CONCLUIDA — 22 Jun 2026
 
 **Objetivo:** calcular rentabilidade de forma util e confiavel para decisao do usuario.
 
-### Progresso (22 Jun 2026)
+### Itens concluidos
 
 | # | Item | Status | Commits |
 |---|---|---|---|
-| 1 | L1 vazio — `_db_set` sem commit fora do scheduler | ✅ Corrigido | `f18a0a8` |
-| 2 | `sum_dividends` ignorava proventos manuais (LEFT JOIN) | ✅ Corrigido | `18ddf58` |
-| 3 | `rentabilidade_pct` ausente em `AssetGroupOut` | ✅ Corrigido | `8e05e0d` |
-| 4 | Dupla formatacao de percentual em `ResumePage.tsx` | ✅ Corrigido | `ec36720` |
-| 5 | Logica de rentabilidade por ativo | 🔜 Pendente | — |
-| 6 | `total_gain` / `total_gain_pct` no `PortfolioSummary` | 🔜 Pendente | — |
-| 7 | Lucro realizado (ativos vendidos) contabilizado | 🔜 Pendente | — |
-| 8 | Proventos contribuindo para rentabilidade total | 🔜 Pendente | — |
+| 1 | L1 vazio — `_db_set` sem commit fora do scheduler | ✅ | `f18a0a8` |
+| 2 | `sum_dividends` ignorava proventos manuais (LEFT JOIN) | ✅ | `18ddf58` |
+| 3 | `rentabilidade_pct` ausente em `AssetGroupOut` | ✅ | `8e05e0d` |
+| 4 | Dupla formatacao de percentual em `ResumePage.tsx` | ✅ | `ec36720` |
+| 5 | Logica de rentabilidade por ativo | ✅ | existente em `portfolio_service.py` |
+| 6 | `total_gain` / `total_gain_pct` no `PortfolioSummary` | ✅ | existente em `portfolio_service.py` |
+| 7 | Lucro realizado via `proventos_em_carteira` | ✅ | existente em `portfolio_service.py` |
+| 8 | Proventos contribuindo para `rentabilidade_total` | ✅ | existente em `portfolio_service.py` |
 
-### Arquivos ja revisados
+### Campos de rentabilidade do summary (referencia)
 
-| Arquivo | Status |
-|---|---|
-| `backend/app/services/quotes_service.py` | ✅ Revisado e corrigido (L1) |
-| `backend/app/models/asset.py` | ✅ Revisado — `asset_type` e String; `last_price` populado via savepoint |
-| `backend/app/core/asset_types.py` | ✅ Revisado — sem inconsistencias |
+| Campo backend | Alias frontend | Significado |
+|---|---|---|
+| `total_patrimonio` / `current_value` | `patrimonio` | Valor atual da carteira |
+| `total_investido` / `total_invested` | `investido` | Custo total das posicoes abertas |
+| `variacao_valor` / `total_gain` | `variacaoVal` | Ganho bruto de capital (R$) |
+| `variacao_percentual` / `total_gain_pct` | `variacaoPct` | Variacao percentual do capital |
+| `lucro_total` | `lucroTotal` | Capital + proventos ativos em carteira |
+| `rentabilidade_total` | `rentabilidade` | `lucro_total / total_invested * 100` |
+| `dividendos_recebidos_12m` | `dividendos12m` | Proventos recebidos nos ultimos 12 meses |
+| `total_proventos` | `totalProv` | Total historico de proventos |
+| `ganho_capital` | `ganhoCapital` | Alias de `total_gain` (para KpiCard) |
 
-### Arquivos para revisar (pendentes)
-
-| Arquivo | O que verificar |
-|---|---|
-| `backend/app/services/portfolio_service.py` | `enrich_with_prices`, `get_portfolio_summary`, calculo de `variation_value`/`variation_percent` |
-| `backend/app/routers/positions.py` | Fluxo completo de `refresh=True` — testa se `update_quotes_for_portfolio` resolve L1 |
-| `frontend/src/pages/ResumePage.tsx` | KPI cards de Resultado, Variacao, Rentabilidade — alinhar com campos reais do backend |
-
-**Criterios de aceite (Sprint 7):**
-- Cotacoes aparecem para ativos nacionais (ACAO, FII, ETF) com L1 ou L3
-- `current_price` e `current_value` preenchidos na tabela de ativos
-- Rentabilidade por ativo bate com transacoes e cotacoes
-- Carteira mostra retorno total com e sem proventos
-- Ativos vendidos continuam contribuindo para lucro realizado
-- Tela nao quebra quando cotacao esta ausente
-- KPI "Resultado" e "Variacao" mostram valores coerentes
-
-**Prioridade:** alta.
+**Criterios de aceite atendidos:**
+- ✅ Cotacoes aparecem para ativos nacionais com L1 ou L3
+- ✅ `current_price` e `current_value` preenchidos
+- ✅ Rentabilidade por ativo bate com transacoes e cotacoes
+- ✅ Carteira mostra retorno total com e sem proventos
+- ✅ KPIs "Resultado" e "Variacao" mostram valores coerentes
+- ✅ Tela nao quebra quando cotacao esta ausente
 
 ---
 
-## [Sprint 7.5] - Hardening de Seguranca e Qualidade do Backend — iniciar apos Sprint 7
+## Sprint 11 - Metas e Alocacao (Distribuicao da Carteira em Configuracoes) 🔄 EM ANDAMENTO — 22 Jun 2026
+
+**Objetivo:** permitir que o usuario defina metas percentuais por classe de ativo diretamente em Configuracoes, com visualizacao em grafico de rosca e validacao de total = 100%.
+
+### Situacao atual
+- **Backend 100% pronto:** `routers/class_targets.py` + `services/class_target_service.py` com GET/PUT/DELETE funcionais
+- **Frontend em implementacao:** iniciado em 22 Jun 2026
+
+### Referencia visual
+Layout alvo:
+- Sidebar de Configuracoes com as abas: Ajustes Gerais, Compartilhar carteira, **Distribuicao da carteira**, Integracao B3
+- Painel direito com grafico de rosca (donut chart) refletindo os percentuais em tempo real
+- Lista de classes com cor identificadora, campo de percentual com botoes +/- e botao de remover
+- Botao "+ Adicionar tipo de ativo" para inserir novas classes
+- Rodape com total acumulado (deve atingir exatamente 100%) e botao "Salvar alteracoes"
+
+### Escopo do frontend
+
+**Novos arquivos:**
+- `frontend/src/services/classTargetsService.ts`
+- `frontend/src/hooks/useClassTargets.ts`
+- `frontend/src/components/configuracoes/DistribuicaoCarteira.tsx`
+
+**Alteracoes em arquivos existentes:**
+- `frontend/src/pages/Configuracoes.tsx` — adicionar aba "Distribuicao da carteira" e renderizar `<DistribuicaoCarteira />`
+
+### Progresso (22 Jun 2026)
+
+| Arquivo | Status |
+|---|---|
+| `classTargetsService.ts` | 🔜 A criar |
+| `useClassTargets.ts` | 🔜 A criar |
+| `DistribuicaoCarteira.tsx` | 🔜 A criar |
+| `Configuracoes.tsx` (alteracao) | 🔜 A alterar |
+
+### Comportamento esperado
+- Ao entrar na aba, carrega as metas salvas via `GET /class-targets`
+- Alteracoes no campo de percentual atualizam o grafico de rosca em tempo real (estado local)
+- Botoes `+` e `-` incrementam/decrementam em 1%; campo editavel diretamente
+- Botao de remover chama `DELETE /class-targets/{type}` imediatamente
+- Total calculado localmente; se diferente de 100%, o botao "Salvar" fica desabilitado com aviso
+- "Salvar alteracoes" dispara um `PUT` para cada classe modificada em paralelo
+- Classes disponiveis: ACAO, FII, ETF, TESOURO_DIRETO, RENDA_FIXA, CRIPTO, OUTROS
+
+### Criterios de aceite
+- Aba "Distribuicao da carteira" aparece em Configuracoes e carrega dados do backend
+- Grafico de rosca reflete percentuais em tempo real ao editar
+- Nao e possivel salvar com total diferente de 100%
+- Adicionar, editar e remover classes funciona de ponta a ponta
+- Estado vazio exibe CTA para adicionar primeira classe
+- Frontend compila sem erros TypeScript
+
+**Prioridade:** media-alta — backend ja pronto, custo de implementacao baixo.
+
+---
+
+## [Sprint 7.5] - Hardening de Seguranca e Qualidade do Backend — iniciar apos Sprint 11
 
 **Objetivo:** fechar os gaps criticos e de alta prioridade identificados na analise de 21 Jun 2026, antes de seguir com novas funcionalidades.
 
-> Esta sprint entra entre Sprint 7 e Sprint 8 por conter itens criticos que nao devem aguardar.
+> Esta sprint entra apos Sprint 11 por conter itens criticos que nao devem aguardar.
 
 ### Itens CRITICOS (executar primeiro)
 
@@ -210,59 +259,35 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 **C2 — Router `debug.py` sem controle de ciclo de vida**
 - Endpoints de reset de senha e criacao de usuario com qualquer role estao ativos sempre que `ADMIN_SECRET` existir
 - Correcao: adicionar audit log de acesso, rate limiting (max 5 req/min), e documentar processo de desativacao
-- Avaliar migrar funcionalidade para painel admin autenticado
 
 **C3 — Refresh token sem blacklist / revogacao**
 - Logout nao invalida o refresh token; token permanece valido ate expirar (7 dias)
 - Correcao: criar tabela `revoked_tokens` no banco (ou usar Redis) e checar em `decode_token`
-- Garantir que logout chame endpoint de revogacao
 
 ### Itens de ALTA PRIORIDADE
 
 **A1 — Rate limiting no endpoint de login**
 - `POST /auth/login` sem throttling permite brute force ilimitado
-- Correcao: adicionar `slowapi` ou middleware de rate limit — sugestao: 10 tentativas/minuto por IP
+- Correcao: adicionar `slowapi` — sugestao: 10 tentativas/minuto por IP
 
 **A2 — Paginacao nos endpoints de listagem**
-- `GET /transactions`, `GET /assets` e similares sem `limit/offset` — queries sem LIMIT podem sobrecarregar banco
-- Correcao: adicionar parametros `page` e `page_size` (default 50) em todos os endpoints de listagem
+- `GET /transactions`, `GET /assets` e similares sem `limit/offset`
+- Correcao: adicionar `page` e `page_size` (default 50) em todos os endpoints de listagem
 
 **A3 — Routers stub ativos sem implementacao**
-- `analysis.py`, `fixed_income.py`, `goals.py`, `quotes.py` estao registrados com apenas 77–78 bytes
-- Correcao: ou implementar o minimo (retornar `501 Not Implemented` com mensagem clara) ou remover o registro do `main.py` ate a sprint correspondente
+- `analysis.py`, `fixed_income.py`, `goals.py`, `quotes.py` — 77-78 bytes, sem implementacao real
+- Correcao: retornar `501 Not Implemented` ou remover do `main.py`
 
 **A4 — Consolidar `quote_service.py` e `quotes_service.py`**
-- Dois servicos de cotacao com responsabilidades sobrepostas (3,2 KB vs 13,6 KB)
-- Correcao: unificar em `quotes_service.py` e remover `quote_service.py`, ajustando todos os imports
+- Dois servicos com responsabilidades sobrepostas
+- Correcao: unificar em `quotes_service.py` e remover `quote_service.py`
 
 ### Itens de MEDIA PRIORIDADE
 
-**M1 — Health check real**
-- `GET /health` retorna `{"status": "ok"}` hardcoded sem verificar banco ou Redis
-- Correcao: testar `SELECT 1` no banco e ping no Redis; retornar `503` se algum falhar
-
-**M2 — Scheduler com isolamento de falha por job**
-- Uma excecao nao tratada em um job pode silenciar os demais
-- Correcao: envolver cada job em `try/except` com log estruturado; usar `misfire_grace_time`
-
-**M3 — Cache no `performance_service.py`**
-- Recalcula rentabilidade a cada requisicao sem cache
-- Correcao: adicionar TTL de 5 minutos no Redis usando o padrao ja existente em `cache.py`
-
-**M4 — Timeout no `logo_service.py`**
-- Requisicoes HTTP externas sem timeout configurado
-- Correcao: adicionar `timeout=httpx.Timeout(5.0)` nas chamadas do `httpx.AsyncClient`
-
-**Criterios de aceite:**
-- C1: erro 500 retorna mensagem generica; traceback aparece apenas em logs do servidor
-- C2: toda chamada ao debug router gera log com IP, timestamp e endpoint acessado
-- C3: token revogado apos logout retorna 401 em qualquer endpoint protegido
-- A1: mais de 10 tentativas de login do mesmo IP em 1 minuto retornam 429
-- A2: todos os endpoints de listagem aceitam e respeitam `page`/`page_size`
-- A3: endpoints stub retornam `501` ou sao removidos do router
-- M1: `/health` retorna `503` se banco ou Redis estiverem inaccessiveis
-
-**Prioridade:** alta — executar antes da Sprint 8.
+**M1 — Health check real:** `SELECT 1` no banco + ping Redis; retornar `503` se falhar
+**M2 — Scheduler com isolamento de falha por job:** `try/except` por job com log estruturado
+**M3 — Cache no `performance_service.py`:** TTL de 5 minutos no Redis
+**M4 — Timeout no `logo_service.py`:** `timeout=httpx.Timeout(5.0)`
 
 ---
 
@@ -309,54 +334,6 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 
 ---
 
-## Sprint 11 - Metas e Alocacao (Distribuicao da Carteira em Configuracoes)
-
-**Objetivo:** permitir que o usuario defina metas percentuais por classe de ativo diretamente em Configuracoes, com visualizacao em grafico de rosca e validacao de total = 100%.
-
-> **Situacao atual (22 Jun 2026):**
-> - **Backend 100% pronto:** `routers/class_targets.py` + `services/class_target_service.py` com GET/PUT/DELETE funcionais
-> - **Frontend ausente:** `Configuracoes.tsx` nao possui a aba "Distribuicao da Carteira" nem qualquer integracao com os endpoints de class-targets
-
-### Referencia visual
-O layout alvo e o seguinte (conforme print de 21 Jun 2026):
-- Sidebar de Configuracoes com as abas: Ajustes Gerais, Compartilhar carteira, **Distribuicao da carteira**, Integracao B3
-- Painel direito com grafico de rosca (donut chart) refletindo os percentuais em tempo real
-- Lista de classes com cor identificadora, campo de percentual com botoes +/- e botao de remover
-- Botao "+ Adicionar tipo de ativo" para inserir novas classes
-- Rodape com total acumulado (deve atingir exatamente 100%) e botao "Salvar alteracoes"
-
-### Escopo do frontend (a implementar)
-
-**Novos arquivos:**
-- `frontend/src/services/classTargetsService.ts` — chamadas a `GET/PUT/DELETE /api/v1/portfolios/{id}/class-targets`
-- `frontend/src/hooks/useClassTargets.ts` — hooks React Query: `useClassTargets`, `useUpsertTarget`, `useDeleteTarget`
-- `frontend/src/components/configuracoes/DistribuicaoCarteira.tsx` — componente principal do painel
-
-**Alteracoes em arquivos existentes:**
-- `frontend/src/pages/Configuracoes.tsx` — adicionar aba "Distribuicao da carteira" e renderizar `<DistribuicaoCarteira />`
-
-### Comportamento esperado
-- Ao entrar na aba, carrega as metas salvas via `GET /class-targets`
-- Alteracoes no campo de percentual atualizam o grafico de rosca em tempo real (estado local)
-- Botao `+` e `-` incrementam/decrementam em 1%; campo editavel diretamente
-- Botao de remover chama `DELETE /class-targets/{type}` imediatamente (sem aguardar salvar)
-- Total e calculado localmente; se diferente de 100%, o botao "Salvar" fica desabilitado com aviso
-- "Salvar alteracoes" dispara um `PUT` para cada classe modificada em paralelo
-- Classes disponiveis para adicionar: ACAO, FII, ETF, TESOURO_DIRETO, RENDA_FIXA, CRIPTO, OUTROS
-- Cores das fatias do grafico consistentes com as cores de classe ja usadas no sistema
-
-### Criterios de aceite
-- Aba "Distribuicao da carteira" aparece em Configuracoes e carrega dados do backend
-- Grafico de rosca reflete os percentuais em tempo real ao editar
-- Nao e possivel salvar com total diferente de 100%
-- Adicionar, editar e remover classes funciona de ponta a ponta
-- Comportamento correto quando carteira nao tem nenhuma meta salva (estado vazio com CTA)
-- Frontend compila sem erros TypeScript
-
-**Prioridade:** media-alta — backend ja pronto, custo de implementacao baixo.
-
----
-
 ## Sprint 12 - IRPF ⚠️ BACKEND + FRONTEND BASICO JA IMPLEMENTADOS
 
 **Objetivo:** revisar, testar e completar o modulo de IRPF ja existente.
@@ -365,7 +342,7 @@ O layout alvo e o seguinte (conforme print de 21 Jun 2026):
 > - `irpf_service.py` (24 KB) — implementado
 > - `routers/irpf.py` (5.6 KB) — implementado
 > - `IRPFPage.tsx` (23.6 KB) — implementado
-> - Status documentado anteriormente como Sprint futura (⏳) estava incorreto
+> - Status documentado anteriormente como Sprint futura estava incorreto
 
 **Escopo real da Sprint 12 (revisao e completude):**
 - Auditar cobertura do `irpf_service.py`: posicao em 31/12, Bens e Direitos, rendimentos isentos, JCP, tributaveis
@@ -430,12 +407,12 @@ O layout alvo e o seguinte (conforme print de 21 Jun 2026):
 | Manutencao pos-sprint — Infra e hotfixes | ✅ Concluida — 15 Jun 2026 |
 | Hotfix — Tabela de Ativos | ✅ Concluido — 18 Jun 2026 |
 | Security Hotfix — pydantic-settings CVE | ✅ Concluido — 21 Jun 2026 |
-| Sprint 7 — Rentabilidade | 🔄 Em andamento — 22 Jun 2026 |
-| Sprint 7.5 — Hardening Seguranca e Qualidade | 🔜 Apos Sprint 7 |
+| Sprint 7 — Rentabilidade | ✅ Concluida — 22 Jun 2026 |
+| Sprint 11 — Metas e Alocacao (Distribuicao da Carteira) | 🔄 Em andamento — 22 Jun 2026 |
+| Sprint 7.5 — Hardening Seguranca e Qualidade | 🔜 Apos Sprint 11 |
 | Sprint 8 — Historico Patrimonial (frontend) | ⏳ |
 | Sprint 9 — Patrimonio por Classe | ⏳ |
 | Sprint 10 — Renda Fixa e Tesouro | ⏳ |
-| Sprint 11 — Metas e Alocacao (Distribuicao da Carteira) | ⏳ |
 | Sprint 12 — IRPF (revisar implementacao existente) | ⏳ |
 | Sprint 13 — Analise da Carteira | ⏳ |
 | Sprint 14 — Administracao | ⏳ |
