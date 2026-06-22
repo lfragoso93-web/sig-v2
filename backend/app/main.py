@@ -1,4 +1,4 @@
-import os
+import logging
 import traceback
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
@@ -19,6 +19,8 @@ from app.routers import debug
 from app.routers import prices
 from app.routers import class_targets
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -38,14 +40,26 @@ app = FastAPI(
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     tb = traceback.format_exc()
+    logger.error(
+        "Unhandled exception on %s %s: %s\n%s",
+        request.method,
+        request.url,
+        exc,
+        tb,
+    )
+    if settings.APP_DEBUG:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail": str(exc),
+                "type": type(exc).__name__,
+                "traceback": tb,
+                "path": str(request.url),
+            },
+        )
     return JSONResponse(
         status_code=500,
-        content={
-            "detail": str(exc),
-            "type": type(exc).__name__,
-            "traceback": tb,
-            "path": str(request.url),
-        },
+        content={"detail": "Erro interno no servidor. Contate o suporte."},
     )
 
 
@@ -116,10 +130,10 @@ app.include_router(irpf.router,            prefix=f"{PREFIX}/irpf",         tags
 app.include_router(analysis.router,        prefix=f"{PREFIX}/analysis",     tags=["analysis"])
 app.include_router(fixed_income.router,    prefix=f"{PREFIX}/fixed-income", tags=["fixed_income"])
 
-if os.getenv("ADMIN_SECRET"):
+if settings.APP_DEBUG or __import__('os').getenv("ADMIN_SECRET"):
     app.include_router(debug.router, prefix=f"{PREFIX}/debug", tags=["debug"])
 
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "version": "2.0.0"}
+    return {"status": "ok", "version": "2.0.0", "debug": settings.APP_DEBUG}
