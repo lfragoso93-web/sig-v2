@@ -73,8 +73,10 @@ export const useAppStore = create<AppState>()(
       name: 'sig-app',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        theme:            state.theme,
-        sidebarCollapsed: state.sidebarCollapsed,
+        theme:               state.theme,
+        sidebarCollapsed:    state.sidebarCollapsed,
+        // Persiste a carteira selecionada para evitar flash de "sem carteira" no reload
+        selectedPortfolioId: state.selectedPortfolioId,
       }),
     }
   )
