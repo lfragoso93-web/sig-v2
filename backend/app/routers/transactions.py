@@ -141,17 +141,20 @@ async def create_transaction(
         name=ticker,
         asset_type=asset_type,
     )
-    _, is_new = await get_or_create_asset(db, asset_data)
+    await get_or_create_asset(db, asset_data)
 
-    if is_new:
-        background_tasks.add_task(run_onboarding, ticker, str(asset_type))
-    else:
-        background_tasks.add_task(
-            _run_backfill,
-            portfolio_id=portfolio_id,
-            ticker=ticker,
-            asset_type=str(asset_type),
-        )
+    # run_onboarding é idempotente: cada etapa verifica se o dado já existe.
+    # Disparar sempre garante que falhas parciais anteriores sejam retriadas
+    # e que ativos criados via upsert (sem onboarding) sejam preenchidos.
+    background_tasks.add_task(run_onboarding, ticker, str(asset_type))
+
+    # Backfill de dividendos da carteira (separado do onboarding de Asset global)
+    background_tasks.add_task(
+        _run_backfill,
+        portfolio_id=portfolio_id,
+        ticker=ticker,
+        asset_type=str(asset_type),
+    )
 
     # Recalcula snapshots históricos para o gráfico patrimonial ficar populado
     background_tasks.add_task(_run_snapshot_backfill, portfolio_id=portfolio_id)
@@ -203,6 +206,7 @@ async def update_transaction(
     await db.commit()
     await db.refresh(tx)
 
+    background_tasks.add_task(run_onboarding, ticker, str(asset_type))
     background_tasks.add_task(
         _run_backfill,
         portfolio_id=portfolio_id,
