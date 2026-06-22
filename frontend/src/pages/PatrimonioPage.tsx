@@ -236,7 +236,7 @@ export default function PatrimonioPage() {
             {[...Array(4)].map((_, i) => <div key={i} className="h-12 rounded skeleton" />)}
           </div>
         ) : (
-          <PositionTable groups={filteredPositions} />
+          <PositionTable groups={filteredPositions} portfolioId={portfolioId} />
         )}
       </div>
     </div>

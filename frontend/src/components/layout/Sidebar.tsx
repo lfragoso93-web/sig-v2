@@ -286,35 +286,34 @@ export default function Sidebar() {
       )}
 
       {/* Modal nova carteira */}
-      {modalOpen && (
-        <Modal
-          title="Nova carteira"
-          onClose={() => { setModalOpen(false); setName(''); setDescription(''); setError(null) }}
-        >
-          {createdName ? (
-            <div className="flex flex-col items-center gap-3 py-4">
-              <CheckCircle2 size={28} style={{ color: 'var(--color-success)' }} />
-              <p style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>Carteira "{createdName}" criada!</p>
+      <Modal
+        open={modalOpen}
+        title="Nova carteira"
+        onClose={() => { setModalOpen(false); setName(''); setDescription(''); setError(null) }}
+      >
+        {createdName ? (
+          <div className="flex flex-col items-center gap-3 py-4">
+            <CheckCircle2 size={28} style={{ color: 'var(--color-success)' }} />
+            <p style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>Carteira "{createdName}" criada!</p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            <div>
+              <label className="block mb-1.5" style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-muted)' }}>Nome *</label>
+              <input className="input" placeholder="Ex: Carteira Principal" value={name}
+                onChange={e => setName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleCreate()} autoFocus />
             </div>
-          ) : (
-            <div className="flex flex-col gap-4">
-              <div>
-                <label className="block mb-1.5" style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-muted)' }}>Nome *</label>
-                <input className="input" placeholder="Ex: Carteira Principal" value={name}
-                  onChange={e => setName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleCreate()} autoFocus />
-              </div>
-              <div>
-                <label className="block mb-1.5" style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-muted)' }}>Descrição</label>
-                <input className="input" placeholder="Opcional" value={description} onChange={e => setDescription(e.target.value)} />
-              </div>
-              {error && <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-notification)' }}>{error}</p>}
-              <button onClick={handleCreate} disabled={createPortfolio.isPending} className="btn btn-primary w-full">
-                {createPortfolio.isPending ? 'Criando...' : 'Criar carteira'}
-              </button>
+            <div>
+              <label className="block mb-1.5" style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-muted)' }}>Descrição</label>
+              <input className="input" placeholder="Opcional" value={description} onChange={e => setDescription(e.target.value)} />
             </div>
-          )}
-        </Modal>
-      )}
+            {error && <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-notification)' }}>{error}</p>}
+            <button onClick={handleCreate} disabled={createPortfolio.isPending} className="btn btn-primary w-full">
+              {createPortfolio.isPending ? 'Criando...' : 'Criar carteira'}
+            </button>
+          </div>
+        )}
+      </Modal>
     </>
   )
 }
