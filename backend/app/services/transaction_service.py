@@ -1,14 +1,94 @@
 """
 Servico de listagem de transacoes com paginacao e filtros.
+
+Tambem exporta helpers sincronos de calculo de preco medio e
+quantidade atual, usados por portfolio_service e pelos testes unitarios.
 """
 from datetime import date as DateType
 from typing import Optional
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.models.transaction import Transaction, OperationType
 
+
+# ---------------------------------------------------------------------------
+# Helpers sincronos (Session normal — usados por servicos legados e testes)
+# ---------------------------------------------------------------------------
+
+def _calc_average_price(
+    db: Session,
+    portfolio_id: int,
+    ticker: str,
+) -> float:
+    """
+    Calcula o preco medio ponderado atual de um ativo na carteira.
+
+    Regra:
+      - Compras aumentam custo total e quantidade.
+      - Vendas reduzem quantidade (pro-rata do PM vigente), sem alterar PM.
+      - Se quantidade chegar a zero ou negativo, retorna 0.0.
+    """
+    rows = (
+        db.query(Transaction)
+        .filter(
+            Transaction.portfolio_id == portfolio_id,
+            Transaction.ticker == ticker,
+        )
+        .order_by(Transaction.date)
+        .all()
+    )
+
+    total_qty: float  = 0.0
+    total_cost: float = 0.0
+
+    for row in rows:
+        if row.operation == OperationType.buy:
+            total_qty  += float(row.quantity)
+            total_cost += float(row.quantity) * float(row.price)
+        elif row.operation == OperationType.sell:
+            sold = min(float(row.quantity), total_qty)  # nunca abaixo de zero
+            pm = total_cost / total_qty if total_qty > 0 else 0.0
+            total_qty  -= sold
+            total_cost -= sold * pm
+
+    if total_qty <= 0:
+        return 0.0
+    return total_cost / total_qty
+
+
+def _calc_current_quantity(
+    db: Session,
+    portfolio_id: int,
+    ticker: str,
+) -> float:
+    """
+    Retorna a quantidade atual do ativo na carteira (nunca negativa).
+    """
+    rows = (
+        db.query(Transaction)
+        .filter(
+            Transaction.portfolio_id == portfolio_id,
+            Transaction.ticker == ticker,
+        )
+        .all()
+    )
+
+    qty: float = 0.0
+    for row in rows:
+        if row.operation == OperationType.buy:
+            qty += float(row.quantity)
+        elif row.operation == OperationType.sell:
+            qty -= float(row.quantity)
+
+    return max(0.0, qty)
+
+
+# ---------------------------------------------------------------------------
+# Listagem paginada async (usada pelos routers)
+# ---------------------------------------------------------------------------
 
 async def list_transactions_paginated(
     db: AsyncSession,
