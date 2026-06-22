@@ -301,11 +301,51 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 
 ---
 
-## Sprint 11 - Metas e Alocacao
+## Sprint 11 - Metas e Alocacao (Distribuicao da Carteira em Configuracoes)
 
-**Objetivo:** ajudar o usuario a planejar e rebalancear a carteira.
+**Objetivo:** permitir que o usuario defina metas percentuais por classe de ativo diretamente em Configuracoes, com visualizacao em grafico de rosca e validacao de total = 100%.
 
-**Prioridade:** media.
+> **Situacao atual (21 Jun 2026):**
+> - **Backend 100% pronto:** `routers/class_targets.py` + `services/class_target_service.py` com GET/PUT/DELETE funcionais
+> - **Frontend ausente:** `Configuracoes.tsx` nao possui a aba "Distribuicao da Carteira" nem qualquer integracao com os endpoints de class-targets
+
+### Referencia visual
+O layout alvo e o seguinte (conforme print de 21 Jun 2026):
+- Sidebar de Configuracoes com as abas: Ajustes Gerais, Compartilhar carteira, **Distribuicao da carteira**, Integracao B3
+- Painel direito com grafico de rosca (donut chart) refletindo os percentuais em tempo real
+- Lista de classes com cor identificadora, campo de percentual com botoes +/- e botao de remover
+- Botao "+ Adicionar tipo de ativo" para inserir novas classes
+- Rodape com total acumulado (deve atingir exatamente 100%) e botao "Salvar alteracoes"
+
+### Escopo do frontend (a implementar)
+
+**Novos arquivos:**
+- `frontend/src/services/classTargetsService.ts` — chamadas a `GET/PUT/DELETE /api/v1/portfolios/{id}/class-targets`
+- `frontend/src/hooks/useClassTargets.ts` — hooks React Query: `useClassTargets`, `useUpsertTarget`, `useDeleteTarget`
+- `frontend/src/components/configuracoes/DistribuicaoCarteira.tsx` — componente principal do painel
+
+**Alteracoes em arquivos existentes:**
+- `frontend/src/pages/Configuracoes.tsx` — adicionar aba "Distribuicao da carteira" e renderizar `<DistribuicaoCarteira />`
+
+### Comportamento esperado
+- Ao entrar na aba, carrega as metas salvas via `GET /class-targets`
+- Alteracoes no campo de percentual atualizam o grafico de rosca em tempo real (estado local)
+- Botao `+` e `-` incrementam/decrementam em 1%; campo editavel diretamente
+- Botao de remover chama `DELETE /class-targets/{type}` imediatamente (sem aguardar salvar)
+- Total e calculado localmente; se diferente de 100%, o botao "Salvar" fica desabilitado com aviso
+- "Salvar alteracoes" dispara um `PUT` para cada classe modificada em paralelo
+- Classes disponiveis para adicionar: ACAO, FII, ETF, TESOURO_DIRETO, RENDA_FIXA, CRIPTO, OUTROS
+- Cores das fatias do grafico consistentes com as cores de classe ja usadas no sistema
+
+### Criterios de aceite
+- Aba "Distribuicao da carteira" aparece em Configuracoes e carrega dados do backend
+- Grafico de rosca reflete os percentuais em tempo real ao editar
+- Nao e possivel salvar com total diferente de 100%
+- Adicionar, editar e remover classes funciona de ponta a ponta
+- Comportamento correto quando carteira nao tem nenhuma meta salva (estado vazio com CTA)
+- Frontend compila sem erros TypeScript
+
+**Prioridade:** media-alta — backend ja pronto, custo de implementacao baixo.
 
 ---
 
@@ -382,7 +422,7 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 | Sprint 8 — Historico Patrimonial (frontend) | ⏳ |
 | Sprint 9 — Patrimonio por Classe | ⏳ |
 | Sprint 10 — Renda Fixa e Tesouro | ⏳ |
-| Sprint 11 — Metas e Alocacao | ⏳ |
+| Sprint 11 — Metas e Alocacao (Distribuicao da Carteira) | ⏳ |
 | Sprint 12 — IRPF | ⏳ |
 | Sprint 13 — Analise da Carteira | ⏳ |
 | Sprint 14 — Administracao | ⏳ |
