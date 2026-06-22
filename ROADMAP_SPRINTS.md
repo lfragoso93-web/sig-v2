@@ -162,6 +162,7 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 | 6 | `total_gain` / `total_gain_pct` no `PortfolioSummary` | ✅ | existente em `portfolio_service.py` |
 | 7 | Lucro realizado via `proventos_em_carteira` | ✅ | existente em `portfolio_service.py` |
 | 8 | Proventos contribuindo para `rentabilidade_total` | ✅ | existente em `portfolio_service.py` |
+| A2 | Paginacao server-side em `GET /transactions` | ✅ | `a00a1aa` (back) `27d0f7b` (front) |
 
 ### Campos de rentabilidade do summary (referencia)
 
@@ -200,9 +201,6 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 
 **Arquivos alterados:**
 - `frontend/src/pages/Configuracoes.tsx` — migrado de SectionCards empilhados para 4 abas: **Conta / Carteiras / Distribuicao / Avancado**
-  - Componente `Tabs` criado inline (pill-style, sem dependencia externa, acessivel)
-  - Aba "Distribuicao" renderiza `<DistribuicaoCarteira />`
-  - Aba "Avancado" agrupa `DangerZone` + `AdminPanel` (superadmin only)
 
 **Commits:**
 - `ccded3a` — classTargetsService.ts + useClassTargets.ts + DistribuicaoCarteira.tsx
@@ -220,49 +218,43 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 
 ---
 
-## [Sprint 7.5] - Hardening de Seguranca e Qualidade do Backend — PROXIMA
+## [Sprint 7.5] - Hardening de Seguranca e Qualidade do Backend ✅ CONCLUIDA (parcial) — 22 Jun 2026
 
-**Objetivo:** fechar os gaps criticos e de alta prioridade identificados na analise de 21 Jun 2026, antes de seguir com novas funcionalidades.
+**Objetivo:** fechar os gaps criticos e de alta prioridade identificados na analise de 21 Jun 2026.
 
-### Itens CRITICOS (executar primeiro)
+### Itens CRITICOS
 
-**C1 — Traceback exposto em producao (`main.py`)**
-- O `global_exception_handler` retorna stack trace completo na resposta JSON
-- Correcao: logar internamente via `logging.error` e retornar apenas mensagem generica ao cliente
-- Diferenciar ambiente: traceback visivel apenas em `DEBUG=true`
-
-**C2 — Router `debug.py` sem controle de ciclo de vida**
-- Endpoints de reset de senha e criacao de usuario com qualquer role estao ativos sempre que `ADMIN_SECRET` existir
-- Correcao: adicionar audit log de acesso, rate limiting (max 5 req/min), e documentar processo de desativacao
-
-**C3 — Refresh token sem blacklist / revogacao**
-- Logout nao invalida o refresh token; token permanece valido ate expirar (7 dias)
-- Correcao: criar tabela `revoked_tokens` no banco (ou usar Redis) e checar em `decode_token`
+| # | Item | Status | Commits |
+|---|---|---|---|
+| C1 | Traceback exposto em producao (`main.py`) | ✅ | `*` |
+| C2 | `debug.py` sem audit log e rate limiting | ✅ | `59ba7ff` |
+| C3 | Refresh token sem blacklist / revogacao | ✅ | `9ff0e40` + `c9e5b96` + `71084de` |
 
 ### Itens de ALTA PRIORIDADE
 
-**A1 — Rate limiting no endpoint de login**
-- `POST /auth/login` sem throttling permite brute force ilimitado
-- Correcao: adicionar `slowapi` — sugestao: 10 tentativas/minuto por IP
-
-**A2 — Paginacao nos endpoints de listagem**
-- `GET /transactions`, `GET /assets` e similares sem `limit/offset`
-- Correcao: adicionar `page` e `page_size` (default 50) em todos os endpoints de listagem
-
-**A3 — Routers stub ativos sem implementacao**
-- `analysis.py`, `fixed_income.py`, `goals.py`, `quotes.py` — 77-78 bytes, sem implementacao real
-- Correcao: retornar `501 Not Implemented` ou remover do `main.py`
-
-**A4 — Consolidar `quote_service.py` e `quotes_service.py`**
-- Dois servicos com responsabilidades sobrepostas
-- Correcao: unificar em `quotes_service.py` e remover `quote_service.py`
+| # | Item | Status | Commits |
+|---|---|---|---|
+| A1 | Rate limiting no endpoint de login | ⏳ Pendente | — |
+| A2 | Paginacao server-side em `GET /transactions` | ✅ Concluido na Sprint 7 | `a00a1aa` + `27d0f7b` |
+| A3 | Routers stub ativos sem implementacao | ⏳ Pendente | — |
+| A4 | Consolidar `quote_service.py` e `quotes_service.py` | ⏳ Pendente | — |
 
 ### Itens de MEDIA PRIORIDADE
 
-**M1 — Health check real:** `SELECT 1` no banco + ping Redis; retornar `503` se falhar
-**M2 — Scheduler com isolamento de falha por job:** `try/except` por job com log estruturado
-**M3 — Cache no `performance_service.py`:** TTL de 5 minutos no Redis
-**M4 — Timeout no `logo_service.py`:** `timeout=httpx.Timeout(5.0)`
+| # | Item | Status |
+|---|---|---|
+| M1 | Health check real (SELECT 1 + Redis ping) | ⏳ Pendente |
+| M2 | Scheduler com isolamento de falha por job | ⏳ Pendente |
+| M3 | Cache no `performance_service.py` (TTL 5min Redis) | ⏳ Pendente |
+| M4 | Timeout no `logo_service.py` | ⏳ Pendente |
+
+### [Bugfixes] - 22 Jun 2026 (mesma sessao)
+
+| # | Bug | Status | Commit |
+|---|---|---|---|
+| B1 | Modal desktop: abas com `flexWrap` para exibir Renda Fixa e Cripto | ✅ | `ffeb622` |
+| B2 | PositionTable: Stocks/ETF INT exibiam preco em R$ sem conversao | ✅ | `2b5542b` |
+| B3 | Transacoes.tsx: preco/total em R$ para ativos USD | ✅ | `2b5542b` |
 
 ---
 
@@ -384,7 +376,7 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 | Security Hotfix — pydantic-settings CVE | ✅ Concluido — 21 Jun 2026 |
 | Sprint 7 — Rentabilidade | ✅ Concluida — 22 Jun 2026 |
 | Sprint 11 — Metas e Alocacao (Distribuicao) | ✅ Concluida — 22 Jun 2026 |
-| Sprint 7.5 — Hardening Seguranca e Qualidade | 🔜 PROXIMA |
+| Sprint 7.5 — Hardening Seguranca (C1–C3 ✅, A1/A3/A4/M1–M4 ⏳) | 🔄 Parcial — 22 Jun 2026 |
 | Sprint 8 — Historico Patrimonial (frontend) | ⏳ |
 | Sprint 9 — Patrimonio por Classe | ⏳ |
 | Sprint 10 — Renda Fixa e Tesouro | ⏳ |
