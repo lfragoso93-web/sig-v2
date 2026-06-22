@@ -48,10 +48,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return data
   }
 
-  // Hidratação inicial: prioriza o store Zustand (persistência confiável),
-  // só recorre ao localStorage como fallback para sessões antigas.
-  // Se o token existir mas /users/me retornar 401, limpa tudo sem loop.
-  // Deps vazias são intencionais: executa apenas na montagem do componente.
+  // Hidratação inicial: executa apenas na montagem do componente (deps vazias intencionais).
+  // O interceptor do axios já injeta o token via authStore.getState().token.
   useEffect(() => {
     const token = authStore.token ?? localStorage.getItem('sig_token')
     if (!token) {
@@ -68,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         delete api.defaults.headers.common['Authorization']
       })
       .finally(() => setIsLoading(false))
-  }, []) // eslint-disable-line -- deps vazias intencionais (executa só na montagem)
+  }, []) // deps vazias intencionais
 
   const login = async (email: string, password: string) => {
     const { data: tokens } = await api.post<{

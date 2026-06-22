@@ -32,7 +32,7 @@ const ASSET_CLASS_OPTIONS = [
   { label: 'FIIs',                 value: 'FII'                  },
   { label: 'ETF Nacional',         value: 'ETF_NACIONAL'         },
   { label: 'ETF Internacional',    value: 'ETF_INTERNACIONAL'    },
-  { label: "Stock / Int\'l",        value: 'STOCK'                },
+  { label: "Stock / Int'l",        value: 'STOCK'                },
   { label: 'Tesouro Direto',       value: 'TESOURO_DIRETO'       },
   { label: 'Renda Fixa',           value: 'RENDA_FIXA'           },
   { label: 'Cripto',               value: 'CRIPTO'               },
