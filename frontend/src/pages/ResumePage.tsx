@@ -108,6 +108,10 @@ export default function ResumePage() {
   const dividendos12m = s?.dividendos_recebidos_12m ?? 0
   const totalProv     = s?.total_proventos     ?? 0
   const variacaoVal   = s?.variacao_valor      ?? s?.total_gain      ?? 0
+  // variacaoPct e rentabilidade chegam do backend já em escala de percentual
+  // (ex: 15.23 significa 15,23%). KpiCard chama formatPercent(change) internamente,
+  // que divide por 100 antes de formatar — portanto NÃO chamar formatPercent aqui
+  // para evitar dupla formatação. Usar os valores brutos diretamente.
   const variacaoPct   = s?.variacao_percentual ?? s?.total_gain_pct  ?? 0
   const rentabilidade = s?.rentabilidade_total ?? s?.total_gain_pct  ?? 0
 
@@ -146,6 +150,11 @@ export default function ResumePage() {
           [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
         ) : (
           <>
+            {/*
+              Patrimônio Total
+              change={variacaoPct}: KpiCard já chama formatPercent(change) internamente.
+              Não usar formatPercent aqui — os valores já estão na escala correta (ex: 15.23 = 15,23%).
+            */}
             <KpiCard
               label="Patrimônio Total"
               value={formatBRL(patrimonio)}
@@ -153,6 +162,11 @@ export default function ResumePage() {
               subLabel="Valor investido"
               change={variacaoPct}
             />
+            {/*
+              Resultado total
+              bottomLine mostra a rentabilidade (capital + proventos) / investido.
+              Usa formatPercent diretamente pois não passa pelo prop change do KpiCard.
+            */}
             <KpiCard
               label="Resultado total"
               value={formatBRL(lucroTotal)}
@@ -174,6 +188,11 @@ export default function ResumePage() {
               subValue={formatBRL(totalProv)}
               subLabel="Total acumulado"
             />
+            {/*
+              Variação
+              change={variacaoPct}: já formatado pelo KpiCard via formatPercent.
+              bottomLine: usa formatPercent diretamente para exibir o label "capital".
+            */}
             <KpiCard
               label="Variação"
               value={formatBRL(variacaoVal)}
