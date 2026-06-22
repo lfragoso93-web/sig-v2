@@ -55,6 +55,10 @@ export default function AllocationChart({ data, loading }: Props) {
     )
   }
 
+  const tooltipFormatter = (value: any): [string, string] => {
+    return [typeof value === 'number' ? formatBRL(value) : '-', 'Valor']
+  }
+
   return (
     <ResponsiveContainer width="100%" height={260}>
       <PieChart>
@@ -70,7 +74,7 @@ export default function AllocationChart({ data, loading }: Props) {
           ))}
         </Pie>
         <Tooltip
-          formatter={(value: number) => [formatBRL(value), 'Valor']}
+          formatter={tooltipFormatter}
           contentStyle={{
             background: 'var(--color-surface)',
             border: '1px solid var(--color-border)',
