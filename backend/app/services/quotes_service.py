@@ -397,36 +397,54 @@ async def update_all_quotes(db: AsyncSession) -> int:
     """
     Atualiza last_price de todos os ativos com cotacao de mercado.
 
-    Bootstrap automatico: se a tabela assets estiver vazia (nenhum ativo
-    cadastrado manualmente), carrega os tickers distintos de Transaction
-    e popula L1 pela primeira vez. Isso resolve o caso em que o usuario
-    so lancou transacoes e nunca executou onboarding de ativos.
+    Sempre combina duas fontes para montar a lista de posicoes:
+      1. Assets existentes na tabela (excluindo NO_QUOTE_TYPES).
+      2. Tickers distintos de Transaction que ainda nao tenham Asset.
+    Isso garante que ativos cadastrados apenas via Transaction (sem registro
+    manual em Asset) sempre entrem no ciclo do scheduler — resolvendo o
+    problema de L1 vazio persistente.
     """
     from app.models.transaction import Transaction
 
-    result = await db.execute(
-        select(Asset).where(
+    # Fonte 1: assets ja registrados
+    asset_result = await db.execute(
+        select(Asset.ticker, Asset.asset_type).where(
             Asset.asset_type.notin_([at.value for at in NO_QUOTE_TYPES])
         )
     )
-    assets = result.scalars().all()
+    asset_rows = asset_result.all()
+    known: set[tuple[str, str]] = {(r.ticker, str(r.asset_type)) for r in asset_rows}
 
-    if not assets:
-        # Bootstrap: deriva posicoes unicas das transacoes
-        logger.info("[quotes_service] tabela assets vazia — bootstrap a partir de Transaction")
-        tx_result = await db.execute(
-            select(Transaction.ticker, Transaction.asset_type).distinct()
-        )
-        positions = [
-            {"ticker": row.ticker, "asset_type": str(row.asset_type)}
-            for row in tx_result.all()
-            if row.ticker and row.asset_type
-        ]
-    else:
-        positions = [
-            {"ticker": a.ticker, "asset_type": a.asset_type}
-            for a in assets
-        ]
+    # Fonte 2: tickers distintos de Transaction
+    tx_result = await db.execute(
+        select(Transaction.ticker, Transaction.asset_type).distinct()
+    )
+    tx_rows = tx_result.all()
+
+    # Union: mantém known + adiciona tickers de Transaction ausentes em known
+    positions_map: dict[tuple[str, str], dict] = {
+        (r.ticker, str(r.asset_type)): {"ticker": r.ticker, "asset_type": str(r.asset_type)}
+        for r in asset_rows
+    }
+    for row in tx_rows:
+        if not row.ticker or not row.asset_type:
+            continue
+        key = (row.ticker, str(row.asset_type))
+        # Ignora NO_QUOTE_TYPES vindo de Transaction
+        try:
+            at = AssetType(str(row.asset_type))
+            if at in NO_QUOTE_TYPES:
+                continue
+        except ValueError:
+            pass
+        if key not in positions_map:
+            positions_map[key] = {"ticker": row.ticker, "asset_type": str(row.asset_type)}
+            logger.info(
+                "[quotes_service] update_all_quotes: ticker %s (%s) so em Transaction — incluido no ciclo",
+                row.ticker, row.asset_type,
+            )
+
+    positions = list(positions_map.values())
 
     if not positions:
         logger.info("[quotes_service] update_all_quotes: nenhuma posicao para atualizar")
