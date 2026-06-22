@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { formatPercent, signClass } from '@/utils/format'
+import { formatPercent } from '@/utils/format'
 
 interface Props {
   label: string
@@ -26,7 +26,6 @@ export default function KpiCard({
     <div
       className="card flex flex-col"
       style={{
-        /* Padding fluido: 16px mobile → 20px desktop */
         padding:   'clamp(1rem, 1.25vw, 1.25rem) clamp(1rem, 1.5vw, 1.375rem)',
         minHeight: 'clamp(96px, 8vw, 112px)',
         gap:       '3px',
@@ -46,7 +45,7 @@ export default function KpiCard({
         {label}
       </span>
 
-      {/* Valor principal — fluido entre 17px e 22px */}
+      {/* Valor principal */}
       <div
         className={clsx('tabular-nums tracking-tight', valueColor ?? '')}
         style={{
@@ -61,7 +60,7 @@ export default function KpiCard({
         {value}
       </div>
 
-      {/* Variação % — como badge pill */}
+      {/* Variação % */}
       {change !== undefined && (
         <div
           className="tabular-nums"
