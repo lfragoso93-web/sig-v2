@@ -151,7 +151,11 @@ function GanhosCapitalTable({ data }: { data: GanhoCapitalMensal[] }) {
   const toggle = (mes: string) =>
     setExpanded(prev => {
       const next = new Set(prev)
-      next.has(mes) ? next.delete(mes) : next.add(mes)
+      if (next.has(mes)) {
+        next.delete(mes)
+      } else {
+        next.add(mes)
+      }
       return next
     })
 
