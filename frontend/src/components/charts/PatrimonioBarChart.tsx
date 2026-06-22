@@ -42,7 +42,6 @@ export default function PatrimonioBarChart({ data, loading, singleSeries }: Prop
     invested: d.invested ?? 0,
   }))
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tooltipFormatter = (value: any, name: any): [string, string] => {
     const formatted = typeof value === 'number' ? formatBRL(value) : '-'
     const label = name === 'value' ? 'Patrimônio' : 'Investido'

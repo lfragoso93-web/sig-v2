@@ -55,7 +55,6 @@ export default function AllocationChart({ data, loading }: Props) {
     )
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tooltipFormatter = (value: any): [string, string] => {
     return [typeof value === 'number' ? formatBRL(value) : '-', 'Valor']
   }
