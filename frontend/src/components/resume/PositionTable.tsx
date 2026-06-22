@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MoreHorizontal, Plus, List, BarChart2 as AnalyseIcon, ChevronDown, Target } from 'lucide-react'
+import { MoreHorizontal, Plus, List, BarChart2 as AnalyseIcon, ChevronDown, Target, Clock } from 'lucide-react'
 import { formatBRL, formatPercent } from '@/utils/format'
 import { formatTreasuryName } from '@/utils/treasury'
 import AssetLogo from '@/components/ui/AssetLogo'
@@ -8,7 +8,7 @@ import { useAppStore } from '@/store/appStore'
 import { useSetClassTarget } from '@/hooks/useClassTargets'
 import type { PositionGroup } from '@/hooks/usePortfolio'
 
-// ── helpers ──────────────────────────────────────────────────────────────────────────────────────
+// ── helpers ──────────────────────────────────────────────────────────────────────────────────────────────
 function assetTypeToTab(assetType: string): string {
   const map: Record<string, string> = {
     ACAO: 'acao', FII: 'fii', ETF_NACIONAL: 'etf_br',
@@ -53,11 +53,47 @@ function calcGroupVariation(group: PositionGroup): { variationPct: number | null
   return { variationPct: ((cur - inv) / inv) * 100, totalInvested: inv }
 }
 
-// ── style tokens ────────────────────────────────────────────────────────────────────────────────────────────────────
+/**
+ * Retorna uma string legible do timestamp da cotação mais recente
+ * entre todas as posições do grupo.
+ * Usa o campo `quote_updated_at` se existir no PositionItem (extensão opt.).
+ * Caso não exista, retorna null (sem exibir nada).
+ */
+function getGroupQuoteTimestamp(group: PositionGroup): string | null {
+  const timestamps: number[] = []
+  for (const p of group.positions) {
+    const ts = (p as any).quote_updated_at
+    if (ts) {
+      const ms = typeof ts === 'number' ? ts * 1000 : Date.parse(ts)
+      if (!isNaN(ms)) timestamps.push(ms)
+    }
+  }
+  if (timestamps.length === 0) return null
+  const latest = Math.max(...timestamps)
+  const d = new Date(latest)
+  const now = new Date()
+  const diffMs = now.getTime() - d.getTime()
+  const diffMin = Math.floor(diffMs / 60_000)
+  const diffH   = Math.floor(diffMs / 3_600_000)
+
+  // Mesmo dia
+  if (d.toDateString() === now.toDateString()) {
+    if (diffMin < 1)  return 'agora mesmo'
+    if (diffMin < 60) return `há ${diffMin} min`
+    if (diffH < 24)   return `há ${diffH}h`
+  }
+  // Ontem
+  const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1)
+  if (d.toDateString() === yesterday.toDateString()) return 'ontem'
+  // Data passada
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+}
+
+// ── style tokens ──────────────────────────────────────────────────────────────────────────────────────────────
 const cellText  = { color: 'var(--color-text)' }
 const cellFaint = { color: 'var(--color-text-faint)' }
 
-// ── hook de breakpoint ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── hook de breakpoint ───────────────────────────────────────────────────────────────────────────────────────────────────────────
 function useIsDesktop(breakpoint = 768) {
   const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= breakpoint)
   useEffect(() => {
@@ -69,7 +105,7 @@ function useIsDesktop(breakpoint = 768) {
   return isDesktop
 }
 
-// ── AssetMenu ──────────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── AssetMenu ────────────────────────────────────────────────────────────────────────────────────────────────────────
 interface AssetMenuProps { ticker: string; assetLabel: string; assetType: string }
 
 function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
@@ -156,7 +192,7 @@ function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
   )
 }
 
-// ── PositionCard (mobile) ─────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── PositionCard (mobile) ───────────────────────────────────────────────────────────────────────────────────────────────
 interface PositionCardProps { item: PositionGroup['positions'][number] }
 
 function PositionCard({ item }: PositionCardProps) {
@@ -315,7 +351,7 @@ function TargetModal({ assetType, label, currentTarget, portfolioId, onClose }: 
   )
 }
 
-// ── ClassGroupHeader ──────────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── ClassGroupHeader ──────────────────────────────────────────────────────────────────────────────────────────────
 interface ClassGroupHeaderProps {
   group: PositionGroup
   collapsed: boolean
@@ -330,7 +366,6 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
   const assetType = group.positions[0]?.asset_type ?? ''
   const [showTargetModal, setShowTargetModal] = useState(false)
 
-  // supress unused warning — totalInvested used only in calcGroupVariation
   void totalInvested
 
   const varColor = variationPct === null ? 'var(--color-text-faint)'
@@ -342,7 +377,6 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
     <span style={{ width: 1, height: 12, background: 'oklch(from var(--color-text) l c h / 0.1)', flexShrink: 0 }} />
   )
 
-  // Label inline: prefixo antes do valor
   const LabeledValue = ({ label, children }: { label: string; children: React.ReactNode }) => (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap', flexShrink: 0 }}>
       <span style={{ fontSize: '0.65rem', color: 'var(--color-text-faint)' }}>{label}</span>
@@ -365,7 +399,6 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
         onMouseEnter={e => (e.currentTarget.style.background = 'oklch(from var(--color-primary) l c h / 0.03)')}
         onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
       >
-        {/* Chevron */}
         <span style={{
           display: 'flex', alignItems: 'center', flexShrink: 0,
           color: 'var(--color-text-faint)',
@@ -374,16 +407,10 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
         }}>
           <ChevronDown size={14} />
         </span>
-
-        {/* Label da classe */}
         <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, letterSpacing: '-0.005em', ...cellText, flexShrink: 0 }}>
           {group.label}
         </span>
-
-        {/* Pills com labels */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, overflow: 'hidden', minWidth: 0, flexWrap: 'nowrap' }}>
-
-          {/* Qtd ativos */}
           <Divider />
           <span style={{
             fontSize: 'var(--text-xs)', fontWeight: 500,
@@ -395,24 +422,18 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
           }}>
             {group.count} {group.count === 1 ? 'ativo' : 'ativos'}
           </span>
-
-          {/* Valor total investido */}
           <Divider />
           <LabeledValue label="Invest.">
             <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, ...cellText, fontVariantNumeric: 'tabular-nums' }}>
               {formatBRL(group.total_invested ?? group.total_value)}
             </span>
           </LabeledValue>
-
-          {/* Valor atual */}
           <Divider />
           <LabeledValue label="Atual">
             <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, ...cellText, fontVariantNumeric: 'tabular-nums' }}>
               {formatBRL(group.total_value)}
             </span>
           </LabeledValue>
-
-          {/* Variação % */}
           {variationPct !== null && (
             <>
               <Divider />
@@ -423,8 +444,6 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
               </LabeledValue>
             </>
           )}
-
-          {/* Rentabilidade total */}
           {rentabilidade !== null && (
             <>
               <Divider />
@@ -435,8 +454,6 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
               </LabeledValue>
             </>
           )}
-
-          {/* Definir meta */}
           <Divider />
           <span
             role="button"
@@ -448,8 +465,7 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
               display: 'inline-flex', alignItems: 'center', gap: 4,
               fontSize: '0.68rem', fontWeight: 500,
               color: target !== null ? 'var(--color-primary)' : 'var(--color-text-faint)',
-              whiteSpace: 'nowrap', flexShrink: 0,
-              cursor: 'pointer',
+              whiteSpace: 'nowrap', flexShrink: 0, cursor: 'pointer',
               padding: '2px 6px',
               borderRadius: 'var(--radius-full)',
               border: `1px solid ${target !== null ? 'oklch(from var(--color-primary) l c h / 0.25)' : 'oklch(from var(--color-text) l c h / 0.1)'}`,
@@ -464,8 +480,6 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
           </span>
         </div>
       </button>
-
-      {/* Popover de edição da meta */}
       {showTargetModal && (
         <TargetModal
           assetType={assetType}
@@ -479,10 +493,11 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
   )
 }
 
-// ── ClassTable ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── ClassTable ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 function ClassTable({ group, portfolioId }: { group: PositionGroup; portfolioId: number }) {
   const isDesktop = useIsDesktop()
   const [collapsed, setCollapsed] = useState(false)
+  const quoteTimestamp = getGroupQuoteTimestamp(group)
 
   const COLS = [
     { key: 'ativo',      label: 'Ativo',       align: 'left',  width: '30%' },
@@ -587,13 +602,28 @@ function ClassTable({ group, portfolioId }: { group: PositionGroup; portfolioId:
               </tbody>
             </table>
           )}
+
+          {/* Rodapé com timestamp da cotação — exibido apenas se o campo existir nos dados */}
+          {quoteTimestamp && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              padding: '0.4rem 1rem',
+              borderTop: '1px solid oklch(from var(--color-text) l c h / 0.05)',
+              background: 'oklch(from var(--color-text) l c h / 0.02)',
+            }}>
+              <Clock size={10} style={{ color: 'var(--color-text-faint)', flexShrink: 0 }} />
+              <span style={{ fontSize: '0.65rem', color: 'var(--color-text-faint)' }}>
+                Cotações atualizadas {quoteTimestamp}
+              </span>
+            </div>
+          )}
         </>
       )}
     </div>
   )
 }
 
-// ── PositionTable ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── PositionTable ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 interface Props { groups: PositionGroup[]; portfolioId: number }
 
 export default function PositionTable({ groups, portfolioId }: Props) {
