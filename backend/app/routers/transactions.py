@@ -18,7 +18,6 @@ router = APIRouter()
 
 
 def _to_operation(value: str) -> OperationType:
-    """Converte string 'buy'/'sell' para OperationType com segurança."""
     try:
         return OperationType(value)
     except ValueError:
@@ -137,7 +136,6 @@ async def create_transaction(
     await db.commit()
     await db.refresh(tx)
 
-    # Garante que o Asset existe e detecta se e a primeira vez do ticker
     asset_data = AssetCreate(
         ticker=ticker,
         name=ticker,
@@ -146,17 +144,17 @@ async def create_transaction(
     _, is_new = await get_or_create_asset(db, asset_data)
 
     if is_new:
-        # Primeira transacao deste ticker: onboarding completo em background
-        # (preco historico 5 anos + proventos historicos + logo)
         background_tasks.add_task(run_onboarding, ticker, str(asset_type))
     else:
-        # Ativo ja existe: apenas backfill de dividendos desta carteira
         background_tasks.add_task(
             _run_backfill,
             portfolio_id=portfolio_id,
             ticker=ticker,
             asset_type=str(asset_type),
         )
+
+    # Recalcula snapshots históricos para o gráfico patrimonial ficar populado
+    background_tasks.add_task(_run_snapshot_backfill, portfolio_id=portfolio_id)
 
     return tx
 
@@ -211,6 +209,7 @@ async def update_transaction(
         ticker=ticker,
         asset_type=str(asset_type),
     )
+    background_tasks.add_task(_run_snapshot_backfill, portfolio_id=portfolio_id)
 
     return tx
 
@@ -250,10 +249,11 @@ async def delete_transaction(
         ticker=ticker,
         asset_type=str(asset_type),
     )
+    background_tasks.add_task(_run_snapshot_backfill, portfolio_id=portfolio_id)
 
 
 async def _run_backfill(portfolio_id: int, ticker: str, asset_type: str) -> None:
-    """Abre sessão própria para o background task de backfill de dividendos."""
+    """Background task: backfill de dividendos para a carteira."""
     try:
         from app.core.database import AsyncSessionLocal
         async with AsyncSessionLocal() as db:
@@ -263,8 +263,29 @@ async def _run_backfill(portfolio_id: int, ticker: str, asset_type: str) -> None
                 ticker=ticker,
                 asset_type=asset_type,
             )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         import logging
         logging.getLogger(__name__).error(
-            "[backfill] erro para %s/%s: %s", ticker, portfolio_id, exc
+            "[backfill_dividends] erro para %s/%s: %s", ticker, portfolio_id, exc
+        )
+
+
+async def _run_snapshot_backfill(portfolio_id: int) -> None:
+    """
+    Background task: recalcula snapshots diários do patrimônio.
+    Roda somente nos dias que ainda não têm snapshot para evitar custo excessivo.
+    """
+    try:
+        from app.core.database import AsyncSessionLocal
+        from app.services.portfolio_snapshot_service import backfill_snapshots
+        async with AsyncSessionLocal() as db:
+            count = await backfill_snapshots(db=db, portfolio_id=portfolio_id)
+            import logging
+            logging.getLogger(__name__).info(
+                "[snapshot_backfill] portfolio=%s — %s snapshots processados", portfolio_id, count
+            )
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).error(
+            "[snapshot_backfill] erro para portfolio %s: %s", portfolio_id, exc
         )
