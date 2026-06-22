@@ -278,6 +278,47 @@ async def sum_dividends_for_tickers(
         return 0.0
 
 
+async def sum_dividends_by_ticker(
+    db: AsyncSession,
+    portfolio_id: int,
+    tickers: list[str],
+) -> dict[str, float]:
+    """
+    Retorna mapa {ticker: total_proventos} para os tickers fornecidos.
+
+    Executa uma única query GROUP BY ticker, evitando N roundtrips ao banco.
+    Usado em get_portfolio_positions para calcular rentabilidade_pct por grupo
+    de classe de ativo (P3).
+
+    Tickers sem proventos não aparecem no dict retornado (usar .get(ticker, 0.0)).
+    Se `tickers` for vazio, retorna {} sem executar query.
+    """
+    if not tickers:
+        return {}
+    q = (
+        select(Dividend.ticker, func.sum(Dividend.total_value).label("total"))
+        .where(
+            Dividend.portfolio_id == portfolio_id,
+            Dividend.ticker.in_(tickers),
+        )
+        .group_by(Dividend.ticker)
+    )
+    try:
+        result = await db.execute(q)
+        return {
+            row.ticker: float(row.total)
+            for row in result.all()
+            if row.ticker is not None and row.total is not None
+        }
+    except Exception as e:
+        logger.warning(f"[portfolio_service] sum_dividends_by_ticker falhou: {e} — retornando {{}}")
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+        return {}
+
+
 # ---------------------------------------------------------------------------
 # CRUD de carteiras
 # ---------------------------------------------------------------------------
@@ -386,8 +427,10 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
 
     tickers = [e["ticker"] for e in enriched]
     logos = await _fetch_logos_batch(db, tickers)
-
     targets_map = await get_targets_map(db, portfolio_id)
+
+    # P3: uma query GROUP BY ticker para todos os tickers da carteira
+    dividends_by_ticker = await sum_dividends_by_ticker(db, portfolio_id, tickers)
 
     total_current = sum(
         (e["current_value"] if e["current_value"] is not None else e["total_invested"])
@@ -435,12 +478,6 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
         g["total_invested"] = round(g["total_invested"], 2)
 
         # P4: variation_pct calculado apenas sobre posições com cotação real.
-        # Separa o subgrupo cotado para evitar distorção em grupos mistos
-        # (ativos com cotação + ativos sem cotação no mesmo grupo).
-        #
-        # quoted_cur  = soma de current_value dos ativos COM cotação
-        # quoted_inv  = soma de invested_value dos mesmos ativos (base de custo coerente)
-        # Se nenhum ativo do grupo tem cotação → None
         quoted_positions = [p for p in g["positions"] if p["current_price"] is not None]
         if quoted_positions:
             quoted_cur = sum(p["current_value"] for p in quoted_positions)
@@ -449,9 +486,22 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
         else:
             g["variation_pct"] = None
 
-        # rentabilidade_pct por grupo: ainda não inclui proventos por grupo (sprint P3)
-        # campo exposto como None para o frontend não quebrar
-        g["rentabilidade_pct"] = None
+        # P3: rentabilidade_pct = (ganho_capital_cotados + proventos_grupo) / custo_cotados * 100
+        # Usa quoted_inv como denominador (coerente com P4 — mesmo subgrupo cotado).
+        # Proventos são somados para todos os tickers do grupo (cotados + não-cotados),
+        # pois proventos existem independentemente de ter cotação de mercado.
+        proventos_grupo = sum(
+            dividends_by_ticker.get(p["ticker"], 0.0)
+            for p in g["positions"]
+        )
+        g["proventos_grupo"] = round(proventos_grupo, 2)
+        if quoted_positions and quoted_inv > 0:
+            quoted_gain = quoted_cur - quoted_inv
+            lucro_grupo = quoted_gain + proventos_grupo
+            g["rentabilidade_pct"] = round(lucro_grupo / quoted_inv * 100, 4)
+        else:
+            g["rentabilidade_pct"] = None
+
         g["target_pct"] = targets_map.get(g["positions"][0]["asset_type"]) if g["positions"] else None
 
     return sorted_groups
