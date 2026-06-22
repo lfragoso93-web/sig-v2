@@ -15,6 +15,12 @@ Tesouro Direto:
   Usa fetch_treasury_list() para obter buyPrice atual de cada titulo.
   O ticker no banco corresponde ao slug BRAPI (ex: "tesouro-ipca-2029").
   O buyPrice e o preco unitario do titulo hoje (PU atual).
+
+L1 populate:
+  _db_set usa begin_nested() (savepoint) para commitar o last_price
+  imediatamente apos busca L3, independente da transacao do chamador.
+  Isso garante que a proxima chamada ja encontre L1 populado, sem depender
+  exclusivamente do scheduler (update_all_quotes).
 """
 import asyncio
 import logging
@@ -137,35 +143,48 @@ async def _db_set(
     Cria o registro se ainda nao existir — garante que L1 seja populado
     mesmo para ativos cadastrados somente via Transaction.
     Usa a constraint uq_assets_ticker_asset_type (migration 008).
+
+    Usa begin_nested() (SAVEPOINT) para commitar o preco imediatamente,
+    independente da transacao principal do chamador. Isso garante que a
+    proxima requisicao ja encontre L1 populado sem depender do scheduler.
+    Se o savepoint falhar (ex: conflito de constraint), faz rollback apenas
+    do savepoint — a transacao principal nao e afetada.
     """
     at_str = _asset_type_str(asset_type)
-    result = await db.execute(
-        select(Asset).where(
-            Asset.ticker == ticker,
-            Asset.asset_type == at_str,
-        )
-    )
-    asset = result.scalar_one_or_none()
-    now = datetime.now(timezone.utc)
-    price_decimal = Decimal(str(round(price, 8)))
+    try:
+        async with db.begin_nested():
+            result = await db.execute(
+                select(Asset).where(
+                    Asset.ticker == ticker,
+                    Asset.asset_type == at_str,
+                )
+            )
+            asset = result.scalar_one_or_none()
+            now = datetime.now(timezone.utc)
+            price_decimal = Decimal(str(round(price, 8)))
 
-    if asset:
-        asset.last_price = price_decimal
-        asset.last_price_updated_at = now
-    else:
-        asset = Asset(
-            ticker=ticker,
-            asset_type=at_str,
-            last_price=price_decimal,
-            last_price_updated_at=now,
+            if asset:
+                asset.last_price = price_decimal
+                asset.last_price_updated_at = now
+            else:
+                asset = Asset(
+                    ticker=ticker,
+                    asset_type=at_str,
+                    last_price=price_decimal,
+                    last_price_updated_at=now,
+                )
+                db.add(asset)
+                logger.info(
+                    "[quotes_service] Asset criado automaticamente via upsert: %s (%s)",
+                    ticker, at_str,
+                )
+        # begin_nested() commita o savepoint aqui — last_price persistido
+        # independente do commit da transacao principal do chamador.
+    except Exception as e:
+        logger.warning(
+            "[quotes_service] _db_set savepoint falhou para %s (%s): %s — L1 nao atualizado",
+            ticker, at_str, e,
         )
-        db.add(asset)
-        logger.info(
-            "[quotes_service] Asset criado automaticamente via upsert: %s (%s)",
-            ticker, at_str,
-        )
-
-    await db.flush()
 
 
 # ---------------------------------------------------------------------------
@@ -292,6 +311,9 @@ async def get_prices(
     br_fallback: list[tuple[str, AssetType]] = []
     resolved: dict[str, float] = {}
 
+    # Mapa ticker -> asset_type para reuso na fase de persistencia
+    type_map: dict[str, AssetType | None] = {}
+
     for p in positions:
         ticker = p["ticker"]
         raw_type = p.get("asset_type", "")
@@ -299,6 +321,12 @@ async def get_prices(
             asset_type = AssetType(raw_type) if isinstance(raw_type, str) else raw_type
         except ValueError:
             asset_type = None
+            logger.warning(
+                "[quotes_service] asset_type invalido '%s' para %s — pulando L1 e tentando BRAPI",
+                raw_type, ticker,
+            )
+
+        type_map[ticker] = asset_type
 
         if asset_type in NO_QUOTE_TYPES:
             logger.debug(f"[quotes_service] {ticker} ({raw_type}) sem cotacao de mercado — ignorado")
@@ -339,11 +367,7 @@ async def get_prices(
 
     for p in positions:
         ticker = p["ticker"]
-        raw_type = p.get("asset_type", "")
-        try:
-            asset_type = AssetType(raw_type) if isinstance(raw_type, str) else raw_type
-        except ValueError:
-            asset_type = None
+        asset_type = type_map.get(ticker)
 
         if (
             ticker in br_tickers
@@ -360,19 +384,24 @@ async def get_prices(
 
     fresh = {**br_results, **crypto_results, **intl_results, **treasury_results, **fallback_results}
 
+    # Persiste precos frescos no L1 via savepoint (commit independente da
+    # transacao principal). Garante que a proxima requisicao encontre L1
+    # populado sem depender do scheduler (update_all_quotes).
     for p in positions:
         ticker = p["ticker"]
-        raw_type = p.get("asset_type", "")
         price = fresh.get(ticker)
         if price is None:
             continue
         _mem_set(ticker, price)
         if db:
-            try:
-                asset_type = AssetType(raw_type) if isinstance(raw_type, str) else raw_type
+            asset_type = type_map.get(ticker)
+            if asset_type is not None:
                 await _db_set(db, ticker, asset_type, price)
-            except Exception as e:
-                logger.warning(f"[quotes_service] falha ao persistir last_price para {ticker}: {e}")
+            else:
+                logger.warning(
+                    "[quotes_service] asset_type invalido para %s — L1 nao atualizado",
+                    ticker,
+                )
 
     return {**resolved, **fresh}
 
@@ -450,6 +479,9 @@ async def update_all_quotes(db: AsyncSession) -> int:
         logger.info("[quotes_service] update_all_quotes: nenhuma posicao para atualizar")
         return 0
 
+    # get_prices ja persiste via savepoint internamente;
+    # commit aqui garante que os savepoints sejam duramente persistidos
+    # e quaisquer Assets criados automaticamente fiquem no banco.
     prices = await get_prices(positions, db)
     await db.commit()
     logger.info("[quotes_service] update_all_quotes: %d precos atualizados", len(prices))
