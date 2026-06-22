@@ -13,18 +13,30 @@ branch_labels = None
 depends_on = None
 
 
+def _create_enum_if_not_exists(name: str, values: list) -> None:
+    """Cria um ENUM de forma idempotente no PostgreSQL."""
+    values_sql = ", ".join(f"'{v}'" for v in values)
+    op.execute(f"""
+        DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '{name}') THEN
+                CREATE TYPE {name} AS ENUM ({values_sql});
+            END IF;
+        END $$;
+    """)
+
+
 def upgrade() -> None:
-    # Cria ENUMs de forma idempotente (IF NOT EXISTS — Postgres 9.1+)
-    op.execute("CREATE TYPE IF NOT EXISTS userrole AS ENUM ('user', 'superadmin')")
-    op.execute("CREATE TYPE IF NOT EXISTS assettype AS ENUM ('ACAO','FII','ETF_NACIONAL','TESOURO_DIRETO','STOCK','ETF_INTERNACIONAL','CRIPTO','RENDA_FIXA')")
-    op.execute("CREATE TYPE IF NOT EXISTS assetcurrency AS ENUM ('BRL','USD','EUR','BTC')")
-    op.execute("CREATE TYPE IF NOT EXISTS transactiontype AS ENUM ('COMPRA','VENDA','DESDOBRAMENTO','GRUPAMENTO','BONIFICACAO','TRANSFERENCIA_ENTRADA','TRANSFERENCIA_SAIDA')")
-    op.execute("CREATE TYPE IF NOT EXISTS dividendtype AS ENUM ('DIVIDENDO','JCP','RENDIMENTO','AMORTIZACAO','FRACAO','OUTROS')")
-    op.execute("CREATE TYPE IF NOT EXISTS fixedincometype AS ENUM ('CDB','LCI','LCA','LCI_LCA','CRI','CRA','DEBENTURE','POUPANCA','OUTROS')")
-    op.execute("CREATE TYPE IF NOT EXISTS indexertype AS ENUM ('CDI','IPCA_PLUS','SELIC','PREFIXADO','IGPM_PLUS')")
-    op.execute("CREATE TYPE IF NOT EXISTS treasurytype AS ENUM ('Tesouro Selic','Tesouro Prefixado','Tesouro Prefixado com Juros Semestrais','Tesouro IPCA+','Tesouro IPCA+ com Juros Semestrais','Tesouro IGP-M+ com Juros Semestrais','Tesouro Renda+','Tesouro Educa+')")
-    op.execute("CREATE TYPE IF NOT EXISTS irpfmarket AS ENUM ('ACOES','DAY_TRADE','FII','ETF','CRIPTO','RENDA_FIXA','STOCKS')")
-    op.execute("CREATE TYPE IF NOT EXISTS goaltype AS ENUM ('PATRIMONIO_ALVO','ALOCACAO','DY_MENSAL','RENTABILIDADE','APORTE_MENSAL')")
+    # Cria ENUMs de forma idempotente
+    _create_enum_if_not_exists('userrole', ['user', 'superadmin'])
+    _create_enum_if_not_exists('assettype', ['ACAO', 'FII', 'ETF_NACIONAL', 'TESOURO_DIRETO', 'STOCK', 'ETF_INTERNACIONAL', 'CRIPTO', 'RENDA_FIXA'])
+    _create_enum_if_not_exists('assetcurrency', ['BRL', 'USD', 'EUR', 'BTC'])
+    _create_enum_if_not_exists('transactiontype', ['COMPRA', 'VENDA', 'DESDOBRAMENTO', 'GRUPAMENTO', 'BONIFICACAO', 'TRANSFERENCIA_ENTRADA', 'TRANSFERENCIA_SAIDA'])
+    _create_enum_if_not_exists('dividendtype', ['DIVIDENDO', 'JCP', 'RENDIMENTO', 'AMORTIZACAO', 'FRACAO', 'OUTROS'])
+    _create_enum_if_not_exists('fixedincometype', ['CDB', 'LCI', 'LCA', 'LCI_LCA', 'CRI', 'CRA', 'DEBENTURE', 'POUPANCA', 'OUTROS'])
+    _create_enum_if_not_exists('indexertype', ['CDI', 'IPCA_PLUS', 'SELIC', 'PREFIXADO', 'IGPM_PLUS'])
+    _create_enum_if_not_exists('treasurytype', ['Tesouro Selic', 'Tesouro Prefixado', 'Tesouro Prefixado com Juros Semestrais', 'Tesouro IPCA+', 'Tesouro IPCA+ com Juros Semestrais', 'Tesouro IGP-M+ com Juros Semestrais', 'Tesouro Renda+', 'Tesouro Educa+'])
+    _create_enum_if_not_exists('irpfmarket', ['ACOES', 'DAY_TRADE', 'FII', 'ETF', 'CRIPTO', 'RENDA_FIXA', 'STOCKS'])
+    _create_enum_if_not_exists('goaltype', ['PATRIMONIO_ALVO', 'ALOCACAO', 'DY_MENSAL', 'RENTABILIDADE', 'APORTE_MENSAL'])
 
     # === USERS ===
     op.execute("""
@@ -316,7 +328,7 @@ def downgrade() -> None:
     op.execute('DROP TABLE IF EXISTS assets')
     op.execute('DROP TABLE IF EXISTS portfolios')
     op.execute('DROP TABLE IF EXISTS users')
-    for enum_name in ['userrole','assettype','assetcurrency','transactiontype',
-                      'dividendtype','fixedincometype','indexertype','treasurytype',
-                      'irpfmarket','goaltype']:
+    for enum_name in ['userrole', 'assettype', 'assetcurrency', 'transactiontype',
+                      'dividendtype', 'fixedincometype', 'indexertype', 'treasurytype',
+                      'irpfmarket', 'goaltype']:
         op.execute(f'DROP TYPE IF EXISTS {enum_name}')
