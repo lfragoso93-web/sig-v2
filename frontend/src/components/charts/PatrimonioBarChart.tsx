@@ -2,6 +2,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from 'recharts'
+import type { ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent'
 import type { PatrimonioHistoryPoint } from '@/hooks/usePortfolio'
 import { formatBRL } from '@/utils/format'
 
@@ -72,10 +73,13 @@ export default function PatrimonioBarChart({ data, loading, singleSeries }: Prop
           axisLine={false} tickLine={false} width={68}
         />
         <Tooltip
-          formatter={(value: number, name: string) => [
-            formatBRL(value),
-            name === 'value' ? 'Patrimônio' : 'Investido',
-          ]}
+          formatter={(value: ValueType, name: NameType) => {
+            if (typeof value !== 'number') return ['-', String(name)]
+            return [
+              formatBRL(value),
+              name === 'value' ? 'Patrimônio' : 'Investido',
+            ]
+          }}
           contentStyle={{
             background: 'var(--color-surface-2)',
             border: '1px solid oklch(from var(--color-text) l c h / 0.1)',
