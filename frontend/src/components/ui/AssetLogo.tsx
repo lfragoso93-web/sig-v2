@@ -3,7 +3,7 @@ import { Landmark, Bitcoin, TrendingUp, BarChart2 } from 'lucide-react'
 
 interface Props {
   ticker: string
-  assetType: string
+  assetType?: string | null
   size?: number
   logoUrl?: string | null   // URL do logo persistido pelo onboarding (prioridade maxima)
 }
@@ -24,8 +24,8 @@ const BRAPI_SUPPORTED_TYPES = new Set([
   'TESOURO_DIRETO', 'TESOURO',
 ])
 
-function FallbackIcon({ assetType, size }: { assetType: string; size: number }) {
-  const norm = assetType.toUpperCase()
+function FallbackIcon({ assetType, size }: { assetType?: string | null; size: number }) {
+  const norm = (assetType ?? '').toUpperCase()
   const iconStyle = { color: 'var(--color-text-faint)' }
   if (norm === 'TESOURO_DIRETO' || norm === 'TESOURO')
     return <Landmark size={size} style={iconStyle} />
@@ -37,7 +37,7 @@ function FallbackIcon({ assetType, size }: { assetType: string; size: number }) 
 }
 
 export default function AssetLogo({ ticker, assetType, size = 24, logoUrl }: Props) {
-  const norm = assetType.toUpperCase()
+  const norm = (assetType ?? '').toUpperCase()
   const canUseBrapi = BRAPI_SUPPORTED_TYPES.has(norm) && norm !== 'TESOURO_DIRETO' && norm !== 'TESOURO'
 
   // Determina a URL inicial a usar: logoUrl do banco tem prioridade

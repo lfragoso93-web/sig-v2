@@ -4,36 +4,28 @@ Servico unificado de cotacoes.
 Estrategia de cache em 3 camadas:
   L1 - Asset.last_price no banco (TTL = PRICE_TTL_SECONDS).
   L2 - Cache em memoria processo (TTL = MEM_CACHE_TTL).
-  L3 - API externa: BRAPI Pro ou yfinance.
+  L3 - API externa: BRAPI Pro, Alpha Vantage ou yfinance.
+
+Roteamento por tipo de ativo:
+  BR / FII / ETF_BR  -> BRAPI quotes
+  CRIPTO             -> BRAPI crypto
+  TESOURO            -> BRAPI treasury list (buyPrice)
+  INTL               -> Alpha Vantage GLOBAL_QUOTE (primario)
+                        yfinance (fallback se AV falhar ou nao configurado)
+
+Alpha Vantage (ativos internacionais):
+  - Primario para INTL_TYPES (substitui yfinance no caminho quente)
+  - Rate limiter: alpha_vantage_limiter (4 req/min, burst 4)
+  - Se ALPHA_VANTAGE_API_KEY nao estiver configurada, cai direto no yfinance
+
+yfinance threading:
+  _fetch_yfinance_current usa _YF_EXECUTOR (ThreadPoolExecutor compartilhado)
+  com _yf_thread_lock (threading.Lock) para serializar chamadas entre threads.
+  Isso substitui o asyncio.Semaphore que nao funciona fora do event loop.
 
 Resiliencia:
   Cada chamada externa e envolta em _with_retry() - 3 tentativas com
-  backoff exponencial (1s, 2s). Falha total retorna {} sem propagar excecao,
-  mantendo degradacao graciosa (posicao fica sem preco corrente mas nao quebra).
-
-Rate limiting (BRAPI):
-  _fetch_brapi e _fetch_brapi_crypto adquirem um token do brapi_limiter antes
-  de cada chamada. O limiter e um token bucket in-memory (asyncio-safe) com
-  rate e burst configurados via BRAPI_RATE_LIMIT / BRAPI_RATE_BURST no .env.
-  Defaults: 2 req/s, burst 5 - conservador para o plano gratuito BRAPI.
-  Para o plano Pro, elevar para BRAPI_RATE_LIMIT=10, BRAPI_RATE_BURST=20.
-
-Tesouro Direto:
-  Usa fetch_treasury_list() para obter buyPrice atual de cada titulo.
-  O ticker no banco corresponde ao slug BRAPI (ex: "tesouro-ipca-2029").
-  O buyPrice e o preco unitario do titulo hoje (PU atual).
-
-L1 populate:
-  _db_set usa begin_nested() (savepoint) para commitar o last_price
-  imediatamente apos busca L3, independente da transacao do chamador.
-  Isso garante que a proxima chamada ja encontre L1 populado, sem depender
-  exclusivamente do scheduler (update_all_quotes).
-
-Funcoes de portfolio (migradas de quote_service.py em 2026-06-22):
-  update_quotes_for_portfolio() - atualiza cotacoes de todos os ativos de
-    uma carteira especifica. Usa Transaction como fonte de verdade.
-  get_price_for_transaction() - preco historico de um ativo em data especifica.
-    Delegado para price_history_service.get_price_at_date().
+  backoff exponencial (1s, 2s). Falha total retorna {} sem propagar excecao.
 """
 import asyncio
 import logging
@@ -47,14 +39,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.asset_types import BR_TYPES, INTL_TYPES, NO_QUOTE_TYPES, TREASURY_TYPES, yf_ticker
-from app.core.rate_limiter import brapi_limiter
+from app.core.rate_limiter import brapi_limiter, alpha_vantage_limiter
 from app.integrations.brapi import (
     fetch_quotes as brapi_fetch_quotes,
     fetch_crypto_quote as brapi_fetch_crypto,
     fetch_treasury_list as brapi_fetch_treasury_list,
 )
 from app.models.asset import Asset, AssetType
-from app.services.price_history_service import _YF_EXECUTOR  # pool global compartilhado
+from app.services.price_history_service import _YF_EXECUTOR, _yf_thread_lock
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +54,7 @@ PRICE_TTL_SECONDS = 900
 MEM_CACHE_TTL = 60
 
 _RETRY_ATTEMPTS = 3
-_RETRY_BASE_DELAY = 1.0  # segundos; duplica a cada tentativa
+_RETRY_BASE_DELAY = 1.0
 
 _mem_cache: dict[str, tuple[float, float]] = {}
 
@@ -72,11 +64,6 @@ _mem_cache: dict[str, tuple[float, float]] = {}
 # ---------------------------------------------------------------------------
 
 async def _with_retry(coro_fn, *args, label: str = "") -> dict[str, float]:
-    """
-    Executa coro_fn(*args) com ate _RETRY_ATTEMPTS tentativas.
-    Backoff exponencial: 1s, 2s entre tentativas.
-    Retorna {} se todas as tentativas falharem (degradacao graciosa).
-    """
     delay = _RETRY_BASE_DELAY
     for attempt in range(1, _RETRY_ATTEMPTS + 1):
         try:
@@ -113,7 +100,6 @@ def _mem_set(ticker: str, price: float) -> None:
 
 
 def _asset_type_str(asset_type) -> str:
-    """Retorna o valor string do asset_type, seja enum ou string pura."""
     if isinstance(asset_type, AssetType):
         return asset_type.value
     return str(asset_type)
@@ -124,11 +110,6 @@ async def _db_get_fresh(
     ticker: str,
     asset_type,
 ) -> Optional[float]:
-    """
-    Busca last_price em Asset por (ticker, asset_type).
-    Compara asset_type como string - evita problemas de cast() no SQLite.
-    Retorna None se ausente ou expirado (> PRICE_TTL_SECONDS).
-    """
     at_str = _asset_type_str(asset_type)
     result = await db.execute(
         select(Asset.last_price, Asset.last_price_updated_at)
@@ -152,18 +133,6 @@ async def _db_set(
     asset_type,
     price: float,
 ) -> None:
-    """
-    Upsert de last_price na tabela assets por (ticker, asset_type).
-    Cria o registro se ainda nao existir - garante que L1 seja populado
-    mesmo para ativos cadastrados somente via Transaction.
-    Usa a constraint uq_assets_ticker_asset_type (migration 008).
-
-    Usa begin_nested() (SAVEPOINT) para commitar o preco imediatamente,
-    independente da transacao principal do chamador. Isso garante que a
-    proxima requisicao ja encontre L1 populado sem depender do scheduler.
-    Se o savepoint falhar (ex: conflito de constraint), faz rollback apenas
-    do savepoint - a transacao principal nao e afetada.
-    """
     at_str = _asset_type_str(asset_type)
     try:
         async with db.begin_nested():
@@ -192,46 +161,97 @@ async def _db_set(
                     "[quotes_service] Asset criado automaticamente via upsert: %s (%s)",
                     ticker, at_str,
                 )
-        # begin_nested() commita o savepoint aqui - last_price persistido
-        # independente do commit da transacao principal do chamador.
     except Exception as e:
         logger.warning(
-            "[quotes_service] _db_set savepoint falhou para %s (%s): %s - L1 nao atualizado",
+            "[quotes_service] _db_set savepoint falhou para %s (%s): %s",
             ticker, at_str, e,
         )
 
 
 # ---------------------------------------------------------------------------
-# Fetch L3 - chamadas externas
+# Fetch L3 - Alpha Vantage (INTL primario)
+# ---------------------------------------------------------------------------
+
+async def _fetch_alpha_vantage_current(
+    pairs: list[tuple[str, AssetType]],
+) -> dict[str, float]:
+    """
+    Busca cotacoes atuais via Alpha Vantage GLOBAL_QUOTE.
+    Serializa as chamadas via alpha_vantage_limiter (4 req/min).
+    Retorna {} se ALPHA_VANTAGE_API_KEY nao estiver configurada.
+    """
+    from app.integrations.alpha_vantage import fetch_global_quote, _is_configured
+
+    if not _is_configured():
+        return {}
+
+    results: dict[str, float] = {}
+    for ticker, _ in pairs:
+        await alpha_vantage_limiter.acquire()
+        price = await fetch_global_quote(ticker)
+        if price is not None:
+            results[ticker] = price
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Fetch L3 - yfinance (fallback para INTL e BR sem BRAPI)
 # ---------------------------------------------------------------------------
 
 def _fetch_yf_current_sync(ticker_map: dict[str, str]) -> dict[str, float]:
+    """
+    Busca cotacoes atuais via yfinance.download().
+    Executa dentro do _YF_EXECUTOR com _yf_thread_lock para serializar
+    entre threads e evitar YFRateLimitError.
+    """
+    import time as _time
+    from app.services.price_history_service import _yf_last_call, _YF_MIN_INTERVAL
+
     if not ticker_map:
         return {}
     yf_syms = list(ticker_map.values())
     results: dict[str, float] = {}
-    try:
-        data = yf.download(
-            tickers=yf_syms,
-            period="1d",
-            interval="1m",
-            progress=False,
-            auto_adjust=True,
-        )
-        if data.empty:
-            return {}
-        close = data["Close"] if "Close" in data.columns else data
-        for internal, sym in ticker_map.items():
-            try:
-                price = float(
-                    close.iloc[-1] if len(yf_syms) == 1
-                    else close[sym].dropna().iloc[-1]
-                )
-                results[internal] = price
-            except Exception as e:
-                logger.warning(f"yfinance preco nao encontrado para {sym}: {e}")
-    except Exception as e:
-        logger.error(f"yfinance download error: {e}")
+
+    with _yf_thread_lock:
+        elapsed = _time.monotonic() - _yf_last_call[0]
+        if elapsed < _YF_MIN_INTERVAL:
+            _time.sleep(_YF_MIN_INTERVAL - elapsed)
+        try:
+            data = yf.download(
+                tickers=yf_syms,
+                period="1d",
+                interval="1m",
+                progress=False,
+                auto_adjust=True,
+            )
+            _yf_last_call[0] = _time.monotonic()
+
+            if data.empty:
+                return {}
+
+            is_multi = hasattr(data.columns, 'levels')
+
+            for internal, sym in ticker_map.items():
+                try:
+                    if is_multi:
+                        col = ("Close", sym)
+                        if col not in data.columns:
+                            continue
+                        series = data[col].dropna()
+                    else:
+                        if "Close" not in data.columns:
+                            continue
+                        series = data["Close"].dropna()
+
+                    if series.empty:
+                        continue
+                    results[internal] = float(series.iloc[-1])
+                except Exception as e:
+                    logger.warning(f"yfinance preco nao encontrado para {sym}: {e}")
+        except Exception as e:
+            logger.error(f"yfinance download error: {e}")
+            _yf_last_call[0] = _time.monotonic()
+
     return results
 
 
@@ -244,15 +264,10 @@ async def _fetch_yfinance_current(
 
 
 # ---------------------------------------------------------------------------
-# Fetch Tesouro Direto - buyPrice via fetch_treasury_list
+# Fetch Tesouro Direto
 # ---------------------------------------------------------------------------
 
 async def _fetch_treasury_prices(slugs: list[str]) -> dict[str, float]:
-    """
-    Busca o buyPrice atual de titulos do Tesouro Direto via BRAPI treasury list.
-    O slug (ticker no banco) e comparado contra os campos slug/bondType/name da API.
-    Retorna {slug: buyPrice}.
-    """
     if not slugs:
         return {}
     try:
@@ -281,30 +296,53 @@ async def _fetch_treasury_prices(slugs: list[str]) -> dict[str, float]:
             results[slug] = price_map[key]
         else:
             logger.warning(f"[quotes_service] Tesouro slug sem cotacao BRAPI: {slug!r}")
-
     return results
 
 
 # ---------------------------------------------------------------------------
-# Aliases mockaveis pelos testes - rate limiting embutido + retry
+# Aliases com rate limit + retry
 # ---------------------------------------------------------------------------
 
 async def _fetch_brapi(tickers: list[str]) -> dict[str, float]:
-    """Adquire token do rate limiter antes de chamar BRAPI quotes."""
     await brapi_limiter.acquire()
     return await _with_retry(brapi_fetch_quotes, tickers, label="BRAPI")
 
 
 async def _fetch_brapi_crypto(tickers: list[str]) -> dict[str, float]:
-    """Adquire token do rate limiter antes de chamar BRAPI crypto."""
     await brapi_limiter.acquire()
     return await _with_retry(brapi_fetch_crypto, tickers, label="BRAPI-crypto")
+
+
+async def _fetch_intl(
+    pairs: list[tuple[str, AssetType]],
+) -> dict[str, float]:
+    """
+    Cotacao atual para ativos INTL:
+      1. Alpha Vantage (primario, se API key configurada)
+      2. yfinance (fallback)
+    Tickers sem resultado no AV sao complementados pelo yfinance.
+    """
+    av_results = await _fetch_alpha_vantage_current(pairs)
+
+    missing = [(t, at) for t, at in pairs if t not in av_results]
+    yf_results: dict[str, float] = {}
+    if missing:
+        if av_results:
+            logger.info(
+                "[quotes_service] %d tickers INTL sem resultado no AV — complementando com yfinance: %s",
+                len(missing), [t for t, _ in missing],
+            )
+        else:
+            logger.info("[quotes_service] AV nao configurado/vazio — usando yfinance para INTL")
+        yf_results = await _with_retry(_fetch_yfinance_current, missing, label="yfinance-intl")
+
+    return {**av_results, **yf_results}
 
 
 async def _fetch_yfinance(
     pairs: list[tuple[str, AssetType]],
 ) -> dict[str, float]:
-    """Wrapper com retry sobre _fetch_yfinance_current (sem rate limit - yfinance e local)."""
+    """Fallback yfinance para BR sem BRAPI (mantido para compatibilidade)."""
     return await _with_retry(_fetch_yfinance_current, pairs, label="yfinance")
 
 
@@ -326,8 +364,6 @@ async def get_prices(
     treasury_slugs: list[str] = []
     br_fallback: list[tuple[str, AssetType]] = []
     resolved: dict[str, float] = {}
-
-    # Mapa ticker -> asset_type para reuso na fase de persistencia
     type_map: dict[str, AssetType | None] = {}
 
     for p in positions:
@@ -338,14 +374,13 @@ async def get_prices(
         except ValueError:
             asset_type = None
             logger.warning(
-                "[quotes_service] asset_type invalido '%s' para %s - pulando L1 e tentando BRAPI",
+                "[quotes_service] asset_type invalido '%s' para %s",
                 raw_type, ticker,
             )
 
         type_map[ticker] = asset_type
 
         if asset_type in NO_QUOTE_TYPES:
-            logger.debug(f"[quotes_service] {ticker} ({raw_type}) sem cotacao de mercado - ignorado")
             continue
 
         mem_val = _mem_get(ticker)
@@ -360,7 +395,6 @@ async def get_prices(
                 _mem_set(ticker, db_val)
                 continue
 
-        # Roteamento por tipo
         if asset_type in TREASURY_TYPES:
             treasury_slugs.append(ticker)
         elif asset_type == AssetType.CRIPTO:
@@ -370,21 +404,20 @@ async def get_prices(
         elif asset_type in INTL_TYPES:
             intl_pairs.append((ticker, asset_type))
         else:
-            logger.warning(f"[quotes_service] asset_type desconhecido para {ticker} ({raw_type}) - tentando BRAPI")
+            logger.warning(f"[quotes_service] asset_type desconhecido para {ticker} ({raw_type})")
             br_tickers.append(ticker)
 
-    # Chamadas externas em paralelo - cada uma ja tem rate limit + retry embutido
+    # Chamadas externas em paralelo
     br_results, crypto_results, intl_results, treasury_results = await asyncio.gather(
         _fetch_brapi(br_tickers) if br_tickers else _noop(),
         _fetch_brapi_crypto(crypto_tickers) if crypto_tickers else _noop(),
-        _fetch_yfinance(intl_pairs) if intl_pairs else _noop(),
+        _fetch_intl(intl_pairs) if intl_pairs else _noop(),
         _fetch_treasury_prices(treasury_slugs) if treasury_slugs else _noop(),
     )
 
     for p in positions:
         ticker = p["ticker"]
         asset_type = type_map.get(ticker)
-
         if (
             ticker in br_tickers
             and ticker not in br_results
@@ -400,9 +433,6 @@ async def get_prices(
 
     fresh = {**br_results, **crypto_results, **intl_results, **treasury_results, **fallback_results}
 
-    # Persiste precos frescos no L1 via savepoint (commit independente da
-    # transacao principal). Garante que a proxima requisicao encontre L1
-    # populado sem depender do scheduler (update_all_quotes).
     for p in positions:
         ticker = p["ticker"]
         price = fresh.get(ticker)
@@ -414,10 +444,7 @@ async def get_prices(
             if asset_type is not None:
                 await _db_set(db, ticker, asset_type, price)
             else:
-                logger.warning(
-                    "[quotes_service] asset_type invalido para %s - L1 nao atualizado",
-                    ticker,
-                )
+                logger.warning("[quotes_service] asset_type invalido para %s", ticker)
 
     return {**resolved, **fresh}
 
@@ -427,31 +454,16 @@ async def get_current_price(
     asset_type: Optional[str] = None,
     db: Optional[AsyncSession] = None,
 ) -> Optional[float]:
-    """
-    Conveniencia: busca preco de um unico ticker.
-    asset_type deve ser sempre passado para garantir o provedor correto.
-    """
     if asset_type is None:
-        logger.warning(f"[quotes_service] get_current_price chamado sem asset_type para {ticker} - retornando None")
+        logger.warning(f"[quotes_service] get_current_price sem asset_type para {ticker}")
         return None
     result = await get_prices([{"ticker": ticker, "asset_type": asset_type}], db)
     return result.get(ticker)
 
 
 async def update_all_quotes(db: AsyncSession) -> int:
-    """
-    Atualiza last_price de todos os ativos com cotacao de mercado.
-
-    Sempre combina duas fontes para montar a lista de posicoes:
-      1. Assets existentes na tabela (excluindo NO_QUOTE_TYPES).
-      2. Tickers distintos de Transaction que ainda nao tenham Asset.
-    Isso garante que ativos cadastrados apenas via Transaction (sem registro
-    manual em Asset) sempre entrem no ciclo do scheduler - resolvendo o
-    problema de L1 vazio persistente.
-    """
     from app.models.transaction import Transaction
 
-    # Fonte 1: assets ja registrados
     asset_result = await db.execute(
         select(Asset.ticker, Asset.asset_type).where(
             Asset.asset_type.notin_([at.value for at in NO_QUOTE_TYPES])
@@ -459,13 +471,11 @@ async def update_all_quotes(db: AsyncSession) -> int:
     )
     asset_rows = asset_result.all()
 
-    # Fonte 2: tickers distintos de Transaction
     tx_result = await db.execute(
         select(Transaction.ticker, Transaction.asset_type).distinct()
     )
     tx_rows = tx_result.all()
 
-    # Union: mantem known + adiciona tickers de Transaction ausentes em known
     positions_map: dict[tuple[str, str], dict] = {
         (r.ticker, str(r.asset_type)): {"ticker": r.ticker, "asset_type": str(r.asset_type)}
         for r in asset_rows
@@ -482,15 +492,9 @@ async def update_all_quotes(db: AsyncSession) -> int:
             pass
         if key not in positions_map:
             positions_map[key] = {"ticker": row.ticker, "asset_type": str(row.asset_type)}
-            logger.info(
-                "[quotes_service] update_all_quotes: ticker %s (%s) so em Transaction - incluido no ciclo",
-                row.ticker, row.asset_type,
-            )
 
     positions = list(positions_map.values())
-
     if not positions:
-        logger.info("[quotes_service] update_all_quotes: nenhuma posicao para atualizar")
         return 0
 
     prices = await get_prices(positions, db)
@@ -500,25 +504,13 @@ async def update_all_quotes(db: AsyncSession) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Funcoes de portfolio (migradas de quote_service.py — 2026-06-22)
+# Funcoes de portfolio
 # ---------------------------------------------------------------------------
 
 async def update_quotes_for_portfolio(
     portfolio_id: int,
     db: AsyncSession,
 ) -> int:
-    """
-    Atualiza Asset.last_price para todos os ativos de uma carteira especifica.
-    Retorna o numero de ativos atualizados.
-
-    Usa Transaction como fonte de verdade (substitui PortfolioPosition legada).
-    Fluxo:
-      1. Busca tickers e asset_types distintos das transacoes da carteira.
-      2. Monta lista de {ticker, asset_type} para get_prices().
-      3. get_prices() consulta L1/L2 do cache e so vai a API para o que expirou.
-      4. Persiste last_price em Asset via _db_set() interno (savepoint).
-      5. Commit unico ao final.
-    """
     from app.models.transaction import Transaction
 
     result = await db.execute(
@@ -527,14 +519,12 @@ async def update_quotes_for_portfolio(
         .distinct()
     )
     rows = result.all()
-
     if not rows:
         return 0
 
     positions_payload = [
         {"ticker": r.ticker, "asset_type": r.asset_type}
-        for r in rows
-        if r.ticker
+        for r in rows if r.ticker
     ]
 
     quotes = await get_prices(positions_payload, db=db)
@@ -554,16 +544,6 @@ async def get_price_for_transaction(
     asset_type: AssetType,
     date_str: str,
 ) -> float | None:
-    """
-    Retorna o preco de fechamento de um ativo em uma data especifica (YYYY-MM-DD).
-    Usado pelo transaction_service ao registrar operacoes retroativas.
-
-    Fluxo (via get_price_at_date do price_history_service):
-      1. Consulta asset_prices no banco - janela de 5 dias antes de date_str.
-      2. Se nao encontrar, dispara persist_daily_prices() - BRAPI Pro ou yfinance.
-      3. Retorna o fechamento mais recente disponivel na janela.
-      4. Retorna None se nenhuma fonte tiver o dado (sem lancar excecao).
-    """
     from app.services.price_history_service import get_price_at_date
     try:
         return await get_price_at_date(db, ticker, asset_type, date_str)

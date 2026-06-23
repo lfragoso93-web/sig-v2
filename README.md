@@ -1,271 +1,161 @@
-# SIG v2 — Sistema de Gestao de Investimentos
+# SGI v2 — Sistema de Gerenciamento de Investimentos
 
-> Sistema pessoal de gestao de carteira de investimentos. Backend FastAPI + Frontend React/Vite + PostgreSQL + Docker.
+> Plataforma pessoal para controle e análise de carteira de investimentos.
+> Backend FastAPI + PostgreSQL + Redis. Frontend React (em desenvolvimento).
 
 ---
 
-## Stack
+## 🚀 Stack
 
 | Camada | Tecnologia |
 |---|---|
-| Backend | Python 3.12, FastAPI 0.137, Uvicorn 0.49, SQLAlchemy 2 (async), Alembic |
-| Autenticacao | PyJWT 2.13, bcrypt 5 (nativo — sem passlib) |
-| Frontend | React 19, Vite 8, TypeScript 6, Tailwind CSS 4, TanStack Query |
-| Banco de dados | PostgreSQL 17 |
-| Cache | Redis (opcional) |
-| Containerizacao | Docker Compose, Nginx 1.28-alpine |
-| CI/CD | GitHub Actions (checkout v6, setup-python v6, setup-node v6) |
+| Backend | FastAPI 0.115, Python 3.12, SQLAlchemy 2 async |
+| Banco de dados | PostgreSQL 16 |
+| Cache | Redis 7 |
+| Migrations | Alembic |
+| Scheduler | APScheduler 3 |
+| Autenticação | JWT (access + refresh token rotativo) |
+| Dados de mercado | BRAPI Pro + Alpha Vantage + yfinance |
+| Containerização | Docker + Docker Compose |
+| Frontend | React + TypeScript + Vite (em desenvolvimento) |
 
 ---
 
-## Estrutura do Projeto
+## ⚡ Setup rápido
+
+### Pré-requisitos
+- Docker Desktop instalado e rodando
+- Git
+
+### 1. Clone e configure
+```bash
+git clone https://github.com/lfragoso93-web/sig-v2.git
+cd sig-v2
+cp backend/.env.example backend/.env
+# Edite backend/.env com suas chaves (BRAPI_TOKEN, SECRET_KEY, etc.)
+```
+
+### 2. Suba os containers
+```bash
+docker compose up -d --build
+```
+
+### 3. Verifique o health
+```bash
+curl http://localhost:8000/health
+# Esperado: {"status": "ok", "checks": {"postgres": "ok", "redis": "ok"}}
+```
+
+### 4. Acesse a documentação interativa
+```
+http://localhost:8000/docs
+```
+
+### 5. Popular catálogo de ativos (primeira vez)
+```powershell
+# PowerShell — faça login primeiro para obter o token
+$login = Invoke-RestMethod -Method Post `
+  -Uri "http://localhost:8000/api/v1/auth/login" `
+  -ContentType "application/json" `
+  -Body '{"email": "admin@sgi.com", "password": "sua_senha"}'
+$token = $login.access_token
+
+# Dispara o seed
+Invoke-RestMethod -Method Post `
+  -Uri "http://localhost:8000/api/v1/admin/assets/seed" `
+  -Headers @{ Authorization = "Bearer $token" }
+```
+
+---
+
+## 📁 Estrutura do projeto
 
 ```
 sig-v2/
 ├── backend/
 │   ├── app/
-│   │   ├── core/          # config, database, security, deps, asset_types, cache
+│   │   ├── core/          # config, database, security, scheduler, cache
+│   │   ├── integrations/  # brapi, alpha_vantage
 │   │   ├── models/        # SQLAlchemy models
 │   │   ├── routers/       # FastAPI routers
 │   │   ├── schemas/       # Pydantic schemas
-│   │   ├── services/      # logica de negocio
-│   │   ├── integrations/  # BRAPI, yfinance
-│   │   ├── migrations/    # scripts SQL versionados
-│   │   └── main.py
-│   ├── tests/
+│   │   └── services/      # lógica de negócio
+│   ├── alembic/           # migrations
+│   ├── Dockerfile
 │   └── requirements.txt
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   ├── hooks/
-│   │   ├── pages/
-│   │   ├── services/
-│   │   └── stores/
-│   ├── package.json
-│   ├── package-lock.json
-│   └── vite.config.ts
+├── frontend/              # React + TypeScript (em desenvolvimento)
 ├── docker-compose.yml
-├── docker-compose.prod.yml
 ├── CHANGELOG.md
 └── ROADMAP_SPRINTS.md
 ```
 
 ---
 
-## Como rodar localmente
+## 🔑 Variáveis de ambiente principais
 
-### Pre-requisitos
-- Docker Desktop
-- Git
-
-### Passos
-
-```bash
-# 1. Clone o repositorio
-git clone https://github.com/lfragoso93-web/sig-v2.git
-cd sig-v2
-
-# 2. Copie e ajuste o .env
-cp .env.example .env
-# Edite .env com suas variaveis (DATABASE_URL, SECRET_KEY, BRAPI_TOKEN...)
-
-# 3. Suba os containers
-docker compose up -d --build
-
-# 4. Acesse
-# Frontend: http://localhost:5173
-# Backend API: http://localhost:8000/docs
-# Health check: http://localhost:8000/health
-```
-
----
-
-## Variaveis de Ambiente
-
-Veja `.env.example` para a lista completa. As principais:
-
-| Variavel | Descricao |
+| Variável | Descrição |
 |---|---|
-| `DATABASE_URL` | URL de conexao PostgreSQL async (`postgresql+asyncpg://...`) |
-| `SECRET_KEY` | Chave JWT — gere com `openssl rand -hex 32` |
-| `BRAPI_TOKEN` | Token da API BRAPI (cotacoes B3) |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | Expiracao do token de acesso (padrao: 30) |
-| `REFRESH_TOKEN_EXPIRE_DAYS` | Expiracao do refresh token (padrao: 7) |
+| `SECRET_KEY` | Chave JWT (mínimo 32 chars) |
+| `BRAPI_TOKEN` | Token BRAPI Pro |
+| `ALPHA_VANTAGE_API_KEY` | Chave Alpha Vantage (opcional) |
+| `DATABASE_URL` | URL do PostgreSQL |
+| `REDIS_URL` | URL do Redis |
+| `SUPERADMIN_EMAIL` | E-mail do superadmin inicial |
+| `SUPERADMIN_PASSWORD` | Senha do superadmin inicial |
+| `CORS_ORIGINS` | Origens permitidas (separadas por vírgula) |
+
+Veja o arquivo `backend/.env.example` para a lista completa.
 
 ---
 
-## Modulos implementados
+## 📡 Principais endpoints
 
-| Modulo | Status |
-|---|---|
-| Autenticacao (login, registro, JWT, refresh, logout, blacklist) | ✅ Funcional |
-| Gestao de carteiras (CRUD) | ✅ Funcional |
-| Transacoes (compra/venda, validacao de saldo, paginacao server-side) | ✅ Funcional |
-| Posicoes e patrimonio (preco medio, valor de mercado) | ✅ Funcional |
-| Cotacoes (BRAPI + yfinance, cache L1/L2/L3 com savepoint) | ✅ Funcional |
-| Historico patrimonial (snapshots diarios) | ✅ Funcional |
-| Proventos (backfill, listagem, historico, sync manual) | ✅ Funcional |
-| Rentabilidade (por ativo, por grupo, total com e sem proventos) | ✅ Funcional — 22 Jun 2026 |
-| Metas de alocacao por classe (Distribuicao da Carteira) | ✅ Funcional — 22 Jun 2026 |
-| Painel Admin (usuarios, roles, configuracoes em abas) | ✅ Funcional |
-| Scheduler (jobs diarios: cotacoes, snapshots) | ✅ Funcional |
-| Refresh token blacklist + endpoint /logout | ✅ Funcional — 22 Jun 2026 |
-| Audit log + rate limiting (debug.py) | ✅ Funcional — 22 Jun 2026 |
-| IRPF (backend + frontend basico) | ✅ Implementado (revisao na Sprint 12) |
-| Exibicao de ativos USD com simbolo correto (Stocks/ETF INT) | ✅ Corrigido — 22 Jun 2026 |
-| Modal de lancamento — todas as classes de ativo visiveis | ✅ Corrigido — 22 Jun 2026 |
-| Historico patrimonial (frontend — graficos) | 🔜 Sprint 8 |
-| Renda Fixa e Tesouro Direto (frontend completo) | ⏳ Sprint 10 |
-| IRPF (revisao e testes completos) | ⏳ Sprint 12 |
-
----
-
-## Fluxo de Desenvolvimento
-
-Todo desenvolvimento novo acontece na branch `stable-15jun`. A `main` e a branch de producao e so recebe codigo via Pull Request com CI verde.
-
-### Regra geral
-
-```
-stable-15jun  ──●──●──●──●──── PR ──▶  main
-                feat  fix  fix        (CI verde)
-                                           │
-                ◀──── pull origin main ────┘
-```
-
-### 1. Antes de comecar qualquer tarefa
-
-Sempre sincronize a branch local com o remoto:
-
-```bash
-git checkout stable-15jun
-git pull origin stable-15jun
-```
-
-### 2. Durante o desenvolvimento
-
-Commits pequenos e descritivos seguindo Conventional Commits:
-
-```
-feat(scope): descricao curta
-fix(scope): descricao curta
-chore(scope): descricao curta
-```
-
-### 3. Antes de abrir o PR
-
-Rode localmente para garantir que o CI vai passar:
-
-```bash
-# Frontend
-cd frontend
-npm run typecheck   # zero erros TS
-npm run lint        # zero warnings ESLint
-
-# Backend
-cd backend
-flake8 app/         # zero erros F401/F821
-```
-
-### 4. Abrir o Pull Request
-
-PR sempre de `stable-15jun` → `main`. Titulo e descricao devem resumir os commits do ciclo.
-
-### 5. Apos o merge — sincronizar a stable-15jun
-
-```bash
-git checkout stable-15jun
-git pull origin main
-git push origin stable-15jun
-```
-
-### Regras de ouro
-
-- **Nunca commitar direto na `main`** — tudo passa por PR
-- **CI deve estar verde** antes de solicitar merge (typecheck + lint)
-- **Commits atomicos** — um problema/feature por commit, facilita rollback
-- **Sincronize a `stable-15jun` imediatamente apos cada merge** para evitar divergencias acumuladas
-
----
-
-## Convencoes de layout responsivo
-
-O projeto **nao depende de classes Tailwind com breakpoints** (`md:hidden`, `hidden md:block`) para alternar layouts. Todo comportamento responsivo e implementado via hook `useIsDesktop()` (`window.matchMedia`) com renderizacao condicional React. Isso garante que mobile e desktop nunca sejam renderizados simultaneamente.
-
-```tsx
-// padrao correto
-const isDesktop = useIsDesktop()   // hook com MediaQueryList
-return isDesktop ? <Tabela /> : <Cards />
-```
-
----
-
-## Convencao de campos opcionais de cotacao
-
-Quando o servico de cotacoes nao retorna preco para um ativo, os campos abaixo chegam como `null` tanto no backend quanto no frontend:
-
-| Campo | Tipo | Significado quando null |
+### Auth
+| Método | Rota | Descrição |
 |---|---|---|
-| `current_price` | `float \| null` | Cotacao indisponivel |
-| `current_value` | `float \| null` | Valor de mercado indisponivel |
+| POST | `/api/v1/auth/login` | Login (retorna access + refresh token) |
+| POST | `/api/v1/auth/refresh` | Renova access token |
+| POST | `/api/v1/auth/logout` | Invalida refresh token |
 
-O frontend exibe `—` nesses casos. **Nunca** repete o `invested_value` no lugar do `current_value`.
+### Admin (superadmin)
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/api/v1/admin/users` | Lista usuários |
+| POST | `/api/v1/admin/assets/seed` | Popula catálogo de ativos via BRAPI |
+| GET | `/api/v1/admin/stats` | Estatísticas do sistema |
 
----
+### Portfólios
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/api/v1/portfolios/` | Lista carteiras do usuário |
+| POST | `/api/v1/portfolios/` | Cria carteira |
+| GET | `/api/v1/portfolios/{id}/summary` | Resumo patrimonial |
+| GET | `/api/v1/portfolios/{id}/positions` | Posições abertas |
+| GET | `/api/v1/portfolios/{id}/patrimonio-history` | Histórico de patrimônio |
 
-## Convencao de moeda — ativos internacionais
-
-Ativos com `currency = "USD"` (STOCK, ETF_INTERNACIONAL) exibem preco e valores unitarios em USD com simbolo correto (`$`). Os totais do grupo (Investido / Atual) sao exibidos em BRL, pois o backend ja converte via `fx_rate`.
-
-```ts
-// padrao correto
-fmtMoney(value, position.currency)   // USD → formatUSD, BRL → formatBRL
-formatBRL(group.total_invested)       // total do grupo sempre em BRL
-```
-
----
-
-## Seguranca — Nota importante
-
-O arquivo `reset_pwd.py` foi removido do repositorio em 15/06/2026 pois continha uma senha em texto claro. O arquivo ainda existe no historico do git (commit `8d7a99a9`). Caso o repositorio seja publico, recomenda-se:
-
-```bash
-# Remover do historico com git filter-repo
-pip install git-filter-repo
-git filter-repo --path reset_pwd.py --invert-paths
-git push origin main --force
-```
-
-> ⚠️ Apos o force push todos os colaboradores devem refazer o clone.
+### Dados de mercado
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/api/v1/quotes/{ticker}` | Cotação atual |
+| GET | `/api/v1/prices/{ticker}/history` | Histórico de preços |
+| GET | `/api/v1/fx/rate` | Cotação de câmbio |
+| GET | `/api/v1/assets` | Catálogo de ativos |
 
 ---
 
-## Progresso das Sprints
+## 🕐 Jobs automáticos (Scheduler)
 
-Veja [ROADMAP_SPRINTS.md](./ROADMAP_SPRINTS.md) para o roadmap completo e [CHANGELOG.md](./CHANGELOG.md) para o historico detalhado de alteracoes.
-
-| Sprint | Status |
-|---|---|
-| Sprint 0 a 6 + Manutencao | ✅ Concluidas |
-| Hotfix 18 Jun — Tabela de ativos | ✅ Concluido |
-| Security Hotfix 21 Jun — pydantic-settings CVE | ✅ Concluido |
-| Sprint 7 — Rentabilidade | ✅ Concluida — 22 Jun 2026 |
-| Sprint 11 — Metas e Alocacao | ✅ Concluida — 22 Jun 2026 |
-| Sprint 7.5 — Hardening de Seguranca (C1–C3, A1–A4) | 🔜 Proxima |
-| Sprint 8 — Historico Patrimonial (frontend) | ⏳ Planejada |
-| Sprints 9 a 15 | ⏳ Planejadas |
+| Job | Frequência | Descrição |
+|---|---|---|
+| `job_update_prices` | Seg–Sex 18h30 | Atualiza preços de fechamento |
+| `job_update_dividends` | Diário 19h | Sincroniza proventos |
+| `job_update_fx` | Seg–Sex 18h | Atualiza cotações de câmbio |
+| `job_seed_assets` | Segunda 03h | Seed incremental de novos ativos |
 
 ---
 
-## Convencoes de commit
+## 📋 Documentação
 
-Seguimos [Conventional Commits](https://www.conventionalcommits.org/pt-BR/):
-
-```
-feat(scope): descricao
-fix(scope): descricao
-build(deps): upgrade ...
-docs: descricao
-refactor(scope): descricao
-test(scope): descricao
-```
+- [CHANGELOG.md](./CHANGELOG.md) — histórico de mudanças
+- [ROADMAP_SPRINTS.md](./ROADMAP_SPRINTS.md) — sprints planejadas e andamento
+- [http://localhost:8000/docs](http://localhost:8000/docs) — Swagger UI (com servidor rodando)

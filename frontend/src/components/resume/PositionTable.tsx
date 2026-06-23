@@ -11,11 +11,13 @@ import type { PositionGroup } from '@/hooks/usePortfolio'
 // ── helpers ────────────────────────────────────────────────────────────────────────────────────────────────────────
 const USD_TYPES = new Set(['STOCK', 'ETF_INTERNACIONAL'])
 
-function isUsdAsset(assetType: string): boolean {
+function isUsdAsset(assetType: string | null | undefined): boolean {
+  if (!assetType) return false
   return USD_TYPES.has(assetType.toUpperCase())
 }
 
-function assetTypeToTab(assetType: string): string {
+function assetTypeToTab(assetType: string | null | undefined): string {
+  if (!assetType) return 'acao'
   const map: Record<string, string> = {
     ACAO: 'acao', FII: 'fii', ETF_NACIONAL: 'etf_br',
     STOCK: 'stock', ETF_INTERNACIONAL: 'etf_int',
@@ -31,7 +33,8 @@ function fmtQty(v: number) {
     : v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 8 })
 }
 
-function displayName(ticker: string, assetType: string): string {
+function displayName(ticker: string, assetType: string | null | undefined): string {
+  if (!assetType) return ticker
   const norm = assetType.toUpperCase()
   if (norm === 'TESOURO_DIRETO' || norm === 'TESOURO') return formatTreasuryName(ticker)
   return ticker
@@ -192,14 +195,15 @@ function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
 interface PositionCardProps { item: PositionGroup['positions'][number] }
 
 function PositionCard({ item }: PositionCardProps) {
-  const isTesouro = item.asset_type.toUpperCase() === 'TESOURO_DIRETO' || item.asset_type.toUpperCase() === 'TESOURO'
-  const name = displayName(item.ticker, item.asset_type)
+  const safeType = item.asset_type ?? ''
+  const isTesouro = safeType.toUpperCase() === 'TESOURO_DIRETO' || safeType.toUpperCase() === 'TESOURO'
+  const name = displayName(item.ticker, safeType)
   const hasQuote = item.current_price !== null && item.current_price !== undefined
   const varColor = (item.variation_value ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-error)'
   const investedValue = item.invested_value ?? item.quantity * item.average_price
   // Para ativos USD (STOCK/ETF_INT), preços unitários ficam em USD;
   // os valores convertidos (invested_value, current_value) já chegam em BRL do backend
-  const currency = isUsdAsset(item.asset_type) ? 'USD' : 'BRL'
+  const currency = isUsdAsset(safeType) ? 'USD' : 'BRL'
 
   return (
     <div style={{
@@ -210,7 +214,7 @@ function PositionCard({ item }: PositionCardProps) {
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-          <AssetLogo ticker={item.ticker} assetType={item.asset_type} size={34} logoUrl={item.logo_url} />
+          <AssetLogo ticker={item.ticker} assetType={safeType} size={34} logoUrl={item.logo_url} />
           <div style={{ minWidth: 0 }}>
             <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)', ...cellText }}>{name}</div>
             <div style={{ fontSize: '0.68rem', marginTop: 2, color: 'var(--color-text-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -218,7 +222,7 @@ function PositionCard({ item }: PositionCardProps) {
             </div>
           </div>
         </div>
-        <AssetMenu ticker={item.ticker} assetLabel={isTesouro ? item.ticker : (item.asset_label ?? item.ticker)} assetType={item.asset_type} />
+        <AssetMenu ticker={item.ticker} assetLabel={isTesouro ? item.ticker : (item.asset_label ?? item.ticker)} assetType={safeType} />
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.625rem 1rem' }}>
         {[
@@ -555,13 +559,14 @@ function ClassTable({ group, portfolioId }: { group: PositionGroup; portfolioId:
               </thead>
               <tbody>
                 {group.positions.map(item => {
+                  const safeType = item.asset_type ?? ''
                   const hasQuote = item.current_price !== null && item.current_price !== undefined
-                  const name = displayName(item.ticker, item.asset_type)
-                  const isTesouro = item.asset_type.toUpperCase() === 'TESOURO_DIRETO' || item.asset_type.toUpperCase() === 'TESOURO'
+                  const name = displayName(item.ticker, safeType)
+                  const isTesouro = safeType.toUpperCase() === 'TESOURO_DIRETO' || safeType.toUpperCase() === 'TESOURO'
                   const varColor = (item.variation_value ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-notification)'
                   const investedValue = item.invested_value ?? item.quantity * item.average_price
                   // Preços unitários: USD para STOCK/ETF_INT; BRL demais
-                  const currency = isUsdAsset(item.asset_type) ? 'USD' : 'BRL'
+                  const currency = isUsdAsset(safeType) ? 'USD' : 'BRL'
                   return (
                     <tr
                       key={`${item.ticker}-${item.id ?? item.ticker}`}
@@ -571,7 +576,7 @@ function ClassTable({ group, portfolioId }: { group: PositionGroup; portfolioId:
                     >
                       <td style={{ padding: '0.75rem 1rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <AssetLogo ticker={item.ticker} assetType={item.asset_type} size={28} logoUrl={item.logo_url} />
+                          <AssetLogo ticker={item.ticker} assetType={safeType} size={28} logoUrl={item.logo_url} />
                           <div style={{ minWidth: 0 }}>
                             <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...cellText }}>{name}</div>
                             <div style={{ fontSize: '0.65rem', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...cellFaint }}>
@@ -606,7 +611,7 @@ function ClassTable({ group, portfolioId }: { group: PositionGroup; portfolioId:
                         ) : <span style={cellFaint}>—</span>}
                       </td>
                       <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>
-                        <AssetMenu ticker={item.ticker} assetLabel={isTesouro ? item.ticker : (item.asset_label ?? item.ticker)} assetType={item.asset_type} />
+                        <AssetMenu ticker={item.ticker} assetLabel={isTesouro ? item.ticker : (item.asset_label ?? item.ticker)} assetType={safeType} />
                       </td>
                     </tr>
                   )

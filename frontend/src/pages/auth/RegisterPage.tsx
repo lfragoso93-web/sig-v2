@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import api from '@/services/api'
+import { useAuth } from '@/contexts/AuthContext'
 import { Eye, EyeOff } from 'lucide-react'
 
 const schema = z.object({
@@ -18,7 +19,7 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>
 
 export default function RegisterPage() {
-  const navigate = useNavigate()
+  const { loginWithTokens } = useAuth()
   const [showPass, setShowPass] = useState(false)
   const [apiError, setApiError] = useState('')
 
@@ -29,8 +30,18 @@ export default function RegisterPage() {
   const onSubmit = async (data: FormData) => {
     setApiError('')
     try {
-      await api.post('/auth/register', { name: data.name, email: data.email, password: data.password })
-      navigate('/auth/login?registered=1')
+      // POST /auth/register ja retorna os tokens — usa direto, sem segundo login
+      const { data: tokens } = await api.post<{
+        access_token: string
+        refresh_token: string
+      }>('/auth/register', {
+        name: data.name,
+        email: data.email,
+        password: data.password,
+      })
+      // loginWithTokens carrega /users/me e navega para /carteira;
+      // ProtectedRoute intercepta e manda para /welcome se onboarding_completed=false
+      await loginWithTokens(tokens.access_token, tokens.refresh_token)
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } } }
       setApiError(err?.response?.data?.detail ?? 'Erro ao criar conta. Tente novamente.')
@@ -89,9 +100,11 @@ export default function RegisterPage() {
           />
           <button
             type="button" onClick={() => setShowPass(p => !p)}
-            style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)',
+            style={{
+              position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)',
               background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-              color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center' }}
+              color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center',
+            }}
             aria-label={showPass ? 'Ocultar senha' : 'Mostrar senha'}
           >
             {showPass ? <EyeOff size={15} /> : <Eye size={15} />}
@@ -113,7 +126,6 @@ export default function RegisterPage() {
         {errors.confirm && <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-notification)', margin: 0 }}>{errors.confirm.message}</p>}
       </div>
 
-      {/* Erro da API */}
       {apiError && (
         <div style={{
           fontSize: 'var(--text-xs)', color: 'var(--color-notification)',
@@ -133,7 +145,7 @@ export default function RegisterPage() {
 
       <p style={{ fontSize: 'var(--text-xs)', textAlign: 'center', color: 'var(--color-text-muted)', margin: 0 }}>
         Já tem conta?{' '}
-        <Link to="/auth/login" style={{ color: 'var(--color-primary)', textDecoration: 'none', fontWeight: 500 }}>
+        <Link to="/login" style={{ color: 'var(--color-primary)', textDecoration: 'none', fontWeight: 500 }}>
           Entrar
         </Link>
       </p>

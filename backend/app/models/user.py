@@ -22,8 +22,13 @@ class User(Base, TimestampMixin):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    onboarding_completed: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="false"
+    )
 
-    # Relacionamentos
+    # Relacionamentos ORM declarados
+    # O delete real usa SQL direto (delete_user em user_service.py)
+    # para garantir que o PostgreSQL execute ON DELETE CASCADE nativamente.
     portfolios: Mapped[list["Portfolio"]] = relationship(
         "Portfolio", back_populates="user", cascade="all, delete-orphan"
     )

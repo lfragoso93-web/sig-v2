@@ -8,6 +8,10 @@ logger = logging.getLogger(__name__)
 
 BRAPI_BASE = "https://brapi.dev/api"
 
+# Limite de dias a partir do qual usamos range=max em vez de range=custom.
+# Acima de ~5 anos, range=custom pode ser rejeitado pela BRAPI dependendo do plano.
+_MAX_RANGE_THRESHOLD_DAYS = 365 * 5
+
 
 def _auth_headers() -> dict:
     if settings.BRAPI_TOKEN:
@@ -15,13 +19,36 @@ def _auth_headers() -> dict:
     return {}
 
 
+def _parse_history_rows(
+    history: list[dict],
+    ticker: str,
+    label: str,
+) -> list[tuple[datetime, float]]:
+    """Converte a lista historicalDataPrice da BRAPI em (datetime UTC, float)."""
+    rows: list[tuple[datetime, float]] = []
+    for entry in history:
+        close = entry.get("close") or entry.get("adjclose")
+        ts_raw = entry.get("date") or entry.get("timestamp")
+        if close is None or ts_raw is None:
+            continue
+        if isinstance(ts_raw, (int, float)):
+            dt = datetime.fromtimestamp(ts_raw, tz=timezone.utc)
+        else:
+            try:
+                dt = datetime.fromisoformat(str(ts_raw))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+            except ValueError:
+                continue
+        rows.append((dt, float(close)))
+    rows.sort(key=lambda x: x[0])
+    logger.info(f"BRAPI price_history [{label}]: {ticker} — {len(rows)} registros")
+    return rows
+
+
 # ── Cotações atuais ───────────────────────────────────────────────────────────────────
 
 async def fetch_quotes(tickers: list[str]) -> dict[str, float]:
-    """
-    Retorna apenas {ticker: price}.
-    Mantido para compatibilidade com quotes_service e demais usos.
-    """
     if not tickers:
         return {}
     results: dict[str, float] = {}
@@ -46,10 +73,6 @@ async def fetch_quotes(tickers: list[str]) -> dict[str, float]:
 
 
 async def fetch_quotes_with_meta(tickers: list[str]) -> dict[str, dict]:
-    """
-    Retorna {ticker: {price: float, logo_url: str | None}}.
-    Usado por calc_positions para enriquecer posições com logo e cotação.
-    """
     if not tickers:
         return {}
     results: dict[str, dict] = {}
@@ -94,16 +117,34 @@ async def fetch_price_history(
     date_to: str,
 ) -> list[tuple[datetime, float]]:
     """
-    Busca histórico diário de fechamento via BRAPI Pro.
-    Suporta: ações BR, FIIs, ETFs nacionais, cripto (via /quote/{ticker}).
+    Busca historico de precos diarios via BRAPI.
 
-    Retorna lista de (datetime_utc, close_price) ordenada por data asc.
-    Retorna [] se BRAPI falhar (sem lançar exceção — fallback para yfinance).
+    Estrategia adaptativa (BRAPI Pro):
+      - Janela <= 5 anos: usa range=custom com from/to exatos.
+      - Janela >  5 anos: delega para fetch_price_history_full (range=max)
+        e filtra os registros fora da janela solicitada.
 
-    Uso:
-        rows = await fetch_price_history("PETR4", "2025-01-01", "2026-01-01")
-        rows = await fetch_price_history("BTC",   "2025-06-01", "2025-06-15")
+    Isso garante que o plano Pro seja aproveitado ao maximo sem rejeicao
+    do parametro range=custom para janelas muito longas.
     """
+    from datetime import date as _date
+    try:
+        d_from = _date.fromisoformat(date_from)
+        d_to   = _date.fromisoformat(date_to)
+        delta  = (d_to - d_from).days
+    except ValueError:
+        delta  = 0
+
+    if delta > _MAX_RANGE_THRESHOLD_DAYS:
+        logger.info(f"BRAPI price_history: {ticker} janela {delta}d > threshold — usando range=max")
+        rows = await fetch_price_history_full(ticker)
+        # Filtra apenas o intervalo pedido
+        cutoff_from = datetime.fromisoformat(date_from).replace(tzinfo=timezone.utc)
+        cutoff_to   = datetime.fromisoformat(date_to).replace(
+            hour=23, minute=59, second=59, tzinfo=timezone.utc
+        )
+        return [(dt, c) for dt, c in rows if cutoff_from <= dt <= cutoff_to]
+
     headers = _auth_headers()
     url = (
         f"{BRAPI_BASE}/quote/{ticker}"
@@ -111,7 +152,7 @@ async def fetch_price_history(
         f"&from={date_from}&to={date_to}"
     )
     try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(url, headers=headers)
             resp.raise_for_status()
             data    = resp.json()
@@ -122,7 +163,6 @@ async def fetch_price_history(
 
             history = results[0].get("historicalDataPrice", [])
             if not history:
-                # Sem histórico mas tem preço atual: retorna snapshot do dia
                 price = results[0].get("regularMarketPrice")
                 if price:
                     now = datetime.now(timezone.utc).replace(
@@ -131,63 +171,235 @@ async def fetch_price_history(
                     return [(now, float(price))]
                 return []
 
-            rows: list[tuple[datetime, float]] = []
-            for entry in history:
-                close = entry.get("close") or entry.get("adjclose")
-                ts_raw = entry.get("date") or entry.get("timestamp")
-                if close is None or ts_raw is None:
-                    continue
-                # ts_raw pode ser epoch (int) ou string ISO
-                if isinstance(ts_raw, (int, float)):
-                    dt = datetime.fromtimestamp(ts_raw, tz=timezone.utc)
-                else:
-                    try:
-                        dt = datetime.fromisoformat(str(ts_raw))
-                        if dt.tzinfo is None:
-                            dt = dt.replace(tzinfo=timezone.utc)
-                    except ValueError:
-                        continue
-                rows.append((dt, float(close)))
-
-            rows.sort(key=lambda x: x[0])
-            logger.info(f"BRAPI price_history: {ticker} — {len(rows)} registros ({date_from} a {date_to})")
-            return rows
+            return _parse_history_rows(history, ticker, f"{date_from} a {date_to}")
 
     except Exception as e:
         logger.warning(f"BRAPI fetch_price_history error for {ticker}: {e}")
         return []
 
 
+async def fetch_price_history_full(
+    ticker: str,
+) -> list[tuple[datetime, float]]:
+    """
+    Busca o historico completo de precos diarios via BRAPI Pro (range=max).
+
+    Disponivel apenas no plano Pro. Retorna todos os fechamentos desde o
+    inicio da negociacao do ativo na bolsa.
+    Timeout estendido (60s) pois a resposta pode ser grande para ativos antigos.
+    """
+    headers = _auth_headers()
+    url = f"{BRAPI_BASE}/quote/{ticker}?range=max&interval=1d"
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.get(url, headers=headers)
+            resp.raise_for_status()
+            data    = resp.json()
+            results = data.get("results", [])
+            if not results:
+                logger.warning(f"BRAPI price_history_full: sem resultados para {ticker}")
+                return []
+
+            history = results[0].get("historicalDataPrice", [])
+            if not history:
+                price = results[0].get("regularMarketPrice")
+                if price:
+                    now = datetime.now(timezone.utc).replace(
+                        hour=18, minute=0, second=0, microsecond=0
+                    )
+                    logger.info(f"BRAPI price_history_full: {ticker} sem historico, usando snapshot atual")
+                    return [(now, float(price))]
+                return []
+
+            return _parse_history_rows(history, ticker, "range=max")
+
+    except Exception as e:
+        logger.warning(f"BRAPI fetch_price_history_full error for {ticker}: {e}")
+        return []
+
+
 async def fetch_historical_price(ticker: str, date_str: str) -> Optional[float]:
-    """
-    Retorna o preco de fechamento de um ativo em uma data específica.
-    Consulta uma janela de 5 dias antes para cobrir fins de semana/feriados.
-    """
     ref_date  = date.fromisoformat(date_str)
     date_from = (ref_date - timedelta(days=5)).isoformat()
     rows = await fetch_price_history(ticker, date_from, date_str)
     if rows:
-        return rows[-1][1]  # ultimo fechamento disponivel na janela
+        return rows[-1][1]
     return None
+
+
+# ── Moedas — cotação atual e histórico (BRAPI v2/currency) ───────────────────────────
+
+def _extract_price_from_item(item: dict) -> Optional[float]:
+    """
+    Extrai preco de um item de resposta de moeda da BRAPI.
+    Tenta multiplos campos em ordem de preferencia.
+    'close' adicionado pois e o campo retornado pelo endpoint /v2/currency na resposta atual.
+    """
+    for field in (
+        "regularMarketPrice",
+        "ask",
+        "bid",
+        "close",
+        "price",
+        "high",
+        "low",
+    ):
+        val = item.get(field)
+        if val is not None:
+            try:
+                f = float(val)
+                if f > 0:
+                    return f
+            except (TypeError, ValueError):
+                continue
+    return None
+
+
+async def fetch_currency_rate(pair: str = "USD-BRL") -> Optional[float]:
+    """
+    Retorna a cotacao atual de um par cambial via BRAPI /v2/currency.
+
+    Tenta o par no formato recebido (ex: 'USD-BRL') e tambem sem hifen ('USDBRL').
+    Retorna None se a BRAPI falhar ou o par nao for encontrado.
+    """
+    headers = _auth_headers()
+    pairs_to_try = [pair, pair.replace("-", "")]
+
+    for pair_fmt in pairs_to_try:
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(
+                    f"{BRAPI_BASE}/v2/currency",
+                    headers=headers,
+                    params={"currency": pair_fmt},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+
+                currencies = (
+                    data.get("currencies")
+                    or data.get("results")
+                    or (data if isinstance(data, list) else [])
+                )
+
+                for item in currencies:
+                    if not isinstance(item, dict):
+                        continue
+                    price = _extract_price_from_item(item)
+                    if price is not None:
+                        logger.info(f"[brapi] fetch_currency_rate {pair_fmt} = {price}")
+                        return price
+
+                # Tenta sub-lista 'historical' com o valor mais recente
+                for item in currencies:
+                    if not isinstance(item, dict):
+                        continue
+                    hist = item.get("historical") or []
+                    if hist and isinstance(hist, list):
+                        last = hist[-1] if isinstance(hist[-1], dict) else None
+                        if last:
+                            price = _extract_price_from_item(last)
+                            if price is not None:
+                                logger.info(f"[brapi] fetch_currency_rate (hist fallback) {pair_fmt} = {price}")
+                                return price
+
+                logger.warning(f"[brapi] fetch_currency_rate: par {pair_fmt!r} sem cotacao na resposta")
+
+        except Exception as e:
+            logger.warning(f"[brapi] fetch_currency_rate error for {pair_fmt}: {e}")
+
+    return None
+
+
+async def fetch_currency_history(
+    pair: str,
+    start_date: str,
+    end_date: str,
+) -> list[tuple[date, float]]:
+    """
+    Retorna historico diario de cotacao de um par cambial via BRAPI /v2/currency/historical.
+
+    Tenta o par no formato 'USD-BRL' e 'USDBRL' (sem hifen).
+    Retorna [] se BRAPI falhar — o chamador deve tratar o fallback.
+    """
+    headers = _auth_headers()
+    pairs_to_try = [pair, pair.replace("-", "")]
+
+    for pair_fmt in pairs_to_try:
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.get(
+                    f"{BRAPI_BASE}/v2/currency/historical",
+                    headers=headers,
+                    params={
+                        "currency":  pair_fmt,
+                        "startDate": start_date,
+                        "endDate":   end_date,
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+
+                entries = (
+                    data.get("currency")
+                    or data.get("historical")
+                    or data.get("currencies")
+                    or (data if isinstance(data, list) else [])
+                )
+                if not entries:
+                    logger.warning(f"[brapi] fetch_currency_history: sem dados para {pair_fmt} ({start_date} a {end_date})")
+                    continue
+
+                flat: list[dict] = []
+                for item in entries:
+                    hist = item.get("historical") if isinstance(item, dict) else None
+                    if hist and isinstance(hist, list):
+                        flat.extend(hist)
+                    elif isinstance(item, dict) and ("date" in item or "close" in item):
+                        flat.append(item)
+
+                rows: list[tuple[date, float]] = []
+                for entry in flat:
+                    raw_date  = entry.get("date") or entry.get("timestamp")
+                    raw_price = (
+                        entry.get("close")
+                        or entry.get("regularMarketPrice")
+                        or entry.get("price")
+                        or entry.get("ask")
+                    )
+                    if raw_date is None or raw_price is None:
+                        continue
+                    try:
+                        if isinstance(raw_date, (int, float)):
+                            d = datetime.fromtimestamp(raw_date, tz=timezone.utc).date()
+                        else:
+                            d = date.fromisoformat(str(raw_date)[:10])
+                        f_price = float(raw_price)
+                        if f_price > 0:
+                            rows.append((d, f_price))
+                    except (ValueError, TypeError):
+                        continue
+
+                rows.sort(key=lambda x: x[0])
+                if rows:
+                    logger.info(f"[brapi] fetch_currency_history {pair_fmt}: {len(rows)} registros ({start_date} a {end_date})")
+                    return rows
+
+        except Exception as e:
+            logger.warning(f"[brapi] fetch_currency_history error for {pair_fmt} ({start_date} a {end_date}): {e}")
+
+    return []
 
 
 # ── Cripto (BRAPI Pro) ─────────────────────────────────────────────────────────────────
 
 async def fetch_crypto_quote(tickers: list[str]) -> dict[str, float]:
-    """
-    Busca cotação atual de criptomoedas via BRAPI Pro (/api/v2/crypto).
-    Retorna {ticker: price_brl}.
-
-    Centraliza a lógica que antes estava inline em quotes_service.py.
-    Tickers sem cotação ficam ausentes no resultado (nunca retorna None como valor).
-    """
     if not tickers:
         return {}
 
     headers = _auth_headers()
     results: dict[str, float] = {}
 
-    # BRAPI v2/crypto aceita múltiplos coins separados por vírgula
     joined = ",".join(t.upper() for t in tickers)
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -228,10 +440,6 @@ async def fetch_asset_info(ticker: str) -> Optional[dict]:
 
 
 async def fetch_logo_url(ticker: str) -> Optional[str]:
-    """
-    Retorna a URL do logo do ativo via BRAPI.
-    Silencioso em caso de erro — nunca deve quebrar o fluxo de criação de ativo.
-    """
     try:
         info = await fetch_asset_info(ticker)
         if not info:
@@ -330,33 +538,87 @@ async def fetch_crypto_suggestions(q: str, limit: int = 10) -> list[dict]:
         return []
 
 
+async def get_quotes_bulk(tickers: list[str]) -> list[dict]:
+    """Retorna lista de dicts com dados completos de cotacao para um lote de tickers."""
+    if not tickers:
+        return []
+    results: list[dict] = []
+    chunks  = [tickers[i:i+20] for i in range(0, len(tickers), 20)]
+    headers = _auth_headers()
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        for chunk in chunks:
+            joined = ",".join(chunk)
+            url    = f"{BRAPI_BASE}/quote/{joined}"
+            try:
+                resp = await client.get(url, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+                results.extend(data.get("results", []))
+            except Exception as e:
+                logger.warning(f"BRAPI get_quotes_bulk error for chunk {chunk}: {e}")
+    return results
+
+
 def _yf_search_sync(q: str, limit: int = 10, asset_type: Optional[str] = None) -> list[dict]:
+    """
+    Fallback de busca de ticker via yfinance.
+
+    yfinance >= 0.2.50 usa yf.Lookup com atributos de propriedade (nao metodos):
+      - yf.Lookup(q).stock       -> DataFrame com acoes
+      - yf.Lookup(q).etf         -> DataFrame com ETFs
+      - yf.Search(q).quotes      -> lista de dicts (busca geral)
+
+    Versoes antigas usavam yf.Lookup(q).get_stock() (metodo) — removido na 0.2.50+.
+    """
     try:
         import yfinance as yf
         results = []
 
-        if asset_type == "stock":
-            items = yf.Lookup(q).get_stock(count=limit)
-        elif asset_type == "etf":
-            items = yf.Lookup(q).get_etf(count=limit)
-        else:
-            search = yf.Search(q, max_results=limit)
-            items  = search.quotes or []
+        def _rows_from_df(df) -> list[dict]:
+            """Converte DataFrame do Lookup em lista de dicts normalizados."""
+            if df is None or (hasattr(df, 'empty') and df.empty):
+                return []
+            rows = []
+            for _, row in df.iterrows():
+                ticker = str(row.get("symbol") or row.get("Symbol") or "").strip()
+                name   = str(row.get("longname") or row.get("shortname") or row.get("name") or "").strip()
+                kind   = str(row.get("quoteType") or asset_type or "").lower()
+                if ticker:
+                    rows.append({"ticker": ticker.upper(), "name": name, "type": kind})
+            return rows
 
-        for item in items:
-            if hasattr(item, "to_dict"):
-                row    = item
-                ticker = str(getattr(row, "symbol", "") or "")
-                name   = str(getattr(row, "longname", "") or getattr(row, "shortname", "") or "")
-                kind   = str(getattr(row, "quoteType", "") or asset_type or "")
-            elif isinstance(item, dict):
-                ticker = item.get("symbol") or item.get("ticker") or ""
-                name   = item.get("longname") or item.get("shortname") or ""
-                kind   = item.get("quoteType") or asset_type or ""
-            else:
-                continue
-            if ticker:
-                results.append({"ticker": ticker.upper(), "name": name, "type": kind.lower()})
+        if asset_type == "stock":
+            try:
+                df = yf.Lookup(q).stock
+                results = _rows_from_df(df)
+            except Exception:
+                pass
+        elif asset_type == "etf":
+            try:
+                df = yf.Lookup(q).etf
+                results = _rows_from_df(df)
+            except Exception:
+                pass
+
+        # Fallback para busca geral (Search) se Lookup falhou ou tipo nao mapeado
+        if not results:
+            try:
+                search = yf.Search(q, max_results=limit)
+                items  = search.quotes or []
+                for item in items:
+                    if isinstance(item, dict):
+                        ticker = item.get("symbol") or item.get("ticker") or ""
+                        name   = item.get("longname") or item.get("shortname") or ""
+                        kind   = item.get("quoteType") or asset_type or ""
+                    else:
+                        ticker = str(getattr(item, "symbol", "") or "")
+                        name   = str(getattr(item, "longname", "") or getattr(item, "shortname", "") or "")
+                        kind   = str(getattr(item, "quoteType", "") or asset_type or "")
+                    if ticker:
+                        results.append({"ticker": ticker.upper(), "name": name, "type": kind.lower()})
+            except Exception as e:
+                logger.warning(f"yfinance Search fallback error for q={q!r}: {e}")
+
         return results[:limit]
     except Exception as e:
         logger.warning(f"yfinance search error for q={q!r} type={asset_type!r}: {e}")

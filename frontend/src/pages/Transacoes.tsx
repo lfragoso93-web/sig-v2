@@ -8,10 +8,11 @@ import {
   type Transaction,
 } from '@/hooks/useTransactions'
 import { usePortfolios } from '@/hooks/usePortfolios'
-import { formatBRL, formatDate, assetBadgeClass } from '@/utils/format'
+import { formatBRL, fmtMoney, formatDate, assetBadgeClass } from '@/utils/format'
 import TransactionsBarChart from '@/components/charts/TransactionsBarChart'
 
-function assetTypeToTab(assetType: string): string {
+function assetTypeToTab(assetType: string | null | undefined): string {
+  if (!assetType) return 'acao'
   const map: Record<string, string> = {
     ACAO:              'acao',
     ACAO_NACIONAL:     'acao',
@@ -23,7 +24,7 @@ function assetTypeToTab(assetType: string): string {
     RENDA_FIXA:        'renda_fixa',
     CRIPTO:            'cripto',
   }
-  return map[assetType] ?? 'acao'
+  return map[assetType.toUpperCase()] ?? 'acao'
 }
 
 const ASSET_TYPE_LABEL: Record<string, string> = {
@@ -38,6 +39,14 @@ const ASSET_TYPE_LABEL: Record<string, string> = {
   CRIPTO:            'Criptomoedas',
 }
 
+/** Retorna 'USD' se a transação for de ativo internacional, 'BRL' caso contrário */
+function txCurrency(t: Transaction): string {
+  if (t.currency && t.currency.toUpperCase() === 'USD') return 'USD'
+  const norm = (t.asset_type ?? '').toUpperCase()
+  if (norm === 'STOCK' || norm === 'ETF_INTERNACIONAL') return 'USD'
+  return 'BRL'
+}
+
 // ── Card mobile ──────────────────────────────────────────────────────────
 function TransactionCard({
   t, onDelete, onEdit,
@@ -49,6 +58,7 @@ function TransactionCard({
   const opBg    = isBuy
     ? 'oklch(from var(--color-success) l c h / 0.12)'
     : 'oklch(from var(--color-notification) l c h / 0.12)'
+  const currency = txCurrency(t)
 
   return (
     <div
@@ -61,7 +71,7 @@ function TransactionCard({
           <span className="px-2 py-0.5 rounded text-[10px] font-semibold" style={{ background: opBg, color: opColor }}>
             {isBuy ? 'Compra' : 'Venda'}
           </span>
-          <span className={`asset-badge ${assetBadgeClass(t.asset_type)} text-[9px]`}>{t.asset_type}</span>
+          <span className={`asset-badge ${assetBadgeClass(t.asset_type)} text-[9px]`}>{t.asset_type ?? '—'}</span>
         </div>
         <div className="flex items-center gap-1">
           <button onClick={onEdit}
@@ -92,16 +102,16 @@ function TransactionCard({
         </div>
         <div>
           <div className="text-[10px]" style={{ color: 'var(--color-text-faint)' }}>Preço unit.</div>
-          <div className="font-medium tabular-nums" style={{ color: 'var(--color-text)' }}>{formatBRL(t.price)}</div>
+          <div className="font-medium tabular-nums" style={{ color: 'var(--color-text)' }}>{fmtMoney(t.price, currency)}</div>
         </div>
         <div>
           <div className="text-[10px]" style={{ color: 'var(--color-text-faint)' }}>Total</div>
-          <div className="font-semibold tabular-nums" style={{ color: 'var(--color-text)' }}>{formatBRL(total)}</div>
+          <div className="font-semibold tabular-nums" style={{ color: 'var(--color-text)' }}>{fmtMoney(total, currency)}</div>
         </div>
         {fees > 0 && (
           <div>
             <div className="text-[10px]" style={{ color: 'var(--color-text-faint)' }}>Taxas</div>
-            <div className="tabular-nums" style={{ color: 'var(--color-text-muted)' }}>{formatBRL(fees)}</div>
+            <div className="tabular-nums" style={{ color: 'var(--color-text-muted)' }}>{fmtMoney(fees, currency)}</div>
           </div>
         )}
       </div>
@@ -113,14 +123,15 @@ function TransactionCard({
 function TransactionRow({
   t, onDelete, onEdit,
 }: { t: Transaction; onDelete: () => void; onEdit: () => void }) {
-  const isBuy = t.operation === 'buy'
-  const fees  = t.fees ?? 0
-  const total = t.quantity * t.price + (isBuy ? fees : -fees)
+  const isBuy    = t.operation === 'buy'
+  const fees     = t.fees ?? 0
+  const total    = t.quantity * t.price + (isBuy ? fees : -fees)
+  const currency = txCurrency(t)
   return (
     <tr>
       <td className="text-sm" style={{ color: 'var(--color-text-muted)' }}>{formatDate(t.date)}</td>
       <td><span className="font-semibold text-sm">{t.ticker}</span></td>
-      <td><span className={`asset-badge ${assetBadgeClass(t.asset_type)}`}>{t.asset_type}</span></td>
+      <td><span className={`asset-badge ${assetBadgeClass(t.asset_type)}`}>{t.asset_type ?? '—'}</span></td>
       <td className="text-center">
         <span
           className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold"
@@ -135,11 +146,11 @@ function TransactionRow({
         </span>
       </td>
       <td className="text-right text-sm tabular-nums">{t.quantity}</td>
-      <td className="text-right text-sm tabular-nums">{formatBRL(t.price)}</td>
+      <td className="text-right text-sm tabular-nums">{fmtMoney(t.price, currency)}</td>
       <td className="text-right text-sm tabular-nums" style={{ color: 'var(--color-text-muted)' }}>
-        {fees > 0 ? formatBRL(fees) : '—'}
+        {fees > 0 ? fmtMoney(fees, currency) : '—'}
       </td>
-      <td className="text-right text-sm font-medium tabular-nums">{formatBRL(total)}</td>
+      <td className="text-right text-sm font-medium tabular-nums">{fmtMoney(total, currency)}</td>
       <td className="text-right pr-3">
         <div className="flex items-center justify-end gap-0.5">
           <button onClick={onEdit} className="btn btn-ghost p-1.5 rounded" style={{ color: 'var(--color-text-muted)' }} aria-label="Editar">
@@ -219,7 +230,6 @@ export default function Transacoes() {
   const [opFilter, setOpFilter] = useState<'todos' | 'buy' | 'sell'>('todos')
   const [page, setPage]         = useState(1)
 
-  // Ao mudar filtros volta para pág 1
   function handleSearchChange(v: string) { setSearch(v); setPage(1) }
   function handleOpChange(v: 'todos' | 'buy' | 'sell') { setOpFilter(v); setPage(1) }
 
@@ -258,16 +268,17 @@ export default function Transacoes() {
     if (ticker) { setSearch(ticker); setPage(1) }
   }, [searchParams])
 
-  // Agrupamento client-side sobre a página atual (≤50 itens) — leve e correto
   const groupedByType = useMemo(() => {
     const groups: Record<string, Transaction[]> = {}
     for (const t of transactions) {
-      if (!groups[t.asset_type]) groups[t.asset_type] = []
-      groups[t.asset_type].push(t)
+      const key = t.asset_type ?? 'SEM_TIPO'
+      if (!groups[key]) groups[key] = []
+      groups[key].push(t)
     }
     return groups
   }, [transactions])
 
+  // Totais consolidados — mantidos em BRL para o rodapé geral
   const totalCompras = transactions
     .filter(t => t.operation === 'buy')
     .reduce((s, t) => s + t.quantity * t.price + (t.fees ?? 0), 0)

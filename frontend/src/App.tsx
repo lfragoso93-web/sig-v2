@@ -5,10 +5,12 @@ import ProtectedRoute from '@/components/ProtectedRoute'
 import AppLayout from '@/components/layout/AppLayout'
 import LoginPage from '@/pages/auth/LoginPage'
 import RegisterPage from '@/pages/auth/RegisterPage'
+import WelcomePage from '@/pages/WelcomePage'
 import ResumePage from '@/pages/ResumePage'
 import ProventosPage from '@/pages/ProventosPage'
 import PatrimonioPage from '@/pages/PatrimonioPage'
 import RentabilidadePage from '@/pages/RentabilidadePage'
+import HistoricoPage from '@/pages/HistoricoPage'
 import MetasPage from '@/pages/MetasPage'
 import AnalisePage from '@/pages/AnalisePage'
 import LancamentosPage from '@/pages/LancamentosPage'
@@ -29,23 +31,30 @@ export default function App() {
 
             {/* Protected */}
             <Route element={<ProtectedRoute />}>
+
+              {/* Welcome / Onboarding — fora do AppLayout (tela cheia) */}
+              <Route path="/welcome" element={<WelcomePage />} />
+
               <Route element={<AppLayout />}>
                 {/* Raiz -> /carteira */}
                 <Route path="/"        element={<Navigate to="/carteira" replace />} />
                 <Route path="/resumo"  element={<Navigate to="/carteira" replace />} />
 
                 {/* Rotas principais */}
-                <Route path="/carteira"               element={<ResumePage />} />
-                <Route path="/carteira/transacoes"    element={<Transacoes />} />
-                <Route path="/carteira/lancamentos"   element={<LancamentosPage />} />
-                <Route path="/carteira/proventos"     element={<ProventosPage />} />
-                <Route path="/carteira/rentabilidade" element={<RentabilidadePage />} />
-                <Route path="/carteira/configuracoes" element={<Configuracoes />} />
+                <Route path="/carteira"                    element={<ResumePage />} />
+                <Route path="/carteira/transacoes"         element={<Transacoes />} />
+                <Route path="/carteira/lancamentos"        element={<LancamentosPage />} />
+                <Route path="/carteira/proventos"          element={<ProventosPage />} />
+                <Route path="/carteira/rentabilidade"      element={<RentabilidadePage />} />
+                <Route path="/carteira/configuracoes"      element={<Configuracoes />} />
 
-                {/* Patrimônio e sub-rotas */}
+                {/* Patrimonio e sub-rotas */}
                 <Route path="/patrimonio"                          element={<PatrimonioPage />} />
                 <Route path="/carteira/patrimonio"                 element={<PatrimonioPage />} />
                 <Route path="/carteira/patrimonio/tesouro"         element={<TesouroDiretoPage />} />
+
+                {/* Redirect: historico agora vive dentro de PatrimonioPage */}
+                <Route path="/carteira/historico" element={<HistoricoPage />} />
 
                 {/* Rotas sem /carteira */}
                 <Route path="/metas"         element={<MetasPage />} />

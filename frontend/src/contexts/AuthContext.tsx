@@ -12,6 +12,7 @@ export interface User {
   role: string
   avatar_url?: string | null
   theme_preference?: 'dark' | 'light'
+  onboarding_completed?: boolean
 }
 
 interface AuthContextData {
@@ -19,6 +20,7 @@ interface AuthContextData {
   isLoading: boolean
   isAuthenticated: boolean
   login: (email: string, password: string) => Promise<void>
+  loginWithTokens: (accessToken: string, refreshToken: string) => Promise<void>
   logout: () => void
   refreshUser: () => Promise<void>
   setUser: React.Dispatch<React.SetStateAction<User | null>>
@@ -26,7 +28,6 @@ interface AuthContextData {
 
 const AuthContext = createContext<AuthContextData>({} as AuthContextData)
 
-/** Limpa todos os artefatos de sessão do localStorage de forma centralizada */
 function clearAllTokens() {
   localStorage.removeItem('sig_token')
   localStorage.removeItem('sig_refresh')
@@ -48,17 +49,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return data
   }
 
-  // Hidratação inicial: executa apenas na montagem do componente (deps vazias intencionais).
-  // O interceptor do axios já injeta o token via authStore.getState().token.
+  // Hidratação inicial: carrega usuário se há token salvo.
+  // NÃO navega aqui — o ProtectedRoute cuida do redirect para /welcome.
   useEffect(() => {
     const token = authStore.token ?? localStorage.getItem('sig_token')
     if (!token) {
       setIsLoading(false)
       return
     }
-
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`
-
     loadMe()
       .catch(() => {
         authStore.logout()
@@ -66,21 +65,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         delete api.defaults.headers.common['Authorization']
       })
       .finally(() => setIsLoading(false))
-  }, []) // deps vazias intencionais
+  }, [])
 
+  // login via email+senha — navega para /welcome ou /carteira conforme onboarding
   const login = async (email: string, password: string) => {
     const { data: tokens } = await api.post<{
       access_token: string
       refresh_token: string
     }>('/auth/login', { email, password })
+    await loginWithTokens(tokens.access_token, tokens.refresh_token)
+  }
 
-    localStorage.setItem('sig_token', tokens.access_token)
-    localStorage.setItem('sig_refresh', tokens.refresh_token)
-    api.defaults.headers.common['Authorization'] = `Bearer ${tokens.access_token}`
+  // login direto com tokens (usado pelo RegisterPage após /auth/register)
+  const loginWithTokens = async (accessToken: string, refreshToken: string) => {
+    localStorage.setItem('sig_token', accessToken)
+    localStorage.setItem('sig_refresh', refreshToken)
+    api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
 
     const me = await loadMe()
 
-    authStore.login(tokens.access_token, {
+    authStore.login(accessToken, {
       id: me.id,
       email: me.email,
       name: me.name,
@@ -88,7 +92,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       theme_preference: me.theme_preference,
     })
 
-    navigate('/carteira')
+    // Navega conforme onboarding_completed
+    if (!me.onboarding_completed) {
+      navigate('/welcome', { replace: true })
+    } else {
+      navigate('/carteira', { replace: true })
+    }
   }
 
   const logout = () => {
@@ -112,6 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       isAuthenticated: !!user,
       login,
+      loginWithTokens,
       logout,
       refreshUser,
       setUser,

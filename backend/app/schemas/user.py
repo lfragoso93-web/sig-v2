@@ -20,6 +20,7 @@ class UserCreate(BaseModel):
 class UserUpdate(BaseModel):
     name: Optional[str] = None
     avatar_url: Optional[str] = None
+    onboarding_completed: Optional[bool] = None
 
 
 class UserAdminUpdate(BaseModel):
@@ -47,6 +48,7 @@ class UserResponse(BaseModel):
     role: UserRole
     is_active: bool
     avatar_url: Optional[str] = None
+    onboarding_completed: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -60,6 +62,7 @@ class UserListResponse(BaseModel):
     role: UserRole
     is_active: bool
     avatar_url: Optional[str] = None
+    onboarding_completed: bool = False
     created_at: datetime
     updated_at: datetime
 
