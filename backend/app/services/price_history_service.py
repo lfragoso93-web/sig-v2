@@ -15,13 +15,13 @@ Convencao de timezone:
   _parse_date_utc() normaliza qualquer string de data para datetime UTC midnight.
 
 Rate limiting yfinance:
-  _YF_SEMAPHORE  - Semaforo asyncio (1 slot): garante que apenas UMA chamada
-                   yfinance esteja em andamento no processo inteiro ao mesmo tempo.
-                   Compartilhado com fx_service e quotes_service via import.
-  _YF_MIN_INTERVAL - Tempo minimo (segundos) entre releases do semaforo.
-                   Evita rajadas mesmo com Semaphore(1).
-  _run_yf_with_throttle(fn, *args) - wrapper publico que combina semaforo +
-                   sleep adaptativo. Usado por todos os callers de yfinance.
+  _get_yf_semaphore() - Retorna o Semaphore(1) criado lazy no primeiro uso,
+                        garantindo que pertenca ao event loop ativo do uvicorn.
+                        asyncio.Semaphore criado no import-time pertence a um
+                        loop diferente e nao funciona corretamente.
+  _YF_MIN_INTERVAL    - Pausa minima (segundos) entre releases do semaforo.
+  _run_yf_with_throttle(fn, *args) - wrapper publico: semaforo + sleep adaptativo.
+                        Todos os callers de yfinance devem usar esta funcao.
 """
 import asyncio
 import logging
@@ -45,26 +45,32 @@ logger = logging.getLogger(__name__)
 
 _YF_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="yfinance_hist")
 
-# Controle de rate limit global para todas as chamadas yfinance no processo.
-# Semaforo(1) = apenas uma chamada em paralelo; _YF_MIN_INTERVAL = pausa minima
-# entre chamadas para nao disparar o rate limit do Yahoo Finance (~2 req/s).
-_YF_SEMAPHORE = asyncio.Semaphore(1)
-_YF_MIN_INTERVAL: float = 2.0          # segundos entre releases
-_yf_last_call: list[float] = [0.0]     # lista para mutabilidade em closure
+# Semaforo criado lazy para garantir que pertenca ao event loop ativo do uvicorn.
+# Se criado no nivel do modulo (import-time), o asyncio.Semaphore pertence ao
+# loop temporario do Python e lancar RuntimeError ou nao bloquear corretamente.
+_yf_semaphore: Optional[asyncio.Semaphore] = None
+_YF_MIN_INTERVAL: float = 2.0       # segundos minimos entre chamadas yfinance
+_yf_last_call: list[float] = [0.0]  # lista mutavel para uso em closures
+
+
+def _get_yf_semaphore() -> asyncio.Semaphore:
+    """Retorna (criando se necessario) o Semaphore global no event loop correto."""
+    global _yf_semaphore
+    if _yf_semaphore is None:
+        _yf_semaphore = asyncio.Semaphore(1)
+    return _yf_semaphore
 
 
 async def _run_yf_with_throttle(fn: Callable, *args) -> any:
     """
     Executa fn(*args) em _YF_EXECUTOR com controle de rate limit:
-      1. Adquire _YF_SEMAPHORE (serializa todas as chamadas yfinance do processo).
+      1. Adquire o semaforo global (lazy) — serializa todas as chamadas yfinance.
       2. Aguarda o intervalo minimo desde a ultima chamada (_YF_MIN_INTERVAL).
       3. Executa fn em thread pool (nao bloqueia o event loop).
       4. Registra timestamp e libera o semaforo.
-
-    Todos os callers de yfinance (price_history, fx_service, quotes_service)
-    devem usar esta funcao em vez de loop.run_in_executor direto.
     """
-    async with _YF_SEMAPHORE:
+    sem = _get_yf_semaphore()
+    async with sem:
         elapsed = time.monotonic() - _yf_last_call[0]
         if elapsed < _YF_MIN_INTERVAL:
             await asyncio.sleep(_YF_MIN_INTERVAL - elapsed)
