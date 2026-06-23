@@ -22,6 +22,9 @@ class User(Base, TimestampMixin):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    onboarding_completed: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="false"
+    )
 
     # Relacionamentos
     portfolios: Mapped[list["Portfolio"]] = relationship(
