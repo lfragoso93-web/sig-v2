@@ -10,6 +10,7 @@ import ResumePage from '@/pages/ResumePage'
 import ProventosPage from '@/pages/ProventosPage'
 import PatrimonioPage from '@/pages/PatrimonioPage'
 import RentabilidadePage from '@/pages/RentabilidadePage'
+import HistoricoPage from '@/pages/HistoricoPage'
 import MetasPage from '@/pages/MetasPage'
 import AnalisePage from '@/pages/AnalisePage'
 import LancamentosPage from '@/pages/LancamentosPage'
@@ -40,14 +41,15 @@ export default function App() {
                 <Route path="/resumo"  element={<Navigate to="/carteira" replace />} />
 
                 {/* Rotas principais */}
-                <Route path="/carteira"               element={<ResumePage />} />
-                <Route path="/carteira/transacoes"    element={<Transacoes />} />
-                <Route path="/carteira/lancamentos"   element={<LancamentosPage />} />
-                <Route path="/carteira/proventos"     element={<ProventosPage />} />
-                <Route path="/carteira/rentabilidade" element={<RentabilidadePage />} />
-                <Route path="/carteira/configuracoes" element={<Configuracoes />} />
+                <Route path="/carteira"                    element={<ResumePage />} />
+                <Route path="/carteira/transacoes"         element={<Transacoes />} />
+                <Route path="/carteira/lancamentos"        element={<LancamentosPage />} />
+                <Route path="/carteira/proventos"          element={<ProventosPage />} />
+                <Route path="/carteira/rentabilidade"      element={<RentabilidadePage />} />
+                <Route path="/carteira/historico"          element={<HistoricoPage />} />
+                <Route path="/carteira/configuracoes"      element={<Configuracoes />} />
 
-                {/* Patrimônio e sub-rotas */}
+                {/* Patrimonio e sub-rotas */}
                 <Route path="/patrimonio"                          element={<PatrimonioPage />} />
                 <Route path="/carteira/patrimonio"                 element={<PatrimonioPage />} />
                 <Route path="/carteira/patrimonio/tesouro"         element={<TesouroDiretoPage />} />

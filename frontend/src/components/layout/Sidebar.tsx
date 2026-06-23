@@ -2,7 +2,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, TrendingUp, ArrowLeftRight, Landmark,
   Settings, Wallet, PanelLeftClose, PanelLeftOpen,
-  Plus, CheckCircle2, ChevronDown, Briefcase, X, FileText,
+  Plus, CheckCircle2, ChevronDown, Briefcase, X, FileText, LineChart,
 } from 'lucide-react'
 import { usePortfolios, useCreatePortfolio } from '@/hooks/usePortfolios'
 import { useAppStore } from '@/store/appStore'
@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { to: '/carteira',                icon: LayoutDashboard, label: 'Resumo'        },
   { to: '/carteira/patrimonio',     icon: Wallet,          label: 'Patrimônio'    },
   { to: '/carteira/rentabilidade',  icon: TrendingUp,      label: 'Rentabilidade' },
+  { to: '/carteira/historico',      icon: LineChart,       label: 'Histórico'     },
   { to: '/carteira/transacoes',     icon: ArrowLeftRight,  label: 'Transações'    },
   { to: '/carteira/proventos',      icon: Landmark,        label: 'Proventos'     },
   { to: '/carteira/irpf',           icon: FileText,        label: 'IRPF'          },
