@@ -150,7 +150,7 @@ async def job_persist_price_history():
         try:
             async with AsyncSessionLocal() as db:
                 inserted = await persist_daily_prices(
-                    db, ticker, asset_type, days_back=2
+                    db, ticker, asset_type, days_back=7  # margem de 7 dias cobre fins de semana e feriados
                 )
                 total += inserted
         except Exception as e:
