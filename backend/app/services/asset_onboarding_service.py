@@ -12,7 +12,9 @@ Etapas:
 """
 import logging
 from datetime import datetime, timezone
+from decimal import Decimal
 from sqlalchemy import select, func
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal
@@ -20,7 +22,7 @@ from app.core.asset_types import INTL_TYPES
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
 from app.models.asset_dividend import AssetDividend
-from app.services.price_history_service import persist_daily_prices, upsert_daily_prices
+from app.services.price_history_service import persist_daily_prices
 from app.services.dividend_backfill_service import run_backfill
 from app.services.logo_service import fetch_logo_url
 from app.integrations.brapi import fetch_price_history_full
@@ -64,6 +66,26 @@ async def _save_logo(db: AsyncSession, ticker: str, url: str) -> None:
         await db.commit()
 
 
+async def _upsert_price_row(
+    db: AsyncSession,
+    asset_id: int,
+    timestamp: datetime,
+    close: float,
+    source: str = "brapi",
+) -> None:
+    stmt = (
+        pg_insert(AssetPrice)
+        .values(
+            asset_id=asset_id,
+            timestamp=timestamp,
+            close=Decimal(str(round(close, 8))),
+            source=source,
+        )
+        .on_conflict_do_nothing(constraint="uq_price_asset_timestamp")
+    )
+    await db.execute(stmt)
+
+
 async def _onboard_price_history_br(db: AsyncSession, ticker: str) -> None:
     """
     Coleta historico completo via BRAPI Pro (range=max) e persiste no banco.
@@ -74,13 +96,31 @@ async def _onboard_price_history_br(db: AsyncSession, ticker: str) -> None:
         logger.warning(f"[onboarding] {ticker}: BRAPI range=max retornou vazio — sem historico salvo")
         return
 
-    # Converte para o formato esperado por upsert_daily_prices: list[(date, float)]
-    daily_rows = [
-        (dt.date() if isinstance(dt, datetime) else dt, close)
-        for dt, close in rows
-    ]
-    n = await upsert_daily_prices(db, ticker, daily_rows)
-    logger.info(f"[onboarding] {ticker}: {n} precos historicos salvos via range=max ({len(rows)} registros brutos)")
+    # Busca ou cria o asset para obter o asset_id
+    result = await db.execute(select(Asset).where(Asset.ticker == ticker))
+    asset = result.scalar_one_or_none()
+    if not asset:
+        logger.warning(f"[onboarding] {ticker}: ativo nao encontrado no banco — abortando historico")
+        return
+
+    inserted = 0
+    for dt, close in rows:
+        ts = dt if isinstance(dt, datetime) else datetime(
+            dt.year, dt.month, dt.day, 0, 0, 0, tzinfo=timezone.utc
+        )
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        await _upsert_price_row(db, asset.id, ts, close, source="brapi")
+        inserted += 1
+
+    # Atualiza last_price com o preco mais recente
+    if rows:
+        latest_close = rows[-1][1]
+        asset.last_price = Decimal(str(round(latest_close, 8)))
+        asset.last_price_updated_at = datetime.now(timezone.utc)
+
+    await db.commit()
+    logger.info(f"[onboarding] {ticker}: {inserted} precos historicos salvos via range=max ({len(rows)} registros brutos)")
 
 
 async def run_onboarding(ticker: str, asset_type: str) -> None:
