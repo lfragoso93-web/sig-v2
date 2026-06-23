@@ -142,7 +142,7 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 
 ---
 
-## [Sprint 7.5] - Hardening de Seguranca e Qualidade do Backend ✅ CONCLUIDA (parcial) — 22 Jun 2026
+## [Sprint 7.5] - Hardening de Seguranca e Qualidade do Backend ✅ CONCLUIDA — 23 Jun 2026
 
 **Objetivo:** fechar os gaps criticos e de alta prioridade identificados na analise de 21 Jun 2026.
 
@@ -156,21 +156,21 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 
 ### Itens de ALTA PRIORIDADE
 
-| # | Item | Status | Commits |
+| # | Item | Status | Observacao |
 |---|---|---|---|
-| A1 | Rate limiting no endpoint de login | ⏳ Pendente | — |
+| A1 | Rate limiting no endpoint de login | ✅ Ja implementado | `@limiter.limit(settings.LOGIN_RATE_LIMIT)` em `/login` e `/register` desde Sprint anterior |
 | A2 | Paginacao server-side em `GET /transactions` | ✅ Concluido na Sprint 7 | `a00a1aa` + `27d0f7b` |
-| A3 | Routers stub ativos sem implementacao | ⏳ Pendente | — |
-| A4 | Consolidar `quote_service.py` e `quotes_service.py` | ⏳ Pendente | — |
+| A3 | Routers stub ativos sem implementacao | ✅ Corretos — retornam 501 | `analysis`, `fixed_income`, `goals`, `quotes` ja retornam 501 com detail |
+| A4 | Consolidar `quote_service.py` e `quotes_service.py` | ✅ Sem duplicata | Apenas `quotes_service.py` existe em services |
 
 ### Itens de MEDIA PRIORIDADE
 
-| # | Item | Status |
-|---|---|---|
-| M1 | Health check real (SELECT 1 + Redis ping) | ⏳ Pendente |
-| M2 | Scheduler com isolamento de falha por job | ⏳ Pendente |
-| M3 | Cache no `performance_service.py` (TTL 5min Redis) | ⏳ Pendente |
-| M4 | Timeout no `logo_service.py` | ⏳ Pendente |
+| # | Item | Status | Commits |
+|---|---|---|---|
+| M1 | Health check real (SELECT 1 + Redis ping) | ✅ Concluido — 23 Jun 2026 | `4cc0042` |
+| M2 | Scheduler com isolamento de falha por job | ✅ Concluido — 23 Jun 2026 | `4cc0042` |
+| M3 | Cache no `performance_service.py` (TTL 5min Redis) | ✅ Concluido — 23 Jun 2026 | `4cc0042` |
+| M4 | Timeout no `logo_service.py` | ✅ Ja implementado | `_TIMEOUT = 8.0` em todas as funcoes |
 
 ### [Bugfixes] - 22 Jun 2026 (mesma sessao)
 
@@ -329,7 +329,7 @@ L1 banco → Alpha Vantage → yfinance
 | Security Hotfix — pydantic-settings CVE | ✅ Concluido — 21 Jun 2026 |
 | Sprint 7 — Rentabilidade | ✅ Concluida — 22 Jun 2026 |
 | Sprint 11 — Metas e Alocacao (Distribuicao) | ✅ Concluida — 22 Jun 2026 |
-| Sprint 7.5 — Hardening Seguranca (C1–C3 ✅, A1/A3/A4/M1–M4 ⏳) | 🔄 Parcial — 22 Jun 2026 |
+| Sprint 7.5 — Hardening Seguranca e Qualidade | ✅ Concluida — 23 Jun 2026 |
 | Hotfix — BCB PTAX + Alpha Vantage INTL | ✅ Concluido — 23 Jun 2026 |
 | Sprint 8 — Historico Patrimonial (frontend) | ⏳ |
 | Sprint 9 — Patrimonio por Classe | ⏳ |
