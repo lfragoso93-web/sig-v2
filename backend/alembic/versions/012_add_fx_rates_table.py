@@ -1,20 +1,20 @@
 """add fx_rates table
 
 Revision ID: 012
-Down revision: 011
+Revises: 011
 Create Date: 2026-06-23
-
-Cria a tabela fx_rates para cache persistente de cotacoes de pares de moeda
-(ex: USD-BRL). Evita chamadas repetidas a BRAPI para datas historicas cuja
-cotacao nunca muda (PTAX e definitiva no dia seguinte ao pregao).
-
-Constraint UNIQUE em (pair, rate_date) garante idempotencia em upserts.
 """
 from alembic import op
 import sqlalchemy as sa
 
+# revision identifiers, used by Alembic.
+revision = '012'
+down_revision = '011'
+branch_labels = None
+depends_on = None
 
-def upgrade():
+
+def upgrade() -> None:
     op.create_table(
         'fx_rates',
         sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
@@ -32,6 +32,6 @@ def upgrade():
     op.create_index('ix_fx_rates_pair_date', 'fx_rates', ['pair', 'rate_date'])
 
 
-def downgrade():
+def downgrade() -> None:
     op.drop_index('ix_fx_rates_pair_date', table_name='fx_rates')
     op.drop_table('fx_rates')
