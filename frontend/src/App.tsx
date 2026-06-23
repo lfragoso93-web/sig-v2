@@ -5,6 +5,7 @@ import ProtectedRoute from '@/components/ProtectedRoute'
 import AppLayout from '@/components/layout/AppLayout'
 import LoginPage from '@/pages/auth/LoginPage'
 import RegisterPage from '@/pages/auth/RegisterPage'
+import WelcomePage from '@/pages/WelcomePage'
 import ResumePage from '@/pages/ResumePage'
 import ProventosPage from '@/pages/ProventosPage'
 import PatrimonioPage from '@/pages/PatrimonioPage'
@@ -29,6 +30,10 @@ export default function App() {
 
             {/* Protected */}
             <Route element={<ProtectedRoute />}>
+
+              {/* Welcome / Onboarding — fora do AppLayout (tela cheia) */}
+              <Route path="/welcome" element={<WelcomePage />} />
+
               <Route element={<AppLayout />}>
                 {/* Raiz -> /carteira */}
                 <Route path="/"        element={<Navigate to="/carteira" replace />} />
