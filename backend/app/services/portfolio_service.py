@@ -60,9 +60,6 @@ _TYPE_ALIASES: dict[str, str] = {
 
 
 def normalize_type(asset_type) -> str:
-    """
-    Normaliza aliases de asset_type para o valor canonico do enum AssetType.
-    """
     if asset_type is None:
         return ""
     key = str(asset_type).upper().strip()
@@ -92,15 +89,13 @@ def _is_sell(op) -> bool:
 
 async def calc_raw_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
     """
-    Calcula posicoes brutas da carteira com custo em BRL.
+    Calcula posicoes brutas da carteira.
 
-    Para transacoes em USD (currency='USD' ou asset_type em _USD_ASSET_TYPES):
-      - Usa fx_rate salvo na transacao (se disponivel e > 0) — mais preciso.
-      - Caso contrario, busca via fx_service.get_usd_brl_batch() com o USD
-        historico da data da transacao (Opcao A — PTAX definitivo).
-
-    O total_cost retornado e SEMPRE em BRL, garantindo que avg_price,
-    total_invested e todos os calculos de portfolio sejam na mesma moeda.
+    Para transacoes em USD (STOCK/ETF_INTERNACIONAL):
+      - total_cost e SEMPRE em BRL (para calculos de portfolio).
+      - total_cost_usd e calculado em USD (para avg_price_usd correto).
+      - Usa fx_rate salvo na transacao se disponivel e > 0.
+      - Caso contrario, busca via fx_service.get_usd_brl_batch().
     """
     result = await db.execute(
         select(Transaction)
@@ -124,7 +119,6 @@ async def calc_raw_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
         if is_usd and not has_saved_rate and tx.date:
             usd_dates_needed.append(tx.date.isoformat())
 
-    # Busca fx_rates em lote (1 chamada BRAPI para todo o range de datas)
     fx_map: dict[str, float] = {}
     if usd_dates_needed:
         fx_map = await get_usd_brl_batch(db, usd_dates_needed)
@@ -134,36 +128,32 @@ async def calc_raw_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
     for tx in transactions:
         ticker = str(tx.ticker)
         qty = float(tx.quantity or 0)
-        price = float(tx.price or 0)
+        price = float(tx.price or 0)  # em USD para STOCK/ETF_INT
         fees = float(tx.fees or 0)
         op = tx.operation
         asset_type = _asset_type_str(tx.asset_type)
 
-        # Determina se transacao e em USD
         is_usd = (
             (getattr(tx, "currency", "BRL") or "BRL").upper() == "USD"
             or asset_type in _USD_ASSET_TYPES
         )
 
-        # Resolve taxa de cambio para converter custo para BRL
         fx_rate = 1.0
         if is_usd:
             saved_rate = getattr(tx, "fx_rate", None)
             if saved_rate is not None and float(saved_rate or 0) > 0:
-                # Prioridade 1: taxa salva na transacao (mais precisa)
                 fx_rate = float(saved_rate)
             elif tx.date:
-                # Prioridade 2: fx historico buscado em lote
                 fx_rate = fx_map.get(tx.date.isoformat(), 1.0)
 
-        # Converte price e fees para BRL
         price_brl = price * fx_rate
         fees_brl = fees * fx_rate
 
         if ticker not in state:
             state[ticker] = {
                 "quantity": 0.0,
-                "total_cost": 0.0,
+                "total_cost": 0.0,       # sempre em BRL
+                "total_cost_usd": 0.0,   # em USD (apenas para is_usd=True)
                 "asset_type": asset_type,
                 "is_usd": is_usd,
             }
@@ -173,10 +163,13 @@ async def calc_raw_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
         if _is_buy(op):
             s["total_cost"] += qty * price_brl + fees_brl
             s["quantity"] += qty
+            if is_usd:
+                s["total_cost_usd"] += qty * price + fees  # acumula em USD
         elif _is_sell(op):
             if s["quantity"] > 0:
                 ratio = min(qty, s["quantity"]) / s["quantity"]
                 s["total_cost"] -= s["total_cost"] * ratio
+                s["total_cost_usd"] -= s["total_cost_usd"] * ratio
                 s["quantity"] = max(0.0, s["quantity"] - qty)
 
     positions = []
@@ -184,16 +177,20 @@ async def calc_raw_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
         qty = s["quantity"]
         if qty <= 1e-9:
             continue
-        avg = s["total_cost"] / qty if qty else 0.0
+        # avg_price em BRL (para calculos internos de resultado)
+        avg_brl = s["total_cost"] / qty if qty else 0.0
+        # avg_price em USD (para exibicao quando is_usd=True)
+        avg_usd = s["total_cost_usd"] / qty if qty and s["is_usd"] else None
         at = s["asset_type"]
         positions.append({
             "ticker": ticker,
             "asset_type": at,
             "asset_label": _TYPE_LABEL.get(at, at.replace("_", " ").title()),
             "quantity": qty,
-            "avg_price": round(avg, 8),
+            "avg_price": round(avg_brl, 8),       # BRL — interno
+            "avg_price_usd": round(avg_usd, 8) if avg_usd is not None else None,  # USD — exibicao
             "total_invested": round(s["total_cost"], 8),
-            "is_usd": s["is_usd"],  # exposto para enrich_with_prices usar na conversao
+            "is_usd": s["is_usd"],
         })
 
     return positions
@@ -211,11 +208,13 @@ def enrich_with_prices(
     """
     Enriquece posicoes com cotacoes atuais e calcula resultado.
 
-    Para ativos USD (is_usd=True), o current_price recebido do quotes_service
-    esta em USD — multiplica por fx_today antes de calcular current_value.
-    O invested_value ja esta em BRL (convertido em calc_raw_positions).
+    Para ativos USD (is_usd=True):
+      - current_price_usd = preco em USD (bruto do quotes_service)
+      - current_price     = preco em BRL (current_price_usd * fx_today)
+      - current_value     = qty * current_price (BRL)
+      - result_abs/pct calculados em BRL.
 
-    Resultado (result_abs, result_pct) sempre em BRL.
+    invested_value e sempre em BRL.
     """
     enriched = []
     for p in positions:
@@ -226,7 +225,6 @@ def enrich_with_prices(
         item = dict(p)
 
         if price_raw is not None:
-            # Converte preco atual para BRL se necessario
             price_brl = price_raw * fx_today if is_usd else price_raw
 
             qty = p["quantity"]
@@ -234,9 +232,9 @@ def enrich_with_prices(
             cur_val = qty * price_brl
             result_abs = cur_val - invested
             result_pct = (result_abs / invested * 100) if invested else 0.0
-            item["current_price"] = round(price_brl, 4)
-            item["current_price_usd"] = round(price_raw, 4) if is_usd else None
-            item["current_value"] = round(cur_val, 2)
+            item["current_price"] = round(price_brl, 4)               # BRL
+            item["current_price_usd"] = round(price_raw, 4) if is_usd else None  # USD
+            item["current_value"] = round(cur_val, 2)                 # BRL
             item["result_abs"] = round(result_abs, 2)
             item["result_pct"] = round(result_pct, 4)
         else:
@@ -277,12 +275,6 @@ async def _fetch_logos_batch(db: AsyncSession, tickers: list[str]) -> dict[str, 
 # ---------------------------------------------------------------------------
 
 async def sum_dividends(db: AsyncSession, portfolio_id: int, cutoff: DateType | None = None) -> float:
-    """
-    Soma os dividendos de um portfolio.
-
-    Quando `cutoff` e informado, filtra apenas dividendos cujo AssetDividend.ex_date >= cutoff.
-    Usa LEFT JOIN para preservar dividendos manuais (asset_dividend_id IS NULL).
-    """
     from app.models.asset_dividend import AssetDividend
     q = select(func.sum(Dividend.total_value)).where(Dividend.portfolio_id == portfolio_id)
     if cutoff is not None:
@@ -412,7 +404,6 @@ async def get_portfolio_summary(db: AsyncSession, portfolio_id: int, user_id: in
     positions_raw = await calc_raw_positions(db, portfolio_id)
     total_invested = sum(p["total_invested"] for p in positions_raw)
 
-    # Busca dolar hoje uma unica vez para enrich_with_prices
     fx_today = await get_usd_brl_today(db)
 
     prices = await _fetch_prices_batch(db, positions_raw)
@@ -458,7 +449,7 @@ async def get_portfolio_summary(db: AsyncSession, portfolio_id: int, user_id: in
         "ganho_capital": round(total_gain, 2),
         "has_partial_prices": has_partial_prices,
         "assets_without_price": tickers_without_price,
-        "usd_brl_rate": round(fx_today, 4),  # exposto para debug/frontend
+        "usd_brl_rate": round(fx_today, 4),
     }
 
 
@@ -466,7 +457,6 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
     await get_portfolio(db, portfolio_id, user_id)
     positions_raw = await calc_raw_positions(db, portfolio_id)
 
-    # Busca dolar hoje uma unica vez
     fx_today = await get_usd_brl_today(db)
 
     prices = await _fetch_prices_batch(db, positions_raw)
@@ -489,6 +479,7 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
         label = _TYPE_LABEL.get(at, at.replace("_", " ").title())
         val_for_alloc = e["current_value"] if e["current_value"] is not None else e["total_invested"]
         alloc = (val_for_alloc / total_current * 100) if total_current else 0
+        is_usd = e.get("is_usd", False)
 
         if at not in groups:
             groups[at] = {
@@ -508,15 +499,22 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
             "asset_type": at,
             "asset_label": label,
             "quantity": round(e["quantity"], 8),
-            "average_price": round(e["avg_price"], 4),
-            "current_price": e["current_price"],          # em BRL
-            "current_price_usd": e.get("current_price_usd"),  # em USD (apenas STOCK/ETF_INT)
-            "current_value": e["current_value"],
-            "invested_value": round(e["total_invested"], 2),
+            # Preco medio: USD para STOCK/ETF_INT, BRL para os demais
+            "average_price": round(e["avg_price_usd"], 4) if (is_usd and e.get("avg_price_usd") is not None) else round(e["avg_price"], 4),
+            "average_price_brl": round(e["avg_price"], 4),        # BRL — para calculos internos
+            "average_price_usd": e.get("avg_price_usd"),          # USD — None para ativos BRL
+            # Preco atual: USD para STOCK/ETF_INT, BRL para os demais
+            "current_price": e["current_price_usd"] if (is_usd and e.get("current_price_usd") is not None) else e["current_price"],
+            "current_price_brl": e["current_price"],              # BRL
+            "current_price_usd": e.get("current_price_usd"),     # USD
+            "current_value": e["current_value"],                  # BRL — sempre
+            "invested_value": round(e["total_invested"], 2),      # BRL — sempre
             "variation_value": e["result_abs"],
             "variation_percent": e["result_pct"],
             "allocation_pct": round(alloc, 4),
             "logo_url": logos.get(e["ticker"]),
+            "is_usd": is_usd,
+            "currency": "USD" if is_usd else "BRL",
         })
 
     sorted_groups = sorted(groups.values(), key=lambda g: g["total_value"], reverse=True)
@@ -524,7 +522,7 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
         g["total_value"] = round(g["total_value"], 2)
         g["total_invested"] = round(g["total_invested"], 2)
 
-        quoted_positions = [p for p in g["positions"] if p["current_price"] is not None]
+        quoted_positions = [p for p in g["positions"] if p["current_price_brl"] is not None]
         if quoted_positions:
             quoted_cur = sum(p["current_value"] for p in quoted_positions)
             quoted_inv = sum(p["invested_value"] for p in quoted_positions)
