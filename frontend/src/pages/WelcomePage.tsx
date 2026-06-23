@@ -35,7 +35,7 @@ function launchConfetti() {
   setTimeout(() => document.body.removeChild(layer), 2800)
 }
 
-// ── Steps definition ────────────────────────────────────
+// ── Steps definition ──────────────────────────────────────
 const STEPS = [
   {
     id: 1,
@@ -84,7 +84,7 @@ const STEPS = [
   },
 ]
 
-// ── Stepper dots ─────────────────────────────────────────
+// ── Stepper dots ──────────────────────────────────────────────────
 function StepDot({ n, state }: { n: number; state: 'pending' | 'active' | 'done' }) {
   return (
     <div
@@ -113,7 +113,7 @@ function StepDot({ n, state }: { n: number; state: 'pending' | 'active' | 'done'
   )
 }
 
-// ── WelcomePage ─────────────────────────────────────────
+// ── WelcomePage ───────────────────────────────────────────────────
 export default function WelcomePage() {
   const { user, refreshUser } = useAuth()
   const navigate = useNavigate()
@@ -122,14 +122,14 @@ export default function WelcomePage() {
   const [finishing, setFinishing] = useState(false)
   const { mutateAsync: createPortfolio } = useCreatePortfolio()
 
-  // Guarda: usuario ja concluiu onboarding
-  if (user?.onboarding_completed) {
-    navigate('/carteira', { replace: true })
-    return null
-  }
+  // Sem guard de redirecionamento aqui — o ProtectedRoute já cuida disso.
+  // Se o usuário já completou onboarding e acessar /welcome diretamente,
+  // o ProtectedRoute NÃO irá redirecionar (onboarding_completed=true),
+  // porém navegamos para /carteira para evitar que o usuário fique preso.
+  // Isso é feito abaixo apenas como safeguard passive.
 
   const markDone = async () => {
-    try { await api.patch('/users/me/onboarding') } catch { /* silencioso */ }
+    try { await api.patch('/users/me/onboarding') } catch { /* silêncioso */ }
     await refreshUser()
   }
 
