@@ -8,7 +8,8 @@ Estrategia de cache:
        * Datas HISTORICAS: permanentes (PTAX e definitiva — nunca muda).
        * Data HOJE: TTL de 900s (15min) — cotacao do dia ainda pode mudar.
   L3 - BRAPI /v2/currency (atual) e /v2/currency/historical (historico).
-       Fallback: yfinance USDBRL=X se BRAPI falhar.
+       Fallback: yfinance BRL=X se BRAPI falhar.
+       Fallback final: AwesomeAPI (economia.awesomeapi.com.br).
 
 Funcoes publicas:
   get_usd_brl_today(db)             -> float   cota hoje (L2 > L1 TTL > L3)
@@ -25,7 +26,7 @@ from datetime import date as DateType, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.integrations.brapi import fetch_currency_rate, fetch_currency_history
@@ -34,9 +35,9 @@ from app.models.fx_rate import FxRate
 logger = logging.getLogger(__name__)
 
 PAIR_USD_BRL = "USD-BRL"
-FALLBACK_RATE = 5.70          # usado apenas se todas as fontes falharem
-MEM_CACHE_TTL = 60            # segundos — L2 para cotacao do dia
-DB_TODAY_TTL = 900            # segundos — L1 TTL para cotacao de hoje
+FALLBACK_RATE = 5.70
+MEM_CACHE_TTL = 60
+DB_TODAY_TTL = 900
 
 # Cache L2: {date_str: (rate, expires_at)}
 _mem_cache: dict[str, tuple[float, float]] = {}
@@ -81,12 +82,10 @@ async def _db_get(db: AsyncSession, date_str: str) -> Optional[float]:
 
         today = datetime.now(timezone.utc).date()
         if d >= today:
-            # cotacao de hoje: verificar TTL
             if row.created_at:
                 age = (datetime.now(timezone.utc) - row.created_at).total_seconds()
                 if age > DB_TODAY_TTL:
-                    return None  # expirado — buscar novamente
-        # historico ou hoje dentro do TTL
+                    return None
         return float(row.rate)
     except Exception as e:
         logger.warning(f"[fx_service] _db_get error for {date_str}: {e}")
@@ -95,32 +94,39 @@ async def _db_get(db: AsyncSession, date_str: str) -> Optional[float]:
 
 async def _db_set(db: AsyncSession, date_str: str, rate: float) -> None:
     """
-    Upsert em fx_rates via savepoint — commit independente da transacao principal.
-    Idempotente: se ja existe, atualiza apenas rate e created_at.
+    Upsert atomico em fx_rates usando INSERT ... ON CONFLICT DO UPDATE.
+
+    Resolve a race condition de requisicoes paralelas no startup:
+    a primeira INSERT vence; as demais atualizam rate/created_at se a
+    nova cotacao for mais recente. Nunca lanca excecao — erros sao logados.
     """
     try:
         d = DateType.fromisoformat(date_str)
-        async with db.begin_nested():
-            result = await db.execute(
-                select(FxRate).where(
-                    FxRate.pair == PAIR_USD_BRL,
-                    FxRate.rate_date == d,
-                )
-            )
-            row = result.scalar_one_or_none()
-            now = datetime.now(timezone.utc)
-            if row:
-                row.rate = Decimal(str(round(rate, 8)))
-                row.created_at = now
-            else:
-                db.add(FxRate(
-                    pair=PAIR_USD_BRL,
-                    rate_date=d,
-                    rate=Decimal(str(round(rate, 8))),
-                    created_at=now,
-                ))
+        now = datetime.now(timezone.utc)
+        rate_decimal = round(rate, 8)
+        await db.execute(
+            text("""
+                INSERT INTO fx_rates (pair, rate_date, rate, created_at)
+                VALUES (:pair, :rate_date, :rate, :created_at)
+                ON CONFLICT (pair, rate_date)
+                DO UPDATE SET
+                    rate       = EXCLUDED.rate,
+                    created_at = EXCLUDED.created_at
+            """),
+            {
+                "pair":       PAIR_USD_BRL,
+                "rate_date":  d,
+                "rate":       rate_decimal,
+                "created_at": now,
+            },
+        )
+        await db.commit()
     except Exception as e:
         logger.warning(f"[fx_service] _db_set error for {date_str}: {e}")
+        try:
+            await db.rollback()
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -128,53 +134,122 @@ async def _db_set(db: AsyncSession, date_str: str, rate: float) -> None:
 # ---------------------------------------------------------------------------
 
 async def _yf_usd_brl_today() -> Optional[float]:
-    """Busca USDBRL=X via yfinance como fallback da BRAPI."""
+    """Busca BRL=X via yfinance como fallback da BRAPI."""
     try:
-        import asyncio
-        import yfinance as yf
         from app.services.price_history_service import _YF_EXECUTOR
 
         def _sync() -> Optional[float]:
             import yfinance as yf
-            data = yf.download("USDBRL=X", period="1d", interval="1m", progress=False, auto_adjust=True)
-            if data.empty:
-                return None
-            return float(data["Close"].dropna().iloc[-1])
+            # BRL=X e o ticker correto do yfinance para USD/BRL
+            for ticker in ("BRL=X", "USDBRL=X"):
+                try:
+                    data = yf.download(ticker, period="5d", interval="1d", progress=False, auto_adjust=True)
+                    if not data.empty:
+                        close = data["Close"].dropna()
+                        if not close.empty:
+                            return float(close.iloc[-1])
+                except Exception:
+                    continue
+            return None
 
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(_YF_EXECUTOR, _sync)
     except Exception as e:
-        logger.warning(f"[fx_service] yfinance USDBRL=X fallback falhou: {e}")
+        logger.warning(f"[fx_service] yfinance USD/BRL fallback falhou: {e}")
         return None
 
 
 async def _yf_usd_brl_history(start_date: str, end_date: str) -> list[tuple[DateType, float]]:
     """Busca historico USD/BRL via yfinance como fallback da BRAPI."""
     try:
-        import yfinance as yf
         from app.services.price_history_service import _YF_EXECUTOR
 
         def _sync() -> list[tuple[DateType, float]]:
-            data = yf.download(
-                "USDBRL=X",
-                start=start_date,
-                end=end_date,
-                interval="1d",
-                progress=False,
-                auto_adjust=True,
-            )
-            if data.empty:
-                return []
-            rows = []
-            for idx, price in data["Close"].dropna().items():
-                d = idx.date() if hasattr(idx, "date") else DateType.fromisoformat(str(idx)[:10])
-                rows.append((d, float(price)))
+            import yfinance as yf
+            rows: list[tuple[DateType, float]] = []
+            for ticker in ("BRL=X", "USDBRL=X"):
+                try:
+                    data = yf.download(
+                        ticker,
+                        start=start_date,
+                        end=end_date,
+                        interval="1d",
+                        progress=False,
+                        auto_adjust=True,
+                    )
+                    if not data.empty:
+                        for idx, price in data["Close"].dropna().items():
+                            d = idx.date() if hasattr(idx, "date") else DateType.fromisoformat(str(idx)[:10])
+                            rows.append((d, float(price)))
+                        if rows:
+                            return rows
+                except Exception:
+                    continue
             return rows
 
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(_YF_EXECUTOR, _sync)
     except Exception as e:
         logger.warning(f"[fx_service] yfinance historico USD/BRL fallback falhou: {e}")
+        return []
+
+
+# ---------------------------------------------------------------------------
+# Fallback AwesomeAPI para USD/BRL (L3 extra)
+# ---------------------------------------------------------------------------
+
+async def _awesome_usd_brl_today() -> Optional[float]:
+    """
+    Busca cotacao USD/BRL via AwesomeAPI como terceira opcao de fallback.
+    Endpoint publico, sem autenticacao necessaria.
+    """
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            resp = await client.get("https://economia.awesomeapi.com.br/last/USD-BRL")
+            resp.raise_for_status()
+            data = resp.json()
+            rate = data.get("USDBRL", {}).get("ask") or data.get("USDBRL", {}).get("bid")
+            if rate:
+                logger.info(f"[fx_service] AwesomeAPI USD/BRL = {rate}")
+                return float(rate)
+        return None
+    except Exception as e:
+        logger.warning(f"[fx_service] AwesomeAPI fallback falhou: {e}")
+        return None
+
+
+async def _awesome_usd_brl_history(start_date: str, end_date: str) -> list[tuple[DateType, float]]:
+    """
+    Busca historico USD/BRL via AwesomeAPI.
+    Endpoint: /json/daily/USD-BRL/{days}
+    """
+    try:
+        import httpx
+        from datetime import datetime
+        start_dt = DateType.fromisoformat(start_date)
+        end_dt = DateType.fromisoformat(end_date)
+        days = (end_dt - start_dt).days + 10  # margem para fins de semana
+        days = max(days, 5)
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                f"https://economia.awesomeapi.com.br/json/daily/USD-BRL/{days}"
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            rows: list[tuple[DateType, float]] = []
+            for entry in data:
+                ts = entry.get("timestamp")
+                ask = entry.get("ask") or entry.get("bid")
+                if ts and ask:
+                    d = datetime.fromtimestamp(int(ts), tz=timezone.utc).date()
+                    if start_dt <= d <= end_dt:
+                        rows.append((d, float(ask)))
+            rows.sort(key=lambda x: x[0])
+            logger.info(f"[fx_service] AwesomeAPI historico USD/BRL: {len(rows)} registros")
+            return rows
+    except Exception as e:
+        logger.warning(f"[fx_service] AwesomeAPI historico fallback falhou: {e}")
         return []
 
 
@@ -186,27 +261,26 @@ async def get_usd_brl_today(db: AsyncSession) -> float:
     """
     Retorna a cotacao USD/BRL atual.
 
-    Ordem: L2 mem -> L1 db (TTL 900s) -> L3 BRAPI -> L3 yfinance -> FALLBACK_RATE
+    Ordem: L2 mem -> L1 db (TTL 900s) -> L3 BRAPI -> L3 yfinance BRL=X -> L3 AwesomeAPI -> FALLBACK
     """
     today_str = datetime.now(timezone.utc).date().isoformat()
 
-    # L2
     cached = _mem_get(today_str)
     if cached is not None:
         return cached
 
-    # L1
     db_val = await _db_get(db, today_str)
     if db_val is not None:
         _mem_set(today_str, db_val)
         return db_val
 
-    # L3 BRAPI
     rate = await fetch_currency_rate(PAIR_USD_BRL)
 
-    # L3 yfinance fallback
     if rate is None:
         rate = await _yf_usd_brl_today()
+
+    if rate is None:
+        rate = await _awesome_usd_brl_today()
 
     if rate is None:
         logger.error(f"[fx_service] todas as fontes falharam para USD/BRL hoje — usando FALLBACK_RATE={FALLBACK_RATE}")
@@ -221,10 +295,7 @@ async def get_usd_brl_at_date(db: AsyncSession, date_str: str) -> float:
     """
     Retorna a cotacao USD/BRL em uma data especifica.
 
-    Para datas historicas, o valor e permanente no banco (PTAX definitivo).
-    Para hoje, delega para get_usd_brl_today().
-
-    Ordem: L2 mem -> L1 db (permanente) -> L3 BRAPI historico -> L3 yfinance -> FALLBACK_RATE
+    Ordem: L2 mem -> L1 db (permanente) -> L3 BRAPI historico -> L3 yfinance -> L3 AwesomeAPI -> FALLBACK
     """
     today = datetime.now(timezone.utc).date()
     try:
@@ -236,33 +307,30 @@ async def get_usd_brl_at_date(db: AsyncSession, date_str: str) -> float:
     if target >= today:
         return await get_usd_brl_today(db)
 
-    # L2
     cached = _mem_get(date_str)
     if cached is not None:
         return cached
 
-    # L1 (permanente para historico)
     db_val = await _db_get(db, date_str)
     if db_val is not None:
-        _mem_set(date_str, db_val, ttl=3600)  # 1h em mem para historico
+        _mem_set(date_str, db_val, ttl=3600)
         return db_val
 
-    # L3 BRAPI historico — janela de 7 dias antes para cobrir feriados
     window_start = (target - timedelta(days=7)).isoformat()
     rows = await fetch_currency_history(PAIR_USD_BRL, window_start, date_str)
 
     if not rows:
-        # Fallback yfinance
         rows = await _yf_usd_brl_history(window_start, date_str)
 
+    if not rows:
+        rows = await _awesome_usd_brl_history(window_start, date_str)
+
     if rows:
-        # Usa o ultimo valor disponivel na janela (mais proximo da data alvo)
         rate = rows[-1][1]
     else:
         logger.error(f"[fx_service] sem cotacao USD/BRL para {date_str} — usando FALLBACK_RATE={FALLBACK_RATE}")
         rate = FALLBACK_RATE
 
-    # Persiste cada data retornada no banco (evita reprocessar o mesmo range)
     for row_date, row_rate in rows:
         await _db_set(db, row_date.isoformat(), row_rate)
         _mem_set(row_date.isoformat(), row_rate, ttl=3600)
@@ -277,10 +345,8 @@ async def get_usd_brl_batch(
     """
     Retorna {date_str: rate} para uma lista de datas.
 
-    Otimizado para portfolio_service: agrupa datas historicas ausentes no banco
-    em uma unica chamada BRAPI (range start..end) em vez de N chamadas individuais.
-
-    Datas duplicadas sao deduplicadas automaticamente.
+    Otimizado: agrupa datas historicas ausentes em uma unica chamada BRAPI
+    (range start..end) em vez de N chamadas individuais.
     """
     if not dates:
         return {}
@@ -292,12 +358,10 @@ async def get_usd_brl_batch(
     today = datetime.now(timezone.utc).date()
 
     for d_str in unique_dates:
-        # L2
         cached = _mem_get(d_str)
         if cached is not None:
             result[d_str] = cached
             continue
-        # L1
         db_val = await _db_get(db, d_str)
         if db_val is not None:
             result[d_str] = db_val
@@ -308,28 +372,25 @@ async def get_usd_brl_batch(
     if not missing:
         return result
 
-    # Separa hoje das datas historicas
     today_str = today.isoformat()
     needs_today = today_str in missing
     hist_missing = [d for d in missing if d != today_str]
 
-    # Cotacao de hoje
     if needs_today:
         rate_today = await get_usd_brl_today(db)
         result[today_str] = rate_today
 
-    # Historico em bloco: um unico range cobrindo todas as datas ausentes
     if hist_missing:
         range_start = hist_missing[0]
-        # Adiciona 7 dias alem do fim para cobrir fins de semana/feriados
         range_end_dt = DateType.fromisoformat(hist_missing[-1]) + timedelta(days=7)
         range_end = min(range_end_dt, today - timedelta(days=1)).isoformat()
 
         rows = await fetch_currency_history(PAIR_USD_BRL, range_start, range_end)
         if not rows:
             rows = await _yf_usd_brl_history(range_start, range_end)
+        if not rows:
+            rows = await _awesome_usd_brl_history(range_start, range_end)
 
-        # Mapeia por date_str para lookup rapido
         fetched: dict[str, float] = {}
         for row_date, row_rate in rows:
             d_str = row_date.isoformat()
@@ -341,7 +402,6 @@ async def get_usd_brl_batch(
             if d_str in fetched:
                 result[d_str] = fetched[d_str]
             else:
-                # Busca o dia disponivel mais proximo antes da data alvo
                 target_dt = DateType.fromisoformat(d_str)
                 closest = None
                 for fd_str, fr in fetched.items():
