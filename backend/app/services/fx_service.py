@@ -134,13 +134,12 @@ async def _db_set(db: AsyncSession, date_str: str, rate: float) -> None:
 # ---------------------------------------------------------------------------
 
 async def _yf_usd_brl_today() -> Optional[float]:
-    """Busca BRL=X via yfinance como fallback da BRAPI."""
+    """Busca BRL=X via yfinance como fallback da BRAPI. Usa throttle global."""
     try:
-        from app.services.price_history_service import _YF_EXECUTOR
+        from app.services.price_history_service import _run_yf_with_throttle
 
         def _sync() -> Optional[float]:
             import yfinance as yf
-            # BRL=X e o ticker correto do yfinance para USD/BRL
             for ticker in ("BRL=X", "USDBRL=X"):
                 try:
                     data = yf.download(ticker, period="5d", interval="1d", progress=False, auto_adjust=True)
@@ -152,17 +151,16 @@ async def _yf_usd_brl_today() -> Optional[float]:
                     continue
             return None
 
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(_YF_EXECUTOR, _sync)
+        return await _run_yf_with_throttle(_sync)
     except Exception as e:
         logger.warning(f"[fx_service] yfinance USD/BRL fallback falhou: {e}")
         return None
 
 
 async def _yf_usd_brl_history(start_date: str, end_date: str) -> list[tuple[DateType, float]]:
-    """Busca historico USD/BRL via yfinance como fallback da BRAPI."""
+    """Busca historico USD/BRL via yfinance como fallback da BRAPI. Usa throttle global."""
     try:
-        from app.services.price_history_service import _YF_EXECUTOR
+        from app.services.price_history_service import _run_yf_with_throttle
 
         def _sync() -> list[tuple[DateType, float]]:
             import yfinance as yf
@@ -187,8 +185,7 @@ async def _yf_usd_brl_history(start_date: str, end_date: str) -> list[tuple[Date
                     continue
             return rows
 
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(_YF_EXECUTOR, _sync)
+        return await _run_yf_with_throttle(_sync)
     except Exception as e:
         logger.warning(f"[fx_service] yfinance historico USD/BRL fallback falhou: {e}")
         return []
