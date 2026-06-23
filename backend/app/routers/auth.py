@@ -4,7 +4,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import (
     create_access_token, create_refresh_token,
-    hash_password, verify_password, decode_token,
+    verify_password, decode_token,
 )
 from app.core.token_blacklist import blacklist_token, is_blacklisted
 from app.schemas.auth import LoginRequest, RefreshRequest, TokenResponse
@@ -26,6 +26,10 @@ async def login(request: Request, data: LoginRequest, db: AsyncSession = Depends
     Autenticacao por e-mail e senha.
     Rate limit: LOGIN_RATE_LIMIT (default 10/minute) por IP.
     Respostas 401/403 intencionalmente genericas para nao confirmar existencia de conta.
+
+    A verificacao de senha e feita por verify_password() em security.py, que ja
+    inclui fallback de compatibilidade para hashes legados gerados pelo passlib
+    (prefixos $2b$/$2y$). Nao e necessario nenhum tratamento adicional aqui.
     """
     limiter = _get_limiter()
     await limiter.check(request, settings.LOGIN_RATE_LIMIT)
@@ -41,14 +45,6 @@ async def login(request: Request, data: LoginRequest, db: AsyncSession = Depends
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Conta desativada. Entre em contato com o administrador.",
         )
-
-    # Migracao silenciosa de hash legado (passlib) para bcrypt v5 nativo.
-    try:
-        import bcrypt as _bcrypt
-        _bcrypt.checkpw(data.password.encode(), user.hashed_password.encode())
-    except Exception:
-        user.hashed_password = hash_password(data.password)
-        await db.commit()
 
     access_token  = create_access_token(subject=str(user.id))
     refresh_token = create_refresh_token(subject=str(user.id))
