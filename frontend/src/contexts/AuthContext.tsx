@@ -90,9 +90,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       theme_preference: me.theme_preference,
     })
 
-    // Redirect reativo: ProtectedRoute cuida do /welcome.
-    // Aqui apenas mandamos para a raiz protegida.
-    navigate('/carteira')
+    // Redireciona para welcome se onboarding nao concluido, senao para carteira
+    if (!me.onboarding_completed) {
+      navigate('/welcome', { replace: true })
+    } else {
+      navigate('/carteira', { replace: true })
+    }
   }
 
   const logout = () => {
