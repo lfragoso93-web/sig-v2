@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.auth import get_current_user
 from app.models.user import User
 from app.schemas.user import UserResponse, UserUpdate
-from app.services.user_service import update_user
+from app.schemas.auth import MessageResponse
+from app.services.user_service import update_user, delete_user
 
 router = APIRouter(tags=["users"])
 
@@ -30,3 +31,16 @@ async def complete_onboarding(
 ):
     """Marca o onboarding do usuario autenticado como concluido."""
     return await update_user(db, current_user.id, UserUpdate(onboarding_completed=True))
+
+
+@router.delete("/me", response_model=MessageResponse, status_code=status.HTTP_200_OK)
+async def delete_me(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    O usuario exclui a propria conta permanentemente.
+    Remove todos os dados associados via ON DELETE CASCADE no PostgreSQL.
+    """
+    await delete_user(db, current_user.id)
+    return MessageResponse(message="Conta excluida com sucesso")
