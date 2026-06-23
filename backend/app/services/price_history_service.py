@@ -4,27 +4,28 @@ Servico de historico de precos.
 Estrategia de busca (por camadas):
   L1 - banco (asset_prices): consulta primeiro; so busca externamente o delta faltante.
   L2 - BRAPI Pro (primario): tentado para todos os tipos de ativo.
-  L3 - yfinance (fallback): usado quando BRAPI retorna vazio ou tipo e puramente internacional.
-
-Usado pelo scheduler (job diario) e pelo endpoint GET /prices/{ticker}/history.
-Tambem chamado por quotes_service ao adicionar transacao retroativa.
+  L2.5 - Alpha Vantage (INTL): para AssetType em INTL_TYPES, tenta antes do yfinance.
+         Economia: compact (<=100 dias) = 1 req/dia/ticker; full (>100) = 1 req na primeira vez.
+  L3 - yfinance (fallback final): usado quando BRAPI e Alpha Vantage retornam vazio.
 
 Convencao de timezone:
   Todos os timestamps sao armazenados em UTC.
   Fechamentos BR (BRAPI snapshot) usam 21:00 UTC (= 18:00 BRT).
+  Fechamentos INTL (Alpha Vantage / yfinance) usam 21:00 UTC (= 17:00 ET).
   _parse_date_utc() normaliza qualquer string de data para datetime UTC midnight.
 
-Rate limiting yfinance:
-  _get_yf_semaphore() - Retorna o Semaphore(1) criado lazy no primeiro uso,
-                        garantindo que pertenca ao event loop ativo do uvicorn.
-                        asyncio.Semaphore criado no import-time pertence a um
-                        loop diferente e nao funciona corretamente.
-  _YF_MIN_INTERVAL    - Pausa minima (segundos) entre releases do semaforo.
-  _run_yf_with_throttle(fn, *args) - wrapper publico: semaforo + sleep adaptativo.
-                        Todos os callers de yfinance devem usar esta funcao.
+Rate limiting yfinance (threading.Lock - nivel de thread):
+  O asyncio.Semaphore nao bloqueia threads do executor corretamente.
+  _yf_thread_lock (threading.Lock) garante que apenas uma thread execute
+  yfinance de cada vez. _YF_MIN_INTERVAL (4s) add pausa minima entre chamadas.
+
+Rate limiting Alpha Vantage:
+  alpha_vantage_limiter (TokenBucket, 4 req/min) em core/rate_limiter.py.
+  Adquirido antes de cada chamada em _fetch_av_history.
 """
 import asyncio
 import logging
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
@@ -36,7 +37,7 @@ from sqlalchemy import select, func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.asset_types import NO_QUOTE_TYPES, yf_ticker
+from app.core.asset_types import NO_QUOTE_TYPES, INTL_TYPES, yf_ticker
 from app.integrations.brapi import fetch_price_history as brapi_fetch_history
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
@@ -45,44 +46,35 @@ logger = logging.getLogger(__name__)
 
 _YF_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="yfinance_hist")
 
-# Semaforo criado lazy para garantir que pertenca ao event loop ativo do uvicorn.
-# Se criado no nivel do modulo (import-time), o asyncio.Semaphore pertence ao
-# loop temporario do Python e lancar RuntimeError ou nao bloquear corretamente.
-_yf_semaphore: Optional[asyncio.Semaphore] = None
-_YF_MIN_INTERVAL: float = 2.0       # segundos minimos entre chamadas yfinance
-_yf_last_call: list[float] = [0.0]  # lista mutavel para uso em closures
-
-
-def _get_yf_semaphore() -> asyncio.Semaphore:
-    """Retorna (criando se necessario) o Semaphore global no event loop correto."""
-    global _yf_semaphore
-    if _yf_semaphore is None:
-        _yf_semaphore = asyncio.Semaphore(1)
-    return _yf_semaphore
+# threading.Lock para serializar chamadas yfinance entre threads do executor.
+# asyncio.Semaphore nao funciona fora do event loop (threads do executor).
+_yf_thread_lock = threading.Lock()
+_YF_MIN_INTERVAL: float = 4.0       # segundos entre chamadas yfinance
+_yf_last_call: list[float] = [0.0]
 
 
 async def _run_yf_with_throttle(fn: Callable, *args) -> any:
     """
-    Executa fn(*args) em _YF_EXECUTOR com controle de rate limit:
-      1. Adquire o semaforo global (lazy) — serializa todas as chamadas yfinance.
-      2. Aguarda o intervalo minimo desde a ultima chamada (_YF_MIN_INTERVAL).
-      3. Executa fn em thread pool (nao bloqueia o event loop).
-      4. Registra timestamp e libera o semaforo.
+    Executa fn(*args) em _YF_EXECUTOR com throttle via threading.Lock.
+    O lock e o sleep sao executados DENTRO da thread do executor,
+    garantindo serializacao real entre todas as threads yfinance.
     """
-    sem = _get_yf_semaphore()
-    async with sem:
-        elapsed = time.monotonic() - _yf_last_call[0]
-        if elapsed < _YF_MIN_INTERVAL:
-            await asyncio.sleep(_YF_MIN_INTERVAL - elapsed)
-        loop = asyncio.get_event_loop()
-        try:
-            return await loop.run_in_executor(_YF_EXECUTOR, fn, *args)
-        finally:
-            _yf_last_call[0] = time.monotonic()
+    loop = asyncio.get_event_loop()
+
+    def _throttled():
+        with _yf_thread_lock:
+            elapsed = time.monotonic() - _yf_last_call[0]
+            if elapsed < _YF_MIN_INTERVAL:
+                time.sleep(_YF_MIN_INTERVAL - elapsed)
+            try:
+                return fn(*args)
+            finally:
+                _yf_last_call[0] = time.monotonic()
+
+    return await loop.run_in_executor(_YF_EXECUTOR, _throttled)
 
 
 PRICE_TTL_SECONDS = 900  # 15 minutos
-
 _BR_CLOSE_HOUR_UTC = 21
 
 
@@ -91,11 +83,6 @@ def _now_utc() -> datetime:
 
 
 def _parse_date_utc(date_str: str) -> datetime:
-    """
-    Converte string de data para datetime UTC midnight, de forma segura.
-    Aceita: "YYYY-MM-DD", "YYYY-MM-DDTHH:MM:SS", "YYYY-MM-DDTHH:MM:SS+HH:MM".
-    Sempre retorna datetime aware em UTC.
-    """
     date_part = date_str[:10]
     return datetime(
         int(date_part[0:4]),
@@ -127,11 +114,6 @@ async def _upsert_price(
 
 
 async def _get_or_create_asset(db: AsyncSession, ticker: str, asset_type: AssetType) -> Asset:
-    """
-    Busca Asset por ticker apenas (unique=True) para evitar miss quando
-    asset_type da transacao diverge do valor salvo na tabela assets.
-    Cria o registro somente se nao existir.
-    """
     result = await db.execute(
         select(Asset).where(Asset.ticker == ticker)
     )
@@ -177,6 +159,22 @@ async def _fetch_yf_history(ticker: str, asset_type: AssetType, days: int) -> li
     return await _run_yf_with_throttle(_fetch_yf_history_sync, sym, days)
 
 
+async def _fetch_av_history(
+    ticker: str,
+    days_back: int,
+) -> list[tuple[datetime, float]]:
+    """
+    Busca historico via Alpha Vantage com rate limiter dedicado.
+    Retorna [] se a API key nao estiver configurada.
+    """
+    from app.core.rate_limiter import alpha_vantage_limiter
+    from app.integrations.alpha_vantage import fetch_daily_history
+
+    await alpha_vantage_limiter.acquire()
+    rows = await fetch_daily_history(ticker, days_back)
+    return rows
+
+
 async def persist_daily_prices(
     db: AsyncSession,
     ticker: str,
@@ -186,13 +184,20 @@ async def persist_daily_prices(
     """
     Persiste historico de precos diarios para um ativo.
 
-    Estrategia:
-      1. BRAPI Pro: tentado sempre como fonte primaria (BR e INTL).
-      2. yfinance: fallback quando BRAPI retorna vazio.
-      3. Snapshot atual como ultimo recurso (ex: Tesouro sem serie historica na BRAPI).
+    Estrategia por tipo:
+      BR / Cripto / Tesouro:
+        1. BRAPI Pro (primario)
+        2. yfinance (fallback)
+        3. Snapshot BRAPI (ultimo recurso)
+
+      Internacional (INTL_TYPES):
+        1. BRAPI Pro (tenta, quase sempre falha para INTL)
+        2. Alpha Vantage (primario real para INTL) - economy: 1 req/dia
+        3. yfinance (fallback final)
+        4. Snapshot BRAPI (ultimo recurso)
     """
     if asset_type in NO_QUOTE_TYPES:
-        logger.debug(f"[PriceHistory] {ticker} ({asset_type}) sem cotacao de mercado — ignorado")
+        logger.debug(f"[PriceHistory] {ticker} ({asset_type}) sem cotacao — ignorado")
         return 0
 
     asset = await _get_or_create_asset(db, ticker, asset_type)
@@ -200,6 +205,10 @@ async def persist_daily_prices(
 
     if last_ts:
         delta = (_now_utc() - last_ts).days
+        # Se o banco esta atualizado, nao faz nada
+        if delta < 1:
+            logger.debug(f"[PriceHistory] {ticker} banco atualizado (last={last_ts.date()}) — pulando")
+            return 0
         days_back = min(days_back, max(delta + 1, 2))
 
     date_to = _now_utc().date().isoformat()
@@ -207,9 +216,10 @@ async def persist_daily_prices(
 
     rows: list[tuple[datetime, float]] = []
     source: str = "brapi"
+    is_intl = asset_type in INTL_TYPES
 
     # ------------------------------------------------------------------
-    # L2: BRAPI Pro — primario para todos os tipos
+    # L2: BRAPI Pro - primario para todos os tipos
     # ------------------------------------------------------------------
     try:
         rows = await brapi_fetch_history(ticker, date_from, date_to)
@@ -218,13 +228,25 @@ async def persist_daily_prices(
         rows = []
 
     # ------------------------------------------------------------------
-    # L3: yfinance — fallback universal quando BRAPI retorna vazio
+    # L2.5: Alpha Vantage - primario real para INTL quando BRAPI falha
+    # ------------------------------------------------------------------
+    if not rows and is_intl:
+        logger.info(f"[PriceHistory] BRAPI vazio para {ticker} (INTL) — tentando Alpha Vantage")
+        try:
+            rows = await _fetch_av_history(ticker, days_back)
+            source = "alpha_vantage"
+        except Exception as e:
+            logger.warning(f"[PriceHistory] Alpha Vantage excecao para {ticker}: {e}")
+            rows = []
+
+    # ------------------------------------------------------------------
+    # L3: yfinance - fallback universal
     # ------------------------------------------------------------------
     if not rows:
-        logger.info(
-            f"[PriceHistory] BRAPI vazio para {ticker} ({asset_type}) "
-            f"— tentando yfinance fallback"
-        )
+        if is_intl:
+            logger.info(f"[PriceHistory] Alpha Vantage vazio para {ticker} — tentando yfinance")
+        else:
+            logger.info(f"[PriceHistory] BRAPI vazio para {ticker} ({asset_type}) — tentando yfinance")
         try:
             rows = await _fetch_yf_history(ticker, asset_type, days_back)
             source = "yfinance_fallback"
@@ -233,23 +255,16 @@ async def persist_daily_prices(
             rows = []
 
     # ------------------------------------------------------------------
-    # Snapshot atual como ultimo recurso (ex: Tesouro sem serie historica)
+    # Snapshot atual como ultimo recurso
     # ------------------------------------------------------------------
     if not rows:
-        logger.info(
-            f"[PriceHistory] sem historico para {ticker} — tentando snapshot de preco atual"
-        )
+        logger.info(f"[PriceHistory] sem historico para {ticker} — tentando snapshot")
         try:
             from app.integrations.brapi import fetch_quotes as brapi_fetch_quotes
             result = await brapi_fetch_quotes([ticker])
             price = result.get(ticker)
             if price:
-                ts = _now_utc().replace(
-                    hour=_BR_CLOSE_HOUR_UTC,
-                    minute=0,
-                    second=0,
-                    microsecond=0,
-                )
+                ts = _now_utc().replace(hour=_BR_CLOSE_HOUR_UTC, minute=0, second=0, microsecond=0)
                 rows = [(ts, price)]
                 source = "brapi_snapshot"
         except Exception as e:
@@ -279,9 +294,6 @@ async def get_price_at_date(
     asset_type: AssetType,
     target_date: str,
 ) -> Optional[float]:
-    """
-    Retorna preco de fechamento de um ativo em ou antes de target_date.
-    """
     ref = _parse_date_utc(target_date)
     since = ref - timedelta(days=5)
     until = ref + timedelta(hours=23, minutes=59, seconds=59)
