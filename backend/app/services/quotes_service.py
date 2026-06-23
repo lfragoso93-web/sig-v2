@@ -34,6 +34,12 @@ Funcoes de portfolio (migradas de quote_service.py em 2026-06-22):
     uma carteira especifica. Usa Transaction como fonte de verdade.
   get_price_for_transaction() - preco historico de um ativo em data especifica.
     Delegado para price_history_service.get_price_at_date().
+
+yfinance MultiIndex (0.2.x+):
+  yf.download() com multiplos tickers retorna DataFrame com MultiIndex de
+  colunas: (field, ticker). Ex: ('Close', 'NVDA'), ('Close', 'AAPL').
+  Com ticker unico, retorna colunas simples: 'Close', 'Open', etc.
+  _fetch_yf_current_sync trata ambos os casos explicitamente.
 """
 import asyncio
 import logging
@@ -206,6 +212,14 @@ async def _db_set(
 # ---------------------------------------------------------------------------
 
 def _fetch_yf_current_sync(ticker_map: dict[str, str]) -> dict[str, float]:
+    """
+    Busca cotacoes atuais via yfinance.download().
+
+    yfinance >= 0.2.x com multiplos tickers retorna DataFrame com MultiIndex
+    de colunas: nivel 0 = field ('Close', 'Open'...), nivel 1 = ticker.
+    Com ticker unico, retorna colunas simples sem MultiIndex.
+    Tratamos ambos os casos explicitamente para evitar KeyError.
+    """
     if not ticker_map:
         return {}
     yf_syms = list(ticker_map.values())
@@ -220,14 +234,31 @@ def _fetch_yf_current_sync(ticker_map: dict[str, str]) -> dict[str, float]:
         )
         if data.empty:
             return {}
-        close = data["Close"] if "Close" in data.columns else data
+
+        # Detecta MultiIndex (multiplos tickers) vs Index simples (ticker unico)
+        is_multi = hasattr(data.columns, 'levels')
+
         for internal, sym in ticker_map.items():
             try:
-                price = float(
-                    close.iloc[-1] if len(yf_syms) == 1
-                    else close[sym].dropna().iloc[-1]
-                )
-                results[internal] = price
+                if is_multi:
+                    # MultiIndex: acessa (field, ticker)
+                    col = ("Close", sym)
+                    if col not in data.columns:
+                        logger.warning(f"yfinance MultiIndex: coluna {col} nao encontrada")
+                        continue
+                    series = data[col].dropna()
+                else:
+                    # Ticker unico: colunas simples
+                    if "Close" not in data.columns:
+                        logger.warning(f"yfinance: coluna 'Close' nao encontrada para {sym}")
+                        continue
+                    series = data["Close"].dropna()
+
+                if series.empty:
+                    logger.warning(f"yfinance: serie vazia para {sym}")
+                    continue
+
+                results[internal] = float(series.iloc[-1])
             except Exception as e:
                 logger.warning(f"yfinance preco nao encontrado para {sym}: {e}")
     except Exception as e:
@@ -500,7 +531,7 @@ async def update_all_quotes(db: AsyncSession) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Funcoes de portfolio (migradas de quote_service.py — 2026-06-22)
+# Funcoes de portfolio (migradas de quote_service.py - 2026-06-22)
 # ---------------------------------------------------------------------------
 
 async def update_quotes_for_portfolio(
