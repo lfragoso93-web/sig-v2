@@ -13,13 +13,23 @@ Convencao de timezone:
   Todos os timestamps sao armazenados em UTC.
   Fechamentos BR (BRAPI snapshot) usam 21:00 UTC (= 18:00 BRT).
   _parse_date_utc() normaliza qualquer string de data para datetime UTC midnight.
+
+Rate limiting yfinance:
+  _YF_SEMAPHORE  - Semaforo asyncio (1 slot): garante que apenas UMA chamada
+                   yfinance esteja em andamento no processo inteiro ao mesmo tempo.
+                   Compartilhado com fx_service e quotes_service via import.
+  _YF_MIN_INTERVAL - Tempo minimo (segundos) entre releases do semaforo.
+                   Evita rajadas mesmo com Semaphore(1).
+  _run_yf_with_throttle(fn, *args) - wrapper publico que combina semaforo +
+                   sleep adaptativo. Usado por todos os callers de yfinance.
 """
 import asyncio
 import logging
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Optional
+from typing import Callable, Optional
 
 import yfinance as yf
 from sqlalchemy import select, func
@@ -34,6 +44,36 @@ from app.models.asset_price import AssetPrice
 logger = logging.getLogger(__name__)
 
 _YF_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="yfinance_hist")
+
+# Controle de rate limit global para todas as chamadas yfinance no processo.
+# Semaforo(1) = apenas uma chamada em paralelo; _YF_MIN_INTERVAL = pausa minima
+# entre chamadas para nao disparar o rate limit do Yahoo Finance (~2 req/s).
+_YF_SEMAPHORE = asyncio.Semaphore(1)
+_YF_MIN_INTERVAL: float = 2.0          # segundos entre releases
+_yf_last_call: list[float] = [0.0]     # lista para mutabilidade em closure
+
+
+async def _run_yf_with_throttle(fn: Callable, *args) -> any:
+    """
+    Executa fn(*args) em _YF_EXECUTOR com controle de rate limit:
+      1. Adquire _YF_SEMAPHORE (serializa todas as chamadas yfinance do processo).
+      2. Aguarda o intervalo minimo desde a ultima chamada (_YF_MIN_INTERVAL).
+      3. Executa fn em thread pool (nao bloqueia o event loop).
+      4. Registra timestamp e libera o semaforo.
+
+    Todos os callers de yfinance (price_history, fx_service, quotes_service)
+    devem usar esta funcao em vez de loop.run_in_executor direto.
+    """
+    async with _YF_SEMAPHORE:
+        elapsed = time.monotonic() - _yf_last_call[0]
+        if elapsed < _YF_MIN_INTERVAL:
+            await asyncio.sleep(_YF_MIN_INTERVAL - elapsed)
+        loop = asyncio.get_event_loop()
+        try:
+            return await loop.run_in_executor(_YF_EXECUTOR, fn, *args)
+        finally:
+            _yf_last_call[0] = time.monotonic()
+
 
 PRICE_TTL_SECONDS = 900  # 15 minutos
 
@@ -128,8 +168,7 @@ def _fetch_yf_history_sync(yf_sym: str, days: int) -> list[tuple[datetime, float
 
 async def _fetch_yf_history(ticker: str, asset_type: AssetType, days: int) -> list[tuple[datetime, float]]:
     sym = yf_ticker(ticker, asset_type)
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(_YF_EXECUTOR, _fetch_yf_history_sync, sym, days)
+    return await _run_yf_with_throttle(_fetch_yf_history_sync, sym, days)
 
 
 async def persist_daily_prices(
