@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from app.models.user import User, UserRole
 from app.schemas.user import UserUpdate, UserCreate, UserAdminUpdate
 from app.core.security import hash_password
@@ -90,11 +90,27 @@ async def admin_update_user(
 
 
 async def delete_user(db: AsyncSession, user_id: int) -> None:
+    """
+    Remove o usuario e todos os dados associados.
+
+    Usa DELETE SQL direto com synchronize_session=False para deixar o
+    PostgreSQL executar ON DELETE CASCADE nativamente em todas as tabelas
+    filhas (portfolios, irpf_records, irpf_losses, etc.).
+
+    O ORM delete (db.delete(obj)) nao funciona corretamente com AsyncSession
+    porque nao faz eager load automatico dos relacionamentos, causando
+    violacao de FK constraint.
+    """
     from fastapi import HTTPException
+
+    # Confirma existencia antes de deletar
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
-    await db.delete(user)
+
+    # DELETE SQL direto — PostgreSQL executa ON DELETE CASCADE nas FKs
+    stmt = delete(User).where(User.id == user_id)
+    await db.execute(stmt)
     await db.commit()
 
 
