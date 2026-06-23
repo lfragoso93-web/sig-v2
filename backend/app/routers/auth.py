@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.limiter import limiter
 from app.core.security import (
     create_access_token, create_refresh_token,
     verify_password, decode_token,
@@ -10,7 +11,6 @@ from app.core.token_blacklist import blacklist_token, is_blacklisted
 from app.schemas.auth import LoginRequest, RefreshRequest, TokenResponse
 from app.schemas.user import UserCreate
 from app.services.user_service import get_user_by_email, get_user_by_id, create_user
-from app.main import limiter
 
 router = APIRouter(tags=["auth"])
 
