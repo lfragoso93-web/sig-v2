@@ -152,11 +152,13 @@ def _extract_price_from_item(item: dict) -> Optional[float]:
     """
     Extrai preco de um item de resposta de moeda da BRAPI.
     Tenta multiplos campos em ordem de preferencia.
+    'close' adicionado pois e o campo retornado pelo endpoint /v2/currency na resposta atual.
     """
     for field in (
         "regularMarketPrice",
         "ask",
         "bid",
+        "close",
         "price",
         "high",
         "low",
@@ -180,7 +182,6 @@ async def fetch_currency_rate(pair: str = "USD-BRL") -> Optional[float]:
     Retorna None se a BRAPI falhar ou o par nao for encontrado.
     """
     headers = _auth_headers()
-    # Tenta os dois formatos que a BRAPI aceita
     pairs_to_try = [pair, pair.replace("-", "")]
 
     for pair_fmt in pairs_to_try:
@@ -214,10 +215,12 @@ async def fetch_currency_rate(pair: str = "USD-BRL") -> Optional[float]:
                         continue
                     hist = item.get("historical") or []
                     if hist and isinstance(hist, list):
-                        price = _extract_price_from_item(hist[-1]) if isinstance(hist[-1], dict) else None
-                        if price is not None:
-                            logger.info(f"[brapi] fetch_currency_rate (hist fallback) {pair_fmt} = {price}")
-                            return price
+                        last = hist[-1] if isinstance(hist[-1], dict) else None
+                        if last:
+                            price = _extract_price_from_item(last)
+                            if price is not None:
+                                logger.info(f"[brapi] fetch_currency_rate (hist fallback) {pair_fmt} = {price}")
+                                return price
 
                 logger.warning(f"[brapi] fetch_currency_rate: par {pair_fmt!r} sem cotacao na resposta")
 
@@ -455,32 +458,65 @@ async def fetch_crypto_suggestions(q: str, limit: int = 10) -> list[dict]:
 
 
 def _yf_search_sync(q: str, limit: int = 10, asset_type: Optional[str] = None) -> list[dict]:
+    """
+    Fallback de busca de ticker via yfinance.
+
+    yfinance >= 0.2.50 usa yf.Lookup com atributos de propriedade (nao metodos):
+      - yf.Lookup(q).stock       -> DataFrame com acoes
+      - yf.Lookup(q).etf         -> DataFrame com ETFs
+      - yf.Search(q).quotes      -> lista de dicts (busca geral)
+
+    Versoes antigas usavam yf.Lookup(q).get_stock() (metodo) — removido na 0.2.50+.
+    """
     try:
         import yfinance as yf
         results = []
 
-        if asset_type == "stock":
-            items = yf.Lookup(q).get_stock(count=limit)
-        elif asset_type == "etf":
-            items = yf.Lookup(q).get_etf(count=limit)
-        else:
-            search = yf.Search(q, max_results=limit)
-            items  = search.quotes or []
+        def _rows_from_df(df) -> list[dict]:
+            """Converte DataFrame do Lookup em lista de dicts normalizados."""
+            if df is None or (hasattr(df, 'empty') and df.empty):
+                return []
+            rows = []
+            for _, row in df.iterrows():
+                ticker = str(row.get("symbol") or row.get("Symbol") or "").strip()
+                name   = str(row.get("longname") or row.get("shortname") or row.get("name") or "").strip()
+                kind   = str(row.get("quoteType") or asset_type or "").lower()
+                if ticker:
+                    rows.append({"ticker": ticker.upper(), "name": name, "type": kind})
+            return rows
 
-        for item in items:
-            if hasattr(item, "to_dict"):
-                row    = item
-                ticker = str(getattr(row, "symbol", "") or "")
-                name   = str(getattr(row, "longname", "") or getattr(row, "shortname", "") or "")
-                kind   = str(getattr(row, "quoteType", "") or asset_type or "")
-            elif isinstance(item, dict):
-                ticker = item.get("symbol") or item.get("ticker") or ""
-                name   = item.get("longname") or item.get("shortname") or ""
-                kind   = item.get("quoteType") or asset_type or ""
-            else:
-                continue
-            if ticker:
-                results.append({"ticker": ticker.upper(), "name": name, "type": kind.lower()})
+        if asset_type == "stock":
+            try:
+                df = yf.Lookup(q).stock
+                results = _rows_from_df(df)
+            except Exception:
+                pass
+        elif asset_type == "etf":
+            try:
+                df = yf.Lookup(q).etf
+                results = _rows_from_df(df)
+            except Exception:
+                pass
+
+        # Fallback para busca geral (Search) se Lookup falhou ou tipo nao mapeado
+        if not results:
+            try:
+                search = yf.Search(q, max_results=limit)
+                items  = search.quotes or []
+                for item in items:
+                    if isinstance(item, dict):
+                        ticker = item.get("symbol") or item.get("ticker") or ""
+                        name   = item.get("longname") or item.get("shortname") or ""
+                        kind   = item.get("quoteType") or asset_type or ""
+                    else:
+                        ticker = str(getattr(item, "symbol", "") or "")
+                        name   = str(getattr(item, "longname", "") or getattr(item, "shortname", "") or "")
+                        kind   = str(getattr(item, "quoteType", "") or asset_type or "")
+                    if ticker:
+                        results.append({"ticker": ticker.upper(), "name": name, "type": kind.lower()})
+            except Exception as e:
+                logger.warning(f"yfinance Search fallback error for q={q!r}: {e}")
+
         return results[:limit]
     except Exception as e:
         logger.warning(f"yfinance search error for q={q!r} type={asset_type!r}: {e}")
