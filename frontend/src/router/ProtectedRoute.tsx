@@ -1,27 +1,43 @@
-import { Navigate, Outlet } from 'react-router-dom'
+import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { useAuth } from '@/contexts/AuthContext'
 
 export default function ProtectedRoute({ children }: { children?: React.ReactNode }) {
-  const { isAuthenticated, token } = useAuthStore()
+  const { token } = useAuthStore()
   const { user, isLoading } = useAuth()
+  const location = useLocation()
 
-  // Aguarda hidratação do contexto de auth
   const hasToken = token || localStorage.getItem('sig_token')
 
-  if (!isAuthenticated && !hasToken) {
+  // Sem token algum → manda para login imediatamente
+  if (!hasToken) {
     return <Navigate to="/auth/login" replace />
   }
 
-  // Enquanto carrega o usuário, não redireciona ainda
-  if (isLoading) return null
+  // Tem token mas ainda está carregando o usuário → aguarda
+  if (isLoading) {
+    return (
+      <div style={{
+        minHeight: '100dvh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'var(--color-bg)',
+      }}>
+        <div style={{
+          width: 32, height: 32, borderRadius: '50%',
+          border: '3px solid var(--color-primary)',
+          borderTopColor: 'transparent',
+          animation: 'spin 0.7s linear infinite',
+        }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    )
+  }
 
-  // Usuário autenticado mas onboarding não concluído → welcome
-  if (user && !user.onboarding_completed) {
-    // Evita loop: se já estiver em /welcome, não redireciona de novo
-    if (typeof window !== 'undefined' && window.location.pathname === '/welcome') {
-      return children ? <>{children}</> : <Outlet />
-    }
+  // Usuário carregado — checa onboarding
+  // Evita loop: não redireciona se já está em /welcome
+  if (user && !user.onboarding_completed && location.pathname !== '/welcome') {
     return <Navigate to="/welcome" replace />
   }
 
