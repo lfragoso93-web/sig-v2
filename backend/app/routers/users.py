@@ -21,3 +21,12 @@ async def update_me(
     current_user: User = Depends(get_current_user),
 ):
     return await update_user(db, current_user.id, data)
+
+
+@router.patch("/me/onboarding", response_model=UserResponse)
+async def complete_onboarding(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Marca o onboarding do usuario autenticado como concluido."""
+    return await update_user(db, current_user.id, UserUpdate(onboarding_completed=True))
