@@ -85,26 +85,6 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 
 **Objetivo:** entregar proventos confiaveis de ponta a ponta: backend com backfill correto e 4 endpoints + frontend conectado com filtros, historico mensal e sincronizacao manual.
 
-**Escopo executado:**
-
-### Backend
-- `dividend_backfill_service.py`: `_net_qty_on_date` e `_portfolios_with_ticker` corrigidos para usar `ticker`
-- `proventos_service.py`: reescrito em AsyncSession — 4 funcoes
-- `routers/proventos.py`: reescrito em async — 4 endpoints funcionais
-- `routers/dividends.py`: novo `POST /dividends/sync` — sincronizacao manual, 202 Accepted
-
-### Frontend
-- `proventosService.ts`: tipos e URLs alinhados; `sync()` adicionado
-- `useProventos.ts`: hooks alinhados; `useSyncProventos` adicionado
-- `ProventosPage.tsx`: KPIs corretos, toggle, botao sync, lista paginada
-
-**Criterios de aceite atendidos:**
-- ✅ Proventos exibem valor por unidade e valor total
-- ✅ Recebidos e futuros separados por status
-- ✅ Backfill correto: quantity calculada na data-ex pelo ticker
-- ✅ Sincronizacao idempotente
-- ✅ Frontend conectado e compilando
-
 **Commits backend:** `73538f57`, `75790b79`, `ff41314a`, `d2e7b5d5`
 **Commits frontend:** `c8ed7f85`, `a6b7ffef`, `670fc7bb`
 
@@ -128,15 +108,7 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 
 ### Tabela de Ativos (PositionTable) — 3 bugs corrigidos
 
-**Problemas corrigidos:**
-- Cards duplicados no desktop (Tailwind `md:hidden` sem breakpoints configurados)
-- Coluna "P. Atual" sempre `—` (comportamento correto revelado; L1 vazio deixa visivel)
-- Coluna "Valor Atual" repetindo o valor investido (`enrich_with_prices` usava `total_invested` como fallback)
-
-**Arquivos alterados:**
-- `frontend/src/components/resume/PositionTable.tsx` — commit `f82c6dc3`
-- `backend/app/services/portfolio_service.py` — commit `25754acb`
-- `backend/app/schemas/position.py` — commit `25754acb`
+**Commits:** `f82c6dc3` (frontend) · `25754acb` (backend)
 
 ---
 
@@ -150,34 +122,6 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 
 **Objetivo:** calcular rentabilidade de forma util e confiavel para decisao do usuario.
 
-### Itens concluidos
-
-| # | Item | Status | Commits |
-|---|---|---|---|
-| 1 | L1 vazio — `_db_set` sem commit fora do scheduler | ✅ | `f18a0a8` |
-| 2 | `sum_dividends` ignorava proventos manuais (LEFT JOIN) | ✅ | `18ddf58` |
-| 3 | `rentabilidade_pct` ausente em `AssetGroupOut` | ✅ | `8e05e0d` |
-| 4 | Dupla formatacao de percentual em `ResumePage.tsx` | ✅ | `ec36720` |
-| 5 | Logica de rentabilidade por ativo | ✅ | existente em `portfolio_service.py` |
-| 6 | `total_gain` / `total_gain_pct` no `PortfolioSummary` | ✅ | existente em `portfolio_service.py` |
-| 7 | Lucro realizado via `proventos_em_carteira` | ✅ | existente em `portfolio_service.py` |
-| 8 | Proventos contribuindo para `rentabilidade_total` | ✅ | existente em `portfolio_service.py` |
-| A2 | Paginacao server-side em `GET /transactions` | ✅ | `a00a1aa` (back) `27d0f7b` (front) |
-
-### Campos de rentabilidade do summary (referencia)
-
-| Campo backend | Alias frontend | Significado |
-|---|---|---|
-| `total_patrimonio` / `current_value` | `patrimonio` | Valor atual da carteira |
-| `total_investido` / `total_invested` | `investido` | Custo total das posicoes abertas |
-| `variacao_valor` / `total_gain` | `variacaoVal` | Ganho bruto de capital (R$) |
-| `variacao_percentual` / `total_gain_pct` | `variacaoPct` | Variacao percentual do capital |
-| `lucro_total` | `lucroTotal` | Capital + proventos ativos em carteira |
-| `rentabilidade_total` | `rentabilidade` | `lucro_total / total_invested * 100` |
-| `dividendos_recebidos_12m` | `dividendos12m` | Proventos recebidos nos ultimos 12 meses |
-| `total_proventos` | `totalProv` | Total historico de proventos |
-| `ganho_capital` | `ganhoCapital` | Alias de `total_gain` (para KpiCard) |
-
 **Criterios de aceite atendidos:**
 - ✅ Cotacoes aparecem para ativos nacionais com L1 ou L3
 - ✅ `current_price` e `current_value` preenchidos
@@ -186,35 +130,15 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 - ✅ KPIs "Resultado" e "Variacao" mostram valores coerentes
 - ✅ Tela nao quebra quando cotacao esta ausente
 
+**Commits:** `f18a0a8`, `18ddf58`, `8e05e0d`, `ec36720`, `a00a1aa`, `27d0f7b`
+
 ---
 
 ## Sprint 11 - Metas e Alocacao (Distribuicao da Carteira) ✅ CONCLUIDA — 22 Jun 2026
 
 **Objetivo:** permitir que o usuario defina metas percentuais por classe de ativo diretamente em Configuracoes.
 
-### Escopo executado
-
-**Novos arquivos:**
-- `frontend/src/services/classTargetsService.ts` — `list`, `upsert`, `remove` via `GET/PUT/DELETE /portfolios/{id}/class-targets`
-- `frontend/src/hooks/useClassTargets.ts` — `useClassTargets`, `useUpsertClassTarget`, `useDeleteClassTarget`
-- `frontend/src/components/configuracoes/DistribuicaoCarteira.tsx` — componente completo com edicao inline, badge de total, select filtrado, delete individual
-
-**Arquivos alterados:**
-- `frontend/src/pages/Configuracoes.tsx` — migrado de SectionCards empilhados para 4 abas: **Conta / Carteiras / Distribuicao / Avancado**
-
-**Commits:**
-- `ccded3a` — classTargetsService.ts + useClassTargets.ts + DistribuicaoCarteira.tsx
-- `703d047` — Configuracoes.tsx migrado para abas
-
-**Criterios de aceite atendidos:**
-- ✅ Aba "Distribuicao" aparece em Configuracoes e carrega metas do backend
-- ✅ Edicao inline com salvar individual por classe (dirty state)
-- ✅ Badge de total com cor dinamica (verde = 100%, laranja < 100%, vermelho > 100%)
-- ✅ Select de nova classe filtrado (exclui ja configuradas)
-- ✅ Delete individual chama `DELETE` imediatamente
-- ✅ Estado vazio com mensagem descritiva
-- ✅ Pagina Configuracoes em 4 abas organizadas
-- ✅ Frontend compila sem erros TypeScript
+**Commits:** `ccded3a`, `703d047`, `d66bb70`
 
 ---
 
@@ -255,6 +179,36 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 | B1 | Modal desktop: abas com `flexWrap` para exibir Renda Fixa e Cripto | ✅ | `ffeb622` |
 | B2 | PositionTable: Stocks/ETF INT exibiam preco em R$ sem conversao | ✅ | `2b5542b` |
 | B3 | Transacoes.tsx: preco/total em R$ para ativos USD | ✅ | `2b5542b` |
+
+---
+
+## [Hotfix] - 23 Jun 2026 ✅ CONCLUIDO — Cambio + Cotacoes Internacionais
+
+**Objetivo:** eliminar `YFRateLimitError` para ativos INTL e `FALLBACK_RATE` para historico USD/BRL.
+
+### Itens corrigidos
+
+| # | Item | Status | Commits |
+|---|---|---|---|
+| H1 | Alpha Vantage como L2 primario para ativos INTL (NVDA, IVV, INTR, TFLO) | ✅ | `alpha_vantage.py` + updates |
+| H2 | BCB PTAX como fonte primaria de historico USD/BRL | ✅ | `0fa81a4` + `13fdc49` |
+| H3 | Guard de datas futuras no `fx_service` (elimina FALLBACK_RATE em projecoes) | ✅ | `13fdc49` |
+
+### Novos arquivos
+- `backend/app/integrations/alpha_vantage.py` — cotacoes e historico INTL via Alpha Vantage API
+- `backend/app/integrations/bcb.py` — PTAX oficial via OData BCB (sem token, historico desde 1994)
+
+### Cadeia de cambio USD/BRL apos o hotfix
+```
+L2 memoria (60s) → L1 banco (permanente) → BCB PTAX → AwesomeAPI → FALLBACK_RATE
+```
+
+### Cadeia de cotacoes INTL apos o hotfix
+```
+L1 banco → Alpha Vantage → yfinance
+```
+
+**Resultado:** backend sem logs de erro; grafico de Evolucao Patrimonial com dados reais de cambio.
 
 ---
 
@@ -309,7 +263,6 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 > - `irpf_service.py` (24 KB) — implementado
 > - `routers/irpf.py` (5.6 KB) — implementado
 > - `IRPFPage.tsx` (23.6 KB) — implementado
-> - Status documentado anteriormente como Sprint futura estava incorreto
 
 **Escopo real da Sprint 12 (revisao e completude):**
 - Auditar cobertura do `irpf_service.py`: posicao em 31/12, Bens e Direitos, rendimentos isentos, JCP, tributaveis
@@ -377,6 +330,7 @@ O projeto ja possui uma base relevante: backend FastAPI, frontend React/Vite, Do
 | Sprint 7 — Rentabilidade | ✅ Concluida — 22 Jun 2026 |
 | Sprint 11 — Metas e Alocacao (Distribuicao) | ✅ Concluida — 22 Jun 2026 |
 | Sprint 7.5 — Hardening Seguranca (C1–C3 ✅, A1/A3/A4/M1–M4 ⏳) | 🔄 Parcial — 22 Jun 2026 |
+| Hotfix — BCB PTAX + Alpha Vantage INTL | ✅ Concluido — 23 Jun 2026 |
 | Sprint 8 — Historico Patrimonial (frontend) | ⏳ |
 | Sprint 9 — Patrimonio por Classe | ⏳ |
 | Sprint 10 — Renda Fixa e Tesouro | ⏳ |

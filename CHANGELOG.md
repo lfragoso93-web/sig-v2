@@ -44,6 +44,98 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [Sessao] - 2026-06-23 — Hotfix cambio + cotacoes internacionais
+
+### Contexto
+
+Apos Sprint 7 e Sprint 11, o sistema apresentava dois problemas persistentes nos logs:
+- `YFRateLimitError` para ativos internacionais (NVDA, IVV, INTR, TFLO) — yfinance com rate limit atingido
+- `FALLBACK_RATE=5.70` sendo aplicado para datas historicas USD/BRL — BRAPI nao tem endpoint de historico de cambio funcional
+
+---
+
+### Fix 1 — Alpha Vantage como fonte primaria para ativos internacionais
+
+#### Problema
+O `quotes_service` e `price_history_service` usavam yfinance diretamente para `INTL_TYPES` (STOCK, ETF_INTERNACIONAL). O yfinance aplica rate limit agressivo em producao, retornando `YFRateLimitError` silenciosamente e deixando cotacoes em branco.
+
+#### Solucao
+- **Novo arquivo:** `backend/app/integrations/alpha_vantage.py`
+  - `fetch_quote_batch(tickers)` — cotacoes atuais via `GLOBAL_QUOTE` (limite: 25 req/min)
+  - `fetch_price_history(ticker, date_from, date_to)` — historico diario via `TIME_SERIES_DAILY_ADJUSTED`
+  - Rate limiter dedicado (`alpha_vantage_limiter`) em `core/rate_limiter.py` — 20 req/min com semaforo asyncio
+- **`core/config.py`:** adicionada variavel `ALPHA_VANTAGE_API_KEY`
+- **`services/quotes_service.py`:** Alpha Vantage como L2 para `INTL_TYPES`; yfinance rebaixado para L3
+- **`services/price_history_service.py`:** Alpha Vantage como L2.5 para historico INTL; yfinance como L3
+- **`.env.example`:** documentada a nova variavel com instrucoes de obtencao da chave gratuita
+
+#### Cadeia de cotacoes INTL apos o fix
+```
+L1 → DB cache (asset.last_price)
+L2 → Alpha Vantage (primario)
+L3 → yfinance (fallback)
+```
+
+**Commits:** `alpha_vantage.py` + atualizacoes em `quotes_service`, `price_history_service`, `config`, `rate_limiter`, `.env.example`
+
+---
+
+### Fix 2 — BCB PTAX como fonte primaria de historico USD/BRL
+
+#### Problema
+O `fx_service` chamava `brapi.fetch_currency_history` (`/api/v2/currency/historical`) que retornava `[]` silenciosamente. Investigacao revelou que:
+1. A BRAPI nao documenta esse endpoint nas paginas de Moedas — ele nao e suportado de forma confivel.
+2. O `fx_service` solicitava ranges que incluiam datas futuras (datas de snapshot de projecao do grafico patrimonial), causando `FALLBACK_RATE=5.70` para todo o periodo.
+
+#### Solucao
+- **Novo arquivo:** `backend/app/integrations/bcb.py`
+  - `fetch_usd_brl_period(start_date, end_date)` — historico diario PTAX via `CotacaoDolarPeriodo` (OData BCB)
+  - `fetch_usd_brl_day(date_str)` — PTAX de um dia especifico via `CotacaoDolarDia`
+  - Conversao automatica de `YYYY-MM-DD` para `MM-DD-YYYY` (formato exigido pela API do BCB)
+  - Usa `cotacaoVenda` (PTAX venda) como referencia
+  - API publica, sem token, historico desde 1994
+- **`services/fx_service.py`:** reescrito
+  - BCB PTAX como L2 primario (historico e dia atual)
+  - AwesomeAPI como fallback
+  - **Guard de datas futuras:** qualquer `date_str >= hoje` e redirecionado para `get_usd_brl_today` — elimina chamadas BCB com datas de projecao
+  - `get_usd_brl_batch` otimizado: uma unica chamada BCB para todo o range + fallback ao dia util anterior mais proximo (feriados/fins de semana)
+  - BRAPI e yfinance removidos do fluxo de cambio
+
+#### Cadeia de cambio apos o fix
+```
+L2 memoria → L1 banco (fx_rates) → BCB PTAX → AwesomeAPI → FALLBACK_RATE
+```
+
+#### Resultado nos logs
+Antes:
+```
+[brapi] fetch_currency_history: sem dados para USD-BRL (2025-06-09 a 2025-08-06)
+[fx_service] sem cotacao para 2025-06-09 — usando FALLBACK_RATE=5.70
+```
+Depois:
+```
+[bcb] CotacaoDolarPeriodo 2025-06-02 a 2025-06-09: 6 registros
+```
+
+**Commits:** `0fa81a4` (bcb.py) · `13fdc49` (fx_service.py)
+
+---
+
+### Arquivos modificados nesta sessao
+
+| Arquivo | Tipo | Descricao |
+|---|---|---|
+| `backend/app/integrations/alpha_vantage.py` | Novo | Cotacoes e historico de ativos INTL via Alpha Vantage |
+| `backend/app/integrations/bcb.py` | Novo | PTAX USD/BRL via API oficial do Banco Central |
+| `backend/app/core/config.py` | Alterado | `ALPHA_VANTAGE_API_KEY` adicionado |
+| `backend/app/core/rate_limiter.py` | Alterado | `alpha_vantage_limiter` (20 req/min) adicionado |
+| `backend/app/services/quotes_service.py` | Alterado | AV como L2 para INTL_TYPES |
+| `backend/app/services/price_history_service.py` | Alterado | AV como L2.5 para historico INTL |
+| `backend/app/services/fx_service.py` | Reescrito | BCB PTAX primario; guard datas futuras; sem BRAPI/yfinance |
+| `.env.example` | Alterado | `ALPHA_VANTAGE_API_KEY` documentado |
+
+---
+
 ## [Sessao] - 2026-06-22 (cont.) — Sprint 7.5 parcial + Bugfixes
 
 ### Sprint 7.5 — Hardening de Seguranca (C1–C3 concluidos)
@@ -206,26 +298,9 @@ Migracao completa de layout vertical (SectionCards empilhados) para estrutura de
 | Distribuicao | DistribuicaoCarteira (novo) | PieChart |
 | Avancado | DangerZone + AdminPanel (superadmin) | Settings2 |
 
-**Componente `Tabs` criado inline:**
-- Estilo pill com fundo `--color-surface-offset` e aba ativa elevada com `--color-surface-2` + shadow
-- Aba ativa em `--color-primary`; abas inativas em `--color-text-muted`
-- Icone sempre visivel; label visivel a partir de `sm:` (responsive)
-- Acessibilidade: `role="tablist"` e `aria-selected` em cada botao
-- Sem dependencia externa
-
 **Commits:**
 - `ccded3a` — classTargetsService.ts + useClassTargets.ts + DistribuicaoCarteira.tsx
 - `703d047` — Configuracoes.tsx migrado para abas
-
-**Criterios de aceite atendidos:**
-- ✅ Aba "Distribuicao" aparece em Configuracoes e carrega metas do backend
-- ✅ Edicao inline de percentual com salvar individual por classe
-- ✅ Badge de total acumulado com feedback visual de cor
-- ✅ Adicionar nova classe com select filtrado
-- ✅ Remover classe chama DELETE imediatamente
-- ✅ Estado vazio com mensagem descritiva
-- ✅ Pagina Configuracoes organizada em 4 abas (Conta / Carteiras / Distribuicao / Avancado)
-- ✅ Frontend compila sem erros TypeScript
 
 ---
 
@@ -286,24 +361,9 @@ Sessao dedicada a leitura cruzada da documentacao (README, ROADMAP, CHANGELOG) c
 
 **Problema (raiz):** `_db_set` usava apenas `await db.flush()` — o dado ficava visivel apenas dentro da transacao corrente. Chamadas de `get_portfolio_positions` e `get_portfolio_summary` nao faziam `commit` apos `get_prices`, descartando o `last_price` ao final da request. Na proxima chamada, L1 voltava vazio e o sistema ia para L3 (BRAPI/yfinance) novamente.
 
-**Problema secundario:** a fase de persistencia fazia um segundo `AssetType(raw_type)` que podia lancar `ValueError` silenciosamente, impedindo que `_db_set` fosse chamado para ativos com `asset_type` nao canonico.
-
 **Correcao:**
 - `_db_set` reescrito para usar `begin_nested()` (SAVEPOINT SQL). O savepoint commita o `last_price` imediatamente, independente da transacao principal do chamador.
 - Se o savepoint falhar (conflito de constraint, etc.), apenas ele faz rollback — a transacao principal nao e afetada. Log de warning emitido.
-- `type_map: dict[str, AssetType | None]` adicionado em `get_prices` para reutilizar o `asset_type` ja resolvido na fase de roteamento, eliminando o segundo `try/except ValueError`.
-- Ativos com `asset_type` invalido recebem log de warning em vez de falhar silenciosamente.
-
-**Fluxo apos a correcao:**
-```
-1a requisicao (L1 vazio):
-  get_portfolio_positions -> get_prices -> L3 (BRAPI/yfinance)
-                                        -> _db_set -> begin_nested() -> COMMIT savepoint
-                                        -> L1 populado imediatamente
-
-2a requisicao (ate 15 min depois):
-  get_prices -> _db_get_fresh -> L1 hit -> retorna sem chamar L3
-```
 
 **Commit:** `f18a0a8`
 
@@ -311,48 +371,7 @@ Sessao dedicada a leitura cruzada da documentacao (README, ROADMAP, CHANGELOG) c
 
 #### A2 — Paginacao server-side no endpoint de transacoes
 
-**Arquivos alterados:**
-- `backend/app/schemas/transaction.py` — novo schema `PagedTransactions { items, total, page, page_size, pages }`
-- `backend/app/services/transaction_service.py` — novo servico com `COUNT` + `OFFSET/LIMIT`
-- `backend/app/routers/transactions.py` — `GET /{portfolio_id}/transactions` aceita `page`, `page_size`, `ticker`, `operation`, `date_from`, `date_to`
-- `frontend/src/hooks/useTransactions.ts` — interface `PagedTransactions` + `TransactionFilters`; hook retorna `PagedTransactions` em vez de `Transaction[]`; `placeholderData: prev => prev` para evitar flash ao virar pagina
-- `frontend/src/pages/Transacoes.tsx` — filtros server-side via `queryKey`; `totalRecords` vem do servidor; componente `Pagination` com `ChevronLeft/Right`; agrupamento client-side mantido sobre a pagina atual (<=50 itens)
-
-**Breaking change:** endpoint antes retornava `List[TransactionOut]` (array puro), agora retorna `{ items, total, page, page_size, pages }`. Frontend ja adaptado.
-
 **Commits:** `a00a1aa` (backend) · `27d0f7b` (frontend)
-
----
-
-#### Sprint 7 — logica de rentabilidade (backend)
-
-**Status: IMPLEMENTADA E REVISADA em `portfolio_service.py`**
-
-A revisao do `portfolio_service.py` revelou que toda a logica de rentabilidade ja estava corretamente implementada:
-
-| Campo | Origem | Descricao |
-|---|---|---|
-| `total_gain` / `variacao_valor` | `current_value - total_invested` | Ganho bruto de capital |
-| `total_gain_pct` / `variacao_percentual` | `total_gain / total_invested * 100` | Variacao percentual do capital |
-| `lucro_total` | `total_gain + proventos_em_carteira` | Capital + proventos (ativos em carteira) |
-| `rentabilidade_total` | `lucro_total / total_invested * 100` | Rentabilidade real ponta a ponta |
-| `variation_pct` (grupo) | P4: apenas posicoes cotadas | Variacao do grupo (cotados) |
-| `rentabilidade_pct` (grupo) | P3: ganho_cotados + proventos_grupo | Rentabilidade do grupo com proventos |
-
-**Funcoes helper implementadas:**
-- `sum_dividends_for_tickers`: proventos apenas dos tickers ainda em carteira (evita superestimativa)
-- `sum_dividends_by_ticker`: GROUP BY ticker para calcular rentabilidade por grupo sem N roundtrips
-- `normalize_type` / `_TYPE_ALIASES`: eliminam `ValueError` silencioso por alias de `asset_type`
-
-**ResumePage.tsx** consumia todos os campos corretamente com os comentarios anti-dupla-formatacao ja presentes.
-
-**Conclusao Sprint 7:** todos os itens do backlog estao completos. Sprint encerrada.
-
----
-
-#### Observacao sobre IRPF
-
-Auditoria revelou que `irpf_service.py` (24 KB), `routers/irpf.py` (5.6 KB) e `IRPFPage.tsx` (23.6 KB) ja estavam implementados, contradizendo o ROADMAP que listava IRPF como Sprint 12 (pendente). ROADMAP atualizado para refletir o status real: **backend + frontend basico implementados**, Sprint 12 reservada para revisao e testes.
 
 ---
 
@@ -360,47 +379,7 @@ Auditoria revelou que `irpf_service.py` (24 KB), `routers/irpf.py` (5.6 KB) e `I
 
 ### Hotfix — Tabela de ativos (PositionTable)
 
-Sessao dedicada a correcao de tres bugs visuais e de dados na tabela de ativos do Resumo da carteira.
-
-#### Problemas identificados
-
-| # | Sintoma | Causa raiz |
-|---|---|---|
-| 1 | Cards grandes + linha de tabela aparecendo juntos | `md:hidden` / `hidden md:block` do Tailwind sem breakpoints configurados — ambos os blocos eram renderizados simultaneamente |
-| 2 | Coluna "P. Atual" sempre exibindo `—` | `quotes_service.get_prices` retorna `None` para ativos sem cotacao recente na tabela `assets`; comportamento correto, mas revelou dependencia de L1 (DB cache) vazio |
-| 3 | Coluna "Valor Atual" repetindo o "Total Investido" | `enrich_with_prices` fazia fallback `current_value = total_invested` quando `price is None`, mascarando a ausencia de cotacao |
-
-#### Correcoes aplicadas
-
-**Frontend — `frontend/src/components/resume/PositionTable.tsx`**
-- Substituido `className="md:hidden"` / `className="hidden md:block"` por hook `useIsDesktop()` com `window.matchMedia('(min-width: 768px)')`
-- Renderizacao condicional: `{!isDesktop && <cards>}` e `{isDesktop && <tabela>}` — nunca os dois simultaneamente
-- Coluna "Valor Atual" na tabela desktop agora exibe `—` quando `current_price === null`
-- Card mobile: "Valor Atual" exibe `—` quando `current_price === null` (nao mais repete investido)
-- `hasQuote` corrigido: `current_price !== null && current_price !== undefined` (antes comparava com `average_price`)
-- Chave React corrigida: `item.id ?? item.ticker` (antes podia usar `item.id` undefined)
-- **Commit:** `f82c6dc3`
-
-**Backend — `backend/app/services/portfolio_service.py`**
-- `enrich_with_prices`: quando `price is None`, agora retorna `current_price=None` e `current_value=None` em vez de `current_value=total_invested`
-- `get_portfolio_positions`: expoe `current_price=None` / `current_value=None` explicitamente no payload
-- Calculo de alocacao e soma de `total_current` usa `current_value or total_invested` (fallback so para alocacao percentual, nao para exibicao)
-- Adicionado campo `id` sintetico (`idx + 1`) em cada posicao para uso como chave React
-- **Commit:** `25754acb`
-
-**Backend — `backend/app/schemas/position.py`**
-- `PositionOut.current_value` alterado de `float` para `Optional[float]` — reflete ausencia de cotacao
-- `PositionOut.id` adicionado como `Optional[int]` — id sintetico para chave React
-- **Commit:** `25754acb`
-
-#### Comportamento apos os hotfixes
-
-| Campo | Sem cotacao | Com cotacao |
-|---|---|---|
-| P. Atual | `—` | `R$ XX,XX` |
-| Valor Atual | `—` | `R$ XX,XX` |
-| Resultado | `—` | `+R$ X,XX (+X,XX%)` |
-| Layout | Cards (mobile) | Tabela (desktop) — nunca ambos juntos |
+**Commits:** `f82c6dc3` (frontend) · `25754acb` (backend)
 
 ---
 
@@ -408,120 +387,14 @@ Sessao dedicada a correcao de tres bugs visuais e de dados na tabela de ativos d
 
 ### Manutencao e estabilizacao pos-upgrade
 
-Sessao dedicada a limpeza de PRs obsoletos, correcao de bugs criticos de inicializacao do backend e atualizacao da infraestrutura Docker/CI.
-
-#### PRs fechados (obsoletos)
-- **PR #2** fechado — pacotes pip (`python-multipart`, `pytest`, `python-jose`) ja estavam atualizados na `main` com versoes mais recentes.
-- **PR #3** fechado — Vite 5→8, Tailwind 3→4, TypeScript 5→6 ja aplicados diretamente na `main`.
-
-#### PR mergeado
-- **PR #4** mergeado (squash) — GitHub Actions core group: `checkout v6`, `setup-python v6`, `setup-node v6`, `dependency-review v5`. Commit: `450377b9`.
-
-#### Correcoes de bugs — Backend
-
-| Arquivo | Problema | Correcao | Commit |
-|---|---|---|---|
-| `backend/app/routers/auth.py` | `ImportError`: `get_password_hash` e `create_jwt_token` inexistentes em `security.py` (renomeados na migracao passlib→bcrypt nativo) | `get_password_hash` → `hash_password`; `create_jwt_token({...})` → `create_access_token(subject=str(...))` | `3f98e74f` |
-| `backend/app/routers/portfolios.py` | `ModuleNotFoundError: No module named 'app.core.auth'` — modulo renomeado para `deps.py` | `from app.core.auth` → `from app.core.deps` | `d8bc50a5` |
-
-#### Correcoes de infraestrutura
-
-| Arquivo | Problema | Correcao | Commit |
-|---|---|---|---|
-| `frontend/Dockerfile` | `npm ci` falha sem `package-lock.json` no repositorio | Fallback condicional: `if [ -f package-lock.json ]; then npm ci; else npm install; fi` | `1b4eb493` |
-| `frontend/package-lock.json` | Arquivo ausente — impedia builds reproduziveis | Gerado localmente e commitado | `8d7a99a9` |
-
-#### Seguranca
-- `reset_pwd.py` removido do repositorio — continha senha `Admin@123` em texto claro. Commit: `febaae6e`.
-- Arquivo ainda presente no historico do git (commit `8d7a99a9`). Recomendado usar `git filter-repo` para limpeza completa e trocar a senha nos ambientes.
+**PRs fechados:** #2, #3 (obsoletos)
+**PR mergeado:** #4 — GitHub Actions atualizados
+**Correcoes de bugs:** `routers/auth.py`, `routers/portfolios.py`, `frontend/Dockerfile`
+**Seguranca:** `reset_pwd.py` removido (commit `febaae6e`)
 
 ---
 
 ## [Sprint 6] - 2026-06-15
 
-### Objetivo
-Entregar proventos confiaveis para a pagina de Proventos: proventos dos ativos da carteira com valor por unidade, valor total pelo usuario, separados em recebidos e futuros. Frontend conectado ao backend com filtros, historico e sincronizacao manual.
-
----
-
-### Decisoes de modelagem (Sprint 6)
-
-#### Modelo de dois niveis — mantido e consolidado
-
-| Tabela | Papel |
-|---|---|
-| `asset_dividends` | Provento global do ativo (ex_date, payment_date, value_per_unit, source). Alimentado pelo backfill via BRAPI/yfinance. |
-| `dividends` | Provento da carteira especifica. Vincula portfolio + asset_dividend. Armazena quantity (cotas na data-ex), total_value e net_value calculados, status (RECEBIDO/A_RECEBER). |
-
-#### Regras de calculo
-- `total_value = quantity * value_per_unit`
-- `net_value = total_value * 0.85` para JCP (IR 15%); `= total_value` para os demais
-- `status = RECEBIDO` se `payment_date <= hoje`; caso contrario `A_RECEBER`
-- `quantity` = posicao liquida (compras - vendas) na data-ex, calculada a partir de `Transaction` por `(portfolio_id, ticker, date <= ex_date)`
-
-#### Tipos sem proventos via API (SKIP_TYPES)
-- `CRIPTO`, `TESOURO_DIRETO`, `RENDA_FIXA` — ignorados silenciosamente pelo backfill
-
----
-
-### Alteracoes — Backend
-
-#### dividend_backfill_service.py — correcoes criticas
-- **`_net_qty_on_date`:** corrigido para filtrar por `(portfolio_id, ticker, date)` — `Transaction` nao tem `asset_id`.
-- **`_portfolios_with_asset`:** renomeado para `_portfolios_with_ticker`; busca por `ticker` em vez de `asset_id`.
-- **`_upsert_portfolio_dividend`:** assinatura atualizada para receber `ticker`.
-- **Tipos alinhados com `asset_types.py`:** `YF_TYPES = INTL_TYPES` (importado); `SKIP_TYPES` consolidado.
-- **`OperationType.buy`:** comparacao via enum em vez de string livre.
-- **Commit:** `73538f57`
-
-#### proventos_service.py — reescrita completa
-- Migrado de `Session` sincrona + `db.query()` para `AsyncSession` + `select()`.
-- Removidos imports de schemas inexistentes (`app.schemas.dividend`).
-- Retorna dicts puros — o router serializa.
-- **Funcoes disponiveis:**
-  - `get_summary(db, portfolio_id)` — total_recebido, total_a_receber, total_12m, media_mensal_12m
-  - `list_items(db, portfolio_id, status, year, asset_type, page, page_size)` — listagem paginada com todos os campos
-  - `get_monthly_history(db, portfolio_id, status, asset_type)` — historico por ano/mes
-  - `get_distribution(db, portfolio_id, months)` — distribuicao percentual por ativo
-- **Commit:** `75790b79`
-
-#### routers/proventos.py — reescrita completa
-- Migrado de sincrono para `async def` + `AsyncSession`.
-- Removido prefixo `/api/v1` hardcoded (gerenciado pelo `main.py`).
-- Removidos schemas inexistentes; resposta e o dict puro do service.
-- Validacao de `status` via `DividendStatus` enum — retorna 422 com mensagem clara.
-- **Endpoints disponibilizados:**
-  - `GET /portfolios/{id}/proventos/summary`
-  - `GET /portfolios/{id}/proventos` (filtros: status, year, asset_type, page)
-  - `GET /portfolios/{id}/proventos/historico-mensal`
-  - `GET /portfolios/{id}/proventos/distribuicao`
-- **Commit:** `ff41314a`
-
-#### routers/dividends.py — novo endpoint de sync manual
-- **`POST /portfolios/{id}/dividends/sync`:** busca todos os tickers distintos da carteira via `Transaction` e dispara um `BackgroundTask` por ticker chamando `_run_backfill`. Retorna 202 Accepted com lista de tickers enfileirados.
-- Reutiliza `_run_backfill` (sessao independente, mesmo padrao de `transactions.py`).
-- **Commit:** `d2e7b5d5`
-
----
-
-### Alteracoes — Frontend
-
-#### frontend/src/services/proventosService.ts
-- `ProventosSummary` alinhada com backend: `total_recebido`, `total_a_receber`, `total_12m`, `media_mensal_12m`
-- `getDistribution` → `getDistribuicao`; URL corrigida para `/proventos/distribuicao`
-- `getEvolucao` removido (endpoint nao existe no backend)
-- `getList` agora aponta para `/portfolios/{id}/proventos`; retorna `ProventosListResponse` paginado
-- Adicionado `sync()` → `POST /portfolios/{id}/dividends/sync`
-- **Commit:** `c8ed7f85`
-
-#### frontend/src/hooks/useProventos.ts
-- `useProventosDistribution` renomeado para `useProventosDistribuicao`
-- `useProventosEvolucao` removido
-- `useSyncProventos` adicionado
-- **Commit:** `a6b7ffef`
-
-#### frontend/src/pages/ProventosPage.tsx
-- KPIs alinhados com backend: total_recebido, total_a_receber, total_12m, media_mensal_12m
-- Botao de sync disparando `useSyncProventos`
-- Lista paginada com todos os campos
-- **Commit:** `670fc7bb`
+**Commits backend:** `73538f57`, `75790b79`, `ff41314a`, `d2e7b5d5`
+**Commits frontend:** `c8ed7f85`, `a6b7ffef`, `670fc7bb`

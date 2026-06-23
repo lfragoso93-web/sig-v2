@@ -24,12 +24,12 @@
 sig-v2/
 ├── backend/
 │   ├── app/
-│   │   ├── core/          # config, database, security, deps, asset_types, cache
+│   │   ├── core/          # config, database, security, deps, asset_types, cache, rate_limiter
 │   │   ├── models/        # SQLAlchemy models
 │   │   ├── routers/       # FastAPI routers
 │   │   ├── schemas/       # Pydantic schemas
 │   │   ├── services/      # logica de negocio
-│   │   ├── integrations/  # BRAPI, yfinance
+│   │   ├── integrations/  # BRAPI, Alpha Vantage, BCB PTAX, yfinance
 │   │   ├── migrations/    # scripts SQL versionados
 │   │   └── main.py
 │   ├── tests/
@@ -67,7 +67,7 @@ cd sig-v2
 
 # 2. Copie e ajuste o .env
 cp .env.example .env
-# Edite .env com suas variaveis (DATABASE_URL, SECRET_KEY, BRAPI_TOKEN...)
+# Edite .env com suas variaveis (DATABASE_URL, SECRET_KEY, BRAPI_TOKEN, ALPHA_VANTAGE_API_KEY...)
 
 # 3. Suba os containers
 docker compose up -d --build
@@ -88,9 +88,34 @@ Veja `.env.example` para a lista completa. As principais:
 |---|---|
 | `DATABASE_URL` | URL de conexao PostgreSQL async (`postgresql+asyncpg://...`) |
 | `SECRET_KEY` | Chave JWT — gere com `openssl rand -hex 32` |
-| `BRAPI_TOKEN` | Token da API BRAPI (cotacoes B3) |
+| `BRAPI_TOKEN` | Token da API BRAPI (cotacoes B3, plano Pro) |
+| `ALPHA_VANTAGE_API_KEY` | Chave Alpha Vantage — cotacoes e historico de ativos internacionais (NVDA, IVV, INTR, TFLO etc.) |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Expiracao do token de acesso (padrao: 30) |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | Expiracao do refresh token (padrao: 7) |
+
+---
+
+## Fontes de dados — cotacoes e cambio
+
+### Cotacoes de ativos (quotes_service + price_history_service)
+
+| Tipo de ativo | L1 | L2 | L3 |
+|---|---|---|---|
+| Acoes BR, FII, ETF, BDR | DB cache | BRAPI (bulk) | yfinance |
+| Stocks, ETF INT (USD) | DB cache | Alpha Vantage | yfinance |
+| Cripto | DB cache | BRAPI `/v2/crypto` | — |
+
+### Cambio USD/BRL (fx_service)
+
+| Camada | Fonte | Observacao |
+|---|---|---|
+| L2 (memoria) | `_mem_cache` (TTL 60s) | In-process |
+| L1 (banco) | Tabela `fx_rates` | Historico permanente; hoje TTL 900s |
+| Primario | BCB PTAX (API oficial) | Sem token, historico desde 1994, definitivo |
+| Fallback | AwesomeAPI | Backup se BCB falhar |
+| Ultimo recurso | `FALLBACK_RATE = 5.70` | Nunca propaga excecao |
+
+> **Nota:** datas futuras (projecoes do grafico de evolucao patrimonial) sao automaticamente redirecionadas para a cotacao do dia atual, evitando FALLBACK_RATE desnecessario.
 
 ---
 
@@ -102,7 +127,9 @@ Veja `.env.example` para a lista completa. As principais:
 | Gestao de carteiras (CRUD) | ✅ Funcional |
 | Transacoes (compra/venda, validacao de saldo, paginacao server-side) | ✅ Funcional |
 | Posicoes e patrimonio (preco medio, valor de mercado) | ✅ Funcional |
-| Cotacoes (BRAPI + yfinance, cache L1/L2/L3 com savepoint) | ✅ Funcional |
+| Cotacoes BR (BRAPI + yfinance, cache L1/L2/L3 com savepoint) | ✅ Funcional |
+| Cotacoes INTL (Alpha Vantage primario + yfinance fallback) | ✅ Funcional — 23 Jun 2026 |
+| Cambio USD/BRL (BCB PTAX primario + AwesomeAPI fallback) | ✅ Funcional — 23 Jun 2026 |
 | Historico patrimonial (snapshots diarios) | ✅ Funcional |
 | Proventos (backfill, listagem, historico, sync manual) | ✅ Funcional |
 | Rentabilidade (por ativo, por grupo, total com e sem proventos) | ✅ Funcional — 22 Jun 2026 |
@@ -251,6 +278,7 @@ Veja [ROADMAP_SPRINTS.md](./ROADMAP_SPRINTS.md) para o roadmap completo e [CHANG
 | Security Hotfix 21 Jun — pydantic-settings CVE | ✅ Concluido |
 | Sprint 7 — Rentabilidade | ✅ Concluida — 22 Jun 2026 |
 | Sprint 11 — Metas e Alocacao | ✅ Concluida — 22 Jun 2026 |
+| Hotfix 23 Jun — BCB PTAX + Alpha Vantage INTL | ✅ Concluido — 23 Jun 2026 |
 | Sprint 7.5 — Hardening de Seguranca (C1–C3, A1–A4) | 🔜 Proxima |
 | Sprint 8 — Historico Patrimonial (frontend) | ⏳ Planejada |
 | Sprints 9 a 15 | ⏳ Planejadas |
