@@ -9,7 +9,7 @@ import '@/index.css'
 // Layouts
 import AppLayout  from '@/components/layout/AppLayout'
 import AuthLayout from '@/components/layout/AuthLayout'
-import ProtectedRoute from '@/router/ProtectedRoute'
+import ProtectedRoute, { OnboardingRoute } from '@/router/ProtectedRoute'
 
 // Pages auth
 import LoginPage    from '@/pages/auth/LoginPage'
@@ -83,13 +83,13 @@ const router = createBrowserRouter([
       { path: '/login',    element: <Navigate to="/auth/login"    replace /> },
       { path: '/register', element: <Navigate to="/auth/registro" replace /> },
 
-      // Welcome — onboarding (protegido, fora do AppLayout)
+      // Welcome — onboarding (protegido, sem verificar onboarding para evitar loop)
       {
         path: '/welcome',
-        element: <ProtectedRoute><WelcomePage /></ProtectedRoute>,
+        element: <OnboardingRoute><WelcomePage /></OnboardingRoute>,
       },
 
-      // App protegido
+      // App protegido (redireciona para /welcome se onboarding incompleto)
       {
         path: '/carteira',
         element: <ProtectedRoute><AppLayout /></ProtectedRoute>,
