@@ -1,19 +1,42 @@
-import { Navigate, Outlet } from 'react-router-dom'
+import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 
 export default function ProtectedRoute() {
-  const { isAuthenticated, isLoading } = useAuth()
+  const { isAuthenticated, isLoading, user } = useAuth()
+  const location = useLocation()
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-light-50 dark:bg-dark-800">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-brand-primary border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm text-muted">Carregando...</span>
-        </div>
+      <div style={{
+        minHeight: '100dvh', display: 'flex', alignItems: 'center',
+        justifyContent: 'center', background: 'var(--color-bg)',
+        flexDirection: 'column', gap: '0.75rem',
+      }}>
+        <div style={{
+          width: 32, height: 32,
+          border: '2px solid var(--color-primary)',
+          borderTopColor: 'transparent',
+          borderRadius: '50%',
+          animation: 'spin 0.7s linear infinite',
+        }} />
+        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Carregando...</span>
       </div>
     )
   }
 
-  return isAuthenticated ? <Outlet /> : <Navigate to="/login" replace />
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />
+  }
+
+  // Redireciona para onboarding se nao concluido e nao esta la ainda
+  if (user && !user.onboarding_completed && location.pathname !== '/welcome') {
+    return <Navigate to="/welcome" replace />
+  }
+
+  // Ja concluiu onboarding mas tentou acessar /welcome diretamente
+  if (user?.onboarding_completed && location.pathname === '/welcome') {
+    return <Navigate to="/carteira" replace />
+  }
+
+  return <Outlet />
 }

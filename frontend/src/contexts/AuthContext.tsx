@@ -20,6 +20,7 @@ interface AuthContextData {
   isLoading: boolean
   isAuthenticated: boolean
   login: (email: string, password: string) => Promise<void>
+  loginWithTokens: (accessToken: string, refreshToken: string) => Promise<void>
   logout: () => void
   refreshUser: () => Promise<void>
   setUser: React.Dispatch<React.SetStateAction<User | null>>
@@ -54,9 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(false)
       return
     }
-
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`
-
     loadMe()
       .catch(() => {
         authStore.logout()
@@ -66,19 +65,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setIsLoading(false))
   }, [])
 
+  // login via email+senha (usado pelo LoginPage)
   const login = async (email: string, password: string) => {
     const { data: tokens } = await api.post<{
       access_token: string
       refresh_token: string
     }>('/auth/login', { email, password })
+    await loginWithTokens(tokens.access_token, tokens.refresh_token)
+  }
 
-    localStorage.setItem('sig_token', tokens.access_token)
-    localStorage.setItem('sig_refresh', tokens.refresh_token)
-    api.defaults.headers.common['Authorization'] = `Bearer ${tokens.access_token}`
+  // login direto com tokens (usado pelo RegisterPage apos /auth/register)
+  const loginWithTokens = async (accessToken: string, refreshToken: string) => {
+    localStorage.setItem('sig_token', accessToken)
+    localStorage.setItem('sig_refresh', refreshToken)
+    api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
 
     const me = await loadMe()
 
-    authStore.login(tokens.access_token, {
+    authStore.login(accessToken, {
       id: me.id,
       email: me.email,
       name: me.name,
@@ -86,12 +90,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       theme_preference: me.theme_preference,
     })
 
-    // Redireciona para o tour de onboarding se ainda nao foi concluido
-    if (!me.onboarding_completed) {
-      navigate('/welcome')
-    } else {
-      navigate('/carteira')
-    }
+    // Redirect reativo: ProtectedRoute cuida do /welcome.
+    // Aqui apenas mandamos para a raiz protegida.
+    navigate('/carteira')
   }
 
   const logout = () => {
@@ -115,6 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       isAuthenticated: !!user,
       login,
+      loginWithTokens,
       logout,
       refreshUser,
       setUser,
