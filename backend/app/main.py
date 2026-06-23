@@ -8,11 +8,13 @@ from fastapi.openapi.utils import get_openapi
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+from sqlalchemy import text
 
-from app.core.database import engine
+from app.core.database import engine, AsyncSessionLocal
 from app.core.config import settings
-from app.core.limiter import limiter  # instancia centralizada — evita circular import
+from app.core.limiter import limiter
 from app.core.scheduler import start_scheduler
+from app.core.cache import get_redis
 from app.routers import (
     auth, portfolios, transactions, dividends, positions,
     users, proventos, performance, admin,
@@ -44,16 +46,11 @@ app = FastAPI(
 app.state.limiter = limiter
 
 
-# Wrapper com assinatura compativel com add_exception_handler (mypy exige
-# Callable[[Request, Exception], Response | Awaitable[Response]]).
 def _rate_limit_handler(request: Request, exc: Exception) -> Response:
     return _rate_limit_exceeded_handler(request, exc)  # type: ignore[arg-type]
 
 
-# Handler de 429 -- retorna JSON padrao em vez de HTML
 app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
-
-# Middleware slowapi (necessario para key_func acessar o request)
 app.add_middleware(SlowAPIMiddleware)
 
 
@@ -132,7 +129,6 @@ app.include_router(transactions.router,    prefix=f"{PREFIX}/portfolios",   tags
 app.include_router(treasury.router,        prefix=f"{PREFIX}/portfolios",   tags=["treasury"])
 app.include_router(positions.router,       prefix=f"{PREFIX}/positions",    tags=["positions"])
 app.include_router(dividends.router,       prefix=f"{PREFIX}/portfolios",   tags=["dividends"])
-# proventos router ja tem prefix="/portfolios/{portfolio_id}/proventos" internamente
 app.include_router(proventos.router,       prefix=f"{PREFIX}",              tags=["proventos"])
 app.include_router(performance.router,     prefix=f"{PREFIX}/performance",  tags=["performance"])
 app.include_router(class_targets.router,   prefix=f"{PREFIX}/portfolios",   tags=["class-targets"])
@@ -154,6 +150,44 @@ if settings.APP_DEBUG or __import__('os').getenv("ADMIN_SECRET"):
     app.include_router(debug.router, prefix=f"{PREFIX}/debug", tags=["debug"])
 
 
-@app.get("/health")
+@app.get("/health", tags=["health"])
 async def health():
-    return {"status": "ok", "version": "2.0.0", "debug": settings.APP_DEBUG}
+    """
+    Health check real: verifica conectividade com PostgreSQL e Redis.
+    Retorna 200 se ambos ok, 503 se algum falhar.
+    """
+    checks: dict[str, str] = {}
+    overall_ok = True
+
+    # --- PostgreSQL: SELECT 1 ---
+    try:
+        async with AsyncSessionLocal() as db:
+            await db.execute(text("SELECT 1"))
+        checks["postgres"] = "ok"
+    except Exception as e:
+        logger.error("[health] postgres falhou: %s", e)
+        checks["postgres"] = "error"
+        overall_ok = False
+
+    # --- Redis: ping ---
+    try:
+        client = await get_redis()
+        if client:
+            await client.ping()
+            checks["redis"] = "ok"
+        else:
+            checks["redis"] = "unavailable"
+            # Redis e opcional — nao derruba o health
+    except Exception as e:
+        logger.warning("[health] redis ping falhou: %s", e)
+        checks["redis"] = "error"
+        # Redis e opcional — nao derruba o health
+
+    payload = {
+        "status": "ok" if overall_ok else "degraded",
+        "version": "2.0.0",
+        "debug": settings.APP_DEBUG,
+        "checks": checks,
+    }
+    status_code = 200 if overall_ok else 503
+    return JSONResponse(content=payload, status_code=status_code)

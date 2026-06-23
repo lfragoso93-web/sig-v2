@@ -18,12 +18,11 @@ from app.services.corporate_event_service import (
 )
 from app.services.dividend_backfill_service import backfill_dividends
 from app.services.price_history_service import persist_daily_prices
-from app.services.quotes_service import update_all_quotes  # canônico com cache L1/L2/L3
+from app.services.quotes_service import update_all_quotes
 from app.services.portfolio_snapshot_service import refresh_today_snapshot
 
 logger = logging.getLogger(__name__)
 
-# Tipos atendidos por BRAPI (inclui BDR — negocia na B3)
 BRAPI_ASSET_TYPES = {
     AssetType.ACAO,
     AssetType.FII,
@@ -41,7 +40,6 @@ scheduler = AsyncIOScheduler(timezone="America/Sao_Paulo")
 
 
 async def _get_active_brapi_assets() -> list[Asset]:
-    """Retorna ativos BR ativos via Transaction (sem depender de PortfolioPosition legada)."""
     async with AsyncSessionLocal() as db:
         result = await db.execute(
             select(Asset)
@@ -99,22 +97,49 @@ async def _get_active_portfolio_ids() -> list[int]:
 
 
 async def job_update_quotes():
+    """Atualiza cotacoes BR via BRAPI. Falha por ativo e isolada."""
     logger.info("[Scheduler] Atualizando cotacoes...")
-    assets = await _get_active_brapi_assets()
+    try:
+        assets = await _get_active_brapi_assets()
+    except Exception as e:
+        logger.error("[Scheduler] job_update_quotes: erro ao listar ativos: %s", e)
+        return
+
     if not assets:
         return
+
     tickers = [a.brapi_ticker or a.ticker for a in assets]
-    quotes = await get_quotes_bulk(tickers)
+    try:
+        quotes = await get_quotes_bulk(tickers)
+    except Exception as e:
+        logger.error("[Scheduler] job_update_quotes: erro BRAPI bulk: %s", e)
+        return
+
+    ok = 0
+    errors = 0
     for quote in quotes:
         ticker = quote.get("symbol", "")
-        if ticker:
+        if not ticker:
+            continue
+        try:
             await cache_set(f"quote:{ticker}", quote, ttl=360)
-    logger.info(f"[Scheduler] {len(quotes)} cotacoes atualizadas.")
+            ok += 1
+        except Exception as e:
+            errors += 1
+            logger.warning("[Scheduler] job_update_quotes: erro cache %s: %s", ticker, e)
+
+    logger.info(f"[Scheduler] {ok} cotacoes atualizadas, {errors} erros de cache.")
 
 
 async def job_persist_price_history():
+    """Persiste historico de precos. Falha por ticker e isolada."""
     logger.info("[Scheduler] Persistindo historico de precos...")
-    pairs = await _get_price_history_tickers()
+    try:
+        pairs = await _get_price_history_tickers()
+    except Exception as e:
+        logger.error("[Scheduler] job_persist_price_history: erro ao listar tickers: %s", e)
+        return
+
     if not pairs:
         logger.info("[Scheduler] Nenhum ativo para historico de precos.")
         return
@@ -130,22 +155,28 @@ async def job_persist_price_history():
                 total += inserted
         except Exception as e:
             errors += 1
-            logger.error(f"[Scheduler] Erro persist price {ticker}: {e}")
+            logger.error("[Scheduler] Erro persist price %s: %s", ticker, e)
 
     logger.info(f"[Scheduler] Historico: {total} registros inseridos, {errors} erros.")
 
 
 async def job_update_all_quotes_and_snapshots():
+    """Atualiza todas as cotacoes (L1/L2/L3) e snapshots do dia. Falha por portfolio e isolada."""
     logger.info("[Scheduler] Iniciando update_all_quotes + snapshots do dia...")
 
     try:
         async with AsyncSessionLocal() as db:
-            await update_all_quotes(db)  # quotes_service — canonico com cache L1/L2/L3
+            await update_all_quotes(db)
         logger.info("[Scheduler] update_all_quotes concluido.")
     except Exception as e:
-        logger.error(f"[Scheduler] Erro em update_all_quotes: {e}")
+        logger.error("[Scheduler] Erro em update_all_quotes: %s", e)
 
-    portfolio_ids = await _get_active_portfolio_ids()
+    try:
+        portfolio_ids = await _get_active_portfolio_ids()
+    except Exception as e:
+        logger.error("[Scheduler] Erro ao listar portfolio_ids para snapshot: %s", e)
+        return
+
     ok = 0
     errors = 0
     for pid in portfolio_ids:
@@ -155,7 +186,7 @@ async def job_update_all_quotes_and_snapshots():
             ok += 1
         except Exception as e:
             errors += 1
-            logger.error(f"[Scheduler] Erro snapshot portfolio={pid}: {e}")
+            logger.error("[Scheduler] Erro snapshot portfolio=%s: %s", pid, e)
 
     logger.info(
         f"[Scheduler] Snapshots do dia: {ok} ok, {errors} erros "
@@ -164,8 +195,14 @@ async def job_update_all_quotes_and_snapshots():
 
 
 async def job_sync_corporate_events():
+    """Sincroniza eventos corporativos. Falha por ativo e isolada."""
     logger.info("[Scheduler] Sincronizando eventos corporativos...")
-    assets = await _get_active_brapi_assets()
+    try:
+        assets = await _get_active_brapi_assets()
+    except Exception as e:
+        logger.error("[Scheduler] job_sync_corporate_events: erro ao listar ativos: %s", e)
+        return
+
     async with AsyncSessionLocal() as db:
         new_total = 0
         for asset in assets:
@@ -173,17 +210,28 @@ async def job_sync_corporate_events():
                 new_events = await sync_corporate_events_for_asset(db, asset)
                 new_total += len(new_events)
             except Exception as e:
-                logger.error(f"[Scheduler] Erro sync {asset.ticker}: {e}")
-        applied = await apply_pending_events(db)
-        await db.commit()
+                logger.error("[Scheduler] Erro sync corporate %s: %s", asset.ticker, e)
+        try:
+            applied = await apply_pending_events(db)
+            await db.commit()
+        except Exception as e:
+            logger.error("[Scheduler] Erro apply_pending_events: %s", e)
+            applied = 0
+
     logger.info(f"[Scheduler] {new_total} novos eventos, {applied} aplicados nas carteiras.")
 
 
 async def job_sync_dividends():
+    """Resync semanal de proventos. Falha por (portfolio, ticker) e isolada."""
     logger.info("[Scheduler] Resync semanal de proventos iniciado...")
-    portfolio_tickers = await _get_active_portfolio_tickers()
+    try:
+        portfolio_tickers = await _get_active_portfolio_tickers()
+    except Exception as e:
+        logger.error("[Scheduler] job_sync_dividends: erro ao listar tickers: %s", e)
+        return
 
     total_processed = 0
+    errors = 0
     for portfolio_id, ticker, asset_type in portfolio_tickers:
         try:
             async with AsyncSessionLocal() as db:
@@ -195,27 +243,34 @@ async def job_sync_dividends():
                 )
             total_processed += 1
         except Exception as e:
-            logger.error(f"[Scheduler] Erro resync proventos {ticker}: {e}")
+            errors += 1
+            logger.error("[Scheduler] Erro resync proventos %s: %s", ticker, e)
 
-    logger.info(f"[Scheduler] Resync semanal concluido: {total_processed} posicoes processadas.")
+    logger.info(
+        f"[Scheduler] Resync semanal concluido: {total_processed} ok, {errors} erros."
+    )
 
 
 async def job_update_dividend_status():
+    """Marca proventos cujo payment_date ja passou como RECEBIDO."""
     today = date.today()
     logger.info("[Scheduler] Atualizando status de proventos para RECEBIDO...")
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(
-            update(Dividend)
-            .where(
-                Dividend.status == DividendStatus.A_RECEBER,
-                Dividend.payment_date <= today,
-                Dividend.payment_date.isnot(None),
+    try:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                update(Dividend)
+                .where(
+                    Dividend.status == DividendStatus.A_RECEBER,
+                    Dividend.payment_date <= today,
+                    Dividend.payment_date.isnot(None),
+                )
+                .values(status=DividendStatus.RECEBIDO)
             )
-            .values(status=DividendStatus.RECEBIDO)
-        )
-        await db.commit()
-        updated = result.rowcount
-    logger.info(f"[Scheduler] {updated} proventos marcados como RECEBIDO.")
+            await db.commit()
+            updated = result.rowcount
+        logger.info(f"[Scheduler] {updated} proventos marcados como RECEBIDO.")
+    except Exception as e:
+        logger.error("[Scheduler] job_update_dividend_status: erro: %s", e)
 
 
 def init_scheduler():
