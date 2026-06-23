@@ -122,7 +122,6 @@ async def fetch_price_history(
 
             history = results[0].get("historicalDataPrice", [])
             if not history:
-                # Sem histórico mas tem preço atual: retorna snapshot do dia
                 price = results[0].get("regularMarketPrice")
                 if price:
                     now = datetime.now(timezone.utc).replace(
@@ -137,7 +136,6 @@ async def fetch_price_history(
                 ts_raw = entry.get("date") or entry.get("timestamp")
                 if close is None or ts_raw is None:
                     continue
-                # ts_raw pode ser epoch (int) ou string ISO
                 if isinstance(ts_raw, (int, float)):
                     dt = datetime.fromtimestamp(ts_raw, tz=timezone.utc)
                 else:
@@ -167,8 +165,125 @@ async def fetch_historical_price(ticker: str, date_str: str) -> Optional[float]:
     date_from = (ref_date - timedelta(days=5)).isoformat()
     rows = await fetch_price_history(ticker, date_from, date_str)
     if rows:
-        return rows[-1][1]  # ultimo fechamento disponivel na janela
+        return rows[-1][1]
     return None
+
+
+# ── Moedas — cotação atual e histórico (BRAPI v2/currency) ───────────────────────────
+
+async def fetch_currency_rate(pair: str = "USD-BRL") -> Optional[float]:
+    """
+    Retorna a cotação atual de um par cambial via BRAPI /v2/currency.
+
+    O par deve estar no formato 'FROM-TO', ex: 'USD-BRL'.
+    Retorna None se a BRAPI falhar ou o par não for encontrado.
+
+    Endpoint: GET /api/v2/currency?currency=USD-BRL
+    Campo usado: regularMarketPrice (cotação de venda atual).
+    """
+    headers = _auth_headers()
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                f"{BRAPI_BASE}/v2/currency",
+                headers=headers,
+                params={"currency": pair},
+            )
+            resp.raise_for_status()
+            data    = resp.json()
+            # Resposta: {"currencies": [{"fromCurrency": "USD", "toCurrency": "BRL",
+            #            "name": "...", "regularMarketPrice": 5.42, ...}]}
+            currencies = data.get("currencies") or []
+            for item in currencies:
+                price = item.get("regularMarketPrice") or item.get("ask") or item.get("price")
+                if price is not None:
+                    logger.info(f"[brapi] fetch_currency_rate {pair} = {price}")
+                    return float(price)
+            logger.warning(f"[brapi] fetch_currency_rate: par {pair!r} sem cotação na resposta")
+            return None
+    except Exception as e:
+        logger.warning(f"[brapi] fetch_currency_rate error for {pair}: {e}")
+        return None
+
+
+async def fetch_currency_history(
+    pair: str,
+    start_date: str,
+    end_date: str,
+) -> list[tuple[date, float]]:
+    """
+    Retorna histórico diário de cotação de um par cambial via BRAPI /v2/currency/historical.
+
+    Parâmetros:
+        pair       -- par no formato 'USD-BRL'
+        start_date -- data inicial YYYY-MM-DD
+        end_date   -- data final YYYY-MM-DD (inclusive)
+
+    Retorna lista de (date, rate) ordenada por data asc.
+    Retorna [] se BRAPI falhar — o chamador deve tratar o fallback.
+
+    Endpoint: GET /api/v2/currency/historical?currency=USD-BRL&startDate=...&endDate=...
+    Campo usado: 'close' ou 'regularMarketPrice' em cada entrada histórica.
+    """
+    headers = _auth_headers()
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(
+                f"{BRAPI_BASE}/v2/currency/historical",
+                headers=headers,
+                params={
+                    "currency":  pair,
+                    "startDate": start_date,
+                    "endDate":   end_date,
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+            # Resposta esperada:
+            # {"currency": [{"date": "2026-06-20", "close": 5.4200, ...}, ...]}
+            # ou variantes com "historical" / lista raiz
+            entries = (
+                data.get("currency")
+                or data.get("historical")
+                or data.get("currencies")
+                or (data if isinstance(data, list) else [])
+            )
+            if not entries:
+                logger.warning(f"[brapi] fetch_currency_history: sem dados para {pair} ({start_date} a {end_date})")
+                return []
+
+            # Normaliza: cada entrada pode ser direto ou ter sub-lista "historical"
+            flat: list[dict] = []
+            for item in entries:
+                hist = item.get("historical") if isinstance(item, dict) else None
+                if hist and isinstance(hist, list):
+                    flat.extend(hist)
+                elif isinstance(item, dict) and ("date" in item or "close" in item):
+                    flat.append(item)
+
+            rows: list[tuple[date, float]] = []
+            for entry in flat:
+                raw_date  = entry.get("date") or entry.get("timestamp")
+                raw_price = entry.get("close") or entry.get("regularMarketPrice") or entry.get("price")
+                if raw_date is None or raw_price is None:
+                    continue
+                try:
+                    if isinstance(raw_date, (int, float)):
+                        d = datetime.fromtimestamp(raw_date, tz=timezone.utc).date()
+                    else:
+                        d = date.fromisoformat(str(raw_date)[:10])
+                    rows.append((d, float(raw_price)))
+                except (ValueError, TypeError):
+                    continue
+
+            rows.sort(key=lambda x: x[0])
+            logger.info(f"[brapi] fetch_currency_history {pair}: {len(rows)} registros ({start_date} a {end_date})")
+            return rows
+
+    except Exception as e:
+        logger.warning(f"[brapi] fetch_currency_history error for {pair} ({start_date} a {end_date}): {e}")
+        return []
 
 
 # ── Cripto (BRAPI Pro) ─────────────────────────────────────────────────────────────────
@@ -177,9 +292,6 @@ async def fetch_crypto_quote(tickers: list[str]) -> dict[str, float]:
     """
     Busca cotação atual de criptomoedas via BRAPI Pro (/api/v2/crypto).
     Retorna {ticker: price_brl}.
-
-    Centraliza a lógica que antes estava inline em quotes_service.py.
-    Tickers sem cotação ficam ausentes no resultado (nunca retorna None como valor).
     """
     if not tickers:
         return {}
@@ -187,7 +299,6 @@ async def fetch_crypto_quote(tickers: list[str]) -> dict[str, float]:
     headers = _auth_headers()
     results: dict[str, float] = {}
 
-    # BRAPI v2/crypto aceita múltiplos coins separados por vírgula
     joined = ",".join(t.upper() for t in tickers)
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
