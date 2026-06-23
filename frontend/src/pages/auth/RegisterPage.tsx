@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import api from '@/services/api'
+import { useAuth } from '@/contexts/AuthContext'
 import { Eye, EyeOff } from 'lucide-react'
 
 const schema = z.object({
@@ -18,7 +19,7 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>
 
 export default function RegisterPage() {
-  const navigate = useNavigate()
+  const { login } = useAuth()
   const [showPass, setShowPass] = useState(false)
   const [apiError, setApiError] = useState('')
 
@@ -29,8 +30,10 @@ export default function RegisterPage() {
   const onSubmit = async (data: FormData) => {
     setApiError('')
     try {
+      // 1. Cria a conta
       await api.post('/auth/register', { name: data.name, email: data.email, password: data.password })
-      navigate('/auth/login?registered=1')
+      // 2. Faz login automatico — AuthContext vai redirecionar para /welcome
+      await login(data.email, data.password)
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } } }
       setApiError(err?.response?.data?.detail ?? 'Erro ao criar conta. Tente novamente.')
@@ -113,7 +116,6 @@ export default function RegisterPage() {
         {errors.confirm && <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-notification)', margin: 0 }}>{errors.confirm.message}</p>}
       </div>
 
-      {/* Erro da API */}
       {apiError && (
         <div style={{
           fontSize: 'var(--text-xs)', color: 'var(--color-notification)',

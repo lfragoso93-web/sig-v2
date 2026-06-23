@@ -12,6 +12,7 @@ export interface User {
   role: string
   avatar_url?: string | null
   theme_preference?: 'dark' | 'light'
+  onboarding_completed?: boolean
 }
 
 interface AuthContextData {
@@ -26,7 +27,6 @@ interface AuthContextData {
 
 const AuthContext = createContext<AuthContextData>({} as AuthContextData)
 
-/** Limpa todos os artefatos de sessão do localStorage de forma centralizada */
 function clearAllTokens() {
   localStorage.removeItem('sig_token')
   localStorage.removeItem('sig_refresh')
@@ -48,8 +48,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return data
   }
 
-  // Hidratação inicial: executa apenas na montagem do componente (deps vazias intencionais).
-  // O interceptor do axios já injeta o token via authStore.getState().token.
   useEffect(() => {
     const token = authStore.token ?? localStorage.getItem('sig_token')
     if (!token) {
@@ -66,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         delete api.defaults.headers.common['Authorization']
       })
       .finally(() => setIsLoading(false))
-  }, []) // deps vazias intencionais
+  }, [])
 
   const login = async (email: string, password: string) => {
     const { data: tokens } = await api.post<{
@@ -88,7 +86,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       theme_preference: me.theme_preference,
     })
 
-    navigate('/carteira')
+    // Redireciona para o tour de onboarding se ainda nao foi concluido
+    if (!me.onboarding_completed) {
+      navigate('/welcome')
+    } else {
+      navigate('/carteira')
+    }
   }
 
   const logout = () => {
