@@ -84,7 +84,10 @@ export function signClass(value: number): string {
 }
 
 // -- Badge por tipo de ativo -------------------------------------------------
-export function assetBadgeClass(assetType: string): string {
+export function assetBadgeClass(assetType: string | null | undefined): string {
+  // Guarda ANTES de qualquer acesso ao valor — evita TypeError: Cannot read
+  // properties of undefined (reading 'toUpperCase') quando asset_type chega
+  // null/undefined do backend.
   if (!assetType) return 'badge-default'
   const map: Record<string, string> = {
     'ACAO':              'badge-acao',

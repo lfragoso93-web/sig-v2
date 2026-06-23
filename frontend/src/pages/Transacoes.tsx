@@ -11,7 +11,8 @@ import { usePortfolios } from '@/hooks/usePortfolios'
 import { formatBRL, formatDate, assetBadgeClass } from '@/utils/format'
 import TransactionsBarChart from '@/components/charts/TransactionsBarChart'
 
-function assetTypeToTab(assetType: string): string {
+function assetTypeToTab(assetType: string | null | undefined): string {
+  if (!assetType) return 'acao'
   const map: Record<string, string> = {
     ACAO:              'acao',
     ACAO_NACIONAL:     'acao',
@@ -23,7 +24,7 @@ function assetTypeToTab(assetType: string): string {
     RENDA_FIXA:        'renda_fixa',
     CRIPTO:            'cripto',
   }
-  return map[assetType] ?? 'acao'
+  return map[assetType.toUpperCase()] ?? 'acao'
 }
 
 const ASSET_TYPE_LABEL: Record<string, string> = {
@@ -61,7 +62,7 @@ function TransactionCard({
           <span className="px-2 py-0.5 rounded text-[10px] font-semibold" style={{ background: opBg, color: opColor }}>
             {isBuy ? 'Compra' : 'Venda'}
           </span>
-          <span className={`asset-badge ${assetBadgeClass(t.asset_type)} text-[9px]`}>{t.asset_type}</span>
+          <span className={`asset-badge ${assetBadgeClass(t.asset_type)} text-[9px]`}>{t.asset_type ?? '—'}</span>
         </div>
         <div className="flex items-center gap-1">
           <button onClick={onEdit}
@@ -120,7 +121,7 @@ function TransactionRow({
     <tr>
       <td className="text-sm" style={{ color: 'var(--color-text-muted)' }}>{formatDate(t.date)}</td>
       <td><span className="font-semibold text-sm">{t.ticker}</span></td>
-      <td><span className={`asset-badge ${assetBadgeClass(t.asset_type)}`}>{t.asset_type}</span></td>
+      <td><span className={`asset-badge ${assetBadgeClass(t.asset_type)}`}>{t.asset_type ?? '—'}</span></td>
       <td className="text-center">
         <span
           className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold"
@@ -258,12 +259,15 @@ export default function Transacoes() {
     if (ticker) { setSearch(ticker); setPage(1) }
   }, [searchParams])
 
-  // Agrupamento client-side sobre a página atual (≤50 itens) — leve e correto
+  // Agrupamento client-side sobre a página atual (≤50 itens)
+  // Usa fallback 'SEM_TIPO' para itens com asset_type undefined/null,
+  // evitando crash ao chamar .toUpperCase() ou ao usar undefined como chave.
   const groupedByType = useMemo(() => {
     const groups: Record<string, Transaction[]> = {}
     for (const t of transactions) {
-      if (!groups[t.asset_type]) groups[t.asset_type] = []
-      groups[t.asset_type].push(t)
+      const key = t.asset_type ?? 'SEM_TIPO'
+      if (!groups[key]) groups[key] = []
+      groups[key].push(t)
     }
     return groups
   }, [transactions])
