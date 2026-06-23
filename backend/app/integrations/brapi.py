@@ -8,11 +8,42 @@ logger = logging.getLogger(__name__)
 
 BRAPI_BASE = "https://brapi.dev/api"
 
+# Limite de dias a partir do qual usamos range=max em vez de range=custom.
+# Acima de ~5 anos, range=custom pode ser rejeitado pela BRAPI dependendo do plano.
+_MAX_RANGE_THRESHOLD_DAYS = 365 * 5
+
 
 def _auth_headers() -> dict:
     if settings.BRAPI_TOKEN:
         return {"Authorization": f"Bearer {settings.BRAPI_TOKEN}"}
     return {}
+
+
+def _parse_history_rows(
+    history: list[dict],
+    ticker: str,
+    label: str,
+) -> list[tuple[datetime, float]]:
+    """Converte a lista historicalDataPrice da BRAPI em (datetime UTC, float)."""
+    rows: list[tuple[datetime, float]] = []
+    for entry in history:
+        close = entry.get("close") or entry.get("adjclose")
+        ts_raw = entry.get("date") or entry.get("timestamp")
+        if close is None or ts_raw is None:
+            continue
+        if isinstance(ts_raw, (int, float)):
+            dt = datetime.fromtimestamp(ts_raw, tz=timezone.utc)
+        else:
+            try:
+                dt = datetime.fromisoformat(str(ts_raw))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+            except ValueError:
+                continue
+        rows.append((dt, float(close)))
+    rows.sort(key=lambda x: x[0])
+    logger.info(f"BRAPI price_history [{label}]: {ticker} — {len(rows)} registros")
+    return rows
 
 
 # ── Cotações atuais ───────────────────────────────────────────────────────────────────
@@ -85,6 +116,35 @@ async def fetch_price_history(
     date_from: str,
     date_to: str,
 ) -> list[tuple[datetime, float]]:
+    """
+    Busca historico de precos diarios via BRAPI.
+
+    Estrategia adaptativa (BRAPI Pro):
+      - Janela <= 5 anos: usa range=custom com from/to exatos.
+      - Janela >  5 anos: delega para fetch_price_history_full (range=max)
+        e filtra os registros fora da janela solicitada.
+
+    Isso garante que o plano Pro seja aproveitado ao maximo sem rejeicao
+    do parametro range=custom para janelas muito longas.
+    """
+    from datetime import date as _date
+    try:
+        d_from = _date.fromisoformat(date_from)
+        d_to   = _date.fromisoformat(date_to)
+        delta  = (d_to - d_from).days
+    except ValueError:
+        delta  = 0
+
+    if delta > _MAX_RANGE_THRESHOLD_DAYS:
+        logger.info(f"BRAPI price_history: {ticker} janela {delta}d > threshold — usando range=max")
+        rows = await fetch_price_history_full(ticker)
+        # Filtra apenas o intervalo pedido
+        cutoff_from = datetime.fromisoformat(date_from).replace(tzinfo=timezone.utc)
+        cutoff_to   = datetime.fromisoformat(date_to).replace(
+            hour=23, minute=59, second=59, tzinfo=timezone.utc
+        )
+        return [(dt, c) for dt, c in rows if cutoff_from <= dt <= cutoff_to]
+
     headers = _auth_headers()
     url = (
         f"{BRAPI_BASE}/quote/{ticker}"
@@ -92,7 +152,7 @@ async def fetch_price_history(
         f"&from={date_from}&to={date_to}"
     )
     try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(url, headers=headers)
             resp.raise_for_status()
             data    = resp.json()
@@ -111,29 +171,50 @@ async def fetch_price_history(
                     return [(now, float(price))]
                 return []
 
-            rows: list[tuple[datetime, float]] = []
-            for entry in history:
-                close = entry.get("close") or entry.get("adjclose")
-                ts_raw = entry.get("date") or entry.get("timestamp")
-                if close is None or ts_raw is None:
-                    continue
-                if isinstance(ts_raw, (int, float)):
-                    dt = datetime.fromtimestamp(ts_raw, tz=timezone.utc)
-                else:
-                    try:
-                        dt = datetime.fromisoformat(str(ts_raw))
-                        if dt.tzinfo is None:
-                            dt = dt.replace(tzinfo=timezone.utc)
-                    except ValueError:
-                        continue
-                rows.append((dt, float(close)))
-
-            rows.sort(key=lambda x: x[0])
-            logger.info(f"BRAPI price_history: {ticker} — {len(rows)} registros ({date_from} a {date_to})")
-            return rows
+            return _parse_history_rows(history, ticker, f"{date_from} a {date_to}")
 
     except Exception as e:
         logger.warning(f"BRAPI fetch_price_history error for {ticker}: {e}")
+        return []
+
+
+async def fetch_price_history_full(
+    ticker: str,
+) -> list[tuple[datetime, float]]:
+    """
+    Busca o historico completo de precos diarios via BRAPI Pro (range=max).
+
+    Disponivel apenas no plano Pro. Retorna todos os fechamentos desde o
+    inicio da negociacao do ativo na bolsa.
+    Timeout estendido (60s) pois a resposta pode ser grande para ativos antigos.
+    """
+    headers = _auth_headers()
+    url = f"{BRAPI_BASE}/quote/{ticker}?range=max&interval=1d"
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.get(url, headers=headers)
+            resp.raise_for_status()
+            data    = resp.json()
+            results = data.get("results", [])
+            if not results:
+                logger.warning(f"BRAPI price_history_full: sem resultados para {ticker}")
+                return []
+
+            history = results[0].get("historicalDataPrice", [])
+            if not history:
+                price = results[0].get("regularMarketPrice")
+                if price:
+                    now = datetime.now(timezone.utc).replace(
+                        hour=18, minute=0, second=0, microsecond=0
+                    )
+                    logger.info(f"BRAPI price_history_full: {ticker} sem historico, usando snapshot atual")
+                    return [(now, float(price))]
+                return []
+
+            return _parse_history_rows(history, ticker, "range=max")
+
+    except Exception as e:
+        logger.warning(f"BRAPI fetch_price_history_full error for {ticker}: {e}")
         return []
 
 
@@ -455,6 +536,27 @@ async def fetch_crypto_suggestions(q: str, limit: int = 10) -> list[dict]:
     except Exception as e:
         logger.warning(f"BRAPI crypto suggestions error for q={q!r}: {e}")
         return []
+
+
+async def get_quotes_bulk(tickers: list[str]) -> list[dict]:
+    """Retorna lista de dicts com dados completos de cotacao para um lote de tickers."""
+    if not tickers:
+        return []
+    results: list[dict] = []
+    chunks  = [tickers[i:i+20] for i in range(0, len(tickers), 20)]
+    headers = _auth_headers()
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        for chunk in chunks:
+            joined = ",".join(chunk)
+            url    = f"{BRAPI_BASE}/quote/{joined}"
+            try:
+                resp = await client.get(url, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+                results.extend(data.get("results", []))
+            except Exception as e:
+                logger.warning(f"BRAPI get_quotes_bulk error for chunk {chunk}: {e}")
+    return results
 
 
 def _yf_search_sync(q: str, limit: int = 10, asset_type: Optional[str] = None) -> list[dict]:
