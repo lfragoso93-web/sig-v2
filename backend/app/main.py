@@ -5,13 +5,13 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from app.core.database import engine
 from app.core.config import settings
+from app.core.limiter import limiter  # instancia centralizada — evita circular import
 from app.core.scheduler import start_scheduler
 from app.routers import (
     auth, portfolios, transactions, dividends, positions,
@@ -24,17 +24,6 @@ from app.routers import prices
 from app.routers import class_targets
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Rate limiter (slowapi)
-# Usa Redis se REDIS_URL estiver configurado; fallback para memoria.
-# ---------------------------------------------------------------------------
-_storage_uri = settings.REDIS_URL if settings.REDIS_URL else "memory://"
-limiter = Limiter(
-    key_func=get_remote_address,
-    storage_uri=_storage_uri,
-    default_limits=[],
-)
 
 
 @asynccontextmanager
