@@ -150,7 +150,7 @@ async def job_persist_price_history():
         try:
             async with AsyncSessionLocal() as db:
                 inserted = await persist_daily_prices(
-                    db, ticker, asset_type, days_back=7  # margem de 7 dias cobre fins de semana e feriados
+                    db, ticker, asset_type, days_back=7
                 )
                 total += inserted
         except Exception as e:
@@ -273,6 +273,27 @@ async def job_update_dividend_status():
         logger.error("[Scheduler] job_update_dividend_status: erro: %s", e)
 
 
+async def job_seed_assets():
+    """
+    Seed semanal de ativos da B3 via BRAPI quote/list.
+
+    Popula/atualiza a tabela `assets` com Acoes, FIIs, ETFs e BDRs listados.
+    Roda toda segunda-feira as 3h para capturar novos IPOs e mudancas de listagem
+    sem interferir no horario de mercado.
+    """
+    logger.info("[Scheduler] Iniciando seed semanal de ativos da B3...")
+    try:
+        from app.services.asset_seed_service import run_asset_seed
+        async with AsyncSessionLocal() as db:
+            result = await run_asset_seed(db)
+        logger.info(
+            "[Scheduler] Seed concluido: %s criados, %s atualizados, %s sem mudanca, %s erros. Por tipo: %s",
+            result.created, result.updated, result.skipped, result.errors, result.by_type,
+        )
+    except Exception as e:
+        logger.error("[Scheduler] job_seed_assets: falha geral: %s", e)
+
+
 def init_scheduler():
     scheduler.add_job(
         job_update_quotes,
@@ -310,5 +331,11 @@ def init_scheduler():
         id="update_dividend_status",
         replace_existing=True,
     )
+    scheduler.add_job(
+        job_seed_assets,
+        CronTrigger(day_of_week="mon", hour=3, minute=0, timezone="America/Sao_Paulo"),
+        id="seed_assets",
+        replace_existing=True,
+    )
     scheduler.start()
-    logger.info("[Scheduler] 6 jobs registrados e scheduler iniciado.")
+    logger.info("[Scheduler] 7 jobs registrados e scheduler iniciado.")
