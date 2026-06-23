@@ -46,13 +46,15 @@ export default function App() {
                 <Route path="/carteira/lancamentos"        element={<LancamentosPage />} />
                 <Route path="/carteira/proventos"          element={<ProventosPage />} />
                 <Route path="/carteira/rentabilidade"      element={<RentabilidadePage />} />
-                <Route path="/carteira/historico"          element={<HistoricoPage />} />
                 <Route path="/carteira/configuracoes"      element={<Configuracoes />} />
 
                 {/* Patrimonio e sub-rotas */}
                 <Route path="/patrimonio"                          element={<PatrimonioPage />} />
                 <Route path="/carteira/patrimonio"                 element={<PatrimonioPage />} />
                 <Route path="/carteira/patrimonio/tesouro"         element={<TesouroDiretoPage />} />
+
+                {/* Redirect: historico agora vive dentro de PatrimonioPage */}
+                <Route path="/carteira/historico" element={<HistoricoPage />} />
 
                 {/* Rotas sem /carteira */}
                 <Route path="/metas"         element={<MetasPage />} />

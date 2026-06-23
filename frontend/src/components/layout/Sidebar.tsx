@@ -2,7 +2,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, TrendingUp, ArrowLeftRight, Landmark,
   Settings, Wallet, PanelLeftClose, PanelLeftOpen,
-  Plus, CheckCircle2, ChevronDown, Briefcase, X, FileText, LineChart,
+  Plus, CheckCircle2, ChevronDown, Briefcase, X, FileText,
 } from 'lucide-react'
 import { usePortfolios, useCreatePortfolio } from '@/hooks/usePortfolios'
 import { useAppStore } from '@/store/appStore'
@@ -13,7 +13,6 @@ const NAV_ITEMS = [
   { to: '/carteira',                icon: LayoutDashboard, label: 'Resumo'        },
   { to: '/carteira/patrimonio',     icon: Wallet,          label: 'Patrimônio'    },
   { to: '/carteira/rentabilidade',  icon: TrendingUp,      label: 'Rentabilidade' },
-  { to: '/carteira/historico',      icon: LineChart,       label: 'Histórico'     },
   { to: '/carteira/transacoes',     icon: ArrowLeftRight,  label: 'Transações'    },
   { to: '/carteira/proventos',      icon: Landmark,        label: 'Proventos'     },
   { to: '/carteira/irpf',           icon: FileText,        label: 'IRPF'          },
@@ -38,7 +37,6 @@ export default function Sidebar() {
   const [createdName,  setCreatedName]  = useState<string | null>(null)
   const [error,        setError]        = useState<string | null>(null)
 
-  /* mobile overlay animation */
   const [mounted, setMounted] = useState(false)
   const [visible, setVisible] = useState(false)
 
@@ -72,7 +70,6 @@ export default function Sidebar() {
     } catch { setError('Erro ao criar carteira.') }
   }
 
-  /* — Nav Item — */
   const NavItem = ({ to, icon: Icon, label }: { to: string; icon: React.ElementType; label: string }) => (
     <NavLink
       to={to}
@@ -80,12 +77,12 @@ export default function Sidebar() {
       className="flex items-center rounded-lg font-medium transition-all"
       title={sidebarCollapsed ? label : undefined}
       style={({ isActive }) => ({
-        padding:       sidebarCollapsed ? '9px' : '9px 12px',
-        gap:           sidebarCollapsed ? 0 : 10,
+        padding:        sidebarCollapsed ? '9px' : '9px 12px',
+        gap:            sidebarCollapsed ? 0 : 10,
         justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
-        fontSize:      'var(--text-sm)',
-        fontWeight:    isActive ? 560 : 440,
-        background:    isActive
+        fontSize:       'var(--text-sm)',
+        fontWeight:     isActive ? 560 : 440,
+        background:     isActive
           ? 'oklch(from var(--color-primary) l c h / 0.11)'
           : 'transparent',
         color: isActive ? 'var(--color-primary)' : 'var(--color-text-muted)',
@@ -123,7 +120,6 @@ export default function Sidebar() {
         overflow:    'hidden',
       }}
     >
-      {/* ── Seletor de carteira (mobile: visível / desktop: escondido pois fica na topbar) ── */}
       {!sidebarCollapsed && (
         <div className="lg:hidden relative mb-3">
           <button
@@ -150,7 +146,7 @@ export default function Sidebar() {
             <ChevronDown
               size={12}
               style={{
-                color:     'var(--color-text-muted)',
+                color:      'var(--color-text-muted)',
                 flexShrink: 0,
                 transform:  dropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
                 transition: 'transform 200ms ease',
@@ -209,12 +205,10 @@ export default function Sidebar() {
         </div>
       )}
 
-      {/* ── Nav: lista única sem dividers ── */}
       <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
         {NAV_ITEMS.map(item => <NavItem key={item.to} {...item} />)}
       </nav>
 
-      {/* ── Botão colapsar (desktop only) ── */}
       <button
         onClick={toggleSidebarCollapsed}
         className="hidden lg:flex items-center rounded-lg transition-all mt-2"
@@ -243,10 +237,8 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Desktop */}
       <aside className="hidden lg:flex h-full">{sidebarContent}</aside>
 
-      {/* Mobile overlay */}
       {mounted && (
         <>
           <div
@@ -268,14 +260,14 @@ export default function Sidebar() {
             }}
           >
             <div style={{
-              height:       'var(--topbar-height, 56px)',
-              display:      'flex',
-              alignItems:   'center',
+              height:         'var(--topbar-height, 56px)',
+              display:        'flex',
+              alignItems:     'center',
               justifyContent: 'flex-end',
-              padding:      '0 14px',
-              borderBottom: '1px solid oklch(from var(--color-text) l c h / 0.07)',
-              background:   'var(--color-surface)',
-              flexShrink:   0,
+              padding:        '0 14px',
+              borderBottom:   '1px solid oklch(from var(--color-text) l c h / 0.07)',
+              background:     'var(--color-surface)',
+              flexShrink:     0,
             }}>
               <button onClick={closeSidebar} className="btn-icon" aria-label="Fechar menu">
                 <X size={15} />
@@ -286,7 +278,6 @@ export default function Sidebar() {
         </>
       )}
 
-      {/* Modal nova carteira */}
       <Modal
         open={modalOpen}
         title="Nova carteira"

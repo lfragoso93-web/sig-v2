@@ -1,11 +1,19 @@
 import { useMemo, useState } from 'react'
-import { BarChart2, RefreshCw, Wallet } from 'lucide-react'
+import {
+  BarChart2, RefreshCw, Wallet, TrendingUp, LineChart, AlertTriangle,
+} from 'lucide-react'
 import {
   usePortfolioSummary,
   useAssetDistribution,
   usePositions,
   type PositionGroup,
 } from '@/hooks/usePortfolio'
+import {
+  useDailyEvolution,
+  useMonthlyEvolution,
+  useEvolutionBackfill,
+  type PeriodOption,
+} from '@/hooks/useEvolution'
 import { useAppStore } from '@/store/appStore'
 import { formatBRL, formatPercent, signClass } from '@/utils/format'
 import KpiCard from '@/components/ui/KpiCard'
@@ -13,7 +21,11 @@ import SkeletonCard from '@/components/ui/SkeletonCard'
 import EmptyState from '@/components/ui/EmptyState'
 import AssetDonutChart from '@/components/charts/AssetDonutChart'
 import PositionTable from '@/components/resume/PositionTable'
+import EvolutionLineChart from '@/components/charts/EvolutionLineChart'
+import EvolutionBarChart from '@/components/charts/EvolutionBarChart'
 import clsx from 'clsx'
+
+// ── Constantes ────────────────────────────────────────────────────────────────
 
 const ASSET_TYPE_LABELS: Record<string, string> = {
   ACAO: 'Ações', ACAO_NACIONAL: 'Ações', FII: 'FIIs',
@@ -34,8 +46,50 @@ const ASSET_TYPE_COLORS: Record<string, { bg: string; text: string; border: stri
 }
 const FALLBACK_COLOR = { bg: 'var(--color-surface-dynamic)', text: 'var(--color-text-muted)', border: 'var(--color-border)' }
 
-export default function PatrimonioPage() {
-  const portfolioId = useAppStore(s => s.selectedPortfolioId)
+const PERIODS: { label: string; value: PeriodOption }[] = [
+  { label: '6m',   value: '6m'  },
+  { label: '12m',  value: '12m' },
+  { label: '24m',  value: '24m' },
+  { label: 'Tudo', value: 'all' },
+]
+
+type Tab = 'visao-geral' | 'historico'
+type ViewMode = 'diario' | 'mensal'
+
+// ── Tab bar ───────────────────────────────────────────────────────────────────
+
+function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
+  const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
+    { id: 'visao-geral', label: 'Visão Geral', icon: BarChart2 },
+    { id: 'historico',   label: 'Histórico',    icon: LineChart  },
+  ]
+  return (
+    <div
+      className="flex gap-1 p-1 rounded-xl"
+      style={{ background: 'var(--color-surface-dynamic)', width: 'fit-content' }}
+    >
+      {tabs.map(({ id, label, icon: Icon }) => (
+        <button
+          key={id}
+          onClick={() => onChange(id)}
+          className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all"
+          style={{
+            background: active === id ? 'var(--color-surface)' : 'transparent',
+            color:      active === id ? 'var(--color-text)'    : 'var(--color-text-muted)',
+            boxShadow:  active === id ? 'var(--shadow-sm)'     : 'none',
+          }}
+        >
+          <Icon size={14} strokeWidth={1.75} />
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// ── Aba: Visao Geral ──────────────────────────────────────────────────────────
+
+function TabVisaoGeral({ portfolioId }: { portfolioId: number }) {
   const [activeTypeFilter, setActiveTypeFilter] = useState<string | null>(null)
 
   const { data: summary,      isLoading: loadingSummary  } = usePortfolioSummary(portfolioId)
@@ -69,25 +123,8 @@ export default function PatrimonioPage() {
       .filter((g: PositionGroup) => g.positions.length > 0)
   }, [positions, activeTypeFilter])
 
-  if (!portfolioId) {
-    return (
-      <div className="p-6">
-        <EmptyState icon={Wallet} title="Nenhuma carteira selecionada" description="Selecione uma carteira no menu superior para visualizar o patrimônio." />
-      </div>
-    )
-  }
-
   return (
-    <div className="page-container">
-
-      {/* Cabeçalho */}
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Patrimônio</h1>
-          <p className="page-subtitle">Visão consolidada dos ativos da carteira selecionada</p>
-        </div>
-      </div>
-
+    <>
       {/* KPIs */}
       <div className="kpi-grid">
         {loadingSummary ? (
@@ -159,7 +196,7 @@ export default function PatrimonioPage() {
                     onClick={() => setActiveTypeFilter(isActive ? null : type)}
                     className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors duration-150"
                     style={{
-                      background: isActive ? 'var(--color-surface-offset)' : 'transparent',
+                      background:   isActive ? 'var(--color-surface-offset)' : 'transparent',
                       borderBottom: '1px solid var(--color-divider)',
                     }}
                     onMouseEnter={e => !isActive && (e.currentTarget.style.background = 'var(--color-surface-offset-2)')}
@@ -239,6 +276,257 @@ export default function PatrimonioPage() {
           <PositionTable groups={filteredPositions} portfolioId={portfolioId} />
         )}
       </div>
+    </>
+  )
+}
+
+// ── Aba: Historico ────────────────────────────────────────────────────────────
+
+function TabHistorico({ portfolioId }: { portfolioId: number }) {
+  const [period,       setPeriod]       = useState<PeriodOption>('12m')
+  const [view,         setView]         = useState<ViewMode>('diario')
+  const [backfillDone, setBackfillDone] = useState(false)
+
+  const { data: daily,   isLoading: loadingDaily   } = useDailyEvolution(portfolioId, period)
+  const { data: monthly, isLoading: loadingMonthly } = useMonthlyEvolution(portfolioId, period)
+  const backfill = useEvolutionBackfill(portfolioId)
+
+  const last  = daily && daily.length > 0 ? daily[daily.length - 1] : null
+  const first = daily && daily.length > 0 ? daily[0] : null
+  const variacao    = last && first ? last.market_value - first.market_value : null
+  const variacaoPct = last && first && first.market_value > 0
+    ? ((last.market_value - first.market_value) / first.market_value) * 100
+    : null
+
+  const handleBackfill = async () => {
+    await backfill.mutateAsync()
+    setBackfillDone(true)
+    setTimeout(() => setBackfillDone(false), 3000)
+  }
+
+  const noData = !loadingDaily && (!daily || daily.length === 0)
+
+  return (
+    <>
+      {/* Controles topo: periodo + backfill */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Toggle diario / mensal */}
+          <div
+            className="flex rounded-lg overflow-hidden"
+            style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface)' }}
+          >
+            {(['diario', 'mensal'] as ViewMode[]).map(v => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className="px-4 py-1.5 text-xs font-medium transition-colors"
+                style={{
+                  background: view === v ? 'var(--color-primary)' : 'transparent',
+                  color:      view === v ? '#fff' : 'var(--color-text-muted)',
+                }}
+              >
+                {v === 'diario' ? 'Diário' : 'Mensal'}
+              </button>
+            ))}
+          </div>
+
+          {/* Seletor de periodo */}
+          <div
+            className="flex rounded-lg overflow-hidden"
+            style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface)' }}
+          >
+            {PERIODS.map(p => (
+              <button
+                key={p.value}
+                onClick={() => setPeriod(p.value)}
+                className="px-3 py-1.5 text-xs font-medium transition-colors"
+                style={{
+                  background: period === p.value ? 'var(--color-primary)' : 'transparent',
+                  color:      period === p.value ? '#fff' : 'var(--color-text-muted)',
+                }}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <button
+          onClick={handleBackfill}
+          disabled={backfill.isPending}
+          className="btn btn-ghost flex items-center gap-2 text-sm"
+          title="Recalcular snapshots históricos"
+        >
+          <RefreshCw size={14} className={clsx(backfill.isPending && 'animate-spin')} />
+          {backfillDone ? 'Atualizado!' : 'Atualizar histórico'}
+        </button>
+      </div>
+
+      {/* KPIs do periodo */}
+      <div className="kpi-grid">
+        {loadingDaily ? (
+          [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
+        ) : last ? (
+          <>
+            <KpiCard
+              label="Valor atual (mercado)"
+              value={formatBRL(last.market_value)}
+              subValue={formatBRL(last.invested_total)}
+              subLabel="Total investido"
+            />
+            <KpiCard
+              label="Resultado total"
+              value={formatBRL(last.total_pnl)}
+              valueColor={signClass(last.total_pnl)}
+              subLabel={`Realizado: ${formatBRL(last.realized_pnl)}`}
+            />
+            <KpiCard
+              label={`Variação no período (${period})`}
+              value={variacao !== null ? formatBRL(variacao) : '—'}
+              valueColor={variacao !== null ? signClass(variacao) : undefined}
+              change={variacaoPct ?? undefined}
+            />
+            <KpiCard
+              label="Rentabilidade total"
+              value={formatPercent(last.return_pct)}
+              valueColor={signClass(last.return_pct)}
+              subLabel="Sobre o capital investido"
+            />
+          </>
+        ) : (
+          <div className="col-span-4 py-8 text-center text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            Nenhum snapshot encontrado. Clique em “Atualizar histórico” para gerar os dados.
+          </div>
+        )}
+      </div>
+
+      {/* Grafico */}
+      <div className="card overflow-hidden">
+        <div className="section-card-header">
+          {view === 'diario'
+            ? <TrendingUp size={14} style={{ color: 'var(--color-primary)' }} />
+            : <BarChart2  size={14} style={{ color: 'var(--color-primary)' }} />}
+          <span className="section-card-title">
+            {view === 'diario' ? 'Evolução Diária' : 'Evolução Mensal'}
+          </span>
+        </div>
+        <div className="p-4">
+          {noData ? (
+            <div className="flex flex-col items-center gap-3 py-10" style={{ color: 'var(--color-text-muted)' }}>
+              <AlertTriangle size={24} style={{ color: 'var(--color-warning, #f59e0b)' }} />
+              <p className="text-sm text-center">
+                Nenhum dado histórico encontrado.<br />
+                Clique em <strong>Atualizar histórico</strong> acima para gerar os snapshots.
+              </p>
+            </div>
+          ) : view === 'diario' ? (
+            loadingDaily
+              ? <div className="h-64 skeleton rounded" />
+              : <EvolutionLineChart data={daily ?? []} />
+          ) : (
+            loadingMonthly
+              ? <div className="h-64 skeleton rounded" />
+              : <EvolutionBarChart data={monthly ?? []} />
+          )}
+        </div>
+      </div>
+
+      {/* Tabela resumo mensal */}
+      {!loadingMonthly && monthly && monthly.length > 0 && (
+        <div className="card overflow-hidden">
+          <div className="section-card-header">
+            <span className="section-card-title">Resumo Mensal</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--color-divider)', color: 'var(--color-text-muted)' }}>
+                  <th className="px-4 py-2 text-left font-medium">Mês</th>
+                  <th className="px-4 py-2 text-right font-medium">Valor mercado</th>
+                  <th className="px-4 py-2 text-right font-medium">Investido</th>
+                  <th className="px-4 py-2 text-right font-medium">P&amp;L não realiz.</th>
+                  <th className="px-4 py-2 text-right font-medium">Rentab.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...monthly].reverse().map((row, i) => (
+                  <tr
+                    key={row.period}
+                    style={{
+                      borderBottom: i < monthly.length - 1 ? '1px solid var(--color-divider)' : 'none',
+                      background:   i === 0 ? 'var(--color-surface-offset)' : 'transparent',
+                    }}
+                  >
+                    <td className="px-4 py-2.5" style={{ color: 'var(--color-text)' }}>
+                      {row.period}
+                      {i === 0 && (
+                        <span
+                          className="ml-2 text-xs px-1 py-0.5 rounded"
+                          style={{ background: 'var(--color-primary-highlight)', color: 'var(--color-primary)', fontSize: 10 }}
+                        >
+                          atual
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: 'var(--color-text)' }}>
+                      {formatBRL(row.value)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: 'var(--color-text-muted)' }}>
+                      {formatBRL(row.invested)}
+                    </td>
+                    <td className={clsx('px-4 py-2.5 text-right tabular-nums', signClass(row.unrealized_pnl))}>
+                      {row.unrealized_pnl >= 0 ? '+' : ''}{formatBRL(row.unrealized_pnl)}
+                    </td>
+                    <td className={clsx('px-4 py-2.5 text-right tabular-nums font-medium', signClass(row.return_pct))}>
+                      {row.return_pct >= 0 ? '+' : ''}{formatPercent(row.return_pct)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+// ── Page root ─────────────────────────────────────────────────────────────────
+
+export default function PatrimonioPage() {
+  const portfolioId = useAppStore(s => s.selectedPortfolioId)
+  const [activeTab, setActiveTab] = useState<Tab>('visao-geral')
+
+  if (!portfolioId) {
+    return (
+      <div className="p-6">
+        <EmptyState
+          icon={Wallet}
+          title="Nenhuma carteira selecionada"
+          description="Selecione uma carteira no menu superior para visualizar o patrimônio."
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div className="page-container">
+      {/* Cabeçalho */}
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Patrimônio</h1>
+          <p className="page-subtitle">Visão consolidada e histórico da carteira selecionada</p>
+        </div>
+      </div>
+
+      {/* Tab bar */}
+      <TabBar active={activeTab} onChange={setActiveTab} />
+
+      {/* Conteudo da aba ativa */}
+      {activeTab === 'visao-geral'
+        ? <TabVisaoGeral portfolioId={portfolioId} />
+        : <TabHistorico  portfolioId={portfolioId} />}
     </div>
   )
 }
