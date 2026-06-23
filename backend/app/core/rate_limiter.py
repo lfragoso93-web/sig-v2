@@ -1,76 +1,72 @@
 """
-Rate limiter baseado em token bucket (in-memory, asyncio-safe).
+Rate limiters globais do processo.
 
-Nao depende de Redis — funciona em qualquer ambiente.
-Para producao com multiplos workers/processos, substituir por
-implementacao Redis (ex: redis-py-limiter ou limits).
+BRAPI:
+  brapi_limiter - token bucket asyncio para chamadas BRAPI.
+  Configurado via BRAPI_RATE_LIMIT / BRAPI_RATE_BURST no .env.
+  Defaults: 2 req/s, burst 5 (plano gratuito).
+  Para plano Pro: BRAPI_RATE_LIMIT=10, BRAPI_RATE_BURST=20.
 
-Uso:
-    from app.core.rate_limiter import brapi_limiter
+Alpha Vantage:
+  alpha_vantage_limiter - token bucket asyncio para chamadas Alpha Vantage.
+  Fixo em 4 req/min (conservador para o plano free: 25 req/min, 500 req/dia).
+  Garante espaco para burst sem ultrapassar o limite diario.
 
-    async def minha_funcao():
-        await brapi_limiter.acquire()  # bloqueia ate ter token disponivel
-        resultado = await chamar_brapi()
+Todos os limiters sao instanciados aqui para serem importados pelos servicos.
 """
 import asyncio
-import logging
 import time
 
-logger = logging.getLogger(__name__)
+from app.core.config import settings
 
 
-class TokenBucketLimiter:
+class TokenBucket:
     """
-    Token bucket simples.
+    Token bucket asyncio-safe para rate limiting.
 
-    - rate:  tokens adicionados por segundo.
-    - burst: capacidade maxima do bucket (pico permitido).
+    rate  - tokens adicionados por segundo (ex: 2.0 = 2 req/s)
+    burst - capacidade maxima do bucket (pico instantaneo permitido)
 
-    Cada chamada a acquire() consome 1 token. Se o bucket estiver
-    vazio, aguarda assincronamente ate o proximo token ser gerado.
+    acquire() bloqueia ate um token estar disponivel.
+    Criado lazy (_lock inicializado no primeiro acquire) para compatibilidade
+    com o event loop do uvicorn.
     """
 
-    def __init__(self, rate: float, burst: int) -> None:
-        self._rate = rate          # tokens/segundo
-        self._burst = burst        # capacidade maxima
-        self._tokens = float(burst)  # comeca cheio
-        self._last = time.monotonic()
-        self._lock = asyncio.Lock()
+    def __init__(self, rate: float, burst: int):
+        self.rate = rate
+        self.burst = burst
+        self._tokens: float = float(burst)
+        self._last: float = time.monotonic()
+        self._lock: asyncio.Lock | None = None
 
-    def _refill(self) -> None:
-        now = time.monotonic()
-        elapsed = now - self._last
-        self._tokens = min(self._burst, self._tokens + elapsed * self._rate)
-        self._last = now
+    def _get_lock(self) -> asyncio.Lock:
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
 
-    async def acquire(self, tokens: int = 1) -> None:
-        async with self._lock:
+    async def acquire(self) -> None:
+        async with self._get_lock():
             while True:
-                self._refill()
-                if self._tokens >= tokens:
-                    self._tokens -= tokens
+                now = time.monotonic()
+                elapsed = now - self._last
+                self._tokens = min(self.burst, self._tokens + elapsed * self.rate)
+                self._last = now
+                if self._tokens >= 1:
+                    self._tokens -= 1
                     return
-                # Calcula quanto tempo esperar ate ter tokens suficientes
-                wait = (tokens - self._tokens) / self._rate
-                logger.debug(
-                    "[rate_limiter] bucket vazio — aguardando %.2fs", wait
-                )
+                wait = (1 - self._tokens) / self.rate
                 await asyncio.sleep(wait)
 
-    def available(self) -> float:
-        """Retorna tokens disponiveis no momento (sem lock — apenas informativo)."""
-        elapsed = time.monotonic() - self._last
-        return min(self._burst, self._tokens + elapsed * self._rate)
 
+# BRAPI - configurado via .env
+brapi_limiter = TokenBucket(
+    rate=settings.BRAPI_RATE_LIMIT,
+    burst=settings.BRAPI_RATE_BURST,
+)
 
-def _build_brapi_limiter() -> TokenBucketLimiter:
-    """Constroi o limiter com settings; importado lazily para evitar circular import."""
-    from app.core.config import settings
-    return TokenBucketLimiter(
-        rate=settings.BRAPI_RATE_LIMIT,
-        burst=settings.BRAPI_RATE_BURST,
-    )
-
-
-# Singleton — criado na primeira importacao do modulo
-brapi_limiter: TokenBucketLimiter = _build_brapi_limiter()
+# Alpha Vantage - 4 req/min fixo (conservador para plano free)
+# 4/60 = ~0.067 tokens/segundo, burst 4
+alpha_vantage_limiter = TokenBucket(
+    rate=4 / 60,
+    burst=4,
+)

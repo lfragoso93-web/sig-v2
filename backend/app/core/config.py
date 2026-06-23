@@ -22,12 +22,16 @@ class Settings(BaseSettings):
     BRAPI_RATE_LIMIT: float = 2.0
     BRAPI_RATE_BURST: int = 5
 
+    # Alpha Vantage (ativos internacionais)
+    # Plano free: 25 req/min, 500 req/dia
+    # Obtenha sua chave em: https://www.alphavantage.co/support/#api-key
+    ALPHA_VANTAGE_API_KEY: Optional[str] = None
+
     # Rate limiting de endpoints publicos (slowapi)
     LOGIN_RATE_LIMIT: str = "10/minute"
     REGISTER_RATE_LIMIT: str = "5/minute"
 
     # Rate limiting do router de debug
-    # Mais restritivo que login — endpoints permitem acoes criticas (reset senha, criar user)
     DEBUG_RATE_LIMIT: str = "5/minute"
 
     # Redis (opcional)
