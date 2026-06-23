@@ -24,6 +24,7 @@ import Transacoes        from '@/pages/Transacoes'
 import Configuracoes     from '@/pages/Configuracoes'
 import ProventosPage     from '@/pages/ProventosPage'
 import IRPFPage          from '@/pages/IRPFPage'
+import WelcomePage       from '@/pages/WelcomePage'
 
 // Patrimônio
 import PatrimonioPage    from '@/pages/patrimonio/PatrimonioPage'
@@ -81,6 +82,12 @@ const router = createBrowserRouter([
       // Atalhos legados
       { path: '/login',    element: <Navigate to="/auth/login"    replace /> },
       { path: '/register', element: <Navigate to="/auth/registro" replace /> },
+
+      // Welcome — onboarding (protegido, fora do AppLayout)
+      {
+        path: '/welcome',
+        element: <ProtectedRoute><WelcomePage /></ProtectedRoute>,
+      },
 
       // App protegido
       {
