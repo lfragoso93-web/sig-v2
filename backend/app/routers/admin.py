@@ -18,6 +18,7 @@ from app.services.user_service import (
 from app.services.config_service import get_all_configs, update_config, bulk_update_configs
 import math
 import logging
+import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ def require_superadmin(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
-# ── Gestão de Usuários ─────────────────────────────────────────────────────
+# ── Gestão de Usuários ──────────────────────────────────────────────────────────────
 
 @router.get("/users", response_model=PaginatedResponse[UserListResponse])
 async def admin_list_users(
@@ -142,7 +143,7 @@ async def admin_reset_password(
     )
 
 
-# ── Estatísticas do sistema ────────────────────────────────────────────────
+# ── Estatísticas do sistema ───────────────────────────────────────────────────────────
 
 @router.get("/stats")
 async def admin_stats(
@@ -158,7 +159,7 @@ async def admin_stats(
     }
 
 
-# ── Configurações do sistema ────────────────────────────────────────────────
+# ── Configurações do sistema ──────────────────────────────────────────────────────────
 
 @router.get("/config", response_model=list[SystemConfigResponse])
 async def admin_list_configs(
@@ -190,21 +191,26 @@ async def admin_bulk_update_config(
     return await bulk_update_configs(db, data.configs)
 
 
-# ── Seed de Ativos (BRAPI) ────────────────────────────────────────────────
+# ── Seed de Ativos (BRAPI) ──────────────────────────────────────────────────────────
 
 async def _run_asset_seed_bg() -> None:
     """Wrapper para rodar o seed em BackgroundTask com sua propria sessao."""
+    logger.info("[seed_bg] ========== INICIANDO SEED DE ATIVOS ==========")
     try:
         from app.core.database import AsyncSessionLocal
         from app.services.asset_seed_service import run_asset_seed
         async with AsyncSessionLocal() as db:
             result = await run_asset_seed(db)
             logger.info(
-                "[seed_bg] concluido: created=%s updated=%s skipped=%s errors=%s",
+                "[seed_bg] ========== SEED CONCLUIDO: created=%s updated=%s skipped=%s errors=%s ==========",
                 result.created, result.updated, result.skipped, result.errors,
             )
     except Exception as e:
-        logger.error("[seed_bg] falha geral: %s", e)
+        logger.error(
+            "[seed_bg] ========== SEED FALHOU: %s\n%s ==========",
+            e,
+            traceback.format_exc(),
+        )
 
 
 @router.post(
@@ -226,6 +232,7 @@ async def admin_seed_assets(
 
     Restrito a SuperAdmins.
     """
+    logger.info("[seed_bg] requisicao recebida — adicionando task ao background")
     background_tasks.add_task(_run_asset_seed_bg)
     return {
         "message": "Seed de ativos iniciado em background. Acompanhe pelo log do servidor.",
