@@ -49,6 +49,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return data
   }
 
+  // Hidratação inicial: carrega usuário se há token salvo.
+  // NÃO navega aqui — o ProtectedRoute cuida do redirect para /welcome.
   useEffect(() => {
     const token = authStore.token ?? localStorage.getItem('sig_token')
     if (!token) {
@@ -65,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setIsLoading(false))
   }, [])
 
-  // login via email+senha (usado pelo LoginPage)
+  // login via email+senha — navega para /welcome ou /carteira conforme onboarding
   const login = async (email: string, password: string) => {
     const { data: tokens } = await api.post<{
       access_token: string
@@ -74,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await loginWithTokens(tokens.access_token, tokens.refresh_token)
   }
 
-  // login direto com tokens (usado pelo RegisterPage apos /auth/register)
+  // login direto com tokens (usado pelo RegisterPage após /auth/register)
   const loginWithTokens = async (accessToken: string, refreshToken: string) => {
     localStorage.setItem('sig_token', accessToken)
     localStorage.setItem('sig_refresh', refreshToken)
@@ -90,7 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       theme_preference: me.theme_preference,
     })
 
-    // Redireciona para welcome se onboarding nao concluido, senao para carteira
+    // Navega conforme onboarding_completed
     if (!me.onboarding_completed) {
       navigate('/welcome', { replace: true })
     } else {
