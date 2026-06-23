@@ -26,16 +26,11 @@ class User(Base, TimestampMixin):
         Boolean, default=False, nullable=False, server_default="false"
     )
 
-    # Relacionamentos — cascade="all, delete-orphan" documentado aqui,
-    # mas o delete real usa SQL direto para garantir compatibilidade com AsyncSession.
+    # Relacionamentos ORM declarados
+    # O delete real usa SQL direto (delete_user em user_service.py)
+    # para garantir que o PostgreSQL execute ON DELETE CASCADE nativamente.
     portfolios: Mapped[list["Portfolio"]] = relationship(
         "Portfolio", back_populates="user", cascade="all, delete-orphan"
-    )
-    irpf_records: Mapped[list["IrpfRecord"]] = relationship(
-        "IrpfRecord", back_populates="user", cascade="all, delete-orphan"
-    )
-    irpf_losses: Mapped[list["IrpfLoss"]] = relationship(
-        "IrpfLoss", back_populates="user", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:
