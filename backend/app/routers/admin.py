@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, status, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, status, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_user
@@ -17,6 +17,9 @@ from app.services.user_service import (
 )
 from app.services.config_service import get_all_configs, update_config, bulk_update_configs
 import math
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -30,7 +33,7 @@ def require_superadmin(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
-# ── Gestão de Usuários ───────────────────────────────────────────
+# ── Gestão de Usuários ─────────────────────────────────────────────────────
 
 @router.get("/users", response_model=PaginatedResponse[UserListResponse])
 async def admin_list_users(
@@ -127,8 +130,6 @@ async def admin_reset_password(
 ):
     """
     Redefine a senha de qualquer usuário com um novo hash bcrypt v5.
-    Usado para migrar usuários cujas senhas foram criadas com passlib/bcrypt<5
-    e que não conseguem mais autenticar após a atualização de dependência.
     """
     user = await get_user_by_id(db, user_id)
     if not user:
@@ -141,7 +142,7 @@ async def admin_reset_password(
     )
 
 
-# ── Estatísticas do sistema ───────────────────────────────
+# ── Estatísticas do sistema ────────────────────────────────────────────────
 
 @router.get("/stats")
 async def admin_stats(
@@ -157,7 +158,7 @@ async def admin_stats(
     }
 
 
-# ── Configurações do sistema ──────────────────────────────
+# ── Configurações do sistema ────────────────────────────────────────────────
 
 @router.get("/config", response_model=list[SystemConfigResponse])
 async def admin_list_configs(
@@ -187,3 +188,46 @@ async def admin_bulk_update_config(
 ):
     """Atualiza múltiplas configurações de uma vez."""
     return await bulk_update_configs(db, data.configs)
+
+
+# ── Seed de Ativos (BRAPI) ────────────────────────────────────────────────
+
+async def _run_asset_seed_bg() -> None:
+    """Wrapper para rodar o seed em BackgroundTask com sua propria sessao."""
+    try:
+        from app.core.database import AsyncSessionLocal
+        from app.services.asset_seed_service import run_asset_seed
+        async with AsyncSessionLocal() as db:
+            result = await run_asset_seed(db)
+            logger.info(
+                "[seed_bg] concluido: created=%s updated=%s skipped=%s errors=%s",
+                result.created, result.updated, result.skipped, result.errors,
+            )
+    except Exception as e:
+        logger.error("[seed_bg] falha geral: %s", e)
+
+
+@router.post(
+    "/assets/seed",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def admin_seed_assets(
+    background_tasks: BackgroundTasks,
+    _: User = Depends(require_superadmin),
+):
+    """
+    Dispara o seed de ativos da B3 em background via BRAPI quote/list.
+
+    Popula (ou atualiza) a tabela `assets` com todos os ativos listados:
+    Ações, FIIs, ETFs Nacionais e BDRs.
+
+    O processo roda em background e pode levar alguns minutos.
+    Acompanhe pelo log do servidor.
+
+    Restrito a SuperAdmins.
+    """
+    background_tasks.add_task(_run_asset_seed_bg)
+    return {
+        "message": "Seed de ativos iniciado em background. Acompanhe pelo log do servidor.",
+        "status": "accepted",
+    }
