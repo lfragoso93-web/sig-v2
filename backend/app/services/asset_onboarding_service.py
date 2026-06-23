@@ -6,7 +6,7 @@ Cada etapa e idempotente: so roda se o dado ainda nao existe no banco,
 garantindo seguranca em re-execucoes (ex: ativo recriado, falha parcial).
 
 Etapas:
-  1. Historico de precos   -> persist_daily_prices (5 anos)
+  1. Historico de precos   -> persist_daily_prices (BR=15 anos, INTL=5 anos)
   2. Proventos historicos  -> dividend_backfill_service.run_backfill
   3. Logo URL              -> logo_service.fetch_logo_url -> Asset.logo_url
 """
@@ -15,6 +15,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal
+from app.core.asset_types import INTL_TYPES
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
 from app.models.asset_dividend import AssetDividend
@@ -24,8 +25,16 @@ from app.services.logo_service import fetch_logo_url
 
 logger = logging.getLogger(__name__)
 
-# Janela de historico de precos coletada no onboarding (5 anos)
-_PRICE_HISTORY_DAYS = 365 * 5
+# Janelas de historico de precos coletadas no onboarding.
+# Ativos nacionais: yfinance e BRAPI suportam historico longo (ate ~20 anos).
+# Ativos internacionais: yfinance/Alpha Vantage limitam a ~5 anos praticos.
+_PRICE_HISTORY_DAYS_BR   = 365 * 15   # ~15 anos para ativos nacionais
+_PRICE_HISTORY_DAYS_INTL = 365 * 5    # ~5 anos para ativos internacionais
+
+
+def _price_history_days(asset_type: AssetType) -> int:
+    """Retorna a janela de dias adequada para o tipo de ativo."""
+    return _PRICE_HISTORY_DAYS_INTL if asset_type in INTL_TYPES else _PRICE_HISTORY_DAYS_BR
 
 
 async def _has_price_history(db: AsyncSession, ticker: str) -> bool:
@@ -83,6 +92,8 @@ async def run_onboarding(ticker: str, asset_type: str) -> None:
         logger.warning(f"[onboarding] asset_type invalido: {asset_type} — abortando")
         return
 
+    days = _price_history_days(at)
+
     async with AsyncSessionLocal() as db:
         # ----------------------------------------------------------------
         # Etapa 1: Historico de precos
@@ -91,8 +102,8 @@ async def run_onboarding(ticker: str, asset_type: str) -> None:
             logger.info(f"[onboarding] {ticker}: historico de precos ja existe — pulando")
         else:
             try:
-                n = await persist_daily_prices(db, ticker, at, days_back=_PRICE_HISTORY_DAYS)
-                logger.info(f"[onboarding] {ticker}: {n} precos historicos salvos")
+                n = await persist_daily_prices(db, ticker, at, days_back=days)
+                logger.info(f"[onboarding] {ticker}: {n} precos historicos salvos ({days}d)")
             except Exception as e:
                 logger.error(f"[onboarding] {ticker}: falha ao salvar precos historicos: {e}")
 
