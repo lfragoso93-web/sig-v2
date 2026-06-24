@@ -6,9 +6,9 @@ from app.services import quotes_service
 from app.services.quotes_service import get_prices
 
 
-BR_ITEMS = [{"ticker": "PETR4",  "asset_type": "ACAO_NACIONAL"}]
-INTL_ITEMS = [{"ticker": "AAPL",    "asset_type": "STOCK"}]
-CRIPTO_ITEMS = [{"ticker": "BTC",     "asset_type": "CRIPTO"}]
+BR_ITEMS = [{"ticker": "PETR4",  "asset_type": "acao"}]
+INTL_ITEMS = [{"ticker": "AAPL",    "asset_type": "stock"}]
+CRIPTO_ITEMS = [{"ticker": "BTC",     "asset_type": "cripto"}]
 
 
 @pytest.fixture(autouse=True)
@@ -50,7 +50,7 @@ class TestGetPrices:
             "app.services.quotes_service._fetch_brapi",
             new=AsyncMock(return_value={}),
         ), patch(
-            "app.services.quotes_service._fetch_yfinance",
+            "app.services.quotes_service._fetch_intl",
             new=AsyncMock(return_value={"AAPL": 180.0}),
         ) as mock_yf, patch(
             "app.services.quotes_service._fetch_brapi_crypto",
@@ -67,7 +67,7 @@ class TestGetPrices:
             "app.services.quotes_service._fetch_brapi",
             new=AsyncMock(return_value={}),
         ), patch(
-            "app.services.quotes_service._fetch_yfinance",
+            "app.services.quotes_service._fetch_intl",
             new=AsyncMock(return_value={}),
         ), patch(
             "app.services.quotes_service._fetch_brapi_crypto",
@@ -85,7 +85,7 @@ class TestGetPrices:
             "app.services.quotes_service._fetch_brapi",
             new=AsyncMock(return_value={}),  # vazio = ticker indisponivel
         ), patch(
-            "app.services.quotes_service._fetch_yfinance",
+            "app.services.quotes_service._fetch_intl",
             new=AsyncMock(return_value={}),
         ), patch(
             "app.services.quotes_service._fetch_brapi_crypto",
@@ -102,7 +102,7 @@ class TestGetPrices:
             "app.services.quotes_service._fetch_brapi",
             new=AsyncMock(return_value={"PETR4": 35.0}),
         ) as mock_br, patch(
-            "app.services.quotes_service._fetch_yfinance",
+            "app.services.quotes_service._fetch_intl",
             new=AsyncMock(return_value={"AAPL": 180.0}),
         ) as mock_yf, patch(
             "app.services.quotes_service._fetch_brapi_crypto",
