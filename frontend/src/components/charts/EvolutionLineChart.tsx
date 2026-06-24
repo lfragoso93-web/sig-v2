@@ -8,6 +8,7 @@ import {
   Tooltip,
   Legend,
 } from 'recharts'
+import type { ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import type { DailyPoint } from '@/hooks/useEvolution'
@@ -25,12 +26,25 @@ function xTickFormatter(value: string): string {
   }
 }
 
-function tooltipLabelFormatter(label: string): string {
+function tooltipLabelFormatter(label: unknown): string {
+  const str = typeof label === 'string' ? label : String(label ?? '')
   try {
-    return format(parseISO(label), "dd 'de' MMMM yyyy", { locale: ptBR })
+    return format(parseISO(str), "dd 'de' MMMM yyyy", { locale: ptBR })
   } catch {
-    return label
+    return str
   }
+}
+
+function tooltipFormatter(
+  value: ValueType,
+  name: NameType,
+): [string, string] {
+  const num = typeof value === 'number' ? value : Number(value ?? 0)
+  const key = String(name)
+  return [
+    formatBRL(num),
+    key === 'market_value' ? 'Valor de mercado' : 'Custo / investido',
+  ]
 }
 
 // Subsampla para no maximo maxPoints para evitar render pesado
@@ -86,10 +100,7 @@ export default function EvolutionLineChart({ data }: Props) {
         />
         <Tooltip
           labelFormatter={tooltipLabelFormatter}
-          formatter={(value: number, name: string) => [
-            formatBRL(value),
-            name === 'market_value' ? 'Valor de mercado' : 'Custo / investido',
-          ]}
+          formatter={tooltipFormatter}
           contentStyle={{
             background:   'var(--color-surface-2)',
             border:       '1px solid var(--color-border)',
