@@ -1,5 +1,6 @@
 import httpx
 import logging
+import time
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 from app.core.config import settings
@@ -9,8 +10,12 @@ logger = logging.getLogger(__name__)
 BRAPI_BASE = "https://brapi.dev/api"
 
 # Limite de dias a partir do qual usamos range=max em vez de range=custom.
-# Acima de ~5 anos, range=custom pode ser rejeitado pela BRAPI dependendo do plano.
 _MAX_RANGE_THRESHOLD_DAYS = 365 * 5
+
+# Cache em memoria de tickers conhecidos pela BRAPI.
+# Estrutura: {ticker: (is_known: bool, expires_at: float)}
+_BRAPI_TICKER_CACHE: dict[str, tuple[bool, float]] = {}
+_BRAPI_TICKER_CACHE_TTL = 3600.0  # 1 hora
 
 
 def _auth_headers() -> dict:
@@ -46,7 +51,85 @@ def _parse_history_rows(
     return rows
 
 
-# ── Cotações atuais ───────────────────────────────────────────────────────────────────
+# ── Validação de tickers BRAPI ────────────────────────────────────────────────
+
+async def fetch_valid_brapi_tickers(tickers: list[str]) -> set[str]:
+    """
+    Valida quais tickers do lote existem na base da BRAPI.
+
+    Usa cache em memoria com TTL de 1 hora para evitar requests repetidos.
+    Tickers nao encontrados sao marcados como invalidos no cache (is_known=False)
+    para que o chamador pule direto para yfinance.
+
+    Estrategia: consulta /api/v2/tickers?search={ticker} individualmente
+    apenas para os que nao estao no cache. Para evitar burst, as consultas
+    sao feitas sequencialmente com await (o rate limiter da BRAPI e generoso
+    para esse endpoint).
+    """
+    if not tickers:
+        return set()
+
+    now = time.monotonic()
+    known: set[str] = set()
+    to_check: list[str] = []
+
+    for t in tickers:
+        cached = _BRAPI_TICKER_CACHE.get(t)
+        if cached is not None and now < cached[1]:
+            if cached[0]:
+                known.add(t)
+        else:
+            to_check.append(t)
+
+    if not to_check:
+        return known
+
+    headers = _auth_headers()
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        for ticker in to_check:
+            try:
+                resp = await client.get(
+                    f"{BRAPI_BASE}/v2/tickers",
+                    headers=headers,
+                    params={"search": ticker, "limit": 1},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                items = (
+                    data.get("tickers")
+                    or data.get("stocks")
+                    or data.get("results")
+                    or []
+                )
+                # Verifica se algum item retornado corresponde exatamente ao ticker
+                is_known = any(
+                    (item.get("stock") or item.get("symbol") or item.get("ticker") or "").upper() == ticker.upper()
+                    for item in items
+                )
+                _BRAPI_TICKER_CACHE[ticker] = (is_known, now + _BRAPI_TICKER_CACHE_TTL)
+                if is_known:
+                    known.add(ticker)
+                else:
+                    logger.debug("[brapi] ticker nao encontrado na BRAPI: %s", ticker)
+            except Exception as e:
+                logger.warning("[brapi] fetch_valid_brapi_tickers erro para %s: %s", ticker, e)
+                # Em caso de erro, assume como conhecido para nao bloquear o fluxo
+                _BRAPI_TICKER_CACHE[ticker] = (True, now + 300.0)  # TTL curto de 5min
+                known.add(ticker)
+
+    return known
+
+
+async def is_known_by_brapi(ticker: str) -> bool:
+    """
+    Retorna True se o ticker e conhecido pela BRAPI.
+    Usa o cache de fetch_valid_brapi_tickers.
+    """
+    result = await fetch_valid_brapi_tickers([ticker])
+    return ticker in result
+
+
+# ── Cotações atuais ───────────────────────────────────────────────────────────
 
 async def fetch_quotes(tickers: list[str]) -> dict[str, float]:
     if not tickers:
@@ -109,19 +192,15 @@ async def fetch_quote_single(ticker: str) -> Optional[float]:
     return result.get(ticker)
 
 
-# ── Catálogo de ativos — /api/v2/tickers (endpoint oficial, substitui /quote/list) ──────
+# ── Catálogo de ativos — /api/v2/tickers ─────────────────────────────────────
 
 async def fetch_all_tickers_v2(
     sub_type: str,
     limit: int = 2000,
 ) -> list[dict]:
     """
-    Busca todos os tickers de um subtipo via /api/v2/tickers com paginação real.
-
+    Busca todos os tickers de um subtipo via /api/v2/tickers com paginacao real.
     sub_type aceitos: 'stock' | 'unit' | 'fii' | 'etf' | 'fi-infra' | 'fi-agro' | 'bdr'
-
-    O endpoint suporta limit de até 2000 por página e paginação por 'page'.
-    Retorna lista de dicts com pelo menos: stock (ticker), name, sector, subType.
     """
     headers   = _auth_headers()
     all_items: list[dict] = []
@@ -156,13 +235,19 @@ async def fetch_all_tickers_v2(
         if not items:
             break
 
+        # Preenche o cache de validacao com os tickers retornados pelo catalogo
+        now = time.monotonic()
+        for item in items:
+            t = (item.get("stock") or item.get("symbol") or item.get("ticker") or "").upper()
+            if t:
+                _BRAPI_TICKER_CACHE[t] = (True, now + _BRAPI_TICKER_CACHE_TTL)
+
         all_items.extend(items)
         logger.info(
             f"[brapi] /v2/tickers subType={sub_type} page={page}: "
             f"{len(items)} itens ({len(all_items)} acumulados)"
         )
 
-        # Paginação real: se retornou menos que o limit, chegamos ao fim
         if len(items) < limit:
             break
         page += 1
@@ -170,7 +255,7 @@ async def fetch_all_tickers_v2(
     return all_items
 
 
-# ── Histórico diário de preços (BRAPI Pro) ───────────────────────────────────────
+# ── Histórico diário de preços ────────────────────────────────────────────────
 
 async def fetch_price_history(
     ticker: str,
@@ -179,12 +264,6 @@ async def fetch_price_history(
 ) -> list[tuple[datetime, float]]:
     """
     Busca historico de precos diarios via BRAPI (endpoint legado /quote/{ticker}).
-
-    Estrategia adaptativa (BRAPI Pro):
-      - Janela <= 5 anos: usa range=custom com from/to exatos.
-      - Janela >  5 anos: delega para fetch_price_history_full (range=max)
-        e filtra os registros fora da janela solicitada.
-
     Para novos consumidores, prefira fetch_stocks_historical_v2 ou
     fetch_fii_historical_v2 que usam os endpoints v2 oficiais.
     """
@@ -241,11 +320,6 @@ async def fetch_price_history(
 async def fetch_price_history_full(
     ticker: str,
 ) -> list[tuple[datetime, float]]:
-    """
-    Busca o historico completo de precos diarios via BRAPI Pro (range=max).
-    Endpoint legado /quote/{ticker} — preferir fetch_stocks_historical_v2
-    para novos consumidores.
-    """
     headers = _auth_headers()
     url = f"{BRAPI_BASE}/quote/{ticker}?range=max&interval=1d"
     try:
@@ -283,11 +357,8 @@ async def fetch_stocks_historical_v2(
     date_to: Optional[str] = None,
 ) -> list[tuple[datetime, float]]:
     """
-    Busca historico de precos via /api/v2/stocks/historical (endpoint oficial v2).
-
+    Busca historico de precos via /api/v2/stocks/historical.
     Usado para: ACAO (stock + unit), ETF_NACIONAL, BDR.
-    range_ pode ser: '1d','5d','1mo','3mo','6mo','1y','2y','5y','10y','ytd','max'
-    Se date_from e date_to forem fornecidos, usa startDate/endDate em vez de range.
     """
     headers = _auth_headers()
     params: dict = {"symbols": ticker, "interval": "1d"}
@@ -307,7 +378,6 @@ async def fetch_stocks_historical_v2(
             resp.raise_for_status()
             data = resp.json()
 
-            # Resposta esperada: {"results": [{"symbol": "PETR4", "historicalDataPrice": [...]}]}
             results = data.get("results") or data.get("stocks") or []
             if not results:
                 logger.warning(f"[brapi] fetch_stocks_historical_v2: sem resultados para {ticker}")
@@ -315,7 +385,6 @@ async def fetch_stocks_historical_v2(
 
             history = results[0].get("historicalDataPrice") or []
             if not history:
-                # Fallback: snapshot atual como único ponto
                 price = results[0].get("regularMarketPrice")
                 if price:
                     now = datetime.now(timezone.utc).replace(hour=21, minute=0, second=0, microsecond=0)
@@ -336,10 +405,8 @@ async def fetch_fii_historical_v2(
     date_to: Optional[str] = None,
 ) -> list[tuple[datetime, float]]:
     """
-    Busca historico de precos via /api/v2/fii/historical (endpoint oficial v2).
-
-    Usado para: FII, FI_INFRA (mapeado como FII), FI_AGRO (mapeado como FII).
-    Plano Pro necessário para range=max.
+    Busca historico de precos via /api/v2/fii/historical.
+    Usado para: FII, FI_INFRA, FI_AGRO.
     """
     headers = _auth_headers()
     params: dict = {"symbols": ticker, "interval": "1d"}
@@ -388,14 +455,9 @@ async def fetch_historical_price(ticker: str, date_str: str) -> Optional[float]:
     return None
 
 
-# ── Moedas — cotação atual e histórico (BRAPI v2/currency) ───────────────────────────
+# ── Moedas ────────────────────────────────────────────────────────────────────
 
 def _extract_price_from_item(item: dict) -> Optional[float]:
-    """
-    Extrai preco de um item de resposta de moeda da BRAPI.
-    Tenta multiplos campos em ordem de preferencia.
-    'close' adicionado pois e o campo retornado pelo endpoint /v2/currency na resposta atual.
-    """
     for field in (
         "regularMarketPrice",
         "ask",
@@ -417,12 +479,6 @@ def _extract_price_from_item(item: dict) -> Optional[float]:
 
 
 async def fetch_currency_rate(pair: str = "USD-BRL") -> Optional[float]:
-    """
-    Retorna a cotacao atual de um par cambial via BRAPI /v2/currency.
-
-    Tenta o par no formato recebido (ex: 'USD-BRL') e tambem sem hifen ('USDBRL').
-    Retorna None se a BRAPI falhar ou o par nao for encontrado.
-    """
     headers = _auth_headers()
     pairs_to_try = [pair, pair.replace("-", "")]
 
@@ -476,12 +532,6 @@ async def fetch_currency_history(
     start_date: str,
     end_date: str,
 ) -> list[tuple[date, float]]:
-    """
-    Retorna historico diario de cotacao de um par cambial via BRAPI /v2/currency/historical.
-
-    Tenta o par no formato 'USD-BRL' e 'USDBRL' (sem hifen).
-    Retorna [] se BRAPI falhar — o chamador deve tratar o fallback.
-    """
     headers = _auth_headers()
     pairs_to_try = [pair, pair.replace("-", "")]
 
@@ -551,7 +601,7 @@ async def fetch_currency_history(
     return []
 
 
-# ── Cripto (BRAPI Pro) ─────────────────────────────────────────────────────────────────
+# ── Cripto ────────────────────────────────────────────────────────────────────
 
 async def fetch_crypto_quote(tickers: list[str]) -> dict[str, float]:
     if not tickers:
@@ -582,7 +632,7 @@ async def fetch_crypto_quote(tickers: list[str]) -> dict[str, float]:
     return results
 
 
-# ── Informações do ativo ──────────────────────────────────────────────────────────────
+# ── Informações do ativo ──────────────────────────────────────────────────────
 
 async def fetch_asset_info(ticker: str) -> Optional[dict]:
     headers = _auth_headers()
@@ -611,7 +661,7 @@ async def fetch_logo_url(ticker: str) -> Optional[str]:
         return None
 
 
-# ── Tesouro Direto ────────────────────────────────────────────────────────────────────
+# ── Tesouro Direto ────────────────────────────────────────────────────────────
 
 async def fetch_treasury_price_by_date(slug: str, date_str: str) -> Optional[float]:
     headers = _auth_headers()
@@ -658,7 +708,7 @@ async def fetch_treasury_list() -> list[dict]:
         return []
 
 
-# ── Busca / sugestões de ticker ────────────────────────────────────────────────────────
+# ── Busca / sugestões de ticker ───────────────────────────────────────────────
 
 async def fetch_ticker_suggestions(
     q: str,
@@ -699,7 +749,6 @@ async def fetch_crypto_suggestions(q: str, limit: int = 10) -> list[dict]:
 
 
 async def get_quotes_bulk(tickers: list[str]) -> list[dict]:
-    """Retorna lista de dicts com dados completos de cotacao para um lote de tickers."""
     if not tickers:
         return []
     results: list[dict] = []
@@ -720,22 +769,11 @@ async def get_quotes_bulk(tickers: list[str]) -> list[dict]:
 
 
 def _yf_search_sync(q: str, limit: int = 10, asset_type: Optional[str] = None) -> list[dict]:
-    """
-    Fallback de busca de ticker via yfinance.
-
-    yfinance >= 0.2.50 usa yf.Lookup com atributos de propriedade (nao metodos):
-      - yf.Lookup(q).stock       -> DataFrame com acoes
-      - yf.Lookup(q).etf         -> DataFrame com ETFs
-      - yf.Search(q).quotes      -> lista de dicts (busca geral)
-
-    Versoes antigas usavam yf.Lookup(q).get_stock() (metodo) — removido na 0.2.50+.
-    """
     try:
         import yfinance as yf
         results = []
 
         def _rows_from_df(df) -> list[dict]:
-            """Converte DataFrame do Lookup em lista de dicts normalizados."""
             if df is None or (hasattr(df, 'empty') and df.empty):
                 return []
             rows = []

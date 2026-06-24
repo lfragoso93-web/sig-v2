@@ -4,6 +4,10 @@ Servico de historico de precos.
 Estrategia de busca (por camadas):
 
   Ativos BR (ACAO, FII, ETF_NACIONAL, BDR, CRIPTO):
+    L0 - Validacao BRAPI: verifica se o ticker e conhecido pela BRAPI via
+         cache em memoria (populado pelo seed via /api/v2/tickers).
+         Tickers desconhecidos pulam direto para yfinance, evitando
+         400 em massa no endpoint legado.
     L1 - BRAPI v2:
          FII -> /api/v2/fii/historical
          demais -> /api/v2/stocks/historical
@@ -13,7 +17,6 @@ Estrategia de busca (por camadas):
 
   Ativos INTL (STOCK, ETF_INTERNACIONAL):
     L1 - Alpha Vantage TIME_SERIES_DAILY (primario real para INTL)
-         Economia: compact (<=100 dias) = 1 req; full (>100) = 1 req na primeira vez.
     L2 - yfinance (fallback)
     L3 - Snapshot BRAPI (ultimo recurso)
     Nota: BRAPI v2 e completamente ignorado para INTL (sempre 404/500).
@@ -24,10 +27,7 @@ Rate limiting yfinance (threading.Lock - nivel de thread):
 
 Lock por ticker (_ticker_locks):
   Evita que multiplos endpoints (performance, portfolio, summary) disparem
-  persist_daily_prices para o mesmo ticker simultaneamente, o que causava
-  burst de requisicoes identicas no yfinance/Alpha Vantage.
-  Cada ticker tem seu proprio asyncio.Lock(); chamadas concorrentes para o
-  mesmo ticker aguardam a primeira terminar e depois pulam (banco ja atualizado).
+  persist_daily_prices para o mesmo ticker simultaneamente.
 
 Rate limiting Alpha Vantage:
   alpha_vantage_limiter (TokenBucket, 4 req/min) em core/rate_limiter.py.
@@ -52,6 +52,7 @@ from app.integrations.brapi import (
     fetch_price_history as brapi_fetch_history_legacy,
     fetch_stocks_historical_v2,
     fetch_fii_historical_v2,
+    is_known_by_brapi,
 )
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
@@ -64,9 +65,7 @@ _yf_thread_lock = threading.Lock()
 _YF_MIN_INTERVAL: float = 8.0
 _yf_last_call: list[float] = [0.0]
 
-# ── Lock por ticker: evita requests duplicados concorrentes ──────────────────
-# defaultdict(asyncio.Lock) nao e seguro pois asyncio.Lock() precisa ser criado
-# no event loop correto. Usamos um dict protegido por threading.Lock.
+# ── Lock por ticker ───────────────────────────────────────────────────────────
 _ticker_locks: dict[str, asyncio.Lock] = {}
 _ticker_locks_mutex = threading.Lock()
 
@@ -78,7 +77,7 @@ def _get_ticker_lock(ticker: str) -> asyncio.Lock:
         return _ticker_locks[ticker]
 
 
-# ── Tipos BRAPI v2 ───────────────────────────────────────────────────────────
+# ── Tipos BRAPI v2 ────────────────────────────────────────────────────────────
 _FII_V2_TYPES    = {AssetType.FII}
 _STOCKS_V2_TYPES = {AssetType.ACAO, AssetType.ETF_NACIONAL, AssetType.BDR}
 
@@ -242,7 +241,6 @@ async def _persist_daily_prices_inner(
 
     if is_intl:
         # ── INTL: Alpha Vantage primeiro, yfinance como fallback ──────────────
-        # BRAPI v2 e ignorado para INTL (sempre 404/500, desperdicaria requests)
         logger.debug(f"[PriceHistory] {ticker} (INTL) — tentando Alpha Vantage")
         try:
             rows = await _fetch_av_history(ticker, days_back)
@@ -259,26 +257,38 @@ async def _persist_daily_prices_inner(
                 logger.warning(f"[PriceHistory] yfinance excecao para {ticker}: {e}")
 
     else:
-        # ── BR: BRAPI v2 → legado → yfinance ─────────────────────────────────
-        rows, source = await _fetch_brapi_v2(ticker, asset_type, date_from, date_to)
+        # ── BR: L0 validacao BRAPI → v2 → legado → yfinance ──────────────────
+        # L0: verifica cache de tickers conhecidos pela BRAPI
+        # (cache e populado automaticamente pelo seed via fetch_all_tickers_v2)
+        brapi_known = await is_known_by_brapi(ticker)
 
-        if not rows:
-            logger.info(f"[PriceHistory] BRAPI v2 vazio para {ticker} ({asset_type}) — tentando legado")
-            try:
-                rows = await brapi_fetch_history_legacy(ticker, date_from, date_to)
-                source = "brapi_legacy"
-            except Exception as e:
-                logger.warning(f"[PriceHistory] BRAPI legado excecao para {ticker}: {e}")
+        if brapi_known:
+            # L1: BRAPI v2
+            rows, source = await _fetch_brapi_v2(ticker, asset_type, date_from, date_to)
 
+            if not rows:
+                # L2: BRAPI legado — apenas para tickers conhecidos
+                logger.info(f"[PriceHistory] BRAPI v2 vazio para {ticker} ({asset_type}) — tentando legado")
+                try:
+                    rows = await brapi_fetch_history_legacy(ticker, date_from, date_to)
+                    source = "brapi_legacy"
+                except Exception as e:
+                    logger.warning(f"[PriceHistory] BRAPI legado excecao para {ticker}: {e}")
+        else:
+            logger.info(
+                f"[PriceHistory] {ticker} nao encontrado na BRAPI — pulando direto para yfinance"
+            )
+
+        # L3: yfinance (se BRAPI desconhece o ticker OU se BRAPI retornou vazio)
         if not rows:
-            logger.info(f"[PriceHistory] BRAPI vazio para {ticker} — tentando yfinance")
+            logger.info(f"[PriceHistory] tentando yfinance para {ticker}")
             try:
                 rows = await _fetch_yf_history(ticker, asset_type, days_back)
                 source = "yfinance_fallback"
             except Exception as e:
                 logger.warning(f"[PriceHistory] yfinance excecao para {ticker}: {e}")
 
-    # ── L4: Snapshot como ultimo recurso (BR e INTL) ──────────────────────────
+    # ── L4: Snapshot como ultimo recurso ─────────────────────────────────────
     if not rows:
         logger.info(f"[PriceHistory] sem historico para {ticker} — tentando snapshot")
         try:
