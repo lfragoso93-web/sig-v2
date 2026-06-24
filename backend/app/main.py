@@ -40,11 +40,10 @@ async def _boot_sequence() -> None:
     Etapa 2 - Backfill historico de precos (10 anos):
       Popula `asset_prices` com o historico completo de todos os ativos.
       So executa se asset_prices estiver vazia E assets tiver registros.
-      E abortada se a etapa 1 falhar com assets vazia.
+      Abortada se a etapa 1 falhar com assets vazia.
 
-    Etapa 3 - Backfill de proventos:
-      Popula `dividends` com o historico de proventos.
-      So executa se dividends estiver vazia.
+    Nota: proventos (dividends) sao processados automaticamente via trigger
+    em cada insercao/edicao/exclusao de transacao — nao precisam de boot.
 
     A API ja esta disponivel e respondendo durante todo o processo.
     """
@@ -61,16 +60,16 @@ async def _boot_sequence() -> None:
             asset_count = result.scalar_one() or 0
 
         if asset_count == 0:
-            logger.info("[Boot] Etapa 1: tabela assets vazia — iniciando seed de tickers")
+            logger.info("[Boot] Etapa 1: tabela assets vazia \u2014 iniciando seed de tickers")
             async with AsyncSessionLocal() as db:
                 seed_result = await run_asset_seed(db, run_backfill=False)
             logger.info(
-                "[Boot] Etapa 1: seed concluido — %d criados, %d atualizados, %d erros",
+                "[Boot] Etapa 1: seed concluido \u2014 %d criados, %d atualizados, %d erros",
                 seed_result.created, seed_result.updated, seed_result.errors,
             )
             seed_ok = True
         else:
-            logger.info("[Boot] Etapa 1: %d assets no banco — seed ignorado", asset_count)
+            logger.info("[Boot] Etapa 1: %d assets no banco \u2014 seed ignorado", asset_count)
             seed_ok = True
 
     except Exception as e:
@@ -89,31 +88,12 @@ async def _boot_sequence() -> None:
         except Exception as e:
             logger.error("[Boot] Etapa 2 (backfill de precos) falhou: %s", e)
 
-    # --- Etapa 3: Backfill de proventos (independente) ----------------------
-    try:
-        from app.models.dividend import Dividend
-        from app.services.dividend_backfill_service import run_full_backfill
-
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(select(func.count()).select_from(Dividend))
-            div_count = result.scalar_one() or 0
-
-        if div_count == 0:
-            logger.info("[Boot] Etapa 3: tabela dividends vazia — iniciando backfill de proventos")
-            await run_full_backfill()
-            logger.info("[Boot] Etapa 3: backfill de proventos concluido")
-        else:
-            logger.info("[Boot] Etapa 3: %d proventos no banco — backfill ignorado", div_count)
-    except Exception as e:
-        logger.error("[Boot] Etapa 3 (backfill de proventos) falhou: %s", e)
-
     logger.info("[Boot] sequencia de inicializacao concluida")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     start_scheduler()
-    # Dispara o boot em background — API fica disponivel imediatamente
     asyncio.create_task(_boot_sequence())
     yield
     await engine.dispose()
