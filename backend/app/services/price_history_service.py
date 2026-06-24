@@ -32,6 +32,10 @@ Cooldown de persistencia (_persist_cooldown):
   Isso evita YFRateLimitError quando multiplos endpoints (summary,
   positions, asset-distribution) chegam em paralelo para os mesmos tickers.
 
+  force=True bypassa o cooldown e o limite de days_back por last_ts.
+  Usado pelo _prefetch_price_history no backfill para garantir que o
+  historico completo seja buscado mesmo que o ticker ja tenha dados recentes.
+
 Rate limiting yfinance (threading.Lock - nivel de thread):
   _yf_thread_lock garante que apenas uma thread execute yfinance de cada vez.
   _YF_MIN_INTERVAL (12s) adiciona pausa minima para evitar 429.
@@ -92,6 +96,12 @@ def _is_in_cooldown(ticker: str) -> bool:
 def _set_cooldown(ticker: str) -> None:
     with _cooldown_lock:
         _persist_cooldown[ticker] = time.monotonic() + PERSIST_COOLDOWN_SECONDS
+
+
+def _clear_cooldown(ticker: str) -> None:
+    """Remove o ticker do cooldown. Usado pelo prefetch forcado do backfill."""
+    with _cooldown_lock:
+        _persist_cooldown.pop(ticker, None)
 
 
 # -- Lock por ticker ----------------------------------------------------------
@@ -176,6 +186,14 @@ async def _last_saved_ts(db: AsyncSession, asset_id: int) -> Optional[datetime]:
     return result.scalar_one_or_none()
 
 
+async def _first_saved_ts(db: AsyncSession, asset_id: int) -> Optional[datetime]:
+    """Retorna o timestamp mais antigo salvo para o asset."""
+    result = await db.execute(
+        select(func.min(AssetPrice.timestamp)).where(AssetPrice.asset_id == asset_id)
+    )
+    return result.scalar_one_or_none()
+
+
 def _fetch_yf_history_sync(yf_sym: str, days: int) -> list[tuple[datetime, float]]:
     try:
         tk = yf.Ticker(yf_sym)
@@ -230,28 +248,35 @@ async def persist_daily_prices(
     ticker: str,
     asset_type: AssetType,
     days_back: int = 365,
+    force: bool = False,
 ) -> int:
     """
     Persiste historico de precos diarios para um ativo.
-    Retorna 0 imediatamente se o ticker estiver em cooldown (evita
-    burst de requests quando multiplos endpoints chamam o mesmo ticker).
+
+    force=True: ignora cooldown e o limite de days_back por last_ts.
+    Usar apenas no _prefetch_price_history do backfill para garantir
+    que o historico completo seja buscado mesmo que o ticker ja tenha
+    dados recentes (ex: 1 registro de hoje do dashboard).
+
+    Retorna 0 imediatamente se o ticker estiver em cooldown E force=False.
     """
     if asset_type in NO_QUOTE_TYPES:
         logger.debug(f"[PriceHistory] {ticker} ({asset_type}) sem cotacao — ignorado")
         return 0
 
-    if _is_in_cooldown(ticker):
+    if not force and _is_in_cooldown(ticker):
         logger.debug(f"[PriceHistory] {ticker} em cooldown — pulando")
         return 0
 
+    if force:
+        _clear_cooldown(ticker)
+
     lock = _get_ticker_lock(ticker)
     async with lock:
-        # Re-checa cooldown apos adquirir o lock (outra coroutine pode ter
-        # terminado e setado o cooldown enquanto esta esperava)
-        if _is_in_cooldown(ticker):
+        if not force and _is_in_cooldown(ticker):
             logger.debug(f"[PriceHistory] {ticker} em cooldown (pos-lock) — pulando")
             return 0
-        return await _persist_daily_prices_inner(db, ticker, asset_type, days_back)
+        return await _persist_daily_prices_inner(db, ticker, asset_type, days_back, force=force)
 
 
 async def _persist_daily_prices_inner(
@@ -259,17 +284,45 @@ async def _persist_daily_prices_inner(
     ticker: str,
     asset_type: AssetType,
     days_back: int,
+    force: bool = False,
 ) -> int:
     asset = await _get_or_create_asset(db, ticker, asset_type)
     last_ts = await _last_saved_ts(db, asset.id)
 
-    if last_ts:
+    if not force and last_ts:
         delta = (_now_utc() - last_ts).days
         if delta < 1:
             logger.debug(f"[PriceHistory] {ticker} banco atualizado (last={last_ts.date()}) — pulando")
             _set_cooldown(ticker)
             return 0
         days_back = min(days_back, max(delta + 1, 2))
+    elif force and last_ts:
+        # Com force=True: calcula a janela real desde o inicio dos dados salvos
+        # vs o days_back solicitado, e usa o maior (garante sem gaps).
+        first_ts = await _first_saved_ts(db, asset.id)
+        if first_ts:
+            days_already = (_now_utc() - first_ts).days
+            if days_already >= days_back:
+                # Historico ja cobre o periodo solicitado — apenas atualiza delta recente
+                delta = (_now_utc() - last_ts).days
+                if delta < 1:
+                    logger.debug(
+                        f"[PriceHistory] {ticker} historico completo (first={first_ts.date()}, "
+                        f"last={last_ts.date()}) — pulando prefetch"
+                    )
+                    _set_cooldown(ticker)
+                    return 0
+                days_back = max(delta + 1, 2)
+                logger.info(
+                    f"[PriceHistory] {ticker} force=True mas historico ja cobre {days_already}d "
+                    f"(pedido={days_back}d) — atualizando apenas delta={delta}d"
+                )
+            else:
+                logger.info(
+                    f"[PriceHistory] {ticker} force=True: historico existente cobre {days_already}d, "
+                    f"pedido={days_back}d — buscando completo"
+                )
+        # Se nao ha first_ts, usa days_back como solicitado
 
     date_to   = _now_utc().date().isoformat()
     date_from = (_now_utc().date() - timedelta(days=days_back)).isoformat()
@@ -279,7 +332,6 @@ async def _persist_daily_prices_inner(
     is_intl = asset_type in INTL_TYPES
 
     if is_intl:
-        # -- INTL: Alpha Vantage primeiro, yfinance como fallback -------------
         logger.debug(f"[PriceHistory] {ticker} (INTL) — tentando Alpha Vantage")
         try:
             rows = await _fetch_av_history(ticker, days_back)
@@ -296,17 +348,12 @@ async def _persist_daily_prices_inner(
                 logger.warning(f"[PriceHistory] yfinance excecao para {ticker}: {e}")
 
     else:
-        # -- BR: L0 validacao BRAPI -> L1 v2 -> L3 yfinance ------------------
         brapi_known = await is_known_by_brapi(ticker)
 
         if brapi_known:
-            # L1: BRAPI v2
             rows, source = await _fetch_brapi_v2(ticker, asset_type, date_from, date_to)
 
             if not rows:
-                # Ticker conhecido pelo catalogo mas sem historico no v2.
-                # NAO tenta o legado (retornaria 400 para esses casos).
-                # Vai direto para yfinance.
                 logger.info(
                     f"[PriceHistory] BRAPI v2 vazio para {ticker} ({asset_type}) "
                     f"— pulando legado, tentando yfinance"
@@ -316,7 +363,6 @@ async def _persist_daily_prices_inner(
                 f"[PriceHistory] {ticker} nao encontrado na BRAPI — pulando direto para yfinance"
             )
 
-        # L3: yfinance (ticker desconhecido pela BRAPI OU v2 retornou vazio)
         if not rows:
             try:
                 rows = await _fetch_yf_history(ticker, asset_type, days_back)
@@ -324,7 +370,6 @@ async def _persist_daily_prices_inner(
             except Exception as e:
                 logger.warning(f"[PriceHistory] yfinance excecao para {ticker}: {e}")
 
-    # -- L4: Snapshot como ultimo recurso ------------------------------------
     if not rows:
         logger.info(f"[PriceHistory] sem historico para {ticker} — tentando snapshot")
         try:
@@ -352,10 +397,8 @@ async def _persist_daily_prices_inner(
             asset.last_price_updated_at = _now_utc()
 
     await db.commit()
-    logger.info(f"[PriceHistory] {ticker}: {inserted} registros persistidos (source={source})")
+    logger.info(f"[PriceHistory] {ticker}: {inserted} registros persistidos (source={source}, force={force})")
 
-    # Seta cooldown apos persistencia bem-sucedida (mesmo que inserted=0,
-    # significa que nao havia dados novos — nao precisa tentar de novo cedo)
     _set_cooldown(ticker)
     return inserted
 
