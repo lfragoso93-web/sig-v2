@@ -17,7 +17,6 @@ from app.services.corporate_event_service import (
     sync_corporate_events_for_asset, apply_pending_events
 )
 from app.services.dividend_backfill_service import backfill_dividends
-from app.services.price_history_service import persist_daily_prices
 from app.services.quotes_service import update_all_quotes
 from app.services.portfolio_snapshot_service import refresh_today_snapshot
 
@@ -28,12 +27,6 @@ BRAPI_ASSET_TYPES = {
     AssetType.FII,
     AssetType.ETF_NACIONAL,
     AssetType.BDR,
-}
-
-PRICE_HISTORY_TYPES = {
-    AssetType.ACAO, AssetType.FII, AssetType.ETF_NACIONAL,
-    AssetType.BDR,
-    AssetType.STOCK, AssetType.ETF_INTERNACIONAL,
 }
 
 scheduler = AsyncIOScheduler(timezone="America/Sao_Paulo")
@@ -69,19 +62,6 @@ async def _get_active_portfolio_tickers() -> list[tuple[int, str, str]]:
         (r.portfolio_id, r.ticker, r.asset_type)
         for r in rows
         if r.asset_type not in skip and r.ticker
-    ]
-
-
-async def _get_price_history_tickers() -> list[tuple[str, AssetType]]:
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(
-            select(Transaction.ticker, Transaction.asset_type).distinct()
-        )
-        rows = result.all()
-    return [
-        (r.ticker, AssetType(r.asset_type))
-        for r in rows
-        if r.ticker and AssetType(r.asset_type) in PRICE_HISTORY_TYPES
     ]
 
 
@@ -128,36 +108,23 @@ async def job_update_quotes():
             errors += 1
             logger.warning("[Scheduler] job_update_quotes: erro cache %s: %s", ticker, e)
 
-    logger.info(f"[Scheduler] {ok} cotacoes atualizadas, {errors} erros de cache.")
+    logger.info("[Scheduler] %d cotacoes atualizadas, %d erros de cache.", ok, errors)
 
 
 async def job_persist_price_history():
-    """Persiste historico de precos. Falha por ticker e isolada."""
-    logger.info("[Scheduler] Persistindo historico de precos...")
+    """
+    Atualiza o historico de precos de todos os ativos (incremental).
+
+    Usa run_incremental_update do backfill service, que busca apenas
+    o delta desde o last_ts de cada ativo — no maximo 7 dias de window.
+    Roda diariamente apos o fechamento do mercado (18h30 BRT).
+    """
+    logger.info("[Scheduler] Iniciando atualizacao incremental de precos...")
     try:
-        pairs = await _get_price_history_tickers()
+        from app.services.price_history_backfill_service import run_incremental_update
+        await run_incremental_update()
     except Exception as e:
-        logger.error("[Scheduler] job_persist_price_history: erro ao listar tickers: %s", e)
-        return
-
-    if not pairs:
-        logger.info("[Scheduler] Nenhum ativo para historico de precos.")
-        return
-
-    total = 0
-    errors = 0
-    for ticker, asset_type in pairs:
-        try:
-            async with AsyncSessionLocal() as db:
-                inserted = await persist_daily_prices(
-                    db, ticker, asset_type, days_back=7
-                )
-                total += inserted
-        except Exception as e:
-            errors += 1
-            logger.error("[Scheduler] Erro persist price %s: %s", ticker, e)
-
-    logger.info(f"[Scheduler] Historico: {total} registros inseridos, {errors} erros.")
+        logger.error("[Scheduler] job_persist_price_history: erro: %s", e)
 
 
 async def job_update_all_quotes_and_snapshots():
@@ -189,8 +156,8 @@ async def job_update_all_quotes_and_snapshots():
             logger.error("[Scheduler] Erro snapshot portfolio=%s: %s", pid, e)
 
     logger.info(
-        f"[Scheduler] Snapshots do dia: {ok} ok, {errors} erros "
-        f"({len(portfolio_ids)} carteiras ativas)."
+        "[Scheduler] Snapshots do dia: %d ok, %d erros (%d carteiras ativas).",
+        ok, errors, len(portfolio_ids)
     )
 
 
@@ -218,7 +185,7 @@ async def job_sync_corporate_events():
             logger.error("[Scheduler] Erro apply_pending_events: %s", e)
             applied = 0
 
-    logger.info(f"[Scheduler] {new_total} novos eventos, {applied} aplicados nas carteiras.")
+    logger.info("[Scheduler] %d novos eventos, %d aplicados nas carteiras.", new_total, applied)
 
 
 async def job_sync_dividends():
@@ -247,7 +214,8 @@ async def job_sync_dividends():
             logger.error("[Scheduler] Erro resync proventos %s: %s", ticker, e)
 
     logger.info(
-        f"[Scheduler] Resync semanal concluido: {total_processed} ok, {errors} erros."
+        "[Scheduler] Resync semanal concluido: %d ok, %d erros.",
+        total_processed, errors
     )
 
 
@@ -268,18 +236,15 @@ async def job_update_dividend_status():
             )
             await db.commit()
             updated = result.rowcount
-        logger.info(f"[Scheduler] {updated} proventos marcados como RECEBIDO.")
+        logger.info("[Scheduler] %d proventos marcados como RECEBIDO.", updated)
     except Exception as e:
         logger.error("[Scheduler] job_update_dividend_status: erro: %s", e)
 
 
 async def job_seed_assets():
     """
-    Seed semanal de ativos da B3 via BRAPI quote/list.
-
-    Popula/atualiza a tabela `assets` com Acoes, FIIs, ETFs e BDRs listados.
-    Roda toda segunda-feira as 3h para capturar novos IPOs e mudancas de listagem
-    sem interferir no horario de mercado.
+    Seed semanal de ativos da B3 via BRAPI /v2/tickers.
+    Roda toda segunda-feira as 3h para capturar novos IPOs.
     """
     logger.info("[Scheduler] Iniciando seed semanal de ativos da B3...")
     try:
@@ -301,6 +266,7 @@ def init_scheduler():
         id="update_quotes",
         replace_existing=True,
     )
+    # Incremental de precos: todo dia apos fechamento da B3 (18h30 BRT)
     scheduler.add_job(
         job_persist_price_history,
         CronTrigger(hour=18, minute=30, timezone="America/Sao_Paulo"),

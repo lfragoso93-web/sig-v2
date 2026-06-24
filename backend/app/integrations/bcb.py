@@ -24,7 +24,7 @@ Ambas retornam [] / None em caso de erro sem propagar excecao.
 from __future__ import annotations
 
 import logging
-from datetime import date as DateType, datetime, timezone
+from datetime import date as DateType
 from typing import Optional
 
 import httpx

@@ -1,29 +1,26 @@
 """
-Servico de historico de precos.
+price_history_service.py
 
-Estrategia de busca (por camadas):
-  L1 - banco (asset_prices): consulta primeiro; so busca externamente o delta faltante.
-  L2 - BRAPI Pro (primario): tentado para todos os tipos de ativo.
-  L2.5 - Alpha Vantage (INTL): para AssetType em INTL_TYPES, tenta antes do yfinance.
-         Economia: compact (<=100 dias) = 1 req/dia/ticker; full (>100) = 1 req na primeira vez.
-  L3 - yfinance (fallback final): usado quando BRAPI e Alpha Vantage retornam vazio.
+Apos a migração para backfill pre-populado, este servico e responsavel por:
 
-Convencao de timezone:
-  Todos os timestamps sao armazenados em UTC.
-  Fechamentos BR (BRAPI snapshot) usam 21:00 UTC (= 18:00 BRT).
-  Fechamentos INTL (Alpha Vantage / yfinance) usam 21:00 UTC (= 17:00 ET).
-  _parse_date_utc() normaliza qualquer string de data para datetime UTC midnight.
+  1. get_price_at_date   — leitura pura do banco, nunca chama API
+  2. get_price_history   — leitura pura do banco, nunca chama API
+  3. persist_daily_prices — incremental simples (delta desde last_ts)
+                           Usado pelo scheduler e pelo asset_onboarding.
+
+O backfill inicial de 10 anos e responsabilidade de:
+  app/services/price_history_backfill_service.py
+
+Regra de negocio para get_price_at_date:
+  Busca o fechamento mais recente disponivel no intervalo
+  [target_date - 5 dias, target_date + 1 dia].
+  Isso cobre: finais de semana, feriados e dias sem pregao.
+  Se nao encontrar, retorna None e loga warning — nunca dispara API.
 
 Rate limiting yfinance (threading.Lock - nivel de thread):
-  O asyncio.Semaphore nao bloqueia threads do executor corretamente.
-  _yf_thread_lock (threading.Lock) garante que apenas uma thread execute
-  yfinance de cada vez. _YF_MIN_INTERVAL (4s) add pausa minima entre chamadas.
-
-Rate limiting Alpha Vantage:
-  alpha_vantage_limiter (TokenBucket, 4 req/min) em core/rate_limiter.py.
-  Adquirido antes de cada chamada em _fetch_av_history.
+  _yf_thread_lock garante que apenas uma thread execute yfinance de cada vez.
+  _YF_MIN_INTERVAL (12s) adiciona pausa minima para evitar 429.
 """
-import asyncio
 import logging
 import threading
 import time
@@ -38,27 +35,63 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.asset_types import NO_QUOTE_TYPES, INTL_TYPES, yf_ticker
-from app.integrations.brapi import fetch_price_history as brapi_fetch_history
+from app.integrations.brapi import (
+    fetch_stocks_historical_v2,
+    fetch_fii_historical_v2,
+    is_known_by_brapi,
+)
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
 
 logger = logging.getLogger(__name__)
 
+# -- yfinance thread pool e rate limiter --------------------------------------
 _YF_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="yfinance_hist")
-
-# threading.Lock para serializar chamadas yfinance entre threads do executor.
-# asyncio.Semaphore nao funciona fora do event loop (threads do executor).
 _yf_thread_lock = threading.Lock()
-_YF_MIN_INTERVAL: float = 4.0       # segundos entre chamadas yfinance
+_YF_MIN_INTERVAL: float = 12.0
 _yf_last_call: list[float] = [0.0]
 
+# -- Cooldown de persistencia (para o incremental do scheduler) ---------------
+# Estrutura: {ticker: expires_at (monotonic)}
+PERSIST_COOLDOWN_SECONDS: float = 1800.0  # 30 minutos
+_persist_cooldown: dict[str, float] = {}
+_cooldown_lock = threading.Lock()
 
-async def _run_yf_with_throttle(fn: Callable, *args) -> any:
-    """
-    Executa fn(*args) em _YF_EXECUTOR com throttle via threading.Lock.
-    O lock e o sleep sao executados DENTRO da thread do executor,
-    garantindo serializacao real entre todas as threads yfinance.
-    """
+
+def _is_in_cooldown(ticker: str) -> bool:
+    with _cooldown_lock:
+        exp = _persist_cooldown.get(ticker)
+        return exp is not None and time.monotonic() < exp
+
+
+def _set_cooldown(ticker: str) -> None:
+    with _cooldown_lock:
+        _persist_cooldown[ticker] = time.monotonic() + PERSIST_COOLDOWN_SECONDS
+
+
+def _clear_cooldown(ticker: str) -> None:
+    with _cooldown_lock:
+        _persist_cooldown.pop(ticker, None)
+
+
+# -- Tipos BRAPI v2 -----------------------------------------------------------
+_FII_V2_TYPES    = {AssetType.FII}
+_STOCKS_V2_TYPES = {AssetType.ACAO, AssetType.ETF_NACIONAL, AssetType.BDR}
+
+_BR_CLOSE_HOUR_UTC = 21
+
+
+def _now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _parse_date_utc(date_str: str) -> datetime:
+    d = date_str[:10]
+    return datetime(int(d[:4]), int(d[5:7]), int(d[8:10]), tzinfo=timezone.utc)
+
+
+async def _run_yf_with_throttle(fn: Callable, *args):
+    import asyncio
     loop = asyncio.get_event_loop()
 
     def _throttled():
@@ -74,31 +107,12 @@ async def _run_yf_with_throttle(fn: Callable, *args) -> any:
     return await loop.run_in_executor(_YF_EXECUTOR, _throttled)
 
 
-PRICE_TTL_SECONDS = 900  # 15 minutos
-_BR_CLOSE_HOUR_UTC = 21
-
-
-def _now_utc() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def _parse_date_utc(date_str: str) -> datetime:
-    date_part = date_str[:10]
-    return datetime(
-        int(date_part[0:4]),
-        int(date_part[5:7]),
-        int(date_part[8:10]),
-        0, 0, 0,
-        tzinfo=timezone.utc,
-    )
-
-
 async def _upsert_price(
     db: AsyncSession,
     asset_id: int,
     timestamp: datetime,
     close: float,
-    source: str = "brapi",
+    source: str = "brapi_v2",
 ) -> None:
     stmt = (
         pg_insert(AssetPrice)
@@ -114,9 +128,7 @@ async def _upsert_price(
 
 
 async def _get_or_create_asset(db: AsyncSession, ticker: str, asset_type: AssetType) -> Asset:
-    result = await db.execute(
-        select(Asset).where(Asset.ticker == ticker)
-    )
+    result = await db.execute(select(Asset).where(Asset.ticker == ticker))
     asset = result.scalar_one_or_none()
     if asset is None:
         asset = Asset(ticker=ticker, name=ticker, asset_type=asset_type)
@@ -134,8 +146,16 @@ async def _last_saved_ts(db: AsyncSession, asset_id: int) -> Optional[datetime]:
 
 def _fetch_yf_history_sync(yf_sym: str, days: int) -> list[tuple[datetime, float]]:
     try:
+        from datetime import date as _date
         tk = yf.Ticker(yf_sym)
-        hist = tk.history(period=f"{days}d", interval="1d", auto_adjust=True)
+        start_date = _date.today() - timedelta(days=days)
+        end_date   = _date.today() + timedelta(days=1)
+        hist = tk.history(
+            start=start_date.isoformat(),
+            end=end_date.isoformat(),
+            interval="1d",
+            auto_adjust=True,
+        )
         if hist.empty:
             return []
         rows = []
@@ -143,122 +163,117 @@ def _fetch_yf_history_sync(yf_sym: str, days: int) -> list[tuple[datetime, float
             close = float(row["Close"])
             if close and close > 0:
                 dt = ts.to_pydatetime()
-                if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=timezone.utc)
-                else:
-                    dt = dt.astimezone(timezone.utc)
+                dt = dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
                 rows.append((dt, close))
         return rows
     except Exception as e:
-        logger.warning(f"[PriceHistory] yfinance error {yf_sym}: {e}")
+        logger.warning("[PriceHistory] yfinance error %s: %s", yf_sym, e)
         return []
 
 
-async def _fetch_yf_history(ticker: str, asset_type: AssetType, days: int) -> list[tuple[datetime, float]]:
+async def _fetch_yf_history(
+    ticker: str,
+    asset_type: AssetType,
+    days: int,
+) -> list[tuple[datetime, float]]:
     sym = yf_ticker(ticker, asset_type)
     return await _run_yf_with_throttle(_fetch_yf_history_sync, sym, days)
 
 
-async def _fetch_av_history(
-    ticker: str,
-    days_back: int,
-) -> list[tuple[datetime, float]]:
-    """
-    Busca historico via Alpha Vantage com rate limiter dedicado.
-    Retorna [] se a API key nao estiver configurada.
-    """
-    from app.core.rate_limiter import alpha_vantage_limiter
-    from app.integrations.alpha_vantage import fetch_daily_history
-
-    await alpha_vantage_limiter.acquire()
-    rows = await fetch_daily_history(ticker, days_back)
-    return rows
-
+# ---------------------------------------------------------------------------
+# persist_daily_prices — incremental simples
+# ---------------------------------------------------------------------------
 
 async def persist_daily_prices(
     db: AsyncSession,
     ticker: str,
     asset_type: AssetType,
-    days_back: int = 365,
+    days_back: int = 30,
+    force: bool = False,
 ) -> int:
     """
-    Persiste historico de precos diarios para um ativo.
+    Busca e persiste apenas o delta desde o last_ts (incremental simples).
 
-    Estrategia por tipo:
-      BR / Cripto / Tesouro:
-        1. BRAPI Pro (primario)
-        2. yfinance (fallback)
-        3. Snapshot BRAPI (ultimo recurso)
+    Nao faz backfill historico completo — isso e responsabilidade de
+    price_history_backfill_service.run_initial_backfill().
 
-      Internacional (INTL_TYPES):
-        1. BRAPI Pro (tenta, quase sempre falha para INTL)
-        2. Alpha Vantage (primario real para INTL) - economy: 1 req/dia
-        3. yfinance (fallback final)
-        4. Snapshot BRAPI (ultimo recurso)
+    Usado por:
+      - scheduler diário (incremental)
+      - asset_onboarding (quando um novo ativo e adicionado pelo usuario)
+
+    force=True ignora o cooldown. Retorna 0 se em cooldown.
     """
     if asset_type in NO_QUOTE_TYPES:
-        logger.debug(f"[PriceHistory] {ticker} ({asset_type}) sem cotacao — ignorado")
         return 0
+
+    if not force and _is_in_cooldown(ticker):
+        logger.debug("[PriceHistory] %s em cooldown — pulando", ticker)
+        return 0
+
+    if force:
+        _clear_cooldown(ticker)
 
     asset = await _get_or_create_asset(db, ticker, asset_type)
     last_ts = await _last_saved_ts(db, asset.id)
 
     if last_ts:
         delta = (_now_utc() - last_ts).days
-        # Se o banco esta atualizado, nao faz nada
-        if delta < 1:
-            logger.debug(f"[PriceHistory] {ticker} banco atualizado (last={last_ts.date()}) — pulando")
+        if not force and delta < 1:
+            _set_cooldown(ticker)
             return 0
-        days_back = min(days_back, max(delta + 1, 2))
+        # Incremental: busca apenas o delta + 1 dia de margem
+        days_back = max(min(delta + 1, days_back), 2)
+    # else: sem dados — usa days_back como passado (default 30)
 
-    date_to = _now_utc().date().isoformat()
+    date_to   = _now_utc().date().isoformat()
     date_from = (_now_utc().date() - timedelta(days=days_back)).isoformat()
 
-    rows: list[tuple[datetime, float]] = []
-    source: str = "brapi"
+    rows:   list[tuple[datetime, float]] = []
+    source: str = ""
     is_intl = asset_type in INTL_TYPES
 
-    # ------------------------------------------------------------------
-    # L2: BRAPI Pro - primario para todos os tipos
-    # ------------------------------------------------------------------
-    try:
-        rows = await brapi_fetch_history(ticker, date_from, date_to)
-    except Exception as e:
-        logger.warning(f"[PriceHistory] BRAPI excecao para {ticker}: {e}")
-        rows = []
-
-    # ------------------------------------------------------------------
-    # L2.5: Alpha Vantage - primario real para INTL quando BRAPI falha
-    # ------------------------------------------------------------------
-    if not rows and is_intl:
-        logger.info(f"[PriceHistory] BRAPI vazio para {ticker} (INTL) — tentando Alpha Vantage")
+    if is_intl:
         try:
-            rows = await _fetch_av_history(ticker, days_back)
+            from app.core.rate_limiter import alpha_vantage_limiter
+            from app.integrations.alpha_vantage import fetch_daily_history
+            await alpha_vantage_limiter.acquire()
+            rows = await fetch_daily_history(ticker, days_back)
             source = "alpha_vantage"
         except Exception as e:
-            logger.warning(f"[PriceHistory] Alpha Vantage excecao para {ticker}: {e}")
-            rows = []
+            logger.warning("[PriceHistory] Alpha Vantage excecao para %s: %s", ticker, e)
 
-    # ------------------------------------------------------------------
-    # L3: yfinance - fallback universal
-    # ------------------------------------------------------------------
-    if not rows:
-        if is_intl:
-            logger.info(f"[PriceHistory] Alpha Vantage vazio para {ticker} — tentando yfinance")
-        else:
-            logger.info(f"[PriceHistory] BRAPI vazio para {ticker} ({asset_type}) — tentando yfinance")
-        try:
-            rows = await _fetch_yf_history(ticker, asset_type, days_back)
-            source = "yfinance_fallback"
-        except Exception as e:
-            logger.warning(f"[PriceHistory] yfinance excecao para {ticker}: {e}")
-            rows = []
+        if not rows:
+            try:
+                rows = await _fetch_yf_history(ticker, asset_type, days_back)
+                source = "yfinance_fallback"
+            except Exception as e:
+                logger.warning("[PriceHistory] yfinance excecao para %s: %s", ticker, e)
+    else:
+        brapi_known = await is_known_by_brapi(ticker)
+        if brapi_known:
+            try:
+                if asset_type == AssetType.FII:
+                    rows = await fetch_fii_historical_v2(
+                        ticker=ticker, date_from=date_from, date_to=date_to
+                    )
+                    source = "brapi_v2_fii"
+                else:
+                    rows = await fetch_stocks_historical_v2(
+                        ticker=ticker, date_from=date_from, date_to=date_to
+                    )
+                    source = "brapi_v2_stocks"
+            except Exception as e:
+                logger.warning("[PriceHistory] BRAPI v2 excecao para %s: %s", ticker, e)
 
-    # ------------------------------------------------------------------
-    # Snapshot atual como ultimo recurso
-    # ------------------------------------------------------------------
+        if not rows:
+            try:
+                rows = await _fetch_yf_history(ticker, asset_type, days_back)
+                source = "yfinance_fallback"
+            except Exception as e:
+                logger.warning("[PriceHistory] yfinance excecao para %s: %s", ticker, e)
+
+    # Snapshot como ultimo recurso
     if not rows:
-        logger.info(f"[PriceHistory] sem historico para {ticker} — tentando snapshot")
         try:
             from app.integrations.brapi import fetch_quotes as brapi_fetch_quotes
             result = await brapi_fetch_quotes([ticker])
@@ -268,7 +283,7 @@ async def persist_daily_prices(
                 rows = [(ts, price)]
                 source = "brapi_snapshot"
         except Exception as e:
-            logger.warning(f"[PriceHistory] snapshot fallback falhou para {ticker}: {e}")
+            logger.warning("[PriceHistory] snapshot fallback falhou para %s: %s", ticker, e)
 
     inserted = 0
     for ts, close in rows:
@@ -278,15 +293,22 @@ async def persist_daily_prices(
         inserted += 1
 
     if inserted:
-        latest_close = rows[-1][1] if rows else None
-        if latest_close:
-            asset.last_price = Decimal(str(round(latest_close, 8)))
-            asset.last_price_updated_at = _now_utc()
+        latest_close = rows[-1][1]
+        asset.last_price = Decimal(str(round(latest_close, 8)))
+        asset.last_price_updated_at = _now_utc()
 
     await db.commit()
-    logger.info(f"[PriceHistory] {ticker}: {inserted} registros persistidos (source={source})")
+    logger.info(
+        "[PriceHistory] %s: %d registros persistidos (source=%s, force=%s)",
+        ticker, inserted, source, force
+    )
+    _set_cooldown(ticker)
     return inserted
 
+
+# ---------------------------------------------------------------------------
+# get_price_at_date — SOMENTE LEITURA DO BANCO
+# ---------------------------------------------------------------------------
 
 async def get_price_at_date(
     db: AsyncSession,
@@ -294,38 +316,27 @@ async def get_price_at_date(
     asset_type: AssetType,
     target_date: str,
 ) -> Optional[float]:
-    ref = _parse_date_utc(target_date)
+    """
+    Retorna o preço de fechamento mais recente disponivel ate target_date.
+
+    Busca no intervalo [target_date - 5 dias, target_date + 1 dia] para
+    cobrir finais de semana, feriados e dias sem pregao.
+
+    NUNCA chama API. Se nao houver dado no banco, retorna None e loga warning.
+    O backfill pre-populado garante que os dados estejam disponiveis.
+    """
+    ref   = _parse_date_utc(target_date)
     since = ref - timedelta(days=5)
     until = ref + timedelta(hours=23, minutes=59, seconds=59)
 
-    asset_result = await db.execute(
-        select(Asset).where(Asset.ticker == ticker)
-    )
+    asset_result = await db.execute(select(Asset).where(Asset.ticker == ticker))
     asset = asset_result.scalar_one_or_none()
 
-    if asset:
-        rows = await db.execute(
-            select(AssetPrice)
-            .where(
-                AssetPrice.asset_id == asset.id,
-                AssetPrice.timestamp >= since,
-                AssetPrice.timestamp <= until,
-            )
-            .order_by(AssetPrice.timestamp.desc())
-            .limit(1)
-        )
-        price_row = rows.scalar_one_or_none()
-        if price_row:
-            return float(price_row.close)
-
-    days_needed = (_now_utc().date() - ref.date()).days + 6
-    await persist_daily_prices(db, ticker, asset_type, days_back=days_needed)
-
-    asset_result = await db.execute(
-        select(Asset).where(Asset.ticker == ticker)
-    )
-    asset = asset_result.scalar_one_or_none()
     if not asset:
+        logger.warning(
+            "[PriceHistory] get_price_at_date: asset %s nao encontrado no banco",
+            ticker
+        )
         return None
 
     rows = await db.execute(
@@ -339,8 +350,21 @@ async def get_price_at_date(
         .limit(1)
     )
     price_row = rows.scalar_one_or_none()
-    return float(price_row.close) if price_row else None
 
+    if not price_row:
+        logger.warning(
+            "[PriceHistory] get_price_at_date: sem preço para %s em %s "
+            "(janela %s a %s)",
+            ticker, target_date, since.date(), until.date()
+        )
+        return None
+
+    return float(price_row.close)
+
+
+# ---------------------------------------------------------------------------
+# get_price_history — SOMENTE LEITURA DO BANCO
+# ---------------------------------------------------------------------------
 
 async def get_price_history(
     db: AsyncSession,
@@ -348,23 +372,21 @@ async def get_price_history(
     asset_type: AssetType,
     days: int = 90,
 ) -> list[dict]:
-    asset_result = await db.execute(
-        select(Asset).where(Asset.ticker == ticker)
-    )
+    """
+    Retorna o histórico de preços dos ultimos `days` dias para o ticker.
+
+    Leitura pura do banco — nunca dispara API.
+    Se o banco nao tiver dados, retorna lista vazia.
+    """
+    asset_result = await db.execute(select(Asset).where(Asset.ticker == ticker))
     asset = asset_result.scalar_one_or_none()
 
     if asset is None:
-        await persist_daily_prices(db, ticker, asset_type, days_back=days)
-        asset_result = await db.execute(
-            select(Asset).where(Asset.ticker == ticker)
+        logger.warning(
+            "[PriceHistory] get_price_history: asset %s nao encontrado no banco",
+            ticker
         )
-        asset = asset_result.scalar_one_or_none()
-        if asset is None:
-            return []
-    else:
-        last_ts = await _last_saved_ts(db, asset.id)
-        if last_ts is None or (_now_utc() - last_ts).days > 1:
-            await persist_daily_prices(db, ticker, asset_type, days_back=days)
+        return []
 
     since = _now_utc() - timedelta(days=days)
     rows_result = await db.execute(

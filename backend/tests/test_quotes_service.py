@@ -6,7 +6,7 @@ from app.services import quotes_service
 from app.services.quotes_service import get_prices
 
 
-BR_ITEMS = [{"ticker": "PETR4",  "asset_type": "ACAO_NACIONAL"}]
+BR_ITEMS = [{"ticker": "PETR4",  "asset_type": "ACAO"}]
 INTL_ITEMS = [{"ticker": "AAPL",    "asset_type": "STOCK"}]
 CRIPTO_ITEMS = [{"ticker": "BTC",     "asset_type": "CRIPTO"}]
 
@@ -33,10 +33,13 @@ class TestGetPrices:
             "app.services.quotes_service._fetch_brapi",
             new=AsyncMock(return_value={"PETR4": 35.5}),
         ) as mock_brapi, patch(
-            "app.services.quotes_service._fetch_yfinance",
+            "app.services.quotes_service._fetch_intl",
             new=AsyncMock(return_value={}),
         ), patch(
             "app.services.quotes_service._fetch_brapi_crypto",
+            new=AsyncMock(return_value={}),
+        ), patch(
+            "app.services.quotes_service._fetch_yfinance",
             new=AsyncMock(return_value={}),
         ):
             result = await get_prices(BR_ITEMS)
@@ -50,10 +53,13 @@ class TestGetPrices:
             "app.services.quotes_service._fetch_brapi",
             new=AsyncMock(return_value={}),
         ), patch(
-            "app.services.quotes_service._fetch_yfinance",
+            "app.services.quotes_service._fetch_intl",
             new=AsyncMock(return_value={"AAPL": 180.0}),
         ) as mock_yf, patch(
             "app.services.quotes_service._fetch_brapi_crypto",
+            new=AsyncMock(return_value={}),
+        ), patch(
+            "app.services.quotes_service._fetch_yfinance",
             new=AsyncMock(return_value={}),
         ):
             result = await get_prices(INTL_ITEMS)
@@ -67,12 +73,15 @@ class TestGetPrices:
             "app.services.quotes_service._fetch_brapi",
             new=AsyncMock(return_value={}),
         ), patch(
-            "app.services.quotes_service._fetch_yfinance",
+            "app.services.quotes_service._fetch_intl",
             new=AsyncMock(return_value={}),
         ), patch(
             "app.services.quotes_service._fetch_brapi_crypto",
             new=AsyncMock(return_value={"BTC": 300000.0}),
-        ) as mock_crypto:
+        ) as mock_crypto, patch(
+            "app.services.quotes_service._fetch_yfinance",
+            new=AsyncMock(return_value={}),
+        ):
             result = await get_prices(CRIPTO_ITEMS)
             mock_crypto.assert_called_once()
             assert result["BTC"] == 300000.0
@@ -83,12 +92,15 @@ class TestGetPrices:
         """Se a API nao retorna o ticker, ele nao deve estar no dict final."""
         with patch(
             "app.services.quotes_service._fetch_brapi",
-            new=AsyncMock(return_value={}),  # vazio = ticker indisponivel
+            new=AsyncMock(return_value={}),
         ), patch(
-            "app.services.quotes_service._fetch_yfinance",
+            "app.services.quotes_service._fetch_intl",
             new=AsyncMock(return_value={}),
         ), patch(
             "app.services.quotes_service._fetch_brapi_crypto",
+            new=AsyncMock(return_value={}),
+        ), patch(
+            "app.services.quotes_service._fetch_yfinance",
             new=AsyncMock(return_value={}),
         ):
             result = await get_prices(BR_ITEMS)
@@ -102,12 +114,15 @@ class TestGetPrices:
             "app.services.quotes_service._fetch_brapi",
             new=AsyncMock(return_value={"PETR4": 35.0}),
         ) as mock_br, patch(
-            "app.services.quotes_service._fetch_yfinance",
+            "app.services.quotes_service._fetch_intl",
             new=AsyncMock(return_value={"AAPL": 180.0}),
         ) as mock_yf, patch(
             "app.services.quotes_service._fetch_brapi_crypto",
             new=AsyncMock(return_value={"BTC": 300000.0}),
-        ) as mock_crypto:
+        ) as mock_crypto, patch(
+            "app.services.quotes_service._fetch_yfinance",
+            new=AsyncMock(return_value={}),
+        ):
             result = await get_prices(items)
             mock_br.assert_called_once()
             mock_yf.assert_called_once()

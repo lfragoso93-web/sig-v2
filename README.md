@@ -1,161 +1,146 @@
 # SGI v2 — Sistema de Gerenciamento de Investimentos
 
-> Plataforma pessoal para controle e análise de carteira de investimentos.
-> Backend FastAPI + PostgreSQL + Redis. Frontend React (em desenvolvimento).
+> Plataforma pessoal para gestão de carteira de investimentos com suporte a Ações, FIIs, BDRs, ETFs, Stocks internacionais, Tesouro Direto, Renda Fixa e Criptomoedas.
 
 ---
 
-## 🚀 Stack
+## Stack
 
 | Camada | Tecnologia |
 |---|---|
-| Backend | FastAPI 0.115, Python 3.12, SQLAlchemy 2 async |
+| Backend | FastAPI + SQLAlchemy async + Alembic |
 | Banco de dados | PostgreSQL 16 |
 | Cache | Redis 7 |
-| Migrations | Alembic |
-| Scheduler | APScheduler 3 |
-| Autenticação | JWT (access + refresh token rotativo) |
-| Dados de mercado | BRAPI Pro + Alpha Vantage + yfinance |
-| Containerização | Docker + Docker Compose |
-| Frontend | React + TypeScript + Vite (em desenvolvimento) |
+| Frontend | React + TypeScript + Vite |
+| Containerização | Docker Compose |
+| Dados de mercado | BRAPI v2 + Alpha Vantage + yfinance |
 
 ---
 
-## ⚡ Setup rápido
+## Início Rápido
 
-### Pré-requisitos
-- Docker Desktop instalado e rodando
-- Git
-
-### 1. Clone e configure
 ```bash
+# 1. Clone o repositório
 git clone https://github.com/lfragoso93-web/sig-v2.git
 cd sig-v2
-cp backend/.env.example backend/.env
-# Edite backend/.env com suas chaves (BRAPI_TOKEN, SECRET_KEY, etc.)
-```
 
-### 2. Suba os containers
-```bash
+# 2. Configure as variáveis de ambiente
+cp .env.example .env
+# edite .env com suas chaves de API
+
+# 3. Suba os serviços
 docker compose up -d --build
-```
 
-### 3. Verifique o health
-```bash
-curl http://localhost:8000/health
-# Esperado: {"status": "ok", "checks": {"postgres": "ok", "redis": "ok"}}
-```
-
-### 4. Acesse a documentação interativa
-```
-http://localhost:8000/docs
-```
-
-### 5. Popular catálogo de ativos (primeira vez)
-```powershell
-# PowerShell — faça login primeiro para obter o token
-$login = Invoke-RestMethod -Method Post `
-  -Uri "http://localhost:8000/api/v1/auth/login" `
-  -ContentType "application/json" `
-  -Body '{"email": "admin@sgi.com", "password": "sua_senha"}'
-$token = $login.access_token
-
-# Dispara o seed
-Invoke-RestMethod -Method Post `
-  -Uri "http://localhost:8000/api/v1/admin/assets/seed" `
-  -Headers @{ Authorization = "Bearer $token" }
+# 4. Acesse
+# Frontend:  http://localhost:5173
+# API Docs:  http://localhost:8000/docs
+# Login:     admin@sgi.com / (definido no .env)
 ```
 
 ---
 
-## 📁 Estrutura do projeto
+## Variáveis de Ambiente
+
+Copie `.env.example` e preencha:
+
+| Variável | Descrição |
+|---|---|
+| `POSTGRES_*` | Credenciais do banco |
+| `REDIS_URL` | URL do Redis |
+| `SECRET_KEY` | Chave JWT (mín. 32 chars) |
+| `BRAPI_TOKEN` | Token da BRAPI (gratuito em brapi.dev) |
+| `ALPHA_VANTAGE_KEY` | Chave Alpha Vantage (opcional, para ativos internacionais) |
+| `SUPERADMIN_EMAIL` | E-mail do superadmin criado no boot |
+| `SUPERADMIN_PASSWORD` | Senha do superadmin |
+
+---
+
+## Arquitetura
 
 ```
 sig-v2/
 ├── backend/
 │   ├── app/
-│   │   ├── core/          # config, database, security, scheduler, cache
-│   │   ├── integrations/  # brapi, alpha_vantage
+│   │   ├── core/          # config, database, limiter, scheduler, cache
 │   │   ├── models/        # SQLAlchemy models
-│   │   ├── routers/       # FastAPI routers
-│   │   ├── schemas/       # Pydantic schemas
-│   │   └── services/      # lógica de negócio
+│   │   ├── routers/       # endpoints FastAPI
+│   │   ├── services/      # lógica de negócio
+│   │   ├── integrations/  # BRAPI, Alpha Vantage
+│   │   └── main.py        # app FastAPI + lifespan
 │   ├── alembic/           # migrations
-│   ├── Dockerfile
-│   └── requirements.txt
-├── frontend/              # React + TypeScript (em desenvolvimento)
+│   └── Dockerfile
+├── frontend/
+│   ├── src/
+│   │   ├── components/    # UI components (modais, dashboard, etc.)
+│   │   ├── hooks/         # React Query hooks
+│   │   ├── pages/         # páginas da aplicação
+│   │   ├── store/         # Zustand store
+│   │   └── services/      # chamadas à API
+│   └── Dockerfile
 ├── docker-compose.yml
+├── .env.example
 ├── CHANGELOG.md
 └── ROADMAP_SPRINTS.md
 ```
 
 ---
 
-## 🔑 Variáveis de ambiente principais
+## Classes de Ativos Suportadas
 
-| Variável | Descrição |
+| Classe | Moeda | Fonte de Dados |
+|---|---|---|
+| Ação (ACAO) | BRL | BRAPI v2 |
+| FII | BRL | BRAPI v2 |
+| ETF Nacional | BRL | BRAPI v2 |
+| BDR | BRL | BRAPI v2 |
+| Stock Internacional | USD | Alpha Vantage + yfinance |
+| ETF Internacional | USD | Alpha Vantage + yfinance |
+| Tesouro Direto | BRL | BRAPI v2 |
+| Renda Fixa | BRL | Manual |
+| Criptomoeda | BRL | BRAPI v2 |
+
+---
+
+## Sequência de Boot
+
+Ao subir o container, o backend executa automaticamente:
+
+1. **Migrations** — Alembic aplica todas as migrations pendentes
+2. **Superadmin** — Cria ou atualiza o usuário admin
+3. **API disponível** — Uvicorn já aceita requests
+4. **[Background] Etapa 1** — Seed de tickers via BRAPI (só se `assets` estiver vazia)
+5. **[Background] Etapa 2** — Backfill de 10 anos de preços por ordem: ACAO → FII → ETF → STOCK → BDR
+
+> Proventos são calculados automaticamente a cada nova transação inserida.
+
+---
+
+## Módulos da API
+
+| Prefixo | Descrição |
 |---|---|
-| `SECRET_KEY` | Chave JWT (mínimo 32 chars) |
-| `BRAPI_TOKEN` | Token BRAPI Pro |
-| `ALPHA_VANTAGE_API_KEY` | Chave Alpha Vantage (opcional) |
-| `DATABASE_URL` | URL do PostgreSQL |
-| `REDIS_URL` | URL do Redis |
-| `SUPERADMIN_EMAIL` | E-mail do superadmin inicial |
-| `SUPERADMIN_PASSWORD` | Senha do superadmin inicial |
-| `CORS_ORIGINS` | Origens permitidas (separadas por vírgula) |
-
-Veja o arquivo `backend/.env.example` para a lista completa.
-
----
-
-## 📡 Principais endpoints
-
-### Auth
-| Método | Rota | Descrição |
-|---|---|---|
-| POST | `/api/v1/auth/login` | Login (retorna access + refresh token) |
-| POST | `/api/v1/auth/refresh` | Renova access token |
-| POST | `/api/v1/auth/logout` | Invalida refresh token |
-
-### Admin (superadmin)
-| Método | Rota | Descrição |
-|---|---|---|
-| GET | `/api/v1/admin/users` | Lista usuários |
-| POST | `/api/v1/admin/assets/seed` | Popula catálogo de ativos via BRAPI |
-| GET | `/api/v1/admin/stats` | Estatísticas do sistema |
-
-### Portfólios
-| Método | Rota | Descrição |
-|---|---|---|
-| GET | `/api/v1/portfolios/` | Lista carteiras do usuário |
-| POST | `/api/v1/portfolios/` | Cria carteira |
-| GET | `/api/v1/portfolios/{id}/summary` | Resumo patrimonial |
-| GET | `/api/v1/portfolios/{id}/positions` | Posições abertas |
-| GET | `/api/v1/portfolios/{id}/patrimonio-history` | Histórico de patrimônio |
-
-### Dados de mercado
-| Método | Rota | Descrição |
-|---|---|---|
-| GET | `/api/v1/quotes/{ticker}` | Cotação atual |
-| GET | `/api/v1/prices/{ticker}/history` | Histórico de preços |
-| GET | `/api/v1/fx/rate` | Cotação de câmbio |
-| GET | `/api/v1/assets` | Catálogo de ativos |
+| `/api/v1/auth` | Login, refresh token, logout |
+| `/api/v1/users` | CRUD de usuários |
+| `/api/v1/admin` | Operações de superadmin (seed de ativos, etc.) |
+| `/api/v1/portfolios` | Carteiras, transações, proventos, Tesouro |
+| `/api/v1/positions` | Posições consolidadas por carteira |
+| `/api/v1/performance` | Rentabilidade e TWR |
+| `/api/v1/assets` | Catálogo de ativos |
+| `/api/v1/quotes` | Cotações em tempo real |
+| `/api/v1/prices` | Histórico de preços OHLCV |
+| `/api/v1/fx` | Câmbio (pares BRL/USD/EUR) |
+| `/api/v1/goals` | Metas financeiras |
+| `/api/v1/irpf` | Cálculo de IR sobre ganho de capital |
+| `/api/v1/analysis` | Score de diversificação e análise |
+| `/api/v1/fixed-income` | Renda fixa (CDB, LCI, LCA, Debêntures) |
+| `/api/v1/sync` | Sincronização manual de dados |
 
 ---
 
-## 🕐 Jobs automáticos (Scheduler)
+## Status
 
-| Job | Frequência | Descrição |
-|---|---|---|
-| `job_update_prices` | Seg–Sex 18h30 | Atualiza preços de fechamento |
-| `job_update_dividends` | Diário 19h | Sincroniza proventos |
-| `job_update_fx` | Seg–Sex 18h | Atualiza cotações de câmbio |
-| `job_seed_assets` | Segunda 03h | Seed incremental de novos ativos |
+> **Sprint 4 concluída** — Catálogo de ativos com 2.259 tickers B3, backfill histórico de 10 anos, modal de transações com todas as classes (incluindo BDR).
+>
+> Próximo: Sprint 5 — Dashboard frontend completo.
 
----
-
-## 📋 Documentação
-
-- [CHANGELOG.md](./CHANGELOG.md) — histórico de mudanças
-- [ROADMAP_SPRINTS.md](./ROADMAP_SPRINTS.md) — sprints planejadas e andamento
-- [http://localhost:8000/docs](http://localhost:8000/docs) — Swagger UI (com servidor rodando)
+Consulte [ROADMAP_SPRINTS.md](./ROADMAP_SPRINTS.md) para o planejamento detalhado e [CHANGELOG.md](./CHANGELOG.md) para o histórico de mudanças.

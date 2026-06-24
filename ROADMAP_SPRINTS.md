@@ -1,6 +1,6 @@
 # Roadmap de Sprints — SGI v2
 
-> Última atualização: 23/06/2026
+> Última atualização: 24/06/2026
 
 ---
 
@@ -46,29 +46,21 @@
 
 ---
 
-## 🔄 Sprint 4 — Catálogo de Ativos e Dados (Em andamento)
-**Período:** Junho 2026 (2ª quinzena) — iniciado em 23/06/2026
+## ✅ Sprint 4 — Catálogo de Ativos e Dados (Concluído)
+**Período:** Junho 2026 (2ª quinzena) — concluído em 24/06/2026
 
-### Concluído hoje (23/06/2026)
-- [x] `asset_seed_service`: popula tabela `assets` via BRAPI `/quote/list` com UPSERT idempotente
+- [x] `asset_seed_service`: popula tabela `assets` via BRAPI `/quote/list` com UPSERT idempotente (2.259 ativos)
 - [x] `POST /api/v1/admin/assets/seed`: endpoint superadmin com resposta `202 Accepted` + background task
 - [x] Job semanal automático (toda segunda às 03h) para seed incremental de novos IPOs
+- [x] Backfill histórico de preços com ordenação por tipo: ACAO/FII primeiro, BDR por último
+- [x] Fix: boot sequence sem Etapa 3 redundante (proventos disparados por transação, não no boot)
 - [x] Fix: `ImportError upsert_daily_prices` removido de `asset_onboarding_service`
 - [x] Fix: background task do seed com log de início + traceback completo em caso de falha
-
-### Pendente (próxima sessão — 24/06/2026)
-- [ ] Validar log do seed após rebuild (`[seed_bg] INICIANDO SEED DE ATIVOS`)
-- [ ] Verificar contadores finais: `created`, `updated`, `skipped`, `errors`
-- [ ] Investigar e corrigir `YFRateLimitError` para ativos internacionais (IVV, NVDA, INTR, TFLO)
-  - Estratégia: TTL de cache para evitar re-tentativas a cada request
-  - Ou: pré-popular via Alpha Vantage no primeiro acesso
-- [ ] `GET /api/v1/assets`: listagem paginada com filtros por tipo, setor e busca por nome/ticker
-- [ ] `GET /api/v1/assets/{ticker}`: detalhe do ativo com cotação atual
-- [ ] Tela de listagem de ativos no frontend
+- [x] Frontend: aba **BDR** adicionada no modal de transações (entre ETF BR e Stock)
 
 ---
 
-## 📋 Sprint 5 — Frontend Dashboard (Planejado)
+## 🔄 Sprint 5 — Frontend Dashboard (Em andamento)
 **Período:** Julho 2026
 
 - [ ] Dashboard principal com resumo de patrimônio
@@ -78,6 +70,10 @@
 - [ ] Tela de metas financeiras
 - [ ] Tela IRPF (exportação de relatório)
 - [ ] Tela de renda fixa
+- [ ] `GET /api/v1/assets`: listagem paginada com filtros por tipo, setor e busca por nome/ticker
+- [ ] `GET /api/v1/assets/{ticker}`: detalhe do ativo com cotação atual
+- [ ] Tela de listagem de ativos no frontend
+- [ ] Investigar e corrigir `YFRateLimitError` para ativos internacionais (IVV, NVDA, INTR, TFLO)
 
 ---
 

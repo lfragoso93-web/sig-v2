@@ -11,10 +11,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 - `asset_seed_service.py`: serviço que popula a tabela `assets` via BRAPI `/quote/list` com UPSERT por `(ticker, asset_type)` para Ações, FIIs, ETFs Nacionais e BDRs
 - `POST /api/v1/admin/assets/seed`: endpoint restrito a superadmin que dispara o seed em background e retorna `202 Accepted`
 - Job semanal automático `job_seed_assets` toda segunda-feira às 03h no scheduler
+- Backfill histórico de preços com **ordenação por prioridade de tipo**: ACAO → FII → ETF_NACIONAL → ETF_INTERNACIONAL → STOCK → BDR → outros, evitando rate-limit prematuro do yfinance
+- Aba **BDR** no modal de transações do frontend (`assetType: 'BDR'`, moeda BRL, ícone Globe2, autocomplete via BRAPI)
 - Log detalhado com separadores visíveis (`==========`) no background task do seed para diagnóstico
 - Traceback completo em caso de falha no seed via `traceback.format_exc()`
 
 ### Corrigido
+- `main.py`: removida Etapa 3 (backfill de proventos) da sequência de boot — proventos são triggerados corretamente por transação via `dividend_backfill_service`, não precisam de boot
+- `price_history_backfill_service.py`: adicionada função `_sort_key` com `_TYPE_PRIORITY` para ordenar ativos no backfill inicial; BDRs (maioria sem histórico BRAPI) ficam por último
 - `asset_onboarding_service.py`: removido import inexistente `upsert_daily_prices` de `price_history_service`; substituído por função local `_upsert_price_row` usando `pg_insert` diretamente
 - `admin.py`: background task do seed agora loga início da execução antes de qualquer operação, evitando falhas silenciosas
 

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   X, TrendingUp, Building2, Globe, Landmark,
-  Bitcoin, Banknote, BarChart2, CheckCircle2, Loader2, Zap, ArrowDownCircle, ArrowUpCircle,
+  Bitcoin, Banknote, BarChart2, CheckCircle2, Loader2, Zap, ArrowDownCircle, ArrowUpCircle, Globe2,
 } from 'lucide-react'
 import { useCreateTransaction, useUpdateTransaction } from '@/hooks/useTransactions'
 import { useAppStore } from '@/store/appStore'
@@ -24,6 +24,7 @@ const TABS: AssetTab[] = [
   { key: 'acao',       label: 'Ação',       icon: <TrendingUp size={12} />, assetType: 'ACAO',              currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: PETR4 ou Petrobras',    brapiEnabled: true,  brapiSuggestType: 'stock'     },
   { key: 'fii',        label: 'FII',        icon: <Building2  size={12} />, assetType: 'FII',               currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: MXRF11 ou Maxi Renda',  brapiEnabled: true,  brapiSuggestType: 'fund'      },
   { key: 'etf_br',     label: 'ETF BR',     icon: <BarChart2  size={12} />, assetType: 'ETF_NACIONAL',      currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: BOVA11 ou IVVB11',      brapiEnabled: true,  brapiSuggestType: 'etf'       },
+  { key: 'bdr',        label: 'BDR',        icon: <Globe2     size={12} />, assetType: 'BDR',               currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: NVDC34 ou AAPL34',      brapiEnabled: true,  brapiSuggestType: 'stock'     },
   { key: 'stock',      label: 'Stock',      icon: <Globe      size={12} />, assetType: 'STOCK',             currency: 'USD', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: AAPL ou Apple',         brapiEnabled: true,  brapiSuggestType: 'stock_int' },
   { key: 'etf_int',    label: 'ETF INT',    icon: <Globe      size={12} />, assetType: 'ETF_INTERNACIONAL', currency: 'USD', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: VTI ou Vanguard',       brapiEnabled: true,  brapiSuggestType: 'etf_int'   },
   { key: 'tesouro',    label: 'Tesouro',    icon: <Landmark   size={12} />, assetType: 'TESOURO_DIRETO',    currency: 'BRL', tickerLabel: 'Título',       tickerPlaceholder: 'ex: Tesouro IPCA 2029',     brapiEnabled: false, extraFields: 'tesouro'        },

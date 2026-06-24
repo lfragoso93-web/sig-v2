@@ -7,7 +7,7 @@ Estrategia de cache em 3 camadas:
   L3 - API externa: BRAPI Pro, Alpha Vantage ou yfinance.
 
 Roteamento por tipo de ativo:
-  BR / FII / ETF_BR  -> BRAPI quotes
+  BR / FII / ETF_BR  -> BRAPI quotes  (chunks de 20, delay 1s entre chunks)
   CRIPTO             -> BRAPI crypto
   TESOURO            -> BRAPI treasury list (buyPrice)
   INTL               -> Alpha Vantage GLOBAL_QUOTE (primario)
@@ -21,11 +21,24 @@ Alpha Vantage (ativos internacionais):
 yfinance threading:
   _fetch_yfinance_current usa _YF_EXECUTOR (ThreadPoolExecutor compartilhado)
   com _yf_thread_lock (threading.Lock) para serializar chamadas entre threads.
-  Isso substitui o asyncio.Semaphore que nao funciona fora do event loop.
 
 Resiliencia:
-  Cada chamada externa e envolta em _with_retry() - 3 tentativas com
-  backoff exponencial (1s, 2s). Falha total retorna {} sem propagar excecao.
+  Cada chamada externa e envolta em _with_retry() - 3 tentativas.
+  YFRateLimitError usa backoff longo (20s, 40s) pois o rate limit do
+  yfinance precisa de tempo real para se recuperar.
+  Outras excecoes usam backoff curto (1s, 2s).
+
+BRAPI - tickers fracionarios:
+  Tickers com sufixo F (ex: PETR4F, ABCB4F) sao direitos de subscricao
+  fracionarios da B3 e NAO sao suportados pela BRAPI para cotacao.
+  _filter_brapi_tickers() os remove antes de montar o chunk evitando
+  erros 400 em massa durante o seed e update_all_quotes.
+
+Chunks BRAPI:
+  Maximo de BRAPI_CHUNK_SIZE (20) tickers por request.
+  Delay de BRAPI_CHUNK_DELAY (1s) entre chunks para evitar rate limit.
+  Jobs do scheduler chamam update_all_quotes com asset_types filtrado
+  para nunca misturar tipos diferentes no mesmo request.
 """
 import asyncio
 import logging
@@ -46,15 +59,19 @@ from app.integrations.brapi import (
     fetch_treasury_list as brapi_fetch_treasury_list,
 )
 from app.models.asset import Asset, AssetType
-from app.services.price_history_service import _YF_EXECUTOR, _yf_thread_lock
+from app.services.price_history_service import _YF_EXECUTOR, _yf_thread_lock, _YF_MIN_INTERVAL, _yf_last_call
 
 logger = logging.getLogger(__name__)
 
 PRICE_TTL_SECONDS = 900
-MEM_CACHE_TTL = 60
+MEM_CACHE_TTL = 300  # 5 minutos - reduz frequencia de chamadas ao yfinance
+
+BRAPI_CHUNK_SIZE = 20   # max tickers por request BRAPI
+BRAPI_CHUNK_DELAY = 1.0  # segundos entre chunks
 
 _RETRY_ATTEMPTS = 3
 _RETRY_BASE_DELAY = 1.0
+_RETRY_RATELIMIT_DELAY = 20.0  # backoff inicial para YFRateLimitError
 
 _mem_cache: dict[str, tuple[float, float]] = {}
 
@@ -64,17 +81,35 @@ _mem_cache: dict[str, tuple[float, float]] = {}
 # ---------------------------------------------------------------------------
 
 async def _with_retry(coro_fn, *args, label: str = "") -> dict[str, float]:
+    """
+    Executa coro_fn com retry e backoff.
+    YFRateLimitError usa backoff longo (20s, 40s) pois o yfinance
+    precisa de tempo real para liberar o rate limit.
+    Outras excecoes usam backoff curto (1s, 2s).
+    """
     delay = _RETRY_BASE_DELAY
     for attempt in range(1, _RETRY_ATTEMPTS + 1):
         try:
             return await coro_fn(*args)
         except Exception as e:
+            is_rate_limit = (
+                "ratelimit" in type(e).__name__.lower()
+                or "rate limit" in str(e).lower()
+                or "too many requests" in str(e).lower()
+            )
             if attempt < _RETRY_ATTEMPTS:
-                logger.warning(
-                    "[quotes_service] %s tentativa %d/%d falhou: %s - retry em %.0fs",
-                    label, attempt, _RETRY_ATTEMPTS, e, delay,
+                actual_delay = (
+                    _RETRY_RATELIMIT_DELAY * (2 ** (attempt - 1))
+                    if is_rate_limit
+                    else delay
                 )
-                await asyncio.sleep(delay)
+                logger.warning(
+                    "[quotes_service] %s tentativa %d/%d falhou%s: %s - retry em %.0fs",
+                    label, attempt, _RETRY_ATTEMPTS,
+                    " (rate limit)" if is_rate_limit else "",
+                    e, actual_delay,
+                )
+                await asyncio.sleep(actual_delay)
                 delay *= 2
             else:
                 logger.error(
@@ -169,17 +204,24 @@ async def _db_set(
 
 
 # ---------------------------------------------------------------------------
+# Filtro BRAPI - remove tickers fracionarios (sufixo F)
+# ---------------------------------------------------------------------------
+
+def _filter_brapi_tickers(tickers: list[str]) -> list[str]:
+    """
+    Remove tickers com sufixo F (direitos de subscricao fracionarios da B3).
+    A BRAPI nao suporta esses tickers para cotacao e retorna 400.
+    """
+    return [t for t in tickers if not t.endswith('F')]
+
+
+# ---------------------------------------------------------------------------
 # Fetch L3 - Alpha Vantage (INTL primario)
 # ---------------------------------------------------------------------------
 
 async def _fetch_alpha_vantage_current(
     pairs: list[tuple[str, AssetType]],
 ) -> dict[str, float]:
-    """
-    Busca cotacoes atuais via Alpha Vantage GLOBAL_QUOTE.
-    Serializa as chamadas via alpha_vantage_limiter (4 req/min).
-    Retorna {} se ALPHA_VANTAGE_API_KEY nao estiver configurada.
-    """
     from app.integrations.alpha_vantage import fetch_global_quote, _is_configured
 
     if not _is_configured():
@@ -201,11 +243,11 @@ async def _fetch_alpha_vantage_current(
 def _fetch_yf_current_sync(ticker_map: dict[str, str]) -> dict[str, float]:
     """
     Busca cotacoes atuais via yfinance.download().
-    Executa dentro do _YF_EXECUTOR com _yf_thread_lock para serializar
-    entre threads e evitar YFRateLimitError.
+    Usa _yf_thread_lock compartilhado com price_history_service para
+    serializar todas as chamadas yfinance do processo.
+    Respeita _YF_MIN_INTERVAL global entre chamadas.
     """
     import time as _time
-    from app.services.price_history_service import _yf_last_call, _YF_MIN_INTERVAL
 
     if not ticker_map:
         return {}
@@ -300,12 +342,34 @@ async def _fetch_treasury_prices(slugs: list[str]) -> dict[str, float]:
 
 
 # ---------------------------------------------------------------------------
-# Aliases com rate limit + retry
+# Fetch BRAPI em chunks de BRAPI_CHUNK_SIZE com delay entre eles
 # ---------------------------------------------------------------------------
 
+async def _fetch_brapi_chunked(tickers: list[str], label: str = "BRAPI") -> dict[str, float]:
+    """
+    Envia tickers para BRAPI em chunks de BRAPI_CHUNK_SIZE.
+    Aplica delay de BRAPI_CHUNK_DELAY entre chunks para respeitar rate limit.
+    Espera receber apenas tickers do mesmo tipo — nunca misturar tipos.
+    """
+    filtered = _filter_brapi_tickers(tickers)
+    if not filtered:
+        return {}
+
+    results: dict[str, float] = {}
+    for i in range(0, len(filtered), BRAPI_CHUNK_SIZE):
+        chunk = filtered[i: i + BRAPI_CHUNK_SIZE]
+        await brapi_limiter.acquire()
+        chunk_result = await _with_retry(brapi_fetch_quotes, chunk, label=f"{label}[{i//BRAPI_CHUNK_SIZE+1}]")
+        results.update(chunk_result)
+        if i + BRAPI_CHUNK_SIZE < len(filtered):
+            await asyncio.sleep(BRAPI_CHUNK_DELAY)
+
+    return results
+
+
 async def _fetch_brapi(tickers: list[str]) -> dict[str, float]:
-    await brapi_limiter.acquire()
-    return await _with_retry(brapi_fetch_quotes, tickers, label="BRAPI")
+    """Wrapper retrocompativel — usa chunked internamente."""
+    return await _fetch_brapi_chunked(tickers, label="BRAPI")
 
 
 async def _fetch_brapi_crypto(tickers: list[str]) -> dict[str, float]:
@@ -342,7 +406,7 @@ async def _fetch_intl(
 async def _fetch_yfinance(
     pairs: list[tuple[str, AssetType]],
 ) -> dict[str, float]:
-    """Fallback yfinance para BR sem BRAPI (mantido para compatibilidade)."""
+    """Fallback yfinance para BR sem BRAPI."""
     return await _with_retry(_fetch_yfinance_current, pairs, label="yfinance")
 
 
@@ -407,7 +471,6 @@ async def get_prices(
             logger.warning(f"[quotes_service] asset_type desconhecido para {ticker} ({raw_type})")
             br_tickers.append(ticker)
 
-    # Chamadas externas em paralelo
     br_results, crypto_results, intl_results, treasury_results = await asyncio.gather(
         _fetch_brapi(br_tickers) if br_tickers else _noop(),
         _fetch_brapi_crypto(crypto_tickers) if crypto_tickers else _noop(),
@@ -428,7 +491,9 @@ async def get_prices(
 
     fallback_results: dict[str, float] = {}
     if br_fallback:
-        logger.info(f"[quotes_service] BRAPI sem resposta para {[t for t, _ in br_fallback]} - tentando yfinance")
+        logger.info(
+            f"[quotes_service] BRAPI sem resposta para {[t for t, _ in br_fallback]} - tentando yfinance"
+        )
         fallback_results = await _fetch_yfinance(br_fallback)
 
     fresh = {**br_results, **crypto_results, **intl_results, **treasury_results, **fallback_results}
@@ -461,19 +526,33 @@ async def get_current_price(
     return result.get(ticker)
 
 
-async def update_all_quotes(db: AsyncSession) -> int:
+async def update_all_quotes(
+    db: AsyncSession,
+    asset_types: Optional[list[AssetType]] = None,
+) -> int:
+    """
+    Atualiza cotacoes de todos os ativos (ou apenas dos tipos em asset_types).
+    O scheduler chama esta funcao com asset_types filtrado por tipo para evitar
+    mistura de ACAO + FII + BDR no mesmo request BRAPI.
+    """
     from app.models.transaction import Transaction
 
-    asset_result = await db.execute(
-        select(Asset.ticker, Asset.asset_type).where(
-            Asset.asset_type.notin_([at.value for at in NO_QUOTE_TYPES])
-        )
+    filter_values = [at.value for at in asset_types] if asset_types else None
+
+    asset_query = select(Asset.ticker, Asset.asset_type).where(
+        Asset.asset_type.notin_([at.value for at in NO_QUOTE_TYPES])
     )
+    if filter_values:
+        asset_query = asset_query.where(Asset.asset_type.in_(filter_values))
+
+    asset_result = await db.execute(asset_query)
     asset_rows = asset_result.all()
 
-    tx_result = await db.execute(
-        select(Transaction.ticker, Transaction.asset_type).distinct()
-    )
+    tx_query = select(Transaction.ticker, Transaction.asset_type).distinct()
+    if filter_values:
+        tx_query = tx_query.where(Transaction.asset_type.in_(filter_values))
+
+    tx_result = await db.execute(tx_query)
     tx_rows = tx_result.all()
 
     positions_map: dict[tuple[str, str], dict] = {
@@ -497,15 +576,20 @@ async def update_all_quotes(db: AsyncSession) -> int:
     if not positions:
         return 0
 
+    type_label = "/".join(at.value for at in asset_types) if asset_types else "ALL"
+    logger.info(
+        "[quotes_service] update_all_quotes [%s]: %d ativos a atualizar",
+        type_label, len(positions),
+    )
+
     prices = await get_prices(positions, db)
     await db.commit()
-    logger.info("[quotes_service] update_all_quotes: %d precos atualizados", len(prices))
+    logger.info(
+        "[quotes_service] update_all_quotes [%s]: %d precos atualizados",
+        type_label, len(prices),
+    )
     return len(prices)
 
-
-# ---------------------------------------------------------------------------
-# Funcoes de portfolio
-# ---------------------------------------------------------------------------
 
 async def update_quotes_for_portfolio(
     portfolio_id: int,

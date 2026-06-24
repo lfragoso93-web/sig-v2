@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
+from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 from pydantic import BaseModel
@@ -8,9 +9,10 @@ import logging
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.models.asset import AssetType
+from app.models.asset import Asset, AssetType
 from app.schemas.asset import AssetCreate, AssetResponse
 from app.services.asset_service import get_or_create_asset, search_assets
+from app.services.price_service import get_current_price, get_price_history
 from app.integrations.brapi import (
     fetch_asset_info,
     fetch_historical_price,
@@ -61,6 +63,10 @@ _TESOURO_STATIC: list[dict] = [
 _SLUG_INDEX: dict[str, dict] = {item["slug"]: item for item in _TESOURO_STATIC if "slug" in item}
 
 
+# ---------------------------------------------------------------------------
+# Schemas locais
+# ---------------------------------------------------------------------------
+
 class TickerQuoteResponse(BaseModel):
     ticker: str
     name: Optional[str] = None
@@ -93,6 +99,46 @@ class TickerSuggestion(BaseModel):
     name: str
     type: Optional[str] = None
 
+
+class AssetListItem(BaseModel):
+    id: int
+    ticker: str
+    name: Optional[str] = None
+    asset_type: str
+    last_price: Optional[float] = None
+    last_price_updated_at: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class AssetListResponse(BaseModel):
+    items: list[AssetListItem]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+
+
+class PricePoint(BaseModel):
+    date: str
+    close: float
+
+
+class AssetDetailResponse(BaseModel):
+    id: int
+    ticker: str
+    name: Optional[str] = None
+    asset_type: str
+    last_price: Optional[float] = None
+    last_price_updated_at: Optional[str] = None
+    current_price: Optional[float] = None
+    price_history: list[PricePoint] = []
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 def _detect_type_from_brapi(info: dict) -> Optional[str]:
     qt = (info.get("quoteType") or "").upper()
@@ -212,6 +258,130 @@ def _parse_treasury_item(raw: dict) -> Optional[TreasuryItem]:
     )
 
 
+# ---------------------------------------------------------------------------
+# GET /assets/  — listagem paginada
+# ---------------------------------------------------------------------------
+
+@router.get("/", response_model=AssetListResponse)
+async def list_assets(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    asset_type: Optional[str] = Query(None, description="Filtro por tipo: ACAO, FII, ETF_NACIONAL, BDR, STOCK, ETF_INTERNACIONAL, CRIPTO, TESOURO_DIRETO, RENDA_FIXA"),
+    q: Optional[str] = Query(None, description="Busca por ticker ou nome (case-insensitive)"),
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    """
+    Lista todos os ativos cadastrados no banco com paginacao.
+    Suporta filtro por asset_type e busca textual por ticker/nome.
+    """
+    stmt = select(Asset)
+
+    if asset_type:
+        stmt = stmt.where(Asset.asset_type == asset_type.upper())
+
+    if q and q.strip():
+        q_like = f"%{q.strip().upper()}%"
+        stmt = stmt.where(
+            or_(
+                func.upper(Asset.ticker).like(q_like),
+                func.upper(Asset.name).like(q_like),
+            )
+        )
+
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    total_result = await db.execute(count_stmt)
+    total = total_result.scalar_one()
+
+    stmt = stmt.order_by(Asset.ticker).offset((page - 1) * page_size).limit(page_size)
+    result = await db.execute(stmt)
+    assets = result.scalars().all()
+
+    items = [
+        AssetListItem(
+            id=a.id,
+            ticker=a.ticker,
+            name=a.name,
+            asset_type=str(a.asset_type),
+            last_price=float(a.last_price) if a.last_price else None,
+            last_price_updated_at=a.last_price_updated_at.isoformat() if a.last_price_updated_at else None,
+        )
+        for a in assets
+    ]
+
+    import math
+    return AssetListResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=math.ceil(total / page_size) if total > 0 else 0,
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /assets/{ticker}/detail  — detalhe com cotacao atual + historico
+# ---------------------------------------------------------------------------
+
+@router.get("/{ticker}/detail", response_model=AssetDetailResponse)
+async def get_asset_detail(
+    ticker: str,
+    days: int = Query(90, ge=7, le=1825, description="Dias de historico de precos (7-1825)"),
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    """
+    Retorna detalhe completo de um ativo:
+      - Dados cadastrais (id, ticker, name, asset_type)
+      - last_price e last_price_updated_at do banco
+      - current_price atualizado via quotes_service (respeita cache L1/L2)
+      - price_history dos ultimos N dias via price_history_service
+    """
+    t = ticker.strip().upper()
+
+    result = await db.execute(select(Asset).where(Asset.ticker == t))
+    asset = result.scalar_one_or_none()
+
+    if asset is None:
+        raise HTTPException(status_code=404, detail=f"Ativo '{t}' nao encontrado no banco.")
+
+    asset_type_str = str(asset.asset_type)
+
+    # Cotacao atual (respeita cache TTL=15min — nao dispara request se recente)
+    current_price: Optional[float] = None
+    try:
+        current_price = await get_current_price(
+            ticker=t,
+            asset_type=asset_type_str,
+            db=db,
+        )
+    except Exception as e:
+        logger.warning(f"[assets] get_current_price falhou para {t}: {e}")
+
+    # Historico de precos
+    history: list[dict] = []
+    try:
+        asset_type_enum = AssetType(asset_type_str)
+        history = await get_price_history(db=db, ticker=t, asset_type=asset_type_enum, days=days)
+    except Exception as e:
+        logger.warning(f"[assets] get_price_history falhou para {t}: {e}")
+
+    return AssetDetailResponse(
+        id=asset.id,
+        ticker=asset.ticker,
+        name=asset.name,
+        asset_type=asset_type_str,
+        last_price=float(asset.last_price) if asset.last_price else None,
+        last_price_updated_at=asset.last_price_updated_at.isoformat() if asset.last_price_updated_at else None,
+        current_price=current_price,
+        price_history=[PricePoint(**p) for p in history],
+    )
+
+
+# ---------------------------------------------------------------------------
+# Endpoints existentes (sem alteracao)
+# ---------------------------------------------------------------------------
+
 @router.get("/search", response_model=list[AssetResponse])
 async def search_assets_endpoint(
     q: str = Query("", min_length=1),
@@ -236,16 +406,7 @@ async def upsert_asset(
 async def suggest_tickers(
     q: str = Query("", min_length=2),
     limit: int = Query(10, ge=1, le=20),
-    asset_type: Optional[str] = Query(
-        None,
-        description=(
-            "Tipo de ativo: "
-            "'stock' (acoes B3), 'fund' (FII), 'etf' (ETF B3), 'bdr', "
-            "'cripto' (via BRAPI /v2/crypto), "
-            "'stock_int' (stocks internacionais via yfinance), "
-            "'etf_int' (ETFs internacionais via yfinance)"
-        ),
-    ),
+    asset_type: Optional[str] = Query(None),
     _=Depends(get_current_user),
 ):
     if asset_type == "cripto":
@@ -269,11 +430,11 @@ async def suggest_tickers(
     raw = await fetch_ticker_suggestions(q.strip(), limit, asset_type)
     result = []
     for item in raw:
-        ticker = item.get("stock") or item.get("ticker") or item.get("symbol")
+        ticker_val = item.get("stock") or item.get("ticker") or item.get("symbol")
         name = item.get("name") or item.get("longName") or item.get("shortName") or ""
         kind = item.get("type") or item.get("assetType")
-        if ticker:
-            result.append(TickerSuggestion(ticker=ticker.upper(), name=name, type=kind))
+        if ticker_val:
+            result.append(TickerSuggestion(ticker=ticker_val.upper(), name=name, type=kind))
     return result
 
 

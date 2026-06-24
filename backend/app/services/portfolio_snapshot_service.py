@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.asset import Asset, AssetType
 from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.transaction import Transaction, OperationType
-from app.services.price_history_service import get_price_at_date
+from app.services.price_history_service import get_price_at_date, persist_daily_prices
 
 logger = logging.getLogger(__name__)
 
@@ -188,12 +188,63 @@ async def _upsert_snapshot(
     await db.execute(stmt)
 
 
+async def _prefetch_price_history(
+    db: AsyncSession,
+    portfolio_id: int,
+    days_back: int,
+) -> None:
+    """
+    Popula o banco com historico de precos para todos os tickers do portfolio
+    antes de iniciar qualquer loop de calculo por data.
+
+    Usa force=True para garantir que o historico completo seja buscado
+    mesmo que o ticker ja tenha dados recentes no banco (ex: 1 registro
+    de hoje gerado pelo dashboard). Sem force=True, o last_ts limitaria
+    o days_back a apenas 1-2 dias, e o cooldown de 30min bloquearia
+    qualquer busca subsequente no loop de backfill.
+    """
+    result = await db.execute(
+        select(Transaction.ticker, Transaction.asset_type)
+        .where(Transaction.portfolio_id == portfolio_id)
+        .distinct()
+    )
+    tickers = result.all()
+    if not tickers:
+        return
+
+    logger.info(
+        "[snapshot] pre-fetch FORCADO de historico para %d tickers (days_back=%d)",
+        len(tickers), days_back,
+    )
+    for row in tickers:
+        ticker = row.ticker.upper()
+        try:
+            asset_type = AssetType(row.asset_type)
+        except ValueError:
+            asset_type = AssetType.ACAO
+        logger.info(
+            "[snapshot] pre-fetch %s (%s) days_back=%d",
+            ticker, asset_type.value, days_back,
+        )
+        await persist_daily_prices(db, ticker, asset_type, days_back=days_back, force=True)
+
+
 async def calc_snapshot_at_date(
     db: AsyncSession,
     portfolio_id: int,
     target_date: date,
     commit: bool = True,
+    prefetch: bool = False,
 ) -> dict:
+    """
+    Calcula e persiste snapshot para uma data especifica.
+    prefetch=True dispara _prefetch_price_history antes do calculo
+    (util para chamadas isoladas fora do backfill).
+    """
+    if prefetch:
+        days_back = (date.today() - target_date).days + 6
+        await _prefetch_price_history(db, portfolio_id, days_back)
+
     totals = await _calc_totals(db, portfolio_id, target_date)
     await _upsert_snapshot(db, portfolio_id, target_date, totals)
     if commit:
@@ -222,6 +273,8 @@ async def backfill_snapshots(
     if days_back is not None:
         start = max(start, date.today() - timedelta(days=days_back))
 
+    total_days = (date.today() - start).days + 1
+
     existing = await db.execute(
         select(PortfolioSnapshot.snapshot_date)
         .where(
@@ -231,6 +284,10 @@ async def backfill_snapshots(
         )
     )
     existing_dates = {r.snapshot_date for r in existing.all()}
+
+    # Pre-fetch com force=True: garante historico completo desde a primeira
+    # transacao, ignorando cooldown e limitacao de days_back por last_ts.
+    await _prefetch_price_history(db, portfolio_id, days_back=total_days)
 
     count = 0
     cursor = start
@@ -257,7 +314,9 @@ async def refresh_today_snapshot(
     db: AsyncSession,
     portfolio_id: int,
 ) -> dict:
-    return await calc_snapshot_at_date(db, portfolio_id, date.today(), commit=True)
+    return await calc_snapshot_at_date(
+        db, portfolio_id, date.today(), commit=True, prefetch=True
+    )
 
 
 async def get_daily_evolution(
@@ -318,11 +377,9 @@ async def get_monthly_evolution(
     rows = result.scalars().all()
     return [
         {
-            # Campos alinhados com o frontend (PatrimonioHistoryPoint)
             "date": r.snapshot_date.strftime("%Y-%m-%d"),
             "value": float(r.market_value),
             "invested": float(r.invested_total),
-            # Campos extras mantidos para outros consumidores
             "period": r.snapshot_date.strftime("%Y-%m"),
             "market_value": float(r.market_value),
             "cost_basis": float(r.cost_basis),

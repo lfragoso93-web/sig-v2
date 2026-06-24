@@ -26,12 +26,26 @@ function xTickFormatter(value: string): string {
   }
 }
 
-function tooltipLabelFormatter(label: string): string {
+function tooltipLabelFormatter(label: unknown): string {
+  const str = typeof label === 'string' ? label : String(label ?? '')
   try {
-    return format(parseISO(label), "MMMM 'de' yyyy", { locale: ptBR })
+    return format(parseISO(str), "MMMM 'de' yyyy", { locale: ptBR })
   } catch {
-    return label
+    return str
   }
+}
+
+function tooltipFormatter(
+  value: unknown,
+  name: unknown,
+): [string, string] {
+  const num = typeof value === 'number' ? value : Number(value ?? 0)
+  const key = String(name ?? '')
+  if (key === 'return_pct') return [formatPercent(num), 'Rentabilidade']
+  return [
+    formatBRL(num),
+    key === 'value' ? 'Valor de mercado' : 'Investido',
+  ]
 }
 
 export default function EvolutionBarChart({ data }: Props) {
@@ -67,14 +81,8 @@ export default function EvolutionBarChart({ data }: Props) {
           width={68}
         />
         <Tooltip
-          labelFormatter={tooltipLabelFormatter}
-          formatter={(value: number, name: string) => {
-            if (name === 'return_pct') return [formatPercent(value), 'Rentabilidade']
-            return [
-              formatBRL(value),
-              name === 'value' ? 'Valor de mercado' : 'Investido',
-            ]
-          }}
+          labelFormatter={tooltipLabelFormatter as never}
+          formatter={tooltipFormatter as never}
           contentStyle={{
             background:   'var(--color-surface-2)',
             border:       '1px solid var(--color-border)',

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import traceback
 from contextlib import asynccontextmanager
@@ -8,7 +9,7 @@ from fastapi.openapi.utils import get_openapi
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from sqlalchemy import text
+from sqlalchemy import text, select, func
 
 from app.core.database import engine, AsyncSessionLocal
 from app.core.config import settings
@@ -28,9 +29,72 @@ from app.routers import class_targets
 logger = logging.getLogger(__name__)
 
 
+async def _boot_sequence() -> None:
+    """
+    Sequencia de inicializacao executada em background apos o app subir.
+
+    Etapa 1 - Seed de ativos:
+      Popula a tabela `assets` com todos os tickers da B3 via BRAPI /v2/tickers.
+      So executa se a tabela estiver vazia.
+
+    Etapa 2 - Backfill historico de precos (10 anos):
+      Popula `asset_prices` com o historico completo de todos os ativos.
+      So executa se asset_prices estiver vazia E assets tiver registros.
+      Abortada se a etapa 1 falhar com assets vazia.
+
+    Nota: proventos (dividends) sao processados automaticamente via trigger
+    em cada insercao/edicao/exclusao de transacao — nao precisam de boot.
+
+    A API ja esta disponivel e respondendo durante todo o processo.
+    """
+    await asyncio.sleep(3)
+
+    # --- Etapa 1: Seed de ativos --------------------------------------------
+    seed_ok = False
+    try:
+        from app.models.asset import Asset
+        from app.services.asset_seed_service import run_asset_seed
+
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(func.count()).select_from(Asset))
+            asset_count = result.scalar_one() or 0
+
+        if asset_count == 0:
+            logger.info("[Boot] Etapa 1: tabela assets vazia \u2014 iniciando seed de tickers")
+            async with AsyncSessionLocal() as db:
+                seed_result = await run_asset_seed(db, run_backfill=False)
+            logger.info(
+                "[Boot] Etapa 1: seed concluido \u2014 %d criados, %d atualizados, %d erros",
+                seed_result.created, seed_result.updated, seed_result.errors,
+            )
+            seed_ok = True
+        else:
+            logger.info("[Boot] Etapa 1: %d assets no banco \u2014 seed ignorado", asset_count)
+            seed_ok = True
+
+    except Exception as e:
+        logger.error("[Boot] Etapa 1 (seed de ativos) falhou: %s", e)
+        seed_ok = False
+
+    # --- Etapa 2: Backfill de precos historicos (depende da etapa 1) --------
+    if not seed_ok:
+        logger.warning("[Boot] Etapa 2 abortada: etapa 1 falhou")
+    else:
+        try:
+            from app.services.price_history_backfill_service import run_initial_backfill
+            logger.info("[Boot] Etapa 2: verificando necessidade de backfill de precos")
+            await run_initial_backfill()
+            logger.info("[Boot] Etapa 2: backfill de precos concluido")
+        except Exception as e:
+            logger.error("[Boot] Etapa 2 (backfill de precos) falhou: %s", e)
+
+    logger.info("[Boot] sequencia de inicializacao concluida")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     start_scheduler()
+    asyncio.create_task(_boot_sequence())
     yield
     await engine.dispose()
 
@@ -42,7 +106,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Injeta o limiter no state para que @limiter.limit() funcione nos routers
 app.state.limiter = limiter
 
 
@@ -152,14 +215,9 @@ if settings.APP_DEBUG or __import__('os').getenv("ADMIN_SECRET"):
 
 @app.get("/health", tags=["health"])
 async def health():
-    """
-    Health check real: verifica conectividade com PostgreSQL e Redis.
-    Retorna 200 se ambos ok, 503 se algum falhar.
-    """
     checks: dict[str, str] = {}
     overall_ok = True
 
-    # --- PostgreSQL: SELECT 1 ---
     try:
         async with AsyncSessionLocal() as db:
             await db.execute(text("SELECT 1"))
@@ -169,7 +227,6 @@ async def health():
         checks["postgres"] = "error"
         overall_ok = False
 
-    # --- Redis: ping ---
     try:
         client = await get_redis()
         if client:
@@ -177,11 +234,9 @@ async def health():
             checks["redis"] = "ok"
         else:
             checks["redis"] = "unavailable"
-            # Redis e opcional — nao derruba o health
     except Exception as e:
         logger.warning("[health] redis ping falhou: %s", e)
         checks["redis"] = "error"
-        # Redis e opcional — nao derruba o health
 
     payload = {
         "status": "ok" if overall_ok else "degraded",

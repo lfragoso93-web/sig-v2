@@ -34,7 +34,7 @@ def require_superadmin(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
-# ── Gestão de Usuários ──────────────────────────────────────────────────────────────
+# ── Gestão de Usuários ───────────────────────────────────────────────────────
 
 @router.get("/users", response_model=PaginatedResponse[UserListResponse])
 async def admin_list_users(
@@ -143,7 +143,7 @@ async def admin_reset_password(
     )
 
 
-# ── Estatísticas do sistema ───────────────────────────────────────────────────────────
+# ── Estatísticas do sistema ───────────────────────────────────────────────────────
 
 @router.get("/stats")
 async def admin_stats(
@@ -159,7 +159,7 @@ async def admin_stats(
     }
 
 
-# ── Configurações do sistema ──────────────────────────────────────────────────────────
+# ── Configurações do sistema ──────────────────────────────────────────────────────
 
 @router.get("/config", response_model=list[SystemConfigResponse])
 async def admin_list_configs(
@@ -191,7 +191,7 @@ async def admin_bulk_update_config(
     return await bulk_update_configs(db, data.configs)
 
 
-# ── Seed de Ativos (BRAPI) ──────────────────────────────────────────────────────────
+# ── Seed de Ativos (BRAPI) ──────────────────────────────────────────────────────
 
 async def _run_asset_seed_bg() -> None:
     """Wrapper para rodar o seed em BackgroundTask com sua propria sessao."""
@@ -222,14 +222,7 @@ async def admin_seed_assets(
     _: User = Depends(require_superadmin),
 ):
     """
-    Dispara o seed de ativos da B3 em background via BRAPI quote/list.
-
-    Popula (ou atualiza) a tabela `assets` com todos os ativos listados:
-    Ações, FIIs, ETFs Nacionais e BDRs.
-
-    O processo roda em background e pode levar alguns minutos.
-    Acompanhe pelo log do servidor.
-
+    Dispara o seed de ativos da B3 em background via BRAPI /v2/tickers.
     Restrito a SuperAdmins.
     """
     logger.info("[seed_bg] requisicao recebida — adicionando task ao background")
@@ -237,4 +230,62 @@ async def admin_seed_assets(
     return {
         "message": "Seed de ativos iniciado em background. Acompanhe pelo log do servidor.",
         "status": "accepted",
+    }
+
+
+# ── Backfill de Preços Históricos ──────────────────────────────────────────────
+
+@router.get("/prices/backfill/status")
+async def admin_backfill_status(
+    _: User = Depends(require_superadmin),
+):
+    """
+    Retorna o status atual do backfill de preços históricos.
+
+    Inclui: se está rodando, total de registros, cobertura por ativo,
+    data do registro mais antigo e mais recente.
+    """
+    from app.services.price_history_backfill_service import get_backfill_status
+    return await get_backfill_status()
+
+
+async def _run_price_backfill_bg(force: bool = False) -> None:
+    """Wrapper para rodar o backfill de precos em BackgroundTask."""
+    logger.info("[backfill_bg] iniciando backfill de precos (force=%s)", force)
+    try:
+        from app.services.price_history_backfill_service import run_initial_backfill
+        await run_initial_backfill(force=force)
+    except Exception as e:
+        logger.error(
+            "[backfill_bg] backfill de precos falhou: %s\n%s",
+            e, traceback.format_exc()
+        )
+
+
+@router.post(
+    "/prices/backfill",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def admin_trigger_price_backfill(
+    background_tasks: BackgroundTasks,
+    force: bool = Query(
+        False,
+        description="Se true, reprocessa mesmo os ativos que já têm histórico"
+    ),
+    _: User = Depends(require_superadmin),
+):
+    """
+    Dispara o backfill de preços históricos (10 anos) em background.
+
+    Por padrao (force=False) só processa ativos sem histórico.
+    Com force=True reprocessa todos os ativos.
+
+    Use após reset do banco ou quando quiser forcar uma atualização completa.
+    Restrito a SuperAdmins.
+    """
+    background_tasks.add_task(_run_price_backfill_bg, force)
+    return {
+        "message": f"Backfill de preços iniciado em background (force={force}). Acompanhe pelo log.",
+        "status": "accepted",
+        "force": force,
     }
