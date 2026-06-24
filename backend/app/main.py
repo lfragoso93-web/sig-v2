@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import traceback
 from contextlib import asynccontextmanager
@@ -28,9 +29,82 @@ from app.routers import class_targets
 logger = logging.getLogger(__name__)
 
 
+async def _boot_sequence() -> None:
+    """
+    Sequencia de inicializacao executada em background apos o app subir.
+
+    Etapa 1 - Seed de ativos:
+      Popula a tabela `assets` com todos os tickers da B3 via BRAPI /v2/tickers.
+      So executa se a tabela estiver vazia.
+
+    Etapa 2 - Backfill historico de precos (10 anos):
+      Popula `asset_prices` com o historico completo de todos os ativos.
+      So executa se a tabela estiver vazia.
+
+    Etapa 3 - Backfill de proventos (10 anos):
+      Popula `dividends` com o historico de proventos de todos os ativos.
+      So executa se a tabela estiver vazia.
+
+    A API ja esta disponivel e respondendo durante todo o processo.
+    """
+    # Pequena pausa para garantir que o banco esta pronto antes de comecar
+    await asyncio.sleep(3)
+
+    # --- Etapa 1: Seed de ativos --------------------------------------------
+    try:
+        from app.services.asset_seed_service import run_full_seed
+        from sqlalchemy import select, func
+        from app.models.asset import Asset
+
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(func.count()).select_from(Asset))
+            asset_count = result.scalar_one() or 0
+
+        if asset_count == 0:
+            logger.info("[Boot] Etapa 1: tabela assets vazia — iniciando seed de tickers")
+            await run_full_seed()
+            logger.info("[Boot] Etapa 1: seed de tickers concluido")
+        else:
+            logger.info("[Boot] Etapa 1: %d assets no banco — seed de tickers ignorado", asset_count)
+    except Exception as e:
+        logger.error("[Boot] Etapa 1 (seed de ativos) falhou: %s", e)
+
+    # --- Etapa 2: Backfill de precos historicos ------------------------------
+    try:
+        from app.services.price_history_backfill_service import run_initial_backfill
+        logger.info("[Boot] Etapa 2: verificando necessidade de backfill de precos")
+        await run_initial_backfill()
+        logger.info("[Boot] Etapa 2: backfill de precos concluido")
+    except Exception as e:
+        logger.error("[Boot] Etapa 2 (backfill de precos) falhou: %s", e)
+
+    # --- Etapa 3: Backfill de proventos -------------------------------------
+    try:
+        from sqlalchemy import select, func
+        from app.models.dividend import Dividend
+        from app.services.dividend_backfill_service import run_full_backfill
+
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(func.count()).select_from(Dividend))
+            div_count = result.scalar_one() or 0
+
+        if div_count == 0:
+            logger.info("[Boot] Etapa 3: tabela dividends vazia — iniciando backfill de proventos")
+            await run_full_backfill()
+            logger.info("[Boot] Etapa 3: backfill de proventos concluido")
+        else:
+            logger.info("[Boot] Etapa 3: %d proventos no banco — backfill ignorado", div_count)
+    except Exception as e:
+        logger.error("[Boot] Etapa 3 (backfill de proventos) falhou: %s", e)
+
+    logger.info("[Boot] sequencia de inicializacao concluida")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     start_scheduler()
+    # Dispara o boot em background — API fica disponivel imediatamente
+    asyncio.create_task(_boot_sequence())
     yield
     await engine.dispose()
 
@@ -159,7 +233,6 @@ async def health():
     checks: dict[str, str] = {}
     overall_ok = True
 
-    # --- PostgreSQL: SELECT 1 ---
     try:
         async with AsyncSessionLocal() as db:
             await db.execute(text("SELECT 1"))
@@ -169,7 +242,6 @@ async def health():
         checks["postgres"] = "error"
         overall_ok = False
 
-    # --- Redis: ping ---
     try:
         client = await get_redis()
         if client:
@@ -177,11 +249,9 @@ async def health():
             checks["redis"] = "ok"
         else:
             checks["redis"] = "unavailable"
-            # Redis e opcional — nao derruba o health
     except Exception as e:
         logger.warning("[health] redis ping falhou: %s", e)
         checks["redis"] = "error"
-        # Redis e opcional — nao derruba o health
 
     payload = {
         "status": "ok" if overall_ok else "degraded",
