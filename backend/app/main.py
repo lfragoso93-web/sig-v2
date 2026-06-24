@@ -9,7 +9,7 @@ from fastapi.openapi.utils import get_openapi
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from sqlalchemy import text
+from sqlalchemy import text, select, func
 
 from app.core.database import engine, AsyncSessionLocal
 from app.core.config import settings
@@ -39,22 +39,22 @@ async def _boot_sequence() -> None:
 
     Etapa 2 - Backfill historico de precos (10 anos):
       Popula `asset_prices` com o historico completo de todos os ativos.
-      So executa se a tabela estiver vazia.
+      So executa se asset_prices estiver vazia E assets tiver registros.
+      E abortada se a etapa 1 falhar com assets vazia.
 
-    Etapa 3 - Backfill de proventos (10 anos):
-      Popula `dividends` com o historico de proventos de todos os ativos.
-      So executa se a tabela estiver vazia.
+    Etapa 3 - Backfill de proventos:
+      Popula `dividends` com o historico de proventos.
+      So executa se dividends estiver vazia.
 
     A API ja esta disponivel e respondendo durante todo o processo.
     """
-    # Pequena pausa para garantir que o banco esta pronto antes de comecar
     await asyncio.sleep(3)
 
     # --- Etapa 1: Seed de ativos --------------------------------------------
+    seed_ok = False
     try:
-        from app.services.asset_seed_service import run_full_seed
-        from sqlalchemy import select, func
         from app.models.asset import Asset
+        from app.services.asset_seed_service import run_asset_seed
 
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(func.count()).select_from(Asset))
@@ -62,25 +62,35 @@ async def _boot_sequence() -> None:
 
         if asset_count == 0:
             logger.info("[Boot] Etapa 1: tabela assets vazia — iniciando seed de tickers")
-            await run_full_seed()
-            logger.info("[Boot] Etapa 1: seed de tickers concluido")
+            async with AsyncSessionLocal() as db:
+                seed_result = await run_asset_seed(db, run_backfill=False)
+            logger.info(
+                "[Boot] Etapa 1: seed concluido — %d criados, %d atualizados, %d erros",
+                seed_result.created, seed_result.updated, seed_result.errors,
+            )
+            seed_ok = True
         else:
-            logger.info("[Boot] Etapa 1: %d assets no banco — seed de tickers ignorado", asset_count)
+            logger.info("[Boot] Etapa 1: %d assets no banco — seed ignorado", asset_count)
+            seed_ok = True
+
     except Exception as e:
         logger.error("[Boot] Etapa 1 (seed de ativos) falhou: %s", e)
+        seed_ok = False
 
-    # --- Etapa 2: Backfill de precos historicos ------------------------------
-    try:
-        from app.services.price_history_backfill_service import run_initial_backfill
-        logger.info("[Boot] Etapa 2: verificando necessidade de backfill de precos")
-        await run_initial_backfill()
-        logger.info("[Boot] Etapa 2: backfill de precos concluido")
-    except Exception as e:
-        logger.error("[Boot] Etapa 2 (backfill de precos) falhou: %s", e)
+    # --- Etapa 2: Backfill de precos historicos (depende da etapa 1) --------
+    if not seed_ok:
+        logger.warning("[Boot] Etapa 2 abortada: etapa 1 falhou")
+    else:
+        try:
+            from app.services.price_history_backfill_service import run_initial_backfill
+            logger.info("[Boot] Etapa 2: verificando necessidade de backfill de precos")
+            await run_initial_backfill()
+            logger.info("[Boot] Etapa 2: backfill de precos concluido")
+        except Exception as e:
+            logger.error("[Boot] Etapa 2 (backfill de precos) falhou: %s", e)
 
-    # --- Etapa 3: Backfill de proventos -------------------------------------
+    # --- Etapa 3: Backfill de proventos (independente) ----------------------
     try:
-        from sqlalchemy import select, func
         from app.models.dividend import Dividend
         from app.services.dividend_backfill_service import run_full_backfill
 
@@ -116,7 +126,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Injeta o limiter no state para que @limiter.limit() funcione nos routers
 app.state.limiter = limiter
 
 
@@ -226,10 +235,6 @@ if settings.APP_DEBUG or __import__('os').getenv("ADMIN_SECRET"):
 
 @app.get("/health", tags=["health"])
 async def health():
-    """
-    Health check real: verifica conectividade com PostgreSQL e Redis.
-    Retorna 200 se ambos ok, 503 se algum falhar.
-    """
     checks: dict[str, str] = {}
     overall_ok = True
 
