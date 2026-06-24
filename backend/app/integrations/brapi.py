@@ -109,6 +109,67 @@ async def fetch_quote_single(ticker: str) -> Optional[float]:
     return result.get(ticker)
 
 
+# ── Catálogo de ativos — /api/v2/tickers (endpoint oficial, substitui /quote/list) ──────
+
+async def fetch_all_tickers_v2(
+    sub_type: str,
+    limit: int = 2000,
+) -> list[dict]:
+    """
+    Busca todos os tickers de um subtipo via /api/v2/tickers com paginação real.
+
+    sub_type aceitos: 'stock' | 'unit' | 'fii' | 'etf' | 'fi-infra' | 'fi-agro' | 'bdr'
+
+    O endpoint suporta limit de até 2000 por página e paginação por 'page'.
+    Retorna lista de dicts com pelo menos: stock (ticker), name, sector, subType.
+    """
+    headers   = _auth_headers()
+    all_items: list[dict] = []
+    page      = 1
+
+    while True:
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.get(
+                    f"{BRAPI_BASE}/v2/tickers",
+                    headers=headers,
+                    params={
+                        "subType":   sub_type,
+                        "limit":     limit,
+                        "page":      page,
+                        "sortBy":    "symbol",
+                        "sortOrder": "asc",
+                    },
+                )
+                resp.raise_for_status()
+                data  = resp.json()
+                items = (
+                    data.get("tickers")
+                    or data.get("stocks")
+                    or data.get("results")
+                    or []
+                )
+        except Exception as e:
+            logger.error(f"[brapi] /v2/tickers subType={sub_type} page={page}: {e}")
+            break
+
+        if not items:
+            break
+
+        all_items.extend(items)
+        logger.info(
+            f"[brapi] /v2/tickers subType={sub_type} page={page}: "
+            f"{len(items)} itens ({len(all_items)} acumulados)"
+        )
+
+        # Paginação real: se retornou menos que o limit, chegamos ao fim
+        if len(items) < limit:
+            break
+        page += 1
+
+    return all_items
+
+
 # ── Histórico diário de preços (BRAPI Pro) ───────────────────────────────────────
 
 async def fetch_price_history(
@@ -117,15 +178,15 @@ async def fetch_price_history(
     date_to: str,
 ) -> list[tuple[datetime, float]]:
     """
-    Busca historico de precos diarios via BRAPI.
+    Busca historico de precos diarios via BRAPI (endpoint legado /quote/{ticker}).
 
     Estrategia adaptativa (BRAPI Pro):
       - Janela <= 5 anos: usa range=custom com from/to exatos.
       - Janela >  5 anos: delega para fetch_price_history_full (range=max)
         e filtra os registros fora da janela solicitada.
 
-    Isso garante que o plano Pro seja aproveitado ao maximo sem rejeicao
-    do parametro range=custom para janelas muito longas.
+    Para novos consumidores, prefira fetch_stocks_historical_v2 ou
+    fetch_fii_historical_v2 que usam os endpoints v2 oficiais.
     """
     from datetime import date as _date
     try:
@@ -138,7 +199,6 @@ async def fetch_price_history(
     if delta > _MAX_RANGE_THRESHOLD_DAYS:
         logger.info(f"BRAPI price_history: {ticker} janela {delta}d > threshold — usando range=max")
         rows = await fetch_price_history_full(ticker)
-        # Filtra apenas o intervalo pedido
         cutoff_from = datetime.fromisoformat(date_from).replace(tzinfo=timezone.utc)
         cutoff_to   = datetime.fromisoformat(date_to).replace(
             hour=23, minute=59, second=59, tzinfo=timezone.utc
@@ -183,10 +243,8 @@ async def fetch_price_history_full(
 ) -> list[tuple[datetime, float]]:
     """
     Busca o historico completo de precos diarios via BRAPI Pro (range=max).
-
-    Disponivel apenas no plano Pro. Retorna todos os fechamentos desde o
-    inicio da negociacao do ativo na bolsa.
-    Timeout estendido (60s) pois a resposta pode ser grande para ativos antigos.
+    Endpoint legado /quote/{ticker} — preferir fetch_stocks_historical_v2
+    para novos consumidores.
     """
     headers = _auth_headers()
     url = f"{BRAPI_BASE}/quote/{ticker}?range=max&interval=1d"
@@ -215,6 +273,109 @@ async def fetch_price_history_full(
 
     except Exception as e:
         logger.warning(f"BRAPI fetch_price_history_full error for {ticker}: {e}")
+        return []
+
+
+async def fetch_stocks_historical_v2(
+    ticker: str,
+    range_: str = "max",
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+) -> list[tuple[datetime, float]]:
+    """
+    Busca historico de precos via /api/v2/stocks/historical (endpoint oficial v2).
+
+    Usado para: ACAO (stock + unit), ETF_NACIONAL, BDR.
+    range_ pode ser: '1d','5d','1mo','3mo','6mo','1y','2y','5y','10y','ytd','max'
+    Se date_from e date_to forem fornecidos, usa startDate/endDate em vez de range.
+    """
+    headers = _auth_headers()
+    params: dict = {"symbols": ticker, "interval": "1d"}
+    if date_from and date_to:
+        params["startDate"] = date_from
+        params["endDate"]   = date_to
+    else:
+        params["range"] = range_
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.get(
+                f"{BRAPI_BASE}/v2/stocks/historical",
+                headers=headers,
+                params=params,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+            # Resposta esperada: {"results": [{"symbol": "PETR4", "historicalDataPrice": [...]}]}
+            results = data.get("results") or data.get("stocks") or []
+            if not results:
+                logger.warning(f"[brapi] fetch_stocks_historical_v2: sem resultados para {ticker}")
+                return []
+
+            history = results[0].get("historicalDataPrice") or []
+            if not history:
+                # Fallback: snapshot atual como único ponto
+                price = results[0].get("regularMarketPrice")
+                if price:
+                    now = datetime.now(timezone.utc).replace(hour=21, minute=0, second=0, microsecond=0)
+                    return [(now, float(price))]
+                return []
+
+            return _parse_history_rows(history, ticker, f"v2/stocks range={range_}")
+
+    except Exception as e:
+        logger.warning(f"[brapi] fetch_stocks_historical_v2 error for {ticker}: {e}")
+        return []
+
+
+async def fetch_fii_historical_v2(
+    ticker: str,
+    range_: str = "max",
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+) -> list[tuple[datetime, float]]:
+    """
+    Busca historico de precos via /api/v2/fii/historical (endpoint oficial v2).
+
+    Usado para: FII, FI_INFRA (mapeado como FII), FI_AGRO (mapeado como FII).
+    Plano Pro necessário para range=max.
+    """
+    headers = _auth_headers()
+    params: dict = {"symbols": ticker, "interval": "1d"}
+    if date_from and date_to:
+        params["startDate"] = date_from
+        params["endDate"]   = date_to
+    else:
+        params["range"] = range_
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.get(
+                f"{BRAPI_BASE}/v2/fii/historical",
+                headers=headers,
+                params=params,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+            results = data.get("results") or data.get("fiis") or []
+            if not results:
+                logger.warning(f"[brapi] fetch_fii_historical_v2: sem resultados para {ticker}")
+                return []
+
+            history = results[0].get("historicalDataPrice") or []
+            if not history:
+                price = results[0].get("regularMarketPrice")
+                if price:
+                    now = datetime.now(timezone.utc).replace(hour=21, minute=0, second=0, microsecond=0)
+                    return [(now, float(price))]
+                return []
+
+            return _parse_history_rows(history, ticker, f"v2/fii range={range_}")
+
+    except Exception as e:
+        logger.warning(f"[brapi] fetch_fii_historical_v2 error for {ticker}: {e}")
         return []
 
 
@@ -290,7 +451,6 @@ async def fetch_currency_rate(pair: str = "USD-BRL") -> Optional[float]:
                         logger.info(f"[brapi] fetch_currency_rate {pair_fmt} = {price}")
                         return price
 
-                # Tenta sub-lista 'historical' com o valor mais recente
                 for item in currencies:
                     if not isinstance(item, dict):
                         continue
@@ -600,7 +760,6 @@ def _yf_search_sync(q: str, limit: int = 10, asset_type: Optional[str] = None) -
             except Exception:
                 pass
 
-        # Fallback para busca geral (Search) se Lookup falhou ou tipo nao mapeado
         if not results:
             try:
                 search = yf.Search(q, max_results=limit)
