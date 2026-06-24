@@ -22,6 +22,12 @@ Estrategia:
 
 Backfill de historico:
   Apos o seed, dispara persist_daily_prices para cada ativo criado nesta execucao.
+  Tickers sem historico na BRAPI sao filtrados ANTES do backfill para evitar
+  requests desnecessarios. Os sufixos filtrados sao:
+    *F  -> direitos de subscricao fracionarios (ABCB4F, AALR3F, ...)
+    *R  -> recibos de subscricao (PETR4R, ...)
+    *B  -> bonus de subscricao
+    *D  -> debentures / codigos especiais
   O roteamento e feito por asset_type:
     FII -> /api/v2/fii/historical
     demais -> /api/v2/stocks/historical
@@ -30,6 +36,7 @@ Backfill de historico:
 """
 import asyncio
 import logging
+import re
 from dataclasses import dataclass, field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -40,8 +47,6 @@ from app.integrations.brapi import fetch_all_tickers_v2
 logger = logging.getLogger(__name__)
 
 # Subtipos BRAPI e o AssetType interno correspondente.
-# unit e mapeado para ACAO pois e negociado da mesma forma.
-# fi-infra e fi-agro sao mapeados para FII pois tem o mesmo comportamento de cota.
 _SEED_TYPES: list[tuple[str, AssetType]] = [
     ("stock",    AssetType.ACAO),
     ("unit",     AssetType.ACAO),
@@ -52,9 +57,16 @@ _SEED_TYPES: list[tuple[str, AssetType]] = [
     ("bdr",      AssetType.BDR),
 ]
 
+# Sufixos B3 que nao possuem historico de precos na BRAPI.
+# Tickers com esses sufixos sao cadastrados como ativos,
+# mas excluidos do backfill de historico.
+# Regex: ticker termina com letra(s) nao numerica(s) apos os digitos.
+# Exemplos filtrados: ABCB4F, PETR4R, VALE3B, BOVA11D
+_NO_HISTORY_SUFFIX_RE = re.compile(r"^[A-Z]{4}\d+[FRBD]$")
+
 # Quantos ativos processar em paralelo no backfill de historico.
-# Valor conservador para nao sobrecarregar BRAPI e DB.
-BACKFILL_CONCURRENCY = 5
+# Valor conservador para nao saturar BRAPI e yfinance.
+BACKFILL_CONCURRENCY = 2
 
 # Quantos dias de historico buscar no backfill inicial.
 BACKFILL_DAYS = 365 * 5  # 5 anos
@@ -67,9 +79,10 @@ class SeedResult:
     skipped:  int = 0
     errors:   int = 0
     by_type:  dict[str, int] = field(default_factory=dict)
-    # Tickers criados nesta execucao, agrupados por asset_type,
-    # para que o backfill saiba exatamente o que buscar.
+    # Tickers criados nesta execucao elegiveis para backfill.
     new_tickers: dict[str, list[str]] = field(default_factory=dict)
+    # Tickers criados mas filtrados do backfill (sem historico).
+    skipped_backfill: int = 0
 
 
 async def _upsert_asset(
@@ -112,15 +125,20 @@ async def _upsert_asset(
     return "updated" if changed else "skipped"
 
 
+def _has_history(ticker: str) -> bool:
+    """
+    Retorna False para tickers B3 que nao possuem historico de precos
+    na BRAPI (direitos de subscricao, recibos, bonus, debentures).
+    """
+    return not _NO_HISTORY_SUFFIX_RE.match(ticker)
+
+
 async def _backfill_history_for_ticker(
     ticker: str,
     asset_type: AssetType,
 ) -> None:
     """
     Dispara o backfill de historico para um ativo, usando sua propria sessao DB.
-    Roteamento:
-      FII -> fetch_fii_historical_v2 (endpoint /api/v2/fii/historical)
-      demais -> fetch_stocks_historical_v2 (endpoint /api/v2/stocks/historical)
     """
     from app.core.database import AsyncSessionLocal
     from app.services.price_history_service import persist_daily_prices
@@ -140,24 +158,32 @@ async def _backfill_history_for_ticker(
 
 async def _run_backfill(new_tickers: dict[str, list[str]]) -> None:
     """
-    Executa o backfill de historico para todos os ativos criados no seed.
-    Processa em lotes de BACKFILL_CONCURRENCY para nao sobrecarregar a BRAPI.
+    Executa o backfill de historico para ativos criados no seed.
+    Filtra tickers sem historico antes de processar.
+    Processa em lotes de BACKFILL_CONCURRENCY.
     """
-    # Monta lista plana de (ticker, asset_type)
     tasks: list[tuple[str, AssetType]] = []
+    filtered = 0
+
     for type_value, tickers in new_tickers.items():
         try:
             at = AssetType(type_value)
         except ValueError:
             continue
         for t in tickers:
-            tasks.append((t, at))
+            if _has_history(t):
+                tasks.append((t, at))
+            else:
+                filtered += 1
+
+    if filtered:
+        logger.info(f"[seed_backfill] {filtered} tickers sem historico ignorados (sufixos F/R/B/D)")
 
     if not tasks:
-        logger.info("[seed_backfill] nenhum ativo novo para backfill")
+        logger.info("[seed_backfill] nenhum ativo elegivel para backfill")
         return
 
-    logger.info(f"[seed_backfill] iniciando backfill de {len(tasks)} ativos novos")
+    logger.info(f"[seed_backfill] iniciando backfill de {len(tasks)} ativos")
     total_done = 0
 
     for i in range(0, len(tasks), BACKFILL_CONCURRENCY):
@@ -167,9 +193,10 @@ async def _run_backfill(new_tickers: dict[str, list[str]]) -> None:
             return_exceptions=True,
         )
         total_done += len(batch)
-        logger.info(f"[seed_backfill] {total_done}/{len(tasks)} ativos processados")
+        if total_done % 20 == 0:
+            logger.info(f"[seed_backfill] {total_done}/{len(tasks)} ativos processados")
 
-    logger.info(f"[seed_backfill] backfill concluido para {total_done} ativos")
+    logger.info(f"[seed_backfill] backfill concluido: {total_done} ativos, {filtered} ignorados")
 
 
 async def run_asset_seed(db: AsyncSession, run_backfill: bool = True) -> SeedResult:
@@ -178,7 +205,8 @@ async def run_asset_seed(db: AsyncSession, run_backfill: bool = True) -> SeedRes
     Faz commit em lotes de 200 para nao sobrecarregar a transacao.
 
     Se run_backfill=True (padrao), ao final do seed dispara o backfill
-    de historico de precos para todos os ativos criados nesta execucao.
+    de historico de precos para todos os ativos criados nesta execucao
+    que possuam historico disponivel na BRAPI.
     """
     result = SeedResult()
     BATCH_SIZE = 200
@@ -213,6 +241,8 @@ async def run_asset_seed(db: AsyncSession, run_backfill: bool = True) -> SeedRes
                 if status == "created":
                     result.created += 1
                     result.by_type[type_label] += 1
+                    # Registra para backfill independente de ter historico;
+                    # a filtragem e feita em _run_backfill.
                     result.new_tickers[type_label].append(ticker)
                 elif status == "updated":
                     result.updated += 1
@@ -241,11 +271,10 @@ async def run_asset_seed(db: AsyncSession, run_backfill: bool = True) -> SeedRes
         f"{result.errors} erros | por tipo: {result.by_type}"
     )
 
-    # Backfill de historico apenas para ativos recem-criados
     if run_backfill and result.created > 0:
-        logger.info(f"[seed] iniciando backfill de historico para {result.created} ativos novos")
+        logger.info(f"[seed] iniciando backfill para {result.created} ativos novos")
         await _run_backfill(result.new_tickers)
     else:
-        logger.info("[seed] sem ativos novos — backfill de historico ignorado")
+        logger.info("[seed] sem ativos novos — backfill ignorado")
 
     return result
