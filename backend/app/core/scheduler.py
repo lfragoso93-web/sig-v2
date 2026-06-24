@@ -19,7 +19,7 @@ def start_scheduler() -> None:
         name="Atualizar cotacoes BRAPI",
     )
     async def update_quotes_job():
-        from app.services.quote_service import update_all_quotes
+        from app.services.price_service import update_all_quotes
         from app.core.database import AsyncSessionLocal
         async with AsyncSessionLocal() as db:
             try:
