@@ -53,8 +53,9 @@ logger = logging.getLogger(__name__)
 # Anos de histórico a buscar no backfill inicial
 BACKFILL_YEARS = 10
 
-# Delay entre cada ativo no backfill para não estourar rate limit da BRAPI
-_BRAPI_DELAY = 0.5  # segundos
+# Delay entre cada ativo no backfill para não estourar rate limit da BRAPI/yfinance.
+# 1.2s garante ~50 ativos/min e evita Too Many Requests do yfinance como fallback.
+_BRAPI_DELAY = 1.2  # segundos
 
 # Flag global para evitar que dois backfills rodem simultaneamente
 _backfill_running = False
@@ -144,7 +145,6 @@ async def _fetch_br_history(
     from app.core.asset_types import yf_ticker
     from app.services.price_history_service import _fetch_yf_history
 
-    # Verifica cache BRAPI antes de qualquer request
     brapi_known = await is_known_by_brapi(ticker)
 
     if brapi_known:
@@ -184,7 +184,6 @@ async def _fetch_intl_history(
     """Busca histórico para ativos internacionais via Alpha Vantage → yfinance."""
     from app.services.price_history_service import _fetch_yf_history
 
-    # Alpha Vantage primeiro
     try:
         from app.core.rate_limiter import alpha_vantage_limiter
         from app.integrations.alpha_vantage import fetch_daily_history
@@ -195,7 +194,6 @@ async def _fetch_intl_history(
     except Exception as e:
         logger.warning("[Backfill] Alpha Vantage erro para %s: %s", ticker, e)
 
-    # Fallback yfinance
     try:
         rows = await _fetch_yf_history(ticker, asset_type, days)
         if rows:
@@ -334,7 +332,6 @@ async def run_initial_backfill(force: bool = False) -> None:
                 errors += 1
                 logger.error("[Backfill] erro em %s: %s", asset.ticker, e)
 
-            # Delay entre ativos para não estourar rate limit da BRAPI
             await asyncio.sleep(_BRAPI_DELAY)
 
         logger.info(
@@ -378,13 +375,11 @@ async def run_incremental_update() -> None:
                     if delta_days < 1:
                         skipped += 1
                         continue
-                    # Limita a 7 dias para o incremental
                     delta_days = min(delta_days, 7)
                     date_from = (
                         date.today() - timedelta(days=delta_days + 1)
                     ).isoformat()
                 else:
-                    # Asset sem histórico — busca 30 dias como mínimo
                     date_from = (date.today() - timedelta(days=30)).isoformat()
 
                 inserted = await backfill_single_asset(
