@@ -29,10 +29,15 @@ def _parse_history_rows(
     ticker: str,
     label: str,
 ) -> list[tuple[datetime, float]]:
-    """Converte a lista historicalDataPrice da BRAPI em (datetime UTC, float)."""
+    """Converte a lista historicalDataPrice da BRAPI em (datetime UTC, float).
+
+    Prioriza adjclose (preco ajustado por splits/dividendos) sobre close bruto
+    para garantir consistencia historica em ativos com eventos corporativos.
+    """
     rows: list[tuple[datetime, float]] = []
     for entry in history:
-        close = entry.get("close") or entry.get("adjclose")
+        # adjclose tem prioridade: ja vem ajustado por desdobramentos e proventos
+        close = entry.get("adjclose") or entry.get("close")
         ts_raw = entry.get("date") or entry.get("timestamp")
         if close is None or ts_raw is None:
             continue
@@ -91,7 +96,7 @@ async def fetch_valid_brapi_tickers(tickers: list[str]) -> set[str]:
                 resp = await client.get(
                     f"{BRAPI_BASE}/v2/tickers",
                     headers=headers,
-                    params={"search": ticker, "limit": 1},
+                    params={"search": ticker.upper(), "limit": 1},
                 )
                 resp.raise_for_status()
                 data = resp.json()
@@ -263,9 +268,11 @@ async def fetch_price_history(
     date_to: str,
 ) -> list[tuple[datetime, float]]:
     """
-    Busca historico de precos diarios via BRAPI (endpoint legado /quote/{ticker}).
-    Para novos consumidores, prefira fetch_stocks_historical_v2 ou
-    fetch_fii_historical_v2 que usam os endpoints v2 oficiais.
+    Busca historico de precos diarios via BRAPI.
+
+    Tenta primeiro o endpoint v2 (stocks/historical ou fii/historical).
+    Usa o endpoint legado /quote/{ticker} apenas como ultimo recurso,
+    com os parametros corretos startDate/endDate conforme documentacao BRAPI.
     """
     from datetime import date as _date
     try:
@@ -284,15 +291,44 @@ async def fetch_price_history(
         )
         return [(dt, c) for dt, c in rows if cutoff_from <= dt <= cutoff_to]
 
+    # Tenta v2/stocks/historical primeiro (parametros corretos: startDate/endDate)
     headers = _auth_headers()
-    url = (
-        f"{BRAPI_BASE}/quote/{ticker}"
-        f"?range=custom&interval=1d"
-        f"&from={date_from}&to={date_to}"
-    )
+    ticker_upper = ticker.upper()
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(url, headers=headers)
+            resp = await client.get(
+                f"{BRAPI_BASE}/v2/stocks/historical",
+                headers=headers,
+                params={
+                    "symbols":   ticker_upper,
+                    "interval":  "1d",
+                    "startDate": date_from,
+                    "endDate":   date_to,
+                },
+            )
+            resp.raise_for_status()
+            data    = resp.json()
+            results = data.get("results") or data.get("stocks") or []
+            if results:
+                history = results[0].get("historicalDataPrice") or []
+                if history:
+                    return _parse_history_rows(history, ticker, f"v2/stocks {date_from} a {date_to}")
+    except Exception as e:
+        logger.warning(f"BRAPI fetch_price_history v2 error for {ticker}: {e}")
+
+    # Fallback: endpoint legado /quote/{ticker} com startDate/endDate
+    # (range=custom nao e suportado — usa startDate/endDate conforme doc BRAPI)
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(
+                f"{BRAPI_BASE}/quote/{ticker_upper}",
+                headers=headers,
+                params={
+                    "interval":  "1d",
+                    "startDate": date_from,
+                    "endDate":   date_to,
+                },
+            )
             resp.raise_for_status()
             data    = resp.json()
             results = data.get("results", [])
@@ -321,7 +357,8 @@ async def fetch_price_history_full(
     ticker: str,
 ) -> list[tuple[datetime, float]]:
     headers = _auth_headers()
-    url = f"{BRAPI_BASE}/quote/{ticker}?range=max&interval=1d"
+    ticker_upper = ticker.upper()
+    url = f"{BRAPI_BASE}/quote/{ticker_upper}?range=max&interval=1d"
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             resp = await client.get(url, headers=headers)
@@ -359,9 +396,13 @@ async def fetch_stocks_historical_v2(
     """
     Busca historico de precos via /api/v2/stocks/historical.
     Usado para: ACAO (stock + unit), ETF_NACIONAL, BDR.
+
+    Sempre envia ticker em uppercase para evitar falhas silenciosas na BRAPI.
+    Usa startDate/endDate quando fornecidos (parametros corretos da API v2).
     """
     headers = _auth_headers()
-    params: dict = {"symbols": ticker, "interval": "1d"}
+    ticker_upper = ticker.upper()
+    params: dict = {"symbols": ticker_upper, "interval": "1d"}
     if date_from and date_to:
         params["startDate"] = date_from
         params["endDate"]   = date_to
@@ -407,9 +448,13 @@ async def fetch_fii_historical_v2(
     """
     Busca historico de precos via /api/v2/fii/historical.
     Usado para: FII, FI_INFRA, FI_AGRO.
+
+    Sempre envia ticker em uppercase para evitar falhas silenciosas na BRAPI.
+    Usa startDate/endDate quando fornecidos (parametros corretos da API v2).
     """
     headers = _auth_headers()
-    params: dict = {"symbols": ticker, "interval": "1d"}
+    ticker_upper = ticker.upper()
+    params: dict = {"symbols": ticker_upper, "interval": "1d"}
     if date_from and date_to:
         params["startDate"] = date_from
         params["endDate"]   = date_to
@@ -636,7 +681,7 @@ async def fetch_crypto_quote(tickers: list[str]) -> dict[str, float]:
 
 async def fetch_asset_info(ticker: str) -> Optional[dict]:
     headers = _auth_headers()
-    url = f"{BRAPI_BASE}/quote/{ticker}?modules=summaryProfile,defaultKeyStatistics"
+    url = f"{BRAPI_BASE}/quote/{ticker.upper()}?modules=summaryProfile,defaultKeyStatistics"
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(url, headers=headers)
@@ -664,17 +709,21 @@ async def fetch_logo_url(ticker: str) -> Optional[str]:
 # ── Tesouro Direto ────────────────────────────────────────────────────────────
 
 async def fetch_treasury_price_by_date(slug: str, date_str: str) -> Optional[float]:
+    """
+    Busca o preco historico de um titulo do Tesouro Direto para uma data especifica.
+    Usa startDate/endDate conforme documentacao BRAPI (nao from/to).
+    """
     headers = _auth_headers()
     try:
         ref_date  = date.fromisoformat(date_str)
         date_from = (ref_date - timedelta(days=5)).isoformat()
         date_to   = date_str
-        url = (
-            f"{BRAPI_BASE}/v2/treasury/{slug}/historical"
-            f"?from={date_from}&to={date_to}"
-        )
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(url, headers=headers)
+            resp = await client.get(
+                f"{BRAPI_BASE}/v2/treasury/{slug}/historical",
+                headers=headers,
+                params={"startDate": date_from, "endDate": date_to},
+            )
             resp.raise_for_status()
             data  = resp.json()
             hist  = data.get("historical") or data.get("prices") or []
