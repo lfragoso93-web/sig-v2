@@ -197,10 +197,11 @@ async def _prefetch_price_history(
     Popula o banco com historico de precos para todos os tickers do portfolio
     antes de iniciar qualquer loop de calculo por data.
 
-    Isso transforma o loop de backfill em operacao somente-leitura:
-    get_price_at_date acha os dados no banco e nao aciona BRAPI/yfinance
-    a cada combinacao ticker+data. Apos o pre-fetch, o _persist_cooldown
-    (30min) garante que chamadas subsequentes dentro do loop retornem 0.
+    Usa force=True para garantir que o historico completo seja buscado
+    mesmo que o ticker ja tenha dados recentes no banco (ex: 1 registro
+    de hoje gerado pelo dashboard). Sem force=True, o last_ts limitaria
+    o days_back a apenas 1-2 dias, e o cooldown de 30min bloquearia
+    qualquer busca subsequente no loop de backfill.
     """
     result = await db.execute(
         select(Transaction.ticker, Transaction.asset_type)
@@ -212,7 +213,7 @@ async def _prefetch_price_history(
         return
 
     logger.info(
-        "[snapshot] pre-fetch de historico para %d tickers (days_back=%d)",
+        "[snapshot] pre-fetch FORCADO de historico para %d tickers (days_back=%d)",
         len(tickers), days_back,
     )
     for row in tickers:
@@ -221,7 +222,11 @@ async def _prefetch_price_history(
             asset_type = AssetType(row.asset_type)
         except ValueError:
             asset_type = AssetType.ACAO
-        await persist_daily_prices(db, ticker, asset_type, days_back=days_back)
+        logger.info(
+            "[snapshot] pre-fetch %s (%s) days_back=%d",
+            ticker, asset_type.value, days_back,
+        )
+        await persist_daily_prices(db, ticker, asset_type, days_back=days_back, force=True)
 
 
 async def calc_snapshot_at_date(
@@ -280,8 +285,8 @@ async def backfill_snapshots(
     )
     existing_dates = {r.snapshot_date for r in existing.all()}
 
-    # Pre-fetch: popula banco com historico completo de todos os tickers
-    # antes do loop. O loop vira somente leitura (sem BRAPI/yfinance).
+    # Pre-fetch com force=True: garante historico completo desde a primeira
+    # transacao, ignorando cooldown e limitacao de days_back por last_ts.
     await _prefetch_price_history(db, portfolio_id, days_back=total_days)
 
     count = 0
