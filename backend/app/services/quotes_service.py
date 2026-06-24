@@ -21,11 +21,12 @@ Alpha Vantage (ativos internacionais):
 yfinance threading:
   _fetch_yfinance_current usa _YF_EXECUTOR (ThreadPoolExecutor compartilhado)
   com _yf_thread_lock (threading.Lock) para serializar chamadas entre threads.
-  Isso substitui o asyncio.Semaphore que nao funciona fora do event loop.
 
 Resiliencia:
-  Cada chamada externa e envolta em _with_retry() - 3 tentativas com
-  backoff exponencial (1s, 2s). Falha total retorna {} sem propagar excecao.
+  Cada chamada externa e envolta em _with_retry() - 3 tentativas.
+  YFRateLimitError usa backoff longo (20s, 40s) pois o rate limit do
+  yfinance precisa de tempo real para se recuperar.
+  Outras excecoes usam backoff curto (1s, 2s).
 
 BRAPI - tickers fracionarios:
   Tickers com sufixo F (ex: PETR4F, ABCB4F) sao direitos de subscricao
@@ -52,15 +53,16 @@ from app.integrations.brapi import (
     fetch_treasury_list as brapi_fetch_treasury_list,
 )
 from app.models.asset import Asset, AssetType
-from app.services.price_history_service import _YF_EXECUTOR, _yf_thread_lock
+from app.services.price_history_service import _YF_EXECUTOR, _yf_thread_lock, _YF_MIN_INTERVAL, _yf_last_call
 
 logger = logging.getLogger(__name__)
 
 PRICE_TTL_SECONDS = 900
-MEM_CACHE_TTL = 60
+MEM_CACHE_TTL = 300  # 5 minutos (era 60s) - reduz frequencia de chamadas ao yfinance
 
 _RETRY_ATTEMPTS = 3
 _RETRY_BASE_DELAY = 1.0
+_RETRY_RATELIMIT_DELAY = 20.0  # backoff inicial para YFRateLimitError
 
 _mem_cache: dict[str, tuple[float, float]] = {}
 
@@ -70,17 +72,27 @@ _mem_cache: dict[str, tuple[float, float]] = {}
 # ---------------------------------------------------------------------------
 
 async def _with_retry(coro_fn, *args, label: str = "") -> dict[str, float]:
+    """
+    Executa coro_fn com retry e backoff.
+    YFRateLimitError usa backoff longo (20s, 40s) pois o yfinance
+    precisa de tempo real para liberar o rate limit.
+    Outras excecoes usam backoff curto (1s, 2s).
+    """
     delay = _RETRY_BASE_DELAY
     for attempt in range(1, _RETRY_ATTEMPTS + 1):
         try:
             return await coro_fn(*args)
         except Exception as e:
+            is_rate_limit = "ratelimit" in type(e).__name__.lower() or "rate limit" in str(e).lower() or "too many requests" in str(e).lower()
             if attempt < _RETRY_ATTEMPTS:
+                actual_delay = _RETRY_RATELIMIT_DELAY * (2 ** (attempt - 1)) if is_rate_limit else delay
                 logger.warning(
-                    "[quotes_service] %s tentativa %d/%d falhou: %s - retry em %.0fs",
-                    label, attempt, _RETRY_ATTEMPTS, e, delay,
+                    "[quotes_service] %s tentativa %d/%d falhou%s: %s - retry em %.0fs",
+                    label, attempt, _RETRY_ATTEMPTS,
+                    " (rate limit)" if is_rate_limit else "",
+                    e, actual_delay,
                 )
-                await asyncio.sleep(delay)
+                await asyncio.sleep(actual_delay)
                 delay *= 2
             else:
                 logger.error(
@@ -182,7 +194,6 @@ def _filter_brapi_tickers(tickers: list[str]) -> list[str]:
     """
     Remove tickers com sufixo F (direitos de subscricao fracionarios da B3).
     A BRAPI nao suporta esses tickers para cotacao e retorna 400.
-    Exemplos filtrados: PETR4F, ABCB4F, VALE3F, KLBN11F
     """
     return [t for t in tickers if not t.endswith('F')]
 
@@ -194,11 +205,6 @@ def _filter_brapi_tickers(tickers: list[str]) -> list[str]:
 async def _fetch_alpha_vantage_current(
     pairs: list[tuple[str, AssetType]],
 ) -> dict[str, float]:
-    """
-    Busca cotacoes atuais via Alpha Vantage GLOBAL_QUOTE.
-    Serializa as chamadas via alpha_vantage_limiter (4 req/min).
-    Retorna {} se ALPHA_VANTAGE_API_KEY nao estiver configurada.
-    """
     from app.integrations.alpha_vantage import fetch_global_quote, _is_configured
 
     if not _is_configured():
@@ -220,11 +226,11 @@ async def _fetch_alpha_vantage_current(
 def _fetch_yf_current_sync(ticker_map: dict[str, str]) -> dict[str, float]:
     """
     Busca cotacoes atuais via yfinance.download().
-    Executa dentro do _YF_EXECUTOR com _yf_thread_lock para serializar
-    entre threads e evitar YFRateLimitError.
+    Usa _yf_thread_lock compartilhado com price_history_service para
+    serializar todas as chamadas yfinance do processo.
+    Respeita _YF_MIN_INTERVAL global entre chamadas.
     """
     import time as _time
-    from app.services.price_history_service import _yf_last_call, _YF_MIN_INTERVAL
 
     if not ticker_map:
         return {}
@@ -232,6 +238,7 @@ def _fetch_yf_current_sync(ticker_map: dict[str, str]) -> dict[str, float]:
     results: dict[str, float] = {}
 
     with _yf_thread_lock:
+        # Garante intervalo minimo desde a ultima chamada yfinance (qualquer origem)
         elapsed = _time.monotonic() - _yf_last_call[0]
         if elapsed < _YF_MIN_INTERVAL:
             _time.sleep(_YF_MIN_INTERVAL - elapsed)
@@ -323,7 +330,6 @@ async def _fetch_treasury_prices(slugs: list[str]) -> dict[str, float]:
 # ---------------------------------------------------------------------------
 
 async def _fetch_brapi(tickers: list[str]) -> dict[str, float]:
-    # Remove tickers fracionarios (sufixo F) - nao suportados pela BRAPI
     filtered = _filter_brapi_tickers(tickers)
     if not filtered:
         return {}
@@ -368,7 +374,7 @@ async def _fetch_intl(
 async def _fetch_yfinance(
     pairs: list[tuple[str, AssetType]],
 ) -> dict[str, float]:
-    """Fallback yfinance para BR sem BRAPI (mantido para compatibilidade)."""
+    """Fallback yfinance para BR sem BRAPI."""
     return await _with_retry(_fetch_yfinance_current, pairs, label="yfinance")
 
 
@@ -433,7 +439,6 @@ async def get_prices(
             logger.warning(f"[quotes_service] asset_type desconhecido para {ticker} ({raw_type})")
             br_tickers.append(ticker)
 
-    # Chamadas externas em paralelo
     br_results, crypto_results, intl_results, treasury_results = await asyncio.gather(
         _fetch_brapi(br_tickers) if br_tickers else _noop(),
         _fetch_brapi_crypto(crypto_tickers) if crypto_tickers else _noop(),
@@ -528,10 +533,6 @@ async def update_all_quotes(db: AsyncSession) -> int:
     logger.info("[quotes_service] update_all_quotes: %d precos atualizados", len(prices))
     return len(prices)
 
-
-# ---------------------------------------------------------------------------
-# Funcoes de portfolio
-# ---------------------------------------------------------------------------
 
 async def update_quotes_for_portfolio(
     portfolio_id: int,
