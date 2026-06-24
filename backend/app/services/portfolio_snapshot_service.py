@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.asset import Asset, AssetType
 from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.transaction import Transaction, OperationType
-from app.services.price_history_service import get_price_at_date
+from app.services.price_history_service import get_price_at_date, persist_daily_prices
 
 logger = logging.getLogger(__name__)
 
@@ -188,12 +188,58 @@ async def _upsert_snapshot(
     await db.execute(stmt)
 
 
+async def _prefetch_price_history(
+    db: AsyncSession,
+    portfolio_id: int,
+    days_back: int,
+) -> None:
+    """
+    Popula o banco com historico de precos para todos os tickers do portfolio
+    antes de iniciar qualquer loop de calculo por data.
+
+    Isso transforma o loop de backfill em operacao somente-leitura:
+    get_price_at_date acha os dados no banco e nao aciona BRAPI/yfinance
+    a cada combinacao ticker+data. Apos o pre-fetch, o _persist_cooldown
+    (30min) garante que chamadas subsequentes dentro do loop retornem 0.
+    """
+    result = await db.execute(
+        select(Transaction.ticker, Transaction.asset_type)
+        .where(Transaction.portfolio_id == portfolio_id)
+        .distinct()
+    )
+    tickers = result.all()
+    if not tickers:
+        return
+
+    logger.info(
+        "[snapshot] pre-fetch de historico para %d tickers (days_back=%d)",
+        len(tickers), days_back,
+    )
+    for row in tickers:
+        ticker = row.ticker.upper()
+        try:
+            asset_type = AssetType(row.asset_type)
+        except ValueError:
+            asset_type = AssetType.ACAO
+        await persist_daily_prices(db, ticker, asset_type, days_back=days_back)
+
+
 async def calc_snapshot_at_date(
     db: AsyncSession,
     portfolio_id: int,
     target_date: date,
     commit: bool = True,
+    prefetch: bool = False,
 ) -> dict:
+    """
+    Calcula e persiste snapshot para uma data especifica.
+    prefetch=True dispara _prefetch_price_history antes do calculo
+    (util para chamadas isoladas fora do backfill).
+    """
+    if prefetch:
+        days_back = (date.today() - target_date).days + 6
+        await _prefetch_price_history(db, portfolio_id, days_back)
+
     totals = await _calc_totals(db, portfolio_id, target_date)
     await _upsert_snapshot(db, portfolio_id, target_date, totals)
     if commit:
@@ -222,6 +268,8 @@ async def backfill_snapshots(
     if days_back is not None:
         start = max(start, date.today() - timedelta(days=days_back))
 
+    total_days = (date.today() - start).days + 1
+
     existing = await db.execute(
         select(PortfolioSnapshot.snapshot_date)
         .where(
@@ -231,6 +279,10 @@ async def backfill_snapshots(
         )
     )
     existing_dates = {r.snapshot_date for r in existing.all()}
+
+    # Pre-fetch: popula banco com historico completo de todos os tickers
+    # antes do loop. O loop vira somente leitura (sem BRAPI/yfinance).
+    await _prefetch_price_history(db, portfolio_id, days_back=total_days)
 
     count = 0
     cursor = start
@@ -257,7 +309,9 @@ async def refresh_today_snapshot(
     db: AsyncSession,
     portfolio_id: int,
 ) -> dict:
-    return await calc_snapshot_at_date(db, portfolio_id, date.today(), commit=True)
+    return await calc_snapshot_at_date(
+        db, portfolio_id, date.today(), commit=True, prefetch=True
+    )
 
 
 async def get_daily_evolution(
@@ -318,11 +372,9 @@ async def get_monthly_evolution(
     rows = result.scalars().all()
     return [
         {
-            # Campos alinhados com o frontend (PatrimonioHistoryPoint)
             "date": r.snapshot_date.strftime("%Y-%m-%d"),
             "value": float(r.market_value),
             "invested": float(r.invested_total),
-            # Campos extras mantidos para outros consumidores
             "period": r.snapshot_date.strftime("%Y-%m"),
             "market_value": float(r.market_value),
             "cost_basis": float(r.cost_basis),
