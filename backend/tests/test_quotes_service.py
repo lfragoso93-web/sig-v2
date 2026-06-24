@@ -38,6 +38,9 @@ class TestGetPrices:
         ), patch(
             "app.services.quotes_service._fetch_brapi_crypto",
             new=AsyncMock(return_value={}),
+        ), patch(
+            "app.services.quotes_service._fetch_yfinance",
+            new=AsyncMock(return_value={}),
         ):
             result = await get_prices(BR_ITEMS)
             mock_brapi.assert_called_once()
@@ -54,6 +57,9 @@ class TestGetPrices:
             new=AsyncMock(return_value={"AAPL": 180.0}),
         ) as mock_yf, patch(
             "app.services.quotes_service._fetch_brapi_crypto",
+            new=AsyncMock(return_value={}),
+        ), patch(
+            "app.services.quotes_service._fetch_yfinance",
             new=AsyncMock(return_value={}),
         ):
             result = await get_prices(INTL_ITEMS)
@@ -72,7 +78,10 @@ class TestGetPrices:
         ), patch(
             "app.services.quotes_service._fetch_brapi_crypto",
             new=AsyncMock(return_value={"BTC": 300000.0}),
-        ) as mock_crypto:
+        ) as mock_crypto, patch(
+            "app.services.quotes_service._fetch_yfinance",
+            new=AsyncMock(return_value={}),
+        ):
             result = await get_prices(CRIPTO_ITEMS)
             mock_crypto.assert_called_once()
             assert result["BTC"] == 300000.0
@@ -83,12 +92,15 @@ class TestGetPrices:
         """Se a API nao retorna o ticker, ele nao deve estar no dict final."""
         with patch(
             "app.services.quotes_service._fetch_brapi",
-            new=AsyncMock(return_value={}),  # vazio = ticker indisponivel
+            new=AsyncMock(return_value={}),
         ), patch(
             "app.services.quotes_service._fetch_intl",
             new=AsyncMock(return_value={}),
         ), patch(
             "app.services.quotes_service._fetch_brapi_crypto",
+            new=AsyncMock(return_value={}),
+        ), patch(
+            "app.services.quotes_service._fetch_yfinance",
             new=AsyncMock(return_value={}),
         ):
             result = await get_prices(BR_ITEMS)
@@ -107,7 +119,10 @@ class TestGetPrices:
         ) as mock_yf, patch(
             "app.services.quotes_service._fetch_brapi_crypto",
             new=AsyncMock(return_value={"BTC": 300000.0}),
-        ) as mock_crypto:
+        ) as mock_crypto, patch(
+            "app.services.quotes_service._fetch_yfinance",
+            new=AsyncMock(return_value={}),
+        ):
             result = await get_prices(items)
             mock_br.assert_called_once()
             mock_yf.assert_called_once()
