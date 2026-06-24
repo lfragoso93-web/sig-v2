@@ -6,9 +6,9 @@ from app.services import quotes_service
 from app.services.quotes_service import get_prices
 
 
-BR_ITEMS = [{"ticker": "PETR4",  "asset_type": "acao"}]
-INTL_ITEMS = [{"ticker": "AAPL",    "asset_type": "stock"}]
-CRIPTO_ITEMS = [{"ticker": "BTC",     "asset_type": "cripto"}]
+BR_ITEMS = [{"ticker": "PETR4",  "asset_type": "ACAO"}]
+INTL_ITEMS = [{"ticker": "AAPL",    "asset_type": "STOCK"}]
+CRIPTO_ITEMS = [{"ticker": "BTC",     "asset_type": "CRIPTO"}]
 
 
 @pytest.fixture(autouse=True)
@@ -33,7 +33,7 @@ class TestGetPrices:
             "app.services.quotes_service._fetch_brapi",
             new=AsyncMock(return_value={"PETR4": 35.5}),
         ) as mock_brapi, patch(
-            "app.services.quotes_service._fetch_yfinance",
+            "app.services.quotes_service._fetch_intl",
             new=AsyncMock(return_value={}),
         ), patch(
             "app.services.quotes_service._fetch_brapi_crypto",
