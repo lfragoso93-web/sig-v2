@@ -8,7 +8,6 @@ import {
   Tooltip,
   Legend,
 } from 'recharts'
-import type { ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import type { DailyPoint } from '@/hooks/useEvolution'
@@ -36,11 +35,11 @@ function tooltipLabelFormatter(label: unknown): string {
 }
 
 function tooltipFormatter(
-  value: ValueType,
-  name: NameType,
+  value: unknown,
+  name: unknown,
 ): [string, string] {
   const num = typeof value === 'number' ? value : Number(value ?? 0)
-  const key = String(name)
+  const key = String(name ?? '')
   return [
     formatBRL(num),
     key === 'market_value' ? 'Valor de mercado' : 'Custo / investido',
@@ -99,8 +98,8 @@ export default function EvolutionLineChart({ data }: Props) {
           width={68}
         />
         <Tooltip
-          labelFormatter={tooltipLabelFormatter}
-          formatter={tooltipFormatter}
+          labelFormatter={tooltipLabelFormatter as never}
+          formatter={tooltipFormatter as never}
           contentStyle={{
             background:   'var(--color-surface-2)',
             border:       '1px solid var(--color-border)',

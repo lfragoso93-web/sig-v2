@@ -9,7 +9,6 @@ import {
   Legend,
   Cell,
 } from 'recharts'
-import type { ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import type { MonthlyPoint } from '@/hooks/useEvolution'
@@ -37,11 +36,11 @@ function tooltipLabelFormatter(label: unknown): string {
 }
 
 function tooltipFormatter(
-  value: ValueType,
-  name: NameType,
+  value: unknown,
+  name: unknown,
 ): [string, string] {
   const num = typeof value === 'number' ? value : Number(value ?? 0)
-  const key = String(name)
+  const key = String(name ?? '')
   if (key === 'return_pct') return [formatPercent(num), 'Rentabilidade']
   return [
     formatBRL(num),
@@ -82,8 +81,8 @@ export default function EvolutionBarChart({ data }: Props) {
           width={68}
         />
         <Tooltip
-          labelFormatter={tooltipLabelFormatter}
-          formatter={tooltipFormatter}
+          labelFormatter={tooltipLabelFormatter as never}
+          formatter={tooltipFormatter as never}
           contentStyle={{
             background:   'var(--color-surface-2)',
             border:       '1px solid var(--color-border)',
