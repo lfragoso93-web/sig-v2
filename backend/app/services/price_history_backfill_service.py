@@ -15,6 +15,14 @@ Fluxo incremental (scheduler diário):
     └── Para cada asset ativo, busca apenas o delta desde o last_ts
         → no máximo 1 request por ativo por dia
 
+Ordem de prioridade no backfill inicial:
+  1. ACAO   → maior cobertura BRAPI, sem fallback yfinance
+  2. FII    → endpoint dedicado BRAPI /v2/fii/historical
+  3. ETF_NACIONAL
+  4. BDR    → deixado por último: maioria sem histórico na BRAPI,
+               aciona fallback yfinance e sofre rate-limit
+  5. demais tipos
+
 Estrategia de busca por tipo de ativo:
   FII                        → BRAPI /v2/fii/historical
   ACAO, ETF_NACIONAL, BDR   → BRAPI /v2/stocks/historical
@@ -34,7 +42,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import select, func, text
+from sqlalchemy import select, func, case, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -53,9 +61,21 @@ logger = logging.getLogger(__name__)
 # Anos de histórico a buscar no backfill inicial
 BACKFILL_YEARS = 10
 
-# Delay entre cada ativo no backfill para não estourar rate limit da BRAPI/yfinance.
-# 1.2s garante ~50 ativos/min e evita Too Many Requests do yfinance como fallback.
+# Delay entre cada ativo no backfill.
+# 1.2s → ~50 ativos/min, abaixo do limite do yfinance como fallback.
 _BRAPI_DELAY = 1.2  # segundos
+
+# Ordem de prioridade de tipos no backfill: tipos com melhor cobertura BRAPI primeiro.
+# BDR fica por último pois a maioria cai no fallback yfinance (rate-limit mais sensível).
+_TYPE_PRIORITY: dict[str, int] = {
+    "acao":          1,
+    "fii":           2,
+    "etf_nacional":  3,
+    "etf_internacional": 4,
+    "stock":         5,
+    "bdr":           6,
+    "cripto":        7,
+}
 
 # Flag global para evitar que dois backfills rodem simultaneamente
 _backfill_running = False
@@ -70,7 +90,6 @@ def _now_utc() -> datetime:
 
 
 def _date_from_years(years: int) -> str:
-    """Retorna a data de início do backfill (hoje - N anos) em ISO format."""
     return (date.today() - timedelta(days=years * 365)).isoformat()
 
 
@@ -127,6 +146,12 @@ async def _update_asset_last_price(
     await db.commit()
 
 
+def _sort_key(asset: Asset) -> tuple[int, str]:
+    """Ordena por prioridade de tipo, depois por ticker alfabético."""
+    priority = _TYPE_PRIORITY.get(asset.asset_type.lower() if asset.asset_type else "", 99)
+    return (priority, asset.ticker or "")
+
+
 # ---------------------------------------------------------------------------
 # Busca de histórico por tipo
 # ---------------------------------------------------------------------------
@@ -137,11 +162,6 @@ async def _fetch_br_history(
     date_from: str,
     date_to: str,
 ) -> tuple[list[tuple[datetime, float]], str]:
-    """
-    Busca histórico para ativos BR via BRAPI v2.
-    Retorna (rows, source).
-    Cai para yfinance se BRAPI retornar vazio.
-    """
     from app.core.asset_types import yf_ticker
     from app.services.price_history_service import _fetch_yf_history
 
@@ -181,7 +201,6 @@ async def _fetch_intl_history(
     asset_type: AssetType,
     days: int,
 ) -> tuple[list[tuple[datetime, float]], str]:
-    """Busca histórico para ativos internacionais via Alpha Vantage → yfinance."""
     from app.services.price_history_service import _fetch_yf_history
 
     try:
@@ -215,14 +234,6 @@ async def backfill_single_asset(
     date_to: str,
     force: bool = False,
 ) -> int:
-    """
-    Persiste histórico completo de um único ativo entre date_from e date_to.
-
-    Se force=False e já houver dados cobrindo o período, retorna 0 sem
-    fazer nenhum request.
-
-    Retorna o número de registros inseridos.
-    """
     if asset.asset_type in NO_QUOTE_TYPES:
         return 0
 
@@ -274,8 +285,13 @@ async def run_initial_backfill(force: bool = False) -> None:
     Executa o backfill histórico completo de 10 anos para todos os assets.
 
     Só roda se asset_prices estiver vazia (ou force=True).
-    Processamento sequencial com delay para respeitar rate limits da BRAPI.
-    A API continua disponível durante o processo (roda em background task).
+    Se asset_prices já tiver dados mas não for force, retorna imediatamente.
+
+    Ordem: ACAO → FII → ETF_NACIONAL → ETF_INTERNACIONAL → STOCK → BDR → outros.
+    BDRs ficam por último pois a maioria cai no fallback yfinance.
+
+    Ativos já com histórico cobrindo o período são pulados automaticamente
+    (sem request à API), permitindo retomar de onde parou após restart.
     """
     global _backfill_running
     if _backfill_running:
@@ -297,36 +313,45 @@ async def run_initial_backfill(force: bool = False) -> None:
             result = await db.execute(
                 select(Asset)
                 .where(Asset.asset_type.notin_(list(NO_QUOTE_TYPES)))
-                .order_by(Asset.ticker)
             )
             assets = result.scalars().all()
 
         if not assets:
-            logger.warning("[Backfill] nenhum asset encontrado — execute o seed de tickers primeiro")
+            logger.warning("[Backfill] nenhum asset encontrado — execute o seed primeiro")
             return
+
+        # Ordena: tipos prioritários primeiro, BDR por último
+        assets_sorted = sorted(assets, key=_sort_key)
 
         date_from = _date_from_years(BACKFILL_YEARS)
         date_to   = date.today().isoformat()
-        total     = len(assets)
+        total     = len(assets_sorted)
         done      = 0
         errors    = 0
+        skipped   = 0
 
+        # Log contagem por tipo
+        type_counts: dict[str, int] = {}
+        for a in assets_sorted:
+            type_counts[a.asset_type] = type_counts.get(a.asset_type, 0) + 1
         logger.info(
-            "[Backfill] iniciando backfill de %d ativos (%s a %s)",
-            total, date_from, date_to
+            "[Backfill] iniciando backfill de %d ativos (%s a %s) | por tipo: %s",
+            total, date_from, date_to, type_counts
         )
 
-        for asset in assets:
+        for asset in assets_sorted:
             try:
                 async with AsyncSessionLocal() as db:
                     inserted = await backfill_single_asset(
                         db, asset, date_from, date_to, force=force
                     )
+                if inserted == 0:
+                    skipped += 1
                 done += 1
                 if done % 50 == 0:
                     logger.info(
-                        "[Backfill] progresso: %d/%d ativos processados",
-                        done, total
+                        "[Backfill] progresso: %d/%d processados (%d com dados, %d sem/já ok)",
+                        done, total, done - skipped, skipped
                     )
             except Exception as e:
                 errors += 1
@@ -335,8 +360,8 @@ async def run_initial_backfill(force: bool = False) -> None:
             await asyncio.sleep(_BRAPI_DELAY)
 
         logger.info(
-            "[Backfill] concluído: %d/%d ativos processados, %d erros",
-            done, total, errors
+            "[Backfill] concluído: %d/%d ativos | %d com dados | %d sem histórico | %d erros",
+            done, total, done - skipped, skipped, errors
         )
 
     finally:
@@ -351,7 +376,6 @@ async def run_incremental_update() -> None:
     """
     Atualiza apenas o delta desde o último registro de cada ativo.
     Chamado pelo scheduler diariamente após o fechamento do mercado.
-    Nunca busca mais do que 7 dias de delta para evitar requests pesados.
     """
     async with AsyncSessionLocal() as db:
         result = await db.execute(
@@ -404,7 +428,6 @@ async def run_incremental_update() -> None:
 # ---------------------------------------------------------------------------
 
 async def get_backfill_status() -> dict:
-    """Retorna estatísticas do estado atual do histórico de preços."""
     async with AsyncSessionLocal() as db:
         total_prices = await _count_prices(db)
 
