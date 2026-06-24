@@ -31,8 +31,8 @@ Backfill de historico:
   O roteamento e feito por asset_type:
     FII -> /api/v2/fii/historical
     demais -> /api/v2/stocks/historical
-  O backfill e executado em lotes de BACKFILL_CONCURRENCY para nao sobrecarregar
-  a BRAPI e o banco simultaneamente.
+  O backfill e executado em lotes de BACKFILL_CONCURRENCY com delay de
+  BACKFILL_BATCH_DELAY segundos entre lotes para evitar YFRateLimitError.
 """
 import asyncio
 import logging
@@ -58,15 +58,15 @@ _SEED_TYPES: list[tuple[str, AssetType]] = [
 ]
 
 # Sufixos B3 que nao possuem historico de precos na BRAPI.
-# Tickers com esses sufixos sao cadastrados como ativos,
-# mas excluidos do backfill de historico.
-# Regex: ticker termina com letra(s) nao numerica(s) apos os digitos.
-# Exemplos filtrados: ABCB4F, PETR4R, VALE3B, BOVA11D
 _NO_HISTORY_SUFFIX_RE = re.compile(r"^[A-Z]{4}\d+[FRBD]$")
 
 # Quantos ativos processar em paralelo no backfill de historico.
-# Valor conservador para nao saturar BRAPI e yfinance.
-BACKFILL_CONCURRENCY = 2
+BACKFILL_CONCURRENCY = 3
+
+# Delay em segundos entre lotes do backfill para evitar YFRateLimitError.
+# Com BACKFILL_CONCURRENCY=3 e BACKFILL_BATCH_DELAY=2s, o throughput e
+# ~90 ativos/min - suficiente para 2245 ativos em ~25min.
+BACKFILL_BATCH_DELAY = 2.0
 
 # Quantos dias de historico buscar no backfill inicial.
 BACKFILL_DAYS = 365 * 5  # 5 anos
@@ -160,7 +160,8 @@ async def _run_backfill(new_tickers: dict[str, list[str]]) -> None:
     """
     Executa o backfill de historico para ativos criados no seed.
     Filtra tickers sem historico antes de processar.
-    Processa em lotes de BACKFILL_CONCURRENCY.
+    Processa em lotes de BACKFILL_CONCURRENCY com BACKFILL_BATCH_DELAY
+    entre lotes para evitar YFRateLimitError no yfinance.
     """
     tasks: list[tuple[str, AssetType]] = []
     filtered = 0
@@ -183,7 +184,10 @@ async def _run_backfill(new_tickers: dict[str, list[str]]) -> None:
         logger.info("[seed_backfill] nenhum ativo elegivel para backfill")
         return
 
-    logger.info(f"[seed_backfill] iniciando backfill de {len(tasks)} ativos")
+    logger.info(
+        f"[seed_backfill] iniciando backfill de {len(tasks)} ativos "
+        f"(lotes de {BACKFILL_CONCURRENCY}, delay {BACKFILL_BATCH_DELAY}s entre lotes)"
+    )
     total_done = 0
 
     for i in range(0, len(tasks), BACKFILL_CONCURRENCY):
@@ -195,6 +199,9 @@ async def _run_backfill(new_tickers: dict[str, list[str]]) -> None:
         total_done += len(batch)
         if total_done % 20 == 0:
             logger.info(f"[seed_backfill] {total_done}/{len(tasks)} ativos processados")
+        # Throttle entre lotes para evitar YFRateLimitError
+        if i + BACKFILL_CONCURRENCY < len(tasks):
+            await asyncio.sleep(BACKFILL_BATCH_DELAY)
 
     logger.info(f"[seed_backfill] backfill concluido: {total_done} ativos, {filtered} ignorados")
 
@@ -241,8 +248,6 @@ async def run_asset_seed(db: AsyncSession, run_backfill: bool = True) -> SeedRes
                 if status == "created":
                     result.created += 1
                     result.by_type[type_label] += 1
-                    # Registra para backfill independente de ter historico;
-                    # a filtragem e feita em _run_backfill.
                     result.new_tickers[type_label].append(ticker)
                 elif status == "updated":
                     result.updated += 1

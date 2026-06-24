@@ -26,6 +26,12 @@ yfinance threading:
 Resiliencia:
   Cada chamada externa e envolta em _with_retry() - 3 tentativas com
   backoff exponencial (1s, 2s). Falha total retorna {} sem propagar excecao.
+
+BRAPI - tickers fracionarios:
+  Tickers com sufixo F (ex: PETR4F, ABCB4F) sao direitos de subscricao
+  fracionarios da B3 e NAO sao suportados pela BRAPI para cotacao.
+  _filter_brapi_tickers() os remove antes de montar o chunk evitando
+  erros 400 em massa durante o seed e update_all_quotes.
 """
 import asyncio
 import logging
@@ -169,6 +175,19 @@ async def _db_set(
 
 
 # ---------------------------------------------------------------------------
+# Filtro BRAPI - remove tickers fracionarios (sufixo F)
+# ---------------------------------------------------------------------------
+
+def _filter_brapi_tickers(tickers: list[str]) -> list[str]:
+    """
+    Remove tickers com sufixo F (direitos de subscricao fracionarios da B3).
+    A BRAPI nao suporta esses tickers para cotacao e retorna 400.
+    Exemplos filtrados: PETR4F, ABCB4F, VALE3F, KLBN11F
+    """
+    return [t for t in tickers if not t.endswith('F')]
+
+
+# ---------------------------------------------------------------------------
 # Fetch L3 - Alpha Vantage (INTL primario)
 # ---------------------------------------------------------------------------
 
@@ -304,8 +323,15 @@ async def _fetch_treasury_prices(slugs: list[str]) -> dict[str, float]:
 # ---------------------------------------------------------------------------
 
 async def _fetch_brapi(tickers: list[str]) -> dict[str, float]:
+    # Remove tickers fracionarios (sufixo F) - nao suportados pela BRAPI
+    filtered = _filter_brapi_tickers(tickers)
+    if not filtered:
+        return {}
+    skipped = len(tickers) - len(filtered)
+    if skipped:
+        logger.debug("[quotes_service] BRAPI: %d tickers fracionarios ignorados", skipped)
     await brapi_limiter.acquire()
-    return await _with_retry(brapi_fetch_quotes, tickers, label="BRAPI")
+    return await _with_retry(brapi_fetch_quotes, filtered, label="BRAPI")
 
 
 async def _fetch_brapi_crypto(tickers: list[str]) -> dict[str, float]:
