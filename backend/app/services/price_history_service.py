@@ -20,7 +20,10 @@ Convencao de timezone:
 Rate limiting yfinance (threading.Lock - nivel de thread):
   O asyncio.Semaphore nao bloqueia threads do executor corretamente.
   _yf_thread_lock (threading.Lock) garante que apenas uma thread execute
-  yfinance de cada vez. _YF_MIN_INTERVAL (4s) add pausa minima entre chamadas.
+  yfinance de cada vez. _YF_MIN_INTERVAL (8s) adiciona pausa minima entre
+  chamadas para evitar o rate limit do yfinance (429 Too Many Requests).
+  Este valor e mais conservador que o anterior (4s) para acomodar o backfill
+  em massa de centenas de ativos simultaneamente.
 
 Rate limiting Alpha Vantage:
   alpha_vantage_limiter (TokenBucket, 4 req/min) em core/rate_limiter.py.
@@ -54,8 +57,9 @@ logger = logging.getLogger(__name__)
 _YF_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="yfinance_hist")
 
 # threading.Lock para serializar chamadas yfinance entre threads do executor.
+# Aumentado para 8s para evitar 429 Too Many Requests durante backfill em massa.
 _yf_thread_lock = threading.Lock()
-_YF_MIN_INTERVAL: float = 4.0
+_YF_MIN_INTERVAL: float = 8.0
 _yf_last_call: list[float] = [0.0]
 
 # Tipos que usam o endpoint /api/v2/fii/historical
