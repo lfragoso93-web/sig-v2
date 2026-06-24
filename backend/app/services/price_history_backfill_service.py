@@ -37,12 +37,11 @@ Rate limiting:
 """
 import asyncio
 import logging
-import time
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import select, func, case, text
+from sqlalchemy import select, func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -162,7 +161,6 @@ async def _fetch_br_history(
     date_from: str,
     date_to: str,
 ) -> tuple[list[tuple[datetime, float]], str]:
-    from app.core.asset_types import yf_ticker
     from app.services.price_history_service import _fetch_yf_history
 
     brapi_known = await is_known_by_brapi(ticker)

@@ -28,8 +28,8 @@ class Transaction(Base):
     date = Column(Date, nullable=False, index=True)
     currency = Column(String(10), default="BRL", nullable=False)
     # Campos da migration 004 — agora expostos no ORM
-    fx_rate: Optional[Decimal] = Column(Numeric(18, 8), nullable=True)   # cotacao USD/BRL na data
-    price_brl: Optional[Decimal] = Column(Numeric(18, 8), nullable=True) # preco convertido para BRL
+    fx_rate: Optional[Decimal] = Column(Numeric(18, 8), nullable=True)  # cotacao USD/BRL na data
+    price_brl: Optional[Decimal] = Column(Numeric(18, 8), nullable=True)  # preco convertido para BRL
     notes = Column(String(500), nullable=True)
 
     portfolio = relationship("Portfolio", back_populates="transactions")

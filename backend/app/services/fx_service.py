@@ -25,7 +25,6 @@ Fallback final: FALLBACK_RATE (5.70) — nunca levanta excecao.
 import logging
 import time
 from datetime import date as DateType, datetime, timedelta, timezone
-from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import select, text
@@ -267,7 +266,6 @@ async def get_usd_brl_batch(
     result: dict[str, float] = {}
     missing: list[str] = []
     today = datetime.now(timezone.utc).date()
-    today_str = today.isoformat()
 
     for d_str in unique_dates:
         # Datas futuras ou hoje -> cotacao atual

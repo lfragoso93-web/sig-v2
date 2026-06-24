@@ -8,7 +8,6 @@ Cache Redis (TTL 5 min, chave `perf:{portfolio_id}`):
 - Cache e invalidado automaticamente por TTL — nao ha invalidacao explicita
   pois este servico e usado apenas no router /performance, chamado raramente.
 """
-import json
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
