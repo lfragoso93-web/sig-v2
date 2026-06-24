@@ -12,11 +12,8 @@ Estrategia de busca (por camadas):
          demais -> /api/v2/stocks/historical
          Se v2 retornar vazio para ticker CONHECIDO, vai direto para
          yfinance (sem tentar legado que retornaria 400).
-    L2 - BRAPI legado /quote/{ticker}?range=custom
-         Usado APENAS para tickers que NAO estao no catalogo BRAPI v2
-         (is_known_by_brapi=False nao chega aqui; esse caminho e para
-         tickers que passaram pelo L0 como desconhecidos mas chegaram
-         aqui via outro fluxo - mantido por seguranca).
+    L2 - BRAPI legado /quote/{ticker} com startDate/endDate
+         Usado apenas como fallback extra dentro de fetch_price_history.
     L3 - yfinance (fallback final)
     L4 - Snapshot BRAPI (ultimo recurso)
 
@@ -24,6 +21,12 @@ Estrategia de busca (por camadas):
     L1 - Alpha Vantage TIME_SERIES_DAILY (primario)
     L2 - yfinance (fallback)
     L3 - Snapshot BRAPI (ultimo recurso)
+
+Ancoragem por transacao (_earliest_transaction_date):
+  Quando o caller nao especifica days_back suficiente para cobrir
+  todo o periodo de posse, persist_daily_prices expande a janela
+  automaticamente ate a data da transacao mais antiga do ticker.
+  Isso garante historico completo para calculo de rentabilidade e IRPF.
 
 Cooldown de persistencia (_persist_cooldown):
   Apos persistir com sucesso, o ticker fica em cooldown por
@@ -51,7 +54,7 @@ import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Callable, Optional
 
@@ -69,6 +72,7 @@ from app.integrations.brapi import (
 )
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
+from app.models.transaction import Transaction
 
 logger = logging.getLogger(__name__)
 
@@ -194,10 +198,43 @@ async def _first_saved_ts(db: AsyncSession, asset_id: int) -> Optional[datetime]
     return result.scalar_one_or_none()
 
 
+async def _earliest_transaction_date(db: AsyncSession, ticker: str) -> Optional[date]:
+    """
+    Retorna a data da transacao mais antiga registrada para o ticker
+    em qualquer carteira do sistema.
+
+    Essa data e usada como ancora do historico: garante que os precos
+    cubram todo o periodo de posse do ativo, necessario para calculo
+    correto de preco medio, rentabilidade e IRPF.
+    """
+    result = await db.execute(
+        select(func.min(Transaction.date)).where(
+            Transaction.ticker == ticker.upper()
+        )
+    )
+    return result.scalar_one_or_none()
+
+
 def _fetch_yf_history_sync(yf_sym: str, days: int) -> list[tuple[datetime, float]]:
+    """
+    Busca historico via yfinance usando start/end explicitos.
+
+    Nao usa period='{days}d' pois yfinance so aceita periodos fixos
+    (1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max). Valores
+    como '365d' ou '730d' retornam DataFrame vazio silenciosamente.
+    """
     try:
+        from datetime import date as _date
         tk = yf.Ticker(yf_sym)
-        hist = tk.history(period=f"{days}d", interval="1d", auto_adjust=True)
+        start_date = _date.today() - timedelta(days=days)
+        # end e exclusivo no yfinance: +1 dia para incluir hoje
+        end_date   = _date.today() + timedelta(days=1)
+        hist = tk.history(
+            start=start_date.isoformat(),
+            end=end_date.isoformat(),
+            interval="1d",
+            auto_adjust=True,
+        )
         if hist.empty:
             return []
         rows = []
@@ -253,10 +290,12 @@ async def persist_daily_prices(
     """
     Persiste historico de precos diarios para um ativo.
 
+    A janela de busca e expandida automaticamente ate a data da transacao
+    mais antiga do ticker (se existir e for anterior a days_back calculado),
+    garantindo cobertura completa do periodo de posse para IRPF e rentabilidade.
+
     force=True: ignora cooldown e o limite de days_back por last_ts.
-    Usar apenas no _prefetch_price_history do backfill para garantir
-    que o historico completo seja buscado mesmo que o ticker ja tenha
-    dados recentes (ex: 1 registro de hoje do dashboard).
+    Usar apenas no _prefetch_price_history do backfill.
 
     Retorna 0 imediatamente se o ticker estiver em cooldown E force=False.
     """
@@ -303,7 +342,6 @@ async def _persist_daily_prices_inner(
         if first_ts:
             days_already = (_now_utc() - first_ts).days
             if days_already >= days_back:
-                # Historico ja cobre o periodo solicitado — apenas atualiza delta recente
                 delta = (_now_utc() - last_ts).days
                 if delta < 1:
                     logger.debug(
@@ -322,7 +360,20 @@ async def _persist_daily_prices_inner(
                     f"[PriceHistory] {ticker} force=True: historico existente cobre {days_already}d, "
                     f"pedido={days_back}d — buscando completo"
                 )
-        # Se nao ha first_ts, usa days_back como solicitado
+
+    # -- Ancora na transacao mais antiga do ticker ----------------------------
+    # Garante que o historico cubra desde a primeira compra/venda registrada,
+    # independente do days_back passado pelo caller.
+    earliest_tx = await _earliest_transaction_date(db, ticker)
+    if earliest_tx:
+        days_since_first_tx = (_now_utc().date() - earliest_tx).days
+        if days_since_first_tx > days_back:
+            logger.info(
+                f"[PriceHistory] {ticker} expandindo janela: days_back={days_back} "
+                f"< dias desde primeira transacao={days_since_first_tx} "
+                f"(first_tx={earliest_tx}) — usando {days_since_first_tx}d"
+            )
+            days_back = days_since_first_tx
 
     date_to   = _now_utc().date().isoformat()
     date_from = (_now_utc().date() - timedelta(days=days_back)).isoformat()
