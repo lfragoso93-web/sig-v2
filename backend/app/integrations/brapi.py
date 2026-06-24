@@ -16,6 +16,10 @@ _MAX_RANGE_THRESHOLD_DAYS = 365 * 5
 # Estrutura: {ticker: (is_known: bool, expires_at: float)}
 _BRAPI_TICKER_CACHE: dict[str, tuple[bool, float]] = {}
 _BRAPI_TICKER_CACHE_TTL = 3600.0  # 1 hora
+_BRAPI_TICKER_INVALID_TTL = 86400.0  # 24h para tickers marcados como invalidos
+
+# Tamanho maximo de tickers por request /quote
+BRAPI_QUOTE_CHUNK = 20
 
 
 def _auth_headers() -> dict:
@@ -65,11 +69,6 @@ async def fetch_valid_brapi_tickers(tickers: list[str]) -> set[str]:
     Usa cache em memoria com TTL de 1 hora para evitar requests repetidos.
     Tickers nao encontrados sao marcados como invalidos no cache (is_known=False)
     para que o chamador pule direto para yfinance.
-
-    Estrategia: consulta /api/v2/tickers?search={ticker} individualmente
-    apenas para os que nao estao no cache. Para evitar burst, as consultas
-    sao feitas sequencialmente com await (o rate limiter da BRAPI e generoso
-    para esse endpoint).
     """
     if not tickers:
         return set()
@@ -106,32 +105,105 @@ async def fetch_valid_brapi_tickers(tickers: list[str]) -> set[str]:
                     or data.get("results")
                     or []
                 )
-                # Verifica se algum item retornado corresponde exatamente ao ticker
                 is_known = any(
                     (item.get("stock") or item.get("symbol") or item.get("ticker") or "").upper() == ticker.upper()
                     for item in items
                 )
-                _BRAPI_TICKER_CACHE[ticker] = (is_known, now + _BRAPI_TICKER_CACHE_TTL)
+                ttl = _BRAPI_TICKER_CACHE_TTL if is_known else _BRAPI_TICKER_INVALID_TTL
+                _BRAPI_TICKER_CACHE[ticker] = (is_known, now + ttl)
                 if is_known:
                     known.add(ticker)
                 else:
                     logger.debug("[brapi] ticker nao encontrado na BRAPI: %s", ticker)
             except Exception as e:
                 logger.warning("[brapi] fetch_valid_brapi_tickers erro para %s: %s", ticker, e)
-                # Em caso de erro, assume como conhecido para nao bloquear o fluxo
-                _BRAPI_TICKER_CACHE[ticker] = (True, now + 300.0)  # TTL curto de 5min
+                _BRAPI_TICKER_CACHE[ticker] = (True, now + 300.0)
                 known.add(ticker)
 
     return known
 
 
 async def is_known_by_brapi(ticker: str) -> bool:
-    """
-    Retorna True se o ticker e conhecido pela BRAPI.
-    Usa o cache de fetch_valid_brapi_tickers.
-    """
     result = await fetch_valid_brapi_tickers([ticker])
     return ticker in result
+
+
+# ── Helpers internos de cotacao ───────────────────────────────────────────────
+
+def _is_cached_invalid(ticker: str) -> bool:
+    """Retorna True se o ticker esta marcado como invalido no cache."""
+    cached = _BRAPI_TICKER_CACHE.get(ticker)
+    if cached is None:
+        return False
+    is_known, expires_at = cached
+    if time.monotonic() > expires_at:
+        return False
+    return not is_known
+
+
+async def _fetch_chunk_with_fallback(
+    client: httpx.AsyncClient,
+    chunk: list[str],
+    headers: dict,
+) -> dict[str, float]:
+    """
+    Tenta buscar o chunk inteiro. Se receber 400 ou erro HTTP, faz retry
+    ticker a ticker — marcando os invalidos no cache para evitar futuras
+    tentativas desnecessarias.
+    """
+    results: dict[str, float] = {}
+
+    async def _single(ticker: str) -> Optional[float]:
+        try:
+            r = await client.get(
+                f"{BRAPI_BASE}/quote/{ticker.upper()}",
+                headers=headers,
+            )
+            if r.status_code == 400:
+                now = time.monotonic()
+                _BRAPI_TICKER_CACHE[ticker] = (False, now + _BRAPI_TICKER_INVALID_TTL)
+                logger.debug("[brapi] ticker invalido marcado no cache: %s", ticker)
+                return None
+            r.raise_for_status()
+            data = r.json()
+            items = data.get("results", [])
+            if items:
+                return items[0].get("regularMarketPrice")
+        except Exception as e:
+            logger.debug("[brapi] _single error para %s: %s", ticker, e)
+        return None
+
+    joined = ",".join(chunk)
+    url = f"{BRAPI_BASE}/quote/{joined}"
+    try:
+        resp = await client.get(url, headers=headers)
+        if resp.status_code == 400:
+            # Chunk tem tickers invalidos — descobre quais via retry individual
+            logger.warning(
+                "[brapi] fetch_quotes 400 no chunk %s — retentando ticker a ticker", chunk
+            )
+            for ticker in chunk:
+                if _is_cached_invalid(ticker):
+                    continue
+                price = await _single(ticker)
+                if price is not None:
+                    results[ticker] = float(price)
+            return results
+
+        resp.raise_for_status()
+        data = resp.json()
+        for item in data.get("results", []):
+            symbol = item.get("symbol", "")
+            price = item.get("regularMarketPrice")
+            if symbol and price is not None:
+                results[symbol] = float(price)
+    except httpx.HTTPStatusError:
+        # ja tratado acima para 400; outros status chegam aqui
+        logger.warning("[brapi] fetch_quotes HTTP error no chunk %s", chunk)
+    except Exception as e:
+        logger.warning("[brapi] fetch_quotes error no chunk %s: %s", chunk, e)
+
+    return results
 
 
 # ── Cotações atuais ───────────────────────────────────────────────────────────
@@ -139,56 +211,65 @@ async def is_known_by_brapi(ticker: str) -> bool:
 async def fetch_quotes(tickers: list[str]) -> dict[str, float]:
     if not tickers:
         return {}
+
+    # Filtra ja de saida os tickers marcados como invalidos no cache
+    valid = [t for t in tickers if not _is_cached_invalid(t)]
+    skipped = len(tickers) - len(valid)
+    if skipped:
+        logger.debug("[brapi] fetch_quotes: %d tickers invalidos ignorados pelo cache", skipped)
+
+    if not valid:
+        return {}
+
     results: dict[str, float] = {}
-    chunks  = [tickers[i:i+50] for i in range(0, len(tickers), 50)]
     headers = _auth_headers()
     async with httpx.AsyncClient(timeout=15.0) as client:
-        for chunk in chunks:
-            joined = ",".join(chunk)
-            url    = f"{BRAPI_BASE}/quote/{joined}"
-            try:
-                resp = await client.get(url, headers=headers)
-                resp.raise_for_status()
-                data = resp.json()
-                for item in data.get("results", []):
-                    symbol = item.get("symbol", "")
-                    price  = item.get("regularMarketPrice")
-                    if symbol and price is not None:
-                        results[symbol] = float(price)
-            except Exception as e:
-                logger.warning(f"BRAPI quote error for chunk {chunk}: {e}")
+        for i in range(0, len(valid), BRAPI_QUOTE_CHUNK):
+            chunk = valid[i: i + BRAPI_QUOTE_CHUNK]
+            chunk_results = await _fetch_chunk_with_fallback(client, chunk, headers)
+            results.update(chunk_results)
+
     return results
 
 
 async def fetch_quotes_with_meta(tickers: list[str]) -> dict[str, dict]:
     if not tickers:
         return {}
+
+    valid = [t for t in tickers if not _is_cached_invalid(t)]
+    if not valid:
+        return {}
+
     results: dict[str, dict] = {}
-    chunks  = [tickers[i:i+50] for i in range(0, len(tickers), 50)]
     headers = _auth_headers()
     async with httpx.AsyncClient(timeout=15.0) as client:
-        for chunk in chunks:
+        for i in range(0, len(valid), BRAPI_QUOTE_CHUNK):
+            chunk = valid[i: i + BRAPI_QUOTE_CHUNK]
             joined = ",".join(chunk)
-            url    = f"{BRAPI_BASE}/quote/{joined}"
+            url = f"{BRAPI_BASE}/quote/{joined}"
             try:
                 resp = await client.get(url, headers=headers)
+                if resp.status_code == 400:
+                    logger.warning("[brapi] fetch_quotes_with_meta 400 no chunk %s", chunk)
+                    continue
                 resp.raise_for_status()
                 data = resp.json()
                 for item in data.get("results", []):
                     symbol = item.get("symbol", "")
-                    price  = item.get("regularMarketPrice")
-                    logo   = (
+                    price = item.get("regularMarketPrice")
+                    logo = (
                         item.get("logourl")
                         or item.get("logo_url")
                         or item.get("logo")
                     )
                     if symbol:
                         results[symbol] = {
-                            "price":    float(price) if price is not None else None,
+                            "price": float(price) if price is not None else None,
                             "logo_url": str(logo) if logo else None,
                         }
             except Exception as e:
-                logger.warning(f"BRAPI quote meta error for chunk {chunk}: {e}")
+                logger.warning("[brapi] fetch_quotes_with_meta error chunk %s: %s", chunk, e)
+
     return results
 
 
@@ -240,7 +321,6 @@ async def fetch_all_tickers_v2(
         if not items:
             break
 
-        # Preenche o cache de validacao com os tickers retornados pelo catalogo
         now = time.monotonic()
         for item in items:
             t = (item.get("stock") or item.get("symbol") or item.get("ticker") or "").upper()
@@ -267,13 +347,6 @@ async def fetch_price_history(
     date_from: str,
     date_to: str,
 ) -> list[tuple[datetime, float]]:
-    """
-    Busca historico de precos diarios via BRAPI.
-
-    Tenta primeiro o endpoint v2 (stocks/historical ou fii/historical).
-    Usa o endpoint legado /quote/{ticker} apenas como ultimo recurso,
-    com os parametros corretos startDate/endDate conforme documentacao BRAPI.
-    """
     from datetime import date as _date
     try:
         d_from = _date.fromisoformat(date_from)
@@ -291,7 +364,6 @@ async def fetch_price_history(
         )
         return [(dt, c) for dt, c in rows if cutoff_from <= dt <= cutoff_to]
 
-    # Tenta v2/stocks/historical primeiro (parametros corretos: startDate/endDate)
     headers = _auth_headers()
     ticker_upper = ticker.upper()
     try:
@@ -316,8 +388,6 @@ async def fetch_price_history(
     except Exception as e:
         logger.warning(f"BRAPI fetch_price_history v2 error for {ticker}: {e}")
 
-    # Fallback: endpoint legado /quote/{ticker} com startDate/endDate
-    # (range=custom nao e suportado — usa startDate/endDate conforme doc BRAPI)
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(
@@ -393,13 +463,6 @@ async def fetch_stocks_historical_v2(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
 ) -> list[tuple[datetime, float]]:
-    """
-    Busca historico de precos via /api/v2/stocks/historical.
-    Usado para: ACAO (stock + unit), ETF_NACIONAL, BDR.
-
-    Sempre envia ticker em uppercase para evitar falhas silenciosas na BRAPI.
-    Usa startDate/endDate quando fornecidos (parametros corretos da API v2).
-    """
     headers = _auth_headers()
     ticker_upper = ticker.upper()
     params: dict = {"symbols": ticker_upper, "interval": "1d"}
@@ -445,13 +508,6 @@ async def fetch_fii_historical_v2(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
 ) -> list[tuple[datetime, float]]:
-    """
-    Busca historico de precos via /api/v2/fii/historical.
-    Usado para: FII, FI_INFRA, FI_AGRO.
-
-    Sempre envia ticker em uppercase para evitar falhas silenciosas na BRAPI.
-    Usa startDate/endDate quando fornecidos (parametros corretos da API v2).
-    """
     headers = _auth_headers()
     ticker_upper = ticker.upper()
     params: dict = {"symbols": ticker_upper, "interval": "1d"}
@@ -709,10 +765,6 @@ async def fetch_logo_url(ticker: str) -> Optional[str]:
 # ── Tesouro Direto ────────────────────────────────────────────────────────────
 
 async def fetch_treasury_price_by_date(slug: str, date_str: str) -> Optional[float]:
-    """
-    Busca o preco historico de um titulo do Tesouro Direto para uma data especifica.
-    Usa startDate/endDate conforme documentacao BRAPI (nao from/to).
-    """
     headers = _auth_headers()
     try:
         ref_date  = date.fromisoformat(date_str)
@@ -801,10 +853,11 @@ async def get_quotes_bulk(tickers: list[str]) -> list[dict]:
     if not tickers:
         return []
     results: list[dict] = []
-    chunks  = [tickers[i:i+20] for i in range(0, len(tickers), 20)]
+    valid = [t for t in tickers if not _is_cached_invalid(t)]
     headers = _auth_headers()
     async with httpx.AsyncClient(timeout=15.0) as client:
-        for chunk in chunks:
+        for i in range(0, len(valid), BRAPI_QUOTE_CHUNK):
+            chunk = valid[i: i + BRAPI_QUOTE_CHUNK]
             joined = ",".join(chunk)
             url    = f"{BRAPI_BASE}/quote/{joined}"
             try:
