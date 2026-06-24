@@ -2,15 +2,18 @@
 Servico de historico de precos.
 
 Estrategia de busca (por camadas):
-  L1 - banco (asset_prices): consulta primeiro; so busca externamente o delta faltante.
-  L2 - BRAPI Pro (primario): tentado para todos os tipos de ativo.
+  L1 - BRAPI v2 (primario oficial):
+       FII -> /api/v2/fii/historical  (fetch_fii_historical_v2)
+       ACAO, UNIT, ETF_NACIONAL, BDR -> /api/v2/stocks/historical  (fetch_stocks_historical_v2)
+  L2 - BRAPI legado /quote/{ticker}?range=custom  (fallback para ativos sem suporte no v2)
   L2.5 - Alpha Vantage (INTL): para AssetType em INTL_TYPES, tenta antes do yfinance.
          Economia: compact (<=100 dias) = 1 req/dia/ticker; full (>100) = 1 req na primeira vez.
   L3 - yfinance (fallback final): usado quando BRAPI e Alpha Vantage retornam vazio.
+  L4 - Snapshot BRAPI atual como ultimo recurso.
 
 Convencao de timezone:
   Todos os timestamps sao armazenados em UTC.
-  Fechamentos BR (BRAPI snapshot) usam 21:00 UTC (= 18:00 BRT).
+  Fechamentos BR (BRAPI) usam 21:00 UTC (= 18:00 BRT).
   Fechamentos INTL (Alpha Vantage / yfinance) usam 21:00 UTC (= 17:00 ET).
   _parse_date_utc() normaliza qualquer string de data para datetime UTC midnight.
 
@@ -38,7 +41,11 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.asset_types import NO_QUOTE_TYPES, INTL_TYPES, yf_ticker
-from app.integrations.brapi import fetch_price_history as brapi_fetch_history
+from app.integrations.brapi import (
+    fetch_price_history as brapi_fetch_history_legacy,
+    fetch_stocks_historical_v2,
+    fetch_fii_historical_v2,
+)
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
 
@@ -47,10 +54,15 @@ logger = logging.getLogger(__name__)
 _YF_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="yfinance_hist")
 
 # threading.Lock para serializar chamadas yfinance entre threads do executor.
-# asyncio.Semaphore nao funciona fora do event loop (threads do executor).
 _yf_thread_lock = threading.Lock()
-_YF_MIN_INTERVAL: float = 4.0       # segundos entre chamadas yfinance
+_YF_MIN_INTERVAL: float = 4.0
 _yf_last_call: list[float] = [0.0]
+
+# Tipos que usam o endpoint /api/v2/fii/historical
+_FII_TYPES = {AssetType.FII}
+
+# Tipos que usam o endpoint /api/v2/stocks/historical
+_STOCKS_V2_TYPES = {AssetType.ACAO, AssetType.ETF_NACIONAL, AssetType.BDR}
 
 
 async def _run_yf_with_throttle(fn: Callable, *args) -> any:
@@ -98,7 +110,7 @@ async def _upsert_price(
     asset_id: int,
     timestamp: datetime,
     close: float,
-    source: str = "brapi",
+    source: str = "brapi_v2",
 ) -> None:
     stmt = (
         pg_insert(AssetPrice)
@@ -163,16 +175,45 @@ async def _fetch_av_history(
     ticker: str,
     days_back: int,
 ) -> list[tuple[datetime, float]]:
-    """
-    Busca historico via Alpha Vantage com rate limiter dedicado.
-    Retorna [] se a API key nao estiver configurada.
-    """
     from app.core.rate_limiter import alpha_vantage_limiter
     from app.integrations.alpha_vantage import fetch_daily_history
 
     await alpha_vantage_limiter.acquire()
     rows = await fetch_daily_history(ticker, days_back)
     return rows
+
+
+async def _fetch_brapi_v2(
+    ticker: str,
+    asset_type: AssetType,
+    date_from: str,
+    date_to: str,
+) -> tuple[list[tuple[datetime, float]], str]:
+    """
+    Busca historico via BRAPI v2, roteando pelo asset_type:
+      FII                     -> /api/v2/fii/historical
+      ACAO, ETF_NACIONAL, BDR -> /api/v2/stocks/historical
+    Retorna (rows, source_label).
+    """
+    try:
+        if asset_type in _FII_TYPES:
+            rows = await fetch_fii_historical_v2(
+                ticker=ticker,
+                date_from=date_from,
+                date_to=date_to,
+            )
+            return rows, "brapi_v2_fii"
+        elif asset_type in _STOCKS_V2_TYPES:
+            rows = await fetch_stocks_historical_v2(
+                ticker=ticker,
+                date_from=date_from,
+                date_to=date_to,
+            )
+            return rows, "brapi_v2_stocks"
+    except Exception as e:
+        logger.warning(f"[PriceHistory] BRAPI v2 excecao para {ticker} ({asset_type}): {e}")
+
+    return [], ""
 
 
 async def persist_daily_prices(
@@ -185,14 +226,15 @@ async def persist_daily_prices(
     Persiste historico de precos diarios para um ativo.
 
     Estrategia por tipo:
-      BR / Cripto / Tesouro:
-        1. BRAPI Pro (primario)
-        2. yfinance (fallback)
-        3. Snapshot BRAPI (ultimo recurso)
+      BR / FII / ETF / BDR:
+        1. BRAPI v2 (endpoint oficial — fii/historical ou stocks/historical)
+        2. BRAPI legado /quote/{ticker}?range=custom (fallback)
+        3. yfinance (fallback final)
+        4. Snapshot BRAPI (ultimo recurso)
 
       Internacional (INTL_TYPES):
-        1. BRAPI Pro (tenta, quase sempre falha para INTL)
-        2. Alpha Vantage (primario real para INTL) - economy: 1 req/dia
+        1. BRAPI v2 stocks (tenta, quase sempre falha para INTL)
+        2. Alpha Vantage (primario real para INTL)
         3. yfinance (fallback final)
         4. Snapshot BRAPI (ultimo recurso)
     """
@@ -205,30 +247,37 @@ async def persist_daily_prices(
 
     if last_ts:
         delta = (_now_utc() - last_ts).days
-        # Se o banco esta atualizado, nao faz nada
         if delta < 1:
             logger.debug(f"[PriceHistory] {ticker} banco atualizado (last={last_ts.date()}) — pulando")
             return 0
         days_back = min(days_back, max(delta + 1, 2))
 
-    date_to = _now_utc().date().isoformat()
+    date_to   = _now_utc().date().isoformat()
     date_from = (_now_utc().date() - timedelta(days=days_back)).isoformat()
 
     rows: list[tuple[datetime, float]] = []
-    source: str = "brapi"
+    source: str = ""
     is_intl = asset_type in INTL_TYPES
 
     # ------------------------------------------------------------------
-    # L2: BRAPI Pro - primario para todos os tipos
+    # L1: BRAPI v2 (endpoint oficial, roteado por asset_type)
     # ------------------------------------------------------------------
-    try:
-        rows = await brapi_fetch_history(ticker, date_from, date_to)
-    except Exception as e:
-        logger.warning(f"[PriceHistory] BRAPI excecao para {ticker}: {e}")
-        rows = []
+    rows, source = await _fetch_brapi_v2(ticker, asset_type, date_from, date_to)
 
     # ------------------------------------------------------------------
-    # L2.5: Alpha Vantage - primario real para INTL quando BRAPI falha
+    # L2: BRAPI legado (fallback para tipos sem suporte no v2 ou falha)
+    # ------------------------------------------------------------------
+    if not rows:
+        logger.info(f"[PriceHistory] BRAPI v2 vazio para {ticker} ({asset_type}) — tentando BRAPI legado")
+        try:
+            rows = await brapi_fetch_history_legacy(ticker, date_from, date_to)
+            source = "brapi_legacy"
+        except Exception as e:
+            logger.warning(f"[PriceHistory] BRAPI legado excecao para {ticker}: {e}")
+            rows = []
+
+    # ------------------------------------------------------------------
+    # L2.5: Alpha Vantage (primario real para INTL quando BRAPI falha)
     # ------------------------------------------------------------------
     if not rows and is_intl:
         logger.info(f"[PriceHistory] BRAPI vazio para {ticker} (INTL) — tentando Alpha Vantage")
@@ -240,7 +289,7 @@ async def persist_daily_prices(
             rows = []
 
     # ------------------------------------------------------------------
-    # L3: yfinance - fallback universal
+    # L3: yfinance (fallback universal)
     # ------------------------------------------------------------------
     if not rows:
         if is_intl:
@@ -255,7 +304,7 @@ async def persist_daily_prices(
             rows = []
 
     # ------------------------------------------------------------------
-    # Snapshot atual como ultimo recurso
+    # L4: Snapshot atual como ultimo recurso
     # ------------------------------------------------------------------
     if not rows:
         logger.info(f"[PriceHistory] sem historico para {ticker} — tentando snapshot")
