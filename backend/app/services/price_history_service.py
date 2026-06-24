@@ -6,28 +6,38 @@ Estrategia de busca (por camadas):
   Ativos BR (ACAO, FII, ETF_NACIONAL, BDR, CRIPTO):
     L0 - Validacao BRAPI: verifica se o ticker e conhecido pela BRAPI via
          cache em memoria (populado pelo seed via /api/v2/tickers).
-         Tickers desconhecidos pulam direto para yfinance, evitando
-         400 em massa no endpoint legado.
+         Tickers desconhecidos pulam direto para yfinance.
     L1 - BRAPI v2:
          FII -> /api/v2/fii/historical
          demais -> /api/v2/stocks/historical
+         Se v2 retornar vazio para ticker CONHECIDO, vai direto para
+         yfinance (sem tentar legado que retornaria 400).
     L2 - BRAPI legado /quote/{ticker}?range=custom
+         Usado APENAS para tickers que NAO estao no catalogo BRAPI v2
+         (is_known_by_brapi=False nao chega aqui; esse caminho e para
+         tickers que passaram pelo L0 como desconhecidos mas chegaram
+         aqui via outro fluxo - mantido por seguranca).
     L3 - yfinance (fallback final)
     L4 - Snapshot BRAPI (ultimo recurso)
 
   Ativos INTL (STOCK, ETF_INTERNACIONAL):
-    L1 - Alpha Vantage TIME_SERIES_DAILY (primario real para INTL)
+    L1 - Alpha Vantage TIME_SERIES_DAILY (primario)
     L2 - yfinance (fallback)
     L3 - Snapshot BRAPI (ultimo recurso)
-    Nota: BRAPI v2 e completamente ignorado para INTL (sempre 404/500).
+
+Cooldown de persistencia (_persist_cooldown):
+  Apos persistir com sucesso, o ticker fica em cooldown por
+  PERSIST_COOLDOWN_SECONDS (1800s = 30min). Chamadas dentro do cooldown
+  retornam 0 imediatamente sem acionar BRAPI ou yfinance.
+  Isso evita YFRateLimitError quando multiplos endpoints (summary,
+  positions, asset-distribution) chegam em paralelo para os mesmos tickers.
 
 Rate limiting yfinance (threading.Lock - nivel de thread):
   _yf_thread_lock garante que apenas uma thread execute yfinance de cada vez.
-  _YF_MIN_INTERVAL (8s) adiciona pausa minima para evitar 429 Too Many Requests.
+  _YF_MIN_INTERVAL (12s) adiciona pausa minima para evitar 429.
 
 Lock por ticker (_ticker_locks):
-  Evita que multiplos endpoints (performance, portfolio, summary) disparem
-  persist_daily_prices para o mesmo ticker simultaneamente.
+  Evita requests duplicados concorrentes para o mesmo ticker.
 
 Rate limiting Alpha Vantage:
   alpha_vantage_limiter (TokenBucket, 4 req/min) em core/rate_limiter.py.
@@ -36,7 +46,6 @@ import asyncio
 import logging
 import threading
 import time
-from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -59,13 +68,33 @@ from app.models.asset_price import AssetPrice
 
 logger = logging.getLogger(__name__)
 
-# ── yfinance thread pool e rate limiter ──────────────────────────────────────
+# -- yfinance thread pool e rate limiter --------------------------------------
 _YF_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="yfinance_hist")
 _yf_thread_lock = threading.Lock()
-_YF_MIN_INTERVAL: float = 8.0
+_YF_MIN_INTERVAL: float = 12.0
 _yf_last_call: list[float] = [0.0]
 
-# ── Lock por ticker ───────────────────────────────────────────────────────────
+# -- Cooldown de persistencia -------------------------------------------------
+# Evita chamadas repetidas a BRAPI/yfinance quando multiplos endpoints
+# chegam em paralelo para os mesmos tickers (summary, positions, etc.).
+# Estrutura: {ticker: expires_at (monotonic)}
+PERSIST_COOLDOWN_SECONDS: float = 1800.0  # 30 minutos
+_persist_cooldown: dict[str, float] = {}
+_cooldown_lock = threading.Lock()
+
+
+def _is_in_cooldown(ticker: str) -> bool:
+    with _cooldown_lock:
+        exp = _persist_cooldown.get(ticker)
+        return exp is not None and time.monotonic() < exp
+
+
+def _set_cooldown(ticker: str) -> None:
+    with _cooldown_lock:
+        _persist_cooldown[ticker] = time.monotonic() + PERSIST_COOLDOWN_SECONDS
+
+
+# -- Lock por ticker ----------------------------------------------------------
 _ticker_locks: dict[str, asyncio.Lock] = {}
 _ticker_locks_mutex = threading.Lock()
 
@@ -77,7 +106,7 @@ def _get_ticker_lock(ticker: str) -> asyncio.Lock:
         return _ticker_locks[ticker]
 
 
-# ── Tipos BRAPI v2 ────────────────────────────────────────────────────────────
+# -- Tipos BRAPI v2 -----------------------------------------------------------
 _FII_V2_TYPES    = {AssetType.FII}
 _STOCKS_V2_TYPES = {AssetType.ACAO, AssetType.ETF_NACIONAL, AssetType.BDR}
 
@@ -204,15 +233,24 @@ async def persist_daily_prices(
 ) -> int:
     """
     Persiste historico de precos diarios para um ativo.
-    Usa lock por ticker para evitar requests duplicados quando multiplos
-    endpoints chamam o mesmo ticker concorrentemente.
+    Retorna 0 imediatamente se o ticker estiver em cooldown (evita
+    burst de requests quando multiplos endpoints chamam o mesmo ticker).
     """
     if asset_type in NO_QUOTE_TYPES:
         logger.debug(f"[PriceHistory] {ticker} ({asset_type}) sem cotacao — ignorado")
         return 0
 
+    if _is_in_cooldown(ticker):
+        logger.debug(f"[PriceHistory] {ticker} em cooldown — pulando")
+        return 0
+
     lock = _get_ticker_lock(ticker)
     async with lock:
+        # Re-checa cooldown apos adquirir o lock (outra coroutine pode ter
+        # terminado e setado o cooldown enquanto esta esperava)
+        if _is_in_cooldown(ticker):
+            logger.debug(f"[PriceHistory] {ticker} em cooldown (pos-lock) — pulando")
+            return 0
         return await _persist_daily_prices_inner(db, ticker, asset_type, days_back)
 
 
@@ -229,18 +267,19 @@ async def _persist_daily_prices_inner(
         delta = (_now_utc() - last_ts).days
         if delta < 1:
             logger.debug(f"[PriceHistory] {ticker} banco atualizado (last={last_ts.date()}) — pulando")
+            _set_cooldown(ticker)
             return 0
         days_back = min(days_back, max(delta + 1, 2))
 
     date_to   = _now_utc().date().isoformat()
     date_from = (_now_utc().date() - timedelta(days=days_back)).isoformat()
 
-    rows:    list[tuple[datetime, float]] = []
-    source:  str = ""
+    rows:   list[tuple[datetime, float]] = []
+    source: str = ""
     is_intl = asset_type in INTL_TYPES
 
     if is_intl:
-        # ── INTL: Alpha Vantage primeiro, yfinance como fallback ──────────────
+        # -- INTL: Alpha Vantage primeiro, yfinance como fallback -------------
         logger.debug(f"[PriceHistory] {ticker} (INTL) — tentando Alpha Vantage")
         try:
             rows = await _fetch_av_history(ticker, days_back)
@@ -257,9 +296,7 @@ async def _persist_daily_prices_inner(
                 logger.warning(f"[PriceHistory] yfinance excecao para {ticker}: {e}")
 
     else:
-        # ── BR: L0 validacao BRAPI → v2 → legado → yfinance ──────────────────
-        # L0: verifica cache de tickers conhecidos pela BRAPI
-        # (cache e populado automaticamente pelo seed via fetch_all_tickers_v2)
+        # -- BR: L0 validacao BRAPI -> L1 v2 -> L3 yfinance ------------------
         brapi_known = await is_known_by_brapi(ticker)
 
         if brapi_known:
@@ -267,28 +304,27 @@ async def _persist_daily_prices_inner(
             rows, source = await _fetch_brapi_v2(ticker, asset_type, date_from, date_to)
 
             if not rows:
-                # L2: BRAPI legado — apenas para tickers conhecidos
-                logger.info(f"[PriceHistory] BRAPI v2 vazio para {ticker} ({asset_type}) — tentando legado")
-                try:
-                    rows = await brapi_fetch_history_legacy(ticker, date_from, date_to)
-                    source = "brapi_legacy"
-                except Exception as e:
-                    logger.warning(f"[PriceHistory] BRAPI legado excecao para {ticker}: {e}")
+                # Ticker conhecido pelo catalogo mas sem historico no v2.
+                # NAO tenta o legado (retornaria 400 para esses casos).
+                # Vai direto para yfinance.
+                logger.info(
+                    f"[PriceHistory] BRAPI v2 vazio para {ticker} ({asset_type}) "
+                    f"— pulando legado, tentando yfinance"
+                )
         else:
             logger.info(
                 f"[PriceHistory] {ticker} nao encontrado na BRAPI — pulando direto para yfinance"
             )
 
-        # L3: yfinance (se BRAPI desconhece o ticker OU se BRAPI retornou vazio)
+        # L3: yfinance (ticker desconhecido pela BRAPI OU v2 retornou vazio)
         if not rows:
-            logger.info(f"[PriceHistory] tentando yfinance para {ticker}")
             try:
                 rows = await _fetch_yf_history(ticker, asset_type, days_back)
                 source = "yfinance_fallback"
             except Exception as e:
                 logger.warning(f"[PriceHistory] yfinance excecao para {ticker}: {e}")
 
-    # ── L4: Snapshot como ultimo recurso ─────────────────────────────────────
+    # -- L4: Snapshot como ultimo recurso ------------------------------------
     if not rows:
         logger.info(f"[PriceHistory] sem historico para {ticker} — tentando snapshot")
         try:
@@ -317,6 +353,10 @@ async def _persist_daily_prices_inner(
 
     await db.commit()
     logger.info(f"[PriceHistory] {ticker}: {inserted} registros persistidos (source={source})")
+
+    # Seta cooldown apos persistencia bem-sucedida (mesmo que inserted=0,
+    # significa que nao havia dados novos — nao precisa tentar de novo cedo)
+    _set_cooldown(ticker)
     return inserted
 
 
