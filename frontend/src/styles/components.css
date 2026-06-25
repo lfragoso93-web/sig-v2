@@ -4,7 +4,7 @@
    .btn e .input vivem exclusivamente em globals.css
    ========================================================= */
 
-/* ─── KPI Card ──────────────────────────────────────────────────────── */
+/* ─── KPI Card ────────────────────────────────────────────────────────────────── */
 .kpi-card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -39,11 +39,31 @@
 .kpi-change.positive { color: var(--color-success); }
 .kpi-change.negative { color: var(--color-notification); }
 
-/* ─── Tabela de posições ────────────────────────────────────────────── */
+/* ─── Tabela de posições ─────────────────────────────────────────────────────── */
 .positions-table {
   width: 100%;
+  /*
+   * table-layout: fixed garante que as colunas respeitem as larguras
+   * definidas e que o conteúdo longo (tickers, valores) não estoure o
+   * container com overflow-x:auto.
+   */
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: var(--text-sm);
+}
+
+/* Larguras padrão por tipo de coluna — podem ser sobrescritas inline */
+.positions-table th:first-child,
+.positions-table td:first-child {
+  width: 5.5rem;    /* Data */
+}
+.positions-table th:nth-child(2),
+.positions-table td:nth-child(2) {
+  width: auto;      /* Ativo — flex */
+}
+.positions-table th:nth-child(3),
+.positions-table td:nth-child(3) {
+  width: 6.5rem;    /* Tipo */
 }
 
 .positions-table th {
@@ -55,6 +75,9 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   border-bottom: 1px solid var(--color-divider);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .positions-table td {
@@ -62,6 +85,9 @@
   border-bottom: 1px solid var(--color-divider);
   font-variant-numeric: tabular-nums;
   color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .positions-table tr:last-child td {
@@ -72,7 +98,7 @@
   background: var(--color-surface-offset);
 }
 
-/* ─── Badge tipo de ativo ──────────────────────────────────────────────── */
+/* ─── Badge tipo de ativo ─────────────────────────────────────────────────────────── */
 .asset-badge {
   display: inline-flex;
   align-items: center;
@@ -92,7 +118,7 @@
 .asset-badge.cripto     { background: oklch(from var(--color-orange)  l c h / 0.12); color: var(--color-orange); }
 .asset-badge.renda-fixa { background: oklch(from var(--color-warning) l c h / 0.12); color: var(--color-warning); }
 
-/* ─── Skeleton ──────────────────────────────────────────────────────────── */
+/* ─── Skeleton ─────────────────────────────────────────────────────────────────────── */
 @keyframes shimmer {
   0%   { background-position: -200% 0; }
   100% { background-position:  200% 0; }
