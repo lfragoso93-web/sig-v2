@@ -5,11 +5,15 @@ Integrador com a API publica do Tesouro Nacional (STN).
 Usado como FALLBACK quando a BRAPI nao retorna preco para um titulo.
 
 Fontes:
-  1. Precos em tempo real (disponivel):
+  1. Precos em tempo real (STN):
      https://www.tesourodireto.com.br/json/br/com/b3/tesourodireto/model/dto/public/yieldedBonds.json
-     Sem autenticacao. Retorna todos os titulos disponiveis com buyPrice/sellPrice.
+     Sem autenticacao. Requer headers de browser para evitar 403.
 
-  2. Historico completo (CSV publico via Tesouro Transparente):
+  2. API Tesouro Transparente (fallback):
+     https://www.tesourotransparente.gov.br/api/listar-tesouro-direto-e-taxa
+     API publica sem autenticacao, retorna titulos com precos.
+
+  3. Historico completo (CSV publico via Tesouro Transparente):
      https://www.tesourotransparente.gov.br/ckan/dataset/taxa-dos-titulos-ofertados-pelo-tesouro-direto
      Planilha com precos e taxas desde 2002 para todos os titulos.
 
@@ -34,6 +38,11 @@ _TN_BONDS_URL = (
     "/model/dto/public/yieldedBonds.json"
 )
 
+# URL fallback: API do Tesouro Transparente
+_TN_TRANSPARENTE_URL = (
+    "https://www.tesourotransparente.gov.br/api/listar-tesouro-direto-e-taxa"
+)
+
 # URL do CSV historico (Tesouro Transparente)
 _TN_HIST_CSV_URL = (
     "https://www.tesourotransparente.gov.br/ckan/dataset/"
@@ -41,6 +50,21 @@ _TN_HIST_CSV_URL = (
     "796d2059-14e9-44e3-80a7-2dff9d4d4b5f/download/"
     "PrecoTaxaTesouroDireto.csv"
 )
+
+# Headers que simulam browser para evitar bloqueio 403 do tesourodireto.com.br
+_BROWSER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/125.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Origin": "https://www.tesourodireto.com.br",
+    "Referer": "https://www.tesourodireto.com.br/",
+    "Connection": "keep-alive",
+}
 
 # Cache em memoria do catalogo TN: {slug_norm: {"name": str, "buyPrice": float, ...}}
 # Expira a cada 15 minutos (preco muda durante o dia)
@@ -104,9 +128,100 @@ def _score_match(user_slug: str, tn_slug: str) -> int:
     return score
 
 
+def _parse_bond_list(bond_list: list) -> dict:
+    """Converte lista de bonds STN em catalogo {slug: {...}}."""
+    catalog: dict = {}
+    for entry in bond_list:
+        bond = entry.get("TrsrBd") or entry
+        if not isinstance(bond, dict):
+            continue
+
+        name = (
+            bond.get("nm")
+            or bond.get("name")
+            or bond.get("bondType")
+            or ""
+        ).strip()
+
+        buy_price = (
+            bond.get("untrInvstmtVal")
+            or bond.get("minInvstmtAmt")
+            or bond.get("buyPrice")
+            or bond.get("BuyPric")
+        )
+        sell_price = (
+            bond.get("SellPric")
+            or bond.get("sellPrice")
+        )
+        maturity = (
+            bond.get("mtrtyDt")
+            or bond.get("maturityDate")
+            or bond.get("MtrtyDt")
+        )
+        annual_rate = (
+            bond.get("anulInvstmtRate")
+            or bond.get("annualRate")
+            or bond.get("AnulInvstmtRate")
+        )
+
+        if not name or buy_price is None:
+            continue
+
+        slug = _slug_tn(name)
+        catalog[slug] = {
+            "name":        name,
+            "buyPrice":    float(buy_price),
+            "sellPrice":   float(sell_price) if sell_price else None,
+            "maturityDate": str(maturity) if maturity else None,
+            "annualRate":  float(annual_rate) if annual_rate else None,
+        }
+    return catalog
+
+
+async def _fetch_from_stn(client: httpx.AsyncClient) -> dict:
+    """Tenta buscar o catalogo diretamente na STN (tesourodireto.com.br)."""
+    resp = await client.get(_TN_BONDS_URL, headers=_BROWSER_HEADERS)
+    resp.raise_for_status()
+    data = resp.json()
+    response = data.get("response") or data
+    bond_list = (
+        response.get("TrsrBdTradgList")
+        or response.get("bonds")
+        or response.get("treasuries")
+        or (data if isinstance(data, list) else [])
+    )
+    return _parse_bond_list(bond_list)
+
+
+async def _fetch_from_transparente(client: httpx.AsyncClient) -> dict:
+    """Fallback: busca catalogo via API do Tesouro Transparente."""
+    resp = await client.get(
+        _TN_TRANSPARENTE_URL,
+        headers={
+            "User-Agent": _BROWSER_HEADERS["User-Agent"],
+            "Accept": "application/json, */*",
+            "Accept-Language": "pt-BR,pt;q=0.9",
+        },
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    # Estrutura varia; tenta extrair lista de titulos
+    bond_list = (
+        data if isinstance(data, list)
+        else data.get("items")
+        or data.get("data")
+        or data.get("titulos")
+        or []
+    )
+    return _parse_bond_list(bond_list)
+
+
 async def _load_tn_catalog() -> dict:
     """
     Carrega (e cacheia 15min) o catalogo completo da API da STN.
+    Tenta primeiro tesourodireto.com.br; em caso de falha (ex: 403)
+    usa o Tesouro Transparente como fallback.
+
     Retorna: { slug_norm: { name, buyPrice, sellPrice, maturityDate, annualRate } }
     """
     global _TN_CACHE, _TN_CACHE_EXPIRES
@@ -116,75 +231,26 @@ async def _load_tn_catalog() -> dict:
         return _TN_CACHE
 
     catalog: dict = {}
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(_TN_BONDS_URL, headers={
-                "User-Agent": "Mozilla/5.0 (compatible; SIG-v2/1.0)",
-                "Accept": "application/json, text/plain, */*",
-                "Referer": "https://www.tesourodireto.com.br/",
-            })
-            resp.raise_for_status()
-            data = resp.json()
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        # Tentativa 1: STN direta
+        try:
+            catalog = await _fetch_from_stn(client)
+            if catalog:
+                logger.info("[TN] catalogo carregado via STN: %d titulos", len(catalog))
+        except Exception as e:
+            logger.warning("[TN] _load_tn_catalog erro (STN): %s", e)
 
-        # Estrutura esperada: { "response": { "TrsrBdTradgList": [ { "TrsrBd": {...} } ] } }
-        response = data.get("response") or data
-        bond_list = (
-            response.get("TrsrBdTradgList")
-            or response.get("bonds")
-            or response.get("treasuries")
-            or (data if isinstance(data, list) else [])
-        )
-
-        for entry in bond_list:
-            bond = entry.get("TrsrBd") or entry
-            if not isinstance(bond, dict):
-                continue
-
-            # Nome oficial completo da STN
-            name = (
-                bond.get("nm")
-                or bond.get("name")
-                or bond.get("bondType")
-                or ""
-            ).strip()
-
-            buy_price = (
-                bond.get("untrInvstmtVal")
-                or bond.get("minInvstmtAmt")
-                or bond.get("buyPrice")
-                or bond.get("BuyPric")
-            )
-            sell_price = (
-                bond.get("SellPric")
-                or bond.get("sellPrice")
-            )
-            maturity = (
-                bond.get("mtrtyDt")
-                or bond.get("maturityDate")
-                or bond.get("MtrtyDt")
-            )
-            annual_rate = (
-                bond.get("anulInvstmtRate")
-                or bond.get("annualRate")
-                or bond.get("AnulInvstmtRate")
-            )
-
-            if not name or buy_price is None:
-                continue
-
-            slug = _slug_tn(name)
-            catalog[slug] = {
-                "name":        name,
-                "buyPrice":    float(buy_price),
-                "sellPrice":   float(sell_price) if sell_price else None,
-                "maturityDate": str(maturity) if maturity else None,
-                "annualRate":  float(annual_rate) if annual_rate else None,
-            }
-
-        logger.info("[TN] catalogo carregado: %d titulos", len(catalog))
-
-    except Exception as e:
-        logger.warning("[TN] _load_tn_catalog erro: %s", e)
+        # Tentativa 2: Tesouro Transparente (fallback)
+        if not catalog:
+            try:
+                catalog = await _fetch_from_transparente(client)
+                if catalog:
+                    logger.info(
+                        "[TN] catalogo carregado via Tesouro Transparente: %d titulos",
+                        len(catalog),
+                    )
+            except Exception as e:
+                logger.warning("[TN] _load_tn_catalog erro (Transparente): %s", e)
 
     if catalog:
         _TN_CACHE = catalog
@@ -229,7 +295,7 @@ def _find_best_match(
 async def fetch_tn_prices(tickers: list[str]) -> dict[str, float]:
     """
     Busca precos atuais (buyPrice) para uma lista de tickers de Tesouro Direto
-    usando a API publica da STN.
+    usando a API publica da STN (com fallback para Tesouro Transparente).
 
     Retorna { ticker_original: preco_float } para os tickers encontrados.
     Tickers sem match sao omitidos (nao levantam excecao).
