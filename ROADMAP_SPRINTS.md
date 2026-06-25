@@ -69,6 +69,12 @@
   - [x] Testes: `test_rentabilidade_service.py` com 13 casos (SQLite in-memory + mocks)
   - [x] Frontend: `rentabilidadeService.ts` + `useRentabilidade.ts` + `RentabilidadePage.tsx`
   - [x] UI: 8 KpiCards, barra por classe de ativo, tabela por ativo com filtros
+- [x] **Hotfixes Tesouro Direto & Cripto** — concluído em 25/06/2026
+  - [x] `fetch_treasury_indicators`: 3 camadas de fallback (BRAPI /indicators → /list → radaropcoes)
+  - [x] `tesouro_nacional.py`: headers anti-403 + fallback tesourotransparente
+  - [x] `rentabilidade_service._proventos_total`: campo `Dividend.total_value` corrigido
+  - [x] `_normalize_crypto_ticker`: mapa de 35 nomes completos de criptomoedas (BITCOIN → BTC)
+  - [x] `quotes_service`: passa a usar `fetch_treasury_prices` com 4 camadas de resolução
 - [ ] Dashboard principal com resumo de patrimônio
 - [ ] Gráfico de evolução patrimonial (linha histórica)
 - [ ] Distribuição por classe de ativo (pizza/donut)

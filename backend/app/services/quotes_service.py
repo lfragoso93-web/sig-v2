@@ -8,8 +8,12 @@ Estrategia de cache em 3 camadas:
 
 Roteamento por tipo de ativo:
   BR / FII / ETF_BR  -> BRAPI quotes  (chunks de 20, delay 1s entre chunks)
-  CRIPTO             -> BRAPI crypto
-  TESOURO            -> BRAPI treasury list (buyPrice)
+  CRIPTO             -> BRAPI crypto   (com _normalize_crypto_ticker)
+  TESOURO            -> BRAPI treasury indicators (fetch_treasury_prices)
+                        Resolucao de slug em 3 camadas:
+                          1. Mapa estatico _TREASURY_NAME_MAP (~60 entradas)
+                          2. Slug ja no formato BRAPI (passagem direta)
+                          3. Fallback dinamico via /v2/treasury/list (cache 6h)
   INTL               -> Alpha Vantage GLOBAL_QUOTE (primario)
                         yfinance (fallback se AV falhar ou nao configurado)
 
@@ -56,7 +60,7 @@ from app.core.rate_limiter import brapi_limiter, alpha_vantage_limiter
 from app.integrations.brapi import (
     fetch_quotes as brapi_fetch_quotes,
     fetch_crypto_quote as brapi_fetch_crypto,
-    fetch_treasury_list as brapi_fetch_treasury_list,
+    fetch_treasury_prices as brapi_fetch_treasury_prices,
 )
 from app.models.asset import Asset, AssetType
 from app.services.price_history_service import _YF_EXECUTOR, _yf_thread_lock, _YF_MIN_INTERVAL, _yf_last_call
@@ -309,36 +313,23 @@ async def _fetch_yfinance_current(
 # Fetch Tesouro Direto
 # ---------------------------------------------------------------------------
 
-async def _fetch_treasury_prices(slugs: list[str]) -> dict[str, float]:
-    if not slugs:
+async def _fetch_treasury_prices(tickers: list[str]) -> dict[str, float]:
+    """
+    Busca precos atuais de titulos do Tesouro Direto.
+
+    Delega inteiramente para brapi.fetch_treasury_prices(), que implementa
+    as 3 camadas de resolucao de slug e usa o endpoint correto /indicators:
+      Camada 1 - Mapa estatico _TREASURY_NAME_MAP (~60 entradas)
+      Camada 2 - Slug ja no formato BRAPI (passagem direta)
+      Camada 3 - Fallback dinamico via /v2/treasury/list (cache 6h)
+    """
+    if not tickers:
         return {}
     try:
-        items = await brapi_fetch_treasury_list() or []
+        return await brapi_fetch_treasury_prices(tickers)
     except Exception as e:
-        logger.warning(f"[quotes_service] fetch_treasury_list falhou: {e}")
+        logger.warning("[quotes_service] fetch_treasury_prices falhou: %s", e)
         return {}
-
-    price_map: dict[str, float] = {}
-    for item in items:
-        api_slug = (item.get("slug") or "").strip().lower()
-        api_name = (item.get("bondType") or item.get("name") or "").strip().lower()
-        price = item.get("buyPrice") or item.get("basePrice") or item.get("sellPrice")
-        if price is None:
-            continue
-        p = float(price)
-        if api_slug:
-            price_map[api_slug] = p
-        if api_name:
-            price_map[api_name] = p
-
-    results: dict[str, float] = {}
-    for slug in slugs:
-        key = slug.strip().lower()
-        if key in price_map:
-            results[slug] = price_map[key]
-        else:
-            logger.warning(f"[quotes_service] Tesouro slug sem cotacao BRAPI: {slug!r}")
-    return results
 
 
 # ---------------------------------------------------------------------------
@@ -425,7 +416,7 @@ async def get_prices(
     br_tickers: list[str] = []
     crypto_tickers: list[str] = []
     intl_pairs: list[tuple[str, AssetType]] = []
-    treasury_slugs: list[str] = []
+    treasury_tickers: list[str] = []
     br_fallback: list[tuple[str, AssetType]] = []
     resolved: dict[str, float] = {}
     type_map: dict[str, AssetType | None] = {}
@@ -460,7 +451,7 @@ async def get_prices(
                 continue
 
         if asset_type in TREASURY_TYPES:
-            treasury_slugs.append(ticker)
+            treasury_tickers.append(ticker)
         elif asset_type == AssetType.CRIPTO:
             crypto_tickers.append(ticker)
         elif asset_type in BR_TYPES:
@@ -475,7 +466,7 @@ async def get_prices(
         _fetch_brapi(br_tickers) if br_tickers else _noop(),
         _fetch_brapi_crypto(crypto_tickers) if crypto_tickers else _noop(),
         _fetch_intl(intl_pairs) if intl_pairs else _noop(),
-        _fetch_treasury_prices(treasury_slugs) if treasury_slugs else _noop(),
+        _fetch_treasury_prices(treasury_tickers) if treasury_tickers else _noop(),
     )
 
     for p in positions:

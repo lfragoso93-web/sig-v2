@@ -304,10 +304,17 @@ export default function AddTransactionModal({ onClose }: Props) {
     setShowTDSugg(false); setShowRVSugg(false); setError(null)
   }
 
-  const total = quantity && price
-    ? (parseFloat(quantity) * parseFloat(price) + parseFloat(fees || '0'))
-        .toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  // Compra: qty × price + fees  (taxa é custo, aumenta o total pago)
+  // Venda:  qty × price - fees  (taxa é desconto, reduz o valor recebido)
+  const isBuy = operation === 'buy'
+  const totalValue = quantity && price
+    ? parseFloat(quantity) * parseFloat(price) + (isBuy ? 1 : -1) * parseFloat(fees || '0')
     : null
+  const total = totalValue !== null
+    ? totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : null
+  // Label contextual: compra = "Total a pagar", venda = "Valor a receber"
+  const totalLabel = isBuy ? 'Total a pagar' : 'Valor a receber'
 
   const showDropdown  = showTDSugg || showRVSugg
   const dropdownItems = showTDSugg
@@ -406,7 +413,7 @@ export default function AddTransactionModal({ onClose }: Props) {
         ) : (
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
 
-            {/* Abas — flexWrap para não perder Renda Fixa/Cripto fora do viewport */}
+            {/* Abas */}
             <div style={{
               display: 'flex', gap: 4, rowGap: 4,
               flexWrap: 'wrap',
@@ -461,8 +468,8 @@ export default function AddTransactionModal({ onClose }: Props) {
               }}>
                 {(['buy', 'sell'] as const).map(op => {
                   const isSel = operation === op
-                  const isBuy = op === 'buy'
-                  const color = isBuy ? 'var(--color-success)' : 'var(--color-notification)'
+                  const isBuyOp = op === 'buy'
+                  const color = isBuyOp ? 'var(--color-success)' : 'var(--color-notification)'
                   return (
                     <button key={op} type="button" onClick={() => setOperation(op)}
                       style={{
@@ -474,10 +481,10 @@ export default function AddTransactionModal({ onClose }: Props) {
                         cursor: 'pointer', transition: 'all 150ms ease',
                       }}
                     >
-                      {isBuy
+                      {isBuyOp
                         ? <ArrowDownCircle size={13} style={{ flexShrink: 0 }} />
                         : <ArrowUpCircle   size={13} style={{ flexShrink: 0 }} />}
-                      {isBuy ? 'Compra' : 'Venda'}
+                      {isBuyOp ? 'Compra' : 'Venda'}
                     </button>
                   )
                 })}
@@ -639,10 +646,14 @@ export default function AddTransactionModal({ onClose }: Props) {
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                   padding: '0.625rem 0.875rem',
                   borderRadius: 'var(--radius-lg)',
-                  background: 'oklch(from var(--color-primary) l c h / 0.07)',
-                  border: '1px solid oklch(from var(--color-primary) l c h / 0.15)',
+                  background: isBuy
+                    ? 'oklch(from var(--color-success) l c h / 0.07)'
+                    : 'oklch(from var(--color-notification) l c h / 0.07)',
+                  border: isBuy
+                    ? '1px solid oklch(from var(--color-success) l c h / 0.2)'
+                    : '1px solid oklch(from var(--color-notification) l c h / 0.2)',
                 }}>
-                  <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Total estimado</span>
+                  <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>{totalLabel}</span>
                   <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--color-text)', fontVariantNumeric: 'tabular-nums' }}>
                     {currency} {total}
                   </span>

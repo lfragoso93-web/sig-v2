@@ -10,7 +10,7 @@ Isolamento:
   - SQLite in-memory (conftest.py)
   - cache_get sempre retorna None (sem Redis)
   - cache_set noop
-  - get_current_price mockado
+  - get_prices mockado (batch, igual ao servico real)
 """
 from __future__ import annotations
 
@@ -23,8 +23,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset, AssetType, AssetCurrency
 from app.models.portfolio import Portfolio
-from app.models.portfolio_position import PortfolioPosition
 from app.models.portfolio_snapshot import PortfolioSnapshot
+from app.models.transaction import Transaction, OperationType
 from app.models.user import User
 
 
@@ -49,27 +49,51 @@ async def _make_asset(
     return a
 
 
-async def _make_position(
+async def _make_buy(
     db: AsyncSession,
     portfolio: Portfolio,
-    asset: Asset,
-    quantity: float = 100.0,
-    average_price: float = 20.0,
-    total_invested: float = 2000.0,
-    realized_profit: float = 0.0,
-) -> PortfolioPosition:
-    pos = PortfolioPosition(
+    ticker: str,
+    quantity: float,
+    price: float,
+    asset_type: str = "ACAO",
+) -> Transaction:
+    """Cria uma transacao de compra — fonte real de posicoes para calc_raw_positions."""
+    tx = Transaction(
         portfolio_id=portfolio.id,
-        asset_id=asset.id,
+        ticker=ticker,
+        asset_type=asset_type,
+        operation=OperationType.buy,
         quantity=Decimal(str(quantity)),
-        average_price=Decimal(str(average_price)),
-        total_invested=Decimal(str(total_invested)),
-        realized_profit=Decimal(str(realized_profit)),
+        price=Decimal(str(price)),
+        fees=Decimal("0"),
+        date=date.today(),
     )
-    db.add(pos)
+    db.add(tx)
     await db.flush()
-    await db.refresh(pos)
-    return pos
+    return tx
+
+
+async def _make_sell(
+    db: AsyncSession,
+    portfolio: Portfolio,
+    ticker: str,
+    quantity: float,
+    price: float,
+    asset_type: str = "ACAO",
+) -> Transaction:
+    tx = Transaction(
+        portfolio_id=portfolio.id,
+        ticker=ticker,
+        asset_type=asset_type,
+        operation=OperationType.sell,
+        quantity=Decimal(str(quantity)),
+        price=Decimal(str(price)),
+        fees=Decimal("0"),
+        date=date.today(),
+    )
+    db.add(tx)
+    await db.flush()
+    return tx
 
 
 async def _make_snapshot(
@@ -111,6 +135,17 @@ _PATCH_CACHE_SET = patch(
     "app.services.rentabilidade_service.cache_set",
     new_callable=AsyncMock,
 )
+
+
+def _make_prices_mock(prices: dict[str, float]):
+    """
+    Retorna AsyncMock para get_prices.
+    get_prices recebe lista de {ticker, asset_type} e retorna {ticker: preco}.
+    Apenas tickers presentes no dict prices serao incluidos no resultado.
+    """
+    async def _mock(items, db=None):
+        return {i["ticker"]: prices[i["ticker"]] for i in items if i["ticker"] in prices}
+    return _mock
 
 
 # ---------------------------------------------------------------------------
@@ -227,17 +262,12 @@ class TestGetRentabilidadePorAtivo:
     ):
         from app.services.rentabilidade_service import get_rentabilidade_por_ativo
 
-        asset = await _make_asset(db, "PETR4")
-        await _make_position(
-            db, portfolio, asset,
-            quantity=100.0,
-            average_price=20.0,
-            total_invested=2000.0,
-        )
+        await _make_asset(db, "PETR4")
+        await _make_buy(db, portfolio, "PETR4", quantity=100.0, price=20.0)
 
-        mock_price = AsyncMock(return_value=25.0)
+        prices_mock = _make_prices_mock({"PETR4": 25.0})
         with _PATCH_CACHE_GET, _PATCH_CACHE_SET, \
-             patch("app.services.rentabilidade_service.get_current_price", mock_price):
+             patch("app.services.rentabilidade_service.get_prices", prices_mock):
             result = await get_rentabilidade_por_ativo(db, portfolio.id)
 
         assert len(result) == 1
@@ -256,17 +286,13 @@ class TestGetRentabilidadePorAtivo:
     ):
         from app.services.rentabilidade_service import get_rentabilidade_por_ativo
 
-        asset = await _make_asset(db, "VALE3")
-        await _make_position(
-            db, portfolio, asset,
-            quantity=50.0,
-            average_price=30.0,
-            total_invested=1500.0,
-        )
+        await _make_asset(db, "VALE3")
+        await _make_buy(db, portfolio, "VALE3", quantity=50.0, price=30.0)
 
-        mock_price = AsyncMock(return_value=None)
+        # get_prices retorna dict vazio -> sem cotacao
+        prices_mock = _make_prices_mock({})
         with _PATCH_CACHE_GET, _PATCH_CACHE_SET, \
-             patch("app.services.rentabilidade_service.get_current_price", mock_price):
+             patch("app.services.rentabilidade_service.get_prices", prices_mock):
             result = await get_rentabilidade_por_ativo(db, portfolio.id)
 
         assert len(result) == 1
@@ -280,17 +306,14 @@ class TestGetRentabilidadePorAtivo:
     ):
         from app.services.rentabilidade_service import get_rentabilidade_por_ativo
 
-        asset = await _make_asset(db, "MGLU3")
-        await _make_position(
-            db, portfolio, asset,
-            quantity=0.0,
-            average_price=0.0,
-            total_invested=0.0,
-            realized_profit=300.0,
-        )
+        await _make_asset(db, "MGLU3")
+        # Compra e venda total com lucro: realized = 100 * (5 - 2) = 300
+        await _make_buy(db, portfolio, "MGLU3", quantity=100.0, price=2.0)
+        await _make_sell(db, portfolio, "MGLU3", quantity=100.0, price=5.0)
 
+        prices_mock = _make_prices_mock({})
         with _PATCH_CACHE_GET, _PATCH_CACHE_SET, \
-             patch("app.services.rentabilidade_service.get_current_price", AsyncMock(return_value=None)):
+             patch("app.services.rentabilidade_service.get_prices", prices_mock):
             result = await get_rentabilidade_por_ativo(db, portfolio.id)
 
         assert len(result) == 1
@@ -306,15 +329,14 @@ class TestGetRentabilidadePorAtivo:
     ):
         from app.services.rentabilidade_service import get_rentabilidade_por_ativo
 
-        asset = await _make_asset(db, "BOVA11")
-        await _make_position(
-            db, portfolio, asset,
-            quantity=0.0, average_price=0.0,
-            total_invested=0.0, realized_profit=0.0,
-        )
+        await _make_asset(db, "BOVA11")
+        # Compra e venda no mesmo preco: realized = 0
+        await _make_buy(db, portfolio, "BOVA11", quantity=10.0, price=10.0)
+        await _make_sell(db, portfolio, "BOVA11", quantity=10.0, price=10.0)
 
+        prices_mock = _make_prices_mock({})
         with _PATCH_CACHE_GET, _PATCH_CACHE_SET, \
-             patch("app.services.rentabilidade_service.get_current_price", AsyncMock(return_value=None)):
+             patch("app.services.rentabilidade_service.get_prices", prices_mock):
             result = await get_rentabilidade_por_ativo(db, portfolio.id)
 
         # qty=0 e realized=0 -> deve ser ignorado
@@ -325,17 +347,15 @@ class TestGetRentabilidadePorAtivo:
     ):
         from app.services.rentabilidade_service import get_rentabilidade_por_ativo
 
-        a1 = await _make_asset(db, "PETR4", AssetType.ACAO)
-        a2 = await _make_asset(db, "HGLG11", AssetType.FII)
+        await _make_asset(db, "PETR4", AssetType.ACAO)
+        await _make_asset(db, "HGLG11", AssetType.FII)
 
-        await _make_position(db, portfolio, a1, quantity=100, total_invested=2000)
-        await _make_position(db, portfolio, a2, quantity=10,  total_invested=500)
+        await _make_buy(db, portfolio, "PETR4",  quantity=100.0, price=20.0, asset_type="ACAO")
+        await _make_buy(db, portfolio, "HGLG11", quantity=10.0,  price=50.0, asset_type="FII")
 
-        async def mock_price(ticker, **kwargs):
-            return 30.0 if ticker == "PETR4" else 120.0
-
+        prices_mock = _make_prices_mock({"PETR4": 30.0, "HGLG11": 120.0})
         with _PATCH_CACHE_GET, _PATCH_CACHE_SET, \
-             patch("app.services.rentabilidade_service.get_current_price", mock_price):
+             patch("app.services.rentabilidade_service.get_prices", prices_mock):
             result = await get_rentabilidade_por_ativo(db, portfolio.id)
 
         assert len(result) == 2
@@ -366,20 +386,17 @@ class TestGetRentabilidadePorClasse:
     ):
         from app.services.rentabilidade_service import get_rentabilidade_por_classe
 
-        a1 = await _make_asset(db, "PETR4",  AssetType.ACAO)
-        a2 = await _make_asset(db, "VALE3",  AssetType.ACAO)
-        a3 = await _make_asset(db, "HGLG11", AssetType.FII)
+        await _make_asset(db, "PETR4",  AssetType.ACAO)
+        await _make_asset(db, "VALE3",  AssetType.ACAO)
+        await _make_asset(db, "HGLG11", AssetType.FII)
 
-        await _make_position(db, portfolio, a1, quantity=100, total_invested=2000)
-        await _make_position(db, portfolio, a2, quantity=50,  total_invested=1000)
-        await _make_position(db, portfolio, a3, quantity=10,  total_invested=500)
+        await _make_buy(db, portfolio, "PETR4",  quantity=100.0, price=20.0, asset_type="ACAO")
+        await _make_buy(db, portfolio, "VALE3",  quantity=50.0,  price=20.0, asset_type="ACAO")
+        await _make_buy(db, portfolio, "HGLG11", quantity=10.0,  price=50.0, asset_type="FII")
 
-        async def mock_price(ticker, **kwargs):
-            prices = {"PETR4": 25.0, "VALE3": 22.0, "HGLG11": 60.0}
-            return prices.get(ticker)
-
+        prices_mock = _make_prices_mock({"PETR4": 25.0, "VALE3": 22.0, "HGLG11": 60.0})
         with _PATCH_CACHE_GET, _PATCH_CACHE_SET, \
-             patch("app.services.rentabilidade_service.get_current_price", mock_price):
+             patch("app.services.rentabilidade_service.get_prices", prices_mock):
             result = await get_rentabilidade_por_classe(db, portfolio.id)
 
         tipos = {r["asset_type"]: r for r in result}
@@ -399,17 +416,15 @@ class TestGetRentabilidadePorClasse:
     ):
         from app.services.rentabilidade_service import get_rentabilidade_por_classe
 
-        a1 = await _make_asset(db, "PETR4",  AssetType.ACAO)
-        a2 = await _make_asset(db, "HGLG11", AssetType.FII)
+        await _make_asset(db, "PETR4",  AssetType.ACAO)
+        await _make_asset(db, "HGLG11", AssetType.FII)
 
-        await _make_position(db, portfolio, a1, quantity=100, total_invested=2000)
-        await _make_position(db, portfolio, a2, quantity=10,  total_invested=600)
+        await _make_buy(db, portfolio, "PETR4",  quantity=100.0, price=20.0, asset_type="ACAO")
+        await _make_buy(db, portfolio, "HGLG11", quantity=10.0,  price=60.0, asset_type="FII")
 
-        async def mock_price(ticker, **kwargs):
-            return 20.0 if ticker == "PETR4" else 60.0
-
+        prices_mock = _make_prices_mock({"PETR4": 20.0, "HGLG11": 60.0})
         with _PATCH_CACHE_GET, _PATCH_CACHE_SET, \
-             patch("app.services.rentabilidade_service.get_current_price", mock_price):
+             patch("app.services.rentabilidade_service.get_prices", prices_mock):
             result = await get_rentabilidade_por_classe(db, portfolio.id)
 
         total_alocacao = sum(r["alocacao_pct"] for r in result)
@@ -420,11 +435,12 @@ class TestGetRentabilidadePorClasse:
     ):
         from app.services.rentabilidade_service import get_rentabilidade_por_classe
 
-        asset = await _make_asset(db, "PETR4", AssetType.ACAO)
-        await _make_position(db, portfolio, asset, quantity=10, total_invested=200)
+        await _make_asset(db, "PETR4", AssetType.ACAO)
+        await _make_buy(db, portfolio, "PETR4", quantity=10.0, price=20.0, asset_type="ACAO")
 
+        prices_mock = _make_prices_mock({"PETR4": 25.0})
         with _PATCH_CACHE_GET, _PATCH_CACHE_SET, \
-             patch("app.services.rentabilidade_service.get_current_price", AsyncMock(return_value=25.0)):
+             patch("app.services.rentabilidade_service.get_prices", prices_mock):
             result = await get_rentabilidade_por_classe(db, portfolio.id)
 
         assert len(result) == 1

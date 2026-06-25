@@ -174,7 +174,12 @@ async def create_transaction(
         ticker=ticker,
         asset_type=str(asset_type),
     )
-    background_tasks.add_task(_run_snapshot_backfill, portfolio_id=portfolio_id)
+    # Passa a data da transacao para invalidar snapshots a partir dela
+    background_tasks.add_task(
+        _run_snapshot_backfill,
+        portfolio_id=portfolio_id,
+        tx_date=payload.date,
+    )
 
     return tx
 
@@ -210,6 +215,10 @@ async def update_transaction(
     if operation == OperationType.sell:
         await _validate_sell(db, portfolio_id, ticker, payload.quantity, exclude_tx_id=transaction_id)
 
+    # Guarda a menor data entre a data antiga e a nova para invalidar
+    # snapshots a partir do ponto mais antigo afetado pela edicao
+    invalidate_from = min(tx.date, payload.date)
+
     tx.ticker = ticker
     tx.asset_type = asset_type
     tx.operation = operation
@@ -230,7 +239,11 @@ async def update_transaction(
         ticker=ticker,
         asset_type=str(asset_type),
     )
-    background_tasks.add_task(_run_snapshot_backfill, portfolio_id=portfolio_id)
+    background_tasks.add_task(
+        _run_snapshot_backfill,
+        portfolio_id=portfolio_id,
+        tx_date=invalidate_from,
+    )
 
     return tx
 
@@ -260,6 +273,7 @@ async def delete_transaction(
 
     ticker = tx.ticker
     asset_type = tx.asset_type
+    tx_date = tx.date  # guarda antes de deletar
 
     await db.delete(tx)
     await db.commit()
@@ -270,7 +284,12 @@ async def delete_transaction(
         ticker=ticker,
         asset_type=str(asset_type),
     )
-    background_tasks.add_task(_run_snapshot_backfill, portfolio_id=portfolio_id)
+    # Invalida snapshots a partir da data da transacao deletada
+    background_tasks.add_task(
+        _run_snapshot_backfill,
+        portfolio_id=portfolio_id,
+        tx_date=tx_date,
+    )
 
 
 async def _run_backfill(portfolio_id: int, ticker: str, asset_type: str) -> None:
@@ -290,18 +309,35 @@ async def _run_backfill(portfolio_id: int, ticker: str, asset_type: str) -> None
         )
 
 
-async def _run_snapshot_backfill(portfolio_id: int) -> None:
+async def _run_snapshot_backfill(portfolio_id: int, tx_date: DateType) -> None:
+    """
+    1. Invalida todos os snapshots >= tx_date (remove do banco).
+    2. Roda backfill_snapshots para recalcular as datas removidas.
+
+    Se tx_date == hoje, nenhum snapshot existente e invalido
+    (hoje nao tem snapshot salvo ainda), entao o delete nao afeta nada
+    e o backfill apenas cria o snapshot do dia normalmente.
+    """
+    import logging
+    log = logging.getLogger(__name__)
     try:
         from app.core.database import AsyncSessionLocal
-        from app.services.portfolio_snapshot_service import backfill_snapshots
+        from app.services.portfolio_snapshot_service import (
+            invalidate_snapshots_from,
+            backfill_snapshots,
+        )
         async with AsyncSessionLocal() as db:
+            deleted = await invalidate_snapshots_from(db, portfolio_id, tx_date)
+            log.info(
+                "[snapshot_backfill] portfolio=%s invalida a partir de %s (%s removidos)",
+                portfolio_id, tx_date, deleted,
+            )
             count = await backfill_snapshots(db=db, portfolio_id=portfolio_id)
-            import logging
-            logging.getLogger(__name__).info(
-                "[snapshot_backfill] portfolio=%s — %s snapshots processados", portfolio_id, count
+            log.info(
+                "[snapshot_backfill] portfolio=%s — %s snapshots recalculados",
+                portfolio_id, count,
             )
     except Exception as exc:
-        import logging
-        logging.getLogger(__name__).error(
+        log.error(
             "[snapshot_backfill] erro para portfolio %s: %s", portfolio_id, exc
         )
