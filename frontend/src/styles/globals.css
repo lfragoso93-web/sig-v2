@@ -96,12 +96,17 @@
 
   /* ══ CARDS ════════════════════════════════════════════════════════════════ */
 
+  /*
+   * NOTA: overflow NÃO está mais aqui.
+   * Use className="card overflow-hidden" quando precisar cortar conteúdo (tabelas, listas).
+   * Gráficos Recharts precisam que o card pai NÃO tenha overflow:hidden
+   * para que os tooltips (position:absolute) não sejam amputados.
+   */
   .card {
     background: var(--color-surface);
     border: 1px solid oklch(from var(--color-text) l c h / 0.07);
-    border-radius: var(--radius-lg);   /* 0.75rem — era xl (1rem) */
+    border-radius: var(--radius-lg);
     box-shadow: var(--shadow-sm);
-    overflow: hidden;
   }
 
   .card-hover {
@@ -109,7 +114,6 @@
     border: 1px solid oklch(from var(--color-text) l c h / 0.07);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-sm);
-    overflow: hidden;
     transition:
       border-color var(--transition-interactive),
       box-shadow   var(--transition-interactive),
@@ -306,6 +310,14 @@
   }
   .input:hover:not(:focus) {
     border-color: oklch(from var(--color-text) l c h / 0.18);
+  }
+
+  /* Variante compacta — para inputs dentro de headers de grupos/tabelas */
+  .input-xs {
+    padding: 0.25rem 0.5rem !important;
+    font-size: var(--text-xs) !important;
+    border-radius: var(--radius-sm) !important;
+    height: 1.75rem;
   }
 
   .input-error {
