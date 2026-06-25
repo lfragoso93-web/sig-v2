@@ -25,8 +25,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.portfolio_position import PortfolioPosition
 from app.models.asset import Asset
-from app.models.asset_dividend import AssetDividend
-from app.models.transaction import Transaction, OperationType
 from app.services.quotes_service import get_current_price
 from app.core.cache import cache_get, cache_set
 
@@ -91,7 +89,7 @@ async def _proventos_total(
 ) -> Decimal:
     """Soma de proventos pagos (status=RECEBIDO) opcionalmente a partir de 'since'."""
     try:
-        from app.models.asset_dividend import AssetDividend  # noqa: F811
+        from app.models.asset_dividend import AssetDividend
         q = (
             select(func.sum(AssetDividend.amount * AssetDividend.quantity))
             .where(
@@ -171,6 +169,12 @@ async def get_kpis(db: AsyncSession, portfolio_id: int) -> dict:
     proventos_total = await _proventos_total(db, portfolio_id)
     proventos_12m   = await _proventos_total(db, portfolio_id, since=today - timedelta(days=365))
 
+    ret_desde_inicio = (
+        _safe_pct(snap_today.total_pnl, snap_today.invested_total)
+        if snap_first is None
+        else _ret_between(snap_today, snap_first)
+    )
+
     payload = {
         "patrimonio_atual":          float(snap_today.market_value),
         "custo_total":               float(snap_today.cost_basis),
@@ -181,9 +185,7 @@ async def get_kpis(db: AsyncSession, portfolio_id: int) -> dict:
         "retorno_total_pct":         float(snap_today.return_pct),
         "retorno_mes_pct":           _ret_between(snap_today, snap_30d),
         "retorno_12m_pct":           _ret_between(snap_today, snap_12m),
-        "retorno_desde_inicio_pct":  _safe_pct(snap_today.total_pnl, snap_today.invested_total)
-                                     if snap_first is None
-                                     else _ret_between(snap_today, snap_first),
+        "retorno_desde_inicio_pct":  ret_desde_inicio,
         "proventos_total":           float(proventos_total),
         "proventos_12m":             float(proventos_12m),
         "snapshot_date":             str(snap_today.snapshot_date),
@@ -337,12 +339,12 @@ async def get_rentabilidade_por_classe(db: AsyncSession, portfolio_id: int) -> l
             "realized_pnl":     round(g["realized_pnl"], 2),
             "total_pnl":        round(g["total_pnl"], 2),
             "total_pnl_pct":    _safe_pct(
-                                    Decimal(str(pnl)),
-                                    Decimal(str(invested)),
-                                ) if invested > 0 else 0.0,
+                Decimal(str(pnl)),
+                Decimal(str(invested)),
+            ) if invested > 0 else 0.0,
             "alocacao_pct":     round(
-                                    g["current_value"] / patrimonio_total * 100, 2
-                                ) if patrimonio_total > 0 else 0.0,
+                g["current_value"] / patrimonio_total * 100, 2
+            ) if patrimonio_total > 0 else 0.0,
             "count":            g["count"],
         })
 
