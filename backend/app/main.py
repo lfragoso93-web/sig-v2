@@ -135,7 +135,7 @@ async def global_exception_handler(request: Request, exc: Exception):
                 "detail": str(exc),
                 "type": type(exc).__name__,
                 "traceback": tb,
-                "path": str(url),
+                "path": str(request.url),
             },
         )
     return JSONResponse(
