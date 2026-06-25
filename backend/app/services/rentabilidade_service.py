@@ -88,18 +88,37 @@ async def _proventos_total(
     portfolio_id: int,
     since: Optional[date] = None,
 ) -> Decimal:
-    """Soma de proventos pagos (status=RECEBIDO) opcionalmente a partir de 'since'."""
+    """
+    Soma de proventos recebidos da carteira.
+
+    Usa a tabela `dividends` (Dividend), que tem vinculo direto com portfolio_id
+    e os campos corretos: total_value / total_received / status.
+
+    Ordem de preferencia para o valor:
+      1. total_value   (campo principal, preenchido pelo backfill moderno)
+      2. total_received (campo legado do backfill antigo)
+    """
     try:
-        from app.models.asset_dividend import AssetDividend
+        from app.models.dividend import Dividend, DividendStatus
+
+        # Soma total_value para registros com status RECEBIDO
+        value_col = func.coalesce(
+            func.sum(
+                func.coalesce(Dividend.total_value, Dividend.total_received, Decimal("0"))
+            ),
+            Decimal("0"),
+        )
         q = (
-            select(func.sum(AssetDividend.amount * AssetDividend.quantity))
+            select(value_col)
             .where(
-                AssetDividend.portfolio_id == portfolio_id,
-                AssetDividend.status == "RECEBIDO",
+                Dividend.portfolio_id == portfolio_id,
+                Dividend.status == DividendStatus.RECEBIDO,
             )
         )
         if since:
-            q = q.where(AssetDividend.payment_date >= since)
+            q = q.where(
+                Dividend.payment_date >= since,
+            )
         result = await db.execute(q)
         return Decimal(str(result.scalar_one() or 0))
     except Exception as e:
