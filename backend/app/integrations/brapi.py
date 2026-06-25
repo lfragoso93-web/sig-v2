@@ -68,14 +68,14 @@ _CRYPTO_NAME_MAP: dict[str, str] = {
     "BITCOINSV": "BSV",
 }
 
-# ── Tesouro Direto — mapa estático de nomes comuns → slug BRAPI ───────────────
+# ── Tesouro Direto — mapa estático de nomes comuns → slug BRAPI ─────────────────────
 #
 # Camada 1: resolve variações de digitação do usuário para o slug exato da BRAPI.
 # Inclui variações com/sem acento, com/sem espaço, abreviacoes comuns.
 # Atualizar aqui quando a STN emitir novos titulos que usuarios cadastrarem
 # com nomes nao cobertos pela normalizacao dinamica (Camada 2/3).
 _TREASURY_NAME_MAP: dict[str, str] = {
-    # ── Tesouro Selic ──────────────────────────────────────────────────────────
+    # ── Tesouro Selic ──────────────────────────────────────────────────────────────────────
     "TESOURO SELIC 2026":                         "tesouro-selic-01032026",
     "TESOURO SELIC 2027":                         "tesouro-selic-01032027",
     "TESOURO SELIC 2029":                         "tesouro-selic-01032029",
@@ -84,7 +84,7 @@ _TREASURY_NAME_MAP: dict[str, str] = {
     "LFT 2027":                                   "tesouro-selic-01032027",
     "LFT 2029":                                   "tesouro-selic-01032029",
     "LFT 2031":                                   "tesouro-selic-01032031",
-    # ── Tesouro Prefixado ──────────────────────────────────────────────────────
+    # ── Tesouro Prefixado ───────────────────────────────────────────────────────────────
     "TESOURO PREFIXADO 2026":                     "tesouro-prefixado-01012026",
     "TESOURO PREFIXADO 2027":                     "tesouro-prefixado-01012027",
     "TESOURO PREFIXADO 2029":                     "tesouro-prefixado-01012029",
@@ -94,7 +94,7 @@ _TREASURY_NAME_MAP: dict[str, str] = {
     "LTN 2027":                                   "tesouro-prefixado-01012027",
     "LTN 2029":                                   "tesouro-prefixado-01012029",
     "LTN 2031":                                   "tesouro-prefixado-01012031",
-    # ── Tesouro Prefixado com Juros Semestrais ─────────────────────────────────
+    # ── Tesouro Prefixado com Juros Semestrais ───────────────────────────────────────
     "TESOURO PREFIXADO COM JUROS SEMESTRAIS 2027": "tesouro-prefixado-com-juros-semestrais-01012027",
     "TESOURO PREFIXADO COM JUROS SEMESTRAIS 2029": "tesouro-prefixado-com-juros-semestrais-01012029",
     "TESOURO PREFIXADO COM JUROS SEMESTRAIS 2031": "tesouro-prefixado-com-juros-semestrais-01012031",
@@ -105,7 +105,7 @@ _TREASURY_NAME_MAP: dict[str, str] = {
     "NTN-F 2027":                                 "tesouro-prefixado-com-juros-semestrais-01012027",
     "NTN-F 2029":                                 "tesouro-prefixado-com-juros-semestrais-01012029",
     "NTN-F 2031":                                 "tesouro-prefixado-com-juros-semestrais-01012031",
-    # ── Tesouro IPCA+ ──────────────────────────────────────────────────────────
+    # ── Tesouro IPCA+ ──────────────────────────────────────────────────────────────────
     "TESOURO IPCA+ 2026":                         "tesouro-ipca-15082026",
     "TESOURO IPCA 2026":                          "tesouro-ipca-15082026",
     "TESOURO IPCA+ 2029":                         "tesouro-ipca-15052029",
@@ -117,7 +117,7 @@ _TREASURY_NAME_MAP: dict[str, str] = {
     "NTN-B PRINCIPAL 2026":                       "tesouro-ipca-15082026",
     "NTN-B PRINCIPAL 2029":                       "tesouro-ipca-15052029",
     "NTN-B PRINCIPAL 2035":                       "tesouro-ipca-15052035",
-    # ── Tesouro IPCA+ com Juros Semestrais ────────────────────────────────────
+    # ── Tesouro IPCA+ com Juros Semestrais ─────────────────────────────────────────
     "TESOURO IPCA+ COM JUROS SEMESTRAIS 2026":    "tesouro-ipca-com-juros-semestrais-15082026",
     "TESOURO IPCA+ COM JUROS SEMESTRAIS 2030":    "tesouro-ipca-com-juros-semestrais-15082030",
     "TESOURO IPCA+ COM JUROS SEMESTRAIS 2032":    "tesouro-ipca-com-juros-semestrais-15082032",
@@ -135,7 +135,7 @@ _TREASURY_NAME_MAP: dict[str, str] = {
     "NTN-B 2040":                                 "tesouro-ipca-com-juros-semestrais-15082040",
     "NTN-B 2045":                                 "tesouro-ipca-com-juros-semestrais-15082045",
     "NTN-B 2055":                                 "tesouro-ipca-com-juros-semestrais-15082055",
-    # ── Tesouro RendA+ ─────────────────────────────────────────────────────────
+    # ── Tesouro RendA+ ──────────────────────────────────────────────────────────────────
     "TESOURO RENDA+ 2030":                        "tesouro-renda-mais-2030",
     "TESOURO RENDA+ 2035":                        "tesouro-renda-mais-2035",
     "TESOURO RENDA+ 2040":                        "tesouro-renda-mais-2040",
@@ -150,7 +150,7 @@ _TREASURY_NAME_MAP: dict[str, str] = {
     "TESOURO RENDA MAIS 2050":                    "tesouro-renda-mais-2050",
     "TESOURO RENDA MAIS 2055":                    "tesouro-renda-mais-2055",
     "TESOURO RENDA MAIS 2060":                    "tesouro-renda-mais-2060",
-    # ── Tesouro Educa+ ─────────────────────────────────────────────────────────
+    # ── Tesouro Educa+ ──────────────────────────────────────────────────────────────────
     "TESOURO EDUCA+ 2026":                        "tesouro-educa-mais-2026",
     "TESOURO EDUCA+ 2029":                        "tesouro-educa-mais-2029",
     "TESOURO EDUCA+ 2031":                        "tesouro-educa-mais-2031",
@@ -313,7 +313,7 @@ def _parse_history_rows(
     return rows
 
 
-# ── Validação de tickers BRAPI ────────────────────────────────────────────────
+# ── Validação de tickers BRAPI ────────────────────────────────────────────────────────────────────
 
 async def fetch_valid_brapi_tickers(
     tickers: list[str],
@@ -398,7 +398,7 @@ async def is_known_by_brapi(ticker: str, asset_type: Optional[str] = None) -> bo
     return ticker in result
 
 
-# ── Helpers internos de cotacao ───────────────────────────────────────────────
+# ── Helpers internos de cotacao ───────────────────────────────────────────────────────────────
 
 def _is_cached_invalid(ticker: str) -> bool:
     """Retorna True se o ticker esta marcado como invalido no cache."""
@@ -469,7 +469,7 @@ async def _fetch_chunk_with_fallback(
     return results
 
 
-# ── Cotações atuais ───────────────────────────────────────────────────────────
+# ── Cotações atuais ─────────────────────────────────────────────────────────────────────────────
 
 async def fetch_quotes(tickers: list[str]) -> dict[str, float]:
     if not tickers:
@@ -540,7 +540,7 @@ async def fetch_quote_single(ticker: str) -> Optional[float]:
     return result.get(ticker)
 
 
-# ── Catálogo de ativos — /api/v2/tickers ─────────────────────────────────────
+# ── Catálogo de ativos — /api/v2/tickers ────────────────────────────────────────────────────────
 
 async def fetch_all_tickers_v2(
     sub_type: str,
@@ -644,7 +644,7 @@ async def fetch_crypto_available_all(limit: int = 500) -> list[dict]:
     return all_coins
 
 
-# ── Histórico diário de preços ────────────────────────────────────────────────
+# ── Histórico diário de preços ────────────────────────────────────────────────────────────────────
 
 async def fetch_price_history(
     ticker: str,
@@ -860,7 +860,7 @@ async def fetch_historical_price(ticker: str, date_str: str) -> Optional[float]:
     return None
 
 
-# ── Moedas ────────────────────────────────────────────────────────────────────
+# ── Moedas ──────────────────────────────────────────────────────────────────────────────────
 
 def _extract_price_from_item(item: dict) -> Optional[float]:
     for field in (
@@ -1006,7 +1006,7 @@ async def fetch_currency_history(
     return []
 
 
-# ── Cripto ────────────────────────────────────────────────────────────────────
+# ── Cripto ─────────────────────────────────────────────────────────────────────────────────
 
 async def fetch_crypto_quote(tickers: list[str]) -> dict[str, float]:
     """
@@ -1062,7 +1062,7 @@ async def fetch_crypto_quote(tickers: list[str]) -> dict[str, float]:
     return results
 
 
-# ── Informações do ativo ──────────────────────────────────────────────────────
+# ── Informações do ativo ──────────────────────────────────────────────────────────────────
 
 async def fetch_asset_info(ticker: str) -> Optional[dict]:
     headers = _auth_headers()
@@ -1091,7 +1091,7 @@ async def fetch_logo_url(ticker: str) -> Optional[str]:
         return None
 
 
-# ── Tesouro Direto ────────────────────────────────────────────────────────────
+# ── Tesouro Direto ──────────────────────────────────────────────────────────────────────────
 
 async def fetch_treasury_list() -> list[dict]:
     """
@@ -1120,31 +1120,68 @@ async def fetch_treasury_list() -> list[dict]:
 
 async def fetch_treasury_indicators() -> list[dict]:
     """
-    Busca precos e taxas atuais de todos os titulos via /api/v2/treasury/indicators.
-    Retorna lista de dicts com pelo menos:
-      { "symbol": "tesouro-selic-01032031", "buyPrice": 14312.50,
-        "sellPrice": 14298.00, "basePrice": 14305.00, ... }
+    Busca precos e taxas atuais de todos os titulos do Tesouro Direto.
 
-    Este e o endpoint correto para precos em tempo real (nao o /list).
+    Estrategia em 2 tentativas:
+      1. /api/v2/treasury/indicators — disponivel apenas com token BRAPI (plano pago).
+         Se retornar 400/401/403 sem token, cai imediatamente no fallback.
+      2. /api/v2/treasury/list — endpoint publico gratuito que tambem retorna
+         buyPrice/sellPrice por symbol. Menos campos, mas suficiente para precos.
+
+    Retorna lista de dicts com pelo menos:
+      { "symbol": "tesouro-selic-01032031", "buyPrice": 14312.50, ... }
     """
     headers = _auth_headers()
-    url = f"{BRAPI_BASE}/v2/treasury/indicators"
+
+    # Tentativa 1: /indicators (requer token)
+    if settings.BRAPI_TOKEN:
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.get(
+                    f"{BRAPI_BASE}/v2/treasury/indicators",
+                    headers=headers,
+                )
+                if resp.status_code not in (400, 401, 403):
+                    resp.raise_for_status()
+                    data  = resp.json()
+                    items = (
+                        data.get("treasuries")
+                        or data.get("indicators")
+                        or data.get("data")
+                        or data.get("results")
+                        or (data if isinstance(data, list) else [])
+                    )
+                    if items:
+                        logger.info(
+                            "[treasury] fetch_treasury_indicators (/indicators): %d titulos",
+                            len(items),
+                        )
+                        return items if isinstance(items, list) else []
+        except Exception as e:
+            logger.warning("[treasury] fetch_treasury_indicators (/indicators) error: %s", e)
+
+    # Tentativa 2 (fallback): /list — disponivel no plano free
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(url, headers=headers)
+            resp = await client.get(
+                f"{BRAPI_BASE}/v2/treasury/list",
+                headers=headers,
+            )
             resp.raise_for_status()
             data  = resp.json()
             items = (
                 data.get("treasuries")
-                or data.get("indicators")
                 or data.get("data")
                 or data.get("results")
                 or (data if isinstance(data, list) else [])
             )
-            logger.info("[treasury] fetch_treasury_indicators: %d titulos retornados", len(items))
+            logger.info(
+                "[treasury] fetch_treasury_indicators (/list fallback): %d titulos",
+                len(items) if isinstance(items, list) else 0,
+            )
             return items if isinstance(items, list) else []
     except Exception as e:
-        logger.warning(f"[treasury] fetch_treasury_indicators error: {e}")
+        logger.warning("[treasury] fetch_treasury_indicators (/list fallback) error: %s", e)
         return []
 
 
@@ -1214,7 +1251,7 @@ async def fetch_treasury_prices(tickers: list[str]) -> dict[str, float]:
                 originals, slug,
             )
 
-    # ── Camada 4: fallback API publica do Tesouro Nacional ────────────────────
+    # ── Camada 4: fallback API publica do Tesouro Nacional ─────────────────────────────────
     missing = [t for t in tickers if t not in results]
     if missing:
         logger.info(
@@ -1298,7 +1335,7 @@ async def fetch_treasury_price_by_date(slug: str, date_str: str) -> Optional[flo
     return None
 
 
-# ── Busca / sugestões de ticker ───────────────────────────────────────────────
+# ── Busca / sugestões de ticker ───────────────────────────────────────────────────────────────
 
 async def fetch_ticker_suggestions(
     q: str,
