@@ -123,8 +123,9 @@ Ao subir o container, o backend executa automaticamente:
 | `/api/v1/users` | CRUD de usuários |
 | `/api/v1/admin` | Operações de superadmin (seed de ativos, etc.) |
 | `/api/v1/portfolios` | Carteiras, transações, proventos, Tesouro |
+| `/api/v1/portfolios/{id}/rentabilidade` | KPIs, rentabilidade por ativo e por classe |
 | `/api/v1/positions` | Posições consolidadas por carteira |
-| `/api/v1/performance` | Rentabilidade e TWR |
+| `/api/v1/performance` | Rentabilidade histórica e TWR |
 | `/api/v1/assets` | Catálogo de ativos |
 | `/api/v1/quotes` | Cotações em tempo real |
 | `/api/v1/prices` | Histórico de preços OHLCV |
@@ -137,10 +138,47 @@ Ao subir o container, o backend executa automaticamente:
 
 ---
 
+## Telas do Frontend
+
+| Rota | Tela |
+|---|---|
+| `/carteira` | Resumo da carteira |
+| `/carteira/rentabilidade` | **Rentabilidade** — KPIs, retornos por período, tabela por ativo, breakdown por classe |
+| `/carteira/proventos` | Proventos recebidos e a receber |
+| `/carteira/patrimonio` | Evolução patrimonial |
+| `/carteira/lancamentos` | Lançamentos manuais |
+| `/carteira/transacoes` | Histórico de transações |
+| `/metas` | Metas financeiras |
+| `/irpf` | Declaração IRPF |
+| `/analise` | Análise de diversificação |
+
+---
+
+## Testes
+
+```bash
+cd backend
+pip install -r requirements-test.txt
+pytest tests/ -v
+```
+
+Cobertura atual por módulo:
+
+| Módulo | Arquivo de teste |
+|---|---|
+| Auth | `test_auth_service.py` |
+| Portfolio | `test_portfolio_service.py` |
+| Dividends | `test_dividend_service.py` |
+| Quotes | `test_quotes_service.py` |
+| Transactions | `test_transaction_service.py` |
+| **Rentabilidade** | **`test_rentabilidade_service.py`** (13 casos) |
+
+---
+
 ## Status
 
-> **Sprint 4 concluída** — Catálogo de ativos com 2.259 tickers B3, backfill histórico de 10 anos, modal de transações com todas as classes (incluindo BDR).
+> **Sprint 5 em andamento** — Página de Rentabilidade completa (backend + frontend + testes).
 >
-> Próximo: Sprint 5 — Dashboard frontend completo.
+> Última entrega: `RentabilidadePage` com 8 KPIs, breakdown por classe de ativo, tabela por ativo com ganho realizado/não-realizado, filtro de tipo e toggle de posições zeradas.
 
 Consulte [ROADMAP_SPRINTS.md](./ROADMAP_SPRINTS.md) para o planejamento detalhado e [CHANGELOG.md](./CHANGELOG.md) para o histórico de mudanças.

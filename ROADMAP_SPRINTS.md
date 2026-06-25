@@ -1,6 +1,6 @@
 # Roadmap de Sprints — SGI v2
 
-> Última atualização: 24/06/2026
+> Última atualização: 25/06/2026
 
 ---
 
@@ -63,6 +63,12 @@
 ## 🔄 Sprint 5 — Frontend Dashboard (Em andamento)
 **Período:** Julho 2026
 
+- [x] **Página de Rentabilidade** (`/carteira/rentabilidade`) — concluído em 25/06/2026
+  - [x] Backend: `rentabilidade_service.py` com KPIs, por ativo e por classe (cache Redis TTL 5min)
+  - [x] Backend: `routers/rentabilidade.py` com 3 endpoints + verificação de ownership
+  - [x] Testes: `test_rentabilidade_service.py` com 13 casos (SQLite in-memory + mocks)
+  - [x] Frontend: `rentabilidadeService.ts` + `useRentabilidade.ts` + `RentabilidadePage.tsx`
+  - [x] UI: 8 KpiCards, barra por classe de ativo, tabela por ativo com filtros
 - [ ] Dashboard principal com resumo de patrimônio
 - [ ] Gráfico de evolução patrimonial (linha histórica)
 - [ ] Distribuição por classe de ativo (pizza/donut)
