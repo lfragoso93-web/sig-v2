@@ -20,6 +20,8 @@ from app.integrations.brapi import (
     fetch_ticker_suggestions,
     fetch_treasury_price_by_date,
     fetch_crypto_suggestions,
+    fetch_crypto_quote,
+    _normalize_crypto_ticker,
     _yf_search_sync,
 )
 
@@ -61,6 +63,31 @@ _TESOURO_STATIC: list[dict] = [
 ]
 
 _SLUG_INDEX: dict[str, dict] = {item["slug"]: item for item in _TESOURO_STATIC if "slug" in item}
+
+# Mapa nome-completo -> ticker para criptos comuns.
+# Usado como fallback quando o banco tem ticker=BITCOIN em vez de BTC.
+_CRYPTO_NAME_TO_TICKER: dict[str, str] = {
+    "BITCOIN": "BTC",
+    "ETHEREUM": "ETH",
+    "CARDANO": "ADA",
+    "SOLANA": "SOL",
+    "RIPPLE": "XRP",
+    "DOGECOIN": "DOGE",
+    "POLKADOT": "DOT",
+    "LITECOIN": "LTC",
+    "CHAINLINK": "LINK",
+    "UNISWAP": "UNI",
+    "AVALANCHE": "AVAX",
+    "POLYGON": "MATIC",
+    "BINANCECOIN": "BNB",
+    "TETHER": "USDT",
+    "USDCOIN": "USDC",
+    "STELLAR": "XLM",
+    "TRON": "TRX",
+    "MONERO": "XMR",
+    "COSMOS": "ATOM",
+    "ALGORAND": "ALGO",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -153,6 +180,32 @@ def _detect_type_from_brapi(info: dict) -> Optional[str]:
     if not detected and ticker.endswith("11"):
         detected = "FII"
     return detected
+
+
+def _resolve_crypto_ticker(ticker: str, db_asset_type: Optional[str] = None) -> Optional[str]:
+    """
+    Tenta resolver o ticker de uma cripto para o codigo BRAPI.
+    Retorna o codigo normalizado se for cripto, ou None se nao for cripto.
+
+    Casos tratados:
+      - ticker ja e o codigo (BTC, ETH, ADA) -> retorna normalizado
+      - ticker e nome completo (BITCOIN, ETHEREUM) -> faz lookup no mapa
+      - db_asset_type == 'CRIPTO' -> forca tratamento como cripto
+    """
+    t = ticker.strip().upper()
+
+    # Se o asset_type do banco diz CRIPTO, tenta resolver
+    is_cripto = (db_asset_type or "").upper() == "CRIPTO"
+
+    # Lookup por nome completo primeiro
+    if t in _CRYPTO_NAME_TO_TICKER:
+        return _CRYPTO_NAME_TO_TICKER[t]
+
+    # Se vier de contexto cripto, normaliza o ticker (remove sufixos -USD, BRL, etc)
+    if is_cripto:
+        return _normalize_crypto_ticker(t)
+
+    return None
 
 
 def _yf_fetch_sync(ticker: str, date_str: Optional[str] = None) -> Optional[dict]:
@@ -271,10 +324,6 @@ async def list_assets(
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_user),
 ):
-    """
-    Lista todos os ativos cadastrados no banco com paginacao.
-    Suporta filtro por asset_type e busca textual por ticker/nome.
-    """
     stmt = select(Asset)
 
     if asset_type:
@@ -320,7 +369,7 @@ async def list_assets(
 
 
 # ---------------------------------------------------------------------------
-# GET /assets/{ticker}/detail  — detalhe com cotacao atual + historico
+# GET /assets/{ticker}/detail
 # ---------------------------------------------------------------------------
 
 @router.get("/{ticker}/detail", response_model=AssetDetailResponse)
@@ -330,13 +379,6 @@ async def get_asset_detail(
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_user),
 ):
-    """
-    Retorna detalhe completo de um ativo:
-      - Dados cadastrais (id, ticker, name, asset_type)
-      - last_price e last_price_updated_at do banco
-      - current_price atualizado via quotes_service (respeita cache L1/L2)
-      - price_history dos ultimos N dias via price_history_service
-    """
     t = ticker.strip().upper()
 
     result = await db.execute(select(Asset).where(Asset.ticker == t))
@@ -347,7 +389,6 @@ async def get_asset_detail(
 
     asset_type_str = str(asset.asset_type)
 
-    # Cotacao atual (respeita cache TTL=15min — nao dispara request se recente)
     current_price: Optional[float] = None
     try:
         current_price = await get_current_price(
@@ -358,7 +399,6 @@ async def get_asset_detail(
     except Exception as e:
         logger.warning(f"[assets] get_current_price falhou para {t}: {e}")
 
-    # Historico de precos
     history: list[dict] = []
     try:
         asset_type_enum = AssetType(asset_type_str)
@@ -379,7 +419,7 @@ async def get_asset_detail(
 
 
 # ---------------------------------------------------------------------------
-# Endpoints existentes (sem alteracao)
+# Endpoints de escrita / busca
 # ---------------------------------------------------------------------------
 
 @router.get("/search", response_model=list[AssetResponse])
@@ -413,10 +453,17 @@ async def suggest_tickers(
         raw = await fetch_crypto_suggestions(q.strip(), limit)
         result = []
         for item in raw:
-            coin = item.get("coin") or item.get("symbol") or item.get("ticker") or ""
-            name = item.get("name") or ""
+            # A BRAPI /crypto/available pode retornar:
+            #   - lista de strings: ["BTC", "ETH", ...]
+            #   - lista de dicts:   [{"coin": "BTC", "coinName": "Bitcoin"}, ...]
+            if isinstance(item, str):
+                coin = item.upper()
+                name = coin
+            else:
+                coin = (item.get("coin") or item.get("symbol") or item.get("ticker") or "").upper()
+                name = item.get("coinName") or item.get("name") or coin
             if coin:
-                result.append(TickerSuggestion(ticker=coin.upper(), name=name, type="cripto"))
+                result.append(TickerSuggestion(ticker=coin, name=name, type="cripto"))
         return result
 
     if asset_type in ("stock_int", "etf_int"):
@@ -483,12 +530,44 @@ async def get_treasury_price(
 async def get_ticker_quote(
     ticker: str,
     date: Optional[str] = Query(None),
+    asset_type: Optional[str] = Query(None, description="Tipo do ativo: CRIPTO, ACAO, FII, etc."),
     _=Depends(get_current_user),
 ):
+    """
+    Retorna cotacao de um ticker.
+
+    Para criptos, aceita tanto o codigo (BTC) quanto o nome completo (BITCOIN).
+    Se asset_type=CRIPTO ou o ticker for reconhecido como nome de cripto,
+    usa o endpoint /api/v2/crypto da BRAPI em vez de /api/v2/quote.
+    """
     t = ticker.strip().upper()
     today = __import__('datetime').date.today().isoformat()
     use_hist = date and date != today
 
+    # Tenta resolver como cripto: BITCOIN->BTC, ETH->ETH, BTC-USD->BTC
+    crypto_code = _resolve_crypto_ticker(t, db_asset_type=asset_type)
+
+    # Caminho cripto
+    if crypto_code:
+        prices = await fetch_crypto_quote([crypto_code])
+        price = prices.get(crypto_code)
+        if price is not None:
+            return TickerQuoteResponse(
+                ticker=t,
+                name=_CRYPTO_NAME_TO_TICKER.get(t, crypto_code),
+                price=price,
+                currency="BRL",
+                asset_type="CRIPTO",
+                source="brapi",
+                price_date=today,
+            )
+        # Se a BRAPI falhou para cripto, nao tenta BRAPI /quote (vai retornar 404)
+        raise HTTPException(
+            status_code=404,
+            detail=f"Cotacao cripto nao encontrada para '{t}' (codigo: {crypto_code})."
+        )
+
+    # Caminho normal (B3, stocks, ETF, etc.)
     if use_hist:
         hist_price = await fetch_historical_price(t, date)
         if hist_price:
