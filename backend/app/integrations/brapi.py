@@ -1,5 +1,6 @@
 import httpx
 import logging
+import re
 import time
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
@@ -21,11 +22,30 @@ _BRAPI_TICKER_INVALID_TTL = 86400.0  # 24h para tickers marcados como invalidos
 # Tamanho maximo de tickers por request /quote
 BRAPI_QUOTE_CHUNK = 20
 
+# Regex para extrair o codigo base de um ticker de cripto.
+# Ex: BTC-USD -> BTC | ETHBRL -> ETH | bitcoin -> BITCOIN (normalizado pelo caller)
+_CRYPTO_SUFFIX_RE = re.compile(r"[-/](USD|BRL|USDT|USDC|EUR|GBP|BTC)$", re.IGNORECASE)
+
 
 def _auth_headers() -> dict:
     if settings.BRAPI_TOKEN:
         return {"Authorization": f"Bearer {settings.BRAPI_TOKEN}"}
     return {}
+
+
+def _normalize_crypto_ticker(ticker: str) -> str:
+    """
+    Extrai o codigo base de um ticker de criptomoeda.
+    BTC-USD -> BTC | ETHBRL -> ETH | BTC -> BTC
+    """
+    t = ticker.strip().upper()
+    t = _CRYPTO_SUFFIX_RE.sub("", t)
+    # Remove sufixos colados sem separador: ETHBRL -> ETH, BTCUSDT -> BTC
+    for suffix in ("USDT", "USDC", "BRL", "USD", "EUR", "GBP"):
+        if t.endswith(suffix) and len(t) > len(suffix):
+            t = t[: -len(suffix)]
+            break
+    return t
 
 
 def _parse_history_rows(
@@ -62,9 +82,16 @@ def _parse_history_rows(
 
 # ── Validação de tickers BRAPI ────────────────────────────────────────────────
 
-async def fetch_valid_brapi_tickers(tickers: list[str]) -> set[str]:
+async def fetch_valid_brapi_tickers(
+    tickers: list[str],
+    asset_type: Optional[str] = None,
+) -> set[str]:
     """
     Valida quais tickers do lote existem na base da BRAPI.
+
+    Se asset_type == 'CRIPTO', usa /api/v2/crypto/available em vez de
+    /api/v2/tickers (que retorna apenas ativos da B3 e causava confusao
+    entre cripto e ETF).
 
     Usa cache em memoria com TTL de 1 hora para evitar requests repetidos.
     Tickers nao encontrados sao marcados como invalidos no cache (is_known=False)
@@ -88,27 +115,45 @@ async def fetch_valid_brapi_tickers(tickers: list[str]) -> set[str]:
     if not to_check:
         return known
 
+    is_crypto = (asset_type or "").upper() == "CRIPTO"
     headers = _auth_headers()
+
     async with httpx.AsyncClient(timeout=10.0) as client:
         for ticker in to_check:
             try:
-                resp = await client.get(
-                    f"{BRAPI_BASE}/v2/tickers",
-                    headers=headers,
-                    params={"search": ticker.upper(), "limit": 1},
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                items = (
-                    data.get("tickers")
-                    or data.get("stocks")
-                    or data.get("results")
-                    or []
-                )
-                is_known = any(
-                    (item.get("stock") or item.get("symbol") or item.get("ticker") or "").upper() == ticker.upper()
-                    for item in items
-                )
+                if is_crypto:
+                    coin_code = _normalize_crypto_ticker(ticker)
+                    resp = await client.get(
+                        f"{BRAPI_BASE}/v2/crypto/available",
+                        headers=headers,
+                        params={"search": coin_code, "limit": 5},
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+                    items = data.get("coins") or data.get("available") or []
+                    is_known = any(
+                        (item.get("coin") or item.get("symbol") or "").upper() == coin_code.upper()
+                        for item in items
+                    )
+                else:
+                    resp = await client.get(
+                        f"{BRAPI_BASE}/v2/tickers",
+                        headers=headers,
+                        params={"search": ticker.upper(), "limit": 1},
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+                    items = (
+                        data.get("tickers")
+                        or data.get("stocks")
+                        or data.get("results")
+                        or []
+                    )
+                    is_known = any(
+                        (item.get("stock") or item.get("symbol") or item.get("ticker") or "").upper() == ticker.upper()
+                        for item in items
+                    )
+
                 ttl = _BRAPI_TICKER_CACHE_TTL if is_known else _BRAPI_TICKER_INVALID_TTL
                 _BRAPI_TICKER_CACHE[ticker] = (is_known, now + ttl)
                 if is_known:
@@ -123,8 +168,8 @@ async def fetch_valid_brapi_tickers(tickers: list[str]) -> set[str]:
     return known
 
 
-async def is_known_by_brapi(ticker: str) -> bool:
-    result = await fetch_valid_brapi_tickers([ticker])
+async def is_known_by_brapi(ticker: str, asset_type: Optional[str] = None) -> bool:
+    result = await fetch_valid_brapi_tickers([ticker], asset_type=asset_type)
     return ticker in result
 
 
@@ -338,6 +383,60 @@ async def fetch_all_tickers_v2(
         page += 1
 
     return all_items
+
+
+async def fetch_crypto_available_all(limit: int = 500) -> list[dict]:
+    """
+    Busca todas as criptomoedas disponiveis na BRAPI via /api/v2/crypto/available
+    com paginacao real. Retorna lista de dicts com pelo menos:
+      { "coin": "BTC", "coinName": "Bitcoin", ... }
+
+    Usado pelo seed para popular a tabela assets com asset_type=CRIPTO,
+    permitindo busca por nome completo (ex: "Bitcoin", "Ethereum", "Cardano").
+    """
+    headers   = _auth_headers()
+    all_coins: list[dict] = []
+    page      = 1
+
+    while True:
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.get(
+                    f"{BRAPI_BASE}/v2/crypto/available",
+                    headers=headers,
+                    params={"limit": limit, "page": page},
+                )
+                resp.raise_for_status()
+                data  = resp.json()
+                items = (
+                    data.get("coins")
+                    or data.get("available")
+                    or (data if isinstance(data, list) else [])
+                )
+        except Exception as e:
+            logger.error(f"[brapi] /v2/crypto/available page={page}: {e}")
+            break
+
+        if not items:
+            break
+
+        now = time.monotonic()
+        for item in items:
+            coin = (item.get("coin") or item.get("symbol") or "").upper()
+            if coin:
+                _BRAPI_TICKER_CACHE[coin] = (True, now + _BRAPI_TICKER_CACHE_TTL)
+
+        all_coins.extend(items)
+        logger.info(
+            f"[brapi] /v2/crypto/available page={page}: "
+            f"{len(items)} moedas ({len(all_coins)} acumuladas)"
+        )
+
+        if len(items) < limit:
+            break
+        page += 1
+
+    return all_coins
 
 
 # ── Histórico diário de preços ────────────────────────────────────────────────
@@ -705,13 +804,25 @@ async def fetch_currency_history(
 # ── Cripto ────────────────────────────────────────────────────────────────────
 
 async def fetch_crypto_quote(tickers: list[str]) -> dict[str, float]:
+    """
+    Busca cotacao de criptomoedas via /api/v2/crypto.
+    Normaliza os tickers antes de enviar: BTC-USD -> BTC, ETHBRL -> ETH.
+    O resultado e indexado pelo ticker ORIGINAL para compatibilidade com
+    o cache do quotes_service.
+    """
     if not tickers:
         return {}
 
     headers = _auth_headers()
     results: dict[str, float] = {}
 
-    joined = ",".join(t.upper() for t in tickers)
+    # Mapa: codigo_normalizado -> [tickers_originais]
+    norm_map: dict[str, list[str]] = {}
+    for t in tickers:
+        code = _normalize_crypto_ticker(t)
+        norm_map.setdefault(code, []).append(t)
+
+    joined = ",".join(norm_map.keys())
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(
@@ -723,10 +834,14 @@ async def fetch_crypto_quote(tickers: list[str]) -> dict[str, float]:
             data  = resp.json()
             coins = data.get("coins") or []
             for coin in coins:
-                symbol = coin.get("coin") or coin.get("symbol") or ""
+                symbol = (coin.get("coin") or coin.get("symbol") or "").upper()
                 price  = coin.get("regularMarketPrice") or coin.get("price")
                 if symbol and price is not None:
-                    results[symbol.upper()] = float(price)
+                    # Propaga o preco para todos os tickers originais que mapeiam para esse codigo
+                    for original in norm_map.get(symbol, [symbol]):
+                        results[original] = float(price)
+                    # Garante que o codigo normalizado tambem esta no resultado
+                    results[symbol] = float(price)
     except Exception as e:
         logger.warning(f"BRAPI fetch_crypto_quote error for {tickers}: {e}")
 
