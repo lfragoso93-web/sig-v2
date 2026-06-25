@@ -1122,18 +1122,21 @@ async def fetch_treasury_indicators() -> list[dict]:
     """
     Busca precos e taxas atuais de todos os titulos do Tesouro Direto.
 
-    Estrategia em 2 tentativas:
-      1. /api/v2/treasury/indicators — disponivel apenas com token BRAPI (plano pago).
-         Se retornar 400/401/403 sem token, cai imediatamente no fallback.
-      2. /api/v2/treasury/list — endpoint publico gratuito que tambem retorna
-         buyPrice/sellPrice por symbol. Menos campos, mas suficiente para precos.
+    Estrategia em 3 tentativas:
+      1. /api/v2/treasury/indicators — disponivel apenas com token BRAPI valido (plano pago).
+         Tentado SOMENTE se BRAPI_TOKEN estiver configurado.
+         Se retornar 400/401/403, cai imediatamente no proximo fallback.
+      2. /api/v2/treasury/list — endpoint publico gratuito que retorna
+         buyPrice/sellPrice por symbol. Sempre tentado como primeiro fallback.
+      3. api.radaropcoes.com — fallback externo gratuito com dados em tempo real
+         do Tesouro Direto. Usado quando BRAPI nao responde ou retorna lista vazia.
 
     Retorna lista de dicts com pelo menos:
       { "symbol": "tesouro-selic-01032031", "buyPrice": 14312.50, ... }
     """
     headers = _auth_headers()
 
-    # Tentativa 1: /indicators (requer token)
+    # Tentativa 1: /indicators — somente se token configurado e valido
     if settings.BRAPI_TOKEN:
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
@@ -1157,10 +1160,15 @@ async def fetch_treasury_indicators() -> list[dict]:
                             len(items),
                         )
                         return items if isinstance(items, list) else []
+                else:
+                    logger.warning(
+                        "[treasury] /indicators retornou %d (token invalido/expirado) — usando fallback",
+                        resp.status_code,
+                    )
         except Exception as e:
             logger.warning("[treasury] fetch_treasury_indicators (/indicators) error: %s", e)
 
-    # Tentativa 2 (fallback): /list — disponivel no plano free
+    # Tentativa 2: /list — disponivel no plano free, sem token
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(
@@ -1175,14 +1183,60 @@ async def fetch_treasury_indicators() -> list[dict]:
                 or data.get("results")
                 or (data if isinstance(data, list) else [])
             )
-            logger.info(
-                "[treasury] fetch_treasury_indicators (/list fallback): %d titulos",
-                len(items) if isinstance(items, list) else 0,
-            )
-            return items if isinstance(items, list) else []
+            if items and isinstance(items, list):
+                logger.info(
+                    "[treasury] fetch_treasury_indicators (/list): %d titulos",
+                    len(items),
+                )
+                return items
     except Exception as e:
-        logger.warning("[treasury] fetch_treasury_indicators (/list fallback) error: %s", e)
-        return []
+        logger.warning("[treasury] fetch_treasury_indicators (/list) error: %s", e)
+
+    # Tentativa 3: Radar Opcoes — fallback externo gratuito
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get("https://api.radaropcoes.com/tesouro-direto")
+            resp.raise_for_status()
+            data = resp.json()
+            # Normaliza para o formato interno { symbol, buyPrice, sellPrice, annualRate }
+            raw_items = (
+                data.get("data")
+                or data.get("treasuries")
+                or data.get("results")
+                or (data if isinstance(data, list) else [])
+            )
+            items = []
+            for item in raw_items:
+                symbol = (
+                    item.get("symbol")
+                    or item.get("slug")
+                    or item.get("name")
+                    or ""
+                ).strip()
+                buy_price = (
+                    item.get("buyPrice")
+                    or item.get("buy_price")
+                    or item.get("preco_compra")
+                    or item.get("price")
+                )
+                if symbol and buy_price is not None:
+                    items.append({
+                        "symbol":     symbol,
+                        "buyPrice":   float(buy_price),
+                        "sellPrice":  item.get("sellPrice") or item.get("sell_price"),
+                        "annualRate": item.get("annualRate") or item.get("taxa"),
+                    })
+            if items:
+                logger.info(
+                    "[treasury] fetch_treasury_indicators (radaropcoes): %d titulos",
+                    len(items),
+                )
+                return items
+    except Exception as e:
+        logger.warning("[treasury] fetch_treasury_indicators (radaropcoes) error: %s", e)
+
+    logger.warning("[treasury] fetch_treasury_indicators: todos os fallbacks falharam")
+    return []
 
 
 async def fetch_treasury_prices(tickers: list[str]) -> dict[str, float]:
