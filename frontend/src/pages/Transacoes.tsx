@@ -39,7 +39,6 @@ const ASSET_TYPE_LABEL: Record<string, string> = {
   CRIPTO:            'Criptomoedas',
 }
 
-/** Retorna 'USD' se a transação for de ativo internacional, 'BRL' caso contrário */
 function txCurrency(t: Transaction): string {
   if (t.currency && t.currency.toUpperCase() === 'USD') return 'USD'
   const norm = (t.asset_type ?? '').toUpperCase()
@@ -225,7 +224,6 @@ export default function Transacoes() {
   const { data: portfolios = [] } = usePortfolios()
   const [searchParams] = useSearchParams()
 
-  // Filtros server-side
   const [search, setSearch]     = useState(() => searchParams.get('ticker') ?? '')
   const [opFilter, setOpFilter] = useState<'todos' | 'buy' | 'sell'>('todos')
   const [page, setPage]         = useState(1)
@@ -278,7 +276,6 @@ export default function Transacoes() {
     return groups
   }, [transactions])
 
-  // Totais consolidados — mantidos em BRL para o rodapé geral
   const totalCompras = transactions
     .filter(t => t.operation === 'buy')
     .reduce((s, t) => s + t.quantity * t.price + (t.fees ?? 0), 0)
@@ -310,9 +307,11 @@ export default function Transacoes() {
 
   if (!selectedPortfolioId) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 gap-3">
-        <p className="text-sm font-medium">Nenhuma carteira selecionada</p>
-        <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Selecione ou crie uma carteira na barra lateral.</p>
+      <div className="page-container">
+        <div className="flex flex-col items-center justify-center py-24 gap-3">
+          <p className="text-sm font-medium">Nenhuma carteira selecionada</p>
+          <p className="text-xs text-muted">Selecione ou crie uma carteira na barra lateral.</p>
+        </div>
       </div>
     )
   }
@@ -320,12 +319,13 @@ export default function Transacoes() {
   const portfolioName = portfolios.find(p => p.id === selectedPortfolioId)?.name ?? 'Carteira'
 
   return (
-    <div className="flex flex-col gap-5">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-2">
+    <div className="page-container">
+
+      {/* ── Header ───────────────────────────────────────────── */}
+      <div className="page-header">
         <div>
-          <h1 className="text-xl font-bold">Transações</h1>
-          <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+          <h1 className="page-title">Transações</h1>
+          <p className="page-subtitle">
             {portfolioName} · {totalRecords} registro{totalRecords !== 1 ? 's' : ''}
             {search && (
               <span
@@ -339,27 +339,27 @@ export default function Transacoes() {
         </div>
       </div>
 
-      {/* Gráfico de Consolidação de aportes */}
+      {/*
+       * ── Gráfico de aportes ─────────────────────────────────
+       * Sem overflow-hidden para que o tooltip do Recharts
+       * (position:absolute) não seja amputado pelo card pai.
+       */}
       <div className="card p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <BarChart2 size={16} className="text-brand-400" />
-            <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-              Consolidação de aportes
-            </span>
-          </div>
+        <div className="flex items-center gap-2 mb-3">
+          <BarChart2 size={16} className="text-brand-400" />
+          <span className="section-card-title">Consolidação de aportes</span>
         </div>
         <div className="h-56">
           <TransactionsBarChart transactions={transactions} />
         </div>
       </div>
 
-      {/* Filtros server-side */}
+      {/* ── Filtros ──────────────────────────────────────────── */}
       <div className="flex flex-wrap gap-2">
         <div className="relative">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-text-muted)' }} />
           <input
-            className="input pl-8 w-40 text-sm"
+            className="input pl-8 w-40"
             placeholder="Buscar ticker…"
             value={search}
             onChange={e => handleSearchChange(e.target.value)}
@@ -394,8 +394,8 @@ export default function Transacoes() {
         </div>
       </div>
 
-      {/* Conteúdo */}
-      <div className="rounded-xl overflow-hidden" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+      {/* ── Conteúdo ─────────────────────────────────────────── */}
+      <div className="card overflow-hidden">
         {isLoading ? (
           <div className="p-4 flex flex-col gap-3">
             {Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton h-10 w-full rounded" />)}
@@ -403,7 +403,7 @@ export default function Transacoes() {
         ) : transactions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <p className="text-sm font-medium mb-1">Nenhuma transação encontrada</p>
-            <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            <p className="text-xs text-muted">
               {totalRecords === 0 ? 'Registre sua primeira transação.' : 'Tente ajustar os filtros.'}
             </p>
           </div>
@@ -418,19 +418,21 @@ export default function Transacoes() {
                   : list
                 const open = isGroupOpen(assetType)
                 return (
-                  <div key={assetType} className="flex flex-col rounded-xl" style={{ background: 'var(--color-surface-offset)', border: '1px solid var(--color-border)' }}>
-                    <div className="flex items-center justify-between px-3 py-2 border-b" style={{ borderColor: 'var(--color-divider)' }}>
+                  <div key={assetType} className="flex flex-col rounded-xl overflow-hidden"
+                    style={{ background: 'var(--color-surface-offset)', border: '1px solid var(--color-border)' }}>
+                    <div className="flex items-center justify-between px-3 py-2"
+                      style={{ borderBottom: '1px solid var(--color-divider)' }}>
                       <button type="button" className="flex items-center gap-2 text-left" onClick={() => toggleGroup(assetType)}>
                         <ChevronDown size={14} className="transition-transform"
                           style={{ transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', color: 'var(--color-text-muted)' }}
                         />
                         <span className="text-xs font-semibold">{ASSET_TYPE_LABEL[assetType] ?? assetType}</span>
-                        <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
+                        <span className="text-[11px] text-muted">
                           · {groupList.length} de {list.length} transação(ões)
                         </span>
                       </button>
                       <input
-                        className="input input-xs w-24 text-[11px]"
+                        className="input input-xs w-24"
                         placeholder="Buscar..."
                         value={groupSearch[assetType] ?? ''}
                         onChange={e => handleGroupSearchChange(assetType, e.target.value)}
@@ -439,7 +441,7 @@ export default function Transacoes() {
                     {open && (
                       <div className="flex flex-col gap-2 p-3">
                         {groupList.length === 0 ? (
-                          <p className="text-xs text-center py-4" style={{ color: 'var(--color-text-muted)' }}>
+                          <p className="text-xs text-center py-4 text-muted">
                             Nenhum ticker encontrado neste grupo.
                           </p>
                         ) : (
@@ -455,8 +457,8 @@ export default function Transacoes() {
                   </div>
                 )
               })}
-              <div className="flex justify-between text-xs pt-2"
-                style={{ color: 'var(--color-text-muted)', borderTop: '1px solid var(--color-divider)' }}>
+              <div className="flex justify-between text-xs pt-2 text-muted"
+                style={{ borderTop: '1px solid var(--color-divider)' }}>
                 <span>{totalRecords} transação(ões)</span>
                 <span>
                   <span style={{ color: 'var(--color-success)' }}>C: {formatBRL(totalCompras)}</span>
@@ -479,23 +481,24 @@ export default function Transacoes() {
                   : list
                 const open = isGroupOpen(assetType)
                 return (
-                  <div key={assetType} className="overflow-x-auto rounded-xl"
+                  <div key={assetType} className="rounded-xl overflow-hidden"
                     style={{ background: 'var(--color-surface-offset)', border: '1px solid var(--color-border)' }}
                   >
-                    <div className="px-4 pt-3 pb-2 flex items-center justify-between border-b" style={{ borderColor: 'var(--color-divider)' }}>
+                    <div className="px-4 pt-3 pb-2 flex items-center justify-between"
+                      style={{ borderBottom: '1px solid var(--color-divider)' }}>
                       <div className="flex items-center gap-2">
                         <button type="button" className="flex items-center gap-2 text-left" onClick={() => toggleGroup(assetType)}>
                           <ChevronDown size={14} className="transition-transform"
                             style={{ transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', color: 'var(--color-text-muted)' }}
                           />
                           <span className="text-sm font-semibold">{ASSET_TYPE_LABEL[assetType] ?? assetType}</span>
-                          <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                          <span className="text-xs text-muted">
                             · {groupList.length} de {list.length} transação(ões)
                           </span>
                         </button>
                       </div>
                       <input
-                        className="input input-xs w-32 text-[11px]"
+                        className="input input-xs w-32"
                         placeholder="Buscar ticker..."
                         value={groupSearch[assetType] ?? ''}
                         onChange={e => handleGroupSearchChange(assetType, e.target.value)}
@@ -504,38 +507,40 @@ export default function Transacoes() {
                     {open && (
                       <>
                         {groupList.length === 0 ? (
-                          <p className="text-xs text-center py-6" style={{ color: 'var(--color-text-muted)' }}>
+                          <p className="text-xs text-center py-6 text-muted">
                             Nenhum ticker encontrado neste grupo.
                           </p>
                         ) : (
-                          <table className="positions-table">
-                            <thead>
-                              <tr>
-                                <th>Data</th><th>Ativo</th><th>Tipo</th>
-                                <th className="text-center">Op.</th>
-                                <th className="text-right">Qtd</th>
-                                <th className="text-right">Preço unit.</th>
-                                <th className="text-right">Taxas</th>
-                                <th className="text-right">Total</th>
-                                <th />
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {groupList.map(t => (
-                                <TransactionRow key={t.id} t={t}
-                                  onDelete={() => setConfirmDelete(t.id)}
-                                  onEdit={() => handleEdit(t)}
-                                />
-                              ))}
-                            </tbody>
-                          </table>
+                          <div className="overflow-x-auto">
+                            <table className="positions-table">
+                              <thead>
+                                <tr>
+                                  <th>Data</th><th>Ativo</th><th>Tipo</th>
+                                  <th className="text-center">Op.</th>
+                                  <th className="text-right">Qtd</th>
+                                  <th className="text-right">Preço unit.</th>
+                                  <th className="text-right">Taxas</th>
+                                  <th className="text-right">Total</th>
+                                  <th style={{ width: '4rem' }} />
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {groupList.map(t => (
+                                  <TransactionRow key={t.id} t={t}
+                                    onDelete={() => setConfirmDelete(t.id)}
+                                    onEdit={() => handleEdit(t)}
+                                  />
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
                         )}
                       </>
                     )}
                   </div>
                 )
               })}
-              <div className="flex justify-between items-center text-xs pr-1 pb-1" style={{ color: 'var(--color-text-muted)' }}>
+              <div className="flex justify-between items-center text-xs pr-1 pb-1 text-muted">
                 <Pagination page={page} pages={totalPages}
                   onPrev={() => setPage(p => Math.max(1, p - 1))}
                   onNext={() => setPage(p => Math.min(totalPages, p + 1))}
