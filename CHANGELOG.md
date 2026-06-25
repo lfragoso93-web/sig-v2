@@ -7,6 +7,37 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — CSS/UI Design System (25/06/2026)
+
+**`frontend/src/styles/globals.css`**
+- Adicionada classe utilitária `.table-dense` para tabelas compactas (th/td com padding reduzido, font-size `var(--text-xs)`, border-bottom automático)
+- Adicionadas classes `.badge` e `.badge-primary` para rótulos inline (ex: badge "atual" no resumo mensal)
+- Adicionados tokens de layout `.page-container`, `.page-header`, `.page-title`, `.page-subtitle` para consistência entre páginas
+- Adicionada classe `.input-xs` (altura 28px, padding menor, font-size `var(--text-xs)`) para inputs compactos em cabeçalhos de grupo
+- Adicionado utilitário `.text-muted` como classe Tailwind-compatível mapeada para `var(--color-text-muted)`
+
+**`frontend/src/styles/components.css`**
+- `.positions-table`: adicionado `table-layout: fixed` para que colunas respeitem larguras definidas e não causem overflow no container
+- Definidas larguras padrão por tipo de coluna: Data (`5.5rem`), Tipo (`6.5rem`), Ativo (`auto — flex`)
+- Adicionados `overflow: hidden` e `text-overflow: ellipsis` em `th` e `td` para conteúdo longo (tickers, valores)
+
+**`frontend/src/pages/Transacoes.tsx`**
+- Substituído wrapper raiz por `page-container` e cabeçalho por `page-header` / `page-title` / `page-subtitle`
+- Card do gráfico de aportes removido `overflow-hidden` para que o tooltip do Recharts (position:absolute) não seja cortado
+- Inputs de busca por grupo corrigidos para usar classe `input input-xs` (antes usavam `input-xs` sem a base `input`)
+- Strings de texto inline com `style={{ color: 'var(--color-text-muted)' }}` substituídas pela classe `.text-muted`
+
+**`frontend/src/pages/PatrimonioPage.tsx`**
+- Extraído componente genérico `<ToggleGroup<T>>`: cada botão recebe `border-radius` individual nos extremos, eliminando a necessidade de `overflow-hidden` no container pai (que cortava o estado ativo)
+- Toggle Diário/Mensal e seletor de Período passam a usar `<ToggleGroup>` em vez de `<div className="overflow-hidden">`
+- Card do gráfico de evolução removido `overflow-hidden` (tooltip Recharts)
+- Tabela "Resumo Mensal" migrada para classe `.table-dense`
+- Coluna Rentabilidade da tabela mensal exibe ícone `TrendingUp` (verde) ou `TrendingDown` (vermelho) ao lado do valor percentual
+- Badge "atual" usa classes `.badge .badge-primary` em vez de estilo inline
+- Importado `TrendingDown` do `lucide-react`
+
+---
+
 ### Corrigido — Tesouro Direto & Cripto (25/06/2026)
 
 **Backend — `brapi.py`**

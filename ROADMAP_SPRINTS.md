@@ -61,7 +61,7 @@
 ---
 
 ## 🔄 Sprint 5 — Frontend Dashboard (Em andamento)
-**Período:** Julho 2026
+**Período:** Junho–Julho 2026
 
 - [x] **Página de Rentabilidade** (`/carteira/rentabilidade`) — concluído em 25/06/2026
   - [x] Backend: `rentabilidade_service.py` com KPIs, por ativo e por classe (cache Redis TTL 5min)
@@ -75,6 +75,11 @@
   - [x] `rentabilidade_service._proventos_total`: campo `Dividend.total_value` corrigido
   - [x] `_normalize_crypto_ticker`: mapa de 35 nomes completos de criptomoedas (BITCOIN → BTC)
   - [x] `quotes_service`: passa a usar `fetch_treasury_prices` com 4 camadas de resolução
+- [x] **Fixes CSS/UI Design System** — concluído em 25/06/2026
+  - [x] `globals.css`: `.table-dense`, `.badge`, `.page-container/header/title`, `.input-xs`, `.text-muted`
+  - [x] `components.css`: `.positions-table` com `table-layout: fixed` + larguras por coluna
+  - [x] `Transacoes.tsx`: `page-container/header/title`, tooltip Recharts desbloqueado, `input-xs` correto
+  - [x] `PatrimonioPage.tsx`: `<ToggleGroup>` com border-radius por botão, `table-dense` + ícones `TrendingUp/Down`
 - [ ] Dashboard principal com resumo de patrimônio
 - [ ] Gráfico de evolução patrimonial (linha histórica)
 - [ ] Distribuição por classe de ativo (pizza/donut)
