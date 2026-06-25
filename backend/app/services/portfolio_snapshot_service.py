@@ -8,7 +8,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import select, func, case, text
+from sqlalchemy import select, func, case, text, delete
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -51,6 +51,36 @@ class _TickerState:
 
 def _safe_div(a: Decimal, b: Decimal) -> Decimal:
     return a / b if b else Decimal("0")
+
+
+async def invalidate_snapshots_from(
+    db: AsyncSession,
+    portfolio_id: int,
+    from_date: date,
+    commit: bool = False,
+) -> int:
+    """
+    Apaga todos os snapshots de um portfolio a partir de from_date (inclusive).
+
+    Deve ser chamado antes de backfill_snapshots sempre que um lancamento
+    retroativo for criado, editado ou removido — garantindo que o loop de
+    backfill recalcule as datas afetadas em vez de pula-las por ja existirem.
+
+    Retorna o numero de registros deletados.
+    """
+    stmt = delete(PortfolioSnapshot).where(
+        PortfolioSnapshot.portfolio_id == portfolio_id,
+        PortfolioSnapshot.snapshot_date >= from_date,
+    )
+    result = await db.execute(stmt)
+    deleted = result.rowcount
+    if commit:
+        await db.commit()
+    logger.info(
+        "[snapshot] invalidate portfolio=%s from=%s — %s snapshots removidos",
+        portfolio_id, from_date, deleted,
+    )
+    return deleted
 
 
 async def _build_positions_at(
@@ -196,12 +226,6 @@ async def _prefetch_price_history(
     """
     Popula o banco com historico de precos para todos os tickers do portfolio
     antes de iniciar qualquer loop de calculo por data.
-
-    Usa force=True para garantir que o historico completo seja buscado
-    mesmo que o ticker ja tenha dados recentes no banco (ex: 1 registro
-    de hoje gerado pelo dashboard). Sem force=True, o last_ts limitaria
-    o days_back a apenas 1-2 dias, e o cooldown de 30min bloquearia
-    qualquer busca subsequente no loop de backfill.
     """
     result = await db.execute(
         select(Transaction.ticker, Transaction.asset_type)
@@ -238,8 +262,6 @@ async def calc_snapshot_at_date(
 ) -> dict:
     """
     Calcula e persiste snapshot para uma data especifica.
-    prefetch=True dispara _prefetch_price_history antes do calculo
-    (util para chamadas isoladas fora do backfill).
     """
     if prefetch:
         days_back = (date.today() - target_date).days + 6
@@ -285,8 +307,6 @@ async def backfill_snapshots(
     )
     existing_dates = {r.snapshot_date for r in existing.all()}
 
-    # Pre-fetch com force=True: garante historico completo desde a primeira
-    # transacao, ignorando cooldown e limitacao de days_back por last_ts.
     await _prefetch_price_history(db, portfolio_id, days_back=total_days)
 
     count = 0
