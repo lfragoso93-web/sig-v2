@@ -1152,18 +1152,18 @@ async def fetch_treasury_prices(tickers: list[str]) -> dict[str, float]:
     """
     Busca o preco atual (buyPrice) para uma lista de tickers de Tesouro Direto.
 
-    Implementa as 3 camadas de resolucao de slug:
+    Fluxo de 4 camadas:
       Camada 1 — Mapa estatico _TREASURY_NAME_MAP (ex: 'Tesouro Selic 2031' -> slug)
       Camada 2 — Slug ja no formato correto (passagem direta)
-      Camada 3 — Fallback dinamico via catalogo /v2/treasury/list (titulos novos)
+      Camada 3 — Fallback dinamico via catalogo /v2/treasury/list (titulos novos na BRAPI)
+      Camada 4 — Fallback API publica do Tesouro Nacional (titulos ausentes da BRAPI)
 
-    Usa o endpoint correto /api/v2/treasury/indicators para precos em tempo real.
     Retorna { ticker_original: preco_float }.
     """
     if not tickers:
         return {}
 
-    # Carrega catalogo dinamico (Camada 3) — cached 6h, sem custo na maioria das chamadas
+    # Carrega catalogo dinamico (Camada 3) — cached 6h
     catalog = await _load_treasury_catalog()
 
     # Mapa: slug_brapi -> [tickers_originais]
@@ -1193,7 +1193,6 @@ async def fetch_treasury_prices(tickers: list[str]) -> dict[str, float]:
         if symbol and price is not None:
             try:
                 price_map[symbol] = float(price)
-                # Tambem indexa pela versao slugificada para match com Camada 3
                 price_map[_slug_from_raw(symbol)] = float(price)
             except (ValueError, TypeError):
                 pass
@@ -1201,28 +1200,43 @@ async def fetch_treasury_prices(tickers: list[str]) -> dict[str, float]:
     # Propaga precos para os tickers originais
     results: dict[str, float] = {}
     for slug, originals in slug_map.items():
-        price = price_map.get(slug)
-        if price is None:
-            # Tenta variacao slugificada
-            price = price_map.get(_slug_from_raw(slug))
+        price = price_map.get(slug) or price_map.get(_slug_from_raw(slug))
         if price is not None:
             for original in originals:
                 results[original] = price
                 logger.debug(
-                    "[treasury] fetch_treasury_prices: %s (original) <- %s = %.2f",
+                    "[treasury] fetch_treasury_prices: %s <- %s = %.2f",
                     original, slug, price,
                 )
         else:
             logger.warning(
-                "[treasury] fetch_treasury_prices: sem preco para ticker=%r slug=%r",
+                "[treasury] fetch_treasury_prices: sem preco BRAPI para ticker=%r slug=%r",
                 originals, slug,
             )
 
+    # ── Camada 4: fallback API publica do Tesouro Nacional ────────────────────
     missing = [t for t in tickers if t not in results]
     if missing:
-        logger.warning(
-            "[treasury] fetch_treasury_prices: %d tickers sem preco: %s",
+        logger.info(
+            "[treasury] Camada 4 (TN fallback) para %d tickers: %s",
             len(missing), missing,
+        )
+        try:
+            from app.integrations.tesouro_nacional import fetch_tn_prices
+            tn_prices = await fetch_tn_prices(missing)
+            for ticker, price in tn_prices.items():
+                results[ticker] = price
+                logger.info(
+                    "[treasury] Camada 4 (TN): %r = %.2f", ticker, price
+                )
+        except Exception as e:
+            logger.warning("[treasury] Camada 4 (TN) erro: %s", e)
+
+    still_missing = [t for t in tickers if t not in results]
+    if still_missing:
+        logger.warning(
+            "[treasury] fetch_treasury_prices: %d tickers sem preco apos todas as camadas: %s",
+            len(still_missing), still_missing,
         )
 
     return results
@@ -1232,6 +1246,7 @@ async def fetch_treasury_price_by_date(slug: str, date_str: str) -> Optional[flo
     """
     Busca o preco historico de um titulo do Tesouro Direto para uma data especifica.
     Normaliza o slug usando as 3 camadas antes de chamar a API.
+    Fallback para API do Tesouro Nacional se BRAPI nao retornar resultado.
     """
     catalog = await _load_treasury_catalog()
     resolved_slug = _normalize_treasury_ticker(slug, catalog=catalog)
@@ -1254,19 +1269,33 @@ async def fetch_treasury_price_by_date(slug: str, date_str: str) -> Optional[flo
                 or data.get("data")
                 or []
             )
-            if not hist:
-                return None
-            last  = hist[-1]
-            price = (
-                last.get("buyPrice")
-                or last.get("price")
-                or last.get("basePrice")
-                or last.get("regularMarketPrice")
-            )
-            return float(price) if price else None
+            if hist:
+                last  = hist[-1]
+                price = (
+                    last.get("buyPrice")
+                    or last.get("price")
+                    or last.get("basePrice")
+                    or last.get("regularMarketPrice")
+                )
+                if price:
+                    return float(price)
     except Exception as e:
-        logger.warning(f"[treasury] fetch_treasury_price_by_date error for {resolved_slug!r} on {date_str}: {e}")
-        return None
+        logger.warning(f"[treasury] fetch_treasury_price_by_date BRAPI error for {resolved_slug!r} on {date_str}: {e}")
+
+    # Fallback Tesouro Nacional para preco historico
+    try:
+        from app.integrations.tesouro_nacional import fetch_tn_price_by_date
+        tn_price = await fetch_tn_price_by_date(slug, date_str)
+        if tn_price:
+            logger.info(
+                "[treasury] fetch_treasury_price_by_date TN fallback: %r em %s = %.2f",
+                slug, date_str, tn_price,
+            )
+            return tn_price
+    except Exception as e:
+        logger.warning("[treasury] fetch_treasury_price_by_date TN fallback erro: %s", e)
+
+    return None
 
 
 # ── Busca / sugestões de ticker ───────────────────────────────────────────────
