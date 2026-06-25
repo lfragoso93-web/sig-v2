@@ -7,7 +7,35 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased] — branch `stable-15jun`
 
-### Adicionado
+### Adicionado — Página de Rentabilidade (25/06/2026)
+
+**Backend**
+- `rentabilidade_service.py`: serviço de agregação com 3 funções (`get_kpis`, `get_rentabilidade_por_ativo`, `get_rentabilidade_por_classe`), cache Redis TTL 5min, degradação gracosa sem Redis
+- `routers/rentabilidade.py`: 3 endpoints REST com verificação de ownership por carteira:
+  - `GET /api/v1/portfolios/{id}/rentabilidade/kpis` — 13 campos: patrimônio, custo, aportado, ganhos realizados/não-realizados, retorno total/mês/12m/desde início, proventos total e 12m
+  - `GET /api/v1/portfolios/{id}/rentabilidade/ativos` — por ativo: qty, avg_price, current_value, unrealized/realized/total PnL, is_open
+  - `GET /api/v1/portfolios/{id}/rentabilidade/classes` — agrupado por ACAO/FII/ETF com alocacao_pct e total_pnl_pct
+- `main.py`: import e registro do `rentabilidade.router` na seção core financeiro
+- `main.py`: fix typo `str(url)` → `str(request.url)` no `global_exception_handler`
+
+**Testes**
+- `test_rentabilidade_service.py`: 13 casos de teste com SQLite in-memory, mocks para cache e cotações:
+  - `TestGetKpis` (5): sem snapshot, com snapshot, retorno 30d, fallback sem snap 30d, campos obrigatórios
+  - `TestGetRentabilidadePorAtivo` (5): sem posições, aberta com cotação, sem cotação (fallback avg_price), zerada com realized, zerada sem realized (ignorada)
+  - `TestGetRentabilidadePorClasse` (3): sem posições, agrupamento por tipo, alocacao_pct soma 100%
+
+**Frontend**
+- `rentabilidadeService.ts`: tipos TypeScript (`RentabilidadeKpis`, `RentabilidadeAtivo`, `RentabilidadeClasse`) + 3 métodos de API
+- `useRentabilidade.ts`: hooks `useRentabilidadeKpis`, `useRentabilidadeAtivos`, `useRentabilidadeClasses` com React Query
+- `RentabilidadePage.tsx`: página completa em `/carteira/rentabilidade`:
+  - **8 KpiCards em 2 linhas** com subValues e indicadores de variação coloridos
+  - **Coluna lateral** — Por classe: barra de alocação visual + retorno colorido por tipo
+  - **Tabela por ativo** — Qtd · P.M. · Val. atual · Ganho n.r. · Ganho real. · Total com filtro de tipo e toggle de posições zeradas
+  - Skeletons de carregamento, estados vazios, link discreto para posições zeradas
+  - Seletor de carteira quando há múltiplas carteiras
+  - Data do último snapshot no cabeçalho
+
+### Adicionado (anterior)
 - `asset_seed_service.py`: serviço que popula a tabela `assets` via BRAPI `/quote/list` com UPSERT por `(ticker, asset_type)` para Ações, FIIs, ETFs Nacionais e BDRs
 - `POST /api/v1/admin/assets/seed`: endpoint restrito a superadmin que dispara o seed em background e retorna `202 Accepted`
 - Job semanal automático `job_seed_assets` toda segunda-feira às 03h no scheduler
