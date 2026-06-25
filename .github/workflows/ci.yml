@@ -160,13 +160,13 @@ jobs:
         run: pip install pip-audit
 
       - name: Run pip-audit
-        working-directory: backend
+        # Sem working-directory: pip-audit com -r nao aceita project_path implicito.
+        # Passamos o caminho completo a partir da raiz do repositorio.
         # --ignore-vuln GHSA-xgmm-8j9v-c9wx: PyJWT JWK/HMAC confusion — falso positivo.
         # O projeto usa jwt.decode() com algorithms=[settings.ALGORITHM] (HS256 fixo).
-        # Nenhuma chave publica JWK e aceita. Ver backend/app/core/security.py -> decode_token()
         run: |
           pip-audit \
-            -r requirements.txt \
+            -r backend/requirements.txt \
             --ignore-vuln GHSA-xgmm-8j9v-c9wx \
             --severity high
 
@@ -188,7 +188,6 @@ jobs:
 
       - name: Run npm audit
         working-directory: frontend
-        # --audit-level=high bloqueia apenas em HIGH e CRITICAL
         run: npm audit --audit-level=high
 
   # ---------------------------------------------------------------------------
@@ -279,8 +278,6 @@ jobs:
         with:
           node-version: "20"
 
-      # npm ci no Dockerfile exige package-lock.json no contexto de build.
-      # Como o lockfile nao esta no repositorio, geramos aqui antes do docker build.
       - name: Generate package-lock.json
         working-directory: frontend
         run: npm install --package-lock-only --ignore-scripts
