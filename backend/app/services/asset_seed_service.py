@@ -355,7 +355,10 @@ async def run_asset_seed(db: AsyncSession, run_backfill: bool = True) -> SeedRes
     )
 
     if run_backfill and result.created > 0:
-        logger.info(f"[seed] iniciando backfill para ativos da B3 novos (cripto ignorada)")
+        logger.info(
+            "[seed] iniciando backfill para %d ativos da B3 novos (cripto ignorada)",
+            result.created,
+        )
         await _run_backfill(result.new_tickers)
     else:
         logger.info("[seed] sem ativos novos — backfill ignorado")

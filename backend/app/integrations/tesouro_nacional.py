@@ -25,7 +25,7 @@ Normalizacao de nomes:
 import logging
 import re
 import time
-from datetime import date, datetime, timezone
+from datetime import date
 from typing import Optional
 
 import httpx
