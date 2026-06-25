@@ -7,6 +7,28 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — Tesouro Direto & Cripto (25/06/2026)
+
+**Backend — `brapi.py`**
+- `fetch_treasury_indicators`: adicionada **3ª tentativa de fallback** via `api.radaropcoes.com` quando BRAPI falha completamente
+- `fetch_treasury_indicators`: token inválido/expirado (`400/401/403`) agora loga o status code explicitamente e cai no fallback `/list` sem lançar exceção
+- `fetch_treasury_indicators`: fluxo agora tem **3 camadas em cascata**:
+  1. `/v2/treasury/indicators` — somente se `BRAPI_TOKEN` configurado e retornar 2xx
+  2. `/v2/treasury/list` — plano free, sempre tentado como primeiro fallback
+  3. `api.radaropcoes.com` — fallback externo gratuito com dados em tempo real
+- `fetch_treasury_prices`: continua usando as 4 camadas internas (mapa estático → slug direto → catálogo dinâmico → API Tesouro Nacional)
+
+**Backend — `tesouro_nacional.py`**
+- Headers anti-403 adicionados (`User-Agent`, `Accept`, `Referer`)
+- Fallback adicional para endpoint `tesourotransparente.tesouro.gov.br` quando a API primária falha
+
+**Backend — `rentabilidade_service.py`**
+- `_proventos_total`: corrigido para usar `Dividend.total_value` (campo correto do modelo) em vez de `Dividend.amount`
+
+**Backend — serviços de cotação**
+- `quotes_service.py`: passa a usar `fetch_treasury_prices` com as 3 camadas de resolução de slug para Tesouro Direto
+- `_normalize_crypto_ticker`: adicionado mapa `_CRYPTO_NAME_MAP` cobrindo 35 criptomoedas por nome completo (ex: `BITCOIN → BTC`, `CARDANO → ADA`)
+
 ### Adicionado — Página de Rentabilidade (25/06/2026)
 
 **Backend**
@@ -44,7 +66,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 - Log detalhado com separadores visíveis (`==========`) no background task do seed para diagnóstico
 - Traceback completo em caso de falha no seed via `traceback.format_exc()`
 
-### Corrigido
+### Corrigido (anterior)
 - `main.py`: removida Etapa 3 (backfill de proventos) da sequência de boot — proventos são triggerados corretamente por transação via `dividend_backfill_service`, não precisam de boot
 - `price_history_backfill_service.py`: adicionada função `_sort_key` com `_TYPE_PRIORITY` para ordenar ativos no backfill inicial; BDRs (maioria sem histórico BRAPI) ficam por último
 - `asset_onboarding_service.py`: removido import inexistente `upsert_daily_prices` de `price_history_service`; substituído por função local `_upsert_price_row` usando `pg_insert` diretamente
