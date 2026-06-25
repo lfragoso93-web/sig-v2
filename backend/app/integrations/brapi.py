@@ -26,6 +26,50 @@ BRAPI_QUOTE_CHUNK = 20
 # Ex: BTC-USD -> BTC | ETHBRL -> ETH | bitcoin -> BITCOIN (normalizado pelo caller)
 _CRYPTO_SUFFIX_RE = re.compile(r"[-/](USD|BRL|USDT|USDC|EUR|GBP|BTC)$", re.IGNORECASE)
 
+# Mapa de nomes completos de criptomoedas para seus codigos de mercado.
+# Resolve casos onde o usuario cadastrou "BITCOIN" em vez de "BTC".
+_CRYPTO_NAME_MAP: dict[str, str] = {
+    "BITCOIN": "BTC",
+    "ETHEREUM": "ETH",
+    "CARDANO": "ADA",
+    "SOLANA": "SOL",
+    "DOGECOIN": "DOGE",
+    "RIPPLE": "XRP",
+    "POLKADOT": "DOT",
+    "AVALANCHE": "AVAX",
+    "CHAINLINK": "LINK",
+    "LITECOIN": "LTC",
+    "UNISWAP": "UNI",
+    "STELLAR": "XLM",
+    "TETHER": "USDT",
+    "BINANCECOIN": "BNB",
+    "BNBCOIN": "BNB",
+    "SHIBA": "SHIB",
+    "SHIBAINUTOKEN": "SHIB",
+    "POLYGON": "MATIC",
+    "NEARPROTOCOL": "NEAR",
+    "ATOMCOSMOS": "ATOM",
+    "COSMOS": "ATOM",
+    "TRON": "TRX",
+    "ALGORAND": "ALGO",
+    "VECHAIN": "VET",
+    "FILECOIN": "FIL",
+    "INTERNETCOMPUTER": "ICP",
+    "APTOS": "APT",
+    "ARBITRUM": "ARB",
+    "OPTIMISM": "OP",
+    "INJECTIVE": "INJ",
+    "AAVE": "AAVE",
+    "MAKER": "MKR",
+    "COMPOUND": "COMP",
+    "MONERO": "XMR",
+    "ZCASH": "ZEC",
+    "DASH": "DASH",
+    "ETHEREUMCLASSIC": "ETC",
+    "BITCOINCASH": "BCH",
+    "BITCOINSV": "BSV",
+}
+
 
 def _auth_headers() -> dict:
     if settings.BRAPI_TOKEN:
@@ -36,15 +80,27 @@ def _auth_headers() -> dict:
 def _normalize_crypto_ticker(ticker: str) -> str:
     """
     Extrai o codigo base de um ticker de criptomoeda.
-    BTC-USD -> BTC | ETHBRL -> ETH | BTC -> BTC
+
+    Ordem de resolucao:
+      1. Nomes completos via _CRYPTO_NAME_MAP (ex: BITCOIN -> BTC, CARDANO -> ADA)
+      2. Sufixos com separador via regex (ex: BTC-USD -> BTC)
+      3. Sufixos colados sem separador (ex: ETHBRL -> ETH, BTCUSDT -> BTC)
     """
     t = ticker.strip().upper()
+
+    # 1. Resolve nomes completos primeiro (ex: BITCOIN, CARDANO, ETHEREUM)
+    if t in _CRYPTO_NAME_MAP:
+        return _CRYPTO_NAME_MAP[t]
+
+    # 2. Remove sufixos com separador: BTC-USD -> BTC
     t = _CRYPTO_SUFFIX_RE.sub("", t)
-    # Remove sufixos colados sem separador: ETHBRL -> ETH, BTCUSDT -> BTC
+
+    # 3. Remove sufixos colados sem separador: ETHBRL -> ETH, BTCUSDT -> BTC
     for suffix in ("USDT", "USDC", "BRL", "USD", "EUR", "GBP"):
         if t.endswith(suffix) and len(t) > len(suffix):
             t = t[: -len(suffix)]
             break
+
     return t
 
 
@@ -806,7 +862,11 @@ async def fetch_currency_history(
 async def fetch_crypto_quote(tickers: list[str]) -> dict[str, float]:
     """
     Busca cotacao de criptomoedas via /api/v2/crypto.
-    Normaliza os tickers antes de enviar: BTC-USD -> BTC, ETHBRL -> ETH.
+
+    Normaliza os tickers antes de enviar usando _normalize_crypto_ticker,
+    que resolve tanto sufixos (BTC-USD -> BTC, ETHBRL -> ETH) quanto
+    nomes completos (BITCOIN -> BTC, CARDANO -> ADA) via _CRYPTO_NAME_MAP.
+
     O resultado e indexado pelo ticker ORIGINAL para compatibilidade com
     o cache do quotes_service.
     """
@@ -837,13 +897,27 @@ async def fetch_crypto_quote(tickers: list[str]) -> dict[str, float]:
                 symbol = (coin.get("coin") or coin.get("symbol") or "").upper()
                 price  = coin.get("regularMarketPrice") or coin.get("price")
                 if symbol and price is not None:
+                    price_f = float(price)
                     # Propaga o preco para todos os tickers originais que mapeiam para esse codigo
-                    for original in norm_map.get(symbol, [symbol]):
-                        results[original] = float(price)
+                    for original in norm_map.get(symbol, []):
+                        results[original] = price_f
+                        logger.debug(
+                            "[brapi] fetch_crypto_quote: %s (original) <- %s = %.4f",
+                            original, symbol, price_f,
+                        )
                     # Garante que o codigo normalizado tambem esta no resultado
-                    results[symbol] = float(price)
+                    results[symbol] = price_f
     except Exception as e:
         logger.warning(f"BRAPI fetch_crypto_quote error for {tickers}: {e}")
+
+    # Loga tickers que nao tiveram cotacao para facilitar debug
+    missing = [t for t in tickers if t not in results]
+    if missing:
+        logger.warning(
+            "[brapi] fetch_crypto_quote: sem cotacao para %s (codigos normalizados: %s)",
+            missing,
+            [_normalize_crypto_ticker(t) for t in missing],
+        )
 
     return results
 
