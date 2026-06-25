@@ -1,5 +1,5 @@
 import {
-  BarChart,
+  ComposedChart,
   Bar,
   XAxis,
   YAxis,
@@ -43,8 +43,7 @@ function buildMonthlyData(transactions: Transaction[]): MonthlyPoint[] {
     if (t.operation === 'buy') {
       acc[key].buy += value
     } else if (t.operation === 'sell') {
-      // vendas negativas para aparecerem abaixo da linha zero no gráfico,
-      // mas não afetam o valor de compra
+      // vendas como valor negativo — aparecem abaixo do eixo zero
       acc[key].sell -= value
     }
   }
@@ -55,11 +54,10 @@ function buildMonthlyData(transactions: Transaction[]): MonthlyPoint[] {
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
 
-  // No payload, o Recharts passa o valor exato usado no gráfico (buy positivo, sell negativo).
-  const rawBuy = payload.find((p: any) => p.dataKey === 'buy')?.value ?? 0
+  const rawBuy  = payload.find((p: any) => p.dataKey === 'buy')?.value  ?? 0
   const rawSell = payload.find((p: any) => p.dataKey === 'sell')?.value ?? 0
 
-  const buy = Math.max(0, rawBuy)
+  const buy  = Math.max(0, rawBuy)
   const sell = Math.abs(rawSell)
 
   return (
@@ -78,20 +76,22 @@ function CustomTooltip({ active, payload, label }: any) {
           <span className="w-2 h-2 rounded-full" style={{ background: 'var(--color-success)' }} />
           <span style={{ color: 'var(--color-text-muted)' }}>Compras</span>
         </div>
-        <span className="font-semibold tabular-nums" style={{ color: 'var(--color-text)' }}>
+        <span className="font-semibold tabular-nums" style={{ color: 'var(--color-success)' }}>
           {formatBRL(buy)}
         </span>
       </div>
 
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full" style={{ background: 'var(--color-notification)' }} />
-          <span style={{ color: 'var(--color-text-muted)' }}>Vendas</span>
+      {sell > 0 && (
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full" style={{ background: 'var(--color-notification)' }} />
+            <span style={{ color: 'var(--color-text-muted)' }}>Vendas</span>
+          </div>
+          <span className="font-semibold tabular-nums" style={{ color: 'var(--color-notification)' }}>
+            {formatBRL(sell)}
+          </span>
         </div>
-        <span className="font-semibold tabular-nums" style={{ color: 'var(--color-notification)' }}>
-          {formatBRL(sell)}
-        </span>
-      </div>
+      )}
     </div>
   )
 }
@@ -104,39 +104,45 @@ export default function TransactionsBarChart({ transactions }: Props) {
 
   return (
     <ResponsiveContainer width="100%" height={220}>
-      <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barCategoryGap="30%">
+      {/*
+        ComposedChart permite duas Bar independentes sem stackId,
+        garantindo que compras (positivas) fiquem acima do zero
+        e vendas (negativas) fiquem abaixo — sem empilhamento indevido.
+      */}
+      <ComposedChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barCategoryGap="30%">
         <CartesianGrid strokeDasharray="3 3" stroke="var(--color-divider)" vertical={false} />
         <XAxis dataKey="label" tick={tickStyle} axisLine={false} tickLine={false} />
         <YAxis
           tick={tickStyle}
           axisLine={false}
           tickLine={false}
-          tickFormatter={(v: number) => formatBRL(v, true)}
+          tickFormatter={(v: number) => formatBRL(Math.abs(v), true)}
           width={60}
         />
         <Tooltip
           content={<CustomTooltip />}
           cursor={{ fill: 'oklch(from var(--color-text) l c h / 0.04)' }}
         />
-        <ReferenceLine y={0} stroke="var(--color-divider)" />
+        <ReferenceLine y={0} stroke="var(--color-divider)" strokeWidth={1.5} />
 
-        {/* Vendas negativas abaixo da linha zero */}
-        <Bar
-          dataKey="sell"
-          name="Vendas"
-          stackId="flows"
-          fill="var(--color-notification)"
-          radius={[0, 0, 4, 4]}
-        />
-        {/* Compras positivas acima da linha zero */}
+        {/* Compras: valores positivos — barras acima do zero */}
         <Bar
           dataKey="buy"
           name="Compras"
-          stackId="flows"
           fill="var(--color-success)"
           radius={[4, 4, 0, 0]}
+          maxBarSize={32}
         />
-      </BarChart>
+
+        {/* Vendas: valores negativos — barras abaixo do zero */}
+        <Bar
+          dataKey="sell"
+          name="Vendas"
+          fill="var(--color-notification)"
+          radius={[0, 0, 4, 4]}
+          maxBarSize={32}
+        />
+      </ComposedChart>
     </ResponsiveContainer>
   )
 }

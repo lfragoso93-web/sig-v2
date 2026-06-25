@@ -32,11 +32,13 @@ O SGI v2 é uma aplicação full-stack para controle de carteiras de investiment
 - **Análise de carteira**: score de diversificação e concentração por setor
 - **Catálogo de ativos**: seed automático de 2.259+ ativos via BRAPI (semanal)
 - **Ativos internacionais**: BDR, ETF_INTL e STOCK via yfinance + Alpha Vantage
+- **Design System CSS**: `globals.css` + `components.css` com tokens, classes utilitárias (`.table-dense`, `.badge`, `.page-container`, `.input-xs`) e layout responsivo consistente
 
 ### Em desenvolvimento (Sprint 5)
 - Dashboard principal com resumo de patrimônio
 - Gráfico de evolução patrimonial
 - Telas de Metas, IRPF e Renda Fixa
+- Listagem de ativos do catálogo
 
 ---
 
@@ -59,7 +61,8 @@ sig-v2/
 │   │   ├── pages/
 │   │   ├── components/
 │   │   ├── services/
-│   │   └── hooks/
+│   │   ├── hooks/
+│   │   └── styles/       # globals.css + components.css (Design System)
 ├── docker-compose.yml
 ├── CHANGELOG.md
 ├── ROADMAP_SPRINTS.md
@@ -78,7 +81,7 @@ sig-v2/
 | Cache | Redis 7 |
 | Migrações | Alembic |
 | Frontend | React 18 + TypeScript + Vite |
-| UI | Tailwind CSS + shadcn/ui |
+| UI | Tailwind CSS + Design System próprio |
 | Estado | TanStack Query (React Query) |
 | Auth | JWT + refresh token rotativo |
 | Scheduler | APScheduler |
@@ -161,7 +164,7 @@ Ver `.env.example` para a lista completa. Principais:
 | Sprint 2 — Core Financeiro | ✅ Concluído | Maio 2026 |
 | Sprint 3 — Funcionalidades Avançadas | ✅ Concluído | Junho 2026 (1ª quinzena) |
 | Sprint 4 — Catálogo de Ativos | ✅ Concluído | Junho 2026 (2ª quinzena) |
-| Sprint 5 — Frontend Dashboard | 🔄 Em andamento | Julho 2026 |
+| Sprint 5 — Frontend Dashboard | 🔄 Em andamento | Junho–Julho 2026 |
 | Sprint 6 — Produção e Qualidade | 📋 Planejado | Agosto 2026 |
 
 Ver [ROADMAP_SPRINTS.md](./ROADMAP_SPRINTS.md) para detalhes por sprint.
