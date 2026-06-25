@@ -25,6 +25,7 @@ from app.routers import (
 from app.routers import debug
 from app.routers import prices
 from app.routers import class_targets
+from app.routers import rentabilidade
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ async def _boot_sequence() -> None:
     Etapa 2 - Backfill historico de precos (10 anos):
       Popula `asset_prices` com o historico completo de todos os ativos.
       So executa se asset_prices estiver vazia E assets tiver registros.
-      Abortada se a etapa 1 falhar com assets vazia.
+      Abortada se a etapa 1 falhou com assets vazia.
 
     Nota: proventos (dividends) sao processados automaticamente via trigger
     em cada insercao/edicao/exclusao de transacao — nao precisam de boot.
@@ -134,7 +135,7 @@ async def global_exception_handler(request: Request, exc: Exception):
                 "detail": str(exc),
                 "type": type(exc).__name__,
                 "traceback": tb,
-                "path": str(request.url),
+                "path": str(url),
             },
         )
     return JSONResponse(
@@ -194,6 +195,7 @@ app.include_router(positions.router,       prefix=f"{PREFIX}/positions",    tags
 app.include_router(dividends.router,       prefix=f"{PREFIX}/portfolios",   tags=["dividends"])
 app.include_router(proventos.router,       prefix=f"{PREFIX}",              tags=["proventos"])
 app.include_router(performance.router,     prefix=f"{PREFIX}/performance",  tags=["performance"])
+app.include_router(rentabilidade.router,   prefix=f"{PREFIX}/portfolios",   tags=["rentabilidade"])
 app.include_router(class_targets.router,   prefix=f"{PREFIX}/portfolios",   tags=["class-targets"])
 
 # Dados de mercado
