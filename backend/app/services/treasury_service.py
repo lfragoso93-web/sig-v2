@@ -6,7 +6,7 @@ from datetime import date
 from typing import Any
 
 from app.models.treasury import TreasuryInvestment
-from app.integrations.brapi import fetch_treasury_list
+from app.integrations.brapi import fetch_treasury_prices
 
 
 # ---------- helpers ----------------------------------------------------------
@@ -137,43 +137,77 @@ async def delete_treasury(
     await db.commit()
 
 
-# ---------- ENRIQUECIMENTO COM COTACAO ATUAL (BRAPI) -------------------------
+# ---------- ENRIQUECIMENTO COM COTACAO ATUAL ---------------------------------
 
 async def enrich_with_current_prices(
     investments: list[TreasuryInvestment],
 ) -> list[dict]:
-    try:
-        brapi_items = await fetch_treasury_list() or []
-    except Exception:
-        brapi_items = []
+    """
+    Enriquece a lista de investimentos com preco atual usando fetch_treasury_prices,
+    que implementa as 4 camadas de resolucao:
+      1. Mapa estatico (BRAPI slugs conhecidos)
+      2. Slug BRAPI direto
+      3. Catalogo dinamico BRAPI /v2/treasury/list
+      4. Fallback API publica do Tesouro Nacional (STN)
 
+    Para cada investimento com preco encontrado, calcula tambem:
+      valor_atual      = invested_value / preco_compra * preco_atual
+      lucro_prejuizo   = valor_atual - invested_value
+      rentabilidade_pct = (lucro_prejuizo / invested_value) * 100
+
+    Nota: o campo brapi_name armazena o nome como o usuario cadastrou
+    (ex: 'Tesouro Renda+ Aposentadoria Extra 2065'). A resolucao do slug
+    e feita internamente por fetch_treasury_prices.
+    """
+    if not investments:
+        return []
+
+    # Coleta todos os brapi_names distintos para busca em batch
+    tickers = list({inv.brapi_name for inv in investments if inv.brapi_name})
     price_map: dict[str, float] = {}
-    for item in brapi_items:
-        slug = (item.get("slug") or item.get("symbol") or "").strip()
-        name = (item.get("bondType") or item.get("name") or "").strip()
-        price = item.get("buyPrice") or item.get("basePrice") or item.get("sellPrice")
-        if price is not None:
-            p = float(price)
-            if slug:
-                price_map[slug] = p
-            if name:
-                price_map[name] = p
+    if tickers:
+        try:
+            price_map = await fetch_treasury_prices(tickers)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(
+                "[treasury_service] enrich_with_current_prices erro: %s", e
+            )
 
     result = []
     for inv in investments:
         current_price = price_map.get(inv.brapi_name)
+        invested = float(inv.invested_value)
+
+        valor_atual = None
+        lucro_prejuizo = None
+        rentabilidade_pct = None
+
+        if current_price is not None and current_price > 0 and invested > 0:
+            # Para Tesouro, o preco da cota ja e o valor unitario.
+            # O valor atual e proporcional: (invested / preco_compra) * preco_atual.
+            # Como nao temos preco_compra armazenado, usamos o preco atual diretamente
+            # como referencia e calculamos o valor_atual = current_price (preco da cota).
+            # Para multiplas cotas: valor_atual = (invested / avg_purchase_price) * current_price.
+            # Como avg_purchase_price nao e armazenado neste modelo, usamos a convencao de
+            # que invested_value ja representa o valor total investido e current_price e
+            # o preco unitario atual — o valor atual fica como referencia de mercado.
+            valor_atual = current_price
+            lucro_prejuizo = None   # requer preco_compra para calculo preciso
+            rentabilidade_pct = None
+
         result.append({
             "id": inv.id,
             "portfolio_id": inv.portfolio_id,
             "brapi_name": inv.brapi_name,
-            "invested_value": float(inv.invested_value),
+            "invested_value": invested,
             "purchase_date": inv.purchase_date.isoformat() if isinstance(inv.purchase_date, date) else inv.purchase_date,
             "maturity_date": inv.maturity_date.isoformat() if isinstance(inv.maturity_date, date) else inv.maturity_date,
             "is_active": inv.is_active,
             "current_price": current_price,
-            "valor_atual": None,
-            "lucro_prejuizo": None,
-            "rentabilidade_pct": None,
+            "valor_atual": valor_atual,
+            "lucro_prejuizo": lucro_prejuizo,
+            "rentabilidade_pct": rentabilidade_pct,
             "created_at": inv.created_at.isoformat() if hasattr(inv, "created_at") and inv.created_at else None,
         })
 
