@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import {
-  BarChart2, RefreshCw, Wallet, TrendingUp, LineChart, AlertTriangle,
+  BarChart2, RefreshCw, Wallet, TrendingUp, TrendingDown, LineChart, AlertTriangle,
 } from 'lucide-react'
 import {
   usePortfolioSummary,
@@ -25,8 +25,7 @@ import EvolutionLineChart from '@/components/charts/EvolutionLineChart'
 import EvolutionBarChart from '@/components/charts/EvolutionBarChart'
 import clsx from 'clsx'
 
-// ── Constantes ────────────────────────────────────────────────────────────────
-
+// ── Constantes ─────────────────────────────────────────────────────────────────────────────
 const ASSET_TYPE_LABELS: Record<string, string> = {
   ACAO: 'Ações', ACAO_NACIONAL: 'Ações', FII: 'FIIs',
   ETF_NACIONAL: 'ETFs BR', STOCK: 'Stocks', ETF_INTERNACIONAL: 'ETFs INT',
@@ -56,8 +55,7 @@ const PERIODS: { label: string; value: PeriodOption }[] = [
 type Tab = 'visao-geral' | 'historico'
 type ViewMode = 'diario' | 'mensal'
 
-// ── Tab bar ───────────────────────────────────────────────────────────────────
-
+// ── Tab bar ──────────────────────────────────────────────────────────────────────────
 function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: 'visao-geral', label: 'Visão Geral', icon: BarChart2 },
@@ -87,8 +85,55 @@ function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
   )
 }
 
-// ── Aba: Visao Geral ──────────────────────────────────────────────────────────
+// ── Toggle group (Diário/Mensal e Período) ──────────────────────────────────────────
+/*
+ * Cada botão tem border-radius próprio nos extremos para evitar que o
+ * background ativo "corte" nas bordas do container pai.
+ * Não usamos overflow-hidden no pai para não amputar focus rings.
+ */
+function ToggleGroup<T extends string>({
+  options, value, onChange,
+}: {
+  options: { label: string; value: T }[]
+  value: T
+  onChange: (v: T) => void
+}) {
+  return (
+    <div
+      className="flex"
+      style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)' }}
+    >
+      {options.map((opt, idx) => {
+        const isActive = value === opt.value
+        const isFirst  = idx === 0
+        const isLast   = idx === options.length - 1
+        return (
+          <button
+            key={opt.value}
+            onClick={() => onChange(opt.value)}
+            className="px-3 py-1.5 text-xs font-medium transition-colors"
+            style={{
+              background:   isActive ? 'var(--color-primary)' : 'transparent',
+              color:        isActive ? '#fff' : 'var(--color-text-muted)',
+              borderRadius: isFirst && isLast
+                ? 'calc(var(--radius-lg) - 1px)'
+                : isFirst
+                  ? 'calc(var(--radius-lg) - 1px) 0 0 calc(var(--radius-lg) - 1px)'
+                  : isLast
+                    ? '0 calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px) 0'
+                    : '0',
+              minWidth: '3.5rem',
+            }}
+          >
+            {opt.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
 
+// ── Aba: Visao Geral ────────────────────────────────────────────────────────────────
 function TabVisaoGeral({ portfolioId }: { portfolioId: number }) {
   const [activeTypeFilter, setActiveTypeFilter] = useState<string | null>(null)
 
@@ -280,8 +325,7 @@ function TabVisaoGeral({ portfolioId }: { portfolioId: number }) {
   )
 }
 
-// ── Aba: Historico ────────────────────────────────────────────────────────────
-
+// ── Aba: Historico ────────────────────────────────────────────────────────────────
 function TabHistorico({ portfolioId }: { portfolioId: number }) {
   const [period,       setPeriod]       = useState<PeriodOption>('12m')
   const [view,         setView]         = useState<ViewMode>('diario')
@@ -306,50 +350,29 @@ function TabHistorico({ portfolioId }: { portfolioId: number }) {
 
   const noData = !loadingDaily && (!daily || daily.length === 0)
 
+  const viewOptions: { label: string; value: ViewMode }[] = [
+    { label: 'Diário', value: 'diario' },
+    { label: 'Mensal', value: 'mensal' },
+  ]
+
   return (
     <>
-      {/* Controles topo: periodo + backfill */}
+      {/* Controles topo */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          {/* Toggle diario / mensal */}
-          <div
-            className="flex rounded-lg overflow-hidden"
-            style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface)' }}
-          >
-            {(['diario', 'mensal'] as ViewMode[]).map(v => (
-              <button
-                key={v}
-                onClick={() => setView(v)}
-                className="px-4 py-1.5 text-xs font-medium transition-colors"
-                style={{
-                  background: view === v ? 'var(--color-primary)' : 'transparent',
-                  color:      view === v ? '#fff' : 'var(--color-text-muted)',
-                }}
-              >
-                {v === 'diario' ? 'Diário' : 'Mensal'}
-              </button>
-            ))}
-          </div>
+          {/* Toggle diário / mensal — border-radius por botão, sem overflow-hidden no pai */}
+          <ToggleGroup<ViewMode>
+            options={viewOptions}
+            value={view}
+            onChange={setView}
+          />
 
-          {/* Seletor de periodo */}
-          <div
-            className="flex rounded-lg overflow-hidden"
-            style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface)' }}
-          >
-            {PERIODS.map(p => (
-              <button
-                key={p.value}
-                onClick={() => setPeriod(p.value)}
-                className="px-3 py-1.5 text-xs font-medium transition-colors"
-                style={{
-                  background: period === p.value ? 'var(--color-primary)' : 'transparent',
-                  color:      period === p.value ? '#fff' : 'var(--color-text-muted)',
-                }}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
+          {/* Seletor de período */}
+          <ToggleGroup<PeriodOption>
+            options={PERIODS}
+            value={period}
+            onChange={setPeriod}
+          />
         </div>
 
         <button
@@ -401,8 +424,8 @@ function TabHistorico({ portfolioId }: { portfolioId: number }) {
         )}
       </div>
 
-      {/* Grafico */}
-      <div className="card overflow-hidden">
+      {/* Grafico — sem overflow-hidden para tooltip Recharts */}
+      <div className="card">
         <div className="section-card-header">
           {view === 'diario'
             ? <TrendingUp size={14} style={{ color: 'var(--color-primary)' }} />
@@ -432,57 +455,67 @@ function TabHistorico({ portfolioId }: { portfolioId: number }) {
         </div>
       </div>
 
-      {/* Tabela resumo mensal */}
+      {/* Tabela resumo mensal — table-dense + ícones TrendingUp/Down */}
       {!loadingMonthly && monthly && monthly.length > 0 && (
         <div className="card overflow-hidden">
           <div className="section-card-header">
             <span className="section-card-title">Resumo Mensal</span>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <table className="table-dense w-full">
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-divider)', color: 'var(--color-text-muted)' }}>
-                  <th className="px-4 py-2 text-left font-medium">Mês</th>
-                  <th className="px-4 py-2 text-right font-medium">Valor mercado</th>
-                  <th className="px-4 py-2 text-right font-medium">Investido</th>
-                  <th className="px-4 py-2 text-right font-medium">P&amp;L não realiz.</th>
-                  <th className="px-4 py-2 text-right font-medium">Rentab.</th>
+                <tr>
+                  <th>Mês</th>
+                  <th className="text-right">Valor mercado</th>
+                  <th className="text-right">Investido</th>
+                  <th className="text-right">P&amp;L não realiz.</th>
+                  <th className="text-right">Rentab.</th>
                 </tr>
               </thead>
               <tbody>
-                {[...monthly].reverse().map((row, i) => (
-                  <tr
-                    key={row.period}
-                    style={{
-                      borderBottom: i < monthly.length - 1 ? '1px solid var(--color-divider)' : 'none',
-                      background:   i === 0 ? 'var(--color-surface-offset)' : 'transparent',
-                    }}
-                  >
-                    <td className="px-4 py-2.5" style={{ color: 'var(--color-text)' }}>
-                      {row.period}
-                      {i === 0 && (
-                        <span
-                          className="ml-2 text-xs px-1 py-0.5 rounded"
-                          style={{ background: 'var(--color-primary-highlight)', color: 'var(--color-primary)', fontSize: 10 }}
-                        >
-                          atual
+                {[...monthly].reverse().map((row, i) => {
+                  const isPositive = row.return_pct >= 0
+                  const isCurrentMonth = i === 0
+                  return (
+                    <tr
+                      key={row.period}
+                      style={{
+                        background: isCurrentMonth
+                          ? 'oklch(from var(--color-primary) l c h / 0.05)'
+                          : 'transparent',
+                      }}
+                    >
+                      <td>
+                        <span style={{ color: 'var(--color-text)' }}>{row.period}</span>
+                        {isCurrentMonth && (
+                          <span
+                            className="ml-2 badge badge-primary"
+                            style={{ fontSize: '0.625rem', padding: '0.1em 0.45em' }}
+                          >
+                            atual
+                          </span>
+                        )}
+                      </td>
+                      <td className="text-right tabular-nums" style={{ color: 'var(--color-text)' }}>
+                        {formatBRL(row.value)}
+                      </td>
+                      <td className="text-right tabular-nums" style={{ color: 'var(--color-text-muted)' }}>
+                        {formatBRL(row.invested)}
+                      </td>
+                      <td className={clsx('text-right tabular-nums', signClass(row.unrealized_pnl))}>
+                        {row.unrealized_pnl >= 0 ? '+' : ''}{formatBRL(row.unrealized_pnl)}
+                      </td>
+                      <td className={clsx('text-right tabular-nums font-medium', signClass(row.return_pct))}>
+                        <span className="inline-flex items-center justify-end gap-1">
+                          {isPositive
+                            ? <TrendingUp size={11} />
+                            : <TrendingDown size={11} />}
+                          {row.return_pct >= 0 ? '+' : ''}{formatPercent(row.return_pct)}
                         </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: 'var(--color-text)' }}>
-                      {formatBRL(row.value)}
-                    </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: 'var(--color-text-muted)' }}>
-                      {formatBRL(row.invested)}
-                    </td>
-                    <td className={clsx('px-4 py-2.5 text-right tabular-nums', signClass(row.unrealized_pnl))}>
-                      {row.unrealized_pnl >= 0 ? '+' : ''}{formatBRL(row.unrealized_pnl)}
-                    </td>
-                    <td className={clsx('px-4 py-2.5 text-right tabular-nums font-medium', signClass(row.return_pct))}>
-                      {row.return_pct >= 0 ? '+' : ''}{formatPercent(row.return_pct)}
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -492,8 +525,7 @@ function TabHistorico({ portfolioId }: { portfolioId: number }) {
   )
 }
 
-// ── Page root ─────────────────────────────────────────────────────────────────
-
+// ── Page root ───────────────────────────────────────────────────────────────────────
 export default function PatrimonioPage() {
   const portfolioId = useAppStore(s => s.selectedPortfolioId)
   const [activeTab, setActiveTab] = useState<Tab>('visao-geral')
