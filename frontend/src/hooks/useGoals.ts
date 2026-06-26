@@ -1,56 +1,75 @@
-import { useState, useCallback } from 'react'
-import {
-  fetchGoals,
-  createGoal,
-  updateGoal,
-  deleteGoal,
-  Goal,
-  GoalCreate,
-  GoalUpdate,
-} from '@/services/goalsService'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import api from '@/services/api'
 
-interface UseGoalsReturn {
-  goals: Goal[]
-  loading: boolean
-  error: string | null
-  loadGoals: (portfolioId: number) => Promise<void>
-  addGoal: (portfolioId: number, payload: GoalCreate) => Promise<void>
-  editGoal: (portfolioId: number, goalId: number, payload: GoalUpdate) => Promise<void>
-  removeGoal: (portfolioId: number, goalId: number) => Promise<void>
+export type GoalType = 'PATRIMONIO' | 'PROVENTOS' | 'RENTABILIDADE' | 'LIVRE'
+
+export interface Goal {
+  id:                   number
+  portfolio_id:         number
+  goal_type:            GoalType
+  name:                 string
+  description?:         string
+  target_value:         number
+  current_value:        number
+  base_value:           number
+  monthly_contribution: number | null
+  target_date:          string | null
+  created_at:           string
+  // calculados pelo backend
+  progress_pct:         number
+  is_completed:         boolean
+  months_to_goal:       number | null
+  projected_date:       string | null
 }
 
-export function useGoals(): UseGoalsReturn {
-  const [goals, setGoals] = useState<Goal[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+export interface GoalCreate {
+  portfolio_id:         number
+  goal_type:            GoalType
+  name:                 string
+  target_value:         number
+  current_value?:       number     // obrigatório somente para LIVRE
+  monthly_contribution?: number
+  target_date?:         string | null
+  description?:         string
+}
 
-  const loadGoals = useCallback(async (portfolioId: number) => {
-    setLoading(true)
-    setError(null)
-    try {
-      const data = await fetchGoals(portfolioId)
-      setGoals(data)
-    } catch {
-      setError('Erro ao carregar metas.')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+export type GoalUpdate = Partial<Omit<GoalCreate, 'portfolio_id' | 'goal_type'>>
 
-  const addGoal = useCallback(async (portfolioId: number, payload: GoalCreate) => {
-    const newGoal = await createGoal(portfolioId, payload)
-    setGoals((prev) => [newGoal, ...prev])
-  }, [])
+const GOALS_KEY = (pid: number | null) => ['goals', pid]
 
-  const editGoal = useCallback(async (portfolioId: number, goalId: number, payload: GoalUpdate) => {
-    const updated = await updateGoal(portfolioId, goalId, payload)
-    setGoals((prev) => prev.map((g) => (g.id === goalId ? updated : g)))
-  }, [])
+export function useGoals(portfolioId: number | null) {
+  return useQuery<Goal[]>({
+    queryKey: GOALS_KEY(portfolioId),
+    queryFn: () =>
+      api.get<Goal[]>(`/portfolios/${portfolioId}/goals`).then(r => r.data),
+    enabled: !!portfolioId,
+    placeholderData: [],
+  })
+}
 
-  const removeGoal = useCallback(async (portfolioId: number, goalId: number) => {
-    await deleteGoal(portfolioId, goalId)
-    setGoals((prev) => prev.filter((g) => g.id !== goalId))
-  }, [])
+export function useCreateGoal() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: GoalCreate) =>
+      api.post<Goal>(`/portfolios/${data.portfolio_id}/goals`, data).then(r => r.data),
+    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: GOALS_KEY(v.portfolio_id) }),
+  })
+}
 
-  return { goals, loading, error, loadGoals, addGoal, editGoal, removeGoal }
+export function useUpdateGoal() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ portfolioId, id, data }: { portfolioId: number; id: number; data: GoalUpdate }) =>
+      api.patch<Goal>(`/portfolios/${portfolioId}/goals/${id}`, data).then(r => r.data),
+    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: GOALS_KEY(v.portfolioId) }),
+  })
+}
+
+export function useDeleteGoal() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ portfolioId, id }: { portfolioId: number; id: number }) =>
+      api.delete(`/portfolios/${portfolioId}/goals/${id}`).then(r => r.data),
+    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: GOALS_KEY(v.portfolioId) }),
+  })
 }
