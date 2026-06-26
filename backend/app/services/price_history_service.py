@@ -20,6 +20,14 @@ Regra de negocio para get_price_at_date:
 Rate limiting yfinance (threading.Lock - nivel de thread):
   _yf_thread_lock garante que apenas uma thread execute yfinance de cada vez.
   _YF_MIN_INTERVAL (12s) adiciona pausa minima para evitar 429.
+
+Fallback de snapshot para INTL (YFRateLimitError):
+  Quando tanto Alpha Vantage quanto yfinance falham para ativos INTL
+  (IVV, NVDA, INTR, TFLO etc.), persist_daily_prices tenta obter o
+  preco atual via quotes_service._mem_get_stale() (cache L2 em memoria)
+  ou Asset.last_price no banco. Isso garante que pelo menos o preco mais
+  recente conhecido seja persistido como AssetPrice, evitando que
+  get_price_at_date retorne None e cause zeros no frontend.
 """
 import logging
 import threading
@@ -180,6 +188,63 @@ async def _fetch_yf_history(
     return await _run_yf_with_throttle(_fetch_yf_history_sync, sym, days)
 
 
+async def _intl_stale_snapshot(
+    db: AsyncSession,
+    ticker: str,
+    asset_type: AssetType,
+) -> list[tuple[datetime, float]]:
+    """
+    Ultimo recurso para ativos INTL quando AV e yfinance falham (rate limit).
+
+    Tenta obter um preco conhecido em duas camadas:
+      1. quotes_service._mem_get_stale() — cache L2 em memoria (mesmo expirado)
+      2. Asset.last_price no banco        — ultimo preco salvo
+
+    Se encontrar, persiste como AssetPrice com source='stale_snapshot' para
+    garantir que get_price_at_date nao retorne None e o frontend nao mostre zeros.
+    """
+    # Camada 1: cache em memoria (stale)
+    try:
+        from app.services.quotes_service import _mem_get_stale
+        stale_price = _mem_get_stale(ticker)
+        if stale_price and stale_price > 0:
+            logger.warning(
+                "[PriceHistory] INTL %s — AV+YF falharam, usando mem_cache stale: %.4f",
+                ticker, stale_price,
+            )
+            ts = _now_utc().replace(hour=20, minute=0, second=0, microsecond=0)
+            return [(ts, stale_price)]
+    except Exception as e:
+        logger.debug("[PriceHistory] _mem_get_stale indisponivel para %s: %s", ticker, e)
+
+    # Camada 2: Asset.last_price no banco
+    try:
+        result = await db.execute(
+            select(Asset.last_price, Asset.last_price_updated_at)
+            .where(Asset.ticker == ticker)
+        )
+        row = result.first()
+        if row and row.last_price and float(row.last_price) > 0:
+            price = float(row.last_price)
+            # Usa o timestamp do ultimo preco salvo, ou agora se nao disponivel
+            ts = row.last_price_updated_at or _now_utc()
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            logger.warning(
+                "[PriceHistory] INTL %s — AV+YF falharam, usando last_price do banco: %.4f (de %s)",
+                ticker, price, ts.date(),
+            )
+            return [(ts, price)]
+    except Exception as e:
+        logger.warning("[PriceHistory] _intl_stale_snapshot banco falhou para %s: %s", ticker, e)
+
+    logger.error(
+        "[PriceHistory] INTL %s — sem preco em nenhuma camada (AV, YF, mem_cache, banco)",
+        ticker,
+    )
+    return []
+
+
 # ---------------------------------------------------------------------------
 # persist_daily_prices — incremental simples
 # ---------------------------------------------------------------------------
@@ -202,6 +267,9 @@ async def persist_daily_prices(
       - asset_onboarding (quando um novo ativo e adicionado pelo usuario)
 
     force=True ignora o cooldown. Retorna 0 se em cooldown.
+
+    Para ativos INTL: se AV e yfinance falharem (YFRateLimitError ou similar),
+    tenta _intl_stale_snapshot() como ultimo recurso antes de desistir.
     """
     if asset_type in NO_QUOTE_TYPES:
         return 0
@@ -233,6 +301,7 @@ async def persist_daily_prices(
     is_intl = asset_type in INTL_TYPES
 
     if is_intl:
+        # --- Alpha Vantage (primario) ---
         try:
             from app.core.rate_limiter import alpha_vantage_limiter
             from app.integrations.alpha_vantage import fetch_daily_history
@@ -242,12 +311,19 @@ async def persist_daily_prices(
         except Exception as e:
             logger.warning("[PriceHistory] Alpha Vantage excecao para %s: %s", ticker, e)
 
+        # --- yfinance (fallback) ---
         if not rows:
             try:
                 rows = await _fetch_yf_history(ticker, asset_type, days_back)
                 source = "yfinance_fallback"
             except Exception as e:
                 logger.warning("[PriceHistory] yfinance excecao para %s: %s", ticker, e)
+
+        # --- Stale snapshot (ultimo recurso — evita zeros no frontend) ---
+        if not rows:
+            rows = await _intl_stale_snapshot(db, ticker, asset_type)
+            if rows:
+                source = "stale_snapshot"
     else:
         brapi_known = await is_known_by_brapi(ticker)
         if brapi_known:
@@ -272,8 +348,8 @@ async def persist_daily_prices(
             except Exception as e:
                 logger.warning("[PriceHistory] yfinance excecao para %s: %s", ticker, e)
 
-    # Snapshot como ultimo recurso
-    if not rows:
+    # Snapshot BRAPI como ultimo recurso para BR
+    if not rows and not is_intl:
         try:
             from app.integrations.brapi import fetch_quotes as brapi_fetch_quotes
             result = await brapi_fetch_quotes([ticker])
