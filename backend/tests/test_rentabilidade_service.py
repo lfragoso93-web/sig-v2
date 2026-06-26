@@ -187,37 +187,77 @@ class TestGetKpis:
         assert result["snapshot_date"] == str(today)
 
     async def test_retorno_mes_usa_snapshot_30d(self, db: AsyncSession, portfolio: Portfolio):
+        """
+        _ret_between(snap_end, snap_start) usa Modified Dietz simplificado:
+          gain = (unrealized_pnl_end - unrealized_pnl_start) + (realized_pnl_end - realized_pnl_start)
+          base = cost_basis_start
+          retorno = gain / base * 100
+
+        snap_30d: unrealized_pnl=0,    realized_pnl=0, cost_basis=9000
+        snap_hoje: unrealized_pnl=1000, realized_pnl=0, cost_basis=9000
+        => gain = (1000 - 0) + (0 - 0) = 1000
+        => retorno = 1000 / 9000 * 100 = 11.1111%
+        """
         from app.services.rentabilidade_service import get_kpis
 
         today = date.today()
         snap_30d = today - timedelta(days=30)
 
-        await _make_snapshot(db, portfolio, snap_30d, market_value=9000.0)
-        await _make_snapshot(db, portfolio, today,    market_value=10000.0)
+        # snap 30d atras: sem ganho ainda (unrealized=0)
+        await _make_snapshot(
+            db, portfolio, snap_30d,
+            market_value=9000.0,
+            cost_basis=9000.0,
+            unrealized_pnl=0.0,
+            realized_pnl=0.0,
+            total_pnl=0.0,
+            return_pct=0.0,
+        )
+        # snap hoje: ganhou 1000 de unrealized
+        await _make_snapshot(
+            db, portfolio, today,
+            market_value=10000.0,
+            cost_basis=9000.0,
+            unrealized_pnl=1000.0,
+            realized_pnl=0.0,
+            total_pnl=1000.0,
+            return_pct=11.11,
+        )
 
         with _PATCH_CACHE_GET, _PATCH_CACHE_SET:
             result = await get_kpis(db, portfolio.id)
 
-        # (10000 - 9000) / 9000 * 100 = 11.1111%
+        # gain=1000, base=9000 -> 11.1111%
         assert result["retorno_mes_pct"] == pytest.approx(11.1111, rel=1e-3)
 
     async def test_retorno_mes_sem_snap_30d_usa_fallback(self, db: AsyncSession, portfolio: Portfolio):
-        """Se nao houver snapshot 30d atras, retorno_mes cai no fallback total_pnl/invested."""
+        """
+        Sem snap_30d, _ret_between(snap_hoje, None) usa:
+          gain = unrealized_pnl + realized_pnl do snap_hoje
+          base = cost_basis do snap_hoje
+          retorno = gain / base * 100
+
+        snap_hoje: unrealized=900, realized=0, cost_basis=9000
+        => gain = 900, base = 9000 => 10.0%
+        """
         from app.services.rentabilidade_service import get_kpis
 
         today = date.today()
         await _make_snapshot(
             db, portfolio, today,
-            market_value=11000.0,
-            invested_total=10000.0,
-            total_pnl=1000.0,
+            market_value=9900.0,
+            cost_basis=9000.0,
+            unrealized_pnl=900.0,
+            realized_pnl=0.0,
+            invested_total=9000.0,
+            total_pnl=900.0,
             return_pct=10.0,
         )
 
         with _PATCH_CACHE_GET, _PATCH_CACHE_SET:
             result = await get_kpis(db, portfolio.id)
 
-        # Sem snap_30d, _ret_between usa total_pnl/invested = 10%
+        # gain=900, base=9000 -> 10.0%
         assert result["retorno_mes_pct"] == pytest.approx(10.0)
 
     async def test_campos_obrigatorios_presentes(self, db: AsyncSession, portfolio: Portfolio):
