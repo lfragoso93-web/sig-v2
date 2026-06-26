@@ -34,7 +34,7 @@ def require_superadmin(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
-# ── Gestão de Usuários ───────────────────────────────────────────────────────
+# ── Gestão de Usuários ────────────────────────────────────────────────────────────────────────────────
 
 @router.get("/users", response_model=PaginatedResponse[UserListResponse])
 async def admin_list_users(
@@ -143,7 +143,7 @@ async def admin_reset_password(
     )
 
 
-# ── Estatísticas do sistema ───────────────────────────────────────────────────────
+# ── Estatísticas do sistema ───────────────────────────────────────────────────────────────────────────────
 
 @router.get("/stats")
 async def admin_stats(
@@ -159,7 +159,7 @@ async def admin_stats(
     }
 
 
-# ── Configurações do sistema ──────────────────────────────────────────────────────
+# ── Configurações do sistema ──────────────────────────────────────────────────────────────────────────────
 
 @router.get("/config", response_model=list[SystemConfigResponse])
 async def admin_list_configs(
@@ -191,7 +191,7 @@ async def admin_bulk_update_config(
     return await bulk_update_configs(db, data.configs)
 
 
-# ── Seed de Ativos (BRAPI) ──────────────────────────────────────────────────────
+# ── Seed de Ativos (BRAPI) ──────────────────────────────────────────────────────────────────────────────
 
 async def _run_asset_seed_bg() -> None:
     """Wrapper para rodar o seed em BackgroundTask com sua propria sessao."""
@@ -233,7 +233,7 @@ async def admin_seed_assets(
     }
 
 
-# ── Backfill de Preços Históricos ──────────────────────────────────────────────
+# ── Backfill de Preços Históricos ────────────────────────────────────────────────────────────────────
 
 @router.get("/prices/backfill/status")
 async def admin_backfill_status(
@@ -287,5 +287,151 @@ async def admin_trigger_price_backfill(
     return {
         "message": f"Backfill de preços iniciado em background (force={force}). Acompanhe pelo log.",
         "status": "accepted",
+        "force": force,
+    }
+
+
+# ── Backfill de Snapshots de Patrimônio ────────────────────────────────────────────────────────────
+
+async def _run_snapshot_backfill_bg(portfolio_id: int | None, force: bool) -> None:
+    """
+    Roda o backfill de snapshots em background com sessão própria.
+
+    - portfolio_id=None: processa TODOS os portfolios de TODOS os usuários.
+    - force=True: apaga snapshots existentes antes de recalcular (recalculo completo).
+    """
+    logger.info(
+        "[snapshot_backfill_bg] iniciando backfill portfolio_id=%s force=%s",
+        portfolio_id or 'ALL', force,
+    )
+    try:
+        from app.core.database import AsyncSessionLocal
+        from app.models.portfolio import Portfolio
+        from app.services.portfolio_snapshot_service import (
+            backfill_snapshots,
+            invalidate_snapshots_from,
+        )
+        from sqlalchemy import select
+        from datetime import date
+
+        async with AsyncSessionLocal() as db:
+            # Resolve lista de portfolio_ids a processar
+            if portfolio_id is not None:
+                portfolio_ids = [portfolio_id]
+            else:
+                result = await db.execute(select(Portfolio.id))
+                portfolio_ids = [row.id for row in result.all()]
+
+            logger.info(
+                "[snapshot_backfill_bg] processando %d portfolio(s)",
+                len(portfolio_ids),
+            )
+
+            total_snapshots = 0
+            errors = 0
+
+            for pid in portfolio_ids:
+                try:
+                    if force:
+                        # Apaga todos os snapshots do portfolio para recalculo completo
+                        from datetime import date
+                        deleted = await invalidate_snapshots_from(
+                            db, pid, date.min, commit=True
+                        )
+                        logger.info(
+                            "[snapshot_backfill_bg] portfolio=%s: %d snapshots deletados (force)",
+                            pid, deleted,
+                        )
+
+                    count = await backfill_snapshots(db, pid)
+                    total_snapshots += count
+                    logger.info(
+                        "[snapshot_backfill_bg] portfolio=%s: %d snapshots gerados",
+                        pid, count,
+                    )
+                except Exception as e:
+                    errors += 1
+                    logger.error(
+                        "[snapshot_backfill_bg] portfolio=%s falhou: %s\n%s",
+                        pid, e, traceback.format_exc(),
+                    )
+
+            logger.info(
+                "[snapshot_backfill_bg] CONCLUIDO: %d snapshots gerados, %d erros",
+                total_snapshots, errors,
+            )
+    except Exception as e:
+        logger.error(
+            "[snapshot_backfill_bg] FALHA GERAL: %s\n%s",
+            e, traceback.format_exc(),
+        )
+
+
+@router.post(
+    "/snapshots/backfill",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Backfill de snapshots patrimoniais (todos os portfolios)",
+)
+async def admin_snapshot_backfill_all(
+    background_tasks: BackgroundTasks,
+    force: bool = Query(
+        False,
+        description=(
+            "Se true, APAGA todos os snapshots existentes e recalcula do zero. "
+            "Use após correção de bugs de cálculo (ex.: return_pct ou _ret_between)."
+        ),
+    ),
+    _: User = Depends(require_superadmin),
+):
+    """
+    Dispara o backfill de snapshots para TODOS os portfolios em background.
+
+    - **force=false** (padrão): apenas gera snapshots faltantes (dias sem registro).
+    - **force=true**: apaga todos os snapshots de cada portfolio e recalcula
+      do zero — necessário após correções de bugs de cálculo como a correção
+      de `return_pct` e `_ret_between` aplicada em 2026-06-26.
+
+    Restrito a SuperAdmins. Acompanhe o progresso pelo log do servidor.
+    """
+    background_tasks.add_task(_run_snapshot_backfill_bg, None, force)
+    return {
+        "message": (
+            f"Backfill de snapshots iniciado em background para TODOS os portfolios "
+            f"(force={force}). Acompanhe pelo log do servidor."
+        ),
+        "status": "accepted",
+        "scope": "all_portfolios",
+        "force": force,
+    }
+
+
+@router.post(
+    "/snapshots/backfill/{portfolio_id}",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Backfill de snapshots patrimoniais (portfolio específico)",
+)
+async def admin_snapshot_backfill_one(
+    portfolio_id: int,
+    background_tasks: BackgroundTasks,
+    force: bool = Query(
+        False,
+        description="Se true, apaga snapshots existentes do portfolio e recalcula do zero.",
+    ),
+    _: User = Depends(require_superadmin),
+):
+    """
+    Dispara o backfill de snapshots para um portfolio específico em background.
+
+    Útil para recalcular apenas um portfolio sem afetar os demais.
+    Restrito a SuperAdmins.
+    """
+    background_tasks.add_task(_run_snapshot_backfill_bg, portfolio_id, force)
+    return {
+        "message": (
+            f"Backfill de snapshots iniciado em background para portfolio {portfolio_id} "
+            f"(force={force}). Acompanhe pelo log do servidor."
+        ),
+        "status": "accepted",
+        "scope": f"portfolio_{portfolio_id}",
         "force": force,
     }
