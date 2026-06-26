@@ -25,6 +25,15 @@ def _month_end(year: int, month: int) -> date:
     return date(year, month + 1, 1) - timedelta(days=1)
 
 
+def _parse_asset_type(asset_type: str) -> AssetType | None:
+    """Converte string para AssetType enum com fallback None."""
+    try:
+        return AssetType(asset_type.upper())
+    except ValueError:
+        logger.warning("[class_evo] asset_type desconhecido: %s", asset_type)
+        return None
+
+
 async def get_monthly_evolution_by_class(
     db: AsyncSession,
     portfolio_id: int,
@@ -35,17 +44,41 @@ async def get_monthly_evolution_by_class(
     today = date.today()
     since = today - timedelta(days=months * 31)
 
+    # FIX: converter string para enum antes da query para garantir match no PostgreSQL
+    parsed_type = _parse_asset_type(asset_type)
+    if parsed_type is None:
+        logger.warning("[class_evo] asset_type invalido '%s' — retornando vazio", asset_type)
+        return []
+
     result = await db.execute(
         select(Transaction.ticker)
         .join(Asset, Asset.ticker == Transaction.ticker)
         .where(
             Transaction.portfolio_id == portfolio_id,
-            Asset.asset_type == asset_type,
+            Asset.asset_type == parsed_type,  # FIX: enum vs enum (nao string vs enum)
         )
         .distinct()
     )
     tickers = [r.ticker for r in result.all()]
+
     if not tickers:
+        # FIX: fallback — buscar direto nas transacoes sem join em Asset
+        # (caso o ticker nao esteja na tabela assets por falha de seed)
+        fallback = await db.execute(
+            select(Transaction.ticker)
+            .where(
+                Transaction.portfolio_id == portfolio_id,
+                Transaction.asset_type == parsed_type,
+            )
+            .distinct()
+        )
+        tickers = [r.ticker for r in fallback.all()]
+
+    if not tickers:
+        logger.info(
+            "[class_evo] nenhum ticker encontrado para portfolio=%s classe=%s",
+            portfolio_id, asset_type,
+        )
         return []
 
     months_to_process: list[tuple[int, int]] = []
@@ -100,7 +133,7 @@ async def get_monthly_evolution_by_class(
 
             asset_result = await db.execute(select(Asset).where(Asset.ticker == ticker))
             asset = asset_result.scalar_one_or_none()
-            a_type = AssetType(asset_type) if asset is None else asset.asset_type
+            a_type = parsed_type if asset is None else asset.asset_type
             close = await get_price_at_date(db, ticker, a_type, target.isoformat())
             if close is None:
                 close = float(cost / qty if qty > 0 else Decimal("0"))

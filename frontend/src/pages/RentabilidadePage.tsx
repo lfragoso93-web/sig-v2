@@ -10,6 +10,7 @@ import type { RentabilidadeAtivo, RentabilidadeClasse } from '@/hooks/useRentabi
 import { formatBRL, formatPercent } from '@/utils/format'
 import KpiCard from '@/components/ui/KpiCard'
 import RentabilidadeChart from '@/components/charts/RentabilidadeChart'
+import { useAppStore } from '@/store/appStore'
 
 // ── helpers de cor ────────────────────────────────────────────────────────────
 
@@ -166,8 +167,11 @@ function AtivoRow({ ativo }: { ativo: RentabilidadeAtivo }) {
 
 export default function RentabilidadePage() {
   const { data: portfolios } = usePortfolioList()
+
+  // Usa o portfolio selecionado globalmente como padrão; permite override local
+  const globalPortfolioId = useAppStore(s => s.selectedPortfolioId)
   const [selectedPortfolio, setSelectedPortfolio] = useState<number | null>(null)
-  const portfolioId = selectedPortfolio ?? (portfolios?.[0]?.id ?? 0)
+  const portfolioId = selectedPortfolio ?? globalPortfolioId ?? (portfolios?.[0]?.id ?? 0)
 
   const [assetTypeFilter, setAssetTypeFilter] = useState('')
   const [showZeradas,     setShowZeradas]     = useState(false)

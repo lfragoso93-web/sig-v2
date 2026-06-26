@@ -19,26 +19,33 @@ from app.services.price_history_service import get_price_at_date, persist_daily_
 
 logger = logging.getLogger(__name__)
 
+# Tipos cotados em USD
+_USD_ASSET_TYPES = {"STOCK", "ETF_INTERNACIONAL"}
+
 
 class _TickerState:
-    __slots__ = ("ticker", "asset_type", "qty", "cost", "realized_pnl")
+    """Acumula custo sempre em BRL (independente da moeda original)."""
+    __slots__ = ("ticker", "asset_type", "qty", "cost", "realized_pnl", "is_usd")
 
-    def __init__(self, ticker: str, asset_type: str):
+    def __init__(self, ticker: str, asset_type: str, is_usd: bool = False):
         self.ticker = ticker
         self.asset_type = asset_type
         self.qty = Decimal("0")
-        self.cost = Decimal("0")
-        self.realized_pnl = Decimal("0")
+        self.cost = Decimal("0")          # sempre em BRL
+        self.realized_pnl = Decimal("0")  # sempre em BRL
+        self.is_usd = is_usd
 
-    def buy(self, qty: Decimal, price: Decimal, fees: Decimal = Decimal("0")) -> None:
+    def buy(self, qty: Decimal, price_brl: Decimal, fees_brl: Decimal = Decimal("0")) -> None:
+        """price_brl e fees_brl ja devem estar convertidos para BRL."""
         self.qty += qty
-        self.cost += qty * price + fees
+        self.cost += qty * price_brl + fees_brl
 
-    def sell(self, qty: Decimal, price: Decimal) -> None:
+    def sell(self, qty: Decimal, price_brl: Decimal) -> None:
+        """price_brl ja deve estar convertido para BRL."""
         sold = min(qty, self.qty)
         if self.qty > 0:
             avg = self.cost / self.qty
-            self.realized_pnl += sold * (price - avg)
+            self.realized_pnl += sold * (price_brl - avg)
             self.cost -= sold * avg
         self.qty -= sold
         self.qty = max(self.qty, Decimal("0"))
@@ -59,15 +66,6 @@ async def invalidate_snapshots_from(
     from_date: date,
     commit: bool = False,
 ) -> int:
-    """
-    Apaga todos os snapshots de um portfolio a partir de from_date (inclusive).
-
-    Deve ser chamado antes de backfill_snapshots sempre que um lancamento
-    retroativo for criado, editado ou removido — garantindo que o loop de
-    backfill recalcule as datas afetadas em vez de pula-las por ja existirem.
-
-    Retorna o numero de registros deletados.
-    """
     stmt = delete(PortfolioSnapshot).where(
         PortfolioSnapshot.portfolio_id == portfolio_id,
         PortfolioSnapshot.snapshot_date >= from_date,
@@ -101,16 +99,33 @@ async def _build_positions_at(
     states: dict[str, _TickerState] = {}
     for tx in txs:
         key = tx.ticker.upper()
+
+        asset_type_raw = (
+            tx.asset_type.value if hasattr(tx.asset_type, "value") else str(tx.asset_type or "")
+        ).upper()
+        is_usd = (
+            (getattr(tx, "currency", "BRL") or "BRL").upper() == "USD"
+            or asset_type_raw in _USD_ASSET_TYPES
+        )
+
+        fx_rate = Decimal("1")
+        if is_usd:
+            saved = getattr(tx, "fx_rate", None)
+            if saved is not None and float(saved or 0) > 0:
+                fx_rate = Decimal(str(saved))
+
         if key not in states:
-            states[key] = _TickerState(key, tx.asset_type)
+            states[key] = _TickerState(key, tx.asset_type, is_usd=is_usd)
         s = states[key]
+
         qty = Decimal(str(tx.quantity))
-        price = Decimal(str(tx.price))
-        fees = Decimal(str(tx.fees or 0))
+        price_brl = Decimal(str(tx.price)) * fx_rate
+        fees_brl = Decimal(str(tx.fees or 0)) * fx_rate
+
         if tx.operation == OperationType.buy:
-            s.buy(qty, price, fees)
+            s.buy(qty, price_brl, fees_brl)
         elif tx.operation == OperationType.sell:
-            s.sell(qty, price)
+            s.sell(qty, price_brl)
 
     return {k: v for k, v in states.items() if v.qty > 0}
 
@@ -137,6 +152,19 @@ async def _calc_totals(
     cost_basis = Decimal("0")
     realized_pnl = Decimal("0")
 
+    fx_snapshot: Optional[float] = None
+    has_usd = any(s.is_usd for s in positions.values())
+    if has_usd:
+        try:
+            from app.services.fx_service import get_usd_brl_for_date
+            fx_snapshot = await get_usd_brl_for_date(db, target_date)
+        except Exception:
+            try:
+                from app.services.fx_service import get_usd_brl_today
+                fx_snapshot = await get_usd_brl_today(db)
+            except Exception:
+                fx_snapshot = 1.0
+
     for ticker, state in positions.items():
         asset_result = await db.execute(
             select(Asset).where(Asset.ticker == ticker)
@@ -152,7 +180,11 @@ async def _calc_totals(
                 ticker, date_str,
             )
 
-        market_value += state.qty * Decimal(str(close))
+        close_brl = close
+        if state.is_usd and fx_snapshot:
+            close_brl = close * fx_snapshot
+
+        market_value += state.qty * Decimal(str(close_brl))
         cost_basis += state.cost
         realized_pnl += state.realized_pnl
 
@@ -162,9 +194,19 @@ async def _calc_totals(
                 case(
                     (
                         Transaction.operation == OperationType.buy,
-                        Transaction.price * Transaction.quantity + func.coalesce(Transaction.fees, 0),
+                        (
+                            Transaction.price
+                            * func.coalesce(Transaction.fx_rate, 1.0)
+                            * Transaction.quantity
+                            + func.coalesce(Transaction.fees, 0)
+                            * func.coalesce(Transaction.fx_rate, 1.0)
+                        ),
                     ),
-                    else_=-(Transaction.price * Transaction.quantity),
+                    else_=-(
+                        Transaction.price
+                        * func.coalesce(Transaction.fx_rate, 1.0)
+                        * Transaction.quantity
+                    ),
                 )
             )
         ).where(
@@ -176,7 +218,26 @@ async def _calc_totals(
 
     unrealized_pnl = market_value - cost_basis
     total_pnl = realized_pnl + unrealized_pnl
-    return_pct = _safe_div(total_pnl, invested_total) * 100 if invested_total > 0 else Decimal("0")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # return_pct: retorno sobre cost_basis + realized_pnl positivo
+    #
+    # CORRECAO: a versao anterior usava invested_total como denominador.
+    # invested_total = compras - vendas; com muitas vendas o denominador cai
+    # e o percentual explode ou fica absurdo.
+    #
+    # Formula adotada: total_pnl / (cost_basis + max(realized_pnl, 0))
+    # Representa quanto o capital efetivamente empregado rendeu.
+    # Fallback para invested_total quando nao ha posicoes abertas.
+    # ──────────────────────────────────────────────────────────────────────────
+    realized_positive = max(realized_pnl, Decimal("0"))
+    return_base = cost_basis + realized_positive
+    if return_base > 0:
+        return_pct = _safe_div(total_pnl, return_base) * 100
+    elif invested_total > 0:
+        return_pct = _safe_div(total_pnl, invested_total) * 100
+    else:
+        return_pct = Decimal("0")
 
     return {
         "market_value": market_value.quantize(Decimal("0.01")),
@@ -223,10 +284,6 @@ async def _prefetch_price_history(
     portfolio_id: int,
     days_back: int,
 ) -> None:
-    """
-    Popula o banco com historico de precos para todos os tickers do portfolio
-    antes de iniciar qualquer loop de calculo por data.
-    """
     result = await db.execute(
         select(Transaction.ticker, Transaction.asset_type)
         .where(Transaction.portfolio_id == portfolio_id)
@@ -260,15 +317,12 @@ async def calc_snapshot_at_date(
     commit: bool = True,
     prefetch: bool = False,
 ) -> dict:
-    """
-    Calcula e persiste snapshot para uma data especifica.
-    """
     if prefetch:
         days_back = (date.today() - target_date).days + 6
         await _prefetch_price_history(db, portfolio_id, days_back)
 
     totals = await _calc_totals(db, portfolio_id, target_date)
-    await _upsert_snapshot(db, portfolio_id, target_date, totals)
+    await _upsert_snapshot(db, portfolio_id, target_date, totals)  # fix: target_date (nao snapshot_date)
     if commit:
         await db.commit()
     logger.info(

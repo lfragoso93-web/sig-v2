@@ -2,10 +2,26 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { ProventoDistribution } from '@/services/proventosService'
 import { formatBRL } from '@/utils/format'
 
+/**
+ * Paleta semântica usando apenas CSS vars do design system.
+ *
+ * As variáveis --color-chart-1..10 são definidas no tema global e
+ * mudam automaticamente entre modo claro e escuro, garantindo
+ * consistência visual com o resto da aplicação.
+ *
+ * Fallbacks em oklch para ambientes sem suporte a CSS vars.
+ */
 const PALETTE = [
   'var(--color-primary)',
-  '#22c55e','#f97316','#a78bfa','#f43f5e',
-  '#2dd4bf','#fbbf24','#94a3b8','#ec4899','#10b981',
+  'var(--color-chart-2,  oklch(0.65 0.17 145))',  // verde
+  'var(--color-chart-3,  oklch(0.68 0.19 47))',   // laranja
+  'var(--color-chart-4,  oklch(0.65 0.18 295))',  // violeta
+  'var(--color-chart-5,  oklch(0.60 0.22 10))',   // rosa-vermelho
+  'var(--color-chart-6,  oklch(0.72 0.14 187))',  // teal
+  'var(--color-chart-7,  oklch(0.78 0.17 88))',   // amarelo
+  'var(--color-chart-8,  oklch(0.63 0.04 255))',  // slate
+  'var(--color-chart-9,  oklch(0.63 0.22 355))',  // pink
+  'var(--color-chart-10, oklch(0.67 0.18 160))',  // esmeralda
 ]
 
 function CustomTooltip({ active, payload }: {
@@ -55,7 +71,7 @@ export default function ProventosDonutChart({ data }: { data: ProventoDistributi
         </PieChart>
       </ResponsiveContainer>
 
-      {/* Legenda manual com CSS vars */}
+      {/* Legenda manual */}
       <div className="flex flex-col gap-1.5">
         {top.map((entry, i) => (
           <div key={entry.ticker} className="flex items-center justify-between text-xs">

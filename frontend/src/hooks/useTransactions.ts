@@ -52,12 +52,18 @@ const TX_KEY = (pid: number | null, filters?: TransactionFilters) =>
   ['transactions', pid, filters ?? {}]
 
 function invalidatePortfolioKeys(qc: ReturnType<typeof useQueryClient>, portfolioId: number) {
-  qc.invalidateQueries({ queryKey: ['transactions',       portfolioId] })
-  qc.invalidateQueries({ queryKey: ['portfolio-summary',  portfolioId] })
-  qc.invalidateQueries({ queryKey: ['positions',          portfolioId] })
-  qc.invalidateQueries({ queryKey: ['asset-distribution', portfolioId] })
-  qc.invalidateQueries({ queryKey: ['patrimonio-history', portfolioId] })
-  qc.invalidateQueries({ queryKey: ['summary',            portfolioId] })
+  qc.invalidateQueries({ queryKey: ['transactions',         portfolioId] })
+  qc.invalidateQueries({ queryKey: ['portfolio-summary',    portfolioId] })
+  qc.invalidateQueries({ queryKey: ['positions',            portfolioId] })
+  qc.invalidateQueries({ queryKey: ['asset-distribution',   portfolioId] })
+  qc.invalidateQueries({ queryKey: ['patrimonio-history',   portfolioId] })
+  qc.invalidateQueries({ queryKey: ['summary',              portfolioId] })
+  // KPIs usados no ResumePage
+  qc.invalidateQueries({ queryKey: ['rentabilidade-kpis',   portfolioId] })
+  qc.invalidateQueries({ queryKey: ['rentabilidade-ativos', portfolioId] })
+  qc.invalidateQueries({ queryKey: ['rentabilidade-classes',portfolioId] })
+  // Metas financeiras (current_value automático pode mudar após transação)
+  qc.invalidateQueries({ queryKey: ['goals',                portfolioId] })
 }
 
 export function useTransactions(

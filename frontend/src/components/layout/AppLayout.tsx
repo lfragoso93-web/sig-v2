@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom'
 import { useAppStore } from '@/store/appStore'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
+import BottomNav from './BottomNav'
 import AddTransactionModal from '@/components/modals/AddTransactionModal'
 
 export default function AppLayout() {
@@ -50,7 +51,10 @@ export default function AppLayout() {
         {/* Sidebar */}
         <Sidebar />
 
-        {/* Main content — expande em qualquer largura */}
+        {/* Main content */}
+        {/* pb-[calc(60px+env(safe-area-inset-bottom))] garante que o conteúdo
+            não fique escondido sob o BottomNav em mobile.
+            Em desktop (lg+) o BottomNav não renderiza, então o padding é 0. */}
         <main
           style={{
             flex:       1,
@@ -60,10 +64,14 @@ export default function AppLayout() {
             height:     '100%',
             background: 'var(--color-bg)',
           }}
+          className="lg:pb-0 pb-[calc(60px+env(safe-area-inset-bottom,0px))]"
         >
           <Outlet />
         </main>
       </div>
+
+      {/* Bottom navigation — visível apenas em mobile (lg:hidden no próprio componente) */}
+      <BottomNav />
 
       {/* Modal global de transação */}
       {transactionModal.open && (

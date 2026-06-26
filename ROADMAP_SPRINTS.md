@@ -54,10 +54,10 @@
 - [x] `POST /api/v1/admin/assets/seed`: endpoint superadmin com resposta `202 Accepted` + background task
 - [x] Job semanal automático (toda segunda às 03h) para seed incremental de novos IPOs
 - [x] Backfill histórico de preços com ordenação por tipo: ACAO/FII primeiro, BDR por último
-- [x] Fix: boot sequence sem Etapa 3 redundante (proventos disparados por transação, não no boot)
+- [x] Fix: boot sequence sem Etapa 3 redundante
 - [x] Fix: `ImportError upsert_daily_prices` removido de `asset_onboarding_service`
-- [x] Fix: background task do seed com log de início + traceback completo em caso de falha
-- [x] Frontend: aba **BDR** adicionada no modal de transações (entre ETF BR e Stock)
+- [x] Fix: background task do seed com log de início + traceback completo
+- [x] Frontend: aba **BDR** adicionada no modal de transações
 
 ---
 
@@ -66,23 +66,17 @@
 
 ### Concluído
 - [x] **Página de Rentabilidade** (`/carteira/rentabilidade`) — 25/06/2026
-  - [x] Backend: `rentabilidade_service.py` com KPIs, por ativo e por classe (cache Redis TTL 5min)
-  - [x] Backend: `routers/rentabilidade.py` com 3 endpoints + verificação de ownership
-  - [x] Testes: `test_rentabilidade_service.py` com 13 casos (SQLite in-memory + mocks)
-  - [x] Frontend: `rentabilidadeService.ts` + `useRentabilidade.ts` + `RentabilidadePage.tsx`
-  - [x] UI: 8 KpiCards, barra por classe de ativo, tabela por ativo com filtros
 - [x] **Hotfixes Tesouro Direto & Cripto** — 25/06/2026
 - [x] **Fixes CSS/UI Design System** — 25/06/2026
 - [x] **Dashboard principal** (`ResumePage`) — 26/06/2026
-  - [x] KpiCards migrados para `rentabilidade/kpis` (consistentes com RentabilidadePage)
-  - [x] 4 cards: Patrimônio Total, Resultado Total, Proventos 12m, Rentabilidade
-  - [x] Gráfico de evolução patrimonial + distribuição por classe + tabela de posições
-  - [x] Página enxuta — sem redundâncias com a página de Rentabilidade
+  - [x] KpiCards via `rentabilidade/kpis`
+  - [x] Evolução patrimonial + distribuição + tabela de posições
 - [x] **Gráfico de rentabilidade mensal + benchmark** (`RentabilidadeChart`) — 26/06/2026
-  - [x] Barras: retorno % mês a mês via `useMonthlyEvolution`
-  - [x] Linhas: IBOV (BRAPI), CDI (BCB série 4391), IPCA (BCB série 433)
-  - [x] Toggles independentes por benchmark, filtro de período (6m/12m/24m/todo)
-  - [x] Integrado na `RentabilidadePage`
+- [x] **Correção do Bug 3 — Evolução Patrimonial vazia** — 26/06/2026
+  - [x] Fallback on-the-fly quando não há snapshots
+  - [x] Backfill automático em background ao acessar histórico
+  - [x] Correção do filtro por classe com parse de enum `AssetType`
+  - [x] Fallback via `Transaction.asset_type` quando `assets` não cobre o ticker
 
 ### Pendente
 - [ ] Tela de metas financeiras
@@ -138,11 +132,11 @@
 - [ ] Verificar nomes de variáveis, tabelas, logs e env vars
 - [ ] Verificar badges e links externos
 - [ ] Propor plano de migração seguro
-- [ ] **Só então aplicar** o rename em commit único e bem documentado
+- [ ] Só então aplicar o rename em commit único e documentado
 
 ### Sprint 6B — Aprimorar UI Global
 - [ ] Revisar bordas cortando conteúdo (tabelas, cards, modais)
-- [ ] Padronizar espaçamento e tipografia entre todas as páginas
+- [ ] Padronizar espaçamento e tipografia entre páginas
 - [ ] Melhorar responsividade geral (tablet e mobile)
 - [ ] Revisitar `Transacoes.tsx` — interface mais leve e moderna
 
