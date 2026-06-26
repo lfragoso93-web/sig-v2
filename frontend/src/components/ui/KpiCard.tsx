@@ -1,9 +1,10 @@
+import React from 'react'
 import clsx from 'clsx'
 import { formatPercent } from '@/utils/format'
 
 interface Props {
   label: string
-  value: string
+  value: React.ReactNode
   valueColor?: string
   change?: number
   subValue?: string
