@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { BarChart2, TrendingUp, DollarSign, Activity, Briefcase, ArrowUpRight } from 'lucide-react'
+import { BarChart2, TrendingUp, DollarSign, Activity, Briefcase } from 'lucide-react'
 import clsx from 'clsx'
 import {
   usePortfolioList,
@@ -27,15 +27,15 @@ const PERIOD_OPTIONS = [
 
 const ASSET_CLASS_ALL = 'all'
 const ASSET_CLASS_OPTIONS = [
-  { label: 'Todas as classes',     value: ASSET_CLASS_ALL        },
-  { label: 'Ações',               value: 'ACAO'                  },
-  { label: 'FIIs',                 value: 'FII'                  },
-  { label: 'ETF Nacional',         value: 'ETF_NACIONAL'         },
-  { label: 'ETF Internacional',    value: 'ETF_INTERNACIONAL'    },
-  { label: "Stock / Int'l",        value: 'STOCK'                },
-  { label: 'Tesouro Direto',       value: 'TESOURO_DIRETO'       },
-  { label: 'Renda Fixa',           value: 'RENDA_FIXA'           },
-  { label: 'Cripto',               value: 'CRIPTO'               },
+  { label: 'Todas as classes',     value: ASSET_CLASS_ALL     },
+  { label: 'Ações',               value: 'ACAO'              },
+  { label: 'FIIs',                 value: 'FII'               },
+  { label: 'ETF Nacional',         value: 'ETF_NACIONAL'      },
+  { label: 'ETF Internacional',    value: 'ETF_INTERNACIONAL' },
+  { label: "Stock / Int'l",        value: 'STOCK'             },
+  { label: 'Tesouro Direto',       value: 'TESOURO_DIRETO'    },
+  { label: 'Renda Fixa',           value: 'RENDA_FIXA'        },
+  { label: 'Cripto',               value: 'CRIPTO'            },
 ]
 
 function ChartSelect({
@@ -76,53 +76,6 @@ function ChartSelect({
   )
 }
 
-// ── Quick Nav ────────────────────────────────────────────────────────────────
-const QUICK_LINKS = [
-  { label: 'Rentabilidade', href: '/carteira/rentabilidade' },
-  { label: 'Proventos',     href: '/carteira/proventos'     },
-  { label: 'Transações',    href: '/carteira/transacoes'    },
-  { label: 'IRPF',          href: '/carteira/irpf'          },
-]
-
-function QuickNav() {
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: '0.5rem',
-      flexWrap: 'wrap',
-    }}>
-      {QUICK_LINKS.map(l => (
-        <a
-          key={l.href}
-          href={l.href}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 3,
-            fontSize: 'var(--text-xs)', fontWeight: 600,
-            color: 'var(--color-text-muted)',
-            background: 'var(--color-surface-offset)',
-            border: '1px solid oklch(from var(--color-text) l c h / 0.08)',
-            borderRadius: 'var(--radius-full)',
-            padding: '3px 10px',
-            textDecoration: 'none',
-            transition: 'color 0.15s, border-color 0.15s',
-          }}
-          onMouseEnter={e => {
-            ;(e.currentTarget as HTMLElement).style.color = 'var(--color-primary)'
-            ;(e.currentTarget as HTMLElement).style.borderColor = 'var(--color-primary)'
-          }}
-          onMouseLeave={e => {
-            ;(e.currentTarget as HTMLElement).style.color = 'var(--color-text-muted)'
-            ;(e.currentTarget as HTMLElement).style.borderColor = 'oklch(from var(--color-text) l c h / 0.08)'
-          }}
-        >
-          {l.label}
-          <ArrowUpRight size={10} />
-        </a>
-      ))}
-    </div>
-  )
-}
-
-// ── Page ─────────────────────────────────────────────────────────────────────
 export default function ResumePage() {
   const globalPortfolioId = useAppStore(s => s.selectedPortfolioId)
   const setGlobal         = useAppStore(s => s.setSelectedPortfolioId)
@@ -142,26 +95,22 @@ export default function ResumePage() {
   const portfolioId: number | null = globalPortfolioId ?? (portfolios?.[0]?.id ?? null)
   const activeAssetType = assetClass === ASSET_CLASS_ALL ? null : assetClass
 
-  // ── Dados ──────────────────────────────────────────────────────────────────
-  // KPIs: fonte primária = rentabilidade/kpis (preciso)
-  const { data: kpis, isLoading: loadingKpis } = useRentabilidadeKpis(portfolioId)
-
+  const { data: kpis,             isLoading: loadingKpis      } = useRentabilidadeKpis(portfolioId)
   const { data: patrimonioHistory, isLoading: loadingHistory   } = usePatrimonioHistory(portfolioId, period, activeAssetType)
   const { data: distribution,      isLoading: loadingDist      } = useAssetDistribution(portfolioId)
   const { data: positions,         isLoading: loadingPositions } = usePositions(portfolioId)
 
-  // ── KPI helpers ────────────────────────────────────────────────────────────
-  const patrimonio       = kpis?.patrimonio_atual         ?? 0
-  const aportado         = kpis?.total_aportado           ?? 0
-  const totalPnl         = kpis?.total_pnl                ?? 0
-  const ganhoNaoReal     = kpis?.ganho_nao_realizado       ?? 0
-  const ganhoReal        = kpis?.ganho_realizado           ?? 0
-  const proventos12m     = kpis?.proventos_12m             ?? 0
-  const proventosTotal   = kpis?.proventos_total           ?? 0
-  const retornoTotal     = kpis?.retorno_total_pct         ?? 0
-  const retornoMes       = kpis?.retorno_mes_pct           ?? 0
-  const retorno12m       = kpis?.retorno_12m_pct           ?? 0
-  const retornoInicio    = kpis?.retorno_desde_inicio_pct  ?? 0
+  const patrimonio     = kpis?.patrimonio_atual        ?? 0
+  const aportado       = kpis?.total_aportado          ?? 0
+  const totalPnl       = kpis?.total_pnl               ?? 0
+  const ganhoNaoReal   = kpis?.ganho_nao_realizado      ?? 0
+  const ganhoReal      = kpis?.ganho_realizado          ?? 0
+  const proventos12m   = kpis?.proventos_12m            ?? 0
+  const proventosTotal = kpis?.proventos_total          ?? 0
+  const retornoTotal   = kpis?.retorno_total_pct        ?? 0
+  const retornoMes     = kpis?.retorno_mes_pct          ?? 0
+  const retorno12m     = kpis?.retorno_12m_pct          ?? 0
+  const retornoInicio  = kpis?.retorno_desde_inicio_pct ?? 0
 
   const loadingKpiCards = loadingPortfolios || loadingKpis
 
@@ -193,30 +142,6 @@ export default function ResumePage() {
 
   return (
     <div className="page-container">
-
-      {/* ── Header com seletor de carteira + quick nav ── */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.25rem',
-      }}>
-        {/* Seletor de carteira */}
-        {portfolios && portfolios.length > 1 && (
-          <ChartSelect
-            value={portfolioId ?? ''}
-            onChange={v => setGlobal(Number(v))}
-            options={portfolios.map(p => ({ label: p.name, value: p.id }))}
-          />
-        )}
-        {portfolios && portfolios.length === 1 && (
-          <span style={{
-            fontSize: 'var(--text-sm)', fontWeight: 700,
-            color: 'var(--color-text)',
-          }}>
-            {portfolios[0].name}
-          </span>
-        )}
-        <QuickNav />
-      </div>
 
       {/* ── KPI Cards ── */}
       <div className="kpi-grid">
@@ -343,7 +268,7 @@ export default function ResumePage() {
         </div>
       </div>
 
-      {/* ── Separador "Meus Ativos" ── */}
+      {/* ── Meus Ativos ── */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: '0.75rem',
         marginTop: '0.25rem',
@@ -368,7 +293,7 @@ export default function ResumePage() {
         <div style={{ flex: 1, height: 1, background: 'oklch(from var(--color-text) l c h / 0.07)' }} />
       </div>
 
-      {/* ── Tabelas por classe ── */}
+      {/* ── Tabela de posições ── */}
       {loadingPositions || !portfolioId ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           {[...Array(3)].map((_, i) => (
