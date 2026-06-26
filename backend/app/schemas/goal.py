@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 from typing import Optional, Literal
 from datetime import datetime
 
@@ -13,8 +13,8 @@ class GoalCreate(BaseModel):
     # current_value é preenchido automaticamente pelo service para tipos auto;
     # obrigatório apenas para LIVRE
     current_value:        float = 0.0
-    monthly_contribution: Optional[float] = None   # aporte mensal projetado
-    target_date:          Optional[datetime] = None # pode ser nulo (calculado)
+    monthly_contribution: Optional[float] = None  # aporte mensal projetado
+    target_date:          Optional[datetime] = None  # pode ser nulo (calculado)
     description:          Optional[str] = None
 
 
@@ -41,9 +41,9 @@ class GoalResponse(BaseModel):
     created_at:           datetime
 
     # calculados
-    progress_pct:         float   # 0–100
+    progress_pct:         float   # 0-100
     is_completed:         bool
     months_to_goal:       Optional[float]    # meses restantes projetados
-    projected_date:       Optional[datetime] # data projetada de conclusão
+    projected_date:       Optional[datetime]  # data projetada de conclusão
 
     model_config = {"from_attributes": True}

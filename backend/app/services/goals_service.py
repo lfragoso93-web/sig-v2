@@ -30,7 +30,7 @@ from app.schemas.goal import GoalCreate, GoalUpdate
 
 def _calc_projection(
     current: float,
-    target:  float,
+    target: float,
     monthly: Optional[float],
 ) -> tuple[Optional[float], Optional[datetime]]:
     """Retorna (months_to_goal, projected_date) ou (None, None)."""
@@ -55,21 +55,21 @@ def _enrich(goal: Goal) -> dict:
     )
 
     return {
-        "id":                   goal.id,
-        "portfolio_id":         goal.portfolio_id,
-        "goal_type":            goal.goal_type,
-        "name":                 goal.name,
-        "target_value":         goal.target_value,
-        "current_value":        goal.current_value,
-        "base_value":           goal.base_value or 0.0,
+        "id": goal.id,
+        "portfolio_id": goal.portfolio_id,
+        "goal_type": goal.goal_type,
+        "name": goal.name,
+        "target_value": goal.target_value,
+        "current_value": goal.current_value,
+        "base_value": goal.base_value or 0.0,
         "monthly_contribution": goal.monthly_contribution,
-        "target_date":          goal.target_date,
-        "description":          goal.description,
-        "created_at":           goal.created_at,
-        "progress_pct":         round(progress, 2),
-        "is_completed":         goal.current_value >= goal.target_value,
-        "months_to_goal":       months_to_goal,
-        "projected_date":       projected_date,
+        "target_date": goal.target_date,
+        "description": goal.description,
+        "created_at": goal.created_at,
+        "progress_pct": round(progress, 2),
+        "is_completed": goal.current_value >= goal.target_value,
+        "months_to_goal": months_to_goal,
+        "projected_date": projected_date,
     }
 
 
@@ -162,15 +162,15 @@ async def create_goal(db: AsyncSession, data: GoalCreate) -> dict:
         db, data.portfolio_id, data.goal_type, data.current_value
     )
     goal = Goal(
-        portfolio_id=         data.portfolio_id,
-        goal_type=            data.goal_type,
-        name=                 data.name,
-        target_value=         data.target_value,
-        current_value=        current,
-        base_value=           current,   # snapshot inicial
-        monthly_contribution= data.monthly_contribution,
-        target_date=          data.target_date,
-        description=          data.description,
+        portfolio_id=data.portfolio_id,
+        goal_type=data.goal_type,
+        name=data.name,
+        target_value=data.target_value,
+        current_value=current,
+        base_value=current,
+        monthly_contribution=data.monthly_contribution,
+        target_date=data.target_date,
+        description=data.description,
     )
     db.add(goal)
     await db.commit()

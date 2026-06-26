@@ -334,7 +334,6 @@ async def _run_snapshot_backfill_bg(portfolio_id: int | None, force: bool) -> No
                 try:
                     if force:
                         # Apaga todos os snapshots do portfolio para recalculo completo
-                        from datetime import date
                         deleted = await invalidate_snapshots_from(
                             db, pid, date.min, commit=True
                         )

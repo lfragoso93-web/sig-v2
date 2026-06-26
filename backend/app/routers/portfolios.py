@@ -177,13 +177,12 @@ async def patrimonio_history(
 
         # Agregar por data
         from collections import defaultdict
-        from decimal import Decimal
         aggregated: dict[str, dict] = defaultdict(lambda: {"value": 0.0, "invested": 0.0})
         for res in results:
             if isinstance(res, Exception):
                 continue
             for point in res:
-                aggregated[point["date"]]["value"]    += point.get("value", 0)
+                aggregated[point["date"]]["value"] += point.get("value", 0)
                 aggregated[point["date"]]["invested"] += point.get("invested", 0)
 
         data = [
