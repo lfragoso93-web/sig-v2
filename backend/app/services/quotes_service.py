@@ -32,6 +32,13 @@ Resiliencia:
   yfinance precisa de tempo real para se recuperar.
   Outras excecoes usam backoff curto (1s, 2s).
 
+Fallback stale cache (YFRateLimitError):
+  Quando _fetch_intl esgota todas as tentativas e yfinance retorna {},
+  _resolve_intl_with_stale_fallback() tenta devolver o ultimo preco valido
+  presente no _mem_cache (mesmo que expirado). Isso evita que ativos
+  internacionais (IVV, NVDA, INTR, TFLO) aparecam zerados na tela durante
+  periodos de rate limit do yfinance. O preco e marcado como stale no log.
+
 BRAPI - tickers fracionarios:
   Tickers com sufixo F (ex: PETR4F, ABCB4F) sao direitos de subscricao
   fracionarios da B3 e NAO sao suportados pela BRAPI para cotacao.
@@ -128,10 +135,21 @@ async def _with_retry(coro_fn, *args, label: str = "") -> dict[str, float]:
 # ---------------------------------------------------------------------------
 
 def _mem_get(ticker: str) -> Optional[float]:
+    """Retorna preco do cache em memoria somente se ainda valido (TTL)."""
     entry = _mem_cache.get(ticker)
     if entry and time.time() < entry[1]:
         return entry[0]
     return None
+
+
+def _mem_get_stale(ticker: str) -> Optional[float]:
+    """
+    Retorna o ultimo preco do cache em memoria mesmo que expirado (stale).
+    Usado como ultimo recurso quando todas as APIs falharam (ex: YFRateLimitError)
+    para evitar exibir valores zerados no frontend.
+    """
+    entry = _mem_cache.get(ticker)
+    return entry[0] if entry else None
 
 
 def _mem_set(ticker: str, price: float) -> None:
@@ -162,6 +180,29 @@ async def _db_get_fresh(
         return None
     age = (datetime.now(timezone.utc) - row.last_price_updated_at).total_seconds()
     if age <= PRICE_TTL_SECONDS:
+        return float(row.last_price)
+    return None
+
+
+async def _db_get_stale(
+    db: AsyncSession,
+    ticker: str,
+    asset_type,
+) -> Optional[float]:
+    """
+    Retorna o ultimo preco do banco independente do TTL (stale).
+    Usado como ultimo recurso quando todas as APIs falharam.
+    """
+    at_str = _asset_type_str(asset_type)
+    result = await db.execute(
+        select(Asset.last_price)
+        .where(
+            Asset.ticker == ticker,
+            Asset.asset_type == at_str,
+        )
+    )
+    row = result.first()
+    if row and row.last_price is not None:
         return float(row.last_price)
     return None
 
@@ -394,6 +435,47 @@ async def _fetch_intl(
     return {**av_results, **yf_results}
 
 
+async def _fetch_intl_with_stale_fallback(
+    pairs: list[tuple[str, AssetType]],
+    db: Optional[AsyncSession] = None,
+) -> dict[str, float]:
+    """
+    Chama _fetch_intl e, para tickers que retornarem sem preco (rate limit
+    ou falha total), tenta devolver o ultimo valor conhecido em:
+      1. _mem_cache (mesmo expirado — stale)
+      2. Asset.last_price no banco (mesmo fora do TTL)
+    Loga warning para cada ticker que usar preco stale.
+    """
+    results = await _fetch_intl(pairs)
+
+    missing_after_fetch = [(t, at) for t, at in pairs if t not in results]
+    if not missing_after_fetch:
+        return results
+
+    stale_used: list[str] = []
+    for ticker, asset_type in missing_after_fetch:
+        # Tenta cache em memoria (stale)
+        stale = _mem_get_stale(ticker)
+        if stale is not None:
+            results[ticker] = stale
+            stale_used.append(f"{ticker}(mem)")
+            continue
+        # Tenta banco (stale)
+        if db:
+            db_stale = await _db_get_stale(db, ticker, asset_type)
+            if db_stale is not None:
+                results[ticker] = db_stale
+                stale_used.append(f"{ticker}(db)")
+
+    if stale_used:
+        logger.warning(
+            "[quotes_service] yfinance INTL falhou — usando preco stale para: %s",
+            ", ".join(stale_used),
+        )
+
+    return results
+
+
 async def _fetch_yfinance(
     pairs: list[tuple[str, AssetType]],
 ) -> dict[str, float]:
@@ -462,10 +544,12 @@ async def get_prices(
             logger.warning(f"[quotes_service] asset_type desconhecido para {ticker} ({raw_type})")
             br_tickers.append(ticker)
 
+    # _fetch_intl substituido por _fetch_intl_with_stale_fallback para
+    # evitar zeros no frontend durante rate limit do yfinance (IVV, NVDA, etc)
     br_results, crypto_results, intl_results, treasury_results = await asyncio.gather(
         _fetch_brapi(br_tickers) if br_tickers else _noop(),
         _fetch_brapi_crypto(crypto_tickers) if crypto_tickers else _noop(),
-        _fetch_intl(intl_pairs) if intl_pairs else _noop(),
+        _fetch_intl_with_stale_fallback(intl_pairs, db) if intl_pairs else _noop(),
         _fetch_treasury_prices(treasury_tickers) if treasury_tickers else _noop(),
     )
 
