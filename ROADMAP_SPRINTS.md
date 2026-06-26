@@ -1,11 +1,12 @@
 # Roadmap de Sprints — SGI v2
 
-> Última atualização: 25/06/2026
+> Última atualização: 26/06/2026
+> Versão visual e interativa: [ROADMAP_VISUAL.md](./ROADMAP_VISUAL.md)
 
 ---
 
 ## ✅ Sprint 1 — Fundação (Concluído)
-**Período:** Abril 2026
+**Período:** Abril 2026 | [Issue #50](https://github.com/lfragoso93-web/sig-v2/issues/50)
 
 - [x] Estrutura do projeto (FastAPI + SQLAlchemy async + Alembic)
 - [x] Docker Compose (backend, postgres, redis, nginx)
@@ -18,7 +19,7 @@
 ---
 
 ## ✅ Sprint 2 — Core Financeiro (Concluído)
-**Período:** Maio 2026
+**Período:** Maio 2026 | [Issue #51](https://github.com/lfragoso93-web/sig-v2/issues/51)
 
 - [x] Módulo dividends e proventos com backfill histórico
 - [x] Módulo performance (rentabilidade, TWR, benchmark)
@@ -33,7 +34,7 @@
 ---
 
 ## ✅ Sprint 3 — Funcionalidades Avançadas (Concluído)
-**Período:** Junho 2026 (1ª quinzena)
+**Período:** Junho 2026 (1ª quinzena) | [Issue #52](https://github.com/lfragoso93-web/sig-v2/issues/52)
 
 - [x] Módulo goals (metas financeiras com progresso automático)
 - [x] Módulo IRPF (ganho de capital renda variável)
@@ -47,7 +48,7 @@
 ---
 
 ## ✅ Sprint 4 — Catálogo de Ativos e Dados (Concluído)
-**Período:** Junho 2026 (2ª quinzena) — concluído em 24/06/2026
+**Período:** Junho 2026 (2ª quinzena) — concluído em 24/06/2026 | [Issue #53](https://github.com/lfragoso93-web/sig-v2/issues/53)
 
 - [x] `asset_seed_service`: popula tabela `assets` via BRAPI `/quote/list` com UPSERT idempotente (2.259 ativos)
 - [x] `POST /api/v1/admin/assets/seed`: endpoint superadmin com resposta `202 Accepted` + background task
@@ -61,25 +62,19 @@
 ---
 
 ## 🔄 Sprint 5 — Frontend Dashboard (Em andamento)
-**Período:** Junho–Julho 2026
+**Período:** Junho–Julho 2026 | [Issue #54](https://github.com/lfragoso93-web/sig-v2/issues/54)
 
-- [x] **Página de Rentabilidade** (`/carteira/rentabilidade`) — concluído em 25/06/2026
+### Concluído
+- [x] **Página de Rentabilidade** (`/carteira/rentabilidade`) — 25/06/2026
   - [x] Backend: `rentabilidade_service.py` com KPIs, por ativo e por classe (cache Redis TTL 5min)
   - [x] Backend: `routers/rentabilidade.py` com 3 endpoints + verificação de ownership
   - [x] Testes: `test_rentabilidade_service.py` com 13 casos (SQLite in-memory + mocks)
   - [x] Frontend: `rentabilidadeService.ts` + `useRentabilidade.ts` + `RentabilidadePage.tsx`
   - [x] UI: 8 KpiCards, barra por classe de ativo, tabela por ativo com filtros
-- [x] **Hotfixes Tesouro Direto & Cripto** — concluído em 25/06/2026
-  - [x] `fetch_treasury_indicators`: 3 camadas de fallback (BRAPI /indicators → /list → radaropcoes)
-  - [x] `tesouro_nacional.py`: headers anti-403 + fallback tesourotransparente
-  - [x] `rentabilidade_service._proventos_total`: campo `Dividend.total_value` corrigido
-  - [x] `_normalize_crypto_ticker`: mapa de 35 nomes completos de criptomoedas (BITCOIN → BTC)
-  - [x] `quotes_service`: passa a usar `fetch_treasury_prices` com 4 camadas de resolução
-- [x] **Fixes CSS/UI Design System** — concluído em 25/06/2026
-  - [x] `globals.css`: `.table-dense`, `.badge`, `.page-container/header/title`, `.input-xs`, `.text-muted`
-  - [x] `components.css`: `.positions-table` com `table-layout: fixed` + larguras por coluna
-  - [x] `Transacoes.tsx`: `page-container/header/title`, tooltip Recharts desbloqueado, `input-xs` correto
-  - [x] `PatrimonioPage.tsx`: `<ToggleGroup>` com border-radius por botão, `table-dense` + ícones `TrendingUp/Down`
+- [x] **Hotfixes Tesouro Direto & Cripto** — 25/06/2026
+- [x] **Fixes CSS/UI Design System** — 25/06/2026
+
+### Pendente
 - [ ] Dashboard principal com resumo de patrimônio
 - [ ] Gráfico de evolução patrimonial (linha histórica)
 - [ ] Distribuição por classe de ativo (pizza/donut)
@@ -87,15 +82,102 @@
 - [ ] Tela de metas financeiras
 - [ ] Tela IRPF (exportação de relatório)
 - [ ] Tela de renda fixa
-- [ ] `GET /api/v1/assets`: listagem paginada com filtros por tipo, setor e busca por nome/ticker
-- [ ] `GET /api/v1/assets/{ticker}`: detalhe do ativo com cotação atual
+- [ ] `GET /api/v1/assets`: listagem paginada com filtros
 - [ ] Tela de listagem de ativos no frontend
-- [ ] Investigar e corrigir `YFRateLimitError` para ativos internacionais (IVV, NVDA, INTR, TFLO)
+- [ ] Fix `YFRateLimitError` para ativos internacionais (IVV, NVDA, INTR, TFLO)
 
 ---
 
-## 📋 Sprint 6 — Produção e Qualidade (Planejado)
-**Período:** Agosto 2026
+## 🔄 Sprint 5A — Botão + Lançamento no Mobile
+**Período:** Julho 2026 | [Issue #54](https://github.com/lfragoso93-web/sig-v2/issues/54)
+
+- [ ] Corrigir exibição do botão de adição rápida em telas móveis
+- [ ] Garantir acessibilidade e tamanho de toque adequado
+
+---
+
+## 🔄 Sprint 5B — Performance de Queries
+**Período:** Julho 2026 | [Issue #54](https://github.com/lfragoso93-web/sig-v2/issues/54)
+
+- [ ] Mapear queries com tempo de execução elevado
+- [ ] Adicionar índices faltantes e otimizar joins
+- [ ] Revisar N+1 em listagens de posições e transações
+
+---
+
+## 🔄 Sprint 5C — Logs de Auditoria por Usuário
+**Período:** Julho 2026 | [Issue #54](https://github.com/lfragoso93-web/sig-v2/issues/54)
+
+- [ ] Criar modelo `AuditLog` (user_id, action, resource, timestamp, metadata)
+- [ ] Middleware ou decorator para captura automática de escrita
+- [ ] Endpoint `GET /admin/users/{id}/audit` para superadmin
+- [ ] Tela de auditoria no painel admin
+
+---
+
+## 🔄 Sprint 5D — Proventos (Fechar Pendências)
+**Período:** Julho 2026 | [Issue #54](https://github.com/lfragoso93-web/sig-v2/issues/54)
+
+- [ ] Migrar `ProventosHistoricoTable.tsx` para CSS vars
+- [ ] Validar `ProventosDonutChart` com dados reais
+- [ ] Testes de integração do fluxo de proventos
+
+---
+
+## 📋 Sprint 6 — Qualidade Visual & Rename SGI (Planejado)
+**Período:** Julho–Agosto 2026 | [Issue #55](https://github.com/lfragoso93-web/sig-v2/issues/55)
+
+### Sprint 6A — Análise de Impacto: Rename SIG v2 → SGI
+- [ ] Inventariar todas as ocorrências de `SIG` no código, docs, CI e banco
+- [ ] Verificar nomes de variáveis, tabelas, logs e env vars
+- [ ] Verificar badges e links externos
+- [ ] Propor plano de migração seguro
+- [ ] **Só então aplicar** o rename em commit único e bem documentado
+
+### Sprint 6B — Aprimorar UI Global
+- [ ] Revisar bordas cortando conteúdo (tabelas, cards, modais)
+- [ ] Padronizar espaçamento e tipografia entre todas as páginas
+- [ ] Melhorar responsividade geral (tablet e mobile)
+- [ ] Revisitar `Transacoes.tsx` — interface mais leve e moderna
+
+---
+
+## 📋 Sprint 7 — Módulo de IRPF (Planejado)
+**Período:** Agosto 2026 | [Issue #56](https://github.com/lfragoso93-web/sig-v2/issues/56)
+
+- [ ] Completar `IRPFPage.tsx`
+- [ ] Exportação de relatório mensal/anual (PDF ou CSV)
+- [ ] Cálculo consolidado por ano-calendário
+- [ ] Isenção para vendas até R$20.000/mês
+- [ ] Apuração Day Trade vs Swing Trade
+- [ ] Testes de validação do cálculo de ganho de capital
+
+---
+
+## 📋 Sprint 8 — Análise de Carteira (Planejado)
+**Período:** Agosto–Setembro 2026 | [Issue #57](https://github.com/lfragoso93-web/sig-v2/issues/57)
+
+- [ ] Completar `AnalisePage.tsx`
+- [ ] Score de diversificação por setor e classe
+- [ ] Concentração por ativo com alertas de over-allocation
+- [ ] Comparação vs. metas de alocação (`class_targets`)
+- [ ] Sugestões de rebalanceamento
+
+---
+
+## 📋 Sprint 9 — Janela Global do Ativo (Planejado)
+**Período:** Setembro 2026 | [Issue #58](https://github.com/lfragoso93-web/sig-v2/issues/58)
+
+- [ ] Componente `AssetDetailDrawer.tsx`
+- [ ] Gráfico de preço histórico (OHLCV)
+- [ ] Histórico de proventos do ativo
+- [ ] Dividend Yield (DY) calculado
+- [ ] Disponível em PatrimonioPage, Transacoes e RentabilidadePage
+
+---
+
+## 📋 Sprint 10 — Produção e Qualidade (Planejado)
+**Período:** Outubro 2026 | [Issue #59](https://github.com/lfragoso93-web/sig-v2/issues/59)
 
 - [ ] Testes unitários e de integração (cobertura mínima 70%)
 - [ ] CI/CD com GitHub Actions (lint + test + build)
