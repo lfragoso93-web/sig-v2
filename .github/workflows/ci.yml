@@ -11,7 +11,6 @@ on:
 permissions:
   contents: read
   actions: read
-  security-events: write
   pull-requests: read
 
 concurrency:
@@ -139,25 +138,62 @@ jobs:
           trivyignores: .trivyignore
           exit-code: "1"
 
-  dependency-review:
-    name: Dependency review
+  # ---------------------------------------------------------------------------
+  # DEPENDENCY AUDIT
+  # Substitui dependency-review-action (requer GitHub Advanced Security pago).
+  # pip-audit e npm audit sao gratuitos e cobrem o mesmo proposito.
+  #
+  # Estrategia pip-audit:
+  #   1. Instala as dependencias do backend no ambiente Python
+  #   2. Roda pip-audit SEM -r para auditar o ambiente instalado
+  #      Isso evita o conflito "project_path not allowed with -r".
+  #   Nota: pip-audit nao suporta --severity; reporta todas as vulns.
+  #   O gate de severidade fica por conta do Trivy (job acima).
+  # ---------------------------------------------------------------------------
+  audit-python:
+    name: Dependency audit – Python (pip-audit)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v7
 
-      - name: Dependency review
-        uses: actions/dependency-review-action@v5
+      - uses: actions/setup-python@v6
         with:
-          fail-on-severity: high
-          license-check: false
-          deny-licenses: GPL-3.0,AGPL-3.0
-          # GHSA-xgmm-8j9v-c9wx: PyJWT JWK/HMAC confusion — falso positivo.
-          # O projeto usa jwt.decode() com algorithms=[settings.ALGORITHM] (HS256
-          # fixo via SECRET_KEY simetrico). Nenhuma chave publica JWK e aceita.
-          # Ver: backend/app/core/security.py -> decode_token()
-          allow-ghsas: GHSA-xgmm-8j9v-c9wx
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install backend dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Run pip-audit
+        # Audita o ambiente Python instalado (sem -r, sem project_path).
+        # --ignore-vuln GHSA-xgmm-8j9v-c9wx: PyJWT JWK/HMAC confusion
+        # falso positivo — o projeto usa HS256 fixo via settings.ALGORITHM.
+        run: pip-audit --ignore-vuln GHSA-xgmm-8j9v-c9wx
+
+  audit-nodejs:
+    name: Dependency audit – Node.js (npm audit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm install
+
+      - name: Run npm audit
+        working-directory: frontend
+        run: npm audit --audit-level=high
 
   # ---------------------------------------------------------------------------
   # DOCKERFILE LINT
@@ -247,8 +283,6 @@ jobs:
         with:
           node-version: "20"
 
-      # npm ci no Dockerfile exige package-lock.json no contexto de build.
-      # Como o lockfile nao esta no repositorio, geramos aqui antes do docker build.
       - name: Generate package-lock.json
         working-directory: frontend
         run: npm install --package-lock-only --ignore-scripts
@@ -264,8 +298,6 @@ jobs:
           push: false
           pull: true
           tags: sig-v2-frontend:ci-${{ github.sha }}
-          # pull:true garante que nginx:1.28-alpine seja sempre re-puxado do Docker Hub
-          # e que o apk upgrade receba os patches mais recentes disponiveis
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

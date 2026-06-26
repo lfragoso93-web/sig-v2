@@ -9,8 +9,9 @@ import {
 import type { RentabilidadeAtivo, RentabilidadeClasse } from '@/hooks/useRentabilidade'
 import { formatBRL, formatPercent } from '@/utils/format'
 import KpiCard from '@/components/ui/KpiCard'
+import RentabilidadeChart from '@/components/charts/RentabilidadeChart'
 
-// ─── helpers de cor ──────────────────────────────────────────────────────────
+// ── helpers de cor ────────────────────────────────────────────────────────────
 
 function pnlColor(value: number): string {
   if (value > 0) return 'var(--color-success)'
@@ -22,7 +23,7 @@ function pnlSign(value: number): string {
   return value > 0 ? '+' : ''
 }
 
-// ─── Labels de classe de ativo ───────────────────────────────────────────────
+// ── Labels de classe ──────────────────────────────────────────────────────────────
 
 const ASSET_TYPE_LABEL: Record<string, string> = {
   ACAO:              'Ações',
@@ -38,10 +39,10 @@ function labelTipo(tipo: string) {
   return ASSET_TYPE_LABEL[tipo] ?? tipo
 }
 
-// ─── Filtros ─────────────────────────────────────────────────────────────────
+// ── Filtros ─────────────────────────────────────────────────────────────────────
 
 const ASSET_TYPE_OPTIONS = [
-  { label: 'Todos',              value: '' },
+  { label: 'Todos',               value: '' },
   { label: 'Ações',              value: 'ACAO' },
   { label: 'FIIs',               value: 'FII' },
   { label: 'ETFs Nacionais',     value: 'ETF_NACIONAL' },
@@ -49,7 +50,7 @@ const ASSET_TYPE_OPTIONS = [
   { label: 'ETFs Internacionais',value: 'ETF_INTERNACIONAL' },
 ]
 
-// ─── Sub-componentes ─────────────────────────────────────────────────────────
+// ── Sub-componentes ─────────────────────────────────────────────────────────────
 
 function ClasseBar({ classe }: { classe: RentabilidadeClasse }) {
   return (
@@ -65,7 +66,6 @@ function ClasseBar({ classe }: { classe: RentabilidadeClasse }) {
           </span>
         </span>
       </div>
-      {/* Barra de alocação */}
       <div
         className="w-full rounded-full"
         style={{ height: 6, background: 'var(--color-surface-offset)' }}
@@ -162,7 +162,7 @@ function AtivoRow({ ativo }: { ativo: RentabilidadeAtivo }) {
   )
 }
 
-// ─── Página ───────────────────────────────────────────────────────────────────
+// ── Página ───────────────────────────────────────────────────────────────────────
 
 export default function RentabilidadePage() {
   const { data: portfolios } = usePortfolioList()
@@ -279,6 +279,9 @@ export default function RentabilidadePage() {
         </>
       )}
 
+      {/* ── Gráfico de rentabilidade mensal + benchmark ── */}
+      {portfolioId > 0 && <RentabilidadeChart portfolioId={portfolioId} />}
+
       {/* ── Corpo: classes + tabela de ativos ── */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
 
@@ -307,7 +310,6 @@ export default function RentabilidadePage() {
           <div className="section-card-header">
             <span className="text-xs font-semibold">Por ativo</span>
             <div className="flex items-center gap-2">
-              {/* Filtro de tipo */}
               <select
                 value={assetTypeFilter}
                 onChange={e => setAssetTypeFilter(e.target.value)}
@@ -317,7 +319,6 @@ export default function RentabilidadePage() {
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
               </select>
-              {/* Toggle posições zeradas */}
               <button
                 onClick={() => setShowZeradas(v => !v)}
                 className="px-3 py-1 rounded text-xs font-medium transition-colors"
