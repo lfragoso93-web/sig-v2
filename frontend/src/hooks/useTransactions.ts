@@ -58,10 +58,12 @@ function invalidatePortfolioKeys(qc: ReturnType<typeof useQueryClient>, portfoli
   qc.invalidateQueries({ queryKey: ['asset-distribution',   portfolioId] })
   qc.invalidateQueries({ queryKey: ['patrimonio-history',   portfolioId] })
   qc.invalidateQueries({ queryKey: ['summary',              portfolioId] })
-  // KPIs usados no ResumePage (Patrimônio Total, Resultado, Rentabilidade)
+  // KPIs usados no ResumePage
   qc.invalidateQueries({ queryKey: ['rentabilidade-kpis',   portfolioId] })
   qc.invalidateQueries({ queryKey: ['rentabilidade-ativos', portfolioId] })
   qc.invalidateQueries({ queryKey: ['rentabilidade-classes',portfolioId] })
+  // Metas financeiras (current_value automático pode mudar após transação)
+  qc.invalidateQueries({ queryKey: ['goals',                portfolioId] })
 }
 
 export function useTransactions(
