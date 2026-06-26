@@ -146,8 +146,9 @@ jobs:
   # Estrategia pip-audit:
   #   1. Instala as dependencias do backend no ambiente Python
   #   2. Roda pip-audit SEM -r para auditar o ambiente instalado
-  #      Isso evita o conflito "project_path not allowed with -r"
-  #      que ocorre quando pip-audit tenta inferir project_path do cwd.
+  #      Isso evita o conflito "project_path not allowed with -r".
+  #   Nota: pip-audit nao suporta --severity; reporta todas as vulns.
+  #   O gate de severidade fica por conta do Trivy (job acima).
   # ---------------------------------------------------------------------------
   audit-python:
     name: Dependency audit – Python (pip-audit)
@@ -169,10 +170,10 @@ jobs:
         run: pip install pip-audit
 
       - name: Run pip-audit
-        # Audita o ambiente Python instalado (sem -r e sem project_path).
+        # Audita o ambiente Python instalado (sem -r, sem project_path).
         # --ignore-vuln GHSA-xgmm-8j9v-c9wx: PyJWT JWK/HMAC confusion
         # falso positivo — o projeto usa HS256 fixo via settings.ALGORITHM.
-        run: pip-audit --ignore-vuln GHSA-xgmm-8j9v-c9wx --severity high
+        run: pip-audit --ignore-vuln GHSA-xgmm-8j9v-c9wx
 
   audit-nodejs:
     name: Dependency audit – Node.js (npm audit)
