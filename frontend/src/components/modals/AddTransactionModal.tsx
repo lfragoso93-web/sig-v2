@@ -21,14 +21,14 @@ type AssetTab = {
 }
 
 const TABS: AssetTab[] = [
-  { key: 'acao',       label: 'Ação',       icon: <TrendingUp size={12} />, assetType: 'ACAO',              currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: PETR4 ou Petrobras',    brapiEnabled: true,  brapiSuggestType: 'stock'     },
+  { key: 'acao',       label: 'A\u00e7\u00e3o',       icon: <TrendingUp size={12} />, assetType: 'ACAO',              currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: PETR4 ou Petrobras',    brapiEnabled: true,  brapiSuggestType: 'stock'     },
   { key: 'fii',        label: 'FII',        icon: <Building2  size={12} />, assetType: 'FII',               currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: MXRF11 ou Maxi Renda',  brapiEnabled: true,  brapiSuggestType: 'fund'      },
   { key: 'etf_br',     label: 'ETF BR',     icon: <BarChart2  size={12} />, assetType: 'ETF_NACIONAL',      currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: BOVA11 ou IVVB11',      brapiEnabled: true,  brapiSuggestType: 'etf'       },
   { key: 'bdr',        label: 'BDR',        icon: <Globe2     size={12} />, assetType: 'BDR',               currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: NVDC34 ou AAPL34',      brapiEnabled: true,  brapiSuggestType: 'stock'     },
   { key: 'stock',      label: 'Stock',      icon: <Globe      size={12} />, assetType: 'STOCK',             currency: 'USD', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: AAPL ou Apple',         brapiEnabled: true,  brapiSuggestType: 'stock_int' },
   { key: 'etf_int',    label: 'ETF INT',    icon: <Globe      size={12} />, assetType: 'ETF_INTERNACIONAL', currency: 'USD', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: VTI ou Vanguard',       brapiEnabled: true,  brapiSuggestType: 'etf_int'   },
-  { key: 'tesouro',    label: 'Tesouro',    icon: <Landmark   size={12} />, assetType: 'TESOURO_DIRETO',    currency: 'BRL', tickerLabel: 'Título',       tickerPlaceholder: 'ex: Tesouro IPCA 2029',     brapiEnabled: false, extraFields: 'tesouro'        },
-  { key: 'renda_fixa', label: 'Renda Fixa', icon: <Banknote   size={12} />, assetType: 'RENDA_FIXA',        currency: 'BRL', tickerLabel: 'Código/Nome',  tickerPlaceholder: 'ex: CDB XP 110% CDI',       brapiEnabled: false, extraFields: 'renda_fixa'     },
+  { key: 'tesouro',    label: 'Tesouro',    icon: <Landmark   size={12} />, assetType: 'TESOURO_DIRETO',    currency: 'BRL', tickerLabel: 'T\u00edtulo',       tickerPlaceholder: 'ex: Tesouro IPCA 2029',     brapiEnabled: false, extraFields: 'tesouro'        },
+  { key: 'renda_fixa', label: 'Renda Fixa', icon: <Banknote   size={12} />, assetType: 'RENDA_FIXA',        currency: 'BRL', tickerLabel: 'C\u00f3digo/Nome',  tickerPlaceholder: 'ex: CDB XP 110% CDI',       brapiEnabled: false, extraFields: 'renda_fixa'     },
   { key: 'cripto',     label: 'Cripto',     icon: <Bitcoin    size={12} />, assetType: 'CRIPTO',            currency: 'BRL', tickerLabel: 'Ticker',       tickerPlaceholder: 'ex: BTC ou Bitcoin',        brapiEnabled: true,  brapiSuggestType: 'cripto'    },
 ]
 
@@ -110,6 +110,44 @@ function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   )
 }
 
+// ── Toggle pill (Liquidez diária) ────────────────────────────────────────────
+function TogglePill({ label, checked, onChange }: {
+  label: string; checked: boolean; onChange: (v: boolean) => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 6,
+        padding: '4px 10px',
+        borderRadius: 'var(--radius-full)',
+        border: checked
+          ? '1px solid oklch(from var(--color-success) l c h / 0.35)'
+          : '1px solid oklch(from var(--color-text) l c h / 0.15)',
+        background: checked
+          ? 'oklch(from var(--color-success) l c h / 0.12)'
+          : 'var(--color-surface-2)',
+        color: checked ? 'var(--color-success)' : 'var(--color-text-muted)',
+        fontSize: 'var(--text-xs)', fontWeight: checked ? 600 : 400,
+        cursor: 'pointer', transition: 'all 150ms ease',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {/* indicador visual */}
+      <span style={{
+        display: 'inline-block',
+        width: 8, height: 8,
+        borderRadius: '50%',
+        background: checked ? 'var(--color-success)' : 'oklch(from var(--color-text) l c h / 0.25)',
+        transition: 'background 150ms ease',
+        flexShrink: 0,
+      }} />
+      {label}
+    </button>
+  )
+}
+
 // ── Extrai mensagem amigável do erro do backend ───────────────────────────────────
 function extractErrorMessage(err: unknown): string {
   const e = err as {
@@ -122,57 +160,63 @@ function extractErrorMessage(err: unknown): string {
     return detail.map((d: any) => d?.msg ?? JSON.stringify(d)).join('; ')
   }
   if (e?.response?.status === 422)
-    return 'Dados inválidos. Verifique o ticker, tipo de ativo e a data.'
-  if (e?.response?.status === 400) return typeof detail === 'string' ? detail : 'Operação inválida.'
-  if (e?.response?.status === 401) return 'Sessão expirada. Faça login novamente.'
-  if (e?.response?.status === 404) return 'Carteira não encontrada.'
+    return 'Dados inv\u00e1lidos. Verifique o ticker, tipo de ativo e a data.'
+  if (e?.response?.status === 400) return typeof detail === 'string' ? detail : 'Opera\u00e7\u00e3o inv\u00e1lida.'
+  if (e?.response?.status === 401) return 'Sess\u00e3o expirada. Fa\u00e7a login novamente.'
+  if (e?.response?.status === 404) return 'Carteira n\u00e3o encontrada.'
   if (e?.message) return e.message
-  return 'Erro ao salvar lançamento. Tente novamente.'
+  return 'Erro ao salvar lan\u00e7amento. Tente novamente.'
 }
 
 export default function AddTransactionModal({ onClose }: Props) {
-  const selectedPortfolioId                                = useAppStore(s => s.selectedPortfolioId)
-  const prefill                                            = useAppStore(s => s.transactionModal.prefill)
+  const selectedPortfolioId                                 = useAppStore(s => s.selectedPortfolioId)
+  const prefill                                             = useAppStore(s => s.transactionModal.prefill)
   const { mutateAsync: createAsync, isPending: isCreating } = useCreateTransaction()
   const { mutateAsync: updateAsync, isPending: isUpdating } = useUpdateTransaction()
   const isPending  = isCreating || isUpdating
   const isEditMode = !!prefill?.transactionId
   const initialTab = prefill?.tab ?? 'acao'
 
-  const [activeTab,     setActiveTab]     = useState(initialTab)
-  const [operation,     setOperation]     = useState<'buy' | 'sell'>(prefill?.operation ?? 'buy')
-  const [ticker,        setTicker]        = useState(prefill?.ticker    ?? '')
-  const [assetName,     setAssetName]     = useState(prefill?.assetName ?? '')
-  const [quantity,      setQuantity]      = useState(prefill?.quantity  != null ? String(prefill.quantity)  : '')
-  const [price,         setPrice]         = useState(prefill?.price     != null ? String(prefill.price)     : '')
-  const [fees,          setFees]          = useState(prefill?.fees      != null ? String(prefill.fees)      : '')
-  const [date,          setDate]          = useState(prefill?.date      ?? TODAY)
-  const [notes,         setNotes]         = useState(prefill?.notes     ?? '')
-  const [currency,      setCurrency]      = useState(prefill?.currency  ?? TABS.find(t => t.key === initialTab)?.currency ?? 'BRL')
-  const [error,         setError]         = useState<string | null>(null)
-  const [success,       setSuccess]       = useState(false)
+  const [activeTab,      setActiveTab]      = useState(initialTab)
+  const [operation,      setOperation]      = useState<'buy' | 'sell'>(prefill?.operation ?? 'buy')
+  const [ticker,         setTicker]         = useState(prefill?.ticker    ?? '')
+  const [assetName,      setAssetName]      = useState(prefill?.assetName ?? '')
+  const [quantity,       setQuantity]       = useState(prefill?.quantity  != null ? String(prefill.quantity)  : '')
+  const [price,          setPrice]          = useState(prefill?.price     != null ? String(prefill.price)     : '')
+  const [fees,           setFees]           = useState(prefill?.fees      != null ? String(prefill.fees)      : '')
+  const [date,           setDate]           = useState(prefill?.date      ?? TODAY)
+  const [notes,          setNotes]          = useState(prefill?.notes     ?? '')
+  const [currency,       setCurrency]       = useState(prefill?.currency  ?? TABS.find(t => t.key === initialTab)?.currency ?? 'BRL')
+  const [error,          setError]          = useState<string | null>(null)
+  const [success,        setSuccess]        = useState(false)
   const [priceFromBrapi, setPriceFromBrapi] = useState(false)
-  const [indexer,       setIndexer]       = useState('')
-  const [rate,          setRate]          = useState('')
-  const [maturity,      setMaturity]      = useState('')
-  const [issuer,        setIssuer]        = useState('')
-  const [activeSlug,    setActiveSlug]    = useState('')
-  const [priceEdited,   setPriceEdited]   = useState(isEditMode)
-  const [showTDSugg,    setShowTDSugg]    = useState(false)
-  const [showRVSugg,    setShowRVSugg]    = useState(false)
-  const dropdownRef                        = useRef<HTMLDivElement>(null)
+  const [indexer,        setIndexer]        = useState('')
+  const [rate,           setRate]           = useState('')
+  const [maturity,       setMaturity]       = useState('')
+  const [issuer,         setIssuer]         = useState('')
+  const [dailyLiquidity, setDailyLiquidity] = useState(false)   // ✔ NOVO
+  const [activeSlug,     setActiveSlug]     = useState('')
+  const [priceEdited,    setPriceEdited]    = useState(isEditMode)
+  const [showTDSugg,     setShowTDSugg]     = useState(false)
+  const [showRVSugg,     setShowRVSugg]     = useState(false)
+  const dropdownRef                          = useRef<HTMLDivElement>(null)
 
   const tab            = TABS.find(t => t.key === activeTab)!
   const isRF           = tab.extraFields === 'renda_fixa'
   const isTesouro      = tab.extraFields === 'tesouro'
   const indexerOptions = isTesouro ? TD_INDEXERS : RF_INDEXERS
-  const modalTitle     = isEditMode ? `Editar — ${ticker}` : prefill?.ticker ? `Adicionar Cotas — ${prefill.ticker}` : 'Novo Lançamento'
+  const modalTitle     = isEditMode ? `Editar \u2014 ${ticker}` : prefill?.ticker ? `Adicionar Cotas \u2014 ${prefill.ticker}` : 'Novo Lan\u00e7amento'
 
   const { quote, loading: quoteLoading, error: quoteError } = useTickerQuote(ticker, !!tab.brapiEnabled && !isEditMode, date)
   const { items: tdItems, loading: tdLoading }               = useTesouroSearch(ticker, isTesouro && !isEditMode)
   const { items: rvItems, loading: rvLoading }               = useTickerSuggest(ticker, !!tab.brapiSuggestType && !isEditMode, tab.brapiSuggestType)
   const { price: tdPrice, loading: tdPriceLoading }          = useTreasuryPrice(activeSlug, date, isTesouro && !!activeSlug && !priceEdited)
   const anyLoading = quoteLoading || tdLoading || rvLoading || tdPriceLoading
+
+  // Zera vencimento quando liquidez diária é ativada
+  useEffect(() => {
+    if (dailyLiquidity) setMaturity('')
+  }, [dailyLiquidity])
 
   useEffect(() => {
     if (isEditMode || !quote) { setPriceFromBrapi(false); return }
@@ -237,6 +281,7 @@ export default function AddTransactionModal({ onClose }: Props) {
     setActiveTab(key); setCurrency(t.currency)
     if (!prefill?.ticker) { setTicker(''); setAssetName('') }
     setPrice(''); setIndexer(''); setRate(''); setMaturity(''); setIssuer('')
+    setDailyLiquidity(false)
     setActiveSlug(''); setPriceEdited(false); setPriceFromBrapi(false)
     setShowTDSugg(false); setShowRVSugg(false); setError(null)
   }
@@ -245,7 +290,7 @@ export default function AddTransactionModal({ onClose }: Props) {
     e.preventDefault(); setError(null)
 
     if (!selectedPortfolioId) {
-      setError('Selecione uma carteira antes de lançar.')
+      setError('Selecione uma carteira antes de lan\u00e7ar.')
       return
     }
 
@@ -253,19 +298,20 @@ export default function AddTransactionModal({ onClose }: Props) {
     const prc = parseFloat(price)
     const fee = parseFloat(fees || '0')
 
-    if (!ticker.trim())          { setError('Informe o ticker/código do ativo.'); return }
-    if (isNaN(qty) || qty <= 0)  { setError('Quantidade deve ser maior que zero.'); return }
-    if (isNaN(prc) || prc <= 0)  { setError('Preço deve ser maior que zero.'); return }
+    if (!ticker.trim())         { setError('Informe o ticker/c\u00f3digo do ativo.'); return }
+    if (isNaN(qty) || qty <= 0) { setError('Quantidade deve ser maior que zero.'); return }
+    if (isNaN(prc) || prc <= 0) { setError('Pre\u00e7o deve ser maior que zero.'); return }
     if ((isRF || isTesouro) && !indexer) { setError('Selecione o indexador.'); return }
 
     let enrichedNotes = notes.trim()
     if (assetName) enrichedNotes = [assetName, enrichedNotes].filter(Boolean).join(' - ')
     if (isRF || isTesouro) {
       const extras = [
-        indexer  && `Indexador: ${indexer}`,
-        rate     && `Taxa: ${rate}% a.a.`,
-        maturity && `Vencimento: ${maturity}`,
-        isRF && issuer && `Emissor: ${issuer}`,
+        indexer         && `Indexador: ${indexer}`,
+        rate            && `Taxa: ${rate}% a.a.`,
+        dailyLiquidity  && 'Liquidez: Di\u00e1ria',
+        !dailyLiquidity && maturity && `Vencimento: ${maturity}`,
+        isRF && issuer  && `Emissor: ${issuer}`,
       ].filter(Boolean).join(' | ')
       enrichedNotes = [extras, enrichedNotes].filter(Boolean).join(' - ')
     }
@@ -300,12 +346,11 @@ export default function AddTransactionModal({ onClose }: Props) {
     setTicker(prefill?.ticker ?? ''); setAssetName(prefill?.assetName ?? '')
     setQuantity(''); setPrice(''); setFees(''); setDate(TODAY); setNotes('')
     setIndexer(''); setRate(''); setMaturity(''); setIssuer('')
+    setDailyLiquidity(false)
     setActiveSlug(''); setPriceEdited(false); setPriceFromBrapi(false)
     setShowTDSugg(false); setShowRVSugg(false); setError(null)
   }
 
-  // Compra: qty × price + fees  (taxa é custo, aumenta o total pago)
-  // Venda:  qty × price - fees  (taxa é desconto, reduz o valor recebido)
   const isBuy = operation === 'buy'
   const totalValue = quantity && price
     ? parseFloat(quantity) * parseFloat(price) + (isBuy ? 1 : -1) * parseFloat(fees || '0')
@@ -313,14 +358,13 @@ export default function AddTransactionModal({ onClose }: Props) {
   const total = totalValue !== null
     ? totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     : null
-  // Label contextual: compra = "Total a pagar", venda = "Valor a receber"
   const totalLabel = isBuy ? 'Total a pagar' : 'Valor a receber'
 
   const showDropdown  = showTDSugg || showRVSugg
   const dropdownItems = showTDSugg
     ? tdItems.map(item => ({
         label:    item.name,
-        sublabel: `${item.indexer}${item.rate ? ` ${item.rate}% a.a.` : ''}${item.maturity_date ? ` • venc. ${item.maturity_date.slice(0, 7)}` : ''}`,
+        sublabel: `${item.indexer}${item.rate ? ` ${item.rate}% a.a.` : ''}${item.maturity_date ? ` \u2022 venc. ${item.maturity_date.slice(0, 7)}` : ''}`,
         onSelect: () => applyTDSuggestion(item),
       }))
     : rvItems.map(item => ({
@@ -393,16 +437,16 @@ export default function AddTransactionModal({ onClose }: Props) {
             </div>
             <div>
               <p style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', margin: 0 }}>
-                {isEditMode ? 'Lançamento atualizado!' : 'Lançamento registrado!'}
+                {isEditMode ? 'Lan\u00e7amento atualizado!' : 'Lan\u00e7amento registrado!'}
               </p>
               <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginTop: 4 }}>
-                {isEditMode ? 'As alterações foram salvas com sucesso.' : 'O lançamento foi adicionado à sua carteira.'}
+                {isEditMode ? 'As altera\u00e7\u00f5es foram salvas com sucesso.' : 'O lan\u00e7amento foi adicionado \u00e0 sua carteira.'}
               </p>
             </div>
             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
               {!isEditMode && (
                 <button onClick={handleReset} className="btn btn-secondary" style={{ fontSize: 'var(--text-xs)', padding: '0.4375rem 1rem' }}>
-                  Novo lançamento
+                  Novo lan\u00e7amento
                 </button>
               )}
               <button onClick={onClose} className="btn btn-primary" style={{ fontSize: 'var(--text-xs)', padding: '0.4375rem 1rem' }}>
@@ -570,13 +614,25 @@ export default function AddTransactionModal({ onClose }: Props) {
                   padding: '0.875rem',
                   display: 'flex', flexDirection: 'column', gap: '0.75rem',
                 }}>
-                  <p style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-primary)', margin: 0 }}>
-                    {isTesouro ? 'Dados do Título' : 'Dados do Ativo'}
-                  </p>
+
+                  {/* Título do bloco + Toggle Liquidez Diária (só RF) */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <p style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-primary)', margin: 0 }}>
+                      {isTesouro ? 'Dados do T\u00edtulo' : 'Dados do Ativo'}
+                    </p>
+                    {isRF && (
+                      <TogglePill
+                        label="Liquidez di\u00e1ria"
+                        checked={dailyLiquidity}
+                        onChange={setDailyLiquidity}
+                      />
+                    )}
+                  </div>
+
                   <div style={{ display: 'flex', gap: '0.75rem' }}>
                     <Field label="Indexador" required style={{ flex: 1 }}>
                       <Select value={indexer} onChange={e => setIndexer(e.target.value)}>
-                        <option value="">Selecionar…</option>
+                        <option value="">Selecionar\u2026</option>
                         {indexerOptions.map(o => <option key={o} value={o}>{o}</option>)}
                       </Select>
                     </Field>
@@ -585,10 +641,27 @@ export default function AddTransactionModal({ onClose }: Props) {
                         placeholder={isTesouro ? 'ex: 5.82' : 'ex: 110'} min="0" step="any" />
                     </Field>
                   </div>
+
                   <div style={{ display: 'flex', gap: '0.75rem' }}>
-                    <Field label="Vencimento" style={{ flex: 1 }}>
-                      <Input type="date" value={maturity} onChange={e => setMaturity(e.target.value)} />
-                    </Field>
+                    {/* Vencimento: desabilitado + opaco quando liquidez diária ativa */}
+                    {!dailyLiquidity && (
+                      <Field label="Vencimento" style={{ flex: 1 }}>
+                        <Input type="date" value={maturity} onChange={e => setMaturity(e.target.value)} />
+                      </Field>
+                    )}
+                    {dailyLiquidity && (
+                      <div style={{
+                        flex: 1, display: 'flex', alignItems: 'center',
+                        padding: '0.5rem 0.75rem',
+                        borderRadius: 'var(--radius-md)',
+                        border: '1px dashed oklch(from var(--color-text) l c h / 0.15)',
+                        background: 'oklch(from var(--color-text) l c h / 0.03)',
+                      }}>
+                        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-faint)' }}>
+                          Sem vencimento (resgate a qualquer dia)
+                        </span>
+                      </div>
+                    )}
                     {isRF && (
                       <Field label="Emissor" style={{ flex: 1 }}>
                         <Input type="text" value={issuer} onChange={e => setIssuer(e.target.value)} placeholder="ex: Banco XP" />
@@ -605,7 +678,7 @@ export default function AddTransactionModal({ onClose }: Props) {
                     placeholder="0" min="0" step="any" />
                 </Field>
                 <Field
-                  label={`${isRF || isTesouro ? 'PU / Preço unit.' : 'Preço'} (${currency})`}
+                  label={`${isRF || isTesouro ? 'PU / Pre\u00e7o unit.' : 'Pre\u00e7o'} (${currency})`}
                   style={{ flex: 1 }}
                   badge={priceFromBrapi && (
                     <span style={{
@@ -635,7 +708,7 @@ export default function AddTransactionModal({ onClose }: Props) {
                   <Input type="number" value={fees} onChange={e => setFees(e.target.value)}
                     placeholder="0,00" min="0" step="any" />
                 </Field>
-                <Field label="Data da operação" style={{ flex: 1 }}>
+                <Field label="Data da opera\u00e7\u00e3o" style={{ flex: 1 }}>
                   <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
                 </Field>
               </div>
@@ -660,11 +733,11 @@ export default function AddTransactionModal({ onClose }: Props) {
                 </div>
               )}
 
-              {/* Observações */}
-              <Field label="Observações" badge={<span style={{ fontSize: '0.68rem', color: 'var(--color-text-faint)' }}>opcional</span>}>
+              {/* Observa\u00e7\u00f5es */}
+              <Field label="Observa\u00e7\u00f5es" badge={<span style={{ fontSize: '0.68rem', color: 'var(--color-text-faint)' }}>opcional</span>}>
                 <textarea
                   value={notes} onChange={e => setNotes(e.target.value)}
-                  rows={2} placeholder="Anotações sobre o lançamento…"
+                  rows={2} placeholder="Anota\u00e7\u00f5es sobre o lan\u00e7amento\u2026"
                   style={{ ...inputStyle, resize: 'none', lineHeight: 1.5 }}
                   onFocus={e => Object.assign(e.target.style, inputFocusStyle)}
                   onBlur={e  => { e.target.style.borderColor = 'oklch(from var(--color-text) l c h / 0.11)'; e.target.style.boxShadow = 'none' }}
@@ -697,7 +770,7 @@ export default function AddTransactionModal({ onClose }: Props) {
               </button>
               <button type="submit" disabled={isPending} className="btn btn-primary"
                 style={{ fontSize: 'var(--text-xs)', padding: '0.4375rem 1.125rem', fontWeight: 650 }}>
-                {isPending ? 'Salvando…' : isEditMode ? 'Salvar Alterações' : 'Salvar Lançamento'}
+                {isPending ? 'Salvando\u2026' : isEditMode ? 'Salvar Altera\u00e7\u00f5es' : 'Salvar Lan\u00e7amento'}
               </button>
             </div>
           </form>
