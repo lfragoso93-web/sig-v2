@@ -47,19 +47,22 @@ export default function App() {
                 <Route path="/carteira/proventos"          element={<ProventosPage />} />
                 <Route path="/carteira/rentabilidade"      element={<RentabilidadePage />} />
                 <Route path="/carteira/configuracoes"      element={<Configuracoes />} />
+                <Route path="/carteira/metas"              element={<MetasPage />} />
+                <Route path="/carteira/analise"            element={<AnalisePage />} />
+                <Route path="/carteira/irpf"               element={<IRPFPage />} />
 
                 {/* Patrimonio e sub-rotas */}
-                <Route path="/patrimonio"                          element={<PatrimonioPage />} />
                 <Route path="/carteira/patrimonio"                 element={<PatrimonioPage />} />
                 <Route path="/carteira/patrimonio/tesouro"         element={<TesouroDiretoPage />} />
 
-                {/* Redirect: historico agora vive dentro de PatrimonioPage */}
+                {/* Historico — ainda sem implementação completa */}
                 <Route path="/carteira/historico" element={<HistoricoPage />} />
 
-                {/* Rotas sem /carteira */}
-                <Route path="/metas"         element={<MetasPage />} />
-                <Route path="/analise"       element={<AnalisePage />} />
-                <Route path="/irpf"          element={<IRPFPage />} />
+                {/* Redirects legados — remover na Sprint 6C */}
+                <Route path="/patrimonio"    element={<Navigate to="/carteira/patrimonio"    replace />} />
+                <Route path="/metas"         element={<Navigate to="/carteira/metas"         replace />} />
+                <Route path="/analise"       element={<Navigate to="/carteira/analise"       replace />} />
+                <Route path="/irpf"          element={<Navigate to="/carteira/irpf"          replace />} />
                 <Route path="/proventos"     element={<Navigate to="/carteira/proventos"     replace />} />
                 <Route path="/rentabilidade" element={<Navigate to="/carteira/rentabilidade" replace />} />
                 <Route path="/lancamentos"   element={<Navigate to="/carteira/lancamentos"   replace />} />
