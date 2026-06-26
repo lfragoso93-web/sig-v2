@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { usePortfolioStore } from '@/store/portfolioStore'
+import { useAppStore } from '@/store/appStore'
 import {
   useGoals, useCreateGoal, useUpdateGoal, useDeleteGoal,
   GoalType, Goal, GoalCreate,
@@ -358,8 +358,8 @@ function GoalCard({
 // ---- Página principal ------------------------------------------------------
 
 export default function MetasPage() {
-  const { activePortfolioId } = usePortfolioStore()
-  const { data: goals = [], isLoading } = useGoals(activePortfolioId)
+  const selectedPortfolioId = useAppStore(s => s.selectedPortfolioId)
+  const { data: goals = [], isLoading } = useGoals(selectedPortfolioId)
   const createGoal = useCreateGoal()
   const updateGoal = useUpdateGoal()
   const deleteGoal = useDeleteGoal()
@@ -380,7 +380,7 @@ export default function MetasPage() {
   async function handleSave(data: GoalCreate) {
     if (editGoal) {
       await updateGoal.mutateAsync({
-        portfolioId: activePortfolioId!,
+        portfolioId: selectedPortfolioId!,
         id: editGoal.id,
         data,
       })
@@ -392,7 +392,7 @@ export default function MetasPage() {
 
   async function handleDelete(id: number) {
     if (!confirm('Remover esta meta?')) return
-    await deleteGoal.mutateAsync({ portfolioId: activePortfolioId!, id })
+    await deleteGoal.mutateAsync({ portfolioId: selectedPortfolioId!, id })
   }
 
   const active    = goals.filter(g => !g.is_completed)
@@ -461,12 +461,12 @@ export default function MetasPage() {
       )}
 
       {/* Modal */}
-      {activePortfolioId && (
+      {selectedPortfolioId && (
         <GoalModal
           open={modalOpen}
           onClose={() => setModalOpen(false)}
           onSave={handleSave}
-          portfolioId={activePortfolioId}
+          portfolioId={selectedPortfolioId}
           editGoal={editGoal}
         />
       )}
