@@ -1,6 +1,6 @@
 # RESUME — SIG v2
 
-Estado atual do projeto em 15 Jun 2026. Ponto de partida para a proxima sessao.
+Estado atual do projeto em 26 Jun 2026. Ponto de partida para a proxima sessao.
 
 ---
 
@@ -11,35 +11,68 @@ Estado atual do projeto em 15 Jun 2026. Ponto de partida para a proxima sessao.
 | Backend FastAPI | ✅ Rodando — async em todos os servicos |
 | Frontend React/Vite | ✅ Compilando |
 | Autenticacao | ✅ Zustand + JWT |
-| Carteiras e Posicoes | ✅ Sprint 4 concluida |
-| Cotacoes e Snapshots | ✅ Sprint 5 concluida |
-| Proventos (backend) | ✅ Sprint 6 concluida |
-| Proventos (frontend) | ✅ Sprint 6 concluida |
-| Rentabilidade | 🔜 Sprint 7 — proxima |
+| Carteiras e Posicoes | ✅ Concluido |
+| Cotacoes e Snapshots | ✅ Concluido |
+| Proventos (backend) | ✅ Concluido |
+| Proventos (frontend) | ✅ Concluido |
+| Catalogo de Ativos (seed) | ✅ Concluido — 2.259 ativos via BRAPI |
+| Rentabilidade (backend) | ✅ Concluido — 3 endpoints + testes |
+| Rentabilidade (frontend) | ✅ Concluido — RentabilidadePage.tsx |
+| IRPF (frontend) | ✅ Concluido — IRPFPage.tsx |
+| Hotfixes Tesouro/Cripto | ✅ Concluido — 3 camadas de fallback |
+| CSS Design System | ✅ Concluido — globals.css + components.css |
+| Dashboard principal | 🔜 Proximo — Sprint 5 em andamento |
 
 ---
 
-## Ultimo commit
+## Ultimo commit relevante
 
-`docs(sprint6): atualizar CHANGELOG, ROADMAP e RESUME com frontend de Proventos`
+`fix(css): design system — table-dense, badge, page-container, positions-table (25/06/2026)`
 
 ---
 
-## Arquivos alterados na Sprint 6
+## Sprint 5 — O que ja foi concluido
 
-| Arquivo | Commit |
+| Entrega | Data |
 |---|---|
-| `backend/app/services/dividend_backfill_service.py` | `73538f57` |
-| `backend/app/services/proventos_service.py` | `75790b79` |
-| `backend/app/routers/proventos.py` | `ff41314a` |
-| `backend/app/routers/dividends.py` | `d2e7b5d5` |
-| `frontend/src/services/proventosService.ts` | `c8ed7f85` |
-| `frontend/src/hooks/useProventos.ts` | `a6b7ffef` |
-| `frontend/src/pages/ProventosPage.tsx` | `670fc7bb` |
+| `rentabilidade_service.py` — KPIs, por ativo e por classe (cache Redis TTL 5min) | 25/06/2026 |
+| `routers/rentabilidade.py` — 3 endpoints com ownership check | 25/06/2026 |
+| `test_rentabilidade_service.py` — 13 casos SQLite in-memory | 25/06/2026 |
+| `RentabilidadePage.tsx` — 8 KpiCards, tabela por ativo, filtros | 25/06/2026 |
+| Hotfix `fetch_treasury_indicators` — 3 camadas de fallback (BRAPI → /list → radaropcoes) | 25/06/2026 |
+| Hotfix `_normalize_crypto_ticker` — mapa de 35 nomes completos | 25/06/2026 |
+| `globals.css` — `.table-dense`, `.badge`, `.page-container/header/title`, `.input-xs`, `.text-muted` | 25/06/2026 |
+| `components.css` — `.positions-table` com `table-layout: fixed` | 25/06/2026 |
+| `Transacoes.tsx` e `PatrimonioPage.tsx` — migracao para design system | 25/06/2026 |
 
 ---
 
-## Endpoints de Proventos
+## Sprint 5 — Pendencias (proximos passos)
+
+- [ ] Dashboard principal com resumo de patrimônio
+- [ ] Grafico de evolucao patrimonial (linha historica)
+- [ ] Distribuicao por classe de ativo (pizza/donut)
+- [ ] Lista de posicoes com rentabilidade individual
+- [ ] Tela de metas financeiras (`MetasPage.tsx` — stub vazio, backend existe)
+- [ ] Tela de renda fixa (`fixed_income` — backend existe, frontend pendente)
+- [ ] `GET /api/v1/assets` — listagem paginada com filtros (backend `assets.py` existe, frontend pendente)
+- [ ] `GET /api/v1/assets/{ticker}` — detalhe do ativo com cotacao atual
+- [ ] Tela de listagem de ativos no frontend
+- [ ] Investigar e corrigir `YFRateLimitError` para ativos internacionais (IVV, NVDA, INTR, TFLO)
+
+---
+
+## Endpoints de Rentabilidade
+
+| Endpoint | Descricao |
+|---|---|
+| `GET /portfolios/{id}/rentabilidade/kpis` | 13 campos: patrimonio, custo, aportado, ganhos, retorno total/mes/12m/desde inicio, proventos |
+| `GET /portfolios/{id}/rentabilidade/ativos` | Por ativo: qty, avg_price, current_value, unrealized/realized/total PnL, is_open |
+| `GET /portfolios/{id}/rentabilidade/classes` | Agrupado por ACAO/FII/ETF com alocacao_pct e total_pnl_pct |
+
+---
+
+## Endpoints de Proventos (referencia)
 
 | Endpoint | Descricao |
 |---|---|
@@ -53,28 +86,31 @@ Estado atual do projeto em 15 Jun 2026. Ponto de partida para a proxima sessao.
 
 ## Pendencias tecnicas conhecidas
 
-- `ProventosHistoricoTable.tsx` usa classes CSS legadas (`text-muted`, `border-light-border`) — a migrar para CSS vars nas proximas sprints
+- `ProventosHistoricoTable.tsx` usa classes CSS legadas (`text-muted`, `border-light-border`) — a migrar para CSS vars
 - `ProventosDonutChart` precisa de validacao com dados reais de distribuicao
+- `YFRateLimitError` afeta ativos internacionais (IVV, NVDA, INTR, TFLO) — sem solucao ainda
+- `MetasPage.tsx` e `AnalisePage.tsx` sao stubs vazios (< 200 bytes) — backend existe, frontend pendente
 - Nenhum teste automatizado escrito para o frontend ainda
 
 ---
 
-## Proxima sprint — Sprint 7: Rentabilidade
+## Paginas do Frontend (estado atual)
 
-**Objetivo:** calcular rentabilidade de forma util para decisao.
-
-**Criterios de aceite:**
-- Rentabilidade por ativo bate com transacoes e cotacoes
-- Carteira mostra retorno total com e sem proventos
-- Ativos vendidos continuam contribuindo para lucro realizado
-- Tela nao quebra quando cotacao esta ausente
-
-**Arquivos provaveis:**
-- `backend/app/services/rentabilidade_service.py` — novo
-- `backend/app/routers/rentabilidade.py` — novo
-- `frontend/src/services/rentabilidadeService.ts` — novo
-- `frontend/src/hooks/useRentabilidade.ts` — novo
-- `frontend/src/pages/RentabilidadePage.tsx` — a implementar
+| Pagina | Arquivo | Status |
+|---|---|---|
+| Login / Register | `Login.tsx`, `Register.tsx` | ✅ |
+| Landing / Welcome | `Landing.tsx`, `WelcomePage.tsx` | ✅ |
+| Patrimonio | `PatrimonioPage.tsx` | ✅ |
+| Transacoes | `Transacoes.tsx` | ✅ |
+| Proventos | `ProventosPage.tsx` | ✅ |
+| Rentabilidade | `RentabilidadePage.tsx` | ✅ |
+| IRPF | `IRPFPage.tsx` | ✅ |
+| Lancamentos | `LancamentosPage.tsx` | ✅ |
+| Configuracoes | `Configuracoes.tsx` | ✅ |
+| Resumo/Dashboard | `ResumePage.tsx` | 🔧 Parcial |
+| Metas | `MetasPage.tsx` | 🔜 Stub |
+| Analise | `AnalisePage.tsx` | 🔜 Stub |
+| Historico | `HistoricoPage.tsx` | 🔜 Stub |
 
 ---
 
@@ -87,3 +123,7 @@ Estado atual do projeto em 15 Jun 2026. Ponto de partida para a proxima sessao.
 - **net_value:** `total_value * 0.85` para JCP; `total_value` para os demais
 - **Prefixo de rotas:** gerenciado pelo `main.py` — nao hardcodar `/api/v1` nos routers
 - **Tipos de ativo:** fonte unica em `asset_types.py`
+- **Cache Redis:** TTL 5min para rentabilidade, 15min para cotacoes
+- **Crypto tickers:** normalizados via `_CRYPTO_NAME_MAP` (35 entradas) — ex: BITCOIN → BTC
+- **Tesouro Direto:** 3 camadas de fallback — BRAPI /indicators → /list → radaropcoes
+- **Asset seed:** UPSERT idempotente por `(ticker, asset_type)`, job semanal toda segunda as 03h
