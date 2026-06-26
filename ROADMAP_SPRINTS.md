@@ -73,12 +73,18 @@
   - [x] UI: 8 KpiCards, barra por classe de ativo, tabela por ativo com filtros
 - [x] **Hotfixes Tesouro Direto & Cripto** — 25/06/2026
 - [x] **Fixes CSS/UI Design System** — 25/06/2026
+- [x] **Dashboard principal** (`ResumePage`) — 26/06/2026
+  - [x] KpiCards migrados para `rentabilidade/kpis` (consistentes com RentabilidadePage)
+  - [x] 4 cards: Patrimônio Total, Resultado Total, Proventos 12m, Rentabilidade
+  - [x] Gráfico de evolução patrimonial + distribuição por classe + tabela de posições
+  - [x] Página enxuta — sem redundâncias com a página de Rentabilidade
+- [x] **Gráfico de rentabilidade mensal + benchmark** (`RentabilidadeChart`) — 26/06/2026
+  - [x] Barras: retorno % mês a mês via `useMonthlyEvolution`
+  - [x] Linhas: IBOV (BRAPI), CDI (BCB série 4391), IPCA (BCB série 433)
+  - [x] Toggles independentes por benchmark, filtro de período (6m/12m/24m/todo)
+  - [x] Integrado na `RentabilidadePage`
 
 ### Pendente
-- [ ] Dashboard principal com resumo de patrimônio
-- [ ] Gráfico de evolução patrimonial (linha histórica)
-- [ ] Distribuição por classe de ativo (pizza/donut)
-- [ ] Lista de posições com rentabilidade individual
 - [ ] Tela de metas financeiras
 - [ ] Tela IRPF (exportação de relatório)
 - [ ] Tela de renda fixa
@@ -192,7 +198,6 @@
 
 - [ ] Notificações por e-mail (proventos recebidos, metas atingidas)
 - [ ] Importação de notas de corretagem (PDF parsing)
-- [ ] Comparação de carteira com benchmark (IBOV, CDI)
 - [ ] Simulador de aportes
 - [ ] App mobile (React Native)
 - [ ] Multi-tenancy (múltiplos usuários com isolamento completo)

@@ -7,11 +7,37 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Adicionado — Dashboard Principal e Rentabilidade (26/06/2026)
+
+**`frontend/src/pages/ResumePage.tsx`**
+- KpiCards migrados de `usePortfolioSummary` para `useRentabilidadeKpis` — dados agora consistentes com a página de Rentabilidade
+- 4 cards: Patrimônio Total, Resultado Total (com breakdown não-realizado/realizado), Proventos 12m e Rentabilidade (mês + 12m + desde início)
+- Removidos `QuickNav` e seletor de carteira inline (navegação centralizada no topbar/sidebar)
+- Removido `usePortfolioSummary` — sem double fetch
+- Página enxuta: 4 KpiCards + evolução patrimonial + distribuição + tabela de posições
+
+**`frontend/src/components/charts/RentabilidadeChart.tsx`** (novo)
+- Gráfico de rentabilidade % mês a mês com comparativo de benchmarks
+- Barras: retorno mensal da carteira via `useMonthlyEvolution` (campo `return_pct`)
+- Linhas de benchmark com toggle independente:
+  - **IBOV**: histórico mensal via BRAPI (`^BVSP`, intervalo `1mo`)
+  - **CDI**: BCB série 4391 (CDI over acumulado no mês)
+  - **IPCA**: BCB série 433 (variação mensal), desligado por padrão
+- Filtro de período: 6m / 12m / 24m / todo período
+- Tooltip customizado com valores de todos os séries por mês
+- Nota de rodapé citando as fontes de dados
+
+**`frontend/src/pages/RentabilidadePage.tsx`**
+- `RentabilidadeChart` inserido entre os KpiCards e a tabela de ativos
+- Sem alteração na estrutura existente de KpiCards, tabela por ativo e barras por classe
+
+---
+
 ### Corrigido — CSS/UI Design System (25/06/2026)
 
 **`frontend/src/styles/globals.css`**
 - Adicionada classe utilitária `.table-dense` para tabelas compactas (th/td com padding reduzido, font-size `var(--text-xs)`, border-bottom automático)
-- Adicionadas classes `.badge` e `.badge-primary` para rótulos inline (ex: badge "atual" no resumo mensal)
+- Adicionadas classes `.badge` e `.badge-primary` para rótulos inline (ex: badge “atual” no resumo mensal)
 - Adicionados tokens de layout `.page-container`, `.page-header`, `.page-title`, `.page-subtitle` para consistência entre páginas
 - Adicionada classe `.input-xs` (altura 28px, padding menor, font-size `var(--text-xs)`) para inputs compactos em cabeçalhos de grupo
 - Adicionado utilitário `.text-muted` como classe Tailwind-compatível mapeada para `var(--color-text-muted)`
@@ -31,9 +57,9 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 - Extraído componente genérico `<ToggleGroup<T>>`: cada botão recebe `border-radius` individual nos extremos, eliminando a necessidade de `overflow-hidden` no container pai (que cortava o estado ativo)
 - Toggle Diário/Mensal e seletor de Período passam a usar `<ToggleGroup>` em vez de `<div className="overflow-hidden">`
 - Card do gráfico de evolução removido `overflow-hidden` (tooltip Recharts)
-- Tabela "Resumo Mensal" migrada para classe `.table-dense`
+- Tabela “Resumo Mensal” migrada para classe `.table-dense`
 - Coluna Rentabilidade da tabela mensal exibe ícone `TrendingUp` (verde) ou `TrendingDown` (vermelho) ao lado do valor percentual
-- Badge "atual" usa classes `.badge .badge-primary` em vez de estilo inline
+- Badge “atual” usa classes `.badge .badge-primary` em vez de estilo inline
 - Importado `TrendingDown` do `lucide-react`
 
 ---
@@ -43,11 +69,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 **Backend — `brapi.py`**
 - `fetch_treasury_indicators`: adicionada **3ª tentativa de fallback** via `api.radaropcoes.com` quando BRAPI falha completamente
 - `fetch_treasury_indicators`: token inválido/expirado (`400/401/403`) agora loga o status code explicitamente e cai no fallback `/list` sem lançar exceção
-- `fetch_treasury_indicators`: fluxo agora tem **3 camadas em cascata**:
-  1. `/v2/treasury/indicators` — somente se `BRAPI_TOKEN` configurado e retornar 2xx
-  2. `/v2/treasury/list` — plano free, sempre tentado como primeiro fallback
-  3. `api.radaropcoes.com` — fallback externo gratuito com dados em tempo real
-- `fetch_treasury_prices`: continua usando as 4 camadas internas (mapa estático → slug direto → catálogo dinâmico → API Tesouro Nacional)
+- Fluxo agora tem **3 camadas em cascata**: `/v2/treasury/indicators` → `/v2/treasury/list` → `api.radaropcoes.com`
 
 **Backend — `tesouro_nacional.py`**
 - Headers anti-403 adicionados (`User-Agent`, `Accept`, `Referer`)
@@ -58,50 +80,33 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 **Backend — serviços de cotação**
 - `quotes_service.py`: passa a usar `fetch_treasury_prices` com as 3 camadas de resolução de slug para Tesouro Direto
-- `_normalize_crypto_ticker`: adicionado mapa `_CRYPTO_NAME_MAP` cobrindo 35 criptomoedas por nome completo (ex: `BITCOIN → BTC`, `CARDANO → ADA`)
+- `_normalize_crypto_ticker`: adicionado mapa `_CRYPTO_NAME_MAP` cobrindo 35 criptomoedas por nome completo
 
 ### Adicionado — Página de Rentabilidade (25/06/2026)
 
 **Backend**
-- `rentabilidade_service.py`: serviço de agregação com 3 funções (`get_kpis`, `get_rentabilidade_por_ativo`, `get_rentabilidade_por_classe`), cache Redis TTL 5min, degradação gracosa sem Redis
+- `rentabilidade_service.py`: serviço de agregação com 3 funções, cache Redis TTL 5min
 - `routers/rentabilidade.py`: 3 endpoints REST com verificação de ownership por carteira:
-  - `GET /api/v1/portfolios/{id}/rentabilidade/kpis` — 13 campos: patrimônio, custo, aportado, ganhos realizados/não-realizados, retorno total/mês/12m/desde início, proventos total e 12m
-  - `GET /api/v1/portfolios/{id}/rentabilidade/ativos` — por ativo: qty, avg_price, current_value, unrealized/realized/total PnL, is_open
-  - `GET /api/v1/portfolios/{id}/rentabilidade/classes` — agrupado por ACAO/FII/ETF com alocacao_pct e total_pnl_pct
-- `main.py`: import e registro do `rentabilidade.router` na seção core financeiro
-- `main.py`: fix typo `str(url)` → `str(request.url)` no `global_exception_handler`
-
-**Testes**
-- `test_rentabilidade_service.py`: 13 casos de teste com SQLite in-memory, mocks para cache e cotações:
-  - `TestGetKpis` (5): sem snapshot, com snapshot, retorno 30d, fallback sem snap 30d, campos obrigatórios
-  - `TestGetRentabilidadePorAtivo` (5): sem posições, aberta com cotação, sem cotação (fallback avg_price), zerada com realized, zerada sem realized (ignorada)
-  - `TestGetRentabilidadePorClasse` (3): sem posições, agrupamento por tipo, alocacao_pct soma 100%
+  - `GET /api/v1/portfolios/{id}/rentabilidade/kpis`
+  - `GET /api/v1/portfolios/{id}/rentabilidade/ativos`
+  - `GET /api/v1/portfolios/{id}/rentabilidade/classes`
+- 13 testes em `test_rentabilidade_service.py` com SQLite in-memory + mocks
 
 **Frontend**
-- `rentabilidadeService.ts`: tipos TypeScript (`RentabilidadeKpis`, `RentabilidadeAtivo`, `RentabilidadeClasse`) + 3 métodos de API
-- `useRentabilidade.ts`: hooks `useRentabilidadeKpis`, `useRentabilidadeAtivos`, `useRentabilidadeClasses` com React Query
-- `RentabilidadePage.tsx`: página completa em `/carteira/rentabilidade`:
-  - **8 KpiCards em 2 linhas** com subValues e indicadores de variação coloridos
-  - **Coluna lateral** — Por classe: barra de alocação visual + retorno colorido por tipo
-  - **Tabela por ativo** — Qtd · P.M. · Val. atual · Ganho n.r. · Ganho real. · Total com filtro de tipo e toggle de posições zeradas
-  - Skeletons de carregamento, estados vazios, link discreto para posições zeradas
-  - Seletor de carteira quando há múltiplas carteiras
-  - Data do último snapshot no cabeçalho
+- `rentabilidadeService.ts` + `useRentabilidade.ts` + `RentabilidadePage.tsx`
+- UI: 8 KpiCards, barra por classe, tabela por ativo com filtros
 
 ### Adicionado (anterior)
-- `asset_seed_service.py`: serviço que popula a tabela `assets` via BRAPI `/quote/list` com UPSERT por `(ticker, asset_type)` para Ações, FIIs, ETFs Nacionais e BDRs
-- `POST /api/v1/admin/assets/seed`: endpoint restrito a superadmin que dispara o seed em background e retorna `202 Accepted`
-- Job semanal automático `job_seed_assets` toda segunda-feira às 03h no scheduler
-- Backfill histórico de preços com **ordenação por prioridade de tipo**: ACAO → FII → ETF_NACIONAL → ETF_INTERNACIONAL → STOCK → BDR → outros, evitando rate-limit prematuro do yfinance
-- Aba **BDR** no modal de transações do frontend (`assetType: 'BDR'`, moeda BRL, ícone Globe2, autocomplete via BRAPI)
-- Log detalhado com separadores visíveis (`==========`) no background task do seed para diagnóstico
-- Traceback completo em caso de falha no seed via `traceback.format_exc()`
+- `asset_seed_service.py`: popula tabela `assets` via BRAPI com UPSERT por `(ticker, asset_type)`
+- `POST /api/v1/admin/assets/seed`: endpoint superadmin + background task
+- Job semanal automático (segunda às 03h) para seed incremental
+- Backfill histórico de preços com ordenação por prioridade de tipo
+- Aba **BDR** no modal de transações do frontend
 
 ### Corrigido (anterior)
-- `main.py`: removida Etapa 3 (backfill de proventos) da sequência de boot — proventos são triggerados corretamente por transação via `dividend_backfill_service`, não precisam de boot
-- `price_history_backfill_service.py`: adicionada função `_sort_key` com `_TYPE_PRIORITY` para ordenar ativos no backfill inicial; BDRs (maioria sem histórico BRAPI) ficam por último
-- `asset_onboarding_service.py`: removido import inexistente `upsert_daily_prices` de `price_history_service`; substituído por função local `_upsert_price_row` usando `pg_insert` diretamente
-- `admin.py`: background task do seed agora loga início da execução antes de qualquer operação, evitando falhas silenciosas
+- Boot sequence sem Etapa 3 redundante de proventos
+- `ImportError upsert_daily_prices` removido de `asset_onboarding_service`
+- Background task do seed com log de início + traceback completo
 
 ---
 

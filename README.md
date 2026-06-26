@@ -1,69 +1,102 @@
 # SGI v2 — Sistema de Gestão de Investimentos
 
-> Plataforma pessoal de acompanhamento de investimentos com backend FastAPI e frontend React.
+> Plataforma pessoal de acompanhamento e análise de investimentos.
+> Monorepo com backend FastAPI e frontend React + TypeScript.
 
 [![Python](https://img.shields.io/badge/Python-3.12-blue)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-green)](https://fastapi.tiangolo.com)
-[![React](https://img.shields.io/badge/React-18-61DAFB)](https://reactjs.org)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791)](https://postgresql.org)
-[![Redis](https://img.shields.io/badge/Redis-7-DC382D)](https://redis.io)
+[![React](https://img.shields.io/badge/React-18-blue)](https://react.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://typescriptlang.org)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED)](https://docker.com)
 
 ---
 
-## Visão Geral
+## Funcionalidades implementadas
 
-O SGI v2 é uma aplicação full-stack para controle de carteiras de investimento. Suporta Ações, FIIs, ETFs, BDRs, Criptomoedas, Renda Fixa e **Tesouro Direto** com cotação automática via múltiplas fontes.
+### Dashboard Principal (`/`)
+- **4 KpiCards** com dados precisos via `rentabilidade/kpis`: Patrimônio Total, Resultado Total (com breakdown não-realizado/realizado), Proventos 12m e Rentabilidade (mês + 12m + desde início)
+- **Evolução patrimonial** — gráfico de barras com filtro de período (6m/12m/24m/todo) e por classe de ativo
+- **Distribuição por classe** — gráfico donut
+- **Tabela de posições** agrupada por classe com qtd, preço médio, valor atual e variação
 
----
+### Rentabilidade (`/carteira/rentabilidade`)
+- **8 KpiCards** em 2 linhas: patrimônio, retorno total/mês/12m, ganhos realizados/não-realizados, proventos e custo médio
+- **Gráfico de rentabilidade mensal** com comparativo de benchmarks:
+  - Barras: retorno % mês a mês da carteira
+  - IBOV (BRAPI), CDI (BCB série 4391), IPCA (BCB série 433) — toggles independentes
+  - Filtro de período: 6m / 12m / 24m / todo período
+- **Distribuição por classe** com barras de alocação e retorno colorido
+- **Tabela por ativo**: Qtd · P.M. · Val. atual · Ganho não-realizado · Ganho realizado · Total PnL
+- Filtro de tipo de ativo e toggle de posições zeradas
 
-## Funcionalidades
-
-### Disponíveis
-- **Carteiras**: criação, gestão e visão consolidada
-- **Transações**: compra/venda com cálculo de preço médio automático
-- **Posições**: controle de quantidade, PM e valor atual
-- **Proventos**: registro e backfill histórico de dividendos/JCP
-- **Rentabilidade**: KPIs de patrimônio, ganhos, retorno percentual por ativo e por classe
-- **Tesouro Direto**: cotação com fallback em 4 camadas (BRAPI indicators → BRAPI list → Radar Opções → API TN)
-- **Criptomoedas**: cotação BRL com normalização de 35 nomes completos (BITCOIN → BTC)
-- **Câmbio**: cotação e histórico de pares (USD-BRL, EUR-BRL, etc.)
-- **Metas financeiras**: CRUD com progresso calculado automaticamente
-- **IRPF**: cálculo de ganho de capital para renda variável
-- **Análise de carteira**: score de diversificação e concentração por setor
-- **Catálogo de ativos**: seed automático de 2.259+ ativos via BRAPI (semanal)
-- **Ativos internacionais**: BDR, ETF_INTL e STOCK via yfinance + Alpha Vantage
-- **Design System CSS**: `globals.css` + `components.css` com tokens, classes utilitárias (`.table-dense`, `.badge`, `.page-container`, `.input-xs`) e layout responsivo consistente
-
-### Em desenvolvimento (Sprint 5)
-- Dashboard principal com resumo de patrimônio
-- Gráfico de evolução patrimonial
-- Telas de Metas, IRPF e Renda Fixa
-- Listagem de ativos do catálogo
+### Outras páginas
+- **Patrimônio** — evolução diária/mensal, resumo mensal com rentabilidade por linha
+- **Transações** — histórico completo com filtros, gráfico de aportes mensais
+- **Proventos** — histórico de dividendos e JCP com gráficos
+- **IRPF** — apuração de ganho de capital (em construção)
+- **Metas** — CRUD com progresso automático (em construção)
+- **Renda Fixa** — cadastro e acompanhamento (em construção)
 
 ---
 
-## Arquitetura
+## Stack tecnológica
+
+### Backend
+| Tecnologia | Versão | Uso |
+|---|---|---|
+| Python | 3.12 | Linguagem base |
+| FastAPI | 0.115 | Framework web async |
+| SQLAlchemy | 2.x async | ORM |
+| Alembic | 1.x | Migrations |
+| PostgreSQL | 15 | Banco de dados |
+| Redis | 7 | Cache (TTL configurável por endpoint) |
+| APScheduler | 3.x | Jobs agendados (7 jobs) |
+| BRAPI | v2 | Cotações, histórico, Tesouro, FX |
+| yfinance | — | Fallback ativos internacionais |
+| Alpha Vantage | — | Fallback internacional (4 req/min) |
+| SlowAPI | — | Rate limiter global |
+| bcrypt | v5 | Hash de senhas |
+| JWT | — | Auth com refresh token rotativo |
+
+### Frontend
+| Tecnologia | Versão | Uso |
+|---|---|---|
+| React | 18 | UI |
+| TypeScript | 5.x | Tipagem |
+| Vite | 5.x | Build tool |
+| TailwindCSS | 3.x | Utilitários CSS |
+| Recharts | 2.x | Gráficos (barras, linha, donut, compostos) |
+| React Query | 5.x | Cache e estado servidor |
+| Zustand | — | Estado global (carteira selecionada) |
+| Lucide React | — | Ícones |
+| Axios | — | HTTP client |
+
+---
+
+## Estrutura do projeto
 
 ```
 sig-v2/
-├── backend/              # FastAPI + SQLAlchemy async
+├── backend/
 │   ├── app/
-│   │   ├── core/         # config, database, security
-│   │   ├── models/       # SQLAlchemy ORM
-│   │   ├── routers/      # endpoints FastAPI
-│   │   ├── services/     # lógica de negócio
-│   │   ├── integrations/ # BRAPI, yfinance, Alpha Vantage, TN
-│   │   └── schemas/      # Pydantic v2
-│   ├── tests/
-│   └── alembic/
-├── frontend/             # React 18 + TypeScript + Vite
+│   │   ├── core/          # database, deps, settings, scheduler
+│   │   ├── models/        # SQLAlchemy models
+│   │   ├── routers/       # endpoints FastAPI
+│   │   ├── schemas/       # Pydantic schemas
+│   │   ├── services/      # lógica de negócio
+│   │   └── integrations/  # BRAPI, yfinance, Alpha Vantage, BCB
+│   └── tests/
+├── frontend/
 │   ├── src/
-│   │   ├── pages/
-│   │   ├── components/
-│   │   ├── services/
-│   │   ├── hooks/
-│   │   └── styles/       # globals.css + components.css (Design System)
+│   │   ├── components/    # UI components, charts, modals
+│   │   ├── hooks/         # React Query hooks
+│   │   ├── pages/         # páginas da aplicação
+│   │   ├── services/      # HTTP services
+│   │   ├── store/         # Zustand stores
+│   │   └── styles/        # CSS vars + design system
+│   └── public/
 ├── docker-compose.yml
+├── docker-compose.prod.yml
 ├── CHANGELOG.md
 ├── ROADMAP_SPRINTS.md
 └── README.md
@@ -71,101 +104,67 @@ sig-v2/
 
 ---
 
-## Stack Tecnológica
+## Como rodar
 
-| Camada | Tecnologia |
-|--------|------------|
-| Backend | FastAPI 0.115 + Python 3.12 |
-| ORM | SQLAlchemy 2.x async |
-| Banco | PostgreSQL 16 |
-| Cache | Redis 7 |
-| Migrações | Alembic |
-| Frontend | React 18 + TypeScript + Vite |
-| UI | Tailwind CSS + Design System próprio |
-| Estado | TanStack Query (React Query) |
-| Auth | JWT + refresh token rotativo |
-| Scheduler | APScheduler |
-| Cotações | BRAPI → Alpha Vantage → yfinance |
-| Tesouro | BRAPI /indicators → /list → Radar Opções → API TN |
-| Infra | Docker Compose + Nginx |
+### Com Docker (recomendado)
 
----
-
-## Integrações de Cotação
-
-### Tesouro Direto — 4 camadas de fallback
-1. **BRAPI `/v2/treasury/indicators`** — somente com token válido (plano pago)
-2. **BRAPI `/v2/treasury/list`** — plano free, sem token, sempre tentado
-3. **Radar Opções API** — fallback externo gratuito
-4. **API Tesouro Nacional** — fonte oficial, último recurso
-
-### Demais ativos
-- **Ações / FIIs / ETFs / BDRs**: BRAPI `/quote` com chunk de 20 tickers
-- **Criptomoedas**: BRAPI `/v2/crypto` com normalização de nomes (35 moedas mapeadas)
-- **Ativos internacionais**: yfinance com fallback Alpha Vantage
-- **Câmbio**: BRAPI `/v2/currency` com fallback de formato `USD-BRL` ↔ `USDBRL`
-
----
-
-## Como Rodar
-
-### Pré-requisitos
-- Docker e Docker Compose
-- Arquivo `.env` configurado (ver `.env.example`)
-
-### Subir o ambiente
 ```bash
-docker-compose up -d
+cp .env.example .env
+# edite o .env com suas chaves (BRAPI_TOKEN, SECRET_KEY, etc.)
+docker compose up --build
 ```
 
-### Acessar
-- **API**: http://localhost:8000
-- **Docs Swagger**: http://localhost:8000/docs
-- **Frontend**: http://localhost:3000
+Acesse:
+- Frontend: http://localhost:5173
+- Backend API: http://localhost:8000
+- Swagger: http://localhost:8000/docs
 
-### Comandos úteis
+### Sem Docker
+
 ```bash
-# Rodar migrations
-make migrate
+# Backend
+cd backend
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+alembic upgrade head
+uvicorn app.main:app --reload
 
-# Criar nova migration
-make migration msg="descricao"
-
-# Rodar testes
-make test
-
-# Rebuild completo
-make rebuild
+# Frontend
+cd frontend
+npm install
+npm run dev
 ```
 
 ---
 
-## Variáveis de Ambiente
+## Variáveis de ambiente
 
-Ver `.env.example` para a lista completa. Principais:
+Copie `.env.example` e preencha:
 
 | Variável | Descrição |
-|----------|------------|
-| `DATABASE_URL` | URL de conexão PostgreSQL |
-| `REDIS_URL` | URL do Redis |
-| `SECRET_KEY` | Chave JWT |
-| `BRAPI_TOKEN` | Token BRAPI (opcional — melhora limites de cotação) |
-| `ALPHA_VANTAGE_KEY` | Chave Alpha Vantage (opcional) |
+|---|---|
+| `DATABASE_URL` | URL PostgreSQL (ex: `postgresql+asyncpg://user:pass@localhost/db`) |
+| `REDIS_URL` | URL Redis (ex: `redis://localhost:6379`) |
+| `SECRET_KEY` | Chave JWT (mínimo 32 chars) |
+| `BRAPI_TOKEN` | Token BRAPI (plano free funciona para cotações básicas) |
+| `ALPHA_VANTAGE_KEY` | Chave Alpha Vantage (opcional, fallback internacional) |
 | `SUPERADMIN_EMAIL` | E-mail do superadmin criado no boot |
 | `SUPERADMIN_PASSWORD` | Senha do superadmin |
 
 ---
 
-## Status do Projeto
+## Roadmap
 
-| Sprint | Status | Período |
-|--------|--------|----------|
-| Sprint 1 — Fundação | ✅ Concluído | Abril 2026 |
-| Sprint 2 — Core Financeiro | ✅ Concluído | Maio 2026 |
-| Sprint 3 — Funcionalidades Avançadas | ✅ Concluído | Junho 2026 (1ª quinzena) |
-| Sprint 4 — Catálogo de Ativos | ✅ Concluído | Junho 2026 (2ª quinzena) |
-| Sprint 5 — Frontend Dashboard | 🔄 Em andamento | Junho–Julho 2026 |
-| Sprint 6 — Produção e Qualidade | 📋 Planejado | Agosto 2026 |
+Veja o roadmap completo em [ROADMAP_SPRINTS.md](./ROADMAP_SPRINTS.md).
 
-Ver [ROADMAP_SPRINTS.md](./ROADMAP_SPRINTS.md) para detalhes por sprint.
-Ver [CHANGELOG.md](./CHANGELOG.md) para histórico de mudanças.
+**Próximas prioridades (Sprint 5 — em andamento):**
+- Tela de metas financeiras
+- Tela IRPF com exportação de relatório
+- Tela de renda fixa
+- Fix `YFRateLimitError` para ativos internacionais
+
+---
+
+## Changelog
+
+Veja o histórico completo em [CHANGELOG.md](./CHANGELOG.md).
