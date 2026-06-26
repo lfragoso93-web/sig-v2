@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react'
-import { BarChart2, TrendingUp, DollarSign, Activity, Briefcase } from 'lucide-react'
+import { BarChart2, TrendingUp, DollarSign, Activity, Briefcase, ArrowUpRight } from 'lucide-react'
 import clsx from 'clsx'
 import {
   usePortfolioList,
-  usePortfolioSummary,
   usePatrimonioHistory,
   useAssetDistribution,
   usePositions,
 } from '@/hooks/usePortfolio'
+import { useRentabilidadeKpis } from '@/hooks/useRentabilidade'
 import { useAppStore } from '@/store/appStore'
 import { formatBRL, formatPercent, signClass } from '@/utils/format'
 import KpiCard from '@/components/ui/KpiCard'
@@ -76,6 +76,53 @@ function ChartSelect({
   )
 }
 
+// ── Quick Nav ────────────────────────────────────────────────────────────────
+const QUICK_LINKS = [
+  { label: 'Rentabilidade', href: '/carteira/rentabilidade' },
+  { label: 'Proventos',     href: '/carteira/proventos'     },
+  { label: 'Transações',    href: '/carteira/transacoes'    },
+  { label: 'IRPF',          href: '/carteira/irpf'          },
+]
+
+function QuickNav() {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: '0.5rem',
+      flexWrap: 'wrap',
+    }}>
+      {QUICK_LINKS.map(l => (
+        <a
+          key={l.href}
+          href={l.href}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 3,
+            fontSize: 'var(--text-xs)', fontWeight: 600,
+            color: 'var(--color-text-muted)',
+            background: 'var(--color-surface-offset)',
+            border: '1px solid oklch(from var(--color-text) l c h / 0.08)',
+            borderRadius: 'var(--radius-full)',
+            padding: '3px 10px',
+            textDecoration: 'none',
+            transition: 'color 0.15s, border-color 0.15s',
+          }}
+          onMouseEnter={e => {
+            ;(e.currentTarget as HTMLElement).style.color = 'var(--color-primary)'
+            ;(e.currentTarget as HTMLElement).style.borderColor = 'var(--color-primary)'
+          }}
+          onMouseLeave={e => {
+            ;(e.currentTarget as HTMLElement).style.color = 'var(--color-text-muted)'
+            ;(e.currentTarget as HTMLElement).style.borderColor = 'oklch(from var(--color-text) l c h / 0.08)'
+          }}
+        >
+          {l.label}
+          <ArrowUpRight size={10} />
+        </a>
+      ))}
+    </div>
+  )
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
 export default function ResumePage() {
   const globalPortfolioId = useAppStore(s => s.selectedPortfolioId)
   const setGlobal         = useAppStore(s => s.setSelectedPortfolioId)
@@ -95,25 +142,28 @@ export default function ResumePage() {
   const portfolioId: number | null = globalPortfolioId ?? (portfolios?.[0]?.id ?? null)
   const activeAssetType = assetClass === ASSET_CLASS_ALL ? null : assetClass
 
-  const { data: summary,           isLoading: loadingSummary  } = usePortfolioSummary(portfolioId)
+  // ── Dados ──────────────────────────────────────────────────────────────────
+  // KPIs: fonte primária = rentabilidade/kpis (preciso)
+  const { data: kpis, isLoading: loadingKpis } = useRentabilidadeKpis(portfolioId)
+
   const { data: patrimonioHistory, isLoading: loadingHistory   } = usePatrimonioHistory(portfolioId, period, activeAssetType)
   const { data: distribution,      isLoading: loadingDist      } = useAssetDistribution(portfolioId)
   const { data: positions,         isLoading: loadingPositions } = usePositions(portfolioId)
 
-  const s = summary as any
-  const patrimonio    = s?.total_patrimonio    ?? s?.current_value   ?? 0
-  const investido     = s?.total_investido     ?? s?.total_invested  ?? 0
-  const lucroTotal    = s?.lucro_total         ?? s?.total_gain      ?? 0
-  const ganhoCapital  = s?.ganho_capital       ?? s?.total_gain      ?? 0
-  const dividendos12m = s?.dividendos_recebidos_12m ?? 0
-  const totalProv     = s?.total_proventos     ?? 0
-  const variacaoVal   = s?.variacao_valor      ?? s?.total_gain      ?? 0
-  // variacaoPct e rentabilidade chegam do backend já em escala de percentual
-  // (ex: 15.23 significa 15,23%). KpiCard chama formatPercent(change) internamente,
-  // que divide por 100 antes de formatar — portanto NÃO chamar formatPercent aqui
-  // para evitar dupla formatação. Usar os valores brutos diretamente.
-  const variacaoPct   = s?.variacao_percentual ?? s?.total_gain_pct  ?? 0
-  const rentabilidade = s?.rentabilidade_total ?? s?.total_gain_pct  ?? 0
+  // ── KPI helpers ────────────────────────────────────────────────────────────
+  const patrimonio       = kpis?.patrimonio_atual         ?? 0
+  const aportado         = kpis?.total_aportado           ?? 0
+  const totalPnl         = kpis?.total_pnl                ?? 0
+  const ganhoNaoReal     = kpis?.ganho_nao_realizado       ?? 0
+  const ganhoReal        = kpis?.ganho_realizado           ?? 0
+  const proventos12m     = kpis?.proventos_12m             ?? 0
+  const proventosTotal   = kpis?.proventos_total           ?? 0
+  const retornoTotal     = kpis?.retorno_total_pct         ?? 0
+  const retornoMes       = kpis?.retorno_mes_pct           ?? 0
+  const retorno12m       = kpis?.retorno_12m_pct           ?? 0
+  const retornoInicio    = kpis?.retorno_desde_inicio_pct  ?? 0
+
+  const loadingKpiCards = loadingPortfolios || loadingKpis
 
   if (loadingPortfolios) {
     return (
@@ -144,63 +194,89 @@ export default function ResumePage() {
   return (
     <div className="page-container">
 
-      {/* KPI Cards */}
+      {/* ── Header com seletor de carteira + quick nav ── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.25rem',
+      }}>
+        {/* Seletor de carteira */}
+        {portfolios && portfolios.length > 1 && (
+          <ChartSelect
+            value={portfolioId ?? ''}
+            onChange={v => setGlobal(Number(v))}
+            options={portfolios.map(p => ({ label: p.name, value: p.id }))}
+          />
+        )}
+        {portfolios && portfolios.length === 1 && (
+          <span style={{
+            fontSize: 'var(--text-sm)', fontWeight: 700,
+            color: 'var(--color-text)',
+          }}>
+            {portfolios[0].name}
+          </span>
+        )}
+        <QuickNav />
+      </div>
+
+      {/* ── KPI Cards ── */}
       <div className="kpi-grid">
-        {loadingSummary ? (
+        {loadingKpiCards ? (
           [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
         ) : (
           <>
-            {/*
-              Patrimônio Total
-              change={variacaoPct}: KpiCard já chama formatPercent(change) internamente.
-              Não usar formatPercent aqui — os valores já estão na escala correta (ex: 15.23 = 15,23%).
-            */}
+            {/* Patrimônio Total */}
             <KpiCard
               label="Patrimônio Total"
               value={formatBRL(patrimonio)}
-              subValue={formatBRL(investido)}
-              subLabel="Valor investido"
-              change={variacaoPct}
+              subValue={formatBRL(aportado)}
+              subLabel="Total aportado"
+              change={retornoTotal}
             />
-            {/*
-              Resultado total
-              bottomLine mostra a rentabilidade (capital + proventos) / investido.
-              Usa formatPercent diretamente pois não passa pelo prop change do KpiCard.
-            */}
+
+            {/* Resultado Total */}
             <KpiCard
-              label="Resultado total"
-              value={formatBRL(lucroTotal)}
-              valueColor={signClass(lucroTotal)}
-              subLabel={`Capital ${formatBRL(ganhoCapital)} · Prov. 12m ${formatBRL(dividendos12m)}`}
+              label="Resultado Total"
+              value={formatBRL(totalPnl)}
+              valueColor={signClass(totalPnl)}
+              subLabel={`Não realizado ${formatBRL(ganhoNaoReal)} · Realizado ${formatBRL(ganhoReal)}`}
               bottomLine={
                 <span
-                  title="Rentabilidade = (ganho de capital + todos os proventos) / valor investido"
-                  className={clsx('text-xs font-semibold tabular-nums', signClass(rentabilidade))}
+                  title="Retorno total = (PnL + proventos) / total aportado"
+                  className={clsx('text-xs font-semibold tabular-nums', signClass(retornoTotal))}
                   style={{ cursor: 'help' }}
                 >
-                  {rentabilidade >= 0 ? '+' : ''}{formatPercent(rentabilidade)} rentab.
+                  {retornoTotal >= 0 ? '+' : ''}{formatPercent(retornoTotal)} retorno total
                 </span>
               }
             />
+
+            {/* Proventos */}
             <KpiCard
               label="Proventos (12m)"
-              value={formatBRL(dividendos12m)}
-              subValue={formatBRL(totalProv)}
+              value={formatBRL(proventos12m)}
+              subValue={formatBRL(proventosTotal)}
               subLabel="Total acumulado"
             />
-            {/*
-              Variação
-              change={variacaoPct}: já formatado pelo KpiCard via formatPercent.
-              bottomLine: usa formatPercent diretamente para exibir o label "capital".
-            */}
+
+            {/* Rentabilidade */}
             <KpiCard
-              label="Variação"
-              value={formatBRL(variacaoVal)}
-              valueColor={signClass(variacaoVal)}
-              change={variacaoPct}
+              label="Rentabilidade"
+              value={
+                <span className={clsx('tabular-nums', signClass(retornoInicio))}>
+                  {retornoInicio >= 0 ? '+' : ''}{formatPercent(retornoInicio)}
+                </span>
+              }
+              subLabel="Desde o início"
               bottomLine={
-                <span className={clsx('text-xs font-semibold tabular-nums', signClass(variacaoPct))}>
-                  {variacaoPct >= 0 ? '+' : ''}{formatPercent(variacaoPct)} capital
+                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+                  Mês:&nbsp;
+                  <span className={clsx('font-semibold tabular-nums', signClass(retornoMes))}>
+                    {retornoMes >= 0 ? '+' : ''}{formatPercent(retornoMes)}
+                  </span>
+                  &nbsp;·&nbsp;12m:&nbsp;
+                  <span className={clsx('font-semibold tabular-nums', signClass(retorno12m))}>
+                    {retorno12m >= 0 ? '+' : ''}{formatPercent(retorno12m)}
+                  </span>
                 </span>
               }
             />
@@ -208,7 +284,7 @@ export default function ResumePage() {
         )}
       </div>
 
-      {/* Gráficos */}
+      {/* ── Gráficos ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
         {/* Evolução Patrimonial */}
@@ -292,7 +368,7 @@ export default function ResumePage() {
         <div style={{ flex: 1, height: 1, background: 'oklch(from var(--color-text) l c h / 0.07)' }} />
       </div>
 
-      {/* Tabelas por classe */}
+      {/* ── Tabelas por classe ── */}
       {loadingPositions || !portfolioId ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           {[...Array(3)].map((_, i) => (
