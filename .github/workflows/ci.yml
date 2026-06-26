@@ -160,13 +160,14 @@ jobs:
         run: pip install pip-audit
 
       - name: Run pip-audit
-        # Sem working-directory: pip-audit com -r nao aceita project_path implicito.
-        # Passamos o caminho completo a partir da raiz do repositorio.
-        # --ignore-vuln GHSA-xgmm-8j9v-c9wx: PyJWT JWK/HMAC confusion — falso positivo.
-        # O projeto usa jwt.decode() com algorithms=[settings.ALGORITHM] (HS256 fixo).
+        # --disable-pip: evita que pip-audit tente inspecionar o ambiente
+        # atual como project_path, o que conflita com -r (argument clash).
+        # --ignore-vuln GHSA-xgmm-8j9v-c9wx: PyJWT JWK/HMAC confusion
+        # falso positivo — o projeto usa HS256 fixo via settings.ALGORITHM.
         run: |
           pip-audit \
             -r backend/requirements.txt \
+            --disable-pip \
             --ignore-vuln GHSA-xgmm-8j9v-c9wx \
             --severity high
 
