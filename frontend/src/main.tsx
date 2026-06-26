@@ -24,6 +24,7 @@ import Transacoes        from '@/pages/Transacoes'
 import Configuracoes     from '@/pages/Configuracoes'
 import ProventosPage     from '@/pages/ProventosPage'
 import IRPFPage          from '@/pages/IRPFPage'
+import MetasPage         from '@/pages/MetasPage'
 import WelcomePage       from '@/pages/WelcomePage'
 
 // Patrimônio
@@ -112,6 +113,18 @@ const router = createBrowserRouter([
           },
         ],
       },
+
+      // Rotas protegidas fora de /carteira (partilham o AppLayout)
+      {
+        element: <ProtectedRoute><AppLayout /></ProtectedRoute>,
+        children: [
+          { path: '/metas', element: <MetasPage /> },
+          { path: '/irpf',  element: <IRPFPage /> },
+        ],
+      },
+
+      // Atalho legado: /carteira/irpf → /irpf
+      { path: '/carteira/irpf', element: <Navigate to="/irpf" replace /> },
 
       // Catch-all
       { path: '*', element: <Navigate to="/" replace /> },
