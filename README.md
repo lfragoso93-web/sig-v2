@@ -14,24 +14,27 @@
 ## Funcionalidades implementadas
 
 ### Dashboard Principal (`/`)
-- **4 KpiCards** com dados precisos via `rentabilidade/kpis`: Patrimônio Total, Resultado Total (com breakdown não-realizado/realizado), Proventos 12m e Rentabilidade (mês + 12m + desde início)
-- **Evolução patrimonial** — gráfico de barras com filtro de período (6m/12m/24m/todo) e por classe de ativo
-- **Distribuição por classe** — gráfico donut
+- **4 KpiCards** com dados via `rentabilidade/kpis`: Patrimônio Total, Resultado Total, Proventos 12m e Rentabilidade
+- **Evolução patrimonial** com filtro de período (6m/12m/24m/todo) e por classe de ativo
+- **Fallback automático** quando não existem snapshots: o backend calcula a série on-the-fly e dispara backfill em background
+- **Distribuição por classe** com gráfico donut
 - **Tabela de posições** agrupada por classe com qtd, preço médio, valor atual e variação
 
 ### Rentabilidade (`/carteira/rentabilidade`)
-- **8 KpiCards** em 2 linhas: patrimônio, retorno total/mês/12m, ganhos realizados/não-realizados, proventos e custo médio
-- **Gráfico de rentabilidade mensal** com comparativo de benchmarks:
-  - Barras: retorno % mês a mês da carteira
-  - IBOV (BRAPI), CDI (BCB série 4391), IPCA (BCB série 433) — toggles independentes
-  - Filtro de período: 6m / 12m / 24m / todo período
-- **Distribuição por classe** com barras de alocação e retorno colorido
-- **Tabela por ativo**: Qtd · P.M. · Val. atual · Ganho não-realizado · Ganho realizado · Total PnL
-- Filtro de tipo de ativo e toggle de posições zeradas
+- **8 KpiCards** em 2 linhas com visão consolidada da carteira
+- **Gráfico de rentabilidade mensal** com benchmarks IBOV, CDI e IPCA
+- **Distribuição por classe** com barras de alocação e retorno
+- **Tabela por ativo** com filtros e toggle de posições zeradas
+
+### Dados e automações
+- **Asset seed** via BRAPI com UPSERT idempotente e endpoint admin em background
+- **Snapshots patrimoniais** com backfill manual/admin e recuperação automática quando o gráfico não encontra base histórica
+- **Fallbacks em cascata** para Tesouro Direto, ativos internacionais e cripto
+- **Scheduler APScheduler** para rotinas automáticas de atualização
 
 ### Outras páginas
 - **Patrimônio** — evolução diária/mensal, resumo mensal com rentabilidade por linha
-- **Transações** — histórico completo com filtros, gráfico de aportes mensais
+- **Transações** — histórico completo com filtros e gráfico de aportes mensais
 - **Proventos** — histórico de dividendos e JCP com gráficos
 - **IRPF** — apuração de ganho de capital (em construção)
 - **Metas** — CRUD com progresso automático (em construção)
@@ -49,11 +52,11 @@
 | SQLAlchemy | 2.x async | ORM |
 | Alembic | 1.x | Migrations |
 | PostgreSQL | 15 | Banco de dados |
-| Redis | 7 | Cache (TTL configurável por endpoint) |
-| APScheduler | 3.x | Jobs agendados (7 jobs) |
+| Redis | 7 | Cache |
+| APScheduler | 3.x | Jobs agendados |
 | BRAPI | v2 | Cotações, histórico, Tesouro, FX |
 | yfinance | — | Fallback ativos internacionais |
-| Alpha Vantage | — | Fallback internacional (4 req/min) |
+| Alpha Vantage | — | Fallback internacional |
 | SlowAPI | — | Rate limiter global |
 | bcrypt | v5 | Hash de senhas |
 | JWT | — | Auth com refresh token rotativo |
@@ -65,9 +68,9 @@
 | TypeScript | 5.x | Tipagem |
 | Vite | 5.x | Build tool |
 | TailwindCSS | 3.x | Utilitários CSS |
-| Recharts | 2.x | Gráficos (barras, linha, donut, compostos) |
+| Recharts | 2.x | Gráficos |
 | React Query | 5.x | Cache e estado servidor |
-| Zustand | — | Estado global (carteira selecionada) |
+| Zustand | — | Estado global |
 | Lucide React | — | Ícones |
 | Axios | — | HTTP client |
 
@@ -75,25 +78,25 @@
 
 ## Estrutura do projeto
 
-```
+```text
 sig-v2/
 ├── backend/
 │   ├── app/
-│   │   ├── core/          # database, deps, settings, scheduler
-│   │   ├── models/        # SQLAlchemy models
-│   │   ├── routers/       # endpoints FastAPI
-│   │   ├── schemas/       # Pydantic schemas
-│   │   ├── services/      # lógica de negócio
-│   │   └── integrations/  # BRAPI, yfinance, Alpha Vantage, BCB
+│   │   ├── core/
+│   │   ├── models/
+│   │   ├── routers/
+│   │   ├── schemas/
+│   │   ├── services/
+│   │   └── integrations/
 │   └── tests/
 ├── frontend/
 │   ├── src/
-│   │   ├── components/    # UI components, charts, modals
-│   │   ├── hooks/         # React Query hooks
-│   │   ├── pages/         # páginas da aplicação
-│   │   ├── services/      # HTTP services
-│   │   ├── store/         # Zustand stores
-│   │   └── styles/        # CSS vars + design system
+│   │   ├── components/
+│   │   ├── hooks/
+│   │   ├── pages/
+│   │   ├── services/
+│   │   ├── store/
+│   │   └── styles/
 │   └── public/
 ├── docker-compose.yml
 ├── docker-compose.prod.yml
@@ -106,11 +109,10 @@ sig-v2/
 
 ## Como rodar
 
-### Com Docker (recomendado)
+### Com Docker
 
 ```bash
 cp .env.example .env
-# edite o .env com suas chaves (BRAPI_TOKEN, SECRET_KEY, etc.)
 docker compose up --build
 ```
 
@@ -143,12 +145,12 @@ Copie `.env.example` e preencha:
 
 | Variável | Descrição |
 |---|---|
-| `DATABASE_URL` | URL PostgreSQL (ex: `postgresql+asyncpg://user:pass@localhost/db`) |
-| `REDIS_URL` | URL Redis (ex: `redis://localhost:6379`) |
-| `SECRET_KEY` | Chave JWT (mínimo 32 chars) |
-| `BRAPI_TOKEN` | Token BRAPI (plano free funciona para cotações básicas) |
-| `ALPHA_VANTAGE_KEY` | Chave Alpha Vantage (opcional, fallback internacional) |
-| `SUPERADMIN_EMAIL` | E-mail do superadmin criado no boot |
+| `DATABASE_URL` | URL PostgreSQL |
+| `REDIS_URL` | URL Redis |
+| `SECRET_KEY` | Chave JWT |
+| `BRAPI_TOKEN` | Token BRAPI |
+| `ALPHA_VANTAGE_KEY` | Chave Alpha Vantage |
+| `SUPERADMIN_EMAIL` | E-mail do superadmin |
 | `SUPERADMIN_PASSWORD` | Senha do superadmin |
 
 ---
@@ -157,11 +159,12 @@ Copie `.env.example` e preencha:
 
 Veja o roadmap completo em [ROADMAP_SPRINTS.md](./ROADMAP_SPRINTS.md).
 
-**Próximas prioridades (Sprint 5 — em andamento):**
+**Próximas prioridades:**
 - Tela de metas financeiras
 - Tela IRPF com exportação de relatório
 - Tela de renda fixa
-- Fix `YFRateLimitError` para ativos internacionais
+- Performance de queries
+- Logs de auditoria por usuário
 
 ---
 
