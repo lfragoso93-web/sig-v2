@@ -18,6 +18,7 @@ import IRPFPage from '@/pages/IRPFPage'
 import Transacoes from '@/pages/Transacoes'
 import Configuracoes from '@/pages/Configuracoes'
 import TesouroDiretoPage from '@/pages/patrimonio/TesouroDiretoPage'
+import AssetsPage from '@/pages/AssetsPage'
 
 export default function App() {
   return (
@@ -50,10 +51,11 @@ export default function App() {
                 <Route path="/carteira/metas"              element={<MetasPage />} />
                 <Route path="/carteira/analise"            element={<AnalisePage />} />
                 <Route path="/carteira/irpf"               element={<IRPFPage />} />
+                <Route path="/carteira/ativos"             element={<AssetsPage />} />
 
                 {/* Patrimonio e sub-rotas */}
-                <Route path="/carteira/patrimonio"                 element={<PatrimonioPage />} />
-                <Route path="/carteira/patrimonio/tesouro"         element={<TesouroDiretoPage />} />
+                <Route path="/carteira/patrimonio"         element={<PatrimonioPage />} />
+                <Route path="/carteira/patrimonio/tesouro" element={<TesouroDiretoPage />} />
 
                 {/* Historico — ainda sem implementação completa */}
                 <Route path="/carteira/historico" element={<HistoricoPage />} />
