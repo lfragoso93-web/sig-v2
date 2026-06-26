@@ -100,7 +100,6 @@ async def _build_positions_at(
     for tx in txs:
         key = tx.ticker.upper()
 
-        # Detecta se ativo e cotado em USD
         asset_type_raw = (
             tx.asset_type.value if hasattr(tx.asset_type, "value") else str(tx.asset_type or "")
         ).upper()
@@ -109,7 +108,6 @@ async def _build_positions_at(
             or asset_type_raw in _USD_ASSET_TYPES
         )
 
-        # fx_rate salvo na transacao (fallback 1.0 para BRL)
         fx_rate = Decimal("1")
         if is_usd:
             saved = getattr(tx, "fx_rate", None)
@@ -121,7 +119,7 @@ async def _build_positions_at(
         s = states[key]
 
         qty = Decimal(str(tx.quantity))
-        price_brl = Decimal(str(tx.price)) * fx_rate  # converte para BRL
+        price_brl = Decimal(str(tx.price)) * fx_rate
         fees_brl = Decimal(str(tx.fees or 0)) * fx_rate
 
         if tx.operation == OperationType.buy:
@@ -154,7 +152,6 @@ async def _calc_totals(
     cost_basis = Decimal("0")
     realized_pnl = Decimal("0")
 
-    # FX do dia do snapshot (para converter cotacoes USD -> BRL)
     fx_snapshot: Optional[float] = None
     has_usd = any(s.is_usd for s in positions.values())
     if has_usd:
@@ -191,7 +188,6 @@ async def _calc_totals(
         cost_basis += state.cost
         realized_pnl += state.realized_pnl
 
-    # invested_total: soma de compras - vendas em BRL (capital liquido aportado)
     invested_result = await db.execute(
         select(
             func.sum(
@@ -224,29 +220,21 @@ async def _calc_totals(
     total_pnl = realized_pnl + unrealized_pnl
 
     # ──────────────────────────────────────────────────────────────────────────
-    # return_pct: retorno sobre cost_basis (posicoes abertas)
+    # return_pct: retorno sobre cost_basis + realized_pnl positivo
     #
     # CORRECAO: a versao anterior usava invested_total como denominador.
-    # Problema: invested_total = compras - vendas. Quando o usuario vende muito,
-    # invested_total cai (pode ate ficar negativo ou proximo de zero) enquanto
-    # o cost_basis das posicoes abertas ainda e substancial — gerando percentual
-    # inflado ou absurdo.
-    #
-    # cost_basis representa o custo real das posicoes ABERTAS hoje: e a base
-    # correta para medir quanto essas posicoes valorizaram ou desvalorizaram.
-    # unrealized_pnl / cost_basis = retorno nao-realizado (posicoes abertas)
-    # realized_pnl / invested_total = retorno realizado (capital que saiu)
+    # invested_total = compras - vendas; com muitas vendas o denominador cai
+    # e o percentual explode ou fica absurdo.
     #
     # Formula adotada: total_pnl / (cost_basis + max(realized_pnl, 0))
-    # Interpretacao: quanto o capital empregado (aberto + ja realizado positivo)
-    # rendeu no total. Estavel mesmo com muitas vendas.
+    # Representa quanto o capital efetivamente empregado rendeu.
+    # Fallback para invested_total quando nao ha posicoes abertas.
     # ──────────────────────────────────────────────────────────────────────────
     realized_positive = max(realized_pnl, Decimal("0"))
     return_base = cost_basis + realized_positive
     if return_base > 0:
         return_pct = _safe_div(total_pnl, return_base) * 100
     elif invested_total > 0:
-        # Fallback: sem posicoes abertas e sem realized positivo — usa invested_total
         return_pct = _safe_div(total_pnl, invested_total) * 100
     else:
         return_pct = Decimal("0")
@@ -334,7 +322,7 @@ async def calc_snapshot_at_date(
         await _prefetch_price_history(db, portfolio_id, days_back)
 
     totals = await _calc_totals(db, portfolio_id, target_date)
-    await _upsert_snapshot(db, portfolio_id, snapshot_date, totals)
+    await _upsert_snapshot(db, portfolio_id, target_date, totals)  # fix: target_date (nao snapshot_date)
     if commit:
         await db.commit()
     logger.info(
