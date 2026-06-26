@@ -197,6 +197,7 @@ app.include_router(proventos.router,       prefix=f"{PREFIX}",              tags
 app.include_router(performance.router,     prefix=f"{PREFIX}/performance",  tags=["performance"])
 app.include_router(rentabilidade.router,   prefix=f"{PREFIX}/portfolios",   tags=["rentabilidade"])
 app.include_router(class_targets.router,   prefix=f"{PREFIX}/portfolios",   tags=["class-targets"])
+app.include_router(goals.router,           prefix=f"{PREFIX}/portfolios",   tags=["goals"])
 
 # Dados de mercado
 app.include_router(assets.router,          prefix=f"{PREFIX}/assets",       tags=["assets"])
@@ -206,7 +207,6 @@ app.include_router(prices.router,          prefix=f"{PREFIX}/prices",       tags
 
 # Funcionalidades extras
 app.include_router(sync.router,            prefix=f"{PREFIX}/sync",         tags=["sync"])
-app.include_router(goals.router,           prefix=f"{PREFIX}/goals",        tags=["goals"])
 app.include_router(irpf.router,            prefix=f"{PREFIX}/irpf",         tags=["irpf"])
 app.include_router(analysis.router,        prefix=f"{PREFIX}/analysis",     tags=["analysis"])
 app.include_router(fixed_income.router,    prefix=f"{PREFIX}/fixed-income", tags=["fixed_income"])
