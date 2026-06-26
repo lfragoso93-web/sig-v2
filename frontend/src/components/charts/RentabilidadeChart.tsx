@@ -44,7 +44,7 @@ interface ChartPoint {
 
 // ── Fetch benchmarks via APIs públicas ──────────────────────────────────────────────
 
-async function fetchIbovMonthly(months: number): Promise<Record<string, number>> {
+async function fetchIbovMonthly(_months: number): Promise<Record<string, number>> {
   try {
     const url = `https://brapi.dev/api/quote/%5EBVSP?range=2y&interval=1mo&fundamental=false`
     const res = await fetch(url)
@@ -75,7 +75,7 @@ async function fetchCdiMonthly(months: number): Promise<Record<string, number>> 
     const map: Record<string, number> = {}
     for (const p of json) {
       // data vem como DD/MM/YYYY
-      const [d, m, y] = p.data.split('/')
+      const [_d, m, y] = p.data.split('/')
       const ym = `${y}-${m.padStart(2, '0')}`
       map[ym] = parseFloat(p.valor)
     }
@@ -93,7 +93,7 @@ async function fetchIpcaMonthly(months: number): Promise<Record<string, number>>
     const json: { data: string; valor: string }[] = await res.json()
     const map: Record<string, number> = {}
     for (const p of json) {
-      const [d, m, y] = p.data.split('/')
+      const [_d, m, y] = p.data.split('/')
       const ym = `${y}-${m.padStart(2, '0')}`
       map[ym] = parseFloat(p.valor)
     }
@@ -307,7 +307,6 @@ export default function RentabilidadeChart({ portfolioId }: { portfolioId: numbe
               radius={[3, 3, 0, 0]}
               maxBarSize={32}
               fill="var(--color-primary)"
-              // barras negativas em vermelho
               label={false}
             />
 
