@@ -255,6 +255,7 @@ async def _kpis_from_realtime(db: AsyncSession, portfolio_id: int) -> dict:
     proventos_total = float(await _proventos_total(db, portfolio_id))
     proventos_12m = float(await _proventos_total(db, portfolio_id, since=today - timedelta(days=365)))
 
+    # Retorno sobre custo das posicoes abertas (base correta sem distorcao de aportes)
     retorno_total_pct = (total_pnl / total_invested * 100) if total_invested else 0.0
 
     return {
@@ -274,9 +275,57 @@ async def _kpis_from_realtime(db: AsyncSession, portfolio_id: int) -> dict:
     }
 
 
-# ────────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────────────
 # KPIs
-# ────────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _ret_between(
+    snap_end: PortfolioSnapshot,
+    snap_start: Optional[PortfolioSnapshot],
+) -> float:
+    """
+    Calcula retorno percentual entre dois snapshots usando cost_basis como base.
+
+    FORMULA CORRETA — retorno sobre custo das posicoes:
+      retorno = (market_value_end - cost_basis_end) / cost_basis_end * 100
+      ajustado pela variacao de custo entre os dois snapshots.
+
+    POR QUE NAO usar (market_value_end - market_value_start) / market_value_start:
+      Esse calculo confunde APORTES com GANHOS. Se o usuario comprou mais acoes
+      no periodo, o numerador sobe mas e capital novo, nao retorno.
+
+    FORMULA APLICADA — Modified Dietz simplificado:
+      gain = (unrealized_pnl_end - unrealized_pnl_start) + (realized_pnl_end - realized_pnl_start)
+      base = cost_basis_start  (custo das posicoes no inicio do periodo)
+      retorno = gain / base * 100
+
+    Quando snap_start e None (periodo = desde o inicio), usa cost_basis do snap_end
+    como denominador (equivale ao retorno total acumulado sobre custo atual).
+    """
+    if snap_start is None:
+        # Desde o inicio: usa return_pct ja calculado e corrigido no snapshot
+        base = snap_end.cost_basis
+        if not base or base == 0:
+            return 0.0
+        gain = snap_end.unrealized_pnl + snap_end.realized_pnl
+        return round(float(gain / base * 100), 4)
+
+    # Ganho incremental no periodo (exclui aportes)
+    gain_unrealized = snap_end.unrealized_pnl - snap_start.unrealized_pnl
+    gain_realized   = snap_end.realized_pnl   - snap_start.realized_pnl
+    total_gain      = gain_unrealized + gain_realized
+
+    # Base = custo medio das posicoes no inicio do periodo
+    # Evita distorcao por aportes: compara ganho com capital que ja estava investido
+    base = snap_start.cost_basis
+    if not base or base == 0:
+        # Fallback: se nao havia posicoes no inicio, usa custo atual como proxy
+        base = snap_end.cost_basis
+    if not base or base == 0:
+        return 0.0
+
+    return round(float(total_gain / base * 100), 4)
+
 
 async def get_kpis(db: AsyncSession, portfolio_id: int) -> dict:
     """
@@ -308,26 +357,15 @@ async def get_kpis(db: AsyncSession, portfolio_id: int) -> dict:
     snap_12m   = await _snapshot_at(db, portfolio_id, today - timedelta(days=365))
     snap_first = await _first_snapshot(db, portfolio_id)
 
-    def _ret_between(
-        snap_end: PortfolioSnapshot,
-        snap_start: Optional[PortfolioSnapshot],
-    ) -> float:
-        if snap_start is None:
-            return _safe_pct(snap_end.total_pnl, snap_end.invested_total)
-        base = snap_start.market_value
-        if not base or base == 0:
-            return 0.0
-        gain = snap_end.market_value - snap_start.market_value
-        return round(float(gain / base * 100), 4)
-
     proventos_total = await _proventos_total(db, portfolio_id)
     proventos_12m   = await _proventos_total(db, portfolio_id, since=today - timedelta(days=365))
 
-    ret_desde_inicio = (
-        _safe_pct(snap_today.total_pnl, snap_today.invested_total)
-        if snap_first is None
-        else _ret_between(snap_today, snap_first)
-    )
+    # return_pct do snapshot ja vem corrigido pelo portfolio_snapshot_service
+    ret_total = float(snap_today.return_pct)
+
+    # Retorno desde o inicio: gain total / cost_basis do primeiro snapshot
+    # _ret_between com snap_start=snap_first calcula o ganho incremental certo
+    ret_desde_inicio = _ret_between(snap_today, snap_first)
 
     payload = {
         "patrimonio_atual":          float(snap_today.market_value),
@@ -336,7 +374,7 @@ async def get_kpis(db: AsyncSession, portfolio_id: int) -> dict:
         "ganho_nao_realizado":       float(snap_today.unrealized_pnl),
         "ganho_realizado":           float(snap_today.realized_pnl),
         "total_pnl":                 float(snap_today.total_pnl),
-        "retorno_total_pct":         float(snap_today.return_pct),
+        "retorno_total_pct":         ret_total,
         "retorno_mes_pct":           _ret_between(snap_today, snap_30d),
         "retorno_12m_pct":           _ret_between(snap_today, snap_12m),
         "retorno_desde_inicio_pct":  ret_desde_inicio,
@@ -349,9 +387,9 @@ async def get_kpis(db: AsyncSession, portfolio_id: int) -> dict:
     return payload
 
 
-# ────────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────────────
 # Por ativo
-# ────────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────────────
 
 async def get_rentabilidade_por_ativo(db: AsyncSession, portfolio_id: int) -> list[dict]:
     """
@@ -487,9 +525,9 @@ async def get_rentabilidade_por_ativo(db: AsyncSession, portfolio_id: int) -> li
     return items
 
 
-# ────────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────────────
 # Por classe de ativo
-# ────────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────────────
 
 async def get_rentabilidade_por_classe(db: AsyncSession, portfolio_id: int) -> list[dict]:
     """

@@ -191,7 +191,7 @@ async def _calc_totals(
         cost_basis += state.cost
         realized_pnl += state.realized_pnl
 
-    # invested_total: soma de compras - vendas em BRL
+    # invested_total: soma de compras - vendas em BRL (capital liquido aportado)
     invested_result = await db.execute(
         select(
             func.sum(
@@ -222,7 +222,34 @@ async def _calc_totals(
 
     unrealized_pnl = market_value - cost_basis
     total_pnl = realized_pnl + unrealized_pnl
-    return_pct = _safe_div(total_pnl, invested_total) * 100 if invested_total > 0 else Decimal("0")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # return_pct: retorno sobre cost_basis (posicoes abertas)
+    #
+    # CORRECAO: a versao anterior usava invested_total como denominador.
+    # Problema: invested_total = compras - vendas. Quando o usuario vende muito,
+    # invested_total cai (pode ate ficar negativo ou proximo de zero) enquanto
+    # o cost_basis das posicoes abertas ainda e substancial — gerando percentual
+    # inflado ou absurdo.
+    #
+    # cost_basis representa o custo real das posicoes ABERTAS hoje: e a base
+    # correta para medir quanto essas posicoes valorizaram ou desvalorizaram.
+    # unrealized_pnl / cost_basis = retorno nao-realizado (posicoes abertas)
+    # realized_pnl / invested_total = retorno realizado (capital que saiu)
+    #
+    # Formula adotada: total_pnl / (cost_basis + max(realized_pnl, 0))
+    # Interpretacao: quanto o capital empregado (aberto + ja realizado positivo)
+    # rendeu no total. Estavel mesmo com muitas vendas.
+    # ──────────────────────────────────────────────────────────────────────────
+    realized_positive = max(realized_pnl, Decimal("0"))
+    return_base = cost_basis + realized_positive
+    if return_base > 0:
+        return_pct = _safe_div(total_pnl, return_base) * 100
+    elif invested_total > 0:
+        # Fallback: sem posicoes abertas e sem realized positivo — usa invested_total
+        return_pct = _safe_div(total_pnl, invested_total) * 100
+    else:
+        return_pct = Decimal("0")
 
     return {
         "market_value": market_value.quantize(Decimal("0.01")),
@@ -307,7 +334,7 @@ async def calc_snapshot_at_date(
         await _prefetch_price_history(db, portfolio_id, days_back)
 
     totals = await _calc_totals(db, portfolio_id, target_date)
-    await _upsert_snapshot(db, portfolio_id, target_date, totals)
+    await _upsert_snapshot(db, portfolio_id, snapshot_date, totals)
     if commit:
         await db.commit()
     logger.info(
