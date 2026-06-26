@@ -2,7 +2,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, TrendingUp, ArrowLeftRight, Landmark,
   Settings, Wallet, PanelLeftClose, PanelLeftOpen,
-  Plus, CheckCircle2, ChevronDown, Briefcase, X, FileText,
+  Plus, CheckCircle2, ChevronDown, Briefcase, X, FileText, Target,
 } from 'lucide-react'
 import { usePortfolios, useCreatePortfolio } from '@/hooks/usePortfolios'
 import { useAppStore } from '@/store/appStore'
@@ -15,7 +15,8 @@ const NAV_ITEMS = [
   { to: '/carteira/rentabilidade',  icon: TrendingUp,      label: 'Rentabilidade' },
   { to: '/carteira/transacoes',     icon: ArrowLeftRight,  label: 'Transações'    },
   { to: '/carteira/proventos',      icon: Landmark,        label: 'Proventos'     },
-  { to: '/carteira/irpf',           icon: FileText,        label: 'IRPF'          },
+  { to: '/metas',                   icon: Target,          label: 'Metas'         },
+  { to: '/irpf',                    icon: FileText,        label: 'IRPF'          },
   { to: '/carteira/configuracoes',  icon: Settings,        label: 'Configurações' },
 ]
 
