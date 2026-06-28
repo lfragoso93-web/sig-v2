@@ -33,6 +33,7 @@ from app.services.portfolio_service import (
     _fetch_prices_batch,
 )
 from app.services.fx_service import get_usd_brl_today
+from app.services.rf_calc_service import enrich_rf_positions
 from app.core.cache import cache_get, cache_set
 
 logger = logging.getLogger(__name__)
@@ -42,6 +43,9 @@ _PREFIX = "rent"
 
 # Tipos de ativos cotados em USD
 _USD_ASSET_TYPES = {"STOCK", "ETF_INTERNACIONAL"}
+
+# Tipos de RF sem cotação de mercado — usam rf_calc_service
+_RF_TYPES = {"RENDA_FIXA"}
 
 
 def _key(portfolio_id: int, suffix: str) -> str:
@@ -205,6 +209,24 @@ async def _get_realized_pnl_by_ticker(
             cost_map[ticker] = max(0.0, cost_map[ticker])
 
     return realized
+
+
+async def _load_transactions_by_ticker(
+    db: AsyncSession,
+    portfolio_id: int,
+) -> dict[str, list]:
+    """Carrega todas as transactions da carteira agrupadas por ticker."""
+    result = await db.execute(
+        select(Transaction)
+        .where(Transaction.portfolio_id == portfolio_id)
+        .order_by(Transaction.date.asc(), Transaction.id.asc())
+    )
+    txs = result.scalars().all()
+    by_ticker: dict[str, list] = {}
+    for tx in txs:
+        key = tx.ticker.upper()
+        by_ticker.setdefault(key, []).append(tx)
+    return by_ticker
 
 
 async def _kpis_from_realtime(db: AsyncSession, portfolio_id: int) -> dict:
@@ -373,6 +395,15 @@ async def get_rentabilidade_por_ativo(db: AsyncSession, portfolio_id: int) -> li
         except Exception as e:
             logger.error("[rentabilidade] erro ao buscar cotacoes: %s", e)
 
+    # ── Calcula current_value estimado para posicoes de RENDA_FIXA ──────────
+    txs_by_ticker = await _load_transactions_by_ticker(db, portfolio_id)
+    rf_values: dict[str, float] = {}
+    try:
+        rf_values = await enrich_rf_positions(positions_raw, txs_by_ticker)
+    except Exception as e:
+        logger.warning("[rentabilidade] enrich_rf_positions falhou: %s", e)
+    # ────────────────────────────────────────────────────────────────────────
+
     tickers_all = list({p["ticker"] for p in positions_raw} | set(realized_map.keys()))
     asset_names: dict[str, str] = {}
     asset_types_db: dict[str, str] = {}
@@ -411,13 +442,18 @@ async def get_rentabilidade_por_ativo(db: AsyncSession, portfolio_id: int) -> li
             except Exception:
                 pass
 
-        if current_price:
+        # ── RF: usa current_value calculado por rf_calc_service ─────────────
+        if asset_type in _RF_TYPES and ticker in rf_values:
+            current_value = rf_values[ticker]
+        elif current_price:
             current_value = qty * current_price
         else:
             current_value = qty * avg_price
-            logger.warning(
-                "[rentabilidade] sem cotacao para %s, usando preco medio", ticker
-            )
+            if asset_type not in _RF_TYPES:
+                logger.warning(
+                    "[rentabilidade] sem cotacao para %s, usando preco medio", ticker
+                )
+        # ────────────────────────────────────────────────────────────────────
 
         unrealized = current_value - total_invested
         unrealized_pct = _safe_pct(
