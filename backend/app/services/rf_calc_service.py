@@ -1,251 +1,271 @@
 """
 rf_calc_service.py
 
-Calcula o valor atual estimado de posições de Renda Fixa com base nos
-juros acumulados desde a data de cada aporte individual.
+Calcula o valor atual estimado de posicoes de Renda Fixa usando o
+historico real de taxas armazenado na tabela rate_history (BCB).
 
-Indexadores suportados (extraídos do campo `notes` da transação):
-  - CDI percentual  : "110% do CDI", "100% CDI", "110%CDI"
-  - CDI + spread    : "CDI + 2%", "CDI+1.5%"
-  - IPCA + spread   : "IPCA + 5%", "IPCA+4.5% a.a."
-  - Prefixado       : "12% a.a.", "12.5%", "prefixado 11%"
+Logica de calculo:
+  Para cada aporte (transacao de compra):
+    1. Busca as taxas diarias do periodo [data_aporte, hoje] no banco.
+    2. Calcula o fator acumulado real: PROD(1 + taxa_diaria_i / 100)
+    3. valor_atual_aporte = valor_aporte * fator_acumulado
+  current_value = soma dos valores atualizados de todos os aportes.
 
-Fonte das taxas:
-  - CDI e IPCA : endpoint BRAPI /v2/finance (taxa anual atual)
-  - Fallback   : estimativas conservadoras fixas quando BRAPI indisponível
+Indexadores suportados (extraidos do campo `notes`):
+  - CDI_PCT  : "110% do CDI", "100% CDI"
+  - CDI_PLUS : "CDI + 2%"
+  - IPCA_PLUS: "IPCA + 5%"
+  - PREFIXADO: "12% a.a."
 
-Lógica de cálculo:
-  Cada transação de compra é tratada individualmente:
-    - valor do aporte = quantity * price  (já em BRL no total_cost)
-    - dias acumulados = hoje - data da transação
-    - fator = (1 + r)^(dias/252)
-    - valor_atual_aporte = valor_aporte * fator
-  O current_value final é a soma dos valores atuais de cada aporte.
-  Vendas parciais reduzem proporcionalmente o saldo pelo ratio FIFO.
+Fallback (quando banco nao tem dados do periodo):
+  Usa taxa anual corrente da BRAPI ou constante conservadora.
 """
 from __future__ import annotations
 
 import logging
 import re
 from datetime import date
+from decimal import Decimal
 from typing import Optional
 
 import httpx
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cache import cache_get, cache_set
+from app.db.session import async_session_factory
 
-logger = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Constantes
-# ---------------------------------------------------------------------------
-
-_CACHE_TTL = 3600  # 1h — taxas mudam pouco durante o dia
+_CACHE_TTL = 3600
 _RF_TYPES = {"RENDA_FIXA"}
-
-# Taxas anuais de fallback (quando BRAPI indisponível)
 _FALLBACK_CDI_ANNUAL = 10.5
 _FALLBACK_IPCA_ANNUAL = 5.0
-
 BRAPI_BASE = "https://brapi.dev/api"
 
 
 # ---------------------------------------------------------------------------
-# Parser de notas
+# Parser de notas (inalterado)
 # ---------------------------------------------------------------------------
 
 class RFParams:
-    """Parâmetros extraídos do campo `notes` de uma transação de RF."""
-
-    def __init__(
-        self,
-        indexer: str,
-        rate: float = 0.0,
-        spread: float = 0.0,
-    ):
-        self.indexer = indexer  # CDI_PCT | CDI_PLUS | IPCA_PLUS | PREFIXADO | UNKNOWN
-        self.rate = rate        # % CDI (ex: 110.0) ou taxa prefixada a.a.
-        self.spread = spread    # spread sobre CDI ou IPCA em % a.a.
+    def __init__(self, indexer: str, rate: float = 0.0, spread: float = 0.0):
+        self.indexer = indexer
+        self.rate = rate
+        self.spread = spread
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"RFParams(indexer={self.indexer!r}, rate={self.rate}, spread={self.spread})"
 
 
 def parse_rf_notes(notes: Optional[str]) -> RFParams:
-    """
-    Extrai indexador e taxas do campo `notes`.
-
-    Exemplos reconhecidos:
-      "110% do CDI"     -> CDI_PCT, rate=110.0
-      "100% CDI"        -> CDI_PCT, rate=100.0
-      "CDI + 2%"        -> CDI_PLUS, spread=2.0
-      "CDI+1.5% a.a."   -> CDI_PLUS, spread=1.5
-      "IPCA + 5% a.a."  -> IPCA_PLUS, spread=5.0
-      "IPCA+4.5%"       -> IPCA_PLUS, spread=4.5
-      "12% a.a."        -> PREFIXADO, rate=12.0
-      "prefixado 11.5%" -> PREFIXADO, rate=11.5
-      None / ""         -> UNKNOWN
-    """
     if not notes:
         return RFParams("UNKNOWN")
-
     n = notes.strip()
-
-    # CDI + spread: "CDI + 2%" ou "CDI+1.5% a.a."
     m = re.search(r"CDI\s*\+\s*([0-9]+(?:[.,][0-9]+)?)", n, re.IGNORECASE)
     if m:
         return RFParams("CDI_PLUS", spread=float(m.group(1).replace(",", ".")))
-
-    # X% do CDI ou X% CDI
     m = re.search(r"([0-9]+(?:[.,][0-9]+)?)\s*%\s*(?:do\s+)?CDI", n, re.IGNORECASE)
     if m:
         return RFParams("CDI_PCT", rate=float(m.group(1).replace(",", ".")))
-
-    # CDI puro sem percentual explícito → assume 100%
     if re.search(r"\bCDI\b", n, re.IGNORECASE):
         return RFParams("CDI_PCT", rate=100.0)
-
-    # IPCA + spread: "IPCA + 5%" ou "IPCA+4.5% a.a."
     m = re.search(r"IPCA\s*\+\s*([0-9]+(?:[.,][0-9]+)?)", n, re.IGNORECASE)
     if m:
         return RFParams("IPCA_PLUS", spread=float(m.group(1).replace(",", ".")))
-
-    # IPCA puro
     if re.search(r"\bIPCA\b", n, re.IGNORECASE):
         return RFParams("IPCA_PLUS", spread=0.0)
-
-    # Prefixado: "prefixado 12%" ou "12% a.a." ou "12.5%"
     m = re.search(
         r"(?:prefixado[\s:]*)?([0-9]+(?:[.,][0-9]+)?)\s*%(?:\s*a\.?a\.?)?",
         n, re.IGNORECASE,
     )
     if m:
         return RFParams("PREFIXADO", rate=float(m.group(1).replace(",", ".")))
-
     return RFParams("UNKNOWN")
 
 
 # ---------------------------------------------------------------------------
-# Busca de taxas via BRAPI
+# Busca de fator acumulado no banco (historico real)
 # ---------------------------------------------------------------------------
 
-async def _fetch_brapi_indicator(key: str) -> Optional[float]:
-    """Retorna a taxa anual atual (% a.a.) do indicador via BRAPI."""
-    cache_key = f"brapi_indicator:{key}"
+FATOR_SQL = text("""
+    SELECT rate_daily
+    FROM   rate_history
+    WHERE  indicator = :indicator
+      AND  date >= :start_date
+      AND  date <= :end_date
+    ORDER  BY date ASC
+""")
+
+
+async def _accumulated_factor_from_db(
+    indicator: str,
+    start_date: date,
+    end_date: date,
+    spread_annual: float = 0.0,
+    pct_of_base: float = 100.0,
+) -> Optional[float]:
+    """
+    Calcula o fator acumulado real usando o historico diario do banco.
+
+    Para CDI_PCT: aplica pct_of_base% da taxa diaria em cada dia.
+    Para CDI_PLUS / IPCA_PLUS: adiciona spread convertido para diario.
+
+    Retorna None se nao houver dados suficientes no banco.
+    """
+    if start_date >= end_date:
+        return 1.0
+
+    cache_key = (
+        f"rf_factor:{indicator}:{start_date}:{end_date}"
+        f":pct={pct_of_base}:spread={spread_annual}"
+    )
     cached = await cache_get(cache_key)
     if cached is not None:
         return float(cached)
 
     try:
+        async with async_session_factory() as session:
+            result = await session.execute(
+                FATOR_SQL,
+                {"indicator": indicator, "start_date": start_date, "end_date": end_date},
+            )
+            rows = result.fetchall()
+    except Exception as e:
+        log.warning("[rf_calc] DB query falhou para %s [%s, %s]: %s", indicator, start_date, end_date, e)
+        return None
+
+    if not rows:
+        log.debug("[rf_calc] Sem dados no banco para %s [%s, %s]", indicator, start_date, end_date)
+        return None
+
+    # Converte spread anual para diario: (1 + s/100)^(1/252) - 1
+    spread_daily = 0.0
+    if spread_annual > 0:
+        spread_daily = ((1 + spread_annual / 100) ** (1 / 252) - 1) * 100
+
+    factor = 1.0
+    for row in rows:
+        daily_base = float(row[0])  # % a.d. do indicador
+        # Aplica percentual do CDI se necessario
+        effective_daily = daily_base * (pct_of_base / 100.0) + spread_daily
+        factor *= (1 + effective_daily / 100)
+
+    # Cache por 1h (hoje) ou 24h (periodo no passado)
+    ttl = _CACHE_TTL if end_date >= date.today() else 86400
+    await cache_set(cache_key, factor, ttl=ttl)
+    return factor
+
+
+# ---------------------------------------------------------------------------
+# Fallback: taxa corrente via BRAPI
+# ---------------------------------------------------------------------------
+
+async def _fetch_brapi_indicator(key: str) -> Optional[float]:
+    cache_key = f"brapi_indicator:{key}"
+    cached = await cache_get(cache_key)
+    if cached is not None:
+        return float(cached)
+    try:
         import os
         token = os.getenv("BRAPI_TOKEN", "")
-        url = f"{BRAPI_BASE}/v2/finance"
         params: dict = {"key": key}
         if token:
             params["token"] = token
-
         async with httpx.AsyncClient(timeout=8.0) as client:
-            resp = await client.get(url, params=params)
+            resp = await client.get(f"{BRAPI_BASE}/v2/finance", params=params)
             resp.raise_for_status()
             data = resp.json()
-
         for item in data.get("finance", []):
             if str(item.get("key", "")).upper() == key.upper():
                 annual = item.get("annual") or item.get("yearly")
-                if annual is not None:
+                if annual:
                     val = float(str(annual).replace(",", "."))
                     await cache_set(cache_key, val, ttl=_CACHE_TTL)
                     return val
                 monthly = item.get("monthly")
-                if monthly is not None:
-                    m_val = float(str(monthly).replace(",", "."))
-                    annual_est = ((1 + m_val / 100) ** 12 - 1) * 100
-                    await cache_set(cache_key, annual_est, ttl=_CACHE_TTL)
-                    return annual_est
+                if monthly:
+                    m = float(str(monthly).replace(",", "."))
+                    val = ((1 + m / 100) ** 12 - 1) * 100
+                    await cache_set(cache_key, val, ttl=_CACHE_TTL)
+                    return val
     except Exception as e:
-        logger.warning("[rf_calc] BRAPI indicator '%s' falhou: %s", key, e)
-
+        log.warning("[rf_calc] BRAPI %s falhou: %s", key, e)
     return None
 
 
-async def get_cdi_annual_pct() -> float:
-    val = await _fetch_brapi_indicator("CDI")
-    if val is not None:
-        return val
-    logger.warning("[rf_calc] CDI indisponível — usando fallback %.1f%%", _FALLBACK_CDI_ANNUAL)
-    return _FALLBACK_CDI_ANNUAL
-
-
-async def get_ipca_annual_pct() -> float:
-    val = await _fetch_brapi_indicator("IPCA")
-    if val is not None:
-        return val
-    logger.warning("[rf_calc] IPCA indisponível — usando fallback %.1f%%", _FALLBACK_IPCA_ANNUAL)
-    return _FALLBACK_IPCA_ANNUAL
-
-
-# ---------------------------------------------------------------------------
-# Fator de crescimento
-# ---------------------------------------------------------------------------
-
-def _days_since(purchase_date: date) -> int:
-    return max(0, (date.today() - purchase_date).days)
-
-
-def _growth_factor(annual_pct: float, days: int) -> float:
-    """
-    Fator de crescimento para `days` dias corridos com taxa anual `annual_pct`.
-    Capitalização em dias úteis: (1 + r)^(d/252)
-    """
-    if annual_pct <= 0 or days <= 0:
+async def _fallback_factor_annual(
+    annual_pct: float,
+    start_date: date,
+    end_date: date,
+) -> float:
+    """Fator de crescimento usando taxa anual fixa como fallback."""
+    days = max(0, (end_date - start_date).days)
+    if days == 0:
         return 1.0
-    return (1 + annual_pct / 100.0) ** (days / 252.0)
+    return (1 + annual_pct / 100) ** (days / 252)
 
 
-async def _effective_rate(params: RFParams) -> Optional[float]:
-    """Retorna a taxa efetiva anual em % com base no indexador."""
-    if params.indexer == "CDI_PCT":
-        cdi = await get_cdi_annual_pct()
-        return cdi * (params.rate / 100.0)
-    elif params.indexer == "CDI_PLUS":
-        cdi = await get_cdi_annual_pct()
-        return cdi + params.spread
-    elif params.indexer == "IPCA_PLUS":
-        ipca = await get_ipca_annual_pct()
-        return ipca + params.spread
-    elif params.indexer == "PREFIXADO":
-        return params.rate
-    return None
+async def _get_annual_rate(indicator: str, default: float) -> float:
+    val = await _fetch_brapi_indicator(indicator)
+    return val if val is not None else default
 
 
 # ---------------------------------------------------------------------------
-# Cálculo por aporte individual
+# Calculo por aporte
 # ---------------------------------------------------------------------------
 
 async def _estimate_aporte(
     value: float,
-    tx_date: date,
+    start_date: date,
     params: RFParams,
-    rate: float,
 ) -> float:
     """
-    Calcula o valor atual estimado de um único aporte.
-
-    Args:
-        value    : Valor aportado em BRL (qty * price da tx)
-        tx_date  : Data da transação de compra
-        params   : Parâmetros do indexador (não usado diretamente aqui,
-                   mantido para log)
-        rate     : Taxa efetiva anual já calculada pelo chamador
-
-    Returns:
-        Valor atual estimado do aporte em BRL.
+    Calcula o valor atual de um unico aporte usando historico do banco.
+    Usa fallback anual se o banco nao tiver dados suficientes.
     """
-    days = _days_since(tx_date)
-    if days == 0:
+    end_date = date.today()
+    if start_date >= end_date or value <= 0:
         return value
-    factor = _growth_factor(rate, days)
-    return round(value * factor, 8)  # precisão interna; arredondamento final no caller
+
+    factor: Optional[float] = None
+
+    if params.indexer == "CDI_PCT":
+        factor = await _accumulated_factor_from_db(
+            "CDI", start_date, end_date,
+            pct_of_base=params.rate,
+        )
+        if factor is None:
+            annual = await _get_annual_rate("CDI", _FALLBACK_CDI_ANNUAL)
+            effective = annual * (params.rate / 100.0)
+            factor = await _fallback_factor_annual(effective, start_date, end_date)
+
+    elif params.indexer == "CDI_PLUS":
+        factor = await _accumulated_factor_from_db(
+            "CDI", start_date, end_date,
+            spread_annual=params.spread,
+        )
+        if factor is None:
+            annual = await _get_annual_rate("CDI", _FALLBACK_CDI_ANNUAL)
+            factor = await _fallback_factor_annual(annual + params.spread, start_date, end_date)
+
+    elif params.indexer == "IPCA_PLUS":
+        factor = await _accumulated_factor_from_db(
+            "IPCA", start_date, end_date,
+            spread_annual=params.spread,
+        )
+        if factor is None:
+            annual = await _get_annual_rate("IPCA", _FALLBACK_IPCA_ANNUAL)
+            factor = await _fallback_factor_annual(annual + params.spread, start_date, end_date)
+
+    elif params.indexer == "PREFIXADO":
+        # Prefixado nao precisa de banco: taxa ja esta em notes
+        factor = await _fallback_factor_annual(params.rate, start_date, end_date)
+
+    if factor is None or factor < 1.0:
+        factor = 1.0
+
+    return round(value * factor, 8)
 
 
 # ---------------------------------------------------------------------------
@@ -257,30 +277,13 @@ async def enrich_rf_positions(
     transactions_by_ticker: dict[str, list],
 ) -> dict[str, float]:
     """
-    Para cada posição de RENDA_FIXA, calcula o current_value estimado
-    somando o valor atualizado de cada aporte individualmente.
-
-    Lógica:
-      1. Filtra as transações de compra do ticker.
-      2. Ordena por data (mais antiga primeiro).
-      3. Para cada compra: calcula valor do aporte = qty * price.
-         Aplica fator de crescimento desde a data daquela compra.
-      4. Se houver vendas parciais, deduz proporcionalmente o saldo
-         pelo custo médio (FIFO simplificado).
-      5. current_value = soma dos valores atualizados dos aportes restantes.
-
-    Args:
-        positions             : Posições brutas (output de calc_raw_positions).
-        transactions_by_ticker: Mapa ticker -> [Transaction].
-
-    Returns:
-        Mapa ticker -> current_value estimado (BRL).
+    Calcula current_value estimado para cada posicao de RENDA_FIXA.
+    Usa fator acumulado real do banco (rate_history) por aporte individual.
     """
     result: dict[str, float] = {}
 
     for pos in positions:
-        asset_type = str(pos.get("asset_type", "")).upper()
-        if asset_type not in _RF_TYPES:
+        if str(pos.get("asset_type", "")).upper() not in _RF_TYPES:
             continue
 
         ticker = pos["ticker"]
@@ -288,23 +291,14 @@ async def enrich_rf_positions(
         if not txs:
             continue
 
-        # Ordena todas as transacoes por data
         txs_sorted = sorted(txs, key=lambda t: (t.date, t.id))
-
-        # Separa compras e vendas
-        buy_txs = [
-            t for t in txs_sorted
-            if str(getattr(t, "operation", "")).lower() in ("buy", "compra")
-        ]
-        sell_txs = [
-            t for t in txs_sorted
-            if str(getattr(t, "operation", "")).lower() in ("sell", "venda")
-        ]
+        buy_txs = [t for t in txs_sorted if str(getattr(t, "operation", "")).lower() in ("buy", "compra")]
+        sell_txs = [t for t in txs_sorted if str(getattr(t, "operation", "")).lower() in ("sell", "venda")]
 
         if not buy_txs:
             continue
 
-        # Determina o indexador a partir da compra mais recente com notes
+        # Indexador: usa notes da compra mais recente com notes preenchido
         notes = None
         for tx in reversed(buy_txs):
             if getattr(tx, "notes", None):
@@ -312,78 +306,48 @@ async def enrich_rf_positions(
                 break
 
         params = parse_rf_notes(notes)
-
         if params.indexer == "UNKNOWN":
-            logger.debug(
-                "[rf_calc] %s sem indexador em notes=%r — pulando", ticker, notes
-            )
+            log.debug("[rf_calc] %s sem indexador em notes=%r — pulando", ticker, notes)
             continue
 
-        # Busca taxa efetiva uma única vez para todos os aportes do ticker
-        try:
-            rate = await _effective_rate(params)
-        except Exception as e:
-            logger.warning("[rf_calc] erro ao obter taxa para %s: %s", ticker, e)
-            continue
-
-        if rate is None:
-            continue
-
-        # Monta lista de aportes: cada compra como (date, valor_brl)
-        # valor_brl = qty * price (em BRL, pois RF é sempre BRL)
+        # Aportes: (date, valor_brl)
         aportes: list[tuple[date, float]] = []
+        total_aportado = 0.0
         for tx in buy_txs:
             qty = float(tx.quantity or 0)
             price = float(tx.price or 0)
             fees = float(tx.fees or 0)
-            valor_aporte = qty * price + fees
-            if valor_aporte > 0:
-                aportes.append((tx.date, valor_aporte))
+            val = qty * price + fees
+            if val > 0:
+                aportes.append((tx.date, val))
+                total_aportado += val
 
-        if not aportes:
+        if not aportes or total_aportado <= 0:
             continue
 
-        # Desconta vendas proporcionalmente do valor total investido
-        # usando racio simples: venda reduz o saldo na proporção do
-        # total_invested (sem distorcao de datas, pois RF não tem lote)
-        total_aportado = sum(v for _, v in aportes)
+        # Ratio restante apos vendas
         total_vendido = sum(
-            float(t.quantity or 0) * float(t.price or 0)
-            for t in sell_txs
+            float(t.quantity or 0) * float(t.price or 0) for t in sell_txs
         )
-        # Racio de quanto ainda esta em carteira (0.0 a 1.0)
-        if total_aportado > 0:
-            ratio_restante = max(0.0, (total_aportado - total_vendido) / total_aportado)
-        else:
-            ratio_restante = 0.0
-
+        ratio_restante = max(0.0, (total_aportado - total_vendido) / total_aportado)
         if ratio_restante <= 0:
             continue
 
-        # Calcula valor atualizado de cada aporte e soma
+        # Soma valor atualizado de cada aporte
         current_value_total = 0.0
         for tx_date, valor_aporte in aportes:
             valor_restante = valor_aporte * ratio_restante
             try:
-                valor_atual = await _estimate_aporte(
-                    value=valor_restante,
-                    tx_date=tx_date,
-                    params=params,
-                    rate=rate,
-                )
+                valor_atual = await _estimate_aporte(valor_restante, tx_date, params)
                 current_value_total += valor_atual
             except Exception as e:
-                logger.warning(
-                    "[rf_calc] erro ao estimar aporte %s em %s: %s",
-                    ticker, tx_date, e,
-                )
-                current_value_total += valor_restante  # fallback: sem juros
+                log.warning("[rf_calc] erro aporte %s em %s: %s", ticker, tx_date, e)
+                current_value_total += valor_restante
 
         result[ticker] = round(current_value_total, 2)
-        logger.debug(
-            "[rf_calc] %s | %d aportes | ratio=%.4f | indexer=%s | rate=%.4f%% | current=%.2f",
-            ticker, len(aportes), ratio_restante,
-            params.indexer, rate, result[ticker],
+        log.debug(
+            "[rf_calc] %s | aportes=%d | ratio=%.4f | indexer=%s | current=%.2f",
+            ticker, len(aportes), ratio_restante, params.indexer, result[ticker],
         )
 
     return result
