@@ -205,7 +205,16 @@ export default function AddTransactionModal({ onClose }: Props) {
   const isRF           = tab.extraFields === 'renda_fixa'
   const isTesouro      = tab.extraFields === 'tesouro'
   const indexerOptions = isTesouro ? TD_INDEXERS : RF_INDEXERS
-  const modalTitle     = isEditMode ? `Editar — ${ticker}` : prefill?.ticker ? `Adicionar Cotas — ${prefill.ticker}` : 'Novo Lançamento'
+
+  // Para Renda Fixa: o usuário informa apenas o valor investido (sem cotas)
+  // O campo "quantity" armazena o valor investido; no envio, quantity=1 e price=valor
+  const rfValorInvestido = isRF ? quantity : ''
+
+  const modalTitle = isEditMode
+    ? `Editar — ${ticker}`
+    : prefill?.ticker
+      ? `Adicionar Lançamento — ${prefill.ticker}`
+      : 'Novo Lançamento'
 
   const { quote, loading: quoteLoading, error: quoteError } = useTickerQuote(ticker, !!tab.brapiEnabled && !isEditMode, date)
   const { items: tdItems, loading: tdLoading }               = useTesouroSearch(ticker, isTesouro && !isEditMode)
@@ -294,14 +303,30 @@ export default function AddTransactionModal({ onClose }: Props) {
       return
     }
 
-    const qty = parseFloat(quantity)
-    const prc = parseFloat(price)
     const fee = parseFloat(fees || '0')
 
-    if (!ticker.trim())         { setError('Informe o ticker/código do ativo.'); return }
-    if (isNaN(qty) || qty <= 0) { setError('Quantidade deve ser maior que zero.'); return }
-    if (isNaN(prc) || prc <= 0) { setError('Preço deve ser maior que zero.'); return }
+    if (!ticker.trim()) { setError('Informe o ticker/código do ativo.'); return }
     if ((isRF || isTesouro) && !indexer) { setError('Selecione o indexador.'); return }
+
+    let qty: number
+    let prc: number
+
+    if (isRF) {
+      // Renda Fixa: o usuário informa apenas o valor investido
+      // Enviamos quantity=1 e price=valor_investido
+      const valorInvestido = parseFloat(quantity)
+      if (isNaN(valorInvestido) || valorInvestido <= 0) {
+        setError('Informe o valor investido (deve ser maior que zero).')
+        return
+      }
+      qty = 1
+      prc = valorInvestido
+    } else {
+      qty = parseFloat(quantity)
+      prc = parseFloat(price)
+      if (isNaN(qty) || qty <= 0) { setError('Quantidade deve ser maior que zero.'); return }
+      if (isNaN(prc) || prc <= 0) { setError('Preço deve ser maior que zero.'); return }
+    }
 
     let enrichedNotes = notes.trim()
     if (assetName) enrichedNotes = [assetName, enrichedNotes].filter(Boolean).join(' - ')
@@ -352,9 +377,20 @@ export default function AddTransactionModal({ onClose }: Props) {
   }
 
   const isBuy = operation === 'buy'
-  const totalValue = quantity && price
-    ? parseFloat(quantity) * parseFloat(price) + (isBuy ? 1 : -1) * parseFloat(fees || '0')
-    : null
+
+  // Cálculo do total estimado
+  // Para RF: valor já é o total (qty=1, price=valor)
+  // Para demais: qty * price ± fees
+  const totalValue = (() => {
+    if (isRF) {
+      const val = parseFloat(quantity)
+      if (isNaN(val) || val <= 0) return null
+      return val + (isBuy ? 1 : -1) * parseFloat(fees || '0')
+    }
+    if (!quantity || !price) return null
+    return parseFloat(quantity) * parseFloat(price) + (isBuy ? 1 : -1) * parseFloat(fees || '0')
+  })()
+
   const total = totalValue !== null
     ? totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     : null
@@ -670,35 +706,51 @@ export default function AddTransactionModal({ onClose }: Props) {
                 </div>
               )}
 
-              {/* Quantidade + Preço */}
+              {/* Valor/Quantidade + Preço */}
               <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <Field label={isRF || isTesouro ? 'Qtd / Cotas' : 'Quantidade'} style={{ flex: 1 }}>
-                  <Input type="number" value={quantity} onChange={e => setQuantity(e.target.value)}
-                    placeholder="0" min="0" step="any" />
-                </Field>
-                <Field
-                  label={`${isRF || isTesouro ? 'PU / Preço unit.' : 'Preço'} (${currency})`}
-                  style={{ flex: 1 }}
-                  badge={priceFromBrapi && (
-                    <span style={{
-                      display: 'flex', alignItems: 'center', gap: 3,
-                      fontSize: '0.65rem', fontWeight: 600,
-                      color: 'var(--color-primary)',
-                      background: 'oklch(from var(--color-primary) l c h / 0.1)',
-                      border: '1px solid oklch(from var(--color-primary) l c h / 0.2)',
-                      borderRadius: 'var(--radius-full)', padding: '1px 6px',
-                    }}>
-                      <Zap size={8} /> BRAPI
-                    </span>
-                  )}
-                >
-                  <Input
-                    type="number" value={price}
-                    onChange={e => { setPrice(e.target.value); setPriceFromBrapi(false); setPriceEdited(true) }}
-                    placeholder="0,00" min="0" step="any"
-                    highlight={priceFromBrapi}
-                  />
-                </Field>
+                {isRF ? (
+                  /* Renda Fixa: campo único de valor investido, sem campo de preço separado */
+                  <Field label={`Valor Investido (${currency})`} style={{ flex: 1 }}>
+                    <Input
+                      type="number"
+                      value={quantity}
+                      onChange={e => setQuantity(e.target.value)}
+                      placeholder="0,00"
+                      min="0"
+                      step="0.01"
+                    />
+                  </Field>
+                ) : (
+                  <>
+                    <Field label={isTesouro ? 'Quantidade (títulos)' : 'Quantidade'} style={{ flex: 1 }}>
+                      <Input type="number" value={quantity} onChange={e => setQuantity(e.target.value)}
+                        placeholder="0" min="0" step="any" />
+                    </Field>
+                    <Field
+                      label={`${isTesouro ? 'PU / Preço unit.' : 'Preço'} (${currency})`}
+                      style={{ flex: 1 }}
+                      badge={priceFromBrapi && (
+                        <span style={{
+                          display: 'flex', alignItems: 'center', gap: 3,
+                          fontSize: '0.65rem', fontWeight: 600,
+                          color: 'var(--color-primary)',
+                          background: 'oklch(from var(--color-primary) l c h / 0.1)',
+                          border: '1px solid oklch(from var(--color-primary) l c h / 0.2)',
+                          borderRadius: 'var(--radius-full)', padding: '1px 6px',
+                        }}>
+                          <Zap size={8} /> BRAPI
+                        </span>
+                      )}
+                    >
+                      <Input
+                        type="number" value={price}
+                        onChange={e => { setPrice(e.target.value); setPriceFromBrapi(false); setPriceEdited(true) }}
+                        placeholder="0,00" min="0" step="any"
+                        highlight={priceFromBrapi}
+                      />
+                    </Field>
+                  </>
+                )}
               </div>
 
               {/* Taxas + Data */}
