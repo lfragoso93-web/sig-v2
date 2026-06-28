@@ -134,7 +134,6 @@ function TogglePill({ label, checked, onChange }: {
         whiteSpace: 'nowrap',
       }}
     >
-      {/* indicador visual */}
       <span style={{
         display: 'inline-block',
         width: 8, height: 8,
@@ -206,10 +205,6 @@ export default function AddTransactionModal({ onClose }: Props) {
   const isTesouro      = tab.extraFields === 'tesouro'
   const indexerOptions = isTesouro ? TD_INDEXERS : RF_INDEXERS
 
-  // Para Renda Fixa: o usuário informa apenas o valor investido (sem cotas)
-  // O campo "quantity" armazena o valor investido; no envio, quantity=1 e price=valor
-  const rfValorInvestido = isRF ? quantity : ''
-
   const modalTitle = isEditMode
     ? `Editar — ${ticker}`
     : prefill?.ticker
@@ -222,7 +217,6 @@ export default function AddTransactionModal({ onClose }: Props) {
   const { price: tdPrice, loading: tdPriceLoading }          = useTreasuryPrice(activeSlug, date, isTesouro && !!activeSlug && !priceEdited)
   const anyLoading = quoteLoading || tdLoading || rvLoading || tdPriceLoading
 
-  // Zera vencimento quando liquidez diária é ativada
   useEffect(() => {
     if (dailyLiquidity) setMaturity('')
   }, [dailyLiquidity])
@@ -312,8 +306,8 @@ export default function AddTransactionModal({ onClose }: Props) {
     let prc: number
 
     if (isRF) {
-      // Renda Fixa: o usuário informa apenas o valor investido
-      // Enviamos quantity=1 e price=valor_investido
+      // Renda Fixa: usuário informa apenas valor investido
+      // Enviamos quantity=1 e price=valor_investido ao backend
       const valorInvestido = parseFloat(quantity)
       if (isNaN(valorInvestido) || valorInvestido <= 0) {
         setError('Informe o valor investido (deve ser maior que zero).')
@@ -331,9 +325,14 @@ export default function AddTransactionModal({ onClose }: Props) {
     let enrichedNotes = notes.trim()
     if (assetName) enrichedNotes = [assetName, enrichedNotes].filter(Boolean).join(' - ')
     if (isRF || isTesouro) {
+      const rateLabel = isRF
+        // Renda Fixa: "110% do CDI" (percentual do indexador)
+        ? rate && indexer && `${rate}% do ${indexer}`
+        // Tesouro Direto: "Taxa: 5.82% a.a."
+        : rate && `Taxa: ${rate}% a.a.`
       const extras = [
         indexer         && `Indexador: ${indexer}`,
-        rate            && `Taxa: ${rate}% a.a.`,
+        rateLabel,
         dailyLiquidity  && 'Liquidez: Diária',
         !dailyLiquidity && maturity && `Vencimento: ${maturity}`,
         isRF && issuer  && `Emissor: ${issuer}`,
@@ -378,9 +377,6 @@ export default function AddTransactionModal({ onClose }: Props) {
 
   const isBuy = operation === 'buy'
 
-  // Cálculo do total estimado
-  // Para RF: valor já é o total (qty=1, price=valor)
-  // Para demais: qty * price ± fees
   const totalValue = (() => {
     if (isRF) {
       const val = parseFloat(quantity)
@@ -651,7 +647,6 @@ export default function AddTransactionModal({ onClose }: Props) {
                   display: 'flex', flexDirection: 'column', gap: '0.75rem',
                 }}>
 
-                  {/* Título do bloco + Toggle Liquidez Diária (só RF) */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                     <p style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-primary)', margin: 0 }}>
                       {isTesouro ? 'Dados do Título' : 'Dados do Ativo'}
@@ -672,9 +667,16 @@ export default function AddTransactionModal({ onClose }: Props) {
                         {indexerOptions.map(o => <option key={o} value={o}>{o}</option>)}
                       </Select>
                     </Field>
-                    <Field label="Taxa (% a.a.)" style={{ width: 100 }}>
-                      <Input type="number" value={rate} onChange={e => setRate(e.target.value)}
-                        placeholder={isTesouro ? 'ex: 5.82' : 'ex: 110'} min="0" step="any" />
+                    {/* RF: % do indexador (ex: 110% do CDI) | Tesouro: taxa a.a. (ex: 5.82% a.a.) */}
+                    <Field
+                      label={isRF ? '% do Indexador' : 'Taxa (% a.a.)'}
+                      style={{ width: 110 }}
+                    >
+                      <Input
+                        type="number" value={rate} onChange={e => setRate(e.target.value)}
+                        placeholder={isRF ? 'ex: 110' : 'ex: 5.82'}
+                        min="0" step="any"
+                      />
                     </Field>
                   </div>
 
@@ -709,7 +711,6 @@ export default function AddTransactionModal({ onClose }: Props) {
               {/* Valor/Quantidade + Preço */}
               <div style={{ display: 'flex', gap: '0.75rem' }}>
                 {isRF ? (
-                  /* Renda Fixa: campo único de valor investido, sem campo de preço separado */
                   <Field label={`Valor Investido (${currency})`} style={{ flex: 1 }}>
                     <Input
                       type="number"
