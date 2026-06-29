@@ -34,7 +34,7 @@ from app.services.portfolio_service import (
 )
 from app.services.fx_service import get_usd_brl_today
 from app.services.rf_calc_service import enrich_rf_positions
-from app.core.cache import cache_get, cache_set
+from app.core.cache import cache_get, cache_set, cache_delete
 
 logger = logging.getLogger(__name__)
 
@@ -44,8 +44,10 @@ _PREFIX = "rent"
 # Tipos de ativos cotados em USD
 _USD_ASSET_TYPES = {"STOCK", "ETF_INTERNACIONAL"}
 
-# Tipos de RF sem cotacao de mercado — usam rf_calc_service
-_RF_TYPES = {"RENDA_FIXA"}
+
+def _is_rf_type(asset_type: str) -> bool:
+    """Retorna True para Renda Fixa (case-insensitive)."""
+    return str(asset_type).upper() == "RENDA_FIXA"
 
 
 def _key(portfolio_id: int, suffix: str) -> str:
@@ -56,6 +58,19 @@ def _safe_pct(gain: Decimal, base: Decimal) -> float:
     if base and base > 0:
         return round(float(gain / base * 100), 4)
     return 0.0
+
+
+async def flush_rentabilidade_cache(portfolio_id: int) -> None:
+    """
+    Invalida as tres chaves de cache de rentabilidade para a carteira.
+    Util para chamar apos lancamento de Renda Fixa para garantir
+    que o calculo retroativo apareca imediatamente na proxima consulta.
+    """
+    for suffix in ("kpis", "ativos", "classes"):
+        try:
+            await cache_delete(_key(portfolio_id, suffix))
+        except Exception:
+            pass
 
 
 async def _snapshot_at(
@@ -382,7 +397,7 @@ async def get_rentabilidade_por_ativo(db: AsyncSession, portfolio_id: int) -> li
         except Exception as e:
             logger.error("[rentabilidade] erro ao buscar cotacoes: %s", e)
 
-    # ── Injeta portfolio_id em cada posicao para o rf_calc_service buscar
+    # Injeta portfolio_id em cada posicao para o rf_calc_service buscar
     # diretamente em fixed_income_investments sem depender de notes/regex.
     positions_with_portfolio = [
         {**p, "portfolio_id": portfolio_id} for p in positions_raw
@@ -433,14 +448,14 @@ async def get_rentabilidade_por_ativo(db: AsyncSession, portfolio_id: int) -> li
             except Exception:
                 pass
 
-        # RF: usa current_value calculado por rf_calc_service
-        if asset_type in _RF_TYPES and ticker in rf_values:
+        # FIX: usa _is_rf_type para comparacao case-insensitive
+        if _is_rf_type(asset_type) and ticker in rf_values:
             current_value = rf_values[ticker]
         elif current_price:
             current_value = qty * current_price
         else:
             current_value = qty * avg_price
-            if asset_type not in _RF_TYPES:
+            if not _is_rf_type(asset_type):
                 logger.warning(
                     "[rentabilidade] sem cotacao para %s, usando preco medio", ticker
                 )
