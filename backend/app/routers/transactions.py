@@ -1,4 +1,5 @@
 from datetime import date as DateType
+from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
@@ -10,6 +11,7 @@ from app.core.deps import get_current_user
 from app.models.user import User
 from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction, OperationType
+from app.models.fixed_income import FixedIncomeInvestment, IndexerType, FixedIncomeType
 from app.schemas.transaction import TransactionCreate, TransactionOut, PagedTransactions
 from app.schemas.asset import AssetCreate
 from app.services.asset_service import get_or_create_asset
@@ -18,6 +20,122 @@ from app.services.asset_onboarding_service import run_onboarding
 from app.services.transaction_service import list_transactions_paginated
 
 router = APIRouter()
+
+# Mapeamento dos valores enviados pelo modal -> IndexerType do modelo
+_INDEXER_MAP: dict[str, IndexerType] = {
+    "CDI":       IndexerType.CDI,
+    "IPCA":      IndexerType.IPCA_PLUS,
+    "IPCA+":     IndexerType.IPCA_PLUS,
+    "SELIC":     IndexerType.SELIC,
+    "Prefixado": IndexerType.PREFIXADO,
+    "IGP-M":     IndexerType.IGPM_PLUS,
+    "Outro":     IndexerType.CDI,  # fallback conservador
+}
+
+
+def _parse_indexer(value: Optional[str]) -> Optional[IndexerType]:
+    """Converte string do modal para IndexerType. Retorna None se não reconhecido."""
+    if not value:
+        return None
+    return _INDEXER_MAP.get(value.strip())
+
+
+def _parse_rf_meta_from_notes(notes: Optional[str]) -> dict:
+    """
+    Extrai metadados RF do campo notes enriquecido pelo modal.
+    Formato esperado: "Nome - Indexador: CDI | 110% do CDI | Vencimento: 2027-12-01 | Emissor: Banco XP"
+    Retorna dict com: indexer_str, rate, maturity, issuer, daily_liquidity.
+    """
+    import re
+    result = {
+        "indexer_str": None,
+        "rate": 0.0,
+        "maturity": None,
+        "issuer": "",
+        "daily_liquidity": False,
+    }
+    if not notes:
+        return result
+
+    m = re.search(r"Indexador:\s*([^|\-]+)", notes)
+    if m:
+        result["indexer_str"] = m.group(1).strip()
+
+    # % do indexador (ex: "110% do CDI")
+    m = re.search(r"([0-9]+(?:[.,][0-9]+)?)\s*%\s*do\s+", notes, re.IGNORECASE)
+    if m:
+        result["rate"] = float(m.group(1).replace(",", "."))
+
+    # Taxa a.a. (ex: "Taxa: 5.82% a.a.")
+    m = re.search(r"Taxa:\s*([0-9]+(?:[.,][0-9]+)?)\s*%", notes, re.IGNORECASE)
+    if m:
+        result["rate"] = float(m.group(1).replace(",", "."))
+
+    m = re.search(r"Vencimento:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})", notes)
+    if m:
+        from datetime import date
+        result["maturity"] = date.fromisoformat(m.group(1))
+
+    m = re.search(r"Emissor:\s*([^|\-]+)", notes)
+    if m:
+        result["issuer"] = m.group(1).strip()
+
+    if re.search(r"Liquidez:\s*Di", notes, re.IGNORECASE):
+        result["daily_liquidity"] = True
+        result["maturity"] = None
+
+    return result
+
+
+async def _upsert_fixed_income(
+    db: AsyncSession,
+    portfolio_id: int,
+    ticker: str,
+    tx_date: DateType,
+    invested_amount: float,
+    notes: Optional[str],
+) -> None:
+    """
+    Cria ou atualiza o registro em fixed_income_investments para o ticker RF.
+    Usa o ticker como chave de lookup dentro da carteira.
+    """
+    meta = _parse_rf_meta_from_notes(notes)
+    indexer = _parse_indexer(meta["indexer_str"])
+    if indexer is None:
+        # Sem indexador reconhecível — não persiste para não corromper dados
+        return
+
+    result = await db.execute(
+        select(FixedIncomeInvestment).where(
+            FixedIncomeInvestment.portfolio_id == portfolio_id,
+            FixedIncomeInvestment.name == ticker,
+        )
+    )
+    fi = result.scalar_one_or_none()
+
+    if fi is None:
+        fi = FixedIncomeInvestment(
+            portfolio_id=portfolio_id,
+            name=ticker,
+            institution=meta["issuer"] or "",
+            fixed_income_type=FixedIncomeType.OUTROS,
+            indexer=indexer,
+            rate=Decimal(str(meta["rate"])),
+            invested_amount=Decimal(str(invested_amount)),
+            date_start=tx_date,
+            daily_liquidity=meta["daily_liquidity"],
+            date_maturity=meta["maturity"],
+            is_active=True,
+        )
+        db.add(fi)
+    else:
+        fi.indexer = indexer
+        fi.rate = Decimal(str(meta["rate"]))
+        fi.invested_amount = Decimal(str(invested_amount))
+        fi.daily_liquidity = meta["daily_liquidity"]
+        fi.date_maturity = meta["maturity"]
+        if meta["issuer"]:
+            fi.institution = meta["issuer"]
 
 
 def _to_operation(value: str) -> OperationType:
@@ -157,6 +275,15 @@ async def create_transaction(
         notes=payload.notes,
     )
     db.add(tx)
+
+    # Para RENDA_FIXA: persiste dados estruturados em fixed_income_investments
+    if str(asset_type).upper() == "RENDA_FIXA" and operation == OperationType.buy:
+        # price = valor investido (qty=1 por convenção do modal)
+        invested = payload.quantity * payload.price
+        await _upsert_fixed_income(
+            db, portfolio_id, ticker, payload.date, invested, payload.notes
+        )
+
     await db.commit()
     await db.refresh(tx)
 
@@ -174,7 +301,6 @@ async def create_transaction(
         ticker=ticker,
         asset_type=str(asset_type),
     )
-    # Passa a data da transacao para invalidar snapshots a partir dela
     background_tasks.add_task(
         _run_snapshot_backfill,
         portfolio_id=portfolio_id,
@@ -215,8 +341,6 @@ async def update_transaction(
     if operation == OperationType.sell:
         await _validate_sell(db, portfolio_id, ticker, payload.quantity, exclude_tx_id=transaction_id)
 
-    # Guarda a menor data entre a data antiga e a nova para invalidar
-    # snapshots a partir do ponto mais antigo afetado pela edicao
     invalidate_from = min(tx.date, payload.date)
 
     tx.ticker = ticker
@@ -228,6 +352,13 @@ async def update_transaction(
     tx.date = payload.date
     tx.currency = payload.currency or "BRL"
     tx.notes = payload.notes
+
+    # Para RENDA_FIXA: atualiza fixed_income_investments
+    if str(asset_type).upper() == "RENDA_FIXA" and operation == OperationType.buy:
+        invested = payload.quantity * payload.price
+        await _upsert_fixed_income(
+            db, portfolio_id, ticker, payload.date, invested, payload.notes
+        )
 
     await db.commit()
     await db.refresh(tx)
@@ -273,7 +404,7 @@ async def delete_transaction(
 
     ticker = tx.ticker
     asset_type = tx.asset_type
-    tx_date = tx.date  # guarda antes de deletar
+    tx_date = tx.date
 
     await db.delete(tx)
     await db.commit()
@@ -284,7 +415,6 @@ async def delete_transaction(
         ticker=ticker,
         asset_type=str(asset_type),
     )
-    # Invalida snapshots a partir da data da transacao deletada
     background_tasks.add_task(
         _run_snapshot_backfill,
         portfolio_id=portfolio_id,
@@ -313,10 +443,6 @@ async def _run_snapshot_backfill(portfolio_id: int, tx_date: DateType) -> None:
     """
     1. Invalida todos os snapshots >= tx_date (remove do banco).
     2. Roda backfill_snapshots para recalcular as datas removidas.
-
-    Se tx_date == hoje, nenhum snapshot existente e invalido
-    (hoje nao tem snapshot salvo ainda), entao o delete nao afeta nada
-    e o backfill apenas cria o snapshot do dia normalmente.
     """
     import logging
     log = logging.getLogger(__name__)
