@@ -32,7 +32,7 @@ cryptography==49.0.0
 bcrypt==5.0.0
 # python-multipart 0.0.32 - GHSA-5rvq-cxj2-64vf (CVE-2026-53539)
 python-multipart==0.0.32
-apscheduler==3.11.2
+apscheduler==3.11.3
 email-validator==2.2.0
 redis==5.2.1
 # reportlab: geracao de PDF no modulo IRPF
