@@ -4,10 +4,6 @@ rate_history_job.py
 Job agendado para atualizar o historico de taxas diariamente.
 Roda uma vez ao dia apos o fechamento do mercado (20:00 BRT = 23:00 UTC).
 
-Integracao com APScheduler (ja utilizado no projeto).
-Se o projeto nao tiver APScheduler, adicionar ao requirements.txt:
-  apscheduler>=3.10.0
-
 Registro do job no startup do FastAPI (app/main.py ou app/core/scheduler.py):
 
   from app.scheduler.rate_history_job import register_rate_history_job
@@ -22,19 +18,17 @@ from typing import TYPE_CHECKING
 
 import httpx
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
     from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from app.db.session import async_session_factory
+from app.core.database import async_session_factory
 
 log = logging.getLogger(__name__)
 
 BCB_SGS_URL = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.{serie}/dados"
 
-# Indicadores e suas series BCB
-INDICATORES = {
+INDICADORES = {
     "CDI":   {"serie": 12,  "granularity": "daily"},
     "SELIC": {"serie": 11,  "granularity": "daily"},
     "IPCA":  {"serie": 433, "granularity": "monthly"},
@@ -69,7 +63,6 @@ def _monthly_to_annual(m: float) -> float:
 
 
 async def _fetch_today(indicator: str, cfg: dict) -> list[dict] | None:
-    """Busca o dado mais recente do indicador no BCB."""
     today = date.today()
     url = BCB_SGS_URL.format(serie=cfg["serie"])
     params = {
@@ -81,8 +74,7 @@ async def _fetch_today(indicator: str, cfg: dict) -> list[dict] | None:
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(url, params=params)
             resp.raise_for_status()
-            data = resp.json()
-        return data
+            return resp.json()
     except Exception as e:
         log.warning("[rate_job] BCB %s falhou: %s", indicator, e)
         return None
@@ -91,7 +83,6 @@ async def _fetch_today(indicator: str, cfg: dict) -> list[dict] | None:
 async def update_rates_today() -> None:
     """
     Busca e grava as taxas do dia atual para CDI, SELIC e IPCA.
-    Chamada pelo scheduler diariamente.
     """
     log.info("[rate_job] Atualizando taxas do dia %s ...", date.today())
     rows_to_insert: list[dict] = []
@@ -110,14 +101,10 @@ async def update_rates_today() -> None:
                 continue
 
             if cfg["granularity"] == "daily":
-                rd = val
-                rm = _daily_to_monthly(val)
-                ra = _daily_to_annual(val)
+                rd, rm, ra = val, _daily_to_monthly(val), _daily_to_annual(val)
             else:
                 ref_date = ref_date.replace(day=1)
-                rd = _monthly_to_daily(val)
-                rm = val
-                ra = _monthly_to_annual(val)
+                rd, rm, ra = _monthly_to_daily(val), val, _monthly_to_annual(val)
 
             rows_to_insert.append({
                 "indicator": indicator,
@@ -140,10 +127,6 @@ async def update_rates_today() -> None:
 
 
 def register_rate_history_job(scheduler: "AsyncIOScheduler") -> None:
-    """
-    Registra o job no APScheduler.
-    Roda todo dia util as 20:00 BRT (23:00 UTC).
-    """
     scheduler.add_job(
         update_rates_today,
         trigger="cron",
@@ -151,6 +134,6 @@ def register_rate_history_job(scheduler: "AsyncIOScheduler") -> None:
         minute=0,
         id="update_rate_history",
         replace_existing=True,
-        misfire_grace_time=3600,  # tolera 1h de atraso
+        misfire_grace_time=3600,
     )
     log.info("[rate_job] Job 'update_rate_history' registrado (diario 23:00 UTC)")
