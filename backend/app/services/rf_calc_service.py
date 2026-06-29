@@ -34,10 +34,34 @@ from app.models.fixed_income import FixedIncomeInvestment, IndexerType
 log = logging.getLogger(__name__)
 
 _CACHE_TTL = 3600
-_RF_TYPES = {"RENDA_FIXA"}
+# Aceita qualquer variante de maiusculas/minusculas
+_RF_TYPES = {"renda_fixa", "RENDA_FIXA"}
 _FALLBACK_CDI_ANNUAL = 10.5
 _FALLBACK_IPCA_ANNUAL = 5.0
 BRAPI_BASE = "https://brapi.dev/api"
+
+
+def _is_rf_type(asset_type: str) -> bool:
+    """Retorna True se o asset_type for de Renda Fixa (case-insensitive)."""
+    return str(asset_type).upper() == "RENDA_FIXA"
+
+
+def _op_is_buy(operation) -> bool:
+    """
+    Retorna True se a operacao for de compra.
+
+    Aceita:
+    - OperationType.buy  (enum SQLAlchemy)
+    - "buy", "compra"    (string)
+    - "OperationType.buy" (repr do enum quando nao desserializado)
+    """
+    val = str(getattr(operation, "value", operation)).lower()
+    return val in ("buy", "compra")
+
+
+def _op_is_sell(operation) -> bool:
+    val = str(getattr(operation, "value", operation)).lower()
+    return val in ("sell", "venda")
 
 
 # ---------------------------------------------------------------------------
@@ -88,8 +112,6 @@ async def _get_fi_record(
     ticker: str,
 ) -> Optional[FixedIncomeInvestment]:
     """Busca registro em fixed_income_investments para o ticker na carteira."""
-    cache_key = f"fi_record:{portfolio_id}:{ticker}"
-    # Nao cacheia modelo ORM — busca sempre do banco para ter dados frescos
     try:
         async with AsyncSessionLocal() as session:
             result = await session.execute(
@@ -272,7 +294,8 @@ async def enrich_rf_positions(
     result: dict[str, float] = {}
 
     for pos in positions:
-        if str(pos.get("asset_type", "")).upper() not in _RF_TYPES:
+        # FIX: comparacao case-insensitive para asset_type
+        if not _is_rf_type(pos.get("asset_type", "")):
             continue
 
         ticker = pos["ticker"]
@@ -282,10 +305,12 @@ async def enrich_rf_positions(
             continue
 
         txs_sorted = sorted(txs, key=lambda t: (t.date, t.id))
-        buy_txs = [t for t in txs_sorted if str(getattr(t, "operation", "")).lower() in ("buy", "compra")]
-        sell_txs = [t for t in txs_sorted if str(getattr(t, "operation", "")).lower() in ("sell", "venda")]
+        # FIX: usa _op_is_buy/_op_is_sell que extrai .value do enum corretamente
+        buy_txs  = [t for t in txs_sorted if _op_is_buy(t.operation)]
+        sell_txs = [t for t in txs_sorted if _op_is_sell(t.operation)]
 
         if not buy_txs:
+            log.debug("[rf_calc] %s sem compras — pulando", ticker)
             continue
 
         # --- Busca parametros RF diretamente no banco (sem regex) ---
@@ -303,13 +328,15 @@ async def enrich_rf_positions(
             continue
 
         # --- Calculo dos aportes ---
+        # Para RF: qty=1, price=valor_investido (conforme padrao do modal)
+        # Para garantir compatibilidade, usa qty * price + fees em todos os casos
         aportes: list[tuple[date, float]] = []
         total_aportado = 0.0
         for tx in buy_txs:
-            qty = float(tx.quantity or 0)
+            qty   = float(tx.quantity or 0)
             price = float(tx.price or 0)
-            fees = float(tx.fees or 0)
-            val = qty * price + fees
+            fees  = float(tx.fees or 0)
+            val   = qty * price + fees
             if val > 0:
                 aportes.append((tx.date, val))
                 total_aportado += val
@@ -335,7 +362,7 @@ async def enrich_rf_positions(
                 current_value_total += valor_restante
 
         result[ticker] = round(current_value_total, 2)
-        log.debug(
+        log.info(
             "[rf_calc] %s | aportes=%d | ratio=%.4f | indexer=%s | current=%.2f",
             ticker, len(aportes), ratio_restante, params.indexer, result[ticker],
         )
