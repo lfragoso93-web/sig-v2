@@ -3,11 +3,6 @@ rate_history_job.py
 
 Job agendado para atualizar o historico de taxas diariamente.
 Roda uma vez ao dia apos o fechamento do mercado (20:00 BRT = 23:00 UTC).
-
-Registro do job no startup do FastAPI (app/main.py ou app/core/scheduler.py):
-
-  from app.scheduler.rate_history_job import register_rate_history_job
-  register_rate_history_job(scheduler)
 """
 from __future__ import annotations
 
@@ -22,7 +17,7 @@ from sqlalchemy import text
 if TYPE_CHECKING:
     from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from app.core.database import async_session_factory
+from app.core.database import AsyncSessionLocal
 
 log = logging.getLogger(__name__)
 
@@ -119,7 +114,7 @@ async def update_rates_today() -> None:
         log.warning("[rate_job] Nenhuma taxa coletada hoje")
         return
 
-    async with async_session_factory() as session:
+    async with AsyncSessionLocal() as session:
         await session.execute(UPSERT_SQL, rows_to_insert)
         await session.commit()
 

@@ -26,7 +26,7 @@ import httpx
 from sqlalchemy import text
 
 from app.core.cache import cache_get, cache_set
-from app.core.database import async_session_factory
+from app.core.database import AsyncSessionLocal
 
 log = logging.getLogger(__name__)
 
@@ -110,7 +110,7 @@ async def _accumulated_factor_from_db(
         return float(cached)
 
     try:
-        async with async_session_factory() as session:
+        async with AsyncSessionLocal() as session:
             result = await session.execute(
                 FATOR_SQL,
                 {"indicator": indicator, "start_date": start_date, "end_date": end_date},
