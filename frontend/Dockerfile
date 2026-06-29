@@ -5,7 +5,9 @@ WORKDIR /app
 
 COPY package*.json ./
 
-RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+# Usa npm install em vez de npm ci para evitar falha quando o package-lock.json
+# está levemente desatualizado em relação ao package.json (ex: minor bumps de eslint/typescript-eslint)
+RUN npm install
 
 COPY . .
 
