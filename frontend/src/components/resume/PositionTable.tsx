@@ -16,6 +16,11 @@ function isUsdAsset(assetType: string | null | undefined): boolean {
   return USD_TYPES.has(assetType.toUpperCase())
 }
 
+function isRendaFixa(assetType: string | null | undefined): boolean {
+  if (!assetType) return false
+  return assetType.toUpperCase() === 'RENDA_FIXA'
+}
+
 function assetTypeToTab(assetType: string | null | undefined): string {
   if (!assetType) return 'acao'
   const map: Record<string, string> = {
@@ -197,13 +202,27 @@ interface PositionCardProps { item: PositionGroup['positions'][number] }
 function PositionCard({ item }: PositionCardProps) {
   const safeType = item.asset_type ?? ''
   const isTesouro = safeType.toUpperCase() === 'TESOURO_DIRETO' || safeType.toUpperCase() === 'TESOURO'
+  const isRF = isRendaFixa(safeType)
   const name = displayName(item.ticker, safeType)
   const hasQuote = item.current_price !== null && item.current_price !== undefined
   const varColor = (item.variation_value ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-error)'
   const investedValue = item.invested_value ?? item.quantity * item.average_price
-  // Para ativos USD (STOCK/ETF_INT), preços unitários ficam em USD;
-  // os valores convertidos (invested_value, current_value) já chegam em BRL do backend
   const currency = isUsdAsset(safeType) ? 'USD' : 'BRL'
+
+  // Campos exibidos no card mobile variam por tipo de ativo:
+  // RENDA_FIXA → apenas Total Inv. + Valor Atual
+  // Demais     → Qtd + P. Médio + Total Inv. + Valor Atual
+  const fields = isRF
+    ? [
+        { label: 'Total Inv.',  value: fmtMoney(investedValue, 'BRL') },
+        { label: 'Valor Atual', value: hasQuote ? fmtMoney(item.current_value ?? null, 'BRL') : '—' },
+      ]
+    : [
+        { label: 'Qtd',        value: fmtQty(item.quantity) },
+        { label: 'P. Médio',  value: fmtMoney(item.average_price, currency) },
+        { label: 'Total Inv.', value: fmtMoney(investedValue, 'BRL') },
+        { label: 'Valor Atual', value: hasQuote ? fmtMoney(item.current_value ?? null, 'BRL') : '—' },
+      ]
 
   return (
     <div style={{
@@ -225,14 +244,7 @@ function PositionCard({ item }: PositionCardProps) {
         <AssetMenu ticker={item.ticker} assetLabel={isTesouro ? item.ticker : (item.asset_label ?? item.ticker)} assetType={safeType} />
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.625rem 1rem' }}>
-        {[
-          { label: 'Qtd',         value: fmtQty(item.quantity)                                      },
-          // P. Médio e P. Atual em USD para ativos internacionais
-          { label: 'P. Médio',   value: fmtMoney(item.average_price, currency)                    },
-          // Total Inv. e Valor Atual: o backend já converte para BRL via fx_rate
-          { label: 'Total Inv.',  value: fmtMoney(investedValue, 'BRL')                            },
-          { label: 'Valor Atual', value: hasQuote ? fmtMoney(item.current_value ?? null, 'BRL') : '—' },
-        ].map(({ label, value }) => (
+        {fields.map(({ label, value }) => (
           <div key={label}>
             <div style={{ fontSize: '0.65rem', marginBottom: 2, color: 'var(--color-text-faint)' }}>{label}</div>
             <div style={{ fontWeight: 500, fontSize: 'var(--text-xs)', ...cellText, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
@@ -499,22 +511,36 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
   )
 }
 
+// ── Colunas por tipo de classe ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+const COLS_DEFAULT = [
+  { key: 'ativo',      label: 'Ativo',       align: 'left',  width: '30%' },
+  { key: 'qtd',        label: 'Qtd',         align: 'right', width: '8%'  },
+  { key: 'pm',         label: 'P. Médio',   align: 'right', width: '11%' },
+  { key: 'pa',         label: 'P. Atual',    align: 'right', width: '11%', info: 'Cotação via BRAPI/yfinance' },
+  { key: 'inv',        label: 'Total Inv.',  align: 'right', width: '13%' },
+  { key: 'atual',      label: 'Valor Atual', align: 'right', width: '13%' },
+  { key: 'resultado',  label: 'Resultado',   align: 'right', width: '11%' },
+  { key: 'acoes',      label: '',            align: 'right', width: '3%'  },
+]
+
+// Renda Fixa: sem QTD, P. Médio nem P. Atual — apenas Total Inv. e Valor Atual
+const COLS_RENDA_FIXA = [
+  { key: 'ativo',      label: 'Ativo',       align: 'left',  width: '45%' },
+  { key: 'inv',        label: 'Total Inv.',  align: 'right', width: '20%' },
+  { key: 'atual',      label: 'Valor Atual', align: 'right', width: '20%' },
+  { key: 'resultado',  label: 'Resultado',   align: 'right', width: '12%' },
+  { key: 'acoes',      label: '',            align: 'right', width: '3%'  },
+]
+
 // ── ClassTable ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 function ClassTable({ group, portfolioId }: { group: PositionGroup; portfolioId: number }) {
   const isDesktop = useIsDesktop()
   const [collapsed, setCollapsed] = useState(false)
   const quoteTimestamp = getGroupQuoteTimestamp(group)
 
-  const COLS = [
-    { key: 'ativo',      label: 'Ativo',       align: 'left',  width: '30%' },
-    { key: 'qtd',        label: 'Qtd',         align: 'right', width: '8%'  },
-    { key: 'pm',         label: 'P. Médio',   align: 'right', width: '11%' },
-    { key: 'pa',         label: 'P. Atual',    align: 'right', width: '11%', info: 'Cotação via BRAPI/yfinance' },
-    { key: 'inv',        label: 'Total Inv.',  align: 'right', width: '13%' },
-    { key: 'atual',      label: 'Valor Atual', align: 'right', width: '13%' },
-    { key: 'resultado',  label: 'Resultado',   align: 'right', width: '11%' },
-    { key: 'acoes',      label: '',            align: 'right', width: '3%'  },
-  ]
+  const groupType = group.positions[0]?.asset_type ?? ''
+  const isRF = isRendaFixa(groupType)
+  const COLS = isRF ? COLS_RENDA_FIXA : COLS_DEFAULT
 
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
@@ -543,10 +569,10 @@ function ClassTable({ group, portfolioId }: { group: PositionGroup; portfolioId:
                 <tr style={{ borderBottom: '1px solid oklch(from var(--color-text) l c h / 0.06)' }}>
                   {COLS.map(col => (
                     <th key={col.key} style={{ padding: '0.5rem 1rem', textAlign: col.align as any, fontWeight: 500, fontSize: '0.68rem', letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
-                      {col.info ? (
+                      {(col as any).info ? (
                         <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3 }}>
                           {col.label}
-                          <span title={col.info} style={{ cursor: 'help', display: 'inline-flex', alignItems: 'center' }}>
+                          <span title={(col as any).info} style={{ cursor: 'help', display: 'inline-flex', alignItems: 'center' }}>
                             <svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={cellFaint}>
                               <circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><path d="M12 17h.01" />
                             </svg>
@@ -563,9 +589,9 @@ function ClassTable({ group, portfolioId }: { group: PositionGroup; portfolioId:
                   const hasQuote = item.current_price !== null && item.current_price !== undefined
                   const name = displayName(item.ticker, safeType)
                   const isTesouro = safeType.toUpperCase() === 'TESOURO_DIRETO' || safeType.toUpperCase() === 'TESOURO'
+                  const itemIsRF = isRendaFixa(safeType)
                   const varColor = (item.variation_value ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-notification)'
                   const investedValue = item.invested_value ?? item.quantity * item.average_price
-                  // Preços unitários: USD para STOCK/ETF_INT; BRL demais
                   const currency = isUsdAsset(safeType) ? 'USD' : 'BRL'
                   return (
                     <tr
@@ -574,6 +600,7 @@ function ClassTable({ group, portfolioId }: { group: PositionGroup; portfolioId:
                       onMouseEnter={e => (e.currentTarget.style.background = 'oklch(from var(--color-primary) l c h / 0.03)')}
                       onMouseLeave={e => (e.currentTarget.style.background = '')}
                     >
+                      {/* Coluna Ativo — sempre presente */}
                       <td style={{ padding: '0.75rem 1rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <AssetLogo ticker={item.ticker} assetType={safeType} size={28} logoUrl={item.logo_url} />
@@ -585,23 +612,35 @@ function ClassTable({ group, portfolioId }: { group: PositionGroup; portfolioId:
                           </div>
                         </div>
                       </td>
-                      <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>{fmtQty(item.quantity)}</td>
-                      {/* P. Médio e P. Atual: símbolo USD para ativos internacionais */}
-                      <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
-                        {fmtMoney(item.average_price, currency)}
-                      </td>
-                      <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                        <span style={hasQuote ? cellText : cellFaint}>
-                          {hasQuote ? fmtMoney(item.current_price, currency) : '—'}
-                        </span>
-                      </td>
-                      {/* Total Inv. e Valor Atual: sempre BRL (backend já converteu via fx_rate) */}
+
+                      {/* Colunas QTD / P. Médio / P. Atual — ocultas para RENDA_FIXA */}
+                      {!itemIsRF && (
+                        <>
+                          <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
+                            {fmtQty(item.quantity)}
+                          </td>
+                          <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
+                            {fmtMoney(item.average_price, currency)}
+                          </td>
+                          <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                            <span style={hasQuote ? cellText : cellFaint}>
+                              {hasQuote ? fmtMoney(item.current_price, currency) : '—'}
+                            </span>
+                          </td>
+                        </>
+                      )}
+
+                      {/* Total Inv. — sempre presente */}
                       <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
                         {fmtMoney(investedValue, 'BRL')}
                       </td>
+
+                      {/* Valor Atual — sempre presente */}
                       <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
                         {hasQuote ? fmtMoney(item.current_value ?? null, 'BRL') : <span style={cellFaint}>—</span>}
                       </td>
+
+                      {/* Resultado — sempre presente */}
                       <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
                         {hasQuote ? (
                           <div style={{ color: varColor }}>
@@ -610,6 +649,8 @@ function ClassTable({ group, portfolioId }: { group: PositionGroup; portfolioId:
                           </div>
                         ) : <span style={cellFaint}>—</span>}
                       </td>
+
+                      {/* Ações */}
                       <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>
                         <AssetMenu ticker={item.ticker} assetLabel={isTesouro ? item.ticker : (item.asset_label ?? item.ticker)} assetType={safeType} />
                       </td>

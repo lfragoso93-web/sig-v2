@@ -7,6 +7,45 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — Modal de Lançamento: Renda Fixa sem cotas (29/06/2026)
+
+**`frontend/src/components/AddTransactionModal.tsx`**
+- Para `asset_type = RENDA_FIXA`, o campo de quantidade agora se chama **"Valor Investido"** (sem rótulo de cotas)
+- Quantidade fixada em `1` automaticamente; o usuário informa apenas o valor
+- Campo de preço unitário oculto para renda fixa — apenas valor total é necessário
+- Labels e placeholders revisados para evitar confusão semântica com ativos de cotas
+
+---
+
+### Atualizado — Dependências Frontend (29/06/2026)
+
+**`frontend/package.json`**
+- `vite` 8.0.16 → **8.1.0**
+- `@vitejs/plugin-react` 6.0.2 → **6.0.3**
+- `autoprefixer` 10.4.20 → **10.5.2**
+- `postcss` 8.4.47 → **8.5.16**
+- `@tanstack/react-query` 5.59.0 → **5.101.2**
+
+**`backend/requirements.txt`**
+- `fastapi` ≥ 0.138.0 → **≥ 0.138.1** (via PR #76)
+
+---
+
+### Corrigido — Módulo de Rentabilidade Renda Fixa (28/06/2026)
+
+**`backend/app/services/rentabilidade_service.py`**
+- Corrigida normalização de `asset_type` para garantir comparação correta com enum `AssetType.RENDA_FIXA`
+- Corrigida comparação de `OperationType` enum ao calcular custo de compra vs. resgate
+- Isolamento de sessão: upsert de `fixed_income` executado em sessão própria para não corromper sessão principal
+- Cache de rentabilidade invalidado automaticamente após upsert de RF/TD
+- Endpoint `flush_cache` exposto para forçar recálculo manual
+
+**`backend/app/models/fixed_income.py` / migration 015**
+- Adicionado campo `daily_liquidity` (bool) à tabela `fixed_income_investments`
+- Migração Alembic `015_add_daily_liquidity_fixed_income` criada e aplicada
+
+---
+
 ### Corrigido — Evolução Patrimonial / Bug 3 (26/06/2026)
 
 **`backend/app/routers/portfolios.py`**

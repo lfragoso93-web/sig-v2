@@ -1,24 +1,212 @@
 from datetime import date as DateType
+from decimal import Decimal
 from typing import Optional
+import logging
+import re
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.core.database import get_db
+from app.core.database import get_db, AsyncSessionLocal
 from app.core.deps import get_current_user
 from app.models.user import User
 from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction, OperationType
+from app.models.fixed_income import FixedIncomeInvestment, IndexerType, FixedIncomeType
 from app.schemas.transaction import TransactionCreate, TransactionOut, PagedTransactions
 from app.schemas.asset import AssetCreate
 from app.services.asset_service import get_or_create_asset
 from app.services.dividend_backfill_service import backfill_dividends
 from app.services.asset_onboarding_service import run_onboarding
 from app.services.transaction_service import list_transactions_paginated
+from app.services.rentabilidade_service import flush_rentabilidade_cache
+
+log = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# ---------------------------------------------------------------------------
+# Mapeamentos de indexador
+# ---------------------------------------------------------------------------
+
+_RF_INDEXER_MAP: dict[str, IndexerType] = {
+    "CDI":       IndexerType.CDI,
+    "IPCA":      IndexerType.IPCA_PLUS,
+    "IPCA+":     IndexerType.IPCA_PLUS,
+    "SELIC":     IndexerType.SELIC,
+    "Prefixado": IndexerType.PREFIXADO,
+    "IGP-M":     IndexerType.IGPM_PLUS,
+    "Outro":     IndexerType.CDI,
+}
+
+_TD_INDEXER_MAP: dict[str, IndexerType] = {
+    "IPCA+":     IndexerType.IPCA_PLUS,
+    "Prefixado": IndexerType.PREFIXADO,
+    "SELIC":     IndexerType.SELIC,
+}
+
+_RF_FI_TYPE = FixedIncomeType.OUTROS
+_TD_FI_TYPE = FixedIncomeType.OUTROS
+
+
+def _parse_indexer_rf(value: Optional[str]) -> Optional[IndexerType]:
+    if not value:
+        return None
+    return _RF_INDEXER_MAP.get(value.strip())
+
+
+def _parse_indexer_td(value: Optional[str]) -> Optional[IndexerType]:
+    if not value:
+        return None
+    return _TD_INDEXER_MAP.get(value.strip())
+
+
+# ---------------------------------------------------------------------------
+# Parser de notes
+# ---------------------------------------------------------------------------
+
+def _parse_rf_meta_from_notes(notes: Optional[str]) -> dict:
+    result: dict = {
+        "indexer_str": None,
+        "rate": 0.0,
+        "maturity": None,
+        "issuer": "",
+        "daily_liquidity": False,
+    }
+    if not notes:
+        return result
+
+    m = re.search(r"Indexador:\s*([^|\-\n]+)", notes)
+    if m:
+        result["indexer_str"] = m.group(1).strip()
+
+    m = re.search(r"([0-9]+(?:[.,][0-9]+)?)\s*%\s*do\s+", notes, re.IGNORECASE)
+    if m:
+        result["rate"] = float(m.group(1).replace(",", "."))
+
+    if not result["rate"]:
+        m = re.search(r"Taxa:\s*([0-9]+(?:[.,][0-9]+)?)\s*%", notes, re.IGNORECASE)
+        if m:
+            result["rate"] = float(m.group(1).replace(",", "."))
+
+    m = re.search(r"Vencimento:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})", notes)
+    if m:
+        try:
+            from datetime import date
+            result["maturity"] = date.fromisoformat(m.group(1))
+        except ValueError:
+            pass
+
+    m = re.search(r"Emissor:\s*([^|\-\n]+)", notes)
+    if m:
+        result["issuer"] = m.group(1).strip()
+
+    if re.search(r"Liquidez:\s*Di", notes, re.IGNORECASE):
+        result["daily_liquidity"] = True
+        result["maturity"] = None
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Upsert fixed_income_investments — sessao isolada + invalida cache
+# ---------------------------------------------------------------------------
+
+async def _upsert_fixed_income_isolated(
+    portfolio_id: int,
+    ticker: str,
+    tx_date: DateType,
+    invested_amount: float,
+    notes: Optional[str],
+    asset_type: str,
+) -> None:
+    """
+    Cria ou atualiza fixed_income_investments em sessao propria.
+    Apos salvar, invalida o cache de rentabilidade para que o calculo
+    retroativo apareca imediatamente na proxima consulta do frontend.
+    """
+    try:
+        async with AsyncSessionLocal() as db:
+            meta = _parse_rf_meta_from_notes(notes)
+            at = asset_type.upper()
+
+            if at == "TESOURO_DIRETO":
+                indexer = _parse_indexer_td(meta["indexer_str"])
+            else:
+                indexer = _parse_indexer_rf(meta["indexer_str"])
+
+            if indexer is None:
+                log.warning(
+                    "[upsert_fi] indexador nao reconhecido '%s' para %s/%s — registro omitido",
+                    meta["indexer_str"], at, ticker,
+                )
+                return
+
+            result = await db.execute(
+                select(FixedIncomeInvestment).where(
+                    FixedIncomeInvestment.portfolio_id == portfolio_id,
+                    FixedIncomeInvestment.name == ticker,
+                )
+            )
+            fi = result.scalar_one_or_none()
+
+            institution = (meta["issuer"] or "").strip()
+            if not institution and at == "TESOURO_DIRETO":
+                institution = "Tesouro Nacional"
+
+            rate_decimal = Decimal(str(round(float(meta["rate"] or 0), 6)))
+            invested_decimal = Decimal(str(round(max(float(invested_amount), 0), 2)))
+
+            if fi is None:
+                fi = FixedIncomeInvestment(
+                    portfolio_id=portfolio_id,
+                    name=ticker,
+                    institution=institution,
+                    fixed_income_type=_RF_FI_TYPE,
+                    indexer=indexer,
+                    rate=rate_decimal,
+                    invested_amount=invested_decimal,
+                    date_start=tx_date,
+                    daily_liquidity=bool(meta["daily_liquidity"]),
+                    date_maturity=meta["maturity"],
+                    is_active=True,
+                    is_ir_exempt=False,
+                )
+                db.add(fi)
+                log.info(
+                    "[upsert_fi] CRIADO %s | portfolio=%s | indexer=%s | rate=%s | invested=%.2f",
+                    ticker, portfolio_id, indexer, rate_decimal, invested_amount,
+                )
+            else:
+                fi.indexer = indexer
+                fi.rate = rate_decimal
+                fi.invested_amount = invested_decimal
+                fi.daily_liquidity = bool(meta["daily_liquidity"])
+                fi.date_maturity = meta["maturity"]
+                if institution:
+                    fi.institution = institution
+                log.info(
+                    "[upsert_fi] ATUALIZADO %s | portfolio=%s | indexer=%s | rate=%s | invested=%.2f",
+                    ticker, portfolio_id, indexer, rate_decimal, invested_amount,
+                )
+
+            await db.commit()
+
+        # Invalida cache APOS o commit para garantir dados frescos
+        await flush_rentabilidade_cache(portfolio_id)
+        log.info("[upsert_fi] cache de rentabilidade invalidado para portfolio=%s", portfolio_id)
+
+    except Exception as exc:
+        log.error(
+            "[upsert_fi] ERRO ao salvar fixed_income_investments para %s/%s: %s",
+            ticker, portfolio_id, exc,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 def _to_operation(value: str) -> OperationType:
     try:
@@ -26,7 +214,7 @@ def _to_operation(value: str) -> OperationType:
     except ValueError:
         raise HTTPException(
             status_code=422,
-            detail=f"operation inválida: '{value}'. Use 'buy' ou 'sell'.",
+            detail=f"operation invalida: '{value}'. Use 'buy' ou 'sell'.",
         )
 
 
@@ -39,7 +227,7 @@ async def _get_portfolio(portfolio_id: int, user: User, db: AsyncSession) -> Por
     )
     p = result.scalar_one_or_none()
     if not p:
-        raise HTTPException(status_code=404, detail="Carteira não encontrada.")
+        raise HTTPException(status_code=404, detail="Carteira nao encontrada.")
     return p
 
 
@@ -82,33 +270,33 @@ async def _validate_sell(
             status_code=400,
             detail=(
                 f"Quantidade insuficiente para venda de {ticker}. "
-                f"Posição atual: {current_qty:.4f} | Tentativa: {quantity:.4f}"
+                f"Posicao atual: {current_qty:.4f} | Tentativa: {quantity:.4f}"
             ),
         )
 
 
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
+
 @router.get("/{portfolio_id}/transactions", response_model=PagedTransactions)
 async def list_transactions(
     portfolio_id: int,
-    page: int = Query(1, ge=1, description="Número da página (inicia em 1)"),
-    page_size: int = Query(50, ge=1, le=200, description="Itens por página (máx 200)"),
-    ticker: Optional[str] = Query(None, description="Filtrar por ticker (ex: PETR4)"),
-    operation: Optional[str] = Query(None, description="Filtrar por operação: buy | sell"),
-    date_from: Optional[DateType] = Query(None, description="Data inicial (YYYY-MM-DD)"),
-    date_to: Optional[DateType] = Query(None, description="Data final (YYYY-MM-DD)"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    ticker: Optional[str] = Query(None),
+    operation: Optional[str] = Query(None),
+    date_from: Optional[DateType] = Query(None),
+    date_to: Optional[DateType] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Lista transações da carteira com paginação e filtros opcionais.
-    Retorna envelope: { items, total, page, page_size, pages }
-    """
     await _get_portfolio(portfolio_id, current_user, db)
 
     if operation and operation.lower() not in {"buy", "sell"}:
         raise HTTPException(
             status_code=422,
-            detail=f"operation inválida: '{operation}'. Use 'buy' ou 'sell'.",
+            detail=f"operation invalida: '{operation}'. Use 'buy' ou 'sell'.",
         )
 
     return await list_transactions_paginated(
@@ -160,11 +348,24 @@ async def create_transaction(
     await db.commit()
     await db.refresh(tx)
 
-    asset_data = AssetCreate(
-        ticker=ticker,
-        name=ticker,
-        asset_type=asset_type,
-    )
+    # RF/TD: upsert em sessao isolada + invalida cache (via background_tasks)
+    if operation == OperationType.buy:
+        if asset_type == "RENDA_FIXA":
+            invested = float(payload.quantity) * float(payload.price)
+            background_tasks.add_task(
+                _upsert_fixed_income_isolated,
+                portfolio_id, ticker, payload.date, invested, payload.notes,
+                "RENDA_FIXA",
+            )
+        elif asset_type == "TESOURO_DIRETO":
+            invested = float(payload.quantity) * float(payload.price)
+            background_tasks.add_task(
+                _upsert_fixed_income_isolated,
+                portfolio_id, ticker, payload.date, invested, payload.notes,
+                "TESOURO_DIRETO",
+            )
+
+    asset_data = AssetCreate(ticker=ticker, name=ticker, asset_type=asset_type)
     await get_or_create_asset(db, asset_data)
 
     background_tasks.add_task(run_onboarding, ticker, str(asset_type))
@@ -174,7 +375,6 @@ async def create_transaction(
         ticker=ticker,
         asset_type=str(asset_type),
     )
-    # Passa a data da transacao para invalidar snapshots a partir dela
     background_tasks.add_task(
         _run_snapshot_backfill,
         portfolio_id=portfolio_id,
@@ -206,7 +406,7 @@ async def update_transaction(
     )
     tx = result.scalar_one_or_none()
     if not tx:
-        raise HTTPException(status_code=404, detail="Transação não encontrada.")
+        raise HTTPException(status_code=404, detail="Transacao nao encontrada.")
 
     ticker = payload.ticker.strip().upper()
     asset_type = payload.asset_type
@@ -215,8 +415,6 @@ async def update_transaction(
     if operation == OperationType.sell:
         await _validate_sell(db, portfolio_id, ticker, payload.quantity, exclude_tx_id=transaction_id)
 
-    # Guarda a menor data entre a data antiga e a nova para invalidar
-    # snapshots a partir do ponto mais antigo afetado pela edicao
     invalidate_from = min(tx.date, payload.date)
 
     tx.ticker = ticker
@@ -231,6 +429,22 @@ async def update_transaction(
 
     await db.commit()
     await db.refresh(tx)
+
+    if operation == OperationType.buy:
+        if asset_type == "RENDA_FIXA":
+            invested = float(payload.quantity) * float(payload.price)
+            background_tasks.add_task(
+                _upsert_fixed_income_isolated,
+                portfolio_id, ticker, payload.date, invested, payload.notes,
+                "RENDA_FIXA",
+            )
+        elif asset_type == "TESOURO_DIRETO":
+            invested = float(payload.quantity) * float(payload.price)
+            background_tasks.add_task(
+                _upsert_fixed_income_isolated,
+                portfolio_id, ticker, payload.date, invested, payload.notes,
+                "TESOURO_DIRETO",
+            )
 
     background_tasks.add_task(run_onboarding, ticker, str(asset_type))
     background_tasks.add_task(
@@ -269,11 +483,11 @@ async def delete_transaction(
     )
     tx = result.scalar_one_or_none()
     if not tx:
-        raise HTTPException(status_code=404, detail="Transação não encontrada.")
+        raise HTTPException(status_code=404, detail="Transacao nao encontrada.")
 
     ticker = tx.ticker
     asset_type = tx.asset_type
-    tx_date = tx.date  # guarda antes de deletar
+    tx_date = tx.date
 
     await db.delete(tx)
     await db.commit()
@@ -284,7 +498,6 @@ async def delete_transaction(
         ticker=ticker,
         asset_type=str(asset_type),
     )
-    # Invalida snapshots a partir da data da transacao deletada
     background_tasks.add_task(
         _run_snapshot_backfill,
         portfolio_id=portfolio_id,
@@ -292,9 +505,12 @@ async def delete_transaction(
     )
 
 
+# ---------------------------------------------------------------------------
+# Background tasks
+# ---------------------------------------------------------------------------
+
 async def _run_backfill(portfolio_id: int, ticker: str, asset_type: str) -> None:
     try:
-        from app.core.database import AsyncSessionLocal
         async with AsyncSessionLocal() as db:
             await backfill_dividends(
                 db=db,
@@ -303,25 +519,11 @@ async def _run_backfill(portfolio_id: int, ticker: str, asset_type: str) -> None
                 asset_type=asset_type,
             )
     except Exception as exc:
-        import logging
-        logging.getLogger(__name__).error(
-            "[backfill_dividends] erro para %s/%s: %s", ticker, portfolio_id, exc
-        )
+        log.error("[backfill_dividends] erro para %s/%s: %s", ticker, portfolio_id, exc)
 
 
 async def _run_snapshot_backfill(portfolio_id: int, tx_date: DateType) -> None:
-    """
-    1. Invalida todos os snapshots >= tx_date (remove do banco).
-    2. Roda backfill_snapshots para recalcular as datas removidas.
-
-    Se tx_date == hoje, nenhum snapshot existente e invalido
-    (hoje nao tem snapshot salvo ainda), entao o delete nao afeta nada
-    e o backfill apenas cria o snapshot do dia normalmente.
-    """
-    import logging
-    log = logging.getLogger(__name__)
     try:
-        from app.core.database import AsyncSessionLocal
         from app.services.portfolio_snapshot_service import (
             invalidate_snapshots_from,
             backfill_snapshots,
@@ -338,6 +540,4 @@ async def _run_snapshot_backfill(portfolio_id: int, tx_date: DateType) -> None:
                 portfolio_id, count,
             )
     except Exception as exc:
-        log.error(
-            "[snapshot_backfill] erro para portfolio %s: %s", portfolio_id, exc
-        )
+        log.error("[snapshot_backfill] erro para portfolio %s: %s", portfolio_id, exc)

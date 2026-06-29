@@ -4,9 +4,10 @@
 > Monorepo com backend FastAPI e frontend React + TypeScript.
 
 [![Python](https://img.shields.io/badge/Python-3.12-blue)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-green)](https://fastapi.tiangolo.com)
-[![React](https://img.shields.io/badge/React-18-blue)](https://react.dev)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://typescriptlang.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.138-green)](https://fastapi.tiangolo.com)
+[![React](https://img.shields.io/badge/React-19-blue)](https://react.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6.x-blue)](https://typescriptlang.org)
+[![Vite](https://img.shields.io/badge/Vite-8.1-purple)](https://vitejs.dev)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED)](https://docker.com)
 
 ---
@@ -25,12 +26,19 @@
 - **Gráfico de rentabilidade mensal** com benchmarks IBOV, CDI e IPCA
 - **Distribuição por classe** com barras de alocação e retorno
 - **Tabela por ativo** com filtros e toggle de posições zeradas
+- **Renda Fixa** calculada corretamente: rendimento por investimento com `asset_type` normalizado e sessão isolada
+
+### Modal de Lançamento
+- **Renda Fixa**: exibe apenas o campo "Valor Investido" — sem cotas
+- **Ações, FIIs, BDRs**: campos de quantidade e preço unitário normais
+- Labels e placeholders adaptados ao tipo de ativo selecionado
 
 ### Dados e automações
 - **Asset seed** via BRAPI com UPSERT idempotente e endpoint admin em background
 - **Snapshots patrimoniais** com backfill manual/admin e recuperação automática quando o gráfico não encontra base histórica
 - **Fallbacks em cascata** para Tesouro Direto, ativos internacionais e cripto
 - **Scheduler APScheduler** para rotinas automáticas de atualização
+- **Cache Redis** com invalidação automática após upsert de renda fixa/Tesouro Direto
 
 ### Outras páginas
 - **Patrimônio** — evolução diária/mensal, resumo mensal com rentabilidade por linha
@@ -38,7 +46,6 @@
 - **Proventos** — histórico de dividendos e JCP com gráficos
 - **IRPF** — apuração de ganho de capital (em construção)
 - **Metas** — CRUD com progresso automático (em construção)
-- **Renda Fixa** — cadastro e acompanhamento (em construção)
 
 ---
 
@@ -48,7 +55,7 @@
 | Tecnologia | Versão | Uso |
 |---|---|---|
 | Python | 3.12 | Linguagem base |
-| FastAPI | 0.115 | Framework web async |
+| FastAPI | ≥ 0.138.1 | Framework web async |
 | SQLAlchemy | 2.x async | ORM |
 | Alembic | 1.x | Migrations |
 | PostgreSQL | 15 | Banco de dados |
@@ -64,13 +71,13 @@
 ### Frontend
 | Tecnologia | Versão | Uso |
 |---|---|---|
-| React | 18 | UI |
-| TypeScript | 5.x | Tipagem |
-| Vite | 5.x | Build tool |
-| TailwindCSS | 3.x | Utilitários CSS |
-| Recharts | 2.x | Gráficos |
-| React Query | 5.x | Cache e estado servidor |
-| Zustand | — | Estado global |
+| React | 19 | UI |
+| TypeScript | 6.x | Tipagem |
+| Vite | 8.1 | Build tool |
+| TailwindCSS | 4.x | Utilitários CSS |
+| Recharts | 3.x | Gráficos |
+| React Query | 5.101 | Cache e estado servidor |
+| Zustand | 5.x | Estado global |
 | Lucide React | — | Ícones |
 | Axios | — | HTTP client |
 
@@ -160,11 +167,11 @@ Copie `.env.example` e preencha:
 Veja o roadmap completo em [ROADMAP_SPRINTS.md](./ROADMAP_SPRINTS.md).
 
 **Próximas prioridades:**
-- Tela de metas financeiras
-- Tela IRPF com exportação de relatório
-- Tela de renda fixa
-- Performance de queries
-- Logs de auditoria por usuário
+- Sprint 5B — Performance de queries
+- Sprint 6 — Qualidade visual & Rename SGI
+- Sprint 7 — Módulo IRPF completo
+- Sprint 8 — Análise de carteira
+- Sprint 9 — Janela global do ativo
 
 ---
 

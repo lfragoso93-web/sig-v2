@@ -134,7 +134,6 @@ function TogglePill({ label, checked, onChange }: {
         whiteSpace: 'nowrap',
       }}
     >
-      {/* indicador visual */}
       <span style={{
         display: 'inline-block',
         width: 8, height: 8,
@@ -205,7 +204,12 @@ export default function AddTransactionModal({ onClose }: Props) {
   const isRF           = tab.extraFields === 'renda_fixa'
   const isTesouro      = tab.extraFields === 'tesouro'
   const indexerOptions = isTesouro ? TD_INDEXERS : RF_INDEXERS
-  const modalTitle     = isEditMode ? `Editar — ${ticker}` : prefill?.ticker ? `Adicionar Cotas — ${prefill.ticker}` : 'Novo Lançamento'
+
+  const modalTitle = isEditMode
+    ? `Editar — ${ticker}`
+    : prefill?.ticker
+      ? `Adicionar Lançamento — ${prefill.ticker}`
+      : 'Novo Lançamento'
 
   const { quote, loading: quoteLoading, error: quoteError } = useTickerQuote(ticker, !!tab.brapiEnabled && !isEditMode, date)
   const { items: tdItems, loading: tdLoading }               = useTesouroSearch(ticker, isTesouro && !isEditMode)
@@ -213,7 +217,6 @@ export default function AddTransactionModal({ onClose }: Props) {
   const { price: tdPrice, loading: tdPriceLoading }          = useTreasuryPrice(activeSlug, date, isTesouro && !!activeSlug && !priceEdited)
   const anyLoading = quoteLoading || tdLoading || rvLoading || tdPriceLoading
 
-  // Zera vencimento quando liquidez diária é ativada
   useEffect(() => {
     if (dailyLiquidity) setMaturity('')
   }, [dailyLiquidity])
@@ -294,21 +297,42 @@ export default function AddTransactionModal({ onClose }: Props) {
       return
     }
 
-    const qty = parseFloat(quantity)
-    const prc = parseFloat(price)
     const fee = parseFloat(fees || '0')
 
-    if (!ticker.trim())         { setError('Informe o ticker/código do ativo.'); return }
-    if (isNaN(qty) || qty <= 0) { setError('Quantidade deve ser maior que zero.'); return }
-    if (isNaN(prc) || prc <= 0) { setError('Preço deve ser maior que zero.'); return }
+    if (!ticker.trim()) { setError('Informe o ticker/código do ativo.'); return }
     if ((isRF || isTesouro) && !indexer) { setError('Selecione o indexador.'); return }
+
+    let qty: number
+    let prc: number
+
+    if (isRF) {
+      // Renda Fixa: usuário informa apenas valor investido
+      // Enviamos quantity=1 e price=valor_investido ao backend
+      const valorInvestido = parseFloat(quantity)
+      if (isNaN(valorInvestido) || valorInvestido <= 0) {
+        setError('Informe o valor investido (deve ser maior que zero).')
+        return
+      }
+      qty = 1
+      prc = valorInvestido
+    } else {
+      qty = parseFloat(quantity)
+      prc = parseFloat(price)
+      if (isNaN(qty) || qty <= 0) { setError('Quantidade deve ser maior que zero.'); return }
+      if (isNaN(prc) || prc <= 0) { setError('Preço deve ser maior que zero.'); return }
+    }
 
     let enrichedNotes = notes.trim()
     if (assetName) enrichedNotes = [assetName, enrichedNotes].filter(Boolean).join(' - ')
     if (isRF || isTesouro) {
+      const rateLabel = isRF
+        // Renda Fixa: "110% do CDI" (percentual do indexador)
+        ? rate && indexer && `${rate}% do ${indexer}`
+        // Tesouro Direto: "Taxa: 5.82% a.a."
+        : rate && `Taxa: ${rate}% a.a.`
       const extras = [
         indexer         && `Indexador: ${indexer}`,
-        rate            && `Taxa: ${rate}% a.a.`,
+        rateLabel,
         dailyLiquidity  && 'Liquidez: Diária',
         !dailyLiquidity && maturity && `Vencimento: ${maturity}`,
         isRF && issuer  && `Emissor: ${issuer}`,
@@ -352,9 +376,17 @@ export default function AddTransactionModal({ onClose }: Props) {
   }
 
   const isBuy = operation === 'buy'
-  const totalValue = quantity && price
-    ? parseFloat(quantity) * parseFloat(price) + (isBuy ? 1 : -1) * parseFloat(fees || '0')
-    : null
+
+  const totalValue = (() => {
+    if (isRF) {
+      const val = parseFloat(quantity)
+      if (isNaN(val) || val <= 0) return null
+      return val + (isBuy ? 1 : -1) * parseFloat(fees || '0')
+    }
+    if (!quantity || !price) return null
+    return parseFloat(quantity) * parseFloat(price) + (isBuy ? 1 : -1) * parseFloat(fees || '0')
+  })()
+
   const total = totalValue !== null
     ? totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     : null
@@ -615,7 +647,6 @@ export default function AddTransactionModal({ onClose }: Props) {
                   display: 'flex', flexDirection: 'column', gap: '0.75rem',
                 }}>
 
-                  {/* Título do bloco + Toggle Liquidez Diária (só RF) */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                     <p style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-primary)', margin: 0 }}>
                       {isTesouro ? 'Dados do Título' : 'Dados do Ativo'}
@@ -636,9 +667,16 @@ export default function AddTransactionModal({ onClose }: Props) {
                         {indexerOptions.map(o => <option key={o} value={o}>{o}</option>)}
                       </Select>
                     </Field>
-                    <Field label="Taxa (% a.a.)" style={{ width: 100 }}>
-                      <Input type="number" value={rate} onChange={e => setRate(e.target.value)}
-                        placeholder={isTesouro ? 'ex: 5.82' : 'ex: 110'} min="0" step="any" />
+                    {/* RF: % do indexador (ex: 110% do CDI) | Tesouro: taxa a.a. (ex: 5.82% a.a.) */}
+                    <Field
+                      label={isRF ? '% do Indexador' : 'Taxa (% a.a.)'}
+                      style={{ width: 110 }}
+                    >
+                      <Input
+                        type="number" value={rate} onChange={e => setRate(e.target.value)}
+                        placeholder={isRF ? 'ex: 110' : 'ex: 5.82'}
+                        min="0" step="any"
+                      />
                     </Field>
                   </div>
 
@@ -670,35 +708,50 @@ export default function AddTransactionModal({ onClose }: Props) {
                 </div>
               )}
 
-              {/* Quantidade + Preço */}
+              {/* Valor/Quantidade + Preço */}
               <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <Field label={isRF || isTesouro ? 'Qtd / Cotas' : 'Quantidade'} style={{ flex: 1 }}>
-                  <Input type="number" value={quantity} onChange={e => setQuantity(e.target.value)}
-                    placeholder="0" min="0" step="any" />
-                </Field>
-                <Field
-                  label={`${isRF || isTesouro ? 'PU / Preço unit.' : 'Preço'} (${currency})`}
-                  style={{ flex: 1 }}
-                  badge={priceFromBrapi && (
-                    <span style={{
-                      display: 'flex', alignItems: 'center', gap: 3,
-                      fontSize: '0.65rem', fontWeight: 600,
-                      color: 'var(--color-primary)',
-                      background: 'oklch(from var(--color-primary) l c h / 0.1)',
-                      border: '1px solid oklch(from var(--color-primary) l c h / 0.2)',
-                      borderRadius: 'var(--radius-full)', padding: '1px 6px',
-                    }}>
-                      <Zap size={8} /> BRAPI
-                    </span>
-                  )}
-                >
-                  <Input
-                    type="number" value={price}
-                    onChange={e => { setPrice(e.target.value); setPriceFromBrapi(false); setPriceEdited(true) }}
-                    placeholder="0,00" min="0" step="any"
-                    highlight={priceFromBrapi}
-                  />
-                </Field>
+                {isRF ? (
+                  <Field label={`Valor Investido (${currency})`} style={{ flex: 1 }}>
+                    <Input
+                      type="number"
+                      value={quantity}
+                      onChange={e => setQuantity(e.target.value)}
+                      placeholder="0,00"
+                      min="0"
+                      step="0.01"
+                    />
+                  </Field>
+                ) : (
+                  <>
+                    <Field label={isTesouro ? 'Quantidade (títulos)' : 'Quantidade'} style={{ flex: 1 }}>
+                      <Input type="number" value={quantity} onChange={e => setQuantity(e.target.value)}
+                        placeholder="0" min="0" step="any" />
+                    </Field>
+                    <Field
+                      label={`${isTesouro ? 'PU / Preço unit.' : 'Preço'} (${currency})`}
+                      style={{ flex: 1 }}
+                      badge={priceFromBrapi && (
+                        <span style={{
+                          display: 'flex', alignItems: 'center', gap: 3,
+                          fontSize: '0.65rem', fontWeight: 600,
+                          color: 'var(--color-primary)',
+                          background: 'oklch(from var(--color-primary) l c h / 0.1)',
+                          border: '1px solid oklch(from var(--color-primary) l c h / 0.2)',
+                          borderRadius: 'var(--radius-full)', padding: '1px 6px',
+                        }}>
+                          <Zap size={8} /> BRAPI
+                        </span>
+                      )}
+                    >
+                      <Input
+                        type="number" value={price}
+                        onChange={e => { setPrice(e.target.value); setPriceFromBrapi(false); setPriceEdited(true) }}
+                        placeholder="0,00" min="0" step="any"
+                        highlight={priceFromBrapi}
+                      />
+                    </Field>
+                  </>
+                )}
               </div>
 
               {/* Taxas + Data */}

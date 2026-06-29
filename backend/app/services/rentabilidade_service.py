@@ -33,7 +33,8 @@ from app.services.portfolio_service import (
     _fetch_prices_batch,
 )
 from app.services.fx_service import get_usd_brl_today
-from app.core.cache import cache_get, cache_set
+from app.services.rf_calc_service import enrich_rf_positions
+from app.core.cache import cache_get, cache_set, cache_delete
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,11 @@ _PREFIX = "rent"
 _USD_ASSET_TYPES = {"STOCK", "ETF_INTERNACIONAL"}
 
 
+def _is_rf_type(asset_type: str) -> bool:
+    """Retorna True para Renda Fixa (case-insensitive)."""
+    return str(asset_type).upper() == "RENDA_FIXA"
+
+
 def _key(portfolio_id: int, suffix: str) -> str:
     return f"{_PREFIX}:{portfolio_id}:{suffix}"
 
@@ -52,6 +58,19 @@ def _safe_pct(gain: Decimal, base: Decimal) -> float:
     if base and base > 0:
         return round(float(gain / base * 100), 4)
     return 0.0
+
+
+async def flush_rentabilidade_cache(portfolio_id: int) -> None:
+    """
+    Invalida as tres chaves de cache de rentabilidade para a carteira.
+    Util para chamar apos lancamento de Renda Fixa para garantir
+    que o calculo retroativo apareca imediatamente na proxima consulta.
+    """
+    for suffix in ("kpis", "ativos", "classes"):
+        try:
+            await cache_delete(_key(portfolio_id, suffix))
+        except Exception:
+            pass
 
 
 async def _snapshot_at(
@@ -110,7 +129,6 @@ async def _proventos_total(
     try:
         from app.models.dividend import Dividend, DividendStatus
 
-        # Soma total_value para registros com status RECEBIDO
         value_col = func.coalesce(
             func.sum(
                 func.coalesce(Dividend.total_value, Dividend.total_received, Decimal("0"))
@@ -142,11 +160,6 @@ async def _get_realized_pnl_by_ticker(
     """
     Calcula o lucro realizado acumulado por ticker a partir das transacoes de venda.
     Usa media ponderada movel (FIFO) para apurar custo na hora da venda.
-
-    Para ativos USD (STOCK/ETF_INTERNACIONAL):
-      - O custo medio e acumulado em BRL (via fx_rate da transacao de compra).
-      - O preco de venda tambem e convertido para BRL usando fx_rate da venda.
-      - Isso garante que o realized_pnl seja sempre em BRL.
     """
     result = await db.execute(
         select(Transaction)
@@ -166,7 +179,6 @@ async def _get_realized_pnl_by_ticker(
         price = float(tx.price or 0)
         fees = float(tx.fees or 0)
 
-        # Determina se ativo e cotado em USD
         asset_type_raw = (
             tx.asset_type.value if hasattr(tx.asset_type, "value") else str(tx.asset_type or "")
         ).upper()
@@ -175,7 +187,6 @@ async def _get_realized_pnl_by_ticker(
             or normalize_type(asset_type_raw) in _USD_ASSET_TYPES
         )
 
-        # Obtem fx_rate salvo na transacao (fallback 1.0 para BRL)
         fx_rate = 1.0
         if is_usd:
             saved = getattr(tx, "fx_rate", None)
@@ -187,7 +198,7 @@ async def _get_realized_pnl_by_ticker(
 
         if ticker not in qty_map:
             qty_map[ticker] = 0.0
-            cost_map[ticker] = 0.0  # BRL
+            cost_map[ticker] = 0.0
             realized[ticker] = 0.0
             is_usd_map[ticker] = is_usd
 
@@ -197,14 +208,31 @@ async def _get_realized_pnl_by_ticker(
         elif tx.operation == OperationType.sell:
             sold = min(qty, qty_map[ticker])
             if qty_map[ticker] > 0:
-                avg_brl = cost_map[ticker] / qty_map[ticker]  # custo medio em BRL
-                # preco de venda tambem em BRL
+                avg_brl = cost_map[ticker] / qty_map[ticker]
                 realized[ticker] += sold * (price_brl - avg_brl)
                 cost_map[ticker] -= sold * avg_brl
             qty_map[ticker] = max(0.0, qty_map[ticker] - sold)
             cost_map[ticker] = max(0.0, cost_map[ticker])
 
     return realized
+
+
+async def _load_transactions_by_ticker(
+    db: AsyncSession,
+    portfolio_id: int,
+) -> dict[str, list]:
+    """Carrega todas as transactions da carteira agrupadas por ticker."""
+    result = await db.execute(
+        select(Transaction)
+        .where(Transaction.portfolio_id == portfolio_id)
+        .order_by(Transaction.date.asc(), Transaction.id.asc())
+    )
+    txs = result.scalars().all()
+    by_ticker: dict[str, list] = {}
+    for tx in txs:
+        key = tx.ticker.upper()
+        by_ticker.setdefault(key, []).append(tx)
+    return by_ticker
 
 
 async def _kpis_from_realtime(db: AsyncSession, portfolio_id: int) -> dict:
@@ -254,7 +282,6 @@ async def _kpis_from_realtime(db: AsyncSession, portfolio_id: int) -> dict:
     proventos_total = float(await _proventos_total(db, portfolio_id))
     proventos_12m = float(await _proventos_total(db, portfolio_id, since=today - timedelta(days=365)))
 
-    # Retorno sobre custo das posicoes abertas (base correta sem distorcao de aportes)
     retorno_total_pct = (total_pnl / total_invested * 100) if total_invested else 0.0
 
     return {
@@ -282,9 +309,6 @@ def _ret_between(
     snap_end: PortfolioSnapshot,
     snap_start: Optional[PortfolioSnapshot],
 ) -> float:
-    """
-    Calcula retorno percentual entre dois snapshots usando cost_basis como base.
-    """
     if snap_start is None:
         base = snap_end.cost_basis
         if not base or base == 0:
@@ -373,6 +397,19 @@ async def get_rentabilidade_por_ativo(db: AsyncSession, portfolio_id: int) -> li
         except Exception as e:
             logger.error("[rentabilidade] erro ao buscar cotacoes: %s", e)
 
+    # Injeta portfolio_id em cada posicao para o rf_calc_service buscar
+    # diretamente em fixed_income_investments sem depender de notes/regex.
+    positions_with_portfolio = [
+        {**p, "portfolio_id": portfolio_id} for p in positions_raw
+    ]
+
+    txs_by_ticker = await _load_transactions_by_ticker(db, portfolio_id)
+    rf_values: dict[str, float] = {}
+    try:
+        rf_values = await enrich_rf_positions(positions_with_portfolio, txs_by_ticker)
+    except Exception as e:
+        logger.warning("[rentabilidade] enrich_rf_positions falhou: %s", e)
+
     tickers_all = list({p["ticker"] for p in positions_raw} | set(realized_map.keys()))
     asset_names: dict[str, str] = {}
     asset_types_db: dict[str, str] = {}
@@ -411,13 +448,17 @@ async def get_rentabilidade_por_ativo(db: AsyncSession, portfolio_id: int) -> li
             except Exception:
                 pass
 
-        if current_price:
+        # FIX: usa _is_rf_type para comparacao case-insensitive
+        if _is_rf_type(asset_type) and ticker in rf_values:
+            current_value = rf_values[ticker]
+        elif current_price:
             current_value = qty * current_price
         else:
             current_value = qty * avg_price
-            logger.warning(
-                "[rentabilidade] sem cotacao para %s, usando preco medio", ticker
-            )
+            if not _is_rf_type(asset_type):
+                logger.warning(
+                    "[rentabilidade] sem cotacao para %s, usando preco medio", ticker
+                )
 
         unrealized = current_value - total_invested
         unrealized_pct = _safe_pct(

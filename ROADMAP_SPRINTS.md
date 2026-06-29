@@ -1,6 +1,6 @@
 # Roadmap de Sprints — SGI v2
 
-> Última atualização: 26/06/2026
+> Última atualização: 29/06/2026
 > Versão visual e interativa: [ROADMAP_VISUAL.md](./ROADMAP_VISUAL.md)
 
 ---
@@ -77,22 +77,38 @@
   - [x] Backfill automático em background ao acessar histórico
   - [x] Correção do filtro por classe com parse de enum `AssetType`
   - [x] Fallback via `Transaction.asset_type` quando `assets` não cobre o ticker
+- [x] **Fix rentabilidade renda fixa** — 28/06/2026
+  - [x] Normalização de `asset_type` corrigida (string → enum)
+  - [x] Comparação de `OperationType` enum corrigida
+  - [x] Sessão isolada para upsert de `fixed_income`
+  - [x] Cache invalidado após upsert RF/TD
+  - [x] Endpoint `flush_cache` exposto
+  - [x] Migration 015: campo `daily_liquidity` em `fixed_income_investments`
+- [x] **Fix modal de lançamento — renda fixa sem cotas** — 28/06/2026
+  - [x] `RENDA_FIXA` exibe apenas "Valor Investido" (sem campo de cotas)
+  - [x] Quantidade fixada em 1 automaticamente
+  - [x] Labels e placeholders revisados
+- [x] **Bump dependências frontend e backend** — 29/06/2026
+  - [x] `vite` 8.1.0, `plugin-react` 6.0.3, `autoprefixer` 10.5.2, `postcss` 8.5.16
+  - [x] `@tanstack/react-query` 5.101.2
+  - [x] `fastapi` ≥ 0.138.1
+- [x] **PR #78 criada** — `stable-15jun` → `main` — 29/06/2026
 
 ### Pendente
-- [ ] Tela de metas financeiras
-- [ ] Tela IRPF (exportação de relatório)
-- [ ] Tela de renda fixa
 - [ ] `GET /api/v1/assets`: listagem paginada com filtros
 - [ ] Tela de listagem de ativos no frontend
-- [ ] Fix `YFRateLimitError` para ativos internacionais (IVV, NVDA, INTR, TFLO)
+- [ ] Sprint 5B — Performance de queries + testes de integração proventos
 
 ---
 
-## 🔄 Sprint 5A — Botão + Lançamento no Mobile
+## 🔄 Sprint 5A — Botão + Lançamento no Mobile (Concluído — 26/06/2026)
 **Período:** Julho 2026 | [Issue #54](https://github.com/lfragoso93-web/sig-v2/issues/54)
 
-- [ ] Corrigir exibição do botão de adição rápida em telas móveis
-- [ ] Garantir acessibilidade e tamanho de toque adequado
+- [x] `BottomNav` adicionado ao `AppLayout`
+- [x] `main` com `padding-bottom` dinâmico: `calc(60px + env(safe-area-inset-bottom))`
+- [x] FAB 52×52px com elevação visual acima da barra
+- [x] Área de toque mínima 44×44px em todos os itens (WCAG 2.5.8)
+- [x] `aria-label` em todos os `NavLink` + `nav` + FAB
 
 ---
 
@@ -102,11 +118,12 @@
 - [ ] Mapear queries com tempo de execução elevado
 - [ ] Adicionar índices faltantes e otimizar joins
 - [ ] Revisar N+1 em listagens de posições e transações
+- [ ] Testes de integração do fluxo de proventos
 
 ---
 
 ## 🔄 Sprint 5C — Logs de Auditoria por Usuário
-**Período:** Julho 2026 | [Issue #54](https://github.com/lfragoso93-web/sig-v2/issues/54)
+**Período:** Julho 2026 → Movido para Sprint 7 | [Issue #56](https://github.com/lfragoso93-web/sig-v2/issues/56)
 
 - [ ] Criar modelo `AuditLog` (user_id, action, resource, timestamp, metadata)
 - [ ] Middleware ou decorator para captura automática de escrita
@@ -118,9 +135,10 @@
 ## 🔄 Sprint 5D — Proventos (Fechar Pendências)
 **Período:** Julho 2026 | [Issue #54](https://github.com/lfragoso93-web/sig-v2/issues/54)
 
-- [ ] Migrar `ProventosHistoricoTable.tsx` para CSS vars
-- [ ] Validar `ProventosDonutChart` com dados reais
-- [ ] Testes de integração do fluxo de proventos
+- [x] `ProventosHistoricoTable.tsx` — já usava CSS vars corretamente (validado)
+- [x] `ProventosDonutChart.tsx` — PALETTE migrada para `--color-chart-2..10`
+- [x] `ProventosDonutChart` consome dados reais via `useProventosDistribuicao` (validado)
+- [ ] Testes de integração do fluxo de proventos _(postergado para Sprint 5B)_
 
 ---
 
