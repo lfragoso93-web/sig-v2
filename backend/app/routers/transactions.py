@@ -20,6 +20,7 @@ from app.services.asset_service import get_or_create_asset
 from app.services.dividend_backfill_service import backfill_dividends
 from app.services.asset_onboarding_service import run_onboarding
 from app.services.transaction_service import list_transactions_paginated
+from app.services.rentabilidade_service import flush_rentabilidade_cache
 
 log = logging.getLogger(__name__)
 
@@ -29,7 +30,6 @@ router = APIRouter()
 # Mapeamentos de indexador
 # ---------------------------------------------------------------------------
 
-# Renda Fixa: % do indexador (ex: CDI 110%)
 _RF_INDEXER_MAP: dict[str, IndexerType] = {
     "CDI":       IndexerType.CDI,
     "IPCA":      IndexerType.IPCA_PLUS,
@@ -37,48 +37,36 @@ _RF_INDEXER_MAP: dict[str, IndexerType] = {
     "SELIC":     IndexerType.SELIC,
     "Prefixado": IndexerType.PREFIXADO,
     "IGP-M":     IndexerType.IGPM_PLUS,
-    "Outro":     IndexerType.CDI,   # fallback conservador
+    "Outro":     IndexerType.CDI,
 }
 
-# Tesouro Direto: taxa a.a. sobre o índice base
 _TD_INDEXER_MAP: dict[str, IndexerType] = {
     "IPCA+":     IndexerType.IPCA_PLUS,
     "Prefixado": IndexerType.PREFIXADO,
     "SELIC":     IndexerType.SELIC,
 }
 
-# Tipo de fixed_income_type por aba
 _RF_FI_TYPE = FixedIncomeType.OUTROS
-_TD_FI_TYPE = FixedIncomeType.OUTROS   # Tesouro não tem CDB/LCI etc.
+_TD_FI_TYPE = FixedIncomeType.OUTROS
 
 
 def _parse_indexer_rf(value: Optional[str]) -> Optional[IndexerType]:
-    """Converte string do modal Renda Fixa para IndexerType."""
     if not value:
         return None
     return _RF_INDEXER_MAP.get(value.strip())
 
 
 def _parse_indexer_td(value: Optional[str]) -> Optional[IndexerType]:
-    """Converte string do modal Tesouro Direto para IndexerType."""
     if not value:
         return None
     return _TD_INDEXER_MAP.get(value.strip())
 
 
 # ---------------------------------------------------------------------------
-# Parser de notes (único ponto de leitura dos notes no roteador)
+# Parser de notes
 # ---------------------------------------------------------------------------
 
 def _parse_rf_meta_from_notes(notes: Optional[str]) -> dict:
-    """
-    Extrai metadados RF/TD do campo notes enriquecido pelo modal.
-
-    Formato RF  : "Indexador: CDI | 110% do CDI | Vencimento: 2027-12-01 | Emissor: Banco XP - Nome Ativo"
-    Formato TD  : "Indexador: IPCA+ | Taxa: 5.82% a.a. | Vencimento: 2029-01-01 - Nome Título"
-
-    Retorna dict com: indexer_str, rate, maturity, issuer, daily_liquidity.
-    """
     result: dict = {
         "indexer_str": None,
         "rate": 0.0,
@@ -89,23 +77,19 @@ def _parse_rf_meta_from_notes(notes: Optional[str]) -> dict:
     if not notes:
         return result
 
-    # Indexador
     m = re.search(r"Indexador:\s*([^|\-\n]+)", notes)
     if m:
         result["indexer_str"] = m.group(1).strip()
 
-    # % do indexador  — formato RF: "110% do CDI"
     m = re.search(r"([0-9]+(?:[.,][0-9]+)?)\s*%\s*do\s+", notes, re.IGNORECASE)
     if m:
         result["rate"] = float(m.group(1).replace(",", "."))
 
-    # Taxa a.a. — formato TD: "Taxa: 5.82% a.a."
     if not result["rate"]:
         m = re.search(r"Taxa:\s*([0-9]+(?:[.,][0-9]+)?)\s*%", notes, re.IGNORECASE)
         if m:
             result["rate"] = float(m.group(1).replace(",", "."))
 
-    # Vencimento
     m = re.search(r"Vencimento:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})", notes)
     if m:
         try:
@@ -114,12 +98,10 @@ def _parse_rf_meta_from_notes(notes: Optional[str]) -> dict:
         except ValueError:
             pass
 
-    # Emissor (só presente em RF)
     m = re.search(r"Emissor:\s*([^|\-\n]+)", notes)
     if m:
         result["issuer"] = m.group(1).strip()
 
-    # Liquidez diária
     if re.search(r"Liquidez:\s*Di", notes, re.IGNORECASE):
         result["daily_liquidity"] = True
         result["maturity"] = None
@@ -128,7 +110,7 @@ def _parse_rf_meta_from_notes(notes: Optional[str]) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Upsert fixed_income_investments — executa em sessão PRÓPRIA e isolada
+# Upsert fixed_income_investments — sessao isolada + invalida cache
 # ---------------------------------------------------------------------------
 
 async def _upsert_fixed_income_isolated(
@@ -137,24 +119,18 @@ async def _upsert_fixed_income_isolated(
     tx_date: DateType,
     invested_amount: float,
     notes: Optional[str],
-    asset_type: str,          # "RENDA_FIXA" ou "TESOURO_DIRETO"
+    asset_type: str,
 ) -> None:
     """
-    Cria ou atualiza fixed_income_investments usando uma sessão DB própria,
-    completamente isolada da sessão da requisição HTTP.
-
-    Isso garante que qualquer falha aqui (coluna ausente, erro de validação,
-    etc.) NÃO corrompe a sessão principal nem reverte a transação já salva.
-
-    - RENDA_FIXA   : indexador % do CDI/IPCA/SELIC, emissor no notes.
-    - TESOURO_DIRETO: indexador com taxa a.a. (spread), sem emissor.
+    Cria ou atualiza fixed_income_investments em sessao propria.
+    Apos salvar, invalida o cache de rentabilidade para que o calculo
+    retroativo apareca imediatamente na proxima consulta do frontend.
     """
     try:
         async with AsyncSessionLocal() as db:
             meta = _parse_rf_meta_from_notes(notes)
             at = asset_type.upper()
 
-            # Seleciona o mapa de indexador correto por tipo de ativo
             if at == "TESOURO_DIRETO":
                 indexer = _parse_indexer_td(meta["indexer_str"])
             else:
@@ -162,12 +138,11 @@ async def _upsert_fixed_income_isolated(
 
             if indexer is None:
                 log.warning(
-                    "[upsert_fi] indexador não reconhecido '%s' para %s/%s — registro omitido",
+                    "[upsert_fi] indexador nao reconhecido '%s' para %s/%s — registro omitido",
                     meta["indexer_str"], at, ticker,
                 )
                 return
 
-            # Lookup por (portfolio_id, name)
             result = await db.execute(
                 select(FixedIncomeInvestment).where(
                     FixedIncomeInvestment.portfolio_id == portfolio_id,
@@ -176,7 +151,6 @@ async def _upsert_fixed_income_isolated(
             )
             fi = result.scalar_one_or_none()
 
-            # Garante que institution nunca seja None (campo NOT NULL no banco)
             institution = (meta["issuer"] or "").strip()
             if not institution and at == "TESOURO_DIRETO":
                 institution = "Tesouro Nacional"
@@ -219,8 +193,11 @@ async def _upsert_fixed_income_isolated(
 
             await db.commit()
 
+        # Invalida cache APOS o commit para garantir dados frescos
+        await flush_rentabilidade_cache(portfolio_id)
+        log.info("[upsert_fi] cache de rentabilidade invalidado para portfolio=%s", portfolio_id)
+
     except Exception as exc:
-        # Nunca deixa um erro aqui derrubar a transação principal
         log.error(
             "[upsert_fi] ERRO ao salvar fixed_income_investments para %s/%s: %s",
             ticker, portfolio_id, exc,
@@ -228,7 +205,7 @@ async def _upsert_fixed_income_isolated(
 
 
 # ---------------------------------------------------------------------------
-# Helpers de operação / carteira / quantidade
+# Helpers
 # ---------------------------------------------------------------------------
 
 def _to_operation(value: str) -> OperationType:
@@ -237,7 +214,7 @@ def _to_operation(value: str) -> OperationType:
     except ValueError:
         raise HTTPException(
             status_code=422,
-            detail=f"operation inválida: '{value}'. Use 'buy' ou 'sell'.",
+            detail=f"operation invalida: '{value}'. Use 'buy' ou 'sell'.",
         )
 
 
@@ -250,7 +227,7 @@ async def _get_portfolio(portfolio_id: int, user: User, db: AsyncSession) -> Por
     )
     p = result.scalar_one_or_none()
     if not p:
-        raise HTTPException(status_code=404, detail="Carteira não encontrada.")
+        raise HTTPException(status_code=404, detail="Carteira nao encontrada.")
     return p
 
 
@@ -293,7 +270,7 @@ async def _validate_sell(
             status_code=400,
             detail=(
                 f"Quantidade insuficiente para venda de {ticker}. "
-                f"Posição atual: {current_qty:.4f} | Tentativa: {quantity:.4f}"
+                f"Posicao atual: {current_qty:.4f} | Tentativa: {quantity:.4f}"
             ),
         )
 
@@ -305,22 +282,21 @@ async def _validate_sell(
 @router.get("/{portfolio_id}/transactions", response_model=PagedTransactions)
 async def list_transactions(
     portfolio_id: int,
-    page: int = Query(1, ge=1, description="Número da página (inicia em 1)"),
-    page_size: int = Query(50, ge=1, le=200, description="Itens por página (máx 200)"),
-    ticker: Optional[str] = Query(None, description="Filtrar por ticker (ex: PETR4)"),
-    operation: Optional[str] = Query(None, description="Filtrar por operação: buy | sell"),
-    date_from: Optional[DateType] = Query(None, description="Data inicial (YYYY-MM-DD)"),
-    date_to: Optional[DateType] = Query(None, description="Data final (YYYY-MM-DD)"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    ticker: Optional[str] = Query(None),
+    operation: Optional[str] = Query(None),
+    date_from: Optional[DateType] = Query(None),
+    date_to: Optional[DateType] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Lista transações da carteira com paginação e filtros opcionais."""
     await _get_portfolio(portfolio_id, current_user, db)
 
     if operation and operation.lower() not in {"buy", "sell"}:
         raise HTTPException(
             status_code=422,
-            detail=f"operation inválida: '{operation}'. Use 'buy' ou 'sell'.",
+            detail=f"operation invalida: '{operation}'. Use 'buy' ou 'sell'.",
         )
 
     return await list_transactions_paginated(
@@ -350,7 +326,7 @@ async def create_transaction(
     await _get_portfolio(portfolio_id, current_user, db)
 
     ticker = payload.ticker.strip().upper()
-    asset_type = payload.asset_type          # já normalizado pelo schema (uppercase)
+    asset_type = payload.asset_type
     operation = _to_operation(payload.operation)
 
     if operation == OperationType.sell:
@@ -372,12 +348,9 @@ async def create_transaction(
     await db.commit()
     await db.refresh(tx)
 
-    # ── Renda Fixa / Tesouro Direto: salva dados estruturados em sessão isolada ──
-    # IMPORTANTE: executado APÓS commit da transação principal para não contaminar
-    # a sessão caso ocorra qualquer erro na tabela auxiliar fixed_income_investments.
+    # RF/TD: upsert em sessao isolada + invalida cache (via background_tasks)
     if operation == OperationType.buy:
         if asset_type == "RENDA_FIXA":
-            # Frontend envia qty=1, price=valor_investido para RF
             invested = float(payload.quantity) * float(payload.price)
             background_tasks.add_task(
                 _upsert_fixed_income_isolated,
@@ -385,7 +358,6 @@ async def create_transaction(
                 "RENDA_FIXA",
             )
         elif asset_type == "TESOURO_DIRETO":
-            # Frontend envia qty=qtd_titulos, price=PU para TD
             invested = float(payload.quantity) * float(payload.price)
             background_tasks.add_task(
                 _upsert_fixed_income_isolated,
@@ -434,7 +406,7 @@ async def update_transaction(
     )
     tx = result.scalar_one_or_none()
     if not tx:
-        raise HTTPException(status_code=404, detail="Transação não encontrada.")
+        raise HTTPException(status_code=404, detail="Transacao nao encontrada.")
 
     ticker = payload.ticker.strip().upper()
     asset_type = payload.asset_type
@@ -458,7 +430,6 @@ async def update_transaction(
     await db.commit()
     await db.refresh(tx)
 
-    # ── Renda Fixa / Tesouro Direto: atualiza dados estruturados em sessão isolada ──
     if operation == OperationType.buy:
         if asset_type == "RENDA_FIXA":
             invested = float(payload.quantity) * float(payload.price)
@@ -512,7 +483,7 @@ async def delete_transaction(
     )
     tx = result.scalar_one_or_none()
     if not tx:
-        raise HTTPException(status_code=404, detail="Transação não encontrada.")
+        raise HTTPException(status_code=404, detail="Transacao nao encontrada.")
 
     ticker = tx.ticker
     asset_type = tx.asset_type
@@ -552,10 +523,6 @@ async def _run_backfill(portfolio_id: int, ticker: str, asset_type: str) -> None
 
 
 async def _run_snapshot_backfill(portfolio_id: int, tx_date: DateType) -> None:
-    """
-    1. Invalida todos os snapshots >= tx_date (remove do banco).
-    2. Roda backfill_snapshots para recalcular as datas removidas.
-    """
     try:
         from app.services.portfolio_snapshot_service import (
             invalidate_snapshots_from,
