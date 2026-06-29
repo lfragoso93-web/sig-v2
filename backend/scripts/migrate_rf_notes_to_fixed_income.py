@@ -11,8 +11,7 @@ Script de migracao one-shot:
     - Se nao existe: cria com base no primeiro buy encontrado para esse ticker.
 
 Uso:
-  cd backend
-  python -m scripts.migrate_rf_notes_to_fixed_income
+  docker compose exec backend python -m scripts.migrate_rf_notes_to_fixed_income
 
   Flags opcionais:
     --dry-run   Apenas imprime o que seria feito, sem gravar no banco.
@@ -79,7 +78,7 @@ def _parse_notes(notes: Optional[str]) -> _RFMeta:
         m2 = re.search(r"([0-9]+(?:[.,][0-9]+)?)\s*%\s*(?:do\s+)?CDI", n, re.IGNORECASE)
         if m2:
             meta.rate = float(m2.group(1).replace(",", "."))
-    # CDI sem percentual explícito
+    # CDI sem percentual explicito
     elif re.search(r"\bCDI\b", n, re.IGNORECASE) and not meta.indexer_str:
         meta.indexer_str = "CDI"
         meta.rate = 100.0
@@ -119,7 +118,7 @@ def _parse_notes(notes: Optional[str]) -> _RFMeta:
     if m:
         meta.issuer = m.group(1).strip()
 
-    # Liquidez diária
+    # Liquidez diaria
     if re.search(r"Liquidez\s*Di", n, re.IGNORECASE):
         meta.daily_liquidity = True
         meta.maturity = None
@@ -135,7 +134,7 @@ def _map_indexer(indexer_str: Optional[str]):
     s = indexer_str.strip().upper()
     mapping = {
         "CDI":       IndexerType.CDI,
-        "CDI+":      IndexerType.CDI,       # CDI+ tratado como CDI no modelo (spread via rate)
+        "CDI+":      IndexerType.CDI,
         "IPCA":      IndexerType.IPCA_PLUS,
         "IPCA+":     IndexerType.IPCA_PLUS,
         "SELIC":     IndexerType.SELIC,
@@ -155,7 +154,6 @@ def _map_indexer(indexer_str: Optional[str]):
 # ---------------------------------------------------------------------------
 
 async def _run(dry_run: bool, force: bool) -> None:
-    # Importacoes lazy para nao quebrar se script for rodado fora do contexto app
     from app.core.database import AsyncSessionLocal
     from app.models.transaction import Transaction, OperationType
     from app.models.fixed_income import (
@@ -163,7 +161,7 @@ async def _run(dry_run: bool, force: bool) -> None:
         FixedIncomeType,
         IndexerType,
     )
-    from sqlalchemy import select
+    from sqlalchemy import select, text
 
     log.info("=" * 60)
     log.info("Migracao RF notes -> fixed_income_investments")
@@ -171,26 +169,42 @@ async def _run(dry_run: bool, force: bool) -> None:
     log.info("=" * 60)
 
     async with AsyncSessionLocal() as db:
-        # 1. Busca todas as transactions RF de compra ordenadas por data
+        # 1. Busca todas as transactions — filtra RENDA_FIXA em Python
+        #    (evita cast() em coluna SAEnum que varia por banco)
         result = await db.execute(
-            select(Transaction)
-            .where(
-                Transaction.asset_type.in_(["RENDA_FIXA", "renda_fixa"])
-                | Transaction.asset_type.cast(str).ilike("%renda_fixa%")
+            select(Transaction).order_by(
+                Transaction.portfolio_id,
+                Transaction.ticker,
+                Transaction.date.asc(),
             )
-            .order_by(Transaction.portfolio_id, Transaction.ticker, Transaction.date.asc())
         )
-        all_txs = result.scalars().all()
+        all_txs_raw = result.scalars().all()
+
+        # Filtra apenas RENDA_FIXA em Python, independente de como o enum e salvo
+        all_txs = [
+            tx for tx in all_txs_raw
+            if str(
+                tx.asset_type.value
+                if hasattr(tx.asset_type, "value")
+                else tx.asset_type or ""
+            ).upper() == "RENDA_FIXA"
+        ]
 
         if not all_txs:
             log.info("Nenhuma transacao RENDA_FIXA encontrada. Nada a migrar.")
             return
 
-        # 2. Agrupa por (portfolio_id, ticker)
+        log.info("Total de transacoes RENDA_FIXA encontradas: %d", len(all_txs))
+
+        # 2. Agrupa por (portfolio_id, ticker) — apenas compras
         groups: dict[tuple[int, str], list] = {}
         for tx in all_txs:
-            op_val = tx.operation.value if hasattr(tx.operation, "value") else str(tx.operation)
-            if op_val.lower() not in ("buy", "compra"):
+            op_val = (
+                tx.operation.value
+                if hasattr(tx.operation, "value")
+                else str(tx.operation or "")
+            ).lower()
+            if op_val not in ("buy", "compra"):
                 continue
             key = (tx.portfolio_id, tx.ticker.upper())
             groups.setdefault(key, []).append(tx)
@@ -217,7 +231,7 @@ async def _run(dry_run: bool, force: bool) -> None:
                     skipped += 1
                     continue
 
-                # 4. Usa o primeiro buy com notes para extrair metadados
+                # 4. Procura o primeiro buy com notes que tenha indexador
                 meta: Optional[_RFMeta] = None
                 first_tx = txs[0]
                 for tx in txs:
@@ -229,22 +243,19 @@ async def _run(dry_run: bool, force: bool) -> None:
                             break
 
                 if meta is None:
-                    # Sem notes com indexador: tenta parse do primeiro mesmo assim
                     meta = _parse_notes(first_tx.notes)
 
                 indexer = _map_indexer(meta.indexer_str if meta else None)
 
                 if indexer is None:
                     log.warning(
-                        "SKIP portfolio=%s ticker=%s — indexador nao identificado "
-                        "(notes=%r)",
-                        portfolio_id, ticker,
-                        first_tx.notes,
+                        "SKIP portfolio=%s ticker=%s — indexador nao identificado (notes=%r)",
+                        portfolio_id, ticker, first_tx.notes,
                     )
                     skipped += 1
                     continue
 
-                # 5. Calcula invested_amount como soma de todos os aportes
+                # 5. invested_amount = soma de todos os aportes do ticker
                 invested_amount = sum(
                     float(tx.quantity or 0) * float(tx.price or 0) + float(tx.fees or 0)
                     for tx in txs
@@ -252,7 +263,7 @@ async def _run(dry_run: bool, force: bool) -> None:
 
                 log.info(
                     "%s portfolio=%s ticker=%s indexer=%s rate=%s invested=%.2f maturity=%s",
-                    "DRY-RUN" if dry_run else "CREATE" if fi is None else "UPDATE",
+                    "DRY-RUN" if dry_run else ("CREATE" if fi is None else "UPDATE"),
                     portfolio_id, ticker, indexer,
                     meta.rate if meta else 0,
                     invested_amount,
@@ -279,7 +290,6 @@ async def _run(dry_run: bool, force: bool) -> None:
                     )
                     db.add(fi)
                 else:
-                    # force=True: atualiza campos principais
                     fi.indexer = indexer
                     fi.rate = Decimal(str(meta.rate if meta else 0))
                     fi.invested_amount = Decimal(str(round(invested_amount, 2)))
@@ -291,9 +301,7 @@ async def _run(dry_run: bool, force: bool) -> None:
                 created += 1
 
             except Exception as e:
-                log.error(
-                    "ERRO portfolio=%s ticker=%s: %s", portfolio_id, ticker, e
-                )
+                log.error("ERRO portfolio=%s ticker=%s: %s", portfolio_id, ticker, e)
                 errors += 1
 
         if not dry_run:
