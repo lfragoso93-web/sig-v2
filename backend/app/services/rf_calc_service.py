@@ -4,11 +4,14 @@ rf_calc_service.py
 Calcula o valor atual estimado de posicoes de Renda Fixa usando o
 historico real de taxas armazenado na tabela rate_history (BCB).
 
-Logica:
-  Para cada aporte (transacao de compra):
-    1. Busca taxas diarias do periodo [data_aporte, hoje] em rate_history.
-    2. Calcula fator acumulado real: PROD(1 + taxa_diaria_i / 100)
-    3. valor_atual_aporte = valor_aporte * fator_acumulado
+Fonte de verdade para indexador/taxa: tabela fixed_income_investments.
+Nao existe mais leitura de notes/regex.
+
+Logica por aporte:
+  1. Busca dados estruturados em fixed_income_investments (indexer, rate).
+  2. Busca taxas diarias do periodo [data_aporte, hoje] em rate_history.
+  3. Calcula fator acumulado real: PROD(1 + taxa_diaria_i / 100)
+  4. valor_atual_aporte = valor_aporte * fator_acumulado
   current_value = soma dos valores atualizados de todos os aportes.
 
 Fallback: se o banco nao tiver dados do periodo, usa taxa anual corrente
@@ -17,16 +20,16 @@ Fallback: se o banco nao tiver dados do periodo, usa taxa anual corrente
 from __future__ import annotations
 
 import logging
-import re
 from datetime import date
 from decimal import Decimal
 from typing import Optional
 
 import httpx
-from sqlalchemy import text
+from sqlalchemy import text, select
 
 from app.core.cache import cache_get, cache_set
 from app.core.database import AsyncSessionLocal
+from app.models.fixed_income import FixedIncomeInvestment, IndexerType
 
 log = logging.getLogger(__name__)
 
@@ -38,7 +41,7 @@ BRAPI_BASE = "https://brapi.dev/api"
 
 
 # ---------------------------------------------------------------------------
-# Parser de notas
+# Lookup estruturado em fixed_income_investments
 # ---------------------------------------------------------------------------
 
 class RFParams:
@@ -51,34 +54,58 @@ class RFParams:
         return f"RFParams(indexer={self.indexer!r}, rate={self.rate}, spread={self.spread})"
 
 
-def parse_rf_notes(notes: Optional[str]) -> RFParams:
-    if not notes:
-        return RFParams("UNKNOWN")
-    n = notes.strip()
-    m = re.search(r"CDI\s*\+\s*([0-9]+(?:[.,][0-9]+)?)", n, re.IGNORECASE)
-    if m:
-        return RFParams("CDI_PLUS", spread=float(m.group(1).replace(",", ".")))
-    m = re.search(r"([0-9]+(?:[.,][0-9]+)?)\s*%\s*(?:do\s+)?CDI", n, re.IGNORECASE)
-    if m:
-        return RFParams("CDI_PCT", rate=float(m.group(1).replace(",", ".")))
-    if re.search(r"\bCDI\b", n, re.IGNORECASE):
-        return RFParams("CDI_PCT", rate=100.0)
-    m = re.search(r"IPCA\s*\+\s*([0-9]+(?:[.,][0-9]+)?)", n, re.IGNORECASE)
-    if m:
-        return RFParams("IPCA_PLUS", spread=float(m.group(1).replace(",", ".")))
-    if re.search(r"\bIPCA\b", n, re.IGNORECASE):
-        return RFParams("IPCA_PLUS", spread=0.0)
-    m = re.search(
-        r"(?:prefixado[\s:]*)?([0-9]+(?:[.,][0-9]+)?)\s*%(?:\s*a\.?a\.?)?",
-        n, re.IGNORECASE,
-    )
-    if m:
-        return RFParams("PREFIXADO", rate=float(m.group(1).replace(",", ".")))
+def _fi_to_params(fi: FixedIncomeInvestment) -> RFParams:
+    """Converte modelo fixed_income_investments para RFParams."""
+    rate = float(fi.rate or 0)
+    idx = fi.indexer
+
+    if idx == IndexerType.CDI:
+        # rate armazenado como percentual do CDI (ex: 110 = 110% do CDI)
+        return RFParams("CDI_PCT", rate=rate if rate > 0 else 100.0)
+
+    if idx == IndexerType.CDI_PLUS:
+        # rate armazenado como spread anual sobre o CDI
+        return RFParams("CDI_PLUS", spread=rate)
+
+    if idx == IndexerType.IPCA_PLUS:
+        return RFParams("IPCA_PLUS", spread=rate)
+
+    if idx == IndexerType.SELIC:
+        return RFParams("CDI_PCT", rate=rate if rate > 0 else 100.0)
+
+    if idx == IndexerType.PREFIXADO:
+        return RFParams("PREFIXADO", rate=rate)
+
+    if idx == IndexerType.IGPM_PLUS:
+        # Usar IPCA como proxy para IGP-M (fallback conservador)
+        return RFParams("IPCA_PLUS", spread=rate)
+
     return RFParams("UNKNOWN")
 
 
+async def _get_fi_record(
+    portfolio_id: int,
+    ticker: str,
+) -> Optional[FixedIncomeInvestment]:
+    """Busca registro em fixed_income_investments para o ticker na carteira."""
+    cache_key = f"fi_record:{portfolio_id}:{ticker}"
+    # Nao cacheia modelo ORM — busca sempre do banco para ter dados frescos
+    try:
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(FixedIncomeInvestment).where(
+                    FixedIncomeInvestment.portfolio_id == portfolio_id,
+                    FixedIncomeInvestment.name == ticker,
+                )
+            )
+            return result.scalar_one_or_none()
+    except Exception as e:
+        log.warning("[rf_calc] Falha ao buscar fi_record %s/%s: %s", ticker, portfolio_id, e)
+        return None
+
+
 # ---------------------------------------------------------------------------
-# Fator acumulado real via banco
+# Fator acumulado real via banco (rate_history)
 # ---------------------------------------------------------------------------
 
 FATOR_SQL = text("""
@@ -234,6 +261,14 @@ async def enrich_rf_positions(
     positions: list[dict],
     transactions_by_ticker: dict[str, list],
 ) -> dict[str, float]:
+    """
+    Enriquece posicoes de Renda Fixa com o valor atual estimado.
+
+    Para cada ticker RF:
+    - Busca parametros (indexer, rate) diretamente em fixed_income_investments.
+    - Calcula o valor atual via fator acumulado real (rate_history) ou fallback.
+    - Nao usa regex em notes.
+    """
     result: dict[str, float] = {}
 
     for pos in positions:
@@ -241,6 +276,7 @@ async def enrich_rf_positions(
             continue
 
         ticker = pos["ticker"]
+        portfolio_id = pos.get("portfolio_id")
         txs = transactions_by_ticker.get(ticker, [])
         if not txs:
             continue
@@ -252,17 +288,21 @@ async def enrich_rf_positions(
         if not buy_txs:
             continue
 
-        notes = None
-        for tx in reversed(buy_txs):
-            if getattr(tx, "notes", None):
-                notes = tx.notes
-                break
+        # --- Busca parametros RF diretamente no banco (sem regex) ---
+        params: Optional[RFParams] = None
+        if portfolio_id is not None:
+            fi_record = await _get_fi_record(portfolio_id, ticker)
+            if fi_record is not None:
+                params = _fi_to_params(fi_record)
 
-        params = parse_rf_notes(notes)
-        if params.indexer == "UNKNOWN":
-            log.debug("[rf_calc] %s sem indexador em notes=%r — pulando", ticker, notes)
+        if params is None or params.indexer == "UNKNOWN":
+            log.debug(
+                "[rf_calc] %s sem registro em fixed_income_investments (portfolio=%s) — pulando",
+                ticker, portfolio_id,
+            )
             continue
 
+        # --- Calculo dos aportes ---
         aportes: list[tuple[date, float]] = []
         total_aportado = 0.0
         for tx in buy_txs:
