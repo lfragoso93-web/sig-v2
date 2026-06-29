@@ -38,6 +38,7 @@ redis==5.2.1
 # reportlab: geracao de PDF no modulo IRPF
 reportlab==4.2.5
 # slowapi: rate limiting por IP para endpoints sensiveis (login, register)
-# limits: backend de storage do slowapi (memoria ou Redis)
+# limits >=5.8.0: major bump com melhorias de storage e suporte a Redis moderno
+# API publica do slowapi permanece identica - sem breaking changes no uso do projeto
 slowapi>=0.0.7
-limits>=3.7.0
+limits>=5.8.0
