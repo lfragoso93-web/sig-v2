@@ -14,7 +14,7 @@ pydantic[email]==2.13.4
 # pydantic-settings 2.14.2 - fix GHSA-4xgf-cpjx-pc3j
 # NestedSecretsSettingsSource seguia symlinks fora de secrets_dir (leitura arbitraria de arquivos)
 pydantic-settings==2.14.2
-alembic==1.18.4
+alembic==1.18.5
 httpx==0.27.2
 # yfinance 0.2.54 - corrige JSONDecodeError e YFTzMissingError causados por mudancas
 # na API interna do Yahoo Finance. Versoes anteriores (<=0.2.40) retornam HTML/vazio
