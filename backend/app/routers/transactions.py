@@ -8,7 +8,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, s
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.core.database import get_db
+from app.core.database import get_db, AsyncSessionLocal
 from app.core.deps import get_current_user
 from app.models.user import User
 from app.models.portfolio import Portfolio
@@ -128,11 +128,10 @@ def _parse_rf_meta_from_notes(notes: Optional[str]) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Upsert fixed_income_investments  — RENDA_FIXA e TESOURO_DIRETO separados
+# Upsert fixed_income_investments — executa em sessão PRÓPRIA e isolada
 # ---------------------------------------------------------------------------
 
-async def _upsert_fixed_income(
-    db: AsyncSession,
+async def _upsert_fixed_income_isolated(
     portfolio_id: int,
     ticker: str,
     tx_date: DateType,
@@ -141,80 +140,84 @@ async def _upsert_fixed_income(
     asset_type: str,          # "RENDA_FIXA" ou "TESOURO_DIRETO"
 ) -> None:
     """
-    Cria ou atualiza o registro em fixed_income_investments para o ticker RF/TD.
+    Cria ou atualiza fixed_income_investments usando uma sessão DB própria,
+    completamente isolada da sessão da requisição HTTP.
 
-    - RENDA_FIXA   : indexador % do CDI/IPCA/SELIC, emissor obrigatório no notes.
+    Isso garante que qualquer falha aqui (coluna ausente, erro de validação,
+    etc.) NÃO corrompe a sessão principal nem reverte a transação já salva.
+
+    - RENDA_FIXA   : indexador % do CDI/IPCA/SELIC, emissor no notes.
     - TESOURO_DIRETO: indexador com taxa a.a. (spread), sem emissor.
-
-    Falhas são logadas mas nunca propagadas — a transação já foi salva e não deve
-    ser revertida por causa de um erro na tabela auxiliar.
     """
     try:
-        meta = _parse_rf_meta_from_notes(notes)
-        at = asset_type.upper()
+        async with AsyncSessionLocal() as db:
+            meta = _parse_rf_meta_from_notes(notes)
+            at = asset_type.upper()
 
-        # Seleciona o mapa de indexador correto por tipo de ativo
-        if at == "TESOURO_DIRETO":
-            indexer = _parse_indexer_td(meta["indexer_str"])
-        else:
-            indexer = _parse_indexer_rf(meta["indexer_str"])
+            # Seleciona o mapa de indexador correto por tipo de ativo
+            if at == "TESOURO_DIRETO":
+                indexer = _parse_indexer_td(meta["indexer_str"])
+            else:
+                indexer = _parse_indexer_rf(meta["indexer_str"])
 
-        if indexer is None:
-            log.warning(
-                "[upsert_fi] indexador não reconhecido '%s' para %s/%s — registro omitido",
-                meta["indexer_str"], at, ticker,
+            if indexer is None:
+                log.warning(
+                    "[upsert_fi] indexador não reconhecido '%s' para %s/%s — registro omitido",
+                    meta["indexer_str"], at, ticker,
+                )
+                return
+
+            # Lookup por (portfolio_id, name)
+            result = await db.execute(
+                select(FixedIncomeInvestment).where(
+                    FixedIncomeInvestment.portfolio_id == portfolio_id,
+                    FixedIncomeInvestment.name == ticker,
+                )
             )
-            return
+            fi = result.scalar_one_or_none()
 
-        # Lookup por (portfolio_id, name)
-        result = await db.execute(
-            select(FixedIncomeInvestment).where(
-                FixedIncomeInvestment.portfolio_id == portfolio_id,
-                FixedIncomeInvestment.name == ticker,
-            )
-        )
-        fi = result.scalar_one_or_none()
+            # Garante que institution nunca seja None (campo NOT NULL no banco)
+            institution = (meta["issuer"] or "").strip()
+            if not institution and at == "TESOURO_DIRETO":
+                institution = "Tesouro Nacional"
 
-        # Garante que institution nunca seja None (campo NOT NULL no banco)
-        institution = (meta["issuer"] or "").strip()
-        if not institution and at == "TESOURO_DIRETO":
-            institution = "Tesouro Nacional"
+            rate_decimal = Decimal(str(round(float(meta["rate"] or 0), 6)))
+            invested_decimal = Decimal(str(round(max(float(invested_amount), 0), 2)))
 
-        rate_decimal = Decimal(str(round(float(meta["rate"] or 0), 6)))
-        invested_decimal = Decimal(str(round(max(float(invested_amount), 0), 2)))
+            if fi is None:
+                fi = FixedIncomeInvestment(
+                    portfolio_id=portfolio_id,
+                    name=ticker,
+                    institution=institution,
+                    fixed_income_type=_RF_FI_TYPE,
+                    indexer=indexer,
+                    rate=rate_decimal,
+                    invested_amount=invested_decimal,
+                    date_start=tx_date,
+                    daily_liquidity=bool(meta["daily_liquidity"]),
+                    date_maturity=meta["maturity"],
+                    is_active=True,
+                    is_ir_exempt=False,
+                )
+                db.add(fi)
+                log.info(
+                    "[upsert_fi] CRIADO %s | portfolio=%s | indexer=%s | rate=%s | invested=%.2f",
+                    ticker, portfolio_id, indexer, rate_decimal, invested_amount,
+                )
+            else:
+                fi.indexer = indexer
+                fi.rate = rate_decimal
+                fi.invested_amount = invested_decimal
+                fi.daily_liquidity = bool(meta["daily_liquidity"])
+                fi.date_maturity = meta["maturity"]
+                if institution:
+                    fi.institution = institution
+                log.info(
+                    "[upsert_fi] ATUALIZADO %s | portfolio=%s | indexer=%s | rate=%s | invested=%.2f",
+                    ticker, portfolio_id, indexer, rate_decimal, invested_amount,
+                )
 
-        if fi is None:
-            fi = FixedIncomeInvestment(
-                portfolio_id=portfolio_id,
-                name=ticker,
-                institution=institution,
-                fixed_income_type=_RF_FI_TYPE,
-                indexer=indexer,
-                rate=rate_decimal,
-                invested_amount=invested_decimal,
-                date_start=tx_date,
-                daily_liquidity=bool(meta["daily_liquidity"]),
-                date_maturity=meta["maturity"],
-                is_active=True,
-                is_ir_exempt=False,
-            )
-            db.add(fi)
-            log.info(
-                "[upsert_fi] CRIADO %s | portfolio=%s | indexer=%s | rate=%s | invested=%.2f",
-                ticker, portfolio_id, indexer, rate_decimal, invested_amount,
-            )
-        else:
-            fi.indexer = indexer
-            fi.rate = rate_decimal
-            fi.invested_amount = invested_decimal
-            fi.daily_liquidity = bool(meta["daily_liquidity"])
-            fi.date_maturity = meta["maturity"]
-            if institution:
-                fi.institution = institution
-            log.info(
-                "[upsert_fi] ATUALIZADO %s | portfolio=%s | indexer=%s | rate=%s | invested=%.2f",
-                ticker, portfolio_id, indexer, rate_decimal, invested_amount,
-            )
+            await db.commit()
 
     except Exception as exc:
         # Nunca deixa um erro aqui derrubar a transação principal
@@ -366,27 +369,29 @@ async def create_transaction(
         notes=payload.notes,
     )
     db.add(tx)
-
-    # ── Renda Fixa: salva dados estruturados (quantity=1, price=valor_investido) ──
-    if asset_type == "RENDA_FIXA" and operation == OperationType.buy:
-        # O frontend envia qty=1 e price=valor_investido para RF
-        invested = float(payload.quantity) * float(payload.price)
-        await _upsert_fixed_income(
-            db, portfolio_id, ticker, payload.date, invested, payload.notes,
-            asset_type="RENDA_FIXA",
-        )
-
-    # ── Tesouro Direto: salva dados estruturados (quantity=títulos, price=PU) ──
-    elif asset_type == "TESOURO_DIRETO" and operation == OperationType.buy:
-        # O frontend envia qty=qtd_titulos e price=PU para TD
-        invested = float(payload.quantity) * float(payload.price)
-        await _upsert_fixed_income(
-            db, portfolio_id, ticker, payload.date, invested, payload.notes,
-            asset_type="TESOURO_DIRETO",
-        )
-
     await db.commit()
     await db.refresh(tx)
+
+    # ── Renda Fixa / Tesouro Direto: salva dados estruturados em sessão isolada ──
+    # IMPORTANTE: executado APÓS commit da transação principal para não contaminar
+    # a sessão caso ocorra qualquer erro na tabela auxiliar fixed_income_investments.
+    if operation == OperationType.buy:
+        if asset_type == "RENDA_FIXA":
+            # Frontend envia qty=1, price=valor_investido para RF
+            invested = float(payload.quantity) * float(payload.price)
+            background_tasks.add_task(
+                _upsert_fixed_income_isolated,
+                portfolio_id, ticker, payload.date, invested, payload.notes,
+                "RENDA_FIXA",
+            )
+        elif asset_type == "TESOURO_DIRETO":
+            # Frontend envia qty=qtd_titulos, price=PU para TD
+            invested = float(payload.quantity) * float(payload.price)
+            background_tasks.add_task(
+                _upsert_fixed_income_isolated,
+                portfolio_id, ticker, payload.date, invested, payload.notes,
+                "TESOURO_DIRETO",
+            )
 
     asset_data = AssetCreate(ticker=ticker, name=ticker, asset_type=asset_type)
     await get_or_create_asset(db, asset_data)
@@ -450,24 +455,25 @@ async def update_transaction(
     tx.currency = payload.currency or "BRL"
     tx.notes = payload.notes
 
-    # ── Renda Fixa ──
-    if asset_type == "RENDA_FIXA" and operation == OperationType.buy:
-        invested = float(payload.quantity) * float(payload.price)
-        await _upsert_fixed_income(
-            db, portfolio_id, ticker, payload.date, invested, payload.notes,
-            asset_type="RENDA_FIXA",
-        )
-
-    # ── Tesouro Direto ──
-    elif asset_type == "TESOURO_DIRETO" and operation == OperationType.buy:
-        invested = float(payload.quantity) * float(payload.price)
-        await _upsert_fixed_income(
-            db, portfolio_id, ticker, payload.date, invested, payload.notes,
-            asset_type="TESOURO_DIRETO",
-        )
-
     await db.commit()
     await db.refresh(tx)
+
+    # ── Renda Fixa / Tesouro Direto: atualiza dados estruturados em sessão isolada ──
+    if operation == OperationType.buy:
+        if asset_type == "RENDA_FIXA":
+            invested = float(payload.quantity) * float(payload.price)
+            background_tasks.add_task(
+                _upsert_fixed_income_isolated,
+                portfolio_id, ticker, payload.date, invested, payload.notes,
+                "RENDA_FIXA",
+            )
+        elif asset_type == "TESOURO_DIRETO":
+            invested = float(payload.quantity) * float(payload.price)
+            background_tasks.add_task(
+                _upsert_fixed_income_isolated,
+                portfolio_id, ticker, payload.date, invested, payload.notes,
+                "TESOURO_DIRETO",
+            )
 
     background_tasks.add_task(run_onboarding, ticker, str(asset_type))
     background_tasks.add_task(
@@ -534,7 +540,6 @@ async def delete_transaction(
 
 async def _run_backfill(portfolio_id: int, ticker: str, asset_type: str) -> None:
     try:
-        from app.core.database import AsyncSessionLocal
         async with AsyncSessionLocal() as db:
             await backfill_dividends(
                 db=db,
@@ -552,7 +557,6 @@ async def _run_snapshot_backfill(portfolio_id: int, tx_date: DateType) -> None:
     2. Roda backfill_snapshots para recalcular as datas removidas.
     """
     try:
-        from app.core.database import AsyncSessionLocal
         from app.services.portfolio_snapshot_service import (
             invalidate_snapshots_from,
             backfill_snapshots,
