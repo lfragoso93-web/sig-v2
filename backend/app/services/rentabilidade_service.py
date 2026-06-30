@@ -254,6 +254,7 @@ async def _kpis_from_realtime(db: AsyncSession, portfolio_id: int) -> dict:
             "ganho_realizado": 0.0,
             "total_pnl": 0.0,
             "retorno_total_pct": 0.0,
+            "retorno_dia_pct": 0.0,
             "retorno_mes_pct": 0.0,
             "retorno_12m_pct": 0.0,
             "retorno_desde_inicio_pct": 0.0,
@@ -292,6 +293,8 @@ async def _kpis_from_realtime(db: AsyncSession, portfolio_id: int) -> dict:
         "ganho_realizado": round(realized_pnl, 2),
         "total_pnl": round(total_pnl, 2),
         "retorno_total_pct": round(retorno_total_pct, 4),
+        # Sem snapshots não é possível calcular variações de período
+        "retorno_dia_pct": 0.0,
         "retorno_mes_pct": 0.0,
         "retorno_12m_pct": 0.0,
         "retorno_desde_inicio_pct": round(retorno_total_pct, 4),
@@ -309,8 +312,23 @@ def _ret_between(
     snap_end: PortfolioSnapshot,
     snap_start: Optional[PortfolioSnapshot],
 ) -> float:
+    """
+    Retorna o percentual de rentabilidade entre dois snapshots.
+
+    Base de cálculo:
+      - Sem snap_start: usa invested_total do snap_end como base
+        (retorno total sobre capital aportado).
+      - Com snap_start: usa market_value do snap_start como base
+        (retorno do período sobre patrimônio inicial do período).
+        Isso evita distorção por aportes realizados dentro do intervalo,
+        aproximando-se do conceito de HPR (Holding Period Return).
+
+    ATENÇÃO: Para janelas longas com muitos aportes, o ideal seria TWR.
+    Esta implementação é uma aproximação simples adequada para exibição.
+    """
     if snap_start is None:
-        base = snap_end.cost_basis
+        # Retorno total: ganho acumulado sobre total aportado
+        base = snap_end.invested_total
         if not base or base == 0:
             return 0.0
         gain = snap_end.unrealized_pnl + snap_end.realized_pnl
@@ -320,9 +338,12 @@ def _ret_between(
     gain_realized = snap_end.realized_pnl - snap_start.realized_pnl
     total_gain = gain_unrealized + gain_realized
 
-    base = snap_start.cost_basis
+    # FIX: usa market_value do snapshot inicial como base do período,
+    # não cost_basis — evita superestimar retorno quando há aportes no período.
+    base = snap_start.market_value
     if not base or base == 0:
-        base = snap_end.cost_basis
+        # Fallback: tenta invested_total se market_value for zero
+        base = snap_start.invested_total
     if not base or base == 0:
         return 0.0
 
@@ -343,6 +364,7 @@ async def get_kpis(db: AsyncSession, portfolio_id: int) -> dict:
         payload = await _kpis_from_realtime(db, portfolio_id)
         return payload
 
+    snap_ontem = await _snapshot_at(db, portfolio_id, today - timedelta(days=1))
     snap_30d = await _snapshot_at(db, portfolio_id, today - timedelta(days=30))
     snap_12m = await _snapshot_at(db, portfolio_id, today - timedelta(days=365))
     snap_first = await _first_snapshot(db, portfolio_id)
@@ -361,6 +383,7 @@ async def get_kpis(db: AsyncSession, portfolio_id: int) -> dict:
         "ganho_realizado": float(snap_today.realized_pnl),
         "total_pnl": float(snap_today.total_pnl),
         "retorno_total_pct": ret_total,
+        "retorno_dia_pct": _ret_between(snap_today, snap_ontem),
         "retorno_mes_pct": _ret_between(snap_today, snap_30d),
         "retorno_12m_pct": _ret_between(snap_today, snap_12m),
         "retorno_desde_inicio_pct": ret_desde_inicio,
