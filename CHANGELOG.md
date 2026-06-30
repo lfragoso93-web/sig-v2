@@ -7,6 +7,127 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Planejado — Distribuição Ideal: BDRs + Reflexo no Resumo (Sprint 5E)
+
+> Criticidade: **Alta** | Esforço: Baixo-Médio | Impacto: Funcionalidade core
+
+**`backend/app/routers/class_targets.py`**
+- Incluir classe `BDR` no cálculo de alocação real vs. alvo
+- Endpoint atualizado para retornar `class_targets` com suporte a BDR
+
+**`frontend/src/pages/ResumePage.tsx`**
+- Exibir barra de distribuição alvo com delta colorido (real vs. configurado)
+- BDRs refletidos corretamente na distribuição da página de Resumo
+
+---
+
+### Planejado — Rentabilidade Diária, Mensal e Total (Sprint 5B — ampliado)
+
+> Criticidade: **Alta** | Esforço: Médio-Alto | Impacto: Precisão financeira
+
+**`backend/app/services/rentabilidade_service.py`**
+- Auditoria do cálculo de rentabilidade diária (base de comparação, preço de fechamento)
+- Revisão do método de cálculo mensal (TWR vs MWRR): documentar a escolha com justificativa
+- Validação da rentabilidade total acumulada contra cálculo manual de referência
+- Criação de dataset determinístico para testes dos três horizontes
+
+---
+
+### Planejado — Página Patrimônio Analítica (Sprint 6B — ampliado)
+
+> Criticidade: Média | Esforço: Médio | Impacto: UX / diferenciação visual
+
+**`frontend/src/pages/PatrimonioPage.tsx`**
+- Reformular página para foco analítico distinto da RentabilidadePage
+- Visão de composição: % de cada ativo dentro de sua classe (treemap ou barras empilhadas)
+- Métricas por ativo: peso, valor investido, valor atual, variação absoluta e relativa
+- Concentração de risco: top 5 ativos como % do patrimônio total
+- Comparativo alocação real vs. alvo com indicação visual de desvio
+- Evolução da composição ao longo do tempo (gráfico de área empilhada)
+- Tabela colapsável por classe com drill-down por ativo
+- Indicador de diversificação (via `analysis` router já existente)
+- Alertas de concentração excessiva (>30% em um único ativo)
+- Painel de "próximo aporte sugerido" baseado no desvio da alocação alvo
+
+---
+
+### Planejado — Otimização de Queries (Sprint 5B — ampliado)
+
+> Criticidade: **Alta** | Esforço: Alto | Impacto: Performance geral
+
+**`backend/app/`**
+- Mapear todas as queries críticas com `EXPLAIN ANALYZE`
+- Adicionar índices faltantes em colunas de filtro frequente
+- Corrigir padrões N+1 em listagens de posições e transações
+- Revisar joins em `rentabilidade_service`, `portfolio_class_evolution_service`
+- Documentar queries e tempos de execução antes e depois das otimizações
+
+---
+
+### Planejado — Remoção de Menções a APIs Externas (Sprint 6A — ampliado)
+
+> Criticidade: **Alta** | Esforço: Baixo | Impacto: Segurança / Compliance
+
+**Documentação pública (README, CHANGELOG, ROADMAP)**
+- Substituir todos os nomes explícitos de APIs externas por termos genéricos
+- Exemplo: "BRAPI" → "provedor de cotações", "Alpha Vantage" → "fonte de dados internacionais"
+- Manter nomes técnicos apenas em `.env.example` com comentários descritivos sem revelar fornecedor
+
+**`backend/app/` (Swagger/OpenAPI)**
+- Remover nomes de provedores em descrições de endpoints e schemas
+- Revisado: `brapi.py`, `tesouro_nacional.py`, `alpha_vantage.py` — sem vazamento de fornecedor nos logs públicos
+
+---
+
+### Planejado — Import de Ativos via CSV (Sprint 6D)
+
+> Criticidade: **Alta** | Esforço: Médio | Impacto: UX / Onboarding
+
+**Backend**
+- `GET /api/v1/assets/csv-template` — retorna CSV modelo para download pelo usuário
+- `POST /api/v1/portfolios/{id}/import-csv` — valida e importa ativos em lote
+- Validação linha a linha com relatório de erros detalhado
+- Importação atômica (tudo ou rollback)
+
+**Frontend**
+- Botão "Importar via CSV" na tela de transações
+- Modal com preview das linhas + confirmação antes de importar
+- Download do modelo CSV diretamente no modal
+
+---
+
+### Planejado — Logs de Auditoria por Usuário (Sprint 7B)
+
+> Criticidade: Média | Esforço: Médio | Impacto: Governança interna
+
+**Backend**
+- Modelo `AuditLog` (user_id, action, resource, timestamp, metadata JSON)
+- Middleware para captura automática de operações de escrita
+- Endpoint `GET /admin/users/{id}/audit` para superadmin com filtros
+- Exportação de log em CSV
+
+**Frontend**
+- Tela de auditoria no painel superadmin (tabela com filtros por usuário, data, ação)
+
+---
+
+### Planejado — Backup e Restore do Banco via Sistema (Sprint 10B)
+
+> Criticidade: **Alta** | Esforço: Médio-Alto | Impacto: Resiliência / Disaster Recovery
+
+**Backend**
+- `POST /api/v1/admin/database/backup` — gera dump PostgreSQL e retorna arquivo para download (superadmin)
+- `POST /api/v1/admin/database/restore` — recebe arquivo de backup e restaura (superadmin + confirmação por senha)
+- Backup armazenado em volume Docker com TTL de 24h
+- Todas as operações registradas no `AuditLog`
+- Testes de integração: ciclo backup → restore → verificação de integridade
+
+**Frontend**
+- Painel de administração com botões de backup e restore
+- Modal de confirmação com aviso de impacto antes do restore
+
+---
+
 ### Corrigido — Modal de Lançamento: Renda Fixa sem cotas (29/06/2026)
 
 **`frontend/src/components/AddTransactionModal.tsx`**
@@ -51,16 +172,10 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 **`backend/app/routers/portfolios.py`**
 - Endpoint `GET /portfolios/{portfolio_id}/patrimonio-history` agora detecta ausência de snapshots e dispara `backfill_snapshots` em background
 - Adicionado fallback on-the-fly para retornar a série histórica imediatamente, sem depender do backfill terminar
-- Agregação de todas as classes no modo `Todas as classes` quando a base histórica ainda não existe
 
 **`backend/app/services/portfolio_class_evolution_service.py`**
 - Corrigida comparação de `asset_type` com conversão explícita string → enum `AssetType`
 - Adicionado fallback por `Transaction.asset_type` quando o join com `assets` não encontra ticker correspondente
-- Melhorado tratamento para classe inválida com log explícito
-
-**`backend/app/services/portfolio_snapshot_service.py`**
-- Mantido fluxo de snapshots mensais como fonte principal do modo consolidado
-- Backfill admin/manual continua disponível para popular a base histórica completa
 
 ---
 
@@ -69,16 +184,11 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 **`frontend/src/pages/ResumePage.tsx`**
 - KpiCards migrados de `usePortfolioSummary` para `useRentabilidadeKpis`
 - 4 cards: Patrimônio Total, Resultado Total, Proventos 12m e Rentabilidade
-- Removidos `QuickNav` e seletor de carteira inline
 - Página enxuta: KPIs + evolução patrimonial + distribuição + tabela de posições
 
 **`frontend/src/components/charts/RentabilidadeChart.tsx`**
 - Gráfico de rentabilidade % mês a mês com benchmark
-- Barras da carteira + linhas de IBOV, CDI e IPCA
 - Filtro de período e toggles independentes
-
-**`frontend/src/pages/RentabilidadePage.tsx`**
-- `RentabilidadeChart` integrado entre KPIs e tabela de ativos
 
 ---
 
@@ -87,36 +197,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 **`frontend/src/styles/globals.css`**
 - Adicionadas classes `.table-dense`, `.badge`, `.badge-primary`, `.page-container`, `.page-header`, `.page-title`, `.page-subtitle`, `.input-xs`, `.text-muted`
 
-**`frontend/src/styles/components.css`**
-- `.positions-table` com `table-layout: fixed`
-- Overflow e ellipsis em colunas longas
-
-**`frontend/src/pages/Transacoes.tsx`**
-- Padronização de layout com tokens globais
-- Ajustes em tooltip e inputs compactos
-
-**`frontend/src/pages/PatrimonioPage.tsx`**
-- Extraído componente genérico `ToggleGroup`
-- Removido `overflow-hidden` onde cortava tooltip e estados ativos
-- Tabela mensal migrada para `.table-dense`
-
 ---
-
-### Corrigido — Tesouro Direto & Cripto (25/06/2026)
-
-**Backend — `brapi.py`**
-- Adicionada 3ª camada de fallback para Tesouro Direto
-- Token inválido agora cai corretamente em fallback sem quebrar o fluxo
-
-**Backend — `tesouro_nacional.py`**
-- Headers anti-403 e fallback adicional para endpoint oficial
-
-**Backend — `rentabilidade_service.py`**
-- `_proventos_total` corrigido para usar `Dividend.total_value`
-
-**Backend — serviços de cotação**
-- `quotes_service.py`: resolução robusta de slugs do Tesouro
-- `_normalize_crypto_ticker`: mapa ampliado para nomes completos de cripto
 
 ### Adicionado — Página de Rentabilidade (25/06/2026)
 
@@ -129,18 +210,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 - `rentabilidadeService.ts` + `useRentabilidade.ts` + `RentabilidadePage.tsx`
 - UI com 8 KPIs, barra por classe e tabela por ativo
 
+---
+
 ### Adicionado (anterior)
-- `asset_seed_service.py`: popula tabela `assets` via BRAPI com UPSERT
+- `asset_seed_service.py`: popula tabela `assets` com UPSERT
 - `POST /api/v1/admin/assets/seed`: endpoint superadmin + background task
 - Job semanal automático para seed incremental
 - Backfill histórico de preços com ordenação por prioridade de tipo
 - Aba **BDR** no modal de transações do frontend
-- Endpoints/admin de backfill de snapshots para recuperação da base histórica
-
-### Corrigido (anterior)
-- Boot sequence sem Etapa 3 redundante de proventos
-- `ImportError upsert_daily_prices` removido de `asset_onboarding_service`
-- Background task do seed com log de início + traceback completo
 
 ---
 
@@ -159,14 +236,11 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 - Scheduler APScheduler com 7 jobs
 - Rate limiter global via SlowAPI
 - Cache Redis com TTL configurável por endpoint
-- Integração Alpha Vantage com rate limiter dedicado
-- Health check real com PostgreSQL e Redis
 - Suporte a ativos internacionais
 
 ### Alterado
 - Autenticação migrada para JWT com refresh token rotativo
 - Senhas com bcrypt v5
-- Modelos de banco com soft-delete e timestamps automáticos
 
 ### Corrigido
 - `price_history_service`: race condition em upsert paralelo
@@ -182,11 +256,8 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 - Módulos core: auth, users, portfolios, transactions, positions, dividends, proventos, performance
 - Seed automático do superadmin no entrypoint
 - Configuração de CORS, middleware de logging, handler global de exceções
-- Integração BRAPI: cotações, histórico, dados de ativos, Tesouro Direto
-- Integração yfinance: fallback para ativos internacionais
-- Modelo `Asset`
-- Modelo `AssetPrice`
-- Modelo `AssetDividend`
+- Integrações com serviços externos de dados de mercado (cotações, histórico, Tesouro Direto, ativos internacionais)
+- Modelos: `Asset`, `AssetPrice`, `AssetDividend`
 - Migrations Alembic versionadas
 
 ---
