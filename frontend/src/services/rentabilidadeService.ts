@@ -10,6 +10,8 @@ export interface RentabilidadeKpis {
   ganho_realizado:          number
   total_pnl:                number
   retorno_total_pct:        number
+  /** Variação do dia (D atual vs. último snapshot anterior). Sprint 5B fix. */
+  retorno_dia_pct:          number
   retorno_mes_pct:          number
   retorno_12m_pct:          number
   retorno_desde_inicio_pct: number
