@@ -22,6 +22,9 @@ _BRAPI_TICKER_INVALID_TTL = 86400.0  # 24h para tickers marcados como invalidos
 # Tamanho maximo de tickers por request /quote
 BRAPI_QUOTE_CHUNK = 20
 
+# Tamanho maximo de tickers por request de dividendos (limite BRAPI)
+BRAPI_DIVIDENDS_CHUNK = 20
+
 # Regex para extrair o codigo base de um ticker de cripto.
 _CRYPTO_SUFFIX_RE = re.compile(r"[-/](USD|BRL|USDT|USDC|EUR|GBP|BTC)$", re.IGNORECASE)
 
@@ -642,6 +645,225 @@ async def fetch_crypto_available_all(limit: int = 500) -> list[dict]:
         page += 1
 
     return all_coins
+
+
+# ── Dividendos em batch — /api/v2/stocks/dividends e /api/v2/fii/dividends ──────────────────────
+
+# Estrutura de retorno normalizada para um provento individual
+# { ex_date, payment_date, value_per_unit, dividend_type }
+_DividendRow = dict  # alias legivel
+
+
+def _parse_dividend_items(raw_items: list[dict]) -> list[_DividendRow]:
+    """
+    Normaliza a lista de proventos retornada pela BRAPI em um formato interno
+    consistente, independente do endpoint (stocks ou fii).
+    """
+    rows: list[_DividendRow] = []
+    for item in raw_items:
+        # ex_date: lastDatePrior (stocks) ou exDate (fii) ou approvedOn
+        ex_str = (
+            item.get("lastDatePrior")
+            or item.get("exDate")
+            or item.get("ex_date")
+            or item.get("approvedOn")
+            or ""
+        )
+        # payment_date: paymentDate ou paidAt
+        pay_str = (
+            item.get("paymentDate")
+            or item.get("paidAt")
+            or item.get("payment_date")
+            or ""
+        )
+        # value: rate (stocks) ou value (fii)
+        raw_val = item.get("rate") or item.get("value") or item.get("amount") or 0
+        # type: type ou dividendType
+        div_type_raw = str(
+            item.get("type") or item.get("dividendType") or "DIVIDENDO"
+        ).upper()
+
+        if not ex_str:
+            continue
+        try:
+            ex_date = date.fromisoformat(str(ex_str)[:10])
+            pay_date = date.fromisoformat(str(pay_str)[:10]) if pay_str else None
+            value = float(raw_val)
+        except (ValueError, TypeError):
+            continue
+
+        if value <= 0:
+            continue
+
+        rows.append({
+            "ex_date": ex_date,
+            "payment_date": pay_date,
+            "value_per_unit": value,
+            "dividend_type": div_type_raw,
+        })
+    return rows
+
+
+async def fetch_stocks_dividends_batch(
+    tickers: list[str],
+) -> dict[str, list[_DividendRow]]:
+    """
+    Busca historico de proventos para ACAO, BDR e ETF_NACIONAL via
+    GET /api/v2/stocks/dividends?symbols=TICK1,TICK2,...
+
+    Aceita ate BRAPI_DIVIDENDS_CHUNK (20) tickers por chamada.
+    Retorna { ticker_upper: [DividendRow, ...] }.
+    Tickers sem proventos retornam lista vazia.
+    """
+    if not tickers:
+        return {}
+
+    results: dict[str, list[_DividendRow]] = {t.upper(): [] for t in tickers}
+    headers = _auth_headers()
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        for i in range(0, len(tickers), BRAPI_DIVIDENDS_CHUNK):
+            chunk = [t.upper() for t in tickers[i: i + BRAPI_DIVIDENDS_CHUNK]]
+            symbols = ",".join(chunk)
+            try:
+                resp = await client.get(
+                    f"{BRAPI_BASE}/v2/stocks/dividends",
+                    headers=headers,
+                    params={"symbols": symbols},
+                )
+                if resp.status_code in (401, 403):
+                    logger.warning(
+                        "[brapi] fetch_stocks_dividends_batch: sem autorizacao "
+                        "(plano BRAPI pode nao incluir dividends) — chunk=%s", chunk
+                    )
+                    continue
+                resp.raise_for_status()
+                data = resp.json()
+
+                # Resposta esperada: { results: [{ symbol, dividends: [...] }, ...] }
+                result_items = (
+                    data.get("results")
+                    or data.get("stocks")
+                    or data.get("dividends")
+                    or []
+                )
+
+                for entry in result_items:
+                    symbol = (
+                        entry.get("symbol")
+                        or entry.get("ticker")
+                        or entry.get("stock")
+                        or ""
+                    ).upper()
+                    if not symbol:
+                        continue
+                    raw_divs = (
+                        entry.get("dividends")
+                        or entry.get("cashDividends")
+                        or entry.get("data")
+                        or []
+                    )
+                    parsed = _parse_dividend_items(raw_divs)
+                    if symbol in results:
+                        results[symbol] = parsed
+                    logger.debug(
+                        "[brapi] fetch_stocks_dividends_batch: %s — %d proventos",
+                        symbol, len(parsed),
+                    )
+
+            except httpx.HTTPStatusError as e:
+                logger.warning(
+                    "[brapi] fetch_stocks_dividends_batch HTTP %s no chunk %s: %s",
+                    e.response.status_code, chunk, e,
+                )
+            except Exception as e:
+                logger.warning(
+                    "[brapi] fetch_stocks_dividends_batch erro no chunk %s: %s",
+                    chunk, e,
+                )
+
+    return results
+
+
+async def fetch_fii_dividends_batch(
+    tickers: list[str],
+) -> dict[str, list[_DividendRow]]:
+    """
+    Busca historico de proventos para FII via
+    GET /api/v2/fii/dividends?symbols=FII1,FII2,...
+
+    Aceita ate BRAPI_DIVIDENDS_CHUNK (20) tickers por chamada.
+    Retorna { ticker_upper: [DividendRow, ...] }.
+    Tickers sem proventos retornam lista vazia.
+    """
+    if not tickers:
+        return {}
+
+    results: dict[str, list[_DividendRow]] = {t.upper(): [] for t in tickers}
+    headers = _auth_headers()
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        for i in range(0, len(tickers), BRAPI_DIVIDENDS_CHUNK):
+            chunk = [t.upper() for t in tickers[i: i + BRAPI_DIVIDENDS_CHUNK]]
+            symbols = ",".join(chunk)
+            try:
+                resp = await client.get(
+                    f"{BRAPI_BASE}/v2/fii/dividends",
+                    headers=headers,
+                    params={"symbols": symbols},
+                )
+                if resp.status_code in (401, 403):
+                    logger.warning(
+                        "[brapi] fetch_fii_dividends_batch: sem autorizacao "
+                        "(plano BRAPI pode nao incluir dividends) — chunk=%s", chunk
+                    )
+                    continue
+                resp.raise_for_status()
+                data = resp.json()
+
+                # Resposta esperada: { results: [{ symbol, dividends: [...] }, ...] }
+                result_items = (
+                    data.get("results")
+                    or data.get("fiis")
+                    or data.get("dividends")
+                    or []
+                )
+
+                for entry in result_items:
+                    symbol = (
+                        entry.get("symbol")
+                        or entry.get("ticker")
+                        or entry.get("fii")
+                        or ""
+                    ).upper()
+                    if not symbol:
+                        continue
+                    raw_divs = (
+                        entry.get("dividends")
+                        or entry.get("cashDividends")
+                        or entry.get("data")
+                        or []
+                    )
+                    parsed = _parse_dividend_items(raw_divs)
+                    if symbol in results:
+                        results[symbol] = parsed
+                    logger.debug(
+                        "[brapi] fetch_fii_dividends_batch: %s — %d proventos",
+                        symbol, len(parsed),
+                    )
+
+            except httpx.HTTPStatusError as e:
+                logger.warning(
+                    "[brapi] fetch_fii_dividends_batch HTTP %s no chunk %s: %s",
+                    e.response.status_code, chunk, e,
+                )
+            except Exception as e:
+                logger.warning(
+                    "[brapi] fetch_fii_dividends_batch erro no chunk %s: %s",
+                    chunk, e,
+                )
+
+    return results
 
 
 # ── Histórico diário de preços ────────────────────────────────────────────────────────────────────
