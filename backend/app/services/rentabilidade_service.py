@@ -16,13 +16,17 @@ Histórico de fixes:
   Sprint 5B — retorno_mes_pct corrigido para usar o 1º dia do mês calendário
                em vez de D-30 corridos.
                retorno_dia_pct agora trata fins de semana e feriados buscando
-               o snapshot mais recente anterior ao dia corrente (<=  D-1),
+               o snapshot mais recente anterior ao dia corrente (<= D-1),
                evitando retornar 0.0 em dias sem snapshot exato de D-1.
                retorno_12m_pct mantido em D-365 (janela móvel de 12m).
   Sprint 5B — _proventos_total: removido total_received do COALESCE pois a
                coluna existe no modelo mas nunca foi criada via migration.
                Usa apenas total_value (campo principal) com fallback para
                net_value (campo alternativo sempre presente).
+  Sprint 5B — get_rentabilidade_por_ativo: eliminado N+1 de get_usd_brl_today
+               dentro do loop de ativos. Eliminada segunda query de transactions
+               em _get_realized_pnl_by_ticker — reutiliza txs já carregados
+               por _load_transactions_by_ticker via _calc_realized_from_txs.
 """
 from __future__ import annotations
 
@@ -196,25 +200,23 @@ async def _proventos_total(
         return Decimal("0")
 
 
-async def _get_realized_pnl_by_ticker(
-    db: AsyncSession,
-    portfolio_id: int,
+def _calc_realized_from_txs(
+    txs: list,
 ) -> dict[str, float]:
     """
-    Calcula o lucro realizado acumulado por ticker a partir das transacoes de venda.
-    Usa media ponderada movel (FIFO) para apurar custo na hora da venda.
-    """
-    result = await db.execute(
-        select(Transaction)
-        .where(Transaction.portfolio_id == portfolio_id)
-        .order_by(Transaction.date.asc(), Transaction.id.asc())
-    )
-    txs = result.scalars().all()
+    Sprint 5B FIX — elimina N+1 de _get_realized_pnl_by_ticker.
 
+    Calcula o lucro realizado acumulado por ticker a partir de uma lista de
+    transacoes ja carregada em memoria (sem nova round-trip ao banco).
+    Recebe a lista plana de Transaction objects (ja ordenados por date ASC, id ASC).
+
+    Substitui a funcao async _get_realized_pnl_by_ticker que fazia um SELECT
+    separado. Agora e chamada com os dados ja trazidos por _load_transactions_by_ticker,
+    evitando a segunda query de transactions por chamada a get_rentabilidade_por_ativo.
+    """
     qty_map: dict[str, float] = {}
     cost_map: dict[str, float] = {}  # sempre em BRL
     realized: dict[str, float] = {}
-    is_usd_map: dict[str, bool] = {}
 
     for tx in txs:
         ticker = tx.ticker.upper()
@@ -243,7 +245,6 @@ async def _get_realized_pnl_by_ticker(
             qty_map[ticker] = 0.0
             cost_map[ticker] = 0.0
             realized[ticker] = 0.0
-            is_usd_map[ticker] = is_usd
 
         if tx.operation == OperationType.buy:
             qty_map[ticker] += qty
@@ -260,22 +261,44 @@ async def _get_realized_pnl_by_ticker(
     return realized
 
 
-async def _load_transactions_by_ticker(
+async def _get_realized_pnl_by_ticker(
     db: AsyncSession,
     portfolio_id: int,
-) -> dict[str, list]:
-    """Carrega todas as transactions da carteira agrupadas por ticker."""
+) -> dict[str, float]:
+    """
+    Mantido para compatibilidade com chamadas externas (ex.: _kpis_from_realtime).
+    Internamente delega para _calc_realized_from_txs apos carregar as transacoes.
+    """
     result = await db.execute(
         select(Transaction)
         .where(Transaction.portfolio_id == portfolio_id)
         .order_by(Transaction.date.asc(), Transaction.id.asc())
     )
-    txs = result.scalars().all()
+    txs = list(result.scalars().all())
+    return _calc_realized_from_txs(txs)
+
+
+async def _load_transactions_by_ticker(
+    db: AsyncSession,
+    portfolio_id: int,
+) -> tuple[dict[str, list], list]:
+    """
+    Sprint 5B FIX — retorna (by_ticker, flat_list) em vez de apenas by_ticker.
+
+    A flat_list e usada por _calc_realized_from_txs para calcular lucro realizado
+    sem nova query, eliminando o N+1 anterior em get_rentabilidade_por_ativo.
+    """
+    result = await db.execute(
+        select(Transaction)
+        .where(Transaction.portfolio_id == portfolio_id)
+        .order_by(Transaction.date.asc(), Transaction.id.asc())
+    )
+    txs = list(result.scalars().all())
     by_ticker: dict[str, list] = {}
     for tx in txs:
         key = tx.ticker.upper()
         by_ticker.setdefault(key, []).append(tx)
-    return by_ticker
+    return by_ticker, txs
 
 
 async def _calc_invested_up_to(
@@ -404,20 +427,9 @@ async def _kpis_from_realtime(db: AsyncSession, portfolio_id: int) -> dict:
 
     retorno_total_pct = (total_pnl / total_invested * 100) if total_invested else 0.0
 
-    # ------------------------------------------------------------------
-    # Sprint 5B FIX: retorno_mes_pct usa 1° dia do mês calendário.
-    # Antes usava today.replace(day=1) - timedelta(days=1), que é D-1
-    # do mês (último dia do mês anterior) — correto como limite, mas a
-    # base deve ser o custo acumulado ATÉ o último dia do mês anterior
-    # para representar o patrimônio no início do mês corrente.
-    #
-    # retorno_dia_pct permanece 0.0 no fallback — sem snapshot anterior,
-    # é impossível calcular variação diária de forma confiável.
-    # ------------------------------------------------------------------
     retorno_mes_pct = 0.0
     retorno_12m_pct = 0.0
     try:
-        # Último dia do mês anterior = D-1 do 1º dia do mês corrente
         primeiro_dia_mes = today.replace(day=1)
         ultimo_dia_mes_anterior = primeiro_dia_mes - timedelta(days=1)
         custo_inicio_mes = await _calc_invested_up_to(db, portfolio_id, ultimo_dia_mes_anterior)
@@ -446,7 +458,6 @@ async def _kpis_from_realtime(db: AsyncSession, portfolio_id: int) -> dict:
         "ganho_realizado": round(realized_pnl, 2),
         "total_pnl": round(total_pnl, 2),
         "retorno_total_pct": round(retorno_total_pct, 4),
-        # Sem snapshot anterior, variacao diaria e impossivel de calcular.
         "retorno_dia_pct": 0.0,
         "retorno_mes_pct": retorno_mes_pct,
         "retorno_12m_pct": retorno_12m_pct,
@@ -480,7 +491,6 @@ def _ret_between(
     Esta implementação é uma aproximação simples adequada para exibição.
     """
     if snap_start is None:
-        # Retorno total: ganho acumulado sobre total aportado
         base = snap_end.invested_total
         if not base or base == 0:
             return 0.0
@@ -491,11 +501,8 @@ def _ret_between(
     gain_realized = snap_end.realized_pnl - snap_start.realized_pnl
     total_gain = gain_unrealized + gain_realized
 
-    # FIX: usa market_value do snapshot inicial como base do período,
-    # não cost_basis — evita superestimar retorno quando há aportes no período.
     base = snap_start.market_value
     if not base or base == 0:
-        # Fallback: tenta invested_total se market_value for zero
         base = snap_start.invested_total
     if not base or base == 0:
         return 0.0
@@ -517,21 +524,6 @@ async def get_kpis(db: AsyncSession, portfolio_id: int) -> dict:
         payload = await _kpis_from_realtime(db, portfolio_id)
         return payload
 
-    # ------------------------------------------------------------------
-    # Sprint 5B FIX — retorno_dia_pct:
-    #   Usa _snapshot_before_today() em vez de _snapshot_at(D-1).
-    #   Isso garante que fins de semana e feriados retornem o último
-    #   snapshot disponível antes do dia atual, em vez de None
-    #   (o que causava retorno_dia_pct = 0.0 toda segunda-feira e
-    #   após feriados).
-    #
-    # Sprint 5B FIX — retorno_mes_pct:
-    #   Usa o snapshot do último dia do mês anterior (1° do mês - 1 dia)
-    #   em vez de D-30. Isso garante que o retorno mensal reflita
-    #   o desempenho do mês calendário corrente, independente de quantos
-    #   dias úteis passaram desde o início do mês.
-    #   Ex.: em 30/jun, usa snapshot de 31/mai; em 05/jun, usa 31/mai.
-    # ------------------------------------------------------------------
     snap_ontem = await _snapshot_before_today(db, portfolio_id, snap_today)
 
     primeiro_dia_mes = today.replace(day=1)
@@ -579,7 +571,13 @@ async def get_rentabilidade_por_ativo(db: AsyncSession, portfolio_id: int) -> li
         return cached
 
     positions_raw = await calc_raw_positions(db, portfolio_id)
-    realized_map = await _get_realized_pnl_by_ticker(db, portfolio_id)
+
+    # Sprint 5B FIX: carrega transactions UMA única vez e reutiliza para
+    # (a) enrich_rf_positions e (b) cálculo de lucro realizado.
+    # Antes: _get_realized_pnl_by_ticker fazia SELECT separado + _load_transactions_by_ticker
+    # fazia outro SELECT separado = 2 queries. Agora = 1 query.
+    txs_by_ticker, txs_flat = await _load_transactions_by_ticker(db, portfolio_id)
+    realized_map = _calc_realized_from_txs(txs_flat)
 
     prices_input = [
         {"ticker": p["ticker"], "asset_type": p["asset_type"]}
@@ -596,7 +594,6 @@ async def get_rentabilidade_por_ativo(db: AsyncSession, portfolio_id: int) -> li
         {**p, "portfolio_id": portfolio_id} for p in positions_raw
     ]
 
-    txs_by_ticker = await _load_transactions_by_ticker(db, portfolio_id)
     rf_values: dict[str, float] = {}
     try:
         rf_values = await enrich_rf_positions(positions_with_portfolio, txs_by_ticker)
@@ -619,6 +616,11 @@ async def get_rentabilidade_por_ativo(db: AsyncSession, portfolio_id: int) -> li
                 else str(row.asset_type)
             )
 
+    # Sprint 5B FIX: fx_today buscado UMA vez antes do loop.
+    # Antes: get_usd_brl_today era chamado DENTRO do loop para cada ativo USD
+    # (N queries). Agora = 1 query independente de quantos ativos USD existam.
+    fx_today = await get_usd_brl_today(db)
+
     items: list[dict] = []
 
     open_tickers: set[str] = set()
@@ -635,11 +637,8 @@ async def get_rentabilidade_por_ativo(db: AsyncSession, portfolio_id: int) -> li
 
         is_usd = p.get("is_usd", False)
         if is_usd and current_price is not None:
-            try:
-                fx_today = await get_usd_brl_today(db)
-                current_price = current_price * fx_today
-            except Exception:
-                pass
+            # Usa fx_today já carregado antes do loop — sem nova query
+            current_price = current_price * fx_today
 
         if _is_rf_type(asset_type) and ticker in rf_values:
             current_value = rf_values[ticker]
