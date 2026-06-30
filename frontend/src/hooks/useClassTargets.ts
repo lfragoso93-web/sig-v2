@@ -1,27 +1,33 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { classTargetsService } from '@/services/classTargetsService'
+/**
+ * useClassTargets
+ * Busca metas de alocacao por classe para um portfolio.
+ * Retorna lista combinada: atual vs. alvo (via /portfolios/{id}/targets-with-current).
+ *
+ * Sprint 5E — Issue #79
+ */
+import { useQuery } from '@tanstack/react-query'
+import api from '@/services/api'
+
+export interface ClassTargetRow {
+  asset_type: string
+  label: string
+  target_pct: number
+  current_pct: number
+  delta_pct: number
+  color: string
+}
 
 export function useClassTargets(portfolioId: number | null) {
-  return useQuery({
+  return useQuery<ClassTargetRow[]>({
     queryKey: ['class-targets', portfolioId],
-    queryFn: () => classTargetsService.list(portfolioId!),
+    queryFn: async () => {
+      if (!portfolioId) return []
+      const res = await api.get<ClassTargetRow[]>(
+        `/portfolios/${portfolioId}/targets-with-current`
+      )
+      return res.data
+    },
     enabled: !!portfolioId,
-  })
-}
-
-export function useUpsertClassTarget(portfolioId: number | null) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: ({ asset_type, target_pct }: { asset_type: string; target_pct: number }) =>
-      classTargetsService.upsert(portfolioId!, asset_type, target_pct),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['class-targets', portfolioId] }),
-  })
-}
-
-export function useDeleteClassTarget(portfolioId: number | null) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (asset_type: string) => classTargetsService.remove(portfolioId!, asset_type),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['class-targets', portfolioId] }),
+    staleTime: 2 * 60 * 1000,
   })
 }
