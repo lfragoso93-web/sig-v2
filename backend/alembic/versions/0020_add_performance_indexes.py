@@ -5,18 +5,16 @@ Revision ID: 0020
 Revises: 015
 Create Date: 2026-06-30
 
-Adiciona indices compostos nas tabelas de maior volume do SIG para reduzir
-full-scans nas queries mais frequentes. Parte do Sprint 8 (Issue #83).
+Adiciona indices compostos nas tabelas de maior volume do SIG.
+Parte do Sprint 8 (Issue #83).
 
-NOTA: Usa CREATE INDEX simples (sem CONCURRENTLY) para rodar dentro da
-transacao Alembic. Para tabelas grandes em producao, recriar manualmente
-com CONCURRENTLY apos o deploy.
+NOTA: CREATE INDEX simples (sem CONCURRENTLY) para rodar dentro da
+transacao Alembic.
 
-Tabelas e indices
------------------
+Indices criados
+---------------
 transactions:
   idx_txn_portfolio_date  (portfolio_id, date DESC)
-  idx_txn_portfolio_type  (portfolio_id, transaction_type)
   idx_txn_asset_date      (asset_id, date DESC)
 
 asset_prices:
@@ -42,10 +40,6 @@ def upgrade() -> None:
     op.execute(
         "CREATE INDEX IF NOT EXISTS idx_txn_portfolio_date "
         "ON transactions (portfolio_id, date DESC);"
-    )
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS idx_txn_portfolio_type "
-        "ON transactions (portfolio_id, transaction_type);"
     )
     op.execute(
         "CREATE INDEX IF NOT EXISTS idx_txn_asset_date "
@@ -77,7 +71,6 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute("DROP INDEX IF EXISTS idx_txn_portfolio_date;")
-    op.execute("DROP INDEX IF EXISTS idx_txn_portfolio_type;")
     op.execute("DROP INDEX IF EXISTS idx_txn_asset_date;")
     op.execute("DROP INDEX IF EXISTS idx_ap_asset_ts;")
     op.execute("DROP INDEX IF EXISTS idx_div_portfolio_date;")
