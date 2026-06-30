@@ -25,7 +25,7 @@ Uso:
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import Date, ForeignKey, Numeric, UniqueConstraint
+from sqlalchemy import Date, ForeignKey, Index, Numeric, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -39,21 +39,34 @@ class PortfolioSnapshot(Base, TimestampMixin):
             "portfolio_id", "snapshot_date",
             name="uq_snapshot_portfolio_date",
         ),
+        # Sprint 5B: índice composto cobre o padrão principal de acesso:
+        #   WHERE portfolio_id = X AND snapshot_date <= Y ORDER BY snapshot_date DESC
+        # Usado por _snapshot_at / _latest_snapshot / _first_snapshot /
+        # _snapshot_before_today sem seq scan + sort.
+        # postgresql_ops define a direcionalidade apenas no PG; em SQLite é ignorado.
+        Index(
+            "idx_ps_portfolio_date_desc",
+            "portfolio_id",
+            "snapshot_date",
+            postgresql_ops={"snapshot_date": "DESC"},
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
 
+    # index=True removido: o índice composto acima já cobre portfolio_id
+    # e snapshot_date como colunas líder, tornando os índices simples
+    # redundantes e evitando overhead de manutenção dupla.
     portfolio_id: Mapped[int] = mapped_column(
         ForeignKey("portfolios.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     snapshot_date: Mapped[date] = mapped_column(
-        Date, nullable=False, index=True,
+        Date, nullable=False,
         comment="Data do fechamento (dia útil ou último dado disponível).",
     )
 
-    # ── Valores principais ─────────────────────────────────────────────────
+    # ── Valores principais ──────────────────────────────────────────────────────
     market_value: Mapped[Decimal] = mapped_column(
         Numeric(18, 2), nullable=False, default=Decimal("0"),
         comment="Valor total de mercado na data (Σ qty × close_price).",
@@ -67,7 +80,7 @@ class PortfolioSnapshot(Base, TimestampMixin):
         comment="Total aportado líquido acumulado até a data (compras - resgates).",
     )
 
-    # ── PnL ───────────────────────────────────────────────────────────────
+    # ── PnL ──────────────────────────────────────────────────────────────────────
     realized_pnl: Mapped[Decimal] = mapped_column(
         Numeric(18, 2), nullable=False, default=Decimal("0"),
         comment="Lucro/prejuízo realizado acumulado até a data.",
@@ -85,7 +98,7 @@ class PortfolioSnapshot(Base, TimestampMixin):
         comment="Retorno percentual sobre capital aportado: total_pnl / invested_total × 100.",
     )
 
-    # ── Relacionamentos ───────────────────────────────────────────────────
+    # ── Relacionamentos ──────────────────────────────────────────────────────────
     portfolio: Mapped["Portfolio"] = relationship(
         "Portfolio", back_populates="snapshots",
     )
