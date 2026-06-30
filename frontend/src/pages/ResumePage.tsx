@@ -80,6 +80,28 @@ function ChartSelect({
 }
 
 // ---------------------------------------------------------------------------
+// Mini linha de rentabilidade — Dia / Mês / 12m
+// ---------------------------------------------------------------------------
+function ReturnRow({
+  label, value,
+}: { label: string; value: number }) {
+  const sign = value >= 0 ? '+' : ''
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <span style={{ fontSize: '0.68rem', color: 'var(--color-text-faint)', fontWeight: 500 }}>
+        {label}
+      </span>
+      <span
+        className={clsx('tabular-nums', signClass(value))}
+        style={{ fontSize: '0.7rem', fontWeight: 700 }}
+      >
+        {sign}{formatPercent(value)}
+      </span>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // ResumePage
 // ---------------------------------------------------------------------------
 export default function ResumePage() {
@@ -115,6 +137,7 @@ export default function ResumePage() {
   const proventos12m   = kpis?.proventos_12m            ?? 0
   const proventosTotal = kpis?.proventos_total          ?? 0
   const retornoTotal   = kpis?.retorno_total_pct        ?? 0
+  const retornoDia     = kpis?.retorno_dia_pct          ?? 0
   const retornoMes     = kpis?.retorno_mes_pct          ?? 0
   const retorno12m     = kpis?.retorno_12m_pct          ?? 0
   const retornoInicio  = kpis?.retorno_desde_inicio_pct ?? 0
@@ -190,7 +213,14 @@ export default function ResumePage() {
               subLabel="Total acumulado"
             />
 
-            {/* Rentabilidade */}
+            {/* ── Rentabilidade ── Sprint 5B
+                Exibe 4 horizontes de forma clara:
+                  · Valor principal  → Desde o início
+                  · 3 linhas internas → Dia / Mês / 12m
+                Backend corrigido:
+                  · retorno_dia_pct: snapshot anterior mais recente (trata fins de semana)
+                  · retorno_mes_pct: usa 1º do mês calendário como base
+            */}
             <KpiCard
               label="Rentabilidade"
               value={
@@ -200,16 +230,17 @@ export default function ResumePage() {
               }
               subLabel="Desde o início"
               bottomLine={
-                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
-                  Mês:&nbsp;
-                  <span className={clsx('font-semibold tabular-nums', signClass(retornoMes))}>
-                    {retornoMes >= 0 ? '+' : ''}{formatPercent(retornoMes)}
-                  </span>
-                  &nbsp;·&nbsp;12m:&nbsp;
-                  <span className={clsx('font-semibold tabular-nums', signClass(retorno12m))}>
-                    {retorno12m >= 0 ? '+' : ''}{formatPercent(retorno12m)}
-                  </span>
-                </span>
+                <div style={{
+                  display: 'flex', flexDirection: 'column', gap: 3,
+                  marginTop: 4,
+                  paddingTop: 6,
+                  borderTop: '1px solid oklch(from var(--color-text) l c h / 0.07)',
+                  width: '100%',
+                }}>
+                  <ReturnRow label="Hoje"  value={retornoDia}  />
+                  <ReturnRow label="Mês"   value={retornoMes}  />
+                  <ReturnRow label="12 m"  value={retorno12m}  />
+                </div>
               }
             />
           </>
