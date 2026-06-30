@@ -71,34 +71,37 @@ export interface PatrimonioHistoryPoint {
   invested?: number
 }
 
+// Cache de 2 minutos — evita refetch excessivo a cada foco de janela/mount
+const STALE_2MIN = 2 * 60 * 1000
+
 // ── Hooks ─────────────────────────────────────────────────────────────────────────────────────────
 
 export function usePositions(portfolioId: number | null) {
   return useQuery<PositionGroup[]>({
-    queryKey: ['positions', portfolioId],
-    queryFn: () =>
-      api.get(`/portfolios/${portfolioId}/positions`).then(r => r.data),
-    enabled: !!portfolioId,
+    queryKey:        ['positions', portfolioId],
+    queryFn:         () => api.get(`/portfolios/${portfolioId}/positions`).then(r => r.data),
+    enabled:         !!portfolioId,
+    staleTime:       STALE_2MIN,
     placeholderData: [],
   })
 }
 
 export function useAssetDistribution(portfolioId: number | null) {
   return useQuery<AssetDistribution[]>({
-    queryKey: ['asset-distribution', portfolioId],
-    queryFn: () =>
-      api.get(`/portfolios/${portfolioId}/asset-distribution`).then(r => r.data),
-    enabled: !!portfolioId,
+    queryKey:        ['asset-distribution', portfolioId],
+    queryFn:         () => api.get(`/portfolios/${portfolioId}/asset-distribution`).then(r => r.data),
+    enabled:         !!portfolioId,
+    staleTime:       STALE_2MIN,
     placeholderData: [],
   })
 }
 
 export function usePortfolioSummaryData(portfolioId: number | null) {
   return useQuery<PortfolioSummary>({
-    queryKey: ['summary', portfolioId],
-    queryFn: () =>
-      api.get(`/portfolios/${portfolioId}/summary`).then(r => r.data),
-    enabled: !!portfolioId,
+    queryKey:  ['summary', portfolioId],
+    queryFn:   () => api.get(`/portfolios/${portfolioId}/summary`).then(r => r.data),
+    enabled:   !!portfolioId,
+    staleTime: STALE_2MIN,
   })
 }
 
@@ -112,8 +115,8 @@ export const usePortfolioSummary = usePortfolioSummaryData
  */
 export function usePortfolioList() {
   return useQuery<PortfolioListItem[]>({
-    queryKey: PORTFOLIOS_QUERY_KEY,
-    queryFn: () => api.get('/portfolios').then(r => r.data),
+    queryKey:  PORTFOLIOS_QUERY_KEY,
+    queryFn:   () => api.get('/portfolios').then(r => r.data),
     staleTime: 30_000,
   })
 }
@@ -124,8 +127,8 @@ export function usePatrimonioHistory(
   assetType?: string | null,
 ) {
   return useQuery<PatrimonioHistoryPoint[]>({
-    queryKey: ['patrimonio-history', portfolioId, months, assetType ?? 'all'],
-    queryFn: () =>
+    queryKey:        ['patrimonio-history', portfolioId, months, assetType ?? 'all'],
+    queryFn:         () =>
       api
         .get(`/portfolios/${portfolioId}/patrimonio-history`, {
           params: {
@@ -134,7 +137,8 @@ export function usePatrimonioHistory(
           },
         })
         .then(r => r.data),
-    enabled: !!portfolioId,
+    enabled:         !!portfolioId,
+    staleTime:       STALE_2MIN,
     placeholderData: [],
   })
 }
