@@ -209,9 +209,6 @@ function PositionCard({ item }: PositionCardProps) {
   const investedValue = item.invested_value ?? item.quantity * item.average_price
   const currency = isUsdAsset(safeType) ? 'USD' : 'BRL'
 
-  // Campos exibidos no card mobile variam por tipo de ativo:
-  // RENDA_FIXA → apenas Total Inv. + Valor Atual
-  // Demais     → Qtd + P. Médio + Total Inv. + Valor Atual
   const fields = isRF
     ? [
         { label: 'Total Inv.',  value: fmtMoney(investedValue, 'BRL') },
@@ -401,7 +398,6 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
     </span>
   )
 
-  // Header sempre em BRL: total_value e total_invested do grupo já chegam convertidos pelo backend
   return (
     <div style={{ position: 'relative' }}>
       <button
@@ -516,7 +512,7 @@ const COLS_DEFAULT = [
   { key: 'ativo',      label: 'Ativo',       align: 'left',  width: '30%' },
   { key: 'qtd',        label: 'Qtd',         align: 'right', width: '8%'  },
   { key: 'pm',         label: 'P. Médio',   align: 'right', width: '11%' },
-  { key: 'pa',         label: 'P. Atual',    align: 'right', width: '11%', info: 'Cotação via BRAPI/yfinance' },
+  { key: 'pa',         label: 'P. Atual',    align: 'right', width: '11%', info: 'Cotação via provedor de mercado' },
   { key: 'inv',        label: 'Total Inv.',  align: 'right', width: '13%' },
   { key: 'atual',      label: 'Valor Atual', align: 'right', width: '13%' },
   { key: 'resultado',  label: 'Resultado',   align: 'right', width: '11%' },
