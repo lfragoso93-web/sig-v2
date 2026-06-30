@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import {
-  BarChart2, RefreshCw, Wallet, TrendingUp, TrendingDown, LineChart, AlertTriangle,
+  BarChart2, RefreshCw, Wallet, Target, TrendingUp, TrendingDown, LineChart, AlertTriangle,
 } from 'lucide-react'
 import {
   usePortfolioSummary,
@@ -14,6 +14,7 @@ import {
   useEvolutionBackfill,
   type PeriodOption,
 } from '@/hooks/useEvolution'
+import { useClassTargets } from '@/hooks/useClassTargets'
 import { useAppStore } from '@/store/appStore'
 import { formatBRL, formatPercent, signClass } from '@/utils/format'
 import KpiCard from '@/components/ui/KpiCard'
@@ -21,15 +22,17 @@ import SkeletonCard from '@/components/ui/SkeletonCard'
 import EmptyState from '@/components/ui/EmptyState'
 import AssetDonutChart from '@/components/charts/AssetDonutChart'
 import PositionTable from '@/components/resume/PositionTable'
+import AllocationTargetWidget from '@/components/resume/AllocationTargetWidget'
 import EvolutionLineChart from '@/components/charts/EvolutionLineChart'
 import EvolutionBarChart from '@/components/charts/EvolutionBarChart'
 import clsx from 'clsx'
 
-// ── Constantes ─────────────────────────────────────────────────────────────────────────────
+// ── Constantes ────────────────────────────────────────────────────────────────────────────────────────
 const ASSET_TYPE_LABELS: Record<string, string> = {
   ACAO: 'Ações', ACAO_NACIONAL: 'Ações', FII: 'FIIs',
   ETF_NACIONAL: 'ETFs BR', STOCK: 'Stocks', ETF_INTERNACIONAL: 'ETFs INT',
   TESOURO_DIRETO: 'Tesouro Direto', RENDA_FIXA: 'Renda Fixa', CRIPTO: 'Cripto',
+  BDR: 'BDRs',
 }
 
 const ASSET_TYPE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
@@ -42,6 +45,7 @@ const ASSET_TYPE_COLORS: Record<string, { bg: string; text: string; border: stri
   TESOURO_DIRETO:    { bg: 'var(--color-gold-highlight)',   text: 'var(--color-gold)',   border: 'var(--color-gold-highlight)' },
   RENDA_FIXA:        { bg: 'var(--color-orange-highlight)', text: 'var(--color-orange)', border: 'var(--color-orange-highlight)' },
   CRIPTO:            { bg: 'var(--color-error-highlight)',  text: 'var(--color-error)',  border: 'var(--color-error-highlight)' },
+  BDR:               { bg: 'var(--color-purple-highlight)', text: 'var(--color-purple)', border: 'var(--color-purple-highlight)' },
 }
 const FALLBACK_COLOR = { bg: 'var(--color-surface-dynamic)', text: 'var(--color-text-muted)', border: 'var(--color-border)' }
 
@@ -55,7 +59,7 @@ const PERIODS: { label: string; value: PeriodOption }[] = [
 type Tab = 'visao-geral' | 'historico'
 type ViewMode = 'diario' | 'mensal'
 
-// ── Tab bar ──────────────────────────────────────────────────────────────────────────
+// ── Tab bar ──────────────────────────────────────────────────────────────────────────────────
 function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: 'visao-geral', label: 'Visão Geral', icon: BarChart2 },
@@ -85,12 +89,7 @@ function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
   )
 }
 
-// ── Toggle group (Diário/Mensal e Período) ──────────────────────────────────────────
-/*
- * Cada botão tem border-radius próprio nos extremos para evitar que o
- * background ativo "corte" nas bordas do container pai.
- * Não usamos overflow-hidden no pai para não amputar focus rings.
- */
+// ── Toggle group (Diário/Mensal e Período) ──────────────────────────────────────────────────
 function ToggleGroup<T extends string>({
   options, value, onChange,
 }: {
@@ -133,13 +132,14 @@ function ToggleGroup<T extends string>({
   )
 }
 
-// ── Aba: Visao Geral ────────────────────────────────────────────────────────────────
+// ── Aba: Visao Geral ─────────────────────────────────────────────────────────────────────────────────────
 function TabVisaoGeral({ portfolioId }: { portfolioId: number }) {
   const [activeTypeFilter, setActiveTypeFilter] = useState<string | null>(null)
 
   const { data: summary,      isLoading: loadingSummary  } = usePortfolioSummary(portfolioId)
   const { data: distribution, isLoading: loadingDist     } = useAssetDistribution(portfolioId)
   const { data: positions,    isLoading: loadingPositions } = usePositions(portfolioId)
+  const { data: classTargets, isLoading: loadingTargets  } = useClassTargets(portfolioId)
 
   const allPositions = useMemo(() => {
     if (!positions) return []
@@ -214,7 +214,7 @@ function TabVisaoGeral({ portfolioId }: { portfolioId: number }) {
         )}
       </div>
 
-      {/* Breakdown por classe + donut */}
+      {/* Breakdown por classe + donut + alvo */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 card overflow-hidden">
           <div className="section-card-header">
@@ -278,7 +278,7 @@ function TabVisaoGeral({ portfolioId }: { portfolioId: number }) {
           )}
         </div>
 
-        {/* Donut */}
+        {/* Donut + Alvo da Carteira */}
         <div className="card overflow-hidden">
           <div className="section-card-header">
             <span className="section-card-title">Distribuição</span>
@@ -292,6 +292,28 @@ function TabVisaoGeral({ portfolioId }: { portfolioId: number }) {
           ) : (
             <div className="h-52 flex items-center justify-center text-xs" style={{ color: 'var(--color-text-muted)' }}>Sem dados</div>
           )}
+
+          {/* Alvo da Carteira — Sprint 5E */}
+          <div style={{ padding: '0 1rem 1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '0.5rem', paddingTop: '0.75rem', borderTop: '1px solid var(--color-divider)' }}>
+              <Target size={12} style={{ color: 'var(--color-primary)' }} />
+              <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-muted)' }}>
+                Distribuição Ideal vs. Atual
+              </span>
+            </div>
+            {loadingTargets ? (
+              <div className="animate-pulse rounded-md" style={{ height: 80, background: 'var(--color-surface-offset)' }} />
+            ) : classTargets && classTargets.length > 0 ? (
+              <AllocationTargetWidget rows={classTargets} noTopMargin />
+            ) : (
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-faint)' }}>
+                Configure metas em{' '}
+                <a href="/carteira/metas" style={{ color: 'var(--color-primary)', textDecoration: 'underline' }}>
+                  Configurações → Metas
+                </a>
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -325,7 +347,7 @@ function TabVisaoGeral({ portfolioId }: { portfolioId: number }) {
   )
 }
 
-// ── Aba: Historico ────────────────────────────────────────────────────────────────
+// ── Aba: Historico ────────────────────────────────────────────────────────────────────────────────────
 function TabHistorico({ portfolioId }: { portfolioId: number }) {
   const [period,       setPeriod]       = useState<PeriodOption>('12m')
   const [view,         setView]         = useState<ViewMode>('diario')
@@ -360,14 +382,11 @@ function TabHistorico({ portfolioId }: { portfolioId: number }) {
       {/* Controles topo */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          {/* Toggle diário / mensal — border-radius por botão, sem overflow-hidden no pai */}
           <ToggleGroup<ViewMode>
             options={viewOptions}
             value={view}
             onChange={setView}
           />
-
-          {/* Seletor de período */}
           <ToggleGroup<PeriodOption>
             options={PERIODS}
             value={period}
@@ -424,7 +443,7 @@ function TabHistorico({ portfolioId }: { portfolioId: number }) {
         )}
       </div>
 
-      {/* Grafico — sem overflow-hidden para tooltip Recharts */}
+      {/* Grafico */}
       <div className="card">
         <div className="section-card-header">
           {view === 'diario'
@@ -455,7 +474,7 @@ function TabHistorico({ portfolioId }: { portfolioId: number }) {
         </div>
       </div>
 
-      {/* Tabela resumo mensal — table-dense + ícones TrendingUp/Down */}
+      {/* Tabela resumo mensal */}
       {!loadingMonthly && monthly && monthly.length > 0 && (
         <div className="card overflow-hidden">
           <div className="section-card-header">
@@ -525,8 +544,8 @@ function TabHistorico({ portfolioId }: { portfolioId: number }) {
   )
 }
 
-// ── Page root ───────────────────────────────────────────────────────────────────────
-export default function PatrimonioPage() {
+// ── Page root ───────────────────────────────────────────────────────────────────────────────────────
+function PatrimonioPage() {
   const portfolioId = useAppStore(s => s.selectedPortfolioId)
   const [activeTab, setActiveTab] = useState<Tab>('visao-geral')
 
@@ -562,3 +581,5 @@ export default function PatrimonioPage() {
     </div>
   )
 }
+
+export default PatrimonioPage

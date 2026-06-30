@@ -434,3 +434,91 @@ async def admin_snapshot_backfill_one(
         "scope": f"portfolio_{portfolio_id}",
         "force": force,
     }
+
+
+# ── Sync de Dividendos de FIIs ────────────────────────────────────────────────────────────────────
+
+@router.get(
+    "/fii-dividends/sync/status",
+    summary="Status do último job de sync de dividendos FII",
+)
+async def admin_fii_dividends_sync_status(
+    _: User = Depends(require_superadmin),
+):
+    """
+    Retorna o status do último job de sincronização de dividendos de FIIs.
+
+    Inclui: status (idle/running/success/error), lock info, cursor de data,
+    métricas da última execução (tickers processados, upserted, erros) e
+    timestamp de início/fim.
+
+    Restrito a SuperAdmins.
+    """
+    from app.services.dividends_sync_service import get_sync_status
+    return await get_sync_status()
+
+
+async def _run_fii_dividends_sync_bg(force_bootstrap: bool) -> None:
+    """Wrapper para rodar o sync de dividendos FII em BackgroundTask com sessão própria."""
+    logger.info(
+        "[fii_dividends_sync_bg] ========== INICIANDO SYNC FII DIVIDENDS (force_bootstrap=%s) ==========",
+        force_bootstrap,
+    )
+    try:
+        from app.core.database import AsyncSessionLocal
+        from app.services.dividends_sync_service import run_fii_dividends_sync
+        async with AsyncSessionLocal() as db:
+            result = await run_fii_dividends_sync(db, force_bootstrap=force_bootstrap)
+        logger.info(
+            "[fii_dividends_sync_bg] ========== SYNC CONCLUIDO: "
+            "tickers=%s upserted=%s created=%s updated=%s errors=%s ==========",
+            result.get("tickers_processed", 0),
+            result.get("upserted", 0),
+            result.get("created", 0),
+            result.get("updated", 0),
+            result.get("errors", 0),
+        )
+    except Exception as e:
+        logger.error(
+            "[fii_dividends_sync_bg] ========== SYNC FALHOU: %s\n%s ==========",
+            e,
+            traceback.format_exc(),
+        )
+
+
+@router.post(
+    "/fii-dividends/sync",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Trigger manual do sync de dividendos FII",
+)
+async def admin_trigger_fii_dividends_sync(
+    background_tasks: BackgroundTasks,
+    force_bootstrap: bool = Query(
+        False,
+        description=(
+            "Se true, ignora o cursor incremental e reprocessa os últimos 5 anos completos. "
+            "Use após reset do banco ou para corrigir dados históricos."
+        ),
+    ),
+    _: User = Depends(require_superadmin),
+):
+    """
+    Dispara manualmente o sync de dividendos de FIIs em background.
+
+    - **force_bootstrap=false** (padrão): modo incremental — busca a partir do
+      cursor salvo (com 30 dias de overlap para absorver correções retroativas).
+    - **force_bootstrap=true**: reprocessa os últimos 5 anos completos —
+      útil após reset de banco ou para forçar recarga histórica.
+
+    O job automático equivalente roda todo sábado às 6h BRT.
+    Restrito a SuperAdmins.
+    """
+    background_tasks.add_task(_run_fii_dividends_sync_bg, force_bootstrap)
+    return {
+        "message": (
+            f"Sync de dividendos FII iniciado em background "
+            f"(force_bootstrap={force_bootstrap}). Acompanhe pelo log do servidor."
+        ),
+        "status": "accepted",
+        "force_bootstrap": force_bootstrap,
+    }

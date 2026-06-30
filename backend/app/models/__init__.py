@@ -16,6 +16,7 @@ from app.models.config import AppConfig
 from app.models.system_config import SystemConfig
 from app.models.portfolio_class_target import PortfolioClassTarget
 from app.models.rate_history import RateHistory
+from app.models.dividends_sync_job import DividendsSyncJob
 
 __all__ = [
     'User', 'Portfolio', 'Transaction', 'PortfolioPosition',
@@ -23,5 +24,5 @@ __all__ = [
     'FixedIncomeInvestment', 'TreasuryInvestment', 'Goal',
     'PortfolioSnapshot', 'IRPFReport', 'CorporateEvent',
     'AppConfig', 'SystemConfig', 'PortfolioClassTarget',
-    'RateHistory',
+    'RateHistory', 'DividendsSyncJob',
 ]

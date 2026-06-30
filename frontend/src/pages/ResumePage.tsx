@@ -8,6 +8,7 @@ import {
   usePositions,
 } from '@/hooks/usePortfolio'
 import { useRentabilidadeKpis } from '@/hooks/useRentabilidade'
+import { useClassTargets } from '@/hooks/useClassTargets'
 import { useAppStore } from '@/store/appStore'
 import { formatBRL, formatPercent, signClass } from '@/utils/format'
 import KpiCard from '@/components/ui/KpiCard'
@@ -16,6 +17,7 @@ import EmptyState from '@/components/ui/EmptyState'
 import PatrimonioBarChart from '@/components/charts/PatrimonioBarChart'
 import AssetDonutChart from '@/components/charts/AssetDonutChart'
 import PositionTable from '@/components/resume/PositionTable'
+import AllocationTargetWidget from '@/components/resume/AllocationTargetWidget'
 import CreatePortfolioModal from '@/components/modals/CreatePortfolioModal'
 
 const PERIOD_OPTIONS = [
@@ -33,6 +35,7 @@ const ASSET_CLASS_OPTIONS = [
   { label: 'ETF Nacional',         value: 'ETF_NACIONAL'      },
   { label: 'ETF Internacional',    value: 'ETF_INTERNACIONAL' },
   { label: "Stock / Int'l",        value: 'STOCK'             },
+  { label: 'BDRs',                 value: 'BDR'               },
   { label: 'Tesouro Direto',       value: 'TESOURO_DIRETO'    },
   { label: 'Renda Fixa',           value: 'RENDA_FIXA'        },
   { label: 'Cripto',               value: 'CRIPTO'            },
@@ -76,6 +79,31 @@ function ChartSelect({
   )
 }
 
+// ---------------------------------------------------------------------------
+// Mini linha de rentabilidade — Dia / Mês / 12m
+// ---------------------------------------------------------------------------
+function ReturnRow({
+  label, value,
+}: { label: string; value: number }) {
+  const sign = value >= 0 ? '+' : ''
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <span style={{ fontSize: '0.68rem', color: 'var(--color-text-faint)', fontWeight: 500 }}>
+        {label}
+      </span>
+      <span
+        className={clsx('tabular-nums', signClass(value))}
+        style={{ fontSize: '0.7rem', fontWeight: 700 }}
+      >
+        {sign}{formatPercent(value)}
+      </span>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// ResumePage
+// ---------------------------------------------------------------------------
 export default function ResumePage() {
   const globalPortfolioId = useAppStore(s => s.selectedPortfolioId)
   const setGlobal         = useAppStore(s => s.setSelectedPortfolioId)
@@ -95,10 +123,11 @@ export default function ResumePage() {
   const portfolioId: number | null = globalPortfolioId ?? (portfolios?.[0]?.id ?? null)
   const activeAssetType = assetClass === ASSET_CLASS_ALL ? null : assetClass
 
-  const { data: kpis,             isLoading: loadingKpis      } = useRentabilidadeKpis(portfolioId)
+  const { data: kpis,              isLoading: loadingKpis      } = useRentabilidadeKpis(portfolioId)
   const { data: patrimonioHistory, isLoading: loadingHistory   } = usePatrimonioHistory(portfolioId, period, activeAssetType)
   const { data: distribution,      isLoading: loadingDist      } = useAssetDistribution(portfolioId)
   const { data: positions,         isLoading: loadingPositions } = usePositions(portfolioId)
+  const { data: classTargets,      isLoading: loadingTargets   } = useClassTargets(portfolioId)
 
   const patrimonio     = kpis?.patrimonio_atual        ?? 0
   const aportado       = kpis?.total_aportado          ?? 0
@@ -108,6 +137,7 @@ export default function ResumePage() {
   const proventos12m   = kpis?.proventos_12m            ?? 0
   const proventosTotal = kpis?.proventos_total          ?? 0
   const retornoTotal   = kpis?.retorno_total_pct        ?? 0
+  const retornoDia     = kpis?.retorno_dia_pct          ?? 0
   const retornoMes     = kpis?.retorno_mes_pct          ?? 0
   const retorno12m     = kpis?.retorno_12m_pct          ?? 0
   const retornoInicio  = kpis?.retorno_desde_inicio_pct ?? 0
@@ -183,7 +213,14 @@ export default function ResumePage() {
               subLabel="Total acumulado"
             />
 
-            {/* Rentabilidade */}
+            {/* ── Rentabilidade ── Sprint 5B
+                Exibe 4 horizontes de forma clara:
+                  · Valor principal  → Desde o início
+                  · 3 linhas internas → Dia / Mês / 12m
+                Backend corrigido:
+                  · retorno_dia_pct: snapshot anterior mais recente (trata fins de semana)
+                  · retorno_mes_pct: usa 1º do mês calendário como base
+            */}
             <KpiCard
               label="Rentabilidade"
               value={
@@ -193,16 +230,17 @@ export default function ResumePage() {
               }
               subLabel="Desde o início"
               bottomLine={
-                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
-                  Mês:&nbsp;
-                  <span className={clsx('font-semibold tabular-nums', signClass(retornoMes))}>
-                    {retornoMes >= 0 ? '+' : ''}{formatPercent(retornoMes)}
-                  </span>
-                  &nbsp;·&nbsp;12m:&nbsp;
-                  <span className={clsx('font-semibold tabular-nums', signClass(retorno12m))}>
-                    {retorno12m >= 0 ? '+' : ''}{formatPercent(retorno12m)}
-                  </span>
-                </span>
+                <div style={{
+                  display: 'flex', flexDirection: 'column', gap: 3,
+                  marginTop: 4,
+                  paddingTop: 6,
+                  borderTop: '1px solid oklch(from var(--color-text) l c h / 0.07)',
+                  width: '100%',
+                }}>
+                  <ReturnRow label="Hoje"  value={retornoDia}  />
+                  <ReturnRow label="Mês"   value={retornoMes}  />
+                  <ReturnRow label="12 m"  value={retorno12m}  />
+                </div>
               }
             />
           </>
@@ -250,20 +288,30 @@ export default function ResumePage() {
           )}
         </div>
 
-        {/* Distribuição */}
+        {/* Distribuição + Alvo */}
         <div className="card p-4">
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '1rem' }}>
             <Activity size={14} style={{ color: 'var(--color-primary)' }} />
             <span className="section-card-title">Distribuição</span>
           </div>
+
+          {/* Donut */}
           {loadingDist ? (
-            <div className="animate-pulse rounded-lg" style={{ height: 220, background: 'var(--color-surface-offset)' }} />
+            <div className="animate-pulse rounded-lg" style={{ height: 180, background: 'var(--color-surface-offset)' }} />
           ) : distribution?.length ? (
             <AssetDonutChart data={distribution} />
           ) : (
-            <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-faint)' }}>Sem ativos</span>
             </div>
+          )}
+
+          {/* Widget de alvo da carteira — Sprint 5E */}
+          {!loadingTargets && classTargets && classTargets.length > 0 && (
+            <AllocationTargetWidget rows={classTargets} />
+          )}
+          {loadingTargets && (
+            <div className="animate-pulse rounded-md" style={{ height: 80, background: 'var(--color-surface-offset)', marginTop: '0.75rem' }} />
           )}
         </div>
       </div>

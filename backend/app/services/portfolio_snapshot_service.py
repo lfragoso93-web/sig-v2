@@ -1,5 +1,42 @@
 """
 Servico de snapshots diarios de patrimonio.
+
+SEMANTICA DOS CAMPOS CALCULADOS
+================================
+Os snapshots capturam o retorno de PRECO puro da carteira, sem proventos.
+
+  total_pnl  = realized_pnl + unrealized_pnl
+               Lucro/prejuizo de compra e venda e valorizacao de preco.
+               NAO inclui dividendos, JCP, rendimentos de RF nem outros
+               proventos recebidos. Estes ficam em app.models.dividend.
+
+  return_pct = total_pnl / (cost_basis + max(realized_pnl, 0)) * 100
+               Percentual de retorno de preco sobre capital empregado.
+               Usa cost_basis + realized positivo como denominador para
+               evitar distorcao quando ha muitas vendas (invested_total
+               diminui com resgates, podendo inflar o percentual).
+               Fallback: invested_total quando nao ha posicoes abertas.
+
+RETORNO TOTAL COM PROVENTOS (uso no rentabilidade_service)
+==========================================================
+  Se a UI precisar exibir retorno total incluindo proventos:
+    retorno_total_com_prov = (total_pnl + proventos_total) / base * 100
+  Onde proventos_total vem de _proventos_total() no rentabilidade_service.
+  O campo retorno_total_pct do payload de /kpis NAO inclui proventos;
+  os campos proventos_total e proventos_12m sao expostos separadamente
+  para que o frontend calcule e exiba o retorno total conforme necessidade.
+
+FLUXO DE ATUALIZACAO
+====================
+  backfill_snapshots  : reconstroi historico completo dia a dia (semanal/sob demanda)
+  refresh_today_snapshot : atualiza o snapshot de hoje (chamado apos cada transacao)
+  invalidate_snapshots_from : remove snapshots a partir de uma data (ex: correcao de transacao)
+
+OTIMIZACOES DE QUERY (Bloco 2)
+================================
+  [Q1 CORRIGIDO] _calc_totals: Asset buscado em batch antes do loop de posicoes.
+  Antes: 1 SELECT por ticker (N+1). Depois: 1 SELECT com IN(tickers).
+  Impacto em backfill 1 ano com 20 tickers: 5.000 queries -> 250 queries.
 """
 from __future__ import annotations
 
@@ -152,6 +189,19 @@ async def _calc_totals(
     cost_basis = Decimal("0")
     realized_pnl = Decimal("0")
 
+    # ------------------------------------------------------------------
+    # [Q1 FIX] Busca asset_type de todos os tickers em uma unica query
+    # antes de entrar no loop, eliminando o N+1 que existia antes.
+    # ------------------------------------------------------------------
+    tickers_list = list(positions.keys())
+    asset_rows = await db.execute(
+        select(Asset.ticker, Asset.asset_type)
+        .where(Asset.ticker.in_(tickers_list))
+    )
+    asset_type_map: dict[str, AssetType] = {
+        r.ticker: r.asset_type for r in asset_rows.all()
+    }
+
     fx_snapshot: Optional[float] = None
     has_usd = any(s.is_usd for s in positions.values())
     if has_usd:
@@ -166,11 +216,13 @@ async def _calc_totals(
                 fx_snapshot = 1.0
 
     for ticker, state in positions.items():
-        asset_result = await db.execute(
-            select(Asset).where(Asset.ticker == ticker)
-        )
-        asset = asset_result.scalar_one_or_none()
-        asset_type = AssetType(state.asset_type) if asset is None else asset.asset_type
+        # Usa o mapa pre-carregado; fallback para o asset_type da transacao
+        asset_type = asset_type_map.get(ticker)
+        if asset_type is None:
+            try:
+                asset_type = AssetType(state.asset_type)
+            except (ValueError, KeyError):
+                asset_type = AssetType.ACAO
 
         close = await get_price_at_date(db, ticker, asset_type, date_str)
         if close is None:
@@ -218,18 +270,13 @@ async def _calc_totals(
 
     unrealized_pnl = market_value - cost_basis
     total_pnl = realized_pnl + unrealized_pnl
+    # NOTA: total_pnl NAO inclui proventos. Ver docstring do modulo.
 
-    # ──────────────────────────────────────────────────────────────────────────
-    # return_pct: retorno sobre cost_basis + realized_pnl positivo
-    #
-    # CORRECAO: a versao anterior usava invested_total como denominador.
-    # invested_total = compras - vendas; com muitas vendas o denominador cai
-    # e o percentual explode ou fica absurdo.
-    #
-    # Formula adotada: total_pnl / (cost_basis + max(realized_pnl, 0))
-    # Representa quanto o capital efetivamente empregado rendeu.
-    # Fallback para invested_total quando nao ha posicoes abertas.
-    # ──────────────────────────────────────────────────────────────────────────
+    # -------------------------------------------------------------------------
+    # return_pct: retorno de preco sobre capital empregado.
+    # ATENCAO: este valor e "retorno de preco". Para retorno total com
+    # proventos ver documentacao do modulo acima.
+    # -------------------------------------------------------------------------
     realized_positive = max(realized_pnl, Decimal("0"))
     return_base = cost_basis + realized_positive
     if return_base > 0:
@@ -322,7 +369,7 @@ async def calc_snapshot_at_date(
         await _prefetch_price_history(db, portfolio_id, days_back)
 
     totals = await _calc_totals(db, portfolio_id, target_date)
-    await _upsert_snapshot(db, portfolio_id, target_date, totals)  # fix: target_date (nao snapshot_date)
+    await _upsert_snapshot(db, portfolio_id, target_date, totals)
     if commit:
         await db.commit()
     logger.info(

@@ -1,6 +1,24 @@
+"""
+Modelo de proventos recebidos por carteira.
+
+Cada registro representa um provento creditado em uma carteira específica,
+vinculado opcionalmente a um AssetDividend (evento de provento do ativo).
+
+Índices compostos (Sprint 5B):
+  - (portfolio_id, ticker)  — cobre sum_dividends_by_ticker
+  - (portfolio_id, status)  — cobre _proventos_total (WHERE status='RECEBIDO')
+
+Campos legados mantidos para não gerar nova migration:
+  ticker, ex_date, payment_date, value_per_unit, total_received, dividend_type.
+Esses campos foram preenchidos pelo backfill inicial e não devem ser removidos
+ainda pois a migration de renomeação (data_ex/data_pagamento) está pendente.
+"""
 import enum
-from sqlalchemy import Column, Integer, String, Date, Numeric, ForeignKey, Enum as SAEnum
-from sqlalchemy.orm import relationship
+
+from sqlalchemy import Date, ForeignKey, Index, Integer, Numeric, String
+from sqlalchemy import Enum as SAEnum
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.core.database import Base
 
 
@@ -22,29 +40,49 @@ class DividendStatus(str, enum.Enum):
 
 class Dividend(Base):
     __tablename__ = "dividends"
+    __table_args__ = (
+        # Sprint 5B: índice composto para sum_dividends_by_ticker
+        #   WHERE portfolio_id = X AND ticker IN (...)
+        Index("idx_div_portfolio_ticker", "portfolio_id", "ticker"),
+        # Sprint 5B: índice composto para _proventos_total
+        #   WHERE portfolio_id = X AND status = 'RECEBIDO'
+        Index("idx_div_portfolio_status", "portfolio_id", "status"),
+    )
 
-    id = Column(Integer, primary_key=True, index=True)
-    asset_dividend_id = Column(Integer, ForeignKey("asset_dividends.id", ondelete="CASCADE"), nullable=True, index=True)
-    portfolio_id = Column(Integer, ForeignKey("portfolios.id", ondelete="CASCADE"), nullable=False, index=True)
-    quantity = Column(Numeric(20, 8), nullable=True)
-    total_value = Column(Numeric(20, 8), nullable=True)
-    net_value = Column(Numeric(20, 8), nullable=True)
-    status = Column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    asset_dividend_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("asset_dividends.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    portfolio_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("portfolios.id", ondelete="CASCADE"),
+        nullable=False,
+        # index=True removido: coberto pelo índice composto idx_div_portfolio_ticker
+    )
+    quantity: Mapped[Numeric | None] = mapped_column(Numeric(20, 8), nullable=True)
+    total_value: Mapped[Numeric | None] = mapped_column(Numeric(20, 8), nullable=True)
+    net_value: Mapped[Numeric | None] = mapped_column(Numeric(20, 8), nullable=True)
+    status: Mapped[str] = mapped_column(
         SAEnum(
             DividendStatus,
             values_callable=lambda x: [e.value for e in x],
-            native_enum=False,   # armazena como VARCHAR — sem tipo PG nativo
+            native_enum=False,
         ),
         nullable=False,
         default="RECEBIDO",
     )
-    # campos legados (backfill)
-    ticker = Column(String, nullable=True, index=True)
-    ex_date = Column(Date, nullable=True)
-    payment_date = Column(Date, nullable=True)
-    value_per_unit = Column(Numeric(20, 8), nullable=True)
-    total_received = Column(Numeric(20, 8), nullable=True)
-    dividend_type = Column(String, nullable=True)
 
+    # ── Campos legados (backfill) ──────────────────────────────────────────
+    ticker: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    ex_date: Mapped[Date | None] = mapped_column(Date, nullable=True)
+    payment_date: Mapped[Date | None] = mapped_column(Date, nullable=True)
+    value_per_unit: Mapped[Numeric | None] = mapped_column(Numeric(20, 8), nullable=True)
+    total_received: Mapped[Numeric | None] = mapped_column(Numeric(20, 8), nullable=True)
+    dividend_type: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    # ── Relacionamentos ─────────────────────────────────────────────────
     portfolio = relationship("Portfolio", back_populates="dividends")
     asset_dividend = relationship("AssetDividend", back_populates="portfolio_dividends")
