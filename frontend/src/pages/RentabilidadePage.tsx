@@ -12,19 +12,28 @@ import KpiCard from '@/components/ui/KpiCard'
 import RentabilidadeChart from '@/components/charts/RentabilidadeChart'
 import { useAppStore } from '@/store/appStore'
 
-// ── helpers de cor ────────────────────────────────────────────────────────────
+// ── helpers defensivos ─────────────────────────────────────────────
 
-function pnlColor(value: number): string {
-  if (value > 0) return 'var(--color-success)'
-  if (value < 0) return 'var(--color-notification)'
+/** Converte qualquer valor para número seguro, retornando 0 para null/undefined/NaN */
+function safeNum(v: unknown): number {
+  const n = Number(v)
+  return isFinite(n) ? n : 0
+}
+
+// ── helpers de cor ───────────────────────────────────────────────
+
+function pnlColor(value: unknown): string {
+  const n = safeNum(value)
+  if (n > 0) return 'var(--color-success)'
+  if (n < 0) return 'var(--color-notification)'
   return 'var(--color-text-muted)'
 }
 
-function pnlSign(value: number): string {
-  return value > 0 ? '+' : ''
+function pnlSign(value: unknown): string {
+  return safeNum(value) > 0 ? '+' : ''
 }
 
-// ── Labels de classe ──────────────────────────────────────────────────────────────
+// ── Labels de classe ────────────────────────────────────────────────
 
 const ASSET_TYPE_LABEL: Record<string, string> = {
   ACAO:              'Ações',
@@ -40,10 +49,10 @@ function labelTipo(tipo: string) {
   return ASSET_TYPE_LABEL[tipo] ?? tipo
 }
 
-// ── Filtros ─────────────────────────────────────────────────────────────────────
+// ── Filtros ────────────────────────────────────────────────────────
 
 const ASSET_TYPE_OPTIONS = [
-  { label: 'Todos',               value: '' },
+  { label: 'Todos',                value: '' },
   { label: 'Ações',              value: 'ACAO' },
   { label: 'FIIs',               value: 'FII' },
   { label: 'ETFs Nacionais',     value: 'ETF_NACIONAL' },
@@ -51,9 +60,14 @@ const ASSET_TYPE_OPTIONS = [
   { label: 'ETFs Internacionais',value: 'ETF_INTERNACIONAL' },
 ]
 
-// ── Sub-componentes ─────────────────────────────────────────────────────────────
+// ── Sub-componentes ─────────────────────────────────────────────────
 
 function ClasseBar({ classe }: { classe: RentabilidadeClasse }) {
+  // safeNum em todos os campos numericos — API pode retornar null/undefined
+  const alocacao  = safeNum(classe.alocacao_pct)
+  const pnlPct    = safeNum(classe.total_pnl_pct)
+  const currValue = safeNum(classe.current_value)
+
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between">
@@ -61,9 +75,9 @@ function ClasseBar({ classe }: { classe: RentabilidadeClasse }) {
           {labelTipo(classe.asset_type)}
         </span>
         <span className="text-xs tabular-nums" style={{ color: 'var(--color-text-muted)' }}>
-          {formatBRL(classe.current_value)}
-          <span className="ml-2" style={{ color: pnlColor(classe.total_pnl_pct) }}>
-            {pnlSign(classe.total_pnl_pct)}{formatPercent(classe.total_pnl_pct)}
+          {formatBRL(currValue)}
+          <span className="ml-2" style={{ color: pnlColor(pnlPct) }}>
+            {pnlSign(pnlPct)}{formatPercent(pnlPct)}
           </span>
         </span>
       </div>
@@ -74,17 +88,17 @@ function ClasseBar({ classe }: { classe: RentabilidadeClasse }) {
         <div
           className="h-full rounded-full transition-all"
           style={{
-            width:      `${Math.min(classe.alocacao_pct, 100)}%`,
+            width:      `${Math.min(alocacao, 100)}%`,
             background: 'var(--color-primary)',
           }}
         />
       </div>
       <div className="flex justify-between">
         <span className="text-[10px]" style={{ color: 'var(--color-text-faint)' }}>
-          {classe.count} ativo{classe.count !== 1 ? 's' : ''}
+          {classe.count ?? 0} ativo{(classe.count ?? 0) !== 1 ? 's' : ''}
         </span>
         <span className="text-[10px] tabular-nums" style={{ color: 'var(--color-text-faint)' }}>
-          {classe.alocacao_pct.toFixed(1)}% do patrimônio
+          {alocacao.toFixed(1)}% do patrimônio
         </span>
       </div>
     </div>
@@ -92,6 +106,15 @@ function ClasseBar({ classe }: { classe: RentabilidadeClasse }) {
 }
 
 function AtivoRow({ ativo }: { ativo: RentabilidadeAtivo }) {
+  const unrealizedPnl  = safeNum(ativo.unrealized_pnl)
+  const unrealizedPct  = safeNum(ativo.unrealized_pct)
+  const realizedPnl    = safeNum(ativo.realized_pnl)
+  const totalPnl       = safeNum(ativo.total_pnl)
+  const totalPnlPct    = safeNum(ativo.total_pnl_pct)
+  const currentValue   = safeNum(ativo.current_value)
+  const avgPrice       = safeNum(ativo.avg_price)
+  const quantity       = safeNum(ativo.quantity)
+
   return (
     <tr className="border-b" style={{ borderColor: 'oklch(from var(--color-text) l c h / 0.06)' }}>
       <td className="py-2.5 pr-3">
@@ -106,32 +129,32 @@ function AtivoRow({ ativo }: { ativo: RentabilidadeAtivo }) {
       </td>
       <td className="py-2.5 pr-3 text-right">
         <span className="text-xs tabular-nums" style={{ color: 'var(--color-text-muted)' }}>
-          {ativo.is_open ? ativo.quantity.toLocaleString('pt-BR') : '—'}
+          {ativo.is_open ? quantity.toLocaleString('pt-BR') : '—'}
         </span>
       </td>
       <td className="py-2.5 pr-3 text-right">
         <span className="text-xs tabular-nums" style={{ color: 'var(--color-text-muted)' }}>
-          {ativo.is_open ? formatBRL(ativo.avg_price) : '—'}
+          {ativo.is_open ? formatBRL(avgPrice) : '—'}
         </span>
       </td>
       <td className="py-2.5 pr-3 text-right">
         <span className="text-xs tabular-nums" style={{ color: 'var(--color-text)' }}>
-          {ativo.is_open ? formatBRL(ativo.current_value) : '—'}
+          {ativo.is_open ? formatBRL(currentValue) : '—'}
         </span>
       </td>
       <td className="py-2.5 pr-3 text-right">
         <div className="flex flex-col items-end">
           <span
             className="text-xs tabular-nums font-medium"
-            style={{ color: pnlColor(ativo.unrealized_pnl) }}
+            style={{ color: pnlColor(unrealizedPnl) }}
           >
             {ativo.is_open
-              ? `${pnlSign(ativo.unrealized_pnl)}${formatBRL(ativo.unrealized_pnl)}`
+              ? `${pnlSign(unrealizedPnl)}${formatBRL(unrealizedPnl)}`
               : '—'}
           </span>
           {ativo.is_open && (
-            <span className="text-[10px] tabular-nums" style={{ color: pnlColor(ativo.unrealized_pct) }}>
-              {pnlSign(ativo.unrealized_pct)}{formatPercent(ativo.unrealized_pct)}
+            <span className="text-[10px] tabular-nums" style={{ color: pnlColor(unrealizedPct) }}>
+              {pnlSign(unrealizedPct)}{formatPercent(unrealizedPct)}
             </span>
           )}
         </div>
@@ -139,10 +162,10 @@ function AtivoRow({ ativo }: { ativo: RentabilidadeAtivo }) {
       <td className="py-2.5 pr-3 text-right">
         <span
           className="text-xs tabular-nums font-medium"
-          style={{ color: pnlColor(ativo.realized_pnl) }}
+          style={{ color: pnlColor(realizedPnl) }}
         >
-          {ativo.realized_pnl !== 0
-            ? `${pnlSign(ativo.realized_pnl)}${formatBRL(ativo.realized_pnl)}`
+          {realizedPnl !== 0
+            ? `${pnlSign(realizedPnl)}${formatBRL(realizedPnl)}`
             : '—'}
         </span>
       </td>
@@ -150,12 +173,12 @@ function AtivoRow({ ativo }: { ativo: RentabilidadeAtivo }) {
         <div className="flex flex-col items-end">
           <span
             className="text-xs tabular-nums font-semibold"
-            style={{ color: pnlColor(ativo.total_pnl) }}
+            style={{ color: pnlColor(totalPnl) }}
           >
-            {pnlSign(ativo.total_pnl)}{formatBRL(ativo.total_pnl)}
+            {pnlSign(totalPnl)}{formatBRL(totalPnl)}
           </span>
-          <span className="text-[10px] tabular-nums" style={{ color: pnlColor(ativo.total_pnl_pct) }}>
-            {pnlSign(ativo.total_pnl_pct)}{formatPercent(ativo.total_pnl_pct)}
+          <span className="text-[10px] tabular-nums" style={{ color: pnlColor(totalPnlPct) }}>
+            {pnlSign(totalPnlPct)}{formatPercent(totalPnlPct)}
           </span>
         </div>
       </td>
@@ -163,12 +186,11 @@ function AtivoRow({ ativo }: { ativo: RentabilidadeAtivo }) {
   )
 }
 
-// ── Página ───────────────────────────────────────────────────────────────────────
+// ── Página ────────────────────────────────────────────────────────────────────────
 
 export default function RentabilidadePage() {
   const { data: portfolios } = usePortfolioList()
 
-  // Usa o portfolio selecionado globalmente como padrão; permite override local
   const globalPortfolioId = useAppStore(s => s.selectedPortfolioId)
   const [selectedPortfolio, setSelectedPortfolio] = useState<number | null>(null)
   const portfolioId = selectedPortfolio ?? globalPortfolioId ?? (portfolios?.[0]?.id ?? 0)
@@ -236,24 +258,24 @@ export default function RentabilidadePage() {
           <div className="kpi-grid">
             <KpiCard
               label="Patrimônio atual"
-              value={formatBRL(kpis?.patrimonio_atual ?? 0)}
-              subValue={formatBRL(kpis?.total_aportado ?? 0)}
+              value={formatBRL(safeNum(kpis?.patrimonio_atual))}
+              subValue={formatBRL(safeNum(kpis?.total_aportado))}
               subLabel="Total aportado"
             />
             <KpiCard
               label="Retorno total"
-              value={formatBRL(kpis?.total_pnl ?? 0)}
-              change={kpis?.retorno_total_pct}
+              value={formatBRL(safeNum(kpis?.total_pnl))}
+              change={safeNum(kpis?.retorno_total_pct)}
             />
             <KpiCard
               label="Retorno no mês"
-              value={kpis ? `${pnlSign(kpis.retorno_mes_pct)}${formatPercent(kpis.retorno_mes_pct)}` : '—'}
-              change={kpis?.retorno_mes_pct}
+              value={kpis ? `${pnlSign(kpis.retorno_mes_pct)}${formatPercent(safeNum(kpis.retorno_mes_pct))}` : '—'}
+              change={safeNum(kpis?.retorno_mes_pct)}
             />
             <KpiCard
               label="Retorno 12 meses"
-              value={kpis ? `${pnlSign(kpis.retorno_12m_pct)}${formatPercent(kpis.retorno_12m_pct)}` : '—'}
-              change={kpis?.retorno_12m_pct}
+              value={kpis ? `${pnlSign(kpis.retorno_12m_pct)}${formatPercent(safeNum(kpis.retorno_12m_pct))}` : '—'}
+              change={safeNum(kpis?.retorno_12m_pct)}
             />
           </div>
 
@@ -261,23 +283,23 @@ export default function RentabilidadePage() {
           <div className="kpi-grid">
             <KpiCard
               label="Ganho não realizado"
-              value={formatBRL(kpis?.ganho_nao_realizado ?? 0)}
-              subValue={kpis ? `${pnlSign(kpis.retorno_desde_inicio_pct)}${formatPercent(kpis.retorno_desde_inicio_pct)}` : '—'}
+              value={formatBRL(safeNum(kpis?.ganho_nao_realizado))}
+              subValue={kpis ? `${pnlSign(kpis.retorno_desde_inicio_pct)}${formatPercent(safeNum(kpis.retorno_desde_inicio_pct))}` : '—'}
               subLabel="Desde o início"
             />
             <KpiCard
               label="Ganho realizado"
-              value={formatBRL(kpis?.ganho_realizado ?? 0)}
+              value={formatBRL(safeNum(kpis?.ganho_realizado))}
             />
             <KpiCard
               label="Proventos recebidos"
-              value={formatBRL(kpis?.proventos_total ?? 0)}
-              subValue={formatBRL(kpis?.proventos_12m ?? 0)}
+              value={formatBRL(safeNum(kpis?.proventos_total))}
+              subValue={formatBRL(safeNum(kpis?.proventos_12m))}
               subLabel="Últimos 12 meses"
             />
             <KpiCard
               label="Custo médio total"
-              value={formatBRL(kpis?.custo_total ?? 0)}
+              value={formatBRL(safeNum(kpis?.custo_total))}
             />
           </div>
         </>
