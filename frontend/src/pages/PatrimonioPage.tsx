@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import {
-  BarChart2, RefreshCw, Wallet, Target, TrendingUp, TrendingDown, LineChart, AlertTriangle,
+  BarChart2, RefreshCw, Wallet, Target, TrendingUp, TrendingDown,
+  LineChart, AlertTriangle, PieChart, ArrowUp, ArrowDown, Minus,
 } from 'lucide-react'
 import {
   usePortfolioSummary,
@@ -25,9 +26,10 @@ import PositionTable from '@/components/resume/PositionTable'
 import AllocationTargetWidget from '@/components/resume/AllocationTargetWidget'
 import EvolutionLineChart from '@/components/charts/EvolutionLineChart'
 import EvolutionBarChart from '@/components/charts/EvolutionBarChart'
+import ConcentrationTreemap from '@/components/charts/ConcentrationTreemap'
 import clsx from 'clsx'
 
-// ── Constantes ────────────────────────────────────────────────────────────────────────────────────────
+// ── Constantes ────────────────────────────────────────────────────────────────────────────────────
 const ASSET_TYPE_LABELS: Record<string, string> = {
   ACAO: 'Ações', ACAO_NACIONAL: 'Ações', FII: 'FIIs',
   ETF_NACIONAL: 'ETFs BR', STOCK: 'Stocks', ETF_INTERNACIONAL: 'ETFs INT',
@@ -49,6 +51,21 @@ const ASSET_TYPE_COLORS: Record<string, { bg: string; text: string; border: stri
 }
 const FALLBACK_COLOR = { bg: 'var(--color-surface-dynamic)', text: 'var(--color-text-muted)', border: 'var(--color-border)' }
 
+// cores sólidas para treemap por tipo de ativo
+const TREEMAP_COLOR_MAP: Record<string, string> = {
+  ACAO:              'var(--color-blue)',
+  ACAO_NACIONAL:     'var(--color-blue)',
+  FII:               'var(--color-purple)',
+  ETF_NACIONAL:      'var(--color-primary)',
+  STOCK:             '#3b82f6',
+  ETF_INTERNACIONAL: '#6366f1',
+  TESOURO_DIRETO:    'var(--color-gold)',
+  RENDA_FIXA:        'var(--color-orange)',
+  CRIPTO:            'var(--color-error)',
+  BDR:               '#a855f7',
+}
+const TREEMAP_FALLBACK = 'var(--color-text-muted)'
+
 const PERIODS: { label: string; value: PeriodOption }[] = [
   { label: '6m',   value: '6m'  },
   { label: '12m',  value: '12m' },
@@ -56,14 +73,16 @@ const PERIODS: { label: string; value: PeriodOption }[] = [
   { label: 'Tudo', value: 'all' },
 ]
 
-type Tab = 'visao-geral' | 'historico'
+type Tab = 'visao-geral' | 'historico' | 'analise'
 type ViewMode = 'diario' | 'mensal'
+type TreemapView = 'ativo' | 'classe'
 
-// ── Tab bar ──────────────────────────────────────────────────────────────────────────────────
+// ── Tab bar ────────────────────────────────────────────────────────────────────────────────────
 function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: 'visao-geral', label: 'Visão Geral', icon: BarChart2 },
     { id: 'historico',   label: 'Histórico',    icon: LineChart  },
+    { id: 'analise',     label: 'Análise',       icon: PieChart  },
   ]
   return (
     <div
@@ -89,7 +108,7 @@ function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
   )
 }
 
-// ── Toggle group (Diário/Mensal e Período) ──────────────────────────────────────────────────
+// ── Toggle group ──────────────────────────────────────────────────────────────────────────────
 function ToggleGroup<T extends string>({
   options, value, onChange,
 }: {
@@ -132,7 +151,7 @@ function ToggleGroup<T extends string>({
   )
 }
 
-// ── Aba: Visao Geral ─────────────────────────────────────────────────────────────────────────────────────
+// ── Aba: Visao Geral ────────────────────────────────────────────────────────────────────────────────────────
 function TabVisaoGeral({ portfolioId }: { portfolioId: number }) {
   const [activeTypeFilter, setActiveTypeFilter] = useState<string | null>(null)
 
@@ -164,7 +183,7 @@ function TabVisaoGeral({ portfolioId }: { portfolioId: number }) {
     if (!positions) return []
     if (!activeTypeFilter) return positions
     return positions
-      .map((g: PositionGroup) => ({ ...g, positions: g.positions.filter(p => p.asset_type === activeTypeFilter) }))
+      .map((g: PositionGroup) => ({ ...g, positions: g.positions.filter((p: any) => p.asset_type === activeTypeFilter) }))
       .filter((g: PositionGroup) => g.positions.length > 0)
   }, [positions, activeTypeFilter])
 
@@ -293,7 +312,6 @@ function TabVisaoGeral({ portfolioId }: { portfolioId: number }) {
             <div className="h-52 flex items-center justify-center text-xs" style={{ color: 'var(--color-text-muted)' }}>Sem dados</div>
           )}
 
-          {/* Alvo da Carteira — Sprint 5E */}
           <div style={{ padding: '0 1rem 1rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '0.5rem', paddingTop: '0.75rem', borderTop: '1px solid var(--color-divider)' }}>
               <Target size={12} style={{ color: 'var(--color-primary)' }} />
@@ -347,7 +365,7 @@ function TabVisaoGeral({ portfolioId }: { portfolioId: number }) {
   )
 }
 
-// ── Aba: Historico ────────────────────────────────────────────────────────────────────────────────────
+// ── Aba: Historico ────────────────────────────────────────────────────────────────────────────────────────
 function TabHistorico({ portfolioId }: { portfolioId: number }) {
   const [period,       setPeriod]       = useState<PeriodOption>('12m')
   const [view,         setView]         = useState<ViewMode>('diario')
@@ -379,21 +397,11 @@ function TabHistorico({ portfolioId }: { portfolioId: number }) {
 
   return (
     <>
-      {/* Controles topo */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          <ToggleGroup<ViewMode>
-            options={viewOptions}
-            value={view}
-            onChange={setView}
-          />
-          <ToggleGroup<PeriodOption>
-            options={PERIODS}
-            value={period}
-            onChange={setPeriod}
-          />
+          <ToggleGroup<ViewMode> options={viewOptions} value={view} onChange={setView} />
+          <ToggleGroup<PeriodOption> options={PERIODS} value={period} onChange={setPeriod} />
         </div>
-
         <button
           onClick={handleBackfill}
           disabled={backfill.isPending}
@@ -405,36 +413,15 @@ function TabHistorico({ portfolioId }: { portfolioId: number }) {
         </button>
       </div>
 
-      {/* KPIs do periodo */}
       <div className="kpi-grid">
         {loadingDaily ? (
           [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
         ) : last ? (
           <>
-            <KpiCard
-              label="Valor atual (mercado)"
-              value={formatBRL(last.market_value)}
-              subValue={formatBRL(last.invested_total)}
-              subLabel="Total investido"
-            />
-            <KpiCard
-              label="Resultado total"
-              value={formatBRL(last.total_pnl)}
-              valueColor={signClass(last.total_pnl)}
-              subLabel={`Realizado: ${formatBRL(last.realized_pnl)}`}
-            />
-            <KpiCard
-              label={`Variação no período (${period})`}
-              value={variacao !== null ? formatBRL(variacao) : '—'}
-              valueColor={variacao !== null ? signClass(variacao) : undefined}
-              change={variacaoPct ?? undefined}
-            />
-            <KpiCard
-              label="Rentabilidade total"
-              value={formatPercent(last.return_pct)}
-              valueColor={signClass(last.return_pct)}
-              subLabel="Sobre o capital investido"
-            />
+            <KpiCard label="Valor atual (mercado)" value={formatBRL(last.market_value)} subValue={formatBRL(last.invested_total)} subLabel="Total investido" />
+            <KpiCard label="Resultado total" value={formatBRL(last.total_pnl)} valueColor={signClass(last.total_pnl)} subLabel={`Realizado: ${formatBRL(last.realized_pnl)}`} />
+            <KpiCard label={`Variação no período (${period})`} value={variacao !== null ? formatBRL(variacao) : '—'} valueColor={variacao !== null ? signClass(variacao) : undefined} change={variacaoPct ?? undefined} />
+            <KpiCard label="Rentabilidade total" value={formatPercent(last.return_pct)} valueColor={signClass(last.return_pct)} subLabel="Sobre o capital investido" />
           </>
         ) : (
           <div className="col-span-4 py-8 text-center text-xs" style={{ color: 'var(--color-text-muted)' }}>
@@ -443,43 +430,28 @@ function TabHistorico({ portfolioId }: { portfolioId: number }) {
         )}
       </div>
 
-      {/* Grafico */}
       <div className="card">
         <div className="section-card-header">
-          {view === 'diario'
-            ? <TrendingUp size={14} style={{ color: 'var(--color-primary)' }} />
-            : <BarChart2  size={14} style={{ color: 'var(--color-primary)' }} />}
-          <span className="section-card-title">
-            {view === 'diario' ? 'Evolução Diária' : 'Evolução Mensal'}
-          </span>
+          {view === 'diario' ? <TrendingUp size={14} style={{ color: 'var(--color-primary)' }} /> : <BarChart2 size={14} style={{ color: 'var(--color-primary)' }} />}
+          <span className="section-card-title">{view === 'diario' ? 'Evolução Diária' : 'Evolução Mensal'}</span>
         </div>
         <div className="p-4">
           {noData ? (
             <div className="flex flex-col items-center gap-3 py-10" style={{ color: 'var(--color-text-muted)' }}>
               <AlertTriangle size={24} style={{ color: 'var(--color-warning, #f59e0b)' }} />
-              <p className="text-sm text-center">
-                Nenhum dado histórico encontrado.<br />
-                Clique em <strong>Atualizar histórico</strong> acima para gerar os snapshots.
-              </p>
+              <p className="text-sm text-center">Nenhum dado histórico encontrado.<br />Clique em <strong>Atualizar histórico</strong> acima para gerar os snapshots.</p>
             </div>
           ) : view === 'diario' ? (
-            loadingDaily
-              ? <div className="h-64 skeleton rounded" />
-              : <EvolutionLineChart data={daily ?? []} />
+            loadingDaily ? <div className="h-64 skeleton rounded" /> : <EvolutionLineChart data={daily ?? []} />
           ) : (
-            loadingMonthly
-              ? <div className="h-64 skeleton rounded" />
-              : <EvolutionBarChart data={monthly ?? []} />
+            loadingMonthly ? <div className="h-64 skeleton rounded" /> : <EvolutionBarChart data={monthly ?? []} />
           )}
         </div>
       </div>
 
-      {/* Tabela resumo mensal */}
       {!loadingMonthly && monthly && monthly.length > 0 && (
         <div className="card overflow-hidden">
-          <div className="section-card-header">
-            <span className="section-card-title">Resumo Mensal</span>
-          </div>
+          <div className="section-card-header"><span className="section-card-title">Resumo Mensal</span></div>
           <div className="overflow-x-auto">
             <table className="table-dense w-full">
               <thead>
@@ -496,39 +468,17 @@ function TabHistorico({ portfolioId }: { portfolioId: number }) {
                   const isPositive = row.return_pct >= 0
                   const isCurrentMonth = i === 0
                   return (
-                    <tr
-                      key={row.period}
-                      style={{
-                        background: isCurrentMonth
-                          ? 'oklch(from var(--color-primary) l c h / 0.05)'
-                          : 'transparent',
-                      }}
-                    >
+                    <tr key={row.period} style={{ background: isCurrentMonth ? 'oklch(from var(--color-primary) l c h / 0.05)' : 'transparent' }}>
                       <td>
                         <span style={{ color: 'var(--color-text)' }}>{row.period}</span>
-                        {isCurrentMonth && (
-                          <span
-                            className="ml-2 badge badge-primary"
-                            style={{ fontSize: '0.625rem', padding: '0.1em 0.45em' }}
-                          >
-                            atual
-                          </span>
-                        )}
+                        {isCurrentMonth && <span className="ml-2 badge badge-primary" style={{ fontSize: '0.625rem', padding: '0.1em 0.45em' }}>atual</span>}
                       </td>
-                      <td className="text-right tabular-nums" style={{ color: 'var(--color-text)' }}>
-                        {formatBRL(row.value)}
-                      </td>
-                      <td className="text-right tabular-nums" style={{ color: 'var(--color-text-muted)' }}>
-                        {formatBRL(row.invested)}
-                      </td>
-                      <td className={clsx('text-right tabular-nums', signClass(row.unrealized_pnl))}>
-                        {row.unrealized_pnl >= 0 ? '+' : ''}{formatBRL(row.unrealized_pnl)}
-                      </td>
+                      <td className="text-right tabular-nums" style={{ color: 'var(--color-text)' }}>{formatBRL(row.value)}</td>
+                      <td className="text-right tabular-nums" style={{ color: 'var(--color-text-muted)' }}>{formatBRL(row.invested)}</td>
+                      <td className={clsx('text-right tabular-nums', signClass(row.unrealized_pnl))}>{row.unrealized_pnl >= 0 ? '+' : ''}{formatBRL(row.unrealized_pnl)}</td>
                       <td className={clsx('text-right tabular-nums font-medium', signClass(row.return_pct))}>
                         <span className="inline-flex items-center justify-end gap-1">
-                          {isPositive
-                            ? <TrendingUp size={11} />
-                            : <TrendingDown size={11} />}
+                          {isPositive ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
                           {row.return_pct >= 0 ? '+' : ''}{formatPercent(row.return_pct)}
                         </span>
                       </td>
@@ -544,7 +494,275 @@ function TabHistorico({ portfolioId }: { portfolioId: number }) {
   )
 }
 
-// ── Page root ───────────────────────────────────────────────────────────────────────────────────────
+// ── Aba: Analise (Sprint 6B) ─────────────────────────────────────────────────────────────────────────────────
+function TabAnalise({ portfolioId }: { portfolioId: number }) {
+  const [treemapView, setTreemapView] = useState<TreemapView>('ativo')
+
+  const { data: positions, isLoading: loadingPositions } = usePositions(portfolioId)
+  const { data: classTargets }                           = useClassTargets(portfolioId)
+
+  // Flatten positions
+  const allPositions = useMemo(() => {
+    if (!positions) return []
+    return positions.flatMap((g: PositionGroup) => g.positions ?? [])
+  }, [positions])
+
+  // Treemap: por ativo individual
+  const treemapByAsset = useMemo(() => {
+    const total = allPositions.reduce((s: number, p: any) => s + (p.current_value ?? 0), 0)
+    if (total === 0) return []
+    return allPositions
+      .filter((p: any) => (p.current_value ?? 0) > 0)
+      .map((p: any) => ({
+        label: p.ticker ?? p.asset_code ?? '?',
+        value: p.current_value ?? 0,
+        color: TREEMAP_COLOR_MAP[p.asset_type] ?? TREEMAP_FALLBACK,
+      }))
+      .sort((a: any, b: any) => b.value - a.value)
+  }, [allPositions])
+
+  // Treemap: por classe
+  const treemapByClass = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const p of allPositions) {
+      const t = p.asset_type ?? 'OUTROS'
+      map[t] = (map[t] ?? 0) + (p.current_value ?? 0)
+    }
+    return Object.entries(map)
+      .filter(([, v]) => v > 0)
+      .map(([type, value]) => ({
+        label: ASSET_TYPE_LABELS[type] ?? type,
+        value,
+        color: TREEMAP_COLOR_MAP[type] ?? TREEMAP_FALLBACK,
+      }))
+      .sort((a, b) => b.value - a.value)
+  }, [allPositions])
+
+  // HHI (0-10000): soma dos quadrados das porcentagens
+  const { hhi, hhiNorm, hhiLevel, hhiLabel } = useMemo(() => {
+    const items = treemapView === 'ativo' ? treemapByAsset : treemapByClass
+    const total = items.reduce((s, i) => s + i.value, 0)
+    if (total === 0) return { hhi: 0, hhiNorm: 0, hhiLevel: 'neutro', hhiLabel: '—' }
+    const hhi = items.reduce((s, i) => {
+      const pct = (i.value / total) * 100
+      return s + pct * pct
+    }, 0)
+    const hhiNorm = Math.min(hhi / 10000, 1)
+    let hhiLevel: 'baixo' | 'medio' | 'alto' | 'neutro' = 'neutro'
+    let hhiLabel = '—'
+    if (hhi < 1500)       { hhiLevel = 'baixo'; hhiLabel = 'Bem diversificado' }
+    else if (hhi < 2500)  { hhiLevel = 'medio'; hhiLabel = 'Concentração moderada' }
+    else                  { hhiLevel = 'alto';  hhiLabel = 'Alta concentração' }
+    return { hhi, hhiNorm, hhiLevel, hhiLabel }
+  }, [treemapByAsset, treemapByClass, treemapView])
+
+  // Desvio por classe: atual vs alvo
+  const desvioRows = useMemo(() => {
+    if (!classTargets || classTargets.length === 0) return []
+    return classTargets
+      .map((row: any) => ({
+        label:   ASSET_TYPE_LABELS[row.asset_class] ?? row.asset_class,
+        type:    row.asset_class as string,
+        target:  row.target_pct as number,
+        current: row.current_pct as number,
+        delta:   (row.current_pct ?? 0) - (row.target_pct ?? 0),
+      }))
+      .sort((a: any, b: any) => Math.abs(b.delta) - Math.abs(a.delta))
+  }, [classTargets])
+
+  const hhiColor = hhiLevel === 'baixo'
+    ? 'var(--color-success)'
+    : hhiLevel === 'medio'
+      ? 'var(--color-gold)'
+      : hhiLevel === 'alto'
+        ? 'var(--color-error)'
+        : 'var(--color-text-muted)'
+
+  const treemapViewOptions: { label: string; value: TreemapView }[] = [
+    { label: 'Por ativo',  value: 'ativo'  },
+    { label: 'Por classe', value: 'classe' },
+  ]
+
+  if (loadingPositions) return (
+    <div className="flex flex-col gap-4">
+      {[...Array(3)].map((_, i) => <div key={i} className="card h-32 skeleton" />)}
+    </div>
+  )
+
+  if (allPositions.length === 0) return (
+    <EmptyState icon={PieChart} title="Nenhum ativo na carteira" description="Adicione lançamentos para visualizar a análise de concentração." />
+  )
+
+  return (
+    <div className="flex flex-col gap-4">
+
+      {/* Score HHI + header */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Score */}
+        <div className="card p-5 flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <PieChart size={14} style={{ color: 'var(--color-primary)' }} />
+            <span className="section-card-title">Score de Concentração</span>
+          </div>
+          <div style={{ fontSize: 'clamp(2rem, 4vw, 2.5rem)', fontWeight: 700, lineHeight: 1, color: hhiColor, fontVariantNumeric: 'tabular-nums' }}>
+            {Math.round(hhi).toLocaleString('pt-BR')}
+            <span style={{ fontSize: 'var(--text-sm)', fontWeight: 400, color: 'var(--color-text-muted)', marginLeft: 6 }}>HHI</span>
+          </div>
+          {/* Barra de progresso */}
+          <div style={{ height: 6, borderRadius: 9999, background: 'var(--color-surface-dynamic)', overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${hhiNorm * 100}%`, background: hhiColor, borderRadius: 9999, transition: 'width 600ms ease' }} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+            <span>0</span><span>2.500</span><span>10.000</span>
+          </div>
+          <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: hhiColor }}>{hhiLabel}</div>
+          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-faint)', lineHeight: 1.5 }}>
+            O índice HHI mede concentração. Abaixo de 1.500 indica carteira bem diversificada.
+          </p>
+        </div>
+
+        {/* Top 3 maiores posições */}
+        <div className="card p-5 flex flex-col gap-3 md:col-span-2">
+          <span className="section-card-title">Top 5 Posições</span>
+          <div className="flex flex-col gap-2">
+            {treemapByAsset.slice(0, 5).map((item, i) => {
+              const total = treemapByAsset.reduce((s, x) => s + x.value, 0)
+              const pct = total > 0 ? (item.value / total) * 100 : 0
+              return (
+                <div key={item.label} className="flex items-center gap-3">
+                  <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-faint)', width: 16 }}>#{i + 1}</span>
+                  <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', width: 72, flexShrink: 0 }}>{item.label}</span>
+                  <div style={{ flex: 1, height: 6, borderRadius: 9999, background: 'var(--color-surface-dynamic)', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${pct}%`, background: item.color, borderRadius: 9999 }} />
+                  </div>
+                  <span style={{ fontSize: 'var(--text-xs)', tabularNums: true, color: 'var(--color-text-muted)', width: 48, textAlign: 'right' }}>{pct.toFixed(1)}%</span>
+                  <span style={{ fontSize: 'var(--text-xs)', tabularNums: true, color: 'var(--color-text)', width: 88, textAlign: 'right' }}>{formatBRL(item.value)}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Treemap */}
+      <div className="card overflow-hidden">
+        <div className="section-card-header" style={{ justifyContent: 'space-between' }}>
+          <div className="flex items-center gap-2">
+            <BarChart2 size={14} style={{ color: 'var(--color-primary)' }} />
+            <span className="section-card-title">Mapa de Concentração</span>
+          </div>
+          <ToggleGroup<TreemapView>
+            options={treemapViewOptions}
+            value={treemapView}
+            onChange={setTreemapView}
+          />
+        </div>
+        <div className="p-4">
+          <ConcentrationTreemap items={treemapView === 'ativo' ? treemapByAsset : treemapByClass} />
+        </div>
+        {/* Legenda */}
+        <div className="px-4 pb-4 flex flex-wrap gap-2">
+          {(treemapView === 'ativo' ? treemapByClass : treemapByClass).map(item => (
+            <span key={item.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+              <span style={{ width: 8, height: 8, borderRadius: 2, background: item.color, flexShrink: 0 }} />
+              {item.label}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Desvio do alvo */}
+      {desvioRows.length > 0 ? (
+        <div className="card overflow-hidden">
+          <div className="section-card-header">
+            <Target size={14} style={{ color: 'var(--color-primary)' }} />
+            <span className="section-card-title">Desvio da Alocação Ideal</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="table-dense w-full">
+              <thead>
+                <tr>
+                  <th>Classe</th>
+                  <th className="text-right">Alvo</th>
+                  <th className="text-right">Atual</th>
+                  <th className="text-right">Desvio</th>
+                  <th style={{ width: 160 }}>Barra</th>
+                </tr>
+              </thead>
+              <tbody>
+                {desvioRows.map((row: any) => {
+                  const isOver  = row.delta > 0.5
+                  const isUnder = row.delta < -0.5
+                  const clr     = isOver ? 'var(--color-notification)' : isUnder ? 'var(--color-gold)' : 'var(--color-success)'
+                  const Icon    = isOver ? ArrowUp : isUnder ? ArrowDown : Minus
+                  const barPct  = Math.min(Math.abs(row.delta) / 20, 1) * 100
+                  return (
+                    <tr key={row.type}>
+                      <td style={{ color: 'var(--color-text)' }}>
+                        <span className="text-xs font-medium px-2 py-0.5 rounded border"
+                          style={{
+                            background: (ASSET_TYPE_COLORS[row.type] ?? FALLBACK_COLOR).bg,
+                            color: (ASSET_TYPE_COLORS[row.type] ?? FALLBACK_COLOR).text,
+                            borderColor: (ASSET_TYPE_COLORS[row.type] ?? FALLBACK_COLOR).border,
+                          }}>
+                          {row.label}
+                        </span>
+                      </td>
+                      <td className="text-right tabular-nums" style={{ color: 'var(--color-text-muted)' }}>{row.target.toFixed(1)}%</td>
+                      <td className="text-right tabular-nums" style={{ color: 'var(--color-text)' }}>{row.current.toFixed(1)}%</td>
+                      <td className="text-right">
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontWeight: 600, fontSize: 'var(--text-xs)', color: clr }}>
+                          <Icon size={11} />
+                          {row.delta > 0 ? '+' : ''}{row.delta.toFixed(1)}%
+                        </span>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          {/* Barra divergente centralizada */}
+                          <div style={{ flex: 1, height: 6, borderRadius: 9999, background: 'var(--color-surface-dynamic)', overflow: 'hidden', position: 'relative' }}>
+                            <div style={{
+                              position: 'absolute',
+                              top: 0,
+                              height: '100%',
+                              width: `${barPct / 2}%`,
+                              background: clr,
+                              borderRadius: 9999,
+                              left:  row.delta > 0 ? '50%'   : undefined,
+                              right: row.delta < 0 ? '50%'   : undefined,
+                            }} />
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-4 pb-3 pt-2 flex gap-4 flex-wrap" style={{ borderTop: '1px solid var(--color-divider)' }}>
+            {[
+              { color: 'var(--color-notification)', label: 'Acima do alvo' },
+              { color: 'var(--color-gold)',          label: 'Abaixo do alvo' },
+              { color: 'var(--color-success)',       label: 'No alvo (±0,5%)' },
+            ].map(l => (
+              <span key={l.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+                <span style={{ width: 8, height: 8, borderRadius: 9999, background: l.color }} />
+                {l.label}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="card p-6 flex items-center gap-3" style={{ color: 'var(--color-text-muted)' }}>
+          <Target size={16} />
+          <span className="text-sm">Configure metas de alocação em <a href="/carteira/metas" style={{ color: 'var(--color-primary)' }}>Configurações → Metas</a> para ver o desvio do alvo.</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Page root ────────────────────────────────────────────────────────────────────────────────────────
 function PatrimonioPage() {
   const portfolioId = useAppStore(s => s.selectedPortfolioId)
   const [activeTab, setActiveTab] = useState<Tab>('visao-geral')
@@ -563,7 +781,6 @@ function PatrimonioPage() {
 
   return (
     <div className="page-container">
-      {/* Cabeçalho */}
       <div className="page-header">
         <div>
           <h1 className="page-title">Patrimônio</h1>
@@ -571,13 +788,13 @@ function PatrimonioPage() {
         </div>
       </div>
 
-      {/* Tab bar */}
       <TabBar active={activeTab} onChange={setActiveTab} />
 
-      {/* Conteudo da aba ativa */}
       {activeTab === 'visao-geral'
         ? <TabVisaoGeral portfolioId={portfolioId} />
-        : <TabHistorico  portfolioId={portfolioId} />}
+        : activeTab === 'historico'
+          ? <TabHistorico  portfolioId={portfolioId} />
+          : <TabAnalise    portfolioId={portfolioId} />}
     </div>
   )
 }
