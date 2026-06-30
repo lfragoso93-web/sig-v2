@@ -2,11 +2,17 @@ import React from 'react'
 import clsx from 'clsx'
 import { formatPercent } from '@/utils/format'
 
+/** Converte qualquer valor para número seguro (0 se null/undefined/NaN/Infinity) */
+function safeNum(v: unknown): number {
+  const n = Number(v)
+  return Number.isFinite(n) ? n : 0
+}
+
 interface Props {
   label: string
   value: React.ReactNode
   valueColor?: string
-  change?: number
+  change?: number | null
   subValue?: string
   subLabel?: string
   bottomLine?: React.ReactNode
@@ -21,7 +27,9 @@ export default function KpiCard({
   subLabel,
   bottomLine,
 }: Props) {
-  const isPositive = change !== undefined && change >= 0
+  // change pode chegar null/undefined da API — normaliza para número seguro
+  const safeChange = change !== undefined && change !== null ? safeNum(change) : undefined
+  const isPositive = safeChange !== undefined && safeChange >= 0
 
   return (
     <div
@@ -62,7 +70,7 @@ export default function KpiCard({
       </div>
 
       {/* Variação % */}
-      {change !== undefined && (
+      {safeChange !== undefined && (
         <div
           className="tabular-nums"
           style={{
@@ -81,7 +89,7 @@ export default function KpiCard({
             color: isPositive ? 'var(--color-success)' : 'var(--color-notification)',
           }}
         >
-          {change >= 0 ? '+' : ''}{formatPercent(change)}
+          {safeChange >= 0 ? '+' : ''}{formatPercent(safeChange)}
         </div>
       )}
 

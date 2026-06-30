@@ -741,7 +741,7 @@ function PatrimonioPage() {
               value={formatBRL(safeNum(summary.total_patrimonio))}
               subValue={formatBRL(safeNum(summary.total_investido))}
               subLabel="Valor investido"
-              change={summary.variacao_percentual}
+              change={safeNum(summary.variacao_percentual)}
             />
             <KpiCard
               label="Resultado"
@@ -759,7 +759,7 @@ function PatrimonioPage() {
               label="Variação"
               value={formatBRL(safeNum(summary.variacao_valor))}
               valueColor={signClass(safeNum(summary.variacao_valor))}
-              change={summary.variacao_percentual}
+              change={safeNum(summary.variacao_percentual)}
               bottomLine={
                 <span className={clsx('text-xs font-semibold tabular-nums', signClass(safeNum(summary.rentabilidade_total)))}>
                   {safeNum(summary.rentabilidade_total) >= 0 ? '+' : ''}{formatPercent(safeNum(summary.rentabilidade_total))} rentab.
