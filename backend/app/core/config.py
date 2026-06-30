@@ -1,5 +1,7 @@
 from pydantic_settings import BaseSettings
+from pydantic import field_validator
 from typing import Optional
+import re
 
 
 class Settings(BaseSettings):
@@ -46,6 +48,50 @@ class Settings(BaseSettings):
     SUPERADMIN_EMAIL: str = "admin@sig.local"
     SUPERADMIN_PASSWORD: str = "Admin@1234!"
     SUPERADMIN_NAME: str = "Super Admin"
+
+    # =========================================================================
+    # Dividendos FIIs — bootstrap e sync via BRAPI
+    # =========================================================================
+    # O endpoint de dividendos de FIIs da BRAPI exige autenticação Bearer e
+    # aceita no máximo 20 símbolos por chamada. O job de bootstrap roda de forma
+    # assíncrona após o app subir e nunca bloqueia o deploy.
+    # Escopo inicial: apenas ativos do tipo FII.
+    #
+    # ENABLE_DIVIDENDS_SYNC      — habilita o job de sync (default: false)
+    # DIVIDENDS_BOOTSTRAP_ON_STARTUP — dispara bootstrap automático no startup
+    # DIVIDENDS_BOOTSTRAP_START_DATE — data inicial para busca histórica
+    # DIVIDENDS_SYNC_LOOKBACK_DAYS   — janela de tolerância no incremental
+    # DIVIDENDS_BATCH_SIZE           — símbolos por request (max 20, limite BRAPI)
+    ENABLE_DIVIDENDS_SYNC: bool = False
+    DIVIDENDS_BOOTSTRAP_ON_STARTUP: bool = False
+    DIVIDENDS_BOOTSTRAP_START_DATE: str = "2018-01-01"
+    DIVIDENDS_SYNC_LOOKBACK_DAYS: int = 7
+    DIVIDENDS_BATCH_SIZE: int = 20
+
+    @field_validator("DIVIDENDS_BATCH_SIZE")
+    @classmethod
+    def validate_dividends_batch_size(cls, v: int) -> int:
+        if v < 1:
+            raise ValueError("DIVIDENDS_BATCH_SIZE deve ser >= 1")
+        if v > 20:
+            raise ValueError("DIVIDENDS_BATCH_SIZE deve ser <= 20 (limite BRAPI)")
+        return v
+
+    @field_validator("DIVIDENDS_SYNC_LOOKBACK_DAYS")
+    @classmethod
+    def validate_dividends_sync_lookback_days(cls, v: int) -> int:
+        if v < 0:
+            raise ValueError("DIVIDENDS_SYNC_LOOKBACK_DAYS deve ser >= 0")
+        return v
+
+    @field_validator("DIVIDENDS_BOOTSTRAP_START_DATE")
+    @classmethod
+    def validate_dividends_bootstrap_start_date(cls, v: str) -> str:
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", v):
+            raise ValueError(
+                "DIVIDENDS_BOOTSTRAP_START_DATE deve estar no formato YYYY-MM-DD"
+            )
+        return v
 
     class Config:
         env_file = ".env"
