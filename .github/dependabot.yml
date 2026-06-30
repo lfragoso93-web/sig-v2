@@ -36,7 +36,8 @@ updates:
           - "passlib*"
           - "bcrypt"
     ignore:
-      # Manter yfinance fixo — API instavel entre versoes
+      # Biblioteca de dados de mercado — API instável entre versões major.
+      # Manter atualizações patch/minor; bloquear apenas major.
       - dependency-name: "yfinance"
         update-types: ["version-update:semver-major"]
 
@@ -77,11 +78,12 @@ updates:
           - "typescript-eslint"
 
   # ── GitHub Actions ──────────────────────────────────────────────────────────
+  # interval: monthly — actions mudam pouco; weekly gerava PRs desnecessárias.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
+      day: 1
       time: "06:00"
       timezone: "America/Sao_Paulo"
     open-pull-requests-limit: 5

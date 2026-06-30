@@ -1,11 +1,29 @@
 name: SIG v2 CI/CD
 
+# ─────────────────────────────────────────────────────────────────────────────
+# DISPAROS
+# • push main        → quality + security + build + publish + scan-published
+# • pull_request     → quality + security + audit (sem build Docker)
+# • workflow_dispatch→ execução manual
+#
+# paths-ignore: commits que alteram apenas docs/markdown não consomem minutos.
+# ─────────────────────────────────────────────────────────────────────────────
 on:
   push:
     branches: ["main"]
+    paths-ignore:
+      - "**.md"
+      - ".github/dependabot.yml"
+      - ".github/dependency-review-config.yml"
+      - "docs/**"
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     branches: ["**"]
+    paths-ignore:
+      - "**.md"
+      - ".github/dependabot.yml"
+      - ".github/dependency-review-config.yml"
+      - "docs/**"
   workflow_dispatch:
 
 permissions:
@@ -13,6 +31,8 @@ permissions:
   actions: read
   pull-requests: read
 
+# Cancela execuções anteriores do mesmo workflow na mesma ref.
+# Economiza minutos quando há pushes rápidos em sequência.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -26,9 +46,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: "pip"
@@ -63,9 +83,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v4
         with:
           node-version: "22"
 
@@ -93,9 +113,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      # fetch-depth: 50 — varre os últimos 50 commits.
+      # fetch-depth: 0 clonava TODO o histórico a cada execução, desnecessário.
+      - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 50
 
       - uses: gitleaks/gitleaks-action@v3
         env:
@@ -106,28 +128,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
-      - name: Trivy scan – SARIF (nao bloqueia)
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          format: sarif
-          output: trivy-fs.sarif
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          trivyignores: .trivyignore
-          exit-code: "0"
-
-      - name: Upload SARIF
-        if: hashFiles('trivy-fs.sarif') != ''
-        continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v4
-        with:
-          sarif_file: trivy-fs.sarif
-
-      - name: Trivy scan – gate (bloqueia em HIGH/CRITICAL sem fix)
+      # Scan único com format: table + exit-code: 1.
+      # Anteriormente rodava 2x (SARIF + table), dobrando o tempo.
+      # Upload SARIF removido: requer GitHub Advanced Security (plano pago).
+      - name: Trivy scan – filesystem gate
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
@@ -141,13 +147,13 @@ jobs:
   # ---------------------------------------------------------------------------
   # DEPENDENCY AUDIT
   # Substitui dependency-review-action (requer GitHub Advanced Security pago).
-  # pip-audit e npm audit sao gratuitos e cobrem o mesmo proposito.
+  # pip-audit e npm audit são gratuitos e cobrem o mesmo propósito.
   #
-  # Estrategia pip-audit:
-  #   1. Instala as dependencias do backend no ambiente Python
+  # Estratégia pip-audit:
+  #   1. Instala as dependências do backend no ambiente Python
   #   2. Roda pip-audit SEM -r para auditar o ambiente instalado
   #      Isso evita o conflito "project_path not allowed with -r".
-  #   Nota: pip-audit nao suporta --severity; reporta todas as vulns.
+  #   Nota: pip-audit não suporta --severity; reporta todas as vulns.
   #   O gate de severidade fica por conta do Trivy (job acima).
   # ---------------------------------------------------------------------------
   audit-python:
@@ -156,9 +162,9 @@ jobs:
     timeout-minutes: 10
     if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: "pip"
@@ -181,9 +187,9 @@ jobs:
     timeout-minutes: 10
     if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v4
         with:
           node-version: "22"
 
@@ -203,7 +209,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - uses: hadolint/hadolint-action@v3.3.0
         with:
           dockerfile: backend/Dockerfile
@@ -214,7 +220,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - uses: hadolint/hadolint-action@v3.3.0
         with:
           dockerfile: frontend/Dockerfile
@@ -222,14 +228,18 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # BUILD & SCAN IMAGES
+  # Restrito a push na main — não roda em PRs.
+  # Em PRs, lint + type check + testes são suficientes para feedback.
+  # Economiza ~30 min por PR (os dois builds juntos).
   # ---------------------------------------------------------------------------
   build-and-scan-backend:
     name: Build and scan backend Docker image
     runs-on: ubuntu-latest
     timeout-minutes: 25
     needs: [backend-quality, dockerfile-lint-backend, secrets-scan, trivy-repository-scan]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v4
 
       - name: Build backend image
@@ -243,24 +253,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Trivy image scan – SARIF
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: sig-v2-backend:ci-${{ github.sha }}
-          format: sarif
-          output: trivy-backend-image.sarif
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          trivyignores: .trivyignore
-          exit-code: "0"
-
-      - name: Upload SARIF
-        if: hashFiles('trivy-backend-image.sarif') != ''
-        continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v4
-        with:
-          sarif_file: trivy-backend-image.sarif
-
+      # Scan único com format: table + exit-code: 1.
+      # SARIF removido: requer GitHub Advanced Security (plano pago).
       - name: Trivy image scan – gate
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -276,10 +270,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     needs: [frontend-quality, dockerfile-lint-frontend, secrets-scan, trivy-repository-scan]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v4
         with:
           node-version: "20"
 
@@ -301,24 +296,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Trivy image scan – SARIF
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: sig-v2-frontend:ci-${{ github.sha }}
-          format: sarif
-          output: trivy-frontend-image.sarif
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          trivyignores: .trivyignore
-          exit-code: "0"
-
-      - name: Upload SARIF
-        if: hashFiles('trivy-frontend-image.sarif') != ''
-        continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v4
-        with:
-          sarif_file: trivy-frontend-image.sarif
-
+      # Scan único com format: table + exit-code: 1.
+      # SARIF removido: requer GitHub Advanced Security (plano pago).
       - name: Trivy image scan – gate
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -341,7 +320,7 @@ jobs:
     outputs:
       image-digest: ${{ steps.build.outputs.digest }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v4
 
       - id: meta
@@ -379,9 +358,9 @@ jobs:
     outputs:
       image-digest: ${{ steps.build.outputs.digest }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v4
         with:
           node-version: "20"
 
@@ -428,7 +407,7 @@ jobs:
     needs: publish-backend
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
       - uses: docker/login-action@v4
         with:
@@ -450,7 +429,7 @@ jobs:
     needs: publish-frontend
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
       - uses: docker/login-action@v4
         with:
