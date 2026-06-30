@@ -28,6 +28,13 @@ import EvolutionLineChart from '@/components/charts/EvolutionLineChart'
 import EvolutionBarChart from '@/components/charts/EvolutionBarChart'
 import clsx from 'clsx'
 
+// ── Helpers defensivos ─────────────────────────────────────────────────────────
+/** Converte qualquer valor para número seguro, retornando 0 para null/undefined/NaN */
+function safeNum(v: unknown): number {
+  const n = Number(v)
+  return isFinite(n) ? n : 0
+}
+
 // ── Constantes ─────────────────────────────────────────────────────────────────
 const ASSET_TYPE_LABELS: Record<string, string> = {
   ACAO: 'Ações', ACAO_NACIONAL: 'Ações', FII: 'FIIs',
@@ -214,7 +221,7 @@ function ConsolidacaoSection({
     for (const p of allPositions) {
       const t = p.asset_type ?? 'OUTROS'
       if (!map[t]) map[t] = { total: 0, count: 0 }
-      map[t].total += p.current_value ?? 0
+      map[t].total += safeNum(p.current_value)
       map[t].count += 1
     }
     const grandTotal = Object.values(map).reduce((s, v) => s + v.total, 0)
@@ -235,14 +242,14 @@ function ConsolidacaoSection({
   ]
 
   const allAssetsSorted = useMemo(() => {
-    const total = allPositions.reduce((s: number, p: any) => s + (p.current_value ?? 0), 0)
+    const total = allPositions.reduce((s: number, p: any) => s + safeNum(p.current_value), 0)
     return allPositions
-      .filter((p: any) => (p.current_value ?? 0) > 0)
+      .filter((p: any) => safeNum(p.current_value) > 0)
       .map((p: any, i: number) => ({
         label: p.ticker ?? p.asset_code ?? '?',
         type:  p.asset_type ?? 'OUTROS',
-        value: p.current_value ?? 0,
-        pct:   total > 0 ? ((p.current_value ?? 0) / total) * 100 : 0,
+        value: safeNum(p.current_value),
+        pct:   total > 0 ? (safeNum(p.current_value) / total) * 100 : 0,
         color: CHART_COLORS[i % CHART_COLORS.length],
       }))
       .sort((a: any, b: any) => b.value - a.value)
@@ -250,14 +257,14 @@ function ConsolidacaoSection({
 
   const exteriorTypes = ['STOCK', 'ETF_INTERNACIONAL', 'BDR', 'CRIPTO']
   const exteriorAssets = useMemo(() => {
-    const total = allPositions.reduce((s: number, p: any) => s + (p.current_value ?? 0), 0)
+    const total = allPositions.reduce((s: number, p: any) => s + safeNum(p.current_value), 0)
     return allPositions
-      .filter((p: any) => exteriorTypes.includes(p.asset_type) && (p.current_value ?? 0) > 0)
+      .filter((p: any) => exteriorTypes.includes(p.asset_type) && safeNum(p.current_value) > 0)
       .map((p: any, i: number) => ({
         label: p.ticker ?? p.asset_code ?? '?',
         type:  p.asset_type ?? 'OUTROS',
-        value: p.current_value ?? 0,
-        pct:   total > 0 ? ((p.current_value ?? 0) / total) * 100 : 0,
+        value: safeNum(p.current_value),
+        pct:   total > 0 ? (safeNum(p.current_value) / total) * 100 : 0,
         color: CHART_COLORS[i % CHART_COLORS.length],
       }))
       .sort((a: any, b: any) => b.value - a.value)
@@ -364,14 +371,14 @@ function ConsolidacaoSection({
                   >
                     <div
                       className="h-full rounded-full"
-                      style={{ width: `${item.pct}%`, background: item.color, transition: 'width 500ms ease' }}
+                      style={{ width: `${safeNum(item.pct)}%`, background: item.color, transition: 'width 500ms ease' }}
                     />
                   </div>
                   <span className="shrink-0 text-xs tabular-nums font-medium" style={{ color: 'var(--color-text)', width: 88, textAlign: 'right' }}>
-                    {formatBRL(item.value)}
+                    {formatBRL(safeNum(item.value))}
                   </span>
                   <span className="shrink-0 text-xs tabular-nums" style={{ color: 'var(--color-text-muted)', width: 44, textAlign: 'right' }}>
-                    {item.pct.toFixed(2)}%
+                    {safeNum(item.pct).toFixed(2)}%
                   </span>
                 </button>
               ))}
@@ -422,7 +429,7 @@ function AnaliseSection({ portfolioId }: { portfolioId: number }) {
     const map: Record<string, number> = {}
     for (const p of allPositions) {
       const t = p.asset_type ?? 'OUTROS'
-      map[t] = (map[t] ?? 0) + (p.current_value ?? 0)
+      map[t] = (map[t] ?? 0) + safeNum(p.current_value)
     }
     const total = Object.values(map).reduce((s, v) => s + v, 0)
     return Object.entries(map)
@@ -437,14 +444,14 @@ function AnaliseSection({ portfolioId }: { portfolioId: number }) {
   }, [allPositions])
 
   const byAsset = useMemo(() => {
-    const total = allPositions.reduce((s: number, p: any) => s + (p.current_value ?? 0), 0)
+    const total = allPositions.reduce((s: number, p: any) => s + safeNum(p.current_value), 0)
     return allPositions
-      .filter((p: any) => (p.current_value ?? 0) > 0)
+      .filter((p: any) => safeNum(p.current_value) > 0)
       .map((p: any, i: number) => ({
         label: p.ticker ?? p.asset_code ?? '?',
         type:  p.asset_type ?? 'OUTROS',
-        value: p.current_value ?? 0,
-        pct:   total > 0 ? ((p.current_value ?? 0) / total) * 100 : 0,
+        value: safeNum(p.current_value),
+        pct:   total > 0 ? (safeNum(p.current_value) / total) * 100 : 0,
         color: CHART_COLORS[i % CHART_COLORS.length],
       }))
       .sort((a: any, b: any) => b.value - a.value)
@@ -474,9 +481,9 @@ function AnaliseSection({ portfolioId }: { portfolioId: number }) {
       .map((row: any) => ({
         label:   ASSET_TYPE_LABELS[row.asset_class] ?? row.asset_class,
         type:    row.asset_class as string,
-        target:  row.target_pct  as number,
-        current: row.current_pct as number,
-        delta:   (row.current_pct ?? 0) - (row.target_pct ?? 0),
+        target:  safeNum(row.target_pct),
+        current: safeNum(row.current_pct),
+        delta:   safeNum(row.current_pct) - safeNum(row.target_pct),
       }))
       .sort((a: any, b: any) => Math.abs(b.delta) - Math.abs(a.delta))
   }, [classTargets])
@@ -517,9 +524,9 @@ function AnaliseSection({ portfolioId }: { portfolioId: number }) {
                 <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-faint)', width: 20, textAlign: 'right' }}>#{i + 1}</span>
                 <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)', width: 72, flexShrink: 0 }}>{item.label}</span>
                 <div style={{ flex: 1, height: 6, borderRadius: 9999, background: 'var(--color-surface-dynamic)', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${item.pct}%`, background: item.color, borderRadius: 9999, transition: 'width 500ms ease' }} />
+                  <div style={{ height: '100%', width: `${safeNum(item.pct)}%`, background: item.color, borderRadius: 9999, transition: 'width 500ms ease' }} />
                 </div>
-                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', width: 44, textAlign: 'right' }}>{item.pct.toFixed(1)}%</span>
+                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', width: 44, textAlign: 'right' }}>{safeNum(item.pct).toFixed(1)}%</span>
                 <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text)', width: 88, textAlign: 'right' }}>{formatBRL(item.value)}</span>
               </div>
             ))}
@@ -539,7 +546,7 @@ function AnaliseSection({ portfolioId }: { portfolioId: number }) {
                 color:      (ASSET_TYPE_COLORS[cls.type] ?? FALLBACK_COLOR).text,
               }}
             >
-              {cls.pct.toFixed(1)}% da carteira
+              {safeNum(cls.pct).toFixed(1)}% da carteira
             </span>
           </div>
           <div className="p-4">
@@ -547,12 +554,11 @@ function AnaliseSection({ portfolioId }: { portfolioId: number }) {
               <div className="flex justify-center">
                 {(() => {
                   const classPositions = allPositions
-                    .filter((p: any) => p.asset_type === cls.type && (p.current_value ?? 0) > 0)
-                  const classTotal = classPositions.reduce((s: number, p: any) => s + (p.current_value ?? 0), 0)
+                    .filter((p: any) => p.asset_type === cls.type && safeNum(p.current_value) > 0)
                   const donutItems = classPositions
                     .map((p: any, i: number) => ({
                       name:  p.ticker ?? p.asset_code ?? '?',
-                      value: p.current_value ?? 0,
+                      value: safeNum(p.current_value),
                       color: CHART_COLORS[i % CHART_COLORS.length],
                     }))
                     .sort((a: any, b: any) => b.value - a.value)
@@ -563,13 +569,13 @@ function AnaliseSection({ portfolioId }: { portfolioId: number }) {
               </div>
               <div className="flex flex-col">
                 {allPositions
-                  .filter((p: any) => p.asset_type === cls.type && (p.current_value ?? 0) > 0)
-                  .sort((a: any, b: any) => (b.current_value ?? 0) - (a.current_value ?? 0))
+                  .filter((p: any) => p.asset_type === cls.type && safeNum(p.current_value) > 0)
+                  .sort((a: any, b: any) => safeNum(b.current_value) - safeNum(a.current_value))
                   .map((p: any, i: number) => {
                     const classTotal = allPositions
                       .filter((pp: any) => pp.asset_type === cls.type)
-                      .reduce((s: number, pp: any) => s + (pp.current_value ?? 0), 0)
-                    const pct = classTotal > 0 ? ((p.current_value ?? 0) / classTotal) * 100 : 0
+                      .reduce((s: number, pp: any) => s + safeNum(pp.current_value), 0)
+                    const pct = classTotal > 0 ? (safeNum(p.current_value) / classTotal) * 100 : 0
                     const color = CHART_COLORS[i % CHART_COLORS.length]
                     return (
                       <div key={p.ticker ?? i} className="flex items-center gap-3 py-2" style={{ borderBottom: '1px solid var(--color-divider)' }}>
@@ -580,10 +586,10 @@ function AnaliseSection({ portfolioId }: { portfolioId: number }) {
                           <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 9999, transition: 'width 500ms ease' }} />
                         </div>
                         <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text)', width: 88, textAlign: 'right' }}>
-                          {formatBRL(p.current_value ?? 0)}
+                          {formatBRL(safeNum(p.current_value))}
                         </span>
                         <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', width: 44, textAlign: 'right' }}>
-                          {pct.toFixed(0)}%
+                          {safeNum(pct).toFixed(0)}%
                         </span>
                       </div>
                     )
@@ -633,12 +639,12 @@ function AnaliseSection({ portfolioId }: { portfolioId: number }) {
                           {row.label}
                         </span>
                       </td>
-                      <td className="text-right tabular-nums" style={{ color: 'var(--color-text-muted)' }}>{row.target.toFixed(1)}%</td>
-                      <td className="text-right tabular-nums" style={{ color: 'var(--color-text)' }}>{row.current.toFixed(1)}%</td>
+                      <td className="text-right tabular-nums" style={{ color: 'var(--color-text-muted)' }}>{safeNum(row.target).toFixed(1)}%</td>
+                      <td className="text-right tabular-nums" style={{ color: 'var(--color-text)' }}>{safeNum(row.current).toFixed(1)}%</td>
                       <td className="text-right">
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontWeight: 600, fontSize: 'var(--text-xs)', color: clr }}>
                           <Icon size={11} />
-                          {row.delta > 0 ? '+' : ''}{row.delta.toFixed(1)}%
+                          {row.delta > 0 ? '+' : ''}{safeNum(row.delta).toFixed(1)}%
                         </span>
                       </td>
                       <td>
@@ -732,31 +738,31 @@ function PatrimonioPage() {
           <>
             <KpiCard
               label="Patrimônio Total"
-              value={formatBRL(summary.total_patrimonio ?? 0)}
-              subValue={formatBRL(summary.total_investido ?? 0)}
+              value={formatBRL(safeNum(summary.total_patrimonio))}
+              subValue={formatBRL(safeNum(summary.total_investido))}
               subLabel="Valor investido"
               change={summary.variacao_percentual}
             />
             <KpiCard
               label="Resultado"
-              value={formatBRL(summary.lucro_total ?? 0)}
-              valueColor={signClass(summary.lucro_total ?? 0)}
+              value={formatBRL(safeNum(summary.lucro_total))}
+              valueColor={signClass(safeNum(summary.lucro_total))}
               subLabel="Ganho de capital + proventos"
             />
             <KpiCard
               label="Proventos (12m)"
-              value={formatBRL(summary.dividendos_recebidos_12m ?? 0)}
-              subValue={formatBRL(summary.total_proventos ?? 0)}
+              value={formatBRL(safeNum(summary.dividendos_recebidos_12m))}
+              subValue={formatBRL(safeNum(summary.total_proventos))}
               subLabel="Total recebido"
             />
             <KpiCard
               label="Variação"
-              value={formatBRL(summary.variacao_valor ?? 0)}
-              valueColor={signClass(summary.variacao_valor ?? 0)}
+              value={formatBRL(safeNum(summary.variacao_valor))}
+              valueColor={signClass(safeNum(summary.variacao_valor))}
               change={summary.variacao_percentual}
               bottomLine={
-                <span className={clsx('text-xs font-semibold tabular-nums', signClass(summary.rentabilidade_total ?? 0))}>
-                  {(summary.rentabilidade_total ?? 0) >= 0 ? '+' : ''}{formatPercent(summary.rentabilidade_total ?? 0)} rentab.
+                <span className={clsx('text-xs font-semibold tabular-nums', signClass(safeNum(summary.rentabilidade_total)))}>
+                  {safeNum(summary.rentabilidade_total) >= 0 ? '+' : ''}{formatPercent(safeNum(summary.rentabilidade_total))} rentab.
                 </span>
               }
             />
