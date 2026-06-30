@@ -86,6 +86,31 @@
 
 ---
 
+## ✅ Sprint 5E — Distribuição Ideal da Carteira: BDR + Reflexo no Resumo (Concluído — 30/06/2026)
+**Período:** Julho 2026 | [Issue #79](https://github.com/lfragoso93-web/sig-v2/issues/79)
+
+- [x] `BDR` adicionado a `VALID_ASSET_CLASSES` e `_TYPE_LABEL` no `class_target_service`
+- [x] `get_targets_with_current()` retorna BDR quando há posição ou meta configurada
+- [x] `AllocationTargetWidget` itera `rows` dinamicamente — BDR renderizado automaticamente
+- [x] Widget exibido na `ResumePage` sob o gráfico de distribuição ("Alvo da Carteira")
+- [x] `useClassTargets` já chamava `/targets-with-current` — nenhuma alteração necessária
+
+---
+
+## ✅ Sprint 5F — Sync Semanal de Dividendos de FIIs (Concluído — 30/06/2026)
+**Período:** Julho 2026
+
+> Pipeline completo de sincronização de proventos de FIIs via provedor de cotações. Job automático toda sábado às 6h BRT.
+
+- [x] Configurações: `FII_DIVIDEND_CHUNK_SIZE`, `FII_DIVIDEND_MAX_RETRIES`, `FII_DIVIDEND_BOOTSTRAP_YEARS`
+- [x] `integrations/brapi_fii_dividends.py`: client com retry exponencial (429/5xx), chunking e DTO `FiiDividendEvent`
+- [x] `models/dividends_sync_job.py` + migration `012`: lock distribuído, cursor incremental, métricas por run
+- [x] `services/dividends_sync_service.py`: orquestrador lock → fetch → upsert sem N+1 → release
+- [x] `scheduler.py`: `job_sync_fii_dividends` — sábado 6h BRT — contador 7 → **8 jobs**
+- [x] `routers/admin.py`: `GET /admin/fii-dividends/sync/status` e `POST /admin/fii-dividends/sync`
+
+---
+
 ## 🔄 Sprint 5B — Performance de Queries (Em andamento)
 **Período:** Julho 2026 | [Issue #54](https://github.com/lfragoso93-web/sig-v2/issues/54)
 
@@ -102,17 +127,6 @@
 - [ ] Adicionar índices faltantes e otimizar joins
 - [ ] Revisar N+1 em listagens de posições e transações
 - [ ] Testes de integração do fluxo de proventos
-
----
-
-## ✅ Sprint 5E — Distribuição Ideal da Carteira: BDR + Reflexo no Resumo (Concluído — 30/06/2026)
-**Período:** Julho 2026 | [Issue #79](https://github.com/lfragoso93-web/sig-v2/issues/79)
-
-- [x] `BDR` adicionado a `VALID_ASSET_CLASSES` e `_TYPE_LABEL` no `class_target_service`
-- [x] `get_targets_with_current()` retorna BDR quando há posição ou meta configurada
-- [x] `AllocationTargetWidget` itera `rows` dinamicamente — BDR renderizado automaticamente
-- [x] Widget exibido na `ResumePage` sob o gráfico de distribuição ("Alvo da Carteira")
-- [x] `useClassTargets` já chamava `/targets-with-current` — nenhuma alteração necessária
 
 ---
 
