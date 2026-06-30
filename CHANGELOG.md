@@ -101,6 +101,54 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+### Adicionado — Sync semanal de dividendos de FIIs via provedor de dados (30/06/2026) — Sprint 5F
+
+> Pipeline completo de sincronização de proventos de FIIs com job automático semanal e trigger manual via painel admin.
+
+**`backend/app/core/config.py` + `backend/app/core/settings.py`**
+- Novas variáveis de configuração: `FII_DIVIDEND_CHUNK_SIZE` (padrão 20), `FII_DIVIDEND_MAX_RETRIES` (padrão 3), `FII_DIVIDEND_BOOTSTRAP_YEARS` (padrão 5)
+
+**`backend/app/integrations/brapi_fii_dividends.py`** *(novo)*
+- Client de integração para o endpoint de dividendos de FIIs do provedor de cotações
+- Suporte a até 20 símbolos por chamada (limite documentado do provedor)
+- Retry com backoff exponencial em erros 429/5xx (máx. 3 tentativas)
+- Normalização do payload para DTO interno `FiiDividendEvent`
+- Verificação antecipada de token: sem configuração → aviso no log + retorno de lista vazia
+
+**`backend/app/models/dividends_sync_job.py`** *(novo)*
+- Model `DividendsSyncJob` para rastrear estado, lock distribuído e cursor incremental
+- Campos: `locked_by` (hostname), `locked_at`, `last_cursor_date`, `started_at`, `finished_at`, `error_message`
+- Métricas por execução: `assets_processed`, `events_created`, `events_updated`, `errors_count`
+- Registrado em `models/__init__.py`
+
+**`backend/alembic/versions/012_add_dividends_sync_job.py`** *(novo)*
+- Migration Alembic versionada — cria tabela `dividends_sync_jobs`
+- Segue padrão das migrations existentes (`009_add_fx_rates_table.py`)
+
+**`backend/app/services/dividends_sync_service.py`** *(novo)*
+- Orquestrador principal: acquire lock → fetch em lote → upsert → release lock
+- Upsert idempotente em `asset_dividends` via `(asset_id, ex_date, dividend_type)` — sem N+1
+- Pre-load de registros existentes em memória antes do loop de inserção
+- Atualização retroativa: só sobrescreve `value_per_unit` se o valor divergir da fonte
+- Falha isolada por ticker: rollback parcial com `continue` — falha em um FII não aborta o job
+- Modo incremental: cursor salvo com 30 dias de overlap para absorver correções retroativas
+- Modo bootstrap: `force_bootstrap=True` busca 5 anos de histórico completo
+- Lock distribuído com TTL de 60 minutos: previne execuções concorrentes em multi-instância
+
+**`backend/app/scheduler.py`**
+- `job_sync_fii_dividends()` registrado com `CronTrigger(day_of_week="sat", hour=6, minute=0)`
+- Complementar ao `job_sync_dividends` (domingo 2h) — sem sobreposição de janela
+- Contador de jobs APScheduler: 7 → **8 jobs**
+- Padrão `AsyncSessionLocal()` por job (sessão isolada)
+
+**`backend/app/routers/admin.py`**
+- `GET /admin/fii-dividends/sync/status` — retorna status, lock info, cursor e métricas da última execução
+- `POST /admin/fii-dividends/sync?force_bootstrap=false` — dispara sync em `BackgroundTask`; `force_bootstrap=true` para bootstrap completo
+- Ambos protegidos por `require_superadmin`
+- Segue padrão `_run_*_bg()` com logs de início/conclusão/falha já estabelecido no router
+
+---
+
 ### Corrigido — Rentabilidade: dia usa snapshot anterior real; mês usa 1º do mês calendário (30/06/2026) — Sprint 5B #54
 
 **`backend/app/services/rentabilidade_service.py`**
