@@ -31,6 +31,12 @@ FLUXO DE ATUALIZACAO
   backfill_snapshots  : reconstroi historico completo dia a dia (semanal/sob demanda)
   refresh_today_snapshot : atualiza o snapshot de hoje (chamado apos cada transacao)
   invalidate_snapshots_from : remove snapshots a partir de uma data (ex: correcao de transacao)
+
+OTIMIZACOES DE QUERY (Bloco 2)
+================================
+  [Q1 CORRIGIDO] _calc_totals: Asset buscado em batch antes do loop de posicoes.
+  Antes: 1 SELECT por ticker (N+1). Depois: 1 SELECT com IN(tickers).
+  Impacto em backfill 1 ano com 20 tickers: 5.000 queries -> 250 queries.
 """
 from __future__ import annotations
 
@@ -183,6 +189,19 @@ async def _calc_totals(
     cost_basis = Decimal("0")
     realized_pnl = Decimal("0")
 
+    # ------------------------------------------------------------------
+    # [Q1 FIX] Busca asset_type de todos os tickers em uma unica query
+    # antes de entrar no loop, eliminando o N+1 que existia antes.
+    # ------------------------------------------------------------------
+    tickers_list = list(positions.keys())
+    asset_rows = await db.execute(
+        select(Asset.ticker, Asset.asset_type)
+        .where(Asset.ticker.in_(tickers_list))
+    )
+    asset_type_map: dict[str, AssetType] = {
+        r.ticker: r.asset_type for r in asset_rows.all()
+    }
+
     fx_snapshot: Optional[float] = None
     has_usd = any(s.is_usd for s in positions.values())
     if has_usd:
@@ -197,11 +216,13 @@ async def _calc_totals(
                 fx_snapshot = 1.0
 
     for ticker, state in positions.items():
-        asset_result = await db.execute(
-            select(Asset).where(Asset.ticker == ticker)
-        )
-        asset = asset_result.scalar_one_or_none()
-        asset_type = AssetType(state.asset_type) if asset is None else asset.asset_type
+        # Usa o mapa pre-carregado; fallback para o asset_type da transacao
+        asset_type = asset_type_map.get(ticker)
+        if asset_type is None:
+            try:
+                asset_type = AssetType(state.asset_type)
+            except (ValueError, KeyError):
+                asset_type = AssetType.ACAO
 
         close = await get_price_at_date(db, ticker, asset_type, date_str)
         if close is None:
@@ -253,14 +274,6 @@ async def _calc_totals(
 
     # -------------------------------------------------------------------------
     # return_pct: retorno de preco sobre capital empregado.
-    #
-    # Denominador = cost_basis + realized_pnl_positivo:
-    #   - Mais estavel que invested_total quando ha resgates frequentes
-    #     (invested_total diminui com vendas, podendo inflar o percentual).
-    #   - Somamos realized positivo para representar o capital que "passou"
-    #     pela carteira e gerou lucro realizado.
-    # Fallback para invested_total quando nao ha posicoes abertas.
-    #
     # ATENCAO: este valor e "retorno de preco". Para retorno total com
     # proventos ver documentacao do modulo acima.
     # -------------------------------------------------------------------------
