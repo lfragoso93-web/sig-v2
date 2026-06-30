@@ -23,18 +23,23 @@ const usdFormatter = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 2,
 })
 
-export function formatCurrency(value: number, short?: boolean): string {
-  if (!Number.isFinite(value)) return brFormatter.format(0)
-  return short ? brFormatterShort.format(value) : brFormatter.format(value)
+/** Converte qualquer valor para número seguro (0 se null/undefined/NaN/Infinity) */
+function safeFinite(v: unknown): number {
+  const n = Number(v)
+  return Number.isFinite(n) ? n : 0
+}
+
+export function formatCurrency(value: number | null | undefined, short?: boolean): string {
+  const n = safeFinite(value)
+  return short ? brFormatterShort.format(n) : brFormatter.format(n)
 }
 
 /** Alias BRL -- usado em PositionsTable e outros componentes */
 export const formatBRL = formatCurrency
 
 /** Formata valor em USD com simbolo correto: US$ 1,234.56 */
-export function formatUSD(value: number): string {
-  if (!Number.isFinite(value)) return usdFormatter.format(0)
-  return usdFormatter.format(value)
+export function formatUSD(value: number | null | undefined): string {
+  return usdFormatter.format(safeFinite(value))
 }
 
 /**
@@ -49,16 +54,23 @@ export function fmtMoney(value: number | null | undefined, currency?: string | n
 }
 
 // -- Percentual --------------------------------------------------------------
-export function formatPercent(value: number): string {
-  return numeral(value / 100).format('0.00%')
+/**
+ * Formata um número como percentual (ex: 12.5 → "12,50%").
+ * Guard defensivo: null/undefined/NaN/Infinity → "0,00%".
+ * Evita o crash "Cannot read properties of undefined (reading 'toFixed')"
+ * que ocorre quando numeral recebe NaN (resultado de undefined / 100).
+ */
+export function formatPercent(value: number | null | undefined): string {
+  const n = safeFinite(value)
+  return numeral(n / 100).format('0.00%')
 }
 
 /** Alias usado em varios componentes */
 export const formatPct = formatPercent
 
 // -- Quantidade --------------------------------------------------------------
-export function formatQuantity(value: number): string {
-  return numeral(value).format('0,0.####')
+export function formatQuantity(value: number | null | undefined): string {
+  return numeral(safeFinite(value)).format('0,0.####')
 }
 
 // -- Data --------------------------------------------------------------------
@@ -77,9 +89,10 @@ export function formatDateShort(dateStr: string): string {
 // -- Classe de cor por sinal -------------------------------------------------
 const numFmt = numeral
 void numFmt
-export function signClass(value: number): string {
-  if (value > 0) return 'text-green-500'
-  if (value < 0) return 'text-red-500'
+export function signClass(value: number | null | undefined): string {
+  const n = safeFinite(value)
+  if (n > 0) return 'text-green-500'
+  if (n < 0) return 'text-red-500'
   return 'text-gray-400'
 }
 
