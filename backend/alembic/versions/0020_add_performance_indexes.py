@@ -2,7 +2,7 @@
 add_performance_indexes
 
 Revision ID: 0020
-Revises: 0019
+Revises: 015
 Create Date: 2026-06-30
 
 Adiciona indices compostos nas tabelas de maior volume do SIG para reduzir
@@ -33,7 +33,7 @@ from alembic import op
 
 # revision identifiers
 revision = '0020'
-down_revision = '0019'
+down_revision = '015'   # fix: era '0019', corrigido para '015' (ultima migration real)
 branch_labels = None
 depends_on = None
 
