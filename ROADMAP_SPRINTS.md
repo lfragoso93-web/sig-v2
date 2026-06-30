@@ -111,6 +111,35 @@
 
 ---
 
+## ✅ Sprint 6B — PatrimonioPage Analítica + Bugfixes Críticos (Concluído — 30/06/2026)
+**Período:** Junho 2026
+
+> Reformulação completa da página Patrimônio com foco analítico, correção de 3 bugs críticos e limpeza de arquivos legados.
+
+### Bugfixes
+- [x] **Bug 1 — Backend**: Migration 022 cria `payment_date`, `ex_date`, `value_per_unit`, `total_received`, `dividend_type` na tabela `dividends` — resolve filtro `since` em `_proventos_total` — 30/06/2026
+- [x] **Bug 2 — Frontend**: Guards `(Number(v) || 0)` em `formatPercent`/`formatBRL` e `safeNum` nos props `change` dos `KpiCard` — elimina crash `toFixed on undefined` — 30/06/2026
+- [x] **Bug 3 — Backend**: `get_rentabilidade_por_ativo` e `get_rentabilidade_por_classe` adicionados ao `rentabilidade_service` — resolve `ImportError` que impedia o boot — 30/06/2026
+
+### PatrimonioPage — Reformulação
+- [x] Aba **Histórico** removida (duplicava `RentabilidadePage`)
+- [x] **Visão Geral**: KPIs + evolução mensal (barras) + donut de alocação por classe + widget Distribuição Ideal vs. Atual + tabela de posições
+- [x] **Aba Análise**: Score HHI (baixo/moderado/alto/crítico) + Top 5 posições + concentração por classe (donut + barras horizontais) + desvio do alvo
+- [x] **Treemap SVG puro** com algoritmo Squarified — sem dependências externas
+- [x] Toggle diário/mensal e seletor de período no gráfico de evolução
+
+---
+
+## ✅ Sprint 6C — Limpeza de Rotas e Arquivos Legados (Concluído — 30/06/2026)
+**Período:** Junho 2026
+
+- [x] `HistoricoPage.tsx` removido + rota `/carteira/historico` removida do router
+- [x] `Login.tsx` e `Register.tsx` duplicados de `auth/` removidos
+- [x] `Landing.tsx` restaurado com rota pública `/` em `main.tsx`
+- [x] `App.tsx` mantido como legado sem re-export que quebrava o build
+
+---
+
 ## 🔄 Sprint 5B — Performance de Queries (Em andamento)
 **Período:** Julho 2026 | [Issue #54](https://github.com/lfragoso93-web/sig-v2/issues/54)
 
@@ -161,30 +190,6 @@
 - [ ] Manter nomes técnicos apenas em `.env.example` com comentários de propósito
 - [ ] Revisar Swagger/OpenAPI: remover nomes de provedores em descrições de endpoints
 - [ ] Análise de impacto para rename SIG v2 → SGI
-
-### Sprint 6B — Aprimorar UI Global + Patrimônio Analítico
-
-> **Patrimônio — Criticidade: Média | Esforço: Médio | Impacto: UX / diferenciação visual**
-
-- [ ] Revisar bordas cortando conteúdo (tabelas, cards, modais)
-- [ ] Padronizar espaçamento e tipografia entre páginas
-- [ ] Melhorar responsividade geral (tablet e mobile)
-- [ ] **Reformular `PatrimonioPage.tsx`** — transformar em página analítica distinta de Rentabilidade:
-  - [ ] Visão de composição: % de cada ativo dentro de sua classe (treemap ou barras empilhadas)
-  - [ ] Métricas por ativo: peso, valor investido, valor atual, variação absoluta e relativa
-  - [ ] Concentração de risco: top 5 ativos como % do patrimônio total
-  - [ ] Comparativo alocação real vs. alvo com indicação visual de desvio
-  - [ ] Evolução da composição ao longo do tempo (gráfico de área empilhada)
-  - [ ] Tabela colapsável por classe com drill-down por ativo
-  - [ ] Indicador de diversificação (score já existe no backend via `analysis`)
-  - [ ] Alertas de concentração excessiva (>30% em um ativo)
-  - [ ] Painel de "próximo aporte sugerido" com base no desvio da alocação alvo
-
-### Sprint 6C — Limpeza de Rotas e Arquivos Legados
-- [ ] Padronizar todas as rotas para `/carteira/*`
-- [ ] Remover rota duplicada `/patrimonio`
-- [ ] Deletar arquivos stub/fantasma
-- [ ] Atualizar `App.tsx` após limpeza
 
 ### Sprint 6D — Import de Ativos via CSV
 
