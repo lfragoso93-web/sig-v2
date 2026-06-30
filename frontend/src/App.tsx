@@ -57,18 +57,8 @@ export default function App() {
                 <Route path="/carteira/patrimonio"         element={<PatrimonioPage />} />
                 <Route path="/carteira/patrimonio/tesouro" element={<TesouroDiretoPage />} />
 
-                {/* Historico — ainda sem implementação completa */}
+                {/* Historico — placeholder até Sprint de implementação completa */}
                 <Route path="/carteira/historico" element={<HistoricoPage />} />
-
-                {/* Redirects legados — remover na Sprint 6C */}
-                <Route path="/patrimonio"    element={<Navigate to="/carteira/patrimonio"    replace />} />
-                <Route path="/metas"         element={<Navigate to="/carteira/metas"         replace />} />
-                <Route path="/analise"       element={<Navigate to="/carteira/analise"       replace />} />
-                <Route path="/irpf"          element={<Navigate to="/carteira/irpf"          replace />} />
-                <Route path="/proventos"     element={<Navigate to="/carteira/proventos"     replace />} />
-                <Route path="/rentabilidade" element={<Navigate to="/carteira/rentabilidade" replace />} />
-                <Route path="/lancamentos"   element={<Navigate to="/carteira/lancamentos"   replace />} />
-                <Route path="/configuracoes" element={<Navigate to="/carteira/configuracoes" replace />} />
               </Route>
             </Route>
 
