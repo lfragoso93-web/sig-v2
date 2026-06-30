@@ -1,10 +1,16 @@
-from fastapi import APIRouter, Depends, status, BackgroundTasks
+from fastapi import APIRouter, Depends, status, BackgroundTasks, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 from app.core.database import get_db, AsyncSessionLocal
 from app.core.deps import get_current_user
 from app.models.user import User
-from app.schemas.portfolio import PortfolioCreate, PortfolioUpdate, PortfolioResponse
+from app.schemas.portfolio import (
+    PortfolioCreate,
+    PortfolioUpdate,
+    PortfolioResponse,
+    ClassTargetWithCurrent,
+    ClassTargetUpsert,
+)
 from app.services.portfolio_service import (
     create_portfolio,
     list_portfolios,
@@ -17,6 +23,12 @@ from app.services.portfolio_service import (
 )
 from app.services.portfolio_snapshot_service import get_monthly_evolution, backfill_snapshots
 from app.services.portfolio_class_evolution_service import get_monthly_evolution_by_class
+from app.services.class_target_service import (
+    get_targets_with_current,
+    upsert_target,
+    delete_target,
+    VALID_ASSET_CLASSES,
+)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -105,6 +117,74 @@ async def asset_distribution(
     current_user: User = Depends(get_current_user),
 ):
     return await get_asset_distribution(db, portfolio_id, current_user.id)
+
+
+# ---------------------------------------------------------------------------
+# Sprint 5E — targets-with-current (alvo vs atual, BDR incluido)
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/{portfolio_id}/targets-with-current",
+    response_model=list[ClassTargetWithCurrent],
+    summary="Distribuicao alvo vs atual por classe (Sprint 5E)",
+)
+async def targets_with_current(
+    portfolio_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Retorna lista combinada: alocacao atual da carteira vs. meta configurada.
+    BDR incluido explicitamente (Issue #79).
+    """
+    await get_portfolio(db, portfolio_id, current_user.id)
+    distribution = await get_asset_distribution(db, portfolio_id, current_user.id)
+    # get_asset_distribution pode retornar dict com chave 'distribution' ou lista direta
+    if isinstance(distribution, dict):
+        dist_list = distribution.get("distribution", distribution.get("data", []))
+    else:
+        dist_list = distribution
+    return await get_targets_with_current(db, portfolio_id, dist_list)
+
+
+@router.put(
+    "/{portfolio_id}/targets",
+    summary="Upsert de meta de alocacao por classe (Sprint 5E)",
+)
+async def upsert_class_target(
+    portfolio_id: int,
+    body: ClassTargetUpsert,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Cria ou atualiza a meta de alocacao para um asset_type. BDR suportado."""
+    await get_portfolio(db, portfolio_id, current_user.id)
+    at = body.asset_type.upper()
+    if at not in VALID_ASSET_CLASSES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"asset_type invalido. Valores aceitos: {sorted(VALID_ASSET_CLASSES)}",
+        )
+    target = await upsert_target(db, portfolio_id, at, body.target_pct)
+    return {"asset_type": target.asset_type, "target_pct": float(target.target_pct)}
+
+
+@router.delete(
+    "/{portfolio_id}/targets/{asset_type}",
+    status_code=204,
+    summary="Remove meta de alocacao por classe (Sprint 5E)",
+)
+async def delete_class_target(
+    portfolio_id: int,
+    asset_type: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Remove a meta de alocacao de um asset_type especifico."""
+    await get_portfolio(db, portfolio_id, current_user.id)
+    removed = await delete_target(db, portfolio_id, asset_type.upper())
+    if not removed:
+        raise HTTPException(status_code=404, detail="Meta nao encontrada.")
 
 
 @router.get("/{portfolio_id}/patrimonio-history")
