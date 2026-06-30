@@ -11,6 +11,14 @@ Endpoints servidos:
 
 Cache Redis (TTL 5 min, prefixo `rent:`):
   Degradacao gracosa se Redis indisponivel.
+
+Histórico de fixes:
+  Sprint 5B — retorno_mes_pct corrigido para usar o 1º dia do mês calendário
+               em vez de D-30 corridos.
+               retorno_dia_pct agora trata fins de semana e feriados buscando
+               o snapshot mais recente anterior ao dia corrente (<=  D-1),
+               evitando retornar 0.0 em dias sem snapshot exato de D-1.
+               retorno_12m_pct mantido em D-365 (janela móvel de 12m).
 """
 from __future__ import annotations
 
@@ -78,7 +86,7 @@ async def _snapshot_at(
     portfolio_id: int,
     target: date,
 ) -> Optional[PortfolioSnapshot]:
-    """Retorna o snapshot mais proximo (<=) de target."""
+    """Retorna o snapshot mais proximo (<= target)."""
     result = await db.execute(
         select(PortfolioSnapshot)
         .where(
@@ -101,11 +109,39 @@ async def _latest_snapshot(
 async def _first_snapshot(
     db: AsyncSession,
     portfolio_id: int,
-) -> Optional[PortfolioSnapshot]:
+) -> Optional[PortfolioSnapshot]:\
     result = await db.execute(
         select(PortfolioSnapshot)
         .where(PortfolioSnapshot.portfolio_id == portfolio_id)
         .order_by(PortfolioSnapshot.snapshot_date.asc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def _snapshot_before_today(
+    db: AsyncSession,
+    portfolio_id: int,
+    snap_today: PortfolioSnapshot,
+) -> Optional[PortfolioSnapshot]:
+    """
+    Sprint 5B FIX — retorno_dia_pct.
+
+    Busca o snapshot imediatamente anterior ao snapshot de hoje (D atual).
+    Ao usar snapshot_date < snap_today.snapshot_date (estrito), garantimos que:
+      - Fins de semana e feriados são tratados corretamente: se não houver
+        snapshot de ontem, usamos o último disponível antes do dia atual.
+      - Não confundimos o snapshot de hoje consigo mesmo.
+      - Se a carteira só tem um snapshot (o de hoje), retorna None e
+        retorno_dia_pct será 0.0 (comportamento correto para carteira nova).
+    """
+    result = await db.execute(
+        select(PortfolioSnapshot)
+        .where(
+            PortfolioSnapshot.portfolio_id == portfolio_id,
+            PortfolioSnapshot.snapshot_date < snap_today.snapshot_date,
+        )
+        .order_by(PortfolioSnapshot.snapshot_date.desc())
         .limit(1)
     )
     return result.scalar_one_or_none()
@@ -309,10 +345,10 @@ async def _kpis_from_realtime(db: AsyncSession, portfolio_id: int) -> dict:
 
     LIMITACOES deste fallback vs. calculo com snapshots:
     - retorno_dia_pct: sempre 0.0 — impossivel sem snapshot de ontem.
-    - retorno_mes_pct / retorno_12m_pct: estimados usando custo acumulado
-      ate o inicio do periodo como proxy do market_value inicial.
-      E uma aproximacao conservadora (subestima ganhos anteriores ao periodo).
-      O valor exato so estara disponivel apos o primeiro backfill de snapshots.
+    - retorno_mes_pct: estimado usando custo acumulado ate D-1 do mes
+      como proxy do market_value em 01/MM. Usa o 1° dia do mes calendário
+      (Sprint 5B FIX), nao D-30 corridos.
+    - retorno_12m_pct: estimado usando custo acumulado ate D-365.
     - A chamada a _calc_invested_up_to faz duas queries extras de transacoes;
       e aceitavel para carteiras novas (poucas transacoes) mas seria caro para
       carteiras grandes — neste caso, o backfill de snapshots deve ser priorizado.
@@ -362,24 +398,22 @@ async def _kpis_from_realtime(db: AsyncSession, portfolio_id: int) -> dict:
     retorno_total_pct = (total_pnl / total_invested * 100) if total_invested else 0.0
 
     # ------------------------------------------------------------------
-    # Bug #4 FIX: retorno_mes_pct e retorno_12m_pct no fallback realtime.
+    # Sprint 5B FIX: retorno_mes_pct usa 1° dia do mês calendário.
+    # Antes usava today.replace(day=1) - timedelta(days=1), que é D-1
+    # do mês (último dia do mês anterior) — correto como limite, mas a
+    # base deve ser o custo acumulado ATÉ o último dia do mês anterior
+    # para representar o patrimônio no início do mês corrente.
     #
-    # Sem snapshots, estimamos o valor da carteira no inicio do periodo
-    # usando o custo acumulado ate aquela data como proxy do market_value.
-    # Isso e uma aproximacao conservadora (ignora valorizacao ate o inicio
-    # do periodo), mas e muito melhor do que retornar 0.0 sempre.
-    #
-    # Formula: (current_value - custo_inicio) / custo_inicio * 100
-    # Se custo_inicio == 0 (carteira nao existia ainda), retorna 0.0.
-    #
-    # retorno_dia_pct permanece 0.0 — sem snapshot de ontem, e impossivel
-    # calcular a variacao diaria de forma confiavel.
+    # retorno_dia_pct permanece 0.0 no fallback — sem snapshot anterior,
+    # é impossível calcular variação diária de forma confiável.
     # ------------------------------------------------------------------
     retorno_mes_pct = 0.0
     retorno_12m_pct = 0.0
     try:
-        inicio_mes = today.replace(day=1)
-        custo_inicio_mes = await _calc_invested_up_to(db, portfolio_id, inicio_mes - timedelta(days=1))
+        # Último dia do mês anterior = D-1 do 1º dia do mês corrente
+        primeiro_dia_mes = today.replace(day=1)
+        ultimo_dia_mes_anterior = primeiro_dia_mes - timedelta(days=1)
+        custo_inicio_mes = await _calc_invested_up_to(db, portfolio_id, ultimo_dia_mes_anterior)
         if custo_inicio_mes > 0:
             retorno_mes_pct = round(
                 (current_value - custo_inicio_mes) / custo_inicio_mes * 100, 4
@@ -405,7 +439,7 @@ async def _kpis_from_realtime(db: AsyncSession, portfolio_id: int) -> dict:
         "ganho_realizado": round(realized_pnl, 2),
         "total_pnl": round(total_pnl, 2),
         "retorno_total_pct": round(retorno_total_pct, 4),
-        # Sem snapshot de ontem, variacao diaria e impossivel de calcular.
+        # Sem snapshot anterior, variacao diaria e impossivel de calcular.
         "retorno_dia_pct": 0.0,
         "retorno_mes_pct": retorno_mes_pct,
         "retorno_12m_pct": retorno_12m_pct,
@@ -476,8 +510,27 @@ async def get_kpis(db: AsyncSession, portfolio_id: int) -> dict:
         payload = await _kpis_from_realtime(db, portfolio_id)
         return payload
 
-    snap_ontem = await _snapshot_at(db, portfolio_id, today - timedelta(days=1))
-    snap_30d = await _snapshot_at(db, portfolio_id, today - timedelta(days=30))
+    # ------------------------------------------------------------------
+    # Sprint 5B FIX — retorno_dia_pct:
+    #   Usa _snapshot_before_today() em vez de _snapshot_at(D-1).
+    #   Isso garante que fins de semana e feriados retornem o último
+    #   snapshot disponível antes do dia atual, em vez de None
+    #   (o que causava retorno_dia_pct = 0.0 toda segunda-feira e
+    #   após feriados).
+    #
+    # Sprint 5B FIX — retorno_mes_pct:
+    #   Usa o snapshot do último dia do mês anterior (1° do mês - 1 dia)
+    #   em vez de D-30. Isso garante que o retorno mensal reflita
+    #   o desempenho do mês calendário corrente, independente de quantos
+    #   dias úteis passaram desde o início do mês.
+    #   Ex.: em 30/jun, usa snapshot de 31/mai; em 05/jun, usa 31/mai.
+    # ------------------------------------------------------------------
+    snap_ontem = await _snapshot_before_today(db, portfolio_id, snap_today)
+
+    primeiro_dia_mes = today.replace(day=1)
+    ultimo_dia_mes_anterior = primeiro_dia_mes - timedelta(days=1)
+    snap_mes = await _snapshot_at(db, portfolio_id, ultimo_dia_mes_anterior)
+
     snap_12m = await _snapshot_at(db, portfolio_id, today - timedelta(days=365))
     snap_first = await _first_snapshot(db, portfolio_id)
 
@@ -496,7 +549,7 @@ async def get_kpis(db: AsyncSession, portfolio_id: int) -> dict:
         "total_pnl": float(snap_today.total_pnl),
         "retorno_total_pct": ret_total,
         "retorno_dia_pct": _ret_between(snap_today, snap_ontem),
-        "retorno_mes_pct": _ret_between(snap_today, snap_30d),
+        "retorno_mes_pct": _ret_between(snap_today, snap_mes),
         "retorno_12m_pct": _ret_between(snap_today, snap_12m),
         "retorno_desde_inicio_pct": ret_desde_inicio,
         "proventos_total": float(proventos_total),
