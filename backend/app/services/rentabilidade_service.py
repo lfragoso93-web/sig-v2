@@ -235,10 +235,87 @@ async def _load_transactions_by_ticker(
     return by_ticker
 
 
+async def _calc_invested_up_to(
+    db: AsyncSession,
+    portfolio_id: int,
+    up_to: date,
+) -> float:
+    """
+    Calcula o total investido (custo BRL) acumulado ate uma data.
+
+    Usado pelo fallback realtime para estimar o valor da carteira
+    no inicio de um periodo (mes, 12m) quando nao ha snapshots.
+    O custo acumulado e um proxy conservador do market_value naquela data:
+    subestima os ganhos mas evita retornos inflados por dados ausentes.
+
+    Nao inclui proventos — apenas aportes liquidos (compras - vendas).
+    """
+    result = await db.execute(
+        select(Transaction)
+        .where(
+            Transaction.portfolio_id == portfolio_id,
+            Transaction.date <= up_to,
+        )
+        .order_by(Transaction.date.asc(), Transaction.id.asc())
+    )
+    txs = result.scalars().all()
+
+    qty_map: dict[str, float] = {}
+    cost_map: dict[str, float] = {}
+
+    for tx in txs:
+        ticker = tx.ticker.upper()
+        qty = float(tx.quantity or 0)
+        price = float(tx.price or 0)
+        fees = float(tx.fees or 0)
+
+        is_usd = (
+            (getattr(tx, "currency", "BRL") or "BRL").upper() == "USD"
+            or (tx.asset_type.value if hasattr(tx.asset_type, "value") else str(tx.asset_type or "")).upper()
+            in _USD_ASSET_TYPES
+        )
+        fx_rate = 1.0
+        if is_usd:
+            saved = getattr(tx, "fx_rate", None)
+            if saved is not None and float(saved or 0) > 0:
+                fx_rate = float(saved)
+
+        price_brl = price * fx_rate
+        fees_brl = fees * fx_rate
+
+        if ticker not in qty_map:
+            qty_map[ticker] = 0.0
+            cost_map[ticker] = 0.0
+
+        if tx.operation == OperationType.buy:
+            qty_map[ticker] += qty
+            cost_map[ticker] += qty * price_brl + fees_brl
+        elif tx.operation == OperationType.sell:
+            sold = min(qty, qty_map[ticker])
+            if qty_map[ticker] > 0:
+                avg_brl = cost_map[ticker] / qty_map[ticker]
+                cost_map[ticker] -= sold * avg_brl
+            qty_map[ticker] = max(0.0, qty_map[ticker] - sold)
+            cost_map[ticker] = max(0.0, cost_map[ticker])
+
+    return sum(cost_map.values())
+
+
 async def _kpis_from_realtime(db: AsyncSession, portfolio_id: int) -> dict:
     """
     Fallback: calcula KPIs diretamente das transacoes + cotacoes atuais.
-    Usado quando nao existe snapshot para a carteira (ex.: carteira nova).
+    Usado quando nao existe snapshot para a carteira (ex.: carteira nova
+    ou backfill ainda nao executado).
+
+    LIMITACOES deste fallback vs. calculo com snapshots:
+    - retorno_dia_pct: sempre 0.0 — impossivel sem snapshot de ontem.
+    - retorno_mes_pct / retorno_12m_pct: estimados usando custo acumulado
+      ate o inicio do periodo como proxy do market_value inicial.
+      E uma aproximacao conservadora (subestima ganhos anteriores ao periodo).
+      O valor exato so estara disponivel apos o primeiro backfill de snapshots.
+    - A chamada a _calc_invested_up_to faz duas queries extras de transacoes;
+      e aceitavel para carteiras novas (poucas transacoes) mas seria caro para
+      carteiras grandes — neste caso, o backfill de snapshots deve ser priorizado.
     """
     logger.info(
         "[rentabilidade] sem snapshot para portfolio=%s — calculando em tempo real",
@@ -278,12 +355,47 @@ async def _kpis_from_realtime(db: AsyncSession, portfolio_id: int) -> dict:
     realized_pnl = sum(realized_map.values())
     total_pnl = unrealized_pnl + realized_pnl
 
-    from datetime import timedelta
     today = date.today()
     proventos_total = float(await _proventos_total(db, portfolio_id))
     proventos_12m = float(await _proventos_total(db, portfolio_id, since=today - timedelta(days=365)))
 
     retorno_total_pct = (total_pnl / total_invested * 100) if total_invested else 0.0
+
+    # ------------------------------------------------------------------
+    # Bug #4 FIX: retorno_mes_pct e retorno_12m_pct no fallback realtime.
+    #
+    # Sem snapshots, estimamos o valor da carteira no inicio do periodo
+    # usando o custo acumulado ate aquela data como proxy do market_value.
+    # Isso e uma aproximacao conservadora (ignora valorizacao ate o inicio
+    # do periodo), mas e muito melhor do que retornar 0.0 sempre.
+    #
+    # Formula: (current_value - custo_inicio) / custo_inicio * 100
+    # Se custo_inicio == 0 (carteira nao existia ainda), retorna 0.0.
+    #
+    # retorno_dia_pct permanece 0.0 — sem snapshot de ontem, e impossivel
+    # calcular a variacao diaria de forma confiavel.
+    # ------------------------------------------------------------------
+    retorno_mes_pct = 0.0
+    retorno_12m_pct = 0.0
+    try:
+        inicio_mes = today.replace(day=1)
+        custo_inicio_mes = await _calc_invested_up_to(db, portfolio_id, inicio_mes - timedelta(days=1))
+        if custo_inicio_mes > 0:
+            retorno_mes_pct = round(
+                (current_value - custo_inicio_mes) / custo_inicio_mes * 100, 4
+            )
+    except Exception as e:
+        logger.warning("[rentabilidade] fallback retorno_mes_pct falhou: %s", e)
+
+    try:
+        inicio_12m = today - timedelta(days=365)
+        custo_inicio_12m = await _calc_invested_up_to(db, portfolio_id, inicio_12m)
+        if custo_inicio_12m > 0:
+            retorno_12m_pct = round(
+                (current_value - custo_inicio_12m) / custo_inicio_12m * 100, 4
+            )
+    except Exception as e:
+        logger.warning("[rentabilidade] fallback retorno_12m_pct falhou: %s", e)
 
     return {
         "patrimonio_atual": round(current_value, 2),
@@ -293,10 +405,10 @@ async def _kpis_from_realtime(db: AsyncSession, portfolio_id: int) -> dict:
         "ganho_realizado": round(realized_pnl, 2),
         "total_pnl": round(total_pnl, 2),
         "retorno_total_pct": round(retorno_total_pct, 4),
-        # Sem snapshots não é possível calcular variações de período
+        # Sem snapshot de ontem, variacao diaria e impossivel de calcular.
         "retorno_dia_pct": 0.0,
-        "retorno_mes_pct": 0.0,
-        "retorno_12m_pct": 0.0,
+        "retorno_mes_pct": retorno_mes_pct,
+        "retorno_12m_pct": retorno_12m_pct,
         "retorno_desde_inicio_pct": round(retorno_total_pct, 4),
         "proventos_total": round(proventos_total, 2),
         "proventos_12m": round(proventos_12m, 2),
@@ -420,8 +532,6 @@ async def get_rentabilidade_por_ativo(db: AsyncSession, portfolio_id: int) -> li
         except Exception as e:
             logger.error("[rentabilidade] erro ao buscar cotacoes: %s", e)
 
-    # Injeta portfolio_id em cada posicao para o rf_calc_service buscar
-    # diretamente em fixed_income_investments sem depender de notes/regex.
     positions_with_portfolio = [
         {**p, "portfolio_id": portfolio_id} for p in positions_raw
     ]
@@ -471,7 +581,6 @@ async def get_rentabilidade_por_ativo(db: AsyncSession, portfolio_id: int) -> li
             except Exception:
                 pass
 
-        # FIX: usa _is_rf_type para comparacao case-insensitive
         if _is_rf_type(asset_type) and ticker in rf_values:
             current_value = rf_values[ticker]
         elif current_price:
