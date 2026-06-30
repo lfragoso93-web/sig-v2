@@ -109,7 +109,7 @@ async def _latest_snapshot(
 async def _first_snapshot(
     db: AsyncSession,
     portfolio_id: int,
-) -> Optional[PortfolioSnapshot]:\
+) -> Optional[PortfolioSnapshot]:
     result = await db.execute(
         select(PortfolioSnapshot)
         .where(PortfolioSnapshot.portfolio_id == portfolio_id)
