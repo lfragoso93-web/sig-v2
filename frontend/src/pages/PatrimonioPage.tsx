@@ -50,7 +50,6 @@ const ASSET_TYPE_COLORS: Record<string, { bg: string; text: string; border: stri
 }
 const FALLBACK_COLOR = { bg: 'var(--color-surface-dynamic)', text: 'var(--color-text-muted)', border: 'var(--color-border)' }
 
-// Cores sólidas para barras de concentração
 const CHART_COLORS: string[] = [
   'var(--color-blue)',
   'var(--color-primary)',
@@ -71,38 +70,7 @@ const PERIODS: { label: string; value: PeriodOption }[] = [
   { label: 'Tudo', value: 'all' },
 ]
 
-type Tab = 'visao-geral' | 'analise'
 type ViewMode = 'diario' | 'mensal'
-
-// ── Tab bar ────────────────────────────────────────────────────────────────────
-function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
-  const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
-    { id: 'visao-geral', label: 'Visão Geral', icon: BarChart2 },
-    { id: 'analise',     label: 'Análise',      icon: PieChart  },
-  ]
-  return (
-    <div
-      className="flex gap-1 p-1 rounded-xl"
-      style={{ background: 'var(--color-surface-dynamic)', width: 'fit-content' }}
-    >
-      {tabs.map(({ id, label, icon: Icon }) => (
-        <button
-          key={id}
-          onClick={() => onChange(id)}
-          className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all"
-          style={{
-            background: active === id ? 'var(--color-surface)' : 'transparent',
-            color:      active === id ? 'var(--color-text)'    : 'var(--color-text-muted)',
-            boxShadow:  active === id ? 'var(--shadow-sm)'     : 'none',
-          }}
-        >
-          <Icon size={14} strokeWidth={1.75} />
-          {label}
-        </button>
-      ))}
-    </div>
-  )
-}
 
 // ── Toggle group ───────────────────────────────────────────────────────────────
 function ToggleGroup<T extends string>({
@@ -147,7 +115,21 @@ function ToggleGroup<T extends string>({
   )
 }
 
-// ── Gráfico de evolução (barras mensais estilo print) ──────────────────────────
+// ── Divisor de seção ───────────────────────────────────────────────────────────
+function SectionDivider({ label, icon: Icon }: { label: string; icon?: React.ElementType }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.5rem' }}>
+      {Icon && <Icon size={15} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />}
+      <span style={{
+        fontSize: 'var(--text-sm)', fontWeight: 700,
+        letterSpacing: '-0.01em', color: 'var(--color-text)',
+      }}>{label}</span>
+      <div style={{ flex: 1, height: 1, background: 'oklch(from var(--color-text) l c h / 0.07)' }} />
+    </div>
+  )
+}
+
+// ── Gráfico de evolução ────────────────────────────────────────────────────────
 function EvolucaoSection({ portfolioId }: { portfolioId: number }) {
   const [period, setPeriod] = useState<PeriodOption>('12m')
   const [view,   setView]   = useState<ViewMode>('mensal')
@@ -176,8 +158,8 @@ function EvolucaoSection({ portfolioId }: { portfolioId: number }) {
           <span className="section-card-title">Evolução do Patrimônio</span>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <ToggleGroup<ViewMode>    options={viewOptions} value={view}   onChange={setView}   />
-          <ToggleGroup<PeriodOption> options={PERIODS}    value={period} onChange={setPeriod} />
+          <ToggleGroup<ViewMode>     options={viewOptions} value={view}   onChange={setView}   />
+          <ToggleGroup<PeriodOption> options={PERIODS}     value={period} onChange={setPeriod} />
           <button
             onClick={async () => { await backfill.mutateAsync(); setBackfillDone(true); setTimeout(() => setBackfillDone(false), 3000) }}
             disabled={backfill.isPending}
@@ -208,7 +190,7 @@ function EvolucaoSection({ portfolioId }: { portfolioId: number }) {
   )
 }
 
-// ── Consolidação por classe com donut + lista (estilo print) ───────────────────
+// ── Consolidação por classe ────────────────────────────────────────────────────
 function ConsolidacaoSection({
   portfolioId,
   onFilterChange,
@@ -218,9 +200,9 @@ function ConsolidacaoSection({
   onFilterChange: (t: string | null) => void
   activeFilter: string | null
 }) {
-  const { data: distribution, isLoading: loadingDist      } = useAssetDistribution(portfolioId)
-  const { data: positions,    isLoading: loadingPositions  } = usePositions(portfolioId)
-  const { data: classTargets, isLoading: loadingTargets    } = useClassTargets(portfolioId)
+  const { data: distribution, isLoading: loadingDist     } = useAssetDistribution(portfolioId)
+  const { data: positions,    isLoading: loadingPositions } = usePositions(portfolioId)
+  const { data: classTargets, isLoading: loadingTargets   } = useClassTargets(portfolioId)
 
   const allPositions = useMemo(() => {
     if (!positions) return []
@@ -244,7 +226,6 @@ function ConsolidacaoSection({
       .sort((a, b) => b.total - a.total)
   }, [allPositions])
 
-  // Tabs de visão dentro da consolidação
   type ConsolTab = 'tipo' | 'ativos' | 'exterior'
   const [consolTab, setConsolTab] = useState<ConsolTab>('tipo')
   const consolTabs: { id: ConsolTab; label: string }[] = [
@@ -253,7 +234,6 @@ function ConsolidacaoSection({
     { id: 'exterior', label: 'Exposição ao exterior' },
   ]
 
-  // Dados para "Ativos" — todos os ativos individuais ordenados
   const allAssetsSorted = useMemo(() => {
     const total = allPositions.reduce((s: number, p: any) => s + (p.current_value ?? 0), 0)
     return allPositions
@@ -268,7 +248,6 @@ function ConsolidacaoSection({
       .sort((a: any, b: any) => b.value - a.value)
   }, [allPositions])
 
-  // "Exposição ao exterior" — ativos não nacionais
   const exteriorTypes = ['STOCK', 'ETF_INTERNACIONAL', 'BDR', 'CRIPTO']
   const exteriorAssets = useMemo(() => {
     const total = allPositions.reduce((s: number, p: any) => s + (p.current_value ?? 0), 0)
@@ -284,14 +263,12 @@ function ConsolidacaoSection({
       .sort((a: any, b: any) => b.value - a.value)
   }, [allPositions])
 
-  // Dados de distribuição para cada tab do donut
   const donutData = useMemo(() => {
     if (consolTab === 'tipo') return distribution ?? []
     const items = consolTab === 'ativos' ? allAssetsSorted : exteriorAssets
     return items.map((it: any) => ({ name: it.label, value: it.value, color: it.color }))
   }, [consolTab, distribution, allAssetsSorted, exteriorAssets])
 
-  // Lista lateral (barras horizontais)
   const listItems = useMemo(() => {
     if (consolTab === 'tipo') return typeBreakdown.map((t, i) => ({
       label: ASSET_TYPE_LABELS[t.type] ?? t.type,
@@ -350,7 +327,11 @@ function ConsolidacaoSection({
 
             {/* Lista com barras horizontais */}
             <div className="flex flex-col">
-              {listItems.map((item, i) => (
+              {listItems.length === 0 ? (
+                <div className="h-48 flex items-center justify-center text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                  {consolTab === 'exterior' ? 'Nenhum ativo internacional' : 'Sem dados'}
+                </div>
+              ) : listItems.map((item, i) => (
                 <button
                   key={item.label + i}
                   type="button"
@@ -427,126 +408,16 @@ function ConsolidacaoSection({
   )
 }
 
-// ── Aba: Visão Geral ───────────────────────────────────────────────────────────
-function TabVisaoGeral({ portfolioId }: { portfolioId: number }) {
-  const [activeTypeFilter, setActiveTypeFilter] = useState<string | null>(null)
-
-  const { data: summary, isLoading: loadingSummary } = usePortfolioSummary(portfolioId)
-  const { data: positions, isLoading: loadingPositions } = usePositions(portfolioId)
-
-  const filteredPositions = useMemo(() => {
-    if (!positions) return []
-    if (!activeTypeFilter) return positions
-    return positions
-      .map((g: PositionGroup) => ({
-        ...g,
-        positions: g.positions.filter((p: any) => p.asset_type === activeTypeFilter),
-      }))
-      .filter((g: PositionGroup) => g.positions.length > 0)
-  }, [positions, activeTypeFilter])
-
-  return (
-    <>
-      {/* KPIs */}
-      <div className="kpi-grid">
-        {loadingSummary ? (
-          [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
-        ) : summary ? (
-          <>
-            <KpiCard
-              label="Patrimônio Total"
-              value={formatBRL(summary.total_patrimonio ?? 0)}
-              subValue={formatBRL(summary.total_investido ?? 0)}
-              subLabel="Valor investido"
-              change={summary.variacao_percentual}
-            />
-            <KpiCard
-              label="Resultado"
-              value={formatBRL(summary.lucro_total ?? 0)}
-              valueColor={signClass(summary.lucro_total ?? 0)}
-              subLabel="Ganho de capital + proventos"
-            />
-            <KpiCard
-              label="Proventos (12m)"
-              value={formatBRL(summary.dividendos_recebidos_12m ?? 0)}
-              subValue={formatBRL(summary.total_proventos ?? 0)}
-              subLabel="Total recebido"
-            />
-            <KpiCard
-              label="Variação"
-              value={formatBRL(summary.variacao_valor ?? 0)}
-              valueColor={signClass(summary.variacao_valor ?? 0)}
-              change={summary.variacao_percentual}
-              bottomLine={
-                <span className={clsx('text-xs font-semibold tabular-nums', signClass(summary.rentabilidade_total ?? 0))}>
-                  {(summary.rentabilidade_total ?? 0) >= 0 ? '+' : ''}{formatPercent(summary.rentabilidade_total ?? 0)} rentab.
-                </span>
-              }
-            />
-          </>
-        ) : (
-          <div className="col-span-4 py-8 text-center text-xs" style={{ color: 'var(--color-text-muted)' }}>
-            Nenhum dado disponível. Adicione lançamentos para começar.
-          </div>
-        )}
-      </div>
-
-      {/* Evolução do Patrimônio */}
-      <EvolucaoSection portfolioId={portfolioId} />
-
-      {/* Consolidação (donut + lista + distribuição ideal) */}
-      <ConsolidacaoSection
-        portfolioId={portfolioId}
-        onFilterChange={setActiveTypeFilter}
-        activeFilter={activeTypeFilter}
-      />
-
-      {/* Posições */}
-      <div className="card overflow-hidden">
-        <div className="section-card-header" style={{ justifyContent: 'space-between' }}>
-          <div className="flex items-center gap-2">
-            <span className="section-card-title">Posições</span>
-            <span
-              className="px-1.5 py-0.5 rounded text-xs tabular-nums"
-              style={{ background: 'var(--color-surface-dynamic)', color: 'var(--color-text-muted)' }}
-            >
-              {filteredPositions.reduce((s: number, g: PositionGroup) => s + g.count, 0)}
-            </span>
-          </div>
-          {activeTypeFilter && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                Filtrado: <strong style={{ color: 'var(--color-text)' }}>{ASSET_TYPE_LABELS[activeTypeFilter] ?? activeTypeFilter}</strong>
-              </span>
-              <button onClick={() => setActiveTypeFilter(null)} className="text-xs flex items-center gap-1" style={{ color: 'var(--color-primary)' }}>
-                <RefreshCw size={11} /> Ver todos
-              </button>
-            </div>
-          )}
-        </div>
-        {loadingPositions ? (
-          <div className="p-4 flex flex-col gap-2">
-            {[...Array(4)].map((_, i) => <div key={i} className="h-12 rounded skeleton" />)}
-          </div>
-        ) : (
-          <PositionTable groups={filteredPositions} portfolioId={portfolioId} />
-        )}
-      </div>
-    </>
-  )
-}
-
-// ── Aba: Análise ───────────────────────────────────────────────────────────────
-function TabAnalise({ portfolioId }: { portfolioId: number }) {
-  const { data: positions,    isLoading: loadingPositions } = usePositions(portfolioId)
-  const { data: classTargets }                              = useClassTargets(portfolioId)
+// ── Análise de concentração (inline, sem aba) ──────────────────────────────────
+function AnaliseSection({ portfolioId }: { portfolioId: number }) {
+  const { data: positions    } = usePositions(portfolioId)
+  const { data: classTargets } = useClassTargets(portfolioId)
 
   const allPositions = useMemo(() => {
     if (!positions) return []
     return positions.flatMap((g: PositionGroup) => g.positions ?? [])
   }, [positions])
 
-  // Agrupamento por classe
   const byClass = useMemo(() => {
     const map: Record<string, number> = {}
     for (const p of allPositions) {
@@ -557,16 +428,14 @@ function TabAnalise({ portfolioId }: { portfolioId: number }) {
     return Object.entries(map)
       .filter(([, v]) => v > 0)
       .map(([type, value], i) => ({
-        type,
+        type, value,
         label: ASSET_TYPE_LABELS[type] ?? type,
-        value,
         pct: total > 0 ? (value / total) * 100 : 0,
         color: CHART_COLORS[i % CHART_COLORS.length],
       }))
       .sort((a, b) => b.value - a.value)
   }, [allPositions])
 
-  // Top ativos individuais
   const byAsset = useMemo(() => {
     const total = allPositions.reduce((s: number, p: any) => s + (p.current_value ?? 0), 0)
     return allPositions
@@ -581,7 +450,6 @@ function TabAnalise({ portfolioId }: { portfolioId: number }) {
       .sort((a: any, b: any) => b.value - a.value)
   }, [allPositions])
 
-  // HHI
   const { hhi, hhiNorm, hhiLevel, hhiLabel } = useMemo(() => {
     const total = byAsset.reduce((s, i) => s + i.value, 0)
     if (total === 0) return { hhi: 0, hhiNorm: 0, hhiLevel: 'neutro' as const, hhiLabel: '—' }
@@ -600,7 +468,6 @@ function TabAnalise({ portfolioId }: { portfolioId: number }) {
     : hhiLevel === 'alto'  ? 'var(--color-error)'
     : 'var(--color-text-muted)'
 
-  // Desvio do alvo
   const desvioRows = useMemo(() => {
     if (!classTargets || classTargets.length === 0) return []
     return classTargets
@@ -614,26 +481,13 @@ function TabAnalise({ portfolioId }: { portfolioId: number }) {
       .sort((a: any, b: any) => Math.abs(b.delta) - Math.abs(a.delta))
   }, [classTargets])
 
-  if (loadingPositions) return (
-    <div className="flex flex-col gap-4">
-      {[...Array(3)].map((_, i) => <div key={i} className="card h-32 skeleton" />)}
-    </div>
-  )
-
-  if (allPositions.length === 0) return (
-    <EmptyState icon={PieChart} title="Nenhum ativo na carteira" description="Adicione lançamentos para visualizar a análise de concentração." />
-  )
-
-  // Donut data por classe
-  const donutDataClasse = byClass.map(c => ({ name: c.label, value: c.value, color: c.color }))
+  if (allPositions.length === 0) return null
 
   return (
     <div className="flex flex-col gap-4">
 
-      {/* Linha 1: Score HHI + Top 5 */}
+      {/* Score HHI + Top 5 */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-
-        {/* Score HHI */}
         <div className="card p-5 flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <PieChart size={14} style={{ color: 'var(--color-primary)' }} />
@@ -655,7 +509,6 @@ function TabAnalise({ portfolioId }: { portfolioId: number }) {
           </p>
         </div>
 
-        {/* Top 5 posições */}
         <div className="card p-5 flex flex-col gap-3 md:col-span-2">
           <span className="section-card-title">Top 5 Posições</span>
           <div className="flex flex-col gap-2">
@@ -674,19 +527,23 @@ function TabAnalise({ portfolioId }: { portfolioId: number }) {
         </div>
       </div>
 
-      {/* Concentração por classe: Donut + barras horizontais (estilo prints) */}
+      {/* Concentração por classe */}
       {byClass.map(cls => (
         <div key={cls.type} className="card overflow-hidden">
           <div className="section-card-header" style={{ justifyContent: 'space-between' }}>
             <span className="section-card-title">{cls.label}</span>
-            {/* toggle Exibir posição ideal — placeholder visual */}
-            <div className="flex items-center gap-2">
-              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Exibir posição ideal</span>
-            </div>
+            <span
+              className="text-xs font-medium px-2 py-0.5 rounded"
+              style={{
+                background: (ASSET_TYPE_COLORS[cls.type] ?? FALLBACK_COLOR).bg,
+                color:      (ASSET_TYPE_COLORS[cls.type] ?? FALLBACK_COLOR).text,
+              }}
+            >
+              {cls.pct.toFixed(1)}% da carteira
+            </span>
           </div>
           <div className="p-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-              {/* Donut da classe */}
               <div className="flex justify-center">
                 {(() => {
                   const classPositions = allPositions
@@ -704,7 +561,6 @@ function TabAnalise({ portfolioId }: { portfolioId: number }) {
                     : <div className="h-40 flex items-center justify-center text-xs" style={{ color: 'var(--color-text-muted)' }}>Sem ativos</div>
                 })()}
               </div>
-              {/* Barras horizontais dos ativos da classe */}
               <div className="flex flex-col">
                 {allPositions
                   .filter((p: any) => p.asset_type === cls.type && (p.current_value ?? 0) > 0)
@@ -803,8 +659,8 @@ function TabAnalise({ portfolioId }: { portfolioId: number }) {
           </div>
           <div className="px-4 pb-3 pt-2 flex gap-4 flex-wrap" style={{ borderTop: '1px solid var(--color-divider)' }}>
             {[
-              { color: 'var(--color-notification)', label: 'Acima do alvo'  },
-              { color: 'var(--color-gold)',          label: 'Abaixo do alvo' },
+              { color: 'var(--color-notification)', label: 'Acima do alvo'   },
+              { color: 'var(--color-gold)',          label: 'Abaixo do alvo'  },
               { color: 'var(--color-success)',       label: 'No alvo (±0,5%)' },
             ].map(l => (
               <span key={l.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
@@ -831,7 +687,21 @@ function TabAnalise({ portfolioId }: { portfolioId: number }) {
 // ── Page root ──────────────────────────────────────────────────────────────────
 function PatrimonioPage() {
   const portfolioId = useAppStore(s => s.selectedPortfolioId)
-  const [activeTab, setActiveTab] = useState<Tab>('visao-geral')
+  const [activeTypeFilter, setActiveTypeFilter] = useState<string | null>(null)
+
+  const { data: summary,   isLoading: loadingSummary   } = usePortfolioSummary(portfolioId ?? 0)
+  const { data: positions, isLoading: loadingPositions } = usePositions(portfolioId ?? 0)
+
+  const filteredPositions = useMemo(() => {
+    if (!positions) return []
+    if (!activeTypeFilter) return positions
+    return positions
+      .map((g: PositionGroup) => ({
+        ...g,
+        positions: g.positions.filter((p: any) => p.asset_type === activeTypeFilter),
+      }))
+      .filter((g: PositionGroup) => g.positions.length > 0)
+  }, [positions, activeTypeFilter])
 
   if (!portfolioId) {
     return (
@@ -854,11 +724,98 @@ function PatrimonioPage() {
         </div>
       </div>
 
-      <TabBar active={activeTab} onChange={setActiveTab} />
+      {/* ── KPIs ── */}
+      <div className="kpi-grid">
+        {loadingSummary ? (
+          [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
+        ) : summary ? (
+          <>
+            <KpiCard
+              label="Patrimônio Total"
+              value={formatBRL(summary.total_patrimonio ?? 0)}
+              subValue={formatBRL(summary.total_investido ?? 0)}
+              subLabel="Valor investido"
+              change={summary.variacao_percentual}
+            />
+            <KpiCard
+              label="Resultado"
+              value={formatBRL(summary.lucro_total ?? 0)}
+              valueColor={signClass(summary.lucro_total ?? 0)}
+              subLabel="Ganho de capital + proventos"
+            />
+            <KpiCard
+              label="Proventos (12m)"
+              value={formatBRL(summary.dividendos_recebidos_12m ?? 0)}
+              subValue={formatBRL(summary.total_proventos ?? 0)}
+              subLabel="Total recebido"
+            />
+            <KpiCard
+              label="Variação"
+              value={formatBRL(summary.variacao_valor ?? 0)}
+              valueColor={signClass(summary.variacao_valor ?? 0)}
+              change={summary.variacao_percentual}
+              bottomLine={
+                <span className={clsx('text-xs font-semibold tabular-nums', signClass(summary.rentabilidade_total ?? 0))}>
+                  {(summary.rentabilidade_total ?? 0) >= 0 ? '+' : ''}{formatPercent(summary.rentabilidade_total ?? 0)} rentab.
+                </span>
+              }
+            />
+          </>
+        ) : (
+          <div className="col-span-4 py-8 text-center text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            Nenhum dado disponível. Adicione lançamentos para começar.
+          </div>
+        )}
+      </div>
 
-      {activeTab === 'visao-geral'
-        ? <TabVisaoGeral portfolioId={portfolioId} />
-        : <TabAnalise    portfolioId={portfolioId} />}
+      {/* ── Evolução ── */}
+      <EvolucaoSection portfolioId={portfolioId} />
+
+      {/* ── Consolidação ── */}
+      <ConsolidacaoSection
+        portfolioId={portfolioId}
+        onFilterChange={setActiveTypeFilter}
+        activeFilter={activeTypeFilter}
+      />
+
+      {/* ── Posições ── */}
+      <div className="card overflow-hidden">
+        <div className="section-card-header" style={{ justifyContent: 'space-between' }}>
+          <div className="flex items-center gap-2">
+            <span className="section-card-title">Posições</span>
+            {filteredPositions.length > 0 && (
+              <span
+                className="px-1.5 py-0.5 rounded text-xs tabular-nums"
+                style={{ background: 'var(--color-surface-dynamic)', color: 'var(--color-text-muted)' }}
+              >
+                {filteredPositions.reduce((s: number, g: PositionGroup) => s + g.count, 0)}
+              </span>
+            )}
+          </div>
+          {activeTypeFilter && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                Filtrado: <strong style={{ color: 'var(--color-text)' }}>{ASSET_TYPE_LABELS[activeTypeFilter] ?? activeTypeFilter}</strong>
+              </span>
+              <button onClick={() => setActiveTypeFilter(null)} className="text-xs flex items-center gap-1" style={{ color: 'var(--color-primary)' }}>
+                <RefreshCw size={11} /> Ver todos
+              </button>
+            </div>
+          )}
+        </div>
+        {loadingPositions ? (
+          <div className="p-4 flex flex-col gap-2">
+            {[...Array(4)].map((_, i) => <div key={i} className="h-12 rounded skeleton" />)}
+          </div>
+        ) : (
+          <PositionTable groups={filteredPositions} portfolioId={portfolioId} />
+        )}
+      </div>
+
+      {/* ── Análise de Concentração ── */}
+      <SectionDivider label="Análise de Concentração" icon={PieChart} />
+      <AnaliseSection portfolioId={portfolioId} />
+
     </div>
   )
 }
