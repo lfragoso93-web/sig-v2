@@ -3,6 +3,10 @@ Schemas de portfolio, metas de alocacao e view combinada alvo vs atual.
 
 Alteracoes Sprint 5E:
 - ClassTargetWithCurrent: novo schema para endpoint targets-with-current
+
+Fix 2026-06-30:
+- Adicionado alias PortfolioResponse = PortfolioRead para compatibilidade
+  com router que importa PortfolioResponse.
 """
 from pydantic import BaseModel, Field
 from typing import Optional
@@ -32,6 +36,10 @@ class PortfolioRead(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# Alias para compatibilidade com routers que importam PortfolioResponse
+PortfolioResponse = PortfolioRead
 
 
 # ---------------------------------------------------------------------------
