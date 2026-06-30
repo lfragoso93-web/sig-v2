@@ -1,6 +1,6 @@
 # Roadmap de Sprints — SGI v2
 
-> Última atualização: 29/06/2026
+> Última atualização: 30/06/2026
 > Versão visual e interativa: [ROADMAP_VISUAL.md](./ROADMAP_VISUAL.md)
 
 ---
@@ -60,10 +60,9 @@
 
 ---
 
-## 🔄 Sprint 5 — Frontend Dashboard (Em andamento)
+## ✅ Sprint 5 — Frontend Dashboard (Concluído — 30/06/2026)
 **Período:** Junho–Julho 2026 | [Issue #54](https://github.com/lfragoso93-web/sig-v2/issues/54)
 
-### Concluído
 - [x] **Página de Rentabilidade** (`/carteira/rentabilidade`) — 25/06/2026
 - [x] **Hotfixes Tesouro Direto & Cripto** — 25/06/2026
 - [x] **Fixes CSS/UI Design System** — 25/06/2026
@@ -73,15 +72,11 @@
 - [x] **Fix rentabilidade renda fixa** — 28/06/2026
 - [x] **Fix modal de lançamento — renda fixa sem cotas** — 28/06/2026
 - [x] **Bump dependências frontend e backend** — 29/06/2026
-- [x] **PR #78 criada** — `stable-15jun` → `main` — 29/06/2026
-
-### Pendente
-- [ ] `GET /api/v1/assets`: listagem paginada com filtros
-- [ ] Tela de listagem de ativos no frontend
+- [x] **Fix rentabilidade dia/mês/12m + KpiCard Rentabilidade reestruturado** — 30/06/2026
 
 ---
 
-## 🔄 Sprint 5A — Botão + Lançamento no Mobile (Concluído — 26/06/2026)
+## ✅ Sprint 5A — Botão + Lançamento no Mobile (Concluído — 26/06/2026)
 **Período:** Julho 2026 | [Issue #54](https://github.com/lfragoso93-web/sig-v2/issues/54)
 
 - [x] `BottomNav` adicionado ao `AppLayout`
@@ -91,19 +86,33 @@
 
 ---
 
-## 🔄 Sprint 5B — Performance de Queries + Rentabilidade
+## 🔄 Sprint 5B — Performance de Queries (Em andamento)
 **Período:** Julho 2026 | [Issue #54](https://github.com/lfragoso93-web/sig-v2/issues/54)
 
-> **Criticidade: Alta | Esforço: Alto | Impacto: Performance + Precisão financeira**
+> **Criticidade: Alta | Esforço: Alto | Impacto: Performance**
 
+### Concluído
+- [x] **Fix `retorno_dia_pct`**: usa `_snapshot_before_today()` — trata fins de semana e feriados corretamente — 30/06/2026
+- [x] **Fix `retorno_mes_pct`**: usa 1º do mês calendário como base fixa (antes usava D-30 corridos) — 30/06/2026
+- [x] **`retorno_dia_pct` adicionado ao tipo `RentabilidadeKpis`** no frontend — 30/06/2026
+- [x] **KpiCard Rentabilidade** exibe Hoje / Mês / 12m / Desde o início com cores semânticas — 30/06/2026
+
+### Pendente
 - [ ] Mapear queries com tempo de execução elevado (EXPLAIN ANALYZE)
 - [ ] Adicionar índices faltantes e otimizar joins
 - [ ] Revisar N+1 em listagens de posições e transações
 - [ ] Testes de integração do fluxo de proventos
-- [ ] **[NOVO]** Auditar e corrigir cálculo de rentabilidade diária (verificar base de comparação)
-- [ ] **[NOVO]** Auditar e corrigir cálculo de rentabilidade mensal (TWR vs MWRR)
-- [ ] **[NOVO]** Validar rentabilidade total acumulada contra cálculo manual de referência
-- [ ] **[NOVO]** Criar conjunto de dados de teste determinístico para validar os três horizontes
+
+---
+
+## ✅ Sprint 5E — Distribuição Ideal da Carteira: BDR + Reflexo no Resumo (Concluído — 30/06/2026)
+**Período:** Julho 2026 | [Issue #79](https://github.com/lfragoso93-web/sig-v2/issues/79)
+
+- [x] `BDR` adicionado a `VALID_ASSET_CLASSES` e `_TYPE_LABEL` no `class_target_service`
+- [x] `get_targets_with_current()` retorna BDR quando há posição ou meta configurada
+- [x] `AllocationTargetWidget` itera `rows` dinamicamente — BDR renderizado automaticamente
+- [x] Widget exibido na `ResumePage` sob o gráfico de distribuição ("Alvo da Carteira")
+- [x] `useClassTargets` já chamava `/targets-with-current` — nenhuma alteração necessária
 
 ---
 
@@ -126,66 +135,44 @@
 
 ---
 
-## 🔄 Sprint 5E — Distribuição Ideal da Carteira (BDR + Resumo) [NOVO]
-**Período:** Julho 2026 | [Issue #60](https://github.com/lfragoso93-web/sig-v2/issues/60)
-
-> **Criticidade: Alta | Esforço: Baixo-Médio | Impacto: Funcionalidade core**
-
-- [ ] Incluir classe `BDR` no módulo `class_targets` (backend)
-- [ ] Garantir que BDRs apareçam no cálculo de alocação atual vs. alvo
-- [ ] Exibir barra de distribuição alvo na `ResumePage` (Dashboard)
-- [ ] Indicar desvio entre alocação real e alvo por classe (delta colorido)
-- [ ] Endpoint atualizado para retornar `class_targets` incluindo BDR
-
----
-
 ## 📋 Sprint 6 — Qualidade Visual & Rename SGI (Planejado)
 **Período:** Julho–Agosto 2026 | [Issue #55](https://github.com/lfragoso93-web/sig-v2/issues/55)
 
-### Sprint 6A — Análise de Impacto: Rename SIG v2 → SGI + Remoção de Referências a APIs Externas [NOVO]
+### Sprint 6A — Remoção de Referências a APIs Externas
 
 > **Criticidade: Alta | Esforço: Baixo | Impacto: Segurança / Compliance**
 
-- [ ] Inventariar todas as ocorrências de `SIG` no código, docs, CI e banco
-- [ ] Verificar nomes de variáveis, tabelas, logs e env vars
-- [ ] Verificar badges e links externos
-- [ ] **[NOVO]** Remover todas as menções explícitas a nomes de APIs externas em documentação pública (README, CHANGELOG, ROADMAP, Swagger)
-- [ ] **[NOVO]** Substituir referências por termos genéricos: "provedor de cotações", "serviço de câmbio", "fonte de dados externos"
-- [ ] **[NOVO]** Manter nomes técnicos apenas em `.env.example` com comentários de propósito, sem revelar fornecedor
-- [ ] **[NOVO]** Revisar Swagger/OpenAPI: remover nomes de provedores em descrições de endpoints
-- [ ] Propor plano de migração seguro do rename
-- [ ] Só então aplicar o rename em commit único e documentado
+- [ ] Remover todas as menções explícitas a nomes de APIs externas em documentação pública
+- [ ] Substituir referências por termos genéricos: "provedor de cotações", "serviço de câmbio"
+- [ ] Manter nomes técnicos apenas em `.env.example` com comentários de propósito
+- [ ] Revisar Swagger/OpenAPI: remover nomes de provedores em descrições de endpoints
+- [ ] Análise de impacto para rename SIG v2 → SGI
 
-### Sprint 6B — Aprimorar UI Global + Patrimônio Analítico [NOVO]
+### Sprint 6B — Aprimorar UI Global + Patrimônio Analítico
 
 > **Patrimônio — Criticidade: Média | Esforço: Médio | Impacto: UX / diferenciação visual**
 
 - [ ] Revisar bordas cortando conteúdo (tabelas, cards, modais)
 - [ ] Padronizar espaçamento e tipografia entre páginas
 - [ ] Melhorar responsividade geral (tablet e mobile)
-- [ ] Revisitar `Transacoes.tsx` — interface mais leve e moderna
-- [ ] **[NOVO] Reformular `PatrimonioPage.tsx`** — transformar em página analítica distinta de Rentabilidade:
+- [ ] **Reformular `PatrimonioPage.tsx`** — transformar em página analítica distinta de Rentabilidade:
   - [ ] Visão de composição: % de cada ativo dentro de sua classe (treemap ou barras empilhadas)
   - [ ] Métricas por ativo: peso, valor investido, valor atual, variação absoluta e relativa
   - [ ] Concentração de risco: top 5 ativos como % do patrimônio total
-  - [ ] Comparativo alocação real vs. alvo (`class_targets`) com indicação visual de desvio
+  - [ ] Comparativo alocação real vs. alvo com indicação visual de desvio
   - [ ] Evolução da composição ao longo do tempo (gráfico de área empilhada)
   - [ ] Tabela colapsável por classe com drill-down por ativo
-  - [ ] Remover redundâncias com `RentabilidadePage` (evitar duplicar KPIs de retorno)
-  - [ ] Sugestões adicionais de melhoria:
-    - [ ] Indicador de diversificação (score já existe no backend via `analysis`)
-    - [ ] Alertas de concentração excessiva (>30% em um ativo)
-    - [ ] Linha do tempo de evolução do patrimônio por classe
-    - [ ] Painel de "próximo aporte sugerido" com base no desvio da alocação alvo
+  - [ ] Indicador de diversificação (score já existe no backend via `analysis`)
+  - [ ] Alertas de concentração excessiva (>30% em um ativo)
+  - [ ] Painel de "próximo aporte sugerido" com base no desvio da alocação alvo
 
 ### Sprint 6C — Limpeza de Rotas e Arquivos Legados
 - [ ] Padronizar todas as rotas para `/carteira/*`
 - [ ] Remover rota duplicada `/patrimonio`
-- [ ] Remover redirects legados desnecessários
-- [ ] Deletar arquivos stub/fantasma: `Proventos.tsx`, `Rentabilidade.tsx`, `Resumo.tsx`
-- [ ] Atualizar `App.tsx` após limpeza e validar todas as rotas
+- [ ] Deletar arquivos stub/fantasma
+- [ ] Atualizar `App.tsx` após limpeza
 
-### Sprint 6D — Import de Ativos via CSV [NOVO]
+### Sprint 6D — Import de Ativos via CSV
 
 > **Criticidade: Alta | Esforço: Médio | Impacto: UX / Onboarding**
 
@@ -197,7 +184,6 @@
 - [ ] Frontend: botão "Importar via CSV" na tela de transações ou patrimônio
 - [ ] Modal com preview das linhas antes de confirmar
 - [ ] Download do modelo CSV diretamente no modal de importação
-- [ ] Suporte a ativos nacionais (ACAO, FII, BDR) e internacionais (STOCK_INTL, ETF_INTL)
 
 ---
 
@@ -212,7 +198,7 @@
 - [ ] Apuração Day Trade vs Swing Trade
 - [ ] Testes de validação do cálculo de ganho de capital
 
-### Sprint 7B — Logs de Auditoria por Usuário _(movido da Sprint 5C)_
+### Sprint 7B — Logs de Auditoria por Usuário
 
 > **Criticidade: Média | Esforço: Médio | Impacto: Governança interna**
 
@@ -256,18 +242,18 @@
 - [ ] Documentação da API (Swagger customizado)
 - [ ] Backups automáticos do PostgreSQL
 
-### Sprint 10B — Backup e Restore do Banco via Sistema [NOVO]
+### Sprint 10B — Backup e Restore do Banco via Sistema
 
 > **Criticidade: Alta | Esforço: Médio-Alto | Impacto: Resiliência / Disaster Recovery**
 
-- [ ] Endpoint `POST /api/v1/admin/database/backup` — gera dump PostgreSQL e retorna arquivo para download (superadmin)
-- [ ] Endpoint `POST /api/v1/admin/database/restore` — recebe arquivo de backup e restaura (superadmin)
+- [ ] Endpoint `POST /api/v1/admin/database/backup` — dump PostgreSQL para download (superadmin)
+- [ ] Endpoint `POST /api/v1/admin/database/restore` — recebe arquivo e restaura (superadmin)
 - [ ] Autenticação dupla: confirmação por senha antes de executar restore
-- [ ] Backup armazenado temporariamente em volume Docker com TTL de 24h
-- [ ] Log de todas as operações de backup/restore em `AuditLog`
+- [ ] Backup com TTL de 24h em volume Docker
+- [ ] Log de todas as operações em `AuditLog`
 - [ ] Frontend: painel de administração com botões de backup e restore
-- [ ] Aviso de impacto: modal de confirmação com alerta de downtime esperado
-- [ ] Testes de integração: backup → restore → verificar integridade dos dados
+- [ ] Modal de confirmação com alerta de downtime
+- [ ] Testes de integração: backup → restore → verificar integridade
 
 ---
 

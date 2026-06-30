@@ -7,33 +7,21 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ## [Unreleased] — branch `stable-15jun`
 
-### Planejado — Distribuição Ideal: BDRs + Reflexo no Resumo (Sprint 5E)
+### Planejado — Remoção de Menções a APIs Externas (Sprint 6A)
 
-> Criticidade: **Alta** | Esforço: Baixo-Médio | Impacto: Funcionalidade core
+> Criticidade: **Alta** | Esforço: Baixo | Impacto: Segurança / Compliance
 
-**`backend/app/routers/class_targets.py`**
-- Incluir classe `BDR` no cálculo de alocação real vs. alvo
-- Endpoint atualizado para retornar `class_targets` com suporte a BDR
+**Documentação pública (README, CHANGELOG, ROADMAP)**
+- Substituir todos os nomes explícitos de APIs externas por termos genéricos
+- Exemplo: "provedor de cotações", "fonte de dados internacionais"
+- Manter nomes técnicos apenas em `.env.example` com comentários descritivos
 
-**`frontend/src/pages/ResumePage.tsx`**
-- Exibir barra de distribuição alvo com delta colorido (real vs. configurado)
-- BDRs refletidos corretamente na distribuição da página de Resumo
-
----
-
-### Planejado — Rentabilidade Diária, Mensal e Total (Sprint 5B — ampliado)
-
-> Criticidade: **Alta** | Esforço: Médio-Alto | Impacto: Precisão financeira
-
-**`backend/app/services/rentabilidade_service.py`**
-- Auditoria do cálculo de rentabilidade diária (base de comparação, preço de fechamento)
-- Revisão do método de cálculo mensal (TWR vs MWRR): documentar a escolha com justificativa
-- Validação da rentabilidade total acumulada contra cálculo manual de referência
-- Criação de dataset determinístico para testes dos três horizontes
+**`backend/app/` (Swagger/OpenAPI)**
+- Remover nomes de provedores em descrições de endpoints e schemas
 
 ---
 
-### Planejado — Página Patrimônio Analítica (Sprint 6B — ampliado)
+### Planejado — Página Patrimônio Analítica (Sprint 6B)
 
 > Criticidade: Média | Esforço: Médio | Impacto: UX / diferenciação visual
 
@@ -51,7 +39,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
-### Planejado — Otimização de Queries (Sprint 5B — ampliado)
+### Planejado — Otimização de Queries (Sprint 5B — pendente)
 
 > Criticidade: **Alta** | Esforço: Alto | Impacto: Performance geral
 
@@ -61,21 +49,6 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 - Corrigir padrões N+1 em listagens de posições e transações
 - Revisar joins em `rentabilidade_service`, `portfolio_class_evolution_service`
 - Documentar queries e tempos de execução antes e depois das otimizações
-
----
-
-### Planejado — Remoção de Menções a APIs Externas (Sprint 6A — ampliado)
-
-> Criticidade: **Alta** | Esforço: Baixo | Impacto: Segurança / Compliance
-
-**Documentação pública (README, CHANGELOG, ROADMAP)**
-- Substituir todos os nomes explícitos de APIs externas por termos genéricos
-- Exemplo: "BRAPI" → "provedor de cotações", "Alpha Vantage" → "fonte de dados internacionais"
-- Manter nomes técnicos apenas em `.env.example` com comentários descritivos sem revelar fornecedor
-
-**`backend/app/` (Swagger/OpenAPI)**
-- Remover nomes de provedores em descrições de endpoints e schemas
-- Revisado: `brapi.py`, `tesouro_nacional.py`, `alpha_vantage.py` — sem vazamento de fornecedor nos logs públicos
 
 ---
 
@@ -125,6 +98,40 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 **Frontend**
 - Painel de administração com botões de backup e restore
 - Modal de confirmação com aviso de impacto antes do restore
+
+---
+
+### Corrigido — Rentabilidade: dia usa snapshot anterior real; mês usa 1º do mês calendário (30/06/2026) — Sprint 5B #54
+
+**`backend/app/services/rentabilidade_service.py`**
+- `retorno_dia_pct`: substituída busca por `D-1 exato` pela função `_snapshot_before_today()`, que retorna o snapshot imediatamente anterior ao dia atual. Corrige `0.0` toda segunda-feira e pós-feriado
+- `retorno_mes_pct`: substituída janela de `D-30 corridos` pelo snapshot do último dia do mês anterior (`today.replace(day=1) - 1 dia`). Garante base fixa no início do mês calendário
+- Fallback realtime (`_kpis_from_realtime`) corrigido com a mesma lógica de `primeiro_dia_mes`
+- Adicionado comentário docstring com histórico de fixes e justificativas de escolha
+
+**`frontend/src/services/rentabilidadeService.ts`**
+- Interface `RentabilidadeKpis` agora inclui campo `retorno_dia_pct: number`
+
+**`frontend/src/pages/ResumePage.tsx`**
+- KpiCard "Rentabilidade" reestruturado:
+  - Valor principal: **Desde o início** (retorno acumulado total)
+  - 3 linhas internas com separador: **Hoje / Mês / 12 m** com cores semânticas (verde/vermelho/laranja)
+  - Novo componente interno `ReturnRow` para cada linha de horizonte
+
+---
+
+### Concluído — Distribuição Ideal: BDRs + Reflexo no Resumo (30/06/2026) — Sprint 5E #79
+
+**`backend/app/services/class_target_service.py`**
+- `BDR` adicionado a `VALID_ASSET_CLASSES` e `_TYPE_LABEL`
+- `get_targets_with_current()` retorna BDR automaticamente quando há posição ou meta configurada
+
+**`frontend/src/hooks/useClassTargets.ts`**
+- Hook chama `/targets-with-current` — sem alterações necessárias
+
+**`frontend/src/components/resume/AllocationTargetWidget.tsx`**
+- Widget itera `rows` dinamicamente — BDR aparece automaticamente
+- Exibido na `ResumePage` sob o gráfico de distribuição com rótulo "Alvo da Carteira"
 
 ---
 
@@ -256,7 +263,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 - Módulos core: auth, users, portfolios, transactions, positions, dividends, proventos, performance
 - Seed automático do superadmin no entrypoint
 - Configuração de CORS, middleware de logging, handler global de exceções
-- Integrações com serviços externos de dados de mercado (cotações, histórico, Tesouro Direto, ativos internacionais)
+- Integrações com serviços de dados de mercado (cotações, histórico, Tesouro Direto, ativos internacionais)
 - Modelos: `Asset`, `AssetPrice`, `AssetDividend`
 - Migrations Alembic versionadas
 
