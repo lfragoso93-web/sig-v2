@@ -19,6 +19,10 @@ Histórico de fixes:
                o snapshot mais recente anterior ao dia corrente (<=  D-1),
                evitando retornar 0.0 em dias sem snapshot exato de D-1.
                retorno_12m_pct mantido em D-365 (janela móvel de 12m).
+  Sprint 5B — _proventos_total: removido total_received do COALESCE pois a
+               coluna existe no modelo mas nunca foi criada via migration.
+               Usa apenas total_value (campo principal) com fallback para
+               net_value (campo alternativo sempre presente).
 """
 from __future__ import annotations
 
@@ -156,18 +160,21 @@ async def _proventos_total(
     Soma de proventos recebidos da carteira.
 
     Usa a tabela `dividends` (Dividend), que tem vinculo direto com portfolio_id
-    e os campos corretos: total_value / total_received / status.
+    e os campos corretos: total_value / net_value / status.
 
     Ordem de preferencia para o valor:
-      1. total_value   (campo principal, preenchido pelo backfill moderno)
-      2. total_received (campo legado do backfill antigo)
+      1. total_value  (campo principal, preenchido pelo backfill moderno)
+      2. net_value    (campo alternativo sempre presente no banco)
+
+    NOTA: total_received existe no modelo ORM como campo legado mas nunca foi
+    criado via migration — removido do COALESCE para evitar UndefinedColumnError.
     """
     try:
         from app.models.dividend import Dividend, DividendStatus
 
         value_col = func.coalesce(
             func.sum(
-                func.coalesce(Dividend.total_value, Dividend.total_received, Decimal("0"))
+                func.coalesce(Dividend.total_value, Dividend.net_value, Decimal("0"))
             ),
             Decimal("0"),
         )
