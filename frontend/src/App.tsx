@@ -10,7 +10,6 @@ import ResumePage from '@/pages/ResumePage'
 import ProventosPage from '@/pages/ProventosPage'
 import PatrimonioPage from '@/pages/PatrimonioPage'
 import RentabilidadePage from '@/pages/RentabilidadePage'
-import HistoricoPage from '@/pages/HistoricoPage'
 import MetasPage from '@/pages/MetasPage'
 import AnalisePage from '@/pages/AnalisePage'
 import LancamentosPage from '@/pages/LancamentosPage'
@@ -37,7 +36,7 @@ export default function App() {
               <Route path="/welcome" element={<WelcomePage />} />
 
               <Route element={<AppLayout />}>
-                {/* Raiz -> /carteira */}
+                {/* Raíz -> /carteira */}
                 <Route path="/"        element={<Navigate to="/carteira" replace />} />
                 <Route path="/resumo"  element={<Navigate to="/carteira" replace />} />
 
@@ -56,9 +55,6 @@ export default function App() {
                 {/* Patrimonio e sub-rotas */}
                 <Route path="/carteira/patrimonio"         element={<PatrimonioPage />} />
                 <Route path="/carteira/patrimonio/tesouro" element={<TesouroDiretoPage />} />
-
-                {/* Historico — placeholder até Sprint de implementação completa */}
-                <Route path="/carteira/historico" element={<HistoricoPage />} />
               </Route>
             </Route>
 
