@@ -34,11 +34,13 @@
 - Labels e placeholders adaptados ao tipo de ativo selecionado
 
 ### Dados e automações
-- **Asset seed** via BRAPI com UPSERT idempotente e endpoint admin em background
+- **Asset seed** com UPSERT idempotente e endpoint admin em background
+- **Sync semanal de dividendos de FIIs** via provedor de cotações: modo incremental com cursor e overlap de 30 dias; bootstrap de 5 anos via painel admin
 - **Snapshots patrimoniais** com backfill manual/admin e recuperação automática quando o gráfico não encontra base histórica
 - **Fallbacks em cascata** para Tesouro Direto, ativos internacionais e cripto
-- **Scheduler APScheduler** para rotinas automáticas de atualização
+- **Scheduler APScheduler** com **8 jobs** para rotinas automáticas de atualização
 - **Cache Redis** com invalidação automática após upsert de renda fixa/Tesouro Direto
+- **Lock distribuído** em jobs de sync: previne execuções concorrentes (modelo `DividendsSyncJob`)
 
 ### Outras páginas
 - **Patrimônio** — evolução diária/mensal, resumo mensal com rentabilidade por linha
@@ -60,10 +62,7 @@
 | Alembic | 1.x | Migrations |
 | PostgreSQL | 15 | Banco de dados |
 | Redis | 7 | Cache |
-| APScheduler | 3.x | Jobs agendados |
-| BRAPI | v2 | Cotações, histórico, Tesouro, FX |
-| yfinance | — | Fallback ativos internacionais |
-| Alpha Vantage | — | Fallback internacional |
+| APScheduler | 3.x | 8 jobs agendados |
 | SlowAPI | — | Rate limiter global |
 | bcrypt | v5 | Hash de senhas |
 | JWT | — | Auth com refresh token rotativo |
@@ -155,8 +154,7 @@ Copie `.env.example` e preencha:
 | `DATABASE_URL` | URL PostgreSQL |
 | `REDIS_URL` | URL Redis |
 | `SECRET_KEY` | Chave JWT |
-| `BRAPI_TOKEN` | Token BRAPI |
-| `ALPHA_VANTAGE_KEY` | Chave Alpha Vantage |
+| `BRAPI_TOKEN` | Token do provedor de cotações |
 | `SUPERADMIN_EMAIL` | E-mail do superadmin |
 | `SUPERADMIN_PASSWORD` | Senha do superadmin |
 
@@ -167,7 +165,7 @@ Copie `.env.example` e preencha:
 Veja o roadmap completo em [ROADMAP_SPRINTS.md](./ROADMAP_SPRINTS.md).
 
 **Próximas prioridades:**
-- Sprint 5B — Performance de queries
+- Sprint 5B — Performance de queries (EXPLAIN ANALYZE, índices, N+1)
 - Sprint 6 — Qualidade visual & Rename SGI
 - Sprint 7 — Módulo IRPF completo
 - Sprint 8 — Análise de carteira
