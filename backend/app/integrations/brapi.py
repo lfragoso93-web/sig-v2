@@ -1146,3 +1146,135 @@ async def fetch_treasury_list() -> list[dict]:
     except Exception as e:
         logger.warning("[market_data] fetch_treasury_list error: %s", e)
         return []
+
+
+# ── Funcoes ausentes referenciadas por routers/assets.py ─────────────────────────────────────
+
+async def fetch_asset_info(ticker: str) -> Optional[dict]:
+    """Retorna metadados completos de um ticker via BRAPI /quote."""
+    headers = _auth_headers()
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                f"{BRAPI_BASE}/quote/{ticker.upper()}",
+                headers=headers,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            results = data.get("results", [])
+            if results:
+                return results[0]
+    except Exception as e:
+        logger.warning("[market_data] fetch_asset_info error para %s: %s", ticker, e)
+    return None
+
+
+async def fetch_ticker_suggestions(
+    q: str,
+    limit: int = 10,
+    asset_type: Optional[str] = None,
+) -> list[dict]:
+    """Busca sugestoes de tickers na BRAPI /v2/tickers."""
+    headers = _auth_headers()
+    params: dict = {"search": q, "limit": limit}
+    if asset_type:
+        params["subType"] = asset_type
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                f"{BRAPI_BASE}/v2/tickers",
+                headers=headers,
+                params=params,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return (
+                data.get("tickers")
+                or data.get("stocks")
+                or data.get("results")
+                or []
+            )
+    except Exception as e:
+        logger.warning("[market_data] fetch_ticker_suggestions error: %s", e)
+        return []
+
+
+async def fetch_treasury_price_by_date(
+    slug: str,
+    date_str: str,
+) -> Optional[float]:
+    """Busca preco historico de um titulo do Tesouro Direto por data."""
+    headers = _auth_headers()
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(
+                f"{BRAPI_BASE}/v2/treasury/{slug}",
+                headers=headers,
+                params={"date": date_str},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            treasury = data.get("treasury") or data
+            price = (
+                treasury.get("price")
+                or treasury.get("currentPrice")
+                or treasury.get("pu")
+                or treasury.get("buyPrice")
+            )
+            if price is not None:
+                return float(price)
+    except Exception as e:
+        logger.warning("[market_data] fetch_treasury_price_by_date error slug=%s date=%s: %s", slug, date_str, e)
+    return None
+
+
+async def fetch_crypto_suggestions(
+    q: str,
+    limit: int = 10,
+) -> list[dict]:
+    """Busca sugestoes de criptomoedas na BRAPI /v2/crypto/available."""
+    headers = _auth_headers()
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                f"{BRAPI_BASE}/v2/crypto/available",
+                headers=headers,
+                params={"search": q, "limit": limit},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return (
+                data.get("coins")
+                or data.get("available")
+                or (data if isinstance(data, list) else [])
+            )
+    except Exception as e:
+        logger.warning("[market_data] fetch_crypto_suggestions error: %s", e)
+        return []
+
+
+def _yf_search_sync(
+    q: str,
+    limit: int = 10,
+    asset_type: Optional[str] = None,
+) -> list[dict]:
+    """Busca sincrona de tickers internacionais via yfinance (run em executor)."""
+    try:
+        import yfinance as yf
+        results = yf.Search(q, max_results=limit)
+        quotes = results.quotes if hasattr(results, "quotes") else []
+        out: list[dict] = []
+        for item in quotes:
+            ticker_val = item.get("symbol") or item.get("ticker") or ""
+            name = item.get("longname") or item.get("shortname") or item.get("longName") or ticker_val
+            qt = (item.get("quoteType") or "").upper()
+            if asset_type == "stock" and qt not in ("EQUITY", "STOCK"):
+                continue
+            if asset_type == "etf" and qt != "ETF":
+                continue
+            if ticker_val:
+                out.append({"ticker": ticker_val.upper(), "name": name, "type": qt})
+        return out[:limit]
+    except Exception as e:
+        logger.warning("[market_data] _yf_search_sync error para %r: %s", q, e)
+        return []
