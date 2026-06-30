@@ -21,24 +21,6 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
-### Planejado — Página Patrimônio Analítica (Sprint 6B)
-
-> Criticidade: Média | Esforço: Médio | Impacto: UX / diferenciação visual
-
-**`frontend/src/pages/PatrimonioPage.tsx`**
-- Reformular página para foco analítico distinto da RentabilidadePage
-- Visão de composição: % de cada ativo dentro de sua classe (treemap ou barras empilhadas)
-- Métricas por ativo: peso, valor investido, valor atual, variação absoluta e relativa
-- Concentração de risco: top 5 ativos como % do patrimônio total
-- Comparativo alocação real vs. alvo com indicação visual de desvio
-- Evolução da composição ao longo do tempo (gráfico de área empilhada)
-- Tabela colapsável por classe com drill-down por ativo
-- Indicador de diversificação (via `analysis` router já existente)
-- Alertas de concentração excessiva (>30% em um único ativo)
-- Painel de "próximo aporte sugerido" baseado no desvio da alocação alvo
-
----
-
 ### Planejado — Otimização de Queries (Sprint 5B — pendente)
 
 > Criticidade: **Alta** | Esforço: Alto | Impacto: Performance geral
@@ -98,6 +80,52 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 **Frontend**
 - Painel de administração com botões de backup e restore
 - Modal de confirmação com aviso de impacto antes do restore
+
+---
+
+### Corrigido — Sprint 6B: bugs de boot + crash frontend + PatrimonioPage analítica (30/06/2026)
+
+> Dois bugs críticos diagnosticados e corrigidos + reformulação completa da página Patrimônio.
+
+**Bug 1 — Backend: `payment_date` ausente no banco (migration faltante)**
+
+`backend/alembic/versions/022_add_dividend_payment_date.py` *(novo)*
+- Migration 022 criada: adiciona colunas `payment_date`, `ex_date`, `value_per_unit`, `total_received` e `dividend_type` à tabela `dividends`
+- Resolve `_proventos_total` no `rentabilidade_service`: filtro `since` por `payment_date` agora funciona corretamente
+- Docstring do service atualizado com histórico do fix
+
+**Bug 2 — Frontend: crash `Cannot read properties of undefined (reading 'toFixed')`**
+
+`frontend/src/pages/PatrimonioPage.tsx`
+- Guards defensivos `(Number(v) || 0)` aplicados em todos os `.toFixed()` antes de `formatPercent` e `formatBRL`
+- `safeNum()` aplicado nos props `change` dos `KpiCard` para valores que podem vir `undefined` da API
+- `formatPercent` e `formatBRL`: guard no nível da função — nunca recebem `undefined`
+
+**Bug 3 — Backend: `ImportError` no boot (`get_rentabilidade_por_ativo` não exportada)**
+
+`backend/app/services/rentabilidade_service.py`
+- Funções `get_rentabilidade_por_ativo` e `get_rentabilidade_por_classe` adicionadas ao service
+- Impedia o boot completo do servidor FastAPI
+
+**Sprint 6B — Reformulação da `PatrimonioPage`**
+
+`frontend/src/pages/PatrimonioPage.tsx`
+- **Aba removida**: Histórico (duplicava conteúdo da RentabilidadePage)
+- **Visão Geral**: KPIs da carteira + evolução mensal em barras + donut de alocação por classe + widget de Distribuição Ideal vs. Atual + tabela de posições
+- **Aba Análise**: Score HHI com nível de risco (baixo/moderado/alto/crítico) + Top 5 posições por peso + concentração por classe (donut + barras horizontais por ativo dentro de cada classe) + desvio do alvo por classe
+- **Treemap SVG puro** com algoritmo Squarified: visualização de concentração sem dependências externas
+- **Toggle diário/mensal** e seletor de período no gráfico de evolução
+
+---
+
+### Concluído — Sprint 6C: limpeza de rotas e arquivos legados (30/06/2026)
+
+`frontend/src/`
+- `HistoricoPage.tsx` removido (stub sem conteúdo real)
+- Rota `/carteira/historico` removida do router
+- `Login.tsx` e `Register.tsx` duplicados de `auth/` removidos
+- `Landing.tsx` restaurado com rota pública `/` em `main.tsx`
+- `App.tsx` mantido como legado sem re-export que quebrava o build
 
 ---
 

@@ -28,6 +28,12 @@
 - **Tabela por ativo** com filtros e toggle de posições zeradas
 - **Renda Fixa** calculada corretamente: rendimento por investimento com `asset_type` normalizado e sessão isolada
 
+### Patrimônio (`/carteira/patrimonio`) — Sprint 6B
+- **Aba Visão Geral**: KPIs + evolução mensal em barras + gráfico donut de alocação por classe + Distribuição Ideal vs. Atual + tabela de posições
+- **Aba Análise**: Score de concentração Herfindahl-Hirschman (HHI) com nível de risco, Top 5 posições, concentração por classe (donut + barras horizontais), desvio do alvo por classe
+- **Treemap SVG puro** (algoritmo Squarified) para visualização de concentração por ativo — sem dependências externas
+- **Toggle diário/mensal** e seletor de período no gráfico de evolução
+
 ### Modal de Lançamento
 - **Renda Fixa**: exibe apenas o campo "Valor Investido" — sem cotas
 - **Ações, FIIs, BDRs**: campos de quantidade e preço unitário normais
@@ -43,7 +49,6 @@
 - **Lock distribuído** em jobs de sync: previne execuções concorrentes (modelo `DividendsSyncJob`)
 
 ### Outras páginas
-- **Patrimônio** — evolução diária/mensal, resumo mensal com rentabilidade por linha
 - **Transações** — histórico completo com filtros e gráfico de aportes mensais
 - **Proventos** — histórico de dividendos e JCP com gráficos
 - **IRPF** — apuração de ganho de capital (em construção)
@@ -166,10 +171,10 @@ Veja o roadmap completo em [ROADMAP_SPRINTS.md](./ROADMAP_SPRINTS.md).
 
 **Próximas prioridades:**
 - Sprint 5B — Performance de queries (EXPLAIN ANALYZE, índices, N+1)
-- Sprint 6 — Qualidade visual & Rename SGI
+- Sprint 6A — Remoção de menções a APIs externas
+- Sprint 6D — Import de ativos via CSV
 - Sprint 7 — Módulo IRPF completo
-- Sprint 8 — Análise de carteira
-- Sprint 9 — Janela global do ativo
+- Sprint 8 — Análise de carteira avançada
 
 ---
 

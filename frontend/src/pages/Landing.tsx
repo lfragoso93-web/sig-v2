@@ -243,7 +243,6 @@ export default function Landing() {
             background: 'var(--color-surface)',
             boxShadow: 'var(--shadow-lg)',
           }}>
-            {/* Barra de janela */}
             <div style={{
               display: 'flex', alignItems: 'center', gap: '0.5rem',
               padding: '0.75rem 1rem',
@@ -255,10 +254,7 @@ export default function Landing() {
               <span style={{ width: 12, height: 12, borderRadius: '9999px', background: '#28c840' }} />
               <span style={{ fontSize: 'var(--text-xs)', marginLeft: '0.5rem', color: 'var(--color-text-faint)' }}>SIG v2 — Carteira Principal</span>
             </div>
-
-            {/* Dashboard preview */}
             <div style={{ padding: '1.5rem' }}>
-              {/* KPIs */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem', marginBottom: '1.5rem' }}>
                 {[
                   { label: 'Patrimônio total',  value: 'R$ 87.432',  change: '+12,3%', pos: true },
@@ -266,42 +262,35 @@ export default function Landing() {
                   { label: 'Proventos (ano)',    value: 'R$ 3.847',   change: '+8,1%',  pos: true },
                   { label: 'Variação hoje',      value: '-R$ 214',    change: '-0,24%', pos: false },
                 ].map(k => (
-                  <div key={k.label} className="kpi-card">
-                    <span className="kpi-label">{k.label}</span>
-                    <span className="kpi-value" style={{ fontSize: 'var(--text-xl)' }}>{k.value}</span>
-                    <span className={`kpi-change ${k.pos ? 'positive' : 'negative'}`}>{k.change}</span>
+                  <div key={k.label} style={{ background: 'var(--color-surface-offset)', borderRadius: 'var(--radius-lg)', padding: '1rem' }}>
+                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', display: 'block' }}>{k.label}</span>
+                    <span style={{ fontSize: 'var(--text-base)', fontWeight: 600, color: 'var(--color-text)', display: 'block', marginTop: '0.25rem' }}>{k.value}</span>
+                    <span style={{ fontSize: 'var(--text-xs)', color: k.pos ? 'var(--color-success)' : 'var(--color-notification)' }}>{k.change}</span>
                   </div>
                 ))}
               </div>
-
-              {/* Tabela de posições */}
               <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
-                <table className="positions-table">
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
                   <thead style={{ background: 'var(--color-surface-offset)' }}>
                     <tr>
-                      <th>Ativo</th>
-                      <th>Qtd</th>
-                      <th>Preço médio</th>
-                      <th>Preço atual</th>
-                      <th>Rentab.</th>
+                      {['Ativo','Qtd','Preço médio','Preço atual','Rentab.'].map(h => (
+                        <th key={h} style={{ padding: '0.625rem 0.75rem', textAlign: 'left', fontWeight: 500, color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-divider)' }}>{h}</th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
                     {[
-                      { ticker: 'PETR4',  type: 'acao',   qty: 200,  avg: 'R$ 32,40', cur: 'R$ 38,15', gain: '+17,7%', pos: true },
-                      { ticker: 'MXRF11', type: 'fii',    qty: 500,  avg: 'R$ 10,12', cur: 'R$ 10,98', gain: '+8,5%',  pos: true },
-                      { ticker: 'IVVB11', type: 'etf',    qty: 15,   avg: 'R$ 312,00',cur: 'R$ 341,20',gain: '+9,4%',  pos: true },
-                      { ticker: 'BTC',    type: 'cripto', qty: 0.12, avg: 'R$ 298k',  cur: 'R$ 342k',  gain: '+14,8%', pos: true },
+                      { ticker: 'PETR4',  qty: 200,  avg: 'R$ 32,40', cur: 'R$ 38,15', gain: '+17,7%', pos: true },
+                      { ticker: 'MXRF11', qty: 500,  avg: 'R$ 10,12', cur: 'R$ 10,98', gain: '+8,5%',  pos: true },
+                      { ticker: 'IVVB11', qty: 15,   avg: 'R$ 312,00',cur: 'R$ 341,20',gain: '+9,4%',  pos: true },
+                      { ticker: 'BTC',    qty: 0.12, avg: 'R$ 298k',  cur: 'R$ 342k',  gain: '+14,8%', pos: true },
                     ].map(r => (
-                      <tr key={r.ticker}>
-                        <td style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>{r.ticker}</span>
-                          <span className={`asset-badge ${r.type}`}>{r.type}</span>
-                        </td>
-                        <td>{r.qty}</td>
-                        <td>{r.avg}</td>
-                        <td>{r.cur}</td>
-                        <td style={{ color: r.pos ? 'var(--color-success)' : 'var(--color-notification)', fontWeight: 500 }}>{r.gain}</td>
+                      <tr key={r.ticker} style={{ borderBottom: '1px solid var(--color-divider)' }}>
+                        <td style={{ padding: '0.625rem 0.75rem', fontWeight: 600, color: 'var(--color-text)' }}>{r.ticker}</td>
+                        <td style={{ padding: '0.625rem 0.75rem', color: 'var(--color-text-muted)' }}>{r.qty}</td>
+                        <td style={{ padding: '0.625rem 0.75rem', color: 'var(--color-text-muted)' }}>{r.avg}</td>
+                        <td style={{ padding: '0.625rem 0.75rem', color: 'var(--color-text)' }}>{r.cur}</td>
+                        <td style={{ padding: '0.625rem 0.75rem', color: r.pos ? 'var(--color-success)' : 'var(--color-notification)', fontWeight: 500 }}>{r.gain}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -312,16 +301,11 @@ export default function Landing() {
         </section>
 
         {/* ── Tipos de ativos ── */}
-        <section style={{
-          padding: '4rem 3rem',
-          borderTop: '1px solid var(--color-divider)',
-        }}>
+        <section style={{ padding: '4rem 3rem', borderTop: '1px solid var(--color-divider)' }}>
           <div style={{ maxWidth: '56rem', margin: '0 auto' }}>
             <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
               <h2 style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginBottom: '0.75rem', color: 'var(--color-text)' }}>Suporte a todos os tipos de ativo</h2>
-              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>
-                Do Tesouro Direto ao Bitcoin, tudo em uma única plataforma.
-              </p>
+              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>Do Tesouro Direto ao Bitcoin, tudo em uma única plataforma.</p>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
               {ASSET_TYPES.map(a => <AssetChip key={a.label} {...a} />)}
@@ -330,16 +314,11 @@ export default function Landing() {
         </section>
 
         {/* ── Features ── */}
-        <section style={{
-          padding: '4rem 3rem',
-          borderTop: '1px solid var(--color-divider)',
-        }}>
+        <section style={{ padding: '4rem 3rem', borderTop: '1px solid var(--color-divider)' }}>
           <div style={{ maxWidth: '56rem', margin: '0 auto' }}>
             <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
               <h2 style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginBottom: '0.75rem', color: 'var(--color-text)' }}>Tudo que você precisa para acompanhar seus investimentos</h2>
-              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>
-                Funcionalidades pensadas para o investidor brasileiro.
-              </p>
+              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>Funcionalidades pensadas para o investidor brasileiro.</p>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
               {FEATURES.map(f => <FeatureCard key={f.title} {...f} />)}
@@ -348,10 +327,7 @@ export default function Landing() {
         </section>
 
         {/* ── CTA final ── */}
-        <section style={{
-          padding: '5rem 3rem',
-          borderTop: '1px solid var(--color-divider)',
-        }}>
+        <section style={{ padding: '5rem 3rem', borderTop: '1px solid var(--color-divider)' }}>
           <div style={{ maxWidth: '32rem', margin: '0 auto', textAlign: 'center' }}>
             <Logo size={48} />
             <h2 style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: '1.5rem', marginBottom: '0.75rem', color: 'var(--color-text)' }}>Pronto para organizar seus investimentos?</h2>

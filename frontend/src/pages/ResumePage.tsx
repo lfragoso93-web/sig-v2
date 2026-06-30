@@ -4,20 +4,16 @@ import clsx from 'clsx'
 import {
   usePortfolioList,
   usePatrimonioHistory,
-  useAssetDistribution,
   usePositions,
 } from '@/hooks/usePortfolio'
 import { useRentabilidadeKpis } from '@/hooks/useRentabilidade'
-import { useClassTargets } from '@/hooks/useClassTargets'
 import { useAppStore } from '@/store/appStore'
 import { formatBRL, formatPercent, signClass } from '@/utils/format'
 import KpiCard from '@/components/ui/KpiCard'
 import SkeletonCard from '@/components/ui/SkeletonCard'
 import EmptyState from '@/components/ui/EmptyState'
 import PatrimonioBarChart from '@/components/charts/PatrimonioBarChart'
-import AssetDonutChart from '@/components/charts/AssetDonutChart'
 import PositionTable from '@/components/resume/PositionTable'
-import AllocationTargetWidget from '@/components/resume/AllocationTargetWidget'
 import CreatePortfolioModal from '@/components/modals/CreatePortfolioModal'
 
 const PERIOD_OPTIONS = [
@@ -79,12 +75,7 @@ function ChartSelect({
   )
 }
 
-// ---------------------------------------------------------------------------
-// Mini linha de rentabilidade — Dia / Mês / 12m
-// ---------------------------------------------------------------------------
-function ReturnRow({
-  label, value,
-}: { label: string; value: number }) {
+function ReturnRow({ label, value }: { label: string; value: number }) {
   const sign = value >= 0 ? '+' : ''
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -101,9 +92,6 @@ function ReturnRow({
   )
 }
 
-// ---------------------------------------------------------------------------
-// ResumePage
-// ---------------------------------------------------------------------------
 export default function ResumePage() {
   const globalPortfolioId = useAppStore(s => s.selectedPortfolioId)
   const setGlobal         = useAppStore(s => s.setSelectedPortfolioId)
@@ -123,11 +111,9 @@ export default function ResumePage() {
   const portfolioId: number | null = globalPortfolioId ?? (portfolios?.[0]?.id ?? null)
   const activeAssetType = assetClass === ASSET_CLASS_ALL ? null : assetClass
 
-  const { data: kpis,              isLoading: loadingKpis      } = useRentabilidadeKpis(portfolioId)
-  const { data: patrimonioHistory, isLoading: loadingHistory   } = usePatrimonioHistory(portfolioId, period, activeAssetType)
-  const { data: distribution,      isLoading: loadingDist      } = useAssetDistribution(portfolioId)
+  const { data: kpis,              isLoading: loadingKpis    } = useRentabilidadeKpis(portfolioId)
+  const { data: patrimonioHistory, isLoading: loadingHistory } = usePatrimonioHistory(portfolioId, period, activeAssetType)
   const { data: positions,         isLoading: loadingPositions } = usePositions(portfolioId)
-  const { data: classTargets,      isLoading: loadingTargets   } = useClassTargets(portfolioId)
 
   const patrimonio     = kpis?.patrimonio_atual        ?? 0
   const aportado       = kpis?.total_aportado          ?? 0
@@ -179,7 +165,6 @@ export default function ResumePage() {
           [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
         ) : (
           <>
-            {/* Patrimônio Total */}
             <KpiCard
               label="Patrimônio Total"
               value={formatBRL(patrimonio)}
@@ -187,8 +172,6 @@ export default function ResumePage() {
               subLabel="Total aportado"
               change={retornoTotal}
             />
-
-            {/* Resultado Total */}
             <KpiCard
               label="Resultado Total"
               value={formatBRL(totalPnl)}
@@ -204,23 +187,12 @@ export default function ResumePage() {
                 </span>
               }
             />
-
-            {/* Proventos */}
             <KpiCard
               label="Proventos (12m)"
               value={formatBRL(proventos12m)}
               subValue={formatBRL(proventosTotal)}
               subLabel="Total acumulado"
             />
-
-            {/* ── Rentabilidade ── Sprint 5B
-                Exibe 4 horizontes de forma clara:
-                  · Valor principal  → Desde o início
-                  · 3 linhas internas → Dia / Mês / 12m
-                Backend corrigido:
-                  · retorno_dia_pct: snapshot anterior mais recente (trata fins de semana)
-                  · retorno_mes_pct: usa 1º do mês calendário como base
-            */}
             <KpiCard
               label="Rentabilidade"
               value={
@@ -247,80 +219,46 @@ export default function ResumePage() {
         )}
       </div>
 
-      {/* ── Gráficos ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-        {/* Evolução Patrimonial */}
-        <div className="card p-4 lg:col-span-2">
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <BarChart2 size={14} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
-              <span className="section-card-title">Evolução Patrimonial</span>
-              {assetClass !== ASSET_CLASS_ALL && (
-                <span style={{
-                  fontSize: '0.68rem', fontWeight: 600,
-                  color: 'var(--color-primary)',
-                  background: 'oklch(from var(--color-primary) l c h / 0.1)',
-                  border: '1px solid oklch(from var(--color-primary) l c h / 0.2)',
-                  borderRadius: 'var(--radius-full)', padding: '1px 8px',
-                }}>
-                  {ASSET_CLASS_OPTIONS.find(o => o.value === assetClass)?.label}
-                </span>
-              )}
-            </div>
-            <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
-              <ChartSelect value={assetClass} onChange={v => setAssetClass(v)} options={ASSET_CLASS_OPTIONS} />
-              <ChartSelect value={period} onChange={v => setPeriod(Number(v))} options={PERIOD_OPTIONS} />
-            </div>
+      {/* ── Evolução Patrimonial (visão rápida) ── */}
+      <div className="card p-4">
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <BarChart2 size={14} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
+            <span className="section-card-title">Evolução Patrimonial</span>
+            {assetClass !== ASSET_CLASS_ALL && (
+              <span style={{
+                fontSize: '0.68rem', fontWeight: 600,
+                color: 'var(--color-primary)',
+                background: 'oklch(from var(--color-primary) l c h / 0.1)',
+                border: '1px solid oklch(from var(--color-primary) l c h / 0.2)',
+                borderRadius: 'var(--radius-full)', padding: '1px 8px',
+              }}>
+                {ASSET_CLASS_OPTIONS.find(o => o.value === assetClass)?.label}
+              </span>
+            )}
           </div>
-
-          {loadingHistory ? (
-            <div className="animate-pulse rounded-lg" style={{ height: 220, background: 'var(--color-surface-offset)' }} />
-          ) : patrimonioHistory?.length ? (
-            <PatrimonioBarChart data={patrimonioHistory} singleSeries={assetClass !== ASSET_CLASS_ALL} />
-          ) : (
-            <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-faint)' }}>Sem dados históricos para esta seleção</span>
-            </div>
-          )}
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
+            <ChartSelect value={assetClass} onChange={v => setAssetClass(v)} options={ASSET_CLASS_OPTIONS} />
+            <ChartSelect value={period} onChange={v => setPeriod(Number(v))} options={PERIOD_OPTIONS} />
+          </div>
         </div>
 
-        {/* Distribuição + Alvo */}
-        <div className="card p-4">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '1rem' }}>
-            <Activity size={14} style={{ color: 'var(--color-primary)' }} />
-            <span className="section-card-title">Distribuição</span>
+        {loadingHistory ? (
+          <div className="animate-pulse rounded-lg" style={{ height: 220, background: 'var(--color-surface-offset)' }} />
+        ) : patrimonioHistory?.length ? (
+          <PatrimonioBarChart data={patrimonioHistory} singleSeries={assetClass !== ASSET_CLASS_ALL} />
+        ) : (
+          <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-faint)' }}>Sem dados históricos para esta seleção</span>
           </div>
-
-          {/* Donut */}
-          {loadingDist ? (
-            <div className="animate-pulse rounded-lg" style={{ height: 180, background: 'var(--color-surface-offset)' }} />
-          ) : distribution?.length ? (
-            <AssetDonutChart data={distribution} />
-          ) : (
-            <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-faint)' }}>Sem ativos</span>
-            </div>
-          )}
-
-          {/* Widget de alvo da carteira — Sprint 5E */}
-          {!loadingTargets && classTargets && classTargets.length > 0 && (
-            <AllocationTargetWidget rows={classTargets} />
-          )}
-          {loadingTargets && (
-            <div className="animate-pulse rounded-md" style={{ height: 80, background: 'var(--color-surface-offset)', marginTop: '0.75rem' }} />
-          )}
-        </div>
+        )}
       </div>
 
       {/* ── Meus Ativos ── */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: '0.75rem',
-        marginTop: '0.25rem',
-      }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem' }}>
         <TrendingUp size={15} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
         <span style={{
           fontSize: 'var(--text-sm)', fontWeight: 700,
@@ -341,7 +279,6 @@ export default function ResumePage() {
         <div style={{ flex: 1, height: 1, background: 'oklch(from var(--color-text) l c h / 0.07)' }} />
       </div>
 
-      {/* ── Tabela de posições ── */}
       {loadingPositions || !portfolioId ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           {[...Array(3)].map((_, i) => (

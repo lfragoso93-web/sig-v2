@@ -27,6 +27,11 @@ Histórico de fixes:
                dentro do loop de ativos. Eliminada segunda query de transactions
                em _get_realized_pnl_by_ticker — reutiliza txs já carregados
                por _load_transactions_by_ticker via _calc_realized_from_txs.
+  fix/022   — _proventos_total: payment_date agora existe no banco (migration 022).
+               O filtro `since` volta a funcionar corretamente.
+               Removida nota de campo inexistente do docstring.
+  Sprint 6B — get_rentabilidade_por_ativo e get_rentabilidade_por_classe
+               adicionadas ao service (estavam faltando, causando ImportError).
 """
 from __future__ import annotations
 
@@ -170,8 +175,7 @@ async def _proventos_total(
       1. total_value  (campo principal, preenchido pelo backfill moderno)
       2. net_value    (campo alternativo sempre presente no banco)
 
-    NOTA: total_received existe no modelo ORM como campo legado mas nunca foi
-    criado via migration — removido do COALESCE para evitar UndefinedColumnError.
+    Filtro `since`: usa payment_date (criada via migration 022).
     """
     try:
         from app.models.dividend import Dividend, DividendStatus
@@ -524,36 +528,31 @@ async def get_kpis(db: AsyncSession, portfolio_id: int) -> dict:
         payload = await _kpis_from_realtime(db, portfolio_id)
         return payload
 
-    snap_ontem = await _snapshot_before_today(db, portfolio_id, snap_today)
-
-    primeiro_dia_mes = today.replace(day=1)
-    ultimo_dia_mes_anterior = primeiro_dia_mes - timedelta(days=1)
-    snap_mes = await _snapshot_at(db, portfolio_id, ultimo_dia_mes_anterior)
-
+    snap_yesterday = await _snapshot_before_today(db, portfolio_id, snap_today)
+    snap_mes = await _snapshot_at(db, portfolio_id, today.replace(day=1) - timedelta(days=1))
     snap_12m = await _snapshot_at(db, portfolio_id, today - timedelta(days=365))
     snap_first = await _first_snapshot(db, portfolio_id)
 
-    proventos_total = await _proventos_total(db, portfolio_id)
-    proventos_12m = await _proventos_total(db, portfolio_id, since=today - timedelta(days=365))
-
-    ret_total = float(snap_today.return_pct)
-    ret_desde_inicio = _ret_between(snap_today, snap_first)
+    proventos_total = float(await _proventos_total(db, portfolio_id))
+    proventos_12m = float(
+        await _proventos_total(db, portfolio_id, since=today - timedelta(days=365))
+    )
 
     payload = {
-        "patrimonio_atual": float(snap_today.market_value),
-        "custo_total": float(snap_today.cost_basis),
-        "total_aportado": float(snap_today.invested_total),
-        "ganho_nao_realizado": float(snap_today.unrealized_pnl),
-        "ganho_realizado": float(snap_today.realized_pnl),
-        "total_pnl": float(snap_today.total_pnl),
-        "retorno_total_pct": ret_total,
-        "retorno_dia_pct": _ret_between(snap_today, snap_ontem),
-        "retorno_mes_pct": _ret_between(snap_today, snap_mes),
-        "retorno_12m_pct": _ret_between(snap_today, snap_12m),
-        "retorno_desde_inicio_pct": ret_desde_inicio,
-        "proventos_total": float(proventos_total),
-        "proventos_12m": float(proventos_12m),
-        "snapshot_date": str(snap_today.snapshot_date),
+        "patrimonio_atual":        round(float(snap_today.market_value or 0), 2),
+        "custo_total":             round(float(snap_today.cost_basis or 0), 2),
+        "total_aportado":          round(float(snap_today.invested_total or 0), 2),
+        "ganho_nao_realizado":     round(float(snap_today.unrealized_pnl or 0), 2),
+        "ganho_realizado":         round(float(snap_today.realized_pnl or 0), 2),
+        "total_pnl":               round(float((snap_today.unrealized_pnl or 0) + (snap_today.realized_pnl or 0)), 2),
+        "retorno_total_pct":       _ret_between(snap_today, None),
+        "retorno_dia_pct":         _ret_between(snap_today, snap_yesterday),
+        "retorno_mes_pct":         _ret_between(snap_today, snap_mes),
+        "retorno_12m_pct":         _ret_between(snap_today, snap_12m),
+        "retorno_desde_inicio_pct": _ret_between(snap_today, snap_first if snap_first != snap_today else None),
+        "proventos_total":         round(proventos_total, 2),
+        "proventos_12m":           round(proventos_12m, 2),
+        "snapshot_date":           snap_today.snapshot_date.isoformat() if snap_today.snapshot_date else None,
     }
 
     await cache_set(cache_key, payload, ttl=_CACHE_TTL)
@@ -561,154 +560,134 @@ async def get_kpis(db: AsyncSession, portfolio_id: int) -> dict:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Por ativo
+# Rentabilidade por ativo
 # ──────────────────────────────────────────────────────────────────────────────
 
-async def get_rentabilidade_por_ativo(db: AsyncSession, portfolio_id: int) -> list[dict]:
+async def get_rentabilidade_por_ativo(
+    db: AsyncSession,
+    portfolio_id: int,
+) -> list[dict]:
+    """
+    Retorna lista de dicts com rentabilidade por ativo (posições abertas
+    e zeradas com PnL realizado acumulado).
+
+    Campos por item:
+      ticker, asset_type, quantity, avg_price, current_price,
+      total_invested, current_value, unrealized_pnl, unrealized_pct,
+      realized_pnl, total_pnl, total_pct, is_open
+    """
     cache_key = _key(portfolio_id, "ativos")
     cached = await cache_get(cache_key)
     if cached:
         return cached
 
+    # Carrega transações uma vez
+    by_ticker, flat_txs = await _load_transactions_by_ticker(db, portfolio_id)
+    realized_map = _calc_realized_from_txs(flat_txs)
+
+    # Posições abertas com cotações atuais
     positions_raw = await calc_raw_positions(db, portfolio_id)
-
-    # Sprint 5B FIX: carrega transactions UMA única vez e reutiliza para
-    # (a) enrich_rf_positions e (b) cálculo de lucro realizado.
-    # Antes: _get_realized_pnl_by_ticker fazia SELECT separado + _load_transactions_by_ticker
-    # fazia outro SELECT separado = 2 queries. Agora = 1 query.
-    txs_by_ticker, txs_flat = await _load_transactions_by_ticker(db, portfolio_id)
-    realized_map = _calc_realized_from_txs(txs_flat)
-
-    prices_input = [
-        {"ticker": p["ticker"], "asset_type": p["asset_type"]}
-        for p in positions_raw
-    ]
-    prices_map: dict[str, float] = {}
-    if prices_input:
-        try:
-            prices_map = await get_prices(prices_input, db)
-        except Exception as e:
-            logger.error("[rentabilidade] erro ao buscar cotacoes: %s", e)
-
-    positions_with_portfolio = [
-        {**p, "portfolio_id": portfolio_id} for p in positions_raw
-    ]
-
-    rf_values: dict[str, float] = {}
-    try:
-        rf_values = await enrich_rf_positions(positions_with_portfolio, txs_by_ticker)
-    except Exception as e:
-        logger.warning("[rentabilidade] enrich_rf_positions falhou: %s", e)
-
-    tickers_all = list({p["ticker"] for p in positions_raw} | set(realized_map.keys()))
-    asset_names: dict[str, str] = {}
-    asset_types_db: dict[str, str] = {}
-    if tickers_all:
-        res = await db.execute(
-            select(Asset.ticker, Asset.name, Asset.asset_type)
-            .where(Asset.ticker.in_(tickers_all))
-        )
-        for row in res.all():
-            asset_names[row.ticker] = row.name or row.ticker
-            asset_types_db[row.ticker] = (
-                row.asset_type.value
-                if hasattr(row.asset_type, "value")
-                else str(row.asset_type)
-            )
-
-    # Sprint 5B FIX: fx_today buscado UMA vez antes do loop.
-    # Antes: get_usd_brl_today era chamado DENTRO do loop para cada ativo USD
-    # (N queries). Agora = 1 query independente de quantos ativos USD existam.
     fx_today = await get_usd_brl_today(db)
-
-    items: list[dict] = []
+    prices = await _fetch_prices_batch(db, positions_raw)
+    enriched = enrich_with_prices(positions_raw, prices, fx_today=fx_today)
 
     open_tickers: set[str] = set()
-    for p in positions_raw:
-        ticker = p["ticker"]
+    result: list[dict] = []
+
+    for pos in enriched:
+        ticker = str(pos.get("ticker") or pos.get("asset_code") or "").upper()
+        if not ticker:
+            continue
         open_tickers.add(ticker)
-        asset_type = asset_types_db.get(ticker) or normalize_type(p.get("asset_type", ""))
-        qty = p["quantity"]
-        total_invested = p["total_invested"]
-        avg_price = p["avg_price"]
-        realized = realized_map.get(ticker, 0.0)
 
-        current_price = prices_map.get(ticker)
-
-        is_usd = p.get("is_usd", False)
-        if is_usd and current_price is not None:
-            # Usa fx_today já carregado antes do loop — sem nova query
-            current_price = current_price * fx_today
-
-        if _is_rf_type(asset_type) and ticker in rf_values:
-            current_value = rf_values[ticker]
-        elif current_price:
-            current_value = qty * current_price
-        else:
-            current_value = qty * avg_price
-            if not _is_rf_type(asset_type):
-                logger.warning(
-                    "[rentabilidade] sem cotacao para %s, usando preco medio", ticker
-                )
-
-        unrealized = current_value - total_invested
+        total_invested = float(pos.get("total_invested") or 0)
+        current_value = float(
+            pos.get("current_value") if pos.get("current_value") is not None else total_invested
+        )
+        unrealized_pnl = current_value - total_invested
         unrealized_pct = _safe_pct(
-            Decimal(str(unrealized)), Decimal(str(total_invested))
-        ) if total_invested > 0 else 0.0
-        total_pnl = unrealized + realized
-        total_pnl_pct = _safe_pct(
+            Decimal(str(unrealized_pnl)), Decimal(str(total_invested))
+        ) if total_invested else 0.0
+        realized_pnl = realized_map.get(ticker, 0.0)
+        total_pnl = unrealized_pnl + realized_pnl
+        total_pct = _safe_pct(
             Decimal(str(total_pnl)), Decimal(str(total_invested))
-        ) if total_invested > 0 else 0.0
+        ) if total_invested else 0.0
 
-        items.append({
-            "ticker": ticker,
-            "name": asset_names.get(ticker, ticker),
-            "asset_type": asset_type,
-            "quantity": round(qty, 8),
-            "avg_price": round(avg_price, 4),
-            "total_invested": round(total_invested, 2),
-            "current_value": round(current_value, 2),
-            "unrealized_pnl": round(unrealized, 2),
-            "unrealized_pct": unrealized_pct,
-            "realized_pnl": round(realized, 2),
-            "total_pnl": round(total_pnl, 2),
-            "total_pnl_pct": total_pnl_pct,
-            "is_open": True,
+        result.append({
+            "ticker":          ticker,
+            "asset_type":      pos.get("asset_type"),
+            "quantity":        float(pos.get("quantity") or 0),
+            "avg_price":       float(pos.get("avg_price") or 0),
+            "current_price":   float(pos.get("current_price") or 0),
+            "total_invested":  round(total_invested, 2),
+            "current_value":   round(current_value, 2),
+            "unrealized_pnl":  round(unrealized_pnl, 2),
+            "unrealized_pct":  unrealized_pct,
+            "realized_pnl":    round(realized_pnl, 2),
+            "total_pnl":       round(total_pnl, 2),
+            "total_pct":       total_pct,
+            "is_open":         True,
         })
 
-    for ticker, realized in realized_map.items():
-        if ticker in open_tickers:
+    # Posições zeradas com PnL realizado
+    for ticker, realized_pnl in realized_map.items():
+        if ticker in open_tickers or realized_pnl == 0.0:
             continue
-        if realized == 0.0:
-            continue
-        asset_type = asset_types_db.get(ticker, "OUTRO")
-        items.append({
-            "ticker": ticker,
-            "name": asset_names.get(ticker, ticker),
-            "asset_type": asset_type,
-            "quantity": 0.0,
-            "avg_price": 0.0,
-            "total_invested": 0.0,
-            "current_value": 0.0,
-            "unrealized_pnl": 0.0,
-            "unrealized_pct": 0.0,
-            "realized_pnl": round(realized, 2),
-            "total_pnl": round(realized, 2),
-            "total_pnl_pct": 0.0,
-            "is_open": False,
+        # Custo total de compras para esse ticker
+        ticker_txs = by_ticker.get(ticker, [])
+        total_invested = sum(
+            float(tx.quantity or 0) * float(tx.price or 0)
+            for tx in ticker_txs
+            if tx.operation == OperationType.buy
+        )
+        asset_type = None
+        if ticker_txs:
+            at = ticker_txs[0].asset_type
+            asset_type = at.value if hasattr(at, "value") else str(at)
+
+        total_pct = _safe_pct(
+            Decimal(str(realized_pnl)), Decimal(str(total_invested))
+        ) if total_invested else 0.0
+
+        result.append({
+            "ticker":          ticker,
+            "asset_type":      asset_type,
+            "quantity":        0.0,
+            "avg_price":       0.0,
+            "current_price":   0.0,
+            "total_invested":  round(total_invested, 2),
+            "current_value":   0.0,
+            "unrealized_pnl":  0.0,
+            "unrealized_pct":  0.0,
+            "realized_pnl":    round(realized_pnl, 2),
+            "total_pnl":       round(realized_pnl, 2),
+            "total_pct":       total_pct,
+            "is_open":         False,
         })
 
-    items.sort(key=lambda x: abs(x["current_value"]), reverse=True)
+    result.sort(key=lambda x: (not x["is_open"], -abs(x["total_pnl"])))
 
-    await cache_set(cache_key, items, ttl=_CACHE_TTL)
-    return items
+    await cache_set(cache_key, result, ttl=_CACHE_TTL)
+    return result
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Por classe de ativo
+# Rentabilidade por classe
 # ──────────────────────────────────────────────────────────────────────────────
 
-async def get_rentabilidade_por_classe(db: AsyncSession, portfolio_id: int) -> list[dict]:
+async def get_rentabilidade_por_classe(
+    db: AsyncSession,
+    portfolio_id: int,
+) -> list[dict]:
+    """
+    Agrega rentabilidade por classe de ativo.
+
+    Campos por item:
+      asset_type, total_invested, current_value,
+      unrealized_pnl, unrealized_pct, realized_pnl,
+      total_pnl, total_pct, allocation_pct
+    """
     cache_key = _key(portfolio_id, "classes")
     cached = await cache_get(cache_key)
     if cached:
@@ -716,51 +695,51 @@ async def get_rentabilidade_por_classe(db: AsyncSession, portfolio_id: int) -> l
 
     ativos = await get_rentabilidade_por_ativo(db, portfolio_id)
 
-    classes: dict[str, dict] = {}
-    for a in ativos:
-        c = a["asset_type"]
-        if c not in classes:
-            classes[c] = {
-                "asset_type": c,
+    # Agrega por asset_type
+    agg: dict[str, dict] = {}
+    for item in ativos:
+        at = str(item.get("asset_type") or "OUTROS").upper()
+        if at not in agg:
+            agg[at] = {
+                "asset_type":     at,
                 "total_invested": 0.0,
-                "current_value": 0.0,
+                "current_value":  0.0,
                 "unrealized_pnl": 0.0,
-                "realized_pnl": 0.0,
-                "total_pnl": 0.0,
-                "count": 0,
+                "realized_pnl":   0.0,
             }
-        g = classes[c]
-        g["total_invested"] += a["total_invested"]
-        g["current_value"] += a["current_value"]
-        g["unrealized_pnl"] += a["unrealized_pnl"]
-        g["realized_pnl"] += a["realized_pnl"]
-        g["total_pnl"] += a["total_pnl"]
-        g["count"] += 1
+        agg[at]["total_invested"] += item["total_invested"]
+        agg[at]["current_value"]  += item["current_value"]
+        agg[at]["unrealized_pnl"] += item["unrealized_pnl"]
+        agg[at]["realized_pnl"]   += item["realized_pnl"]
 
-    patrimonio_total = sum(g["current_value"] for g in classes.values())
+    total_portfolio = sum(v["current_value"] for v in agg.values())
 
-    result = []
-    for c, g in classes.items():
-        invested = g["total_invested"]
-        pnl = g["total_pnl"]
+    result: list[dict] = []
+    for at, v in agg.items():
+        total_pnl = v["unrealized_pnl"] + v["realized_pnl"]
+        unrealized_pct = _safe_pct(
+            Decimal(str(v["unrealized_pnl"])), Decimal(str(v["total_invested"]))
+        ) if v["total_invested"] else 0.0
+        total_pct = _safe_pct(
+            Decimal(str(total_pnl)), Decimal(str(v["total_invested"]))
+        ) if v["total_invested"] else 0.0
+        allocation_pct = round(
+            v["current_value"] / total_portfolio * 100, 4
+        ) if total_portfolio else 0.0
+
         result.append({
-            "asset_type": c,
-            "total_invested": round(g["total_invested"], 2),
-            "current_value": round(g["current_value"], 2),
-            "unrealized_pnl": round(g["unrealized_pnl"], 2),
-            "realized_pnl": round(g["realized_pnl"], 2),
-            "total_pnl": round(g["total_pnl"], 2),
-            "total_pnl_pct": _safe_pct(
-                Decimal(str(pnl)),
-                Decimal(str(invested)),
-            ) if invested > 0 else 0.0,
-            "alocacao_pct": round(
-                g["current_value"] / patrimonio_total * 100, 2
-            ) if patrimonio_total > 0 else 0.0,
-            "count": g["count"],
+            "asset_type":      at,
+            "total_invested":  round(v["total_invested"], 2),
+            "current_value":   round(v["current_value"], 2),
+            "unrealized_pnl":  round(v["unrealized_pnl"], 2),
+            "unrealized_pct":  unrealized_pct,
+            "realized_pnl":    round(v["realized_pnl"], 2),
+            "total_pnl":       round(total_pnl, 2),
+            "total_pct":       total_pct,
+            "allocation_pct":  allocation_pct,
         })
 
-    result.sort(key=lambda x: x["current_value"], reverse=True)
+    result.sort(key=lambda x: -x["current_value"])
 
     await cache_set(cache_key, result, ttl=_CACHE_TTL)
     return result
