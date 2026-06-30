@@ -1,5 +1,36 @@
 """
 Servico de snapshots diarios de patrimonio.
+
+SEMANTICA DOS CAMPOS CALCULADOS
+================================
+Os snapshots capturam o retorno de PRECO puro da carteira, sem proventos.
+
+  total_pnl  = realized_pnl + unrealized_pnl
+               Lucro/prejuizo de compra e venda e valorizacao de preco.
+               NAO inclui dividendos, JCP, rendimentos de RF nem outros
+               proventos recebidos. Estes ficam em app.models.dividend.
+
+  return_pct = total_pnl / (cost_basis + max(realized_pnl, 0)) * 100
+               Percentual de retorno de preco sobre capital empregado.
+               Usa cost_basis + realized positivo como denominador para
+               evitar distorcao quando ha muitas vendas (invested_total
+               diminui com resgates, podendo inflar o percentual).
+               Fallback: invested_total quando nao ha posicoes abertas.
+
+RETORNO TOTAL COM PROVENTOS (uso no rentabilidade_service)
+==========================================================
+  Se a UI precisar exibir retorno total incluindo proventos:
+    retorno_total_com_prov = (total_pnl + proventos_total) / base * 100
+  Onde proventos_total vem de _proventos_total() no rentabilidade_service.
+  O campo retorno_total_pct do payload de /kpis NAO inclui proventos;
+  os campos proventos_total e proventos_12m sao expostos separadamente
+  para que o frontend calcule e exiba o retorno total conforme necessidade.
+
+FLUXO DE ATUALIZACAO
+====================
+  backfill_snapshots  : reconstroi historico completo dia a dia (semanal/sob demanda)
+  refresh_today_snapshot : atualiza o snapshot de hoje (chamado apos cada transacao)
+  invalidate_snapshots_from : remove snapshots a partir de uma data (ex: correcao de transacao)
 """
 from __future__ import annotations
 
@@ -218,18 +249,21 @@ async def _calc_totals(
 
     unrealized_pnl = market_value - cost_basis
     total_pnl = realized_pnl + unrealized_pnl
+    # NOTA: total_pnl NAO inclui proventos. Ver docstring do modulo.
 
-    # ──────────────────────────────────────────────────────────────────────────
-    # return_pct: retorno sobre cost_basis + realized_pnl positivo
+    # -------------------------------------------------------------------------
+    # return_pct: retorno de preco sobre capital empregado.
     #
-    # CORRECAO: a versao anterior usava invested_total como denominador.
-    # invested_total = compras - vendas; com muitas vendas o denominador cai
-    # e o percentual explode ou fica absurdo.
-    #
-    # Formula adotada: total_pnl / (cost_basis + max(realized_pnl, 0))
-    # Representa quanto o capital efetivamente empregado rendeu.
+    # Denominador = cost_basis + realized_pnl_positivo:
+    #   - Mais estavel que invested_total quando ha resgates frequentes
+    #     (invested_total diminui com vendas, podendo inflar o percentual).
+    #   - Somamos realized positivo para representar o capital que "passou"
+    #     pela carteira e gerou lucro realizado.
     # Fallback para invested_total quando nao ha posicoes abertas.
-    # ──────────────────────────────────────────────────────────────────────────
+    #
+    # ATENCAO: este valor e "retorno de preco". Para retorno total com
+    # proventos ver documentacao do modulo acima.
+    # -------------------------------------------------------------------------
     realized_positive = max(realized_pnl, Decimal("0"))
     return_base = cost_basis + realized_positive
     if return_base > 0:
@@ -322,7 +356,7 @@ async def calc_snapshot_at_date(
         await _prefetch_price_history(db, portfolio_id, days_back)
 
     totals = await _calc_totals(db, portfolio_id, target_date)
-    await _upsert_snapshot(db, portfolio_id, target_date, totals)  # fix: target_date (nao snapshot_date)
+    await _upsert_snapshot(db, portfolio_id, target_date, totals)
     if commit:
         await db.commit()
     logger.info(
