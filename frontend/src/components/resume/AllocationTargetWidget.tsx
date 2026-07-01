@@ -2,6 +2,12 @@ import { useState } from 'react'
 import { Target } from 'lucide-react'
 import type { ClassTargetRow } from '@/hooks/useClassTargets'
 
+/** Conversão segura para número — evita toFixed em null/undefined/NaN */
+function safe(v: unknown): number {
+  const n = Number(v)
+  return Number.isFinite(n) ? n : 0
+}
+
 /**
  * AllocationTargetWidget
  * ---------------------------------------------------------------------------
@@ -21,7 +27,7 @@ export interface AllocationTargetWidgetProps {
 export default function AllocationTargetWidget({ rows, noTopMargin = false }: AllocationTargetWidgetProps) {
   const [collapsed, setCollapsed] = useState(false)
 
-  const hasAnyTarget = rows.some(r => r.target_pct > 0)
+  const hasAnyTarget = rows.some(r => safe(r.target_pct) > 0)
   if (!hasAnyTarget) {
     return (
       <div style={{
@@ -69,7 +75,10 @@ export default function AllocationTargetWidget({ rows, noTopMargin = false }: Al
       {!collapsed && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
           {rows.map(row => {
-            const delta = row.delta_pct
+            const currentPct = safe(row.current_pct)
+            const targetPct  = safe(row.target_pct)
+            const delta      = safe(row.delta_pct)
+
             const statusColor =
               Math.abs(delta) <= 2
                 ? 'var(--color-success)'
@@ -77,9 +86,9 @@ export default function AllocationTargetWidget({ rows, noTopMargin = false }: Al
                   ? 'var(--color-error)'
                   : 'var(--color-warning)'
 
-            const barMax = Math.max(row.current_pct, row.target_pct, 1)
-            const currentW = Math.min((row.current_pct / barMax) * 100, 100)
-            const targetW  = Math.min((row.target_pct  / barMax) * 100, 100)
+            const barMax   = Math.max(currentPct, targetPct, 1)
+            const currentW = Math.min((currentPct / barMax) * 100, 100)
+            const targetW  = Math.min((targetPct  / barMax) * 100, 100)
 
             return (
               <div key={row.asset_type}>
@@ -90,12 +99,12 @@ export default function AllocationTargetWidget({ rows, noTopMargin = false }: Al
                   </span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ fontSize: '0.68rem', color: 'var(--color-text-faint)' }}>
-                      {row.current_pct.toFixed(1)}%{' '}
+                      {currentPct.toFixed(1)}%{' '}
                       <span style={{ color: 'var(--color-text-faint)', fontWeight: 400 }}>
-                        / alvo {row.target_pct.toFixed(1)}%
+                        / alvo {targetPct.toFixed(1)}%
                       </span>
                     </span>
-                    {row.target_pct > 0 && (
+                    {targetPct > 0 && (
                       <span style={{
                         fontSize: '0.62rem', fontWeight: 700,
                         color: statusColor,
@@ -126,7 +135,7 @@ export default function AllocationTargetWidget({ rows, noTopMargin = false }: Al
                     transition: 'width 0.4s ease',
                   }} />
                   {/* Marcador de alvo (linha vertical) */}
-                  {row.target_pct > 0 && (
+                  {targetPct > 0 && (
                     <div style={{
                       position: 'absolute',
                       top: -3, bottom: -3,
