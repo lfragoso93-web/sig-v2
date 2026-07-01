@@ -29,9 +29,6 @@ class Portfolio(Base, TimestampMixin):
     fixed_income: Mapped[list["FixedIncomeInvestment"]] = relationship(
         "FixedIncomeInvestment", back_populates="portfolio", cascade="all, delete-orphan"
     )
-    treasury: Mapped[list["TreasuryInvestment"]] = relationship(
-        "TreasuryInvestment", back_populates="portfolio", cascade="all, delete-orphan"
-    )
     goals: Mapped[list["Goal"]] = relationship(
         "Goal", back_populates="portfolio", cascade="all, delete-orphan"
     )
