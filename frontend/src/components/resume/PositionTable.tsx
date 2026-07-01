@@ -8,7 +8,16 @@ import { useAppStore } from '@/store/appStore'
 import { useUpsertClassTarget } from '@/hooks/useClassTargets'
 import type { PositionGroup } from '@/hooks/usePortfolio'
 
-// ── helpers ────────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── helpers defensivos ───────────────────────────────────────────────────
+
+/** Converte qualquer valor para número seguro, retornando 0 para null/undefined/NaN */
+function safeNum(v: unknown): number {
+  const n = Number(v)
+  return isFinite(n) ? n : 0
+}
+
+// ── helpers ───────────────────────────────────────────────────────────────────────────────────────────
+
 const USD_TYPES = new Set(['STOCK', 'ETF_INTERNACIONAL'])
 
 function isUsdAsset(assetType: string | null | undefined): boolean {
@@ -32,10 +41,12 @@ function assetTypeToTab(assetType: string | null | undefined): string {
   return map[assetType.toUpperCase()] ?? 'acao'
 }
 
-function fmtQty(v: number) {
-  return v % 1 === 0
-    ? v.toLocaleString('pt-BR')
-    : v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 8 })
+/** Formata quantidade — usa safeNum para evitar toFixed em NaN/undefined */
+function fmtQty(v: unknown) {
+  const n = safeNum(v)
+  return n % 1 === 0
+    ? n.toLocaleString('pt-BR')
+    : n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 8 })
 }
 
 function displayName(ticker: string, assetType: string | null | undefined): string {
@@ -47,14 +58,14 @@ function displayName(ticker: string, assetType: string | null | undefined): stri
 
 function calcGroupVariation(group: PositionGroup): { variationPct: number | null; totalInvested: number } {
   if (group.variation_pct !== undefined && group.variation_pct !== null) {
-    return { variationPct: group.variation_pct, totalInvested: group.total_invested ?? 0 }
+    return { variationPct: group.variation_pct, totalInvested: safeNum(group.total_invested) }
   }
   let inv = 0; let cur = 0; let hasQuote = false
   for (const p of group.positions) {
-    const invested = p.invested_value ?? p.quantity * p.average_price
+    const invested = safeNum(p.invested_value) || safeNum(p.quantity) * safeNum(p.average_price)
     inv += invested
     if (p.current_price !== null && p.current_price !== undefined) {
-      cur += p.current_value ?? 0
+      cur += safeNum(p.current_value)
       hasQuote = true
     }
   }
@@ -63,7 +74,7 @@ function calcGroupVariation(group: PositionGroup): { variationPct: number | null
 }
 
 /**
- * Retorna uma string legible do timestamp da cotação mais recente
+ * Retorna uma string legível do timestamp da cotação mais recente
  * entre todas as posições do grupo.
  */
 function getGroupQuoteTimestamp(group: PositionGroup): string | null {
@@ -93,11 +104,11 @@ function getGroupQuoteTimestamp(group: PositionGroup): string | null {
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
 }
 
-// ── style tokens ────────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── style tokens ────────────────────────────────────────────────────────────────────────────────────────────
 const cellText  = { color: 'var(--color-text)' }
 const cellFaint = { color: 'var(--color-text-faint)' }
 
-// ── hook de breakpoint ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── hook de breakpoint ────────────────────────────────────────────────────────────────────────────────────────────
 function useIsDesktop(breakpoint = 768) {
   const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= breakpoint)
   useEffect(() => {
@@ -109,7 +120,7 @@ function useIsDesktop(breakpoint = 768) {
   return isDesktop
 }
 
-// ── AssetMenu ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── AssetMenu ────────────────────────────────────────────────────────────────────────────────────────────
 interface AssetMenuProps { ticker: string; assetLabel: string; assetType: string }
 
 function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
@@ -196,7 +207,7 @@ function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
   )
 }
 
-// ── PositionCard (mobile) ─────────────────────────────────────────────────────────────────────────────────────────────────
+// ── PositionCard (mobile) ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 interface PositionCardProps { item: PositionGroup['positions'][number] }
 
 function PositionCard({ item }: PositionCardProps) {
@@ -205,20 +216,21 @@ function PositionCard({ item }: PositionCardProps) {
   const isRF = isRendaFixa(safeType)
   const name = displayName(item.ticker, safeType)
   const hasQuote = item.current_price !== null && item.current_price !== undefined
-  const varColor = (item.variation_value ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-error)'
-  const investedValue = item.invested_value ?? item.quantity * item.average_price
+  const varColor = safeNum(item.variation_value) >= 0 ? 'var(--color-success)' : 'var(--color-error)'
+  // safeNum garante que investedValue nunca seja NaN mesmo se average_price for undefined
+  const investedValue = safeNum(item.invested_value) || safeNum(item.quantity) * safeNum(item.average_price)
   const currency = isUsdAsset(safeType) ? 'USD' : 'BRL'
 
   const fields = isRF
     ? [
         { label: 'Total Inv.',  value: fmtMoney(investedValue, 'BRL') },
-        { label: 'Valor Atual', value: hasQuote ? fmtMoney(item.current_value ?? null, 'BRL') : '—' },
+        { label: 'Valor Atual', value: hasQuote ? fmtMoney(safeNum(item.current_value), 'BRL') : '—' },
       ]
     : [
         { label: 'Qtd',        value: fmtQty(item.quantity) },
-        { label: 'P. Médio',  value: fmtMoney(item.average_price, currency) },
+        { label: 'P. Médio',  value: fmtMoney(safeNum(item.average_price), currency) },
         { label: 'Total Inv.', value: fmtMoney(investedValue, 'BRL') },
-        { label: 'Valor Atual', value: hasQuote ? fmtMoney(item.current_value ?? null, 'BRL') : '—' },
+        { label: 'Valor Atual', value: hasQuote ? fmtMoney(safeNum(item.current_value), 'BRL') : '—' },
       ]
 
   return (
@@ -251,9 +263,9 @@ function PositionCard({ item }: PositionCardProps) {
           <div style={{ fontSize: '0.65rem', marginBottom: 2, color: 'var(--color-text-faint)' }}>Resultado</div>
           {hasQuote ? (
             <div style={{ fontWeight: 600, fontSize: 'var(--text-xs)', color: varColor, fontVariantNumeric: 'tabular-nums' }}>
-              {fmtMoney(item.variation_value ?? null, 'BRL')}
+              {fmtMoney(safeNum(item.variation_value), 'BRL')}
               <span style={{ marginLeft: 6, fontSize: '0.65rem', fontWeight: 500, opacity: 0.8 }}>
-                ({formatPercent(item.variation_percent ?? 0)})
+                ({formatPercent(safeNum(item.variation_percent))})
               </span>
             </div>
           ) : (
@@ -265,7 +277,7 @@ function PositionCard({ item }: PositionCardProps) {
   )
 }
 
-// ── TargetModal ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── TargetModal ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 interface TargetModalProps {
   assetType: string
   label: string
@@ -365,7 +377,7 @@ function TargetModal({ assetType, label, currentTarget, portfolioId, onClose }: 
   )
 }
 
-// ── ClassGroupHeader ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── ClassGroupHeader ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 interface ClassGroupHeaderProps {
   group: PositionGroup
   collapsed: boolean
@@ -439,13 +451,13 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
           <Divider />
           <LabeledValue label="Invest.">
             <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, ...cellText, fontVariantNumeric: 'tabular-nums' }}>
-              {formatBRL(group.total_invested ?? group.total_value)}
+              {formatBRL(safeNum(group.total_invested ?? group.total_value))}
             </span>
           </LabeledValue>
           <Divider />
           <LabeledValue label="Atual">
             <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, ...cellText, fontVariantNumeric: 'tabular-nums' }}>
-              {formatBRL(group.total_value)}
+              {formatBRL(safeNum(group.total_value))}
             </span>
           </LabeledValue>
           {variationPct !== null && (
@@ -507,7 +519,7 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
   )
 }
 
-// ── Colunas por tipo de classe ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── Colunas por tipo de classe ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 const COLS_DEFAULT = [
   { key: 'ativo',      label: 'Ativo',       align: 'left',  width: '30%' },
   { key: 'qtd',        label: 'Qtd',         align: 'right', width: '8%'  },
@@ -519,7 +531,6 @@ const COLS_DEFAULT = [
   { key: 'acoes',      label: '',            align: 'right', width: '3%'  },
 ]
 
-// Renda Fixa: sem QTD, P. Médio nem P. Atual — apenas Total Inv. e Valor Atual
 const COLS_RENDA_FIXA = [
   { key: 'ativo',      label: 'Ativo',       align: 'left',  width: '45%' },
   { key: 'inv',        label: 'Total Inv.',  align: 'right', width: '20%' },
@@ -528,7 +539,7 @@ const COLS_RENDA_FIXA = [
   { key: 'acoes',      label: '',            align: 'right', width: '3%'  },
 ]
 
-// ── ClassTable ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── ClassTable ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 function ClassTable({ group, portfolioId }: { group: PositionGroup; portfolioId: number }) {
   const isDesktop = useIsDesktop()
   const [collapsed, setCollapsed] = useState(false)
@@ -586,8 +597,9 @@ function ClassTable({ group, portfolioId }: { group: PositionGroup; portfolioId:
                   const name = displayName(item.ticker, safeType)
                   const isTesouro = safeType.toUpperCase() === 'TESOURO_DIRETO' || safeType.toUpperCase() === 'TESOURO'
                   const itemIsRF = isRendaFixa(safeType)
-                  const varColor = (item.variation_value ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-notification)'
-                  const investedValue = item.invested_value ?? item.quantity * item.average_price
+                  const varColor = safeNum(item.variation_value) >= 0 ? 'var(--color-success)' : 'var(--color-notification)'
+                  // safeNum evita NaN quando average_price ou quantity chegam undefined
+                  const investedValue = safeNum(item.invested_value) || safeNum(item.quantity) * safeNum(item.average_price)
                   const currency = isUsdAsset(safeType) ? 'USD' : 'BRL'
                   return (
                     <tr
@@ -616,11 +628,11 @@ function ClassTable({ group, portfolioId }: { group: PositionGroup; portfolioId:
                             {fmtQty(item.quantity)}
                           </td>
                           <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
-                            {fmtMoney(item.average_price, currency)}
+                            {fmtMoney(safeNum(item.average_price), currency)}
                           </td>
                           <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
                             <span style={hasQuote ? cellText : cellFaint}>
-                              {hasQuote ? fmtMoney(item.current_price, currency) : '—'}
+                              {hasQuote ? fmtMoney(safeNum(item.current_price), currency) : '—'}
                             </span>
                           </td>
                         </>
@@ -633,15 +645,15 @@ function ClassTable({ group, portfolioId }: { group: PositionGroup; portfolioId:
 
                       {/* Valor Atual — sempre presente */}
                       <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
-                        {hasQuote ? fmtMoney(item.current_value ?? null, 'BRL') : <span style={cellFaint}>—</span>}
+                        {hasQuote ? fmtMoney(safeNum(item.current_value), 'BRL') : <span style={cellFaint}>—</span>}
                       </td>
 
                       {/* Resultado — sempre presente */}
                       <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
                         {hasQuote ? (
                           <div style={{ color: varColor }}>
-                            <div style={{ fontWeight: 600 }}>{fmtMoney(item.variation_value ?? null, 'BRL')}</div>
-                            <div style={{ fontSize: '0.65rem', fontWeight: 500, opacity: 0.8 }}>{formatPercent(item.variation_percent ?? 0)}</div>
+                            <div style={{ fontWeight: 600 }}>{fmtMoney(safeNum(item.variation_value), 'BRL')}</div>
+                            <div style={{ fontSize: '0.65rem', fontWeight: 500, opacity: 0.8 }}>{formatPercent(safeNum(item.variation_percent))}</div>
                           </div>
                         ) : <span style={cellFaint}>—</span>}
                       </td>
@@ -677,7 +689,7 @@ function ClassTable({ group, portfolioId }: { group: PositionGroup; portfolioId:
   )
 }
 
-// ── PositionTable ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── PositionTable ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 interface Props { groups: PositionGroup[]; portfolioId: number }
 
 export default function PositionTable({ groups, portfolioId }: Props) {
