@@ -42,6 +42,7 @@ async def create_treasury(
         portfolio_id=portfolio_id,
         brapi_name=payload["brapi_name"],
         invested_value=Decimal(str(payload["invested_value"])),
+        purchase_price=Decimal(str(payload["purchase_price"])) if payload.get("purchase_price") else None,
         purchase_date=payload["purchase_date"],
         maturity_date=payload.get("maturity_date"),
         is_active=payload.get("is_active", True),
@@ -110,6 +111,8 @@ async def update_treasury(
         obj.brapi_name = data["brapi_name"]
     if "invested_value" in data:
         obj.invested_value = Decimal(str(data["invested_value"]))
+    if "purchase_price" in data and data["purchase_price"] is not None:
+        obj.purchase_price = Decimal(str(data["purchase_price"]))
     if "purchase_date" in data:
         obj.purchase_date = data["purchase_date"]
     if "maturity_date" in data:
@@ -143,26 +146,21 @@ async def enrich_with_current_prices(
     investments: list[TreasuryInvestment],
 ) -> list[dict]:
     """
-    Enriquece a lista de investimentos com preco atual usando fetch_treasury_prices,
-    que implementa as 4 camadas de resolucao:
-      1. Mapa estatico (BRAPI slugs conhecidos)
-      2. Slug BRAPI direto
-      3. Catalogo dinamico BRAPI /v2/treasury/list
-      4. Fallback API publica do Tesouro Nacional (STN)
+    Enriquece a lista de investimentos com preco atual usando fetch_treasury_prices.
 
-    Para cada investimento com preco encontrado, calcula tambem:
-      valor_atual      = invested_value / preco_compra * preco_atual
-      lucro_prejuizo   = valor_atual - invested_value
+    Logica de calculo com purchase_price:
+      quantidade_cotas  = invested_value / purchase_price
+      valor_atual       = quantidade_cotas * current_price
+      lucro_prejuizo    = valor_atual - invested_value
       rentabilidade_pct = (lucro_prejuizo / invested_value) * 100
 
-    Nota: o campo brapi_name armazena o nome como o usuario cadastrou
-    (ex: 'Tesouro Renda+ Aposentadoria Extra 2065'). A resolucao do slug
-    e feita internamente por fetch_treasury_prices.
+    Fallback (sem purchase_price):
+      valor_atual = current_price  (preco unitario de mercado como referencia)
+      lucro_prejuizo e rentabilidade_pct ficam None
     """
     if not investments:
         return []
 
-    # Coleta todos os brapi_names distintos para busca em batch
     tickers = list({inv.brapi_name for inv in investments if inv.brapi_name})
     price_map: dict[str, float] = {}
     if tickers:
@@ -178,36 +176,38 @@ async def enrich_with_current_prices(
     for inv in investments:
         current_price = price_map.get(inv.brapi_name)
         invested = float(inv.invested_value)
+        purchase_price = float(inv.purchase_price) if inv.purchase_price else None
 
         valor_atual = None
         lucro_prejuizo = None
         rentabilidade_pct = None
+        quantidade_cotas = None
 
         if current_price is not None and current_price > 0 and invested > 0:
-            # Para Tesouro, o preco da cota ja e o valor unitario.
-            # O valor atual e proporcional: (invested / preco_compra) * preco_atual.
-            # Como nao temos preco_compra armazenado, usamos o preco atual diretamente
-            # como referencia e calculamos o valor_atual = current_price (preco da cota).
-            # Para multiplas cotas: valor_atual = (invested / avg_purchase_price) * current_price.
-            # Como avg_purchase_price nao e armazenado neste modelo, usamos a convencao de
-            # que invested_value ja representa o valor total investido e current_price e
-            # o preco unitario atual — o valor atual fica como referencia de mercado.
-            valor_atual = current_price
-            lucro_prejuizo = None   # requer preco_compra para calculo preciso
-            rentabilidade_pct = None
+            if purchase_price and purchase_price > 0:
+                # Calculo preciso via quantidade de cotas
+                quantidade_cotas = invested / purchase_price
+                valor_atual = quantidade_cotas * current_price
+                lucro_prejuizo = valor_atual - invested
+                rentabilidade_pct = (lucro_prejuizo / invested) * 100
+            else:
+                # Fallback: exibe apenas o preco unitario atual como referencia
+                valor_atual = current_price
 
         result.append({
             "id": inv.id,
             "portfolio_id": inv.portfolio_id,
             "brapi_name": inv.brapi_name,
             "invested_value": invested,
+            "purchase_price": purchase_price,
             "purchase_date": inv.purchase_date.isoformat() if isinstance(inv.purchase_date, date) else inv.purchase_date,
             "maturity_date": inv.maturity_date.isoformat() if isinstance(inv.maturity_date, date) else inv.maturity_date,
             "is_active": inv.is_active,
             "current_price": current_price,
-            "valor_atual": valor_atual,
-            "lucro_prejuizo": lucro_prejuizo,
-            "rentabilidade_pct": rentabilidade_pct,
+            "valor_atual": round(valor_atual, 2) if valor_atual is not None else None,
+            "lucro_prejuizo": round(lucro_prejuizo, 2) if lucro_prejuizo is not None else None,
+            "rentabilidade_pct": round(rentabilidade_pct, 4) if rentabilidade_pct is not None else None,
+            "quantidade_cotas": round(quantidade_cotas, 6) if quantidade_cotas is not None else None,
             "created_at": inv.created_at.isoformat() if hasattr(inv, "created_at") and inv.created_at else None,
         })
 
