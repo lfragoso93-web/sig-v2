@@ -7,6 +7,7 @@ from decimal import Decimal
 class TreasuryCreate(BaseModel):
     brapi_name: str
     invested_value: Decimal
+    purchase_price: Optional[Decimal] = None  # preco unitario da cota na data de compra
     purchase_date: date
     maturity_date: Optional[date] = None
     is_active: bool = True
@@ -18,10 +19,18 @@ class TreasuryCreate(BaseModel):
             raise ValueError("Valor investido deve ser maior que zero")
         return v
 
+    @field_validator("purchase_price", mode="before")
+    @classmethod
+    def purchase_price_positive(cls, v):
+        if v is not None and Decimal(str(v)) <= 0:
+            raise ValueError("Preco de compra deve ser maior que zero")
+        return v
+
 
 class TreasuryUpdate(BaseModel):
     brapi_name: Optional[str] = None
     invested_value: Optional[Decimal] = None
+    purchase_price: Optional[Decimal] = None
     purchase_date: Optional[date] = None
     maturity_date: Optional[date] = None
     is_active: Optional[bool] = None
@@ -32,6 +41,7 @@ class TreasuryResponse(BaseModel):
     portfolio_id: int
     brapi_name: str
     invested_value: float
+    purchase_price: Optional[float] = None
     purchase_date: date
     maturity_date: Optional[date] = None
     is_active: bool
@@ -40,6 +50,7 @@ class TreasuryResponse(BaseModel):
     valor_atual: Optional[float] = None
     lucro_prejuizo: Optional[float] = None
     rentabilidade_pct: Optional[float] = None
+    quantidade_cotas: Optional[float] = None  # cotas = invested_value / purchase_price
     created_at: Optional[str] = None
 
     class Config:
