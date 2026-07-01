@@ -1,23 +1,42 @@
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from fastapi import HTTPException
-from decimal import Decimal
-from datetime import date
-from typing import Any
+"""
+Treasury service — lê posições diretamente da tabela transactions.
 
-from app.models.treasury import TreasuryInvestment
+Cada linha de transação com asset_type = 'tesouro_direto' representa
+um lote de compra de Tesouro Direto:
+  - ticker   → brapi_name (ex: "Tesouro IPCA+ 2029")
+  - price    → preço de um título cheio na data de compra
+  - quantity → quantidade de cotas (pode ser fracionado, ex: 0.02)
+  - quantity * price → valor investido (calculado)
+  - date     → purchase_date
+
+Cálculo de rentabilidade:
+  valor_atual       = quantity * current_price
+  lucro_prejuizo    = valor_atual - invested_value
+  rentabilidade_pct = (lucro_prejuizo / invested_value) * 100
+"""
+from datetime import date
+from typing import Optional
+import logging
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import HTTPException
+
+from app.models.transaction import Transaction, OperationType
+from app.models.portfolio import Portfolio
 from app.integrations.brapi import fetch_treasury_prices
 
+logger = logging.getLogger(__name__)
 
-# ---------- helpers ----------------------------------------------------------
+# Valores de asset_type reconhecidos como Tesouro Direto (case-insensitive)
+TREASURY_ASSET_TYPES = {"tesouro_direto", "tesouro direto", "treasury"}
+
 
 async def _assert_portfolio_owner(
     db: AsyncSession,
     portfolio_id: int,
     user_id: int,
 ) -> None:
-    """Valida que o portfolio pertence ao user. Lanca 403 se nao."""
-    from app.models.portfolio import Portfolio
     result = await db.execute(
         select(Portfolio).where(
             Portfolio.id == portfolio_id,
@@ -28,29 +47,10 @@ async def _assert_portfolio_owner(
         raise HTTPException(status_code=403, detail="Acesso negado ao portfolio.")
 
 
-# ---------- CREATE -----------------------------------------------------------
-
-async def create_treasury(
-    db: AsyncSession,
-    portfolio_id: int,
-    user_id: int,
-    data: Any,
-) -> TreasuryInvestment:
-    await _assert_portfolio_owner(db, portfolio_id, user_id)
-    payload = data.model_dump() if hasattr(data, "model_dump") else dict(data)
-    investment = TreasuryInvestment(
-        portfolio_id=portfolio_id,
-        brapi_name=payload["brapi_name"],
-        invested_value=Decimal(str(payload["invested_value"])),
-        purchase_price=Decimal(str(payload["purchase_price"])) if payload.get("purchase_price") else None,
-        purchase_date=payload["purchase_date"],
-        maturity_date=payload.get("maturity_date"),
-        is_active=payload.get("is_active", True),
-    )
-    db.add(investment)
-    await db.commit()
-    await db.refresh(investment)
-    return investment
+def _is_treasury(asset_type: Optional[str]) -> bool:
+    if not asset_type:
+        return False
+    return asset_type.strip().lower() in TREASURY_ASSET_TYPES
 
 
 # ---------- READ -------------------------------------------------------------
@@ -61,154 +61,102 @@ async def list_treasury(
     user_id: int,
     only_active: bool = False,
 ) -> list[dict]:
-    """Lista os investimentos de Tesouro Direto de uma carteira, enriquecidos com cotacao atual."""
+    """
+    Lista todos os lotes de Tesouro Direto de uma carteira,
+    enriquecidos com cotação atual via BRAPI.
+
+    only_active é mantido por compatibilidade de assinatura, mas
+    como transações não têm is_active, retorna todas as compras (buy).
+    """
     await _assert_portfolio_owner(db, portfolio_id, user_id)
-    investments = await get_treasury_by_portfolio(db, portfolio_id, only_active)
-    return await enrich_with_current_prices(investments)
+
+    stmt = select(Transaction).where(
+        Transaction.portfolio_id == portfolio_id,
+        Transaction.operation == OperationType.buy,
+    ).order_by(Transaction.date.desc())
+
+    result = await db.execute(stmt)
+    all_txs = result.scalars().all()
+
+    treasury_txs = [tx for tx in all_txs if _is_treasury(tx.asset_type)]
+
+    return await enrich_with_current_prices(treasury_txs)
 
 
 async def get_treasury_by_portfolio(
     db: AsyncSession,
     portfolio_id: int,
     only_active: bool = False,
-) -> list[TreasuryInvestment]:
-    stmt = select(TreasuryInvestment).where(
-        TreasuryInvestment.portfolio_id == portfolio_id
-    )
-    if only_active:
-        stmt = stmt.where(TreasuryInvestment.is_active.is_(True))
-    result = await db.execute(stmt.order_by(TreasuryInvestment.maturity_date))
-    return list(result.scalars().all())
+) -> list[Transaction]:
+    """Retorna transações de Tesouro Direto de uma carteira (sem autenticação)."""
+    stmt = select(Transaction).where(
+        Transaction.portfolio_id == portfolio_id,
+        Transaction.operation == OperationType.buy,
+    ).order_by(Transaction.date.desc())
 
-
-async def get_treasury_by_id(
-    db: AsyncSession,
-    investment_id: int,
-    portfolio_id: int,
-) -> TreasuryInvestment:
-    stmt = select(TreasuryInvestment).where(
-        TreasuryInvestment.id == investment_id,
-        TreasuryInvestment.portfolio_id == portfolio_id,
-    )
     result = await db.execute(stmt)
-    obj = result.scalar_one_or_none()
-    if not obj:
-        raise HTTPException(status_code=404, detail="Investimento de Tesouro n\u00e3o encontrado.")
-    return obj
+    all_txs = result.scalars().all()
+    return [tx for tx in all_txs if _is_treasury(tx.asset_type)]
 
 
-# ---------- UPDATE -----------------------------------------------------------
-
-async def update_treasury(
-    db: AsyncSession,
-    investment_id: int,
-    portfolio_id: int,
-    data: dict,
-) -> TreasuryInvestment:
-    obj = await get_treasury_by_id(db, investment_id, portfolio_id)
-
-    if "brapi_name" in data:
-        obj.brapi_name = data["brapi_name"]
-    if "invested_value" in data:
-        obj.invested_value = Decimal(str(data["invested_value"]))
-    if "purchase_price" in data and data["purchase_price"] is not None:
-        obj.purchase_price = Decimal(str(data["purchase_price"]))
-    if "purchase_date" in data:
-        obj.purchase_date = data["purchase_date"]
-    if "maturity_date" in data:
-        obj.maturity_date = data["maturity_date"]
-    if "is_active" in data:
-        obj.is_active = data["is_active"]
-
-    await db.commit()
-    await db.refresh(obj)
-    return obj
-
-
-# ---------- DELETE -----------------------------------------------------------
-
-async def delete_treasury(
-    db: AsyncSession,
-    investment_id: int,
-    portfolio_id: int,
-    user_id: int | None = None,
-) -> None:
-    if user_id is not None:
-        await _assert_portfolio_owner(db, portfolio_id, user_id)
-    obj = await get_treasury_by_id(db, investment_id, portfolio_id)
-    await db.delete(obj)
-    await db.commit()
-
-
-# ---------- ENRIQUECIMENTO COM COTACAO ATUAL ---------------------------------
+# ---------- ENRIQUECIMENTO COM COTAÇÃO ATUAL ---------------------------------
 
 async def enrich_with_current_prices(
-    investments: list[TreasuryInvestment],
+    transactions: list[Transaction],
 ) -> list[dict]:
     """
-    Enriquece a lista de investimentos com preco atual usando fetch_treasury_prices.
+    Enriquece lotes de Tesouro com preço atual da BRAPI.
 
-    Logica de calculo com purchase_price:
-      quantidade_cotas  = invested_value / purchase_price
-      valor_atual       = quantidade_cotas * current_price
-      lucro_prejuizo    = valor_atual - invested_value
-      rentabilidade_pct = (lucro_prejuizo / invested_value) * 100
-
-    Fallback (sem purchase_price):
-      valor_atual = current_price  (preco unitario de mercado como referencia)
-      lucro_prejuizo e rentabilidade_pct ficam None
+    Campos retornados por lote:
+      id, portfolio_id, ticker (= brapi_name), purchase_price, quantity,
+      invested_value, purchase_date, current_price,
+      valor_atual, lucro_prejuizo, rentabilidade_pct
     """
-    if not investments:
+    if not transactions:
         return []
 
-    tickers = list({inv.brapi_name for inv in investments if inv.brapi_name})
+    tickers = list({tx.ticker for tx in transactions if tx.ticker})
     price_map: dict[str, float] = {}
     if tickers:
         try:
             price_map = await fetch_treasury_prices(tickers)
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).warning(
-                "[treasury_service] enrich_with_current_prices erro: %s", e
-            )
+        except Exception as exc:
+            logger.warning("[treasury_service] erro ao buscar preços BRAPI: %s", exc)
 
     result = []
-    for inv in investments:
-        current_price = price_map.get(inv.brapi_name)
-        invested = float(inv.invested_value)
-        purchase_price = float(inv.purchase_price) if inv.purchase_price else None
+    for tx in transactions:
+        purchase_price = float(tx.price)
+        quantity = float(tx.quantity)
+        invested_value = round(quantity * purchase_price, 2)
 
+        current_price = price_map.get(tx.ticker)
         valor_atual = None
         lucro_prejuizo = None
         rentabilidade_pct = None
-        quantidade_cotas = None
 
-        if current_price is not None and current_price > 0 and invested > 0:
-            if purchase_price and purchase_price > 0:
-                # Calculo preciso via quantidade de cotas
-                quantidade_cotas = invested / purchase_price
-                valor_atual = quantidade_cotas * current_price
-                lucro_prejuizo = valor_atual - invested
-                rentabilidade_pct = (lucro_prejuizo / invested) * 100
-            else:
-                # Fallback: exibe apenas o preco unitario atual como referencia
-                valor_atual = current_price
+        if current_price is not None and current_price > 0 and invested_value > 0:
+            valor_atual = round(quantity * current_price, 2)
+            lucro_prejuizo = round(valor_atual - invested_value, 2)
+            rentabilidade_pct = round((lucro_prejuizo / invested_value) * 100, 4)
 
+        purchase_date = tx.date
         result.append({
-            "id": inv.id,
-            "portfolio_id": inv.portfolio_id,
-            "brapi_name": inv.brapi_name,
-            "invested_value": invested,
+            "id": tx.id,
+            "portfolio_id": tx.portfolio_id,
+            "brapi_name": tx.ticker,
+            "ticker": tx.ticker,
             "purchase_price": purchase_price,
-            "purchase_date": inv.purchase_date.isoformat() if isinstance(inv.purchase_date, date) else inv.purchase_date,
-            "maturity_date": inv.maturity_date.isoformat() if isinstance(inv.maturity_date, date) else inv.maturity_date,
-            "is_active": inv.is_active,
+            "quantity": quantity,
+            "invested_value": invested_value,
+            "purchase_date": purchase_date.isoformat() if isinstance(purchase_date, date) else purchase_date,
+            "maturity_date": None,  # não armazenado em transactions; reservado para uso futuro via notes
+            "is_active": True,
             "current_price": current_price,
-            "valor_atual": round(valor_atual, 2) if valor_atual is not None else None,
-            "lucro_prejuizo": round(lucro_prejuizo, 2) if lucro_prejuizo is not None else None,
-            "rentabilidade_pct": round(rentabilidade_pct, 4) if rentabilidade_pct is not None else None,
-            "quantidade_cotas": round(quantidade_cotas, 6) if quantidade_cotas is not None else None,
-            "created_at": inv.created_at.isoformat() if hasattr(inv, "created_at") and inv.created_at else None,
+            "valor_atual": valor_atual,
+            "lucro_prejuizo": lucro_prejuizo,
+            "rentabilidade_pct": rentabilidade_pct,
+            "quantidade_cotas": round(quantity, 6),
+            "notes": tx.notes,
         })
 
     return result
