@@ -7,7 +7,6 @@ from app.models.asset_price import AssetPrice
 from app.models.dividend import Dividend
 from app.models.asset_dividend import AssetDividend
 from app.models.fixed_income import FixedIncomeInvestment
-from app.models.treasury import TreasuryInvestment
 from app.models.goal import Goal
 from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.irpf import IRPFReport
@@ -21,7 +20,7 @@ from app.models.dividends_sync_job import DividendsSyncJob
 __all__ = [
     'User', 'Portfolio', 'Transaction', 'PortfolioPosition',
     'Asset', 'AssetPrice', 'Dividend', 'AssetDividend',
-    'FixedIncomeInvestment', 'TreasuryInvestment', 'Goal',
+    'FixedIncomeInvestment', 'Goal',
     'PortfolioSnapshot', 'IRPFReport', 'CorporateEvent',
     'AppConfig', 'SystemConfig', 'PortfolioClassTarget',
     'RateHistory', 'DividendsSyncJob',
