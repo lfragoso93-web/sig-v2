@@ -1,57 +1,32 @@
-from pydantic import BaseModel, field_validator
+"""
+Schemas de resposta para Tesouro Direto.
+
+Como o Tesouro e gerenciado via transactions, nao ha schema de Create/Update
+dedicado. O dado entra pelo endpoint padrao de transactions.
+"""
+from pydantic import BaseModel
 from typing import Optional
-from datetime import date
-from decimal import Decimal
+from datetime import date as DateType
 
 
-class TreasuryCreate(BaseModel):
-    brapi_name: str
-    invested_value: Decimal
-    purchase_price: Optional[Decimal] = None  # preco unitario da cota na data de compra
-    purchase_date: date
-    maturity_date: Optional[date] = None
-    is_active: bool = True
-
-    @field_validator("invested_value", mode="before")
-    @classmethod
-    def must_be_positive(cls, v):
-        if v is not None and Decimal(str(v)) <= 0:
-            raise ValueError("Valor investido deve ser maior que zero")
-        return v
-
-    @field_validator("purchase_price", mode="before")
-    @classmethod
-    def purchase_price_positive(cls, v):
-        if v is not None and Decimal(str(v)) <= 0:
-            raise ValueError("Preco de compra deve ser maior que zero")
-        return v
-
-
-class TreasuryUpdate(BaseModel):
-    brapi_name: Optional[str] = None
-    invested_value: Optional[Decimal] = None
-    purchase_price: Optional[Decimal] = None
-    purchase_date: Optional[date] = None
-    maturity_date: Optional[date] = None
-    is_active: Optional[bool] = None
-
-
-class TreasuryResponse(BaseModel):
+class TreasuryPositionResponse(BaseModel):
+    """Representa um lote de compra de Tesouro Direto enriquecido com cotacao."""
     id: int
     portfolio_id: int
     brapi_name: str
+    ticker: str
+    purchase_price: float
+    quantity: float
     invested_value: float
-    purchase_price: Optional[float] = None
-    purchase_date: date
-    maturity_date: Optional[date] = None
-    is_active: bool
-    # Campos calculados on-the-fly
+    purchase_date: Optional[str] = None
+    maturity_date: Optional[str] = None
+    is_active: bool = True
     current_price: Optional[float] = None
     valor_atual: Optional[float] = None
     lucro_prejuizo: Optional[float] = None
     rentabilidade_pct: Optional[float] = None
-    quantidade_cotas: Optional[float] = None  # cotas = invested_value / purchase_price
-    created_at: Optional[str] = None
+    quantidade_cotas: Optional[float] = None
+    notes: Optional[str] = None
 
     class Config:
         from_attributes = True
