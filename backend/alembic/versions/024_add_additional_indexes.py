@@ -1,8 +1,8 @@
 """
 add_additional_indexes
 
-Revision ID: 023
-Revises: 022
+Revision ID: 024
+Revises: 023
 Create Date: 2026-07-02
 
 Adiciona o índice composto que ainda NÃO existe no schema:
@@ -17,13 +17,13 @@ Os demais índices propostos na análise já foram implementados pelo projeto
   * portfolio_snapshots (portfolio_id, snapshot_date DESC) -> idx_ps_portfolio_date_desc
   * dividends (portfolio_id, payment_date)  -> idx_div_portfolio_payment_date (migration 022)
 
-Esta migration é linear após a 022 (head anterior), evitando o problema de
+Esta migration é linear após a 023 (drop treasury), evitando o problema de
 múltiplas heads no Alembic.
 """
 from alembic import op
 
-revision = '023'
-down_revision = '022'
+revision = '024'
+down_revision = '023'
 branch_labels = None
 depends_on = None
 
