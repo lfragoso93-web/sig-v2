@@ -215,16 +215,26 @@ async def _calc_totals(
             except Exception:
                 fx_snapshot = 1.0
 
+    # ------------------------------------------------------------------
+    # FIX N+1: Carrega todos os preços de uma vez usando batch
+    # ------------------------------------------------------------------
+    from app.services.price_history_service import get_prices_at_date_batch
+    
+    tickers_with_types = []
     for ticker, state in positions.items():
-        # Usa o mapa pre-carregado; fallback para o asset_type da transacao
         asset_type = asset_type_map.get(ticker)
         if asset_type is None:
             try:
                 asset_type = AssetType(state.asset_type)
             except (ValueError, KeyError):
                 asset_type = AssetType.ACAO
-
-        close = await get_price_at_date(db, ticker, asset_type, date_str)
+        tickers_with_types.append((ticker, asset_type))
+    
+    # Carrega todos os preços em uma única operação
+    prices_map = await get_prices_at_date_batch(db, tickers_with_types, date_str)
+    
+    for ticker, state in positions.items():
+        close = prices_map.get(ticker)
         if close is None:
             close = float(state.avg_price)
             logger.warning(
