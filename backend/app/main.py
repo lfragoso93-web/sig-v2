@@ -180,6 +180,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Security headers middleware
+from app.middleware import SecurityHeadersMiddleware
+app.add_middleware(SecurityHeadersMiddleware)
+
 PREFIX = "/api/v1"
 
 # Auth & Users
