@@ -1,6 +1,8 @@
-from fastapi import APIRouter, Depends, status, BackgroundTasks, HTTPException
+from fastapi import APIRouter, Depends, status, BackgroundTasks, HTTPException, UploadFile, File
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
+import io
 from app.core.database import get_db, AsyncSessionLocal
 from app.core.deps import get_current_user
 from app.models.user import User
@@ -10,6 +12,7 @@ from app.schemas.portfolio import (
     PortfolioResponse,
     ClassTargetWithCurrent,
     ClassTargetUpsert,
+    CSVImportResponse,
 )
 from app.services.portfolio_service import (
     create_portfolio,
@@ -29,6 +32,7 @@ from app.services.class_target_service import (
     delete_target,
     VALID_ASSET_CLASSES,
 )
+from app.services import csv_import_service
 import logging
 
 logger = logging.getLogger(__name__)
@@ -271,3 +275,67 @@ async def patrimonio_history(
         ]
 
     return data
+
+
+# ---------------------------------------------------------------------------
+# CSV Import endpoints
+# ---------------------------------------------------------------------------
+
+@router.get("/assets/csv-template", tags=["csv-import"])
+async def get_csv_template():
+    """
+    Retorna um template CSV para importacao de transacoes.
+    Download como arquivo CSV.
+    """
+    csv_content = csv_import_service.generate_csv_template()
+    return FileResponse(
+        io.BytesIO(csv_content.encode()),
+        media_type="text/csv",
+        filename="portfolio_import_template.csv"
+    )
+
+
+@router.post("/{portfolio_id}/import-csv", response_model=CSVImportResponse, tags=["csv-import"])
+async def import_csv(
+    portfolio_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Importa transacoes de um arquivo CSV.
+    
+    Validacao:
+    - Verifica headers obrigatorios
+    - Valida tipos de dados
+    - Valida datas
+    - Valida asset_types e operations
+    
+    Retorna:
+    - success: bool
+    - imported_count: numero de transacoes importadas
+    - skipped_count: numero de linhas puladas
+    - error_count: numero de erros
+    - rows: lista de validacoes por linha
+    - global_errors: erros globais do CSV
+    """
+    await get_portfolio(db, portfolio_id, current_user.id)
+    
+    try:
+        content = await file.read()
+        content_str = content.decode('utf-8')
+    except Exception as e:
+        logger.error(f"Error reading file: {e}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Error reading file: {str(e)}"
+        )
+    
+    result = await csv_import_service.import_csv_transactions(
+        content_str,
+        portfolio_id,
+        current_user.id,
+        db
+    )
+    
+    return result

@@ -50,6 +50,28 @@ class ClassTargetUpsert(BaseModel):
     target_pct: float = Field(..., ge=0, le=100)
 
 
+# ---------------------------------------------------------------------------
+# CSV Import
+# ---------------------------------------------------------------------------
+class CSVRowValidation(BaseModel):
+    row_num: int
+    errors: list[str] = []
+    warnings: list[str] = []
+    status: str
+    ticker: Optional[str] = None
+    operation: Optional[str] = None
+    quantity: Optional[float] = None
+
+
+class CSVImportResponse(BaseModel):
+    success: bool
+    imported_count: int
+    skipped_count: int
+    error_count: int
+    rows: list[CSVRowValidation] = []
+    global_errors: list[str] = []
+
+
 class ClassTargetRead(BaseModel):
     id: int
     portfolio_id: int

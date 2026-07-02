@@ -16,7 +16,16 @@
       "Bash(git commit -m \"Merge remote changes and resolve migration file conflict\")",
       "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\\backend\" && python -m alembic revision -m \"add performance indexes on fx_ra…)",
       "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\\backend\" && alembic revision -m \"add performance indexes on fx_rates\")",
-      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\" && git add -A && git status)"
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\" && git add -A && git status)",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\" && git commit -m \"feat(sprint1): implementar otimizações de performance e …)",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\" && git add frontend/package.json && git commit -m \"fix(frontend): atualiza…)",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\" && python -m py_compile backend/app/services/csv_import_service.py backend…)",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\\frontend\" && npx tsc --noEmit src/components/modals/ImportCSVModal.tsx 2>&1…)",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\\frontend\" && npx tsc --noEmit 2>&1 | head -20)",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\\frontend\" && npx tsc --noEmit)",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\" && docker-compose build 2>&1 | tail -50)",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\" && docker-compose build 2>&1)",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\" && git add -A && git commit -m \"feat(sprint2-gap2.1): CSV Import Feature\n\n…)"
     ]
   }
 }
