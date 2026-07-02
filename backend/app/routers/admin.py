@@ -1,4 +1,5 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, Query, status, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, status, HTTPException, File, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_user
@@ -16,9 +17,11 @@ from app.services.user_service import (
     admin_update_user, delete_user, count_users
 )
 from app.services.config_service import get_all_configs, update_config, bulk_update_configs
+from app.services import backup_service
 import math
 import logging
 import traceback
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -522,3 +525,156 @@ async def admin_trigger_fii_dividends_sync(
         "status": "accepted",
         "force_bootstrap": force_bootstrap,
     }
+
+
+# ── Backup & Restore de Banco de Dados ────────────────────────────────────────────────
+
+async def _run_database_backup_bg(db_url: str) -> None:
+    """Wrapper para criar backup do banco em BackgroundTask."""
+    logger.info("[backup_bg] ========== INICIANDO BACKUP DO BANCO ==========")
+    try:
+        result = await backup_service.create_database_backup(db_url)
+        if result["success"]:
+            logger.info(
+                "[backup_bg] ========== BACKUP CONCLUIDO: backup_id=%s size_mb=%.2f ==========",
+                result["backup_id"], result["size_mb"],
+            )
+        else:
+            logger.error(
+                "[backup_bg] ========== BACKUP FALHOU: %s ==========",
+                result["error"],
+            )
+    except Exception as e:
+        logger.error(
+            "[backup_bg] ========== BACKUP FALHOU: %s\n%s ==========",
+            e, traceback.format_exc(),
+        )
+
+
+@router.post(
+    "/database/backup",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Criar backup do banco de dados",
+)
+async def admin_create_database_backup(
+    background_tasks: BackgroundTasks,
+    _: User = Depends(require_superadmin),
+):
+    """
+    Cria um backup completo do banco de dados em background usando pg_dump.
+    
+    O arquivo de backup é comprimido com gzip e armazenado localmente.
+    Restrito a SuperAdmins.
+    """
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        raise HTTPException(
+            status_code=500,
+            detail="DATABASE_URL não configurado"
+        )
+    
+    logger.info("[backup] Requisição de backup recebida — adicionando task ao background")
+    background_tasks.add_task(_run_database_backup_bg, db_url)
+    
+    return {
+        "message": "Backup do banco iniciado em background. Acompanhe pelo log do servidor.",
+        "status": "accepted",
+    }
+
+
+@router.get(
+    "/database/backups",
+    summary="Listar backups disponíveis",
+)
+async def admin_list_database_backups(
+    _: User = Depends(require_superadmin),
+):
+    """
+    Lista todos os backups do banco de dados disponíveis.
+    
+    Retorna informações de tamanho, data de criação e filename para restauração.
+    Restrito a SuperAdmins.
+    """
+    result = await backup_service.list_backups()
+    return result
+
+
+@router.post(
+    "/database/restore",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Restaurar banco de dados a partir de um backup",
+)
+async def admin_restore_database(
+    backup_filename: str = Query(..., description="Nome do arquivo de backup (ex: backup_20240101_120000.sql.gz)"),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    _: User = Depends(require_superadmin),
+):
+    """
+    Restaura o banco de dados a partir de um backup em background.
+    
+    **CUIDADO**: Esta operação sobrescreve TODOS os dados do banco com os dados do backup.
+    
+    Args:
+        backup_filename: Nome exato do arquivo de backup (obtido via GET /database/backups)
+    
+    Restrito a SuperAdmins.
+    """
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        raise HTTPException(
+            status_code=500,
+            detail="DATABASE_URL não configurado"
+        )
+    
+    backups = await backup_service.list_backups()
+    valid_files = [b["filename"] for b in backups["backups"]]
+    
+    if backup_filename not in valid_files:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Backup não encontrado. Backups disponíveis: {valid_files}"
+        )
+    
+    logger.warning(
+        "[restore] Requisição de restore recebida para: %s — adicionando task ao background",
+        backup_filename
+    )
+    background_tasks.add_task(backup_service.restore_database_backup, db_url, backup_filename)
+    
+    return {
+        "message": f"Restauração iniciada em background a partir de {backup_filename}. Acompanhe pelo log do servidor.",
+        "status": "accepted",
+        "backup_filename": backup_filename,
+        "warning": "Esta operação sobrescreve TODOS os dados do banco",
+    }
+
+
+@router.delete(
+    "/database/backups/{backup_filename}",
+    summary="Deletar um backup",
+)
+async def admin_delete_database_backup(
+    backup_filename: str,
+    _: User = Depends(require_superadmin),
+):
+    """
+    Deleta um arquivo de backup.
+    
+    Args:
+        backup_filename: Nome do arquivo a deletar
+    
+    Restrito a SuperAdmins.
+    """
+    result = await backup_service.delete_backup(backup_filename)
+    
+    if not result["success"]:
+        raise HTTPException(
+            status_code=404,
+            detail=result["error"]
+        )
+    
+    return {
+        "message": f"Backup {backup_filename} deletado com sucesso",
+        "backup_id": result["backup_id"],
+    }
+
