@@ -128,9 +128,9 @@ class Settings(BaseSettings):
                     "SUPERADMIN_PASSWORD não pode usar o valor padrão em produção! "
                     "Defina uma senha forte através da variável de ambiente."
                 )
-            if len(v) < 12:
+            if len(v) < 10:
                 raise ValueError(
-                    "SUPERADMIN_PASSWORD deve ter no mínimo 12 caracteres em produção"
+                    "SUPERADMIN_PASSWORD deve ter no mínimo 10 caracteres em produção"
                 )
         return v
 
