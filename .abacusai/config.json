@@ -25,7 +25,11 @@
       "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\\frontend\" && npx tsc --noEmit)",
       "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\" && docker-compose build 2>&1 | tail -50)",
       "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\" && docker-compose build 2>&1)",
-      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\" && git add -A && git commit -m \"feat(sprint2-gap2.1): CSV Import Feature\n\n…)"
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\" && git add -A && git commit -m \"feat(sprint2-gap2.1): CSV Import Feature\n\n…)",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\" && docker-compose build --no-cache 2>&1)",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\" && docker-compose build)",
+      "Bash(python -m py_compile \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\\backend\\app\\routers\\assets.py\" \"E:\\Sistema Investimentos\\…)",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\" && git add -A && git commit -m \"fix(csv-import): Move csv-template endpoin…)"
     ]
   }
 }

@@ -277,24 +277,6 @@ async def patrimonio_history(
     return data
 
 
-# ---------------------------------------------------------------------------
-# CSV Import endpoints
-# ---------------------------------------------------------------------------
-
-@router.get("/assets/csv-template", tags=["csv-import"])
-async def get_csv_template():
-    """
-    Retorna um template CSV para importacao de transacoes.
-    Download como arquivo CSV.
-    """
-    csv_content = csv_import_service.generate_csv_template()
-    return FileResponse(
-        io.BytesIO(csv_content.encode()),
-        media_type="text/csv",
-        filename="portfolio_import_template.csv"
-    )
-
-
 @router.post("/{portfolio_id}/import-csv", response_model=CSVImportResponse, tags=["csv-import"])
 async def import_csv(
     portfolio_id: int,
