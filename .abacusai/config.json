@@ -61,7 +61,25 @@
       "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\\frontend\" && npm run typecheck 2>&1 | findstr \"AssetDetailDrawer\")",
       "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\" && docker-compose build 2>&1 | tail -20)",
       "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\" && docker-compose build 2>&1)",
-      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\" && git add -A && git commit -m \"Sprint 2 - Gap 2.5: AssetDetailDrawer comp…)"
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\" && git add -A && git commit -m \"Sprint 2 - Gap 2.5: AssetDetailDrawer comp…)",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\" && powershell -Command \"Get-ChildItem -Recurse -Filter '*test*.py' -Type F…)",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\\backend\" && powershell -Command \"Get-ChildItem -Directory -Path '.\\app\\serv…)",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\\backend\" && powershell -Command \"python -m pytest --co -q 2>&1\" | head -50)",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\\backend\" && python -m pytest --co -q 2>&1)",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\\backend\" && python -c \"from app.models.config import AppConfig; print('AppC…)",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\\backend\" && python -m py_compile tests/test_csv_import_service.py 2>&1 && e…)",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\\backend\" && for file in tests/test_audit_log_service.py tests/test_backup_s…)",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\\backend\" && python -m py_compile tests/test_audit_log_service.py && echo \"A…)",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\\backend\" && python -m py_compile tests/test_backup_service.py && python -m …)",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\\backend\" && python -m py_compile tests/test_goals_service.py && echo \"Goals…)",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\" && git add backend/tests/test_csv_import_service.py backend/tests/test_aud…)",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\" && git commit -m \"Sprint 3 - Gap 3.1: Expand backend test coverage with 8 …)",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\\backend\" && python -m py_compile tests/test_class_target_service.py && echo…)",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\" && powershell -Command \"Get-ChildItem -Path 'src/components' -Recurse -Fil…)",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\" && powershell -Command \"Get-ChildItem -Path '.' -Directory | % {$_.Name}\")",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\" && docker-compose build 2>&1)",
+      "Bash(powershell -Command \"docker-compose ps\" 2>&1)",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\" && git add -A && git commit -m \"Fix: Replace LogSquare icon with BookOpen …)"
     ]
   }
 }

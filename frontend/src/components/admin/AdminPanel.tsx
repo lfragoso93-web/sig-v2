@@ -9,7 +9,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Users, Settings, BarChart2, Trash2, Power, Plus, Save,
-  ChevronDown, ChevronUp, Loader2, Pencil, Check, X, KeyRound, LogSquare,
+  ChevronDown, ChevronUp, Loader2, Pencil, Check, X, KeyRound, BookOpen,
 } from 'lucide-react'
 import api from '@/services/api'
 import PasswordInput from '@/components/ui/PasswordInput'
@@ -606,7 +606,7 @@ export default function AdminPanel() {
 
       {/* Audit Logs */}
       <div style={{ borderTop: '1px solid var(--color-divider)', paddingTop: 4 }}>
-        <SectionHeader icon={LogSquare} title="Audit Logs" open={openAudit} onToggle={() => setOpenAudit(v => !v)} />
+        <SectionHeader icon={BookOpen} title="Audit Logs" open={openAudit} onToggle={() => setOpenAudit(v => !v)} />
         {openAudit && (
           <div className="mt-4 pt-4" style={{ borderTop: '1px solid var(--color-divider)' }}>
             <AuditLogsPanel />

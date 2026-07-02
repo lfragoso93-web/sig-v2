@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import {
-  LogSquare,
+  BookOpen,
   ChevronDown,
   ChevronUp,
   Trash2,
@@ -200,10 +200,10 @@ export default function AuditLogsPanel() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
-            <LogSquare size={24} />
-            Audit Logs
-          </h2>
+           <h2 className="text-xl font-bold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
+             <BookOpen size={24} />
+             Audit Logs
+           </h2>
           <p className="text-sm mt-1" style={{ color: 'var(--color-text-muted)' }}>
             Rastreamento de operações de usuários no sistema
           </p>
