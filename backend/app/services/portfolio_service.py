@@ -12,6 +12,7 @@ from app.services.quotes_service import get_prices
 from app.services.class_target_service import get_targets_map
 from app.services.fx_service import get_usd_brl_batch, get_usd_brl_today
 from app.core.cache import cache_get, cache_set, cache_delete
+from app.services.audit_log_service import AuditLogService
 
 logger = logging.getLogger(__name__)
 
@@ -385,6 +386,18 @@ async def list_portfolios(db: AsyncSession, user_id: int) -> list[Portfolio]:
 async def create_portfolio(db: AsyncSession, user_id: int, data: PortfolioCreate) -> Portfolio:
     portfolio = Portfolio(user_id=user_id, name=data.name, description=getattr(data, "description", None))
     db.add(portfolio)
+    await db.flush()
+    
+    await AuditLogService.log_action(
+        db=db,
+        user_id=user_id,
+        action="CREATE",
+        resource_type="Portfolio",
+        resource_id=portfolio.id,
+        portfolio_id=portfolio.id,
+        new_values={"name": data.name, "description": getattr(data, "description", None)},
+    )
+    
     await db.commit()
     await db.refresh(portfolio)
     return portfolio
@@ -402,17 +415,47 @@ async def get_portfolio(db: AsyncSession, portfolio_id: int, user_id: int) -> Po
 
 async def update_portfolio(db: AsyncSession, portfolio_id: int, user_id: int, data: PortfolioUpdate) -> Portfolio:
     portfolio = await get_portfolio(db, portfolio_id, user_id)
+    
+    old_values = {"name": portfolio.name, "description": portfolio.description}
+    
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(portfolio, field, value)
+    
+    new_values = {"name": portfolio.name, "description": portfolio.description}
+    
+    await AuditLogService.log_action(
+        db=db,
+        user_id=user_id,
+        action="UPDATE",
+        resource_type="Portfolio",
+        resource_id=portfolio_id,
+        portfolio_id=portfolio_id,
+        old_values=old_values,
+        new_values=new_values,
+    )
+    
     await db.commit()
     await db.refresh(portfolio)
+    await invalidate_portfolio_cache(portfolio_id)
     return portfolio
 
 
 async def delete_portfolio(db: AsyncSession, portfolio_id: int, user_id: int) -> None:
     portfolio = await get_portfolio(db, portfolio_id, user_id)
+    
+    await AuditLogService.log_action(
+        db=db,
+        user_id=user_id,
+        action="DELETE",
+        resource_type="Portfolio",
+        resource_id=portfolio_id,
+        portfolio_id=portfolio_id,
+        old_values={"name": portfolio.name, "description": portfolio.description},
+    )
+    
     await db.delete(portfolio)
     await db.commit()
+    await invalidate_portfolio_cache(portfolio_id)
 
 
 async def get_portfolio_summary(db: AsyncSession, portfolio_id: int, user_id: int) -> dict:
