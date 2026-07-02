@@ -31,6 +31,7 @@ from app.services.irpf_service import (
     calc_ganhos_capital,
     calc_rendimentos,
     generate_irpf_pdf,
+    generate_irpf_csv,
 )
 
 router = APIRouter(tags=["irpf"])
@@ -126,6 +127,34 @@ async def download_irpf_pdf(
         media_type="application/pdf",
         headers={
             "Content-Disposition": f'attachment; filename="irpf_{year}_{portfolio_id}.pdf"'
+        },
+    )
+
+
+@router.get("/{portfolio_id}/irpf/{year}/csv")
+async def download_irpf_csv(
+    portfolio_id: int,
+    year: int,
+    refresh: bool = False,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Gera e retorna o relatorio IRPF em CSV para download.
+    Content-Type: text/csv
+    Content-Disposition: attachment; filename="irpf_{year}_{portfolio_id}.csv"
+    """
+    await _get_portfolio(portfolio_id, current_user, db)
+    report = await generate_irpf_report(db, portfolio_id, year) if refresh else \
+        await get_irpf_report(portfolio_id, year, False, db, current_user)
+
+    csv_content = generate_irpf_csv(report)
+
+    return Response(
+        content=csv_content.encode('utf-8'),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="irpf_{year}_{portfolio_id}.csv"'
         },
     )
 
