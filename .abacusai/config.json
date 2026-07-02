@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -Command \"Get-ChildItem -Path 'backend/alembic/versions' -Filter '*023*' | ForEach-Object { Write-Host $_.Ful…)",
+      "Bash(powershell -Command \"Remove-Item 'E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\\backend\\alembic\\versions\\023_add_additional_i…)",
+      "Bash(powershell -Command \"Get-ChildItem -Path 'backend/alembic/versions' -Filter '*02{3,4}*' | ForEach-Object { Write-Host $_…)",
+      "Bash(powershell -Command \"ls backend/alembic/versions | where-object { $_.name -match '02[34]' }\")",
+      "Bash(git add COMECE_AQUI.md GAPS_ANALISE_COMPLETA.md MATRIZ_PRIORIZACAO.md PLANO_ACAO_EXECUTAVEL.md SUMARIO_EXECUTIVO.md READ…)",
+      "Bash(git commit -m \"docs: análise completa de gaps + plano de ação executável (3 sprints, 120-150h)\n\nAdicionado análise detal…)",
+      "Bash(cd /e/Sistema\\ Investimentos/App/SGFP/sig-v2 && git push origin stable-15jun 2>&1 || true)",
+      "Bash(cd 'E:\\Sistema Investimentos\\App\\SGFP\\sig-v2' && git push origin stable-15jun 2>&1)",
+      "Bash(cd /mnt/e/Sistema\\ Investimentos/App/SGFP/sig-v2 && pwd && git push origin stable-15jun)",
+      "Bash(git push origin stable-15jun)",
+      "Bash(git pull origin stable-15jun)",
+      "Bash(git add backend/alembic/versions/024_add_additional_indexes.py)",
+      "Bash(git commit -m \"Merge remote changes and resolve migration file conflict\")",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\\backend\" && python -m alembic revision -m \"add performance indexes on fx_ra…)",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\\backend\" && alembic revision -m \"add performance indexes on fx_rates\")",
+      "Bash(cd \"E:\\Sistema Investimentos\\App\\SGFP\\sig-v2\" && git add -A && git status)"
+    ]
+  }
+}

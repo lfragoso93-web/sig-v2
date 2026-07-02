@@ -21,6 +21,7 @@ from app.services.dividend_backfill_service import backfill_dividends
 from app.services.asset_onboarding_service import run_onboarding
 from app.services.transaction_service import list_transactions_paginated
 from app.services.rentabilidade_service import flush_rentabilidade_cache
+from app.services.portfolio_service import invalidate_portfolio_cache
 
 log = logging.getLogger(__name__)
 
@@ -380,6 +381,10 @@ async def create_transaction(
         portfolio_id=portfolio_id,
         tx_date=payload.date,
     )
+    background_tasks.add_task(
+        invalidate_portfolio_cache,
+        portfolio_id=portfolio_id,
+    )
 
     return tx
 
@@ -458,6 +463,10 @@ async def update_transaction(
         portfolio_id=portfolio_id,
         tx_date=invalidate_from,
     )
+    background_tasks.add_task(
+        invalidate_portfolio_cache,
+        portfolio_id=portfolio_id,
+    )
 
     return tx
 
@@ -502,6 +511,10 @@ async def delete_transaction(
         _run_snapshot_backfill,
         portfolio_id=portfolio_id,
         tx_date=tx_date,
+    )
+    background_tasks.add_task(
+        invalidate_portfolio_cache,
+        portfolio_id=portfolio_id,
     )
 
 

@@ -35,7 +35,7 @@ async def _boot_sequence() -> None:
     Sequencia de inicializacao executada em background apos o app subir.
 
     Etapa 1 - Seed de ativos:
-      Popula a tabela `assets` com todos os tickers da B3 via BRAPI /v2/tickers.
+      Popula a tabela `assets` com todos os tickers da B3 via provedor de dados.
       So executa se a tabela estiver vazia.
 
     Etapa 2 - Backfill historico de precos (10 anos):

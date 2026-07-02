@@ -11,8 +11,24 @@ from app.schemas.portfolio import PortfolioCreate, PortfolioUpdate
 from app.services.quotes_service import get_prices
 from app.services.class_target_service import get_targets_map
 from app.services.fx_service import get_usd_brl_batch, get_usd_brl_today
+from app.core.cache import cache_get, cache_set, cache_delete
 
 logger = logging.getLogger(__name__)
+
+_CACHE_TTL = 120
+_CACHE_PREFIX = "portfolio"
+
+
+def _cache_key(portfolio_id: int, suffix: str) -> str:
+    return f"{_CACHE_PREFIX}:{portfolio_id}:{suffix}"
+
+
+async def invalidate_portfolio_cache(portfolio_id: int) -> None:
+    try:
+        await cache_delete(_cache_key(portfolio_id, "summary"))
+        await cache_delete(_cache_key(portfolio_id, "positions"))
+    except Exception:
+        pass
 
 _TYPE_LABEL: dict[str, str] = {
     "ACAO": "Ações",
@@ -400,6 +416,11 @@ async def delete_portfolio(db: AsyncSession, portfolio_id: int, user_id: int) ->
 
 
 async def get_portfolio_summary(db: AsyncSession, portfolio_id: int, user_id: int) -> dict:
+    cache_key = _cache_key(portfolio_id, "summary")
+    cached = await cache_get(cache_key)
+    if cached:
+        return cached
+
     await get_portfolio(db, portfolio_id, user_id)
     positions_raw = await calc_raw_positions(db, portfolio_id)
     total_invested = sum(p["total_invested"] for p in positions_raw)
@@ -432,7 +453,7 @@ async def get_portfolio_summary(db: AsyncSession, portfolio_id: int, user_id: in
     lucro_total = total_gain + proventos_em_carteira
     rentabilidade_total_pct = (lucro_total / total_invested * 100) if total_invested else 0.0
 
-    return {
+    result = {
         "total_invested": round(total_invested, 2),
         "current_value": round(current_value, 2),
         "total_gain": round(total_gain, 2),
@@ -452,8 +473,16 @@ async def get_portfolio_summary(db: AsyncSession, portfolio_id: int, user_id: in
         "usd_brl_rate": round(fx_today, 4),
     }
 
+    await cache_set(cache_key, result, ttl=_CACHE_TTL)
+    return result
+
 
 async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: int) -> list[dict]:
+    cache_key = _cache_key(portfolio_id, "positions")
+    cached = await cache_get(cache_key)
+    if cached:
+        return cached
+
     await get_portfolio(db, portfolio_id, user_id)
     positions_raw = await calc_raw_positions(db, portfolio_id)
 
@@ -499,16 +528,14 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
             "asset_type": at,
             "asset_label": label,
             "quantity": round(e["quantity"], 8),
-            # Preco medio: USD para STOCK/ETF_INT, BRL para os demais
             "average_price": round(e["avg_price_usd"], 4) if (is_usd and e.get("avg_price_usd") is not None) else round(e["avg_price"], 4),
-            "average_price_brl": round(e["avg_price"], 4),        # BRL — para calculos internos
-            "average_price_usd": e.get("avg_price_usd"),          # USD — None para ativos BRL
-            # Preco atual: USD para STOCK/ETF_INT, BRL para os demais
+            "average_price_brl": round(e["avg_price"], 4),
+            "average_price_usd": e.get("avg_price_usd"),
             "current_price": e["current_price_usd"] if (is_usd and e.get("current_price_usd") is not None) else e["current_price"],
-            "current_price_brl": e["current_price"],              # BRL
-            "current_price_usd": e.get("current_price_usd"),     # USD
-            "current_value": e["current_value"],                  # BRL — sempre
-            "invested_value": round(e["total_invested"], 2),      # BRL — sempre
+            "current_price_brl": e["current_price"],
+            "current_price_usd": e.get("current_price_usd"),
+            "current_value": e["current_value"],
+            "invested_value": round(e["total_invested"], 2),
             "variation_value": e["result_abs"],
             "variation_percent": e["result_pct"],
             "allocation_pct": round(alloc, 4),
@@ -544,6 +571,7 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
 
         g["target_pct"] = targets_map.get(g["positions"][0]["asset_type"]) if g["positions"] else None
 
+    await cache_set(cache_key, sorted_groups, ttl=_CACHE_TTL)
     return sorted_groups
 
 
