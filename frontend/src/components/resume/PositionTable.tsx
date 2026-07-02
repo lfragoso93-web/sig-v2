@@ -4,6 +4,7 @@ import { MoreHorizontal, Plus, List, BarChart2 as AnalyseIcon, ChevronDown, Targ
 import { formatBRL, formatPercent, fmtMoney } from '@/utils/format'
 import { formatTreasuryName } from '@/utils/treasury'
 import AssetLogo from '@/components/ui/AssetLogo'
+import AssetDetailDrawer from '@/components/portfolio/AssetDetailDrawer'
 import { useAppStore } from '@/store/appStore'
 import { useUpsertClassTarget } from '@/hooks/useClassTargets'
 import type { PositionGroup } from '@/hooks/usePortfolio'
@@ -208,16 +209,15 @@ function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
 }
 
 // ── PositionCard (mobile) ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-interface PositionCardProps { item: PositionGroup['positions'][number] }
+interface PositionCardProps { item: PositionGroup['positions'][number]; onAssetClick?: (asset: PositionGroup['positions'][number]) => void }
 
-function PositionCard({ item }: PositionCardProps) {
+function PositionCard({ item, onAssetClick }: PositionCardProps) {
   const safeType = item.asset_type ?? ''
   const isTesouro = safeType.toUpperCase() === 'TESOURO_DIRETO' || safeType.toUpperCase() === 'TESOURO'
   const isRF = isRendaFixa(safeType)
   const name = displayName(item.ticker, safeType)
   const hasQuote = item.current_price !== null && item.current_price !== undefined
   const varColor = safeNum(item.variation_value) >= 0 ? 'var(--color-success)' : 'var(--color-error)'
-  // safeNum garante que investedValue nunca seja NaN mesmo se average_price for undefined
   const investedValue = safeNum(item.invested_value) || safeNum(item.quantity) * safeNum(item.average_price)
   const currency = isUsdAsset(safeType) ? 'USD' : 'BRL'
 
@@ -234,12 +234,21 @@ function PositionCard({ item }: PositionCardProps) {
       ]
 
   return (
-    <div style={{
-      borderRadius: 'var(--radius-xl)', padding: '1rem',
-      background: 'var(--color-surface-offset)',
-      border: '1px solid oklch(from var(--color-text) l c h / 0.07)',
-      display: 'flex', flexDirection: 'column', gap: '0.75rem',
-    }}>
+    <button
+      type="button"
+      onClick={() => onAssetClick?.(item)}
+      style={{
+        borderRadius: 'var(--radius-xl)', padding: '1rem',
+        background: 'var(--color-surface-offset)',
+        border: '1px solid oklch(from var(--color-text) l c h / 0.07)',
+        display: 'flex', flexDirection: 'column', gap: '0.75rem',
+        cursor: 'pointer',
+        transition: 'all 0.2s',
+        textAlign: 'left',
+      }}
+      onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--color-primary)')}
+      onMouseLeave={e => (e.currentTarget.style.borderColor = 'oklch(from var(--color-text) l c h / 0.07)')}
+    >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
           <AssetLogo ticker={item.ticker} assetType={safeType} size={34} logoUrl={item.logo_url} />
@@ -273,7 +282,7 @@ function PositionCard({ item }: PositionCardProps) {
           )}
         </div>
       </div>
-    </div>
+    </button>
   )
 }
 
@@ -540,7 +549,7 @@ const COLS_RENDA_FIXA = [
 ]
 
 // ── ClassTable ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-function ClassTable({ group, portfolioId }: { group: PositionGroup; portfolioId: number }) {
+function ClassTable({ group, portfolioId, onAssetClick }: { group: PositionGroup; portfolioId: number; onAssetClick?: (asset: PositionGroup['positions'][number]) => void }) {
   const isDesktop = useIsDesktop()
   const [collapsed, setCollapsed] = useState(false)
   const quoteTimestamp = getGroupQuoteTimestamp(group)
@@ -563,7 +572,7 @@ function ClassTable({ group, portfolioId }: { group: PositionGroup; portfolioId:
           {!isDesktop && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '1rem' }}>
               {group.positions.map(item => (
-                <PositionCard key={`${item.ticker}-${item.id ?? item.ticker}`} item={item} />
+                <PositionCard key={`${item.ticker}-${item.id ?? item.ticker}`} item={item} onAssetClick={onAssetClick} />
               ))}
             </div>
           )}
@@ -604,7 +613,8 @@ function ClassTable({ group, portfolioId }: { group: PositionGroup; portfolioId:
                   return (
                     <tr
                       key={`${item.ticker}-${item.id ?? item.ticker}`}
-                      style={{ borderBottom: '1px solid oklch(from var(--color-text) l c h / 0.045)' }}
+                      onClick={() => onAssetClick?.(item)}
+                      style={{ borderBottom: '1px solid oklch(from var(--color-text) l c h / 0.045)', cursor: 'pointer' }}
                       onMouseEnter={e => (e.currentTarget.style.background = 'oklch(from var(--color-primary) l c h / 0.03)')}
                       onMouseLeave={e => (e.currentTarget.style.background = '')}
                     >
@@ -693,12 +703,21 @@ function ClassTable({ group, portfolioId }: { group: PositionGroup; portfolioId:
 interface Props { groups: PositionGroup[]; portfolioId: number }
 
 export default function PositionTable({ groups, portfolioId }: Props) {
+  const [selectedAsset, setSelectedAsset] = useState<PositionGroup['positions'][number] | null>(null)
+
   if (!groups || groups.length === 0) return null
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      {groups.map(group => (
-        <ClassTable key={group.label} group={group} portfolioId={portfolioId} />
-      ))}
-    </div>
+    <>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        {groups.map(group => (
+          <ClassTable key={group.label} group={group} portfolioId={portfolioId} onAssetClick={setSelectedAsset} />
+        ))}
+      </div>
+      <AssetDetailDrawer
+        asset={selectedAsset}
+        portfolioId={portfolioId}
+        onClose={() => setSelectedAsset(null)}
+      />
+    </>
   )
 }
