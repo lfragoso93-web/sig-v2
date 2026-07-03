@@ -11,8 +11,9 @@ BRAPI_CHUNK_DELAY = 1.0  # segundos entre chunks BRAPI
 
 def start_scheduler() -> None:
     """
-    Registra jobs de cotação, benchmarks, catálogo, histórico de Tesouro Direto
-    e sincronização diária de proventos/eventos corporativos.
+    Registra jobs de cotação, benchmarks, catálogo, histórico de Tesouro Direto,
+    sincronização diária de proventos/eventos e pipeline incremental dos ativos
+    mantidos em carteira.
     """
 
     @scheduler.scheduled_job(
@@ -135,7 +136,36 @@ def start_scheduler() -> None:
             except Exception as e:
                 logger.error("[scheduler] Erro ao sincronizar proventos diários: %s", e)
 
+    @scheduler.scheduled_job(
+        CronTrigger(day_of_week="mon-fri", hour=20, minute=20),
+        id="sync_market_pipeline_held_assets",
+        name="Pipeline incremental — ativos em carteira",
+        max_instances=1,
+        coalesce=True,
+    )
+    async def sync_market_pipeline_held_assets():
+        from app.core.database import AsyncSessionLocal
+        from app.models.asset import AssetType
+        from app.services.market_pipeline_batch_service import run_market_pipeline_batch
+        async with AsyncSessionLocal() as db:
+            try:
+                result = await run_market_pipeline_batch(
+                    db,
+                    asset_types={AssetType.ACAO, AssetType.FII, AssetType.ETF_NACIONAL, AssetType.BDR},
+                    only_held=True,
+                    concurrency=1,
+                    delay=0.5,
+                    full=False,
+                    sync_prices=True,
+                    sync_logo=True,
+                    sync_events=True,
+                    materialize=True,
+                )
+                logger.info("[scheduler] Pipeline incremental da carteira atualizado: %s", result)
+            except Exception as e:
+                logger.error("[scheduler] Erro no pipeline incremental da carteira: %s", e)
+
     scheduler.start()
     logger.info(
-        "Scheduler iniciado — cotações intraday + Tesouro Direto + benchmarks SGS/BCB + proventos diários"
+        "Scheduler iniciado — cotações intraday + Tesouro Direto + benchmarks SGS/BCB + proventos diários + pipeline carteira"
     )
