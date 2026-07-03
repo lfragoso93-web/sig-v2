@@ -438,6 +438,80 @@ async def get_price_at_date(
     return float(price_row.close)
 
 
+async def get_prices_at_date_batch(
+    db: AsyncSession,
+    tickers_with_types: list[tuple[str, AssetType]],
+    target_date: str,
+) -> dict[str, Optional[float]]:
+    """
+    Versão otimizada de get_price_at_date que carrega preços para múltiplos
+    tickers de uma vez, evitando queries N+1.
+
+    Args:
+        tickers_with_types: Lista de tuplas (ticker, asset_type)
+        target_date: Data alvo no formato YYYY-MM-DD
+
+    Returns:
+        Dicionário {ticker: price} onde price pode ser None se não encontrado
+    """
+    if not tickers_with_types:
+        return {}
+
+    ref = _parse_date_utc(target_date)
+    since = ref - timedelta(days=5)
+    until = ref + timedelta(hours=23, minutes=59, seconds=59)
+
+    tickers = [t[0] for t in tickers_with_types]
+
+    # Carrega todos os assets de uma vez
+    assets_result = await db.execute(
+        select(Asset.id, Asset.ticker)
+        .where(Asset.ticker.in_(tickers))
+    )
+    asset_map = {row.ticker: row.id for row in assets_result.all()}
+
+    # Carrega todos os preços de uma vez
+    asset_ids = list(asset_map.values())
+    if not asset_ids:
+        return {t: None for t in tickers}
+
+    # Subquery para pegar o preço mais recente de cada asset
+    from sqlalchemy import and_
+
+    prices_result = await db.execute(
+        select(AssetPrice.asset_id, AssetPrice.close, AssetPrice.timestamp)
+        .where(
+            and_(
+                AssetPrice.asset_id.in_(asset_ids),
+                AssetPrice.timestamp >= since,
+                AssetPrice.timestamp <= until,
+            )
+        )
+        .order_by(AssetPrice.asset_id, AssetPrice.timestamp.desc())
+    )
+
+    # Agrupa por asset_id e pega o mais recente
+    price_map: dict[int, float] = {}
+    for row in prices_result.all():
+        if row.asset_id not in price_map:
+            price_map[row.asset_id] = float(row.close)
+
+    # Mapeia de volta para ticker
+    result = {}
+    for ticker in tickers:
+        asset_id = asset_map.get(ticker)
+        if asset_id and asset_id in price_map:
+            result[ticker] = price_map[asset_id]
+        else:
+            result[ticker] = None
+            logger.warning(
+                "[PriceHistory] get_prices_at_date_batch: sem preço para %s em %s",
+                ticker, target_date
+            )
+
+    return result
+
+
 # ---------------------------------------------------------------------------
 # get_price_history — SOMENTE LEITURA DO BANCO
 # ---------------------------------------------------------------------------

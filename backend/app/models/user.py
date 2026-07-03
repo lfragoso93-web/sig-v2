@@ -2,7 +2,11 @@ from sqlalchemy import String, Boolean, Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 from app.models.base import TimestampMixin
+from typing import TYPE_CHECKING
 import enum
+
+if TYPE_CHECKING:
+    from app.models.portfolio import Portfolio
 
 
 class UserRole(str, enum.Enum):

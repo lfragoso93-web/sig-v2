@@ -1,6 +1,6 @@
 from pydantic import BaseModel, field_validator
 from typing import Optional, List
-from datetime import date
+from datetime import date as DateType
 
 VALID_OPERATIONS = {"buy", "sell"}
 VALID_ASSET_TYPES = {
@@ -28,7 +28,7 @@ class TransactionCreate(BaseModel):
     quantity:   float
     price:      float
     fees:       Optional[float] = 0.0
-    date:       date
+    date:       DateType
     currency:   Optional[str]  = "BRL"
     notes:      Optional[str]  = None
 
@@ -60,7 +60,7 @@ class TransactionUpdate(BaseModel):
     quantity:   Optional[float] = None
     price:      Optional[float] = None
     fees:       Optional[float] = None
-    date:       Optional[date]  = None
+    date:       Optional[DateType]  = None
     currency:   Optional[str]   = None
     notes:      Optional[str]   = None
 
@@ -98,7 +98,7 @@ class TransactionOut(BaseModel):
     quantity:     float
     price:        float
     fees:         float
-    date:         date
+    date:         DateType
     currency:     str
     notes:        Optional[str]
 

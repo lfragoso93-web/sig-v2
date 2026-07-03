@@ -1,5 +1,3 @@
-import numeral from 'numeral'
-
 // -- Moeda -------------------------------------------------------------------
 const brFormatter = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
@@ -21,6 +19,17 @@ const usdFormatter = new Intl.NumberFormat('en-US', {
   currency: 'USD',
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
+})
+
+const pctFormatter = new Intl.NumberFormat('pt-BR', {
+  style: 'percent',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})
+
+const qtyFormatter = new Intl.NumberFormat('pt-BR', {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 4,
 })
 
 /** Converte qualquer valor para número seguro (0 se null/undefined/NaN/Infinity) */
@@ -57,12 +66,13 @@ export function fmtMoney(value: number | null | undefined, currency?: string | n
 /**
  * Formata um número como percentual (ex: 12.5 → "12,50%").
  * Guard defensivo: null/undefined/NaN/Infinity → "0,00%".
- * Evita o crash "Cannot read properties of undefined (reading 'toFixed')"
- * que ocorre quando numeral recebe NaN (resultado de undefined / 100).
+ * Usa Intl.NumberFormat nativo para evitar bugs de dependências externas.
+ * O valor recebido já é uma porcentagem (ex: 12.5 = 12,50%).
  */
 export function formatPercent(value: number | null | undefined): string {
   const n = safeFinite(value)
-  return numeral(n / 100).format('0.00%')
+  // Intl.NumberFormat com style:'percent' espera 0.125 para exibir 12,50%
+  return pctFormatter.format(n / 100)
 }
 
 /** Alias usado em varios componentes */
@@ -70,7 +80,7 @@ export const formatPct = formatPercent
 
 // -- Quantidade --------------------------------------------------------------
 export function formatQuantity(value: number | null | undefined): string {
-  return numeral(safeFinite(value)).format('0,0.####')
+  return qtyFormatter.format(safeFinite(value))
 }
 
 // -- Data --------------------------------------------------------------------
@@ -87,8 +97,6 @@ export function formatDateShort(dateStr: string): string {
 }
 
 // -- Classe de cor por sinal -------------------------------------------------
-const numFmt = numeral
-void numFmt
 export function signClass(value: number | null | undefined): string {
   const n = safeFinite(value)
   if (n > 0) return 'text-green-500'
@@ -98,9 +106,6 @@ export function signClass(value: number | null | undefined): string {
 
 // -- Badge por tipo de ativo -------------------------------------------------
 export function assetBadgeClass(assetType: string | null | undefined): string {
-  // Guarda ANTES de qualquer acesso ao valor — evita TypeError: Cannot read
-  // properties of undefined (reading 'toUpperCase') quando asset_type chega
-  // null/undefined do backend.
   if (!assetType) return 'badge-default'
   const map: Record<string, string> = {
     'ACAO':              'badge-acao',

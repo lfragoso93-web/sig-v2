@@ -16,7 +16,7 @@ function squarify(items: { v: number; idx: number }[], rect: Rect): ({ idx: numb
 
   const result: ({ idx: number } & Rect)[] = []
 
-  function worst(row: number[], w: number, total: number) {
+  function worst(row: number[], w: number) {
     const s = row.reduce((a, b) => a + b, 0)
     const max = Math.max(...row)
     const min = Math.min(...row)
@@ -25,7 +25,6 @@ function squarify(items: { v: number; idx: number }[], rect: Rect): ({ idx: numb
 
   function layoutRow(row: { v: number; idx: number }[], r: Rect, horizontal: boolean) {
     const rowTotal = row.reduce((s, i) => s + i.v, 0)
-    const rectTotal = r.w * r.h
     let offset = 0
     row.forEach(item => {
       const ratio = item.v / rowTotal
@@ -52,15 +51,15 @@ function squarify(items: { v: number; idx: number }[], rect: Rect): ({ idx: numb
 
     const horizontal = r.w >= r.h
     const w = horizontal ? r.h : r.w
-    let row: { v: number; idx: number }[] = []
+    const row: { v: number; idx: number }[] = []
     let remaining = [...nodes]
     const scale = (r.w * r.h) / total
 
     while (remaining.length > 0) {
       const next = remaining[0]
       const scaled = next.v * scale
-      if (row.length === 0 || worst(row.map(i => i.v * scale), w, row.reduce((s, i) => s + i.v * scale, 0)) >=
-          worst([...row.map(i => i.v * scale), scaled], w, row.reduce((s, i) => s + i.v * scale, 0) + scaled)) {
+      if (row.length === 0 || worst(row.map(i => i.v * scale), w) >=
+          worst([...row.map(i => i.v * scale), scaled], w)) {
         row.push(next)
         remaining = remaining.slice(1)
       } else {

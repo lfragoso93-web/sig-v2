@@ -165,16 +165,30 @@ Copie `.env.example` e preencha:
 
 ---
 
-## Roadmap
+## Análise de Gaps e Plano de Ação (02/07/2026)
 
-Veja o roadmap completo em [ROADMAP_SPRINTS.md](./ROADMAP_SPRINTS.md).
+📊 **Status:** 78% de completude funcional — 21 gaps identificados
 
-**Próximas prioridades:**
-- Sprint 5B — Performance de queries (EXPLAIN ANALYZE, índices, N+1)
-- Sprint 6A — Remoção de menções a APIs externas
-- Sprint 6D — Import de ativos via CSV
-- Sprint 7 — Módulo IRPF completo
-- Sprint 8 — Análise de carteira avançada
+Documentação completa de análise e plano de ação:
+
+| Documento | Descrição |
+|-----------|-----------|
+| **[SUMARIO_EXECUTIVO.md](./SUMARIO_EXECUTIVO.md)** | ⭐ Comece por aqui — visão geral em 5 min |
+| **[GAPS_ANALISE_COMPLETA.md](./GAPS_ANALISE_COMPLETA.md)** | Detalhamento de cada gap, impacto e recomendações |
+| **[PLANO_ACAO_EXECUTAVEL.md](./PLANO_ACAO_EXECUTAVEL.md)** | 3 sprints de 8-12 semanas com tarefas concretas |
+| **[MATRIZ_PRIORIZACAO.md](./MATRIZ_PRIORIZACAO.md)** | Timeline, prioridades e métricas de sucesso |
+
+**Próximas prioridades (Sprint 1):**
+- ✅ Índices PostgreSQL (-30-50% latência)
+- ✅ Monitoramento de queries (pg_stat_statements)
+- ✅ Cache Redis completo (dashboard instantâneo)
+- ✅ Sprint 6A compliance (remover refs de APIs externas)
+
+---
+
+## Roadmap Histórico
+
+Veja o roadmap original em [ROADMAP_SPRINTS.md](./ROADMAP_SPRINTS.md).
 
 ---
 

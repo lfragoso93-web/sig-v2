@@ -16,6 +16,7 @@ from app.core.config import settings
 from app.core.limiter import limiter
 from app.core.scheduler import start_scheduler
 from app.core.cache import get_redis
+from app.middleware import SecurityHeadersMiddleware
 from app.routers import (
     auth, portfolios, transactions, dividends, positions,
     users, proventos, performance, admin,
@@ -35,7 +36,7 @@ async def _boot_sequence() -> None:
     Sequencia de inicializacao executada em background apos o app subir.
 
     Etapa 1 - Seed de ativos:
-      Popula a tabela `assets` com todos os tickers da B3 via BRAPI /v2/tickers.
+      Popula a tabela `assets` com todos os tickers da B3 via provedor de dados.
       So executa se a tabela estiver vazia.
 
     Etapa 2 - Backfill historico de precos (10 anos):
@@ -179,6 +180,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 PREFIX = "/api/v1"
 

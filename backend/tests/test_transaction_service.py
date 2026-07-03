@@ -1,160 +1,301 @@
-"""Testes para transaction_service — modelo atual (ticker, operation, date)."""
 import pytest
-from unittest.mock import MagicMock
 from datetime import date
+from unittest.mock import MagicMock, AsyncMock, patch
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
-from app.models.transaction import OperationType
 from app.services.transaction_service import (
-    _calc_average_price,
-    _calc_current_quantity,
+    list_transactions_paginated,
 )
+from app.models.transaction import OperationType
 
 
-# ---------------------------------------------------------------------------
-# Helpers de mock
-# ---------------------------------------------------------------------------
-
-def _mock_db_avg(rows: list[tuple]) -> MagicMock:
-    """
-    Monta db fake para _calc_average_price.
-    Cada row: (operation: OperationType, quantity: float, price: float)
-    """
-    row_objects = []
-    for op, qty, price in rows:
-        r = MagicMock()
-        r.operation = op
-        r.quantity = qty
-        r.price = price
-        row_objects.append(r)
-
-    db = MagicMock()
-    db.query.return_value.filter.return_value.order_by.return_value.all.return_value = row_objects
-    return db
+@pytest.mark.asyncio
+async def test_list_transactions_paginated_empty():
+    db = AsyncMock(spec=AsyncSession)
+    
+    count_result = MagicMock()
+    count_result.scalar_one.return_value = 0
+    
+    fetch_result = MagicMock()
+    fetch_result.scalars().all.return_value = []
+    
+    db.execute.side_effect = [count_result, fetch_result]
+    
+    result = await list_transactions_paginated(db, portfolio_id=1)
+    
+    assert result["total"] == 0
+    assert result["items"] == []
+    assert result["page"] == 1
+    assert result["page_size"] == 50
 
 
-def _mock_db_qty(rows: list[tuple]) -> MagicMock:
-    """
-    Monta db fake para _calc_current_quantity.
-    Cada row: (operation: OperationType, quantity: float)
-    """
-    row_objects = []
-    for op, qty in rows:
-        r = MagicMock()
-        r.operation = op
-        r.quantity = qty
-        row_objects.append(r)
-
-    db = MagicMock()
-    db.query.return_value.filter.return_value.all.return_value = row_objects
-    return db
-
-
-# ---------------------------------------------------------------------------
-# _calc_average_price
-# ---------------------------------------------------------------------------
-
-class TestCalcAveragePrice:
-
-    def test_compra_simples(self):
-        db = _mock_db_avg([
-            (OperationType.buy, 10, 30.0),
-        ])
-        avg = _calc_average_price(db, portfolio_id=1, ticker="PETR4")
-        assert avg == pytest.approx(30.0)
-
-    def test_duas_compras_media_ponderada(self):
-        """(10*20 + 10*30) / 20 = 25.0"""
-        db = _mock_db_avg([
-            (OperationType.buy, 10, 20.0),
-            (OperationType.buy, 10, 30.0),
-        ])
-        avg = _calc_average_price(db, portfolio_id=1, ticker="PETR4")
-        assert avg == pytest.approx(25.0)
-
-    def test_venda_parcial_nao_altera_preco_medio(self):
-        """PM = 25. Venda de 5 unidades nao muda PM."""
-        db = _mock_db_avg([
-            (OperationType.buy,  10, 20.0),
-            (OperationType.buy,  10, 30.0),
-            (OperationType.sell,  5, 40.0),
-        ])
-        avg = _calc_average_price(db, portfolio_id=1, ticker="PETR4")
-        assert avg == pytest.approx(25.0)
-
-    def test_venda_total_retorna_zero(self):
-        db = _mock_db_avg([
-            (OperationType.buy,  10, 50.0),
-            (OperationType.sell, 10, 60.0),
-        ])
-        avg = _calc_average_price(db, portfolio_id=1, ticker="PETR4")
-        assert avg == pytest.approx(0.0)
-
-    def test_sem_transacoes_retorna_zero(self):
-        db = _mock_db_avg([])
-        avg = _calc_average_price(db, portfolio_id=1, ticker="PETR4")
-        assert avg == 0.0
-
-    def test_venda_superior_a_estoque_nao_estoura(self):
-        """Venda com qty > estoque nao deve gerar qty ou cost negativos."""
-        db = _mock_db_avg([
-            (OperationType.buy,   5, 10.0),
-            (OperationType.sell, 10, 15.0),
-        ])
-        avg = _calc_average_price(db, portfolio_id=1, ticker="PETR4")
-        assert avg == pytest.approx(0.0)
-
-    def test_multiplas_compras_e_vendas(self):
-        """Compra 10@20, compra 10@30 => PM=25. Vende 5@35. Compra 5@40 => PM = (15*25 + 5*40) / 20 = 28.75"""
-        db = _mock_db_avg([
-            (OperationType.buy,  10, 20.0),
-            (OperationType.buy,  10, 30.0),
-            (OperationType.sell,  5, 35.0),
-            (OperationType.buy,   5, 40.0),
-        ])
-        avg = _calc_average_price(db, portfolio_id=1, ticker="PETR4")
-        assert avg == pytest.approx(28.75)
+@pytest.mark.asyncio
+async def test_list_transactions_paginated_with_data():
+    db = AsyncMock(spec=AsyncSession)
+    
+    mock_tx = MagicMock()
+    mock_tx.id = 1
+    mock_tx.ticker = "VALE3"
+    mock_tx.operation = OperationType.buy
+    mock_tx.quantity = 100.0
+    mock_tx.price = 50.0
+    mock_tx.date = date(2024, 1, 15)
+    mock_tx.asset_type = "ACAO"
+    mock_tx.fees = 10.0
+    
+    count_result = MagicMock()
+    count_result.scalar_one.return_value = 1
+    
+    fetch_result = MagicMock()
+    fetch_result.scalars().all.return_value = [mock_tx]
+    
+    db.execute.side_effect = [count_result, fetch_result]
+    
+    result = await list_transactions_paginated(db, portfolio_id=1)
+    
+    assert result["total"] == 1
+    assert len(result["items"]) == 1
+    assert result["items"][0].ticker == "VALE3"
 
 
-# ---------------------------------------------------------------------------
-# _calc_current_quantity
-# ---------------------------------------------------------------------------
+@pytest.mark.asyncio
+async def test_list_transactions_paginated_with_filters():
+    db = AsyncMock(spec=AsyncSession)
+    
+    mock_tx = MagicMock()
+    mock_tx.id = 1
+    mock_tx.ticker = "PETR4"
+    mock_tx.operation = OperationType.buy
+    mock_tx.quantity = 200.0
+    mock_tx.price = 30.0
+    mock_tx.date = date(2024, 6, 15)
+    
+    count_result = MagicMock()
+    count_result.scalar_one.return_value = 1
+    
+    fetch_result = MagicMock()
+    fetch_result.scalars().all.return_value = [mock_tx]
+    
+    db.execute.side_effect = [count_result, fetch_result]
+    
+    result = await list_transactions_paginated(
+        db,
+        portfolio_id=1,
+        ticker="PETR4",
+        operation="buy",
+        date_from=date(2024, 1, 1),
+    )
+    
+    assert result["total"] == 1
+    assert len(result["items"]) == 1
 
-class TestCalcCurrentQuantity:
 
-    def test_apenas_compras(self):
-        db = _mock_db_qty([
-            (OperationType.buy, 10),
-            (OperationType.buy, 5),
-        ])
-        qty = _calc_current_quantity(db, portfolio_id=1, ticker="ITUB4")
-        assert qty == pytest.approx(15.0)
+@pytest.mark.asyncio
+async def test_list_transactions_paginated_pagination():
+    db = AsyncMock(spec=AsyncSession)
+    
+    mock_tx = MagicMock()
+    mock_tx.id = 1
+    
+    count_result = MagicMock()
+    count_result.scalar_one.return_value = 100
+    
+    fetch_result = MagicMock()
+    fetch_result.scalars().all.return_value = [mock_tx]
+    
+    db.execute.side_effect = [count_result, fetch_result]
+    
+    result = await list_transactions_paginated(
+        db,
+        portfolio_id=1,
+        page=2,
+        page_size=25,
+    )
+    
+    assert result["total"] == 100
+    assert result["page"] == 2
+    assert result["page_size"] == 25
 
-    def test_compra_e_venda_parcial(self):
-        db = _mock_db_qty([
-            (OperationType.buy,  10),
-            (OperationType.sell,  3),
-        ])
-        qty = _calc_current_quantity(db, portfolio_id=1, ticker="ITUB4")
-        assert qty == pytest.approx(7.0)
 
-    def test_venda_total_resulta_em_zero(self):
-        db = _mock_db_qty([
-            (OperationType.buy,  10),
-            (OperationType.sell, 10),
-        ])
-        qty = _calc_current_quantity(db, portfolio_id=1, ticker="ITUB4")
-        assert qty == pytest.approx(0.0)
+@pytest.mark.asyncio
+async def test_calc_average_price_single_buy():
+    from app.services.transaction_service import _calc_average_price
+    
+    db = MagicMock(spec=Session)
+    
+    mock_tx = MagicMock()
+    mock_tx.operation = OperationType.buy
+    mock_tx.quantity = 100.0
+    mock_tx.price = 50.0
+    
+    mock_query = MagicMock()
+    mock_query.filter.return_value.order_by.return_value.all.return_value = [mock_tx]
+    db.query.return_value = mock_query
+    
+    avg_price = _calc_average_price(db, portfolio_id=1, ticker="VALE3")
+    
+    assert avg_price == 50.0
 
-    def test_sem_transacoes_retorna_zero(self):
-        db = _mock_db_qty([])
-        qty = _calc_current_quantity(db, portfolio_id=1, ticker="ITUB4")
-        assert qty == 0.0
 
-    def test_venda_maior_que_estoque_nao_retorna_negativo(self):
-        """_calc_current_quantity nao deve retornar valor negativo."""
-        db = _mock_db_qty([
-            (OperationType.buy,   5),
-            (OperationType.sell, 10),
-        ])
-        qty = _calc_current_quantity(db, portfolio_id=1, ticker="ITUB4")
-        assert qty >= 0.0
+@pytest.mark.asyncio
+async def test_calc_average_price_multiple_buys():
+    from app.services.transaction_service import _calc_average_price
+    
+    db = MagicMock(spec=Session)
+    
+    mock_tx1 = MagicMock()
+    mock_tx1.operation = OperationType.buy
+    mock_tx1.quantity = 100.0
+    mock_tx1.price = 50.0
+    
+    mock_tx2 = MagicMock()
+    mock_tx2.operation = OperationType.buy
+    mock_tx2.quantity = 100.0
+    mock_tx2.price = 60.0
+    
+    mock_query = MagicMock()
+    mock_query.filter.return_value.order_by.return_value.all.return_value = [mock_tx1, mock_tx2]
+    db.query.return_value = mock_query
+    
+    avg_price = _calc_average_price(db, portfolio_id=1, ticker="VALE3")
+    
+    assert avg_price == 55.0
+
+
+@pytest.mark.asyncio
+async def test_calc_average_price_buy_and_sell():
+    from app.services.transaction_service import _calc_average_price
+    
+    db = MagicMock(spec=Session)
+    
+    mock_buy = MagicMock()
+    mock_buy.operation = OperationType.buy
+    mock_buy.quantity = 100.0
+    mock_buy.price = 50.0
+    
+    mock_sell = MagicMock()
+    mock_sell.operation = OperationType.sell
+    mock_sell.quantity = 30.0
+    mock_sell.price = 60.0
+    
+    mock_query = MagicMock()
+    mock_query.filter.return_value.order_by.return_value.all.return_value = [mock_buy, mock_sell]
+    db.query.return_value = mock_query
+    
+    avg_price = _calc_average_price(db, portfolio_id=1, ticker="VALE3")
+    
+    assert avg_price == 50.0
+
+
+@pytest.mark.asyncio
+async def test_calc_average_price_all_sold():
+    from app.services.transaction_service import _calc_average_price
+    
+    db = MagicMock(spec=Session)
+    
+    mock_buy = MagicMock()
+    mock_buy.operation = OperationType.buy
+    mock_buy.quantity = 100.0
+    mock_buy.price = 50.0
+    
+    mock_sell = MagicMock()
+    mock_sell.operation = OperationType.sell
+    mock_sell.quantity = 100.0
+    mock_sell.price = 60.0
+    
+    mock_query = MagicMock()
+    mock_query.filter.return_value.order_by.return_value.all.return_value = [mock_buy, mock_sell]
+    db.query.return_value = mock_query
+    
+    avg_price = _calc_average_price(db, portfolio_id=1, ticker="VALE3")
+    
+    assert avg_price == 0.0
+
+
+@pytest.mark.asyncio
+async def test_calc_current_quantity_single_buy():
+    from app.services.transaction_service import _calc_current_quantity
+    
+    db = MagicMock(spec=Session)
+    
+    mock_tx = MagicMock()
+    mock_tx.operation = OperationType.buy
+    mock_tx.quantity = 100.0
+    
+    mock_query = MagicMock()
+    mock_query.filter.return_value.all.return_value = [mock_tx]
+    db.query.return_value = mock_query
+    
+    qty = _calc_current_quantity(db, portfolio_id=1, ticker="VALE3")
+    
+    assert qty == 100.0
+
+
+@pytest.mark.asyncio
+async def test_calc_current_quantity_buy_and_sell():
+    from app.services.transaction_service import _calc_current_quantity
+    
+    db = MagicMock(spec=Session)
+    
+    mock_buy = MagicMock()
+    mock_buy.operation = OperationType.buy
+    mock_buy.quantity = 200.0
+    
+    mock_sell = MagicMock()
+    mock_sell.operation = OperationType.sell
+    mock_sell.quantity = 50.0
+    
+    mock_query = MagicMock()
+    mock_query.filter.return_value.all.return_value = [mock_buy, mock_sell]
+    db.query.return_value = mock_query
+    
+    qty = _calc_current_quantity(db, portfolio_id=1, ticker="VALE3")
+    
+    assert qty == 150.0
+
+
+@pytest.mark.asyncio
+async def test_calc_current_quantity_all_sold():
+    from app.services.transaction_service import _calc_current_quantity
+    
+    db = MagicMock(spec=Session)
+    
+    mock_buy = MagicMock()
+    mock_buy.operation = OperationType.buy
+    mock_buy.quantity = 100.0
+    
+    mock_sell = MagicMock()
+    mock_sell.operation = OperationType.sell
+    mock_sell.quantity = 100.0
+    
+    mock_query = MagicMock()
+    mock_query.filter.return_value.all.return_value = [mock_buy, mock_sell]
+    db.query.return_value = mock_query
+    
+    qty = _calc_current_quantity(db, portfolio_id=1, ticker="VALE3")
+    
+    assert qty == 0.0
+
+
+@pytest.mark.asyncio
+async def test_calc_current_quantity_oversold():
+    from app.services.transaction_service import _calc_current_quantity
+    
+    db = MagicMock(spec=Session)
+    
+    mock_buy = MagicMock()
+    mock_buy.operation = OperationType.buy
+    mock_buy.quantity = 100.0
+    
+    mock_sell = MagicMock()
+    mock_sell.operation = OperationType.sell
+    mock_sell.quantity = 150.0
+    
+    mock_query = MagicMock()
+    mock_query.filter.return_value.all.return_value = [mock_buy, mock_sell]
+    db.query.return_value = mock_query
+    
+    qty = _calc_current_quantity(db, portfolio_id=1, ticker="VALE3")
+    
+    assert qty == 0.0

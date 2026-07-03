@@ -636,3 +636,121 @@ def generate_irpf_pdf(report: IRPFReportOut) -> bytes:
 
     doc.build(story)
     return buffer.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# Geracao de CSV
+# ---------------------------------------------------------------------------
+
+def generate_irpf_csv(report: IRPFReportOut) -> str:
+    """
+    Gera CSV do relatorio IRPF com multiplas secoes.
+    Retorna string CSV com separador ponto-virgula para compatibilidade com Excel PT-BR.
+    """
+    import csv
+    from io import StringIO
+
+    buffer = StringIO()
+    writer = csv.writer(buffer, delimiter=';', quotechar='"', lineterminator='\n')
+
+    def brl(v):
+        return f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+    r = report.resumo
+
+    writer.writerow(["RELATÓRIO IRPF", report.ano])
+    writer.writerow(["Carteira ID", report.portfolio_id])
+    writer.writerow(["Gerado em", date.today().strftime('%d/%m/%Y')])
+    writer.writerow([])
+
+    writer.writerow(["RESUMO ANUAL"])
+    writer.writerow(["Descricao", "Valor"])
+    writer.writerow(["Total Bens e Direitos (31/12)", brl(r.total_bens_direitos)])
+    writer.writerow(["Total Vendas no Ano", brl(r.total_vendas_ano)])
+    writer.writerow(["Lucro Tributavel Swing Trade", brl(r.lucro_tributavel_swing)])
+    writer.writerow(["Lucro Tributavel Day Trade", brl(r.lucro_tributavel_day_trade)])
+    writer.writerow(["IR Swing Trade Devido", brl(r.ir_swing_trade_devido)])
+    writer.writerow(["IR Day Trade Devido", brl(r.ir_day_trade_devido)])
+    writer.writerow(["IR Retido na Fonte", brl(r.ir_retido_fonte_total)])
+    writer.writerow(["IR a Recolher", brl(r.ir_a_recolher_total)])
+    writer.writerow(["Total Dividendos Isentos", brl(r.total_dividendos_isentos)])
+    writer.writerow(["Total JCP Bruto", brl(r.total_jcp_bruto)])
+    writer.writerow(["IR Retido JCP (15%)", brl(r.total_jcp_ir_retido)])
+    writer.writerow(["Prejuizo Acumulado", brl(r.prejuizo_acumulado)])
+    writer.writerow([])
+
+    writer.writerow(["BENS E DIREITOS (posicao em 31/12)"])
+    writer.writerow(["Codigo IRPF", "Ticker", "Tipo", "Quantidade", "Custo Medio", "Custo Total", "Moeda"])
+    if report.bens_direitos:
+        for b in report.bens_direitos:
+            writer.writerow([
+                b.codigo_irpf,
+                b.ticker,
+                b.asset_type,
+                f"{b.quantidade:,.4f}".replace(",", "X").replace(".", ",").replace("X", "."),
+                brl(b.custo_medio),
+                brl(b.custo_total),
+                b.moeda,
+            ])
+        total_bens = sum(b.custo_total for b in report.bens_direitos)
+        writer.writerow(["TOTAL", "", "", "", "", brl(total_bens), ""])
+    writer.writerow([])
+
+    writer.writerow(["GANHOS DE CAPITAL MENSAIS"])
+    for gm in report.ganhos_mensais:
+        writer.writerow([f"MES: {gm.mes}"])
+        writer.writerow(["Total Vendas", "Lucro Bruto", "Isencao Aplicada", "Base Calculo", "IR Swing", "IR Day Trade", "IR a Recolher"])
+        writer.writerow([
+            brl(gm.total_vendas),
+            brl(gm.lucro_bruto),
+            brl(gm.isencao_aplicada),
+            brl(gm.base_calculo),
+            brl(gm.ir_devido_swing),
+            brl(gm.ir_devido_day_trade),
+            brl(gm.ir_a_recolher),
+        ])
+        writer.writerow(["VENDAS DETALHADAS"])
+        writer.writerow(["Data", "Ticker", "Tipo", "Quantidade", "Preco Venda", "Custo Aquisicao", "Lucro/Prejuizo", "Day Trade?", "Isento?"])
+        for v in gm.vendas:
+            writer.writerow([
+                v.data,
+                v.ticker,
+                v.asset_type,
+                f"{v.quantidade:,.4f}".replace(",", "X").replace(".", ",").replace("X", "."),
+                brl(v.preco_venda),
+                brl(v.custo_aquisicao),
+                brl(v.lucro_bruto),
+                "SIM" if v.is_day_trade else "NAO",
+                "SIM" if v.is_isento else "NAO",
+            ])
+        writer.writerow([])
+    writer.writerow([])
+
+    writer.writerow(["DIVIDENDOS ISENTOS"])
+    writer.writerow(["Ticker", "Tipo", "Total Recebido", "Numero Pagamentos"])
+    if report.dividendos:
+        for d in report.dividendos:
+            writer.writerow([
+                d.ticker,
+                d.asset_type,
+                brl(d.total_recebido),
+                str(d.quantidade_pgtos),
+            ])
+        total_div = sum(d.total_recebido for d in report.dividendos)
+        writer.writerow(["TOTAL", "", brl(total_div), ""])
+    writer.writerow([])
+
+    writer.writerow(["JCP - JUROS SOBRE CAPITAL PROPRIO"])
+    writer.writerow(["Ticker", "Total Bruto", "IR Retido (15%)", "Total Liquido"])
+    if report.jcp:
+        for j in report.jcp:
+            writer.writerow([
+                j.ticker,
+                brl(j.total_bruto),
+                brl(j.ir_retido),
+                brl(j.total_liquido),
+            ])
+        total_jcp = sum(j.total_bruto for j in report.jcp)
+        writer.writerow(["TOTAL", brl(total_jcp), brl(sum(j.ir_retido for j in report.jcp)), brl(sum(j.total_liquido for j in report.jcp))])
+
+    return buffer.getvalue()

@@ -10,7 +10,13 @@ asyncio.run(asyncpg.connect(url.replace('postgresql+asyncpg', 'postgresql')))
   sleep 1
 done
 
-echo "[entrypoint] Executando migrations..."
+echo "[entrypoint] Executando migrations ate 022 (pre-drop)..."
+alembic upgrade 022
+
+echo "[entrypoint] Migrando dados de treasury_investments -> transactions..."
+python -m scripts.migrate_treasury
+
+echo "[entrypoint] Executando migrations restantes (023+)..."
 alembic upgrade head
 
 echo "[entrypoint] Criando/atualizando superadmin..."

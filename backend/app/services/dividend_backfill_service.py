@@ -6,8 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.models.transaction import Transaction, OperationType
+from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
-from app.models.dividend import Dividend, DividendStatus
+from app.models.dividend import Dividend, DividendStatus, DividendType
 
 logger = logging.getLogger(__name__)
 
@@ -122,9 +123,11 @@ async def backfill_dividends(
         return
 
     logger.info(f"[Backfill] iniciando para {ticker} / portfolio {portfolio_id}")
+    ticker = ticker.upper()
+    asset_type_norm = asset_type.upper()
 
     # 1. Busca raw dividends da API (uma chamada)
-    use_yf = asset_type.upper() in INTL_TYPES
+    use_yf = asset_type_norm in INTL_TYPES
     raw_dividends = (
         await _fetch_dividends_yf(ticker)
         if use_yf
@@ -143,6 +146,23 @@ async def backfill_dividends(
     portfolio_ids = [row[0] for row in pid_result.all()]
     if not portfolio_ids:
         return
+
+    asset_result = await db.execute(
+        select(Asset).where(
+            Asset.ticker == ticker,
+            Asset.asset_type == asset_type_norm,
+        )
+    )
+    asset = asset_result.scalar_one_or_none()
+    if asset is None:
+        asset = Asset(
+            ticker=ticker,
+            name=ticker,
+            asset_type=asset_type_norm,
+            currency="USD" if asset_type_norm in INTL_TYPES else "BRL",
+        )
+        db.add(asset)
+        await db.flush()
 
     # 3. Pre-carrega transacoes do ticker para todos os portfolios (um SELECT)
     tx_result = await db.execute(
@@ -163,10 +183,11 @@ async def backfill_dividends(
 
     # 4. Pre-carrega AssetDividends existentes para o ticker (um SELECT)
     ad_result = await db.execute(
-        select(AssetDividend).where(AssetDividend.ticker == ticker)
+        select(AssetDividend).where(AssetDividend.asset_id == asset.id)
     )
-    existing_ads: dict[date, AssetDividend] = {
-        ad.ex_date: ad for ad in ad_result.scalars().all()
+    existing_ads: dict[tuple[date, str], AssetDividend] = {
+        (ad.ex_date, str(ad.dividend_type.value if hasattr(ad.dividend_type, "value") else ad.dividend_type)): ad
+        for ad in ad_result.scalars().all()
     }
 
     # 5. Pre-carrega Dividends existentes para (portfolio_ids, ticker) (um SELECT)
@@ -195,23 +216,33 @@ async def backfill_dividends(
         ex_date, pay_date, value, div_type = parsed
 
         try:
+            try:
+                dividend_type = DividendType(div_type)
+            except ValueError:
+                dividend_type = DividendType.OUTROS
+
             # Upsert AssetDividend usando cache em memoria
-            asset_div = existing_ads.get(ex_date)
+            asset_key = (ex_date, dividend_type.value)
+            asset_div = existing_ads.get(asset_key)
             if asset_div is None:
                 asset_div = AssetDividend(
-                    ticker=ticker,
+                    asset_id=asset.id,
                     ex_date=ex_date,
                     payment_date=pay_date,
                     value_per_unit=value,
-                    dividend_type=div_type,
+                    dividend_type=dividend_type,
                     source=source,
                 )
                 db.add(asset_div)
                 await db.flush()  # obtem asset_div.id para usar como FK
-                existing_ads[ex_date] = asset_div
+                existing_ads[asset_key] = asset_div
+            else:
+                asset_div.payment_date = pay_date
+                asset_div.value_per_unit = value
+                asset_div.source = source
 
             # Upsert Dividend por portfolio usando transacoes pre-carregadas
-            div_type_str = str(div_type).upper()
+            div_type_str = dividend_type.value
             status = (
                 DividendStatus.RECEBIDO
                 if pay_date and pay_date <= date.today()
@@ -236,6 +267,12 @@ async def backfill_dividends(
                         total_value=total,
                         net_value=net,
                         status=status,
+                        ticker=ticker,
+                        ex_date=ex_date,
+                        payment_date=pay_date,
+                        value_per_unit=value,
+                        total_received=total,
+                        dividend_type=div_type_str,
                     )
                     db.add(div)
                     existing_divs[(pid, asset_div.id)] = div
@@ -244,6 +281,12 @@ async def backfill_dividends(
                     div.total_value = total
                     div.net_value = net
                     div.status = status
+                    div.ticker = ticker
+                    div.ex_date = ex_date
+                    div.payment_date = pay_date
+                    div.value_per_unit = value
+                    div.total_received = total
+                    div.dividend_type = div_type_str
 
         except Exception as e:
             logger.warning(f"[Backfill] erro ao processar provento de {ticker} ex={ex_date}: {e}")

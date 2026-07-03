@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status, BackgroundTasks, HTTPException
+from fastapi import APIRouter, Depends, status, BackgroundTasks, HTTPException, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 from app.core.database import get_db, AsyncSessionLocal
@@ -10,6 +10,7 @@ from app.schemas.portfolio import (
     PortfolioResponse,
     ClassTargetWithCurrent,
     ClassTargetUpsert,
+    CSVImportResponse,
 )
 from app.services.portfolio_service import (
     create_portfolio,
@@ -29,6 +30,7 @@ from app.services.class_target_service import (
     delete_target,
     VALID_ASSET_CLASSES,
 )
+from app.services import csv_import_service
 import logging
 
 logger = logging.getLogger(__name__)
@@ -271,3 +273,49 @@ async def patrimonio_history(
         ]
 
     return data
+
+
+@router.post("/{portfolio_id}/import-csv", response_model=CSVImportResponse, tags=["csv-import"])
+async def import_csv(
+    portfolio_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Importa transacoes de um arquivo CSV.
+
+    Validacao:
+    - Verifica headers obrigatorios
+    - Valida tipos de dados
+    - Valida datas
+    - Valida asset_types e operations
+
+    Retorna:
+    - success: bool
+    - imported_count: numero de transacoes importadas
+    - skipped_count: numero de linhas puladas
+    - error_count: numero de erros
+    - rows: lista de validacoes por linha
+    - global_errors: erros globais do CSV
+    """
+    await get_portfolio(db, portfolio_id, current_user.id)
+
+    try:
+        content = await file.read()
+        content_str = content.decode('utf-8')
+    except Exception as e:
+        logger.error(f"Error reading file: {e}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Error reading file: {str(e)}"
+        )
+
+    result = await csv_import_service.import_csv_transactions(
+        content_str,
+        portfolio_id,
+        current_user.id,
+        db
+    )
+
+    return result

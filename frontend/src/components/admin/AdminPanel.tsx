@@ -9,10 +9,11 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Users, Settings, BarChart2, Trash2, Power, Plus, Save,
-  ChevronDown, ChevronUp, Loader2, Pencil, Check, X, KeyRound,
+  ChevronDown, ChevronUp, Loader2, Pencil, Check, X, KeyRound, BookOpen,
 } from 'lucide-react'
 import api from '@/services/api'
 import PasswordInput from '@/components/ui/PasswordInput'
+import AuditLogsPanel from '@/components/admin/AuditLogsPanel'
 
 // ── Types ────────────────────────────────────────────
 interface AdminUser {
@@ -561,6 +562,7 @@ export default function AdminPanel() {
   const [openStats,   setOpenStats]   = useState(true)
   const [openUsers,   setOpenUsers]   = useState(true)
   const [openConfigs, setOpenConfigs] = useState(false)
+  const [openAudit,   setOpenAudit]   = useState(false)
 
   return (
     <section
@@ -600,6 +602,16 @@ export default function AdminPanel() {
       <div>
         <SectionHeader icon={Settings} title="Config. do sistema" open={openConfigs} onToggle={() => setOpenConfigs(v => !v)} />
         {openConfigs && <ConfigsSection />}
+      </div>
+
+      {/* Audit Logs */}
+      <div style={{ borderTop: '1px solid var(--color-divider)', paddingTop: 4 }}>
+        <SectionHeader icon={BookOpen} title="Audit Logs" open={openAudit} onToggle={() => setOpenAudit(v => !v)} />
+        {openAudit && (
+          <div className="mt-4 pt-4" style={{ borderTop: '1px solid var(--color-divider)' }}>
+            <AuditLogsPanel />
+          </div>
+        )}
       </div>
     </section>
   )

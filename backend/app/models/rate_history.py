@@ -9,7 +9,7 @@ Armazena o historico diario de indicadores macroeconomicos:
 """
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date as DateType, datetime
 from decimal import Decimal
 from typing import Optional
 
@@ -34,7 +34,7 @@ class RateHistory(Base):
         nullable=False,
         comment="CDI | IPCA | SELIC",
     )
-    date: date = Column(
+    date: DateType = Column(
         Date,
         nullable=False,
         comment="Data de referencia da taxa",

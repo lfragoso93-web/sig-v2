@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi.responses import FileResponse
 from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 from pydantic import BaseModel
 import asyncio
+import io
 from concurrent.futures import ThreadPoolExecutor
 import logging
 
@@ -13,6 +15,7 @@ from app.models.asset import Asset, AssetType
 from app.schemas.asset import AssetCreate, AssetResponse
 from app.services.asset_service import get_or_create_asset, search_assets
 from app.services.price_service import get_current_price, get_price_history
+from app.services import csv_import_service
 from app.integrations.brapi import (
     fetch_asset_info,
     fetch_historical_price,
@@ -601,3 +604,17 @@ async def get_ticker_quote(
         )
 
     raise HTTPException(status_code=404, detail=f"Ticker '{t}' nao encontrado.")
+
+
+@router.get("/csv-template", tags=["csv-import"])
+async def get_csv_template():
+    """
+    Retorna um template CSV para importacao de transacoes.
+    Download como arquivo CSV.
+    """
+    csv_content = csv_import_service.generate_csv_template()
+    return FileResponse(
+        io.BytesIO(csv_content.encode()),
+        media_type="text/csv",
+        filename="portfolio_import_template.csv"
+    )

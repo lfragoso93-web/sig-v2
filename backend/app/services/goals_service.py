@@ -34,6 +34,8 @@ def _calc_projection(
     monthly: Optional[float],
 ) -> tuple[Optional[float], Optional[datetime]]:
     """Retorna (months_to_goal, projected_date) ou (None, None)."""
+    if not target or target <= 0:
+        return None, None
     if current >= target:
         return 0.0, None   # já concluído
     if not monthly or monthly <= 0:
@@ -67,7 +69,7 @@ def _enrich(goal: Goal) -> dict:
         "description": goal.description,
         "created_at": goal.created_at,
         "progress_pct": round(progress, 2),
-        "is_completed": goal.current_value >= goal.target_value,
+        "is_completed": bool(goal.target_value and goal.current_value >= goal.target_value),
         "months_to_goal": months_to_goal,
         "projected_date": projected_date,
     }

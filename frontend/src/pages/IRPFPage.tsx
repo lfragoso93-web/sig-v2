@@ -341,6 +341,7 @@ export default function IRPFPage() {
   const [selectedYear, setSelectedYear] = useState<number>(currentYear - 1)
   const [activeTab, setActiveTab] = useState<Tab>('resumo')
   const [downloading, setDownloading] = useState(false)
+  const [downloadingCSV, setDownloadingCSV] = useState(false)
   const [refreshKey, setRefreshKey] = useState(false)
 
   const { data: anos, isLoading: loadingAnos } = useIRPFAnos(portfolioId)
@@ -362,6 +363,25 @@ export default function IRPFPage() {
       URL.revokeObjectURL(url)
     } finally {
       setDownloading(false)
+    }
+  }, [portfolioId, selectedYear])
+
+  const handleDownloadCSV = useCallback(async () => {
+    if (!portfolioId || !selectedYear) return
+    setDownloadingCSV(true)
+    try {
+      const res = await api.get(
+        `/portfolios/${portfolioId}/irpf/${selectedYear}/csv`,
+        { responseType: 'blob' },
+      )
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'text/csv' }))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `irpf_${selectedYear}_carteira${portfolioId}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setDownloadingCSV(false)
     }
   }, [portfolioId, selectedYear])
 
@@ -440,6 +460,22 @@ export default function IRPFPage() {
           >
             <Download size={13} />
             {downloading ? 'Gerando...' : 'Exportar PDF'}
+          </button>
+
+          {/* Download CSV */}
+          <button
+            type="button"
+            onClick={handleDownloadCSV}
+            disabled={downloadingCSV || !report}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-colors"
+            style={{
+              background: downloadingCSV ? 'var(--color-surface-dynamic)' : 'var(--color-primary)',
+              color: downloadingCSV ? 'var(--color-text-muted)' : 'white',
+              opacity: (!report || downloadingCSV) ? 0.7 : 1,
+            }}
+          >
+            <Download size={13} />
+            {downloadingCSV ? 'Gerando...' : 'Exportar CSV'}
           </button>
         </div>
       </div>

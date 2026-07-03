@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     # Debug
     APP_DEBUG: bool = False
 
+    # Environment
+    ENVIRONMENT: str = "development"
+
     # JWT
     SECRET_KEY: str = "change-me-in-production"
     ALGORITHM: str = "HS256"
@@ -91,6 +94,42 @@ class Settings(BaseSettings):
             raise ValueError(
                 "DIVIDENDS_BOOTSTRAP_START_DATE deve estar no formato YYYY-MM-DD"
             )
+        return v
+
+    @field_validator("SECRET_KEY")
+    @classmethod
+    def validate_secret_key(cls, v: str, info) -> str:
+        """Valida SECRET_KEY em produção"""
+        environment = info.data.get("ENVIRONMENT", "development")
+
+        if environment == "production":
+            if v == "change-me-in-production":
+                raise ValueError(
+                    "SECRET_KEY não pode usar o valor padrão em produção! "
+                    "Gere uma chave segura com: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+                )
+            if len(v) < 32:
+                raise ValueError(
+                    "SECRET_KEY deve ter no mínimo 32 caracteres em produção"
+                )
+        return v
+
+    @field_validator("SUPERADMIN_PASSWORD")
+    @classmethod
+    def validate_superadmin_password(cls, v: str, info) -> str:
+        """Valida senha do superadmin em produção"""
+        environment = info.data.get("ENVIRONMENT", "development")
+
+        if environment == "production":
+            if v == "Admin@1234!":
+                raise ValueError(
+                    "SUPERADMIN_PASSWORD não pode usar o valor padrão em produção! "
+                    "Defina uma senha forte através da variável de ambiente."
+                )
+            if len(v) < 10:
+                raise ValueError(
+                    "SUPERADMIN_PASSWORD deve ter no mínimo 10 caracteres em produção"
+                )
         return v
 
     class Config:

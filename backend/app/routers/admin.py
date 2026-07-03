@@ -16,9 +16,17 @@ from app.services.user_service import (
     admin_update_user, delete_user, count_users
 )
 from app.services.config_service import get_all_configs, update_config, bulk_update_configs
-import math
+from app.services import backup_service
+from app.schemas.audit_log import (
+    PaginatedAuditLogs, AuditLogDetailResponse, AuditStatsResponse,
+    UserAuditStatsResponse, AuditLogCleanupResponse
+)
+from app.services.audit_log_service import AuditLogService
+from datetime import datetime
 import logging
 import traceback
+import os
+import math
 
 logger = logging.getLogger(__name__)
 
@@ -522,3 +530,369 @@ async def admin_trigger_fii_dividends_sync(
         "status": "accepted",
         "force_bootstrap": force_bootstrap,
     }
+
+
+# ── Backup & Restore de Banco de Dados ────────────────────────────────────────────────
+
+async def _run_database_backup_bg(db_url: str) -> None:
+    """Wrapper para criar backup do banco em BackgroundTask."""
+    logger.info("[backup_bg] ========== INICIANDO BACKUP DO BANCO ==========")
+    try:
+        result = await backup_service.create_database_backup(db_url)
+        if result["success"]:
+            logger.info(
+                "[backup_bg] ========== BACKUP CONCLUIDO: backup_id=%s size_mb=%.2f ==========",
+                result["backup_id"], result["size_mb"],
+            )
+        else:
+            logger.error(
+                "[backup_bg] ========== BACKUP FALHOU: %s ==========",
+                result["error"],
+            )
+    except Exception as e:
+        logger.error(
+            "[backup_bg] ========== BACKUP FALHOU: %s\n%s ==========",
+            e, traceback.format_exc(),
+        )
+
+
+@router.post(
+    "/database/backup",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Criar backup do banco de dados",
+)
+async def admin_create_database_backup(
+    background_tasks: BackgroundTasks,
+    _: User = Depends(require_superadmin),
+):
+    """
+    Cria um backup completo do banco de dados em background usando pg_dump.
+
+    O arquivo de backup é comprimido com gzip e armazenado localmente.
+    Restrito a SuperAdmins.
+    """
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        raise HTTPException(
+            status_code=500,
+            detail="DATABASE_URL não configurado"
+        )
+
+    logger.info("[backup] Requisição de backup recebida — adicionando task ao background")
+    background_tasks.add_task(_run_database_backup_bg, db_url)
+
+    return {
+        "message": "Backup do banco iniciado em background. Acompanhe pelo log do servidor.",
+        "status": "accepted",
+    }
+
+
+@router.get(
+    "/database/backups",
+    summary="Listar backups disponíveis",
+)
+async def admin_list_database_backups(
+    _: User = Depends(require_superadmin),
+):
+    """
+    Lista todos os backups do banco de dados disponíveis.
+
+    Retorna informações de tamanho, data de criação e filename para restauração.
+    Restrito a SuperAdmins.
+    """
+    result = await backup_service.list_backups()
+    return result
+
+
+@router.post(
+    "/database/restore",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Restaurar banco de dados a partir de um backup",
+)
+async def admin_restore_database(
+    backup_filename: str = Query(..., description="Nome do arquivo de backup (ex: backup_20240101_120000.sql.gz)"),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    _: User = Depends(require_superadmin),
+):
+    """
+    Restaura o banco de dados a partir de um backup em background.
+
+    **CUIDADO**: Esta operação sobrescreve TODOS os dados do banco com os dados do backup.
+
+    Args:
+        backup_filename: Nome exato do arquivo de backup (obtido via GET /database/backups)
+
+    Restrito a SuperAdmins.
+    """
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        raise HTTPException(
+            status_code=500,
+            detail="DATABASE_URL não configurado"
+        )
+
+    backups = await backup_service.list_backups()
+    valid_files = [b["filename"] for b in backups["backups"]]
+
+    if backup_filename not in valid_files:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Backup não encontrado. Backups disponíveis: {valid_files}"
+        )
+
+    logger.warning(
+        "[restore] Requisição de restore recebida para: %s — adicionando task ao background",
+        backup_filename
+    )
+    background_tasks.add_task(backup_service.restore_database_backup, db_url, backup_filename)
+
+    return {
+        "message": f"Restauração iniciada em background a partir de {backup_filename}. Acompanhe pelo log do servidor.",
+        "status": "accepted",
+        "backup_filename": backup_filename,
+        "warning": "Esta operação sobrescreve TODOS os dados do banco",
+    }
+
+
+@router.delete(
+    "/database/backups/{backup_filename}",
+    summary="Deletar um backup",
+)
+async def admin_delete_database_backup(
+    backup_filename: str,
+    _: User = Depends(require_superadmin),
+):
+    """
+    Deleta um arquivo de backup.
+
+    Args:
+        backup_filename: Nome do arquivo a deletar
+
+    Restrito a SuperAdmins.
+    """
+    result = await backup_service.delete_backup(backup_filename)
+
+    if not result["success"]:
+        raise HTTPException(
+            status_code=404,
+            detail=result["error"]
+        )
+
+    return {
+        "message": f"Backup {backup_filename} deletado com sucesso",
+        "backup_id": result["backup_id"],
+    }
+
+
+# ── Logs de Auditoria ────────────────────────────────────────────────────────────────────────────────
+
+@router.get("/audit-logs", response_model=PaginatedAuditLogs)
+async def admin_list_audit_logs(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=500),
+    user_id: int = Query(None),
+    resource_type: str = Query(None),
+    action: str = Query(None),
+    portfolio_id: int = Query(None),
+    status: str = Query(None),
+    date_from: str = Query(None),
+    date_to: str = Query(None),
+    search: str = Query(None),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_superadmin),
+):
+    """
+    Lista logs de auditoria com filtros e paginação.
+
+    Filtros:
+    - user_id: ID do usuário
+    - resource_type: Tipo de recurso (Portfolio, Transaction, etc)
+    - action: Tipo de ação (CREATE, UPDATE, DELETE, etc)
+    - portfolio_id: ID da carteira
+    - status: Status (SUCCESS, FAILED, PARTIAL)
+    - date_from: Data inicial (ISO format)
+    - date_to: Data final (ISO format)
+    - search: Busca por resource_id ou erro
+
+    Restrito a SuperAdmins.
+    """
+    date_from_dt = None
+    date_to_dt = None
+
+    if date_from:
+        try:
+            date_from_dt = datetime.fromisoformat(date_from.replace('Z', '+00:00'))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="date_from inválido. Use ISO format")
+
+    if date_to:
+        try:
+            date_to_dt = datetime.fromisoformat(date_to.replace('Z', '+00:00'))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="date_to inválido. Use ISO format")
+
+    logs, total = await AuditLogService.get_audit_logs(
+        db,
+        page=page,
+        page_size=page_size,
+        user_id=user_id,
+        resource_type=resource_type,
+        action=action,
+        portfolio_id=portfolio_id,
+        status=status,
+        date_from=date_from_dt,
+        date_to=date_to_dt,
+        search=search,
+    )
+
+    return {
+        "items": [
+            {
+                "id": log.id,
+                "user_id": log.user_id,
+                "action": log.action,
+                "resource_type": log.resource_type,
+                "resource_id": log.resource_id,
+                "portfolio_id": log.portfolio_id,
+                "ip_address": log.ip_address,
+                "user_agent": log.user_agent,
+                "status": log.status,
+                "error_message": log.error_message,
+                "created_at": log.created_at,
+            }
+            for log in logs
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "pages": math.ceil(total / page_size) if total > 0 else 0,
+    }
+
+
+@router.get("/audit-logs/{log_id}", response_model=AuditLogDetailResponse)
+async def admin_get_audit_log_detail(
+    log_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_superadmin),
+):
+    """
+    Retorna detalhes completos de um log de auditoria.
+    Inclui valores antigos, novos e mudanças em JSON.
+
+    Restrito a SuperAdmins.
+    """
+    log = await AuditLogService.get_audit_log_by_id(db, log_id)
+
+    if not log:
+        raise HTTPException(status_code=404, detail="Log não encontrado")
+
+    return {
+        "id": log.id,
+        "user_id": log.user_id,
+        "action": log.action,
+        "resource_type": log.resource_type,
+        "resource_id": log.resource_id,
+        "portfolio_id": log.portfolio_id,
+        "ip_address": log.ip_address,
+        "user_agent": log.user_agent,
+        "status": log.status,
+        "error_message": log.error_message,
+        "old_values": log.old_values,
+        "new_values": log.new_values,
+        "changes": log.changes,
+        "created_at": log.created_at,
+    }
+
+
+@router.get("/audit-logs/user/{user_id}", response_model=PaginatedAuditLogs)
+async def admin_get_user_audit_logs(
+    user_id: int,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=500),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_superadmin),
+):
+    """
+    Retorna logs de auditoria de um usuário específico.
+
+    Restrito a SuperAdmins.
+    """
+    logs, total = await AuditLogService.get_user_audit_logs(
+        db,
+        user_id=user_id,
+        page=page,
+        page_size=page_size,
+    )
+
+    return {
+        "items": [
+            {
+                "id": log.id,
+                "user_id": log.user_id,
+                "action": log.action,
+                "resource_type": log.resource_type,
+                "resource_id": log.resource_id,
+                "portfolio_id": log.portfolio_id,
+                "ip_address": log.ip_address,
+                "user_agent": log.user_agent,
+                "status": log.status,
+                "error_message": log.error_message,
+                "created_at": log.created_at,
+            }
+            for log in logs
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "pages": math.ceil(total / page_size) if total > 0 else 0,
+    }
+
+
+@router.get("/audit-logs/stats", response_model=AuditStatsResponse)
+async def admin_get_audit_stats(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_superadmin),
+):
+    """
+    Retorna estatísticas gerais de auditoria.
+
+    Inclui: total de logs, logs de hoje, desta semana, breakdown de ações,
+    tipos de recursos, e operações que falharam.
+
+    Restrito a SuperAdmins.
+    """
+    return await AuditLogService.get_audit_stats(db)
+
+
+@router.get("/audit-logs/user/{user_id}/stats", response_model=UserAuditStatsResponse)
+async def admin_get_user_audit_stats(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_superadmin),
+):
+    """
+    Retorna estatísticas de auditoria de um usuário.
+
+    Inclui: total de ações, breakdown de ações, última ação, ações falhadas.
+
+    Restrito a SuperAdmins.
+    """
+    return await AuditLogService.get_user_audit_stats(db, user_id)
+
+
+@router.delete("/audit-logs/cleanup", response_model=AuditLogCleanupResponse)
+async def admin_cleanup_audit_logs(
+    days_to_keep: int = Query(90, ge=30, le=365, description="Dias de logs a manter"),
+    dry_run: bool = Query(True, description="Se True, apenas simula a limpeza"),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_superadmin),
+):
+    """
+    Limpa logs de auditoria mais antigos que 'days_to_keep'.
+
+    Se dry_run=True (padrão), apenas retorna quantos seriam deletados sem realmente deletar.
+    Se dry_run=False, realmente deleta os logs antigos.
+
+    Restrito a SuperAdmins.
+    """
+    return await AuditLogService.cleanup_audit_logs(db, days_to_keep, dry_run)
