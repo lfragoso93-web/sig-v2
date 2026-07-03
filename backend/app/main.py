@@ -37,6 +37,7 @@ async def _boot_sequence() -> None:
 
     Etapa 1 - Seed de ativos B3/cripto.
     Etapa 1b - Seed/atualização do catálogo de Tesouro Direto via BRAPI.
+    Etapa 1c - Histórico/snapshot de Tesouro Direto via BRAPI.
     Etapa 2 - Backfill histórico de preços.
     Etapa 3 - Backfill/incremental de benchmarks SGS/BCB para Renda Fixa.
     """
@@ -83,6 +84,21 @@ async def _boot_sequence() -> None:
         )
     except Exception as e:
         logger.error("[Boot] Etapa 1b (seed Tesouro Direto) falhou: %s", e)
+
+    try:
+        from app.services.treasury_price_history_service import (
+            import_missing_treasury_price_history,
+            update_treasury_latest_prices,
+        )
+
+        logger.info("[Boot] Etapa 1c: verificando histórico Tesouro Direto BRAPI")
+        treasury_stats = await import_missing_treasury_price_history()
+        logger.info("[Boot] Etapa 1c: histórico Tesouro Direto atualizado: %s", treasury_stats)
+        async with AsyncSessionLocal() as db:
+            snapshot = await update_treasury_latest_prices(db)
+        logger.info("[Boot] Etapa 1c: snapshot Tesouro Direto atualizado: %d títulos", len(snapshot))
+    except Exception as e:
+        logger.error("[Boot] Etapa 1c (histórico Tesouro Direto) falhou: %s", e)
 
     if not seed_ok:
         logger.warning("[Boot] Etapa 2 abortada: etapa 1 falhou")
