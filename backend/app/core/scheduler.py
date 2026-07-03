@@ -11,7 +11,7 @@ BRAPI_CHUNK_DELAY = 1.0  # segundos entre chunks BRAPI
 
 def start_scheduler() -> None:
     """
-    Registra jobs de cotação, benchmarks e catálogo de Tesouro Direto.
+    Registra jobs de cotação, benchmarks, catálogo e histórico de Tesouro Direto.
     """
 
     @scheduler.scheduled_job(
@@ -94,6 +94,25 @@ def start_scheduler() -> None:
                 await seed_treasury_assets(db)
             except Exception as e:
                 logger.error("[scheduler] Erro ao atualizar catálogo Tesouro Direto: %s", e)
+
+    @scheduler.scheduled_job(
+        CronTrigger(day_of_week="mon-fri", hour=7, minute=8),
+        id="update_treasury_history",
+        name="Atualizar histórico BRAPI — Tesouro Direto",
+    )
+    async def update_treasury_history():
+        from app.core.database import AsyncSessionLocal
+        from app.services.treasury_price_history_service import (
+            import_treasury_price_history,
+            update_treasury_latest_prices,
+        )
+
+        async with AsyncSessionLocal() as db:
+            try:
+                await import_treasury_price_history(db, only_missing=True)
+                await update_treasury_latest_prices(db)
+            except Exception as e:
+                logger.error("[scheduler] Erro ao atualizar histórico Tesouro Direto: %s", e)
 
     @scheduler.scheduled_job(
         CronTrigger(day_of_week="mon-fri", hour=7, minute=10),
