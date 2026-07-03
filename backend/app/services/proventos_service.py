@@ -20,13 +20,11 @@ from app.services.dividend_backfill_service import materialize_asset_dividends
 
 logger = logging.getLogger(__name__)
 
-# Evita que os 4 endpoints da página materializem repetidamente no mesmo load.
 _AUTO_MATERIALIZE_TTL_SECONDS = 60.0
 _auto_materialize_cache: dict[int, float] = {}
 
 
 def _first_buy_subquery():
-    """Subquery que retorna a primeira data de compra (buy) por portfolio_id + ticker."""
     return (
         select(
             Transaction.portfolio_id.label("portfolio_id"),
@@ -39,14 +37,60 @@ def _first_buy_subquery():
     )
 
 
+def _calc_net_qty(txs: list[tuple], ref_date: date) -> float:
+    qty = 0.0
+    for tx_date, op, q in txs:
+        if tx_date > ref_date:
+            continue
+        op_val = op.value if isinstance(op, OperationType) else str(op)
+        if op_val == "buy":
+            qty += float(q)
+        elif op_val == "sell":
+            qty -= float(q)
+    return max(qty, 0.0)
+
+
+async def _reconcile_portfolio_dividend_rights(db: AsyncSession, portfolio_id: int, tickers: list[str]) -> int:
+    """
+    Remove materializações que não fazem mais sentido após alteração/exclusão de
+    transações. O evento global permanece em AssetDividend; só o vínculo da
+    carteira é removido se a carteira não tinha posição na Data Com/Data Ex.
+    """
+    if not tickers:
+        return 0
+
+    tx_rows = await db.execute(
+        select(Transaction.ticker, Transaction.date, Transaction.operation, Transaction.quantity)
+        .where(Transaction.portfolio_id == portfolio_id, Transaction.ticker.in_(tickers))
+    )
+    txs_by_ticker: dict[str, list[tuple]] = {}
+    for ticker, tx_date, op, qty in tx_rows.all():
+        txs_by_ticker.setdefault(str(ticker).upper(), []).append((tx_date, op, qty))
+
+    div_rows = await db.execute(
+        select(Dividend, AssetDividend, Asset.ticker)
+        .join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
+        .join(Asset, AssetDividend.asset_id == Asset.id)
+        .where(Dividend.portfolio_id == portfolio_id, Asset.ticker.in_(tickers))
+    )
+
+    removed = 0
+    for div, asset_div, ticker in div_rows.all():
+        entitlement_date = asset_div.record_date or asset_div.ex_date
+        qty = _calc_net_qty(txs_by_ticker.get(str(ticker).upper(), []), entitlement_date)
+        if qty <= 0:
+            await db.delete(div)
+            removed += 1
+
+    return removed
+
+
 async def ensure_portfolio_proventos(db: AsyncSession, portfolio_id: int, force: bool = False) -> int:
     """
     Garante que a página de Proventos reflita automaticamente os ativos da carteira.
 
-    Não chama provedores externos. Ela apenas materializa, para a carteira, os
-    eventos globais já coletados em AssetDividend. A coleta externa continua
-    acontecendo no seed/onboarding/backfill; aqui a regra é tornar a leitura da
-    página idempotente e autossuficiente.
+    Não chama provedores externos. Materializa eventos globais já coletados e
+    reconcilia vínculos da carteira usando a posição do investidor na Data Com.
     """
     now = time.monotonic()
     if not force and now < _auto_materialize_cache.get(portfolio_id, 0.0):
@@ -62,16 +106,20 @@ async def ensure_portfolio_proventos(db: AsyncSession, portfolio_id: int, force:
         _auto_materialize_cache[portfolio_id] = now + _AUTO_MATERIALIZE_TTL_SECONDS
         return 0
 
-    changed = await materialize_asset_dividends(
-        db=db,
-        tickers=tickers,
-        portfolio_id=portfolio_id,
-        commit=True,
-    )
+    changed = await materialize_asset_dividends(db=db, tickers=tickers, portfolio_id=portfolio_id, commit=False)
+    removed = await _reconcile_portfolio_dividend_rights(db, portfolio_id, tickers)
+    await db.commit()
+
     _auto_materialize_cache[portfolio_id] = time.monotonic() + _AUTO_MATERIALIZE_TTL_SECONDS
-    if changed:
-        logger.info("[proventos] portfolio=%s: %s proventos materializados automaticamente", portfolio_id, changed)
-    return changed
+    total = changed + removed
+    if total:
+        logger.info(
+            "[proventos] portfolio=%s: auto-sync concluido (%s criados/atualizados, %s removidos)",
+            portfolio_id,
+            changed,
+            removed,
+        )
+    return total
 
 
 async def get_summary(db: AsyncSession, portfolio_id: int) -> dict:
@@ -81,20 +129,14 @@ async def get_summary(db: AsyncSession, portfolio_id: int) -> dict:
     res = await db.execute(
         select(func.sum(Dividend.net_value))
         .join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
-        .where(
-            Dividend.portfolio_id == portfolio_id,
-            Dividend.status == DividendStatus.RECEBIDO,
-        )
+        .where(Dividend.portfolio_id == portfolio_id, Dividend.status == DividendStatus.RECEBIDO)
     )
     total_recebido = float(res.scalar_one() or 0.0)
 
     res = await db.execute(
         select(func.sum(Dividend.net_value))
         .join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
-        .where(
-            Dividend.portfolio_id == portfolio_id,
-            Dividend.status == DividendStatus.A_RECEBER,
-        )
+        .where(Dividend.portfolio_id == portfolio_id, Dividend.status == DividendStatus.A_RECEBER)
     )
     total_a_receber = float(res.scalar_one() or 0.0)
 
@@ -154,11 +196,7 @@ async def list_items(
         )
         .join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
         .join(Asset, AssetDividend.asset_id == Asset.id)
-        .join(
-            first_buy,
-            (first_buy.c.portfolio_id == Dividend.portfolio_id)
-            & (first_buy.c.ticker == Asset.ticker),
-        )
+        .join(first_buy, (first_buy.c.portfolio_id == Dividend.portfolio_id) & (first_buy.c.ticker == Asset.ticker))
         .where(
             Dividend.portfolio_id == portfolio_id,
             (AssetDividend.record_date >= first_buy.c.first_buy) | (AssetDividend.ex_date >= first_buy.c.first_buy),
@@ -175,12 +213,7 @@ async def list_items(
     count_res = await db.execute(select(func.count()).select_from(base.subquery()))
     total = count_res.scalar_one()
 
-    stmt = (
-        base
-        .order_by(AssetDividend.payment_date.desc().nullslast(), AssetDividend.ex_date.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    )
+    stmt = base.order_by(AssetDividend.payment_date.desc().nullslast(), AssetDividend.ex_date.desc()).offset((page - 1) * page_size).limit(page_size)
     rows = (await db.execute(stmt)).fetchall()
 
     items = [
@@ -219,27 +252,17 @@ async def get_monthly_history(
     asset_type: Optional[str] = None,
 ) -> list[dict]:
     first_buy = _first_buy_subquery()
-
     stmt = (
-        select(
-            extract("year", AssetDividend.payment_date).label("year"),
-            extract("month", AssetDividend.payment_date).label("month"),
-            func.sum(Dividend.net_value).label("total"),
-        )
+        select(extract("year", AssetDividend.payment_date).label("year"), extract("month", AssetDividend.payment_date).label("month"), func.sum(Dividend.net_value).label("total"))
         .join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
         .join(Asset, AssetDividend.asset_id == Asset.id)
-        .join(
-            first_buy,
-            (first_buy.c.portfolio_id == Dividend.portfolio_id)
-            & (first_buy.c.ticker == Asset.ticker),
-        )
+        .join(first_buy, (first_buy.c.portfolio_id == Dividend.portfolio_id) & (first_buy.c.ticker == Asset.ticker))
         .where(
             Dividend.portfolio_id == portfolio_id,
             AssetDividend.payment_date.isnot(None),
             (AssetDividend.record_date >= first_buy.c.first_buy) | (AssetDividend.ex_date >= first_buy.c.first_buy),
         )
     )
-
     if status:
         stmt = stmt.where(Dividend.status == status)
     if asset_type:
@@ -265,7 +288,6 @@ async def get_monthly_history(
 
 async def get_distribution(db: AsyncSession, portfolio_id: int, months: int = 12) -> list[dict]:
     start = date.today() - relativedelta(months=months)
-
     stmt = (
         select(Asset.ticker, Asset.asset_type, func.sum(Dividend.net_value).label("total"))
         .join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
