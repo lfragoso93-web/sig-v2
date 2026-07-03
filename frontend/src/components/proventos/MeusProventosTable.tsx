@@ -4,8 +4,8 @@ import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
 const ASSET_TYPE_LABELS: Record<string, string> = {
-  ACAO_NACIONAL: 'Ações', FII: 'FII', ETF_NACIONAL: 'ETF',
-  TESOURO_DIRETO: 'Tesouro', STOCK: 'Stock',
+  ACAO: 'Ações', ACAO_NACIONAL: 'Ações', FII: 'FII', ETF_NACIONAL: 'ETF',
+  TESOURO_DIRETO: 'Tesouro', STOCK: 'Stock', BDR: 'BDR',
   ETF_INTERNACIONAL: 'ETF Int.', CRIPTO: 'Cripto', RENDA_FIXA: 'Renda Fixa',
 }
 
@@ -72,6 +72,14 @@ function ProventoCard({ item }: { item: ProventoItem }) {
           <div className="tabular-nums" style={cellMuted}>{fmt(item.payment_date)}</div>
         </div>
         <div>
+          <div className="text-[10px]" style={cellFaint}>Data Com</div>
+          <div className="tabular-nums" style={cellMuted}>{fmt(item.record_date)}</div>
+        </div>
+        <div>
+          <div className="text-[10px]" style={cellFaint}>Data Ex</div>
+          <div className="tabular-nums" style={cellMuted}>{fmt(item.ex_date)}</div>
+        </div>
+        <div>
           <div className="text-[10px]" style={cellFaint}>Valor unit.</div>
           <div className="tabular-nums" style={cellText}>{formatBRL(item.value_per_unit)}</div>
         </div>
@@ -99,10 +107,10 @@ export default function MeusProventosTable({ data }: { data: ProventoItem[] }) {
 
       {/* VIEW DESKTOP: tabela (≥768px) */}
       <div className="hidden md:block overflow-x-auto">
-        <table className="w-full min-w-[900px] text-xs">
+        <table className="w-full min-w-[980px] text-xs">
           <thead>
             <tr style={{ borderBottom: '1px solid var(--color-divider)' }}>
-              {['Ativo','Tipo de Ativo','Status','Tipo Pgto','Data Com','Data Pgto','Quantidade','Valor/Unit.','Valor Total','Líquido'].map(h => (
+              {['Ativo','Tipo de Ativo','Status','Tipo Pgto','Data Com','Data Ex','Data Pgto','Quantidade','Valor/Unit.','Valor Total','Líquido'].map(h => (
                 <th key={h} className="px-3 py-2 font-medium text-left first:pl-4 last:pr-4" style={cellMuted}>{h}</th>
               ))}
             </tr>
@@ -127,6 +135,7 @@ export default function MeusProventosTable({ data }: { data: ProventoItem[] }) {
                 </td>
                 <td className="px-3 py-2"><StatusBadge status={item.status} /></td>
                 <td className="px-3 py-2" style={cellMuted}>{DIVIDEND_TYPE_LABELS[item.dividend_type] ?? item.dividend_type}</td>
+                <td className="px-3 py-2 tabular-nums" style={cellMuted}>{fmt(item.record_date)}</td>
                 <td className="px-3 py-2 tabular-nums" style={cellMuted}>{fmt(item.ex_date)}</td>
                 <td className="px-3 py-2 tabular-nums" style={cellMuted}>{fmt(item.payment_date)}</td>
                 <td className="px-3 py-2 tabular-nums text-right" style={cellText}>{formatQuantity(item.quantity)}</td>
