@@ -8,6 +8,7 @@ Além do catálogo, o seed executa pipeline idempotente para renda variável nac
   2. histórico completo de preços diário
   3. logo via cotação quando ausente
   4. histórico global de proventos/eventos corporativos
+  5. materialização de carteiras reais
 """
 import asyncio
 import logging
@@ -31,10 +32,9 @@ _SEED_TYPES: list[tuple[str, AssetType]] = [
     ("bdr",      AssetType.BDR),
 ]
 
-_NO_HISTORY_SUFFIX_RE = re.compile(r"^[A-Z]{4}\d+[FRBD]$")
+_NO_HISTORY_SUFFIX_RE = re.compile(r"^[A-Z0-9]{4,6}(3|4|5|6|11|31|32|33|34|35)$")
 BACKFILL_CONCURRENCY = 3
 BACKFILL_BATCH_DELAY = 2.0
-BACKFILL_DAYS = 365 * 80
 
 
 @dataclass
@@ -92,43 +92,38 @@ async def _upsert_asset(
 
 
 def _has_history(ticker: str) -> bool:
-    return not _NO_HISTORY_SUFFIX_RE.match(ticker)
-
-
-async def _ensure_logo_if_missing(db: AsyncSession, ticker: str, asset_type: AssetType) -> None:
-    from app.services.logo_service import fetch_logo_url
-
-    result = await db.execute(select(Asset).where(Asset.ticker == ticker, Asset.asset_type == asset_type.value))
-    asset = result.scalar_one_or_none()
-    if not asset or asset.logo_url:
-        return
-
-    logo = await fetch_logo_url(ticker, asset_type)
-    if logo:
-        asset.logo_url = logo
-        await db.commit()
-        logger.info(f"[seed_market] {ticker}: logo salva via fallback")
+    t = ticker.upper()
+    if t.endswith("F") or t[-1:] in {"B", "D", "R"} or t[-2:] in {"97", "98", "99"}:
+        return False
+    return bool(_NO_HISTORY_SUFFIX_RE.match(t))
 
 
 async def _backfill_market_data_for_ticker(ticker: str, asset_type: AssetType) -> None:
     from app.core.database import AsyncSessionLocal
-    from app.services.price_history_service import persist_daily_prices
-    from app.services.dividend_backfill_service import run_backfill
+    from app.services.asset_market_pipeline_service import sync_asset_market_data
 
     try:
         async with AsyncSessionLocal() as db:
-            inserted = await persist_daily_prices(
+            result = await sync_asset_market_data(
                 db=db,
                 ticker=ticker,
                 asset_type=asset_type,
-                days_back=BACKFILL_DAYS,
-                force=True,
+                full=True,
+                sync_prices=True,
+                sync_logo=True,
+                sync_events=True,
+                materialize=True,
+                commit=True,
             )
-            logger.info(f"[seed_market] {ticker} ({asset_type.value}): {inserted} preços persistidos")
-
-            await _ensure_logo_if_missing(db, ticker, asset_type)
-            await run_backfill(db, ticker, asset_type)
-            logger.info(f"[seed_market] {ticker} ({asset_type.value}): proventos sincronizados")
+            logger.info(
+                "[seed_market] %s (%s): prices=%s logo=%s events=%s materialized=%s",
+                ticker,
+                asset_type.value,
+                result.prices_inserted,
+                result.logo_updated,
+                result.events_synced,
+                result.materialized,
+            )
     except Exception as e:
         logger.error(f"[seed_market] erro em {ticker} ({asset_type.value}): {e}")
 
@@ -151,13 +146,13 @@ async def _run_market_backfill(seeded_tickers: dict[str, list[str]]) -> int:
                 filtered += 1
 
     if filtered:
-        logger.info(f"[seed_market] {filtered} tickers sem histórico ignorados (sufixos F/R/B/D)")
+        logger.info(f"[seed_market] {filtered} tickers sem pipeline próprio ignorados")
     if not tasks:
-        logger.info("[seed_market] nenhum ativo elegível para backfill")
+        logger.info("[seed_market] nenhum ativo elegível para pipeline")
         return filtered
 
     logger.info(
-        f"[seed_market] iniciando pipeline de {len(tasks)} ativos "
+        f"[seed_market] iniciando pipeline único de {len(tasks)} ativos "
         f"(lotes de {BACKFILL_CONCURRENCY}, delay {BACKFILL_BATCH_DELAY}s)"
     )
 
@@ -171,7 +166,7 @@ async def _run_market_backfill(seeded_tickers: dict[str, list[str]]) -> int:
         if i + BACKFILL_CONCURRENCY < len(tasks):
             await asyncio.sleep(BACKFILL_BATCH_DELAY)
 
-    logger.info(f"[seed_market] pipeline concluído: {total_done} ativos, {filtered} ignorados")
+    logger.info(f"[seed_market] pipeline único concluído: {total_done} ativos, {filtered} ignorados")
     return filtered
 
 
