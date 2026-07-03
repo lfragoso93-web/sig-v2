@@ -2,7 +2,7 @@
 Asset Seed Service.
 
 Popula (ou atualiza) a tabela `assets` com todos os ativos listados na B3
-a partir do endpoint oficial BRAPI GET /api/v2/tickers.
+a partir do endpoint BRAPI GET /api/v2/tickers.
 
 Mapeamento de subtipos BRAPI -> AssetType interno:
   stock    -> ACAO   (acoes ordinarias e preferenciais)
@@ -13,27 +13,15 @@ Mapeamento de subtipos BRAPI -> AssetType interno:
   etf      -> ETF_NACIONAL
   bdr      -> BDR
 
-Alem dos ativos da B3, o seed tambem popula as criptomoedas disponiveis
-na BRAPI via GET /api/v2/crypto/available. Para cada moeda sao salvos:
-  ticker = codigo da moeda (ex: BTC, ETH, ADA)
-  name   = nome completo   (ex: Bitcoin, Ethereum, Cardano)
-  asset_type = CRIPTO
+Para ativos nacionais de renda variavel, o seed tambem executa o pipeline
+idempotente de dados de mercado:
+  1. catalogo de ativos + metadados + logo_url quando disponivel no catalogo
+  2. historico completo de precos diarios
+  3. logo via BRAPI /quote quando ausente no catalogo
+  4. historico global de proventos do ativo com data com, data ex e pagamento
 
-Isso permite que o usuario pesquise no modal tanto pelo ticker ("BTC") quanto
-pelo nome completo ("Bitcoin") e o sistema encontre o ativo corretamente.
-
-Estrategia:
-  - Para cada subtipo B3, busca todos os tickers via /api/v2/tickers.
-  - Para cripto, busca todas as moedas via /api/v2/crypto/available.
-  - Faz UPSERT por (ticker, asset_type): cria o registro se nao existir,
-    atualiza name/sector se ja existir e esses campos estiverem vazios.
-  - Nunca sobrescreve logo_url ou last_price ja preenchidos.
-  - Retorna um SeedResult com contadores para log/debug.
-
-Backfill de historico:
-  Apos o seed de B3, dispara persist_daily_prices para cada ativo criado.
-  O seed de cripto NAO dispara backfill (precos sao buscados on-demand).
-  Tickers sem historico na BRAPI sao filtrados ANTES do backfill.
+Alem dos ativos da B3, o seed tambem popula criptomoedas disponiveis na BRAPI via
+GET /api/v2/crypto/available. Cripto nao recebe backfill historico aqui.
 """
 import asyncio
 import logging
@@ -58,17 +46,18 @@ _SEED_TYPES: list[tuple[str, AssetType]] = [
     ("bdr",      AssetType.BDR),
 ]
 
-# Sufixos B3 que nao possuem historico de precos na BRAPI.
+# Sufixos B3 que normalmente nao possuem historico de precos/proventos na BRAPI.
 _NO_HISTORY_SUFFIX_RE = re.compile(r"^[A-Z]{4}\d+[FRBD]$")
 
-# Quantos ativos processar em paralelo no backfill de historico.
+# Quantos ativos processar em paralelo no backfill de mercado.
 BACKFILL_CONCURRENCY = 3
 
-# Delay em segundos entre lotes do backfill para evitar YFRateLimitError.
+# Delay em segundos entre lotes para proteger limite da BRAPI/provedores.
 BACKFILL_BATCH_DELAY = 2.0
 
-# Quantos dias de historico buscar no backfill inicial.
-BACKFILL_DAYS = 365 * 5  # 5 anos
+# Janela ampla o bastante para forcar historico completo quando o servico usar start/end.
+# Para BRAPI v2, o price_history_service usa range=max quando nao ha historico salvo.
+BACKFILL_DAYS = 365 * 80
 
 
 @dataclass
@@ -78,10 +67,23 @@ class SeedResult:
     skipped:  int = 0
     errors:   int = 0
     by_type:  dict[str, int] = field(default_factory=dict)
-    # Tickers criados nesta execucao elegiveis para backfill.
+    # Tickers criados nesta execucao.
     new_tickers: dict[str, list[str]] = field(default_factory=dict)
-    # Tickers criados mas filtrados do backfill (sem historico).
+    # Todos os tickers B3 recebidos/elegiveis para o pipeline idempotente.
+    seeded_tickers: dict[str, list[str]] = field(default_factory=dict)
+    # Tickers filtrados do backfill (direitos/recibos/etc.).
     skipped_backfill: int = 0
+
+
+def _extract_logo_url(item: dict) -> str | None:
+    raw = (
+        item.get("logourl")
+        or item.get("logoUrl")
+        or item.get("logo_url")
+        or item.get("logo")
+        or item.get("image")
+    )
+    return str(raw).strip() if raw else None
 
 
 async def _upsert_asset(
@@ -90,6 +92,7 @@ async def _upsert_asset(
     name: str,
     asset_type: AssetType,
     sector: str | None,
+    logo_url: str | None = None,
 ) -> str:
     """
     Insere ou atualiza o ativo. Retorna 'created', 'updated' ou 'skipped'.
@@ -110,6 +113,7 @@ async def _upsert_asset(
             asset_type=asset_type.value,
             currency="BRL",
             sector=sector,
+            logo_url=logo_url,
         ))
         return "created"
 
@@ -119,6 +123,9 @@ async def _upsert_asset(
         changed = True
     if not existing.sector and sector:
         existing.sector = sector
+        changed = True
+    if not existing.logo_url and logo_url:
+        existing.logo_url = logo_url
         changed = True
 
     return "updated" if changed else "skipped"
@@ -132,15 +139,39 @@ def _has_history(ticker: str) -> bool:
     return not _NO_HISTORY_SUFFIX_RE.match(ticker)
 
 
-async def _backfill_history_for_ticker(
+async def _ensure_logo_if_missing(db: AsyncSession, ticker: str, asset_type: AssetType) -> None:
+    from app.services.logo_service import fetch_logo_url
+
+    result = await db.execute(
+        select(Asset).where(
+            Asset.ticker == ticker,
+            Asset.asset_type == asset_type.value,
+        )
+    )
+    asset = result.scalar_one_or_none()
+    if not asset or asset.logo_url:
+        return
+
+    logo = await fetch_logo_url(ticker, asset_type)
+    if logo:
+        asset.logo_url = logo
+        await db.commit()
+        logger.info(f"[seed_market] {ticker}: logo salva via fallback BRAPI")
+
+
+async def _backfill_market_data_for_ticker(
     ticker: str,
     asset_type: AssetType,
 ) -> None:
     """
-    Dispara o backfill de historico para um ativo, usando sua propria sessao DB.
+    Pipeline idempotente para um ativo nacional:
+      - historico completo de precos
+      - logo, se ausente
+      - proventos globais + materializacao por carteira quando aplicavel
     """
     from app.core.database import AsyncSessionLocal
     from app.services.price_history_service import persist_daily_prices
+    from app.services.dividend_backfill_service import run_backfill
 
     try:
         async with AsyncSessionLocal() as db:
@@ -149,23 +180,26 @@ async def _backfill_history_for_ticker(
                 ticker=ticker,
                 asset_type=asset_type,
                 days_back=BACKFILL_DAYS,
+                force=True,
             )
-            logger.info(f"[seed_backfill] {ticker} ({asset_type.value}): {inserted} precos persistidos")
+            logger.info(f"[seed_market] {ticker} ({asset_type.value}): {inserted} precos persistidos")
+
+            await _ensure_logo_if_missing(db, ticker, asset_type)
+            await run_backfill(db, ticker, asset_type)
+            logger.info(f"[seed_market] {ticker} ({asset_type.value}): proventos sincronizados")
     except Exception as e:
-        logger.error(f"[seed_backfill] erro em {ticker} ({asset_type.value}): {e}")
+        logger.error(f"[seed_market] erro em {ticker} ({asset_type.value}): {e}")
 
 
-async def _run_backfill(new_tickers: dict[str, list[str]]) -> None:
+async def _run_market_backfill(seeded_tickers: dict[str, list[str]]) -> int:
     """
-    Executa o backfill de historico para ativos criados no seed.
-    Filtra tickers sem historico antes de processar.
-    Processa em lotes de BACKFILL_CONCURRENCY com BACKFILL_BATCH_DELAY
-    entre lotes para evitar YFRateLimitError no yfinance.
+    Executa o pipeline de mercado para todos os ativos B3 elegiveis recebidos
+    no seed, nao apenas os criados nesta execucao.
     """
     tasks: list[tuple[str, AssetType]] = []
     filtered = 0
 
-    for type_value, tickers in new_tickers.items():
+    for type_value, tickers in seeded_tickers.items():
         # Cripto nao faz backfill: precos sao buscados on-demand
         if type_value == AssetType.CRIPTO.value:
             continue
@@ -180,14 +214,14 @@ async def _run_backfill(new_tickers: dict[str, list[str]]) -> None:
                 filtered += 1
 
     if filtered:
-        logger.info(f"[seed_backfill] {filtered} tickers sem historico ignorados (sufixos F/R/B/D)")
+        logger.info(f"[seed_market] {filtered} tickers sem historico ignorados (sufixos F/R/B/D)")
 
     if not tasks:
-        logger.info("[seed_backfill] nenhum ativo elegivel para backfill")
-        return
+        logger.info("[seed_market] nenhum ativo elegivel para backfill")
+        return filtered
 
     logger.info(
-        f"[seed_backfill] iniciando backfill de {len(tasks)} ativos "
+        f"[seed_market] iniciando pipeline de {len(tasks)} ativos "
         f"(lotes de {BACKFILL_CONCURRENCY}, delay {BACKFILL_BATCH_DELAY}s entre lotes)"
     )
     total_done = 0
@@ -195,33 +229,29 @@ async def _run_backfill(new_tickers: dict[str, list[str]]) -> None:
     for i in range(0, len(tasks), BACKFILL_CONCURRENCY):
         batch = tasks[i:i + BACKFILL_CONCURRENCY]
         await asyncio.gather(
-            *[_backfill_history_for_ticker(ticker, at) for ticker, at in batch],
+            *[_backfill_market_data_for_ticker(ticker, at) for ticker, at in batch],
             return_exceptions=True,
         )
         total_done += len(batch)
         if total_done % 20 == 0:
-            logger.info(f"[seed_backfill] {total_done}/{len(tasks)} ativos processados")
+            logger.info(f"[seed_market] {total_done}/{len(tasks)} ativos processados")
         if i + BACKFILL_CONCURRENCY < len(tasks):
             await asyncio.sleep(BACKFILL_BATCH_DELAY)
 
-    logger.info(f"[seed_backfill] backfill concluido: {total_done} ativos, {filtered} ignorados")
+    logger.info(f"[seed_market] pipeline concluido: {total_done} ativos, {filtered} ignorados")
+    return filtered
 
 
 async def _run_crypto_seed(db: AsyncSession, result: SeedResult) -> None:
     """
     Seed de criptomoedas: popula asset_type=CRIPTO com ticker=coin e
     name=coinName para cada moeda disponivel na BRAPI.
-
-    Ex: { ticker: 'BTC', name: 'Bitcoin', asset_type: CRIPTO }
-        { ticker: 'ETH', name: 'Ethereum', asset_type: CRIPTO }
-        { ticker: 'ADA', name: 'Cardano',  asset_type: CRIPTO }
-
-    Permite ao usuario pesquisar por nome completo no modal de lancamento.
     """
     type_label = AssetType.CRIPTO.value
     if type_label not in result.by_type:
-        result.by_type[type_label]     = 0
-        result.new_tickers[type_label] = []
+        result.by_type[type_label]      = 0
+        result.new_tickers[type_label]  = []
+        result.seeded_tickers[type_label] = []
 
     logger.info("[seed] iniciando seed de criptomoedas via /api/v2/crypto/available")
     coins = await fetch_crypto_available_all()
@@ -236,7 +266,6 @@ async def _run_crypto_seed(db: AsyncSession, result: SeedResult) -> None:
             result.errors += 1
             continue
 
-        # coinName e o nome completo: 'Bitcoin', 'Ethereum', 'Cardano', etc.
         coin_name = (
             item.get("coinName")
             or item.get("name")
@@ -245,7 +274,8 @@ async def _run_crypto_seed(db: AsyncSession, result: SeedResult) -> None:
         ).strip()
 
         try:
-            status = await _upsert_asset(db, coin, coin_name, AssetType.CRIPTO, None)
+            status = await _upsert_asset(db, coin, coin_name, AssetType.CRIPTO, None, _extract_logo_url(item))
+            result.seeded_tickers[type_label].append(coin)
             if status == "created":
                 result.created += 1
                 result.by_type[type_label] += 1
@@ -281,13 +311,11 @@ async def run_asset_seed(db: AsyncSession, run_backfill: bool = True) -> SeedRes
     Ponto de entrada do seed. Recebe uma sessao de banco ja aberta.
     Faz commit em lotes de 200 para nao sobrecarregar a transacao.
 
-    Executa em duas etapas:
+    Executa em tres etapas:
       1. Seed de ativos da B3 (acoes, FII, ETF, BDR) via /api/v2/tickers
       2. Seed de criptomoedas via /api/v2/crypto/available
-
-    Se run_backfill=True, ao final do seed de B3 dispara o backfill
-    de historico de precos para os ativos criados. Cripto nao recebe
-    backfill (precos sao buscados on-demand pelo quotes_service).
+      3. Pipeline idempotente de mercado para todos os ativos B3 elegiveis:
+         historico de precos, logo e proventos globais.
     """
     result = SeedResult()
     BATCH_SIZE = 200
@@ -297,8 +325,9 @@ async def run_asset_seed(db: AsyncSession, run_backfill: bool = True) -> SeedRes
     for brapi_subtype, asset_type in _SEED_TYPES:
         type_label = asset_type.value
         if type_label not in result.by_type:
-            result.by_type[type_label]     = 0
-            result.new_tickers[type_label] = []
+            result.by_type[type_label]      = 0
+            result.new_tickers[type_label]  = []
+            result.seeded_tickers[type_label] = []
 
         logger.info(f"[seed] iniciando subtype={brapi_subtype} -> {type_label}")
         items = await fetch_all_tickers_v2(brapi_subtype)
@@ -317,9 +346,11 @@ async def run_asset_seed(db: AsyncSession, run_backfill: bool = True) -> SeedRes
 
             name   = (item.get("name") or item.get("longName") or "").strip()
             sector = (item.get("sector") or item.get("segment") or item.get("subSector") or "").strip() or None
+            logo_url = _extract_logo_url(item)
 
             try:
-                status = await _upsert_asset(db, ticker, name, asset_type, sector)
+                status = await _upsert_asset(db, ticker, name, asset_type, sector, logo_url)
+                result.seeded_tickers[type_label].append(ticker)
                 if status == "created":
                     result.created += 1
                     result.by_type[type_label] += 1
@@ -349,18 +380,15 @@ async def run_asset_seed(db: AsyncSession, run_backfill: bool = True) -> SeedRes
     await _run_crypto_seed(db, result)
 
     logger.info(
-        f"[seed] concluido: {result.created} criados, "
+        f"[seed] catalogo concluido: {result.created} criados, "
         f"{result.updated} atualizados, {result.skipped} sem mudanca, "
         f"{result.errors} erros | por tipo: {result.by_type}"
     )
 
-    if run_backfill and result.created > 0:
-        logger.info(
-            "[seed] iniciando backfill para %d ativos da B3 novos (cripto ignorada)",
-            result.created,
-        )
-        await _run_backfill(result.new_tickers)
+    # Etapa 3: pipeline completo para renda variavel nacional
+    if run_backfill:
+        result.skipped_backfill = await _run_market_backfill(result.seeded_tickers)
     else:
-        logger.info("[seed] sem ativos novos — backfill ignorado")
+        logger.info("[seed] run_backfill=False — pipeline de mercado ignorado")
 
     return result
