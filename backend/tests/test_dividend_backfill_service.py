@@ -67,8 +67,27 @@ class TestParseRawDividend:
         }
         result = _parse_raw_dividend(raw)
         assert result is not None
-        ex_date, pay_date, value, div_type = result
-        assert ex_date == date(2024, 3, 1)
+        record_date, ex_date, pay_date, value, div_type = result
+        assert record_date == date(2024, 3, 1)
+        # Quando a BRAPI nao traz exDate explicito, derivamos o proximo dia util apos a Data Com.
+        assert ex_date == date(2024, 3, 4)
+        assert pay_date == date(2024, 3, 15)
+        assert value == 1.25
+        assert div_type == "DIVIDENDO"
+
+    def test_parse_formato_brapi_com_ex_date_explicito(self):
+        raw = {
+            "lastDatePrior": "2024-03-01",
+            "exDate": "2024-03-04",
+            "paymentDate": "2024-03-15",
+            "rate": 1.25,
+            "type": "DIVIDENDO",
+        }
+        result = _parse_raw_dividend(raw)
+        assert result is not None
+        record_date, ex_date, pay_date, value, div_type = result
+        assert record_date == date(2024, 3, 1)
+        assert ex_date == date(2024, 3, 4)
         assert pay_date == date(2024, 3, 15)
         assert value == 1.25
         assert div_type == "DIVIDENDO"
@@ -81,8 +100,12 @@ class TestParseRawDividend:
         }
         result = _parse_raw_dividend(raw)
         assert result is not None
-        ex_date, pay_date, value, div_type = result
+        record_date, ex_date, pay_date, value, div_type = result
+        assert record_date is None
         assert ex_date == date(2024, 4, 10)
+        assert pay_date == date(2024, 4, 10)
+        assert value == 0.75
+        assert div_type == "DIVIDENDO"
 
     def test_retorna_none_sem_data(self):
         raw = {"rate": 1.0, "type": "DIVIDENDO"}
@@ -109,7 +132,7 @@ class TestParseRawDividend:
         }
         result = _parse_raw_dividend(raw)
         assert result is not None
-        assert result[3] == "JCP"
+        assert result[4] == "JCP"
 
 
 # ─── Testes de _calc_net_qty ────────────────────────────────────────────────────
@@ -198,6 +221,8 @@ class TestBackfillDividends:
         )
         ads = ad_result.scalars().all()
         assert len(ads) == 1
+        assert ads[0].record_date == date(2024, 3, 1)
+        assert ads[0].ex_date == date(2024, 3, 4)
         assert float(ads[0].value_per_unit) == pytest.approx(1.50)
 
         # Verifica Dividend criado
@@ -265,8 +290,8 @@ class TestBackfillDividends:
         assert div.status == DividendStatus.RECEBIDO
 
     async def test_sem_posicao_no_ex_date_nao_cria_dividend(self, db: AsyncSession, portfolio: Portfolio):
-        """Se o usuario nao tinha o ativo no ex_date, nao deve criar Dividend."""
-        # Comprou DEPOIS do ex_date
+        """Se o usuario nao tinha o ativo na data com, nao deve criar Dividend."""
+        # Comprou DEPOIS da data com
         await _make_tx(db, portfolio.id, "ABEV3", OperationType.buy, 100, date(2025, 1, 1))
 
         raw_dividends = [
@@ -358,7 +383,5 @@ class TestBackfillAllTickers:
         ):
             result = await backfill_all_tickers(db, portfolio.id, tickers)
 
-        assert "PETR4" in result
-        assert "BTC" not in result
-        assert "TNLP11" not in result
-        assert len(result) == 1
+        assert result == ["PETR4"]
+        assert processed == ["PETR4"]
