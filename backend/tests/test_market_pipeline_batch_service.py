@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.asset import Asset
+from app.models.asset import Asset, AssetType
 from app.models.portfolio import Portfolio
 from app.models.transaction import OperationType, Transaction
 from app.services.market_pipeline_batch_service import (
@@ -66,13 +66,10 @@ class TestLoadMarketPipelinePairs:
 
         pairs, skipped = await load_market_pipeline_pairs(db, only_held=True)
 
-        assert ("PETR4", Asset.__table__.columns.asset_type.type.python_type("ACAO")) not in pairs  # sanity: raw string is normalized below
-        assert pairs == [("PETR4", __import__("app.models.asset", fromlist=["AssetType"]).AssetType.ACAO), ("MXRF11", __import__("app.models.asset", fromlist=["AssetType"]).AssetType.FII)]
+        assert pairs == [("PETR4", AssetType.ACAO), ("MXRF11", AssetType.FII)]
         assert skipped == 1
 
     async def test_tickers_usa_assets_e_respeita_asset_type(self, db: AsyncSession):
-        from app.models.asset import AssetType
-
         db.add_all([
             Asset(ticker="PETR4", name="PETR4", asset_type="ACAO", currency="BRL"),
             Asset(ticker="MXRF11", name="MXRF11", asset_type="FII", currency="BRL"),
@@ -94,8 +91,6 @@ class TestLoadMarketPipelinePairs:
 @pytest.mark.asyncio
 class TestRunMarketPipelineBatch:
     async def test_roda_pipeline_para_ativos_elegiveis(self, db: AsyncSession, portfolio: Portfolio):
-        from app.models.asset import AssetType
-
         await _make_tx(db, portfolio.id, "PETR4", "ACAO")
         await _make_tx(db, portfolio.id, "MXRF11", "FII")
         await _make_tx(db, portfolio.id, "B3SA3F", "ACAO")
@@ -128,8 +123,6 @@ class TestRunMarketPipelineBatch:
         assert calls == [("PETR4", "ACAO", False), ("MXRF11", "FII", False)]
 
     async def test_registra_falha_e_continua_lote(self, db: AsyncSession, portfolio: Portfolio):
-        from app.models.asset import AssetType
-
         await _make_tx(db, portfolio.id, "BBAS3", "ACAO")
         await _make_tx(db, portfolio.id, "PETR4", "ACAO")
 
