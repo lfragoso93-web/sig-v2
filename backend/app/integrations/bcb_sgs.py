@@ -6,6 +6,9 @@ https://api.bcb.gov.br/dados/serie/bcdata.sgs.{codigo}/dados?formato=json
 
 O SGS pode responder 406 para intervalos muito grandes. Por isso, chamadas
 históricas são divididas em janelas menores por padrão.
+
+Para séries mensais, janelas recentes sem divulgação ainda podem retornar 404;
+nesses casos o retorno é tratado como lista vazia, pois não é erro de negócio.
 """
 from __future__ import annotations
 
@@ -92,6 +95,17 @@ async def _fetch_sgs_window(
 
     response = await client.get(url, params=params)
 
+    # Séries mensais podem retornar 404 quando a janela não contém nenhuma
+    # competência divulgada. Ex.: IPCA ainda não publicado para o mês corrente.
+    if response.status_code == 404 and meta.frequency == "monthly":
+        logger.debug(
+            "[BCB SGS] janela mensal sem dados para %s (%s-%s)",
+            meta.indicator,
+            start_date,
+            end_date,
+        )
+        return []
+
     # Algumas combinações do SGS retornam 406 quando dataFinal está muito à frente
     # ou quando o range é grande. Uma segunda tentativa sem dataFinal costuma
     # funcionar para buscar "desde dataInicial até o último dado disponível".
@@ -105,6 +119,14 @@ async def _fetch_sgs_window(
             end_date,
         )
         response = await client.get(url, params=retry_params)
+        if response.status_code == 404 and meta.frequency == "monthly":
+            logger.debug(
+                "[BCB SGS] janela mensal sem dados para %s após retry (%s-%s)",
+                meta.indicator,
+                start_date,
+                end_date,
+            )
+            return []
 
     response.raise_for_status()
     return _normalize_rows(meta, response.json())
