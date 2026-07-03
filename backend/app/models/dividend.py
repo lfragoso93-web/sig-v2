@@ -9,8 +9,9 @@ vinculado opcionalmente a um AssetDividend (evento de provento do ativo).
   - (portfolio_id, status)  — cobre _proventos_total (WHERE status='RECEBIDO')
 
 Campos legados mantidos para compatibilidade com bancos já migrados antes da
-normalização do módulo de proventos. `date_ex`, `date_pagamento` e
-`quantity_on_date` ficam sincronizados até a limpeza definitiva do legado.
+normalização do módulo de proventos. `date_ex`, `date_pagamento`,
+`quantity_on_date` e `value_per_share` ficam sincronizados até a limpeza
+definitiva do legado.
 """
 import enum
 
@@ -82,6 +83,7 @@ class Dividend(Base):
     date_ex: Mapped[Date | None] = mapped_column(Date, nullable=True)
     date_pagamento: Mapped[Date | None] = mapped_column(Date, nullable=True)
     quantity_on_date: Mapped[Numeric | None] = mapped_column(Numeric(20, 8), nullable=True)
+    value_per_share: Mapped[Numeric | None] = mapped_column(Numeric(20, 8), nullable=True)
 
     # ── Relacionamentos ────────────────────────────────────────────────────
     portfolio = relationship("Portfolio", back_populates="dividends")
