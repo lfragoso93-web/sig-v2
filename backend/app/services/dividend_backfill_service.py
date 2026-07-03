@@ -1,5 +1,5 @@
 import logging
-from datetime import date
+from datetime import date, timedelta
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +17,14 @@ SKIP_TYPES = {"CRIPTO", "TESOURO_DIRETO", "RENDA_FIXA"}
 
 # Tipos internacionais (yfinance)
 INTL_TYPES = {"STOCK", "ETF_INTERNACIONAL"}
+
+
+def _next_business_day(d: date) -> date:
+    """Retorna o proximo dia util simples (sab/dom)."""
+    nxt = d + timedelta(days=1)
+    while nxt.weekday() >= 5:
+        nxt += timedelta(days=1)
+    return nxt
 
 
 def _calc_net_qty(txs: list[tuple], ref_date: date) -> float:
@@ -80,23 +88,55 @@ async def _fetch_dividends_yf(ticker: str) -> list[dict]:
         return []
 
 
-def _parse_raw_dividend(raw: dict) -> Optional[tuple[date, Optional[date], float, str]]:
+def _parse_raw_dividend(raw: dict) -> Optional[tuple[Optional[date], date, Optional[date], float, str]]:
     """
     Parseia um item raw de provento.
-    Retorna (ex_date, pay_date, value, div_type) ou None se invalido.
+
+    BRAPI cashDividends costuma trazer:
+      - lastDatePrior: data com / ultimo dia negociado com direito
+      - paymentDate: data de pagamento
+      - rate/value: valor por unidade
+      - type/dividendType: tipo de provento
+
+    Algumas respostas tambem podem trazer exDate/ex_date. Quando nao houver data ex
+    explicita, derivamos a data ex como o proximo dia util apos a data com.
+
+    Retorna (record_date, ex_date, pay_date, value, div_type) ou None se invalido.
     """
     try:
-        pay_str = raw.get("paymentDate") or raw.get("approvedOn") or ""
-        ex_str = raw.get("lastDatePrior") or pay_str
-        if not ex_str:
+        record_str = (
+            raw.get("lastDatePrior")
+            or raw.get("recordDate")
+            or raw.get("dateCom")
+            or raw.get("date_with")
+            or ""
+        )
+        ex_str = (
+            raw.get("exDate")
+            or raw.get("ex_date")
+            or raw.get("dateEx")
+            or raw.get("date_ex")
+            or ""
+        )
+        pay_str = raw.get("paymentDate") or raw.get("paidAt") or raw.get("payment_date") or ""
+
+        record_date = date.fromisoformat(str(record_str)[:10]) if record_str else None
+        if ex_str:
+            ex_date = date.fromisoformat(str(ex_str)[:10])
+        elif record_date:
+            ex_date = _next_business_day(record_date)
+        elif pay_str:
+            # Fallback para provedores que so entregam uma data no evento.
+            ex_date = date.fromisoformat(str(pay_str)[:10])
+        else:
             return None
-        ex_date = date.fromisoformat(str(ex_str)[:10])
+
         pay_date = date.fromisoformat(str(pay_str)[:10]) if pay_str else None
-        value = float(raw.get("rate") or raw.get("value") or 0)
+        value = float(raw.get("rate") or raw.get("value") or raw.get("amount") or 0)
         if value <= 0:
             return None
         div_type = str(raw.get("type") or raw.get("dividendType") or "DIVIDENDO").upper()
-        return ex_date, pay_date, value, div_type
+        return record_date, ex_date, pay_date, value, div_type
     except Exception:
         return None
 
@@ -109,14 +149,14 @@ async def backfill_dividends(
 ) -> None:
     """
     Ponto de entrada principal do backfill.
-    Chamado pelo transactions.py apos cada insercao/edicao/exclusao de transacao.
+    Chamado pelo transactions.py apos cada insercao/edicao/exclusao de transacao
+    e pelo seed/onboarding de ativos.
 
     Estrategia sem N+1:
-      1. Busca portfolio_ids uma unica vez.
-      2. Pre-carrega TODAS as transacoes do ticker por portfolio em memoria.
-      3. Pre-carrega AssetDividends existentes para o ticker em um unico SELECT.
-      4. Pre-carrega Dividends existentes para os portfolios afetados em um SELECT.
-      5. Loop sobre proventos opera exclusivamente em memoria.
+      1. Busca proventos da API uma unica vez.
+      2. Garante Asset e AssetDividend globais mesmo sem carteira com posicao.
+      3. Pre-carrega carteiras/transacoes do ticker em memoria.
+      4. Materializa Dividends por carteira apenas quando houver quantidade na data com.
     """
     if asset_type.upper() in SKIP_TYPES:
         logger.debug(f"[Backfill] {ticker} ({asset_type}) ignorado (SKIP_TYPES)")
@@ -137,16 +177,7 @@ async def backfill_dividends(
         logger.info(f"[Backfill] nenhum provento encontrado para {ticker}")
         return
 
-    # 2. Portfolios com o ticker (um SELECT)
-    pid_result = await db.execute(
-        select(Transaction.portfolio_id)
-        .where(Transaction.ticker == ticker)
-        .distinct()
-    )
-    portfolio_ids = [row[0] for row in pid_result.all()]
-    if not portfolio_ids:
-        return
-
+    # 2. Garante Asset global para salvar AssetDividends mesmo sem carteira.
     asset_result = await db.execute(
         select(Asset).where(
             Asset.ticker == ticker,
@@ -164,24 +195,32 @@ async def backfill_dividends(
         db.add(asset)
         await db.flush()
 
-    # 3. Pre-carrega transacoes do ticker para todos os portfolios (um SELECT)
-    tx_result = await db.execute(
-        select(
-            Transaction.portfolio_id,
-            Transaction.date,
-            Transaction.operation,
-            Transaction.quantity,
-        ).where(
-            Transaction.ticker == ticker,
-            Transaction.portfolio_id.in_(portfolio_ids),
-        )
+    # 3. Portfolios com o ticker (um SELECT). Pode ser vazio no seed global.
+    pid_result = await db.execute(
+        select(Transaction.portfolio_id)
+        .where(Transaction.ticker == ticker)
+        .distinct()
     )
-    # txs_by_portfolio: {pid: [(date, op, qty), ...]}
-    txs_by_portfolio: dict[int, list[tuple]] = {pid: [] for pid in portfolio_ids}
-    for pid, tx_date, op, qty in tx_result.all():
-        txs_by_portfolio[pid].append((tx_date, op, qty))
+    portfolio_ids = [row[0] for row in pid_result.all()]
 
-    # 4. Pre-carrega AssetDividends existentes para o ticker (um SELECT)
+    # 4. Pre-carrega transacoes do ticker para todos os portfolios (um SELECT)
+    txs_by_portfolio: dict[int, list[tuple]] = {pid: [] for pid in portfolio_ids}
+    if portfolio_ids:
+        tx_result = await db.execute(
+            select(
+                Transaction.portfolio_id,
+                Transaction.date,
+                Transaction.operation,
+                Transaction.quantity,
+            ).where(
+                Transaction.ticker == ticker,
+                Transaction.portfolio_id.in_(portfolio_ids),
+            )
+        )
+        for pid, tx_date, op, qty in tx_result.all():
+            txs_by_portfolio[pid].append((tx_date, op, qty))
+
+    # 5. Pre-carrega AssetDividends existentes para o ticker (um SELECT)
     ad_result = await db.execute(
         select(AssetDividend).where(AssetDividend.asset_id == asset.id)
     )
@@ -190,8 +229,8 @@ async def backfill_dividends(
         for ad in ad_result.scalars().all()
     }
 
-    # 5. Pre-carrega Dividends existentes para (portfolio_ids, ticker) (um SELECT)
-    if existing_ads:
+    # 6. Pre-carrega Dividends existentes para (portfolio_ids, ticker) (um SELECT)
+    if portfolio_ids and existing_ads:
         ad_ids = [ad.id for ad in existing_ads.values()]
         div_result = await db.execute(
             select(Dividend).where(
@@ -208,12 +247,12 @@ async def backfill_dividends(
 
     source = "yfinance" if use_yf else "brapi"
 
-    # 6. Loop sobre proventos — sem queries adicionais
+    # 7. Loop sobre proventos — sem queries adicionais
     for raw in raw_dividends:
         parsed = _parse_raw_dividend(raw)
         if parsed is None:
             continue
-        ex_date, pay_date, value, div_type = parsed
+        record_date, ex_date, pay_date, value, div_type = parsed
 
         try:
             try:
@@ -227,6 +266,7 @@ async def backfill_dividends(
             if asset_div is None:
                 asset_div = AssetDividend(
                     asset_id=asset.id,
+                    record_date=record_date,
                     ex_date=ex_date,
                     payment_date=pay_date,
                     value_per_unit=value,
@@ -237,6 +277,7 @@ async def backfill_dividends(
                 await db.flush()  # obtem asset_div.id para usar como FK
                 existing_ads[asset_key] = asset_div
             else:
+                asset_div.record_date = record_date or asset_div.record_date
                 asset_div.payment_date = pay_date
                 asset_div.value_per_unit = value
                 asset_div.source = source
@@ -249,9 +290,13 @@ async def backfill_dividends(
                 else DividendStatus.A_RECEBER
             )
 
+            # Para direito ao provento, a quantidade deve ser calculada na data com.
+            # Se nao houver data com no provedor, usa data ex como fallback.
+            entitlement_date = record_date or ex_date
+
             for pid in portfolio_ids:
                 txs = txs_by_portfolio.get(pid, [])
-                qty = _calc_net_qty(txs, ex_date)
+                qty = _calc_net_qty(txs, entitlement_date)
                 if qty <= 0:
                     continue
 
@@ -320,7 +365,7 @@ async def run_backfill(
     asset_type,
 ) -> None:
     """
-    Alias usado pelo asset_onboarding_service.
+    Alias usado pelo asset_onboarding_service e pelo seed.
     Chama backfill_dividends sem portfolio_id especifico (usa portfolio_id=0
     pois backfill_dividends busca todos os portfolios do ticker internamente).
     """
