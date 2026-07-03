@@ -1,17 +1,26 @@
 """
 Integração BRAPI — Tesouro Direto.
 
-Fluxo oficial:
+Fluxo primário:
 - GET /api/v2/treasury/list
 - GET /api/v2/treasury/indicators
 - GET /api/v2/treasury/indicators/history
 
+Fallbacks:
+- Tesouro Transparente/CKAN, quando disponível.
+- Lista sintética para produtos de longo prazo que a BRAPI pode não listar,
+  especialmente Tesouro RendA+ Aposentadoria Extra e Tesouro Educa+.
+
 Os títulos usam `symbol` em formato slug minúsculo, ex.:
-`tesouro-selic-01032031`.
+`tesouro-selic-01032031` e `tesouro-renda-mais-2060`.
 """
 from __future__ import annotations
 
+import csv
+import io
 import logging
+import re
+import unicodedata
 from datetime import date, datetime, timezone
 from typing import Iterable, Optional
 
@@ -24,11 +33,80 @@ logger = logging.getLogger(__name__)
 BRAPI_TREASURY_BASE = "https://brapi.dev/api/v2/treasury"
 BRAPI_TREASURY_CHUNK = 20
 
+TESOURO_TRANSPARENTE_PACKAGE = (
+    "https://www.tesourotransparente.gov.br/ckan/api/3/action/package_show"
+)
+TESOURO_TRANSPARENTE_DATASET_ID = (
+    "precos-e-taxas-dos-titulos-publicos-ofertados-no-tesouro-direto"
+)
+
+# Último recurso para produtos de longo prazo que podem não aparecer no /list
+# da BRAPI, mas são aceitos como slugs canônicos nos fluxos do SGI.
+_SYNTHETIC_LONG_TERM_BONDS: list[dict] = [
+    *[
+        {
+            "symbol": f"tesouro-renda-mais-{year}",
+            "bondType": "Tesouro RendA+ Aposentadoria Extra",
+            "name": f"Tesouro RendA+ Aposentadoria Extra {year}",
+            "maturityYear": year,
+            "indexer": "IPCA",
+            "couponType": "monthly_income",
+            "source": "synthetic_treasury_long_term",
+        }
+        for year in range(2030, 2070, 5)
+    ],
+    *[
+        {
+            "symbol": f"tesouro-educa-mais-{year}",
+            "bondType": "Tesouro Educa+",
+            "name": f"Tesouro Educa+ {year}",
+            "maturityYear": year,
+            "indexer": "IPCA",
+            "couponType": "monthly_income",
+            "source": "synthetic_treasury_long_term",
+        }
+        for year in range(2026, 2051)
+    ],
+]
+
 
 def _auth_headers() -> dict:
     if settings.BRAPI_TOKEN:
         return {"Authorization": f"Bearer {settings.BRAPI_TOKEN}"}
     return {}
+
+
+def _strip_accents(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value or "")
+    return "".join(ch for ch in normalized if not unicodedata.combining(ch))
+
+
+def _slug_text(value: str | None) -> str:
+    raw = _strip_accents(value or "").lower().replace("+", " mais ")
+    raw = re.sub(r"[^a-z0-9]+", "-", raw)
+    raw = re.sub(r"-+", "-", raw).strip("-")
+    return raw
+
+
+def _year_from_text(value: str | None) -> Optional[int]:
+    match = re.search(r"20\d{2}", value or "")
+    return int(match.group(0)) if match else None
+
+
+def canonical_treasury_symbol_from_text(value: str | None) -> Optional[str]:
+    """Converte nomes públicos comuns para symbol canônico usado pelo SGI."""
+    if not value:
+        return None
+    slug = _slug_text(value)
+    year = _year_from_text(value)
+    if not year:
+        return None
+
+    if "renda" in slug:
+        return f"tesouro-renda-mais-{year}"
+    if "educa" in slug:
+        return f"tesouro-educa-mais-{year}"
+    return None
 
 
 def _items_from_payload(payload: object) -> list[dict]:
@@ -50,7 +128,6 @@ def _items_from_payload(payload: object) -> list[dict]:
         if isinstance(value, list):
             return [item for item in value if isinstance(item, dict)]
 
-    # Alguns endpoints retornam um objeto por símbolo.
     maybe_values = [v for v in payload.values() if isinstance(v, dict)]
     if maybe_values:
         return maybe_values
@@ -58,13 +135,20 @@ def _items_from_payload(payload: object) -> list[dict]:
 
 
 def _symbol_from_item(item: dict) -> str:
-    return str(
+    symbol = str(
         item.get("symbol")
         or item.get("slug")
         or item.get("ticker")
         or item.get("id")
         or ""
     ).strip().lower()
+    if symbol:
+        return symbol
+    return canonical_treasury_symbol_from_text(
+        str(item.get("name") or item.get("bondType") or item.get("Tipo Titulo") or "")
+        + " "
+        + str(item.get("maturityYear") or item.get("Data Vencimento") or "")
+    ) or ""
 
 
 def _price_from_item(item: dict) -> Optional[float]:
@@ -75,12 +159,18 @@ def _price_from_item(item: dict) -> Optional[float]:
         "price",
         "unitPrice",
         "valorUnitario",
+        "PU Compra Manha",
+        "PU Venda Manha",
+        "PU Base Manha",
+        "PU Compra Tarde",
+        "PU Venda Tarde",
+        "PU Base Tarde",
     ):
         value = item.get(field)
         if value is None:
             continue
         try:
-            parsed = float(value)
+            parsed = float(str(value).replace(".", "").replace(",", ".") if isinstance(value, str) else value)
             if parsed > 0:
                 return parsed
         except (TypeError, ValueError):
@@ -93,9 +183,15 @@ def _history_date(value: object) -> Optional[datetime]:
         return None
     if isinstance(value, (int, float)):
         return datetime.fromtimestamp(value, tz=timezone.utc)
-    raw = str(value)[:10]
+
+    raw = str(value).strip()
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d/%m/%y"):
+        try:
+            return datetime.strptime(raw[:10], fmt).replace(tzinfo=timezone.utc)
+        except ValueError:
+            pass
     try:
-        dt = datetime.fromisoformat(raw)
+        dt = datetime.fromisoformat(raw[:10])
     except ValueError:
         return None
     if dt.tzinfo is None:
@@ -103,28 +199,150 @@ def _history_date(value: object) -> Optional[datetime]:
     return dt
 
 
-async def fetch_treasury_list(
+async def _fetch_brapi_treasury_list(
+    client: httpx.AsyncClient,
     indexer: Optional[str] = None,
     coupon_type: Optional[str] = None,
 ) -> list[dict]:
-    """Lista títulos disponíveis do Tesouro Direto na BRAPI."""
     params: dict[str, str] = {}
     if indexer:
         params["indexer"] = indexer.lower()
     if coupon_type:
         params["couponType"] = coupon_type.lower()
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.get(
-            f"{BRAPI_TREASURY_BASE}/list",
-            headers=_auth_headers(),
-            params=params,
-        )
-        response.raise_for_status()
-        payload = response.json()
-
-    items = _items_from_payload(payload)
+    response = await client.get(
+        f"{BRAPI_TREASURY_BASE}/list",
+        headers=_auth_headers(),
+        params=params,
+    )
+    response.raise_for_status()
+    items = _items_from_payload(response.json())
     logger.info("[treasury] BRAPI list retornou %d títulos", len(items))
+    return items
+
+
+def _resource_candidates(payload: dict) -> list[str]:
+    resources = (((payload or {}).get("result") or {}).get("resources") or [])
+    urls: list[str] = []
+    for resource in resources:
+        if not isinstance(resource, dict):
+            continue
+        fmt = str(resource.get("format") or "").lower()
+        url = str(resource.get("url") or resource.get("download_url") or "")
+        if url and ("csv" in fmt or url.lower().endswith(".csv")):
+            urls.append(url)
+    return urls
+
+
+def _parse_tesouro_csv(text: str) -> list[dict]:
+    sample = text[:4096]
+    delimiter = ";" if sample.count(";") >= sample.count(",") else ","
+    reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
+    items: list[dict] = []
+    seen: set[str] = set()
+    for row in reader:
+        title = (
+            row.get("Tipo Titulo")
+            or row.get("Tipo Título")
+            or row.get("Titulo")
+            or row.get("Título")
+            or row.get("Nome")
+            or ""
+        )
+        maturity = row.get("Data Vencimento") or row.get("Vencimento") or ""
+        year = _year_from_text(maturity) or _year_from_text(title)
+        symbol = canonical_treasury_symbol_from_text(f"{title} {year or ''}")
+        if not symbol:
+            continue
+        if symbol in seen:
+            continue
+        seen.add(symbol)
+        items.append(
+            {
+                "symbol": symbol,
+                "bondType": title.strip() or symbol,
+                "name": f"{title.strip()} {year}" if year else title.strip() or symbol,
+                "maturityYear": year,
+                "maturityDate": maturity,
+                "indexer": "IPCA" if symbol.startswith(("tesouro-renda-mais", "tesouro-educa-mais")) else None,
+                "source": "tesouro_transparente_csv",
+            }
+        )
+    return items
+
+
+async def _fetch_tesouro_transparente_list(client: httpx.AsyncClient) -> list[dict]:
+    try:
+        resp = await client.get(
+            TESOURO_TRANSPARENTE_PACKAGE,
+            params={"id": TESOURO_TRANSPARENTE_DATASET_ID},
+            timeout=20.0,
+        )
+        resp.raise_for_status()
+        urls = _resource_candidates(resp.json())
+    except Exception as exc:
+        logger.info("[treasury] Tesouro Transparente indisponível para catálogo: %s", exc)
+        return []
+
+    for url in urls[:3]:
+        try:
+            csv_resp = await client.get(url, timeout=45.0)
+            csv_resp.raise_for_status()
+            items = _parse_tesouro_csv(csv_resp.text)
+            if items:
+                logger.info("[treasury] Tesouro Transparente retornou %d títulos", len(items))
+                return items
+        except Exception as exc:
+            logger.info("[treasury] falha ao ler recurso Tesouro Transparente %s: %s", url, exc)
+    return []
+
+
+def _merge_items(*groups: list[dict]) -> list[dict]:
+    merged: dict[str, dict] = {}
+    for group in groups:
+        for item in group:
+            symbol = _symbol_from_item(item)
+            if not symbol:
+                continue
+            current = dict(item)
+            current["symbol"] = symbol
+            if symbol not in merged:
+                merged[symbol] = current
+            else:
+                # preserva dados do provedor primário e só completa campos vazios
+                for key, value in current.items():
+                    if value and not merged[symbol].get(key):
+                        merged[symbol][key] = value
+    return list(merged.values())
+
+
+async def fetch_treasury_list(
+    indexer: Optional[str] = None,
+    coupon_type: Optional[str] = None,
+) -> list[dict]:
+    """Lista títulos disponíveis do Tesouro Direto com fallback para RendA+/Educa+."""
+    brapi_items: list[dict] = []
+    transparente_items: list[dict] = []
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        try:
+            brapi_items = await _fetch_brapi_treasury_list(client, indexer=indexer, coupon_type=coupon_type)
+        except Exception as exc:
+            logger.warning("[treasury] BRAPI list falhou: %s", exc)
+
+        # Só usa fallback amplo quando não há filtros específicos, para não poluir
+        # consultas filtradas de indexador/cupom.
+        if not indexer and not coupon_type:
+            transparente_items = await _fetch_tesouro_transparente_list(client)
+
+    items = _merge_items(brapi_items, transparente_items, _SYNTHETIC_LONG_TERM_BONDS)
+    logger.info(
+        "[treasury] catálogo consolidado: %d títulos (brapi=%d, transparente=%d, fallback=%d)",
+        len(items),
+        len(brapi_items),
+        len(transparente_items),
+        len(_SYNTHETIC_LONG_TERM_BONDS),
+    )
     return items
 
 
