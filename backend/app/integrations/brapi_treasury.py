@@ -40,8 +40,6 @@ TESOURO_TRANSPARENTE_DATASET_ID = (
     "precos-e-taxas-dos-titulos-publicos-ofertados-no-tesouro-direto"
 )
 
-# Último recurso para produtos de longo prazo que podem não aparecer no /list
-# da BRAPI, mas são aceitos como slugs canônicos nos fluxos do SGI.
 _SYNTHETIC_LONG_TERM_BONDS: list[dict] = [
     *[
         {
@@ -68,6 +66,8 @@ _SYNTHETIC_LONG_TERM_BONDS: list[dict] = [
         for year in range(2026, 2051)
     ],
 ]
+
+_TREASURY_SYMBOL_RE = re.compile(r"^tesouro-[a-z0-9-]+-\d{4,8}$")
 
 
 def _auth_headers() -> dict:
@@ -107,6 +107,14 @@ def canonical_treasury_symbol_from_text(value: str | None) -> Optional[str]:
     if "educa" in slug:
         return f"tesouro-educa-mais-{year}"
     return None
+
+
+def is_brapi_treasury_symbol(value: str | None) -> bool:
+    """True somente para slugs que vale a pena enviar para /treasury/indicators."""
+    raw = (value or "").strip().lower()
+    if not raw or " " in raw or "+" in raw:
+        return False
+    return bool(_TREASURY_SYMBOL_RE.match(raw))
 
 
 def _items_from_payload(payload: object) -> list[dict]:
@@ -252,9 +260,7 @@ def _parse_tesouro_csv(text: str) -> list[dict]:
         maturity = row.get("Data Vencimento") or row.get("Vencimento") or ""
         year = _year_from_text(maturity) or _year_from_text(title)
         symbol = canonical_treasury_symbol_from_text(f"{title} {year or ''}")
-        if not symbol:
-            continue
-        if symbol in seen:
+        if not symbol or symbol in seen:
             continue
         seen.add(symbol)
         items.append(
@@ -309,7 +315,6 @@ def _merge_items(*groups: list[dict]) -> list[dict]:
             if symbol not in merged:
                 merged[symbol] = current
             else:
-                # preserva dados do provedor primário e só completa campos vazios
                 for key, value in current.items():
                     if value and not merged[symbol].get(key):
                         merged[symbol][key] = value
@@ -330,8 +335,6 @@ async def fetch_treasury_list(
         except Exception as exc:
             logger.warning("[treasury] BRAPI list falhou: %s", exc)
 
-        # Só usa fallback amplo quando não há filtros específicos, para não poluir
-        # consultas filtradas de indexador/cupom.
         if not indexer and not coupon_type:
             transparente_items = await _fetch_tesouro_transparente_list(client)
 
@@ -346,31 +349,71 @@ async def fetch_treasury_list(
     return items
 
 
+async def _request_treasury_indicators(
+    client: httpx.AsyncClient,
+    symbols: list[str],
+) -> list[dict]:
+    response = await client.get(
+        f"{BRAPI_TREASURY_BASE}/indicators",
+        headers=_auth_headers(),
+        params={"symbols": ",".join(symbols)},
+    )
+    response.raise_for_status()
+    return _items_from_payload(response.json())
+
+
 async def fetch_treasury_indicators(symbols: Iterable[str]) -> dict[str, dict]:
     """Consulta indicadores atuais por symbol canônico da BRAPI."""
-    selected = [s.strip().lower() for s in symbols if s and s.strip()]
+    selected = []
+    skipped = 0
+    seen: set[str] = set()
+    for raw in symbols:
+        raw_symbol = str(raw or "").strip().lower()
+        symbol = raw_symbol if is_brapi_treasury_symbol(raw_symbol) else canonical_treasury_symbol_from_text(raw_symbol)
+        if not symbol or not is_brapi_treasury_symbol(symbol):
+            skipped += 1
+            continue
+        if symbol not in seen:
+            seen.add(symbol)
+            selected.append(symbol)
+
+    if skipped:
+        logger.info("[treasury] %d símbolos não-canônicos ignorados em indicators", skipped)
     if not selected:
         return {}
 
     result: dict[str, dict] = {}
+    invalid: list[str] = []
     async with httpx.AsyncClient(timeout=30.0) as client:
         for i in range(0, len(selected), BRAPI_TREASURY_CHUNK):
             chunk = selected[i:i + BRAPI_TREASURY_CHUNK]
             try:
-                response = await client.get(
-                    f"{BRAPI_TREASURY_BASE}/indicators",
-                    headers=_auth_headers(),
-                    params={"symbols": ",".join(chunk)},
-                )
-                response.raise_for_status()
-                items = _items_from_payload(response.json())
-                for item in items:
-                    symbol = _symbol_from_item(item)
-                    if symbol:
-                        result[symbol] = item
+                items = await _request_treasury_indicators(client, chunk)
             except Exception as exc:
-                logger.warning("[treasury] indicators falhou para %s: %s", chunk, exc)
+                logger.info(
+                    "[treasury] indicators em lote falhou para %d símbolos; tentando individualmente: %s",
+                    len(chunk),
+                    exc,
+                )
+                for symbol in chunk:
+                    try:
+                        items = await _request_treasury_indicators(client, [symbol])
+                    except Exception:
+                        invalid.append(symbol)
+                        continue
+                    for item in items:
+                        returned_symbol = _symbol_from_item(item)
+                        if returned_symbol:
+                            result[returned_symbol] = item
+                continue
 
+            for item in items:
+                returned_symbol = _symbol_from_item(item)
+                if returned_symbol:
+                    result[returned_symbol] = item
+
+    if invalid:
+        logger.info("[treasury] %d symbols sem indicators na BRAPI: %s", len(invalid), invalid[:10])
     return result
 
 
@@ -391,7 +434,7 @@ async def fetch_treasury_history(
     end_date: date,
 ) -> dict[str, list[tuple[datetime, float]]]:
     """Busca histórico diário de preços unitários para títulos do Tesouro."""
-    selected = [s.strip().lower() for s in symbols if s and s.strip()]
+    selected = [s.strip().lower() for s in symbols if is_brapi_treasury_symbol(s)]
     if not selected:
         return {}
 
@@ -412,8 +455,23 @@ async def fetch_treasury_history(
                 response.raise_for_status()
                 items = _items_from_payload(response.json())
             except Exception as exc:
-                logger.warning("[treasury] history falhou para %s: %s", chunk, exc)
-                continue
+                logger.info("[treasury] history em lote falhou para %d símbolos; tentando individualmente: %s", len(chunk), exc)
+                items = []
+                for symbol in chunk:
+                    try:
+                        response = await client.get(
+                            f"{BRAPI_TREASURY_BASE}/indicators/history",
+                            headers=_auth_headers(),
+                            params={
+                                "symbols": symbol,
+                                "startDate": start_date.isoformat(),
+                                "endDate": end_date.isoformat(),
+                            },
+                        )
+                        response.raise_for_status()
+                        items.extend(_items_from_payload(response.json()))
+                    except Exception:
+                        continue
 
             for item in items:
                 symbol = _symbol_from_item(item)
