@@ -22,6 +22,11 @@ class AssetDividend(Base):
     """
     Provento declarado pelo ativo (global, sem vinculo com carteira).
     Alimentado pelo backfill_service via BRAPI / yfinance.
+
+    Datas:
+      - record_date: data com / ultimo dia para manter o ativo com direito ao provento
+      - ex_date: data ex / primeiro dia negociado sem direito ao provento
+      - payment_date: data de pagamento
     """
     __tablename__ = "asset_dividends"
     __table_args__ = (
@@ -40,6 +45,7 @@ class AssetDividend(Base):
         index=True,
     )
 
+    record_date: Mapped[DateType | None] = mapped_column(Date, nullable=True, index=True)
     ex_date: Mapped[DateType] = mapped_column(Date, nullable=False, index=True)
     payment_date: Mapped[DateType | None] = mapped_column(Date, nullable=True)
 
@@ -66,6 +72,6 @@ class AssetDividend(Base):
     def __repr__(self) -> str:
         return (
             f"<AssetDividend asset_id={self.asset_id} "
-            f"ex={self.ex_date} type={self.dividend_type} "
+            f"com={self.record_date} ex={self.ex_date} type={self.dividend_type} "
             f"val={self.value_per_unit}>"
         )
