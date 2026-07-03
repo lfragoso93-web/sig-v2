@@ -33,8 +33,8 @@ NATIONAL_EVENT_TYPES = {
 }
 
 # Tickers fracionários/direitos/recibos não têm agenda própria de eventos.
-# O provento pertence ao ticker principal, por exemplo ABEV3 e não ABEV3F.
-_NO_EVENT_SUFFIX_RE = re.compile(r"^[A-Z]{4}\d+[FRBD]$")
+# O provento pertence ao ticker principal, por exemplo B3SA3 e não B3SA3F.
+_MAIN_EQUITY_RE = re.compile(r"^[A-Z0-9]{4,6}(3|4|5|6|11|31|32|33|34|35)$")
 
 SYNC_CONCURRENCY = 3
 SYNC_BATCH_DELAY = 2.0
@@ -51,7 +51,14 @@ class ProventosDailySyncResult:
 
 
 def _is_event_ticker(ticker: str) -> bool:
-    return not _NO_EVENT_SUFFIX_RE.match(ticker.upper())
+    t = ticker.upper()
+    if t.endswith("F"):
+        return False
+    if t[-1:] in {"B", "D", "R"}:
+        return False
+    if t[-2:] in {"97", "98", "99"}:
+        return False
+    return bool(_MAIN_EQUITY_RE.match(t))
 
 
 async def _sync_asset_events(db: AsyncSession, ticker: str, asset_type: str) -> bool:
@@ -101,8 +108,6 @@ async def run_daily_proventos_sync(
 
     logger.info("[proventos_daily] iniciando sync global de eventos para %s ativos", len(pairs))
 
-    # Usa sessões separadas por ativo para que falha/rollback de um ticker não
-    # contamine a sessão principal nem interrompa todo o job.
     from app.core.database import AsyncSessionLocal
 
     for i in range(0, len(pairs), concurrency):
@@ -133,8 +138,6 @@ async def run_daily_proventos_sync(
         if i + concurrency < len(pairs):
             await asyncio.sleep(SYNC_BATCH_DELAY)
 
-    # Reconciliador final: garante que carteiras existentes reflitam os eventos
-    # globais coletados, inclusive em cenários onde os eventos já existiam antes.
     try:
         result.materialized = await materialize_asset_dividends(db=db, commit=True)
     except Exception as exc:
