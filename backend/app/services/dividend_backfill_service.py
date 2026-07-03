@@ -2,9 +2,11 @@ import logging
 from datetime import date, timedelta
 from typing import Optional
 
+import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
+from app.integrations.brapi import BRAPI_BASE, _auth_headers
 from app.models.transaction import Transaction, OperationType
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
@@ -17,6 +19,9 @@ SKIP_TYPES = {"CRIPTO", "TESOURO_DIRETO", "RENDA_FIXA"}
 
 # Tipos internacionais (yfinance)
 INTL_TYPES = {"STOCK", "ETF_INTERNACIONAL"}
+
+# Tipos nacionais cujo endpoint de proventos fica em /api/v2/fii/dividends
+FII_TYPES = {"FII"}
 
 
 def _next_business_day(d: date) -> date:
@@ -44,16 +49,56 @@ def _calc_net_qty(txs: list[tuple], ref_date: date) -> float:
     return max(qty, 0.0)
 
 
-async def _fetch_dividends_brapi(ticker: str) -> list[dict]:
-    """Busca proventos do ticker via BRAPI."""
+def _cash_dividends_from_brapi_entry(entry: dict) -> list[dict]:
+    """
+    Extrai cashDividends do payload v2 da BRAPI.
+
+    O formato documentado e:
+      results[].data.cashDividends[]
+
+    Mantemos fallbacks para formatos antigos/flat usados em mocks e respostas
+    anteriores.
+    """
+    data = entry.get("data") if isinstance(entry.get("data"), dict) else entry
+    raw = (
+        data.get("cashDividends")
+        or data.get("dividends")
+        or data.get("provents")
+        or []
+    )
+    return raw if isinstance(raw, list) else []
+
+
+async def _fetch_dividends_brapi(ticker: str, asset_type: str = "ACAO") -> list[dict]:
+    """Busca proventos do ticker via BRAPI v2 stocks/fii dividends."""
+    endpoint = "fii/dividends" if asset_type.upper() in FII_TYPES else "stocks/dividends"
     try:
-        from app.integrations.brapi import fetch_asset_info
-        info = await fetch_asset_info(ticker)
-        if not info:
-            return []
-        dividends_raw = info.get("dividendsData", {}) or {}
-        cash_dividends = dividends_raw.get("cashDividends") or []
-        return cash_dividends
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(
+                f"{BRAPI_BASE}/v2/{endpoint}",
+                headers=_auth_headers(),
+                params={"symbols": ticker.upper()},
+            )
+            if resp.status_code in (401, 403):
+                logger.warning("[Backfill] BRAPI sem autorizacao para %s (%s)", ticker, endpoint)
+                return []
+            resp.raise_for_status()
+            data = resp.json()
+
+        result_items = data.get("results") or data.get("stocks") or data.get("fiis") or []
+        rows: list[dict] = []
+        for entry in result_items:
+            symbol = (
+                entry.get("symbol")
+                or entry.get("ticker")
+                or entry.get("stock")
+                or entry.get("fii")
+                or ""
+            ).upper()
+            if symbol and symbol != ticker.upper():
+                continue
+            rows.extend(_cash_dividends_from_brapi_entry(entry))
+        return rows
     except Exception as e:
         logger.warning(f"[Backfill] BRAPI erro para {ticker}: {e}")
         return []
@@ -92,11 +137,11 @@ def _parse_raw_dividend(raw: dict) -> Optional[tuple[Optional[date], date, Optio
     """
     Parseia um item raw de provento.
 
-    BRAPI cashDividends costuma trazer:
+    BRAPI cashDividends traz:
       - lastDatePrior: data com / ultimo dia negociado com direito
       - paymentDate: data de pagamento
-      - rate/value: valor por unidade
-      - type/dividendType: tipo de provento
+      - rate: valor por unidade
+      - label: tipo de provento (ex: JCP)
 
     Algumas respostas tambem podem trazer exDate/ex_date. Quando nao houver data ex
     explicita, derivamos a data ex como o proximo dia util apos a data com.
@@ -135,7 +180,12 @@ def _parse_raw_dividend(raw: dict) -> Optional[tuple[Optional[date], date, Optio
         value = float(raw.get("rate") or raw.get("value") or raw.get("amount") or 0)
         if value <= 0:
             return None
-        div_type = str(raw.get("type") or raw.get("dividendType") or "DIVIDENDO").upper()
+        div_type = str(
+            raw.get("label")
+            or raw.get("type")
+            or raw.get("dividendType")
+            or "DIVIDENDO"
+        ).upper()
         return record_date, ex_date, pay_date, value, div_type
     except Exception:
         return None
@@ -171,7 +221,7 @@ async def backfill_dividends(
     raw_dividends = (
         await _fetch_dividends_yf(ticker)
         if use_yf
-        else await _fetch_dividends_brapi(ticker)
+        else await _fetch_dividends_brapi(ticker, asset_type_norm)
     )
     if not raw_dividends:
         logger.info(f"[Backfill] nenhum provento encontrado para {ticker}")
