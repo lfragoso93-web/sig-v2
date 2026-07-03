@@ -3,7 +3,7 @@ AssetDividend — proventos declarados por ativo (fonte da verdade global).
 Independente de carteira.
 """
 from sqlalchemy import (
-    Integer, Numeric, Date, String, ForeignKey, Text,
+    Integer, Numeric, Date, String, ForeignKey, Text, JSON,
     UniqueConstraint, Enum as SAEnum,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from app.models.asset import Asset
     from app.models.dividend import Dividend
+
+_RAW_PAYLOAD_TYPE = JSON().with_variant(JSONB, "postgresql")
 
 
 class AssetDividend(Base):
@@ -62,9 +64,7 @@ class AssetDividend(Base):
         default=DividendType.DIVIDENDO,
     )
 
-    value_per_unit: Mapped[Decimal] = mapped_column(
-        Numeric(18, 8), nullable=False
-    )
+    value_per_unit: Mapped[Decimal] = mapped_column(Numeric(18, 8), nullable=False)
     gross_value_per_unit: Mapped[Decimal | None] = mapped_column(Numeric(18, 8), nullable=True)
     factor: Mapped[Decimal | None] = mapped_column(Numeric(24, 12), nullable=True)
     complete_factor: Mapped[Decimal | None] = mapped_column(Numeric(24, 12), nullable=True)
@@ -73,13 +73,10 @@ class AssetDividend(Base):
     asset_issued: Mapped[str | None] = mapped_column(String(32), nullable=True)
     related_to: Mapped[str | None] = mapped_column(String(80), nullable=True)
     remarks: Mapped[str | None] = mapped_column(Text, nullable=True)
-    raw_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    raw_payload: Mapped[dict[str, Any] | None] = mapped_column(_RAW_PAYLOAD_TYPE, nullable=True)
 
-    source: Mapped[str] = mapped_column(
-        String(30), nullable=False, default="brapi"
-    )
+    source: Mapped[str] = mapped_column(String(30), nullable=False, default="brapi")
 
-    # Relacionamentos
     asset: Mapped["Asset"] = relationship("Asset", back_populates="asset_dividends")
     portfolio_dividends: Mapped[list["Dividend"]] = relationship(
         "Dividend", back_populates="asset_dividend", cascade="all, delete-orphan"
