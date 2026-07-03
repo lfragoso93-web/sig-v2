@@ -6,6 +6,8 @@ Pontos importantes:
 - TESOURO_DIRETO usa o catálogo persistido em assets para resolver o `symbol`
   canônico da BRAPI e consulta /api/v2/treasury/indicators.
 - Ativos internacionais mantêm fallback stale para evitar zerar tela em rate limit.
+- Quando provedores entram em rate limit, aplica cooldown em memória para evitar
+  martelar Alpha Vantage/yfinance a cada refresh da UI.
 """
 from __future__ import annotations
 
@@ -22,10 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.asset_types import BR_TYPES, INTL_TYPES, NO_QUOTE_TYPES, TREASURY_TYPES, yf_ticker
 from app.core.rate_limiter import brapi_limiter, alpha_vantage_limiter
-from app.integrations.brapi import (
-    fetch_quotes as brapi_fetch_quotes,
-    fetch_crypto_quote as brapi_fetch_crypto,
-)
+from app.integrations.brapi import fetch_quotes as brapi_fetch_quotes, fetch_crypto_quote as brapi_fetch_crypto
 from app.integrations.brapi_treasury import fetch_treasury_prices as brapi_fetch_treasury_prices
 from app.models.asset import Asset, AssetType
 from app.services.price_history_service import _YF_EXECUTOR, _yf_thread_lock, _YF_MIN_INTERVAL, _yf_last_call
@@ -37,8 +36,18 @@ PRICE_TTL_SECONDS = 900
 MEM_CACHE_TTL = 300
 BRAPI_CHUNK_SIZE = 20
 BRAPI_CHUNK_DELAY = 1.0
+PROVIDER_COOLDOWN_SECONDS = 1800
 
 _mem_cache: dict[str, tuple[float, float]] = {}
+_provider_cooldown_until: dict[str, float] = {}
+
+
+def _provider_in_cooldown(name: str) -> bool:
+    return time.time() < _provider_cooldown_until.get(name, 0.0)
+
+
+def _set_provider_cooldown(name: str, seconds: int = PROVIDER_COOLDOWN_SECONDS) -> None:
+    _provider_cooldown_until[name] = time.time() + seconds
 
 
 def _asset_type_str(asset_type) -> str:
@@ -95,10 +104,7 @@ async def _db_get_fresh_batch(db: AsyncSession, pairs: list[tuple[str, str]]) ->
 
 async def _db_get_stale(db: AsyncSession, ticker: str, asset_type) -> Optional[float]:
     result = await db.execute(
-        select(Asset.last_price).where(
-            Asset.ticker == ticker,
-            Asset.asset_type == _asset_type_str(asset_type),
-        )
+        select(Asset.last_price).where(Asset.ticker == ticker, Asset.asset_type == _asset_type_str(asset_type))
     )
     row = result.first()
     if row and row.last_price is not None:
@@ -110,9 +116,7 @@ async def _db_set(db: AsyncSession, ticker: str, asset_type, price: float) -> No
     at_str = _asset_type_str(asset_type)
     try:
         async with db.begin_nested():
-            result = await db.execute(
-                select(Asset).where(Asset.ticker == ticker, Asset.asset_type == at_str)
-            )
+            result = await db.execute(select(Asset).where(Asset.ticker == ticker, Asset.asset_type == at_str))
             asset = result.scalar_one_or_none()
             now = datetime.now(timezone.utc)
             price_decimal = Decimal(str(round(price, 8)))
@@ -120,15 +124,7 @@ async def _db_set(db: AsyncSession, ticker: str, asset_type, price: float) -> No
                 asset.last_price = price_decimal
                 asset.last_price_updated_at = now
             else:
-                db.add(
-                    Asset(
-                        ticker=ticker,
-                        name=ticker,
-                        asset_type=at_str,
-                        last_price=price_decimal,
-                        last_price_updated_at=now,
-                    )
-                )
+                db.add(Asset(ticker=ticker, name=ticker, asset_type=at_str, last_price=price_decimal, last_price_updated_at=now))
     except Exception as exc:
         logger.warning("[quotes_service] _db_set falhou para %s/%s: %s", ticker, at_str, exc)
 
@@ -142,15 +138,15 @@ async def _with_retry(coro_fn, *args, label: str = "") -> dict[str, float]:
         try:
             return await coro_fn(*args)
         except Exception as exc:
+            msg = str(exc)
+            is_rate_limit = any(token in msg.lower() for token in ("rate limit", "too many requests", "ratelimit"))
+            if is_rate_limit:
+                _set_provider_cooldown(label.split("[")[0])
             if attempt == 3:
-                logger.error("[quotes_service] %s todas as tentativas esgotadas: %s", label, exc)
+                logger.error("[quotes_service] %s todas as tentativas esgotadas: %s", label, msg[:180])
                 return {}
-            is_rate_limit = any(
-                token in str(exc).lower()
-                for token in ("rate limit", "too many requests", "ratelimit")
-            )
             delay = (20.0 * attempt) if is_rate_limit else float(attempt)
-            logger.warning("[quotes_service] %s tentativa %d falhou: %s", label, attempt, exc)
+            logger.warning("[quotes_service] %s tentativa %d falhou: %s", label, attempt, msg[:180])
             await asyncio.sleep(delay)
     return {}
 
@@ -182,7 +178,6 @@ async def _fetch_brapi_crypto(tickers: list[str]) -> dict[str, float]:
 
 def _fetch_yf_current_sync(ticker_map: dict[str, str]) -> dict[str, float]:
     import time as _time
-
     if not ticker_map:
         return {}
     with _yf_thread_lock:
@@ -190,13 +185,7 @@ def _fetch_yf_current_sync(ticker_map: dict[str, str]) -> dict[str, float]:
         if elapsed < _YF_MIN_INTERVAL:
             _time.sleep(_YF_MIN_INTERVAL - elapsed)
         try:
-            data = yf.download(
-                tickers=list(ticker_map.values()),
-                period="1d",
-                interval="1m",
-                progress=False,
-                auto_adjust=True,
-            )
+            data = yf.download(tickers=list(ticker_map.values()), period="1d", interval="1m", progress=False, auto_adjust=True)
         finally:
             _yf_last_call[0] = _time.monotonic()
 
@@ -215,14 +204,22 @@ def _fetch_yf_current_sync(ticker_map: dict[str, str]) -> dict[str, float]:
 
 
 async def _fetch_yfinance_current(pairs: list[tuple[str, AssetType]]) -> dict[str, float]:
+    if _provider_in_cooldown("yfinance"):
+        logger.info("[quotes_service] yfinance em cooldown — pulando chamada externa")
+        return {}
     loop = asyncio.get_event_loop()
     ticker_map = {ticker: yf_ticker(ticker, at) for ticker, at in pairs}
-    return await loop.run_in_executor(_YF_EXECUTOR, _fetch_yf_current_sync, ticker_map)
+    results = await loop.run_in_executor(_YF_EXECUTOR, _fetch_yf_current_sync, ticker_map)
+    if pairs and not results:
+        _set_provider_cooldown("yfinance")
+    return results
 
 
 async def _fetch_alpha_vantage_current(pairs: list[tuple[str, AssetType]]) -> dict[str, float]:
+    if _provider_in_cooldown("alpha_vantage"):
+        logger.info("[quotes_service] Alpha Vantage em cooldown — pulando chamada externa")
+        return {}
     from app.integrations.alpha_vantage import fetch_global_quote, _is_configured
-
     if not _is_configured():
         return {}
     results: dict[str, float] = {}
@@ -231,24 +228,24 @@ async def _fetch_alpha_vantage_current(pairs: list[tuple[str, AssetType]]) -> di
         price = await fetch_global_quote(ticker)
         if price is not None:
             results[ticker] = price
+    if pairs and not results:
+        _set_provider_cooldown("alpha_vantage")
     return results
 
 
 async def _fetch_intl(pairs: list[tuple[str, AssetType]]) -> dict[str, float]:
     av = await _fetch_alpha_vantage_current(pairs)
     missing = [(ticker, at) for ticker, at in pairs if ticker not in av]
-    yf_results = await _with_retry(_fetch_yfinance_current, missing, label="intl-fallback") if missing else {}
+    yf_results = await _with_retry(_fetch_yfinance_current, missing, label="yfinance") if missing else {}
+    if pairs and len(av) + len(yf_results) == 0:
+        _set_provider_cooldown("intl")
     return {**av, **yf_results}
 
 
-async def _fetch_intl_with_stale_fallback(
-    pairs: list[tuple[str, AssetType]],
-    db: Optional[AsyncSession] = None,
-) -> dict[str, float]:
-    results = await _fetch_intl(pairs)
-    missing = [(ticker, at) for ticker, at in pairs if ticker not in results]
+async def _fetch_stale_for_pairs(pairs: list[tuple[str, AssetType]], db: Optional[AsyncSession] = None, label: str = "ativos") -> dict[str, float]:
+    results: dict[str, float] = {}
     stale_used: list[str] = []
-    for ticker, at in missing:
+    for ticker, at in pairs:
         stale = _mem_get_stale(ticker)
         if stale is not None:
             results[ticker] = stale
@@ -260,25 +257,25 @@ async def _fetch_intl_with_stale_fallback(
                 results[ticker] = db_stale
                 stale_used.append(f"{ticker}(db)")
     if stale_used:
-        logger.warning("[quotes_service] provedor INTL indisponivel — usando preco stale para: %s", ", ".join(stale_used))
+        logger.warning("[quotes_service] usando preço stale para %s: %s", label, ", ".join(stale_used[:20]) + ("..." if len(stale_used) > 20 else ""))
     return results
 
 
-async def _fetch_yfinance(pairs: list[tuple[str, AssetType]]) -> dict[str, float]:
-    return await _with_retry(_fetch_yfinance_current, pairs, label="br-fallback")
+async def _fetch_intl_with_stale_fallback(pairs: list[tuple[str, AssetType]], db: Optional[AsyncSession] = None) -> dict[str, float]:
+    if _provider_in_cooldown("intl") or (_provider_in_cooldown("alpha_vantage") and _provider_in_cooldown("yfinance")):
+        return await _fetch_stale_for_pairs(pairs, db, label="INTL")
+    results = await _fetch_intl(pairs)
+    missing = [(ticker, at) for ticker, at in pairs if ticker not in results]
+    results.update(await _fetch_stale_for_pairs(missing, db, label="INTL"))
+    return results
 
 
-async def _fetch_treasury_prices(
-    tickers: list[str],
-    db: Optional[AsyncSession] = None,
-) -> dict[str, float]:
+async def _fetch_treasury_prices(tickers: list[str], db: Optional[AsyncSession] = None) -> dict[str, float]:
     if not tickers:
         return {}
     symbol_by_ticker: dict[str, str] = {}
     for ticker in tickers:
-        symbol = None
-        if db:
-            symbol = await resolve_treasury_symbol(db, ticker)
+        symbol = await resolve_treasury_symbol(db, ticker) if db else None
         symbol_by_ticker[ticker] = (symbol or ticker).lower()
 
     prices_by_symbol = await brapi_fetch_treasury_prices(symbol_by_ticker.values())
@@ -297,10 +294,7 @@ async def _noop() -> dict[str, float]:
     return {}
 
 
-async def get_prices(
-    positions: list[dict],
-    db: Optional[AsyncSession] = None,
-) -> dict[str, float]:
+async def get_prices(positions: list[dict], db: Optional[AsyncSession] = None) -> dict[str, float]:
     br_tickers: list[str] = []
     crypto_tickers: list[str] = []
     intl_pairs: list[tuple[str, AssetType]] = []
@@ -356,14 +350,12 @@ async def get_prices(
         _fetch_treasury_prices(treasury_tickers, db) if treasury_tickers else _noop(),
     )
 
-    br_fallback = [
-        (ticker, type_map[ticker])
-        for ticker in br_tickers
-        if ticker not in br_results and type_map.get(ticker) is not None
-    ]
-    fallback_results = await _fetch_yfinance(br_fallback) if br_fallback else {}
-    fresh = {**br_results, **crypto_results, **intl_results, **treasury_results, **fallback_results}
+    # Não faz fallback yfinance em massa para ativos BR. Quando a BRAPI falha,
+    # usa stale se existir; caso contrário deixa sem preço para evitar 429 em cascata.
+    br_missing_pairs = [(ticker, type_map[ticker]) for ticker in br_tickers if ticker not in br_results and type_map.get(ticker) is not None]
+    br_stale = await _fetch_stale_for_pairs(br_missing_pairs, db, label="BR") if br_missing_pairs else {}
 
+    fresh = {**br_results, **crypto_results, **intl_results, **treasury_results, **br_stale}
     for ticker, price in fresh.items():
         _mem_set(ticker, price)
         if db:
@@ -374,11 +366,7 @@ async def get_prices(
     return {**resolved, **fresh}
 
 
-async def get_current_price(
-    ticker: str,
-    asset_type: Optional[str] = None,
-    db: Optional[AsyncSession] = None,
-) -> Optional[float]:
+async def get_current_price(ticker: str, asset_type: Optional[str] = None, db: Optional[AsyncSession] = None) -> Optional[float]:
     if asset_type is None:
         logger.warning("[quotes_service] get_current_price sem asset_type para %s", ticker)
         return None
@@ -386,17 +374,7 @@ async def get_current_price(
     return result.get(ticker)
 
 
-async def get_price_for_transaction(
-    ticker: str,
-    asset_type,
-    db: Optional[AsyncSession] = None,
-) -> Optional[float]:
-    """
-    Compatibilidade com price_service.py e fluxos antigos.
-
-    Retorna preço atual roteando pelo mesmo orquestrador usado em posições.
-    Aceita AssetType ou string. Não chama APIs para NO_QUOTE_TYPES.
-    """
+async def get_price_for_transaction(ticker: str, asset_type, db: Optional[AsyncSession] = None) -> Optional[float]:
     at = _asset_type_from_any(asset_type)
     if at is None:
         logger.warning("[quotes_service] get_price_for_transaction asset_type inválido para %s: %s", ticker, asset_type)
@@ -405,21 +383,9 @@ async def get_price_for_transaction(
 
 
 async def update_quotes_for_portfolio(portfolio_id: int, db: AsyncSession) -> int:
-    """
-    Compatibilidade com routers/positions.py.
-
-    Atualiza cotações apenas dos ativos usados em uma carteira específica.
-    Não chama APIs para NO_QUOTE_TYPES, como RENDA_FIXA.
-    Tesouro Direto é resolvido pelo catálogo persistido antes de chamar BRAPI.
-    """
     from app.models.transaction import Transaction
 
-    result = await db.execute(
-        select(Transaction.ticker, Transaction.asset_type)
-        .where(Transaction.portfolio_id == portfolio_id)
-        .distinct()
-    )
-
+    result = await db.execute(select(Transaction.ticker, Transaction.asset_type).where(Transaction.portfolio_id == portfolio_id).distinct())
     positions: list[dict] = []
     seen: set[tuple[str, str]] = set()
     for row in result.all():
@@ -437,36 +403,23 @@ async def update_quotes_for_portfolio(portfolio_id: int, db: AsyncSession) -> in
 
     prices = await get_prices(positions, db)
     await db.commit()
-    logger.info(
-        "[quotes_service] update_quotes_for_portfolio(%s): %d/%d preços atualizados",
-        portfolio_id,
-        len(prices),
-        len(positions),
-    )
+    logger.info("[quotes_service] update_quotes_for_portfolio(%s): %d/%d preços atualizados", portfolio_id, len(prices), len(positions))
     return len(prices)
 
 
-async def update_all_quotes(
-    db: AsyncSession,
-    asset_types: Optional[list[AssetType]] = None,
-) -> int:
+async def update_all_quotes(db: AsyncSession, asset_types: Optional[list[AssetType]] = None) -> int:
     from app.models.transaction import Transaction
 
     filter_values = [at.value for at in asset_types] if asset_types else None
-
-    asset_query = select(Asset.ticker, Asset.asset_type).where(
-        Asset.asset_type.notin_([at.value for at in NO_QUOTE_TYPES])
-    )
+    asset_query = select(Asset.ticker, Asset.asset_type).where(Asset.asset_type.notin_([at.value for at in NO_QUOTE_TYPES]))
     if filter_values:
         asset_query = asset_query.where(Asset.asset_type.in_(filter_values))
-    asset_result = await db.execute(asset_query)
-    asset_rows = asset_result.all()
+    asset_rows = (await db.execute(asset_query)).all()
 
     tx_query = select(Transaction.ticker, Transaction.asset_type).distinct()
     if filter_values:
         tx_query = tx_query.where(Transaction.asset_type.in_(filter_values))
-    tx_result = await db.execute(tx_query)
-    tx_rows = tx_result.all()
+    tx_rows = (await db.execute(tx_query)).all()
 
     positions_map: dict[tuple[str, str], dict] = {
         (r.ticker, str(r.asset_type)): {"ticker": r.ticker, "asset_type": str(r.asset_type)}
@@ -479,10 +432,7 @@ async def update_all_quotes(
         at = _asset_type_from_any(str(row.asset_type))
         if at in NO_QUOTE_TYPES:
             continue
-        positions_map.setdefault(
-            (row.ticker, str(row.asset_type)),
-            {"ticker": row.ticker, "asset_type": str(row.asset_type)},
-        )
+        positions_map.setdefault((row.ticker, str(row.asset_type)), {"ticker": row.ticker, "asset_type": str(row.asset_type)})
 
     positions = list(positions_map.values())
     prices = await get_prices(positions, db)
