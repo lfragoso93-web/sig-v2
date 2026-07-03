@@ -19,10 +19,6 @@ from app.models.transaction import Transaction, OperationType
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Subquery: menor data de compra por ticker/portfolio
-# ---------------------------------------------------------------------------
-
 def _first_buy_subquery():
     """Subquery que retorna a primeira data de compra (buy) por portfolio_id + ticker."""
     return (
@@ -99,10 +95,19 @@ async def list_items(
             Dividend.total_value,
             Dividend.net_value,
             Dividend.status,
+            AssetDividend.record_date,
             AssetDividend.ex_date,
             AssetDividend.payment_date,
+            AssetDividend.approved_on,
             AssetDividend.value_per_unit,
+            AssetDividend.gross_value_per_unit,
+            AssetDividend.factor,
+            AssetDividend.complete_factor,
             AssetDividend.dividend_type,
+            AssetDividend.isin_code,
+            AssetDividend.asset_issued,
+            AssetDividend.related_to,
+            AssetDividend.remarks,
             Asset.ticker,
             Asset.asset_type,
         )
@@ -115,25 +120,23 @@ async def list_items(
         )
         .where(
             Dividend.portfolio_id == portfolio_id,
-            AssetDividend.ex_date >= first_buy.c.first_buy,
+            (AssetDividend.record_date >= first_buy.c.first_buy) | (AssetDividend.ex_date >= first_buy.c.first_buy),
         )
     )
 
     if status:
         base = base.where(Dividend.status == status)
     if year:
-        base = base.where(extract("year", AssetDividend.ex_date) == year)
+        base = base.where(extract("year", AssetDividend.payment_date) == year)
     if asset_type:
         base = base.where(Asset.asset_type == asset_type)
 
-    count_res = await db.execute(
-        select(func.count()).select_from(base.subquery())
-    )
+    count_res = await db.execute(select(func.count()).select_from(base.subquery()))
     total = count_res.scalar_one()
 
     stmt = (
         base
-        .order_by(AssetDividend.ex_date.desc())
+        .order_by(AssetDividend.payment_date.desc().nullslast(), AssetDividend.ex_date.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
     )
@@ -145,9 +148,18 @@ async def list_items(
             "ticker": row.ticker,
             "asset_type": row.asset_type,
             "dividend_type": row.dividend_type,
+            "record_date": row.record_date,
             "ex_date": row.ex_date,
             "payment_date": row.payment_date,
+            "approved_on": row.approved_on,
             "value_per_unit": float(row.value_per_unit),
+            "gross_value_per_unit": float(row.gross_value_per_unit) if row.gross_value_per_unit else None,
+            "factor": float(row.factor) if row.factor else None,
+            "complete_factor": float(row.complete_factor) if row.complete_factor else None,
+            "isin_code": row.isin_code,
+            "asset_issued": row.asset_issued,
+            "related_to": row.related_to,
+            "remarks": row.remarks,
             "quantity": float(row.quantity),
             "total_value": float(row.total_value) if row.total_value else 0.0,
             "net_value": float(row.net_value) if row.net_value else 0.0,
@@ -183,7 +195,7 @@ async def get_monthly_history(
         .where(
             Dividend.portfolio_id == portfolio_id,
             AssetDividend.payment_date.isnot(None),
-            AssetDividend.ex_date >= first_buy.c.first_buy,
+            (AssetDividend.record_date >= first_buy.c.first_buy) | (AssetDividend.ex_date >= first_buy.c.first_buy),
         )
     )
 
@@ -215,19 +227,11 @@ async def get_monthly_history(
     return result
 
 
-async def get_distribution(
-    db: AsyncSession,
-    portfolio_id: int,
-    months: int = 12,
-) -> list[dict]:
+async def get_distribution(db: AsyncSession, portfolio_id: int, months: int = 12) -> list[dict]:
     start = date.today() - relativedelta(months=months)
 
     stmt = (
-        select(
-            Asset.ticker,
-            Asset.asset_type,
-            func.sum(Dividend.net_value).label("total"),
-        )
+        select(Asset.ticker, Asset.asset_type, func.sum(Dividend.net_value).label("total"))
         .join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
         .join(Asset, AssetDividend.asset_id == Asset.id)
         .where(
