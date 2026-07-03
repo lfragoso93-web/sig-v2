@@ -14,9 +14,8 @@ Regra de negócio:
     4. vencimento
 - O valor aplicado e a data de aplicação NÃO entram na chave de agrupamento.
 
-Esta primeira versão usa uma taxa anual de referência configurável por app_config
-com fallbacks conservadores. Não representa marcação a mercado; é accrual estimado
-para evitar que Renda Fixa fique com rentabilidade zerada.
+A correção usa a série histórica persistida em rate_history, importada do SGS/BCB.
+Quando não há histórico suficiente, cai para um fallback anual conservador.
 """
 from __future__ import annotations
 
@@ -25,18 +24,18 @@ import re
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Iterable, Optional
+from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.transaction import Transaction, OperationType
+from app.services.benchmark_rate_service import benchmark_factor, latest_annual_reference_pct
 
 logger = logging.getLogger(__name__)
 
 RENDA_FIXA_TYPE = "RENDA_FIXA"
 
-# Fallbacks anuais em percentual. Depois podemos expor isso no Admin/Configurações.
 _DEFAULT_CDI_ANNUAL_PCT = Decimal("10.65")
 _DEFAULT_SELIC_ANNUAL_PCT = Decimal("10.65")
 _DEFAULT_IPCA_ANNUAL_PCT = Decimal("4.50")
@@ -103,8 +102,7 @@ def _is_sell(op: object) -> bool:
 def _normalize_indexer(raw: Optional[str]) -> str:
     if not raw:
         return "CDI"
-    value = raw.strip().upper()
-    value = value.replace("Í", "I")
+    value = raw.strip().upper().replace("Í", "I")
     if value in {"IPCA+", "IPCA PLUS", "IPCA_PLUS", "IPCA"}:
         return "IPCA_PLUS"
     if value in {"IGP-M", "IGPM", "IGPM+", "IGP-M+", "IGPM_PLUS"}:
@@ -119,9 +117,7 @@ def _normalize_indexer(raw: Optional[str]) -> str:
 
 
 def _parse_notes(notes: Optional[str]) -> tuple[str, Decimal, Optional[date]]:
-    """Extrai indexador, taxa/percentual e vencimento de notes."""
     text = notes or ""
-
     indexer: Optional[str] = None
     rate = Decimal("0")
     maturity: Optional[date] = None
@@ -130,18 +126,15 @@ def _parse_notes(notes: Optional[str]) -> tuple[str, Decimal, Optional[date]]:
     if m:
         indexer = m.group(1).strip()
 
-    # Ex.: 110% do CDI
     m = re.search(r"([0-9]+(?:[\.,][0-9]+)?)\s*%\s*do\s+", text, re.IGNORECASE)
     if m:
         rate = _decimal_from_str(m.group(1))
 
-    # Ex.: Taxa: 12.5%
     if rate == 0:
         m = re.search(r"Taxa:\s*([0-9]+(?:[\.,][0-9]+)?)\s*%", text, re.IGNORECASE)
         if m:
             rate = _decimal_from_str(m.group(1))
 
-    # Ex.: Vencimento: 2028-01-01
     m = re.search(r"Vencimento:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})", text, re.IGNORECASE)
     if m:
         try:
@@ -152,35 +145,16 @@ def _parse_notes(notes: Optional[str]) -> tuple[str, Decimal, Optional[date]]:
     return _normalize_indexer(indexer), rate, maturity
 
 
-async def _config_decimal(db: AsyncSession, key: str, default: Decimal) -> Decimal:
-    try:
-        from app.services.config_service import get_config
-
-        value = await get_config(db, key)
-        if value is None or str(value).strip() == "":
-            return default
-        return _decimal_from_str(value, str(default))
-    except Exception:
-        return default
-
-
-async def _reference_rates(db: AsyncSession) -> dict[str, Decimal]:
+async def _latest_refs(db: AsyncSession) -> dict[str, Decimal]:
     return {
-        "CDI": await _config_decimal(db, "fixed_income.cdi_annual_pct", _DEFAULT_CDI_ANNUAL_PCT),
-        "SELIC": await _config_decimal(db, "fixed_income.selic_annual_pct", _DEFAULT_SELIC_ANNUAL_PCT),
-        "IPCA": await _config_decimal(db, "fixed_income.ipca_annual_pct", _DEFAULT_IPCA_ANNUAL_PCT),
-        "IGPM": await _config_decimal(db, "fixed_income.igpm_annual_pct", _DEFAULT_IGPM_ANNUAL_PCT),
+        "CDI": await latest_annual_reference_pct(db, "CDI", _DEFAULT_CDI_ANNUAL_PCT),
+        "SELIC": await latest_annual_reference_pct(db, "SELIC", _DEFAULT_SELIC_ANNUAL_PCT),
+        "IPCA": await latest_annual_reference_pct(db, "IPCA", _DEFAULT_IPCA_ANNUAL_PCT),
+        "IGPM": await latest_annual_reference_pct(db, "IGPM", _DEFAULT_IGPM_ANNUAL_PCT),
     }
 
 
 def _annual_rate_pct(indexer: str, rate_pct: Decimal, refs: dict[str, Decimal]) -> Decimal:
-    """
-    Converte os metadados da aplicação em taxa anual estimada.
-
-    CDI/SELIC: rate_pct representa % do indexador. Ex.: 110% do CDI.
-    PREFIXADO: rate_pct representa taxa anual direta.
-    IPCA_PLUS/IGPM_PLUS: rate_pct representa spread anual acima do índice.
-    """
     idx = _normalize_indexer(indexer)
     if idx == "CDI":
         pct_of_indexer = rate_pct if rate_pct > 0 else Decimal("100")
@@ -203,19 +177,34 @@ def _compound_value(principal: Decimal, annual_rate_pct: Decimal, start: date, t
     days = max((target - start).days, 0)
     if days == 0 or annual_rate_pct == 0:
         return principal
-
     annual_rate = float(annual_rate_pct / Decimal("100"))
     factor = Decimal(str((1.0 + annual_rate) ** (days / 365.0)))
     return principal * factor
 
 
+async def _application_factor(db: AsyncSession, key: FixedIncomeKey, start: date, target: date) -> Decimal:
+    idx = _normalize_indexer(key.indexer)
+    try:
+        if idx == "CDI":
+            return await benchmark_factor(db, "CDI", start, target, multiplier_pct=key.rate_pct or Decimal("100"))
+        if idx == "SELIC":
+            return await benchmark_factor(db, "SELIC", start, target, multiplier_pct=key.rate_pct or Decimal("100"))
+        if idx == "IPCA_PLUS":
+            return await benchmark_factor(db, "IPCA", start, target, spread_annual_pct=key.rate_pct)
+        if idx == "IGPM_PLUS":
+            return await benchmark_factor(db, "IGPM", start, target, spread_annual_pct=key.rate_pct)
+    except Exception as exc:
+        logger.warning("[fixed_income] benchmark_factor falhou para %s: %s", key, exc)
+
+    refs = await _latest_refs(db)
+    annual = _annual_rate_pct(idx, key.rate_pct, refs)
+    return _compound_value(Decimal("1"), annual, start, target)
+
+
 async def _load_fixed_income_transactions(db: AsyncSession, portfolio_id: int) -> list[Transaction]:
     result = await db.execute(
         select(Transaction)
-        .where(
-            Transaction.portfolio_id == portfolio_id,
-            Transaction.asset_type == RENDA_FIXA_TYPE,
-        )
+        .where(Transaction.portfolio_id == portfolio_id, Transaction.asset_type == RENDA_FIXA_TYPE)
         .order_by(Transaction.date.asc(), Transaction.id.asc())
     )
     return list(result.scalars().all())
@@ -229,12 +218,7 @@ def _application_from_buy(tx: Transaction) -> FixedIncomeApplication:
         * _decimal_from_str(getattr(tx, "price", 0))
         + _decimal_from_str(getattr(tx, "fees", 0))
     )
-    key = FixedIncomeKey(
-        name=name,
-        indexer=indexer,
-        rate_pct=_pct(rate),
-        maturity=maturity,
-    )
+    key = FixedIncomeKey(name=name, indexer=indexer, rate_pct=_pct(rate), maturity=maturity)
     return FixedIncomeApplication(
         key=key,
         invested_amount=_money(amount),
@@ -244,13 +228,6 @@ def _application_from_buy(tx: Transaction) -> FixedIncomeApplication:
 
 
 def _apply_redemption(applications: list[FixedIncomeApplication], tx: Transaction) -> None:
-    """
-    Resgate simples por FIFO dentro do mesmo produto.
-
-    O valor do resgate reduz o principal remanescente das aplicações mais antigas
-    que tenham a mesma chave de agrupamento. Se as notas do resgate não tiverem
-    os metadados, usamos apenas o ticker e abatemos as aplicações desse ticker.
-    """
     redeem_amount = _money(
         _decimal_from_str(getattr(tx, "quantity", 0))
         * _decimal_from_str(getattr(tx, "price", 0))
@@ -274,9 +251,9 @@ def _apply_redemption(applications: list[FixedIncomeApplication], tx: Transactio
         redeem_amount -= consumed
 
 
-def _aggregate_applications(
-    applications: Iterable[FixedIncomeApplication],
-    refs: dict[str, Decimal],
+async def _aggregate_applications(
+    db: AsyncSession,
+    applications: list[FixedIncomeApplication],
     target_date: date,
 ) -> list[FixedIncomeValuation]:
     grouped: dict[FixedIncomeKey, dict[str, Decimal | int]] = {}
@@ -284,15 +261,11 @@ def _aggregate_applications(
     for app in applications:
         if app.remaining_principal <= 0:
             continue
-        annual_rate = _annual_rate_pct(app.key.indexer, app.key.rate_pct, refs)
-        current_value = _compound_value(app.remaining_principal, annual_rate, app.date_start, target_date)
+        factor = await _application_factor(db, app.key, app.date_start, target_date)
+        current_value = app.remaining_principal * factor
 
         if app.key not in grouped:
-            grouped[app.key] = {
-                "invested": Decimal("0"),
-                "current": Decimal("0"),
-                "count": 0,
-            }
+            grouped[app.key] = {"invested": Decimal("0"), "current": Decimal("0"), "count": 0}
         grouped[app.key]["invested"] = grouped[app.key]["invested"] + app.remaining_principal  # type: ignore[operator]
         grouped[app.key]["current"] = grouped[app.key]["current"] + current_value  # type: ignore[operator]
         grouped[app.key]["count"] = int(grouped[app.key]["count"]) + 1
@@ -324,7 +297,6 @@ async def get_fixed_income_valuations(
     target_date: Optional[date] = None,
 ) -> list[FixedIncomeValuation]:
     target = target_date or date.today()
-    refs = await _reference_rates(db)
     txs = await _load_fixed_income_transactions(db, portfolio_id)
 
     applications: list[FixedIncomeApplication] = []
@@ -336,7 +308,7 @@ async def get_fixed_income_valuations(
         elif _is_sell(tx.operation):
             _apply_redemption(applications, tx)
 
-    return _aggregate_applications(applications, refs, target)
+    return await _aggregate_applications(db, applications, target)
 
 
 async def get_fixed_income_totals(
