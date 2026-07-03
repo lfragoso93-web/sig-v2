@@ -97,7 +97,7 @@ async def test_calc_ganhos_capital_no_transactions():
     
     ganhos = await calc_ganhos_capital(db, portfolio_id=1, year=2024)
     
-    assert ganhos == {}
+    assert ganhos == []
 
 
 @pytest.mark.asyncio
@@ -141,10 +141,10 @@ async def test_calc_rendimentos_no_dividends():
     result.scalars().all.return_value = []
     db.execute.return_value = result
     
-    rendimentos = await calc_rendimentos(db, portfolio_id=1, year=2024)
+    dividendos, jcp = await calc_rendimentos(db, portfolio_id=1, year=2024)
     
-    assert rendimentos.isentos == []
-    assert rendimentos.jcp == []
+    assert dividendos == []
+    assert jcp == []
 
 
 @pytest.mark.asyncio
@@ -152,20 +152,27 @@ async def test_generate_irpf_pdf_valid():
     from app.schemas.irpf import IRPFReportOut, IRPFResumo
     
     report = IRPFReportOut(
-        year=2024,
         portfolio_id=1,
+        ano=2024,
         bens_direitos=[],
-        ganhos_capital_mensal={},
-        rendimentos=IRPFResumo(isentos=[], jcp=[]),
-        resumo={
-            "total_bens": 0.0,
-            "total_ganhos_realizado": 0.0,
-            "total_ganhos_base_calculo": 0.0,
-            "aliquesta_media": 0.0,
-            "irpf_devido": 0.0,
-            "rendimentos_isentos": 0.0,
-            "jcp_recebido": 0.0,
-        }
+        ganhos_mensais=[],
+        dividendos=[],
+        jcp=[],
+        resumo=IRPFResumo(
+            ano=2024,
+            total_bens_direitos=0.0,
+            total_vendas_ano=0.0,
+            lucro_tributavel_swing=0.0,
+            lucro_tributavel_day_trade=0.0,
+            ir_swing_trade_devido=0.0,
+            ir_day_trade_devido=0.0,
+            ir_retido_fonte_total=0.0,
+            ir_a_recolher_total=0.0,
+            total_dividendos_isentos=0.0,
+            total_jcp_bruto=0.0,
+            total_jcp_ir_retido=0.0,
+            prejuizo_acumulado=0.0,
+        )
     )
     
     pdf_bytes = generate_irpf_pdf(report)
@@ -179,20 +186,27 @@ async def test_generate_irpf_csv_valid():
     from app.schemas.irpf import IRPFReportOut, IRPFResumo
     
     report = IRPFReportOut(
-        year=2024,
         portfolio_id=1,
+        ano=2024,
         bens_direitos=[],
-        ganhos_capital_mensal={},
-        rendimentos=IRPFResumo(isentos=[], jcp=[]),
-        resumo={
-            "total_bens": 0.0,
-            "total_ganhos_realizado": 0.0,
-            "total_ganhos_base_calculo": 0.0,
-            "aliquesta_media": 0.0,
-            "irpf_devido": 0.0,
-            "rendimentos_isentos": 0.0,
-            "jcp_recebido": 0.0,
-        }
+        ganhos_mensais=[],
+        dividendos=[],
+        jcp=[],
+        resumo=IRPFResumo(
+            ano=2024,
+            total_bens_direitos=0.0,
+            total_vendas_ano=0.0,
+            lucro_tributavel_swing=0.0,
+            lucro_tributavel_day_trade=0.0,
+            ir_swing_trade_devido=0.0,
+            ir_day_trade_devido=0.0,
+            ir_retido_fonte_total=0.0,
+            ir_a_recolher_total=0.0,
+            total_dividendos_isentos=0.0,
+            total_jcp_bruto=0.0,
+            total_jcp_ir_retido=0.0,
+            prejuizo_acumulado=0.0,
+        )
     )
     
     csv_str = generate_irpf_csv(report)

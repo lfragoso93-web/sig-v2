@@ -1,6 +1,5 @@
 import api from './api'
 import type {
-  AuditLogResponse,
   AuditLogDetail,
   PaginatedAuditLogs,
   AuditStatsResponse,

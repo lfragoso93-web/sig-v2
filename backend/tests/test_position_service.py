@@ -13,9 +13,9 @@ class TestGetPositions:
     async def test_get_positions_empty_portfolio(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[])
+        execute_result = MagicMock()
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[])
         
         db.execute = AsyncMock(return_value=execute_result)
 
@@ -34,9 +34,9 @@ class TestGetPositions:
         tx.fees = 10.0
         tx.operation = OperationType.buy
         
-        execute_result = AsyncMock()
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[tx])
+        execute_result = MagicMock()
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[tx])
         
         db.execute = AsyncMock(return_value=execute_result)
 
@@ -69,9 +69,9 @@ class TestGetPositions:
         tx_sell.fees = 0.0
         tx_sell.operation = OperationType.sell
         
-        execute_result = AsyncMock()
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[tx_buy, tx_sell])
+        execute_result = MagicMock()
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[tx_buy, tx_sell])
         
         db.execute = AsyncMock(return_value=execute_result)
 
@@ -102,9 +102,9 @@ class TestGetPositions:
         tx_sell.fees = 0.0
         tx_sell.operation = OperationType.sell
         
-        execute_result = AsyncMock()
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[tx_buy, tx_sell])
+        execute_result = MagicMock()
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[tx_buy, tx_sell])
         
         db.execute = AsyncMock(return_value=execute_result)
 
@@ -133,9 +133,9 @@ class TestGetPositions:
         tx2.fees = 5.0
         tx2.operation = OperationType.buy
         
-        execute_result = AsyncMock()
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[tx1, tx2])
+        execute_result = MagicMock()
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[tx1, tx2])
         
         db.execute = AsyncMock(return_value=execute_result)
 

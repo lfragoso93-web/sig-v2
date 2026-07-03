@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import {
-  BarChart2, RefreshCw, Wallet, Target, TrendingUp, TrendingDown,
-  LineChart, AlertTriangle, PieChart, ArrowUp, ArrowDown, Minus,
+  BarChart2, RefreshCw, Wallet, Target, TrendingUp,
+  AlertTriangle, PieChart, ArrowUp, ArrowDown, Minus,
 } from 'lucide-react'
 import {
   usePortfolioSummary,
@@ -273,7 +273,13 @@ function ConsolidacaoSection({
   const donutData = useMemo(() => {
     if (consolTab === 'tipo') return distribution ?? []
     const items = consolTab === 'ativos' ? allAssetsSorted : exteriorAssets
-    return items.map((it: any) => ({ name: it.label, value: it.value, color: it.color }))
+    return items.map((it: any) => ({
+      asset_type: it.type,
+      label: it.label,
+      value: it.value,
+      percentage: it.pct,
+      color: it.color,
+    }))
   }, [consolTab, distribution, allAssetsSorted, exteriorAssets])
 
   const listItems = useMemo(() => {
@@ -557,8 +563,10 @@ function AnaliseSection({ portfolioId }: { portfolioId: number }) {
                     .filter((p: any) => p.asset_type === cls.type && safeNum(p.current_value) > 0)
                   const donutItems = classPositions
                     .map((p: any, i: number) => ({
-                      name:  p.ticker ?? p.asset_code ?? '?',
+                      asset_type: p.asset_type ?? cls.type,
+                      label: p.ticker ?? p.asset_code ?? '?',
                       value: safeNum(p.current_value),
+                      percentage: cls.value > 0 ? (safeNum(p.current_value) / cls.value) * 100 : 0,
                       color: CHART_COLORS[i % CHART_COLORS.length],
                     }))
                     .sort((a: any, b: any) => b.value - a.value)

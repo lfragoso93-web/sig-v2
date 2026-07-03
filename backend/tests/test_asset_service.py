@@ -23,8 +23,8 @@ class TestGetOrCreateAsset:
         existing_asset.ticker = "PETR4"
         existing_asset.name = "Petrobras"
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=existing_asset)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=existing_asset)
         db.execute = AsyncMock(return_value=execute_result)
         
         data = AssetCreate(
@@ -41,8 +41,8 @@ class TestGetOrCreateAsset:
     async def test_create_new_asset(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=None)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=None)
         db.execute = AsyncMock(return_value=execute_result)
         
         db.commit = AsyncMock()
@@ -64,8 +64,8 @@ class TestGetOrCreateAsset:
     async def test_create_asset_with_currency(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=None)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=None)
         db.execute = AsyncMock(return_value=execute_result)
         
         db.commit = AsyncMock()
@@ -89,9 +89,9 @@ class TestListAssets:
     async def test_list_assets_empty(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[])
+        execute_result = MagicMock()
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[])
         
         db.execute = AsyncMock(return_value=execute_result)
         
@@ -108,9 +108,9 @@ class TestListAssets:
         asset2 = MagicMock(spec=Asset)
         asset2.ticker = "VALE3"
         
-        execute_result = AsyncMock()
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[asset1, asset2])
+        execute_result = MagicMock()
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[asset1, asset2])
         
         db.execute = AsyncMock(return_value=execute_result)
         
@@ -131,8 +131,8 @@ class TestGetAssetByTicker:
         asset.ticker = "PETR4"
         asset.name = "Petrobras"
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=asset)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=asset)
         db.execute = AsyncMock(return_value=execute_result)
         
         result = await get_asset_by_ticker(db, "PETR4")
@@ -142,8 +142,8 @@ class TestGetAssetByTicker:
     async def test_get_asset_not_found(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=None)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=None)
         db.execute = AsyncMock(return_value=execute_result)
         
         result = await get_asset_by_ticker(db, "NONEXISTENT")
@@ -163,9 +163,9 @@ class TestSearchAssets:
         asset2 = MagicMock(spec=Asset)
         asset2.ticker = "VALE3"
         
-        execute_result = AsyncMock()
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[asset1, asset2])
+        execute_result = MagicMock()
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[asset1, asset2])
         
         db.execute = AsyncMock(return_value=execute_result)
         
@@ -179,9 +179,9 @@ class TestSearchAssets:
         asset = MagicMock(spec=Asset)
         asset.ticker = "PETR4"
         
-        execute_result = AsyncMock()
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[asset])
+        execute_result = MagicMock()
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[asset])
         
         db.execute = AsyncMock(return_value=execute_result)
         
@@ -197,9 +197,9 @@ class TestSearchAssets:
         asset.ticker = "PETR4"
         asset.name = "Petrobras S.A."
         
-        execute_result = AsyncMock()
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[asset])
+        execute_result = MagicMock()
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[asset])
         
         db.execute = AsyncMock(return_value=execute_result)
         
@@ -214,9 +214,9 @@ class TestSearchAssets:
         asset.ticker = "PETR4"
         asset.asset_type = AssetType.ACAO
         
-        execute_result = AsyncMock()
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[asset])
+        execute_result = MagicMock()
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[asset])
         
         db.execute = AsyncMock(return_value=execute_result)
         
@@ -229,9 +229,9 @@ class TestSearchAssets:
         
         assets_list = [MagicMock(spec=Asset) for _ in range(5)]
         
-        execute_result = AsyncMock()
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=assets_list[:10])
+        execute_result = MagicMock()
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=assets_list[:10])
         
         db.execute = AsyncMock(return_value=execute_result)
         

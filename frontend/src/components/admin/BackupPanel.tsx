@@ -446,17 +446,17 @@ export default function BackupPanel() {
   )
 }
 
-function ChevronUp({ size }: { size: number }) {
+function ChevronUp({ size, style }: { size: number; style?: React.CSSProperties }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg width={size} height={size} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <polyline points="18 15 12 9 6 15" />
     </svg>
   )
 }
 
-function ChevronDown({ size }: { size: number }) {
+function ChevronDown({ size, style }: { size: number; style?: React.CSSProperties }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg width={size} height={size} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <polyline points="6 9 12 15 18 9" />
     </svg>
   )

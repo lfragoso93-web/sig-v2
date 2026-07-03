@@ -173,6 +173,7 @@ class TestGetKpis:
             db, portfolio, today,
             market_value=12000.0,
             invested_total=10000.0,
+            unrealized_pnl=2000.0,
             total_pnl=2000.0,
             return_pct=20.0,
         )

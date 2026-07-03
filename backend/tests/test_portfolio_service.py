@@ -167,7 +167,7 @@ async def test_delete_portfolio_success():
     result.scalar_one_or_none.return_value = mock_portfolio
     db.execute.return_value = result
     
-    db.delete = MagicMock()
+    db.delete = AsyncMock()
     db.flush = AsyncMock()
     
     await delete_portfolio(db, portfolio_id=1, user_id=1)
@@ -256,7 +256,7 @@ async def test_sum_dividends_zero():
     db = AsyncMock(spec=AsyncSession)
     
     result = MagicMock()
-    result.scalar_one.return_value = 0.0
+    result.scalar_one_or_none.return_value = 0.0
     db.execute.return_value = result
     
     total = await sum_dividends(db, portfolio_id=1)
@@ -269,7 +269,7 @@ async def test_sum_dividends_with_cutoff():
     db = AsyncMock(spec=AsyncSession)
     
     result = MagicMock()
-    result.scalar_one.return_value = 1500.0
+    result.scalar_one_or_none.return_value = 1500.0
     db.execute.return_value = result
     
     total = await sum_dividends(db, portfolio_id=1, cutoff=date(2024, 1, 1))

@@ -278,11 +278,11 @@ PETR4,ACAO,buy,100,25.50,2024-01-15,10.00,BRL,Compra inicial"""
         portfolio = MagicMock(spec=Portfolio)
         portfolio.user_id = 1
         
-        portfolio_result = AsyncMock()
-        portfolio_result.scalar_one_or_none = AsyncMock(return_value=portfolio)
+        portfolio_result = MagicMock()
+        portfolio_result.scalar_one_or_none = MagicMock(return_value=portfolio)
         
-        asset_result = AsyncMock()
-        asset_result.scalar_one_or_none = AsyncMock(return_value=None)
+        asset_result = MagicMock()
+        asset_result.scalar_one_or_none = MagicMock(return_value=None)
         
         db.execute = AsyncMock(side_effect=[portfolio_result, asset_result])
         db.commit = AsyncMock()
@@ -301,8 +301,8 @@ PETR4,ACAO,buy,100,25.50,2024-01-15,10.00,BRL,"""
 
         db = AsyncMock(spec=AsyncSession)
         
-        portfolio_result = AsyncMock()
-        portfolio_result.scalar_one_or_none = AsyncMock(return_value=None)
+        portfolio_result = MagicMock()
+        portfolio_result.scalar_one_or_none = MagicMock(return_value=None)
         
         db.execute = AsyncMock(return_value=portfolio_result)
 
@@ -320,8 +320,8 @@ PETR4,ACAO,buy,100,25.50,2024-01-15,10.00,BRL,"""
         portfolio = MagicMock(spec=Portfolio)
         portfolio.user_id = 999
         
-        portfolio_result = AsyncMock()
-        portfolio_result.scalar_one_or_none = AsyncMock(return_value=portfolio)
+        portfolio_result = MagicMock()
+        portfolio_result.scalar_one_or_none = MagicMock(return_value=portfolio)
         
         db.execute = AsyncMock(return_value=portfolio_result)
 
@@ -339,8 +339,8 @@ PETR4,ACAO,buy,invalid,25.50,2024-01-15,10.00,BRL,"""
         portfolio = MagicMock(spec=Portfolio)
         portfolio.user_id = 1
         
-        portfolio_result = AsyncMock()
-        portfolio_result.scalar_one_or_none = AsyncMock(return_value=portfolio)
+        portfolio_result = MagicMock()
+        portfolio_result.scalar_one_or_none = MagicMock(return_value=portfolio)
         
         db.execute = AsyncMock(return_value=portfolio_result)
 
@@ -359,8 +359,8 @@ PETR4,ACAO,buy,100,25.50,{future_date},10.00,BRL,"""
         portfolio = MagicMock(spec=Portfolio)
         portfolio.user_id = 1
         
-        portfolio_result = AsyncMock()
-        portfolio_result.scalar_one_or_none = AsyncMock(return_value=portfolio)
+        portfolio_result = MagicMock()
+        portfolio_result.scalar_one_or_none = MagicMock(return_value=portfolio)
         
         db.execute = AsyncMock(return_value=portfolio_result)
 

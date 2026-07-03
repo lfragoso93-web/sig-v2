@@ -62,7 +62,6 @@ async def create_database_backup(
     try:
         timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
         backup_id = backup_name or f"backup_{timestamp}"
-        backup_file = BACKUPS_DIR / f"{backup_id}.sql"
         backup_file_gz = BACKUPS_DIR / f"{backup_id}.sql.gz"
         
         parsed_url = _parse_db_url(db_url)
@@ -98,16 +97,8 @@ async def create_database_backup(
             result["error"] = f"pg_dump failed: {error_msg}"
             return result
         
-        with open(backup_file, "wb") as f:
-            f.write(stdout)
-        
-        logger.info(f"[backup] SQL dump created: {backup_file}")
-        
-        with open(backup_file, "rb") as f_in:
-            with gzip.open(backup_file_gz, "wb") as f_out:
-                shutil.copyfileobj(f_in, f_out)
-        
-        backup_file.unlink()
+        with gzip.open(backup_file_gz, "wb") as f_out:
+            f_out.write(stdout)
         
         size_bytes = backup_file_gz.stat().st_size
         size_mb = size_bytes / (1024 * 1024)
@@ -201,7 +192,10 @@ async def restore_database_backup(
         
         stdout, stderr = await result_restore.communicate()
         
-        temp_sql_file.unlink()
+        try:
+            temp_sql_file.unlink()
+        except FileNotFoundError:
+            pass
         
         if result_restore.returncode != 0:
             error_msg = stderr.decode('utf-8', errors='ignore')
@@ -326,7 +320,9 @@ def _parse_db_url(db_url: str) -> Dict[str, Any]:
     
     parsed = urlparse(db_url)
     
-    if not all([parsed.hostname, parsed.username, parsed.database]):
+    database = parsed.path.lstrip("/")
+
+    if not all([parsed.hostname, parsed.username, database]):
         raise ValueError(f"Invalid database URL: {db_url}")
     
     return {
@@ -334,5 +330,5 @@ def _parse_db_url(db_url: str) -> Dict[str, Any]:
         "password": parsed.password or "",
         "host": parsed.hostname,
         "port": parsed.port or 5432,
-        "database": parsed.database,
+        "database": database,
     }

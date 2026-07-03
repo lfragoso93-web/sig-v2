@@ -25,8 +25,8 @@ class TestGetConfig:
         config.key = "test_key"
         config.value = "test_value"
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=config)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=config)
         db.execute = AsyncMock(return_value=execute_result)
         
         result = await get_config(db, "test_key")
@@ -36,8 +36,8 @@ class TestGetConfig:
     async def test_get_config_not_found(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=None)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=None)
         db.execute = AsyncMock(return_value=execute_result)
         
         result = await get_config(db, "nonexistent_key")
@@ -55,8 +55,8 @@ class TestGetBoolConfig:
             config = MagicMock(spec=AppConfig)
             config.value = true_val
             
-            execute_result = AsyncMock()
-            execute_result.scalar_one_or_none = AsyncMock(return_value=config)
+            execute_result = MagicMock()
+            execute_result.scalar_one_or_none = MagicMock(return_value=config)
             db.execute = AsyncMock(return_value=execute_result)
             
             result = await get_bool_config(db, "test_key")
@@ -69,8 +69,8 @@ class TestGetBoolConfig:
             config = MagicMock(spec=AppConfig)
             config.value = false_val
             
-            execute_result = AsyncMock()
-            execute_result.scalar_one_or_none = AsyncMock(return_value=config)
+            execute_result = MagicMock()
+            execute_result.scalar_one_or_none = MagicMock(return_value=config)
             db.execute = AsyncMock(return_value=execute_result)
             
             result = await get_bool_config(db, "test_key")
@@ -79,8 +79,8 @@ class TestGetBoolConfig:
     async def test_get_bool_config_not_found_default_false(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=None)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=None)
         db.execute = AsyncMock(return_value=execute_result)
         
         result = await get_bool_config(db, "nonexistent_key", default=False)
@@ -90,8 +90,8 @@ class TestGetBoolConfig:
     async def test_get_bool_config_not_found_default_true(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=None)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=None)
         db.execute = AsyncMock(return_value=execute_result)
         
         result = await get_bool_config(db, "nonexistent_key", default=True)
@@ -109,8 +109,8 @@ class TestSetConfig:
         config.key = "test_key"
         config.value = "old_value"
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=config)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=config)
         db.execute = AsyncMock(return_value=execute_result)
         
         db.commit = AsyncMock()
@@ -123,8 +123,8 @@ class TestSetConfig:
     async def test_set_config_new_key(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=None)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=None)
         db.execute = AsyncMock(return_value=execute_result)
         
         db.commit = AsyncMock()
@@ -149,9 +149,9 @@ class TestGetAllConfigs:
         config2.key = "key2"
         config2.is_public = True
         
-        execute_result = AsyncMock()
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[config1, config2])
+        execute_result = MagicMock()
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[config1, config2])
         
         db.execute = AsyncMock(return_value=execute_result)
         
@@ -170,9 +170,9 @@ class TestGetAllConfigs:
         config2.key = "private_key"
         config2.is_public = False
         
-        execute_result = AsyncMock()
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[config1, config2])
+        execute_result = MagicMock()
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[config1, config2])
         
         db.execute = AsyncMock(return_value=execute_result)
         
@@ -192,8 +192,8 @@ class TestUpdateConfig:
         config.value = "old_value"
         config.updated_at = None
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=config)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=config)
         
         db.execute = AsyncMock(return_value=execute_result)
         db.commit = AsyncMock()
@@ -208,8 +208,8 @@ class TestUpdateConfig:
     async def test_update_config_new(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=None)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=None)
         
         db.execute = AsyncMock(return_value=execute_result)
         db.commit = AsyncMock()
@@ -236,8 +236,8 @@ class TestBulkUpdateConfigs:
         config2.value = "old2"
         
         execute_results = [
-            AsyncMock(scalar_one_or_none=AsyncMock(return_value=config1)),
-            AsyncMock(scalar_one_or_none=AsyncMock(return_value=config2)),
+            MagicMock(scalar_one_or_none=MagicMock(return_value=config1)),
+            MagicMock(scalar_one_or_none=MagicMock(return_value=config2)),
         ]
         
         db.execute = AsyncMock(side_effect=execute_results)
@@ -258,8 +258,8 @@ class TestBulkUpdateConfigs:
         existing_config.key = "existing_key"
         
         execute_results = [
-            AsyncMock(scalar_one_or_none=AsyncMock(return_value=existing_config)),
-            AsyncMock(scalar_one_or_none=AsyncMock(return_value=None)),
+            MagicMock(scalar_one_or_none=MagicMock(return_value=existing_config)),
+            MagicMock(scalar_one_or_none=MagicMock(return_value=None)),
         ]
         
         db.execute = AsyncMock(side_effect=execute_results)

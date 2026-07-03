@@ -24,8 +24,8 @@ class TestGetUserByEmail:
         user.email = "user@example.com"
         user.name = "Test User"
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=user)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=user)
         db.execute = AsyncMock(return_value=execute_result)
         
         result = await get_user_by_email(db, "user@example.com")
@@ -35,8 +35,8 @@ class TestGetUserByEmail:
     async def test_get_user_not_found(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=None)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=None)
         db.execute = AsyncMock(return_value=execute_result)
         
         result = await get_user_by_email(db, "nonexistent@example.com")
@@ -54,8 +54,8 @@ class TestGetUserById:
         user.id = 1
         user.name = "Test User"
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=user)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=user)
         db.execute = AsyncMock(return_value=execute_result)
         
         result = await get_user_by_id(db, 1)
@@ -65,8 +65,8 @@ class TestGetUserById:
     async def test_get_user_not_found(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=None)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=None)
         db.execute = AsyncMock(return_value=execute_result)
         
         result = await get_user_by_id(db, 999)
@@ -80,8 +80,8 @@ class TestCreateUser:
     async def test_create_user_success(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=None)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=None)
         db.execute = AsyncMock(return_value=execute_result)
         
         db.commit = AsyncMock()
@@ -90,7 +90,7 @@ class TestCreateUser:
         data = UserCreate(
             name="New User",
             email="new@example.com",
-            password="password123",
+            password="Password123!",
         )
         
         with patch('app.services.user_service.hash_password', return_value="hashed_password"):
@@ -106,14 +106,14 @@ class TestCreateUser:
         
         existing_user = MagicMock(spec=User)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=existing_user)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=existing_user)
         db.execute = AsyncMock(return_value=execute_result)
         
         data = UserCreate(
             name="Duplicate",
             email="existing@example.com",
-            password="password123",
+            password="Password123!",
         )
         
         from fastapi import HTTPException
@@ -123,8 +123,8 @@ class TestCreateUser:
     async def test_create_user_with_role(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=None)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=None)
         db.execute = AsyncMock(return_value=execute_result)
         
         db.commit = AsyncMock()
@@ -133,11 +133,11 @@ class TestCreateUser:
         data = UserCreate(
             name="Admin User",
             email="admin@example.com",
-            password="password123",
+            password="Password123!",
         )
         
         with patch('app.services.user_service.hash_password', return_value="hashed_password"):
-            user = await create_user(db, data, role=UserRole.admin)
+            user = await create_user(db, data, role=UserRole.superadmin)
         
         assert user is not None
 
@@ -153,8 +153,8 @@ class TestUpdateUser:
         existing_user.name = "Old Name"
         existing_user.email = "old@example.com"
         
-        get_result = AsyncMock()
-        get_result.scalar_one_or_none = AsyncMock(return_value=existing_user)
+        get_result = MagicMock()
+        get_result.scalar_one_or_none = MagicMock(return_value=existing_user)
         
         db.execute = AsyncMock(return_value=get_result)
         db.commit = AsyncMock()
@@ -170,8 +170,8 @@ class TestUpdateUser:
     async def test_update_user_not_found(self):
         db = AsyncMock(spec=AsyncSession)
         
-        get_result = AsyncMock()
-        get_result.scalar_one_or_none = AsyncMock(return_value=None)
+        get_result = MagicMock()
+        get_result.scalar_one_or_none = MagicMock(return_value=None)
         db.execute = AsyncMock(return_value=get_result)
         
         data = UserUpdate(name="New Name")
@@ -189,12 +189,12 @@ class TestListUsers:
     async def test_list_users_empty(self):
         db = AsyncMock(spec=AsyncSession)
         
-        count_result = AsyncMock()
-        count_result.scalar_one = AsyncMock(return_value=0)
+        count_result = MagicMock()
+        count_result.scalar_one = MagicMock(return_value=0)
         
-        list_result = AsyncMock()
-        list_result.scalars = AsyncMock(return_value=list_result)
-        list_result.all = AsyncMock(return_value=[])
+        list_result = MagicMock()
+        list_result.scalars = MagicMock(return_value=list_result)
+        list_result.all = MagicMock(return_value=[])
         
         db.execute = AsyncMock(side_effect=[count_result, list_result])
         
@@ -214,12 +214,12 @@ class TestListUsers:
         user2.id = 2
         user2.name = "User 2"
         
-        count_result = AsyncMock()
-        count_result.scalar_one = AsyncMock(return_value=2)
+        count_result = MagicMock()
+        count_result.scalar_one = MagicMock(return_value=2)
         
-        list_result = AsyncMock()
-        list_result.scalars = AsyncMock(return_value=list_result)
-        list_result.all = AsyncMock(return_value=[user1, user2])
+        list_result = MagicMock()
+        list_result.scalars = MagicMock(return_value=list_result)
+        list_result.all = MagicMock(return_value=[user1, user2])
         
         db.execute = AsyncMock(side_effect=[count_result, list_result])
         
@@ -233,12 +233,12 @@ class TestListUsers:
         
         user = MagicMock(spec=User)
         
-        count_result = AsyncMock()
-        count_result.scalar_one = AsyncMock(return_value=50)
+        count_result = MagicMock()
+        count_result.scalar_one = MagicMock(return_value=50)
         
-        list_result = AsyncMock()
-        list_result.scalars = AsyncMock(return_value=list_result)
-        list_result.all = AsyncMock(return_value=[user])
+        list_result = MagicMock()
+        list_result.scalars = MagicMock(return_value=list_result)
+        list_result.all = MagicMock(return_value=[user])
         
         db.execute = AsyncMock(side_effect=[count_result, list_result])
         
@@ -252,12 +252,12 @@ class TestListUsers:
         user = MagicMock(spec=User)
         user.name = "John Doe"
         
-        count_result = AsyncMock()
-        count_result.scalar_one = AsyncMock(return_value=1)
+        count_result = MagicMock()
+        count_result.scalar_one = MagicMock(return_value=1)
         
-        list_result = AsyncMock()
-        list_result.scalars = AsyncMock(return_value=list_result)
-        list_result.all = AsyncMock(return_value=[user])
+        list_result = MagicMock()
+        list_result.scalars = MagicMock(return_value=list_result)
+        list_result.all = MagicMock(return_value=[user])
         
         db.execute = AsyncMock(side_effect=[count_result, list_result])
         

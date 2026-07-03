@@ -3,16 +3,13 @@ import {
   BookOpen,
   ChevronDown,
   ChevronUp,
-  Trash2,
   RefreshCw,
-  FileDown,
   Filter,
   X,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { auditService } from '@/services/auditService'
-import { formatBRL } from '@/utils/format'
-import type { AuditLogResponse, AuditLogDetail } from '@/types/audit'
+import type { AuditLogResponse } from '@/types/audit'
 import clsx from 'clsx'
 
 const ACTIONS_COLORS: Record<string, string> = {
@@ -146,7 +143,7 @@ function AuditLogRow({ log, onExpand, isExpanded }: { log: AuditLogResponse; onE
 
 export default function AuditLogsPanel() {
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(50)
+  const [pageSize] = useState(50)
   const [showFilters, setShowFilters] = useState(false)
   const [expandedId, setExpandedId] = useState<number | null>(null)
 

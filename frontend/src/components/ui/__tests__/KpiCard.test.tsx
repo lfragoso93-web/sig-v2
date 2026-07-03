@@ -11,8 +11,8 @@ describe('KpiCard', () => {
       />
     );
 
-    expect(screen.getByText('Total Investido')).toBeInTheDocument();
-    expect(screen.getByText('R$ 100.000')).toBeInTheDocument();
+    expect(screen.getByText('Total Investido')).toBeTruthy();
+    expect(screen.getByText('R$ 100.000')).toBeTruthy();
   });
 
   it('renders change percentage when provided', () => {
@@ -24,7 +24,7 @@ describe('KpiCard', () => {
       />
     );
 
-    expect(screen.getByText('+5.50%')).toBeInTheDocument();
+    expect(screen.getByText('+5.50%')).toBeTruthy();
   });
 
   it('renders subValue and subLabel when provided', () => {
@@ -37,8 +37,8 @@ describe('KpiCard', () => {
       />
     );
 
-    expect(screen.getByText('R$ 50.000')).toBeInTheDocument();
-    expect(screen.getByText('Ganho capital')).toBeInTheDocument();
+    expect(screen.getByText('R$ 50.000')).toBeTruthy();
+    expect(screen.getByText('Ganho capital')).toBeTruthy();
   });
 
   it('handles null change gracefully', () => {
@@ -50,7 +50,7 @@ describe('KpiCard', () => {
       />
     );
 
-    expect(container.firstChild).toBeInTheDocument();
+    expect(container.firstChild).toBeTruthy();
   });
 
   it('displays negative change with minus sign', () => {
@@ -62,6 +62,6 @@ describe('KpiCard', () => {
       />
     );
 
-    expect(screen.getByText('-3.25%')).toBeInTheDocument();
+    expect(screen.getByText('-3.25%')).toBeTruthy();
   });
 });

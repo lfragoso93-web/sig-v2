@@ -14,7 +14,7 @@ const schema = z.object({
   password:      z.string().min(8, 'Mínimo 8 caracteres'),
   confirm:       z.string(),
   acceptedTerms: z.literal(true, {
-    errorMap: () => ({ message: 'Você precisa aceitar os termos para continuar' }),
+    message: 'Você precisa aceitar os termos para continuar',
   }),
 }).refine(d => d.password === d.confirm, {
   message: 'As senhas não coincidem',

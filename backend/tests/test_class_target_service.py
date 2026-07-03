@@ -34,9 +34,9 @@ class TestGetTargets:
     async def test_get_targets_empty(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[])
+        execute_result = MagicMock()
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[])
         
         db.execute = AsyncMock(return_value=execute_result)
         
@@ -55,9 +55,9 @@ class TestGetTargets:
         target2.asset_type = "FII"
         target2.target_pct = Decimal("20.00")
         
-        execute_result = AsyncMock()
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[target1, target2])
+        execute_result = MagicMock()
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[target1, target2])
         
         db.execute = AsyncMock(return_value=execute_result)
         
@@ -73,9 +73,9 @@ class TestGetTargetsMap:
     async def test_get_targets_map_empty(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[])
+        execute_result = MagicMock()
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[])
         
         db.execute = AsyncMock(return_value=execute_result)
         
@@ -94,9 +94,9 @@ class TestGetTargetsMap:
         target2.asset_type = "FII"
         target2.target_pct = Decimal("20.00")
         
-        execute_result = AsyncMock()
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[target1, target2])
+        execute_result = MagicMock()
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[target1, target2])
         
         db.execute = AsyncMock(return_value=execute_result)
         
@@ -112,9 +112,9 @@ class TestGetTargetsWithCurrent:
     async def test_get_targets_with_current_empty(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[])
+        execute_result = MagicMock()
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[])
         
         db.execute = AsyncMock(return_value=execute_result)
         
@@ -129,9 +129,9 @@ class TestGetTargetsWithCurrent:
         target.asset_type = "ACAO"
         target.target_pct = Decimal("30.00")
         
-        execute_result = AsyncMock()
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[target])
+        execute_result = MagicMock()
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[target])
         
         db.execute = AsyncMock(return_value=execute_result)
         
@@ -149,9 +149,9 @@ class TestGetTargetsWithCurrent:
         target.asset_type = "ACAO"
         target.target_pct = Decimal("30.00")
         
-        execute_result = AsyncMock()
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[target])
+        execute_result = MagicMock()
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[target])
         
         db.execute = AsyncMock(return_value=execute_result)
         
@@ -183,9 +183,9 @@ class TestGetTargetsWithCurrent:
         target_fii.asset_type = "FII"
         target_fii.target_pct = Decimal("20.00")
         
-        execute_result = AsyncMock()
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[target_acao, target_fii])
+        execute_result = MagicMock()
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[target_acao, target_fii])
         
         db.execute = AsyncMock(return_value=execute_result)
         
@@ -218,8 +218,8 @@ class TestUpsertTarget:
     async def test_upsert_target_create_new(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=None)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=None)
         
         db.execute = AsyncMock(return_value=execute_result)
         db.commit = AsyncMock()
@@ -238,8 +238,8 @@ class TestUpsertTarget:
         existing_target.asset_type = "ACAO"
         existing_target.target_pct = Decimal("25.00")
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=existing_target)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=existing_target)
         
         db.execute = AsyncMock(return_value=execute_result)
         db.commit = AsyncMock()
@@ -254,8 +254,8 @@ class TestUpsertTarget:
     async def test_upsert_target_rounding(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=None)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=None)
         
         db.execute = AsyncMock(return_value=execute_result)
         db.commit = AsyncMock()
@@ -276,8 +276,8 @@ class TestDeleteTarget:
         target = MagicMock(spec=PortfolioClassTarget)
         target.asset_type = "ACAO"
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=target)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=target)
         
         db.execute = AsyncMock(return_value=execute_result)
         db.delete = AsyncMock()
@@ -292,8 +292,8 @@ class TestDeleteTarget:
     async def test_delete_target_not_found(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=None)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=None)
         
         db.execute = AsyncMock(return_value=execute_result)
         

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { BarChart2, TrendingUp, DollarSign, Activity, Briefcase } from 'lucide-react'
+import { BarChart2, TrendingUp, DollarSign, Briefcase } from 'lucide-react'
 import clsx from 'clsx'
 import {
   usePortfolioList,

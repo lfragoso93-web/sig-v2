@@ -51,7 +51,6 @@ from app.services.portfolio_service import (
     calc_raw_positions,
     normalize_type,
     enrich_with_prices,
-    _fetch_prices_batch,
 )
 from app.services.fx_service import get_usd_brl_today
 from app.services.rf_calc_service import enrich_rf_positions
@@ -411,7 +410,15 @@ async def _kpis_from_realtime(db: AsyncSession, portfolio_id: int) -> dict:
         }
 
     fx_today = await get_usd_brl_today(db)
-    prices = await _fetch_prices_batch(db, positions_raw)
+    price_items = [
+        {"ticker": p["ticker"], "asset_type": p["asset_type"]}
+        for p in positions_raw
+    ]
+    try:
+        prices = await get_prices(price_items, db)
+    except Exception as e:
+        logger.error("[rentabilidade] erro ao buscar precos: %s", e)
+        prices = {}
     enriched = enrich_with_prices(positions_raw, prices, fx_today=fx_today)
 
     total_invested = sum(p["total_invested"] for p in enriched)
@@ -588,7 +595,15 @@ async def get_rentabilidade_por_ativo(
     # Posições abertas com cotações atuais
     positions_raw = await calc_raw_positions(db, portfolio_id)
     fx_today = await get_usd_brl_today(db)
-    prices = await _fetch_prices_batch(db, positions_raw)
+    price_items = [
+        {"ticker": p["ticker"], "asset_type": p["asset_type"]}
+        for p in positions_raw
+    ]
+    try:
+        prices = await get_prices(price_items, db)
+    except Exception as e:
+        logger.error("[rentabilidade] erro ao buscar precos: %s", e)
+        prices = {}
     enriched = enrich_with_prices(positions_raw, prices, fx_today=fx_today)
 
     open_tickers: set[str] = set()
@@ -627,6 +642,7 @@ async def get_rentabilidade_por_ativo(
             "realized_pnl":    round(realized_pnl, 2),
             "total_pnl":       round(total_pnl, 2),
             "total_pct":       total_pct,
+            "total_pnl_pct":   total_pct,
             "is_open":         True,
         })
 
@@ -663,6 +679,7 @@ async def get_rentabilidade_por_ativo(
             "realized_pnl":    round(realized_pnl, 2),
             "total_pnl":       round(realized_pnl, 2),
             "total_pct":       total_pct,
+            "total_pnl_pct":   total_pct,
             "is_open":         False,
         })
 
@@ -706,11 +723,13 @@ async def get_rentabilidade_por_classe(
                 "current_value":  0.0,
                 "unrealized_pnl": 0.0,
                 "realized_pnl":   0.0,
+                "count":          0,
             }
         agg[at]["total_invested"] += item["total_invested"]
         agg[at]["current_value"]  += item["current_value"]
         agg[at]["unrealized_pnl"] += item["unrealized_pnl"]
         agg[at]["realized_pnl"]   += item["realized_pnl"]
+        agg[at]["count"]          += 1
 
     total_portfolio = sum(v["current_value"] for v in agg.values())
 
@@ -736,7 +755,10 @@ async def get_rentabilidade_por_classe(
             "realized_pnl":    round(v["realized_pnl"], 2),
             "total_pnl":       round(total_pnl, 2),
             "total_pct":       total_pct,
+            "total_pnl_pct":   total_pct,
             "allocation_pct":  allocation_pct,
+            "alocacao_pct":    allocation_pct,
+            "count":           v["count"],
         })
 
     result.sort(key=lambda x: -x["current_value"])

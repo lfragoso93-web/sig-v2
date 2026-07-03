@@ -39,7 +39,6 @@ async def _make_tx(
     op: OperationType,
     qty: float,
     tx_date: date,
-    asset_id: int = None,
 ) -> Transaction:
     tx = Transaction(
         portfolio_id=portfolio_id,
@@ -48,8 +47,7 @@ async def _make_tx(
         quantity=qty,
         date=tx_date,
         price=Decimal("10.00"),
-        total_value=Decimal(str(qty * 10)),
-        asset_id=asset_id,
+        asset_type="ACAO",
     )
     db.add(tx)
     await db.flush()
@@ -123,35 +121,35 @@ class TestCalcNetQty:
 
     def test_compras_somam(self):
         txs = [
-            (date(2024, 1, 1), OperationType.BUY, 100),
-            (date(2024, 2, 1), OperationType.BUY, 50),
+            (date(2024, 1, 1), OperationType.buy, 100),
+            (date(2024, 2, 1), OperationType.buy, 50),
         ]
         assert _calc_net_qty(txs, date(2024, 3, 1)) == 150.0
 
     def test_vendas_subtraem(self):
         txs = [
-            (date(2024, 1, 1), OperationType.BUY, 100),
-            (date(2024, 2, 1), OperationType.SELL, 40),
+            (date(2024, 1, 1), OperationType.buy, 100),
+            (date(2024, 2, 1), OperationType.sell, 40),
         ]
         assert _calc_net_qty(txs, date(2024, 3, 1)) == 60.0
 
     def test_nao_conta_transacoes_futuras(self):
         txs = [
-            (date(2024, 1, 1), OperationType.BUY, 100),
-            (date(2024, 6, 1), OperationType.BUY, 200),  # futuro em relacao ao ex_date
+            (date(2024, 1, 1), OperationType.buy, 100),
+            (date(2024, 6, 1), OperationType.buy, 200),  # futuro em relacao ao ex_date
         ]
         assert _calc_net_qty(txs, date(2024, 3, 1)) == 100.0
 
     def test_nunca_retorna_negativo(self):
         txs = [
-            (date(2024, 1, 1), OperationType.SELL, 999),  # venda sem compra previa
+            (date(2024, 1, 1), OperationType.sell, 999),  # venda sem compra previa
         ]
         assert _calc_net_qty(txs, date(2024, 6, 1)) == 0.0
 
     def test_posicao_zero_apos_venda_total(self):
         txs = [
-            (date(2024, 1, 1), OperationType.BUY, 100),
-            (date(2024, 2, 1), OperationType.SELL, 100),
+            (date(2024, 1, 1), OperationType.buy, 100),
+            (date(2024, 2, 1), OperationType.sell, 100),
         ]
         assert _calc_net_qty(txs, date(2024, 3, 1)) == 0.0
 
@@ -173,7 +171,7 @@ class TestBackfillDividends:
 
     async def test_cria_asset_dividend_e_dividend(self, db: AsyncSession, portfolio: Portfolio):
         """Backfill cria AssetDividend global + Dividend por carteira."""
-        await _make_tx(db, portfolio.id, "PETR4", OperationType.BUY, 100, date(2023, 1, 1))
+        await _make_tx(db, portfolio.id, "PETR4", OperationType.buy, 100, date(2023, 1, 1))
 
         raw_dividends = [
             {
@@ -194,7 +192,9 @@ class TestBackfillDividends:
         # Verifica AssetDividend criado
         from sqlalchemy import select
         ad_result = await db.execute(
-            select(AssetDividend).where(AssetDividend.ticker == "PETR4")
+            select(AssetDividend)
+            .join(Asset, AssetDividend.asset_id == Asset.id)
+            .where(Asset.ticker == "PETR4")
         )
         ads = ad_result.scalars().all()
         assert len(ads) == 1
@@ -210,7 +210,7 @@ class TestBackfillDividends:
 
     async def test_jcp_aplica_desconto_15_porcento(self, db: AsyncSession, portfolio: Portfolio):
         """JCP deve ter net_value = total_value * 0.85."""
-        await _make_tx(db, portfolio.id, "ITUB4", OperationType.BUY, 200, date(2023, 1, 1))
+        await _make_tx(db, portfolio.id, "ITUB4", OperationType.buy, 200, date(2023, 1, 1))
 
         raw_dividends = [
             {
@@ -239,7 +239,7 @@ class TestBackfillDividends:
 
     async def test_status_recebido_quando_payment_no_passado(self, db: AsyncSession, portfolio: Portfolio):
         """Se payment_date <= hoje, status deve ser RECEBIDO."""
-        await _make_tx(db, portfolio.id, "VALE3", OperationType.BUY, 100, date(2023, 1, 1))
+        await _make_tx(db, portfolio.id, "VALE3", OperationType.buy, 100, date(2023, 1, 1))
 
         raw_dividends = [
             {
@@ -267,7 +267,7 @@ class TestBackfillDividends:
     async def test_sem_posicao_no_ex_date_nao_cria_dividend(self, db: AsyncSession, portfolio: Portfolio):
         """Se o usuario nao tinha o ativo no ex_date, nao deve criar Dividend."""
         # Comprou DEPOIS do ex_date
-        await _make_tx(db, portfolio.id, "ABEV3", OperationType.BUY, 100, date(2025, 1, 1))
+        await _make_tx(db, portfolio.id, "ABEV3", OperationType.buy, 100, date(2025, 1, 1))
 
         raw_dividends = [
             {
@@ -294,7 +294,7 @@ class TestBackfillDividends:
 
     async def test_atualiza_dividend_existente(self, db: AsyncSession, portfolio: Portfolio):
         """Se AssetDividend ja existe, backfill atualiza qty/total_value do Dividend."""
-        await _make_tx(db, portfolio.id, "PETR4", OperationType.BUY, 100, date(2023, 1, 1))
+        await _make_tx(db, portfolio.id, "PETR4", OperationType.buy, 100, date(2023, 1, 1))
 
         raw_v1 = [{
             "lastDatePrior": "2024-03-01",

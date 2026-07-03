@@ -352,7 +352,7 @@ async def import_csv_transactions(
         try:
             await db.commit()
             result["success"] = True
-            await invalidate_portfolio_cache(db, portfolio_id)
+            await invalidate_portfolio_cache(portfolio_id)
             logger.info(f"Imported {len(created_transactions)} transactions for portfolio {portfolio_id}")
         except Exception as e:
             await db.rollback()
@@ -362,6 +362,6 @@ async def import_csv_transactions(
             result["imported_count"] = 0
             result["global_errors"].append(f"Database error: {str(e)}")
     else:
-        result["success"] = True
+        result["success"] = result["error_count"] == 0
     
     return result

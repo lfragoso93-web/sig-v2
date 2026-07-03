@@ -150,11 +150,11 @@ class TestGetAuditLogs:
         mock_log = MagicMock(spec=AuditLog)
         mock_log.user_id = 1
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one = AsyncMock(return_value=1)
-        execute_result.unique = AsyncMock(return_value=execute_result)
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[mock_log])
+        execute_result = MagicMock()
+        execute_result.scalar_one = MagicMock(return_value=1)
+        execute_result.unique = MagicMock(return_value=execute_result)
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[mock_log])
         
         db.execute = AsyncMock(return_value=execute_result)
 
@@ -166,11 +166,11 @@ class TestGetAuditLogs:
     async def test_get_logs_filter_by_user(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one = AsyncMock(return_value=1)
-        execute_result.unique = AsyncMock(return_value=execute_result)
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[])
+        execute_result = MagicMock()
+        execute_result.scalar_one = MagicMock(return_value=1)
+        execute_result.unique = MagicMock(return_value=execute_result)
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[])
         
         db.execute = AsyncMock(return_value=execute_result)
 
@@ -181,11 +181,11 @@ class TestGetAuditLogs:
     async def test_get_logs_filter_by_resource_type(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one = AsyncMock(return_value=5)
-        execute_result.unique = AsyncMock(return_value=execute_result)
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[])
+        execute_result = MagicMock()
+        execute_result.scalar_one = MagicMock(return_value=5)
+        execute_result.unique = MagicMock(return_value=execute_result)
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[])
         
         db.execute = AsyncMock(return_value=execute_result)
 
@@ -196,11 +196,11 @@ class TestGetAuditLogs:
     async def test_get_logs_filter_by_action(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one = AsyncMock(return_value=3)
-        execute_result.unique = AsyncMock(return_value=execute_result)
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[])
+        execute_result = MagicMock()
+        execute_result.scalar_one = MagicMock(return_value=3)
+        execute_result.unique = MagicMock(return_value=execute_result)
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[])
         
         db.execute = AsyncMock(return_value=execute_result)
 
@@ -211,11 +211,11 @@ class TestGetAuditLogs:
     async def test_get_logs_filter_by_portfolio(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one = AsyncMock(return_value=2)
-        execute_result.unique = AsyncMock(return_value=execute_result)
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[])
+        execute_result = MagicMock()
+        execute_result.scalar_one = MagicMock(return_value=2)
+        execute_result.unique = MagicMock(return_value=execute_result)
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[])
         
         db.execute = AsyncMock(return_value=execute_result)
 
@@ -226,11 +226,11 @@ class TestGetAuditLogs:
     async def test_get_logs_filter_by_status(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one = AsyncMock(return_value=1)
-        execute_result.unique = AsyncMock(return_value=execute_result)
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[])
+        execute_result = MagicMock()
+        execute_result.scalar_one = MagicMock(return_value=1)
+        execute_result.unique = MagicMock(return_value=execute_result)
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[])
         
         db.execute = AsyncMock(return_value=execute_result)
 
@@ -241,11 +241,11 @@ class TestGetAuditLogs:
     async def test_get_logs_pagination(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one = AsyncMock(return_value=100)
-        execute_result.unique = AsyncMock(return_value=execute_result)
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[])
+        execute_result = MagicMock()
+        execute_result.scalar_one = MagicMock(return_value=100)
+        execute_result.unique = MagicMock(return_value=execute_result)
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[])
         
         db.execute = AsyncMock(return_value=execute_result)
 
@@ -260,11 +260,11 @@ class TestGetSpecificAuditLogs:
     async def test_get_user_audit_logs(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one = AsyncMock(return_value=5)
-        execute_result.unique = AsyncMock(return_value=execute_result)
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[])
+        execute_result = MagicMock()
+        execute_result.scalar_one = MagicMock(return_value=5)
+        execute_result.unique = MagicMock(return_value=execute_result)
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[])
         
         db.execute = AsyncMock(return_value=execute_result)
 
@@ -275,11 +275,11 @@ class TestGetSpecificAuditLogs:
     async def test_get_portfolio_audit_logs(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one = AsyncMock(return_value=3)
-        execute_result.unique = AsyncMock(return_value=execute_result)
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[])
+        execute_result = MagicMock()
+        execute_result.scalar_one = MagicMock(return_value=3)
+        execute_result.unique = MagicMock(return_value=execute_result)
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[])
         
         db.execute = AsyncMock(return_value=execute_result)
 
@@ -293,8 +293,8 @@ class TestGetSpecificAuditLogs:
         mock_log = MagicMock(spec=AuditLog)
         mock_log.id = 123
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=mock_log)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=mock_log)
         
         db.execute = AsyncMock(return_value=execute_result)
 
@@ -310,9 +310,9 @@ class TestAuditStats:
     async def test_get_audit_stats(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one = AsyncMock(return_value=100)
-        execute_result.all = AsyncMock(return_value=[("CREATE", 50), ("UPDATE", 30), ("DELETE", 20)])
+        execute_result = MagicMock()
+        execute_result.scalar_one = MagicMock(return_value=100)
+        execute_result.all = MagicMock(return_value=[("CREATE", 50), ("UPDATE", 30), ("DELETE", 20)])
         
         db.execute = AsyncMock(return_value=execute_result)
 
@@ -324,10 +324,10 @@ class TestAuditStats:
     async def test_get_user_audit_stats(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one = AsyncMock(return_value=25)
-        execute_result.scalar_one_or_none = AsyncMock(return_value=datetime.now(timezone.utc))
-        execute_result.all = AsyncMock(return_value=[("CREATE", 15), ("UPDATE", 10)])
+        execute_result = MagicMock()
+        execute_result.scalar_one = MagicMock(return_value=25)
+        execute_result.scalar_one_or_none = MagicMock(return_value=datetime.now(timezone.utc))
+        execute_result.all = MagicMock(return_value=[("CREATE", 15), ("UPDATE", 10)])
         
         db.execute = AsyncMock(return_value=execute_result)
 
@@ -343,8 +343,8 @@ class TestCleanupAuditLogs:
     async def test_cleanup_dry_run(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one = AsyncMock(return_value=50)
+        execute_result = MagicMock()
+        execute_result.scalar_one = MagicMock(return_value=50)
         
         db.execute = AsyncMock(return_value=execute_result)
 
@@ -355,8 +355,8 @@ class TestCleanupAuditLogs:
     async def test_cleanup_actual(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one = AsyncMock(return_value=30)
+        execute_result = MagicMock()
+        execute_result.scalar_one = MagicMock(return_value=30)
         
         db.execute = AsyncMock(return_value=execute_result)
         db.commit = AsyncMock()
@@ -368,8 +368,8 @@ class TestCleanupAuditLogs:
     async def test_cleanup_no_logs_to_delete(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one = AsyncMock(return_value=0)
+        execute_result = MagicMock()
+        execute_result.scalar_one = MagicMock(return_value=0)
         
         db.execute = AsyncMock(return_value=execute_result)
 

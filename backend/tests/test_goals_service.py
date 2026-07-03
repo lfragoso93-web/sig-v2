@@ -120,9 +120,9 @@ class TestResolveCurrentValue:
         position = MagicMock()
         position.market_value = 5000.0
         
-        execute_result = AsyncMock()
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[position])
+        execute_result = MagicMock()
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[position])
         
         db.execute = AsyncMock(return_value=execute_result)
         
@@ -144,9 +144,9 @@ class TestListGoals:
     async def test_list_goals_empty(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[])
+        execute_result = MagicMock()
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[])
         
         db.execute = AsyncMock(return_value=execute_result)
         
@@ -183,9 +183,9 @@ class TestListGoals:
         goal2.description = ""
         goal2.created_at = datetime.now(timezone.utc)
         
-        execute_result = AsyncMock()
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[goal1, goal2])
+        execute_result = MagicMock()
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[goal1, goal2])
         
         db.execute = AsyncMock(return_value=execute_result)
         
@@ -213,8 +213,8 @@ class TestGetGoal:
         goal.description = ""
         goal.created_at = datetime.now(timezone.utc)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=goal)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=goal)
         
         db.execute = AsyncMock(return_value=execute_result)
         
@@ -226,8 +226,8 @@ class TestGetGoal:
     async def test_get_goal_not_found(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=None)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=None)
         
         db.execute = AsyncMock(return_value=execute_result)
         
@@ -242,9 +242,9 @@ class TestCreateGoal:
     async def test_create_goal_livre(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalars = AsyncMock(return_value=execute_result)
-        execute_result.all = AsyncMock(return_value=[])
+        execute_result = MagicMock()
+        execute_result.scalars = MagicMock(return_value=execute_result)
+        execute_result.all = MagicMock(return_value=[])
         
         db.execute = AsyncMock(return_value=execute_result)
         db.commit = AsyncMock()
@@ -286,8 +286,8 @@ class TestUpdateGoal:
         goal.description = ""
         goal.created_at = datetime.now(timezone.utc)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=goal)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=goal)
         
         db.execute = AsyncMock(return_value=execute_result)
         db.commit = AsyncMock()
@@ -303,8 +303,8 @@ class TestUpdateGoal:
     async def test_update_goal_not_found(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=None)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=None)
         
         db.execute = AsyncMock(return_value=execute_result)
         
@@ -325,8 +325,8 @@ class TestDeleteGoal:
         goal.id = 1
         goal.portfolio_id = 1
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=goal)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=goal)
         
         db.execute = AsyncMock(return_value=execute_result)
         db.delete = AsyncMock()
@@ -340,8 +340,8 @@ class TestDeleteGoal:
     async def test_delete_goal_not_found(self):
         db = AsyncMock(spec=AsyncSession)
         
-        execute_result = AsyncMock()
-        execute_result.scalar_one_or_none = AsyncMock(return_value=None)
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none = MagicMock(return_value=None)
         
         db.execute = AsyncMock(return_value=execute_result)
         
