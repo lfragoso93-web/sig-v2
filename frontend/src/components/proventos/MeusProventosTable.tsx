@@ -4,19 +4,25 @@ import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
 const ASSET_TYPE_LABELS: Record<string, string> = {
-  ACAO_NACIONAL: 'Ações', FII: 'FII', ETF_NACIONAL: 'ETF',
-  TESOURO_DIRETO: 'Tesouro', STOCK: 'Stock',
+  ACAO: 'Ações', ACAO_NACIONAL: 'Ações', FII: 'FII', ETF_NACIONAL: 'ETF',
+  TESOURO_DIRETO: 'Tesouro', STOCK: 'Stock', BDR: 'BDR',
   ETF_INTERNACIONAL: 'ETF Int.', CRIPTO: 'Cripto', RENDA_FIXA: 'Renda Fixa',
 }
 
 const DIVIDEND_TYPE_LABELS: Record<string, string> = {
   DIVIDENDO: 'Dividendos', JCP: 'JCP', RENDIMENTO: 'Rendimento',
-  AMORTIZACAO: 'Amortização', BONIFICACAO: 'Bonificação', OUTROS: 'Outros',
+  AMORTIZACAO: 'Amortização', BONIFICACAO: 'Bonificação',
+  SUBSCRICAO: 'Subscrição', OUTROS: 'Outros',
 }
 
 function fmt(dateStr: string | null): string {
   if (!dateStr) return '—'
   try { return format(parseISO(dateStr), 'dd/MM/yyyy', { locale: ptBR }) } catch { return dateStr }
+}
+
+function fmtMaybeMoney(value: number | null | undefined): string {
+  if (value === null || value === undefined) return '—'
+  return formatBRL(value)
 }
 
 const cellText  = { color: 'var(--color-text)' }
@@ -40,14 +46,13 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
-// ── Card mobile ──────────────────────────────────────────────────────
 function ProventoCard({ item }: { item: ProventoItem }) {
+  const typeLabel = DIVIDEND_TYPE_LABELS[item.dividend_type] ?? item.dividend_type
   return (
     <div
       className="rounded-xl p-3 flex flex-col gap-2"
       style={{ background: 'var(--color-surface-offset)', border: '1px solid var(--color-divider)' }}
     >
-      {/* Cabeçalho */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <span className="font-bold text-sm" style={cellText}>{item.ticker}</span>
@@ -61,19 +66,26 @@ function ProventoCard({ item }: { item: ProventoItem }) {
         <StatusBadge status={item.status} />
       </div>
 
-      {/* Grade de dados */}
       <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
         <div>
           <div className="text-[10px]" style={cellFaint}>Tipo</div>
-          <div style={cellMuted}>{DIVIDEND_TYPE_LABELS[item.dividend_type] ?? item.dividend_type}</div>
+          <div style={cellMuted}>{typeLabel}</div>
         </div>
         <div>
           <div className="text-[10px]" style={cellFaint}>Data Pgto</div>
           <div className="tabular-nums" style={cellMuted}>{fmt(item.payment_date)}</div>
         </div>
         <div>
+          <div className="text-[10px]" style={cellFaint}>Data Com</div>
+          <div className="tabular-nums" style={cellMuted}>{fmt(item.record_date)}</div>
+        </div>
+        <div>
+          <div className="text-[10px]" style={cellFaint}>Data Ex</div>
+          <div className="tabular-nums" style={cellMuted}>{fmt(item.ex_date)}</div>
+        </div>
+        <div>
           <div className="text-[10px]" style={cellFaint}>Valor unit.</div>
-          <div className="tabular-nums" style={cellText}>{formatBRL(item.value_per_unit)}</div>
+          <div className="tabular-nums" style={cellText}>{fmtMaybeMoney(item.value_per_unit)}</div>
         </div>
         <div>
           <div className="text-[10px]" style={cellFaint}>Líquido</div>
@@ -84,25 +96,20 @@ function ProventoCard({ item }: { item: ProventoItem }) {
   )
 }
 
-// ── Componente principal ───────────────────────────────────────────────
 export default function MeusProventosTable({ data }: { data: ProventoItem[] }) {
-  if (!data.length) return (
-    <p className="text-xs p-4" style={cellMuted}>Sem proventos no período.</p>
-  )
+  if (!data.length) return <p className="text-xs p-4" style={cellMuted}>Sem proventos no período.</p>
 
   return (
     <>
-      {/* VIEW MOBILE: cards (<768px) */}
       <div className="flex flex-col gap-2 md:hidden">
         {data.map(item => <ProventoCard key={item.id} item={item} />)}
       </div>
 
-      {/* VIEW DESKTOP: tabela (≥768px) */}
       <div className="hidden md:block overflow-x-auto">
-        <table className="w-full min-w-[900px] text-xs">
+        <table className="w-full min-w-[1040px] text-xs">
           <thead>
             <tr style={{ borderBottom: '1px solid var(--color-divider)' }}>
-              {['Ativo','Tipo de Ativo','Status','Tipo Pgto','Data Com','Data Pgto','Quantidade','Valor/Unit.','Valor Total','Líquido'].map(h => (
+              {['Ativo','Tipo de Ativo','Status','Tipo Pgto','Data Com','Data Ex','Data Pgto','Quantidade','Valor/Unit.','Valor Total','Líquido'].map(h => (
                 <th key={h} className="px-3 py-2 font-medium text-left first:pl-4 last:pr-4" style={cellMuted}>{h}</th>
               ))}
             </tr>
@@ -113,10 +120,9 @@ export default function MeusProventosTable({ data }: { data: ProventoItem[] }) {
                 key={item.id}
                 className="transition-colors hover:bg-[var(--color-surface-offset)]"
                 style={{ borderBottom: '1px solid var(--color-divider)' }}
+                title={item.remarks || undefined}
               >
-                <td className="px-3 py-2 pl-4">
-                  <span className="font-semibold" style={cellText}>{item.ticker}</span>
-                </td>
+                <td className="px-3 py-2 pl-4"><span className="font-semibold" style={cellText}>{item.ticker}</span></td>
                 <td className="px-3 py-2">
                   <span
                     className="px-1.5 py-0.5 rounded text-[9px] font-medium"
@@ -127,10 +133,11 @@ export default function MeusProventosTable({ data }: { data: ProventoItem[] }) {
                 </td>
                 <td className="px-3 py-2"><StatusBadge status={item.status} /></td>
                 <td className="px-3 py-2" style={cellMuted}>{DIVIDEND_TYPE_LABELS[item.dividend_type] ?? item.dividend_type}</td>
+                <td className="px-3 py-2 tabular-nums" style={cellMuted}>{fmt(item.record_date)}</td>
                 <td className="px-3 py-2 tabular-nums" style={cellMuted}>{fmt(item.ex_date)}</td>
                 <td className="px-3 py-2 tabular-nums" style={cellMuted}>{fmt(item.payment_date)}</td>
                 <td className="px-3 py-2 tabular-nums text-right" style={cellText}>{formatQuantity(item.quantity)}</td>
-                <td className="px-3 py-2 tabular-nums text-right" style={cellText}>{formatBRL(item.value_per_unit)}</td>
+                <td className="px-3 py-2 tabular-nums text-right" style={cellText}>{fmtMaybeMoney(item.value_per_unit)}</td>
                 <td className="px-3 py-2 tabular-nums text-right font-medium" style={cellText}>{formatBRL(item.total_value)}</td>
                 <td className="px-3 py-2 pr-4 tabular-nums text-right font-semibold" style={{ color: 'var(--color-success)' }}>{formatBRL(item.net_value)}</td>
               </tr>
