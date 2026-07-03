@@ -9,9 +9,8 @@ vinculado opcionalmente a um AssetDividend (evento de provento do ativo).
   - (portfolio_id, status)  — cobre _proventos_total (WHERE status='RECEBIDO')
 
 Campos legados mantidos para compatibilidade com bancos já migrados antes da
-normalização do módulo de proventos. Algumas bases ainda possuem `date_ex` e
-`date_pagamento` como NOT NULL; por isso esses campos precisam continuar
-mapeados e preenchidos junto com `ex_date`/`payment_date`.
+normalização do módulo de proventos. A base local ainda possui `date_ex`, mas
+não possui `date_pagamento`; por isso apenas `date_ex` permanece mapeado aqui.
 """
 import enum
 
@@ -79,9 +78,8 @@ class Dividend(Base):
     total_received: Mapped[Numeric | None] = mapped_column(Numeric(20, 8), nullable=True)
     dividend_type: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    # ── Campos legados ainda existentes em algumas bases ───────────────────
+    # ── Campo legado ainda existente em algumas bases ──────────────────────
     date_ex: Mapped[Date | None] = mapped_column(Date, nullable=True)
-    date_pagamento: Mapped[Date | None] = mapped_column(Date, nullable=True)
 
     # ── Relacionamentos ────────────────────────────────────────────────────
     portfolio = relationship("Portfolio", back_populates="dividends")
