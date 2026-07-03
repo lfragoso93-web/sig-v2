@@ -142,15 +142,20 @@ def _calc_net_qty(txs: list[tuple], ref_date: date) -> float:
     return max(qty, 0.0)
 
 
-def _apply_dividend_dates(div: Dividend, ex_date: date, payment_date: date | None) -> None:
+def _apply_dividend_legacy_fields(div: Dividend, ex_date: date, payment_date: date | None, quantity: float) -> None:
     div.ex_date = ex_date
     div.payment_date = payment_date
     div.date_ex = ex_date
     div.date_pagamento = payment_date or ex_date
+    div.quantity_on_date = quantity
 
 
-def _legacy_dividend_dates(ex_date: date, payment_date: date | None) -> dict[str, date | None]:
-    return {"date_ex": ex_date, "date_pagamento": payment_date or ex_date}
+def _legacy_dividend_fields(ex_date: date, payment_date: date | None, quantity: float) -> dict[str, Any]:
+    return {
+        "date_ex": ex_date,
+        "date_pagamento": payment_date or ex_date,
+        "quantity_on_date": quantity,
+    }
 
 
 def _sync_scope_label(portfolio_id: int | None) -> str:
@@ -190,8 +195,8 @@ async def _fetch_dividends_brapi(ticker: str, asset_type: str = "ACAO") -> list[
             if resp.status_code in (401, 403):
                 logger.warning("[Backfill] BRAPI sem autorizacao para %s (%s)", ticker, endpoint)
                 return []
-            if resp.status_code == 400:
-                logger.info("[Backfill] BRAPI sem dividendos/eventos para %s em %s (400)", ticker, endpoint)
+            if resp.status_code in (400, 404):
+                logger.info("[Backfill] BRAPI sem dividendos/eventos para %s em %s (%s)", ticker, endpoint, resp.status_code)
                 return []
             resp.raise_for_status()
             data = resp.json()
@@ -424,7 +429,7 @@ async def backfill_dividends(db: AsyncSession, portfolio_id: int | None, ticker:
                         value_per_unit=parsed.value_per_unit,
                         total_received=total,
                         dividend_type=div_type_str,
-                        **_legacy_dividend_dates(parsed.ex_date, parsed.payment_date),
+                        **_legacy_dividend_fields(parsed.ex_date, parsed.payment_date, qty),
                     )
                     db.add(div)
                     existing_divs[(pid, asset_div.id)] = div
@@ -434,7 +439,7 @@ async def backfill_dividends(db: AsyncSession, portfolio_id: int | None, ticker:
                     div.net_value = net
                     div.status = status
                     div.ticker = ticker
-                    _apply_dividend_dates(div, parsed.ex_date, parsed.payment_date)
+                    _apply_dividend_legacy_fields(div, parsed.ex_date, parsed.payment_date, qty)
                     div.value_per_unit = parsed.value_per_unit
                     div.total_received = total
                     div.dividend_type = div_type_str
@@ -515,7 +520,7 @@ async def materialize_asset_dividends(db: AsyncSession, tickers: Optional[list[s
                     value_per_unit=value,
                     total_received=total,
                     dividend_type=dividend_type.value,
-                    **_legacy_dividend_dates(asset_div.ex_date, asset_div.payment_date),
+                    **_legacy_dividend_fields(asset_div.ex_date, asset_div.payment_date, qty),
                 )
                 db.add(div)
                 existing_divs[(pid, asset_div.id)] = div
@@ -526,7 +531,7 @@ async def materialize_asset_dividends(db: AsyncSession, tickers: Optional[list[s
                 div.net_value = net
                 div.status = status
                 div.ticker = asset.ticker
-                _apply_dividend_dates(div, asset_div.ex_date, asset_div.payment_date)
+                _apply_dividend_legacy_fields(div, asset_div.ex_date, asset_div.payment_date, qty)
                 div.value_per_unit = value
                 div.total_received = total
                 div.dividend_type = dividend_type.value
