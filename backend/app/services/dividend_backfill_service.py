@@ -77,7 +77,7 @@ def _map_dividend_type(raw: str | None, category: str | None = None) -> str:
         return DividendType.JCP.value
     if "AMORT" in label:
         return DividendType.AMORTIZACAO.value
-    if "REND" in label:
+    if "REND" in label or "FII" in cat:
         return DividendType.RENDIMENTO.value
     if "DIVID" in label:
         return DividendType.DIVIDENDO.value
@@ -164,29 +164,76 @@ def _sync_scope_label(portfolio_id: int | None) -> str:
     return "global" if not portfolio_id or portfolio_id <= 0 else f"portfolio {portfolio_id}"
 
 
-def _extract_brapi_events(entry: dict) -> list[dict]:
+def _as_list(value: Any) -> list[Any]:
+    if isinstance(value, list):
+        return value
+    if isinstance(value, dict):
+        return [value]
+    return []
+
+
+def _extract_brapi_events(entry: dict, default_category: str | None = None) -> list[dict]:
     data = entry.get("data") if isinstance(entry.get("data"), dict) else entry
     events: list[dict] = []
+
     for category, keys in (
-        ("cash", ("cashDividends", "dividends", "provents")),
-        ("stock", ("stockDividends",)),
+        (default_category or "cash", ("cashDividends", "dividends", "provents", "income", "incomes", "earnings", "results")),
+        ("stock", ("stockDividends", "stock_dividends")),
         ("subscription", ("subscriptions",)),
     ):
-        raw_items: list[dict] = []
+        raw_items: list[Any] = []
         for key in keys:
-            value = data.get(key)
-            if isinstance(value, list):
-                raw_items.extend(value)
+            raw_items.extend(_as_list(data.get(key)))
         for item in raw_items:
             if isinstance(item, dict):
                 enriched = dict(item)
                 enriched.setdefault("eventCategory", category)
                 events.append(enriched)
+
+    # Alguns retornos de FII vêm como lista direta dentro de data/results, sem
+    # wrapper por ticker nem chave dividends/cashDividends.
+    if not events and any(k in data for k in ("paymentDate", "lastDatePrior", "rate", "value", "amount")):
+        enriched = dict(data)
+        enriched.setdefault("eventCategory", default_category or "cash")
+        events.append(enriched)
+
     return events
 
 
+def _iter_brapi_result_entries(data: dict, ticker: str) -> list[dict]:
+    ticker_upper = ticker.upper()
+    entries: list[dict] = []
+
+    for key in ("results", "stocks", "fiis", "dividends", "data"):
+        value = data.get(key)
+        if isinstance(value, list):
+            entries.extend([item for item in value if isinstance(item, dict)])
+        elif isinstance(value, dict):
+            entries.append(value)
+
+    if not entries and isinstance(data, dict):
+        entries.append(data)
+
+    filtered: list[dict] = []
+    for entry in entries:
+        symbol = (
+            entry.get("symbol")
+            or entry.get("ticker")
+            or entry.get("stock")
+            or entry.get("fii")
+            or entry.get("code")
+            or entry.get("asset")
+            or ""
+        ).upper()
+        if symbol and symbol != ticker_upper:
+            continue
+        filtered.append(entry)
+    return filtered
+
+
 async def _fetch_dividends_brapi(ticker: str, asset_type: str = "ACAO") -> list[dict]:
-    endpoint = "fii/dividends" if asset_type.upper() in FII_TYPES else "stocks/dividends"
+    is_fii = asset_type.upper() in FII_TYPES
+    endpoint = "fii/dividends" if is_fii else "stocks/dividends"
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(
@@ -203,19 +250,10 @@ async def _fetch_dividends_brapi(ticker: str, asset_type: str = "ACAO") -> list[
             resp.raise_for_status()
             data = resp.json()
 
-        result_items = data.get("results") or data.get("stocks") or data.get("fiis") or []
         rows: list[dict] = []
-        for entry in result_items:
-            symbol = (
-                entry.get("symbol")
-                or entry.get("ticker")
-                or entry.get("stock")
-                or entry.get("fii")
-                or ""
-            ).upper()
-            if symbol and symbol != ticker.upper():
-                continue
-            rows.extend(_extract_brapi_events(entry))
+        for entry in _iter_brapi_result_entries(data, ticker):
+            rows.extend(_extract_brapi_events(entry, default_category="fii" if is_fii else None))
+        logger.info("[Backfill] BRAPI %s: %s evento(s) bruto(s) para %s", endpoint, len(rows), ticker)
         return rows
     except Exception as e:
         logger.warning(f"[Backfill] BRAPI erro para {ticker}: {e}")
@@ -266,7 +304,7 @@ def _parse_raw_dividend(raw: dict) -> Optional[ParsedDividendEvent]:
             return None
 
         div_type = _map_dividend_type(raw.get("label") or raw.get("type") or raw.get("dividendType"), category)
-        value = _to_float(raw.get("rate") or raw.get("value") or raw.get("amount"), default=0.0)
+        value = _to_float(raw.get("rate") or raw.get("value") or raw.get("amount") or raw.get("income"), default=0.0)
         factor = _to_optional_float(raw.get("factor"))
         complete_factor = _to_optional_float(raw.get("completeFactor") or raw.get("complete_factor"))
 
@@ -293,7 +331,7 @@ def _parse_raw_dividend(raw: dict) -> Optional[ParsedDividendEvent]:
             isin_code=raw.get("isinCode") or raw.get("isin_code"),
             asset_issued=raw.get("assetIssued") or raw.get("asset_issued"),
             related_to=raw.get("relatedTo") or raw.get("related_to"),
-            remarks=raw.get("remarks"),
+            remarks=raw.get("remarks") or raw.get("observation"),
             raw_payload=raw,
         )
     except Exception:
