@@ -4,6 +4,7 @@ proventos_service.py — agregacoes e leituras de proventos.
 from __future__ import annotations
 
 import logging
+import time
 from datetime import date
 from typing import Optional
 
@@ -15,8 +16,13 @@ from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
 from app.models.dividend import Dividend, DividendStatus
 from app.models.transaction import Transaction, OperationType
+from app.services.dividend_backfill_service import materialize_asset_dividends
 
 logger = logging.getLogger(__name__)
+
+# Evita que os 4 endpoints da página materializem repetidamente no mesmo load.
+_AUTO_MATERIALIZE_TTL_SECONDS = 60.0
+_auto_materialize_cache: dict[int, float] = {}
 
 
 def _first_buy_subquery():
@@ -31,6 +37,41 @@ def _first_buy_subquery():
         .group_by(Transaction.portfolio_id, Transaction.ticker)
         .subquery()
     )
+
+
+async def ensure_portfolio_proventos(db: AsyncSession, portfolio_id: int, force: bool = False) -> int:
+    """
+    Garante que a página de Proventos reflita automaticamente os ativos da carteira.
+
+    Não chama provedores externos. Ela apenas materializa, para a carteira, os
+    eventos globais já coletados em AssetDividend. A coleta externa continua
+    acontecendo no seed/onboarding/backfill; aqui a regra é tornar a leitura da
+    página idempotente e autossuficiente.
+    """
+    now = time.monotonic()
+    if not force and now < _auto_materialize_cache.get(portfolio_id, 0.0):
+        return 0
+
+    rows = await db.execute(
+        select(Transaction.ticker)
+        .where(Transaction.portfolio_id == portfolio_id)
+        .distinct()
+    )
+    tickers = [str(row[0]).upper() for row in rows.all() if row[0]]
+    if not tickers:
+        _auto_materialize_cache[portfolio_id] = now + _AUTO_MATERIALIZE_TTL_SECONDS
+        return 0
+
+    changed = await materialize_asset_dividends(
+        db=db,
+        tickers=tickers,
+        portfolio_id=portfolio_id,
+        commit=True,
+    )
+    _auto_materialize_cache[portfolio_id] = time.monotonic() + _AUTO_MATERIALIZE_TTL_SECONDS
+    if changed:
+        logger.info("[proventos] portfolio=%s: %s proventos materializados automaticamente", portfolio_id, changed)
+    return changed
 
 
 async def get_summary(db: AsyncSession, portfolio_id: int) -> dict:
@@ -218,12 +259,7 @@ async def get_monthly_history(
         values = [v for v in months_vals if v is not None]
         total = sum(values)
         media = total / len(values) if values else 0.0
-        result.append({
-            "year": year,
-            "months": months_vals,
-            "total": round(total, 2),
-            "media": round(media, 2),
-        })
+        result.append({"year": year, "months": months_vals, "total": round(total, 2), "media": round(media, 2)})
     return result
 
 
@@ -234,10 +270,7 @@ async def get_distribution(db: AsyncSession, portfolio_id: int, months: int = 12
         select(Asset.ticker, Asset.asset_type, func.sum(Dividend.net_value).label("total"))
         .join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
         .join(Asset, AssetDividend.asset_id == Asset.id)
-        .where(
-            Dividend.portfolio_id == portfolio_id,
-            AssetDividend.payment_date >= start,
-        )
+        .where(Dividend.portfolio_id == portfolio_id, AssetDividend.payment_date >= start)
         .group_by(Asset.ticker, Asset.asset_type)
         .order_by(func.sum(Dividend.net_value).desc())
     )
@@ -245,11 +278,6 @@ async def get_distribution(db: AsyncSession, portfolio_id: int, months: int = 12
 
     grand_total = sum(float(r.total) for r in rows) or 1.0
     return [
-        {
-            "ticker": r.ticker,
-            "asset_type": r.asset_type,
-            "total": round(float(r.total), 2),
-            "percentage": round(float(r.total) / grand_total * 100, 2),
-        }
+        {"ticker": r.ticker, "asset_type": r.asset_type, "total": round(float(r.total), 2), "percentage": round(float(r.total) / grand_total * 100, 2)}
         for r in rows
     ]
