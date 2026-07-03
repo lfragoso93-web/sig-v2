@@ -142,19 +142,21 @@ def _calc_net_qty(txs: list[tuple], ref_date: date) -> float:
     return max(qty, 0.0)
 
 
-def _apply_dividend_legacy_fields(div: Dividend, ex_date: date, payment_date: date | None, quantity: float) -> None:
+def _apply_dividend_legacy_fields(div: Dividend, ex_date: date, payment_date: date | None, quantity: float, value_per_unit: float) -> None:
     div.ex_date = ex_date
     div.payment_date = payment_date
     div.date_ex = ex_date
     div.date_pagamento = payment_date or ex_date
     div.quantity_on_date = quantity
+    div.value_per_share = value_per_unit
 
 
-def _legacy_dividend_fields(ex_date: date, payment_date: date | None, quantity: float) -> dict[str, Any]:
+def _legacy_dividend_fields(ex_date: date, payment_date: date | None, quantity: float, value_per_unit: float) -> dict[str, Any]:
     return {
         "date_ex": ex_date,
         "date_pagamento": payment_date or ex_date,
         "quantity_on_date": quantity,
+        "value_per_share": value_per_unit,
     }
 
 
@@ -429,7 +431,7 @@ async def backfill_dividends(db: AsyncSession, portfolio_id: int | None, ticker:
                         value_per_unit=parsed.value_per_unit,
                         total_received=total,
                         dividend_type=div_type_str,
-                        **_legacy_dividend_fields(parsed.ex_date, parsed.payment_date, qty),
+                        **_legacy_dividend_fields(parsed.ex_date, parsed.payment_date, qty, parsed.value_per_unit),
                     )
                     db.add(div)
                     existing_divs[(pid, asset_div.id)] = div
@@ -439,14 +441,14 @@ async def backfill_dividends(db: AsyncSession, portfolio_id: int | None, ticker:
                     div.net_value = net
                     div.status = status
                     div.ticker = ticker
-                    _apply_dividend_legacy_fields(div, parsed.ex_date, parsed.payment_date, qty)
+                    _apply_dividend_legacy_fields(div, parsed.ex_date, parsed.payment_date, qty, parsed.value_per_unit)
                     div.value_per_unit = parsed.value_per_unit
                     div.total_received = total
                     div.dividend_type = div_type_str
         except Exception as e:
             logger.warning(f"[Backfill] erro ao processar provento de {ticker} ex={parsed.ex_date}: {e}")
             await db.rollback()
-            return
+            raise
 
     await db.commit()
     logger.info("[Backfill] concluido sync %s de eventos para %s", scope_label, ticker)
@@ -520,7 +522,7 @@ async def materialize_asset_dividends(db: AsyncSession, tickers: Optional[list[s
                     value_per_unit=value,
                     total_received=total,
                     dividend_type=dividend_type.value,
-                    **_legacy_dividend_fields(asset_div.ex_date, asset_div.payment_date, qty),
+                    **_legacy_dividend_fields(asset_div.ex_date, asset_div.payment_date, qty, value),
                 )
                 db.add(div)
                 existing_divs[(pid, asset_div.id)] = div
@@ -531,7 +533,7 @@ async def materialize_asset_dividends(db: AsyncSession, tickers: Optional[list[s
                 div.net_value = net
                 div.status = status
                 div.ticker = asset.ticker
-                _apply_dividend_legacy_fields(div, asset_div.ex_date, asset_div.payment_date, qty)
+                _apply_dividend_legacy_fields(div, asset_div.ex_date, asset_div.payment_date, qty, value)
                 div.value_per_unit = value
                 div.total_received = total
                 div.dividend_type = dividend_type.value
