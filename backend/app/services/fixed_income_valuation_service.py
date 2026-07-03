@@ -182,23 +182,33 @@ def _compound_value(principal: Decimal, annual_rate_pct: Decimal, start: date, t
     return principal * factor
 
 
+async def _fallback_factor(db: AsyncSession, key: FixedIncomeKey, start: date, target: date) -> Decimal:
+    refs = await _latest_refs(db)
+    annual = _annual_rate_pct(key.indexer, key.rate_pct, refs)
+    return _compound_value(Decimal("1"), annual, start, target)
+
+
 async def _application_factor(db: AsyncSession, key: FixedIncomeKey, start: date, target: date) -> Decimal:
     idx = _normalize_indexer(key.indexer)
     try:
         if idx == "CDI":
-            return await benchmark_factor(db, "CDI", start, target, multiplier_pct=key.rate_pct or Decimal("100"))
-        if idx == "SELIC":
-            return await benchmark_factor(db, "SELIC", start, target, multiplier_pct=key.rate_pct or Decimal("100"))
-        if idx == "IPCA_PLUS":
-            return await benchmark_factor(db, "IPCA", start, target, spread_annual_pct=key.rate_pct)
-        if idx == "IGPM_PLUS":
-            return await benchmark_factor(db, "IGPM", start, target, spread_annual_pct=key.rate_pct)
+            factor = await benchmark_factor(db, "CDI", start, target, multiplier_pct=key.rate_pct or Decimal("100"))
+        elif idx == "SELIC":
+            factor = await benchmark_factor(db, "SELIC", start, target, multiplier_pct=key.rate_pct or Decimal("100"))
+        elif idx == "IPCA_PLUS":
+            factor = await benchmark_factor(db, "IPCA", start, target, spread_annual_pct=key.rate_pct)
+        elif idx == "IGPM_PLUS":
+            factor = await benchmark_factor(db, "IGPM", start, target, spread_annual_pct=key.rate_pct)
+        else:
+            return await _fallback_factor(db, key, start, target)
+
+        if factor != Decimal("1") or target <= start:
+            return factor
+        logger.warning("[fixed_income] sem histórico para %s; usando fallback anual", key)
     except Exception as exc:
         logger.warning("[fixed_income] benchmark_factor falhou para %s: %s", key, exc)
 
-    refs = await _latest_refs(db)
-    annual = _annual_rate_pct(idx, key.rate_pct, refs)
-    return _compound_value(Decimal("1"), annual, start, target)
+    return await _fallback_factor(db, key, start, target)
 
 
 async def _load_fixed_income_transactions(db: AsyncSession, portfolio_id: int) -> list[Transaction]:
