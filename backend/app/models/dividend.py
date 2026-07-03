@@ -8,10 +8,10 @@ vinculado opcionalmente a um AssetDividend (evento de provento do ativo).
   - (portfolio_id, ticker)  — cobre sum_dividends_by_ticker
   - (portfolio_id, status)  — cobre _proventos_total (WHERE status='RECEBIDO')
 
-Campos legados mantidos para não gerar nova migration:
-  ticker, ex_date, payment_date, value_per_unit, total_received, dividend_type.
-Esses campos foram preenchidos pelo backfill inicial e não devem ser removidos
-ainda pois a migration de renomeação (data_ex/data_pagamento) está pendente.
+Campos legados mantidos para compatibilidade com bancos já migrados antes da
+normalização do módulo de proventos. Algumas bases ainda possuem `date_ex` e
+`date_pagamento` como NOT NULL; por isso esses campos precisam continuar
+mapeados e preenchidos junto com `ex_date`/`payment_date`.
 """
 import enum
 
@@ -42,11 +42,7 @@ class DividendStatus(str, enum.Enum):
 class Dividend(Base):
     __tablename__ = "dividends"
     __table_args__ = (
-        # Sprint 5B: índice composto para sum_dividends_by_ticker
-        #   WHERE portfolio_id = X AND ticker IN (...)
         Index("idx_div_portfolio_ticker", "portfolio_id", "ticker"),
-        # Sprint 5B: índice composto para _proventos_total
-        #   WHERE portfolio_id = X AND status = 'RECEBIDO'
         Index("idx_div_portfolio_status", "portfolio_id", "status"),
     )
 
@@ -61,7 +57,6 @@ class Dividend(Base):
         Integer,
         ForeignKey("portfolios.id", ondelete="CASCADE"),
         nullable=False,
-        # index=True removido: coberto pelo índice composto idx_div_portfolio_ticker
     )
     quantity: Mapped[Numeric | None] = mapped_column(Numeric(20, 8), nullable=True)
     total_value: Mapped[Numeric | None] = mapped_column(Numeric(20, 8), nullable=True)
@@ -76,7 +71,7 @@ class Dividend(Base):
         default="RECEBIDO",
     )
 
-    # ── Campos legados (backfill) ──────────────────────────────────────────
+    # ── Campos do backfill atual ───────────────────────────────────────────
     ticker: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     ex_date: Mapped[Date | None] = mapped_column(Date, nullable=True)
     payment_date: Mapped[Date | None] = mapped_column(Date, nullable=True)
@@ -84,6 +79,10 @@ class Dividend(Base):
     total_received: Mapped[Numeric | None] = mapped_column(Numeric(20, 8), nullable=True)
     dividend_type: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    # ── Relacionamentos ─────────────────────────────────────────────────
+    # ── Campos legados ainda existentes em algumas bases ───────────────────
+    date_ex: Mapped[Date | None] = mapped_column(Date, nullable=True)
+    date_pagamento: Mapped[Date | None] = mapped_column(Date, nullable=True)
+
+    # ── Relacionamentos ────────────────────────────────────────────────────
     portfolio = relationship("Portfolio", back_populates="dividends")
     asset_dividend = relationship("AssetDividend", back_populates="portfolio_dividends")
