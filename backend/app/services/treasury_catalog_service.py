@@ -1,9 +1,9 @@
 """
 Serviço de catálogo do Tesouro Direto.
 
-Fonte de verdade: tabela assets, populada a partir do endpoint BRAPI
-/api/v2/treasury/list. O sistema deve sempre operar com o `symbol` canônico da
-BRAPI para cotações e histórico.
+Fonte de verdade: tabela assets, populada a partir da BRAPI e de fallbacks
+públicos do Tesouro. O sistema deve sempre operar com o `symbol` canônico para
+cotações e histórico.
 """
 from __future__ import annotations
 
@@ -16,7 +16,10 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.integrations.brapi_treasury import fetch_treasury_list
+from app.integrations.brapi_treasury import (
+    canonical_treasury_symbol_from_text,
+    fetch_treasury_list,
+)
 from app.models.asset import Asset, AssetType
 
 logger = logging.getLogger(__name__)
@@ -47,18 +50,27 @@ def slug_from_text(value: str | None) -> str:
 
 
 def _symbol(item: dict) -> str:
-    return str(
+    direct = str(
         item.get("symbol")
         or item.get("slug")
         or item.get("ticker")
         or item.get("id")
         or ""
     ).strip().lower()
+    if direct:
+        return direct
+    return canonical_treasury_symbol_from_text(
+        f"{item.get('bondType') or item.get('name') or item.get('title') or ''} "
+        f"{item.get('maturityYear') or item.get('maturityDate') or item.get('dueDate') or ''}"
+    ) or ""
 
 
 def _name(item: dict, symbol: str) -> str:
     bond_type = str(item.get("bondType") or item.get("name") or item.get("title") or "").strip()
+    maturity_year = item.get("maturityYear")
     maturity = str(item.get("maturityDate") or item.get("dueDate") or item.get("expiresAt") or "").strip()
+    if bond_type and maturity_year:
+        return f"{bond_type} {maturity_year}"
     if bond_type and maturity:
         return f"{bond_type} {maturity[:10]}"
     return bond_type or symbol
@@ -66,12 +78,15 @@ def _name(item: dict, symbol: str) -> str:
 
 def _sector(item: dict) -> str:
     bits = []
+    source = item.get("source")
     indexer = item.get("indexer")
     coupon = item.get("couponType")
     if indexer:
         bits.append(str(indexer).upper())
     if coupon:
         bits.append(f"cupom={coupon}")
+    if source:
+        bits.append(f"fonte={source}")
     return "Tesouro Direto" + (" | " + " | ".join(bits) if bits else "")
 
 
@@ -81,7 +96,7 @@ async def seed_treasury_assets(db: AsyncSession, commit: bool = True) -> Treasur
     try:
         items = await fetch_treasury_list()
     except Exception as exc:
-        logger.error("[treasury_seed] falha ao buscar BRAPI treasury/list: %s", exc)
+        logger.error("[treasury_seed] falha ao buscar catálogo Tesouro: %s", exc)
         result.errors += 1
         return result
 
@@ -153,13 +168,12 @@ async def _treasury_assets(db: AsyncSession) -> list[Asset]:
 
 async def resolve_treasury_symbol(db: AsyncSession, raw: str | None) -> Optional[str]:
     """
-    Resolve texto/ticker informado pelo usuário para o symbol canônico da BRAPI.
+    Resolve texto/ticker informado pelo usuário para o symbol canônico.
 
-    Ordem:
-    1. ticker exato em assets
-    2. nome exato em assets
-    3. slug normalizado em assets
-    4. match parcial normalizado
+    Exemplo importante:
+    "TESOURO RENDA+ APOSENTADORIA EXTRA 2060" -> tesouro-renda-mais-2060
+    "Tesouro RendA+ 2060" -> tesouro-renda-mais-2060
+    "Tesouro Educa+ 2040" -> tesouro-educa-mais-2040
     """
     value = (raw or "").strip()
     if not value:
@@ -175,6 +189,18 @@ async def resolve_treasury_symbol(db: AsyncSession, raw: str | None) -> Optional
     found = exact.scalar_one_or_none()
     if found:
         return str(found).lower()
+
+    canonical = canonical_treasury_symbol_from_text(value)
+    if canonical:
+        canonical_exists = await db.execute(
+            select(Asset.ticker).where(
+                Asset.asset_type == _TREASURY_TYPE,
+                Asset.ticker == canonical,
+            )
+        )
+        found = canonical_exists.scalar_one_or_none()
+        if found:
+            return str(found).lower()
 
     name_exact = await db.execute(
         select(Asset.ticker).where(
@@ -193,6 +219,13 @@ async def resolve_treasury_symbol(db: AsyncSession, raw: str | None) -> Optional
             assets = await _treasury_assets(db)
         except Exception as exc:
             logger.warning("[treasury_catalog] seed sob demanda falhou: %s", exc)
+
+    if canonical:
+        for asset in assets:
+            if str(asset.ticker or "").lower() == canonical:
+                return canonical
+        logger.info("[treasury_catalog] %r resolvido por regra canônica para %s", value, canonical)
+        return canonical
 
     raw_norm = normalize_treasury_text(value)
     raw_slug = slug_from_text(value)
