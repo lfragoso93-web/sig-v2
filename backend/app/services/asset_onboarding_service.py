@@ -162,14 +162,16 @@ async def run_onboarding(ticker: str, asset_type: str) -> None:
         # ----------------------------------------------------------------
         # Etapa 2: Proventos historicos
         # ----------------------------------------------------------------
-        if await _has_dividends(db, ticker):
-            logger.info(f"[onboarding] {ticker}: proventos ja existem — pulando")
-        else:
-            try:
-                await run_backfill(db, ticker, at)
-                logger.info(f"[onboarding] {ticker}: proventos historicos salvos")
-            except Exception as e:
-                logger.error(f"[onboarding] {ticker}: falha ao salvar proventos: {e}")
+        try:
+            if await _has_dividends(db, ticker):
+                logger.info(
+                    f"[onboarding] {ticker}: seed/global de proventos ja existe — "
+                    "sincronizando vinculos da carteira"
+                )
+            await run_backfill(db, ticker, at)
+            logger.info(f"[onboarding] {ticker}: proventos historicos sincronizados")
+        except Exception as e:
+            logger.error(f"[onboarding] {ticker}: falha ao sincronizar proventos: {e}")
 
         # ----------------------------------------------------------------
         # Etapa 3: Logo
