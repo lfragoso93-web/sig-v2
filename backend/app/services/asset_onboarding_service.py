@@ -2,13 +2,10 @@
 Asset Onboarding Service.
 
 Executado como BackgroundTask ao criar um novo ativo (primeira transacao).
-Cada etapa e idempotente: so roda se o dado ainda nao existe no banco,
-garantindo seguranca em re-execucoes (ex: ativo recriado, falha parcial).
 
-Etapas:
-  1. Historico de precos   -> BRAPI Pro range=max (BR) / persist_daily_prices 5a (INTL)
-  2. Proventos historicos  -> dividend_backfill_service.run_backfill
-  3. Logo URL              -> logo_service.fetch_logo_url -> Asset.logo_url
+Ativos em NO_QUOTE_TYPES, como RENDA_FIXA, não possuem ticker de mercado e não
+podem passar por BRAPI/yfinance/logo/proventos. Para esses tipos, o onboarding
+é encerrado imediatamente.
 """
 import logging
 from datetime import datetime, timezone
@@ -18,7 +15,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal
-from app.core.asset_types import INTL_TYPES
+from app.core.asset_types import INTL_TYPES, NO_QUOTE_TYPES
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
 from app.models.asset_dividend import AssetDividend
@@ -29,7 +26,6 @@ from app.integrations.brapi import fetch_price_history_full
 
 logger = logging.getLogger(__name__)
 
-# Janela de fallback para ativos internacionais (yfinance nao tem range=max equivalente).
 _PRICE_HISTORY_DAYS_INTL = 365 * 5
 
 
@@ -87,16 +83,11 @@ async def _upsert_price_row(
 
 
 async def _onboard_price_history_br(db: AsyncSession, ticker: str) -> None:
-    """
-    Coleta historico completo via BRAPI Pro (range=max) e persiste no banco.
-    Disponivel apenas no plano Pro — sem limite de anos.
-    """
     rows = await fetch_price_history_full(ticker)
     if not rows:
         logger.warning(f"[onboarding] {ticker}: BRAPI range=max retornou vazio — sem historico salvo")
         return
 
-    # Busca ou cria o asset para obter o asset_id
     result = await db.execute(select(Asset).where(Asset.ticker == ticker))
     asset = result.scalar_one_or_none()
     if not asset:
@@ -113,7 +104,6 @@ async def _onboard_price_history_br(db: AsyncSession, ticker: str) -> None:
         await _upsert_price_row(db, asset.id, ts, close, source="brapi")
         inserted += 1
 
-    # Atualiza last_price com o preco mais recente
     if rows:
         latest_close = rows[-1][1]
         asset.last_price = Decimal(str(round(latest_close, 8)))
@@ -124,13 +114,6 @@ async def _onboard_price_history_br(db: AsyncSession, ticker: str) -> None:
 
 
 async def run_onboarding(ticker: str, asset_type: str) -> None:
-    """
-    Ponto de entrada do onboarding. Abre sua propria sessao de banco
-    para nao interferir na sessao do request original.
-
-    Chamado via FastAPI BackgroundTasks:
-        background_tasks.add_task(run_onboarding, ticker, asset_type)
-    """
     logger.info(f"[onboarding] iniciando para {ticker} ({asset_type})")
 
     try:
@@ -139,29 +122,29 @@ async def run_onboarding(ticker: str, asset_type: str) -> None:
         logger.warning(f"[onboarding] asset_type invalido: {asset_type} — abortando")
         return
 
+    if at in NO_QUOTE_TYPES:
+        logger.info(
+            "[onboarding] %s (%s): tipo sem cotação de mercado — pulando histórico, proventos e logo",
+            ticker,
+            at.value,
+        )
+        return
+
     is_intl = at in INTL_TYPES
 
     async with AsyncSessionLocal() as db:
-        # ----------------------------------------------------------------
-        # Etapa 1: Historico de precos
-        # ----------------------------------------------------------------
         if await _has_price_history(db, ticker):
             logger.info(f"[onboarding] {ticker}: historico de precos ja existe — pulando")
         else:
             try:
                 if is_intl:
-                    # Ativos internacionais: yfinance com janela de 5 anos
                     n = await persist_daily_prices(db, ticker, at, days_back=_PRICE_HISTORY_DAYS_INTL)
                     logger.info(f"[onboarding] {ticker}: {n} precos historicos salvos (INTL, {_PRICE_HISTORY_DAYS_INTL}d)")
                 else:
-                    # Ativos nacionais: BRAPI Pro range=max (historico completo)
                     await _onboard_price_history_br(db, ticker)
             except Exception as e:
                 logger.error(f"[onboarding] {ticker}: falha ao salvar precos historicos: {e}")
 
-        # ----------------------------------------------------------------
-        # Etapa 2: Proventos historicos
-        # ----------------------------------------------------------------
         if await _has_dividends(db, ticker):
             logger.info(f"[onboarding] {ticker}: proventos ja existem — pulando")
         else:
@@ -171,9 +154,6 @@ async def run_onboarding(ticker: str, asset_type: str) -> None:
             except Exception as e:
                 logger.error(f"[onboarding] {ticker}: falha ao salvar proventos: {e}")
 
-        # ----------------------------------------------------------------
-        # Etapa 3: Logo
-        # ----------------------------------------------------------------
         if await _has_logo(db, ticker):
             logger.info(f"[onboarding] {ticker}: logo ja existe — pulando")
         else:
