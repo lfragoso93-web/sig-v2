@@ -52,7 +52,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.asset import Asset, AssetType
 from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.transaction import Transaction, OperationType
-from app.services.price_history_service import get_price_at_date, persist_daily_prices
+from app.services.price_history_service import persist_daily_prices
 
 logger = logging.getLogger(__name__)
 
@@ -219,7 +219,7 @@ async def _calc_totals(
     # FIX N+1: Carrega todos os preços de uma vez usando batch
     # ------------------------------------------------------------------
     from app.services.price_history_service import get_prices_at_date_batch
-    
+
     tickers_with_types = []
     for ticker, state in positions.items():
         asset_type = asset_type_map.get(ticker)
@@ -229,10 +229,10 @@ async def _calc_totals(
             except (ValueError, KeyError):
                 asset_type = AssetType.ACAO
         tickers_with_types.append((ticker, asset_type))
-    
+
     # Carrega todos os preços em uma única operação
     prices_map = await get_prices_at_date_batch(db, tickers_with_types, date_str)
-    
+
     for ticker, state in positions.items():
         close = prices_map.get(ticker)
         if close is None:

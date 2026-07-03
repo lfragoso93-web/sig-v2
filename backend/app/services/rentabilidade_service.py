@@ -45,7 +45,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.transaction import Transaction, OperationType
-from app.models.asset import Asset
 from app.services.quotes_service import get_prices
 from app.services.portfolio_service import (
     calc_raw_positions,
@@ -53,7 +52,6 @@ from app.services.portfolio_service import (
     enrich_with_prices,
 )
 from app.services.fx_service import get_usd_brl_today
-from app.services.rf_calc_service import enrich_rf_positions
 from app.core.cache import cache_get, cache_set, cache_delete
 
 logger = logging.getLogger(__name__)

@@ -19,22 +19,22 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         response: Response = await call_next(request)
-        
+
         # Previne MIME type sniffing
         response.headers["X-Content-Type-Options"] = "nosniff"
-        
+
         # Previne clickjacking
         response.headers["X-Frame-Options"] = "DENY"
-        
+
         # XSS Protection (ainda útil para navegadores antigos)
         response.headers["X-XSS-Protection"] = "1; mode=block"
-        
+
         # HSTS - força HTTPS (apenas em produção)
-        if not request.url.hostname in ["localhost", "127.0.0.1"]:
+        if request.url.hostname not in ["localhost", "127.0.0.1"]:
             response.headers["Strict-Transport-Security"] = (
                 "max-age=31536000; includeSubDomains"
             )
-        
+
         # Content Security Policy - política restritiva
         # Ajuste conforme necessário baseado nos recursos externos usados
         response.headers["Content-Security-Policy"] = (
@@ -46,13 +46,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "connect-src 'self'; "
             "frame-ancestors 'none';"
         )
-        
+
         # Referrer Policy - controla informações de referrer
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        
+
         # Permissions Policy - desabilita features não utilizadas
         response.headers["Permissions-Policy"] = (
             "geolocation=(), microphone=(), camera=(), payment=()"
         )
-        
+
         return response

@@ -4,7 +4,11 @@ from app.core.database import Base
 from app.models.base import TimestampMixin
 from decimal import Decimal
 from datetime import date
+from typing import TYPE_CHECKING
 import enum
+
+if TYPE_CHECKING:
+    from app.models.portfolio import Portfolio
 
 
 class FixedIncomeType(str, enum.Enum):

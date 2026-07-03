@@ -23,19 +23,19 @@ class UserCreate(BaseModel):
         """
         if len(v) < 10:
             raise ValueError("Senha deve ter no mínimo 10 caracteres")
-        
+
         if not re.search(r"[A-Z]", v):
             raise ValueError("Senha deve conter pelo menos uma letra maiúscula")
-        
+
         if not re.search(r"[a-z]", v):
             raise ValueError("Senha deve conter pelo menos uma letra minúscula")
-        
+
         if not re.search(r"\d", v):
             raise ValueError("Senha deve conter pelo menos um número")
-        
+
         if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", v):
             raise ValueError("Senha deve conter pelo menos um caractere especial (!@#$%^&*(),.?\":{}|<>)")
-        
+
         return v
 
 
@@ -68,19 +68,19 @@ class AdminResetPasswordRequest(BaseModel):
         """
         if len(v) < 10:
             raise ValueError("Senha deve ter no mínimo 10 caracteres")
-        
+
         if not re.search(r"[A-Z]", v):
             raise ValueError("Senha deve conter pelo menos uma letra maiúscula")
-        
+
         if not re.search(r"[a-z]", v):
             raise ValueError("Senha deve conter pelo menos uma letra minúscula")
-        
+
         if not re.search(r"\d", v):
             raise ValueError("Senha deve conter pelo menos um número")
-        
+
         if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", v):
             raise ValueError("Senha deve conter pelo menos um caractere especial (!@#$%^&*(),.?\":{}|<>)")
-        
+
         return v
 
 

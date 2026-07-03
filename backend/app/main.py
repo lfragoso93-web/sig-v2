@@ -16,6 +16,7 @@ from app.core.config import settings
 from app.core.limiter import limiter
 from app.core.scheduler import start_scheduler
 from app.core.cache import get_redis
+from app.middleware import SecurityHeadersMiddleware
 from app.routers import (
     auth, portfolios, transactions, dividends, positions,
     users, proventos, performance, admin,
@@ -180,8 +181,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Security headers middleware
-from app.middleware import SecurityHeadersMiddleware
 app.add_middleware(SecurityHeadersMiddleware)
 
 PREFIX = "/api/v1"

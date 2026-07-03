@@ -649,20 +649,20 @@ def generate_irpf_csv(report: IRPFReportOut) -> str:
     """
     import csv
     from io import StringIO
-    
+
     buffer = StringIO()
     writer = csv.writer(buffer, delimiter=';', quotechar='"', lineterminator='\n')
-    
-    def brl(v): 
+
+    def brl(v):
         return f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    
+
     r = report.resumo
-    
+
     writer.writerow(["RELATÓRIO IRPF", report.ano])
     writer.writerow(["Carteira ID", report.portfolio_id])
     writer.writerow(["Gerado em", date.today().strftime('%d/%m/%Y')])
     writer.writerow([])
-    
+
     writer.writerow(["RESUMO ANUAL"])
     writer.writerow(["Descricao", "Valor"])
     writer.writerow(["Total Bens e Direitos (31/12)", brl(r.total_bens_direitos)])
@@ -678,7 +678,7 @@ def generate_irpf_csv(report: IRPFReportOut) -> str:
     writer.writerow(["IR Retido JCP (15%)", brl(r.total_jcp_ir_retido)])
     writer.writerow(["Prejuizo Acumulado", brl(r.prejuizo_acumulado)])
     writer.writerow([])
-    
+
     writer.writerow(["BENS E DIREITOS (posicao em 31/12)"])
     writer.writerow(["Codigo IRPF", "Ticker", "Tipo", "Quantidade", "Custo Medio", "Custo Total", "Moeda"])
     if report.bens_direitos:
@@ -695,7 +695,7 @@ def generate_irpf_csv(report: IRPFReportOut) -> str:
         total_bens = sum(b.custo_total for b in report.bens_direitos)
         writer.writerow(["TOTAL", "", "", "", "", brl(total_bens), ""])
     writer.writerow([])
-    
+
     writer.writerow(["GANHOS DE CAPITAL MENSAIS"])
     for gm in report.ganhos_mensais:
         writer.writerow([f"MES: {gm.mes}"])
@@ -725,7 +725,7 @@ def generate_irpf_csv(report: IRPFReportOut) -> str:
             ])
         writer.writerow([])
     writer.writerow([])
-    
+
     writer.writerow(["DIVIDENDOS ISENTOS"])
     writer.writerow(["Ticker", "Tipo", "Total Recebido", "Numero Pagamentos"])
     if report.dividendos:
@@ -739,7 +739,7 @@ def generate_irpf_csv(report: IRPFReportOut) -> str:
         total_div = sum(d.total_recebido for d in report.dividendos)
         writer.writerow(["TOTAL", "", brl(total_div), ""])
     writer.writerow([])
-    
+
     writer.writerow(["JCP - JUROS SOBRE CAPITAL PROPRIO"])
     writer.writerow(["Ticker", "Total Bruto", "IR Retido (15%)", "Total Liquido"])
     if report.jcp:
@@ -752,5 +752,5 @@ def generate_irpf_csv(report: IRPFReportOut) -> str:
             ])
         total_jcp = sum(j.total_bruto for j in report.jcp)
         writer.writerow(["TOTAL", brl(total_jcp), brl(sum(j.ir_retido for j in report.jcp)), brl(sum(j.total_liquido for j in report.jcp))])
-    
+
     return buffer.getvalue()

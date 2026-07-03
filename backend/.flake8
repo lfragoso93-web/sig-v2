@@ -1,6 +1,17 @@
 [flake8]
 max-line-length = 120
-extend-ignore = E501
+extend-ignore =
+    E501,
+    W503,
+    W504,
+    E241,
+    E221
+exclude =
+    .git,
+    __pycache__,
+    alembic/versions,
+    .venv,
+    venv
 
 per-file-ignores =
     # Models SQLAlchemy: F821 sao forward references validas em runtime

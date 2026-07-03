@@ -1,8 +1,6 @@
 from fastapi import APIRouter, Depends, status, BackgroundTasks, HTTPException, UploadFile, File
-from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
-import io
 from app.core.database import get_db, AsyncSessionLocal
 from app.core.deps import get_current_user
 from app.models.user import User
@@ -286,13 +284,13 @@ async def import_csv(
 ):
     """
     Importa transacoes de um arquivo CSV.
-    
+
     Validacao:
     - Verifica headers obrigatorios
     - Valida tipos de dados
     - Valida datas
     - Valida asset_types e operations
-    
+
     Retorna:
     - success: bool
     - imported_count: numero de transacoes importadas
@@ -302,7 +300,7 @@ async def import_csv(
     - global_errors: erros globais do CSV
     """
     await get_portfolio(db, portfolio_id, current_user.id)
-    
+
     try:
         content = await file.read()
         content_str = content.decode('utf-8')
@@ -312,12 +310,12 @@ async def import_csv(
             status_code=400,
             detail=f"Error reading file: {str(e)}"
         )
-    
+
     result = await csv_import_service.import_csv_transactions(
         content_str,
         portfolio_id,
         current_user.id,
         db
     )
-    
+
     return result

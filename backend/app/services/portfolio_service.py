@@ -387,7 +387,7 @@ async def create_portfolio(db: AsyncSession, user_id: int, data: PortfolioCreate
     portfolio = Portfolio(user_id=user_id, name=data.name, description=getattr(data, "description", None))
     db.add(portfolio)
     await db.flush()
-    
+
     await AuditLogService.log_action(
         db=db,
         user_id=user_id,
@@ -397,7 +397,7 @@ async def create_portfolio(db: AsyncSession, user_id: int, data: PortfolioCreate
         portfolio_id=portfolio.id,
         new_values={"name": data.name, "description": getattr(data, "description", None)},
     )
-    
+
     await db.commit()
     await db.refresh(portfolio)
     return portfolio
@@ -415,14 +415,14 @@ async def get_portfolio(db: AsyncSession, portfolio_id: int, user_id: int) -> Po
 
 async def update_portfolio(db: AsyncSession, portfolio_id: int, user_id: int, data: PortfolioUpdate) -> Portfolio:
     portfolio = await get_portfolio(db, portfolio_id, user_id)
-    
+
     old_values = {"name": portfolio.name, "description": portfolio.description}
-    
+
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(portfolio, field, value)
-    
+
     new_values = {"name": portfolio.name, "description": portfolio.description}
-    
+
     await AuditLogService.log_action(
         db=db,
         user_id=user_id,
@@ -433,7 +433,7 @@ async def update_portfolio(db: AsyncSession, portfolio_id: int, user_id: int, da
         old_values=old_values,
         new_values=new_values,
     )
-    
+
     await db.commit()
     await db.refresh(portfolio)
     await invalidate_portfolio_cache(portfolio_id)
@@ -442,7 +442,7 @@ async def update_portfolio(db: AsyncSession, portfolio_id: int, user_id: int, da
 
 async def delete_portfolio(db: AsyncSession, portfolio_id: int, user_id: int) -> None:
     portfolio = await get_portfolio(db, portfolio_id, user_id)
-    
+
     await AuditLogService.log_action(
         db=db,
         user_id=user_id,
@@ -452,7 +452,7 @@ async def delete_portfolio(db: AsyncSession, portfolio_id: int, user_id: int) ->
         portfolio_id=portfolio_id,
         old_values={"name": portfolio.name, "description": portfolio.description},
     )
-    
+
     await db.delete(portfolio)
     await db.commit()
     await invalidate_portfolio_cache(portfolio_id)

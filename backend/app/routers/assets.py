@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, HTTPException, File, UploadFile
+from fastapi import APIRouter, Depends, Query, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -618,4 +618,3 @@ async def get_csv_template():
         media_type="text/csv",
         filename="portfolio_import_template.csv"
     )
-

@@ -1,7 +1,6 @@
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional, Any, Dict
-from app.models.audit_log import AuditAction
 
 
 class AuditLogCreate(BaseModel):

@@ -2,6 +2,19 @@ from sqlalchemy import String, Text, ForeignKey, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 from app.models.base import TimestampMixin
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.corporate_event import CorporateEvent
+    from app.models.dividend import Dividend
+    from app.models.fixed_income import FixedIncomeInvestment
+    from app.models.goals import Goal
+    from app.models.irpf import IRPFReport
+    from app.models.portfolio_class_target import PortfolioClassTarget
+    from app.models.portfolio_position import PortfolioPosition
+    from app.models.portfolio_snapshot import PortfolioSnapshot
+    from app.models.transaction import Transaction
+    from app.models.user import User
 
 
 class Portfolio(Base, TimestampMixin):

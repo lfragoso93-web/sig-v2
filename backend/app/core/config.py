@@ -2,8 +2,6 @@ from pydantic_settings import BaseSettings
 from pydantic import field_validator
 from typing import Optional
 import re
-import os
-import secrets
 
 
 class Settings(BaseSettings):
@@ -103,7 +101,7 @@ class Settings(BaseSettings):
     def validate_secret_key(cls, v: str, info) -> str:
         """Valida SECRET_KEY em produção"""
         environment = info.data.get("ENVIRONMENT", "development")
-        
+
         if environment == "production":
             if v == "change-me-in-production":
                 raise ValueError(
@@ -121,7 +119,7 @@ class Settings(BaseSettings):
     def validate_superadmin_password(cls, v: str, info) -> str:
         """Valida senha do superadmin em produção"""
         environment = info.data.get("ENVIRONMENT", "development")
-        
+
         if environment == "production":
             if v == "Admin@1234!":
                 raise ValueError(

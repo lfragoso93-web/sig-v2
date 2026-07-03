@@ -3,16 +3,13 @@ Servico de auditoria para rastreamento de operações de usuários.
 """
 import logging
 from datetime import datetime, timezone, timedelta
-from typing import Optional, Dict, Any, Type, List
+from typing import Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, desc
 from sqlalchemy.orm import joinedload
-import json
-from app.models.audit_log import AuditLog, AuditAction
-from app.models.user import User
+from app.models.audit_log import AuditLog
 from app.schemas.audit_log import (
-    AuditLogCreate, AuditLogResponse, AuditStatsResponse, 
-    UserAuditStatsResponse, AuditLogCleanupResponse
+    AuditStatsResponse, UserAuditStatsResponse, AuditLogCleanupResponse
 )
 
 logger = logging.getLogger(__name__)
@@ -72,17 +69,17 @@ class AuditLogService:
         """
         changes = {}
         all_keys = set(old_values.keys()) | set(new_values.keys())
-        
+
         for key in all_keys:
             old_val = old_values.get(key)
             new_val = new_values.get(key)
-            
+
             if old_val != new_val:
                 changes[key] = {
                     "old": old_val,
                     "new": new_val,
                 }
-        
+
         return changes if changes else None
 
     @staticmethod
@@ -141,7 +138,7 @@ class AuditLogService:
         # Fetch paginated
         query = query.order_by(desc(AuditLog.created_at))
         query = query.offset((page - 1) * page_size).limit(page_size)
-        
+
         result = await db.execute(query)
         logs = result.unique().scalars().all()
 
@@ -296,12 +293,6 @@ class AuditLogService:
         count = count_result.scalar_one()
 
         if not dry_run and count > 0:
-            await db.execute(
-                select(AuditLog).where(AuditLog.created_at < cutoff_date)
-            )
-            deleted_result = await db.execute(
-                select(func.count()).select_from(AuditLog)
-            )
             await db.execute(
                 AuditLog.__table__.delete().where(AuditLog.created_at < cutoff_date)
             )

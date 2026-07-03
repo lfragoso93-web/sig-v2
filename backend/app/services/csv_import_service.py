@@ -1,7 +1,7 @@
 import csv
 import io
 from datetime import datetime, date as DateType
-from typing import Optional, Tuple, List, Dict, Any
+from typing import Tuple, List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.transaction import Transaction, OperationType
 from app.models.asset import Asset, AssetType
@@ -30,9 +30,9 @@ CSV_TEMPLATE_HEADERS = [
 def generate_csv_template() -> str:
     output = io.StringIO()
     writer = csv.writer(output)
-    
+
     writer.writerow(CSV_TEMPLATE_HEADERS)
-    
+
     writer.writerow([
         "PETR4",
         "ACAO",
@@ -66,7 +66,7 @@ def generate_csv_template() -> str:
         "BRL",
         "ETF S&P500",
     ])
-    
+
     return output.getvalue()
 
 
@@ -80,13 +80,13 @@ class CSVRow:
         self.data = data
         self.errors: List[str] = []
         self.warnings: List[str] = []
-    
+
     def add_error(self, message: str):
         self.errors.append(message)
-    
+
     def add_warning(self, message: str):
         self.warnings.append(message)
-    
+
     def is_valid(self) -> bool:
         return len(self.errors) == 0
 
@@ -102,27 +102,27 @@ async def parse_csv_content(
     """
     rows = []
     global_errors = []
-    
+
     try:
         csv_reader = csv.DictReader(io.StringIO(content))
-        
+
         if csv_reader.fieldnames is None:
             global_errors.append("CSV file is empty or invalid")
             return rows, global_errors
-        
+
         missing_headers = set(CSV_TEMPLATE_HEADERS) - set(csv_reader.fieldnames)
         if missing_headers:
             global_errors.append(f"Missing required headers: {', '.join(missing_headers)}")
             return rows, global_errors
-        
+
         for row_num, raw_row in enumerate(csv_reader, start=2):
             csv_row = CSVRow(row_num, raw_row)
-            
+
             if not any(raw_row.values()):
                 csv_row.add_warning("Empty row, skipping")
                 rows.append(csv_row)
                 continue
-            
+
             ticker = raw_row.get("ticker", "").strip().upper()
             asset_type = raw_row.get("asset_type", "").strip().upper()
             operation = raw_row.get("operation", "").strip().lower()
@@ -131,21 +131,19 @@ async def parse_csv_content(
             date_str = raw_row.get("date", "").strip()
             fees_str = raw_row.get("fees", "0").strip()
             currency = raw_row.get("currency", "BRL").strip().upper()
-            notes = raw_row.get("notes", "").strip()
-            
             if not ticker:
                 csv_row.add_error("ticker is required")
-            
+
             if not asset_type:
                 csv_row.add_error("asset_type is required")
             elif asset_type not in SUPPORTED_ASSET_TYPES:
                 csv_row.add_error(f"asset_type '{asset_type}' not supported. Valid: {', '.join(SUPPORTED_ASSET_TYPES)}")
-            
+
             if not operation:
                 csv_row.add_error("operation is required")
             elif operation not in VALID_OPERATIONS:
                 csv_row.add_error(f"operation '{operation}' not valid. Valid: {', '.join(VALID_OPERATIONS)}")
-            
+
             if not quantity_str:
                 csv_row.add_error("quantity is required")
             else:
@@ -155,7 +153,7 @@ async def parse_csv_content(
                         csv_row.add_error("quantity must be positive")
                 except ValueError:
                     csv_row.add_error(f"quantity '{quantity_str}' is not a valid number")
-            
+
             if not price_str:
                 csv_row.add_error("price is required")
             else:
@@ -165,7 +163,7 @@ async def parse_csv_content(
                         csv_row.add_error("price must be positive")
                 except ValueError:
                     csv_row.add_error(f"price '{price_str}' is not a valid number")
-            
+
             if not date_str:
                 csv_row.add_error("date is required")
             else:
@@ -175,7 +173,7 @@ async def parse_csv_content(
                         csv_row.add_warning(f"date '{date_str}' is in the future")
                 except ValueError:
                     csv_row.add_error(f"date '{date_str}' format not recognized (use YYYY-MM-DD)")
-            
+
             if fees_str:
                 try:
                     fees = float(fees_str)
@@ -183,16 +181,16 @@ async def parse_csv_content(
                         csv_row.add_error("fees cannot be negative")
                 except ValueError:
                     csv_row.add_error(f"fees '{fees_str}' is not a valid number")
-            
+
             if currency not in ["BRL", "USD", "EUR", "BTC"]:
                 csv_row.add_warning(f"currency '{currency}' may not be valid, defaulting to BRL")
-            
+
             rows.append(csv_row)
-        
+
     except Exception as e:
         global_errors.append(f"Error parsing CSV: {str(e)}")
         logger.error(f"CSV parse error: {e}")
-    
+
     return rows, global_errors
 
 
@@ -203,13 +201,13 @@ def _parse_date(date_str: str) -> DateType:
         "%d-%m-%Y",
         "%Y/%m/%d",
     ]
-    
+
     for fmt in formats:
         try:
             return datetime.strptime(date_str, fmt).date()
         except ValueError:
             continue
-    
+
     raise ValueError(f"Cannot parse date: {date_str}")
 
 
@@ -231,7 +229,7 @@ async def import_csv_transactions(
         "rows": [],
         "global_errors": [],
     }
-    
+
     portfolio = await db.execute(
         select(Portfolio).where(Portfolio.id == portfolio_id)
     )
@@ -239,14 +237,14 @@ async def import_csv_transactions(
     if not portfolio_obj:
         result["global_errors"].append(f"Portfolio {portfolio_id} not found")
         return result
-    
+
     if portfolio_obj.user_id != user_id:
         result["global_errors"].append("Unauthorized: Portfolio belongs to different user")
         return result
-    
+
     rows, global_errors = await parse_csv_content(content, portfolio_id, db)
     result["global_errors"] = global_errors
-    
+
     if global_errors:
         result["error_count"] += len(global_errors)
         result["rows"] = [
@@ -259,9 +257,9 @@ async def import_csv_transactions(
             for r in rows
         ]
         return result
-    
+
     created_transactions = []
-    
+
     for csv_row in rows:
         if csv_row.warnings and not csv_row.errors:
             result["rows"].append({
@@ -272,7 +270,7 @@ async def import_csv_transactions(
             })
             result["skipped_count"] += 1
             continue
-        
+
         if not csv_row.is_valid():
             result["rows"].append({
                 "row_num": csv_row.row_num,
@@ -282,7 +280,7 @@ async def import_csv_transactions(
             })
             result["error_count"] += 1
             continue
-        
+
         try:
             ticker = csv_row.data.get("ticker", "").strip().upper()
             asset_type = csv_row.data.get("asset_type", "").strip().upper()
@@ -293,16 +291,16 @@ async def import_csv_transactions(
             fees = float(csv_row.data.get("fees", 0) or 0)
             currency = csv_row.data.get("currency", "BRL").strip().upper()
             notes = csv_row.data.get("notes", "").strip()
-            
+
             parsed_date = _parse_date(date_str)
-            
+
             asset = await db.execute(
                 select(Asset).where(
                     (Asset.ticker == ticker) & (Asset.asset_type == asset_type)
                 )
             )
             asset_obj = asset.scalar_one_or_none()
-            
+
             if not asset_obj:
                 asset_obj = Asset(
                     ticker=ticker,
@@ -311,7 +309,7 @@ async def import_csv_transactions(
                 )
                 db.add(asset_obj)
                 await db.flush()
-            
+
             transaction = Transaction(
                 portfolio_id=portfolio_id,
                 ticker=ticker,
@@ -326,7 +324,7 @@ async def import_csv_transactions(
             )
             db.add(transaction)
             created_transactions.append(transaction)
-            
+
             result["rows"].append({
                 "row_num": csv_row.row_num,
                 "errors": [],
@@ -337,7 +335,7 @@ async def import_csv_transactions(
                 "quantity": quantity,
             })
             result["imported_count"] += 1
-            
+
         except Exception as e:
             logger.error(f"Error importing row {csv_row.row_num}: {e}")
             result["rows"].append({
@@ -347,7 +345,7 @@ async def import_csv_transactions(
                 "status": "error",
             })
             result["error_count"] += 1
-    
+
     if created_transactions:
         try:
             await db.commit()
@@ -363,5 +361,5 @@ async def import_csv_transactions(
             result["global_errors"].append(f"Database error: {str(e)}")
     else:
         result["success"] = result["error_count"] == 0
-    
+
     return result

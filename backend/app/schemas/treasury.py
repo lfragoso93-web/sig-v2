@@ -6,7 +6,6 @@ dedicado. O dado entra pelo endpoint padrao de transactions.
 """
 from pydantic import BaseModel
 from typing import Optional
-from datetime import date as DateType
 
 
 class TreasuryPositionResponse(BaseModel):

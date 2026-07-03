@@ -1,5 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, Query, status, HTTPException, File, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, status, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_user
@@ -19,7 +18,7 @@ from app.services.user_service import (
 from app.services.config_service import get_all_configs, update_config, bulk_update_configs
 from app.services import backup_service
 from app.schemas.audit_log import (
-    PaginatedAuditLogs, AuditLogDetailResponse, AuditStatsResponse, 
+    PaginatedAuditLogs, AuditLogDetailResponse, AuditStatsResponse,
     UserAuditStatsResponse, AuditLogCleanupResponse
 )
 from app.services.audit_log_service import AuditLogService
@@ -27,6 +26,7 @@ from datetime import datetime
 import logging
 import traceback
 import os
+import math
 
 logger = logging.getLogger(__name__)
 
@@ -567,7 +567,7 @@ async def admin_create_database_backup(
 ):
     """
     Cria um backup completo do banco de dados em background usando pg_dump.
-    
+
     O arquivo de backup é comprimido com gzip e armazenado localmente.
     Restrito a SuperAdmins.
     """
@@ -577,10 +577,10 @@ async def admin_create_database_backup(
             status_code=500,
             detail="DATABASE_URL não configurado"
         )
-    
+
     logger.info("[backup] Requisição de backup recebida — adicionando task ao background")
     background_tasks.add_task(_run_database_backup_bg, db_url)
-    
+
     return {
         "message": "Backup do banco iniciado em background. Acompanhe pelo log do servidor.",
         "status": "accepted",
@@ -596,7 +596,7 @@ async def admin_list_database_backups(
 ):
     """
     Lista todos os backups do banco de dados disponíveis.
-    
+
     Retorna informações de tamanho, data de criação e filename para restauração.
     Restrito a SuperAdmins.
     """
@@ -616,12 +616,12 @@ async def admin_restore_database(
 ):
     """
     Restaura o banco de dados a partir de um backup em background.
-    
+
     **CUIDADO**: Esta operação sobrescreve TODOS os dados do banco com os dados do backup.
-    
+
     Args:
         backup_filename: Nome exato do arquivo de backup (obtido via GET /database/backups)
-    
+
     Restrito a SuperAdmins.
     """
     db_url = os.getenv("DATABASE_URL")
@@ -630,22 +630,22 @@ async def admin_restore_database(
             status_code=500,
             detail="DATABASE_URL não configurado"
         )
-    
+
     backups = await backup_service.list_backups()
     valid_files = [b["filename"] for b in backups["backups"]]
-    
+
     if backup_filename not in valid_files:
         raise HTTPException(
             status_code=404,
             detail=f"Backup não encontrado. Backups disponíveis: {valid_files}"
         )
-    
+
     logger.warning(
         "[restore] Requisição de restore recebida para: %s — adicionando task ao background",
         backup_filename
     )
     background_tasks.add_task(backup_service.restore_database_backup, db_url, backup_filename)
-    
+
     return {
         "message": f"Restauração iniciada em background a partir de {backup_filename}. Acompanhe pelo log do servidor.",
         "status": "accepted",
@@ -664,20 +664,20 @@ async def admin_delete_database_backup(
 ):
     """
     Deleta um arquivo de backup.
-    
+
     Args:
         backup_filename: Nome do arquivo a deletar
-    
+
     Restrito a SuperAdmins.
     """
     result = await backup_service.delete_backup(backup_filename)
-    
+
     if not result["success"]:
         raise HTTPException(
             status_code=404,
             detail=result["error"]
         )
-    
+
     return {
         "message": f"Backup {backup_filename} deletado com sucesso",
         "backup_id": result["backup_id"],
@@ -703,7 +703,7 @@ async def admin_list_audit_logs(
 ):
     """
     Lista logs de auditoria com filtros e paginação.
-    
+
     Filtros:
     - user_id: ID do usuário
     - resource_type: Tipo de recurso (Portfolio, Transaction, etc)
@@ -713,24 +713,24 @@ async def admin_list_audit_logs(
     - date_from: Data inicial (ISO format)
     - date_to: Data final (ISO format)
     - search: Busca por resource_id ou erro
-    
+
     Restrito a SuperAdmins.
     """
     date_from_dt = None
     date_to_dt = None
-    
+
     if date_from:
         try:
             date_from_dt = datetime.fromisoformat(date_from.replace('Z', '+00:00'))
         except ValueError:
             raise HTTPException(status_code=400, detail="date_from inválido. Use ISO format")
-    
+
     if date_to:
         try:
             date_to_dt = datetime.fromisoformat(date_to.replace('Z', '+00:00'))
         except ValueError:
             raise HTTPException(status_code=400, detail="date_to inválido. Use ISO format")
-    
+
     logs, total = await AuditLogService.get_audit_logs(
         db,
         page=page,
@@ -744,7 +744,7 @@ async def admin_list_audit_logs(
         date_to=date_to_dt,
         search=search,
     )
-    
+
     return {
         "items": [
             {
@@ -778,14 +778,14 @@ async def admin_get_audit_log_detail(
     """
     Retorna detalhes completos de um log de auditoria.
     Inclui valores antigos, novos e mudanças em JSON.
-    
+
     Restrito a SuperAdmins.
     """
     log = await AuditLogService.get_audit_log_by_id(db, log_id)
-    
+
     if not log:
         raise HTTPException(status_code=404, detail="Log não encontrado")
-    
+
     return {
         "id": log.id,
         "user_id": log.user_id,
@@ -814,7 +814,7 @@ async def admin_get_user_audit_logs(
 ):
     """
     Retorna logs de auditoria de um usuário específico.
-    
+
     Restrito a SuperAdmins.
     """
     logs, total = await AuditLogService.get_user_audit_logs(
@@ -823,7 +823,7 @@ async def admin_get_user_audit_logs(
         page=page,
         page_size=page_size,
     )
-    
+
     return {
         "items": [
             {
@@ -855,10 +855,10 @@ async def admin_get_audit_stats(
 ):
     """
     Retorna estatísticas gerais de auditoria.
-    
+
     Inclui: total de logs, logs de hoje, desta semana, breakdown de ações,
     tipos de recursos, e operações que falharam.
-    
+
     Restrito a SuperAdmins.
     """
     return await AuditLogService.get_audit_stats(db)
@@ -872,9 +872,9 @@ async def admin_get_user_audit_stats(
 ):
     """
     Retorna estatísticas de auditoria de um usuário.
-    
+
     Inclui: total de ações, breakdown de ações, última ação, ações falhadas.
-    
+
     Restrito a SuperAdmins.
     """
     return await AuditLogService.get_user_audit_stats(db, user_id)
@@ -889,10 +889,10 @@ async def admin_cleanup_audit_logs(
 ):
     """
     Limpa logs de auditoria mais antigos que 'days_to_keep'.
-    
+
     Se dry_run=True (padrão), apenas retorna quantos seriam deletados sem realmente deletar.
     Se dry_run=False, realmente deleta os logs antigos.
-    
+
     Restrito a SuperAdmins.
     """
     return await AuditLogService.cleanup_audit_logs(db, days_to_keep, dry_run)

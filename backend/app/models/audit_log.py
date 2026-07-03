@@ -1,6 +1,5 @@
 from enum import Enum
-from datetime import datetime, timezone
-from sqlalchemy import Integer, String, Text, DateTime, ForeignKey, Index, JSON, func
+from sqlalchemy import Integer, String, Text, ForeignKey, Index, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, TimestampMixin
 from app.models.user import User
