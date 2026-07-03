@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react'
 import { BarChart2, TrendingUp, DollarSign, Briefcase } from 'lucide-react'
-import clsx from 'clsx'
 import {
   usePortfolioList,
   usePatrimonioHistory,
   usePositions,
+  usePortfolioSummaryData,
 } from '@/hooks/usePortfolio'
-import { useRentabilidadeKpis } from '@/hooks/useRentabilidade'
 import { useAppStore } from '@/store/appStore'
 import { formatBRL, formatPercent, signClass } from '@/utils/format'
 import KpiCard from '@/components/ui/KpiCard'
@@ -36,6 +35,11 @@ const ASSET_CLASS_OPTIONS = [
   { label: 'Renda Fixa',           value: 'RENDA_FIXA'        },
   { label: 'Cripto',               value: 'CRIPTO'            },
 ]
+
+function safeNum(v: unknown): number {
+  const n = Number(v)
+  return isFinite(n) ? n : 0
+}
 
 function ChartSelect({
   value, onChange, options,
@@ -75,23 +79,6 @@ function ChartSelect({
   )
 }
 
-function ReturnRow({ label, value }: { label: string; value: number }) {
-  const sign = value >= 0 ? '+' : ''
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-      <span style={{ fontSize: '0.68rem', color: 'var(--color-text-faint)', fontWeight: 500 }}>
-        {label}
-      </span>
-      <span
-        className={clsx('tabular-nums', signClass(value))}
-        style={{ fontSize: '0.7rem', fontWeight: 700 }}
-      >
-        {sign}{formatPercent(value)}
-      </span>
-    </div>
-  )
-}
-
 export default function ResumePage() {
   const globalPortfolioId = useAppStore(s => s.selectedPortfolioId)
   const setGlobal         = useAppStore(s => s.setSelectedPortfolioId)
@@ -111,24 +98,20 @@ export default function ResumePage() {
   const portfolioId: number | null = globalPortfolioId ?? (portfolios?.[0]?.id ?? null)
   const activeAssetType = assetClass === ASSET_CLASS_ALL ? null : assetClass
 
-  const { data: kpis,              isLoading: loadingKpis    } = useRentabilidadeKpis(portfolioId)
+  const { data: summary,           isLoading: loadingSummary } = usePortfolioSummaryData(portfolioId)
   const { data: patrimonioHistory, isLoading: loadingHistory } = usePatrimonioHistory(portfolioId, period, activeAssetType)
   const { data: positions,         isLoading: loadingPositions } = usePositions(portfolioId)
 
-  const patrimonio     = kpis?.patrimonio_atual        ?? 0
-  const aportado       = kpis?.total_aportado          ?? 0
-  const totalPnl       = kpis?.total_pnl               ?? 0
-  const ganhoNaoReal   = kpis?.ganho_nao_realizado      ?? 0
-  const ganhoReal      = kpis?.ganho_realizado          ?? 0
-  const proventos12m   = kpis?.proventos_12m            ?? 0
-  const proventosTotal = kpis?.proventos_total          ?? 0
-  const retornoTotal   = kpis?.retorno_total_pct        ?? 0
-  const retornoDia     = kpis?.retorno_dia_pct          ?? 0
-  const retornoMes     = kpis?.retorno_mes_pct          ?? 0
-  const retorno12m     = kpis?.retorno_12m_pct          ?? 0
-  const retornoInicio  = kpis?.retorno_desde_inicio_pct ?? 0
+  const patrimonio         = safeNum(summary?.total_patrimonio ?? summary?.current_value)
+  const aportado           = safeNum(summary?.total_investido ?? summary?.total_invested)
+  const resultadoAtual     = safeNum(summary?.variacao_valor ?? summary?.total_gain)
+  const variacaoPercentual = safeNum(summary?.variacao_percentual ?? summary?.total_gain_pct)
+  const lucroTotal         = safeNum(summary?.lucro_total)
+  const rentabilidadeTotal = safeNum(summary?.rentabilidade_total)
+  const proventos12m       = safeNum(summary?.dividendos_recebidos_12m)
+  const proventosTotal     = safeNum(summary?.total_proventos)
 
-  const loadingKpiCards = loadingPortfolios || loadingKpis
+  const loadingKpiCards = loadingPortfolios || loadingSummary
 
   if (loadingPortfolios) {
     return (
@@ -163,27 +146,23 @@ export default function ResumePage() {
       <div className="kpi-grid">
         {loadingKpiCards ? (
           [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
-        ) : (
+        ) : summary ? (
           <>
             <KpiCard
               label="Patrimônio Total"
               value={formatBRL(patrimonio)}
               subValue={formatBRL(aportado)}
-              subLabel="Total aportado"
-              change={retornoTotal}
+              subLabel="Valor investido"
+              change={variacaoPercentual}
             />
             <KpiCard
-              label="Resultado Total"
-              value={formatBRL(totalPnl)}
-              valueColor={signClass(totalPnl)}
-              subLabel={`Não realizado ${formatBRL(ganhoNaoReal)} · Realizado ${formatBRL(ganhoReal)}`}
+              label="Resultado Atual"
+              value={formatBRL(resultadoAtual)}
+              valueColor={signClass(resultadoAtual)}
+              subLabel="Variação da posição atual"
               bottomLine={
-                <span
-                  title="Retorno total = (PnL + proventos) / total aportado"
-                  className={clsx('text-xs font-semibold tabular-nums', signClass(retornoTotal))}
-                  style={{ cursor: 'help' }}
-                >
-                  {retornoTotal >= 0 ? '+' : ''}{formatPercent(retornoTotal)} retorno total
+                <span className="text-xs font-semibold tabular-nums" style={{ color: 'var(--color-text-muted)' }}>
+                  Não inclui proventos acumulados
                 </span>
               }
             />
@@ -191,31 +170,25 @@ export default function ResumePage() {
               label="Proventos (12m)"
               value={formatBRL(proventos12m)}
               subValue={formatBRL(proventosTotal)}
-              subLabel="Total acumulado"
+              subLabel="Total recebido"
             />
             <KpiCard
-              label="Rentabilidade"
-              value={
-                <span className={clsx('tabular-nums', signClass(retornoInicio))}>
-                  {retornoInicio >= 0 ? '+' : ''}{formatPercent(retornoInicio)}
-                </span>
-              }
-              subLabel="Desde o início"
+              label="Retorno Total"
+              value={formatBRL(lucroTotal)}
+              valueColor={signClass(lucroTotal)}
+              subLabel="Ganho de capital + proventos"
+              change={rentabilidadeTotal}
               bottomLine={
-                <div style={{
-                  display: 'flex', flexDirection: 'column', gap: 3,
-                  marginTop: 4,
-                  paddingTop: 6,
-                  borderTop: '1px solid oklch(from var(--color-text) l c h / 0.07)',
-                  width: '100%',
-                }}>
-                  <ReturnRow label="Hoje"  value={retornoDia}  />
-                  <ReturnRow label="Mês"   value={retornoMes}  />
-                  <ReturnRow label="12 m"  value={retorno12m}  />
-                </div>
+                <span className="text-xs font-semibold tabular-nums" style={{ color: 'var(--color-text-muted)' }}>
+                  Variação atual: {resultadoAtual >= 0 ? '+' : ''}{formatPercent(variacaoPercentual)}
+                </span>
               }
             />
           </>
+        ) : (
+          <div className="col-span-4 py-8 text-center text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            Nenhum dado disponível. Adicione lançamentos para começar.
+          </div>
         )}
       </div>
 
