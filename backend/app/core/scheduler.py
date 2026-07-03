@@ -11,7 +11,8 @@ BRAPI_CHUNK_DELAY = 1.0  # segundos entre chunks BRAPI
 
 def start_scheduler() -> None:
     """
-    Registra jobs de cotação, benchmarks, catálogo e histórico de Tesouro Direto.
+    Registra jobs de cotação, benchmarks, catálogo, histórico de Tesouro Direto
+    e sincronização diária de proventos/eventos corporativos.
     """
 
     @scheduler.scheduled_job(
@@ -55,10 +56,7 @@ def start_scheduler() -> None:
         from app.models.asset import AssetType
         async with AsyncSessionLocal() as db:
             try:
-                await update_all_quotes(
-                    db,
-                    asset_types=[AssetType.ETF_NACIONAL, AssetType.BDR],
-                )
+                await update_all_quotes(db, asset_types=[AssetType.ETF_NACIONAL, AssetType.BDR])
             except Exception as e:
                 logger.error("[scheduler] Erro ao atualizar ETF_NACIONAL/BDR: %s", e)
 
@@ -73,10 +71,7 @@ def start_scheduler() -> None:
         from app.models.asset import AssetType
         async with AsyncSessionLocal() as db:
             try:
-                await update_all_quotes(
-                    db,
-                    asset_types=[AssetType.STOCK, AssetType.ETF_INTERNACIONAL],
-                )
+                await update_all_quotes(db, asset_types=[AssetType.STOCK, AssetType.ETF_INTERNACIONAL])
             except Exception as e:
                 logger.error("[scheduler] Erro ao atualizar INTL: %s", e)
 
@@ -88,7 +83,6 @@ def start_scheduler() -> None:
     async def update_treasury_catalog():
         from app.core.database import AsyncSessionLocal
         from app.services.treasury_catalog_service import seed_treasury_assets
-
         async with AsyncSessionLocal() as db:
             try:
                 await seed_treasury_assets(db)
@@ -102,11 +96,7 @@ def start_scheduler() -> None:
     )
     async def update_treasury_history():
         from app.core.database import AsyncSessionLocal
-        from app.services.treasury_price_history_service import (
-            import_treasury_price_history,
-            update_treasury_latest_prices,
-        )
-
+        from app.services.treasury_price_history_service import import_treasury_price_history, update_treasury_latest_prices
         async with AsyncSessionLocal() as db:
             try:
                 await import_treasury_price_history(db, only_missing=True)
@@ -122,14 +112,30 @@ def start_scheduler() -> None:
     async def update_benchmark_rates():
         from app.core.database import AsyncSessionLocal
         from app.services.benchmark_rate_service import import_missing_benchmark_history
-
         async with AsyncSessionLocal() as db:
             try:
                 await import_missing_benchmark_history(db)
             except Exception as e:
                 logger.error("[scheduler] Erro ao atualizar benchmarks SGS/BCB: %s", e)
 
+    @scheduler.scheduled_job(
+        CronTrigger(day_of_week="mon-fri", hour=6, minute=40),
+        id="sync_daily_proventos",
+        name="Sincronizar proventos/eventos BRAPI — renda variável nacional",
+        max_instances=1,
+        coalesce=True,
+    )
+    async def sync_daily_proventos():
+        from app.core.database import AsyncSessionLocal
+        from app.services.proventos_daily_sync_service import run_daily_proventos_sync
+        async with AsyncSessionLocal() as db:
+            try:
+                result = await run_daily_proventos_sync(db)
+                logger.info("[scheduler] Proventos diários atualizados: %s", result)
+            except Exception as e:
+                logger.error("[scheduler] Erro ao sincronizar proventos diários: %s", e)
+
     scheduler.start()
     logger.info(
-        "Scheduler iniciado — cotacoes intraday + Tesouro Direto + benchmarks SGS/BCB diários"
+        "Scheduler iniciado — cotações intraday + Tesouro Direto + benchmarks SGS/BCB + proventos diários"
     )
