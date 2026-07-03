@@ -29,6 +29,9 @@ export interface ProventoItem {
   asset_type: string
   dividend_type: string
   status: 'RECEBIDO' | 'A_RECEBER'
+  /** Data com: ultimo dia com direito ao provento. */
+  record_date: string | null
+  /** Data ex: primeiro dia negociado sem direito ao provento. */
   ex_date: string
   payment_date: string | null
   quantity: number
