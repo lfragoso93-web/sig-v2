@@ -12,7 +12,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Iterable, Optional
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,6 +22,7 @@ from app.models.rate_history import RateHistory
 logger = logging.getLogger(__name__)
 
 DEFAULT_HISTORY_START = date(2010, 1, 1)
+_RATE_HISTORY_UNIQUE_INDEX = "ix_rate_history_indicator_date_unique"
 
 
 def _to_decimal(value: object, default: str = "0") -> Decimal:
@@ -39,7 +40,26 @@ def _daily_rate_from_annual_pct(annual_pct: Decimal) -> Decimal:
     return Decimal(str(daily * 100))
 
 
+async def ensure_rate_history_unique_index(db: AsyncSession) -> None:
+    """
+    Garante idempotência do upsert em bases antigas.
+
+    O model declara UniqueConstraint(indicator, date), mas algumas bases locais já
+    tinham a tabela rate_history sem a constraint nomeada. Criamos um índice único
+    equivalente para suportar ON CONFLICT (indicator, date) sem depender do nome
+    da constraint/migration original.
+    """
+    await db.execute(
+        text(
+            f"CREATE UNIQUE INDEX IF NOT EXISTS {_RATE_HISTORY_UNIQUE_INDEX} "
+            "ON rate_history (indicator, date)"
+        )
+    )
+
+
 async def _upsert_rate_rows(db: AsyncSession, rows: list[dict]) -> int:
+    await ensure_rate_history_unique_index(db)
+
     inserted_or_updated = 0
     for row in rows:
         values = {
@@ -58,7 +78,7 @@ async def _upsert_rate_rows(db: AsyncSession, rows: list[dict]) -> int:
             pg_insert(RateHistory)
             .values(**values)
             .on_conflict_do_update(
-                constraint="uq_rate_history_indicator_date",
+                index_elements=[RateHistory.indicator, RateHistory.date],
                 set_={
                     "rate_daily": values.get("rate_daily"),
                     "rate_monthly": values.get("rate_monthly"),
@@ -107,6 +127,8 @@ async def import_missing_benchmark_history(
     Backfill inicial: se a tabela estiver vazia para algum indicador, importa
     histórico desde start_date. Se já houver dados, atualiza apenas últimos 10 dias.
     """
+    await ensure_rate_history_unique_index(db)
+
     today = end_date or date.today()
     stats: dict[str, int] = {}
 
