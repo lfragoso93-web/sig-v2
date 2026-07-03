@@ -30,6 +30,8 @@ def upgrade() -> None:
         END $$;
         """)
 
+    raw_payload_type = sa.JSON().with_variant(postgresql.JSONB(astext_type=sa.Text()), 'postgresql')
+
     op.add_column('asset_dividends', sa.Column('record_date', sa.Date(), nullable=True))
     op.add_column('asset_dividends', sa.Column('approved_on', sa.Date(), nullable=True))
     op.add_column('asset_dividends', sa.Column('gross_value_per_unit', sa.Numeric(18, 8), nullable=True))
@@ -39,7 +41,7 @@ def upgrade() -> None:
     op.add_column('asset_dividends', sa.Column('asset_issued', sa.String(length=32), nullable=True))
     op.add_column('asset_dividends', sa.Column('related_to', sa.String(length=80), nullable=True))
     op.add_column('asset_dividends', sa.Column('remarks', sa.Text(), nullable=True))
-    op.add_column('asset_dividends', sa.Column('raw_payload', postgresql.JSONB(astext_type=sa.Text()), nullable=True))
+    op.add_column('asset_dividends', sa.Column('raw_payload', raw_payload_type, nullable=True))
 
     op.create_index('ix_asset_dividends_record_date', 'asset_dividends', ['record_date'], unique=False)
     op.create_index('ix_asset_dividends_approved_on', 'asset_dividends', ['approved_on'], unique=False)
