@@ -48,9 +48,7 @@ async def _has_dividends(db: AsyncSession, ticker: str) -> bool:
 
 
 async def _has_logo(db: AsyncSession, ticker: str) -> bool:
-    result = await db.execute(
-        select(Asset.logo_url).where(Asset.ticker == ticker)
-    )
+    result = await db.execute(select(Asset.logo_url).where(Asset.ticker == ticker))
     return bool(result.scalar_one_or_none())
 
 
@@ -62,13 +60,7 @@ async def _save_logo(db: AsyncSession, ticker: str, url: str) -> None:
         await db.commit()
 
 
-async def _upsert_price_row(
-    db: AsyncSession,
-    asset_id: int,
-    timestamp: datetime,
-    close: float,
-    source: str = "brapi",
-) -> None:
+async def _upsert_price_row(db: AsyncSession, asset_id: int, timestamp: datetime, close: float, source: str = "brapi") -> None:
     stmt = (
         pg_insert(AssetPrice)
         .values(
@@ -82,7 +74,11 @@ async def _upsert_price_row(
     await db.execute(stmt)
 
 
-async def _onboard_price_history_br(db: AsyncSession, ticker: str) -> None:
+async def _onboard_price_history_br(db: AsyncSession, ticker: str, force: bool = False) -> None:
+    if not force and await _has_price_history(db, ticker):
+        logger.info(f"[onboarding] {ticker}: historico de precos ja existe — pulando")
+        return
+
     rows = await fetch_price_history_full(ticker)
     if not rows:
         logger.warning(f"[onboarding] {ticker}: BRAPI range=max retornou vazio — sem historico salvo")
@@ -96,18 +92,15 @@ async def _onboard_price_history_br(db: AsyncSession, ticker: str) -> None:
 
     inserted = 0
     for dt, close in rows:
-        ts = dt if isinstance(dt, datetime) else datetime(
-            dt.year, dt.month, dt.day, 0, 0, 0, tzinfo=timezone.utc
-        )
+        ts = dt if isinstance(dt, datetime) else datetime(dt.year, dt.month, dt.day, 0, 0, 0, tzinfo=timezone.utc)
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=timezone.utc)
         await _upsert_price_row(db, asset.id, ts, close, source="brapi")
         inserted += 1
 
-    if rows:
-        latest_close = rows[-1][1]
-        asset.last_price = Decimal(str(round(latest_close, 8)))
-        asset.last_price_updated_at = datetime.now(timezone.utc)
+    latest_close = rows[-1][1]
+    asset.last_price = Decimal(str(round(latest_close, 8)))
+    asset.last_price_updated_at = datetime.now(timezone.utc)
 
     await db.commit()
     logger.info(f"[onboarding] {ticker}: {inserted} precos historicos salvos via range=max ({len(rows)} registros brutos)")
@@ -133,26 +126,27 @@ async def run_onboarding(ticker: str, asset_type: str) -> None:
     is_intl = at in INTL_TYPES
 
     async with AsyncSessionLocal() as db:
-        if await _has_price_history(db, ticker):
-            logger.info(f"[onboarding] {ticker}: historico de precos ja existe — pulando")
-        else:
-            try:
-                if is_intl:
-                    n = await persist_daily_prices(db, ticker, at, days_back=_PRICE_HISTORY_DAYS_INTL)
-                    logger.info(f"[onboarding] {ticker}: {n} precos historicos salvos (INTL, {_PRICE_HISTORY_DAYS_INTL}d)")
-                else:
-                    await _onboard_price_history_br(db, ticker)
-            except Exception as e:
-                logger.error(f"[onboarding] {ticker}: falha ao salvar precos historicos: {e}")
+        try:
+            if is_intl:
+                if await _has_price_history(db, ticker):
+                    logger.info(f"[onboarding] {ticker}: historico intl ja existe — atualizando delta")
+                n = await persist_daily_prices(db, ticker, at, days_back=_PRICE_HISTORY_DAYS_INTL, force=True)
+                logger.info(f"[onboarding] {ticker}: {n} precos historicos salvos/atualizados (INTL, {_PRICE_HISTORY_DAYS_INTL}d)")
+            else:
+                await _onboard_price_history_br(db, ticker, force=False)
+        except Exception as e:
+            logger.error(f"[onboarding] {ticker}: falha ao salvar precos historicos: {e}")
 
-        if await _has_dividends(db, ticker):
-            logger.info(f"[onboarding] {ticker}: proventos ja existem — pulando")
-        else:
-            try:
-                await run_backfill(db, ticker, at)
-                logger.info(f"[onboarding] {ticker}: proventos historicos salvos")
-            except Exception as e:
-                logger.error(f"[onboarding] {ticker}: falha ao salvar proventos: {e}")
+        try:
+            if await _has_dividends(db, ticker):
+                logger.info(
+                    f"[onboarding] {ticker}: proventos globais ja existem — "
+                    "sincronizando eventos e vinculos da carteira"
+                )
+            await run_backfill(db, ticker, at)
+            logger.info(f"[onboarding] {ticker}: proventos historicos sincronizados")
+        except Exception as e:
+            logger.error(f"[onboarding] {ticker}: falha ao sincronizar proventos: {e}")
 
         if await _has_logo(db, ticker):
             logger.info(f"[onboarding] {ticker}: logo ja existe — pulando")
