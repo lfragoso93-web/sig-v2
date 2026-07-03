@@ -143,12 +143,6 @@ def _calc_net_qty(txs: list[tuple], ref_date: date) -> float:
 
 
 def _apply_dividend_dates(div: Dividend, ex_date: date, payment_date: date | None) -> None:
-    """Preenche datas atuais e legadas do Dividend.
-
-    Algumas bases antigas ainda têm `date_ex` como NOT NULL. Para não quebrar
-    materialização, mantemos esses campos sincronizados com `ex_date` e
-    `payment_date` até uma futura migration limpar o legado.
-    """
     div.ex_date = ex_date
     div.payment_date = payment_date
     div.date_ex = ex_date
@@ -156,10 +150,11 @@ def _apply_dividend_dates(div: Dividend, ex_date: date, payment_date: date | Non
 
 
 def _legacy_dividend_dates(ex_date: date, payment_date: date | None) -> dict[str, date | None]:
-    return {
-        "date_ex": ex_date,
-        "date_pagamento": payment_date or ex_date,
-    }
+    return {"date_ex": ex_date, "date_pagamento": payment_date or ex_date}
+
+
+def _sync_scope_label(portfolio_id: int | None) -> str:
+    return "global" if not portfolio_id or portfolio_id <= 0 else f"portfolio {portfolio_id}"
 
 
 def _extract_brapi_events(entry: dict) -> list[dict]:
@@ -247,18 +242,8 @@ async def _fetch_dividends_yf(ticker: str) -> list[dict]:
 def _parse_raw_dividend(raw: dict) -> Optional[ParsedDividendEvent]:
     try:
         category = raw.get("eventCategory")
-        record_date = _parse_date(
-            raw.get("lastDatePrior")
-            or raw.get("recordDate")
-            or raw.get("dateCom")
-            or raw.get("date_with")
-        )
-        explicit_ex_date = _parse_date(
-            raw.get("exDate")
-            or raw.get("ex_date")
-            or raw.get("dateEx")
-            or raw.get("date_ex")
-        )
+        record_date = _parse_date(raw.get("lastDatePrior") or raw.get("recordDate") or raw.get("dateCom") or raw.get("date_with"))
+        explicit_ex_date = _parse_date(raw.get("exDate") or raw.get("ex_date") or raw.get("dateEx") or raw.get("date_ex"))
         pay_date = _parse_date(raw.get("paymentDate") or raw.get("paidAt") or raw.get("payment_date"))
         approved_on = _parse_date(raw.get("approvedOn") or raw.get("approved_on") or raw.get("declaredDate"))
 
@@ -273,10 +258,7 @@ def _parse_raw_dividend(raw: dict) -> Optional[ParsedDividendEvent]:
         else:
             return None
 
-        div_type = _map_dividend_type(
-            raw.get("label") or raw.get("type") or raw.get("dividendType"),
-            category,
-        )
+        div_type = _map_dividend_type(raw.get("label") or raw.get("type") or raw.get("dividendType"), category)
         value = _to_float(raw.get("rate") or raw.get("value") or raw.get("amount"), default=0.0)
         factor = _to_optional_float(raw.get("factor"))
         complete_factor = _to_optional_float(raw.get("completeFactor") or raw.get("complete_factor"))
@@ -315,12 +297,13 @@ def _is_cash_event(dividend_type: DividendType, value: float) -> bool:
     return dividend_type in CASH_DIVIDEND_TYPES and value > 0
 
 
-async def backfill_dividends(db: AsyncSession, portfolio_id: int, ticker: str, asset_type: str) -> None:
+async def backfill_dividends(db: AsyncSession, portfolio_id: int | None, ticker: str, asset_type: str) -> None:
     if asset_type.upper() in SKIP_TYPES:
         logger.debug(f"[Backfill] {ticker} ({asset_type}) ignorado (SKIP_TYPES)")
         return
 
-    logger.info(f"[Backfill] iniciando para {ticker} / portfolio {portfolio_id}")
+    scope_label = _sync_scope_label(portfolio_id)
+    logger.info("[Backfill] iniciando sync %s de eventos para %s", scope_label, ticker)
     ticker = ticker.upper()
     asset_type_norm = asset_type.upper()
 
@@ -359,9 +342,7 @@ async def backfill_dividends(db: AsyncSession, portfolio_id: int, ticker: str, a
 
     if portfolio_ids and existing_ads:
         ad_ids = [ad.id for ad in existing_ads.values()]
-        div_result = await db.execute(
-            select(Dividend).where(Dividend.portfolio_id.in_(portfolio_ids), Dividend.asset_dividend_id.in_(ad_ids))
-        )
+        div_result = await db.execute(select(Dividend).where(Dividend.portfolio_id.in_(portfolio_ids), Dividend.asset_dividend_id.in_(ad_ids)))
         existing_divs: dict[tuple[int, int], Dividend] = {(d.portfolio_id, d.asset_dividend_id): d for d in div_result.scalars().all()}
     else:
         existing_divs = {}
@@ -463,7 +444,7 @@ async def backfill_dividends(db: AsyncSession, portfolio_id: int, ticker: str, a
             return
 
     await db.commit()
-    logger.info(f"[Backfill] concluido para {ticker} / portfolio {portfolio_id}")
+    logger.info("[Backfill] concluido sync %s de eventos para %s", scope_label, ticker)
 
 
 async def materialize_asset_dividends(db: AsyncSession, tickers: Optional[list[str]] = None, portfolio_id: Optional[int] = None, commit: bool = True) -> int:
@@ -494,9 +475,7 @@ async def materialize_asset_dividends(db: AsyncSession, tickers: Optional[list[s
     asset_dividend_ids = [ad.id for _, ad in asset_rows if ad.id is not None]
     existing_divs: dict[tuple[int, int], Dividend] = {}
     if asset_dividend_ids and portfolio_ids:
-        existing_rows = await db.execute(
-            select(Dividend).where(Dividend.portfolio_id.in_(portfolio_ids), Dividend.asset_dividend_id.in_(asset_dividend_ids))
-        )
+        existing_rows = await db.execute(select(Dividend).where(Dividend.portfolio_id.in_(portfolio_ids), Dividend.asset_dividend_id.in_(asset_dividend_ids)))
         existing_divs = {(d.portfolio_id, d.asset_dividend_id): d for d in existing_rows.scalars().all()}
 
     changed = 0
@@ -571,5 +550,6 @@ async def backfill_all_tickers(db: AsyncSession, portfolio_id: int, tickers: lis
 
 
 async def run_backfill(db: AsyncSession, ticker: str, asset_type) -> None:
+    """Sincroniza eventos globais do ativo e materializa carteiras reais afetadas."""
     asset_type_str = asset_type.value if hasattr(asset_type, 'value') else str(asset_type)
-    await backfill_dividends(db, portfolio_id=0, ticker=ticker, asset_type=asset_type_str)
+    await backfill_dividends(db, portfolio_id=None, ticker=ticker, asset_type=asset_type_str)
