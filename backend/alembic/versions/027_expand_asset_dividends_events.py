@@ -19,6 +19,17 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Se o banco estiver usando enum nativo do PostgreSQL para DividendType,
+    # adiciona SUBSCRICAO sem falhar em bases SQLite/testes ou enum não-nativo.
+    op.execute("""
+    DO $$
+    BEGIN
+        IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'dividendtype') THEN
+            ALTER TYPE dividendtype ADD VALUE IF NOT EXISTS 'SUBSCRICAO';
+        END IF;
+    END $$;
+    """)
+
     op.add_column('asset_dividends', sa.Column('record_date', sa.Date(), nullable=True))
     op.add_column('asset_dividends', sa.Column('approved_on', sa.Date(), nullable=True))
     op.add_column('asset_dividends', sa.Column('gross_value_per_unit', sa.Numeric(18, 8), nullable=True))
