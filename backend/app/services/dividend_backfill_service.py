@@ -296,6 +296,134 @@ async def backfill_dividends(
     logger.info(f"[Backfill] concluido para {ticker} / portfolio {portfolio_id}")
 
 
+async def materialize_asset_dividends(
+    db: AsyncSession,
+    tickers: Optional[list[str]] = None,
+    portfolio_id: Optional[int] = None,
+    commit: bool = True,
+) -> int:
+    """
+    Cria/atualiza Dividend da carteira a partir dos eventos globais em AssetDividend.
+
+    Usado apos syncs em lote que populam asset_dividends, garantindo que a tela de
+    Proventos enxergue os valores calculados pela posicao de cada carteira na data-ex.
+    """
+    ticker_filter = [t.upper() for t in (tickers or []) if t]
+
+    asset_stmt = select(Asset, AssetDividend).join(
+        AssetDividend,
+        AssetDividend.asset_id == Asset.id,
+    )
+    if ticker_filter:
+        asset_stmt = asset_stmt.where(Asset.ticker.in_(ticker_filter))
+
+    asset_rows = (await db.execute(asset_stmt)).all()
+    if not asset_rows:
+        return 0
+
+    event_tickers = sorted({asset.ticker for asset, _ in asset_rows})
+    tx_stmt = select(
+        Transaction.portfolio_id,
+        Transaction.ticker,
+        Transaction.date,
+        Transaction.operation,
+        Transaction.quantity,
+    ).where(Transaction.ticker.in_(event_tickers))
+    if portfolio_id is not None:
+        tx_stmt = tx_stmt.where(Transaction.portfolio_id == portfolio_id)
+
+    tx_rows = (await db.execute(tx_stmt)).all()
+    if not tx_rows:
+        return 0
+
+    txs_by_key: dict[tuple[int, str], list[tuple]] = {}
+    portfolio_ids: set[int] = set()
+    for pid, ticker, tx_date, op, qty in tx_rows:
+        portfolio_ids.add(pid)
+        txs_by_key.setdefault((pid, ticker), []).append((tx_date, op, qty))
+
+    asset_dividend_ids = [ad.id for _, ad in asset_rows if ad.id is not None]
+    existing_divs: dict[tuple[int, int], Dividend] = {}
+    if asset_dividend_ids and portfolio_ids:
+        existing_rows = await db.execute(
+            select(Dividend).where(
+                Dividend.portfolio_id.in_(portfolio_ids),
+                Dividend.asset_dividend_id.in_(asset_dividend_ids),
+            )
+        )
+        existing_divs = {
+            (d.portfolio_id, d.asset_dividend_id): d
+            for d in existing_rows.scalars().all()
+        }
+
+    changed = 0
+    today = date.today()
+    for asset, asset_div in asset_rows:
+        if asset_div.id is None:
+            continue
+        div_type_str = (
+            asset_div.dividend_type.value
+            if hasattr(asset_div.dividend_type, "value")
+            else str(asset_div.dividend_type)
+        )
+        value = float(asset_div.value_per_unit or 0)
+        if value <= 0:
+            continue
+        status = (
+            DividendStatus.RECEBIDO
+            if asset_div.payment_date and asset_div.payment_date <= today
+            else DividendStatus.A_RECEBER
+        )
+
+        for pid in portfolio_ids:
+            txs = txs_by_key.get((pid, asset.ticker), [])
+            if not txs:
+                continue
+            qty = _calc_net_qty(txs, asset_div.ex_date)
+            if qty <= 0:
+                continue
+
+            total = qty * value
+            net = total * 0.85 if "JCP" in div_type_str else total
+            div = existing_divs.get((pid, asset_div.id))
+            if div is None:
+                div = Dividend(
+                    portfolio_id=pid,
+                    asset_dividend_id=asset_div.id,
+                    quantity=qty,
+                    total_value=total,
+                    net_value=net,
+                    status=status,
+                    ticker=asset.ticker,
+                    ex_date=asset_div.ex_date,
+                    payment_date=asset_div.payment_date,
+                    value_per_unit=value,
+                    total_received=total,
+                    dividend_type=div_type_str,
+                )
+                db.add(div)
+                existing_divs[(pid, asset_div.id)] = div
+                changed += 1
+            else:
+                div.quantity = qty
+                div.total_value = total
+                div.net_value = net
+                div.status = status
+                div.ticker = asset.ticker
+                div.ex_date = asset_div.ex_date
+                div.payment_date = asset_div.payment_date
+                div.value_per_unit = value
+                div.total_received = total
+                div.dividend_type = div_type_str
+                changed += 1
+
+    if commit:
+        await db.commit()
+    else:
+        await db.flush()
+    return changed
+
+
 async def backfill_all_tickers(
     db: AsyncSession,
     portfolio_id: int,

@@ -34,6 +34,7 @@ from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
 from app.models.dividend import DividendType
 from app.models.dividends_sync_job import DividendsSyncJob
+from app.services.dividend_backfill_service import materialize_asset_dividends
 from app.models.portfolio_position import PortfolioPosition
 
 logger = logging.getLogger(__name__)
@@ -321,6 +322,12 @@ async def run_fii_dividends_sync(
                 await db.rollback()
                 continue
 
+        materialized = await materialize_asset_dividends(
+            db,
+            tickers=tickers,
+            commit=False,
+        )
+
         # Flush acumulado (apos todos os tickers processados sem erro)
         await db.flush()
 
@@ -332,6 +339,7 @@ async def run_fii_dividends_sync(
             f"assets={result.assets_processed} "
             f"created={result.events_created} "
             f"updated={result.events_updated} "
+            f"materialized={materialized} "
             f"errors={result.errors} "
             f"cursor={result.cursor_date}"
         )

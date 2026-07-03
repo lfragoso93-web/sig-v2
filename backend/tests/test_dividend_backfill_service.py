@@ -12,7 +12,7 @@ Fluxo testado:
 import pytest
 from datetime import date
 from decimal import Decimal
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +26,7 @@ from app.services.dividend_backfill_service import (
     _calc_net_qty,
     backfill_dividends,
     backfill_all_tickers,
+    materialize_asset_dividends,
     SKIP_TYPES,
 )
 
@@ -362,3 +363,41 @@ class TestBackfillAllTickers:
         assert "BTC" not in result
         assert "TNLP11" not in result
         assert len(result) == 1
+
+
+@pytest.mark.asyncio
+async def test_materialize_asset_dividends_cria_provento_da_carteira(db: AsyncSession, portfolio: Portfolio):
+    """Eventos globais em AssetDividend devem virar Dividend da carteira."""
+    asset = Asset(
+        ticker="MXRF11",
+        name="MXRF11",
+        asset_type=AssetType.FII,
+        currency=AssetCurrency.BRL,
+    )
+    db.add(asset)
+    await db.flush()
+
+    await _make_tx(db, portfolio.id, "MXRF11", OperationType.buy, 100, date(2023, 1, 1))
+
+    event = AssetDividend(
+        asset_id=asset.id,
+        ex_date=date(2024, 3, 1),
+        payment_date=date(2024, 3, 15),
+        value_per_unit=Decimal("0.10"),
+        dividend_type=DividendType.RENDIMENTO,
+        source="sync",
+    )
+    db.add(event)
+    await db.flush()
+
+    changed = await materialize_asset_dividends(db, tickers=["MXRF11"])
+    assert changed == 1
+
+    from sqlalchemy import select
+    div_result = await db.execute(
+        select(Dividend).where(Dividend.portfolio_id == portfolio.id)
+    )
+    div = div_result.scalars().one()
+    assert div.ticker == "MXRF11"
+    assert float(div.quantity) == pytest.approx(100.0)
+    assert float(div.total_value) == pytest.approx(10.0)
