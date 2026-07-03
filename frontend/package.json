@@ -44,10 +44,10 @@
     "autoprefixer": "^10.5.2",
     "postcss": "^8.5.16",
     "eslint": "^10.6.0",
-    "vitest": "^2.0.0",
+    "vitest": "^4.1.9",
     "@testing-library/react": "^16.0.0",
     "@testing-library/dom": "^10.0.0",
     "jsdom": "^24.0.0",
-    "@vitest/coverage-v8": "^2.0.0"
+    "@vitest/coverage-v8": "^4.1.9"
   }
 }
