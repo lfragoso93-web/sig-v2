@@ -379,6 +379,51 @@ async def get_current_price(
     return result.get(ticker)
 
 
+async def update_quotes_for_portfolio(portfolio_id: int, db: AsyncSession) -> int:
+    """
+    Compatibilidade com routers/positions.py.
+
+    Atualiza cotações apenas dos ativos usados em uma carteira específica.
+    Não chama APIs para NO_QUOTE_TYPES, como RENDA_FIXA.
+    Tesouro Direto é resolvido pelo catálogo persistido antes de chamar BRAPI.
+    """
+    from app.models.transaction import Transaction
+
+    result = await db.execute(
+        select(Transaction.ticker, Transaction.asset_type)
+        .where(Transaction.portfolio_id == portfolio_id)
+        .distinct()
+    )
+
+    positions: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+    for row in result.all():
+        if not row.ticker or not row.asset_type:
+            continue
+        asset_type_str = str(row.asset_type)
+        try:
+            at = AssetType(asset_type_str)
+            if at in NO_QUOTE_TYPES:
+                continue
+        except ValueError:
+            pass
+        key = (str(row.ticker), asset_type_str)
+        if key in seen:
+            continue
+        seen.add(key)
+        positions.append({"ticker": str(row.ticker), "asset_type": asset_type_str})
+
+    prices = await get_prices(positions, db)
+    await db.commit()
+    logger.info(
+        "[quotes_service] update_quotes_for_portfolio(%s): %d/%d preços atualizados",
+        portfolio_id,
+        len(prices),
+        len(positions),
+    )
+    return len(prices)
+
+
 async def update_all_quotes(
     db: AsyncSession,
     asset_types: Optional[list[AssetType]] = None,
