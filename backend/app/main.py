@@ -35,7 +35,8 @@ async def _boot_sequence() -> None:
     """
     Sequência de inicialização executada em background após o app subir.
 
-    Etapa 1 - Seed de ativos.
+    Etapa 1 - Seed de ativos B3/cripto.
+    Etapa 1b - Seed/atualização do catálogo de Tesouro Direto via BRAPI.
     Etapa 2 - Backfill histórico de preços.
     Etapa 3 - Backfill/incremental de benchmarks SGS/BCB para Renda Fixa.
     """
@@ -66,6 +67,22 @@ async def _boot_sequence() -> None:
     except Exception as e:
         logger.error("[Boot] Etapa 1 (seed de ativos) falhou: %s", e)
         seed_ok = False
+
+    try:
+        from app.services.treasury_catalog_service import seed_treasury_assets
+
+        logger.info("[Boot] Etapa 1b: atualizando catálogo Tesouro Direto BRAPI")
+        async with AsyncSessionLocal() as db:
+            treasury_seed = await seed_treasury_assets(db)
+        logger.info(
+            "[Boot] Etapa 1b: Tesouro Direto — %d criados, %d atualizados, %d ignorados, %d erros",
+            treasury_seed.created,
+            treasury_seed.updated,
+            treasury_seed.skipped,
+            treasury_seed.errors,
+        )
+    except Exception as e:
+        logger.error("[Boot] Etapa 1b (seed Tesouro Direto) falhou: %s", e)
 
     if not seed_ok:
         logger.warning("[Boot] Etapa 2 abortada: etapa 1 falhou")
