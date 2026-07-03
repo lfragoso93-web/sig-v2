@@ -47,6 +47,15 @@ def _asset_type_str(asset_type) -> str:
     return str(asset_type)
 
 
+def _asset_type_from_any(asset_type) -> Optional[AssetType]:
+    if isinstance(asset_type, AssetType):
+        return asset_type
+    try:
+        return AssetType(str(asset_type))
+    except Exception:
+        return None
+
+
 def _mem_get(ticker: str) -> Optional[float]:
     entry = _mem_cache.get(ticker)
     if entry and time.time() < entry[1]:
@@ -305,10 +314,8 @@ async def get_prices(
         if not ticker:
             continue
         raw_type = p.get("asset_type", "")
-        try:
-            asset_type = AssetType(raw_type) if isinstance(raw_type, str) else raw_type
-        except ValueError:
-            asset_type = None
+        asset_type = _asset_type_from_any(raw_type)
+        if asset_type is None:
             logger.warning("[quotes_service] asset_type invalido '%s' para %s", raw_type, ticker)
         type_map[ticker] = asset_type
 
@@ -379,6 +386,24 @@ async def get_current_price(
     return result.get(ticker)
 
 
+async def get_price_for_transaction(
+    ticker: str,
+    asset_type,
+    db: Optional[AsyncSession] = None,
+) -> Optional[float]:
+    """
+    Compatibilidade com price_service.py e fluxos antigos.
+
+    Retorna preço atual roteando pelo mesmo orquestrador usado em posições.
+    Aceita AssetType ou string. Não chama APIs para NO_QUOTE_TYPES.
+    """
+    at = _asset_type_from_any(asset_type)
+    if at is None:
+        logger.warning("[quotes_service] get_price_for_transaction asset_type inválido para %s: %s", ticker, asset_type)
+        return None
+    return await get_current_price(ticker, at.value, db)
+
+
 async def update_quotes_for_portfolio(portfolio_id: int, db: AsyncSession) -> int:
     """
     Compatibilidade com routers/positions.py.
@@ -401,12 +426,9 @@ async def update_quotes_for_portfolio(portfolio_id: int, db: AsyncSession) -> in
         if not row.ticker or not row.asset_type:
             continue
         asset_type_str = str(row.asset_type)
-        try:
-            at = AssetType(asset_type_str)
-            if at in NO_QUOTE_TYPES:
-                continue
-        except ValueError:
-            pass
+        at = _asset_type_from_any(asset_type_str)
+        if at in NO_QUOTE_TYPES:
+            continue
         key = (str(row.ticker), asset_type_str)
         if key in seen:
             continue
@@ -454,12 +476,9 @@ async def update_all_quotes(
     for row in tx_rows:
         if not row.ticker or not row.asset_type:
             continue
-        try:
-            at = AssetType(str(row.asset_type))
-            if at in NO_QUOTE_TYPES:
-                continue
-        except ValueError:
-            pass
+        at = _asset_type_from_any(str(row.asset_type))
+        if at in NO_QUOTE_TYPES:
+            continue
         positions_map.setdefault(
             (row.ticker, str(row.asset_type)),
             {"ticker": row.ticker, "asset_type": str(row.asset_type)},
