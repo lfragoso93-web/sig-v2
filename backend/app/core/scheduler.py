@@ -11,8 +11,7 @@ BRAPI_CHUNK_DELAY = 1.0  # segundos entre chunks BRAPI
 
 def start_scheduler() -> None:
     """
-    Registra 4 jobs independentes por tipo de ativo e inicia o scheduler async.
-    Separar por tipo evita 400 na BRAPI por mix de tickers incompativeis.
+    Registra jobs de cotação e benchmarks e inicia o scheduler async.
     """
 
     @scheduler.scheduled_job(
@@ -81,8 +80,22 @@ def start_scheduler() -> None:
             except Exception as e:
                 logger.error("[scheduler] Erro ao atualizar INTL: %s", e)
 
+    @scheduler.scheduled_job(
+        CronTrigger(day_of_week="mon-fri", hour=7, minute=10),
+        id="update_benchmark_rates",
+        name="Atualizar benchmarks SGS/BCB — CDI/SELIC/IPCA/IGPM",
+    )
+    async def update_benchmark_rates():
+        from app.core.database import AsyncSessionLocal
+        from app.services.benchmark_rate_service import import_missing_benchmark_history
+
+        async with AsyncSessionLocal() as db:
+            try:
+                await import_missing_benchmark_history(db)
+            except Exception as e:
+                logger.error("[scheduler] Erro ao atualizar benchmarks SGS/BCB: %s", e)
+
     scheduler.start()
     logger.info(
-        "Scheduler iniciado — 4 jobs por tipo (ACAO | FII | ETF+BDR | INTL) "
-        "a cada 15min (seg-sex 9h-18h)"
+        "Scheduler iniciado — cotacoes intraday + benchmarks SGS/BCB diários"
     )
