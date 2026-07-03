@@ -11,7 +11,7 @@ BRAPI_CHUNK_DELAY = 1.0  # segundos entre chunks BRAPI
 
 def start_scheduler() -> None:
     """
-    Registra jobs de cotação e benchmarks e inicia o scheduler async.
+    Registra jobs de cotação, benchmarks e catálogo de Tesouro Direto.
     """
 
     @scheduler.scheduled_job(
@@ -81,6 +81,21 @@ def start_scheduler() -> None:
                 logger.error("[scheduler] Erro ao atualizar INTL: %s", e)
 
     @scheduler.scheduled_job(
+        CronTrigger(day_of_week="mon-fri", hour=7, minute=5),
+        id="update_treasury_catalog",
+        name="Atualizar catálogo BRAPI — Tesouro Direto",
+    )
+    async def update_treasury_catalog():
+        from app.core.database import AsyncSessionLocal
+        from app.services.treasury_catalog_service import seed_treasury_assets
+
+        async with AsyncSessionLocal() as db:
+            try:
+                await seed_treasury_assets(db)
+            except Exception as e:
+                logger.error("[scheduler] Erro ao atualizar catálogo Tesouro Direto: %s", e)
+
+    @scheduler.scheduled_job(
         CronTrigger(day_of_week="mon-fri", hour=7, minute=10),
         id="update_benchmark_rates",
         name="Atualizar benchmarks SGS/BCB — CDI/SELIC/IPCA/IGPM",
@@ -97,5 +112,5 @@ def start_scheduler() -> None:
 
     scheduler.start()
     logger.info(
-        "Scheduler iniciado — cotacoes intraday + benchmarks SGS/BCB diários"
+        "Scheduler iniciado — cotacoes intraday + Tesouro Direto + benchmarks SGS/BCB diários"
     )
