@@ -18,7 +18,12 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal
-from app.integrations.brapi_treasury import fetch_treasury_history, fetch_treasury_prices
+from app.integrations.brapi_treasury import (
+    canonical_treasury_symbol_from_text,
+    fetch_treasury_history,
+    fetch_treasury_prices,
+    is_brapi_treasury_symbol,
+)
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
 
@@ -38,6 +43,14 @@ def _now_utc() -> datetime:
 
 def _default_start_date() -> date:
     return date.today() - timedelta(days=DEFAULT_HISTORY_YEARS * 365)
+
+
+def _canonical_symbol(value: str | None) -> Optional[str]:
+    raw = str(value or "").strip().lower()
+    if is_brapi_treasury_symbol(raw):
+        return raw
+    canonical = canonical_treasury_symbol_from_text(raw)
+    return canonical if canonical and is_brapi_treasury_symbol(canonical) else None
 
 
 async def _treasury_assets(db: AsyncSession) -> list[Asset]:
@@ -111,13 +124,6 @@ async def import_treasury_price_history(
     only_missing: bool = True,
     commit: bool = True,
 ) -> dict[str, int]:
-    """
-    Importa histórico de Tesouro para asset_prices.
-
-    only_missing=True:
-      - se o título já tem histórico, atualiza somente uma janela recente;
-      - se não tem, busca desde DEFAULT_HISTORY_YEARS.
-    """
     assets = await _treasury_assets(db)
     if not assets:
         logger.info("[treasury_history] nenhum título TESOURO_DIRETO em assets")
@@ -132,7 +138,7 @@ async def import_treasury_price_history(
         assets_by_symbol: dict[str, Asset] = {}
 
         for asset in chunk:
-            symbol = str(asset.ticker or "").strip().lower()
+            symbol = _canonical_symbol(asset.ticker)
             if not symbol:
                 continue
 
@@ -149,8 +155,6 @@ async def import_treasury_price_history(
             symbol_dates[symbol] = (fetch_from, today)
             assets_by_symbol[symbol] = asset
 
-        # A BRAPI aceita várias symbols, mas start/end são compartilhados por chamada.
-        # Para preservar incremental correto por título, agrupamos por janela.
         windows: dict[tuple[date, date], list[str]] = {}
         for symbol, window in symbol_dates.items():
             windows.setdefault(window, []).append(symbol)
@@ -202,15 +206,23 @@ async def import_missing_treasury_price_history() -> dict[str, int]:
 async def update_treasury_latest_prices(db: AsyncSession, commit: bool = True) -> dict[str, float]:
     """
     Atualiza apenas o snapshot atual dos títulos do Tesouro em assets.last_price.
-    Útil quando o endpoint de histórico não retorna dado para o dia corrente.
+    Títulos sintéticos/sem cobertura de indicators são ignorados sem erro.
     """
     assets = await _treasury_assets(db)
-    symbols = [str(asset.ticker).lower() for asset in assets if asset.ticker]
+    by_symbol: dict[str, Asset] = {}
+    skipped = 0
+    for asset in assets:
+        symbol = _canonical_symbol(asset.ticker)
+        if not symbol:
+            skipped += 1
+            continue
+        by_symbol[symbol] = asset
+
+    symbols = sorted(by_symbol.keys())
     if not symbols:
         return {}
 
     prices = await fetch_treasury_prices(symbols)
-    by_symbol = {str(asset.ticker).lower(): asset for asset in assets if asset.ticker}
     now = _now_utc()
 
     for symbol, price in prices.items():
@@ -223,5 +235,7 @@ async def update_treasury_latest_prices(db: AsyncSession, commit: bool = True) -
     if commit:
         await db.commit()
 
+    if skipped:
+        logger.info("[treasury_history] snapshot Tesouro ignorou %d títulos sem symbol canônico", skipped)
     logger.info("[treasury_history] snapshot atual Tesouro atualizado: %d títulos", len(prices))
     return prices
