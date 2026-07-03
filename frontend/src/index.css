@@ -126,6 +126,16 @@ table {
   width: 100%;
 }
 
+/*
+  Menus de ações dentro das tabelas de posições são absolutos.
+  Alguns cards da tabela usam overflow inline para arredondar bordas; isso
+  recortava o dropdown quando havia poucas linhas/ativos. Mantemos o card
+  visualmente igual, mas permitimos que overlays escapem do container.
+*/
+.card[style*="overflow: hidden"] {
+  overflow: visible !important;
+}
+
 /* ── Tipografia mínima em inputs (evita zoom iOS) ─────── */
 input,
 select,
