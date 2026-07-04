@@ -19,6 +19,28 @@ python -m scripts.migrate_treasury
 echo "[entrypoint] Executando migrations restantes (023+)..."
 alembic upgrade head
 
+echo "[entrypoint] Garantindo tabelas opcionais usadas pelo ORM..."
+python - <<'PY'
+import asyncio
+from app.core.database import engine
+from app.models.corporate_event import CorporateEvent
+from app.models.goal import Goal
+from app.models.irpf import IRPFReport
+
+OPTIONAL_TABLES = (
+    CorporateEvent.__table__,
+    Goal.__table__,
+    IRPFReport.__table__,
+)
+
+async def main() -> None:
+    async with engine.begin() as conn:
+        for table in OPTIONAL_TABLES:
+            await conn.run_sync(table.create, checkfirst=True)
+
+asyncio.run(main())
+PY
+
 echo "[entrypoint] Criando/atualizando superadmin..."
 python -m scripts.create_superadmin
 
