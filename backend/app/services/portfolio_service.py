@@ -1,13 +1,21 @@
 import logging
 from datetime import date as DateType, datetime, timezone, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete, update
 from fastapi import HTTPException
 
 from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction, OperationType
 from app.models.dividend import Dividend
 from app.models.asset import Asset
+from app.models.audit_log import AuditLog
+from app.models.corporate_event import CorporateEvent
+from app.models.fixed_income import FixedIncomeInvestment
+from app.models.goal import Goal
+from app.models.irpf import IRPFReport
+from app.models.portfolio_class_target import PortfolioClassTarget
+from app.models.portfolio_position import PortfolioPosition
+from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.schemas.portfolio import PortfolioCreate, PortfolioUpdate
 from app.services.quotes_service import get_prices
 from app.services.class_target_service import get_targets_map
@@ -346,13 +354,9 @@ async def sum_dividends_by_ticker(
     )
     try:
         result = await db.execute(q)
-        return {
-            row.ticker: float(row.total)
-            for row in result.all()
-            if row.ticker is not None and row.total is not None
-        }
+        return {row.ticker: float(row.total or 0.0) for row in result.all()}
     except Exception as e:
-        logger.warning(f"[portfolio_service] sum_dividends_by_ticker falhou: {e} — retornando {{}}")
+        logger.warning(f"[portfolio_service] sum_dividends_by_ticker falhou: {e} — retornando vazio")
         try:
             await db.rollback()
         except Exception:
@@ -426,6 +430,7 @@ async def update_portfolio(db: AsyncSession, portfolio_id: int, user_id: int, da
 
 async def delete_portfolio(db: AsyncSession, portfolio_id: int, user_id: int) -> None:
     portfolio = await get_portfolio(db, portfolio_id, user_id)
+    old_values = {"name": portfolio.name, "description": portfolio.description}
 
     await AuditLogService.log_action(
         db=db,
@@ -434,8 +439,32 @@ async def delete_portfolio(db: AsyncSession, portfolio_id: int, user_id: int) ->
         resource_type="Portfolio",
         resource_id=portfolio_id,
         portfolio_id=portfolio_id,
-        old_values={"name": portfolio.name, "description": portfolio.description},
+        old_values=old_values,
     )
+    await db.flush()
+
+    # Mantém o histórico de auditoria, mas remove a FK para permitir apagar a carteira.
+    await db.execute(
+        update(AuditLog)
+        .where(AuditLog.portfolio_id == portfolio_id)
+        .values(portfolio_id=None)
+    )
+
+    # Delete explícito evita falhas quando o banco/migration não tem ON DELETE CASCADE
+    # ou quando o ORM precisaria carregar coleções assíncronas para aplicar cascade.
+    dependent_models = (
+        Dividend,
+        CorporateEvent,
+        FixedIncomeInvestment,
+        Goal,
+        IRPFReport,
+        PortfolioClassTarget,
+        PortfolioPosition,
+        PortfolioSnapshot,
+        Transaction,
+    )
+    for model in dependent_models:
+        await db.execute(delete(model).where(model.portfolio_id == portfolio_id))
 
     await db.delete(portfolio)
     await db.commit()

@@ -1,16 +1,18 @@
-import { Sun, Moon, Menu, Plus, Briefcase, ChevronDown, CheckCircle2 } from 'lucide-react'
+import { Sun, Moon, Menu, Plus, Briefcase, ChevronDown, CheckCircle2, Trash2 } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { useAppStore } from '@/store/appStore'
 import UserMenu from './UserMenu'
-import { usePortfolios } from '@/hooks/usePortfolios'
+import { useDeletePortfolio, usePortfolios } from '@/hooks/usePortfolios'
 import LogoSGI from '@/components/ui/LogoSGI'
 import CreatePortfolioModal from '@/components/modals/CreatePortfolioModal'
 
 function PortfolioSelector() {
   const { data: portfolios = [] } = usePortfolios()
-  const { selectedPortfolioId, setSelectedPortfolio } = useAppStore()
+  const { selectedPortfolioId, setSelectedPortfolio, clearSelectedPortfolio } = useAppStore()
+  const deletePortfolio = useDeletePortfolio()
   const [open, setOpen] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const ref = useRef<HTMLDivElement>(null)
 
   const selected = portfolios.find(p => p.id === selectedPortfolioId)
@@ -22,6 +24,24 @@ function PortfolioSelector() {
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
+
+  const handleDelete = async (portfolioId: number, portfolioName: string) => {
+    setDeleteError(null)
+    const ok = window.confirm(`Excluir a carteira "${portfolioName}"? Esta ação removerá os dados vinculados a ela.`)
+    if (!ok) return
+
+    try {
+      await deletePortfolio.mutateAsync(portfolioId)
+
+      if (selectedPortfolioId === portfolioId) {
+        const next = portfolios.find(p => p.id !== portfolioId)
+        if (next) setSelectedPortfolio(next.id)
+        else clearSelectedPortfolio()
+      }
+    } catch {
+      setDeleteError('Não foi possível excluir a carteira. Tente novamente.')
+    }
+  }
 
   // Sem carteiras: mostra botão para criar
   if (!portfolios.length) {
@@ -53,7 +73,7 @@ function PortfolioSelector() {
     <>
       <div ref={ref} className="relative">
         <button
-          onClick={() => setOpen(o => !o)}
+          onClick={() => { setDeleteError(null); setOpen(o => !o) }}
           className="flex items-center gap-2 rounded-lg transition-all"
           style={{
             padding: '5px 10px', height: 32,
@@ -99,7 +119,7 @@ function PortfolioSelector() {
           <div
             className="absolute left-0 z-50"
             style={{
-              top: 'calc(100% + 6px)', minWidth: 180,
+              top: 'calc(100% + 6px)', minWidth: 220,
               background: 'var(--color-surface-2)',
               border: '1px solid oklch(from var(--color-text) l c h / 0.08)',
               borderRadius: 'var(--radius-xl)',
@@ -107,37 +127,90 @@ function PortfolioSelector() {
               overflow: 'hidden', padding: 6,
             }}
           >
-            {portfolios.map(p => (
-              <button
-                key={p.id}
-                onClick={() => { setSelectedPortfolio(p.id); setOpen(false) }}
-                className="w-full flex items-center justify-between rounded-lg transition-all"
-                style={{
-                  padding: '7px 11px',
-                  fontSize: 'var(--text-xs)',
-                  fontWeight: p.id === selectedPortfolioId ? 550 : 400,
-                  color: p.id === selectedPortfolioId ? 'var(--color-primary)' : 'var(--color-text)',
-                  background: p.id === selectedPortfolioId
-                    ? 'oklch(from var(--color-primary) l c h / 0.08)'
-                    : 'transparent',
-                }}
-                onMouseEnter={e => {
-                  if (p.id !== selectedPortfolioId)
-                    e.currentTarget.style.background = 'oklch(from var(--color-text) l c h / 0.05)'
-                }}
-                onMouseLeave={e => {
-                  if (p.id !== selectedPortfolioId)
-                    e.currentTarget.style.background = 'transparent'
-                }}
-              >
-                <span className="truncate">{p.name}</span>
-                {p.id === selectedPortfolioId && (
-                  <CheckCircle2 size={12} style={{ color: 'var(--color-primary)', flexShrink: 0, marginLeft: 6 }} />
-                )}
-              </button>
-            ))}
+            {portfolios.map(p => {
+              const isSelected = p.id === selectedPortfolioId
+              const isDeleting = deletePortfolio.isPending && deletePortfolio.variables === p.id
 
-            {/* Divisór + criar nova */}
+              return (
+                <div
+                  key={p.id}
+                  className="flex items-center gap-1 rounded-lg transition-all"
+                  style={{
+                    background: isSelected
+                      ? 'oklch(from var(--color-primary) l c h / 0.08)'
+                      : 'transparent',
+                  }}
+                >
+                  <button
+                    onClick={() => { setSelectedPortfolio(p.id); setOpen(false) }}
+                    className="flex-1 min-w-0 flex items-center justify-between rounded-lg transition-all"
+                    style={{
+                      padding: '7px 8px 7px 11px',
+                      fontSize: 'var(--text-xs)',
+                      fontWeight: isSelected ? 550 : 400,
+                      color: isSelected ? 'var(--color-primary)' : 'var(--color-text)',
+                      background: 'transparent',
+                    }}
+                    onMouseEnter={e => {
+                      if (!isSelected) e.currentTarget.style.background = 'oklch(from var(--color-text) l c h / 0.05)'
+                    }}
+                    onMouseLeave={e => {
+                      if (!isSelected) e.currentTarget.style.background = 'transparent'
+                    }}
+                  >
+                    <span className="truncate">{p.name}</span>
+                    {isSelected && (
+                      <CheckCircle2 size={12} style={{ color: 'var(--color-primary)', flexShrink: 0, marginLeft: 6 }} />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isDeleting}
+                    onClick={e => { e.stopPropagation(); void handleDelete(p.id, p.name) }}
+                    title="Excluir carteira"
+                    aria-label={`Excluir carteira ${p.name}`}
+                    style={{
+                      width: 26,
+                      height: 26,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: 'var(--radius-md)',
+                      border: 'none',
+                      background: 'transparent',
+                      color: 'var(--color-text-faint)',
+                      cursor: isDeleting ? 'not-allowed' : 'pointer',
+                      opacity: isDeleting ? 0.55 : 1,
+                      flexShrink: 0,
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.background = 'oklch(from var(--color-notification) l c h / 0.12)'
+                      e.currentTarget.style.color = 'var(--color-notification)'
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.background = 'transparent'
+                      e.currentTarget.style.color = 'var(--color-text-faint)'
+                    }}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              )
+            })}
+
+            {deleteError && (
+              <div style={{
+                margin: '4px 2px', padding: '6px 8px',
+                borderRadius: 'var(--radius-md)',
+                background: 'oklch(from var(--color-notification) l c h / 0.1)',
+                color: 'var(--color-notification)',
+                fontSize: 'var(--text-xs)',
+                lineHeight: 1.35,
+              }}>
+                {deleteError}
+              </div>
+            )}
+
             <div style={{ height: 1, background: 'oklch(from var(--color-text) l c h / 0.07)', margin: '4px 0' }} />
             <button
               onClick={() => { setOpen(false); setShowCreate(true) }}
