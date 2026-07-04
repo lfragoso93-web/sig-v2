@@ -14,14 +14,28 @@ import KpiCard from '@/components/ui/KpiCard'
 import ProventosDonutChart from '@/components/charts/ProventosDonutChart'
 import ProventosHistoricoTable from '@/components/proventos/ProventosHistoricoTable'
 import MeusProventosTable from '@/components/proventos/MeusProventosTable'
+import EmptyState from '@/components/ui/EmptyState'
+import { DollarSign } from 'lucide-react'
 
 const ASSET_TYPE_OPTIONS = [
-  { label: 'Todos os tipos',       value: ''                  },
-  { label: 'Ações',               value: 'ACAO'               },
-  { label: 'FIIs',                 value: 'FII'               },
-  { label: 'ETFs Nacionais',       value: 'ETF_NACIONAL'      },
-  { label: 'Stocks',               value: 'STOCK'             },
-  { label: 'ETFs Internacionais',  value: 'ETF_INTERNACIONAL' },
+  { label: 'Todos os ativos',       value: ''                  },
+  { label: 'Ações',                value: 'ACAO'               },
+  { label: 'FIIs',                  value: 'FII'                },
+  { label: 'ETFs Nacionais',        value: 'ETF_NACIONAL'       },
+  { label: 'BDRs',                  value: 'BDR'                },
+  { label: 'Stocks',                value: 'STOCK'              },
+  { label: 'ETFs Internacionais',   value: 'ETF_INTERNACIONAL'  },
+]
+
+const PROVENTO_TYPE_OPTIONS = [
+  { label: 'Todos os tipos', value: ''             },
+  { label: 'Dividendos',     value: 'DIVIDENDO'    },
+  { label: 'JCP',            value: 'JCP'           },
+  { label: 'Rendimentos',    value: 'RENDIMENTO'   },
+  { label: 'Amortização',    value: 'AMORTIZACAO'  },
+  { label: 'Bonificação',    value: 'BONIFICACAO'  },
+  { label: 'Subscrição',     value: 'SUBSCRICAO'   },
+  { label: 'Outros',         value: 'OUTROS'        },
 ]
 
 const YEARS = [
@@ -31,38 +45,52 @@ const YEARS = [
 ]
 
 export default function ProventosPage() {
-  const { data: portfolios } = usePortfolioList()
+  const { data: portfolios, isLoading: loadingPortfolios } = usePortfolioList()
   const [selectedPortfolio, setSelectedPortfolio] = useState<number | null>(null)
   const portfolioId = selectedPortfolio ?? (portfolios?.[0]?.id ?? 0)
 
   const [assetTypeFilter, setAssetTypeFilter] = useState('')
+  const [dividendTypeFilter, setDividendTypeFilter] = useState('')
   const [statusFilter,    setStatusFilter]    = useState('')
   const [yearFilter,      setYearFilter]      = useState<number | undefined>(undefined)
 
-  const { data: summary }      = useProventosSummary(portfolioId)
+  const { data: summary, isLoading: loadingSummary } = useProventosSummary(portfolioId)
   const { data: distribuicao } = useProventosDistribuicao(portfolioId)
   const { data: historico,  isLoading: loadingHistorico } = useProventosHistoricoMensal(
     portfolioId,
-    statusFilter  || undefined,
-    assetTypeFilter || undefined,
+    statusFilter       || undefined,
+    assetTypeFilter    || undefined,
+    dividendTypeFilter || undefined,
   )
   const { data: lista, isLoading: loadingLista } = useProventosList(portfolioId, {
-    status:     statusFilter    || undefined,
-    year:       yearFilter,
-    asset_type: assetTypeFilter || undefined,
-    page_size:  100,
+    status:        statusFilter       || undefined,
+    year:          yearFilter,
+    asset_type:    assetTypeFilter    || undefined,
+    dividend_type: dividendTypeFilter || undefined,
+    page_size:     100,
   })
 
   const sync = useSyncProventos(portfolioId || null)
 
+  if (!loadingPortfolios && !portfolios?.length) {
+    return (
+      <div className="page-container">
+        <EmptyState
+          icon={DollarSign}
+          title="Nenhuma carteira encontrada"
+          description="Crie uma carteira e cadastre ativos para acompanhar proventos."
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="page-container">
 
-      {/* Cabeçalho */}
       <div className="page-header">
         <div>
           <h1 className="page-title">Proventos</h1>
-          <p className="page-subtitle">Rendimentos recebidos e a receber da carteira</p>
+          <p className="page-subtitle">Eventos recebidos e a receber, com Data Com, Data Ex e pagamento.</p>
         </div>
         <button
           onClick={() => sync.mutate()}
@@ -75,7 +103,6 @@ export default function ProventosPage() {
         </button>
       </div>
 
-      {/* Seletor de carteira (múltiplas) */}
       {(portfolios?.length ?? 0) > 1 && (
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Carteira:</span>
@@ -97,47 +124,50 @@ export default function ProventosPage() {
         </div>
       )}
 
-      {/* KPIs — 4 cards simétricos */}
       <div className="kpi-grid">
         <KpiCard
-          label="Total recebido"
-          value={formatBRL(summary?.total_recebido ?? 0)}
+          label="Recebido líquido"
+          value={formatBRL(summary?.total_liquido_recebido ?? summary?.total_recebido ?? 0)}
+          subValue={formatBRL(summary?.total_bruto_recebido ?? summary?.total_recebido ?? 0)}
+          subLabel="Bruto recebido"
         />
         <KpiCard
-          label="A receber"
-          value={formatBRL(summary?.total_a_receber ?? 0)}
+          label="A receber líquido"
+          value={formatBRL(summary?.total_liquido_a_receber ?? summary?.total_a_receber ?? 0)}
+          subValue={formatBRL(summary?.total_bruto_a_receber ?? summary?.total_a_receber ?? 0)}
+          subLabel="Bruto a receber"
           valueColor="text-primary"
         />
         <KpiCard
           label="Últimos 12 meses"
           value={formatBRL(summary?.total_12m ?? 0)}
+          subLabel="Somente eventos financeiros"
         />
         <KpiCard
           label="Média mensal (12m)"
           value={formatBRL(summary?.media_mensal_12m ?? 0)}
+          subValue={(summary?.eventos_nao_cash ?? 0).toString()}
+          subLabel="Eventos não-cash"
         />
       </div>
 
-      {/* Corpo — gráfico donut + tabelas */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-
-        {/* Coluna lateral — donut */}
         {(distribuicao?.length ?? 0) > 0 && (
           <div className="card p-4">
             <div className="section-card-header">
               <span className="text-xs font-semibold">Por ativo (12m)</span>
             </div>
             <ProventosDonutChart data={distribuicao!} />
+            <p className="text-[10px] mt-3" style={{ color: 'var(--color-text-faint)' }}>
+              Considera apenas eventos financeiros pagos no período.
+            </p>
           </div>
         )}
 
-        {/* Coluna principal */}
         <div className="lg:col-span-3 flex flex-col gap-4">
-
-          {/* Filtros */}
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: 'var(--color-surface-offset)' }}>
-              {[{ label: 'Todos', value: '' }, { label: 'Recebidos', value: 'RECEBIDO' }, { label: 'A Receber', value: 'A_RECEBER' }].map(o => (
+              {[{ label: 'Todos', value: '' }, { label: 'Recebidos', value: 'RECEBIDO' }, { label: 'A receber', value: 'A_RECEBER' }].map(o => (
                 <button
                   key={o.value} onClick={() => setStatusFilter(o.value)}
                   className="px-3 py-1 rounded text-xs font-medium transition-colors"
@@ -151,15 +181,17 @@ export default function ProventosPage() {
             <select value={assetTypeFilter} onChange={e => setAssetTypeFilter(e.target.value)} className="input text-xs">
               {ASSET_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
+            <select value={dividendTypeFilter} onChange={e => setDividendTypeFilter(e.target.value)} className="input text-xs">
+              {PROVENTO_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
           </div>
 
-          {/* Histórico mensal */}
           <div className="card overflow-hidden">
             <div className="section-card-header">
               <span className="text-xs font-semibold">Histórico mensal</span>
             </div>
             <div className="p-4">
-              {loadingHistorico ? (
+              {loadingHistorico || loadingSummary ? (
                 <div className="flex flex-col gap-2">{[...Array(4)].map((_, i) => <div key={i} className="h-8 skeleton rounded" />)}</div>
               ) : (
                 <ProventosHistoricoTable data={historico ?? []} />
@@ -167,7 +199,6 @@ export default function ProventosPage() {
             </div>
           </div>
 
-          {/* Lista de proventos */}
           <div className="card overflow-hidden">
             <div className="section-card-header">
               <span className="text-xs font-semibold">Meus proventos</span>
@@ -199,7 +230,7 @@ export default function ProventosPage() {
               )}
               {(lista?.total ?? 0) > 0 && (
                 <p className="text-[10px] mt-3 text-right" style={{ color: 'var(--color-text-faint)' }}>
-                  {lista!.total} provento{lista!.total !== 1 ? 's' : ''}
+                  {lista!.total} evento{lista!.total !== 1 ? 's' : ''}
                 </p>
               )}
             </div>
