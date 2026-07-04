@@ -37,6 +37,11 @@ const ASSET_CLASS_OPTIONS = [
   { label: 'Cripto',               value: 'CRIPTO'            },
 ]
 
+function safeNum(v: unknown): number {
+  const n = Number(v)
+  return Number.isFinite(n) ? n : 0
+}
+
 function ChartSelect({
   value, onChange, options,
 }: {
@@ -98,14 +103,17 @@ export default function ResumePage() {
   const { data: patrimonioHistory, isLoading: loadingHistory } = usePatrimonioHistory(portfolioId, period, activeAssetType)
   const { data: positions,         isLoading: loadingPositions } = usePositions(portfolioId)
 
-  const patrimonio       = summary?.total_patrimonio         ?? summary?.current_value  ?? 0
-  const aportado         = summary?.total_investido          ?? summary?.total_invested ?? 0
-  const lucroTotal       = summary?.lucro_total              ?? summary?.total_gain     ?? 0
-  const proventos12m     = summary?.dividendos_recebidos_12m ?? 0
-  const proventosTotal   = summary?.total_proventos          ?? 0
-  const variacaoValor    = summary?.variacao_valor           ?? summary?.total_gain     ?? 0
-  const variacaoPct      = summary?.variacao_percentual      ?? summary?.total_gain_pct ?? 0
-  const rentabilidadePct = summary?.rentabilidade_total      ?? variacaoPct
+  // Mantém a mesma leitura da página Patrimônio para evitar KPIs divergentes.
+  // Apenas patrimônio/investido/lucro usam aliases legados; variação e rentabilidade
+  // ficam em campos próprios para não mascarar conceitos diferentes.
+  const patrimonio       = safeNum(summary?.total_patrimonio ?? summary?.current_value)
+  const aportado         = safeNum(summary?.total_investido  ?? summary?.total_invested)
+  const lucroTotal       = safeNum(summary?.lucro_total      ?? summary?.total_gain)
+  const proventos12m     = safeNum(summary?.dividendos_recebidos_12m)
+  const proventosTotal   = safeNum(summary?.total_proventos)
+  const variacaoValor    = safeNum(summary?.variacao_valor)
+  const variacaoPct      = safeNum(summary?.variacao_percentual)
+  const rentabilidadePct = safeNum(summary?.rentabilidade_total)
 
   const loadingKpiCards = loadingPortfolios || loadingSummary
 
@@ -164,13 +172,13 @@ export default function ResumePage() {
               subLabel="Total recebido"
             />
             <KpiCard
-              label="Variação"
+              label="Variação atual"
               value={formatBRL(variacaoValor)}
               valueColor={signClass(variacaoValor)}
               change={variacaoPct}
               bottomLine={
                 <span className={clsx('text-xs font-semibold tabular-nums', signClass(rentabilidadePct))}>
-                  {rentabilidadePct >= 0 ? '+' : ''}{formatPercent(rentabilidadePct)} rentab.
+                  {rentabilidadePct >= 0 ? '+' : ''}{formatPercent(rentabilidadePct)} rentab. total
                 </span>
               }
             />
