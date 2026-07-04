@@ -186,7 +186,7 @@ async def patrimonio_history(
             months=months,
             asset_type=asset_type,
         )
-    return await get_monthly_evolution(db, portfolio_id, current_user.id, months=months)
+    return await get_monthly_evolution(db, portfolio_id, months=months)
 
 
 @router.post("/{portfolio_id}/snapshots/backfill", status_code=status.HTTP_202_ACCEPTED)
