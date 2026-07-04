@@ -16,7 +16,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
-import sys
 from dataclasses import asdict
 
 from sqlalchemy import select
