@@ -12,6 +12,33 @@
 
 ---
 
+## Status atual — 04/07/2026
+
+A branch de desenvolvimento padrão é `stable-15jun`.
+
+### Entrega mais recente
+
+**Pipeline completo de mercado e proventos para renda variável nacional — concluído via #92 / PR #93.**
+
+Principais pontos entregues:
+
+- Pipeline único por ativo para cadastro, preços, logo, eventos corporativos/proventos e materialização por carteira.
+- Coleta e normalização de proventos para ações, FIIs, ETFs nacionais e BDRs.
+- Expansão de `asset_dividends` com Data Com, Data Ex, pagamento, aprovação, valor unitário, total, fatores, ISIN, payload bruto e eventos não-cash.
+- Materialização de proventos por carteira usando a posição na Data Com.
+- Tabela de Proventos preparada para exibir Data Com e Data Ex separadamente.
+- Jobs/CLIs manuais e batch incremental para ativos mantidos em carteira.
+- Testes automatizados para parser, materialização e batch do pipeline.
+
+### Próximos focos de desenvolvimento
+
+1. **Resumo** — corrigir KPIs, variação por ativo/classe e dropdown das tabelas quando há poucos ativos.
+2. **Proventos** — validar a tela ponta a ponta com os dados materializados pelo novo pipeline e refinar filtros/status.
+3. **Patrimônio** — refinar UX em cards conforme issue #90.
+4. **Compliance de documentação** — concluir remoção de referências explícitas a provedores externos em docs, Swagger/OpenAPI e mensagens públicas.
+
+---
+
 ## Funcionalidades implementadas
 
 ### Dashboard Principal (`/`)
@@ -30,9 +57,16 @@
 
 ### Patrimônio (`/carteira/patrimonio`) — Sprint 6B
 - **Aba Visão Geral**: KPIs + evolução mensal em barras + gráfico donut de alocação por classe + Distribuição Ideal vs. Atual + tabela de posições
-- **Aba Análise**: Score de concentração Herfindahl-Hirschman (HHI) com nível de risco, Top 5 posições, concentração por classe (donut + barras horizontais), desvio do alvo por classe
-- **Treemap SVG puro** (algoritmo Squarified) para visualização de concentração por ativo — sem dependências externas
+- **Aba Análise**: Score de concentração Herfindahl-Hirschman (HHI) com nível de risco, Top 5 posições, concentração por classe, desvio do alvo por classe
+- **Treemap SVG puro** com algoritmo Squarified para visualização de concentração por ativo — sem dependências externas
 - **Toggle diário/mensal** e seletor de período no gráfico de evolução
+- **Próximo refinamento aberto**: reorganização visual em cards mais escaneáveis (#90)
+
+### Proventos (`/carteira/proventos`)
+- Histórico de dividendos, JCP, rendimentos e demais eventos materializados por carteira
+- Separação de Data Com, Data Ex e Data de Pagamento
+- Base preparada para status, tipo, quantidade elegível, valor unitário, valor total e total líquido
+- Pipeline de sincronização integrado ao onboarding, seed e batch incremental de ativos de renda variável nacional
 
 ### Modal de Lançamento
 - **Renda Fixa**: exibe apenas o campo "Valor Investido" — sem cotas
@@ -41,16 +75,15 @@
 
 ### Dados e automações
 - **Asset seed** com UPSERT idempotente e endpoint admin em background
-- **Sync semanal de dividendos de FIIs** via provedor de cotações: modo incremental com cursor e overlap de 30 dias; bootstrap de 5 anos via painel admin
+- **Pipeline de mercado/proventos** para ativos nacionais de renda variável com execução por ativo, batch e incremental diário
 - **Snapshots patrimoniais** com backfill manual/admin e recuperação automática quando o gráfico não encontra base histórica
 - **Fallbacks em cascata** para Tesouro Direto, ativos internacionais e cripto
-- **Scheduler APScheduler** com **8 jobs** para rotinas automáticas de atualização
+- **Scheduler APScheduler** com rotinas automáticas de atualização
 - **Cache Redis** com invalidação automática após upsert de renda fixa/Tesouro Direto
-- **Lock distribuído** em jobs de sync: previne execuções concorrentes (modelo `DividendsSyncJob`)
+- **Lock distribuído** em jobs de sync: previne execuções concorrentes
 
 ### Outras páginas
 - **Transações** — histórico completo com filtros e gráfico de aportes mensais
-- **Proventos** — histórico de dividendos e JCP com gráficos
 - **IRPF** — apuração de ganho de capital (em construção)
 - **Metas** — CRUD com progresso automático (em construção)
 
@@ -67,7 +100,7 @@
 | Alembic | 1.x | Migrations |
 | PostgreSQL | 15 | Banco de dados |
 | Redis | 7 | Cache |
-| APScheduler | 3.x | 8 jobs agendados |
+| APScheduler | 3.x | Jobs agendados |
 | SlowAPI | — | Rate limiter global |
 | bcrypt | v5 | Hash de senhas |
 | JWT | — | Auth com refresh token rotativo |
@@ -159,30 +192,24 @@ Copie `.env.example` e preencha:
 | `DATABASE_URL` | URL PostgreSQL |
 | `REDIS_URL` | URL Redis |
 | `SECRET_KEY` | Chave JWT |
-| `BRAPI_TOKEN` | Token do provedor de cotações |
+| `QUOTES_PROVIDER_TOKEN` | Token do provedor de cotações |
 | `SUPERADMIN_EMAIL` | E-mail do superadmin |
 | `SUPERADMIN_PASSWORD` | Senha do superadmin |
 
+> Observação: nomes técnicos legados podem existir no `.env.example` para compatibilidade do código atual, mas a documentação pública deve descrever provedores de forma genérica.
+
 ---
 
-## Análise de Gaps e Plano de Ação (02/07/2026)
-
-📊 **Status:** 78% de completude funcional — 21 gaps identificados
+## Análise de Gaps e Plano de Ação
 
 Documentação completa de análise e plano de ação:
 
 | Documento | Descrição |
 |-----------|-----------|
-| **[SUMARIO_EXECUTIVO.md](./SUMARIO_EXECUTIVO.md)** | ⭐ Comece por aqui — visão geral em 5 min |
+| **[SUMARIO_EXECUTIVO.md](./SUMARIO_EXECUTIVO.md)** | Visão geral executiva |
 | **[GAPS_ANALISE_COMPLETA.md](./GAPS_ANALISE_COMPLETA.md)** | Detalhamento de cada gap, impacto e recomendações |
-| **[PLANO_ACAO_EXECUTAVEL.md](./PLANO_ACAO_EXECUTAVEL.md)** | 3 sprints de 8-12 semanas com tarefas concretas |
+| **[PLANO_ACAO_EXECUTAVEL.md](./PLANO_ACAO_EXECUTAVEL.md)** | Sprints e tarefas concretas |
 | **[MATRIZ_PRIORIZACAO.md](./MATRIZ_PRIORIZACAO.md)** | Timeline, prioridades e métricas de sucesso |
-
-**Próximas prioridades (Sprint 1):**
-- ✅ Índices PostgreSQL (-30-50% latência)
-- ✅ Monitoramento de queries (pg_stat_statements)
-- ✅ Cache Redis completo (dashboard instantâneo)
-- ✅ Sprint 6A compliance (remover refs de APIs externas)
 
 ---
 
