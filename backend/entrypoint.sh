@@ -19,6 +19,19 @@ python -m scripts.migrate_treasury
 echo "[entrypoint] Executando migrations restantes (023+)..."
 alembic upgrade head
 
+echo "[entrypoint] Garantindo tabelas opcionais usadas pelo ORM..."
+python - <<'PY'
+import asyncio
+from app.core.database import engine
+from app.models.corporate_event import CorporateEvent
+
+async def main() -> None:
+    async with engine.begin() as conn:
+        await conn.run_sync(CorporateEvent.__table__.create, checkfirst=True)
+
+asyncio.run(main())
+PY
+
 echo "[entrypoint] Criando/atualizando superadmin..."
 python -m scripts.create_superadmin
 
