@@ -44,6 +44,12 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 - Validar a tela ponta a ponta com os dados materializados pelo novo pipeline.
 - Revisar filtros, status e agregações com a nova base `asset_dividends`.
 
+**Revisão visual e responsividade — #103**
+- Planejar revisão geral da interface para reduzir densidade visual e melhorar espaçamentos.
+- Padronizar cards, filtros, botões, tabelas, inputs, badges e estados.
+- Revisar responsividade das páginas principais em desktop, tablet e mobile.
+- Documentar plano em `docs/REVISAO_INTERFACE.md`.
+
 **Patrimônio**
 - Continuar refinamento visual em cards conforme issue #90.
 
@@ -157,67 +163,3 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 - `App.tsx` mantido como legado sem re-export que quebrava o build.
 
 ---
-
-### Adicionado — Sync semanal de dividendos de FIIs via provedor de dados (30/06/2026) — Sprint 5F
-
-> Pipeline inicial de sincronização de proventos de FIIs com job automático semanal e trigger manual via painel admin.
-
-- Configurações de chunk, retry e janela de bootstrap.
-- Client de integração para endpoint de dividendos de FIIs do provedor de cotações.
-- Model `DividendsSyncJob` para rastrear estado, lock distribuído e cursor incremental.
-- Serviço de sincronização com upsert idempotente em `asset_dividends`.
-- Scheduler semanal e endpoints admin de status/disparo manual.
-
----
-
-### Corrigido — Rentabilidade: dia usa snapshot anterior real; mês usa 1º do mês calendário (30/06/2026) — Sprint 5B #54
-
-**Backend**
-- `retorno_dia_pct` usa snapshot imediatamente anterior ao dia atual.
-- `retorno_mes_pct` usa snapshot do último dia do mês anterior.
-- Fallback realtime corrigido com a mesma lógica.
-
-**Frontend**
-- Interface `RentabilidadeKpis` inclui `retorno_dia_pct`.
-- KpiCard Rentabilidade exibe Hoje / Mês / 12m / Desde o início com cores semânticas.
-
----
-
-### Concluído — Distribuição Ideal: BDRs + Reflexo no Resumo (30/06/2026) — Sprint 5E #79
-
-- `BDR` adicionado a `VALID_ASSET_CLASSES` e `_TYPE_LABEL`.
-- `get_targets_with_current()` retorna BDR automaticamente quando há posição ou meta configurada.
-- `AllocationTargetWidget` itera `rows` dinamicamente e exibe BDR automaticamente.
-
----
-
-### Corrigido — Modal de Lançamento: Renda Fixa sem cotas (29/06/2026)
-
-- Para `asset_type = RENDA_FIXA`, o campo de quantidade agora se chama **"Valor Investido"**.
-- Quantidade fixada em `1` automaticamente.
-- Campo de preço unitário oculto para renda fixa.
-- Labels e placeholders revisados.
-
----
-
-### Atualizado — Dependências Frontend e Backend (29/06/2026)
-
-- Atualizações de Vite, plugin React, PostCSS, Autoprefixer, React Query e FastAPI conforme PRs da sprint.
-
----
-
-### Corrigido — Módulo de Rentabilidade Renda Fixa (28/06/2026)
-
-- Corrigida normalização de `asset_type` para comparação com enum `AssetType.RENDA_FIXA`.
-- Corrigida comparação de `OperationType` ao calcular custo de compra vs. resgate.
-- Isolamento de sessão para upsert de renda fixa.
-- Cache de rentabilidade invalidado automaticamente após upsert de RF/TD.
-- Campo `daily_liquidity` adicionado em `fixed_income_investments`.
-
----
-
-### Corrigido — Evolução Patrimonial / Bug 3 (26/06/2026)
-
-- Endpoint de histórico patrimonial detecta ausência de snapshots e dispara backfill em background.
-- Fallback on-the-fly retorna série histórica imediatamente.
-- Correção de comparação de `asset_type` no serviço de evolução por classe.

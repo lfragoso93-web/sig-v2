@@ -156,7 +156,7 @@
 
 ---
 
-## 🔄 Sprint corrente — Ajustes pós-proventos e Resumo (Em andamento)
+## 🔄 Sprint corrente — Ajustes pós-proventos, Resumo e UX (Em andamento)
 **Período:** Julho 2026
 
 ### Resumo — Bugs a corrigir
@@ -170,6 +170,13 @@
 - [ ] Revisar filtros, status e agregações após expansão de `asset_dividends`
 - [ ] Garantir consistência entre Data Com, Data Ex e Data de Pagamento
 - [ ] Conferir cards/resumos de proventos 12m, mês e total líquido
+
+### Revisão visual e responsividade — [Issue #103](https://github.com/lfragoso93-web/sig-v2/issues/103)
+- [ ] Fazer auditoria geral da interface para reduzir densidade visual e melhorar espaçamentos
+- [ ] Padronizar cards, KPIs, filtros, botões, inputs, badges, tabelas e estados vazios
+- [ ] Revisar responsividade em desktop, tablet e mobile nas páginas principais
+- [ ] Priorizar Resumo, Patrimônio, Proventos, Transações, Rentabilidade e Configurações
+- [ ] Documentar plano e critérios em [`docs/REVISAO_INTERFACE.md`](./docs/REVISAO_INTERFACE.md)
 
 ---
 

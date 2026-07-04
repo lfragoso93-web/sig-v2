@@ -34,8 +34,9 @@ Principais pontos entregues:
 
 1. **Resumo** — corrigir KPIs, variação por ativo/classe e dropdown das tabelas quando há poucos ativos.
 2. **Proventos** — validar a tela ponta a ponta com os dados materializados pelo novo pipeline e refinar filtros/status.
-3. **Patrimônio** — refinar UX em cards conforme issue #90.
-4. **Compliance de documentação** — concluir remoção de referências explícitas a provedores externos em docs, Swagger/OpenAPI e mensagens públicas.
+3. **Revisão visual e responsividade** — melhorar espaçamentos, consistência de componentes e uso em telas menores conforme #103.
+4. **Patrimônio** — refinar UX em cards conforme issue #90.
+5. **Compliance de documentação** — concluir remoção de referências explícitas a provedores externos em docs, Swagger/OpenAPI e mensagens públicas.
 
 ---
 
@@ -210,6 +211,7 @@ Documentação completa de análise e plano de ação:
 | **[GAPS_ANALISE_COMPLETA.md](./GAPS_ANALISE_COMPLETA.md)** | Detalhamento de cada gap, impacto e recomendações |
 | **[PLANO_ACAO_EXECUTAVEL.md](./PLANO_ACAO_EXECUTAVEL.md)** | Sprints e tarefas concretas |
 | **[MATRIZ_PRIORIZACAO.md](./MATRIZ_PRIORIZACAO.md)** | Timeline, prioridades e métricas de sucesso |
+| **[docs/REVISAO_INTERFACE.md](./docs/REVISAO_INTERFACE.md)** | Plano de revisão visual, espaçamentos e responsividade (#103) |
 
 ---
 
@@ -218,7 +220,3 @@ Documentação completa de análise e plano de ação:
 Veja o roadmap original em [ROADMAP_SPRINTS.md](./ROADMAP_SPRINTS.md).
 
 ---
-
-## Changelog
-
-Veja o histórico completo em [CHANGELOG.md](./CHANGELOG.md).
