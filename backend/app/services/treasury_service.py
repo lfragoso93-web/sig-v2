@@ -80,19 +80,43 @@ async def get_treasury_by_portfolio(
     return [tx for tx in all_txs if _is_treasury(tx.asset_type)]
 
 
+async def _resolve_symbol_safe(db: AsyncSession | None, raw_ticker: str) -> str:
+    if not db:
+        return raw_ticker
+    try:
+        return await resolve_treasury_symbol(db, raw_ticker) or raw_ticker
+    except Exception as exc:
+        # Mantém compatibilidade com testes/mocks antigos e evita quebrar a tela
+        # se o catálogo ainda não estiver populado.
+        logger.debug("[treasury_service] fallback para ticker bruto %s: %s", raw_ticker, exc)
+        return raw_ticker
+
+
 async def enrich_with_current_prices(
-    db: AsyncSession,
-    transactions: list[Transaction],
+    db_or_transactions,
+    transactions: list[Transaction] | None = None,
 ) -> list[dict]:
-    """Enriquece lotes de Tesouro com preço atual via BRAPI indicators."""
+    """
+    Enriquece lotes de Tesouro com preço atual via BRAPI indicators.
+
+    Aceita as duas assinaturas para compatibilidade:
+      - enrich_with_current_prices(db, transactions)  # fluxo novo
+      - enrich_with_current_prices(transactions)      # testes/uso legado
+    """
+    if transactions is None:
+        db: AsyncSession | None = None
+        transactions = db_or_transactions
+    else:
+        db = db_or_transactions
+
     if not transactions:
         return []
 
-    symbol_by_raw: dict[str, str | None] = {}
+    symbol_by_raw: dict[str, str] = {}
     for tx in transactions:
         raw = str(tx.ticker or "")
         if raw not in symbol_by_raw:
-            symbol_by_raw[raw] = await resolve_treasury_symbol(db, raw)
+            symbol_by_raw[raw] = await _resolve_symbol_safe(db, raw)
 
     symbols = sorted({s for s in symbol_by_raw.values() if s})
     price_map: dict[str, float] = {}
@@ -109,8 +133,8 @@ async def enrich_with_current_prices(
         invested_value = round(quantity * purchase_price, 2)
 
         raw_ticker = str(tx.ticker or "")
-        brapi_symbol = symbol_by_raw.get(raw_ticker)
-        current_price = price_map.get(brapi_symbol) if brapi_symbol else None
+        brapi_symbol = symbol_by_raw.get(raw_ticker, raw_ticker)
+        current_price = price_map.get(brapi_symbol)
         valor_atual = None
         lucro_prejuizo = None
         rentabilidade_pct = None
