@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { MoreHorizontal, Plus, List, BarChart2 as AnalyseIcon, ChevronDown, Target, Clock } from 'lucide-react'
 import { formatBRL, formatPercent, fmtMoney } from '@/utils/format'
@@ -9,32 +10,25 @@ import { useAppStore } from '@/store/appStore'
 import { useUpsertClassTarget } from '@/hooks/useClassTargets'
 import type { PositionGroup } from '@/hooks/usePortfolio'
 
-// ── helpers defensivos ───────────────────────────────────────────────────
-
-/** Converte qualquer valor para número seguro, retornando 0 para null/undefined/NaN */
 function safeNum(v: unknown): number {
   const n = Number(v)
-  return isFinite(n) ? n : 0
+  return Number.isFinite(n) ? n : 0
 }
-
-// ── helpers ───────────────────────────────────────────────────────────────────────────────────────────
 
 const USD_TYPES = new Set(['STOCK', 'ETF_INTERNACIONAL'])
 
 function isUsdAsset(assetType: string | null | undefined): boolean {
-  if (!assetType) return false
-  return USD_TYPES.has(assetType.toUpperCase())
+  return !!assetType && USD_TYPES.has(assetType.toUpperCase())
 }
 
 function isRendaFixa(assetType: string | null | undefined): boolean {
-  if (!assetType) return false
-  return assetType.toUpperCase() === 'RENDA_FIXA'
+  return !!assetType && assetType.toUpperCase() === 'RENDA_FIXA'
 }
 
 function assetTypeToTab(assetType: string | null | undefined): string {
   if (!assetType) return 'acao'
   const map: Record<string, string> = {
-    ACAO: 'acao', FII: 'fii', ETF_NACIONAL: 'etf_br',
+    ACAO: 'acao', FII: 'fii', ETF_NACIONAL: 'etf_br', BDR: 'bdr',
     STOCK: 'stock', ETF_INTERNACIONAL: 'etf_int',
     TESOURO_DIRETO: 'tesouro', TESOURO: 'tesouro',
     RENDA_FIXA: 'renda_fixa', CRIPTO: 'cripto',
@@ -42,7 +36,6 @@ function assetTypeToTab(assetType: string | null | undefined): string {
   return map[assetType.toUpperCase()] ?? 'acao'
 }
 
-/** Formata quantidade — usa safeNum para evitar toFixed em NaN/undefined */
 function fmtQty(v: unknown) {
   const n = safeNum(v)
   return n % 1 === 0
@@ -57,109 +50,158 @@ function displayName(ticker: string, assetType: string | null | undefined): stri
   return ticker
 }
 
+function investedValueOf(p: PositionGroup['positions'][number]): number {
+  return safeNum(p.invested_value) || safeNum(p.quantity) * safeNum(p.average_price)
+}
+
 function calcGroupVariation(group: PositionGroup): { variationPct: number | null; totalInvested: number } {
-  if (group.variation_pct !== undefined && group.variation_pct !== null) {
-    return { variationPct: group.variation_pct, totalInvested: safeNum(group.total_invested) }
-  }
-  let inv = 0; let cur = 0; let hasQuote = false
+  let invested = 0
+  let current = 0
+  let hasQuote = false
+
   for (const p of group.positions) {
-    const invested = safeNum(p.invested_value) || safeNum(p.quantity) * safeNum(p.average_price)
-    inv += invested
+    invested += investedValueOf(p)
     if (p.current_price !== null && p.current_price !== undefined) {
-      cur += safeNum(p.current_value)
+      current += safeNum(p.current_value)
       hasQuote = true
     }
   }
-  if (!hasQuote || inv === 0) return { variationPct: null, totalInvested: inv }
-  return { variationPct: ((cur - inv) / inv) * 100, totalInvested: inv }
+
+  if (!hasQuote || invested === 0) return { variationPct: null, totalInvested: invested }
+  return { variationPct: ((current - invested) / invested) * 100, totalInvested: invested }
 }
 
-/**
- * Retorna uma string legível do timestamp da cotação mais recente
- * entre todas as posições do grupo.
- */
 function getGroupQuoteTimestamp(group: PositionGroup): string | null {
   const timestamps: number[] = []
   for (const p of group.positions) {
     const ts = (p as any).quote_updated_at
-    if (ts) {
-      const ms = typeof ts === 'number' ? ts * 1000 : Date.parse(ts)
-      if (!isNaN(ms)) timestamps.push(ms)
-    }
+    if (!ts) continue
+    const ms = typeof ts === 'number' ? ts * 1000 : Date.parse(ts)
+    if (!isNaN(ms)) timestamps.push(ms)
   }
   if (timestamps.length === 0) return null
-  const latest = Math.max(...timestamps)
-  const d = new Date(latest)
+
+  const d = new Date(Math.max(...timestamps))
   const now = new Date()
   const diffMs = now.getTime() - d.getTime()
   const diffMin = Math.floor(diffMs / 60_000)
-  const diffH   = Math.floor(diffMs / 3_600_000)
+  const diffH = Math.floor(diffMs / 3_600_000)
 
   if (d.toDateString() === now.toDateString()) {
-    if (diffMin < 1)  return 'agora mesmo'
+    if (diffMin < 1) return 'agora mesmo'
     if (diffMin < 60) return `há ${diffMin} min`
-    if (diffH < 24)   return `há ${diffH}h`
+    if (diffH < 24) return `há ${diffH}h`
   }
-  const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1)
+
+  const yesterday = new Date(now)
+  yesterday.setDate(now.getDate() - 1)
   if (d.toDateString() === yesterday.toDateString()) return 'ontem'
+
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
 }
 
-// ── style tokens ────────────────────────────────────────────────────────────────────────────────────────────
-const cellText  = { color: 'var(--color-text)' }
+const cellText = { color: 'var(--color-text)' }
 const cellFaint = { color: 'var(--color-text-faint)' }
 
-// ── hook de breakpoint ────────────────────────────────────────────────────────────────────────────────────────────
 function useIsDesktop(breakpoint = 768) {
   const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= breakpoint)
+
   useEffect(() => {
     const mq = window.matchMedia(`(min-width: ${breakpoint}px)`)
     const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches)
     mq.addEventListener('change', handler)
     return () => mq.removeEventListener('change', handler)
   }, [breakpoint])
+
   return isDesktop
 }
 
-// ── AssetMenu ────────────────────────────────────────────────────────────────────────────────────────────
 interface AssetMenuProps { ticker: string; assetLabel: string; assetType: string }
 
 function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
   const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
   const openTransactionModal = useAppStore(s => s.openTransactionModal)
 
+  const updateCoords = () => {
+    const rect = buttonRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const menuWidth = 210
+    const margin = 8
+    const left = Math.min(
+      Math.max(margin, rect.right - menuWidth),
+      window.innerWidth - menuWidth - margin,
+    )
+    setCoords({ top: rect.bottom + 4, left })
+  }
+
+  useLayoutEffect(() => {
+    if (open) updateCoords()
+  }, [open])
+
   useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    if (!open) return
+
+    function handleMouseDown(e: MouseEvent) {
+      const target = e.target as Node
+      if (buttonRef.current?.contains(target) || menuRef.current?.contains(target)) return
+      setOpen(false)
     }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
+
+    function handleReposition() {
+      updateCoords()
+    }
+
+    document.addEventListener('mousedown', handleMouseDown)
+    window.addEventListener('resize', handleReposition)
+    window.addEventListener('scroll', handleReposition, true)
+
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown)
+      window.removeEventListener('resize', handleReposition)
+      window.removeEventListener('scroll', handleReposition, true)
+    }
+  }, [open])
 
   const items = [
     {
-      icon: <Plus size={13} />, label: 'Adicionar Lançamento',
-      onClick: () => { setOpen(false); openTransactionModal({ tab: assetTypeToTab(assetType), ticker, assetName: assetLabel }) },
+      icon: <Plus size={13} />,
+      label: 'Adicionar Lançamento',
+      onClick: () => {
+        setOpen(false)
+        openTransactionModal({ tab: assetTypeToTab(assetType), ticker, assetName: assetLabel })
+      },
     },
     {
-      icon: <List size={13} />, label: 'Ver Lançamentos',
-      onClick: () => { setOpen(false); navigate(`/carteira/transacoes?ticker=${encodeURIComponent(ticker)}`) },
+      icon: <List size={13} />,
+      label: 'Ver Lançamentos',
+      onClick: () => {
+        setOpen(false)
+        navigate(`/carteira/transacoes?ticker=${encodeURIComponent(ticker)}`)
+      },
     },
     {
-      icon: <AnalyseIcon size={13} />, label: 'Análise do Ativo', badge: 'Em breve',
-      onClick: () => { setOpen(false); navigate(`/carteira/analise?ticker=${encodeURIComponent(ticker)}`) },
+      icon: <AnalyseIcon size={13} />,
+      label: 'Análise do Ativo',
+      badge: 'Em breve',
+      onClick: () => {
+        setOpen(false)
+        navigate(`/carteira/analise?ticker=${encodeURIComponent(ticker)}`)
+      },
     },
   ]
 
   return (
-    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+    <>
       <button
+        ref={buttonRef}
         type="button"
         onClick={(e) => { e.stopPropagation(); setOpen(v => !v) }}
         style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           width: 28, height: 28, borderRadius: 'var(--radius-md)',
           border: 'none', background: 'transparent',
           color: 'var(--color-text-faint)', cursor: 'pointer', flexShrink: 0,
@@ -167,19 +209,33 @@ function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
         onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-text-muted)')}
         onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-text-faint)')}
         aria-label="Opções"
+        aria-expanded={open}
       >
         <MoreHorizontal size={14} />
       </button>
-      {open && (
-        <div style={{
-          position: 'absolute', right: 0, top: '100%', zIndex: 1000, marginTop: 4,
-          width: 210, borderRadius: 'var(--radius-lg)', overflow: 'hidden',
-          background: 'var(--color-surface)', boxShadow: 'var(--shadow-lg)',
-          border: '1px solid oklch(from var(--color-text) l c h / 0.1)',
-        }}>
+
+      {open && coords && createPortal(
+        <div
+          ref={menuRef}
+          style={{
+            position: 'fixed',
+            top: coords.top,
+            left: coords.left,
+            zIndex: 9999,
+            width: 210,
+            borderRadius: 'var(--radius-lg)',
+            overflow: 'hidden',
+            background: 'var(--color-surface)',
+            boxShadow: 'var(--shadow-lg)',
+            border: '1px solid oklch(from var(--color-text) l c h / 0.1)',
+          }}
+          onClick={e => e.stopPropagation()}
+        >
           {items.map((item, i) => (
             <button
-              key={i} type="button" onClick={item.onClick}
+              key={item.label}
+              type="button"
+              onClick={item.onClick}
               style={{
                 width: '100%', display: 'flex', alignItems: 'center', gap: 8,
                 padding: '8px 12px', border: 'none', background: 'transparent',
@@ -202,14 +258,17 @@ function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
               )}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
-    </div>
+    </>
   )
 }
 
-// ── PositionCard (mobile) ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-interface PositionCardProps { item: PositionGroup['positions'][number]; onAssetClick?: (asset: PositionGroup['positions'][number]) => void }
+interface PositionCardProps {
+  item: PositionGroup['positions'][number]
+  onAssetClick?: (asset: PositionGroup['positions'][number]) => void
+}
 
 function PositionCard({ item, onAssetClick }: PositionCardProps) {
   const safeType = item.asset_type ?? ''
@@ -217,18 +276,19 @@ function PositionCard({ item, onAssetClick }: PositionCardProps) {
   const isRF = isRendaFixa(safeType)
   const name = displayName(item.ticker, safeType)
   const hasQuote = item.current_price !== null && item.current_price !== undefined
-  const varColor = safeNum(item.variation_value) >= 0 ? 'var(--color-success)' : 'var(--color-error)'
-  const investedValue = safeNum(item.invested_value) || safeNum(item.quantity) * safeNum(item.average_price)
+  const result = safeNum(item.variation_value)
+  const varColor = result >= 0 ? 'var(--color-success)' : 'var(--color-error)'
+  const investedValue = investedValueOf(item)
   const currency = isUsdAsset(safeType) ? 'USD' : 'BRL'
 
   const fields = isRF
     ? [
-        { label: 'Total Inv.',  value: fmtMoney(investedValue, 'BRL') },
+        { label: 'Total Inv.', value: fmtMoney(investedValue, 'BRL') },
         { label: 'Valor Atual', value: hasQuote ? fmtMoney(safeNum(item.current_value), 'BRL') : '—' },
       ]
     : [
-        { label: 'Qtd',        value: fmtQty(item.quantity) },
-        { label: 'P. Médio',  value: fmtMoney(safeNum(item.average_price), currency) },
+        { label: 'Qtd', value: fmtQty(item.quantity) },
+        { label: 'P. Médio', value: fmtMoney(safeNum(item.average_price), currency) },
         { label: 'Total Inv.', value: fmtMoney(investedValue, 'BRL') },
         { label: 'Valor Atual', value: hasQuote ? fmtMoney(safeNum(item.current_value), 'BRL') : '—' },
       ]
@@ -242,9 +302,7 @@ function PositionCard({ item, onAssetClick }: PositionCardProps) {
         background: 'var(--color-surface-offset)',
         border: '1px solid oklch(from var(--color-text) l c h / 0.07)',
         display: 'flex', flexDirection: 'column', gap: '0.75rem',
-        cursor: 'pointer',
-        transition: 'all 0.2s',
-        textAlign: 'left',
+        cursor: 'pointer', transition: 'all 0.2s', textAlign: 'left',
       }}
       onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--color-primary)')}
       onMouseLeave={e => (e.currentTarget.style.borderColor = 'oklch(from var(--color-text) l c h / 0.07)')}
@@ -261,6 +319,7 @@ function PositionCard({ item, onAssetClick }: PositionCardProps) {
         </div>
         <AssetMenu ticker={item.ticker} assetLabel={isTesouro ? item.ticker : (item.asset_label ?? item.ticker)} assetType={safeType} />
       </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.625rem 1rem' }}>
         {fields.map(({ label, value }) => (
           <div key={label}>
@@ -272,21 +331,18 @@ function PositionCard({ item, onAssetClick }: PositionCardProps) {
           <div style={{ fontSize: '0.65rem', marginBottom: 2, color: 'var(--color-text-faint)' }}>Resultado</div>
           {hasQuote ? (
             <div style={{ fontWeight: 600, fontSize: 'var(--text-xs)', color: varColor, fontVariantNumeric: 'tabular-nums' }}>
-              {fmtMoney(safeNum(item.variation_value), 'BRL')}
+              {fmtMoney(result, 'BRL')}
               <span style={{ marginLeft: 6, fontSize: '0.65rem', fontWeight: 500, opacity: 0.8 }}>
                 ({formatPercent(safeNum(item.variation_percent))})
               </span>
             </div>
-          ) : (
-            <span style={cellFaint}>—</span>
-          )}
+          ) : <span style={cellFaint}>—</span>}
         </div>
       </div>
     </button>
   )
 }
 
-// ── TargetModal ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 interface TargetModalProps {
   assetType: string
   label: string
@@ -339,13 +395,10 @@ function TargetModal({ assetType, label, currentTarget, portfolioId, onClose }: 
           onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') onClose() }}
           placeholder="ex: 30"
           style={{
-            flex: 1, padding: '6px 10px',
-            borderRadius: 'var(--radius-md)',
+            flex: 1, padding: '6px 10px', borderRadius: 'var(--radius-md)',
             border: '1px solid oklch(from var(--color-text) l c h / 0.15)',
-            background: 'var(--color-surface-offset)',
-            color: 'var(--color-text)',
-            fontSize: 'var(--text-sm)',
-            outline: 'none',
+            background: 'var(--color-surface-offset)', color: 'var(--color-text)',
+            fontSize: 'var(--text-sm)', outline: 'none',
           }}
         />
         <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', flexShrink: 0 }}>%</span>
@@ -355,11 +408,9 @@ function TargetModal({ assetType, label, currentTarget, portfolioId, onClose }: 
           type="button"
           onClick={onClose}
           style={{
-            flex: 1, padding: '5px 0',
-            borderRadius: 'var(--radius-md)',
+            flex: 1, padding: '5px 0', borderRadius: 'var(--radius-md)',
             border: '1px solid oklch(from var(--color-text) l c h / 0.12)',
-            background: 'transparent',
-            color: 'var(--color-text-muted)',
+            background: 'transparent', color: 'var(--color-text-muted)',
             fontSize: 'var(--text-xs)', cursor: 'pointer',
           }}
         >
@@ -370,13 +421,9 @@ function TargetModal({ assetType, label, currentTarget, portfolioId, onClose }: 
           onClick={handleSave}
           disabled={isPending}
           style={{
-            flex: 1, padding: '5px 0',
-            borderRadius: 'var(--radius-md)',
-            border: 'none',
-            background: 'var(--color-primary)',
-            color: '#fff',
-            fontSize: 'var(--text-xs)', cursor: 'pointer',
-            opacity: isPending ? 0.7 : 1,
+            flex: 1, padding: '5px 0', borderRadius: 'var(--radius-md)',
+            border: 'none', background: 'var(--color-primary)', color: '#fff',
+            fontSize: 'var(--text-xs)', cursor: 'pointer', opacity: isPending ? 0.7 : 1,
           }}
         >
           {isPending ? 'Salvando…' : 'Salvar'}
@@ -386,7 +433,6 @@ function TargetModal({ assetType, label, currentTarget, portfolioId, onClose }: 
   )
 }
 
-// ── ClassGroupHeader ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 interface ClassGroupHeaderProps {
   group: PositionGroup
   collapsed: boolean
@@ -401,17 +447,10 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
   const assetType = group.positions[0]?.asset_type ?? ''
   const [showTargetModal, setShowTargetModal] = useState(false)
 
-  void totalInvested
+  const varColor = variationPct === null ? 'var(--color-text-faint)' : variationPct >= 0 ? 'var(--color-success)' : 'var(--color-error)'
+  const rentColor = rentabilidade === null ? 'var(--color-text-faint)' : rentabilidade >= 0 ? 'var(--color-success)' : 'var(--color-error)'
 
-  const varColor = variationPct === null ? 'var(--color-text-faint)'
-    : variationPct >= 0 ? 'var(--color-success)' : 'var(--color-error)'
-  const rentColor = rentabilidade === null ? 'var(--color-text-faint)'
-    : rentabilidade >= 0 ? 'var(--color-success)' : 'var(--color-error)'
-
-  const Divider = () => (
-    <span style={{ width: 1, height: 12, background: 'oklch(from var(--color-text) l c h / 0.1)', flexShrink: 0 }} />
-  )
-
+  const Divider = () => <span style={{ width: 1, height: 12, background: 'oklch(from var(--color-text) l c h / 0.1)', flexShrink: 0 }} />
   const LabeledValue = ({ label, children }: { label: string; children: React.ReactNode }) => (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap', flexShrink: 0 }}>
       <span style={{ fontSize: '0.65rem', color: 'var(--color-text-faint)' }}>{label}</span>
@@ -449,8 +488,7 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
           <Divider />
           <span style={{
             fontSize: 'var(--text-xs)', fontWeight: 500,
-            color: 'var(--color-text-muted)',
-            background: 'var(--color-surface-offset)',
+            color: 'var(--color-text-muted)', background: 'var(--color-surface-offset)',
             border: '1px solid oklch(from var(--color-text) l c h / 0.07)',
             borderRadius: 'var(--radius-full)', padding: '1px 8px',
             whiteSpace: 'nowrap', flexShrink: 0,
@@ -460,7 +498,7 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
           <Divider />
           <LabeledValue label="Invest.">
             <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, ...cellText, fontVariantNumeric: 'tabular-nums' }}>
-              {formatBRL(safeNum(group.total_invested ?? group.total_value))}
+              {formatBRL(totalInvested || safeNum(group.total_invested ?? group.total_value))}
             </span>
           </LabeledValue>
           <Divider />
@@ -501,8 +539,7 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
               fontSize: '0.68rem', fontWeight: 500,
               color: target !== null ? 'var(--color-primary)' : 'var(--color-text-faint)',
               whiteSpace: 'nowrap', flexShrink: 0, cursor: 'pointer',
-              padding: '2px 6px',
-              borderRadius: 'var(--radius-full)',
+              padding: '2px 6px', borderRadius: 'var(--radius-full)',
               border: `1px solid ${target !== null ? 'oklch(from var(--color-primary) l c h / 0.25)' : 'oklch(from var(--color-text) l c h / 0.1)'}`,
               background: target !== null ? 'oklch(from var(--color-primary) l c h / 0.08)' : 'transparent',
               transition: 'all 0.15s',
@@ -528,27 +565,25 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
   )
 }
 
-// ── Colunas por tipo de classe ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 const COLS_DEFAULT = [
-  { key: 'ativo',      label: 'Ativo',       align: 'left',  width: '30%' },
-  { key: 'qtd',        label: 'Qtd',         align: 'right', width: '8%'  },
-  { key: 'pm',         label: 'P. Médio',   align: 'right', width: '11%' },
-  { key: 'pa',         label: 'P. Atual',    align: 'right', width: '11%', info: 'Cotação via provedor de mercado' },
-  { key: 'inv',        label: 'Total Inv.',  align: 'right', width: '13%' },
-  { key: 'atual',      label: 'Valor Atual', align: 'right', width: '13%' },
-  { key: 'resultado',  label: 'Resultado',   align: 'right', width: '11%' },
-  { key: 'acoes',      label: '',            align: 'right', width: '3%'  },
+  { key: 'ativo', label: 'Ativo', align: 'left', width: '30%' },
+  { key: 'qtd', label: 'Qtd', align: 'right', width: '8%' },
+  { key: 'pm', label: 'P. Médio', align: 'right', width: '11%' },
+  { key: 'pa', label: 'P. Atual', align: 'right', width: '11%', info: 'Cotação via provedor de mercado' },
+  { key: 'inv', label: 'Total Inv.', align: 'right', width: '13%' },
+  { key: 'atual', label: 'Valor Atual', align: 'right', width: '13%' },
+  { key: 'resultado', label: 'Resultado', align: 'right', width: '11%' },
+  { key: 'acoes', label: '', align: 'right', width: '3%' },
 ]
 
 const COLS_RENDA_FIXA = [
-  { key: 'ativo',      label: 'Ativo',       align: 'left',  width: '45%' },
-  { key: 'inv',        label: 'Total Inv.',  align: 'right', width: '20%' },
-  { key: 'atual',      label: 'Valor Atual', align: 'right', width: '20%' },
-  { key: 'resultado',  label: 'Resultado',   align: 'right', width: '12%' },
-  { key: 'acoes',      label: '',            align: 'right', width: '3%'  },
+  { key: 'ativo', label: 'Ativo', align: 'left', width: '45%' },
+  { key: 'inv', label: 'Total Inv.', align: 'right', width: '20%' },
+  { key: 'atual', label: 'Valor Atual', align: 'right', width: '20%' },
+  { key: 'resultado', label: 'Resultado', align: 'right', width: '12%' },
+  { key: 'acoes', label: '', align: 'right', width: '3%' },
 ]
 
-// ── ClassTable ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 function ClassTable({ group, portfolioId, onAssetClick }: { group: PositionGroup; portfolioId: number; onAssetClick?: (asset: PositionGroup['positions'][number]) => void }) {
   const isDesktop = useIsDesktop()
   const [collapsed, setCollapsed] = useState(false)
@@ -570,14 +605,15 @@ function ClassTable({ group, portfolioId, onAssetClick }: { group: PositionGroup
       {!collapsed && (
         <>
           {!isDesktop && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '1rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '1rem', overflow: 'visible' }}>
               {group.positions.map(item => (
                 <PositionCard key={`${item.ticker}-${item.id ?? item.ticker}`} item={item} onAssetClick={onAssetClick} />
               ))}
             </div>
           )}
+
           {isDesktop && (
-            <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 'var(--text-xs)' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 'var(--text-xs)', overflow: 'visible' }}>
               <colgroup>
                 {COLS.map(c => <col key={c.key} style={{ width: c.width }} />)}
               </colgroup>
@@ -606,20 +642,20 @@ function ClassTable({ group, portfolioId, onAssetClick }: { group: PositionGroup
                   const name = displayName(item.ticker, safeType)
                   const isTesouro = safeType.toUpperCase() === 'TESOURO_DIRETO' || safeType.toUpperCase() === 'TESOURO'
                   const itemIsRF = isRendaFixa(safeType)
-                  const varColor = safeNum(item.variation_value) >= 0 ? 'var(--color-success)' : 'var(--color-notification)'
-                  // safeNum evita NaN quando average_price ou quantity chegam undefined
-                  const investedValue = safeNum(item.invested_value) || safeNum(item.quantity) * safeNum(item.average_price)
+                  const result = safeNum(item.variation_value)
+                  const varColor = result >= 0 ? 'var(--color-success)' : 'var(--color-error)'
+                  const investedValue = investedValueOf(item)
                   const currency = isUsdAsset(safeType) ? 'USD' : 'BRL'
+
                   return (
                     <tr
                       key={`${item.ticker}-${item.id ?? item.ticker}`}
                       onClick={() => onAssetClick?.(item)}
-                      style={{ borderBottom: '1px solid oklch(from var(--color-text) l c h / 0.045)', cursor: 'pointer' }}
+                      style={{ borderBottom: '1px solid oklch(from var(--color-text) l c h / 0.045)', cursor: 'pointer', overflow: 'visible' }}
                       onMouseEnter={e => (e.currentTarget.style.background = 'oklch(from var(--color-primary) l c h / 0.03)')}
                       onMouseLeave={e => (e.currentTarget.style.background = '')}
                     >
-                      {/* Coluna Ativo — sempre presente */}
-                      <td style={{ padding: '0.75rem 1rem' }}>
+                      <td style={{ padding: '0.75rem 1rem', overflow: 'visible' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <AssetLogo ticker={item.ticker} assetType={safeType} size={28} logoUrl={item.logo_url} />
                           <div style={{ minWidth: 0 }}>
@@ -631,7 +667,6 @@ function ClassTable({ group, portfolioId, onAssetClick }: { group: PositionGroup
                         </div>
                       </td>
 
-                      {/* Colunas QTD / P. Médio / P. Atual — ocultas para RENDA_FIXA */}
                       {!itemIsRF && (
                         <>
                           <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
@@ -648,28 +683,21 @@ function ClassTable({ group, portfolioId, onAssetClick }: { group: PositionGroup
                         </>
                       )}
 
-                      {/* Total Inv. — sempre presente */}
                       <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
                         {fmtMoney(investedValue, 'BRL')}
                       </td>
-
-                      {/* Valor Atual — sempre presente */}
                       <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
                         {hasQuote ? fmtMoney(safeNum(item.current_value), 'BRL') : <span style={cellFaint}>—</span>}
                       </td>
-
-                      {/* Resultado — sempre presente */}
                       <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
                         {hasQuote ? (
                           <div style={{ color: varColor }}>
-                            <div style={{ fontWeight: 600 }}>{fmtMoney(safeNum(item.variation_value), 'BRL')}</div>
+                            <div style={{ fontWeight: 600 }}>{fmtMoney(result, 'BRL')}</div>
                             <div style={{ fontSize: '0.65rem', fontWeight: 500, opacity: 0.8 }}>{formatPercent(safeNum(item.variation_percent))}</div>
                           </div>
                         ) : <span style={cellFaint}>—</span>}
                       </td>
-
-                      {/* Ações */}
-                      <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>
+                      <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right', overflow: 'visible' }}>
                         <AssetMenu ticker={item.ticker} assetLabel={isTesouro ? item.ticker : (item.asset_label ?? item.ticker)} assetType={safeType} />
                       </td>
                     </tr>
@@ -679,7 +707,6 @@ function ClassTable({ group, portfolioId, onAssetClick }: { group: PositionGroup
             </table>
           )}
 
-          {/* Rodapé com timestamp da cotação */}
           {quoteTimestamp && (
             <div style={{
               display: 'flex', alignItems: 'center', gap: 4,
@@ -699,16 +726,16 @@ function ClassTable({ group, portfolioId, onAssetClick }: { group: PositionGroup
   )
 }
 
-// ── PositionTable ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 interface Props { groups: PositionGroup[]; portfolioId: number }
 
 export default function PositionTable({ groups, portfolioId }: Props) {
   const [selectedAsset, setSelectedAsset] = useState<PositionGroup['positions'][number] | null>(null)
 
   if (!groups || groups.length === 0) return null
+
   return (
     <>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', overflow: 'visible' }}>
         {groups.map(group => (
           <ClassTable key={group.label} group={group} portfolioId={portfolioId} onAssetClick={setSelectedAsset} />
         ))}
