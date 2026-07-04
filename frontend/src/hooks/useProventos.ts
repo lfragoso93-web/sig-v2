@@ -41,14 +41,15 @@ export function useProventosDistribuicao(portfolioId: number | null, months = 12
 // ─── Historico mensal ──────────────────────────────────────────────────────
 
 export function useProventosHistoricoMensal(
-  portfolioId: number | null,
-  status?:    string,
-  assetType?: string,
+  portfolioId:    number | null,
+  status?:        string,
+  assetType?:     string,
+  dividendType?:  string,
 ) {
   return useQuery<ProventosHistoricoMes[]>({
-    queryKey:    ['proventos-historico', portfolioId, status, assetType],
+    queryKey:    ['proventos-historico', portfolioId, status, assetType, dividendType],
     queryFn:     () =>
-      proventosService.getHistoricoMensal(portfolioId!, status, assetType),
+      proventosService.getHistoricoMensal(portfolioId!, status, assetType, dividendType),
     enabled:     !!portfolioId,
     placeholderData: [],
   })
@@ -59,11 +60,12 @@ export function useProventosHistoricoMensal(
 export function useProventosList(
   portfolioId: number | null,
   params?: {
-    status?:     string
-    year?:       number
-    asset_type?: string
-    page?:       number
-    page_size?:  number
+    status?:        string
+    year?:          number
+    asset_type?:    string
+    dividend_type?: string
+    page?:          number
+    page_size?:     number
   },
 ) {
   return useQuery<ProventosListResponse>({
@@ -81,10 +83,10 @@ export function useSyncProventos(portfolioId: number | null) {
   return useMutation({
     mutationFn: () => proventosService.sync(portfolioId!),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['proventos-summary',    portfolioId] })
+      qc.invalidateQueries({ queryKey: ['proventos-summary',     portfolioId] })
       qc.invalidateQueries({ queryKey: ['proventos-distribuicao', portfolioId] })
-      qc.invalidateQueries({ queryKey: ['proventos-historico',  portfolioId] })
-      qc.invalidateQueries({ queryKey: ['proventos-list',       portfolioId] })
+      qc.invalidateQueries({ queryKey: ['proventos-historico',    portfolioId] })
+      qc.invalidateQueries({ queryKey: ['proventos-list',         portfolioId] })
     },
   })
 }
