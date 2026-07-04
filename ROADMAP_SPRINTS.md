@@ -1,6 +1,6 @@
 # Roadmap de Sprints — SGI v2
 
-> Última atualização: 30/06/2026
+> Última atualização: 04/07/2026
 > Versão visual e interativa: [ROADMAP_VISUAL.md](./ROADMAP_VISUAL.md)
 
 ---
@@ -26,8 +26,8 @@
 - [x] Módulo fx (câmbio)
 - [x] Módulo Tesouro Direto
 - [x] Suporte a ativos internacionais (BDR, ETF_INTL, STOCK_INTL)
-- [x] Cache Redis (TTL 15min) nos endpoints de cotação
-- [x] Scheduler APScheduler (atualização automática de preços e proventos)
+- [x] Cache Redis nos endpoints de cotação
+- [x] Scheduler APScheduler
 - [x] Rate limiter global SlowAPI
 
 ---
@@ -49,13 +49,11 @@
 ## ✅ Sprint 4 — Catálogo de Ativos e Dados (Concluído)
 **Período:** Junho 2026 (2ª quinzena) — concluído em 24/06/2026 | [Issue #53](https://github.com/lfragoso93-web/sig-v2/issues/53)
 
-- [x] `asset_seed_service`: popula tabela `assets` com UPSERT idempotente (2.259 ativos)
-- [x] `POST /api/v1/admin/assets/seed`: endpoint superadmin com resposta `202 Accepted` + background task
-- [x] Job semanal automático (toda segunda às 03h) para seed incremental de novos IPOs
-- [x] Backfill histórico de preços com ordenação por tipo: ACAO/FII primeiro, BDR por último
-- [x] Fix: boot sequence sem Etapa 3 redundante
-- [x] Fix: `ImportError upsert_daily_prices` removido de `asset_onboarding_service`
-- [x] Fix: background task do seed com log de início + traceback completo
+- [x] `asset_seed_service`: popula tabela `assets` com UPSERT idempotente
+- [x] `POST /api/v1/admin/assets/seed`: endpoint superadmin com background task
+- [x] Job semanal automático para seed incremental de novos IPOs
+- [x] Backfill histórico de preços com ordenação por tipo
+- [x] Fixes de boot sequence, imports e logs de background task
 - [x] Frontend: aba **BDR** adicionada no modal de transações
 
 ---
@@ -63,16 +61,16 @@
 ## ✅ Sprint 5 — Frontend Dashboard (Concluído — 30/06/2026)
 **Período:** Junho–Julho 2026 | [Issue #54](https://github.com/lfragoso93-web/sig-v2/issues/54)
 
-- [x] **Página de Rentabilidade** (`/carteira/rentabilidade`) — 25/06/2026
-- [x] **Hotfixes Tesouro Direto & Cripto** — 25/06/2026
-- [x] **Fixes CSS/UI Design System** — 25/06/2026
-- [x] **Dashboard principal** (`ResumePage`) — 26/06/2026
-- [x] **Gráfico de rentabilidade mensal + benchmark** (`RentabilidadeChart`) — 26/06/2026
-- [x] **Correção do Bug 3 — Evolução Patrimonial vazia** — 26/06/2026
-- [x] **Fix rentabilidade renda fixa** — 28/06/2026
-- [x] **Fix modal de lançamento — renda fixa sem cotas** — 28/06/2026
-- [x] **Bump dependências frontend e backend** — 29/06/2026
-- [x] **Fix rentabilidade dia/mês/12m + KpiCard Rentabilidade reestruturado** — 30/06/2026
+- [x] **Página de Rentabilidade** (`/carteira/rentabilidade`)
+- [x] **Hotfixes Tesouro Direto & Cripto**
+- [x] **Fixes CSS/UI Design System**
+- [x] **Dashboard principal** (`ResumePage`)
+- [x] **Gráfico de rentabilidade mensal + benchmark** (`RentabilidadeChart`)
+- [x] **Correção da evolução patrimonial vazia**
+- [x] **Fix rentabilidade renda fixa**
+- [x] **Fix modal de lançamento — renda fixa sem cotas**
+- [x] **Bump dependências frontend e backend**
+- [x] **Fix rentabilidade dia/mês/12m + KpiCard Rentabilidade reestruturado**
 
 ---
 
@@ -81,8 +79,8 @@
 
 - [x] `BottomNav` adicionado ao `AppLayout`
 - [x] FAB 52×52px com elevação visual acima da barra
-- [x] Área de toque mínima 44×44px em todos os itens (WCAG 2.5.8)
-- [x] `aria-label` em todos os `NavLink` + `nav` + FAB
+- [x] Área de toque mínima 44×44px em todos os itens
+- [x] `aria-label` em todos os `NavLink`, `nav` e FAB
 
 ---
 
@@ -91,42 +89,60 @@
 
 - [x] `BDR` adicionado a `VALID_ASSET_CLASSES` e `_TYPE_LABEL` no `class_target_service`
 - [x] `get_targets_with_current()` retorna BDR quando há posição ou meta configurada
-- [x] `AllocationTargetWidget` itera `rows` dinamicamente — BDR renderizado automaticamente
-- [x] Widget exibido na `ResumePage` sob o gráfico de distribuição ("Alvo da Carteira")
-- [x] `useClassTargets` já chamava `/targets-with-current` — nenhuma alteração necessária
+- [x] `AllocationTargetWidget` itera `rows` dinamicamente
+- [x] Widget exibido na `ResumePage` sob o gráfico de distribuição
 
 ---
 
 ## ✅ Sprint 5F — Sync Semanal de Dividendos de FIIs (Concluído — 30/06/2026)
 **Período:** Julho 2026
 
-> Pipeline completo de sincronização de proventos de FIIs via provedor de cotações. Job automático toda sábado às 6h BRT.
+> Primeira etapa do pipeline de proventos, com sincronização de FIIs via provedor de cotações e job automático semanal.
 
-- [x] Configurações: `FII_DIVIDEND_CHUNK_SIZE`, `FII_DIVIDEND_MAX_RETRIES`, `FII_DIVIDEND_BOOTSTRAP_YEARS`
-- [x] `integrations/brapi_fii_dividends.py`: client com retry exponencial (429/5xx), chunking e DTO `FiiDividendEvent`
-- [x] `models/dividends_sync_job.py` + migration `012`: lock distribuído, cursor incremental, métricas por run
+- [x] Configurações de chunk, retry e bootstrap
+- [x] Client de integração com retry exponencial, chunking e DTO interno
+- [x] `models/dividends_sync_job.py` + migration `012`: lock distribuído, cursor incremental e métricas por execução
 - [x] `services/dividends_sync_service.py`: orquestrador lock → fetch → upsert sem N+1 → release
-- [x] `scheduler.py`: `job_sync_fii_dividends` — sábado 6h BRT — contador 7 → **8 jobs**
-- [x] `routers/admin.py`: `GET /admin/fii-dividends/sync/status` e `POST /admin/fii-dividends/sync`
+- [x] Scheduler semanal e endpoints admin de status/disparo manual
+
+---
+
+## ✅ Sprint 5G — Pipeline completo de mercado e proventos RV nacional (Concluído — 04/07/2026)
+**Período:** Julho 2026 | [Issue #92](https://github.com/lfragoso93-web/sig-v2/issues/92) | [PR #93](https://github.com/lfragoso93-web/sig-v2/pull/93)
+
+> Entrega concluída após o avanço de proventos: coleta, normalização, materialização e batch incremental para renda variável nacional.
+
+- [x] `asset_dividends` expandido com Data Com, Data Ex, pagamento, aprovação, valor unitário, total, fatores, ISIN, payload bruto e eventos não-cash
+- [x] Parser/backfill para dividendos, JCP, rendimentos, amortização, bonificação e subscrição
+- [x] Materialização de proventos por carteira usando posição elegível na Data Com
+- [x] Pipeline único por ativo: cadastro, preços, logo, eventos corporativos/proventos e materialização
+- [x] Onboarding e seed delegando para o pipeline único
+- [x] CLIs manuais para sincronização de proventos, pipeline individual e pipeline batch
+- [x] Batch incremental diário para ativos mantidos em carteira
+- [x] Tabela de Proventos preparada para Data Com e Data Ex separadas
+- [x] Testes automatizados para parser/materialização e pipeline batch
 
 ---
 
 ## ✅ Sprint 6B — PatrimonioPage Analítica + Bugfixes Críticos (Concluído — 30/06/2026)
-**Período:** Junho 2026
+**Período:** Junho 2026 | [Issue #81](https://github.com/lfragoso93-web/sig-v2/issues/81)
 
-> Reformulação completa da página Patrimônio com foco analítico, correção de 3 bugs críticos e limpeza de arquivos legados.
+> Reformulação completa da página Patrimônio com foco analítico, correção de bugs críticos e limpeza de arquivos legados.
 
 ### Bugfixes
-- [x] **Bug 1 — Backend**: Migration 022 cria `payment_date`, `ex_date`, `value_per_unit`, `total_received`, `dividend_type` na tabela `dividends` — resolve filtro `since` em `_proventos_total` — 30/06/2026
-- [x] **Bug 2 — Frontend**: Guards `(Number(v) || 0)` em `formatPercent`/`formatBRL` e `safeNum` nos props `change` dos `KpiCard` — elimina crash `toFixed on undefined` — 30/06/2026
-- [x] **Bug 3 — Backend**: `get_rentabilidade_por_ativo` e `get_rentabilidade_por_classe` adicionados ao `rentabilidade_service` — resolve `ImportError` que impedia o boot — 30/06/2026
+- [x] Migration 022 cria colunas de proventos na tabela `dividends`
+- [x] Guards defensivos em `formatPercent`, `formatBRL` e props dos KPIs
+- [x] Funções de rentabilidade por ativo/classe adicionadas ao service para resolver boot
 
 ### PatrimonioPage — Reformulação
-- [x] Aba **Histórico** removida (duplicava `RentabilidadePage`)
-- [x] **Visão Geral**: KPIs + evolução mensal (barras) + donut de alocação por classe + widget Distribuição Ideal vs. Atual + tabela de posições
-- [x] **Aba Análise**: Score HHI (baixo/moderado/alto/crítico) + Top 5 posições + concentração por classe (donut + barras horizontais) + desvio do alvo
-- [x] **Treemap SVG puro** com algoritmo Squarified — sem dependências externas
+- [x] Aba **Histórico** removida
+- [x] **Visão Geral**: KPIs + evolução mensal + donut + widget Distribuição Ideal vs. Atual + tabela de posições
+- [x] **Aba Análise**: Score HHI + Top 5 posições + concentração por classe + desvio do alvo
+- [x] **Treemap SVG puro** com algoritmo Squarified
 - [x] Toggle diário/mensal e seletor de período no gráfico de evolução
+
+### Continuidade
+- [ ] Refinar UX em cards e espaçamento visual conforme [issue #90](https://github.com/lfragoso93-web/sig-v2/issues/90)
 
 ---
 
@@ -140,19 +156,36 @@
 
 ---
 
+## 🔄 Sprint corrente — Ajustes pós-proventos e Resumo (Em andamento)
+**Período:** Julho 2026
+
+### Resumo — Bugs a corrigir
+- [ ] Dropdown/lista suspensa deve extrapolar a área da tabela e permanecer visível mesmo com poucos ativos
+- [ ] Cabeçalho/tabela: revisar diferença entre **variação** e **rentabilidade total da classe**
+- [ ] KPIs da página Resumo devem refletir apenas valores atuais e preservar sinal negativo quando a carteira estiver negativa
+- [ ] Comparar comportamento dos cards com a página Patrimônio, que parece mais consistente
+
+### Proventos — Pós-pipeline
+- [ ] Validar tela com dados reais materializados por carteira
+- [ ] Revisar filtros, status e agregações após expansão de `asset_dividends`
+- [ ] Garantir consistência entre Data Com, Data Ex e Data de Pagamento
+- [ ] Conferir cards/resumos de proventos 12m, mês e total líquido
+
+---
+
 ## 🔄 Sprint 5B — Performance de Queries (Em andamento)
 **Período:** Julho 2026 | [Issue #54](https://github.com/lfragoso93-web/sig-v2/issues/54)
 
 > **Criticidade: Alta | Esforço: Alto | Impacto: Performance**
 
 ### Concluído
-- [x] **Fix `retorno_dia_pct`**: usa `_snapshot_before_today()` — trata fins de semana e feriados corretamente — 30/06/2026
-- [x] **Fix `retorno_mes_pct`**: usa 1º do mês calendário como base fixa (antes usava D-30 corridos) — 30/06/2026
-- [x] **`retorno_dia_pct` adicionado ao tipo `RentabilidadeKpis`** no frontend — 30/06/2026
-- [x] **KpiCard Rentabilidade** exibe Hoje / Mês / 12m / Desde o início com cores semânticas — 30/06/2026
+- [x] `retorno_dia_pct`: usa snapshot imediatamente anterior ao dia atual
+- [x] `retorno_mes_pct`: usa 1º do mês calendário como base fixa
+- [x] `retorno_dia_pct` adicionado ao tipo `RentabilidadeKpis`
+- [x] KpiCard Rentabilidade exibe Hoje / Mês / 12m / Desde o início
 
 ### Pendente
-- [ ] Mapear queries com tempo de execução elevado (EXPLAIN ANALYZE)
+- [ ] Mapear queries com tempo de execução elevado (`EXPLAIN ANALYZE`)
 - [ ] Adicionar índices faltantes e otimizar joins
 - [ ] Revisar N+1 em listagens de posições e transações
 - [ ] Testes de integração do fluxo de proventos
@@ -169,15 +202,6 @@
 
 ---
 
-## 🔄 Sprint 5D — Proventos (Fechar Pendências)
-**Período:** Julho 2026 | [Issue #54](https://github.com/lfragoso93-web/sig-v2/issues/54)
-
-- [x] `ProventosHistoricoTable.tsx` — CSS vars corretos (validado)
-- [x] `ProventosDonutChart.tsx` — PALETTE migrada para `--color-chart-2..10`
-- [ ] Testes de integração do fluxo de proventos _(postergado para Sprint 5B)_
-
----
-
 ## 📋 Sprint 6 — Qualidade Visual & Rename SGI (Planejado)
 **Período:** Julho–Agosto 2026 | [Issue #55](https://github.com/lfragoso93-web/sig-v2/issues/55)
 
@@ -185,7 +209,7 @@
 
 > **Criticidade: Alta | Esforço: Baixo | Impacto: Segurança / Compliance**
 
-- [ ] Remover todas as menções explícitas a nomes de APIs externas em documentação pública
+- [ ] Remover menções explícitas a nomes de provedores em documentação pública
 - [ ] Substituir referências por termos genéricos: "provedor de cotações", "serviço de câmbio"
 - [ ] Manter nomes técnicos apenas em `.env.example` com comentários de propósito
 - [ ] Revisar Swagger/OpenAPI: remover nomes de provedores em descrições de endpoints
@@ -218,13 +242,10 @@
 - [ ] Testes de validação do cálculo de ganho de capital
 
 ### Sprint 7B — Logs de Auditoria por Usuário
-
-> **Criticidade: Média | Esforço: Médio | Impacto: Governança interna**
-
 - [ ] Criar modelo `AuditLog` (user_id, action, resource, timestamp, metadata)
 - [ ] Middleware ou decorator para captura automática de escrita
 - [ ] Endpoint `GET /admin/users/{id}/audit` para superadmin
-- [ ] Tela de auditoria no painel admin (tabela com filtros por usuário, data, ação)
+- [ ] Tela de auditoria no painel admin
 - [ ] Exportação de log em CSV pelo superadmin
 
 ---
@@ -256,9 +277,9 @@
 
 - [ ] Testes unitários e de integração (cobertura mínima 70%)
 - [ ] CI/CD com GitHub Actions (lint + test + build)
-- [ ] Deploy em ambiente de produção (VPS ou Railway)
-- [ ] Monitoramento com Sentry ou similar
-- [ ] Documentação da API (Swagger customizado)
+- [ ] Deploy em ambiente de produção
+- [ ] Monitoramento de erros
+- [ ] Documentação da API
 - [ ] Backups automáticos do PostgreSQL
 
 ### Sprint 10B — Backup e Restore do Banco via Sistema

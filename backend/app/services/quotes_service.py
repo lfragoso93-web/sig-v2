@@ -215,6 +215,11 @@ async def _fetch_yfinance_current(pairs: list[tuple[str, AssetType]]) -> dict[st
     return results
 
 
+async def _fetch_yfinance(pairs: list[tuple[str, AssetType]]) -> dict[str, float]:
+    """Alias legado mantido para testes e integrações antigas."""
+    return await _fetch_yfinance_current(pairs)
+
+
 async def _fetch_alpha_vantage_current(pairs: list[tuple[str, AssetType]]) -> dict[str, float]:
     if _provider_in_cooldown("alpha_vantage"):
         logger.info("[quotes_service] Alpha Vantage em cooldown — pulando chamada externa")
@@ -236,7 +241,7 @@ async def _fetch_alpha_vantage_current(pairs: list[tuple[str, AssetType]]) -> di
 async def _fetch_intl(pairs: list[tuple[str, AssetType]]) -> dict[str, float]:
     av = await _fetch_alpha_vantage_current(pairs)
     missing = [(ticker, at) for ticker, at in pairs if ticker not in av]
-    yf_results = await _with_retry(_fetch_yfinance_current, missing, label="yfinance") if missing else {}
+    yf_results = await _with_retry(_fetch_yfinance, missing, label="yfinance") if missing else {}
     if pairs and len(av) + len(yf_results) == 0:
         _set_provider_cooldown("intl")
     return {**av, **yf_results}
@@ -350,8 +355,6 @@ async def get_prices(positions: list[dict], db: Optional[AsyncSession] = None) -
         _fetch_treasury_prices(treasury_tickers, db) if treasury_tickers else _noop(),
     )
 
-    # Não faz fallback yfinance em massa para ativos BR. Quando a BRAPI falha,
-    # usa stale se existir; caso contrário deixa sem preço para evitar 429 em cascata.
     br_missing_pairs = [(ticker, type_map[ticker]) for ticker in br_tickers if ticker not in br_results and type_map.get(ticker) is not None]
     br_stale = await _fetch_stale_for_pairs(br_missing_pairs, db, label="BR") if br_missing_pairs else {}
 

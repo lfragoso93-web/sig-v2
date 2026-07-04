@@ -31,16 +31,11 @@ permissions:
   actions: read
   pull-requests: read
 
-# Cancela execuções anteriores do mesmo workflow na mesma ref.
-# Economiza minutos quando há pushes rápidos em sequência.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # ---------------------------------------------------------------------------
-  # BACKEND
-  # ---------------------------------------------------------------------------
   backend-quality:
     name: Backend – lint, type check and tests
     runs-on: ubuntu-latest
@@ -75,9 +70,6 @@ jobs:
         working-directory: backend
         run: pytest
 
-  # ---------------------------------------------------------------------------
-  # FRONTEND
-  # ---------------------------------------------------------------------------
   frontend-quality:
     name: Frontend – lint, type check and build
     runs-on: ubuntu-latest
@@ -105,19 +97,16 @@ jobs:
         working-directory: frontend
         run: npm run build
 
-  # ---------------------------------------------------------------------------
-  # SECURITY
-  # ---------------------------------------------------------------------------
   secrets-scan:
     name: Secret scan – Gitleaks
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      # fetch-depth: 50 — varre os últimos 50 commits.
-      # fetch-depth: 0 clonava TODO o histórico a cada execução, desnecessário.
+      # PRs grandes/divergentes precisam do commit-base no checkout para que
+      # o range calculado pelo gitleaks-action exista localmente.
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 50
+          fetch-depth: 0
 
       - uses: gitleaks/gitleaks-action@v3
         env:
@@ -130,9 +119,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Scan único com format: table + exit-code: 1.
-      # Anteriormente rodava 2x (SARIF + table), dobrando o tempo.
-      # Upload SARIF removido: requer GitHub Advanced Security (plano pago).
       - name: Trivy scan – filesystem gate
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -144,18 +130,6 @@ jobs:
           trivyignores: .trivyignore
           exit-code: "1"
 
-  # ---------------------------------------------------------------------------
-  # DEPENDENCY AUDIT
-  # Substitui dependency-review-action (requer GitHub Advanced Security pago).
-  # pip-audit e npm audit são gratuitos e cobrem o mesmo propósito.
-  #
-  # Estratégia pip-audit:
-  #   1. Instala as dependências do backend no ambiente Python
-  #   2. Roda pip-audit SEM -r para auditar o ambiente instalado
-  #      Isso evita o conflito "project_path not allowed with -r".
-  #   Nota: pip-audit não suporta --severity; reporta todas as vulns.
-  #   O gate de severidade fica por conta do Trivy (job acima).
-  # ---------------------------------------------------------------------------
   audit-python:
     name: Dependency audit – Python (pip-audit)
     runs-on: ubuntu-latest
@@ -176,9 +150,6 @@ jobs:
         run: pip install pip-audit
 
       - name: Run pip-audit
-        # Audita o ambiente Python instalado (sem -r, sem project_path).
-        # --ignore-vuln GHSA-xgmm-8j9v-c9wx: PyJWT JWK/HMAC confusion
-        # falso positivo — o projeto usa HS256 fixo via settings.ALGORITHM.
         run: pip-audit --ignore-vuln GHSA-xgmm-8j9v-c9wx
 
   audit-nodejs:
@@ -201,9 +172,6 @@ jobs:
         working-directory: frontend
         run: npm audit --audit-level=high
 
-  # ---------------------------------------------------------------------------
-  # DOCKERFILE LINT
-  # ---------------------------------------------------------------------------
   dockerfile-lint-backend:
     name: Dockerfile lint – backend
     runs-on: ubuntu-latest
@@ -226,12 +194,6 @@ jobs:
           dockerfile: frontend/Dockerfile
           ignore: DL3016,DL3018
 
-  # ---------------------------------------------------------------------------
-  # BUILD & SCAN IMAGES
-  # Restrito a push na main — não roda em PRs.
-  # Em PRs, lint + type check + testes são suficientes para feedback.
-  # Economiza ~30 min por PR (os dois builds juntos).
-  # ---------------------------------------------------------------------------
   build-and-scan-backend:
     name: Build and scan backend Docker image
     runs-on: ubuntu-latest
@@ -253,8 +215,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Scan único com format: table + exit-code: 1.
-      # SARIF removido: requer GitHub Advanced Security (plano pago).
       - name: Trivy image scan – gate
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -273,15 +233,6 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Generate package-lock.json
-        working-directory: frontend
-        run: npm install --package-lock-only --ignore-scripts
-
       - uses: docker/setup-buildx-action@v4
 
       - name: Build frontend image
@@ -291,154 +242,15 @@ jobs:
           file: ./frontend/Dockerfile
           load: true
           push: false
-          pull: true
           tags: sig-v2-frontend:ci-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Scan único com format: table + exit-code: 1.
-      # SARIF removido: requer GitHub Advanced Security (plano pago).
       - name: Trivy image scan – gate
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: sig-v2-frontend:ci-${{ github.sha }}
           format: table
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          trivyignores: .trivyignore
-          exit-code: "1"
-
-  # ---------------------------------------------------------------------------
-  # PUBLISH (main only)
-  # ---------------------------------------------------------------------------
-  publish-backend:
-    name: Publish backend image to Docker Hub
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    needs: build-and-scan-backend
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    outputs:
-      image-digest: ${{ steps.build.outputs.digest }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v4
-
-      - id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/sig-v2-backend
-          tags: |
-            type=raw,value=latest
-            type=sha,prefix=sha-
-
-      - uses: docker/login-action@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - id: build
-        uses: docker/build-push-action@v7
-        with:
-          context: ./backend
-          file: ./backend/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          sbom: true
-          provenance: true
-
-  publish-frontend:
-    name: Publish frontend image to Docker Hub
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    needs: build-and-scan-frontend
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    outputs:
-      image-digest: ${{ steps.build.outputs.digest }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Generate package-lock.json
-        working-directory: frontend
-        run: npm install --package-lock-only --ignore-scripts
-
-      - uses: docker/setup-buildx-action@v4
-
-      - id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/sig-v2-frontend
-          tags: |
-            type=raw,value=latest
-            type=sha,prefix=sha-
-
-      - uses: docker/login-action@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - id: build
-        uses: docker/build-push-action@v7
-        with:
-          context: ./frontend
-          file: ./frontend/Dockerfile
-          push: true
-          pull: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          sbom: true
-          provenance: true
-
-  # ---------------------------------------------------------------------------
-  # SCAN PUBLISHED DIGESTS
-  # ---------------------------------------------------------------------------
-  scan-published-backend:
-    name: Scan published backend image digest
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs: publish-backend
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: docker/login-action@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/sig-v2-backend@${{ needs.publish-backend.outputs.image-digest }}
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          trivyignores: .trivyignore
-          exit-code: "1"
-
-  scan-published-frontend:
-    name: Scan published frontend image digest
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs: publish-frontend
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: docker/login-action@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/sig-v2-frontend@${{ needs.publish-frontend.outputs.image-digest }}
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           trivyignores: .trivyignore
