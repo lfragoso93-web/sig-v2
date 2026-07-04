@@ -172,7 +172,7 @@ function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
       </button>
       {open && (
         <div style={{
-          position: 'absolute', right: 0, top: '100%', zIndex: 50, marginTop: 4,
+          position: 'absolute', right: 0, top: '100%', zIndex: 1000, marginTop: 4,
           width: 210, borderRadius: 'var(--radius-lg)', overflow: 'hidden',
           background: 'var(--color-surface)', boxShadow: 'var(--shadow-lg)',
           border: '1px solid oklch(from var(--color-text) l c h / 0.1)',
@@ -472,7 +472,7 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
           {variationPct !== null && (
             <>
               <Divider />
-              <LabeledValue label="Var.">
+              <LabeledValue label="Var. atual">
                 <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: varColor, fontVariantNumeric: 'tabular-nums' }}>
                   {variationPct >= 0 ? '+' : ''}{formatPercent(variationPct)}
                 </span>
@@ -482,7 +482,7 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
           {rentabilidade !== null && (
             <>
               <Divider />
-              <LabeledValue label="Rentab.">
+              <LabeledValue label="Rentab. total">
                 <span style={{ fontSize: '0.68rem', fontWeight: 500, color: rentColor, fontVariantNumeric: 'tabular-nums' }}>
                   {rentabilidade >= 0 ? '+' : ''}{formatPercent(rentabilidade)}
                 </span>
@@ -559,7 +559,7 @@ function ClassTable({ group, portfolioId, onAssetClick }: { group: PositionGroup
   const COLS = isRF ? COLS_RENDA_FIXA : COLS_DEFAULT
 
   return (
-    <div className="card" style={{ overflow: 'hidden' }}>
+    <div className="card" style={{ overflow: 'visible' }}>
       <ClassGroupHeader
         group={group}
         collapsed={collapsed}

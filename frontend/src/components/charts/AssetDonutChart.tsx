@@ -13,6 +13,11 @@ const PALETTE = [
   '#f97316', // orange
 ]
 
+function safeNumber(value: unknown): number {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : 0
+}
+
 function getColor(entry: AssetTypeDistribution, index: number): string {
   return entry.color && entry.color !== '#000000' && entry.color !== 'black'
     ? entry.color
@@ -35,7 +40,7 @@ function CustomTooltip({ active, payload }: {
       }}
     >
       <p className="font-semibold mb-1" style={{ color: 'var(--color-text)' }}>{d.label}</p>
-      <p style={{ color: 'var(--color-text-muted)' }}>{d.percentage.toFixed(1)}%</p>
+      <p style={{ color: 'var(--color-text-muted)' }}>{safeNumber(d.percentage).toFixed(1)}%</p>
     </div>
   )
 }
@@ -100,7 +105,7 @@ export default function AssetDonutChart({ data }: { data: AssetTypeDistribution[
               {entry.label}
             </span>
             <span style={{ color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-              {entry.percentage.toFixed(1)}%
+              {safeNumber(entry.percentage).toFixed(1)}%
             </span>
           </li>
         ))}

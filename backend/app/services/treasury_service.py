@@ -1,18 +1,10 @@
 """
 Treasury service — lê posições diretamente da tabela transactions.
 
-Cada linha de transação com asset_type = 'tesouro_direto' representa
-um lote de compra de Tesouro Direto:
-  - ticker   → brapi_name (ex: "Tesouro IPCA+ 2029")
-  - price    → preço de um título cheio na data de compra
-  - quantity → quantidade de cotas (pode ser fracionado, ex: 0.02)
-  - quantity * price → valor investido (calculado)
-  - date     → purchase_date
-
-Cálculo de rentabilidade:
-  valor_atual       = quantity * current_price
-  lucro_prejuizo    = valor_atual - invested_value
-  rentabilidade_pct = (lucro_prejuizo / invested_value) * 100
+Cada linha de transação com asset_type = 'tesouro_direto' representa um lote de
+compra de Tesouro Direto. Para cotação atual, o ticker informado pelo usuário é
+resolvido para o `symbol` canônico da BRAPI usando o catálogo persistido em
+assets, populado via /api/v2/treasury/list.
 """
 from datetime import date
 from typing import Optional
@@ -24,12 +16,12 @@ from fastapi import HTTPException
 
 from app.models.transaction import Transaction, OperationType
 from app.models.portfolio import Portfolio
-from app.integrations.brapi import fetch_treasury_prices
+from app.integrations.brapi_treasury import fetch_treasury_prices
+from app.services.treasury_catalog_service import resolve_treasury_symbol
 
 logger = logging.getLogger(__name__)
 
-# Valores de asset_type reconhecidos como Tesouro Direto (case-insensitive)
-TREASURY_ASSET_TYPES = {"tesouro_direto", "tesouro direto", "treasury"}
+TREASURY_ASSET_TYPES = {"tesouro_direto", "tesouro direto", "treasury", "TESOURO_DIRETO"}
 
 
 async def _assert_portfolio_owner(
@@ -50,10 +42,9 @@ async def _assert_portfolio_owner(
 def _is_treasury(asset_type: Optional[str]) -> bool:
     if not asset_type:
         return False
-    return asset_type.strip().lower() in TREASURY_ASSET_TYPES
+    raw = asset_type.value if hasattr(asset_type, "value") else str(asset_type)
+    return raw.strip().lower() in {item.lower() for item in TREASURY_ASSET_TYPES}
 
-
-# ---------- READ -------------------------------------------------------------
 
 async def list_treasury(
     db: AsyncSession,
@@ -61,13 +52,6 @@ async def list_treasury(
     user_id: int,
     only_active: bool = False,
 ) -> list[dict]:
-    """
-    Lista todos os lotes de Tesouro Direto de uma carteira,
-    enriquecidos com cotação atual via BRAPI.
-
-    only_active é mantido por compatibilidade de assinatura, mas
-    como transações não têm is_active, retorna todas as compras (buy).
-    """
     await _assert_portfolio_owner(db, portfolio_id, user_id)
 
     stmt = select(Transaction).where(
@@ -77,10 +61,8 @@ async def list_treasury(
 
     result = await db.execute(stmt)
     all_txs = result.scalars().all()
-
     treasury_txs = [tx for tx in all_txs if _is_treasury(tx.asset_type)]
-
-    return await enrich_with_current_prices(treasury_txs)
+    return await enrich_with_current_prices(db, treasury_txs)
 
 
 async def get_treasury_by_portfolio(
@@ -88,7 +70,6 @@ async def get_treasury_by_portfolio(
     portfolio_id: int,
     only_active: bool = False,
 ) -> list[Transaction]:
-    """Retorna transações de Tesouro Direto de uma carteira (sem autenticação)."""
     stmt = select(Transaction).where(
         Transaction.portfolio_id == portfolio_id,
         Transaction.operation == OperationType.buy,
@@ -99,27 +80,49 @@ async def get_treasury_by_portfolio(
     return [tx for tx in all_txs if _is_treasury(tx.asset_type)]
 
 
-# ---------- ENRIQUECIMENTO COM COTAÇÃO ATUAL ---------------------------------
+async def _resolve_symbol_safe(db: AsyncSession | None, raw_ticker: str) -> str:
+    if not db:
+        return raw_ticker
+    try:
+        return await resolve_treasury_symbol(db, raw_ticker) or raw_ticker
+    except Exception as exc:
+        # Mantém compatibilidade com testes/mocks antigos e evita quebrar a tela
+        # se o catálogo ainda não estiver populado.
+        logger.debug("[treasury_service] fallback para ticker bruto %s: %s", raw_ticker, exc)
+        return raw_ticker
+
 
 async def enrich_with_current_prices(
-    transactions: list[Transaction],
+    db_or_transactions,
+    transactions: list[Transaction] | None = None,
 ) -> list[dict]:
     """
-    Enriquece lotes de Tesouro com preço atual da BRAPI.
+    Enriquece lotes de Tesouro com preço atual via BRAPI indicators.
 
-    Campos retornados por lote:
-      id, portfolio_id, ticker (= brapi_name), purchase_price, quantity,
-      invested_value, purchase_date, current_price,
-      valor_atual, lucro_prejuizo, rentabilidade_pct
+    Aceita as duas assinaturas para compatibilidade:
+      - enrich_with_current_prices(db, transactions)  # fluxo novo
+      - enrich_with_current_prices(transactions)      # testes/uso legado
     """
+    if transactions is None:
+        db: AsyncSession | None = None
+        transactions = db_or_transactions
+    else:
+        db = db_or_transactions
+
     if not transactions:
         return []
 
-    tickers = list({tx.ticker for tx in transactions if tx.ticker})
+    symbol_by_raw: dict[str, str] = {}
+    for tx in transactions:
+        raw = str(tx.ticker or "")
+        if raw not in symbol_by_raw:
+            symbol_by_raw[raw] = await _resolve_symbol_safe(db, raw)
+
+    symbols = sorted({s for s in symbol_by_raw.values() if s})
     price_map: dict[str, float] = {}
-    if tickers:
+    if symbols:
         try:
-            price_map = await fetch_treasury_prices(tickers)
+            price_map = await fetch_treasury_prices(symbols)
         except Exception as exc:
             logger.warning("[treasury_service] erro ao buscar preços BRAPI: %s", exc)
 
@@ -129,7 +132,9 @@ async def enrich_with_current_prices(
         quantity = float(tx.quantity)
         invested_value = round(quantity * purchase_price, 2)
 
-        current_price = price_map.get(tx.ticker)
+        raw_ticker = str(tx.ticker or "")
+        brapi_symbol = symbol_by_raw.get(raw_ticker, raw_ticker)
+        current_price = price_map.get(brapi_symbol)
         valor_atual = None
         lucro_prejuizo = None
         rentabilidade_pct = None
@@ -143,13 +148,14 @@ async def enrich_with_current_prices(
         result.append({
             "id": tx.id,
             "portfolio_id": tx.portfolio_id,
-            "brapi_name": tx.ticker,
-            "ticker": tx.ticker,
+            "brapi_name": brapi_symbol or raw_ticker,
+            "brapi_symbol": brapi_symbol,
+            "ticker": raw_ticker,
             "purchase_price": purchase_price,
             "quantity": quantity,
             "invested_value": invested_value,
             "purchase_date": purchase_date.isoformat() if isinstance(purchase_date, date) else purchase_date,
-            "maturity_date": None,  # não armazenado em transactions; reservado para uso futuro via notes
+            "maturity_date": None,
             "is_active": True,
             "current_price": current_price,
             "valor_atual": valor_atual,

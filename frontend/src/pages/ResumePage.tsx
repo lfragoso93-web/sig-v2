@@ -5,8 +5,8 @@ import {
   usePortfolioList,
   usePatrimonioHistory,
   usePositions,
+  usePortfolioSummaryData,
 } from '@/hooks/usePortfolio'
-import { useRentabilidadeKpis } from '@/hooks/useRentabilidade'
 import { useAppStore } from '@/store/appStore'
 import { formatBRL, formatPercent, signClass } from '@/utils/format'
 import KpiCard from '@/components/ui/KpiCard'
@@ -75,23 +75,6 @@ function ChartSelect({
   )
 }
 
-function ReturnRow({ label, value }: { label: string; value: number }) {
-  const sign = value >= 0 ? '+' : ''
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-      <span style={{ fontSize: '0.68rem', color: 'var(--color-text-faint)', fontWeight: 500 }}>
-        {label}
-      </span>
-      <span
-        className={clsx('tabular-nums', signClass(value))}
-        style={{ fontSize: '0.7rem', fontWeight: 700 }}
-      >
-        {sign}{formatPercent(value)}
-      </span>
-    </div>
-  )
-}
-
 export default function ResumePage() {
   const globalPortfolioId = useAppStore(s => s.selectedPortfolioId)
   const setGlobal         = useAppStore(s => s.setSelectedPortfolioId)
@@ -111,24 +94,20 @@ export default function ResumePage() {
   const portfolioId: number | null = globalPortfolioId ?? (portfolios?.[0]?.id ?? null)
   const activeAssetType = assetClass === ASSET_CLASS_ALL ? null : assetClass
 
-  const { data: kpis,              isLoading: loadingKpis    } = useRentabilidadeKpis(portfolioId)
+  const { data: summary,           isLoading: loadingSummary } = usePortfolioSummaryData(portfolioId)
   const { data: patrimonioHistory, isLoading: loadingHistory } = usePatrimonioHistory(portfolioId, period, activeAssetType)
   const { data: positions,         isLoading: loadingPositions } = usePositions(portfolioId)
 
-  const patrimonio     = kpis?.patrimonio_atual        ?? 0
-  const aportado       = kpis?.total_aportado          ?? 0
-  const totalPnl       = kpis?.total_pnl               ?? 0
-  const ganhoNaoReal   = kpis?.ganho_nao_realizado      ?? 0
-  const ganhoReal      = kpis?.ganho_realizado          ?? 0
-  const proventos12m   = kpis?.proventos_12m            ?? 0
-  const proventosTotal = kpis?.proventos_total          ?? 0
-  const retornoTotal   = kpis?.retorno_total_pct        ?? 0
-  const retornoDia     = kpis?.retorno_dia_pct          ?? 0
-  const retornoMes     = kpis?.retorno_mes_pct          ?? 0
-  const retorno12m     = kpis?.retorno_12m_pct          ?? 0
-  const retornoInicio  = kpis?.retorno_desde_inicio_pct ?? 0
+  const patrimonio       = summary?.total_patrimonio         ?? summary?.current_value  ?? 0
+  const aportado         = summary?.total_investido          ?? summary?.total_invested ?? 0
+  const lucroTotal       = summary?.lucro_total              ?? summary?.total_gain     ?? 0
+  const proventos12m     = summary?.dividendos_recebidos_12m ?? 0
+  const proventosTotal   = summary?.total_proventos          ?? 0
+  const variacaoValor    = summary?.variacao_valor           ?? summary?.total_gain     ?? 0
+  const variacaoPct      = summary?.variacao_percentual      ?? summary?.total_gain_pct ?? 0
+  const rentabilidadePct = summary?.rentabilidade_total      ?? variacaoPct
 
-  const loadingKpiCards = loadingPortfolios || loadingKpis
+  const loadingKpiCards = loadingPortfolios || loadingSummary
 
   if (loadingPortfolios) {
     return (
@@ -169,50 +148,30 @@ export default function ResumePage() {
               label="Patrimônio Total"
               value={formatBRL(patrimonio)}
               subValue={formatBRL(aportado)}
-              subLabel="Total aportado"
-              change={retornoTotal}
+              subLabel="Valor investido"
+              change={variacaoPct}
             />
             <KpiCard
-              label="Resultado Total"
-              value={formatBRL(totalPnl)}
-              valueColor={signClass(totalPnl)}
-              subLabel={`Não realizado ${formatBRL(ganhoNaoReal)} · Realizado ${formatBRL(ganhoReal)}`}
-              bottomLine={
-                <span
-                  title="Retorno total = (PnL + proventos) / total aportado"
-                  className={clsx('text-xs font-semibold tabular-nums', signClass(retornoTotal))}
-                  style={{ cursor: 'help' }}
-                >
-                  {retornoTotal >= 0 ? '+' : ''}{formatPercent(retornoTotal)} retorno total
-                </span>
-              }
+              label="Resultado"
+              value={formatBRL(lucroTotal)}
+              valueColor={signClass(lucroTotal)}
+              subLabel="Ganho de capital + proventos"
             />
             <KpiCard
               label="Proventos (12m)"
               value={formatBRL(proventos12m)}
               subValue={formatBRL(proventosTotal)}
-              subLabel="Total acumulado"
+              subLabel="Total recebido"
             />
             <KpiCard
-              label="Rentabilidade"
-              value={
-                <span className={clsx('tabular-nums', signClass(retornoInicio))}>
-                  {retornoInicio >= 0 ? '+' : ''}{formatPercent(retornoInicio)}
-                </span>
-              }
-              subLabel="Desde o início"
+              label="Variação"
+              value={formatBRL(variacaoValor)}
+              valueColor={signClass(variacaoValor)}
+              change={variacaoPct}
               bottomLine={
-                <div style={{
-                  display: 'flex', flexDirection: 'column', gap: 3,
-                  marginTop: 4,
-                  paddingTop: 6,
-                  borderTop: '1px solid oklch(from var(--color-text) l c h / 0.07)',
-                  width: '100%',
-                }}>
-                  <ReturnRow label="Hoje"  value={retornoDia}  />
-                  <ReturnRow label="Mês"   value={retornoMes}  />
-                  <ReturnRow label="12 m"  value={retorno12m}  />
-                </div>
+                <span className={clsx('text-xs font-semibold tabular-nums', signClass(rentabilidadePct))}>
+                  {rentabilidadePct >= 0 ? '+' : ''}{formatPercent(rentabilidadePct)} rentab.
+                </span>
               }
             />
           </>

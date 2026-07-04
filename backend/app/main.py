@@ -33,25 +33,17 @@ logger = logging.getLogger(__name__)
 
 async def _boot_sequence() -> None:
     """
-    Sequencia de inicializacao executada em background apos o app subir.
+    Sequência de inicialização executada em background após o app subir.
 
-    Etapa 1 - Seed de ativos:
-      Popula a tabela `assets` com todos os tickers da B3 via provedor de dados.
-      So executa se a tabela estiver vazia.
-
-    Etapa 2 - Backfill historico de precos (10 anos):
-      Popula `asset_prices` com o historico completo de todos os ativos.
-      So executa se asset_prices estiver vazia E assets tiver registros.
-      Abortada se a etapa 1 falhou com assets vazia.
-
-    Nota: proventos (dividends) sao processados automaticamente via trigger
-    em cada insercao/edicao/exclusao de transacao — nao precisam de boot.
-
-    A API ja esta disponivel e respondendo durante todo o processo.
+    Etapa 1 - Seed de ativos B3/cripto.
+    Etapa 1b - Seed/atualização do catálogo de Tesouro Direto via BRAPI.
+    Etapa 1c - Reconciliação de lançamentos antigos de Tesouro Direto.
+    Etapa 1d - Histórico/snapshot de Tesouro Direto via BRAPI.
+    Etapa 2 - Backfill histórico de preços.
+    Etapa 3 - Backfill/incremental de benchmarks SGS/BCB para Renda Fixa.
     """
     await asyncio.sleep(3)
 
-    # --- Etapa 1: Seed de ativos --------------------------------------------
     seed_ok = False
     try:
         from app.models.asset import Asset
@@ -62,23 +54,70 @@ async def _boot_sequence() -> None:
             asset_count = result.scalar_one() or 0
 
         if asset_count == 0:
-            logger.info("[Boot] Etapa 1: tabela assets vazia \u2014 iniciando seed de tickers")
+            logger.info("[Boot] Etapa 1: tabela assets vazia — iniciando seed de tickers")
             async with AsyncSessionLocal() as db:
                 seed_result = await run_asset_seed(db, run_backfill=False)
             logger.info(
-                "[Boot] Etapa 1: seed concluido \u2014 %d criados, %d atualizados, %d erros",
+                "[Boot] Etapa 1: seed concluido — %d criados, %d atualizados, %d erros",
                 seed_result.created, seed_result.updated, seed_result.errors,
             )
             seed_ok = True
         else:
-            logger.info("[Boot] Etapa 1: %d assets no banco \u2014 seed ignorado", asset_count)
+            logger.info("[Boot] Etapa 1: %d assets no banco — seed ignorado", asset_count)
             seed_ok = True
 
     except Exception as e:
         logger.error("[Boot] Etapa 1 (seed de ativos) falhou: %s", e)
         seed_ok = False
 
-    # --- Etapa 2: Backfill de precos historicos (depende da etapa 1) --------
+    try:
+        from app.services.treasury_catalog_service import seed_treasury_assets
+
+        logger.info("[Boot] Etapa 1b: atualizando catálogo Tesouro Direto BRAPI")
+        async with AsyncSessionLocal() as db:
+            treasury_seed = await seed_treasury_assets(db)
+        logger.info(
+            "[Boot] Etapa 1b: Tesouro Direto — %d criados, %d atualizados, %d ignorados, %d erros",
+            treasury_seed.created,
+            treasury_seed.updated,
+            treasury_seed.skipped,
+            treasury_seed.errors,
+        )
+    except Exception as e:
+        logger.error("[Boot] Etapa 1b (seed Tesouro Direto) falhou: %s", e)
+
+    try:
+        from app.services.treasury_reconciliation_service import reconcile_treasury_transactions
+
+        logger.info("[Boot] Etapa 1c: reconciliando lançamentos Tesouro Direto existentes")
+        async with AsyncSessionLocal() as db:
+            reconciliation = await reconcile_treasury_transactions(db)
+        logger.info(
+            "[Boot] Etapa 1c: Tesouro Direto reconciliado — %d lidos, %d transações atualizadas, %d assets criados, %d sem match, %d erros",
+            reconciliation.scanned,
+            reconciliation.updated_transactions,
+            reconciliation.created_assets,
+            reconciliation.unresolved,
+            reconciliation.errors,
+        )
+    except Exception as e:
+        logger.error("[Boot] Etapa 1c (reconciliação Tesouro Direto) falhou: %s", e)
+
+    try:
+        from app.services.treasury_price_history_service import (
+            import_missing_treasury_price_history,
+            update_treasury_latest_prices,
+        )
+
+        logger.info("[Boot] Etapa 1d: verificando histórico Tesouro Direto BRAPI")
+        treasury_stats = await import_missing_treasury_price_history()
+        logger.info("[Boot] Etapa 1d: histórico Tesouro Direto atualizado: %s", treasury_stats)
+        async with AsyncSessionLocal() as db:
+            snapshot = await update_treasury_latest_prices(db)
+        logger.info("[Boot] Etapa 1d: snapshot Tesouro Direto atualizado: %d títulos", len(snapshot))
+    except Exception as e:
+        logger.error("[Boot] Etapa 1d (histórico Tesouro Direto) falhou: %s", e)
+
     if not seed_ok:
         logger.warning("[Boot] Etapa 2 abortada: etapa 1 falhou")
     else:
@@ -89,6 +128,16 @@ async def _boot_sequence() -> None:
             logger.info("[Boot] Etapa 2: backfill de precos concluido")
         except Exception as e:
             logger.error("[Boot] Etapa 2 (backfill de precos) falhou: %s", e)
+
+    try:
+        from app.services.benchmark_rate_service import import_missing_benchmark_history
+
+        logger.info("[Boot] Etapa 3: verificando benchmarks SGS/BCB")
+        async with AsyncSessionLocal() as db:
+            stats = await import_missing_benchmark_history(db)
+        logger.info("[Boot] Etapa 3: benchmarks SGS/BCB atualizados: %s", stats)
+    except Exception as e:
+        logger.error("[Boot] Etapa 3 (benchmarks SGS/BCB) falhou: %s", e)
 
     logger.info("[Boot] sequencia de inicializacao concluida")
 
@@ -178,19 +227,17 @@ app.add_middleware(
     allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*"]
 )
 
 app.add_middleware(SecurityHeadersMiddleware)
 
 PREFIX = "/api/v1"
 
-# Auth & Users
 app.include_router(auth.router,            prefix=f"{PREFIX}/auth",         tags=["auth"])
 app.include_router(users.router,           prefix=f"{PREFIX}/users",        tags=["users"])
 app.include_router(admin.router,           prefix=f"{PREFIX}/admin",        tags=["admin"])
 
-# Core financeiro
 app.include_router(portfolios.router,      prefix=f"{PREFIX}/portfolios",   tags=["portfolios"])
 app.include_router(transactions.router,    prefix=f"{PREFIX}/portfolios",   tags=["transactions"])
 app.include_router(treasury.router,        prefix=f"{PREFIX}/portfolios",   tags=["treasury"])
@@ -202,13 +249,11 @@ app.include_router(rentabilidade.router,   prefix=f"{PREFIX}/portfolios",   tags
 app.include_router(class_targets.router,   prefix=f"{PREFIX}/portfolios",   tags=["class-targets"])
 app.include_router(goals.router,           prefix=f"{PREFIX}/portfolios",   tags=["goals"])
 
-# Dados de mercado
 app.include_router(assets.router,          prefix=f"{PREFIX}/assets",       tags=["assets"])
 app.include_router(fx.router,              prefix=f"{PREFIX}/fx",           tags=["fx"])
 app.include_router(quotes.router,          prefix=f"{PREFIX}/quotes",       tags=["quotes"])
 app.include_router(prices.router,          prefix=f"{PREFIX}/prices",       tags=["prices"])
 
-# Funcionalidades extras
 app.include_router(sync.router,            prefix=f"{PREFIX}/sync",         tags=["sync"])
 app.include_router(irpf.router,            prefix=f"{PREFIX}/irpf",         tags=["irpf"])
 app.include_router(analysis.router,        prefix=f"{PREFIX}/analysis",     tags=["analysis"])

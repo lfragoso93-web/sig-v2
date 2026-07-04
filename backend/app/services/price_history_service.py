@@ -203,7 +203,6 @@ async def _intl_stale_snapshot(
     Se encontrar, persiste como AssetPrice com source='stale_snapshot' para
     garantir que get_price_at_date nao retorne None e o frontend nao mostre zeros.
     """
-    # Camada 1: cache em memoria (stale)
     try:
         from app.services.quotes_service import _mem_get_stale
         stale_price = _mem_get_stale(ticker)
@@ -217,7 +216,6 @@ async def _intl_stale_snapshot(
     except Exception as e:
         logger.debug("[PriceHistory] _mem_get_stale indisponivel para %s: %s", ticker, e)
 
-    # Camada 2: Asset.last_price no banco
     try:
         result = await db.execute(
             select(Asset.last_price, Asset.last_price_updated_at)
@@ -226,7 +224,6 @@ async def _intl_stale_snapshot(
         row = result.first()
         if row and row.last_price and float(row.last_price) > 0:
             price = float(row.last_price)
-            # Usa o timestamp do ultimo preco salvo, ou agora se nao disponivel
             ts = row.last_price_updated_at or _now_utc()
             if ts.tzinfo is None:
                 ts = ts.replace(tzinfo=timezone.utc)
@@ -254,22 +251,13 @@ async def persist_daily_prices(
     ticker: str,
     asset_type: AssetType,
     days_back: int = 30,
-    force: bool = False,
+    force: bool = False
 ) -> int:
     """
     Busca e persiste apenas o delta desde o last_ts (incremental simples).
 
     Nao faz backfill historico completo — isso e responsabilidade de
     price_history_backfill_service.run_initial_backfill().
-
-    Usado por:
-      - scheduler diário (incremental)
-      - asset_onboarding (quando um novo ativo e adicionado pelo usuario)
-
-    force=True ignora o cooldown. Retorna 0 se em cooldown.
-
-    Para ativos INTL: se AV e yfinance falharem (YFRateLimitError ou similar),
-    tenta _intl_stale_snapshot() como ultimo recurso antes de desistir.
     """
     if asset_type in NO_QUOTE_TYPES:
         return 0
@@ -289,19 +277,16 @@ async def persist_daily_prices(
         if not force and delta < 1:
             _set_cooldown(ticker)
             return 0
-        # Incremental: busca apenas o delta + 1 dia de margem
         days_back = max(min(delta + 1, days_back), 2)
-    # else: sem dados — usa days_back como passado (default 30)
 
     date_to   = _now_utc().date().isoformat()
     date_from = (_now_utc().date() - timedelta(days=days_back)).isoformat()
 
-    rows:   list[tuple[datetime, float]] = []
-    source: str = ""
+    rows: list[tuple[datetime, float]] = []
+    source = ""
     is_intl = asset_type in INTL_TYPES
 
     if is_intl:
-        # --- Alpha Vantage (primario) ---
         try:
             from app.core.rate_limiter import alpha_vantage_limiter
             from app.integrations.alpha_vantage import fetch_daily_history
@@ -311,7 +296,6 @@ async def persist_daily_prices(
         except Exception as e:
             logger.warning("[PriceHistory] Alpha Vantage excecao para %s: %s", ticker, e)
 
-        # --- yfinance (fallback) ---
         if not rows:
             try:
                 rows = await _fetch_yf_history(ticker, asset_type, days_back)
@@ -319,7 +303,6 @@ async def persist_daily_prices(
             except Exception as e:
                 logger.warning("[PriceHistory] yfinance excecao para %s: %s", ticker, e)
 
-        # --- Stale snapshot (ultimo recurso — evita zeros no frontend) ---
         if not rows:
             rows = await _intl_stale_snapshot(db, ticker, asset_type)
             if rows:
@@ -329,26 +312,24 @@ async def persist_daily_prices(
         if brapi_known:
             try:
                 if asset_type == AssetType.FII:
-                    rows = await fetch_fii_historical_v2(
-                        ticker=ticker, date_from=date_from, date_to=date_to
-                    )
+                    rows = await fetch_fii_historical_v2(ticker=ticker, date_from=date_from, date_to=date_to)
                     source = "brapi_v2_fii"
                 else:
-                    rows = await fetch_stocks_historical_v2(
-                        ticker=ticker, date_from=date_from, date_to=date_to
-                    )
+                    rows = await fetch_stocks_historical_v2(ticker=ticker, date_from=date_from, date_to=date_to)
                     source = "brapi_v2_stocks"
             except Exception as e:
                 logger.warning("[PriceHistory] BRAPI v2 excecao para %s: %s", ticker, e)
 
-        if not rows:
+        # Para ativos BR conhecidos, não fazemos fallback para yfinance no
+        # incremental operacional. Se a janela BRAPI vier vazia, usamos snapshot
+        # BRAPI abaixo. Isso evita rate limit e ruído diário do yfinance.
+        if not rows and not brapi_known:
             try:
                 rows = await _fetch_yf_history(ticker, asset_type, days_back)
                 source = "yfinance_fallback"
             except Exception as e:
                 logger.warning("[PriceHistory] yfinance excecao para %s: %s", ticker, e)
 
-    # Snapshot BRAPI como ultimo recurso para BR
     if not rows and not is_intl:
         try:
             from app.integrations.brapi import fetch_quotes as brapi_fetch_quotes
@@ -428,125 +409,30 @@ async def get_price_at_date(
     price_row = rows.scalar_one_or_none()
 
     if not price_row:
-        logger.warning(
-            "[PriceHistory] get_price_at_date: sem preço para %s em %s "
-            "(janela %s a %s)",
-            ticker, target_date, since.date(), until.date()
-        )
+        logger.warning("[PriceHistory] preco nao encontrado para %s em %s", ticker, target_date)
         return None
 
     return float(price_row.close)
 
 
-async def get_prices_at_date_batch(
-    db: AsyncSession,
-    tickers_with_types: list[tuple[str, AssetType]],
-    target_date: str,
-) -> dict[str, Optional[float]]:
-    """
-    Versão otimizada de get_price_at_date que carrega preços para múltiplos
-    tickers de uma vez, evitando queries N+1.
-
-    Args:
-        tickers_with_types: Lista de tuplas (ticker, asset_type)
-        target_date: Data alvo no formato YYYY-MM-DD
-
-    Returns:
-        Dicionário {ticker: price} onde price pode ser None se não encontrado
-    """
-    if not tickers_with_types:
-        return {}
-
-    ref = _parse_date_utc(target_date)
-    since = ref - timedelta(days=5)
-    until = ref + timedelta(hours=23, minutes=59, seconds=59)
-
-    tickers = [t[0] for t in tickers_with_types]
-
-    # Carrega todos os assets de uma vez
-    assets_result = await db.execute(
-        select(Asset.id, Asset.ticker)
-        .where(Asset.ticker.in_(tickers))
-    )
-    asset_map = {row.ticker: row.id for row in assets_result.all()}
-
-    # Carrega todos os preços de uma vez
-    asset_ids = list(asset_map.values())
-    if not asset_ids:
-        return {t: None for t in tickers}
-
-    # Subquery para pegar o preço mais recente de cada asset
-    from sqlalchemy import and_
-
-    prices_result = await db.execute(
-        select(AssetPrice.asset_id, AssetPrice.close, AssetPrice.timestamp)
-        .where(
-            and_(
-                AssetPrice.asset_id.in_(asset_ids),
-                AssetPrice.timestamp >= since,
-                AssetPrice.timestamp <= until,
-            )
-        )
-        .order_by(AssetPrice.asset_id, AssetPrice.timestamp.desc())
-    )
-
-    # Agrupa por asset_id e pega o mais recente
-    price_map: dict[int, float] = {}
-    for row in prices_result.all():
-        if row.asset_id not in price_map:
-            price_map[row.asset_id] = float(row.close)
-
-    # Mapeia de volta para ticker
-    result = {}
-    for ticker in tickers:
-        asset_id = asset_map.get(ticker)
-        if asset_id and asset_id in price_map:
-            result[ticker] = price_map[asset_id]
-        else:
-            result[ticker] = None
-            logger.warning(
-                "[PriceHistory] get_prices_at_date_batch: sem preço para %s em %s",
-                ticker, target_date
-            )
-
-    return result
-
-
-# ---------------------------------------------------------------------------
-# get_price_history — SOMENTE LEITURA DO BANCO
-# ---------------------------------------------------------------------------
-
 async def get_price_history(
     db: AsyncSession,
     ticker: str,
     asset_type: AssetType,
-    days: int = 90,
+    days: int = 365,
 ) -> list[dict]:
-    """
-    Retorna o histórico de preços dos ultimos `days` dias para o ticker.
-
-    Leitura pura do banco — nunca dispara API.
-    Se o banco nao tiver dados, retorna lista vazia.
-    """
+    cutoff = _now_utc() - timedelta(days=days)
     asset_result = await db.execute(select(Asset).where(Asset.ticker == ticker))
     asset = asset_result.scalar_one_or_none()
-
-    if asset is None:
-        logger.warning(
-            "[PriceHistory] get_price_history: asset %s nao encontrado no banco",
-            ticker
-        )
+    if not asset:
         return []
 
-    since = _now_utc() - timedelta(days=days)
-    rows_result = await db.execute(
+    rows = await db.execute(
         select(AssetPrice)
-        .where(AssetPrice.asset_id == asset.id, AssetPrice.timestamp >= since)
+        .where(AssetPrice.asset_id == asset.id, AssetPrice.timestamp >= cutoff)
         .order_by(AssetPrice.timestamp.asc())
     )
-    prices = rows_result.scalars().all()
-
     return [
-        {"date": p.timestamp.strftime("%Y-%m-%d"), "close": float(p.close)}
-        for p in prices
+        {"timestamp": r.timestamp, "close": float(r.close), "source": r.source}
+        for r in rows.scalars().all()
     ]
