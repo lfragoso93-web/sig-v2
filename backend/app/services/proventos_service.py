@@ -23,16 +23,11 @@ logger = logging.getLogger(__name__)
 _AUTO_MATERIALIZE_TTL_SECONDS = 60.0
 _auto_materialize_cache: dict[int, float] = {}
 
-_CASH_DIVIDEND_TYPES = (
-    DividendType.DIVIDENDO,
-    DividendType.JCP,
-    DividendType.RENDIMENTO,
-    DividendType.AMORTIZACAO,
-)
 _NON_CASH_DIVIDEND_TYPES = (
     DividendType.BONIFICACAO,
     DividendType.SUBSCRICAO,
 )
+_NON_CASH_DIVIDEND_VALUES = tuple(t.value for t in _NON_CASH_DIVIDEND_TYPES)
 
 
 def _first_buy_subquery():
@@ -49,7 +44,24 @@ def _first_buy_subquery():
 
 
 def _cash_type_filter():
-    return AssetDividend.dividend_type.in_(_CASH_DIVIDEND_TYPES)
+    """Eventos financeiros são todos exceto bonificação/subscrição.
+
+    A regra por exclusão preserva dados antigos ou parcialmente classificados,
+    evitando zerar cards quando a origem usa tipos não previstos.
+    """
+    return or_(
+        AssetDividend.dividend_type.is_(None),
+        AssetDividend.dividend_type.notin_(_NON_CASH_DIVIDEND_VALUES),
+    )
+
+
+def _non_cash_type_filter():
+    return AssetDividend.dividend_type.in_(_NON_CASH_DIVIDEND_VALUES)
+
+
+def _is_cash_type(value) -> bool:
+    raw = value.value if hasattr(value, "value") else str(value or "")
+    return raw not in _NON_CASH_DIVIDEND_VALUES
 
 
 def _year_filter(year: int):
@@ -169,7 +181,7 @@ async def _count_non_cash(db: AsyncSession, portfolio_id: int) -> int:
         .join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
         .where(
             Dividend.portfolio_id == portfolio_id,
-            AssetDividend.dividend_type.in_(_NON_CASH_DIVIDEND_TYPES),
+            _non_cash_type_filter(),
         )
     )
     res = await db.execute(stmt)
@@ -297,7 +309,7 @@ async def list_items(
             "ticker": row.ticker,
             "asset_type": row.asset_type,
             "dividend_type": row.dividend_type,
-            "is_cash": row.dividend_type in _CASH_DIVIDEND_TYPES,
+            "is_cash": _is_cash_type(row.dividend_type),
             "record_date": row.record_date,
             "ex_date": row.ex_date,
             "payment_date": row.payment_date,
