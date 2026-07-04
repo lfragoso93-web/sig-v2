@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.models.dividend import DividendStatus
+from app.models.dividend import DividendStatus, DividendType
 from app.models.portfolio import Portfolio
 from app.models.user import User
 from app.services.proventos_service import (
@@ -46,6 +46,25 @@ async def _prepare_proventos(portfolio_id: int, user: User, db: AsyncSession) ->
     await ensure_portfolio_proventos(db, portfolio_id)
 
 
+def _parse_status(status: Optional[str]) -> Optional[DividendStatus]:
+    if not status:
+        return None
+    try:
+        return DividendStatus(status.upper())
+    except ValueError:
+        raise HTTPException(status_code=422, detail=f"Status invalido: '{status}'. Use RECEBIDO ou A_RECEBER.")
+
+
+def _parse_dividend_type(dividend_type: Optional[str]) -> Optional[DividendType]:
+    if not dividend_type:
+        return None
+    try:
+        return DividendType(dividend_type.upper())
+    except ValueError:
+        valid = ", ".join(t.value for t in DividendType)
+        raise HTTPException(status_code=422, detail=f"Tipo de provento invalido: '{dividend_type}'. Use um de: {valid}.")
+
+
 @router.get("/summary")
 async def proventos_summary(
     portfolio_id: int,
@@ -60,8 +79,9 @@ async def proventos_summary(
 async def list_proventos(
     portfolio_id: int,
     status: Optional[str] = Query(None, description="Filtrar por status: RECEBIDO | A_RECEBER"),
-    year: Optional[int] = Query(None, description="Filtrar por ano da data de pagamento"),
+    year: Optional[int] = Query(None, description="Filtrar por ano da data de pagamento ou Data Ex"),
     asset_type: Optional[str] = Query(None, description="Filtrar por tipo de ativo"),
+    dividend_type: Optional[str] = Query(None, description="Filtrar por tipo de provento/evento"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
@@ -69,14 +89,16 @@ async def list_proventos(
 ):
     await _prepare_proventos(portfolio_id, current_user, db)
 
-    status_enum: Optional[DividendStatus] = None
-    if status:
-        try:
-            status_enum = DividendStatus(status.upper())
-        except ValueError:
-            raise HTTPException(status_code=422, detail=f"Status invalido: '{status}'. Use RECEBIDO ou A_RECEBER.")
-
-    return await list_items(db, portfolio_id, status=status_enum, year=year, asset_type=asset_type, page=page, page_size=page_size)
+    return await list_items(
+        db,
+        portfolio_id,
+        status=_parse_status(status),
+        year=year,
+        asset_type=asset_type,
+        dividend_type=_parse_dividend_type(dividend_type),
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.get("/historico-mensal")
@@ -84,19 +106,19 @@ async def proventos_historico_mensal(
     portfolio_id: int,
     status: Optional[str] = Query(None, description="RECEBIDO | A_RECEBER"),
     asset_type: Optional[str] = Query(None),
+    dividend_type: Optional[str] = Query(None, description="Filtrar por tipo de provento financeiro"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     await _prepare_proventos(portfolio_id, current_user, db)
 
-    status_enum: Optional[DividendStatus] = None
-    if status:
-        try:
-            status_enum = DividendStatus(status.upper())
-        except ValueError:
-            raise HTTPException(status_code=422, detail=f"Status invalido: '{status}'. Use RECEBIDO ou A_RECEBER.")
-
-    return await get_monthly_history(db, portfolio_id, status=status_enum, asset_type=asset_type)
+    return await get_monthly_history(
+        db,
+        portfolio_id,
+        status=_parse_status(status),
+        asset_type=asset_type,
+        dividend_type=_parse_dividend_type(dividend_type),
+    )
 
 
 @router.get("/distribuicao")
