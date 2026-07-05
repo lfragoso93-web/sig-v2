@@ -1,0 +1,148 @@
+@layer components {
+  .settings-page {
+    max-width: min(980px, 100%);
+  }
+
+  .settings-content {
+    margin-top: 0.25rem;
+  }
+
+  .settings-card {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(0.875rem, 1vw, 1.25rem);
+    padding: clamp(1rem, 1.6vw, 1.5rem);
+  }
+
+  .settings-tabs {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.25rem;
+    border-radius: var(--radius-xl);
+    padding: 0.25rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .settings-tab {
+    min-height: 2.35rem;
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    border-radius: var(--radius-lg);
+    padding: 0.55rem 0.75rem;
+    font-size: var(--text-xs);
+    transition: background var(--transition-interactive), color var(--transition-interactive), box-shadow var(--transition-interactive);
+  }
+
+  .settings-profile-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    min-width: 0;
+  }
+
+  .settings-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+    gap: 0.875rem;
+  }
+
+  .settings-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    min-width: 0;
+  }
+
+  .settings-action {
+    align-self: flex-start;
+  }
+
+  .settings-list-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.625rem;
+    border-radius: var(--radius-lg);
+    padding: 0.75rem 0.875rem;
+    min-width: 0;
+  }
+
+  .settings-icon-button {
+    width: 2rem;
+    height: 2rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-md);
+    flex-shrink: 0;
+    transition: background var(--transition-interactive), color var(--transition-interactive);
+  }
+
+  .settings-icon-button:hover:not(:disabled) {
+    background: oklch(from var(--color-text) l c h / 0.06);
+  }
+
+  .settings-inline-form {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    min-width: 0;
+  }
+
+  @media (min-width: 1440px) {
+    .settings-page {
+      max-width: min(1080px, 100%);
+    }
+  }
+
+  @media (max-width: 720px) {
+    .settings-page {
+      max-width: 100%;
+    }
+
+    .settings-tabs {
+      grid-template-columns: repeat(4, max-content);
+      padding-bottom: 0.35rem;
+    }
+
+    .settings-tab {
+      min-width: 7rem;
+      padding-inline: 0.875rem;
+    }
+
+    .settings-profile-header {
+      align-items: flex-start;
+    }
+
+    .settings-inline-form {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .settings-inline-form .btn {
+      width: 100%;
+    }
+
+    .settings-action {
+      width: 100%;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .settings-card {
+      padding: 0.875rem;
+    }
+
+    .settings-profile-header {
+      gap: 0.75rem;
+    }
+
+    .settings-list-row {
+      padding: 0.7rem 0.75rem;
+    }
+  }
+}

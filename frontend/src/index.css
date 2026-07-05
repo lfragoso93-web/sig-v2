@@ -6,6 +6,7 @@
 @import "./styles/table-overrides.css";
 @import "./styles/proventos-responsive.css";
 @import "./styles/responsive-polish.css";
+@import "./styles/settings-responsive.css";
 
 /*
   ── Tailwind v4: @theme ─────────────────────────────────────────────
