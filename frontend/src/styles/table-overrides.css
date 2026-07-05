@@ -1,0 +1,47 @@
+@layer components {
+  .card .overflow-x-auto,
+  .table-responsive {
+    padding-inline: 0.25rem;
+  }
+
+  .card .overflow-x-auto table,
+  .table-responsive table,
+  .positions-table {
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  .card .overflow-x-auto table th,
+  .card .overflow-x-auto table td,
+  .table-responsive table th,
+  .table-responsive table td,
+  .positions-table th,
+  .positions-table td {
+    padding-left: clamp(1.125rem, 1.35vw, 1.5rem) !important;
+    padding-right: clamp(1.125rem, 1.35vw, 1.5rem) !important;
+  }
+
+  .card .overflow-x-auto table th:first-child,
+  .card .overflow-x-auto table td:first-child,
+  .table-responsive table th:first-child,
+  .table-responsive table td:first-child,
+  .positions-table th:first-child,
+  .positions-table td:first-child {
+    padding-left: clamp(1.35rem, 2vw, 2rem) !important;
+  }
+
+  .card .overflow-x-auto table th:last-child,
+  .card .overflow-x-auto table td:last-child,
+  .table-responsive table th:last-child,
+  .table-responsive table td:last-child,
+  .positions-table th:last-child,
+  .positions-table td:last-child {
+    padding-right: clamp(1.35rem, 2vw, 2rem) !important;
+  }
+
+  .card .overflow-x-auto table th,
+  .table-responsive table th,
+  .positions-table th {
+    white-space: nowrap;
+  }
+}

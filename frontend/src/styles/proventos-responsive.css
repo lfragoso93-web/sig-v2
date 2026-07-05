@@ -1,0 +1,117 @@
+@layer components {
+  .proventos-page {
+    container-type: inline-size;
+  }
+
+  .proventos-kpi-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+  }
+
+  .proventos-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: clamp(0.875rem, 1vw, 1.25rem);
+    align-items: start;
+  }
+
+  .proventos-layout.has-distribution {
+    grid-template-columns: minmax(280px, clamp(300px, 22vw, 420px)) minmax(0, 1fr);
+  }
+
+  .proventos-distribution-card {
+    min-width: 0;
+  }
+
+  .proventos-content {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(0.875rem, 1vw, 1.25rem);
+  }
+
+  .proventos-filter-bar {
+    width: 100%;
+  }
+
+  .proventos-select {
+    width: clamp(180px, 14vw, 240px) !important;
+    min-width: 0;
+  }
+
+  .proventos-table-card {
+    min-width: 0;
+  }
+
+  .proventos-table-wrap {
+    min-width: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .proventos-table-wrap table {
+    width: 100%;
+  }
+
+  .proventos-table-wrap th,
+  .proventos-table-wrap td {
+    padding-left: clamp(0.75rem, 0.85vw, 1.25rem) !important;
+    padding-right: clamp(0.75rem, 0.85vw, 1.25rem) !important;
+    white-space: nowrap;
+  }
+
+  .proventos-table-wrap th:first-child,
+  .proventos-table-wrap td:first-child {
+    padding-left: clamp(1rem, 1.2vw, 1.5rem) !important;
+  }
+
+  .proventos-table-wrap th:last-child,
+  .proventos-table-wrap td:last-child {
+    padding-right: clamp(1rem, 1.2vw, 1.5rem) !important;
+  }
+
+  @media (min-width: 1800px) {
+    .proventos-layout.has-distribution {
+      grid-template-columns: minmax(340px, 440px) minmax(0, 1fr);
+    }
+
+    .proventos-table-wrap th,
+    .proventos-table-wrap td {
+      padding-left: clamp(1rem, 0.9vw, 1.6rem) !important;
+      padding-right: clamp(1rem, 0.9vw, 1.6rem) !important;
+    }
+  }
+
+  @media (max-width: 1360px) {
+    .proventos-layout.has-distribution {
+      grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+    }
+  }
+
+  @media (max-width: 1180px) {
+    .proventos-layout.has-distribution {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .proventos-distribution-card {
+      max-width: none;
+    }
+  }
+
+  @media (max-width: 720px) {
+    .proventos-filter-bar {
+      align-items: stretch;
+    }
+
+    .proventos-filter-bar > * {
+      width: 100%;
+    }
+
+    .proventos-select {
+      width: 100% !important;
+    }
+
+    .proventos-table-wrap {
+      padding-inline: 0.25rem;
+    }
+  }
+}

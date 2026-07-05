@@ -23,18 +23,15 @@ export default function AppLayout() {
       style={{
         display:       'flex',
         flexDirection: 'column',
+        minHeight:     '100dvh',
         height:        '100dvh',
         overflow:      'hidden',
         background:    'var(--color-bg)',
       }}
     >
-      {/* Topbar */}
       <Topbar />
 
-      {/* Body: sidebar + main */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
-
-        {/* Overlay mobile */}
+      <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
         {sidebarOpen && (
           <div
             ref={overlayRef}
@@ -48,19 +45,14 @@ export default function AppLayout() {
           />
         )}
 
-        {/* Sidebar */}
         <Sidebar />
 
-        {/* Main content */}
-        {/* pb-[calc(60px+env(safe-area-inset-bottom))] garante que o conteúdo
-            não fique escondido sob o BottomNav em mobile.
-            Em desktop (lg+) o BottomNav não renderiza, então o padding é 0. */}
         <main
           style={{
             flex:       1,
             minWidth:   0,
             overflowY:  'auto',
-            overflowX:  'hidden',
+            overflowX:  'clip',
             height:     '100%',
             background: 'var(--color-bg)',
           }}
@@ -70,10 +62,8 @@ export default function AppLayout() {
         </main>
       </div>
 
-      {/* Bottom navigation — visível apenas em mobile (lg:hidden no próprio componente) */}
       <BottomNav />
 
-      {/* Modal global de transação */}
       {transactionModal.open && (
         <AddTransactionModal onClose={closeTransactionModal} />
       )}
