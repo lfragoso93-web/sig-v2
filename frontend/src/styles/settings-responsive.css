@@ -122,11 +122,32 @@
     border: 1px solid oklch(from var(--color-text) l c h / 0.08);
     border-radius: clamp(var(--radius-xl), 2vw, 1.5rem);
     box-shadow: var(--shadow-lg);
-    padding: clamp(1.25rem, 4vw, 2rem);
+    padding: clamp(1.75rem, 4vw, 2.5rem) !important;
+  }
+
+  .auth-card:has(> .min-h-screen) {
+    padding: 0 !important;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+  }
+
+  .auth-card:has(> .min-h-screen) > .min-h-screen {
+    min-height: auto !important;
+    display: block !important;
+    background: transparent !important;
+  }
+
+  .auth-card:has(> .min-h-screen) > .min-h-screen > .w-full {
+    margin-inline: auto;
+  }
+
+  .auth-card:has(> .min-h-screen) label {
+    padding-left: 0.25rem;
   }
 
   .auth-card form {
-    gap: clamp(0.875rem, 2vw, 1.25rem) !important;
+    gap: clamp(1rem, 2vw, 1.35rem) !important;
   }
 
   .auth-card input,
@@ -201,6 +222,7 @@
 
     .auth-card {
       border-radius: var(--radius-xl);
+      padding: 1.5rem !important;
     }
   }
 
