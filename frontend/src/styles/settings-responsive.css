@@ -93,9 +93,66 @@
     min-width: 0;
   }
 
+  .auth-shell {
+    min-height: 100dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(1.25rem, 3vw, 3rem) clamp(1rem, 3vw, 2rem);
+    background: var(--color-bg);
+  }
+
+  .auth-panel {
+    width: min(100%, 430px);
+    display: flex;
+    flex-direction: column;
+    gap: clamp(1rem, 2vw, 1.5rem);
+  }
+
+  .auth-brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.875rem;
+    text-align: center;
+  }
+
+  .auth-card {
+    background: var(--color-surface);
+    border: 1px solid oklch(from var(--color-text) l c h / 0.08);
+    border-radius: clamp(var(--radius-xl), 2vw, 1.5rem);
+    box-shadow: var(--shadow-lg);
+    padding: clamp(1.25rem, 4vw, 2rem);
+  }
+
+  .auth-card form {
+    gap: clamp(0.875rem, 2vw, 1.25rem) !important;
+  }
+
+  .auth-card input,
+  .auth-card select,
+  .auth-card textarea {
+    min-height: 2.75rem;
+  }
+
+  .auth-card .btn {
+    min-height: 2.75rem;
+  }
+
+  .auth-footer-note {
+    text-align: center;
+    margin: 0;
+    font-size: var(--text-xs);
+    color: var(--color-text-faint);
+  }
+
   @media (min-width: 1440px) {
     .settings-page {
       max-width: min(1080px, 100%);
+    }
+
+    .auth-panel {
+      width: min(100%, 460px);
     }
   }
 
@@ -129,6 +186,21 @@
 
     .settings-action {
       width: 100%;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .auth-shell {
+      align-items: stretch;
+      justify-content: flex-start;
+    }
+
+    .auth-panel {
+      width: 100%;
+    }
+
+    .auth-card {
+      border-radius: var(--radius-xl);
     }
   }
 
