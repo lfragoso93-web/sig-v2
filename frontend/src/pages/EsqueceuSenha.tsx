@@ -20,6 +20,32 @@ const resetSchema = z.object({
 type EmailForm = z.infer<typeof emailSchema>
 type ResetForm = z.infer<typeof resetSchema>
 
+const titleStyle: React.CSSProperties = {
+  fontSize: 'var(--text-lg)',
+  fontWeight: 650,
+  color: 'var(--color-text)',
+  margin: 0,
+  letterSpacing: '-0.01em',
+}
+
+const subtitleStyle: React.CSSProperties = {
+  fontSize: 'var(--text-xs)',
+  color: 'var(--color-text-muted)',
+  margin: '0.25rem 0 0',
+}
+
+const labelStyle: React.CSSProperties = {
+  fontSize: 'var(--text-xs)',
+  fontWeight: 500,
+  color: 'var(--color-text-muted)',
+}
+
+const errorStyle: React.CSSProperties = {
+  fontSize: 'var(--text-xs)',
+  color: 'var(--color-error)',
+  margin: '0.25rem 0 0',
+}
+
 export default function EsqueceuSenha() {
   const [step, setStep] = useState<'email' | 'reset' | 'done'>('email')
   const [resetToken, setResetToken] = useState('')
@@ -49,99 +75,74 @@ export default function EsqueceuSenha() {
     }
   }
 
-  const cardCls = "w-full max-w-sm rounded-xl p-8 shadow-lg"
-  const cardStyle = { background: 'var(--color-surface)', border: '1px solid var(--color-border)' }
-  const wrapCls = "min-h-screen flex items-center justify-center"
-  const wrapStyle = { background: 'var(--color-bg)' }
+  if (step === 'email') {
+    return (
+      <form onSubmit={emailForm.handleSubmit(onRequestReset)} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+        <div style={{ marginBottom: '0.25rem' }}>
+          <h2 style={titleStyle}>Recuperar senha</h2>
+          <p style={subtitleStyle}>Informe seu e-mail para receber as instruções.</p>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+          <label style={labelStyle}>E-mail</label>
+          <input
+            {...emailForm.register('email')}
+            type="email"
+            autoFocus
+            placeholder="seu@email.com"
+            className="input w-full"
+          />
+          {emailForm.formState.errors.email && <p style={errorStyle}>{emailForm.formState.errors.email.message}</p>}
+        </div>
+
+        {emailForm.formState.errors.root && <p style={errorStyle}>{emailForm.formState.errors.root.message}</p>}
+
+        <button type="submit" disabled={emailForm.formState.isSubmitting} className="btn btn-primary w-full" style={{ fontWeight: 600, marginTop: '0.25rem' }}>
+          {emailForm.formState.isSubmitting ? 'Enviando...' : 'Enviar instruções'}
+        </button>
+
+        <p style={{ fontSize: 'var(--text-xs)', textAlign: 'center', color: 'var(--color-text-muted)', margin: 0 }}>
+          Lembrou? <Link to="/auth/login" className="hover:underline" style={{ color: 'var(--color-primary)' }}>Entrar</Link>
+        </p>
+      </form>
+    )
+  }
+
+  if (step === 'reset') {
+    return (
+      <form onSubmit={resetForm.handleSubmit(onResetPassword)} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+        <div style={{ marginBottom: '0.25rem' }}>
+          <h2 style={titleStyle}>Nova senha</h2>
+          <p style={subtitleStyle}>Defina uma nova senha para <strong>{emailSent}</strong>.</p>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+          <label style={labelStyle}>Nova senha</label>
+          <input {...resetForm.register('new_password')} type="password" autoFocus className="input w-full" />
+          {resetForm.formState.errors.new_password && <p style={errorStyle}>{resetForm.formState.errors.new_password.message}</p>}
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+          <label style={labelStyle}>Confirmar senha</label>
+          <input {...resetForm.register('confirm_password')} type="password" className="input w-full" />
+          {resetForm.formState.errors.confirm_password && <p style={errorStyle}>{resetForm.formState.errors.confirm_password.message}</p>}
+        </div>
+
+        {resetForm.formState.errors.root && <p style={errorStyle}>{resetForm.formState.errors.root.message}</p>}
+
+        <button type="submit" disabled={resetForm.formState.isSubmitting} className="btn btn-primary w-full" style={{ fontWeight: 600, marginTop: '0.25rem' }}>
+          {resetForm.formState.isSubmitting ? 'Salvando...' : 'Salvar nova senha'}
+        </button>
+      </form>
+    )
+  }
 
   return (
-    <div className={wrapCls} style={wrapStyle}>
-      <div className={cardCls} style={cardStyle}>
-
-        {step === 'email' && (
-          <>
-            <h1 className="text-xl font-bold mb-1 text-center">Recuperar senha</h1>
-            <p className="text-sm text-center mb-6" style={{ color: 'var(--color-text-muted)' }}>
-              Informe seu e-mail para receber as instruções.
-            </p>
-            <form onSubmit={emailForm.handleSubmit(onRequestReset)} className="space-y-4">
-              <div>
-                <label className="block text-sm mb-1" style={{ color: 'var(--color-text-muted)' }}>E-mail</label>
-                <input
-                  {...emailForm.register('email')}
-                  type="email"
-                  autoFocus
-                  placeholder="seu@email.com"
-                  className="input w-full"
-                />
-                {emailForm.formState.errors.email && (
-                  <p className="text-xs mt-1" style={{ color: 'var(--color-error)' }}>{emailForm.formState.errors.email.message}</p>
-                )}
-              </div>
-              {emailForm.formState.errors.root && (
-                <p className="text-sm text-center" style={{ color: 'var(--color-error)' }}>{emailForm.formState.errors.root.message}</p>
-              )}
-              <button
-                type="submit"
-                disabled={emailForm.formState.isSubmitting}
-                className="btn btn-primary w-full py-2 font-semibold"
-              >
-                {emailForm.formState.isSubmitting ? 'Enviando...' : 'Enviar instruções'}
-              </button>
-              <p className="text-center text-sm" style={{ color: 'var(--color-text-muted)' }}>
-                Lembrou?{' '}
-                <Link to="/auth/login" className="hover:underline" style={{ color: 'var(--color-primary)' }}>Entrar</Link>
-              </p>
-            </form>
-          </>
-        )}
-
-        {step === 'reset' && (
-          <>
-            <h1 className="text-xl font-bold mb-1 text-center">Nova senha</h1>
-            <p className="text-sm text-center mb-6" style={{ color: 'var(--color-text-muted)' }}>
-              Defina uma nova senha para <strong>{emailSent}</strong>.
-            </p>
-            <form onSubmit={resetForm.handleSubmit(onResetPassword)} className="space-y-4">
-              <div>
-                <label className="block text-sm mb-1" style={{ color: 'var(--color-text-muted)' }}>Nova senha</label>
-                <input {...resetForm.register('new_password')} type="password" autoFocus className="input w-full" />
-                {resetForm.formState.errors.new_password && (
-                  <p className="text-xs mt-1" style={{ color: 'var(--color-error)' }}>{resetForm.formState.errors.new_password.message}</p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm mb-1" style={{ color: 'var(--color-text-muted)' }}>Confirmar senha</label>
-                <input {...resetForm.register('confirm_password')} type="password" className="input w-full" />
-                {resetForm.formState.errors.confirm_password && (
-                  <p className="text-xs mt-1" style={{ color: 'var(--color-error)' }}>{resetForm.formState.errors.confirm_password.message}</p>
-                )}
-              </div>
-              {resetForm.formState.errors.root && (
-                <p className="text-sm text-center" style={{ color: 'var(--color-error)' }}>{resetForm.formState.errors.root.message}</p>
-              )}
-              <button
-                type="submit"
-                disabled={resetForm.formState.isSubmitting}
-                className="btn btn-primary w-full py-2 font-semibold"
-              >
-                {resetForm.formState.isSubmitting ? 'Salvando...' : 'Salvar nova senha'}
-              </button>
-            </form>
-          </>
-        )}
-
-        {step === 'done' && (
-          <div className="text-center space-y-4">
-            <div className="text-4xl">✅</div>
-            <h1 className="text-xl font-bold">Senha alterada!</h1>
-            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Sua senha foi redefinida com sucesso.</p>
-            <Link to="/auth/login" className="btn btn-primary block w-full py-2 font-semibold text-center">
-              Ir para o login
-            </Link>
-          </div>
-        )}
-      </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', textAlign: 'center' }}>
+      <div className="text-4xl">✅</div>
+      <h2 style={{ ...titleStyle, textAlign: 'center' }}>Senha alterada!</h2>
+      <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', margin: 0 }}>Sua senha foi redefinida com sucesso.</p>
+      <Link to="/auth/login" className="btn btn-primary block w-full font-semibold text-center">Ir para o login</Link>
     </div>
   )
 }

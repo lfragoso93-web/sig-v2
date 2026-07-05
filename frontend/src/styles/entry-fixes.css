@@ -1,0 +1,66 @@
+.auth-panel .auth-card:has(> .min-h-screen) {
+  padding: clamp(2.25rem, 4vw, 2.75rem) !important;
+  background: var(--color-surface) !important;
+  border: 1px solid oklch(from var(--color-text) l c h / 0.08) !important;
+  border-radius: clamp(var(--radius-xl), 2vw, 1.5rem) !important;
+  box-shadow: var(--shadow-lg) !important;
+}
+
+.auth-panel .auth-card:has(> .min-h-screen) > .min-h-screen {
+  min-height: auto !important;
+  display: block !important;
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+.auth-panel .auth-card:has(> .min-h-screen) > .min-h-screen > .w-full {
+  width: 100% !important;
+  max-width: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.auth-panel .auth-card:has(> .min-h-screen) h1 {
+  text-align: left !important;
+  font-size: var(--text-lg) !important;
+  font-weight: 650 !important;
+  letter-spacing: -0.01em !important;
+  margin: 0 0 0.25rem !important;
+  color: var(--color-text) !important;
+}
+
+.auth-panel .auth-card:has(> .min-h-screen) p {
+  text-align: left !important;
+}
+
+.auth-panel .auth-card:has(> .min-h-screen) form {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: clamp(1rem, 2vw, 1.35rem) !important;
+  margin-top: 1.25rem !important;
+}
+
+.auth-panel .auth-card:has(> .min-h-screen) label {
+  padding-left: 0 !important;
+  font-size: var(--text-xs) !important;
+  font-weight: 500 !important;
+}
+
+.auth-panel .auth-card:has(> .min-h-screen) input {
+  min-height: 2.75rem !important;
+}
+
+.auth-panel .auth-card:has(> .min-h-screen) .btn,
+.auth-panel .auth-card:has(> .min-h-screen) button[type="submit"] {
+  min-height: 2.75rem !important;
+}
+
+@media (max-width: 640px) {
+  .auth-panel .auth-card:has(> .min-h-screen) {
+    padding: 1.75rem !important;
+  }
+}
