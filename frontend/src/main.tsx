@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import { AuthProvider } from '@/contexts/AuthContext'
 import '@/index.css'
+import '@/styles/entry-fixes.css'
 
 // Layouts
 import AppLayout  from '@/components/layout/AppLayout'
