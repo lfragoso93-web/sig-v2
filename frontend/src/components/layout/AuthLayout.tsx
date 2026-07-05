@@ -7,38 +7,20 @@ export default function AuthLayout() {
   if (token) return <Navigate to="/carteira" replace />
 
   return (
-    <div
-      className="flex flex-col items-center justify-center px-4 py-12"
-      style={{
-        minHeight: '100dvh',
-        background: 'var(--color-bg)',
-      }}
-    >
-      <div className="w-full max-w-sm">
-
-        {/* ── Header com logo ─────────────────────────────── */}
-        <div className="flex flex-col items-center gap-5 mb-10">
-          <LogoSGI size={44} variant="auth" />
+    <div className="auth-shell">
+      <div className="auth-panel">
+        <div className="auth-brand">
+          <LogoSGI size={46} variant="auth" />
+          <p className="auth-brand-caption" style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+            Sistema de Gestão de Investimentos
+          </p>
         </div>
 
-        {/* ── Card de conteúdo (login/registro) ───────────── */}
-        <div
-          style={{
-            background:   'var(--color-surface)',
-            border:       '1px solid oklch(from var(--color-text) l c h / 0.08)',
-            borderRadius: 'var(--radius-xl)',
-            boxShadow:    'var(--shadow-md)',
-            padding:      'clamp(1.5rem, 5vw, 2rem)',
-          }}
-        >
+        <div className="auth-card">
           <Outlet />
         </div>
 
-        {/* ── Rodapé discreto ─────────────────────────────── */}
-        <p
-          className="text-center mt-6"
-          style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-faint)' }}
-        >
+        <p className="auth-footer-note">
           SIG v2 &mdash; Uso interno
         </p>
       </div>
