@@ -77,8 +77,29 @@
   font-weight: 650 !important;
 }
 
+.section-card-header {
+  padding: clamp(1rem, 1.35vw, 1.35rem) clamp(1.25rem, 1.9vw, 1.875rem) !important;
+  min-height: 3.5rem;
+}
+
+.section-card-title {
+  font-size: clamp(var(--text-sm), 0.9vw, var(--text-base)) !important;
+  font-weight: 650 !important;
+}
+
+.filter-bar {
+  padding: clamp(0.75rem, 1.15vw, 1rem) !important;
+  gap: clamp(0.625rem, 1vw, 0.875rem) !important;
+  border-radius: clamp(var(--radius-xl), 1.4vw, 1.5rem) !important;
+}
+
 @media (max-width: 640px) {
   .auth-panel .auth-card:has(> .min-h-screen) {
     padding: 1.75rem !important;
+  }
+
+  .section-card-header {
+    padding: 0.95rem 1.125rem !important;
+    min-height: auto;
   }
 }
