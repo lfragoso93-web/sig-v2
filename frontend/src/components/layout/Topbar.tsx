@@ -43,25 +43,24 @@ function PortfolioSelector() {
     }
   }
 
-  // Sem carteiras: mostra botão para criar
   if (!portfolios.length) {
     return (
       <>
         <button
           onClick={() => setShowCreate(true)}
           style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '5px 10px', height: 32,
+            display: 'flex', alignItems: 'center', gap: 7,
+            padding: '0 12px', height: 36,
             borderRadius: 'var(--radius-lg)',
             border: '1px dashed oklch(from var(--color-primary) l c h / 0.4)',
             background: 'oklch(from var(--color-primary) l c h / 0.06)',
             color: 'var(--color-primary)',
-            fontSize: 'var(--text-xs)', fontWeight: 550,
+            fontSize: 'var(--text-xs)', fontWeight: 560,
             cursor: 'pointer',
           }}
           aria-label="Criar carteira"
         >
-          <Briefcase size={12} />
+          <Briefcase size={13} />
           <span>Criar carteira</span>
         </button>
         {showCreate && <CreatePortfolioModal onClose={() => setShowCreate(false)} />}
@@ -76,7 +75,7 @@ function PortfolioSelector() {
           onClick={() => { setDeleteError(null); setOpen(o => !o) }}
           className="flex items-center gap-2 rounded-lg transition-all"
           style={{
-            padding: '5px 10px', height: 32,
+            padding: '0 12px', height: 36,
             background: open
               ? 'oklch(from var(--color-primary) l c h / 0.1)'
               : 'oklch(from var(--color-text) l c h / 0.05)',
@@ -85,7 +84,7 @@ function PortfolioSelector() {
               : '1px solid oklch(from var(--color-text) l c h / 0.09)',
             color: 'var(--color-text)',
             transition: 'all 150ms cubic-bezier(0.16,1,0.3,1)',
-            maxWidth: 220,
+            maxWidth: 240,
           }}
           onMouseEnter={e => {
             if (!open) {
@@ -101,12 +100,12 @@ function PortfolioSelector() {
           }}
           aria-label="Selecionar carteira"
         >
-          <Briefcase size={12} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
-          <span className="truncate" style={{ fontSize: 'var(--text-xs)', fontWeight: 550, maxWidth: 140 }}>
+          <Briefcase size={13} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
+          <span className="truncate" style={{ fontSize: 'var(--text-xs)', fontWeight: 560, maxWidth: 155 }}>
             {selected?.name ?? 'Carteira'}
           </span>
           <ChevronDown
-            size={11}
+            size={12}
             style={{
               color: 'var(--color-text-muted)', flexShrink: 0,
               transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
@@ -119,12 +118,12 @@ function PortfolioSelector() {
           <div
             className="absolute left-0 z-50"
             style={{
-              top: 'calc(100% + 6px)', minWidth: 220,
+              top: 'calc(100% + 8px)', minWidth: 240,
               background: 'var(--color-surface-2)',
               border: '1px solid oklch(from var(--color-text) l c h / 0.08)',
               borderRadius: 'var(--radius-xl)',
               boxShadow: 'var(--shadow-lg)',
-              overflow: 'hidden', padding: 6,
+              overflow: 'hidden', padding: 7,
             }}
           >
             {portfolios.map(p => {
@@ -145,9 +144,9 @@ function PortfolioSelector() {
                     onClick={() => { setSelectedPortfolio(p.id); setOpen(false) }}
                     className="flex-1 min-w-0 flex items-center justify-between rounded-lg transition-all"
                     style={{
-                      padding: '7px 8px 7px 11px',
+                      padding: '8px 9px 8px 11px',
                       fontSize: 'var(--text-xs)',
-                      fontWeight: isSelected ? 550 : 400,
+                      fontWeight: isSelected ? 560 : 440,
                       color: isSelected ? 'var(--color-primary)' : 'var(--color-text)',
                       background: 'transparent',
                     }}
@@ -170,8 +169,8 @@ function PortfolioSelector() {
                     title="Excluir carteira"
                     aria-label={`Excluir carteira ${p.name}`}
                     style={{
-                      width: 26,
-                      height: 26,
+                      width: 28,
+                      height: 28,
                       display: 'inline-flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -200,7 +199,7 @@ function PortfolioSelector() {
 
             {deleteError && (
               <div style={{
-                margin: '4px 2px', padding: '6px 8px',
+                margin: '5px 2px', padding: '7px 8px',
                 borderRadius: 'var(--radius-md)',
                 background: 'oklch(from var(--color-notification) l c h / 0.1)',
                 color: 'var(--color-notification)',
@@ -211,19 +210,19 @@ function PortfolioSelector() {
               </div>
             )}
 
-            <div style={{ height: 1, background: 'oklch(from var(--color-text) l c h / 0.07)', margin: '4px 0' }} />
+            <div style={{ height: 1, background: 'oklch(from var(--color-text) l c h / 0.07)', margin: '5px 0' }} />
             <button
               onClick={() => { setOpen(false); setShowCreate(true) }}
               className="w-full flex items-center gap-2 rounded-lg"
               style={{
-                padding: '7px 11px',
-                fontSize: 'var(--text-xs)', fontWeight: 500,
+                padding: '8px 11px',
+                fontSize: 'var(--text-xs)', fontWeight: 540,
                 color: 'var(--color-primary)', background: 'transparent',
               }}
               onMouseEnter={e => (e.currentTarget.style.background = 'oklch(from var(--color-primary) l c h / 0.06)')}
               onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
             >
-              <Plus size={11} />
+              <Plus size={12} />
               Nova carteira
             </button>
           </div>
@@ -242,36 +241,34 @@ export default function Topbar() {
     <header
       className="flex items-center justify-between shrink-0"
       style={{
-        height: 'var(--topbar-height, 56px)',
-        padding: '0 clamp(1rem, 2vw, 1.5rem)',
-        gap: 12,
+        height: 'var(--topbar-height, 58px)',
+        padding: '0 clamp(1rem, 2.4vw, 1.75rem)',
+        gap: 14,
         background: 'var(--color-surface)',
         borderBottom: '1px solid oklch(from var(--color-text) l c h / 0.07)',
         boxShadow: '0 1px 4px oklch(0.18 0.01 80 / 0.05)',
         position: 'relative', zIndex: 30,
       }}
     >
-      {/* Esquerda */}
-      <div className="flex items-center min-w-0" style={{ gap: 10 }}>
+      <div className="flex items-center min-w-0" style={{ gap: 12 }}>
         <button onClick={toggleSidebar} className="lg:hidden btn-icon" aria-label="Abrir menu">
           <Menu size={18} />
         </button>
         <LogoSGI size={28} />
         <div
           className="hidden sm:block"
-          style={{ width: 1, height: 18, background: 'oklch(from var(--color-text) l c h / 0.1)', flexShrink: 0 }}
+          style={{ width: 1, height: 20, background: 'oklch(from var(--color-text) l c h / 0.1)', flexShrink: 0 }}
         />
         <div className="hidden sm:block">
           <PortfolioSelector />
         </div>
       </div>
 
-      {/* Direita */}
-      <div className="flex items-center shrink-0" style={{ gap: 6 }}>
+      <div className="flex items-center shrink-0" style={{ gap: 8 }}>
         <button
           onClick={() => openTransactionModal()}
           className="hidden sm:inline-flex items-center btn btn-primary"
-          style={{ height: 34, padding: '0 14px', fontSize: 'var(--text-xs)', fontWeight: 600, gap: 6,
+          style={{ height: 36, padding: '0 15px', fontSize: 'var(--text-xs)', fontWeight: 620, gap: 7,
             boxShadow: '0 1px 4px oklch(from var(--color-primary) 0.3 c h / 0.45)' }}
           aria-label="Novo lançamento"
         >
@@ -280,7 +277,7 @@ export default function Topbar() {
         </button>
         <div
           className="hidden sm:block"
-          style={{ width: 1, height: 20, background: 'oklch(from var(--color-text) l c h / 0.08)', margin: '0 4px', flexShrink: 0 }}
+          style={{ width: 1, height: 22, background: 'oklch(from var(--color-text) l c h / 0.08)', margin: '0 4px', flexShrink: 0 }}
         />
         <button
           onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
