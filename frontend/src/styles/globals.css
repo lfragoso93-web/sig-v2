@@ -52,7 +52,7 @@
 
   .page-container {
     width: 100%;
-    padding: clamp(1rem, 2vw, 2.25rem) clamp(1rem, 3vw, 3rem);
+    padding: clamp(1.5rem, 2.4vw, 2.75rem) clamp(1rem, 3vw, 3rem) clamp(1rem, 2vw, 2.25rem);
     max-width: min(1680px, 100%);
     margin-inline: auto;
     display: flex;
@@ -62,7 +62,7 @@
 
   @media (max-width: 640px) {
     .page-container {
-      padding: 0.875rem 0.875rem 1.25rem;
+      padding: 1.125rem 0.875rem 1.25rem;
       gap: 1rem;
     }
   }
