@@ -103,9 +103,6 @@ export default function ResumePage() {
   const { data: patrimonioHistory, isLoading: loadingHistory } = usePatrimonioHistory(portfolioId, period, activeAssetType)
   const { data: positions,         isLoading: loadingPositions } = usePositions(portfolioId)
 
-  // Mantém a mesma leitura da página Patrimônio para evitar KPIs divergentes.
-  // Apenas patrimônio/investido/lucro usam aliases legados; variação e rentabilidade
-  // ficam em campos próprios para não mascarar conceitos diferentes.
   const patrimonio       = safeNum(summary?.total_patrimonio ?? summary?.current_value)
   const aportado         = safeNum(summary?.total_investido  ?? summary?.total_invested)
   const lucroTotal       = safeNum(summary?.lucro_total      ?? summary?.total_gain)
@@ -146,68 +143,37 @@ export default function ResumePage() {
   return (
     <div className="page-container">
 
-      {/* ── KPI Cards ── */}
       <div className="kpi-grid">
         {loadingKpiCards ? (
           [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
         ) : (
           <>
-            <KpiCard
-              label="Patrimônio Total"
-              value={formatBRL(patrimonio)}
-              subValue={formatBRL(aportado)}
-              subLabel="Valor investido"
-              change={variacaoPct}
-            />
-            <KpiCard
-              label="Resultado"
-              value={formatBRL(lucroTotal)}
-              valueColor={signClass(lucroTotal)}
-              subLabel="Ganho de capital + proventos"
-            />
-            <KpiCard
-              label="Proventos (12m)"
-              value={formatBRL(proventos12m)}
-              subValue={formatBRL(proventosTotal)}
-              subLabel="Total recebido"
-            />
+            <KpiCard label="Patrimônio Total" value={formatBRL(patrimonio)} subValue={formatBRL(aportado)} subLabel="Valor investido" change={variacaoPct} />
+            <KpiCard label="Resultado" value={formatBRL(lucroTotal)} valueColor={signClass(lucroTotal)} subLabel="Ganho de capital + proventos" />
+            <KpiCard label="Proventos (12m)" value={formatBRL(proventos12m)} subValue={formatBRL(proventosTotal)} subLabel="Total recebido" />
             <KpiCard
               label="Variação atual"
               value={formatBRL(variacaoValor)}
               valueColor={signClass(variacaoValor)}
               change={variacaoPct}
-              bottomLine={
-                <span className={clsx('text-xs font-semibold tabular-nums', signClass(rentabilidadePct))}>
-                  {rentabilidadePct >= 0 ? '+' : ''}{formatPercent(rentabilidadePct)} rentab. total
-                </span>
-              }
+              bottomLine={<span className={clsx('text-xs font-semibold tabular-nums', signClass(rentabilidadePct))}>{rentabilidadePct >= 0 ? '+' : ''}{formatPercent(rentabilidadePct)} rentab. total</span>}
             />
           </>
         )}
       </div>
 
-      {/* ── Evolução Patrimonial (visão rápida) ── */}
       <div className="card p-4">
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
             <BarChart2 size={14} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
             <span className="section-card-title">Evolução Patrimonial</span>
             {assetClass !== ASSET_CLASS_ALL && (
-              <span style={{
-                fontSize: '0.68rem', fontWeight: 600,
-                color: 'var(--color-primary)',
-                background: 'oklch(from var(--color-primary) l c h / 0.1)',
-                border: '1px solid oklch(from var(--color-primary) l c h / 0.2)',
-                borderRadius: 'var(--radius-full)', padding: '1px 8px',
-              }}>
+              <span style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--color-primary)', background: 'oklch(from var(--color-primary) l c h / 0.1)', border: '1px solid oklch(from var(--color-primary) l c h / 0.2)', borderRadius: 'var(--radius-full)', padding: '1px 8px' }}>
                 {ASSET_CLASS_OPTIONS.find(o => o.value === assetClass)?.label}
               </span>
             )}
           </div>
-          <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
+          <div className="responsive-actions">
             <ChartSelect value={assetClass} onChange={v => setAssetClass(v)} options={ASSET_CLASS_OPTIONS} />
             <ChartSelect value={period} onChange={v => setPeriod(Number(v))} options={PERIOD_OPTIONS} />
           </div>
@@ -224,22 +190,11 @@ export default function ResumePage() {
         )}
       </div>
 
-      {/* ── Meus Ativos ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem' }}>
         <TrendingUp size={15} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
-        <span style={{
-          fontSize: 'var(--text-sm)', fontWeight: 700,
-          letterSpacing: '-0.01em', color: 'var(--color-text)',
-        }}>Meus Ativos</span>
+        <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, letterSpacing: '-0.01em', color: 'var(--color-text)' }}>Meus Ativos</span>
         {positions && (
-          <span style={{
-            fontSize: 'var(--text-xs)', fontWeight: 500,
-            color: 'var(--color-text-muted)',
-            background: 'var(--color-surface-offset)',
-            border: '1px solid oklch(from var(--color-text) l c h / 0.07)',
-            borderRadius: 'var(--radius-full)',
-            padding: '1px 8px',
-          }}>
+          <span style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-muted)', background: 'var(--color-surface-offset)', border: '1px solid oklch(from var(--color-text) l c h / 0.07)', borderRadius: 'var(--radius-full)', padding: '1px 8px' }}>
             {positions.reduce((acc, g) => acc + (g.count ?? 0), 0)} ativos
           </span>
         )}
@@ -248,19 +203,13 @@ export default function ResumePage() {
 
       {loadingPositions || !portfolioId ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className="animate-pulse rounded-xl" style={{ height: 120, background: 'var(--color-surface-offset)' }} />
-          ))}
+          {[...Array(3)].map((_, i) => <div key={i} className="animate-pulse rounded-xl" style={{ height: 120, background: 'var(--color-surface-offset)' }} />)}
         </div>
       ) : positions && positions.length > 0 ? (
         <PositionTable groups={positions} portfolioId={portfolioId} />
       ) : (
         <div className="card">
-          <EmptyState
-            icon={DollarSign}
-            title="Nenhum ativo encontrado"
-            description="Adicione um lançamento para começar a acompanhar sua carteira."
-          />
+          <EmptyState icon={DollarSign} title="Nenhum ativo encontrado" description="Adicione um lançamento para começar a acompanhar sua carteira." />
         </div>
       )}
     </div>
