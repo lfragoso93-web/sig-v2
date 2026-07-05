@@ -1,0 +1,120 @@
+@layer components {
+  .responsive-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .responsive-actions > * {
+    min-width: 0;
+  }
+
+  .responsive-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+    gap: clamp(0.875rem, 1vw, 1.25rem);
+  }
+
+  .fluid-table-card {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .fluid-table-card table {
+    width: 100%;
+  }
+
+  @media (min-width: 1600px) {
+    .page-container {
+      max-width: min(1840px, 100%);
+    }
+
+    .table-responsive table,
+    .card .overflow-x-auto table,
+    .positions-table {
+      font-size: var(--text-sm);
+    }
+  }
+
+  @media (max-width: 1180px) {
+    .page-header {
+      align-items: stretch;
+    }
+
+    .page-header > * {
+      min-width: 0;
+    }
+
+    .section-card-header {
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    .responsive-actions {
+      justify-content: flex-start;
+      width: 100%;
+    }
+  }
+
+  @media (max-width: 860px) {
+    .page-container {
+      padding-inline: clamp(0.875rem, 3vw, 1.25rem);
+    }
+
+    .kpi-grid {
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+    }
+
+    .filter-bar {
+      align-items: stretch;
+    }
+
+    .filter-bar > select,
+    .filter-bar > input,
+    .filter-bar > .input,
+    .responsive-actions select,
+    .responsive-actions input {
+      width: 100% !important;
+      min-width: 0 !important;
+    }
+
+    .responsive-actions {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .table-responsive,
+    .card .overflow-x-auto,
+    .proventos-table-wrap {
+      margin-inline: -0.25rem;
+      padding-inline: 0.25rem;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .page-title {
+      font-size: clamp(1.25rem, 7vw, 1.5rem);
+    }
+
+    .page-subtitle {
+      font-size: var(--text-xs);
+    }
+
+    .section-card-header {
+      padding: 0.875rem 1rem;
+    }
+
+    .card.p-4,
+    .card .p-4 {
+      padding: 0.875rem !important;
+    }
+
+    .table-responsive table,
+    .card .overflow-x-auto table,
+    .positions-table {
+      min-width: max-content;
+    }
+  }
+}
