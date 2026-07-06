@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { usePortfolioList } from '@/hooks/usePortfolio'
 import type { PortfolioListItem } from '@/hooks/usePortfolio'
 import {
@@ -54,21 +54,25 @@ export default function ProventosPage() {
     setPage(1)
   }, [portfolioId, assetTypeFilter, dividendTypeFilter, statusFilter, yearFilter])
 
-  const { data: summary, isLoading: loadingSummary } = useProventosSummary(portfolioId)
+  const proventosFilters = useMemo(() => ({
+    status: statusFilter || undefined,
+    year: yearFilter,
+    asset_type: assetTypeFilter || undefined,
+    dividend_type: dividendTypeFilter || undefined,
+  }), [assetTypeFilter, dividendTypeFilter, statusFilter, yearFilter])
+
+  const { data: summary, isLoading: loadingSummary } = useProventosSummary(portfolioId, proventosFilters)
   const { data: distribuicao } = useProventosDistribuicao(portfolioId)
   const hasDistribuicao = (distribuicao?.length ?? 0) > 0
 
   const { data: historico, isLoading: loadingHistorico } = useProventosHistoricoMensal(
     portfolioId,
-    statusFilter || undefined,
-    assetTypeFilter || undefined,
-    dividendTypeFilter || undefined,
+    proventosFilters.status,
+    proventosFilters.asset_type,
+    proventosFilters.dividend_type,
   )
   const { data: lista, isLoading: loadingLista } = useProventosList(portfolioId, {
-    status: statusFilter || undefined,
-    year: yearFilter,
-    asset_type: assetTypeFilter || undefined,
-    dividend_type: dividendTypeFilter || undefined,
+    ...proventosFilters,
     page,
     page_size: PAGE_SIZE,
   })
