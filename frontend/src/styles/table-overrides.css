@@ -45,6 +45,17 @@
     white-space: nowrap;
   }
 
+  .positions-table th:last-child,
+  .positions-table td:last-child {
+    min-width: 6.5rem;
+    width: 6.5rem;
+  }
+
+  .positions-table td:last-child > div {
+    gap: 0.375rem;
+    flex-wrap: nowrap;
+  }
+
   .positions-table td:last-child .btn.btn-ghost {
     min-width: 2.25rem;
     min-height: 2.25rem;
