@@ -82,6 +82,20 @@ def _is_cash_type(value) -> bool:
     return raw.upper() not in _NON_CASH_DIVIDEND_VALUES
 
 
+def _entitlement_date_expr():
+    """Data usada para elegibilidade do investidor: Data Com, com Data Ex como fallback."""
+    return func.coalesce(AssetDividend.record_date, AssetDividend.ex_date)
+
+
+def _entitled_after_first_buy_filter(first_buy):
+    """Mantém os agregados consistentes com a materialização por Data Com.
+
+    Quando existe Data Com, ela é a referência de elegibilidade. A Data Ex só é
+    usada como fallback para eventos de fontes antigas/parciais sem record_date.
+    """
+    return _entitlement_date_expr() >= first_buy.c.first_buy
+
+
 def _year_filter(year: int):
     """Filtra por ano usando pagamento quando existe e Data Ex como fallback."""
     return or_(
@@ -179,12 +193,21 @@ async def ensure_portfolio_proventos(db: AsyncSession, portfolio_id: int, force:
 
 
 async def _sum_value(db: AsyncSession, portfolio_id: int, column, *conditions) -> float:
+    first_buy = _first_buy_subquery()
     stmt = (
         select(func.sum(column))
+        .select_from(Dividend)
         .join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
+        .join(Asset, AssetDividend.asset_id == Asset.id)
+        .join(
+            first_buy,
+            (first_buy.c.portfolio_id == Dividend.portfolio_id)
+            & (first_buy.c.ticker == Asset.ticker),
+        )
         .where(
             Dividend.portfolio_id == portfolio_id,
             _cash_type_filter(),
+            _entitled_after_first_buy_filter(first_buy),
             *conditions,
         )
     )
@@ -192,47 +215,86 @@ async def _sum_value(db: AsyncSession, portfolio_id: int, column, *conditions) -
     return float(res.scalar_one() or 0.0)
 
 
-async def _count_non_cash(db: AsyncSession, portfolio_id: int) -> int:
+async def _count_non_cash(db: AsyncSession, portfolio_id: int, *conditions) -> int:
+    first_buy = _first_buy_subquery()
     stmt = (
         select(func.count())
         .select_from(Dividend)
         .join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
+        .join(Asset, AssetDividend.asset_id == Asset.id)
+        .join(
+            first_buy,
+            (first_buy.c.portfolio_id == Dividend.portfolio_id)
+            & (first_buy.c.ticker == Asset.ticker),
+        )
         .where(
             Dividend.portfolio_id == portfolio_id,
             _non_cash_type_filter(),
+            _entitled_after_first_buy_filter(first_buy),
+            *conditions,
         )
     )
     res = await db.execute(stmt)
     return int(res.scalar_one() or 0)
 
 
-async def get_summary(db: AsyncSession, portfolio_id: int) -> dict:
+def _summary_filter_conditions(
+    status: Optional[DividendStatus] = None,
+    year: Optional[int] = None,
+    asset_type: Optional[str] = None,
+    dividend_type: Optional[DividendType] = None,
+):
+    conditions = []
+    if status:
+        conditions.append(_status_filter(status))
+    if year:
+        conditions.append(_year_filter(year))
+    if asset_type:
+        conditions.append(Asset.asset_type == asset_type)
+    if dividend_type:
+        conditions.append(_dividend_type_filter(dividend_type))
+    return conditions
+
+
+async def get_summary(
+    db: AsyncSession,
+    portfolio_id: int,
+    status: Optional[DividendStatus] = None,
+    year: Optional[int] = None,
+    asset_type: Optional[str] = None,
+    dividend_type: Optional[DividendType] = None,
+) -> dict:
     today = date.today()
     start_12m = today - relativedelta(months=12)
+    filters = _summary_filter_conditions(status, year, asset_type, dividend_type)
 
     total_recebido = await _sum_value(
         db,
         portfolio_id,
         Dividend.net_value,
         _status_filter(DividendStatus.RECEBIDO),
+        *filters,
     )
     total_bruto_recebido = await _sum_value(
         db,
         portfolio_id,
         Dividend.total_value,
         _status_filter(DividendStatus.RECEBIDO),
+        *filters,
     )
     total_a_receber = await _sum_value(
         db,
         portfolio_id,
         Dividend.net_value,
         _status_filter(DividendStatus.A_RECEBER),
+        *filters,
     )
     total_bruto_a_receber = await _sum_value(
         db,
         portfolio_id,
         Dividend.total_value,
         _status_filter(DividendStatus.A_RECEBER),
+        *filters,
     )
     total_12m = await _sum_value(
         db,
@@ -240,8 +302,9 @@ async def get_summary(db: AsyncSession, portfolio_id: int) -> dict:
         Dividend.net_value,
         _status_filter(DividendStatus.RECEBIDO),
         AssetDividend.payment_date >= start_12m,
+        *filters,
     )
-    eventos_nao_cash = await _count_non_cash(db, portfolio_id)
+    eventos_nao_cash = await _count_non_cash(db, portfolio_id, *filters)
 
     return {
         "total_recebido": total_recebido,
@@ -292,12 +355,17 @@ async def list_items(
             Asset.ticker,
             Asset.asset_type,
         )
+        .select_from(Dividend)
         .join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
         .join(Asset, AssetDividend.asset_id == Asset.id)
-        .join(first_buy, (first_buy.c.portfolio_id == Dividend.portfolio_id) & (first_buy.c.ticker == Asset.ticker))
+        .join(
+            first_buy,
+            (first_buy.c.portfolio_id == Dividend.portfolio_id)
+            & (first_buy.c.ticker == Asset.ticker),
+        )
         .where(
             Dividend.portfolio_id == portfolio_id,
-            (AssetDividend.record_date >= first_buy.c.first_buy) | (AssetDividend.ex_date >= first_buy.c.first_buy),
+            _entitled_after_first_buy_filter(first_buy),
         )
     )
 
@@ -365,14 +433,19 @@ async def get_monthly_history(
             extract("month", AssetDividend.payment_date).label("month"),
             func.sum(Dividend.net_value).label("total"),
         )
+        .select_from(Dividend)
         .join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
         .join(Asset, AssetDividend.asset_id == Asset.id)
-        .join(first_buy, (first_buy.c.portfolio_id == Dividend.portfolio_id) & (first_buy.c.ticker == Asset.ticker))
+        .join(
+            first_buy,
+            (first_buy.c.portfolio_id == Dividend.portfolio_id)
+            & (first_buy.c.ticker == Asset.ticker),
+        )
         .where(
             Dividend.portfolio_id == portfolio_id,
             AssetDividend.payment_date.isnot(None),
             _cash_type_filter(),
-            (AssetDividend.record_date >= first_buy.c.first_buy) | (AssetDividend.ex_date >= first_buy.c.first_buy),
+            _entitled_after_first_buy_filter(first_buy),
         )
     )
     if status:
@@ -402,14 +475,22 @@ async def get_monthly_history(
 
 async def get_distribution(db: AsyncSession, portfolio_id: int, months: int = 12) -> list[dict]:
     start = date.today() - relativedelta(months=months)
+    first_buy = _first_buy_subquery()
     stmt = (
         select(Asset.ticker, Asset.asset_type, func.sum(Dividend.net_value).label("total"))
+        .select_from(Dividend)
         .join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
         .join(Asset, AssetDividend.asset_id == Asset.id)
+        .join(
+            first_buy,
+            (first_buy.c.portfolio_id == Dividend.portfolio_id)
+            & (first_buy.c.ticker == Asset.ticker),
+        )
         .where(
             Dividend.portfolio_id == portfolio_id,
             AssetDividend.payment_date >= start,
             _cash_type_filter(),
+            _entitled_after_first_buy_filter(first_buy),
         )
         .group_by(Asset.ticker, Asset.asset_type)
         .order_by(func.sum(Dividend.net_value).desc())

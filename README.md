@@ -11,32 +11,29 @@ A branch padrão de desenvolvimento é `stable-15jun`.
 
 ### Entrega mais recente
 
-A revisão visual e responsiva do sistema foi consolidada como baseline por meio da issue #103 e das PRs #104, #105, #106, #107 e #108.
+A validação pós-pipeline da página **Proventos** foi concluída pela issue #95, dando continuidade à entrega do pipeline completo de mercado e proventos de renda variável nacional da issue #92 / PR #93.
 
 Principais entregas recentes:
 
-- Páginas principais com mais respiro, melhor hierarquia e menor densidade visual.
-- Cards, KPIs, filtros, cabeçalhos de seção e tabelas mais consistentes.
-- Responsividade refinada para desktop, tablet, mobile e telas ultrawide.
-- Resumo ajustado em KPIs, variação, dropdown e tabelas.
-- Proventos revisado com filtros, cards, paginação e layout fluido.
-- Patrimônio simplificado para evitar redundância com posições já exibidas no Resumo.
-- Rentabilidade reorganizada em blocos mais claros.
-- Transações revisada em busca, densidade e responsividade.
-- Configurações revisada em abas, cards, formulários e lista de carteiras.
-- Login, Registro e Recuperar Senha definidos como referência visual para o restante do sistema.
+- Agregações de proventos revisadas para usar elegibilidade por Data Com, com Data Ex como fallback.
+- Eventos não-cash seguem visíveis quando relevantes, mas não inflam totais financeiros.
+- Cards/KPIs de Proventos sincronizados com os mesmos filtros da tabela.
+- Tabela de Proventos revisada com Data Com, Data Ex, pagamento, quantidade elegível, valores unitários e totais.
+- Coluna técnica “Natureza” removida da tabela para simplificar a experiência do usuário.
+- Cobertura automatizada adicionada para cash vs. não-cash, elegibilidade por Data Com e agregações.
+- Ajustes pontuais de UX em Transações para garantir botões de editar/excluir visíveis e clicáveis.
 
-Após essa sequência, o projeto entra em pausa curta de desenvolvimento funcional. A próxima retomada deve preservar o padrão visual definido nesta etapa.
+A revisão visual e responsiva do sistema segue como baseline consolidado pela issue #103 e pelas PRs #104, #105, #106, #107 e #108.
 
 ---
 
 ## Próximos focos sugeridos
 
-1. Auth: implementar login com Google OAuth (#97).
-2. Admin: corrigir edição de usuários e alteração de perfil pelo superadmin (#98).
-3. Compliance: revisar documentação pública, Swagger/OpenAPI e mensagens para manter provedores descritos de forma genérica.
+1. Admin: corrigir edição de usuários e alteração de perfil pelo superadmin (#98).
+2. Compliance: revisar documentação pública, Swagger/OpenAPI e mensagens para manter provedores descritos de forma genérica (#80).
+3. Auth: implementar login com Google OAuth (#97).
 4. Performance: mapear queries críticas, índices e possíveis N+1.
-5. Importação CSV: preparar fluxo de importação de ativos em lote.
+5. Importação CSV: preparar fluxo de importação de ativos em lote (#82).
 
 ---
 
@@ -67,10 +64,12 @@ Após essa sequência, o projeto entra em pausa curta de desenvolvimento funcion
 
 ### Proventos
 
-- Histórico de dividendos, JCP, rendimentos e demais eventos por carteira.
+- Histórico de dividendos, JCP, rendimentos, amortizações, bonificações e subscrições por carteira.
 - Separação de Data Com, Data Ex e Data de Pagamento.
+- Materialização por carteira usando posição elegível na Data Com.
 - Filtros por status, classe, tipo de evento e ano.
-- Cards com valores líquidos, brutos e eventos não-cash.
+- Cards com valores líquidos, brutos, últimos 12 meses e média mensal.
+- Eventos não-cash mantidos fora dos totais financeiros.
 - Paginação e layout fluido.
 
 ### Configurações

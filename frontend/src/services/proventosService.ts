@@ -63,9 +63,16 @@ export interface ProventosEvolucao {
   a_receber: number
 }
 
+export interface ProventosFilters {
+  status?: string
+  year?: number
+  asset_type?: string
+  dividend_type?: string
+}
+
 export const proventosService = {
-  getSummary: (portfolioId: number) =>
-    api.get<ProventosSummary>(`/portfolios/${portfolioId}/proventos/summary`).then(r => r.data),
+  getSummary: (portfolioId: number, params?: ProventosFilters) =>
+    api.get<ProventosSummary>(`/portfolios/${portfolioId}/proventos/summary`, { params }).then(r => r.data),
 
   getDistribuicao: (portfolioId: number, months = 12) =>
     api.get<ProventoDistribution[]>(`/portfolios/${portfolioId}/proventos/distribuicao`, { params: { months } }).then(r => r.data),
@@ -77,7 +84,7 @@ export const proventosService = {
 
   getList: (
     portfolioId: number,
-    params?: { status?: string; year?: number; asset_type?: string; dividend_type?: string; page?: number; page_size?: number },
+    params?: ProventosFilters & { page?: number; page_size?: number },
   ) => api.get<ProventosListResponse>(`/portfolios/${portfolioId}/proventos`, { params }).then(r => r.data),
 
   sync: (portfolioId: number) =>

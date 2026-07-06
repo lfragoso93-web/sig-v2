@@ -3,6 +3,7 @@ import {
   proventosService,
   ProventoDistribution,
   ProventoItem,
+  ProventosFilters,
   ProventosHistoricoMes,
   ProventosListResponse,
   ProventosSummary,
@@ -12,6 +13,7 @@ import {
 export type {
   ProventoDistribution,
   ProventoItem,
+  ProventosFilters,
   ProventosHistoricoMes,
   ProventosListResponse,
   ProventosSummary,
@@ -19,10 +21,10 @@ export type {
 
 // ─── Summary ────────────────────────────────────────────────────────────
 
-export function useProventosSummary(portfolioId: number | null) {
+export function useProventosSummary(portfolioId: number | null, params?: ProventosFilters) {
   return useQuery<ProventosSummary>({
-    queryKey: ['proventos-summary', portfolioId],
-    queryFn:  () => proventosService.getSummary(portfolioId!),
+    queryKey: ['proventos-summary', portfolioId, params],
+    queryFn:  () => proventosService.getSummary(portfolioId!, params),
     enabled:  !!portfolioId,
   })
 }
@@ -59,11 +61,7 @@ export function useProventosHistoricoMensal(
 
 export function useProventosList(
   portfolioId: number | null,
-  params?: {
-    status?:        string
-    year?:          number
-    asset_type?:    string
-    dividend_type?: string
+  params?: ProventosFilters & {
     page?:          number
     page_size?:     number
   },
