@@ -7,6 +7,28 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Concluído — Validação da página Proventos após pipeline completo (06/07/2026) — #95
+
+> Continuidade da entrega #92 / PR #93, validando a experiência da página Proventos com dados materializados pelo pipeline de renda variável nacional.
+
+**Backend**
+- Agregações de proventos revisadas para considerar elegibilidade por Data Com, com Data Ex como fallback.
+- Eventos não-cash, como bonificação e subscrição, mantidos fora dos totais financeiros.
+- `summary` de proventos passou a aceitar os mesmos filtros consumidos pela listagem: status, ano, classe de ativo e tipo de evento.
+- Histórico mensal e distribuição preservam apenas eventos financeiros nos totais.
+
+**Frontend**
+- KPIs da página Proventos conectados aos mesmos filtros da tabela.
+- Tabela de Proventos revisada para simplificar leitura e remover a coluna técnica “Natureza”.
+- Cards mobile alinhados à mesma simplificação da tabela desktop.
+- Ajustes pontuais em Transações para garantir botões de edição e exclusão visíveis na tabela.
+
+**Testes**
+- Cobertura adicionada em `backend/tests/test_proventos_issue95.py`.
+- Cenários cobertos: cash vs. não-cash, elegibilidade por Data Com e agregações sem inflar totais com eventos não financeiros.
+
+---
+
 ### Concluído — Revisão visual e responsividade do sistema (06/07/2026) — #103 / PRs #104–#108
 
 > Sequência de ajustes visuais que consolidou um novo baseline de interface para o SGI v2.
@@ -59,14 +81,14 @@ Formato baseado em Keep a Changelog.
 
 ### Próximos focos sugeridos
 
-**Auth**
-- Implementar login com Google OAuth (#97).
-
 **Admin**
 - Corrigir edição de usuários e alteração de perfil pelo superadmin (#98).
 
 **Compliance de documentação/API**
-- Substituir nomes explícitos de provedores externos por termos genéricos na documentação pública, Swagger/OpenAPI e mensagens públicas.
+- Substituir nomes explícitos de provedores externos por termos genéricos na documentação pública, Swagger/OpenAPI e mensagens públicas (#80).
+
+**Auth**
+- Implementar login com Google OAuth (#97).
 
 **Performance**
 - Mapear queries críticas com `EXPLAIN ANALYZE`.
@@ -74,7 +96,7 @@ Formato baseado em Keep a Changelog.
 - Corrigir padrões N+1 em listagens de posições e transações.
 
 **Importação CSV**
-- Preparar fluxo de importação de ativos em lote com validação e preview.
+- Preparar fluxo de importação de ativos em lote com validação e preview (#82).
 
 ---
 
