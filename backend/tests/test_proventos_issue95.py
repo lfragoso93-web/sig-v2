@@ -104,7 +104,7 @@ async def test_issue95_list_uses_record_date_before_ex_date(db: AsyncSession, po
     no_rights = await make_event(db, asset, date(2024, 1, 1), date(2024, 1, 4), date(2024, 1, 20), DividendType.DIVIDENDO)
     await make_dividend(db, portfolio.id, no_rights, "100.00", "100.00")
 
-    fallback = await make_event(db, asset, None, date(2024, 1, 4), date(2024, 1, 25), DividendType.DIVIDENDO)
+    fallback = await make_event(db, asset, None, date(2024, 1, 5), date(2024, 1, 25), DividendType.DIVIDENDO)
     await make_dividend(db, portfolio.id, fallback, "100.00", "100.00")
 
     result = await list_items(db, portfolio.id)
