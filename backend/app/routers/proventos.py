@@ -1,3 +1,14 @@
+"""
+Router de proventos da carteira.
+Endpoints:
+  GET  /portfolios/{id}/proventos/summary          -> totais recebido/a-receber/12m
+  GET  /portfolios/{id}/proventos                  -> lista paginada (recebidos + futuros)
+  GET  /portfolios/{id}/proventos/historico-mensal -> historico por ano/mes
+  GET  /portfolios/{id}/proventos/distribuicao     -> % por ativo (ultimos N meses)
+
+Ao consultar a pagina, o backend materializa automaticamente os proventos da
+carteira a partir dos eventos globais ja coletados para os ativos em posicao.
+"""
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -24,10 +35,10 @@ async def _assert_owner(portfolio_id: int, user: User, db: AsyncSession) -> Port
     result = await db.execute(
         select(Portfolio).where(Portfolio.id == portfolio_id, Portfolio.user_id == user.id)
     )
-    portfolio = result.scalar_one_or_none()
-    if not portfolio:
+    p = result.scalar_one_or_none()
+    if not p:
         raise HTTPException(status_code=404, detail="Carteira nao encontrada.")
-    return portfolio
+    return p
 
 
 async def _prepare_proventos(portfolio_id: int, user: User, db: AsyncSession) -> None:
@@ -41,7 +52,7 @@ def _parse_status(status: Optional[str]) -> Optional[DividendStatus]:
     try:
         return DividendStatus(status.upper())
     except ValueError:
-        raise HTTPException(status_code=422, detail="Status invalido. Use RECEBIDO ou A_RECEBER.")
+        raise HTTPException(status_code=422, detail=f"Status invalido: '{status}'. Use RECEBIDO ou A_RECEBER.")
 
 
 def _parse_dividend_type(dividend_type: Optional[str]) -> Optional[DividendType]:
@@ -51,43 +62,33 @@ def _parse_dividend_type(dividend_type: Optional[str]) -> Optional[DividendType]
         return DividendType(dividend_type.upper())
     except ValueError:
         valid = ", ".join(t.value for t in DividendType)
-        raise HTTPException(status_code=422, detail=f"Tipo de provento invalido. Use um de: {valid}.")
+        raise HTTPException(status_code=422, detail=f"Tipo de provento invalido: '{dividend_type}'. Use um de: {valid}.")
 
 
 @router.get("/summary")
 async def proventos_summary(
     portfolio_id: int,
-    status: Optional[str] = Query(None),
-    year: Optional[int] = Query(None),
-    asset_type: Optional[str] = Query(None),
-    dividend_type: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     await _prepare_proventos(portfolio_id, current_user, db)
-    return await get_summary(
-        db,
-        portfolio_id,
-        status=_parse_status(status),
-        year=year,
-        asset_type=asset_type,
-        dividend_type=_parse_dividend_type(dividend_type),
-    )
+    return await get_summary(db, portfolio_id)
 
 
 @router.get("")
 async def list_proventos(
     portfolio_id: int,
-    status: Optional[str] = Query(None),
-    year: Optional[int] = Query(None),
-    asset_type: Optional[str] = Query(None),
-    dividend_type: Optional[str] = Query(None),
+    status: Optional[str] = Query(None, description="Filtrar por status: RECEBIDO | A_RECEBER"),
+    year: Optional[int] = Query(None, description="Filtrar por ano da data de pagamento ou Data Ex"),
+    asset_type: Optional[str] = Query(None, description="Filtrar por tipo de ativo"),
+    dividend_type: Optional[str] = Query(None, description="Filtrar por tipo de provento/evento"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     await _prepare_proventos(portfolio_id, current_user, db)
+
     return await list_items(
         db,
         portfolio_id,
@@ -103,13 +104,14 @@ async def list_proventos(
 @router.get("/historico-mensal")
 async def proventos_historico_mensal(
     portfolio_id: int,
-    status: Optional[str] = Query(None),
+    status: Optional[str] = Query(None, description="RECEBIDO | A_RECEBER"),
     asset_type: Optional[str] = Query(None),
-    dividend_type: Optional[str] = Query(None),
+    dividend_type: Optional[str] = Query(None, description="Filtrar por tipo de provento financeiro"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     await _prepare_proventos(portfolio_id, current_user, db)
+
     return await get_monthly_history(
         db,
         portfolio_id,
@@ -122,7 +124,7 @@ async def proventos_historico_mensal(
 @router.get("/distribuicao")
 async def proventos_distribuicao(
     portfolio_id: int,
-    months: int = Query(12, ge=1, le=120),
+    months: int = Query(12, ge=1, le=120, description="Periodo em meses (padrao 12)"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
