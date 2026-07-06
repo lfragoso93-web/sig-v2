@@ -2,95 +2,104 @@
 
 Issue relacionada: #103
 
+## Status
+
+Baseline visual concluido em 06/07/2026.
+
+A revisao geral foi realizada em blocos pequenos, com validacao visual ao longo das PRs #104, #105, #106, #107 e #108.
+
+O sistema entra agora em uma pausa curta de desenvolvimento funcional, mantendo este documento como referencia para os proximos ajustes visuais.
+
 ## Objetivo
 
 Revisar a interface do SGI v2 para deixar o sistema mais profissional, simples, moderno e confortavel em diferentes tamanhos de tela.
 
-A revisao deve reduzir a sensacao de elementos apertados, melhorar a leitura das paginas principais e consolidar uma base visual mais consistente para os proximos modulos.
+A revisao reduziu a sensacao de elementos apertados, melhorou a leitura das paginas principais e consolidou uma base visual mais consistente para os proximos modulos.
 
-## Problemas atuais observados
+## Baseline definido
 
-- Alguns cards, filtros, botoes e tabelas ficam muito proximos entre si.
-- A densidade visual varia bastante entre paginas.
-- A responsividade ainda nao esta totalmente consistente em todas as telas.
-- Tabelas e filtros precisam de melhor comportamento em larguras menores.
-- Algumas telas ja possuem boa base visual, mas ainda falta padronizacao global.
+O padrao visual aprovado prioriza:
 
-## Principios da revisao
+1. **Mais respiro interno** em cards, formularios e secoes.
+2. **Largura controlada** para evitar telas muito densas em desktop e ultrawide.
+3. **Hierarquia clara** entre titulo, subtitulo, conteudo e acoes.
+4. **Menor densidade visual** em tabelas, filtros e blocos de dados.
+5. **Responsividade real** em desktop, tablet, mobile e ultrawide.
+6. **Consistencia** entre telas internas e telas de entrada.
 
-1. **Mais respiro visual**: aumentar espacos entre blocos, linhas e secoes importantes.
-2. **Mais simplicidade**: reduzir informacao concorrente e deixar a acao principal clara.
-3. **Mais consistencia**: padronizar cards, filtros, tabelas, badges, inputs, botoes e estados.
-4. **Responsividade real**: garantir uso confortavel em desktop, tablet e mobile.
-5. **Profissionalismo**: melhorar hierarquia, alinhamentos, escala tipografica e acabamento visual.
+## Telas revisadas
 
-## Escopo inicial
+- Resumo.
+- Patrimonio.
+- Proventos.
+- Transacoes.
+- Rentabilidade.
+- Configuracoes.
+- Login.
+- Registro.
+- Recuperar Senha.
 
-### Layout base
+## Entregas principais
 
-- Revisar `AppLayout`, `Topbar`, `Sidebar` e comportamento mobile.
-- Ajustar larguras, paddings e gaps globais.
-- Validar altura e densidade de headers.
-- Rever comportamento de menus, filtros e acoes em telas menores.
+### Layout e componentes
 
-### Componentes compartilhados
+- Cards, KPIs, filtros e headers de secao padronizados.
+- Tabelas com mais respiro horizontal.
+- Grids mais fluidos por breakpoint.
+- Ajustes para telas pequenas, grandes e ultrawide.
 
-- Padronizar `KpiCard`, cards de secao, filtros, botoes, inputs, badges e empty states.
-- Revisar skeleton/loading e estados de erro.
-- Garantir consistencia do dark theme.
-- Melhorar foco, hover e areas de toque.
+### Resumo
 
-### Tabelas
+- KPIs alinhados ao comportamento da pagina Patrimonio.
+- Variação atual separada de rentabilidade total.
+- Dropdown de ativos corrigido para nao ficar preso ao recorte da tabela.
+- Filtros e grafico com comportamento mais responsivo.
 
-- Revisar densidade das linhas.
-- Melhorar legibilidade de colunas numericas.
-- Garantir scroll horizontal quando necessario.
-- Preferir cards em mobile quando a tabela ficar extensa.
-- Padronizar empty state e mensagens de erro.
+### Proventos
 
-## Telas prioritarias
+- Cards, filtros e area Por Ativo refinados.
+- Historico mensal e tabela de eventos com mais respiro.
+- Layout fluido com melhor uso de largura disponivel.
+- Paginacao adicionada na listagem.
 
-1. Resumo.
-2. Patrimonio.
-3. Proventos.
-4. Transacoes.
-5. Rentabilidade.
-6. Configuracoes.
-7. Login, cadastro e onboarding, se houver impacto visual relevante.
+### Patrimonio
 
-## Plano de execucao recomendado
+- Consolidacao simplificada.
+- Posições removidas da pagina para evitar redundancia com Resumo.
+- Layout visual menos carregado.
 
-### Etapa 1 — Auditoria visual
+### Rentabilidade
 
-- Mapear inconsistencias de espacamento, responsividade e densidade.
-- Registrar screenshots ou observacoes por pagina.
-- Definir uma ordem de prioridade para os ajustes.
+- Blocos Por Classe e Por Ativo reorganizados.
+- Tabela e cards mais escaneaveis.
 
-### Etapa 2 — Tokens e componentes base
+### Transacoes
 
-- Consolidar padroes de spacing, radius, sombra, borda e tipografia.
-- Revisar componentes compartilhados antes dos ajustes pagina a pagina.
+- Busca ajustada para evitar sobreposicao do icone.
+- Cards e tabela com densidade reduzida.
 
-### Etapa 3 — Responsividade
+### Configuracoes
 
-- Revisar breakpoints principais.
-- Ajustar grids de KPIs e cards.
-- Rever tabelas e filtros em telas pequenas.
+- Abas, cards, formularios e lista de carteiras responsivos.
+- Melhor comportamento em mobile e tablet.
 
-### Etapa 4 — Ajustes por pagina
+### Telas de entrada
 
-- Aplicar melhorias pagina a pagina em PRs pequenas.
-- Validar desktop, tablet e mobile.
-- Validar dark theme.
+- Login, Registro e Recuperar Senha unificados visualmente.
+- Este padrao passa a ser referencia para novas telas.
 
-## Criterios de aceite
+## Criterios para proximos ajustes
 
-- Páginas principais com mais respiro e hierarquia clara.
-- Componentes compartilhados consistentes entre modulos.
-- Filtros, tabelas e cards usaveis em telas menores.
-- Dark theme sem quebras visuais.
-- PRs pequenas e isoladas para reduzir risco de regressao.
+- Manter commits pequenos.
+- Continuar usando a branch `stable-15jun`.
+- Validar visualmente em desktop, tablet e mobile.
+- Evitar grandes reescritas visuais sem validacao intermediaria.
+- Preservar o padrao aprovado nas telas de entrada.
 
-## Observacao de processo
+## Proximos focos sugeridos
 
-O desenvolvimento deve continuar na branch `stable-15jun`, com commits pequenos e validacao visual por tela.
+1. Auth: Google OAuth (#97).
+2. Admin: edicao de usuarios e perfil superadmin (#98).
+3. Compliance de documentacao e descricoes publicas.
+4. Performance de queries criticas.
+5. Importacao CSV de ativos.
