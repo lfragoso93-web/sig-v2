@@ -5,18 +5,18 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build --configLoader native",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings 0",
-    "test": "vitest",
+    "test": "vitest --configLoader native",
     "test:coverage": "vitest --coverage",
     "test:watch": "vitest --watch"
   },
   "dependencies": {
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "react-router-dom": "^7.18.0",
+    "react-router-dom": "^7.18.1",
     "axios": "^1.7.7",
     "recharts": "^3.9.0",
     "@tanstack/react-query": "^5.101.2",
