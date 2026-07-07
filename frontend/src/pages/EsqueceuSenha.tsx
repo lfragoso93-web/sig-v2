@@ -56,7 +56,7 @@ export default function EsqueceuSenha() {
 
   const onRequestReset = async (data: EmailForm) => {
     try {
-      const res = await api.post('/api/v1/auth/forgot-password', { email: data.email })
+      const res = await api.post('/auth/forgot-password', { email: data.email })
       setResetToken(res.data.reset_token)
       setEmailSent(data.email)
       setStep('reset')
@@ -67,7 +67,7 @@ export default function EsqueceuSenha() {
 
   const onResetPassword = async (data: ResetForm) => {
     try {
-      await api.post('/api/v1/auth/reset-password', { token: resetToken, new_password: data.new_password })
+      await api.post('/auth/reset-password', { token: resetToken, new_password: data.new_password })
       setStep('done')
     } catch (err: any) {
       const detail = err?.response?.data?.detail
