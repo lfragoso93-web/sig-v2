@@ -33,7 +33,7 @@ bcrypt==5.0.0
 # python-multipart 0.0.32 - GHSA-5rvq-cxj2-64vf (CVE-2026-53539)
 python-multipart==0.0.32
 apscheduler==3.11.3
-email-validator==2.2.0
+email-validator==2.3.0
 redis==5.2.1
 # reportlab 5.0.0: MAJOR bump - validar geracao de PDF do modulo IRPF antes do merge para main
 reportlab==5.0.0
