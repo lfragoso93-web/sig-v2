@@ -45,6 +45,18 @@ class UserUpdate(BaseModel):
     onboarding_completed: Optional[bool] = None
 
 
+class UserPasswordUpdate(BaseModel):
+    current_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Senha deve ter no mínimo 8 caracteres")
+        return v
+
+
 class UserAdminUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[EmailStr] = None
