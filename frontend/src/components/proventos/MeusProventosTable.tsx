@@ -53,23 +53,6 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
-function EventKindBadge({ item }: { item: ProventoItem }) {
-  const cash = isCashEvent(item)
-  return (
-    <span
-      className="px-1.5 py-0.5 rounded text-[9px] font-semibold"
-      style={{
-        background: cash
-          ? 'oklch(from var(--color-success) l c h / 0.11)'
-          : 'oklch(from var(--color-warning) l c h / 0.14)',
-        color: cash ? 'var(--color-success)' : 'var(--color-warning)',
-      }}
-    >
-      {cash ? 'Financeiro' : 'Não-cash'}
-    </span>
-  )
-}
-
 function ProventoCard({ item }: { item: ProventoItem }) {
   const typeLabel = DIVIDEND_TYPE_LABELS[item.dividend_type] ?? item.dividend_type
   const cash = isCashEvent(item)
@@ -91,10 +74,7 @@ function ProventoCard({ item }: { item: ProventoItem }) {
         <StatusBadge status={item.status} />
       </div>
 
-      <div className="flex items-center gap-2">
-        <EventKindBadge item={item} />
-        <span className="text-[10px]" style={cellFaint}>{typeLabel}</span>
-      </div>
+      <div className="text-[10px]" style={cellFaint}>{typeLabel}</div>
 
       <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
         <div>
@@ -138,10 +118,10 @@ export default function MeusProventosTable({ data }: { data: ProventoItem[] }) {
       </div>
 
       <div className="hidden md:block overflow-x-auto">
-        <table className="w-full min-w-[1160px] text-xs">
+        <table className="w-full min-w-[1080px] text-xs">
           <thead>
             <tr style={{ borderBottom: '1px solid var(--color-divider)' }}>
-              {['Ativo','Tipo de Ativo','Status','Tipo','Natureza','Data Com','Data Ex','Data Pgto','Qtd elegível','Valor/Unit.','Valor Total','Líquido'].map(h => (
+              {['Ativo','Tipo de Ativo','Status','Tipo','Data Com','Data Ex','Data Pgto','Qtd elegível','Valor/Unit.','Valor Total','Líquido'].map(h => (
                 <th key={h} className="px-3 py-2 font-medium text-left first:pl-4 last:pr-4" style={cellMuted}>{h}</th>
               ))}
             </tr>
@@ -167,7 +147,6 @@ export default function MeusProventosTable({ data }: { data: ProventoItem[] }) {
                   </td>
                   <td className="px-3 py-2"><StatusBadge status={item.status} /></td>
                   <td className="px-3 py-2" style={cellMuted}>{DIVIDEND_TYPE_LABELS[item.dividend_type] ?? item.dividend_type}</td>
-                  <td className="px-3 py-2"><EventKindBadge item={item} /></td>
                   <td className="px-3 py-2 tabular-nums" style={cellMuted}>{fmt(item.record_date)}</td>
                   <td className="px-3 py-2 tabular-nums" style={cellMuted}>{fmt(item.ex_date)}</td>
                   <td className="px-3 py-2 tabular-nums" style={cellMuted}>{fmt(item.payment_date)}</td>
