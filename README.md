@@ -7,21 +7,32 @@ A branch padrão de desenvolvimento é `stable-15jun`.
 
 ---
 
-## Status atual — 06/07/2026
+## Status atual — 07/07/2026
 
 ### Entrega mais recente
 
-A validação pós-pipeline da página **Proventos** foi concluída pela issue #95, dando continuidade à entrega do pipeline completo de mercado e proventos de renda variável nacional da issue #92 / PR #93.
+Foi concluído e validado localmente um pacote de estabilização para contratos críticos de autenticação, dependências e CI/CD antes da continuidade do desenvolvimento funcional.
 
 Principais entregas recentes:
 
-- Agregações de proventos revisadas para usar elegibilidade por Data Com, com Data Ex como fallback.
-- Eventos não-cash seguem visíveis quando relevantes, mas não inflam totais financeiros.
-- Cards/KPIs de Proventos sincronizados com os mesmos filtros da tabela.
-- Tabela de Proventos revisada com Data Com, Data Ex, pagamento, quantidade elegível, valores unitários e totais.
-- Coluna técnica “Natureza” removida da tabela para simplificar a experiência do usuário.
-- Cobertura automatizada adicionada para cash vs. não-cash, elegibilidade por Data Com e agregações.
-- Ajustes pontuais de UX em Transações para garantir botões de editar/excluir visíveis e clicáveis.
+- Fluxo **Esqueci senha** corrigido ponta a ponta.
+- Endpoints `POST /auth/forgot-password` e `POST /auth/reset-password` expostos no backend.
+- Frontend de recuperação de senha corrigido para usar o client Axios sem duplicar `/api/v1`.
+- Endpoint `PATCH /users/me/password` criado para alteração autenticada de senha.
+- Tela de Configurações validada para troca de senha.
+- Build Vite corrigido para Docker ao remover `--configLoader native`.
+- Pendências Dependabot aplicadas em blocos pequenos e validadas localmente.
+- GitHub Actions centrais atualizadas no workflow de CI.
+
+Validação local reportada:
+
+- Backend, frontend, PostgreSQL e Redis subiram via Docker Compose.
+- Login validado com sucesso.
+- Recuperação de senha validada com sucesso.
+- Alteração de senha em Configurações validada com sucesso.
+- Teste frontend executado com Vitest passando.
+
+A validação pós-pipeline da página **Proventos** também permanece concluída pela issue #95, dando continuidade à entrega do pipeline completo de mercado e proventos de renda variável nacional da issue #92 / PR #93.
 
 A revisão visual e responsiva do sistema segue como baseline consolidado pela issue #103 e pelas PRs #104, #105, #106, #107 e #108.
 
@@ -29,11 +40,12 @@ A revisão visual e responsiva do sistema segue como baseline consolidado pela i
 
 ## Próximos focos sugeridos
 
-1. Admin: corrigir edição de usuários e alteração de perfil pelo superadmin (#98).
-2. Compliance: revisar documentação pública, Swagger/OpenAPI e mensagens para manter provedores descritos de forma genérica (#80).
-3. Auth: implementar login com Google OAuth (#97).
-4. Performance: mapear queries críticas, índices e possíveis N+1.
-5. Importação CSV: preparar fluxo de importação de ativos em lote (#82).
+1. CSV: corrigir importação autenticada, `dry_run=false` e template CSV (#82).
+2. Backup/Restore: implementar download de backup e endurecer restore com confirmação forte, lock e auditoria (#83).
+3. Admin: corrigir edição de usuários e alteração de perfil pelo superadmin (#98).
+4. Compliance: revisar documentação pública, Swagger/OpenAPI e mensagens para manter provedores descritos de forma genérica (#80).
+5. Auth: implementar login com Google OAuth (#97).
+6. Performance: mapear queries críticas, índices e possíveis N+1.
 
 ---
 
@@ -76,6 +88,7 @@ A revisão visual e responsiva do sistema segue como baseline consolidado pela i
 
 - Abas de Conta, Carteiras, Distribuição e Avançado.
 - Formulários de perfil e senha responsivos.
+- Alteração de senha autenticada via `/users/me/password`.
 - Lista de carteiras com ações de renomear e excluir.
 - Layout revisado com cards e abas mais confortáveis.
 
@@ -84,6 +97,7 @@ A revisão visual e responsiva do sistema segue como baseline consolidado pela i
 - Login, Registro e Recuperar Senha com padrão visual unificado.
 - Card centralizado, largura controlada e mais respiro interno.
 - Hierarquia clara entre título, subtítulo, campos e ações.
+- Recuperação de senha conectada aos endpoints backend de forgot/reset password.
 
 ### Dados e automações
 
