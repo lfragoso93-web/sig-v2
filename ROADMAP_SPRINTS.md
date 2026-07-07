@@ -1,6 +1,6 @@
 # Roadmap de Sprints — SGI v2
 
-> Última atualização: 06/07/2026
+> Última atualização: 07/07/2026
 > Versão visual e interativa: [ROADMAP_VISUAL.md](./ROADMAP_VISUAL.md)
 
 ---
@@ -133,6 +133,20 @@
 
 ---
 
+## ✅ Sprint 5I — Estabilização auth, dependências e CI (Concluído — 07/07/2026)
+**Período:** Julho 2026
+
+- [x] Corrigido fluxo “Esqueci senha” com endpoints backend `forgot/reset password`
+- [x] Corrigido prefixo duplicado `/api/v1` no frontend de recuperação de senha
+- [x] Criado endpoint autenticado `PATCH /users/me/password`
+- [x] Validada alteração de senha em Configurações
+- [x] Corrigido build Vite no Docker removendo `--configLoader native`
+- [x] Aplicadas e validadas pendências Dependabot de backend, frontend e CI
+- [x] Atualizadas Actions centrais do workflow de CI
+- [x] Validação local: Docker Compose, login, recuperação de senha, troca de senha e Vitest
+
+---
+
 ## ✅ Sprint 6B — PatrimonioPage Analítica + Bugfixes Críticos (Concluído — 30/06/2026)
 **Período:** Junho 2026 | [Issue #81](https://github.com/lfragoso93-web/sig-v2/issues/81)
 
@@ -167,8 +181,21 @@
 
 ---
 
-## 🔄 Próxima sprint — Admin e governança operacional
+## 🔄 Próxima sprint — Contratos operacionais e admin
 **Período:** Julho 2026
+
+### CSV — [Issue #82](https://github.com/lfragoso93-web/sig-v2/issues/82)
+- [ ] Corrigir importação CSV autenticada usando client com Bearer token
+- [ ] Enviar `dry_run=false` no fluxo de importação real
+- [ ] Corrigir template CSV para resposta compatível com streaming/download
+- [ ] Validar fluxo completo no modal de importação
+
+### Backup/Restore — [Issue #83](https://github.com/lfragoso93-web/sig-v2/issues/83)
+- [ ] Criar endpoint autenticado para download de backup
+- [ ] Endurecer restore com senha/frase de confirmação
+- [ ] Adicionar lock global para evitar restores concorrentes
+- [ ] Preparar trilha de auditoria e status de operação
+- [ ] Revisar storage persistente para backups
 
 ### Admin — [Issue #98](https://github.com/lfragoso93-web/sig-v2/issues/98)
 - [ ] Revisar endpoints administrativos de usuários
@@ -258,35 +285,3 @@
 - [ ] Componente `AssetDetailDrawer.tsx`
 - [ ] Gráfico de preço histórico
 - [ ] Histórico de proventos do ativo
-- [ ] Dividend Yield calculado
-- [ ] Disponível em Patrimônio, Transações e Rentabilidade
-
----
-
-## 📋 Sprint 10 — Produção e Qualidade (Planejado)
-**Período:** Outubro 2026 | [Issue #59](https://github.com/lfragoso93-web/sig-v2/issues/59)
-
-- [ ] Testes unitários e de integração com cobertura mínima definida
-- [ ] CI/CD com GitHub Actions
-- [ ] Deploy em ambiente de produção
-- [ ] Monitoramento de erros
-- [ ] Documentação da API
-- [ ] Backups automáticos do PostgreSQL
-
-### Sprint 10B — Backup e Restore do Banco via Sistema
-- [ ] Backup do banco para superadmin
-- [ ] Restore com confirmação por senha
-- [ ] Backup temporário com TTL
-- [ ] Log de operações em `AuditLog`
-- [ ] Frontend com botões de backup/restore
-- [ ] Teste de integração backup → restore → verificação de integridade
-
----
-
-## 🗂 Backlog (Sem sprint definida)
-
-- [ ] Notificações por e-mail
-- [ ] Importação de notas de corretagem
-- [ ] Simulador de aportes
-- [ ] App mobile (React Native)
-- [ ] Multi-tenancy
