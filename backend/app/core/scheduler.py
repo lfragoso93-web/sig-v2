@@ -120,9 +120,16 @@ def start_scheduler() -> None:
                 logger.error("[scheduler] Erro ao atualizar benchmarks SGS/BCB: %s", e)
 
     @scheduler.scheduled_job(
-        CronTrigger(day_of_week="mon-fri", hour=6, minute=40),
-        id="sync_daily_proventos",
-        name="Sincronizar proventos/eventos BRAPI — renda variável nacional",
+        CronTrigger(hour=9, minute=0),
+        id="sync_daily_proventos_morning",
+        name="Sincronizar proventos/eventos BRAPI — renda variável nacional (09:00)",
+        max_instances=1,
+        coalesce=True,
+    )
+    @scheduler.scheduled_job(
+        CronTrigger(hour=18, minute=10),
+        id="sync_daily_proventos_evening",
+        name="Sincronizar proventos/eventos BRAPI — renda variável nacional (18:10)",
         max_instances=1,
         coalesce=True,
     )
