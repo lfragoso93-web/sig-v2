@@ -7,13 +7,9 @@ from app.services.performance_service import get_portfolio_performance
 from app.services.portfolio_snapshot_service import (
     get_daily_evolution,
     get_monthly_evolution,
-    backfill_snapshots,
 )
 from app.models.portfolio import Portfolio
 from sqlalchemy import select
-import logging
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["performance"])
 
@@ -77,21 +73,3 @@ async def evolution_monthly(
     return data
 
 
-@router.post("/{portfolio_id}/evolution/backfill")
-async def evolution_backfill(
-    portfolio_id: int,
-    days_back: int = Query(default=None, ge=1, le=3650, description="Dias para backfill. Omitir = desde a primeira transacao"),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Recalcula snapshots historicos para a carteira.
-    Pode demorar alguns segundos para carteiras com historico longo.
-    """
-    await _assert_portfolio_owner(db, portfolio_id, current_user.id)
-    count = await backfill_snapshots(db, portfolio_id, days_back=days_back)
-    logger.info(
-        "[evolution/backfill] portfolio=%s user=%s snapshots=%s",
-        portfolio_id, current_user.id, count,
-    )
-    return {"snapshots_processed": count, "portfolio_id": portfolio_id}

@@ -130,6 +130,18 @@ async def _boot_sequence() -> None:
             logger.error("[Boot] Etapa 2 (backfill de precos) falhou: %s", e)
 
     try:
+        from app.services.portfolio_snapshot_service import (
+            backfill_missing_snapshots_for_active_portfolios,
+        )
+
+        logger.info("[Boot] Etapa 2b: verificando snapshots patrimoniais")
+        async with AsyncSessionLocal() as db:
+            stats = await backfill_missing_snapshots_for_active_portfolios(db)
+        logger.info("[Boot] Etapa 2b: snapshots patrimoniais atualizados: %s", stats)
+    except Exception as e:
+        logger.error("[Boot] Etapa 2b (snapshots patrimoniais) falhou: %s", e)
+
+    try:
         from app.services.benchmark_rate_service import import_missing_benchmark_history
 
         logger.info("[Boot] Etapa 3: verificando benchmarks SGS/BCB")

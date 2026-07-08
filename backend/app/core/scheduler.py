@@ -172,6 +172,25 @@ def start_scheduler() -> None:
             except Exception as e:
                 logger.error("[scheduler] Erro no pipeline incremental da carteira: %s", e)
 
+    @scheduler.scheduled_job(
+        CronTrigger(day_of_week="mon-fri", hour=21, minute=0),
+        id="portfolio_snapshot_auto_maintenance",
+        name="Manutencao automatica de snapshots patrimoniais",
+        max_instances=1,
+        coalesce=True,
+    )
+    async def portfolio_snapshot_auto_maintenance():
+        from app.core.database import AsyncSessionLocal
+        from app.services.portfolio_snapshot_service import (
+            backfill_missing_snapshots_for_active_portfolios,
+        )
+        async with AsyncSessionLocal() as db:
+            try:
+                result = await backfill_missing_snapshots_for_active_portfolios(db)
+                logger.info("[scheduler] Snapshots patrimoniais atualizados: %s", result)
+            except Exception as e:
+                logger.error("[scheduler] Erro na manutencao de snapshots patrimoniais: %s", e)
+
     scheduler.start()
     logger.info(
         "Scheduler iniciado — cotações intraday + Tesouro Direto + benchmarks SGS/BCB + proventos diários + pipeline carteira"

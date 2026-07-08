@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, status, BackgroundTasks, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, status, HTTPException, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
-from app.core.database import get_db, AsyncSessionLocal
+from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
 from app.schemas.portfolio import (
@@ -22,7 +22,7 @@ from app.services.portfolio_service import (
     get_asset_distribution,
 )
 from app.services.portfolio_delete_service import delete_portfolio_safely
-from app.services.portfolio_snapshot_service import get_monthly_evolution, backfill_snapshots
+from app.services.portfolio_snapshot_service import get_monthly_evolution
 from app.services.portfolio_class_evolution_service import get_monthly_evolution_by_class
 from app.services.class_target_service import (
     get_targets_with_current,
@@ -31,21 +31,7 @@ from app.services.class_target_service import (
     VALID_ASSET_CLASSES,
 )
 from app.services import csv_import_service
-import logging
-
-logger = logging.getLogger(__name__)
-
 router = APIRouter(tags=["portfolios"])
-
-
-async def _backfill_bg(portfolio_id: int) -> None:
-    """Roda backfill em background sem bloquear a resposta."""
-    try:
-        async with AsyncSessionLocal() as db:
-            count = await backfill_snapshots(db, portfolio_id)
-        logger.info("[snapshot_bg] portfolio=%s backfill concluido: %d snapshots", portfolio_id, count)
-    except Exception as exc:
-        logger.error("[snapshot_bg] portfolio=%s erro: %s", portfolio_id, exc)
 
 
 @router.get("/", response_model=list[PortfolioResponse])
@@ -187,18 +173,6 @@ async def patrimonio_history(
             asset_type=asset_type,
         )
     return await get_monthly_evolution(db, portfolio_id, months=months)
-
-
-@router.post("/{portfolio_id}/snapshots/backfill", status_code=status.HTTP_202_ACCEPTED)
-async def backfill_portfolio_snapshots(
-    portfolio_id: int,
-    background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    await get_portfolio(db, portfolio_id, current_user.id)
-    background_tasks.add_task(_backfill_bg, portfolio_id)
-    return {"detail": "Backfill de snapshots iniciado"}
 
 
 @router.post("/{portfolio_id}/import-csv", response_model=CSVImportResponse)
