@@ -3,10 +3,12 @@ import { ChevronDown, FileUp, LogOut, Settings } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { useAppStore } from '@/store/appStore'
+import { usePortfolios } from '@/hooks/usePortfolios'
 import ImportCSVModal from '@/components/modals/ImportCSVModal'
 
 export default function UserMenu() {
   const { user, logout } = useAuthStore()
+  const { data: portfolios = [] } = usePortfolios()
   const selectedPortfolioId = useAppStore(s => s.selectedPortfolioId)
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
@@ -27,6 +29,10 @@ export default function UserMenu() {
   }
 
   if (!user) return null
+
+  const resolvedPortfolioId = portfolios.some(p => p.id === selectedPortfolioId)
+    ? selectedPortfolioId
+    : (portfolios[0]?.id ?? null)
 
   const initials = user.name
     .split(' ')
@@ -118,22 +124,22 @@ export default function UserMenu() {
               </button>
 
               <button
-                disabled={!selectedPortfolioId}
+                disabled={!resolvedPortfolioId}
                 onClick={() => {
-                  if (!selectedPortfolioId) return
+                  if (!resolvedPortfolioId) return
                   setOpen(false)
                   setShowImport(true)
                 }}
-                title={selectedPortfolioId ? 'Importar transações por CSV' : 'Selecione uma carteira para importar CSV'}
+                title={resolvedPortfolioId ? 'Importar transações por CSV' : 'Crie ou selecione uma carteira para importar CSV'}
                 style={{
                   width: '100%', display: 'flex', alignItems: 'center',
                   gap: 'var(--space-3)', padding: 'var(--space-2) var(--space-3)',
                   borderRadius: 'var(--radius-md)', border: 'none',
-                  background: 'transparent', color: selectedPortfolioId ? 'var(--color-text)' : 'var(--color-text-faint)',
-                  fontSize: 'var(--text-xs)', cursor: selectedPortfolioId ? 'pointer' : 'not-allowed', textAlign: 'left',
-                  opacity: selectedPortfolioId ? 1 : 0.6,
+                  background: 'transparent', color: resolvedPortfolioId ? 'var(--color-text)' : 'var(--color-text-faint)',
+                  fontSize: 'var(--text-xs)', cursor: resolvedPortfolioId ? 'pointer' : 'not-allowed', textAlign: 'left',
+                  opacity: resolvedPortfolioId ? 1 : 0.6,
                 }}
-                onMouseEnter={e => { if (selectedPortfolioId) e.currentTarget.style.background = 'var(--color-surface-offset)' }}
+                onMouseEnter={e => { if (resolvedPortfolioId) e.currentTarget.style.background = 'var(--color-surface-offset)' }}
                 onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
               >
                 <FileUp size={14} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
@@ -162,9 +168,9 @@ export default function UserMenu() {
         )}
       </div>
 
-      {showImport && selectedPortfolioId && (
+      {showImport && resolvedPortfolioId && (
         <ImportCSVModal
-          portfolioId={selectedPortfolioId}
+          portfolioId={resolvedPortfolioId}
           onClose={() => setShowImport(false)}
         />
       )}
