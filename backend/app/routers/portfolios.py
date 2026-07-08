@@ -134,7 +134,8 @@ async def get_portfolio_targets_with_current(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return await get_targets_with_current(db, portfolio_id, current_user.id)
+    current_distribution = await get_asset_distribution(db, portfolio_id, current_user.id)
+    return await get_targets_with_current(db, portfolio_id, current_distribution)
 
 
 @router.put(
@@ -166,7 +167,7 @@ async def delete_class_target(
     current_user: User = Depends(get_current_user),
 ):
     asset_type_norm = asset_type.upper()
-    await delete_target(db, portfolio_id, current_user.id, asset_type_norm)
+    await delete_target(db, current_user.id, asset_type_norm)
     return None
 
 
