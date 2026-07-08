@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import api from '@/services/api'
 import { useTheme } from './ThemeContext'
 import { useAuthStore } from '@/store/authStore'
@@ -38,9 +39,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { setTheme } = useTheme()
   const authStore = useAuthStore()
   const clearSelectedPortfolio = useAppStore((s) => s.clearSelectedPortfolio)
+
+  const resetUserScopedState = async () => {
+    clearSelectedPortfolio()
+    await queryClient.cancelQueries()
+    queryClient.clear()
+  }
 
   const loadMe = async (): Promise<User> => {
     const { data } = await api.get<User>('/users/me')
@@ -63,6 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         authStore.logout()
         clearAllTokens()
         delete api.defaults.headers.common['Authorization']
+        void resetUserScopedState()
       })
       .finally(() => setIsLoading(false))
   }, [])
@@ -78,6 +87,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // login direto com tokens (usado pelo RegisterPage após /auth/register)
   const loginWithTokens = async (accessToken: string, refreshToken: string) => {
+    await resetUserScopedState()
+    setUser(null)
+
     localStorage.setItem('sig_token', accessToken)
     localStorage.setItem('sig_refresh', refreshToken)
     api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
@@ -104,8 +116,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearAllTokens()
     delete api.defaults.headers.common['Authorization']
     authStore.logout()
-    clearSelectedPortfolio()
     setUser(null)
+    void resetUserScopedState()
     try {
       navigate('/login', { replace: true })
     } catch {
