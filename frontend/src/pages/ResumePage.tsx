@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { BarChart2, TrendingUp, DollarSign, Briefcase } from 'lucide-react'
+import { BarChart2, TrendingUp, DollarSign, Briefcase, AlertTriangle } from 'lucide-react'
 import clsx from 'clsx'
 import {
   usePortfolioList,
@@ -103,14 +103,18 @@ export default function ResumePage() {
   const { data: patrimonioHistory, isLoading: loadingHistory } = usePatrimonioHistory(portfolioId, period, activeAssetType)
   const { data: positions,         isLoading: loadingPositions } = usePositions(portfolioId)
 
-  const patrimonio       = safeNum(summary?.total_patrimonio ?? summary?.current_value)
-  const aportado         = safeNum(summary?.total_investido  ?? summary?.total_invested)
-  const lucroTotal       = safeNum(summary?.lucro_total      ?? summary?.total_gain)
+  // Mesmo contrato usado em Patrimônio. Evita fallbacks legados que misturavam
+  // current_value/total_gain com os campos consolidados da API.
+  const patrimonio       = safeNum(summary?.total_patrimonio)
+  const aportado         = safeNum(summary?.total_investido)
+  const lucroTotal       = safeNum(summary?.lucro_total)
   const proventos12m     = safeNum(summary?.dividendos_recebidos_12m)
   const proventosTotal   = safeNum(summary?.total_proventos)
   const variacaoValor    = safeNum(summary?.variacao_valor)
   const variacaoPct      = safeNum(summary?.variacao_percentual)
   const rentabilidadePct = safeNum(summary?.rentabilidade_total)
+  const hasPartialPrices = Boolean(summary?.has_partial_prices)
+  const assetsWithoutPrice = summary?.assets_without_price ?? []
 
   const loadingKpiCards = loadingPortfolios || loadingSummary
 
@@ -146,21 +150,39 @@ export default function ResumePage() {
       <div className="kpi-grid">
         {loadingKpiCards ? (
           [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
-        ) : (
+        ) : summary ? (
           <>
             <KpiCard label="Patrimônio Total" value={formatBRL(patrimonio)} subValue={formatBRL(aportado)} subLabel="Valor investido" change={variacaoPct} />
             <KpiCard label="Resultado" value={formatBRL(lucroTotal)} valueColor={signClass(lucroTotal)} subLabel="Ganho de capital + proventos" />
             <KpiCard label="Proventos (12m)" value={formatBRL(proventos12m)} subValue={formatBRL(proventosTotal)} subLabel="Total recebido" />
             <KpiCard
-              label="Variação atual"
+              label="Variação"
               value={formatBRL(variacaoValor)}
               valueColor={signClass(variacaoValor)}
               change={variacaoPct}
               bottomLine={<span className={clsx('text-xs font-semibold tabular-nums', signClass(rentabilidadePct))}>{rentabilidadePct >= 0 ? '+' : ''}{formatPercent(rentabilidadePct)} rentab. total</span>}
             />
           </>
+        ) : (
+          <div className="col-span-4 py-8 text-center text-xs" style={{ color: 'var(--color-text-muted)' }}>Nenhum dado disponível. Adicione lançamentos para começar.</div>
         )}
       </div>
+
+      {hasPartialPrices && (
+        <div
+          className="card"
+          style={{
+            display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem',
+            borderColor: 'oklch(from var(--color-warning) l c h / 0.25)',
+            background: 'oklch(from var(--color-warning) l c h / 0.08)',
+          }}
+        >
+          <AlertTriangle size={15} style={{ color: 'var(--color-warning)', flexShrink: 0 }} />
+          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+            Alguns ativos ainda não têm cotação atual{assetsWithoutPrice.length ? `: ${assetsWithoutPrice.join(', ')}` : ''}. Para eles, o valor investido é usado como referência até a próxima atualização.
+          </span>
+        </div>
+      )}
 
       <div className="card p-4">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
