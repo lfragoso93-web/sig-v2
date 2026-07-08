@@ -186,13 +186,13 @@
 
 Objetivo: fechar bugs visíveis, contratos frontend/backend e riscos operacionais antes de avançar para features maiores como OAuth, IRPF, Análise e Janela Global do Ativo.
 
-### 5J-A — Resumo — [Issue #124](https://github.com/lfragoso93-web/sig-v2/issues/124)
-- [ ] Corrigir KPIs inconsistentes da página Resumo
-- [ ] Alinhar KPIs do Resumo com os valores atuais usados em Patrimônio
-- [ ] Garantir exibição correta de retornos negativos
-- [ ] Separar claramente variação, rentabilidade da classe e retorno total
+### 5J-A — Resumo — [Issue #124](https://github.com/lfragoso93-web/sig-v2/issues/124) — Em andamento
+- [x] Corrigir KPIs inconsistentes da página Resumo
+- [x] Alinhar KPIs do Resumo com os valores atuais usados em Patrimônio
+- [x] Garantir exibição correta de retornos negativos
+- [x] Separar claramente variação, rentabilidade da classe e retorno total nos KPIs
 - [ ] Corrigir dropdown/lista suspensa cortada dentro da tabela
-- [ ] Adicionar cobertura de testes para cálculos e comportamento visual crítico
+- [x] Adicionar cobertura de testes para cálculos críticos
 
 ### 5J-B — CSV — [Issue #82](https://github.com/lfragoso93-web/sig-v2/issues/82)
 - [ ] Corrigir importação CSV autenticada usando client com Bearer token
