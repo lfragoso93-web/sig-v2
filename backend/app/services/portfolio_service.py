@@ -120,14 +120,6 @@ def _is_fixed_income_type(asset_type) -> bool:
 
 
 async def calc_raw_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
-    """
-    Calcula posições brutas da carteira.
-
-    Observação para RENDA_FIXA:
-    - Ainda mantemos a posição bruta para compatibilidade com serviços legados.
-    - As telas de Patrimônio usam fixed_income_valuation_service para substituir
-      o valor zerado por agrupamentos de aplicações, sem conceito de cotas.
-    """
     result = await db.execute(
         select(Transaction)
         .where(Transaction.portfolio_id == portfolio_id)
@@ -229,7 +221,6 @@ def enrich_with_prices(
     prices: dict[str, float],
     fx_today: float = 1.0,
 ) -> list[dict]:
-    """Enriquece posições com preços atuais quando houver cotação."""
     enriched = []
     for p in positions:
         ticker = p["ticker"]
@@ -443,15 +434,12 @@ async def delete_portfolio(db: AsyncSession, portfolio_id: int, user_id: int) ->
     )
     await db.flush()
 
-    # Mantém o histórico de auditoria, mas remove a FK para permitir apagar a carteira.
     await db.execute(
         update(AuditLog)
         .where(AuditLog.portfolio_id == portfolio_id)
         .values(portfolio_id=None)
     )
 
-    # Delete explícito evita falhas quando o banco/migration não tem ON DELETE CASCADE
-    # ou quando o ORM precisaria carregar coleções assíncronas para aplicar cascade.
     dependent_models = (
         Dividend,
         CorporateEvent,
@@ -480,12 +468,12 @@ async def _non_fixed_income_enriched(db: AsyncSession, portfolio_id: int) -> lis
 
 
 async def get_portfolio_summary(db: AsyncSession, portfolio_id: int, user_id: int) -> dict:
+    await get_portfolio(db, portfolio_id, user_id)
     cache_key = _cache_key(portfolio_id, "summary")
     cached = await cache_get(cache_key)
     if cached:
         return cached
 
-    await get_portfolio(db, portfolio_id, user_id)
     enriched = await _non_fixed_income_enriched(db, portfolio_id)
     rf_totals = await get_fixed_income_totals(db, portfolio_id)
 
@@ -542,12 +530,12 @@ async def get_portfolio_summary(db: AsyncSession, portfolio_id: int, user_id: in
 
 
 async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: int) -> list[dict]:
+    await get_portfolio(db, portfolio_id, user_id)
     cache_key = _cache_key(portfolio_id, "positions")
     cached = await cache_get(cache_key)
     if cached:
         return cached
 
-    await get_portfolio(db, portfolio_id, user_id)
     enriched = await _non_fixed_income_enriched(db, portfolio_id)
     targets_map = await get_targets_map(db, portfolio_id)
 
