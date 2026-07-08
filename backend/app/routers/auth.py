@@ -8,8 +8,17 @@ from app.core.security import (
     verify_password, decode_token,
 )
 from app.core.token_blacklist import blacklist_token, is_blacklisted
-from app.schemas.auth import LoginRequest, RefreshRequest, TokenResponse
+from app.schemas.auth import (
+    ForgotPasswordRequest,
+    ForgotPasswordResponse,
+    LoginRequest,
+    MessageResponse,
+    RefreshRequest,
+    ResetPasswordRequest,
+    TokenResponse,
+)
 from app.schemas.user import UserCreate
+from app.services.auth_service import forgot_password, reset_password
 from app.services.user_service import get_user_by_email, get_user_by_id, create_user
 
 router = APIRouter(tags=["auth"])
@@ -63,6 +72,37 @@ async def register(request: Request, data: UserCreate, db: AsyncSession = Depend
         refresh_token=refresh_token,
         token_type="bearer",
     )
+
+
+@router.post("/forgot-password", response_model=ForgotPasswordResponse)
+@limiter.limit(settings.LOGIN_RATE_LIMIT)
+async def request_password_reset(
+    request: Request,
+    data: ForgotPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Inicia recuperacao de senha sem revelar se o e-mail existe.
+    Enquanto nao ha provedor de e-mail configurado, retorna o token para o fluxo atual da UI.
+    """
+    reset_token = await forgot_password(db, data.email)
+    return ForgotPasswordResponse(
+        message="Se o e-mail existir, as instrucoes de recuperacao serao enviadas.",
+        reset_token=reset_token,
+    )
+
+
+@router.post("/reset-password", response_model=MessageResponse)
+@limiter.limit(settings.LOGIN_RATE_LIMIT)
+async def confirm_password_reset(
+    request: Request,
+    data: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Redefine a senha usando token de recuperacao valido."""
+    await reset_password(db, data.token, data.new_password)
+    await db.commit()
+    return MessageResponse(message="Senha redefinida com sucesso")
 
 
 @router.post("/refresh", response_model=TokenResponse)

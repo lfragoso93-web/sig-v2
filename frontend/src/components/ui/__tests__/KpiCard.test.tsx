@@ -24,7 +24,7 @@ describe('KpiCard', () => {
       />
     );
 
-    expect(screen.getByText('+5.50%')).toBeTruthy();
+    expect(screen.getByText((content) => content.replace(/\s/g, '') === '+5,50%')).toBeTruthy();
   });
 
   it('renders subValue and subLabel when provided', () => {
@@ -62,6 +62,6 @@ describe('KpiCard', () => {
       />
     );
 
-    expect(screen.getByText('-3.25%')).toBeTruthy();
+    expect(screen.getByText('-3,25%')).toBeTruthy();
   });
 });
