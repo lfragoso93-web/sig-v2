@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import {
-  BarChart2, RefreshCw, Wallet, Target, TrendingUp,
-  AlertTriangle, PieChart, ArrowUp, ArrowDown, Minus,
+  BarChart2, Wallet, Target, TrendingUp,
+  PieChart, ArrowUp, ArrowDown, Minus,
 } from 'lucide-react'
 import {
   usePortfolioSummary,
@@ -12,7 +12,6 @@ import {
 import {
   useDailyEvolution,
   useMonthlyEvolution,
-  useEvolutionBackfill,
   type PeriodOption,
 } from '@/hooks/useEvolution'
 import { useClassTargets } from '@/hooks/useClassTargets'
@@ -120,11 +119,9 @@ function SectionDivider({ label, icon: Icon }: { label: string; icon?: React.Ele
 function EvolucaoSection({ portfolioId }: { portfolioId: number }) {
   const [period, setPeriod] = useState<PeriodOption>('12m')
   const [view,   setView]   = useState<ViewMode>('mensal')
-  const [backfillDone, setBackfillDone] = useState(false)
 
   const { data: daily,   isLoading: loadingDaily   } = useDailyEvolution(portfolioId, period)
   const { data: monthly, isLoading: loadingMonthly } = useMonthlyEvolution(portfolioId, period)
-  const backfill = useEvolutionBackfill(portfolioId)
 
   const noData = view === 'mensal'
     ? (!loadingMonthly && (!monthly || monthly.length === 0))
@@ -147,24 +144,13 @@ function EvolucaoSection({ portfolioId }: { portfolioId: number }) {
         <div className="flex items-center gap-2 flex-wrap">
           <ToggleGroup<ViewMode>     options={viewOptions} value={view}   onChange={setView}   />
           <ToggleGroup<PeriodOption> options={PERIODS}     value={period} onChange={setPeriod} />
-          <button
-            onClick={async () => { await backfill.mutateAsync(); setBackfillDone(true); setTimeout(() => setBackfillDone(false), 3000) }}
-            disabled={backfill.isPending}
-            className="btn btn-ghost flex items-center gap-1.5 text-xs"
-            title="Recalcular snapshots históricos"
-          >
-            <RefreshCw size={12} className={clsx(backfill.isPending && 'animate-spin')} />
-            {backfillDone ? 'Atualizado!' : 'Atualizar'}
-          </button>
         </div>
       </div>
       <div className="p-4">
         {noData ? (
           <div className="flex flex-col items-center gap-3 py-10" style={{ color: 'var(--color-text-muted)' }}>
-            <AlertTriangle size={24} style={{ color: 'var(--color-warning, #f59e0b)' }} />
             <p className="text-sm text-center">
-              Nenhum dado histórico.<br />
-              Clique em <strong>Atualizar</strong> para gerar os snapshots.
+              Nenhum dado histórico para o período selecionado.
             </p>
           </div>
         ) : view === 'diario' ? (
