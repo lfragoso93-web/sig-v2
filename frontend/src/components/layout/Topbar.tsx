@@ -7,7 +7,7 @@ import LogoSGI from '@/components/ui/LogoSGI'
 import CreatePortfolioModal from '@/components/modals/CreatePortfolioModal'
 
 function PortfolioSelector() {
-  const { data: portfolios = [] } = usePortfolios()
+  const { data: portfolios = [], isLoading } = usePortfolios()
   const { selectedPortfolioId, setSelectedPortfolio, clearSelectedPortfolio } = useAppStore()
   const deletePortfolio = useDeletePortfolio()
   const [open, setOpen] = useState(false)
@@ -25,6 +25,20 @@ function PortfolioSelector() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
+  useEffect(() => {
+    if (isLoading) return
+
+    if (!portfolios.length) {
+      if (selectedPortfolioId !== null) clearSelectedPortfolio()
+      return
+    }
+
+    const isValid = selectedPortfolioId !== null && portfolios.some(p => p.id === selectedPortfolioId)
+    if (!isValid) {
+      setSelectedPortfolio(portfolios[0].id)
+    }
+  }, [clearSelectedPortfolio, isLoading, portfolios, selectedPortfolioId, setSelectedPortfolio])
+
   const handleDelete = async (portfolioId: number, portfolioName: string) => {
     setDeleteError(null)
     const ok = window.confirm(`Excluir a carteira "${portfolioName}"? Esta ação removerá os dados vinculados a ela.`)
@@ -41,6 +55,20 @@ function PortfolioSelector() {
     } catch {
       setDeleteError('Não foi possível excluir a carteira. Tente novamente.')
     }
+  }
+
+  if (isLoading) {
+    return (
+      <div
+        style={{
+          width: 140,
+          height: 36,
+          borderRadius: 'var(--radius-lg)',
+          background: 'oklch(from var(--color-text) l c h / 0.05)',
+          border: '1px solid oklch(from var(--color-text) l c h / 0.09)',
+        }}
+      />
+    )
   }
 
   if (!portfolios.length) {
@@ -102,7 +130,7 @@ function PortfolioSelector() {
         >
           <Briefcase size={13} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
           <span className="truncate" style={{ fontSize: 'var(--text-xs)', fontWeight: 560, maxWidth: 155 }}>
-            {selected?.name ?? 'Carteira'}
+            {selected?.name ?? portfolios[0]?.name ?? 'Carteira'}
           </span>
           <ChevronDown
             size={12}
