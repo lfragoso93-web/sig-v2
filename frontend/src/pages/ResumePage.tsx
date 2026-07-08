@@ -9,6 +9,7 @@ import {
 } from '@/hooks/usePortfolio'
 import { useAppStore } from '@/store/appStore'
 import { formatBRL, formatPercent, signClass } from '@/utils/format'
+import { mapPortfolioSummaryMetrics } from '@/utils/portfolioSummary'
 import KpiCard from '@/components/ui/KpiCard'
 import SkeletonCard from '@/components/ui/SkeletonCard'
 import EmptyState from '@/components/ui/EmptyState'
@@ -36,11 +37,6 @@ const ASSET_CLASS_OPTIONS = [
   { label: 'Renda Fixa',           value: 'RENDA_FIXA'        },
   { label: 'Cripto',               value: 'CRIPTO'            },
 ]
-
-function safeNum(v: unknown): number {
-  const n = Number(v)
-  return Number.isFinite(n) ? n : 0
-}
 
 function ChartSelect({
   value, onChange, options,
@@ -103,19 +99,7 @@ export default function ResumePage() {
   const { data: patrimonioHistory, isLoading: loadingHistory } = usePatrimonioHistory(portfolioId, period, activeAssetType)
   const { data: positions,         isLoading: loadingPositions } = usePositions(portfolioId)
 
-  // Mesmo contrato usado em Patrimônio. Evita fallbacks legados que misturavam
-  // current_value/total_gain com os campos consolidados da API.
-  const patrimonio       = safeNum(summary?.total_patrimonio)
-  const aportado         = safeNum(summary?.total_investido)
-  const lucroTotal       = safeNum(summary?.lucro_total)
-  const proventos12m     = safeNum(summary?.dividendos_recebidos_12m)
-  const proventosTotal   = safeNum(summary?.total_proventos)
-  const variacaoValor    = safeNum(summary?.variacao_valor)
-  const variacaoPct      = safeNum(summary?.variacao_percentual)
-  const rentabilidadePct = safeNum(summary?.rentabilidade_total)
-  const hasPartialPrices = Boolean(summary?.has_partial_prices)
-  const assetsWithoutPrice = summary?.assets_without_price ?? []
-
+  const metrics = mapPortfolioSummaryMetrics(summary)
   const loadingKpiCards = loadingPortfolios || loadingSummary
 
   if (loadingPortfolios) {
@@ -152,15 +136,15 @@ export default function ResumePage() {
           [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
         ) : summary ? (
           <>
-            <KpiCard label="Patrimônio Total" value={formatBRL(patrimonio)} subValue={formatBRL(aportado)} subLabel="Valor investido" change={variacaoPct} />
-            <KpiCard label="Resultado" value={formatBRL(lucroTotal)} valueColor={signClass(lucroTotal)} subLabel="Ganho de capital + proventos" />
-            <KpiCard label="Proventos (12m)" value={formatBRL(proventos12m)} subValue={formatBRL(proventosTotal)} subLabel="Total recebido" />
+            <KpiCard label="Patrimônio Total" value={formatBRL(metrics.patrimonio)} subValue={formatBRL(metrics.aportado)} subLabel="Valor investido" change={metrics.variacaoPct} />
+            <KpiCard label="Resultado" value={formatBRL(metrics.lucroTotal)} valueColor={signClass(metrics.lucroTotal)} subLabel="Ganho de capital + proventos" />
+            <KpiCard label="Proventos (12m)" value={formatBRL(metrics.proventos12m)} subValue={formatBRL(metrics.proventosTotal)} subLabel="Total recebido" />
             <KpiCard
               label="Variação"
-              value={formatBRL(variacaoValor)}
-              valueColor={signClass(variacaoValor)}
-              change={variacaoPct}
-              bottomLine={<span className={clsx('text-xs font-semibold tabular-nums', signClass(rentabilidadePct))}>{rentabilidadePct >= 0 ? '+' : ''}{formatPercent(rentabilidadePct)} rentab. total</span>}
+              value={formatBRL(metrics.variacaoValor)}
+              valueColor={signClass(metrics.variacaoValor)}
+              change={metrics.variacaoPct}
+              bottomLine={<span className={clsx('text-xs font-semibold tabular-nums', signClass(metrics.rentabilidadePct))}>{metrics.rentabilidadePct >= 0 ? '+' : ''}{formatPercent(metrics.rentabilidadePct)} rentab. total</span>}
             />
           </>
         ) : (
@@ -168,7 +152,7 @@ export default function ResumePage() {
         )}
       </div>
 
-      {hasPartialPrices && (
+      {metrics.hasPartialPrices && (
         <div
           className="card"
           style={{
@@ -179,7 +163,7 @@ export default function ResumePage() {
         >
           <AlertTriangle size={15} style={{ color: 'var(--color-warning)', flexShrink: 0 }} />
           <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
-            Alguns ativos ainda não têm cotação atual{assetsWithoutPrice.length ? `: ${assetsWithoutPrice.join(', ')}` : ''}. Para eles, o valor investido é usado como referência até a próxima atualização.
+            Alguns ativos ainda não têm cotação atual{metrics.assetsWithoutPrice.length ? `: ${metrics.assetsWithoutPrice.join(', ')}` : ''}. Para eles, o valor investido é usado como referência até a próxima atualização.
           </span>
         </div>
       )}
