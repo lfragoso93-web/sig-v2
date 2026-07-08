@@ -1,6 +1,6 @@
 # Roadmap de Sprints — SGI v2
 
-> Última atualização: 07/07/2026
+> Última atualização: 08/07/2026
 > Versão visual e interativa: [ROADMAP_VISUAL.md](./ROADMAP_VISUAL.md)
 
 ---
@@ -181,38 +181,43 @@
 
 ---
 
-## 🔄 Próxima sprint — Contratos operacionais e admin
+## 🔄 Sprint 5J — Estabilização funcional e contratos operacionais
 **Período:** Julho 2026
 
-### CSV — [Issue #82](https://github.com/lfragoso93-web/sig-v2/issues/82)
+Objetivo: fechar bugs visíveis, contratos frontend/backend e riscos operacionais antes de avançar para features maiores como OAuth, IRPF, Análise e Janela Global do Ativo.
+
+### 5J-A — Resumo — [Issue #124](https://github.com/lfragoso93-web/sig-v2/issues/124)
+- [ ] Corrigir KPIs inconsistentes da página Resumo
+- [ ] Alinhar KPIs do Resumo com os valores atuais usados em Patrimônio
+- [ ] Garantir exibição correta de retornos negativos
+- [ ] Separar claramente variação, rentabilidade da classe e retorno total
+- [ ] Corrigir dropdown/lista suspensa cortada dentro da tabela
+- [ ] Adicionar cobertura de testes para cálculos e comportamento visual crítico
+
+### 5J-B — CSV — [Issue #82](https://github.com/lfragoso93-web/sig-v2/issues/82)
 - [ ] Corrigir importação CSV autenticada usando client com Bearer token
 - [ ] Enviar `dry_run=false` no fluxo de importação real
 - [ ] Corrigir template CSV para resposta compatível com streaming/download
 - [ ] Validar fluxo completo no modal de importação
 
-### Backup/Restore — [Issue #83](https://github.com/lfragoso93-web/sig-v2/issues/83)
+### 5J-C — Backup/Restore — [Issue #83](https://github.com/lfragoso93-web/sig-v2/issues/83)
 - [ ] Criar endpoint autenticado para download de backup
 - [ ] Endurecer restore com senha/frase de confirmação
 - [ ] Adicionar lock global para evitar restores concorrentes
 - [ ] Preparar trilha de auditoria e status de operação
 - [ ] Revisar storage persistente para backups
 
-### Admin — [Issue #98](https://github.com/lfragoso93-web/sig-v2/issues/98)
+### 5J-D — Admin — [Issue #98](https://github.com/lfragoso93-web/sig-v2/issues/98)
 - [ ] Revisar endpoints administrativos de usuários
 - [ ] Revisar autorização de superadmin
 - [ ] Permitir edição de dados permitidos de usuários
 - [ ] Permitir alteração de perfil/permissão quando aplicável
 - [ ] Proteger contra remoção acidental do último superadmin
 
-### Compliance — [Issue #80](https://github.com/lfragoso93-web/sig-v2/issues/80)
+### 5J-E — Compliance — [Issue #80](https://github.com/lfragoso93-web/sig-v2/issues/80)
 - [ ] Remover menções explícitas a provedores em documentação pública
 - [ ] Substituir referências por termos genéricos
 - [ ] Revisar Swagger/OpenAPI e mensagens públicas
-
-### Auth — [Issue #97](https://github.com/lfragoso93-web/sig-v2/issues/97)
-- [ ] Implementar login/cadastro com Google OAuth como método adicional
-- [ ] Vincular usuário existente por e-mail verificado
-- [ ] Emitir os mesmos tokens internos do login tradicional
 
 ---
 
