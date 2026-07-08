@@ -57,6 +57,8 @@ export interface PortfolioSummary {
   rentabilidade_total?: number
   dividendos_recebidos_12m?: number
   total_proventos?: number
+  has_partial_prices?: boolean
+  assets_without_price?: string[]
 }
 
 export interface PortfolioListItem {
