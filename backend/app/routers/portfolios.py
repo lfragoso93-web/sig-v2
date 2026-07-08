@@ -149,11 +149,14 @@ async def upsert_class_target(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # asset_type da URL manda; body pode vir igual por conveniencia
+    await get_portfolio(db, portfolio_id, current_user.id)
     asset_type_norm = asset_type.upper()
     if asset_type_norm not in VALID_ASSET_CLASSES:
         raise HTTPException(status_code=400, detail="Classe de ativo invalida")
-    return await upsert_target(db, portfolio_id, current_user.id, asset_type_norm, data.target_pct)
+    await upsert_target(db, portfolio_id, asset_type_norm, data.target_pct)
+    current_distribution = await get_asset_distribution(db, portfolio_id, current_user.id)
+    rows = await get_targets_with_current(db, portfolio_id, current_distribution)
+    return next(row for row in rows if row["asset_type"] == asset_type_norm)
 
 
 @router.delete(
@@ -166,8 +169,9 @@ async def delete_class_target(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    await get_portfolio(db, portfolio_id, current_user.id)
     asset_type_norm = asset_type.upper()
-    await delete_target(db, current_user.id, asset_type_norm)
+    await delete_target(db, portfolio_id, asset_type_norm)
     return None
 
 
