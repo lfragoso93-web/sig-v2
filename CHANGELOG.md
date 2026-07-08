@@ -7,6 +7,38 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Concluído — Contratos críticos de autenticação e atualização de dependências (07/07/2026)
+
+> Pacote validado localmente antes da PR `stable-15jun` → `main`, com foco em corrigir fluxos quebrados visíveis e reduzir pendências do Dependabot.
+
+**Backend**
+- Endpoint `POST /auth/forgot-password` exposto no router de autenticação.
+- Endpoint `POST /auth/reset-password` exposto no router de autenticação.
+- Schemas dedicados para solicitação e confirmação de recuperação de senha.
+- Endpoint `PATCH /users/me/password` criado para alteração autenticada de senha.
+- Validação da senha atual antes da troca de senha do usuário autenticado.
+- Atualizações de dependências backend aplicadas em blocos pequenos: `email-validator`, `yfinance`, `fastapi` e `uvicorn`.
+
+**Frontend**
+- Fluxo “Esqueci senha” corrigido para usar o client Axios já prefixado com `/api/v1`, evitando chamadas duplicadas para `/api/v1/api/v1/...`.
+- Tela de recuperação de senha validada localmente após a correção dos endpoints.
+- Tela de Configurações validada para alteração de senha com o novo contrato backend.
+- Build Vite corrigido removendo `--configLoader native`, que quebrava o Docker ao carregar `vite.config.ts`.
+- `jsdom` atualizado e validado com Vitest.
+
+**CI/CD**
+- GitHub Actions centrais atualizadas: `actions/checkout`, `actions/setup-python` e `actions/setup-node`.
+- PRs redundantes do Dependabot fechados após aplicação direta e validação em `stable-15jun`.
+
+**Validação local reportada**
+- `docker compose up -d --build backend frontend` subiu backend, frontend, banco e Redis sem erros.
+- Login validado com sucesso.
+- Fluxo “Esqueci senha” validado com sucesso.
+- Alteração de senha em Configurações validada com sucesso.
+- `npm test` executado com Vitest e teste de `KpiCard` passando.
+
+---
+
 ### Concluído — Validação da página Proventos após pipeline completo (06/07/2026) — #95
 
 > Continuidade da entrega #92 / PR #93, validando a experiência da página Proventos com dados materializados pelo pipeline de renda variável nacional.
@@ -81,6 +113,10 @@ Formato baseado em Keep a Changelog.
 
 ### Próximos focos sugeridos
 
+**Contratos frontend/backend**
+- Corrigir importação CSV autenticada, `dry_run=false` e template CSV (#82).
+- Implementar download de backup e endurecer restore com confirmação forte, lock e auditoria (#83).
+
 **Admin**
 - Corrigir edição de usuários e alteração de perfil pelo superadmin (#98).
 
@@ -94,9 +130,6 @@ Formato baseado em Keep a Changelog.
 - Mapear queries críticas com `EXPLAIN ANALYZE`.
 - Adicionar índices faltantes.
 - Corrigir padrões N+1 em listagens de posições e transações.
-
-**Importação CSV**
-- Preparar fluxo de importação de ativos em lote com validação e preview (#82).
 
 ---
 
