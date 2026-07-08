@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import api from '@/services/api'
 
 export interface DailyPoint {
@@ -73,19 +73,5 @@ export function useMonthlyEvolution(
     enabled: !!portfolioId,
     placeholderData: [],
     staleTime: 5 * 60 * 1000,
-  })
-}
-
-export function useEvolutionBackfill(portfolioId: number | null) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: () =>
-      api
-        .post(`/performance/${portfolioId}/evolution/backfill`)
-        .then(r => r.data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['evolution-daily',   portfolioId] })
-      qc.invalidateQueries({ queryKey: ['evolution-monthly', portfolioId] })
-    },
   })
 }
