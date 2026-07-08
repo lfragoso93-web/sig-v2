@@ -86,13 +86,20 @@ export default function ResumePage() {
 
   const { data: portfolios, isLoading: loadingPortfolios } = usePortfolioList()
 
-  useEffect(() => {
-    if (!globalPortfolioId && portfolios && portfolios.length > 0) {
-      setGlobal(portfolios[0].id)
-    }
-  }, [globalPortfolioId, portfolios, setGlobal])
+  const hasPortfolios = Boolean(portfolios?.length)
+  const validGlobalPortfolioId = hasPortfolios && portfolios!.some(p => p.id === globalPortfolioId)
+    ? globalPortfolioId
+    : null
+  const portfolioId: number | null = validGlobalPortfolioId ?? (portfolios?.[0]?.id ?? null)
 
-  const portfolioId: number | null = globalPortfolioId ?? (portfolios?.[0]?.id ?? null)
+  useEffect(() => {
+    if (loadingPortfolios || !portfolios) return
+    if (portfolios.length === 0) return
+    if (globalPortfolioId !== portfolioId && portfolioId) {
+      setGlobal(portfolioId)
+    }
+  }, [globalPortfolioId, loadingPortfolios, portfolioId, portfolios, setGlobal])
+
   const activeAssetType = assetClass === ASSET_CLASS_ALL ? null : assetClass
 
   const { data: summary,           isLoading: loadingSummary } = usePortfolioSummaryData(portfolioId)
