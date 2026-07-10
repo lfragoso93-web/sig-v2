@@ -14,33 +14,10 @@ CANONICAL_ZERO = {
 
 
 @pytest.mark.asyncio
-async def test_get_portfolio_performance_cached():
-    db = AsyncMock(spec=AsyncSession)
-
-    with patch('app.services.performance_service.cache_get') as mock_cache_get:
-        cached_data = {
-            "total_invested": 10000.0,
-            "total_current_value": 12000.0,
-            "total_gain": 2000.0,
-            "total_gain_pct": 20.0,
-            "positions": [],
-        }
-        mock_cache_get.return_value = cached_data
-
-        result = await get_portfolio_performance(db, portfolio_id=1, user_id=1)
-
-        assert result == cached_data
-        mock_cache_get.assert_called_once()
-
-
-@pytest.mark.asyncio
 async def test_get_portfolio_performance_no_transactions():
     db = AsyncMock(spec=AsyncSession)
 
-    with patch('app.services.performance_service.cache_get') as mock_cache_get, \
-         patch('app.services.performance_service.cache_set') as mock_cache_set, \
-         patch('app.services.performance_service.get_canonical_portfolio_summary') as mock_summary:
-        mock_cache_get.return_value = None
+    with patch('app.services.performance_service.get_canonical_portfolio_summary') as mock_summary:
         mock_summary.return_value = CANONICAL_ZERO
 
         fetch_result = MagicMock()
@@ -55,7 +32,6 @@ async def test_get_portfolio_performance_no_transactions():
         assert result["total_gain_pct"] == 0.0
         assert result["positions"] == []
         mock_summary.assert_awaited_once_with(db, 1, 1)
-        mock_cache_set.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -81,11 +57,8 @@ async def test_get_portfolio_performance_single_stock_uses_canonical_totals():
         "total_gain_pct": 15.7143,
     }
 
-    with patch('app.services.performance_service.cache_get') as mock_cache_get, \
-         patch('app.services.performance_service.cache_set'), \
-         patch('app.services.performance_service.get_current_price') as mock_get_price, \
+    with patch('app.services.performance_service.get_current_price') as mock_get_price, \
          patch('app.services.performance_service.get_canonical_portfolio_summary') as mock_summary:
-        mock_cache_get.return_value = None
         mock_get_price.return_value = 60.0
         mock_summary.return_value = canonical
 
@@ -131,11 +104,8 @@ async def test_get_portfolio_performance_buy_and_sell():
     mock_asset.name = "Petrobras"
     mock_asset.ticker = "PETR4"
 
-    with patch('app.services.performance_service.cache_get') as mock_cache_get, \
-         patch('app.services.performance_service.cache_set'), \
-         patch('app.services.performance_service.get_current_price') as mock_get_price, \
+    with patch('app.services.performance_service.get_current_price') as mock_get_price, \
          patch('app.services.performance_service.get_canonical_portfolio_summary') as mock_summary:
-        mock_cache_get.return_value = None
         mock_get_price.return_value = 40.0
         mock_summary.return_value = CANONICAL_ZERO
 
@@ -167,11 +137,8 @@ async def test_get_portfolio_performance_zero_current_price():
     mock_asset = MagicMock()
     mock_asset.name = "Test Asset"
 
-    with patch('app.services.performance_service.cache_get') as mock_cache_get, \
-         patch('app.services.performance_service.cache_set'), \
-         patch('app.services.performance_service.get_current_price') as mock_get_price, \
+    with patch('app.services.performance_service.get_current_price') as mock_get_price, \
          patch('app.services.performance_service.get_canonical_portfolio_summary') as mock_summary:
-        mock_cache_get.return_value = None
         mock_get_price.return_value = None
         mock_summary.return_value = CANONICAL_ZERO
 
@@ -221,11 +188,8 @@ async def test_get_portfolio_performance_multiple_stocks():
         "total_gain_pct": 18.1818,
     }
 
-    with patch('app.services.performance_service.cache_get') as mock_cache_get, \
-         patch('app.services.performance_service.cache_set'), \
-         patch('app.services.performance_service.get_current_price') as mock_get_price, \
+    with patch('app.services.performance_service.get_current_price') as mock_get_price, \
          patch('app.services.performance_service.get_canonical_portfolio_summary') as mock_summary:
-        mock_cache_get.return_value = None
         mock_get_price.side_effect = [60.0, 35.0]
         mock_summary.return_value = canonical
 
