@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import warnings
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset
@@ -38,21 +40,39 @@ def _event_type(asset_type: str) -> DividendType:
 
 
 async def _fetch_full_history(ticker: str, asset_type: str) -> list[tuple[date, float]]:
+    """Busca dividendos sem depender de ``period=max``.
+
+    Alguns tickers recém-listados expõem somente períodos curtos no Yahoo. Usar
+    ``start``/``end`` evita que essa limitação gere exceção e mantém o retorno
+    vazio como um caso normal para ativos sem histórico disponível.
+    """
     symbol = _yf_symbol(ticker, asset_type)
 
     def _sync() -> list[tuple[date, float]]:
         import yfinance as yf
 
-        series = yf.Ticker(symbol).dividends
-        if series.empty:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            history = yf.Ticker(symbol).history(
+                start="1970-01-01",
+                end=(date.today() + timedelta(days=1)).isoformat(),
+                actions=True,
+                auto_adjust=False,
+            )
+
+        if history.empty or "Dividends" not in history.columns:
             return []
 
         rows: list[tuple[date, float]] = []
-        for timestamp, value in series.items():
+        for timestamp, value in history["Dividends"].items():
             amount = float(value or 0)
             if amount <= 0:
                 continue
-            event_date = timestamp.date() if hasattr(timestamp, "date") else date.fromisoformat(str(timestamp)[:10])
+            event_date = (
+                timestamp.date()
+                if hasattr(timestamp, "date")
+                else date.fromisoformat(str(timestamp)[:10])
+            )
             rows.append((event_date, amount))
         return rows
 
@@ -66,7 +86,12 @@ async def seed_full_dividend_history(
     ticker: str,
     asset_type: str,
 ) -> int:
-    """Persiste todo o histórico anterior à cobertura principal e materializa carteiras."""
+    """Persiste o histórico anterior à cobertura principal e materializa carteiras.
+
+    A escrita é idempotente pela constraint
+    ``uq_asset_dividend_asset_exdate_type``. Assim, reexecutar o seed nunca deve
+    abortar o processamento do ativo por eventos já existentes.
+    """
     ticker = ticker.upper().strip()
     asset_type = asset_type.upper().strip()
     if not ticker or asset_type in SKIP_TYPES:
@@ -87,39 +112,26 @@ async def seed_full_dividend_history(
     try:
         history = await _fetch_full_history(ticker, asset_type)
     except Exception as exc:
-        logger.warning("[dividend_history] falha ao buscar histórico de %s: %s", ticker, exc)
+        logger.warning("[dividend_history] histórico indisponível para %s: %s", ticker, exc)
         return 0
 
     if not history:
+        logger.debug("[dividend_history] %s sem histórico complementar disponível", ticker)
         return 0
 
     dividend_type = _event_type(asset_type)
-    existing_rows = await db.execute(
-        select(AssetDividend.ex_date, AssetDividend.dividend_type)
-        .where(AssetDividend.asset_id == asset.id)
-    )
-    existing_keys = {
-        (
-            row.ex_date,
-            row.dividend_type.value if hasattr(row.dividend_type, "value") else str(row.dividend_type),
-        )
-        for row in existing_rows.all()
-    }
-
     inserted = 0
+
     for event_date, amount in history:
-        # O complemento histórico só cobre datas anteriores à fonte principal.
-        # O catálogo global recebe todo o histórico disponível; a carteira só
-        # materializa direitos quando havia posição na data do evento.
+        # A BRAPI continua responsável pela cobertura principal e pelos campos
+        # ricos. O Yahoo complementa somente datas anteriores ao primeiro evento
+        # conhecido dessa fonte principal.
         if earliest_existing is not None and event_date >= earliest_existing:
             continue
 
-        key = (event_date, dividend_type.value)
-        if key in existing_keys:
-            continue
-
-        db.add(
-            AssetDividend(
+        stmt = (
+            pg_insert(AssetDividend)
+            .values(
                 asset_id=asset.id,
                 record_date=None,
                 ex_date=event_date,
@@ -133,9 +145,11 @@ async def seed_full_dividend_history(
                     "historical_seed": True,
                 },
             )
+            .on_conflict_do_nothing(constraint="uq_asset_dividend_asset_exdate_type")
         )
-        existing_keys.add(key)
-        inserted += 1
+        result = await db.execute(stmt)
+        if result.rowcount and result.rowcount > 0:
+            inserted += 1
 
     if inserted:
         await db.flush()
@@ -151,5 +165,10 @@ async def seed_full_dividend_history(
             inserted,
             materialized,
         )
+    else:
+        # Libera qualquer transação de leitura aberta pela sessão sem gerar
+        # alteração no banco.
+        await db.rollback()
+        logger.debug("[dividend_history] %s já estava atualizado", ticker)
 
     return inserted
