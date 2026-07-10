@@ -1,6 +1,4 @@
 import { useState } from 'react'
-import { usePortfolioList } from '@/hooks/usePortfolio'
-import type { PortfolioListItem } from '@/hooks/usePortfolio'
 import {
   useRentabilidadeKpis,
   useRentabilidadeAtivos,
@@ -10,6 +8,8 @@ import type { RentabilidadeAtivo, RentabilidadeClasse } from '@/hooks/useRentabi
 import { formatBRL, formatPercent } from '@/utils/format'
 import KpiCard from '@/components/ui/KpiCard'
 import RentabilidadeChart from '@/components/charts/RentabilidadeChart'
+import EmptyState from '@/components/ui/EmptyState'
+import { TrendingUp } from 'lucide-react'
 import { useAppStore } from '@/store/appStore'
 
 function safeNum(v: unknown): number {
@@ -113,22 +113,27 @@ function AtivoRow({ ativo }: { ativo: RentabilidadeAtivo }) {
 }
 
 export default function RentabilidadePage() {
-  const { data: portfolios } = usePortfolioList()
-  const globalPortfolioId = useAppStore(s => s.selectedPortfolioId)
-  const [selectedPortfolio, setSelectedPortfolio] = useState<number | null>(null)
-  const portfolioId = selectedPortfolio ?? globalPortfolioId ?? (portfolios?.[0]?.id ?? 0)
+  const portfolioId = useAppStore(s => s.selectedPortfolioId)
   const [assetTypeFilter, setAssetTypeFilter] = useState('')
   const [showZeradas, setShowZeradas] = useState(false)
 
-  const { data: kpis, isLoading: loadingKpis } = useRentabilidadeKpis(portfolioId || null)
-  const { data: ativos, isLoading: loadingAtivos } = useRentabilidadeAtivos(portfolioId || null)
-  const { data: classes, isLoading: loadingClasses } = useRentabilidadeClasses(portfolioId || null)
+  const { data: kpis, isLoading: loadingKpis } = useRentabilidadeKpis(portfolioId)
+  const { data: ativos, isLoading: loadingAtivos } = useRentabilidadeAtivos(portfolioId)
+  const { data: classes, isLoading: loadingClasses } = useRentabilidadeClasses(portfolioId)
 
   const ativosFiltrados = (ativos ?? []).filter(a => {
     if (!showZeradas && !a.is_open) return false
     if (assetTypeFilter && a.asset_type !== assetTypeFilter) return false
     return true
   })
+
+  if (!portfolioId) {
+    return (
+      <div className="page-container">
+        <EmptyState icon={TrendingUp} title="Nenhuma carteira selecionada" description="Selecione uma carteira no menu superior para visualizar a rentabilidade." />
+      </div>
+    )
+  }
 
   return (
     <div className="page-container">
@@ -141,15 +146,6 @@ export default function RentabilidadePage() {
           <span className="text-xs" style={{ color: 'var(--color-text-faint)' }}>Atualizado em {new Date(kpis.snapshot_date + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
         )}
       </div>
-
-      {(portfolios?.length ?? 0) > 1 && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Carteira:</span>
-          {(portfolios ?? []).map((p: PortfolioListItem) => (
-            <button key={p.id} onClick={() => setSelectedPortfolio(p.id)} className="px-3 py-1 rounded text-xs font-medium transition-colors" style={{ background: portfolioId === p.id ? 'oklch(from var(--color-primary) l c h / 0.15)' : 'var(--color-surface-offset)', color: portfolioId === p.id ? 'var(--color-primary)' : 'var(--color-text-muted)' }}>{p.name}</button>
-          ))}
-        </div>
-      )}
 
       {loadingKpis ? (
         <div className="kpi-grid">{[...Array(4)].map((_, i) => <div key={i} className="card h-[88px] skeleton" />)}</div>
@@ -171,7 +167,7 @@ export default function RentabilidadePage() {
         </>
       )}
 
-      {portfolioId > 0 && <RentabilidadeChart portfolioId={portfolioId} />}
+      <RentabilidadeChart portfolioId={portfolioId} />
 
       <div className="flex flex-col gap-4">
         <div className="card overflow-hidden">
