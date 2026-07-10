@@ -24,12 +24,16 @@ from app.integrations.brapi_treasury import (
     fetch_treasury_prices,
     is_brapi_treasury_symbol,
 )
+from app.integrations.tesouro_transparente_prices import (
+    fetch_tesouro_transparente_prices,
+)
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
 
 logger = logging.getLogger(__name__)
 
 SOURCE = "brapi_treasury"
+FALLBACK_SOURCE = "tesouro_transparente"
 DEFAULT_HISTORY_YEARS = 10
 _INCREMENTAL_LOOKBACK_DAYS = 10
 _TREASURY_HISTORY_CHUNK = 20
@@ -76,6 +80,7 @@ async def _upsert_price_rows(
     db: AsyncSession,
     asset: Asset,
     rows: list[tuple[datetime, float]],
+    source: str = SOURCE,
 ) -> int:
     if not rows:
         return 0
@@ -94,13 +99,13 @@ async def _upsert_price_rows(
                 asset_id=asset.id,
                 timestamp=ts,
                 close=value,
-                source=SOURCE,
+                source=source,
             )
             .on_conflict_do_update(
                 constraint="uq_price_asset_timestamp",
                 set_={
                     "close": value,
-                    "source": SOURCE,
+                    "source": source,
                 },
             )
         )
@@ -204,9 +209,11 @@ async def import_missing_treasury_price_history() -> dict[str, int]:
 
 
 async def update_treasury_latest_prices(db: AsyncSession, commit: bool = True) -> dict[str, float]:
-    """
-    Atualiza apenas o snapshot atual dos títulos do Tesouro em assets.last_price.
-    Títulos sintéticos/sem cobertura de indicators são ignorados sem erro.
+    """Atualiza o snapshot atual dos títulos do Tesouro.
+
+    BRAPI continua como fonte primária. Para títulos canônicos sem indicador,
+    especialmente alguns vencimentos RendA+/Educa+, usa o preço mais recente
+    publicado no Tesouro Transparente.
     """
     assets = await _treasury_assets(db)
     by_symbol: dict[str, Asset] = {}
@@ -223,7 +230,16 @@ async def update_treasury_latest_prices(db: AsyncSession, commit: bool = True) -
         return {}
 
     prices = await fetch_treasury_prices(symbols)
+    missing = [symbol for symbol in symbols if symbol not in prices]
+    fallback_prices: dict[str, float] = {}
+    if missing:
+        try:
+            fallback_prices = await fetch_tesouro_transparente_prices(missing)
+        except Exception as exc:
+            logger.info("[treasury_history] fallback Tesouro Transparente indisponível: %s", exc)
+
     now = _now_utc()
+    today_ts = now.replace(hour=12, minute=0, second=0, microsecond=0)
 
     for symbol, price in prices.items():
         asset = by_symbol.get(symbol)
@@ -232,10 +248,26 @@ async def update_treasury_latest_prices(db: AsyncSession, commit: bool = True) -
         asset.last_price = Decimal(str(round(price, 8)))
         asset.last_price_updated_at = now
 
+    for symbol, price in fallback_prices.items():
+        if symbol in prices:
+            continue
+        asset = by_symbol.get(symbol)
+        if not asset:
+            continue
+        await _upsert_price_rows(
+            db,
+            asset,
+            [(today_ts, price)],
+            source=FALLBACK_SOURCE,
+        )
+        prices[symbol] = price
+
     if commit:
         await db.commit()
 
     if skipped:
         logger.info("[treasury_history] snapshot Tesouro ignorou %d títulos sem symbol canônico", skipped)
+    if fallback_prices:
+        logger.info("[treasury_history] fallback atualizou %d título(s)", len(fallback_prices))
     logger.info("[treasury_history] snapshot atual Tesouro atualizado: %d títulos", len(prices))
     return prices
