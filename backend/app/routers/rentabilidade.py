@@ -15,8 +15,8 @@ from app.core.database import get_db
 from app.core.auth import get_current_user
 from app.models.user import User
 from app.models.portfolio import Portfolio
+from app.services.rentabilidade_kpi_service import get_rentabilidade_kpis
 from app.services.rentabilidade_service import (
-    get_kpis,
     get_rentabilidade_por_ativo,
     get_rentabilidade_por_classe,
 )
@@ -47,13 +47,9 @@ async def rentabilidade_kpis(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    KPIs consolidados da carteira:
-    patrimônio, custo, ganhos realizados/não-realizados,
-    retorno total/mês/12m/desde início, proventos.
-    """
+    """KPIs atuais canônicos combinados com métricas históricas de retorno."""
     await _assert_owner(db, portfolio_id, current_user.id)
-    return await get_kpis(db, portfolio_id)
+    return await get_rentabilidade_kpis(db, portfolio_id, current_user.id)
 
 
 @router.get("/{portfolio_id}/rentabilidade/ativos")
