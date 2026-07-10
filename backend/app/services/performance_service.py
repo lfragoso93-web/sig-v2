@@ -6,27 +6,22 @@ Monta a visao de rentabilidade por ativo para um portfolio.
 Os totais consolidados sao obtidos de portfolio_summary_service, garantindo a
 mesma fonte de verdade usada por Resumo e Patrimonio. A lista detalhada de
 posicoes permanece neste servico por compatibilidade com o endpoint legado.
+
+Este servico nao mantem cache proprio: o resumo canonico ja possui cache curto e
+invalidacao centralizada. Evitar uma segunda camada impede totais divergentes
+apos novos lancamentos.
 """
 import logging
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.cache import cache_get, cache_set
 from app.models.asset import Asset
 from app.models.transaction import Transaction
 from app.services.portfolio_summary_service import get_canonical_portfolio_summary
 from app.services.quotes_service import get_current_price
 
 logger = logging.getLogger(__name__)
-
-_CACHE_TTL = 300  # 5 minutos
-# v2 evita reutilizar payloads calculados antes da consolidacao dos KPIs.
-_CACHE_PREFIX = "perf:v2"
-
-
-def _cache_key(portfolio_id: int) -> str:
-    return f"{_CACHE_PREFIX}:{portfolio_id}"
 
 
 async def get_portfolio_performance(
@@ -35,15 +30,6 @@ async def get_portfolio_performance(
     user_id: int,
 ) -> dict:
     """Retorna posicoes legadas com totais vindos do resumo canonico."""
-    key = _cache_key(portfolio_id)
-
-    cached = await cache_get(key)
-    if cached:
-        logger.debug("[performance] cache hit portfolio=%s", portfolio_id)
-        return cached
-
-    logger.debug("[performance] cache miss portfolio=%s — calculando", portfolio_id)
-
     result = await db.execute(
         select(Transaction).where(Transaction.portfolio_id == portfolio_id)
     )
@@ -132,14 +118,10 @@ async def get_portfolio_performance(
         user_id,
     )
 
-    payload = {
+    return {
         "total_invested": summary["total_invested"],
         "total_current_value": summary["current_value"],
         "total_gain": summary["total_gain"],
         "total_gain_pct": summary["total_gain_pct"],
         "positions": items,
     }
-
-    await cache_set(key, payload, ttl=_CACHE_TTL)
-    logger.debug("[performance] cache set portfolio=%s TTL=%ss", portfolio_id, _CACHE_TTL)
-    return payload
