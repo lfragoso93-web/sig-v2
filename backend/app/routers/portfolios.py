@@ -17,10 +17,10 @@ from app.services.portfolio_service import (
     list_portfolios,
     get_portfolio,
     update_portfolio,
-    get_portfolio_summary,
     get_portfolio_positions,
     get_asset_distribution,
 )
+from app.services.portfolio_summary_service import get_canonical_portfolio_summary
 from app.services.portfolio_delete_service import delete_portfolio_safely
 from app.services.portfolio_snapshot_service import get_monthly_evolution, backfill_snapshots
 from app.services.portfolio_class_evolution_service import get_monthly_evolution_by_class
@@ -100,7 +100,7 @@ async def portfolio_summary(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return await get_portfolio_summary(db, portfolio_id, current_user.id)
+    return await get_canonical_portfolio_summary(db, portfolio_id, current_user.id)
 
 
 @router.get("/{portfolio_id}/positions")
