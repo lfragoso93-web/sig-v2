@@ -17,7 +17,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
-from app.models.transaction import Transaction
 from app.models.dividend import DividendType
 from app.services.dividend_backfill_service import materialize_asset_dividends
 
@@ -67,7 +66,7 @@ async def seed_full_dividend_history(
     ticker: str,
     asset_type: str,
 ) -> int:
-    """Persiste o histórico anterior à cobertura já existente e materializa carteiras."""
+    """Persiste todo o histórico anterior à cobertura principal e materializa carteiras."""
     ticker = ticker.upper().strip()
     asset_type = asset_type.upper().strip()
     if not ticker or asset_type in SKIP_TYPES:
@@ -80,22 +79,10 @@ async def seed_full_dividend_history(
     if asset is None:
         return 0
 
-    first_tx_result = await db.execute(
-        select(func.min(Transaction.date)).where(Transaction.ticker == ticker)
-    )
-    first_transaction_date = first_tx_result.scalar_one_or_none()
-    if first_transaction_date is None:
-        return 0
-
     earliest_result = await db.execute(
         select(func.min(AssetDividend.ex_date)).where(AssetDividend.asset_id == asset.id)
     )
     earliest_existing = earliest_result.scalar_one_or_none()
-
-    # Se a cobertura já alcança a primeira movimentação conhecida, não há lacuna
-    # histórica útil para as carteiras cadastradas.
-    if earliest_existing is not None and earliest_existing <= first_transaction_date:
-        return 0
 
     try:
         history = await _fetch_full_history(ticker, asset_type)
@@ -121,8 +108,9 @@ async def seed_full_dividend_history(
 
     inserted = 0
     for event_date, amount in history:
-        if event_date < first_transaction_date:
-            continue
+        # O complemento histórico só cobre datas anteriores à fonte principal.
+        # O catálogo global recebe todo o histórico disponível; a carteira só
+        # materializa direitos quando havia posição na data do evento.
         if earliest_existing is not None and event_date >= earliest_existing:
             continue
 
