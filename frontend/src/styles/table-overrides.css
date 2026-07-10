@@ -73,4 +73,25 @@
     width: 1rem;
     height: 1rem;
   }
+
+  /*
+    Resume/posição: popovers de ações e de meta precisam escapar da altura da tabela/card.
+    Isso evita o corte visual quando uma classe tem poucos ativos e o dropdown abre para baixo.
+  */
+  .card:has([aria-label="Opções"]),
+  .card:has([title="Definir meta de alocação"]),
+  .card:has([aria-label="Opções"]) table,
+  .card:has([aria-label="Opções"]) thead,
+  .card:has([aria-label="Opções"]) tbody,
+  .card:has([aria-label="Opções"]) tr,
+  .card:has([aria-label="Opções"]) th,
+  .card:has([aria-label="Opções"]) td,
+  .card:has([title="Definir meta de alocação"]) table,
+  .card:has([title="Definir meta de alocação"]) thead,
+  .card:has([title="Definir meta de alocação"]) tbody,
+  .card:has([title="Definir meta de alocação"]) tr,
+  .card:has([title="Definir meta de alocação"]) th,
+  .card:has([title="Definir meta de alocação"]) td {
+    overflow: visible !important;
+  }
 }

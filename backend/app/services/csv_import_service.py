@@ -91,6 +91,111 @@ class CSVRow:
         return len(self.errors) == 0
 
 
+async def _read_upload_text(file: Any) -> str:
+    """Le um UploadFile e devolve texto CSV, aceitando BOM UTF-8 e Latin-1."""
+    raw = await file.read()
+    if not raw:
+        raise CSVImportError("O arquivo CSV está vazio")
+
+    for encoding in ("utf-8-sig", "utf-8", "latin-1"):
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+
+    raise CSVImportError("Não foi possível identificar a codificação do arquivo CSV")
+
+
+async def import_transactions_csv(
+    db: AsyncSession,
+    portfolio_id: int,
+    user_id: int,
+    file: Any,
+    dry_run: bool = True,
+) -> Dict[str, Any]:
+    """Entrada usada pelo endpoint multipart de importação.
+
+    No dry-run apenas valida o conteúdo. Na importação efetiva delega para a
+    rotina transacional existente, preservando uma única regra de persistência.
+    """
+    try:
+        content = await _read_upload_text(file)
+    except CSVImportError as exc:
+        return {
+            "success": False,
+            "imported_count": 0,
+            "skipped_count": 0,
+            "error_count": 1,
+            "rows": [],
+            "global_errors": [str(exc)],
+        }
+
+    if not dry_run:
+        return await import_csv_transactions(
+            content=content,
+            portfolio_id=portfolio_id,
+            user_id=user_id,
+            db=db,
+        )
+
+    portfolio_result = await db.execute(
+        select(Portfolio).where(
+            Portfolio.id == portfolio_id,
+            Portfolio.user_id == user_id,
+        )
+    )
+    if portfolio_result.scalar_one_or_none() is None:
+        return {
+            "success": False,
+            "imported_count": 0,
+            "skipped_count": 0,
+            "error_count": 1,
+            "rows": [],
+            "global_errors": ["Carteira não encontrada"],
+        }
+
+    rows, global_errors = await parse_csv_content(content, portfolio_id, db)
+    response_rows = []
+    error_count = len(global_errors)
+    skipped_count = 0
+
+    for row in rows:
+        if row.errors:
+            status = "error"
+            error_count += 1
+        elif row.warnings:
+            status = "warning"
+            skipped_count += 1
+        else:
+            status = "valid"
+
+        response_rows.append({
+            "row_num": row.row_num,
+            "errors": row.errors,
+            "warnings": row.warnings,
+            "status": status,
+            "ticker": (row.data.get("ticker") or "").strip().upper() or None,
+            "operation": (row.data.get("operation") or "").strip().lower() or None,
+            "quantity": _safe_float(row.data.get("quantity")),
+        })
+
+    return {
+        "success": error_count == 0,
+        "imported_count": 0,
+        "skipped_count": skipped_count,
+        "error_count": error_count,
+        "rows": response_rows,
+        "global_errors": global_errors,
+    }
+
+
+def _safe_float(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 async def parse_csv_content(
     content: str,
     portfolio_id: int,

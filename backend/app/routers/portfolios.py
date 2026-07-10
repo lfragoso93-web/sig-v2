@@ -17,10 +17,11 @@ from app.services.portfolio_service import (
     list_portfolios,
     get_portfolio,
     update_portfolio,
-    get_portfolio_summary,
     get_portfolio_positions,
     get_asset_distribution,
+    invalidate_portfolio_cache,
 )
+from app.services.portfolio_summary_service import get_canonical_portfolio_summary
 from app.services.portfolio_delete_service import delete_portfolio_safely
 from app.services.portfolio_snapshot_service import get_monthly_evolution, backfill_snapshots
 from app.services.portfolio_class_evolution_service import get_monthly_evolution_by_class
@@ -30,12 +31,82 @@ from app.services.class_target_service import (
     delete_target,
     VALID_ASSET_CLASSES,
 )
+from app.services.rentabilidade_service import flush_rentabilidade_cache
 from app.services import csv_import_service
 import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["portfolios"])
+
+
+_CSV_MESSAGE_EXACT = {
+    "CSV file is empty or invalid": "O arquivo CSV está vazio ou inválido",
+    "Empty row, skipping": "Linha vazia; o lançamento foi ignorado",
+    "ticker is required": "O campo ticker é obrigatório",
+    "asset_type is required": "O campo asset_type é obrigatório",
+    "operation is required": "O campo operation é obrigatório",
+    "quantity is required": "O campo quantity é obrigatório",
+    "price is required": "O campo price é obrigatório",
+    "quantity must be positive": "A quantidade deve ser maior que zero",
+    "price must be positive": "O preço deve ser maior que zero",
+    "fees cannot be negative": "As taxas não podem ser negativas",
+    "Unauthorized: Portfolio belongs to different user": "A carteira pertence a outro usuário",
+}
+
+
+def _localize_csv_message(message: str) -> str:
+    """Traduz mensagens conhecidas do importador sem ocultar detalhes técnicos."""
+    if message in _CSV_MESSAGE_EXACT:
+        return _CSV_MESSAGE_EXACT[message]
+
+    replacements = (
+        ("Missing required headers:", "Colunas obrigatórias ausentes:"),
+        ("asset_type '", "Tipo de ativo '"),
+        ("' not supported. Valid:", "' não suportado. Valores aceitos:"),
+        ("operation '", "Operação '"),
+        ("' not valid. Valid:", "' inválida. Valores aceitos:"),
+        ("quantity '", "Quantidade '"),
+        ("' is not a valid number", "' não é um número válido"),
+        ("price '", "Preço '"),
+        ("date '", "Data '"),
+        ("' format not recognized (use YYYY-MM-DD)", "' em formato inválido; use AAAA-MM-DD"),
+        ("' is in the future", "' está no futuro"),
+        ("fees '", "Taxas '"),
+        ("currency '", "Moeda '"),
+        ("' may not be valid, defaulting to BRL", "' pode ser inválida; será usado BRL"),
+        ("Portfolio ", "Carteira "),
+        (" not found", " não encontrada"),
+        ("Database error:", "Erro ao gravar no banco de dados:"),
+        ("Error parsing CSV:", "Erro ao interpretar o CSV:"),
+    )
+    localized = message
+    for source, target in replacements:
+        localized = localized.replace(source, target)
+    return localized
+
+
+def _localize_csv_result(result: dict) -> dict:
+    result["global_errors"] = [
+        _localize_csv_message(str(message))
+        for message in result.get("global_errors", [])
+    ]
+    for row in result.get("rows", []):
+        row["errors"] = [
+            _localize_csv_message(str(message))
+            for message in row.get("errors", [])
+        ]
+        row["warnings"] = [
+            _localize_csv_message(str(message))
+            for message in row.get("warnings", [])
+        ]
+    return result
+
+
+async def _refresh_after_csv_import(portfolio_id: int) -> None:
+    """Invalida todas as leituras financeiras afetadas por novos lançamentos."""
+    await invalidate_portfolio_cache(portfolio_id)
+    await flush_rentabilidade_cache(portfolio_id)
 
 
 async def _backfill_bg(portfolio_id: int) -> None:
@@ -100,7 +171,7 @@ async def portfolio_summary(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return await get_portfolio_summary(db, portfolio_id, current_user.id)
+    return await get_canonical_portfolio_summary(db, portfolio_id, current_user.id)
 
 
 @router.get("/{portfolio_id}/positions")
@@ -134,7 +205,8 @@ async def get_portfolio_targets_with_current(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return await get_targets_with_current(db, portfolio_id, current_user.id)
+    current_distribution = await get_asset_distribution(db, portfolio_id, current_user.id)
+    return await get_targets_with_current(db, portfolio_id, current_distribution)
 
 
 @router.put(
@@ -148,11 +220,14 @@ async def upsert_class_target(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # asset_type da URL manda; body pode vir igual por conveniencia
+    await get_portfolio(db, portfolio_id, current_user.id)
     asset_type_norm = asset_type.upper()
     if asset_type_norm not in VALID_ASSET_CLASSES:
         raise HTTPException(status_code=400, detail="Classe de ativo invalida")
-    return await upsert_target(db, portfolio_id, current_user.id, asset_type_norm, data.target_pct)
+    await upsert_target(db, portfolio_id, asset_type_norm, data.target_pct)
+    current_distribution = await get_asset_distribution(db, portfolio_id, current_user.id)
+    rows = await get_targets_with_current(db, portfolio_id, current_distribution)
+    return next(row for row in rows if row["asset_type"] == asset_type_norm)
 
 
 @router.delete(
@@ -165,8 +240,9 @@ async def delete_class_target(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    await get_portfolio(db, portfolio_id, current_user.id)
     asset_type_norm = asset_type.upper()
-    await delete_target(db, portfolio_id, current_user.id, asset_type_norm)
+    await delete_target(db, portfolio_id, asset_type_norm)
     return None
 
 
@@ -210,10 +286,14 @@ async def import_portfolio_csv(
     current_user: User = Depends(get_current_user),
 ):
     await get_portfolio(db, portfolio_id, current_user.id)
-    return await csv_import_service.import_transactions_csv(
+    result = await csv_import_service.import_transactions_csv(
         db=db,
         portfolio_id=portfolio_id,
         user_id=current_user.id,
         file=file,
         dry_run=dry_run,
     )
+    result = _localize_csv_result(result)
+    if not dry_run and result.get("imported_count", 0) > 0:
+        await _refresh_after_csv_import(portfolio_id)
+    return result

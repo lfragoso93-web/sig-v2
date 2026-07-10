@@ -50,6 +50,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset, AssetType
+from app.models.portfolio import Portfolio
 from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.transaction import Transaction, OperationType
 from app.services.price_history_service import persist_daily_prices
@@ -450,6 +451,83 @@ async def refresh_today_snapshot(
     )
 
 
+def _weekday_count(start: date, end: date) -> int:
+    count = 0
+    cursor = start
+    while cursor <= end:
+        if cursor.weekday() < 5:
+            count += 1
+        cursor += timedelta(days=1)
+    return count
+
+
+async def snapshot_backfill_needed(
+    db: AsyncSession,
+    portfolio_id: int,
+) -> bool:
+    first_date = await _first_transaction_date(db, portfolio_id)
+    if first_date is None:
+        return False
+
+    today = date.today()
+    expected = _weekday_count(first_date, today)
+    if expected == 0:
+        return False
+
+    result = await db.execute(
+        select(func.count(func.distinct(PortfolioSnapshot.snapshot_date)))
+        .where(
+            PortfolioSnapshot.portfolio_id == portfolio_id,
+            PortfolioSnapshot.snapshot_date >= first_date,
+            PortfolioSnapshot.snapshot_date <= today,
+        )
+    )
+    existing = int(result.scalar_one() or 0)
+    return existing < expected
+
+
+async def backfill_missing_snapshots_for_active_portfolios(
+    db: AsyncSession,
+) -> dict:
+    result = await db.execute(
+        select(Portfolio.id)
+        .join(Transaction, Transaction.portfolio_id == Portfolio.id)
+        .where(Portfolio.is_active.is_(True))
+        .distinct()
+    )
+    portfolio_ids = [row.id for row in result.all()]
+
+    processed = 0
+    skipped = 0
+    errors = 0
+    snapshots = 0
+
+    for portfolio_id in portfolio_ids:
+        try:
+            if not await snapshot_backfill_needed(db, portfolio_id):
+                skipped += 1
+                continue
+            count = await backfill_snapshots(db, portfolio_id)
+            processed += 1
+            snapshots += count
+        except Exception as exc:
+            await db.rollback()
+            errors += 1
+            logger.error(
+                "[snapshot_auto] portfolio=%s falhou: %s",
+                portfolio_id,
+                exc,
+            )
+
+    return {
+        "portfolios": len(portfolio_ids),
+        "processed": processed,
+        "skipped": skipped,
+        "errors": errors,
+        "snapshots": snapshots,
+    }
+
+
 async def get_daily_evolution(
     db: AsyncSession,
     portfolio_id: int,
@@ -465,17 +543,11 @@ async def get_daily_evolution(
         .order_by(PortfolioSnapshot.snapshot_date.asc())
     )
     rows = result.scalars().all()
+    if not rows:
+        return await _get_fallback_daily_evolution(db, portfolio_id, days)
+
     return [
-        {
-            "date": str(r.snapshot_date),
-            "market_value": float(r.market_value),
-            "cost_basis": float(r.cost_basis),
-            "invested_total": float(r.invested_total),
-            "unrealized_pnl": float(r.unrealized_pnl),
-            "realized_pnl": float(r.realized_pnl),
-            "total_pnl": float(r.total_pnl),
-            "return_pct": float(r.return_pct),
-        }
+        _snapshot_to_payload(r)
         for r in rows
     ]
 
@@ -506,19 +578,135 @@ async def get_monthly_evolution(
         .order_by(PortfolioSnapshot.snapshot_date.asc())
     )
     rows = result.scalars().all()
+    if not rows:
+        return await _get_fallback_monthly_evolution(db, portfolio_id, months)
+
     return [
-        {
-            "date": r.snapshot_date.strftime("%Y-%m-%d"),
-            "value": float(r.market_value),
-            "invested": float(r.invested_total),
-            "period": r.snapshot_date.strftime("%Y-%m"),
-            "market_value": float(r.market_value),
-            "cost_basis": float(r.cost_basis),
-            "invested_total": float(r.invested_total),
-            "unrealized_pnl": float(r.unrealized_pnl),
-            "realized_pnl": float(r.realized_pnl),
-            "total_pnl": float(r.total_pnl),
-            "return_pct": float(r.return_pct),
-        }
+        _snapshot_to_payload(r, include_monthly_aliases=True)
         for r in rows
     ]
+
+
+def _snapshot_to_payload(
+    snapshot: PortfolioSnapshot,
+    include_monthly_aliases: bool = False,
+) -> dict:
+    payload = {
+        "date": snapshot.snapshot_date.strftime("%Y-%m-%d"),
+        "market_value": float(snapshot.market_value),
+        "cost_basis": float(snapshot.cost_basis),
+        "invested_total": float(snapshot.invested_total),
+        "unrealized_pnl": float(snapshot.unrealized_pnl),
+        "realized_pnl": float(snapshot.realized_pnl),
+        "total_pnl": float(snapshot.total_pnl),
+        "return_pct": float(snapshot.return_pct),
+    }
+    if include_monthly_aliases:
+        payload.update({
+            "value": payload["market_value"],
+            "invested": payload["invested_total"],
+            "period": snapshot.snapshot_date.strftime("%Y-%m"),
+        })
+    return payload
+
+
+def _totals_to_payload(
+    target_date: date,
+    totals: dict,
+    include_monthly_aliases: bool = False,
+) -> dict:
+    payload = {
+        "date": target_date.strftime("%Y-%m-%d"),
+        "market_value": float(totals["market_value"]),
+        "cost_basis": float(totals["cost_basis"]),
+        "invested_total": float(totals["invested_total"]),
+        "unrealized_pnl": float(totals["unrealized_pnl"]),
+        "realized_pnl": float(totals["realized_pnl"]),
+        "total_pnl": float(totals["total_pnl"]),
+        "return_pct": float(totals["return_pct"]),
+    }
+    if include_monthly_aliases:
+        payload.update({
+            "value": payload["market_value"],
+            "invested": payload["invested_total"],
+            "period": target_date.strftime("%Y-%m"),
+        })
+    return payload
+
+
+async def _first_transaction_date(db: AsyncSession, portfolio_id: int) -> date | None:
+    result = await db.execute(
+        select(func.min(Transaction.date))
+        .where(Transaction.portfolio_id == portfolio_id)
+    )
+    return result.scalar_one_or_none()
+
+
+def _month_end(year: int, month: int) -> date:
+    if month == 12:
+        return date(year + 1, 1, 1) - timedelta(days=1)
+    return date(year, month + 1, 1) - timedelta(days=1)
+
+
+def _month_end_dates(start: date, end: date) -> list[date]:
+    cursor = date(start.year, start.month, 1)
+    dates: list[date] = []
+    while cursor <= end:
+        dates.append(min(_month_end(cursor.year, cursor.month), end))
+        if cursor.month == 12:
+            cursor = date(cursor.year + 1, 1, 1)
+        else:
+            cursor = date(cursor.year, cursor.month + 1, 1)
+    return dates
+
+
+async def _get_fallback_monthly_evolution(
+    db: AsyncSession,
+    portfolio_id: int,
+    months: int,
+) -> list[dict]:
+    first_date = await _first_transaction_date(db, portfolio_id)
+    if first_date is None:
+        return []
+
+    today = date.today()
+    start = max(first_date, today - timedelta(days=months * 31))
+    points: list[dict] = []
+
+    for target in _month_end_dates(start, today):
+        totals = await _calc_totals(db, portfolio_id, target)
+        if totals["market_value"] > 0 or totals["invested_total"] > 0:
+            points.append(_totals_to_payload(target, totals, include_monthly_aliases=True))
+
+    return points
+
+
+async def _get_fallback_daily_evolution(
+    db: AsyncSession,
+    portfolio_id: int,
+    days: int,
+) -> list[dict]:
+    first_date = await _first_transaction_date(db, portfolio_id)
+    if first_date is None:
+        return []
+
+    today = date.today()
+    start = max(first_date, today - timedelta(days=days))
+    # Sem snapshots, evita uma consulta pesada gerando uma serie esparsa:
+    # semanal para janelas curtas e mensal para janelas longas.
+    step_days = 7 if days <= 180 else 31
+    dates: list[date] = []
+    cursor = start
+    while cursor <= today:
+        dates.append(cursor)
+        cursor += timedelta(days=step_days)
+    if not dates or dates[-1] != today:
+        dates.append(today)
+
+    points: list[dict] = []
+    for target in dates:
+        totals = await _calc_totals(db, portfolio_id, target)
+        if totals["market_value"] > 0 or totals["invested_total"] > 0:
+            points.append(_totals_to_payload(target, totals))
+
+    return points

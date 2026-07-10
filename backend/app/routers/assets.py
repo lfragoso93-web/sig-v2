@@ -1,11 +1,10 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 from pydantic import BaseModel
 import asyncio
-import io
 from concurrent.futures import ThreadPoolExecutor
 import logging
 
@@ -67,8 +66,6 @@ _TESOURO_STATIC: list[dict] = [
 
 _SLUG_INDEX: dict[str, dict] = {item["slug"]: item for item in _TESOURO_STATIC if "slug" in item}
 
-# Mapa nome-completo -> ticker para criptos comuns.
-# Usado como fallback quando o banco tem ticker=BITCOIN em vez de BTC.
 _CRYPTO_NAME_TO_TICKER: dict[str, str] = {
     "BITCOIN": "BTC",
     "ETHEREUM": "ETH",
@@ -92,10 +89,6 @@ _CRYPTO_NAME_TO_TICKER: dict[str, str] = {
     "ALGORAND": "ALGO",
 }
 
-
-# ---------------------------------------------------------------------------
-# Schemas locais
-# ---------------------------------------------------------------------------
 
 class TickerQuoteResponse(BaseModel):
     ticker: str
@@ -166,10 +159,6 @@ class AssetDetailResponse(BaseModel):
     price_history: list[PricePoint] = []
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 def _detect_type_from_brapi(info: dict) -> Optional[str]:
     qt = (info.get("quoteType") or "").upper()
     ticker = (info.get("symbol") or "").upper()
@@ -186,28 +175,12 @@ def _detect_type_from_brapi(info: dict) -> Optional[str]:
 
 
 def _resolve_crypto_ticker(ticker: str, db_asset_type: Optional[str] = None) -> Optional[str]:
-    """
-    Tenta resolver o ticker de uma cripto para o codigo BRAPI.
-    Retorna o codigo normalizado se for cripto, ou None se nao for cripto.
-
-    Casos tratados:
-      - ticker ja e o codigo (BTC, ETH, ADA) -> retorna normalizado
-      - ticker e nome completo (BITCOIN, ETHEREUM) -> faz lookup no mapa
-      - db_asset_type == 'CRIPTO' -> forca tratamento como cripto
-    """
     t = ticker.strip().upper()
-
-    # Se o asset_type do banco diz CRIPTO, tenta resolver
     is_cripto = (db_asset_type or "").upper() == "CRIPTO"
-
-    # Lookup por nome completo primeiro
     if t in _CRYPTO_NAME_TO_TICKER:
         return _CRYPTO_NAME_TO_TICKER[t]
-
-    # Se vier de contexto cripto, normaliza o ticker (remove sufixos -USD, BRL, etc)
     if is_cripto:
         return _normalize_crypto_ticker(t)
-
     return None
 
 
@@ -314,10 +287,6 @@ def _parse_treasury_item(raw: dict) -> Optional[TreasuryItem]:
     )
 
 
-# ---------------------------------------------------------------------------
-# GET /assets/  — listagem paginada
-# ---------------------------------------------------------------------------
-
 @router.get("/", response_model=AssetListResponse)
 async def list_assets(
     page: int = Query(1, ge=1),
@@ -371,10 +340,6 @@ async def list_assets(
     )
 
 
-# ---------------------------------------------------------------------------
-# GET /assets/{ticker}/detail
-# ---------------------------------------------------------------------------
-
 @router.get("/{ticker}/detail", response_model=AssetDetailResponse)
 async def get_asset_detail(
     ticker: str,
@@ -421,10 +386,6 @@ async def get_asset_detail(
     )
 
 
-# ---------------------------------------------------------------------------
-# Endpoints de escrita / busca
-# ---------------------------------------------------------------------------
-
 @router.get("/search", response_model=list[AssetResponse])
 async def search_assets_endpoint(
     q: str = Query("", min_length=1),
@@ -456,9 +417,6 @@ async def suggest_tickers(
         raw = await fetch_crypto_suggestions(q.strip(), limit)
         result = []
         for item in raw:
-            # A BRAPI /crypto/available pode retornar:
-            #   - lista de strings: ["BTC", "ETH", ...]
-            #   - lista de dicts:   [{"coin": "BTC", "coinName": "Bitcoin"}, ...]
             if isinstance(item, str):
                 coin = item.upper()
                 name = coin
@@ -536,21 +494,12 @@ async def get_ticker_quote(
     asset_type: Optional[str] = Query(None, description="Tipo do ativo: CRIPTO, ACAO, FII, etc."),
     _=Depends(get_current_user),
 ):
-    """
-    Retorna cotacao de um ticker.
-
-    Para criptos, aceita tanto o codigo (BTC) quanto o nome completo (BITCOIN).
-    Se asset_type=CRIPTO ou o ticker for reconhecido como nome de cripto,
-    usa o endpoint /api/v2/crypto da BRAPI em vez de /api/v2/quote.
-    """
     t = ticker.strip().upper()
     today = __import__('datetime').date.today().isoformat()
     use_hist = date and date != today
 
-    # Tenta resolver como cripto: BITCOIN->BTC, ETH->ETH, BTC-USD->BTC
     crypto_code = _resolve_crypto_ticker(t, db_asset_type=asset_type)
 
-    # Caminho cripto
     if crypto_code:
         prices = await fetch_crypto_quote([crypto_code])
         price = prices.get(crypto_code)
@@ -564,13 +513,11 @@ async def get_ticker_quote(
                 source="brapi",
                 price_date=today,
             )
-        # Se a BRAPI falhou para cripto, nao tenta BRAPI /quote (vai retornar 404)
         raise HTTPException(
             status_code=404,
             detail=f"Cotacao cripto nao encontrada para '{t}' (codigo: {crypto_code})."
         )
 
-    # Caminho normal (B3, stocks, ETF, etc.)
     if use_hist:
         hist_price = await fetch_historical_price(t, date)
         if hist_price:
@@ -609,12 +556,14 @@ async def get_ticker_quote(
 @router.get("/csv-template", tags=["csv-import"])
 async def get_csv_template():
     """
-    Retorna um template CSV para importacao de transacoes.
-    Download como arquivo CSV.
+    Retorna um modelo CSV aceito pela importacao de transacoes.
+    O arquivo possui cabecalho obrigatorio e exemplos em formato importavel.
     """
     csv_content = csv_import_service.generate_csv_template()
-    return FileResponse(
-        io.BytesIO(csv_content.encode()),
-        media_type="text/csv",
-        filename="portfolio_import_template.csv"
+    return Response(
+        content=csv_content,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": 'attachment; filename="portfolio_import_template.csv"',
+        },
     )

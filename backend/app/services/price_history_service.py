@@ -415,6 +415,64 @@ async def get_price_at_date(
     return float(price_row.close)
 
 
+async def get_prices_at_date_batch(
+    db: AsyncSession,
+    tickers_with_types: list[tuple[str, AssetType]],
+    target_date: str,
+) -> dict[str, float]:
+    """
+    Retorna fechamento por ticker em lote para uma data de referencia.
+
+    Mantem a mesma semantica de get_price_at_date: busca o preco mais recente
+    disponivel na janela [target_date - 5 dias, target_date + 1 dia], sem
+    disparar APIs externas. Tickers sem preco retornam ausentes do dict.
+    """
+    if not tickers_with_types:
+        return {}
+
+    ref = _parse_date_utc(target_date)
+    since = ref - timedelta(days=5)
+    until = ref + timedelta(hours=23, minutes=59, seconds=59)
+    tickers = [ticker.upper() for ticker, _ in tickers_with_types]
+
+    assets_result = await db.execute(
+        select(Asset.id, Asset.ticker)
+        .where(Asset.ticker.in_(tickers))
+    )
+    asset_rows = assets_result.all()
+    asset_id_to_ticker = {row.id: row.ticker.upper() for row in asset_rows}
+
+    if not asset_id_to_ticker:
+        for ticker in tickers:
+            logger.warning(
+                "[PriceHistory] get_prices_at_date_batch: asset %s nao encontrado no banco",
+                ticker,
+            )
+        return {}
+
+    rows_result = await db.execute(
+        select(AssetPrice)
+        .where(
+            AssetPrice.asset_id.in_(asset_id_to_ticker.keys()),
+            AssetPrice.timestamp >= since,
+            AssetPrice.timestamp <= until,
+        )
+        .order_by(AssetPrice.asset_id.asc(), AssetPrice.timestamp.desc())
+    )
+
+    prices: dict[str, float] = {}
+    for price_row in rows_result.scalars().all():
+        ticker = asset_id_to_ticker.get(price_row.asset_id)
+        if ticker and ticker not in prices:
+            prices[ticker] = float(price_row.close)
+
+    missing = [ticker for ticker in tickers if ticker not in prices]
+    for ticker in missing:
+        logger.warning("[PriceHistory] preco nao encontrado para %s em %s", ticker, target_date)
+
+    return prices
+
+
 async def get_price_history(
     db: AsyncSession,
     ticker: str,

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { BarChart2, TrendingUp, DollarSign, Briefcase } from 'lucide-react'
+import { BarChart2, TrendingUp, DollarSign, Briefcase, AlertTriangle } from 'lucide-react'
 import clsx from 'clsx'
 import {
   usePortfolioList,
@@ -9,6 +9,7 @@ import {
 } from '@/hooks/usePortfolio'
 import { useAppStore } from '@/store/appStore'
 import { formatBRL, formatPercent, signClass } from '@/utils/format'
+import { mapPortfolioSummaryMetrics } from '@/utils/portfolioSummary'
 import KpiCard from '@/components/ui/KpiCard'
 import SkeletonCard from '@/components/ui/SkeletonCard'
 import EmptyState from '@/components/ui/EmptyState'
@@ -36,11 +37,6 @@ const ASSET_CLASS_OPTIONS = [
   { label: 'Renda Fixa',           value: 'RENDA_FIXA'        },
   { label: 'Cripto',               value: 'CRIPTO'            },
 ]
-
-function safeNum(v: unknown): number {
-  const n = Number(v)
-  return Number.isFinite(n) ? n : 0
-}
 
 function ChartSelect({
   value, onChange, options,
@@ -90,28 +86,27 @@ export default function ResumePage() {
 
   const { data: portfolios, isLoading: loadingPortfolios } = usePortfolioList()
 
-  useEffect(() => {
-    if (!globalPortfolioId && portfolios && portfolios.length > 0) {
-      setGlobal(portfolios[0].id)
-    }
-  }, [globalPortfolioId, portfolios, setGlobal])
+  const hasPortfolios = Boolean(portfolios?.length)
+  const validGlobalPortfolioId = hasPortfolios && portfolios!.some(p => p.id === globalPortfolioId)
+    ? globalPortfolioId
+    : null
+  const portfolioId: number | null = validGlobalPortfolioId ?? (portfolios?.[0]?.id ?? null)
 
-  const portfolioId: number | null = globalPortfolioId ?? (portfolios?.[0]?.id ?? null)
+  useEffect(() => {
+    if (loadingPortfolios || !portfolios) return
+    if (portfolios.length === 0) return
+    if (globalPortfolioId !== portfolioId && portfolioId) {
+      setGlobal(portfolioId)
+    }
+  }, [globalPortfolioId, loadingPortfolios, portfolioId, portfolios, setGlobal])
+
   const activeAssetType = assetClass === ASSET_CLASS_ALL ? null : assetClass
 
   const { data: summary,           isLoading: loadingSummary } = usePortfolioSummaryData(portfolioId)
   const { data: patrimonioHistory, isLoading: loadingHistory } = usePatrimonioHistory(portfolioId, period, activeAssetType)
   const { data: positions,         isLoading: loadingPositions } = usePositions(portfolioId)
 
-  const patrimonio       = safeNum(summary?.total_patrimonio ?? summary?.current_value)
-  const aportado         = safeNum(summary?.total_investido  ?? summary?.total_invested)
-  const lucroTotal       = safeNum(summary?.lucro_total      ?? summary?.total_gain)
-  const proventos12m     = safeNum(summary?.dividendos_recebidos_12m)
-  const proventosTotal   = safeNum(summary?.total_proventos)
-  const variacaoValor    = safeNum(summary?.variacao_valor)
-  const variacaoPct      = safeNum(summary?.variacao_percentual)
-  const rentabilidadePct = safeNum(summary?.rentabilidade_total)
-
+  const metrics = mapPortfolioSummaryMetrics(summary)
   const loadingKpiCards = loadingPortfolios || loadingSummary
 
   if (loadingPortfolios) {
@@ -146,21 +141,39 @@ export default function ResumePage() {
       <div className="kpi-grid">
         {loadingKpiCards ? (
           [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
-        ) : (
+        ) : summary ? (
           <>
-            <KpiCard label="Patrimônio Total" value={formatBRL(patrimonio)} subValue={formatBRL(aportado)} subLabel="Valor investido" change={variacaoPct} />
-            <KpiCard label="Resultado" value={formatBRL(lucroTotal)} valueColor={signClass(lucroTotal)} subLabel="Ganho de capital + proventos" />
-            <KpiCard label="Proventos (12m)" value={formatBRL(proventos12m)} subValue={formatBRL(proventosTotal)} subLabel="Total recebido" />
+            <KpiCard label="Patrimônio Total" value={formatBRL(metrics.patrimonio)} subValue={formatBRL(metrics.aportado)} subLabel="Valor investido" change={metrics.variacaoPct} />
+            <KpiCard label="Resultado" value={formatBRL(metrics.lucroTotal)} valueColor={signClass(metrics.lucroTotal)} subLabel="Ganho de capital + proventos" />
+            <KpiCard label="Proventos (12m)" value={formatBRL(metrics.proventos12m)} subValue={formatBRL(metrics.proventosTotal)} subLabel="Total recebido" />
             <KpiCard
-              label="Variação atual"
-              value={formatBRL(variacaoValor)}
-              valueColor={signClass(variacaoValor)}
-              change={variacaoPct}
-              bottomLine={<span className={clsx('text-xs font-semibold tabular-nums', signClass(rentabilidadePct))}>{rentabilidadePct >= 0 ? '+' : ''}{formatPercent(rentabilidadePct)} rentab. total</span>}
+              label="Variação"
+              value={formatBRL(metrics.variacaoValor)}
+              valueColor={signClass(metrics.variacaoValor)}
+              change={metrics.variacaoPct}
+              bottomLine={<span className={clsx('text-xs font-semibold tabular-nums', signClass(metrics.rentabilidadePct))}>{metrics.rentabilidadePct >= 0 ? '+' : ''}{formatPercent(metrics.rentabilidadePct)} rentab. total</span>}
             />
           </>
+        ) : (
+          <div className="col-span-4 py-8 text-center text-xs" style={{ color: 'var(--color-text-muted)' }}>Nenhum dado disponível. Adicione lançamentos para começar.</div>
         )}
       </div>
+
+      {metrics.hasPartialPrices && (
+        <div
+          className="card"
+          style={{
+            display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem',
+            borderColor: 'oklch(from var(--color-warning) l c h / 0.25)',
+            background: 'oklch(from var(--color-warning) l c h / 0.08)',
+          }}
+        >
+          <AlertTriangle size={15} style={{ color: 'var(--color-warning)', flexShrink: 0 }} />
+          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+            Alguns ativos ainda não têm cotação atual{metrics.assetsWithoutPrice.length ? `: ${metrics.assetsWithoutPrice.join(', ')}` : ''}. Para eles, o valor investido é usado como referência até a próxima atualização.
+          </span>
+        </div>
+      )}
 
       <div className="card p-4">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
