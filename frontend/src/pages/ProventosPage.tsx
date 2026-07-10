@@ -14,6 +14,7 @@ import ProventosHistoricoTable from '@/components/proventos/ProventosHistoricoTa
 import MeusProventosTable from '@/components/proventos/MeusProventosTable'
 import EmptyState from '@/components/ui/EmptyState'
 import { DollarSign } from 'lucide-react'
+import { useAppStore } from '@/store/appStore'
 
 const ASSET_TYPE_OPTIONS = [
   { label: 'Todos os ativos', value: '' },
@@ -41,8 +42,9 @@ const PAGE_SIZE = 20
 
 export default function ProventosPage() {
   const { data: portfolios, isLoading: loadingPortfolios } = usePortfolioList()
+  const globalPortfolioId = useAppStore(s => s.selectedPortfolioId)
   const [selectedPortfolio, setSelectedPortfolio] = useState<number | null>(null)
-  const portfolioId = selectedPortfolio ?? (portfolios?.[0]?.id ?? 0)
+  const portfolioId = selectedPortfolio ?? globalPortfolioId ?? (portfolios?.[0]?.id ?? 0)
 
   const [assetTypeFilter, setAssetTypeFilter] = useState('')
   const [dividendTypeFilter, setDividendTypeFilter] = useState('')
@@ -174,3 +176,4 @@ export default function ProventosPage() {
     </div>
   )
 }
+
