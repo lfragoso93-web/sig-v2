@@ -2,12 +2,29 @@
 
 Este modulo concentra a semantica financeira exibida em Resumo, Patrimonio e
 futuros consumidores. A coleta de posicoes, cotacoes, renda fixa e proventos
-pode continuar em servicos especializados; a composicao final dos indicadores
-deve passar por ``build_portfolio_summary``.
+continua em servicos especializados; a composicao final dos indicadores passa
+por ``build_portfolio_summary``.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.cache import cache_get, cache_set
+from app.services.fixed_income_valuation_service import get_fixed_income_totals
+from app.services.fx_service import get_usd_brl_today
+from app.services.portfolio_service import (
+    _MARKET_PRICE_TYPES,
+    _cache_key,
+    _non_fixed_income_enriched,
+    get_portfolio,
+    sum_dividends,
+    sum_dividends_for_tickers,
+)
+
+_CACHE_TTL = 120
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,3 +86,65 @@ def build_portfolio_summary(data: PortfolioSummaryInput) -> dict:
         "total_gain": round(variation_value, 2),
         "total_gain_pct": round(variation_pct, 4),
     }
+
+
+async def get_canonical_portfolio_summary(
+    db: AsyncSession,
+    portfolio_id: int,
+    user_id: int,
+) -> dict:
+    """Coleta os dados especializados e retorna o resumo financeiro canonico."""
+    await get_portfolio(db, portfolio_id, user_id)
+
+    cache_key = _cache_key(portfolio_id, "summary")
+    cached = await cache_get(cache_key)
+    if cached:
+        return cached
+
+    enriched = await _non_fixed_income_enriched(db, portfolio_id)
+    fixed_income = await get_fixed_income_totals(db, portfolio_id)
+
+    non_fixed_invested = sum(position["total_invested"] for position in enriched)
+    non_fixed_current = sum(
+        position["current_value"]
+        if position["current_value"] is not None
+        else position["total_invested"]
+        for position in enriched
+    )
+
+    total_invested = non_fixed_invested + float(fixed_income["invested_amount"])
+    current_value = non_fixed_current + float(fixed_income["current_value"])
+
+    assets_without_price = tuple(
+        position["ticker"]
+        for position in enriched
+        if position.get("current_price") is None
+        and position["asset_type"] in _MARKET_PRICE_TYPES
+    )
+
+    cutoff_12m = (datetime.now(timezone.utc) - timedelta(days=365)).date()
+    dividends_12m = await sum_dividends(db, portfolio_id, cutoff=cutoff_12m)
+    total_dividends = await sum_dividends(db, portfolio_id)
+
+    active_tickers = [position["ticker"] for position in enriched]
+    active_position_dividends = await sum_dividends_for_tickers(
+        db,
+        portfolio_id,
+        active_tickers,
+    )
+
+    summary = build_portfolio_summary(
+        PortfolioSummaryInput(
+            total_invested=total_invested,
+            current_value=current_value,
+            dividends_12m=dividends_12m,
+            total_dividends=total_dividends,
+            active_position_dividends=active_position_dividends,
+            has_partial_prices=bool(assets_without_price),
+            assets_without_price=assets_without_price,
+            usd_brl_rate=await get_usd_brl_today(db),
+        )
+    )
+
+    await cache_set(cache_key, summary, ttl=_CACHE_TTL)
+    return summary
