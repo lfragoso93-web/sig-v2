@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 import warnings
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
@@ -27,6 +28,12 @@ logger = logging.getLogger(__name__)
 SKIP_TYPES = {"CRIPTO", "TESOURO_DIRETO", "RENDA_FIXA"}
 NATIONAL_TYPES = {"ACAO", "FII", "ETF_NACIONAL", "BDR"}
 
+# Evita consultar repetidamente símbolos ausentes/delisted na mesma instância.
+# O cache é apenas operacional e expira para permitir que tickers novos passem a
+# ser reconhecidos pelo provedor futuramente.
+_UNAVAILABLE_TTL_SECONDS = 24 * 60 * 60
+_unavailable_symbols: dict[str, float] = {}
+
 
 def _yf_symbol(ticker: str, asset_type: str) -> str:
     ticker = ticker.upper().strip()
@@ -39,26 +46,53 @@ def _event_type(asset_type: str) -> DividendType:
     return DividendType.RENDIMENTO if asset_type.upper() == "FII" else DividendType.DIVIDENDO
 
 
+def _is_symbol_unavailable(symbol: str) -> bool:
+    expires_at = _unavailable_symbols.get(symbol)
+    if expires_at is None:
+        return False
+    if time.monotonic() >= expires_at:
+        _unavailable_symbols.pop(symbol, None)
+        return False
+    return True
+
+
+def _mark_symbol_unavailable(symbol: str) -> None:
+    _unavailable_symbols[symbol] = time.monotonic() + _UNAVAILABLE_TTL_SECONDS
+
+
 async def _fetch_full_history(ticker: str, asset_type: str) -> list[tuple[date, float]]:
     """Busca dividendos sem depender de ``period=max``.
 
-    Alguns tickers recém-listados expõem somente períodos curtos no Yahoo. Usar
-    ``start``/``end`` evita que essa limitação gere exceção e mantém o retorno
-    vazio como um caso normal para ativos sem histórico disponível.
+    Alguns tickers recém-listados, renomeados ou descontinuados não possuem
+    histórico no Yahoo. Esses casos retornam lista vazia e entram em cooldown,
+    sem interromper nem poluir a sincronização dos demais ativos.
     """
     symbol = _yf_symbol(ticker, asset_type)
+    if _is_symbol_unavailable(symbol):
+        logger.debug("[dividend_history] %s em cooldown por indisponibilidade no Yahoo", symbol)
+        return []
 
     def _sync() -> list[tuple[date, float]]:
         import yfinance as yf
 
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            history = yf.Ticker(symbol).history(
-                start="1970-01-01",
-                end=(date.today() + timedelta(days=1)).isoformat(),
-                actions=True,
-                auto_adjust=False,
-            )
+        yf_logger = logging.getLogger("yfinance")
+        previous_level = yf_logger.level
+        previous_disabled = yf_logger.disabled
+        yf_logger.setLevel(logging.CRITICAL)
+        yf_logger.disabled = True
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                history = yf.Ticker(symbol).history(
+                    start="1970-01-01",
+                    end=(date.today() + timedelta(days=1)).isoformat(),
+                    actions=True,
+                    auto_adjust=False,
+                    raise_errors=False,
+                )
+        finally:
+            yf_logger.setLevel(previous_level)
+            yf_logger.disabled = previous_disabled
 
         if history.empty or "Dividends" not in history.columns:
             return []
@@ -77,8 +111,18 @@ async def _fetch_full_history(ticker: str, asset_type: str) -> list[tuple[date, 
         return rows
 
     loop = asyncio.get_running_loop()
-    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="dividend_history") as pool:
-        return await loop.run_in_executor(pool, _sync)
+    try:
+        with ThreadPoolExecutor(max_workers=1, thread_name_prefix="dividend_history") as pool:
+            rows = await loop.run_in_executor(pool, _sync)
+    except Exception as exc:
+        _mark_symbol_unavailable(symbol)
+        logger.debug("[dividend_history] %s indisponível no Yahoo: %s", symbol, exc)
+        return []
+
+    if not rows:
+        _mark_symbol_unavailable(symbol)
+        logger.debug("[dividend_history] %s sem histórico no Yahoo; cooldown aplicado", symbol)
+    return rows
 
 
 async def seed_full_dividend_history(
@@ -109,14 +153,8 @@ async def seed_full_dividend_history(
     )
     earliest_existing = earliest_result.scalar_one_or_none()
 
-    try:
-        history = await _fetch_full_history(ticker, asset_type)
-    except Exception as exc:
-        logger.warning("[dividend_history] histórico indisponível para %s: %s", ticker, exc)
-        return 0
-
+    history = await _fetch_full_history(ticker, asset_type)
     if not history:
-        logger.debug("[dividend_history] %s sem histórico complementar disponível", ticker)
         return 0
 
     dividend_type = _event_type(asset_type)
@@ -166,8 +204,6 @@ async def seed_full_dividend_history(
             materialized,
         )
     else:
-        # Libera qualquer transação de leitura aberta pela sessão sem gerar
-        # alteração no banco.
         await db.rollback()
         logger.debug("[dividend_history] %s já estava atualizado", ticker)
 
