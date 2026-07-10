@@ -6,6 +6,7 @@ Sincronização diária de eventos/proventos de renda variável nacional.
 Objetivo:
   - coletar eventos globais dos ativos nacionais já cadastrados;
   - atualizar AssetDividend de forma idempotente;
+  - complementar o histórico anterior à cobertura da BRAPI;
   - materializar automaticamente os eventos para carteiras com posição.
 
 Este serviço é usado pelo scheduler diário e não depende da página de Proventos.
@@ -22,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset, AssetType
 from app.services.dividend_backfill_service import run_backfill, materialize_asset_dividends
+from app.services.dividend_history_seed_service import seed_full_dividend_history
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +49,7 @@ class ProventosDailySyncResult:
     assets_failed: int = 0
     assets_skipped: int = 0
     materialized: int = 0
+    historical_events: int = 0
     errors: list[str] = field(default_factory=list)
 
 
@@ -61,13 +64,14 @@ def _is_event_ticker(ticker: str) -> bool:
     return bool(_MAIN_EQUITY_RE.match(t))
 
 
-async def _sync_asset_events(db: AsyncSession, ticker: str, asset_type: str) -> bool:
+async def _sync_asset_events(db: AsyncSession, ticker: str, asset_type: str) -> tuple[bool, int]:
     try:
         await run_backfill(db, ticker, asset_type)
-        return True
+        historical = await seed_full_dividend_history(db, ticker, asset_type)
+        return True, historical
     except Exception as exc:
         logger.error("[proventos_daily] falha ao sincronizar %s/%s: %s", ticker, asset_type, exc)
-        return False
+        return False, 0
 
 
 async def run_daily_proventos_sync(
@@ -79,8 +83,9 @@ async def run_daily_proventos_sync(
     Sincroniza proventos/eventos globais para ativos nacionais cadastrados.
 
     `run_backfill` opera em modo global quando chamado por este serviço: ele cria
-    ou atualiza eventos em AssetDividend e, se houver carteiras com posição no
-    ticker, também materializa os vínculos de Dividend dessas carteiras reais.
+    ou atualiza eventos em AssetDividend. Em seguida, o seed histórico preenche
+    datas anteriores à cobertura da BRAPI e materializa os vínculos de Dividend
+    das carteiras com posição na data do evento.
     """
     wanted = asset_types or NATIONAL_EVENT_TYPES
     result = ProventosDailySyncResult()
@@ -113,10 +118,10 @@ async def run_daily_proventos_sync(
     for i in range(0, len(pairs), concurrency):
         batch = pairs[i:i + concurrency]
 
-        async def _run_one(ticker: str, asset_type: str) -> tuple[str, bool]:
+        async def _run_one(ticker: str, asset_type: str) -> tuple[str, bool, int]:
             async with AsyncSessionLocal() as item_db:
-                ok = await _sync_asset_events(item_db, ticker, asset_type)
-                return ticker, ok
+                ok, historical = await _sync_asset_events(item_db, ticker, asset_type)
+                return ticker, ok, historical
 
         batch_results = await asyncio.gather(
             *[_run_one(ticker, asset_type) for ticker, asset_type in batch],
@@ -128,7 +133,8 @@ async def run_daily_proventos_sync(
                 result.assets_failed += 1
                 result.errors.append(str(item))
                 continue
-            ticker, ok = item
+            ticker, ok, historical = item
+            result.historical_events += historical
             if ok:
                 result.assets_synced += 1
             else:
@@ -145,11 +151,12 @@ async def run_daily_proventos_sync(
         result.errors.append(f"materialize: {exc}")
 
     logger.info(
-        "[proventos_daily] concluído: scanned=%s synced=%s failed=%s skipped=%s materialized=%s",
+        "[proventos_daily] concluído: scanned=%s synced=%s failed=%s skipped=%s historical=%s materialized=%s",
         result.assets_scanned,
         result.assets_synced,
         result.assets_failed,
         result.assets_skipped,
+        result.historical_events,
         result.materialized,
     )
     return result
