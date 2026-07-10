@@ -1,6 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { usePortfolioList } from '@/hooks/usePortfolio'
-import type { PortfolioListItem } from '@/hooks/usePortfolio'
 import {
   useProventosSummary,
   useProventosDistribuicao,
@@ -41,10 +39,7 @@ const YEARS = [new Date().getFullYear(), new Date().getFullYear() - 1, new Date(
 const PAGE_SIZE = 20
 
 export default function ProventosPage() {
-  const { data: portfolios, isLoading: loadingPortfolios } = usePortfolioList()
-  const globalPortfolioId = useAppStore(s => s.selectedPortfolioId)
-  const [selectedPortfolio, setSelectedPortfolio] = useState<number | null>(null)
-  const portfolioId = selectedPortfolio ?? globalPortfolioId ?? (portfolios?.[0]?.id ?? 0)
+  const portfolioId = useAppStore(s => s.selectedPortfolioId)
 
   const [assetTypeFilter, setAssetTypeFilter] = useState('')
   const [dividendTypeFilter, setDividendTypeFilter] = useState('')
@@ -84,10 +79,14 @@ export default function ProventosPage() {
   const firstItem = totalItems === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
   const lastItem = Math.min(page * PAGE_SIZE, totalItems)
 
-  if (!loadingPortfolios && !portfolios?.length) {
+  if (!portfolioId) {
     return (
       <div className="page-container proventos-page">
-        <EmptyState icon={DollarSign} title="Nenhuma carteira encontrada" description="Crie uma carteira e cadastre ativos para acompanhar proventos." />
+        <EmptyState
+          icon={DollarSign}
+          title="Nenhuma carteira selecionada"
+          description="Selecione uma carteira no menu superior para acompanhar os proventos."
+        />
       </div>
     )
   }
@@ -100,17 +99,6 @@ export default function ProventosPage() {
           <p className="page-subtitle">Eventos recebidos e a receber, com Data Com, Data Ex e pagamento.</p>
         </div>
       </div>
-
-      {(portfolios?.length ?? 0) > 1 && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Carteira:</span>
-          {(portfolios ?? []).map((p: PortfolioListItem) => (
-            <button key={p.id} onClick={() => setSelectedPortfolio(p.id)} className="px-3 py-1 rounded text-xs font-medium transition-colors" style={{ background: portfolioId === p.id ? 'oklch(from var(--color-primary) l c h / 0.15)' : 'var(--color-surface-offset)', color: portfolioId === p.id ? 'var(--color-primary)' : 'var(--color-text-muted)' }}>
-              {p.name}
-            </button>
-          ))}
-        </div>
-      )}
 
       <div className="kpi-grid proventos-kpi-grid">
         <KpiCard label="Recebido liquido" value={formatBRL(summary?.total_liquido_recebido ?? summary?.total_recebido ?? 0)} subValue={formatBRL(summary?.total_bruto_recebido ?? summary?.total_recebido ?? 0)} subLabel="Bruto recebido" />
@@ -176,4 +164,3 @@ export default function ProventosPage() {
     </div>
   )
 }
-
