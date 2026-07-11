@@ -7,6 +7,39 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Concluído — Resumo, administração e integridade operacional (11/07/2026)
+
+> Evolução posterior à PR #125, preparada para nova consolidação em `main`.
+
+#### Backend
+
+- Variação diária por classe separada da rentabilidade acumulada.
+- Preços anteriores passaram a compor métricas diárias das posições agrupadas.
+- Exclusão de carteira passou a remover explicitamente transações, posições, snapshots, metas, proventos, eventos corporativos, renda fixa e relatórios dependentes.
+- Logs de auditoria são preservados com `portfolio_id` desacoplado antes da exclusão.
+- Serviços administrativos de usuários completados com criação, listagem, edição, exclusão e contagem.
+- Validações adicionadas para unicidade, permissões, autoedição e proteção do último superadmin.
+- Schemas de usuários ampliados para atender o painel administrativo.
+- Importação CSV ajustada para tratar corretamente registros já existentes e resultados de validação.
+
+#### Frontend
+
+- Menu de ações da tabela de posições passou a usar portal e posicionamento relativo à viewport.
+- Dropdown deixa de ser cortado pelo contêiner da tabela, inclusive em carteiras com poucas posições.
+- Cabeçalho das classes passou a exibir variação diária real, sem reutilizar a rentabilidade acumulada.
+- Modal de importação CSV passou a bloquear a confirmação quando houver erros, linhas ignoradas ou falhas globais.
+- Caches de Resumo, Patrimônio, Rentabilidade, metas e transações são invalidados após importação bem-sucedida.
+- Painel administrativo modernizado e edição de papel/status integrada ao backend.
+- Painel de backup simplificado para refletir apenas ações atualmente suportadas.
+- Página Patrimônio ajustada aos contratos atualizados de posições.
+
+#### Testes
+
+- Cobertura backend ampliada para métricas de grupos, exclusão de carteiras, CSV e regras administrativas.
+- Adicionado teste frontend para tabela de posições e comportamento do menu contextual.
+
+---
+
 ### Concluído — Consolidação financeira, CSV, Proventos e Tesouro Direto (10/07/2026)
 
 > Pacote validado localmente antes da PR `stable-15jun` → `main`.
@@ -90,9 +123,9 @@ Formato baseado em Keep a Changelog.
 
 ## Próximos focos
 
-- Finalizar issue #124: dropdown da tabela, variação por classe e QA final.
+- Finalizar QA da issue #124 em cenários de borda.
 - Robustecer Backup/Restore (#83).
-- Corrigir administração de usuários (#98).
+- Concluir QA funcional da administração de usuários (#98).
 - Revisar compliance da documentação/API (#80).
 - Implementar Google OAuth (#97).
 - Avançar em IRPF (#56), Análise (#57) e Janela Global do Ativo (#58).
