@@ -1,7 +1,10 @@
 import asyncio
+import json
 import logging
 import traceback
 from contextlib import asynccontextmanager
+from typing import Any
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -30,17 +33,56 @@ from app.routers import rentabilidade
 
 logger = logging.getLogger(__name__)
 
+_PROVIDER_TERMS = (
+    "brapi",
+    "yfinance",
+    "yahoo finance",
+    "alpha vantage",
+    "tesouro transparente",
+)
+_PUBLIC_MARKET_DATA_SOURCE = "market_data_provider"
+_PUBLIC_PROVIDER_RESPONSE_PATHS = (
+    "/api/v1/assets/quote/",
+    "/api/v1/assets/tesouro/price",
+)
+
+
+def _sanitize_provider_text(value: str) -> str:
+    sanitized = value
+    for term in _PROVIDER_TERMS:
+        sanitized = sanitized.replace(term, _PUBLIC_MARKET_DATA_SOURCE)
+        sanitized = sanitized.replace(term.upper(), _PUBLIC_MARKET_DATA_SOURCE)
+        sanitized = sanitized.replace(term.title(), _PUBLIC_MARKET_DATA_SOURCE)
+    return sanitized
+
+
+def _sanitize_public_payload(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: (
+                _PUBLIC_MARKET_DATA_SOURCE
+                if key == "source" and isinstance(item, str)
+                else _sanitize_public_payload(item)
+            )
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_sanitize_public_payload(item) for item in value]
+    if isinstance(value, str):
+        return _sanitize_provider_text(value)
+    return value
+
 
 async def _boot_sequence() -> None:
     """
     Sequência de inicialização executada em background após o app subir.
 
     Etapa 1 - Seed de ativos B3/cripto.
-    Etapa 1b - Seed/atualização do catálogo de Tesouro Direto via BRAPI.
+    Etapa 1b - Seed/atualização do catálogo de Tesouro Direto.
     Etapa 1c - Reconciliação de lançamentos antigos de Tesouro Direto.
-    Etapa 1d - Histórico/snapshot de Tesouro Direto via BRAPI.
+    Etapa 1d - Histórico/snapshot de Tesouro Direto.
     Etapa 2 - Backfill histórico de preços.
-    Etapa 3 - Backfill/incremental de benchmarks SGS/BCB para Renda Fixa.
+    Etapa 3 - Backfill/incremental de benchmarks para Renda Fixa.
     """
     await asyncio.sleep(3)
 
@@ -73,7 +115,7 @@ async def _boot_sequence() -> None:
     try:
         from app.services.treasury_catalog_service import seed_treasury_assets
 
-        logger.info("[Boot] Etapa 1b: atualizando catálogo Tesouro Direto BRAPI")
+        logger.info("[Boot] Etapa 1b: atualizando catálogo Tesouro Direto")
         async with AsyncSessionLocal() as db:
             treasury_seed = await seed_treasury_assets(db)
         logger.info(
@@ -109,7 +151,7 @@ async def _boot_sequence() -> None:
             update_treasury_latest_prices,
         )
 
-        logger.info("[Boot] Etapa 1d: verificando histórico Tesouro Direto BRAPI")
+        logger.info("[Boot] Etapa 1d: verificando histórico Tesouro Direto")
         treasury_stats = await import_missing_treasury_price_history()
         logger.info("[Boot] Etapa 1d: histórico Tesouro Direto atualizado: %s", treasury_stats)
         async with AsyncSessionLocal() as db:
@@ -132,12 +174,12 @@ async def _boot_sequence() -> None:
     try:
         from app.services.benchmark_rate_service import import_missing_benchmark_history
 
-        logger.info("[Boot] Etapa 3: verificando benchmarks SGS/BCB")
+        logger.info("[Boot] Etapa 3: verificando benchmarks de renda fixa")
         async with AsyncSessionLocal() as db:
             stats = await import_missing_benchmark_history(db)
-        logger.info("[Boot] Etapa 3: benchmarks SGS/BCB atualizados: %s", stats)
+        logger.info("[Boot] Etapa 3: benchmarks de renda fixa atualizados: %s", stats)
     except Exception as e:
-        logger.error("[Boot] Etapa 3 (benchmarks SGS/BCB) falhou: %s", e)
+        logger.error("[Boot] Etapa 3 (benchmarks de renda fixa) falhou: %s", e)
 
     logger.info("[Boot] sequencia de inicializacao concluida")
 
@@ -158,6 +200,43 @@ app = FastAPI(
 )
 
 app.state.limiter = limiter
+
+
+@app.middleware("http")
+async def sanitize_public_provider_metadata(request: Request, call_next):
+    response = await call_next(request)
+    if not any(request.url.path.startswith(path) for path in _PUBLIC_PROVIDER_RESPONSE_PATHS):
+        return response
+
+    content_type = response.headers.get("content-type", "")
+    if "application/json" not in content_type:
+        return response
+
+    body = b"".join([chunk async for chunk in response.body_iterator])
+    try:
+        payload = json.loads(body)
+    except (TypeError, ValueError):
+        return Response(
+            content=body,
+            status_code=response.status_code,
+            headers={
+                key: value
+                for key, value in response.headers.items()
+                if key.lower() != "content-length"
+            },
+            media_type=response.media_type,
+        )
+
+    headers = {
+        key: value
+        for key, value in response.headers.items()
+        if key.lower() not in {"content-length", "content-type"}
+    }
+    return JSONResponse(
+        content=_sanitize_public_payload(payload),
+        status_code=response.status_code,
+        headers=headers,
+    )
 
 
 def _rate_limit_handler(request: Request, exc: Exception) -> Response:
@@ -182,9 +261,9 @@ async def global_exception_handler(request: Request, exc: Exception):
         return JSONResponse(
             status_code=500,
             content={
-                "detail": str(exc),
+                "detail": _sanitize_provider_text(str(exc)),
                 "type": type(exc).__name__,
-                "traceback": tb,
+                "traceback": _sanitize_provider_text(tb),
                 "path": str(request.url),
             },
         )
@@ -214,8 +293,8 @@ def custom_openapi():
         {"OAuth2PasswordBearer": []},
         {"HTTPBearer": []},
     ]
-    app.openapi_schema = schema
-    return schema
+    app.openapi_schema = _sanitize_public_payload(schema)
+    return app.openapi_schema
 
 
 app.openapi = custom_openapi  # type: ignore[method-assign]
