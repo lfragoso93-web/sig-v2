@@ -82,6 +82,10 @@ async def admin_update_user(
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    if data.email and data.email != user.email:
+        existing = await get_user_by_email(db, data.email)
+        if existing and existing.id != user_id:
+            raise HTTPException(status_code=400, detail="E-mail já cadastrado")
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(user, field, value)
     await db.commit()

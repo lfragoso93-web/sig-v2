@@ -211,6 +211,64 @@ class TestAdminUpdateUser:
         assert user.role == UserRole.superadmin
         db.commit.assert_called_once()
 
+    async def test_admin_update_user_name_and_email_success(self):
+        db = AsyncMock(spec=AsyncSession)
+
+        existing_user = MagicMock(spec=User)
+        existing_user.id = 2
+        existing_user.name = "Old Name"
+        existing_user.email = "old@example.com"
+
+        get_result = MagicMock()
+        get_result.scalar_one_or_none = MagicMock(return_value=existing_user)
+
+        email_result = MagicMock()
+        email_result.scalar_one_or_none = MagicMock(return_value=None)
+
+        db.execute = AsyncMock(side_effect=[get_result, email_result])
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+
+        user = await admin_update_user(
+            db,
+            2,
+            UserAdminUpdate(name="New Name", email="new@example.com"),
+        )
+
+        assert user.name == "New Name"
+        assert user.email == "new@example.com"
+        db.commit.assert_called_once()
+
+    async def test_admin_update_user_rejects_duplicate_email(self):
+        db = AsyncMock(spec=AsyncSession)
+
+        existing_user = MagicMock(spec=User)
+        existing_user.id = 2
+        existing_user.email = "old@example.com"
+
+        duplicate_user = MagicMock(spec=User)
+        duplicate_user.id = 3
+        duplicate_user.email = "used@example.com"
+
+        get_result = MagicMock()
+        get_result.scalar_one_or_none = MagicMock(return_value=existing_user)
+
+        email_result = MagicMock()
+        email_result.scalar_one_or_none = MagicMock(return_value=duplicate_user)
+
+        db.execute = AsyncMock(side_effect=[get_result, email_result])
+
+        from fastapi import HTTPException
+        with pytest.raises(HTTPException) as exc_info:
+            await admin_update_user(
+                db,
+                2,
+                UserAdminUpdate(email="used@example.com"),
+            )
+
+        assert exc_info.value.status_code == 400
+        db.commit.assert_not_called()
+
     async def test_admin_role_endpoint_blocks_self_demotion(self):
         db = AsyncMock(spec=AsyncSession)
 

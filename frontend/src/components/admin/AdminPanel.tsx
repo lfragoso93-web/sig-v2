@@ -181,6 +181,9 @@ function UsersSection() {
   const [page,            setPage]            = useState(1)
   const [search,          setSearch]          = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [editingUser,     setEditingUser]     = useState<number | null>(null)
+  const [userForm,        setUserForm]        = useState({ name: '', email: '' })
+  const [userFeedback,    setUserFeedback]    = useState<{ userId: number; msg: string; isError: boolean } | null>(null)
   const [editingRole,     setEditingRole]     = useState<number | null>(null)
   const [roleValue,       setRoleValue]       = useState('')
   const [roleFeedback,    setRoleFeedback]    = useState<{ userId: number; msg: string; isError: boolean } | null>(null)
@@ -221,6 +224,24 @@ function UsersSection() {
     },
   })
 
+  const updateUser = useMutation({
+    mutationFn: ({ id, name, email }: { id: number; name: string; email: string }) =>
+      api.put(`/admin/users/${id}`, { name, email }),
+    onSuccess: (_res, vars) => {
+      qc.invalidateQueries({ queryKey: ['admin-users'] })
+      setUserFeedback({ userId: vars.id, msg: 'Usuário atualizado.', isError: false })
+      setEditingUser(null)
+    },
+    onError: (e: any, vars) => {
+      const detail = e?.response?.data?.detail
+      setUserFeedback({
+        userId: vars.id,
+        msg: typeof detail === 'string' ? detail : 'Erro ao atualizar usuário.',
+        isError: true,
+      })
+    },
+  })
+
   const deleteUser = useMutation({
     mutationFn: (id: number) => api.delete(`/admin/users/${id}`),
     onSuccess:  () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
@@ -248,6 +269,12 @@ function UsersSection() {
     setEditingRole(u.id)
     setRoleValue(u.role)
     setRoleFeedback(null)
+  }
+
+  function startEditUser(u: AdminUser) {
+    setEditingUser(u.id)
+    setUserForm({ name: u.name ?? '', email: u.email ?? '' })
+    setUserFeedback(null)
   }
 
   return (
@@ -349,7 +376,48 @@ function UsersSection() {
                 }}
               >
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
+                  {editingUser === u.id && (
+                    <div className="flex flex-col gap-1.5 mb-2">
+                      <input
+                        value={userForm.name}
+                        onChange={e => setUserForm(v => ({ ...v, name: e.target.value }))}
+                        className="input text-xs py-1 px-2"
+                        style={{ fontSize: 13 }}
+                        placeholder="Nome"
+                        autoFocus
+                      />
+                      <input
+                        type="email"
+                        value={userForm.email}
+                        onChange={e => setUserForm(v => ({ ...v, email: e.target.value }))}
+                        className="input text-xs py-1 px-2"
+                        style={{ fontSize: 13 }}
+                        placeholder="E-mail"
+                      />
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => updateUser.mutate({ id: u.id, ...userForm })}
+                          disabled={updateUser.isPending || !userForm.name.trim() || !userForm.email.trim()}
+                          className="btn btn-primary text-xs px-2 py-1 disabled:opacity-50"
+                          style={{ minHeight: 28 }}
+                        >
+                          {updateUser.isPending ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                          Salvar
+                        </button>
+                        <button
+                          onClick={() => setEditingUser(null)}
+                          className="text-xs px-2 py-1 rounded"
+                          style={{ color: 'var(--color-text-muted)' }}
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <div
+                    className="flex items-center gap-2 flex-wrap"
+                    style={{ display: editingUser === u.id ? 'none' : undefined }}
+                  >
                     <span className="text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>
                       {u.name || u.email}
                     </span>
@@ -413,10 +481,31 @@ function UsersSection() {
                       {roleFeedback.msg}
                     </div>
                   )}
-                  <div className="text-xs truncate" style={{ color: 'var(--color-text-faint)' }}>{u.email}</div>
+                  {userFeedback?.userId === u.id && (
+                    <div
+                      className="text-xs mt-1"
+                      style={{ color: userFeedback.isError ? 'var(--color-error)' : 'var(--color-success)' }}
+                    >
+                      {userFeedback.msg}
+                    </div>
+                  )}
+                  <div
+                    className="text-xs truncate"
+                    style={{ color: 'var(--color-text-faint)', display: editingUser === u.id ? 'none' : undefined }}
+                  >
+                    {u.email}
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={() => startEditUser(u)}
+                    title="Editar usuário"
+                    className="p-1.5 rounded"
+                    style={{ color: editingUser === u.id ? 'var(--color-primary)' : 'var(--color-text-faint)' }}
+                  >
+                    <Pencil size={13} />
+                  </button>
                   {/* Botão reset de senha */}
                   <button
                     onClick={() => setResettingId(id => id === u.id ? null : u.id)}
