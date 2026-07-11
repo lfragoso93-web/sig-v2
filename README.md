@@ -7,41 +7,40 @@ A branch padrão de desenvolvimento é `stable-15jun`.
 
 ---
 
-## Status atual — 10/07/2026
+## Status atual — 11/07/2026
 
-A entrega atual consolida a camada financeira e corrige fluxos críticos antes da continuidade das próximas sprints.
+A entrega atual consolida a camada financeira, conclui correções relevantes da página Resumo e amplia a segurança dos fluxos administrativos antes das próximas sprints.
 
 ### Principais entregas
 
 - Serviço canônico de KPIs para Resumo, Patrimônio, Rentabilidade e endpoints de performance.
 - Evolução patrimonial diária e mensal com manutenção automática de snapshots e fallback histórico.
 - KPIs atuais, resultados realizados, retorno mensal e retorno de 12 meses alinhados.
-- Importação CSV autenticada com modelo, preview, `dry_run`, persistência, mensagens em português e invalidação de cache.
+- Variação diária por classe separada da rentabilidade acumulada.
+- Menu de ações dos ativos renderizado fora da tabela, sem corte em carteiras com poucas posições.
+- Importação CSV autenticada com modelo, preview, `dry_run`, persistência, mensagens em português, bloqueio de importação inválida e invalidação de cache.
 - Isolamento de carteiras por usuário, inclusive superadmins.
+- Exclusão de carteira com limpeza explícita das entidades dependentes e preservação do histórico de auditoria.
+- Administração de usuários com edição de perfil e papel, validações de segurança e proteção do último superadmin.
 - Proventos vinculados exclusivamente à carteira selecionada no topbar.
 - Seed histórico de proventos idempotente, com complemento histórico e materialização por posição elegível.
 - Tratamento de tickers sem histórico e cache temporário de indisponibilidade.
 - Tesouro Direto com catálogo canônico e fallback de preços do Tesouro Transparente para RendA+ e Educa+.
 - Seletores locais de carteira removidos das páginas Proventos e Rentabilidade.
 
-### Validação local realizada
+### Validação disponível
 
-- Backend e frontend compilando via Docker Compose.
-- Login e troca de usuário validados.
-- Resumo, Patrimônio e Rentabilidade com KPIs consistentes.
-- Gráficos de evolução restaurados.
-- Importação CSV validada com linhas válidas e inválidas.
-- Sincronização de proventos reexecutável sem violações de unicidade.
-- Testes backend focados em portfolio, performance e CSV aprovados.
-- Typecheck e build do frontend aprovados.
+- Cobertura backend ampliada para portfolio, importação CSV e administração de usuários.
+- Teste frontend dedicado ao comportamento da tabela de posições.
+- Fluxos de build, typecheck e Docker Compose mantidos como critérios obrigatórios antes do merge.
 
 ---
 
 ## Próximos focos
 
-1. Finalizar a issue #124: dropdown da tabela do Resumo, variação por classe e acabamento de UX.
+1. Finalizar o QA da issue #124 em carteira vazia, apenas renda fixa e posições zeradas.
 2. Robustecer Backup/Restore (#83).
-3. Corrigir administração de usuários e perfis (#98).
+3. Concluir QA funcional da administração de usuários (#98).
 4. Revisar documentação pública e referências a provedores (#80).
 5. Implementar Google OAuth (#97).
 6. Avançar em IRPF (#56), Análise de Carteira (#57) e Janela Global do Ativo (#58).
@@ -55,6 +54,9 @@ A entrega atual consolida a camada financeira e corrige fluxos críticos antes d
 - KPIs consolidados de patrimônio, investido, resultado, proventos e variação atual.
 - Evolução diária e mensal com filtros de período.
 - Distribuição por classe e metas de alocação.
+- Variação diária por classe calculada a partir do preço de referência anterior.
+- Rentabilidade acumulada incluindo resultado de capital e proventos.
+- Menu contextual dos ativos com posicionamento responsivo via portal.
 - Score HHI, Top 5 posições e desvio da alocação ideal.
 
 ### Rentabilidade
@@ -80,6 +82,7 @@ A entrega atual consolida a camada financeira e corrige fluxos críticos antes d
 - Preview antes da importação.
 - Validação linha a linha.
 - `dry_run` e persistência efetiva.
+- Importação bloqueada enquanto existirem erros, linhas ignoradas ou falhas globais.
 - Mensagens localizadas e atualização dos caches financeiros.
 
 ### Tesouro Direto
@@ -89,11 +92,14 @@ A entrega atual consolida a camada financeira e corrige fluxos críticos antes d
 - Suporte a Selic, Prefixado, IPCA+, RendA+ e Educa+.
 - Fallback oficial para títulos sem preço no provedor primário.
 
-### Conta e configurações
+### Conta, administração e configurações
 
 - Login JWT com refresh token rotativo.
 - Recuperação e alteração autenticada de senha.
 - Carteiras isoladas por usuário.
+- Exclusão segura de carteiras e dados dependentes.
+- Administração de usuários com edição de nome, papel e status.
+- Proteção contra remoção do último superadmin.
 - Configuração de metas de alocação.
 
 ---
