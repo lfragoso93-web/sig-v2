@@ -1,220 +1,122 @@
-# SUMÁRIO EXECUTIVO — Análise & Plano de Ação
+# Sumário Executivo — SGI v2
 
-**Análise realizada em:** 02 de Julho de 2026  
-**Status do projeto:** 78% de completude funcional (Sprint 5/6)  
-**Documentos gerados:** 3 arquivos de referência
-
----
-
-## 📊 Situação Atual
-
-### ✅ O que está funcionando
-
-| Item | Status | Detalhe |
-|------|--------|---------|
-| Backend FastAPI | ✅ Sólido | 70+ endpoints, async em todos, Docker ready |
-| Frontend React | ✅ Bom | 40+ componentes, TypeScript, Vite, TailwindCSS |
-| Banco de Dados | ✅ OK | PostgreSQL 15, migrations Alembic, cache Redis |
-| Autenticação | ✅ OK | JWT com refresh token rotativo, bcrypt |
-| Funcionalidades Core | ✅ Completo | Carteiras, transações, proventos, rentabilidade |
-| CI/CD | ✅ OK | GitHub Actions, lint, testes, Docker builds |
-| Dashboard | ✅ Básico | Resumo, patrimônio, rentabilidade implementados |
-
-### 🔴 Gaps Críticos Identificados (21 total)
-
-**Distribuição:**
-- 🔴 **4 CRÍTICOS** — afetam performance ou impossibilitam features essenciais
-- 🟡 **13 MÉDIOS** — features incompletas ou UX degradada
-- 🟢 **4 BAIXOS** — melhorias de documentação ou compliance
-
-**Categorias:**
-1. **Performance & BD** (6 gaps) — índices, cache, monitoramento
-2. **Frontend/UX** (5 gaps) — drawer de ativos, layouts mobile, temas
-3. **Features** (4 gaps) — IRPF, CSV import, backup, audit logs
-4. **Testes** (3 gaps) — cobertura frontend 0%, backend 15%
-5. **Documentação** (2 gaps) — arquitetura, API
-6. **Segurança** (1 gap) — Sprint 6A (remover refs de APIs)
+**Atualizado em:** 11 de julho de 2026  
+**Branch de desenvolvimento:** `stable-15jun`
 
 ---
 
-## 🎯 Plano em 3 Sprints
+## Situação atual
 
-### SPRINT 1 (Semana 1-2): Produção-Ready [30-40h]
+O SGI v2 possui uma base funcional consolidada para gestão de investimentos, com backend FastAPI, frontend React + TypeScript, PostgreSQL, Redis, jobs agendados e autenticação JWT.
 
-**Objetivo:** Performance, segurança, estabilidade
+O ciclo mais recente estabilizou os contratos financeiros e os fluxos operacionais mais visíveis ao usuário.
 
-1. ✅ **Índices PostgreSQL** (2h) — Reduz latência 30-50%
-2. ✅ **Monitoramento de Queries** (1h) — Logs de queries lentas
-3. ✅ **Cache Redis** (2-3h) — Dashboard instantâneo
-4. ✅ **Sprint 6A Compliance** (2h) — Remove refs de APIs externas
-5. ✅ **Setup Testes Frontend** (4-5h) — Infraestrutura para Vitest
+### Entregas consolidadas
 
-**Saída:** App pronto para produção com performance baseline
+- Resumo, Patrimônio e Rentabilidade usando KPIs canônicos.
+- Evolução patrimonial diária e mensal.
+- Variação diária separada da rentabilidade acumulada.
+- Importação CSV com modelo, preview, pré-validação e persistência.
+- Proventos vinculados à carteira selecionada.
+- Histórico de proventos idempotente.
+- Catálogo e preços de Tesouro Direto com fallback oficial.
+- Administração de usuários e proteção do último superadmin.
+- Exclusão segura de carteiras e preservação da auditoria.
+- Cobertura backend ampliada e testes frontend iniciais.
 
----
+### Issues concluídas no ciclo
 
-### SPRINT 2 (Semana 3-4): Features Críticas [40-60h]
-
-**Objetivo:** Implementar roadmap planejado
-
-1. ✅ **CSV Import** (12-15h) — Importação em massa com validação
-2. ✅ **Backup/Restore** (12-15h) — Disaster recovery
-3. ✅ **IRPF Completo** (10-12h) — Exportação PDF, cálculos corretos
-4. ✅ **Audit Logs** (8-10h) — Rastreabilidade de ações
-5. ✅ **Asset Drawer** (8-10h) — Detalhe de ativo ao clicar
-
-**Saída:** 100% das features roadmap implementadas
+- #124 — Correções da página Resumo.
+- #98 — Administração de usuários.
+- #82 — Importação CSV.
 
 ---
 
-### SPRINT 3 (Semana 5-7): Qualidade [40-50h]
+## Prioridade atual
 
-**Objetivo:** Testes, documentação, UX profissional
+### #80 — Compliance da documentação e API pública
 
-1. ✅ **Testes Backend** (15-20h) — De 15% para 70% cobertura
-2. ✅ **Testes E2E** (12-15h) — 10+ cenários críticos
-3. ✅ **Mobile Responsivo** (6-8h) — iPhone + Android
-4. ✅ **Documentação** (6-8h) — Arquitetura, deploy, troubleshooting
-5. ✅ **Páginas Completas** (10-12h) — AnalisePage + MetasPage
+A próxima entrega remove detalhes de fornecedores das superfícies públicas do sistema.
 
-**Saída:** Aplicativo pronto para produção profissional
+O trabalho está dividido em:
 
----
+1. documentação principal;
+2. documentos auxiliares;
+3. OpenAPI, schemas e respostas públicas;
+4. configuração com compatibilidade;
+5. testes automatizados contra regressões.
 
-## 📈 Timeline
-
-```
-Total: 120-150 horas
-
-Com 1 dev:     8-12 semanas
-Com 2 devs:    4-6 semanas  ← RECOMENDADO
-Com 3 devs:    3-4 semanas
-```
+A documentação principal e os documentos de planejamento já começaram a ser atualizados na `stable-15jun`.
 
 ---
 
-## 💡 Quick Start (Hoje)
+## Próximas entregas
 
-### Para o Dev Lead
+### 1. Backup seguro — primeira fase da #83
 
-1. **Ler (50 min total):**
-   - Este sumário (5 min)
-   - `GAPS_ANALISE_COMPLETA.md` — Detalhes de cada gap (20 min)
-   - `PLANO_ACAO_EXECUTAVEL.md` — Como executar (15 min)
-   - `MATRIZ_PRIORIZACAO.md` — Priorização (10 min)
+- geração de backup para superadmin;
+- download autenticado;
+- checksum;
+- lock de concorrência;
+- auditoria;
+- retenção temporária;
+- teste de restauração manual em ambiente isolado.
 
-2. **Agir (30 min):**
-   - [ ] Criar 6 issues no GitHub (Sprint 1 tasks)
-   - [ ] Estimar timing com time
-   - [ ] Agendar kick-off (1h) para amanhã
+O restore direto pela aplicação não faz parte da primeira fase devido ao risco operacional.
 
-3. **Começar (amanhã):**
-   - Tarefa 1.1 — Criar migration com índices PostgreSQL (2h)
+### 2. Google OAuth — #97
 
----
+- identidade externa;
+- vínculo seguro com conta existente;
+- preservação do login por senha;
+- callback frontend;
+- testes de conflito e segurança.
 
-## 🔥 Top 5 Prioridades (Fazer Primeiro)
+### 3. Refinamento da página Patrimônio — #90
 
-| # | O que fazer | Por quê | Tempo |
-|---|-------------|--------|-------|
-| 1️⃣ | Índices PostgreSQL | -30-50% latência imediato | 2h |
-| 2️⃣ | Monitoramento queries | Detectar problemas em produção | 1h |
-| 3️⃣ | Cache Redis completo | Dashboard instantâneo | 2-3h |
-| 4️⃣ | CSV Import | Feature critical (users pedem) | 12-15h |
-| 5️⃣ | Backup/Restore | Disaster recovery (CRÍTICO) | 12-15h |
+- melhor hierarquia visual;
+- separação entre composição, metas, concentração e posições;
+- responsividade;
+- preservação dos contratos financeiros canônicos.
 
----
+### 4. Novos módulos de produto
 
-## 📚 Documentos de Referência
-
-| Documento | Tamanho | Conteúdo |
-|-----------|---------|----------|
-| **GAPS_ANALISE_COMPLETA.md** | 500+ linhas | Detalhamento de cada gap, impacto, recomendações |
-| **PLANO_ACAO_EXECUTAVEL.md** | 400+ linhas | 3 sprints com tarefas concretas, código, testes |
-| **MATRIZ_PRIORIZACAO.md** | 300+ linhas | Timeline, matrix impacto/esforço, métricas, risk |
+- Análise de Carteira — #57.
+- Janela Global do Ativo — #58.
+- Motor fiscal e IRPF — #56.
 
 ---
 
-## ✅ Métricas de Sucesso
+## Riscos principais
 
-### Sprint 1
-- [ ] Queries críticas < 200ms (de 500-2000ms)
-- [ ] Cache hitrate > 50%
-- [ ] 5+ testes frontend passando
-- [ ] 0 referências a APIs externas em docs
-
-### Sprint 2
-- [ ] CSV import + validação funcional
-- [ ] Backup/restore testado
-- [ ] IRPF exporta PDF correto
-- [ ] Audit logs para 100% de ações
-
-### Sprint 3
-- [ ] Cobertura backend 70%+
-- [ ] 10+ testes E2E
-- [ ] App responsivo mobile
-- [ ] Documentação completa
+| Risco | Mitigação |
+|---|---|
+| Reintrodução de divergência entre KPIs | Reutilizar exclusivamente os contratos canônicos |
+| Quebra de configuração ao genericizar nomes | Compatibilidade e depreciação gradual |
+| Exposição de dados em backups | Acesso restrito, retenção curta e auditoria |
+| Restore causar indisponibilidade | Manter fora da primeira fase |
+| Vinculação OAuth insegura | Identidade externa e e-mail verificado |
+| Erros em regras fiscais | Especificação e testes antes da interface |
 
 ---
 
-## 🎯 O que esperar ao final (8-12 semanas)
+## Processo de desenvolvimento
 
-✅ App production-ready  
-✅ -40% latência média  
-✅ Features roadmap 100% implementadas  
-✅ Testes 70%+ cobertura  
-✅ Documentação profissional  
-✅ UX mobile = desktop  
-✅ Zero gaps críticos restantes  
+- Todo desenvolvimento ocorre na `stable-15jun`.
+- Commits são pequenos e isolados.
+- Testes e validação funcional antecedem a PR.
+- README, roadmap e changelog são atualizados na consolidação.
+- O merge em `main` ocorre apenas após a validação do bloco.
 
 ---
 
-## 🚀 Próximos Passos
+## Documentos de referência
 
-```
-Hoje (02/07):
-  - Ler documentação (1h)
-  - Kick-off meeting planejamento (30 min)
-
-Amanhã (03/07):
-  - Sprint 1, Tarefa 1.1: Índices PostgreSQL
-  - Criar issues no GitHub
-
-Semana que vem:
-  - Completar Sprint 1 (30-40h)
-  - Daily standups (5 min)
-  - Weekly review (30 min)
-```
-
----
-
-## 🤔 Dúvidas Comuns
-
-**P: Quanto tempo vai levar?**  
-R: 8-12 semanas com 1 dev, 4-6 com 2 devs. Sprint 1 (performance) é rápido (semana 1). Sprint 2 (features) é o maior esforço.
-
-**P: Qual é o risco maior?**  
-R: Índices quebram queries (baixa prob). CSV import corrompe dados (média prob). Mitigado com testes.
-
-**P: Preciso parar o projeto atual?**  
-R: Sprint 1 é rápido (2 semanas). Sprint 2-3 são paralelo-izáveis (2 devs: 1 backend, 1 frontend).
-
-**P: Como eu sei se estou no caminho certo?**  
-R: Weekly reviews + métricas. Se Sprint 1 não tem latência -30%, algo está errado.
-
-**P: E depois? v2.0?**  
-R: Após Sprint 3, app é v1.0 production-ready. v2.0 pode ser: Mobile app, multi-tenancy, análises avançadas.
-
----
-
-## 📞 Suporte
-
-**Dúvidas sobre gaps?** → `GAPS_ANALISE_COMPLETA.md`  
-**Como executar?** → `PLANO_ACAO_EXECUTAVEL.md`  
-**Prioridades?** → `MATRIZ_PRIORIZACAO.md`  
-**Histórico?** → `CHANGELOG.md` + `ROADMAP_SPRINTS.md`  
-
----
-
-*Análise completa realizada em 02/07/2026 por Abacus AI Agent*  
-*Pronto para começar? Vamos ao primeiro commit! 🚀*
+| Documento | Finalidade |
+|---|---|
+| `README.md` | Visão geral e execução do projeto |
+| `ROADMAP_SPRINTS.md` | Entregas concluídas e futuras |
+| `CHANGELOG.md` | Histórico de alterações |
+| `GAPS_ANALISE_COMPLETA.md` | Gaps ativos e ordem de atuação |
+| `PLANO_ACAO_EXECUTAVEL.md` | Plano técnico de execução |
+| `MATRIZ_PRIORIZACAO.md` | Impacto, esforço e riscos |
