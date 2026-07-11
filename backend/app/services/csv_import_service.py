@@ -180,7 +180,7 @@ async def import_transactions_csv(
         })
 
     return {
-        "success": error_count == 0,
+        "success": error_count == 0 and skipped_count == 0,
         "imported_count": 0,
         "skipped_count": skipped_count,
         "error_count": error_count,
@@ -350,8 +350,10 @@ async def import_csv_transactions(
     rows, global_errors = await parse_csv_content(content, portfolio_id, db)
     result["global_errors"] = global_errors
 
-    if global_errors:
-        result["error_count"] += len(global_errors)
+    blocking_rows = [row for row in rows if row.errors or row.warnings]
+    if global_errors or blocking_rows:
+        result["error_count"] += len(global_errors) + sum(1 for row in rows if row.errors)
+        result["skipped_count"] += sum(1 for row in rows if row.warnings and not row.errors)
         result["rows"] = [
             {
                 "row_num": r.row_num,

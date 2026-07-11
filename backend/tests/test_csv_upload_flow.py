@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,7 +36,7 @@ async def test_import_upload_rejects_empty_file():
 @pytest.mark.asyncio
 async def test_import_upload_dry_run_validates_without_persisting():
     db = AsyncMock(spec=AsyncSession)
-    portfolio_result = AsyncMock()
+    portfolio_result = MagicMock()
     portfolio_result.scalar_one_or_none.return_value = SimpleNamespace(id=1, user_id=7)
     db.execute.return_value = portfolio_result
 
