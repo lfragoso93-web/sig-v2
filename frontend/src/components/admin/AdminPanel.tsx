@@ -9,7 +9,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Users, Settings, BarChart2, Trash2, Power, Plus, Save,
-  ChevronDown, ChevronUp, Loader2, Pencil, Check, X, KeyRound, BookOpen,
+  ChevronDown, ChevronUp, Loader2, Pencil, Check, KeyRound, BookOpen,
 } from 'lucide-react'
 import api from '@/services/api'
 import PasswordInput from '@/components/ui/PasswordInput'
@@ -182,11 +182,8 @@ function UsersSection() {
   const [search,          setSearch]          = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [editingUser,     setEditingUser]     = useState<number | null>(null)
-  const [userForm,        setUserForm]        = useState({ name: '', email: '' })
+  const [userForm,        setUserForm]        = useState({ name: '', email: '', role: 'user' })
   const [userFeedback,    setUserFeedback]    = useState<{ userId: number; msg: string; isError: boolean } | null>(null)
-  const [editingRole,     setEditingRole]     = useState<number | null>(null)
-  const [roleValue,       setRoleValue]       = useState('')
-  const [roleFeedback,    setRoleFeedback]    = useState<{ userId: number; msg: string; isError: boolean } | null>(null)
   // Controla qual usuário está com o form de reset aberto (null = nenhum)
   const [resettingId,     setResettingId]     = useState<number | null>(null)
 
@@ -206,27 +203,9 @@ function UsersSection() {
     onSuccess:  () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
   })
 
-  const changeRole = useMutation({
-    mutationFn: ({ id, role }: { id: number; role: string }) =>
-      api.put(`/admin/users/${id}/role`, { role }),
-    onSuccess: (_res, vars) => {
-      qc.invalidateQueries({ queryKey: ['admin-users'] })
-      setRoleFeedback({ userId: vars.id, msg: 'Perfil atualizado.', isError: false })
-      setEditingRole(null)
-    },
-    onError: (e: any, vars) => {
-      const detail = e?.response?.data?.detail
-      setRoleFeedback({
-        userId: vars.id,
-        msg: typeof detail === 'string' ? detail : 'Erro ao atualizar perfil.',
-        isError: true,
-      })
-    },
-  })
-
   const updateUser = useMutation({
-    mutationFn: ({ id, name, email }: { id: number; name: string; email: string }) =>
-      api.put(`/admin/users/${id}`, { name, email }),
+    mutationFn: ({ id, name, email, role }: { id: number; name: string; email: string; role: string }) =>
+      api.put(`/admin/users/${id}`, { name, email, role }),
     onSuccess: (_res, vars) => {
       qc.invalidateQueries({ queryKey: ['admin-users'] })
       setUserFeedback({ userId: vars.id, msg: 'Usuário atualizado.', isError: false })
@@ -265,15 +244,9 @@ function UsersSection() {
   const users: AdminUser[] = data?.items ?? []
   const totalPages: number = data?.total_pages ?? 1
 
-  function startEditRole(u: AdminUser) {
-    setEditingRole(u.id)
-    setRoleValue(u.role)
-    setRoleFeedback(null)
-  }
-
   function startEditUser(u: AdminUser) {
     setEditingUser(u.id)
-    setUserForm({ name: u.name ?? '', email: u.email ?? '' })
+    setUserForm({ name: u.name ?? '', email: u.email ?? '', role: u.role ?? 'user' })
     setUserFeedback(null)
   }
 
@@ -394,6 +367,14 @@ function UsersSection() {
                         style={{ fontSize: 13 }}
                         placeholder="E-mail"
                       />
+                      <select
+                        value={userForm.role}
+                        onChange={e => setUserForm(v => ({ ...v, role: e.target.value }))}
+                        className="input text-xs py-1 px-2"
+                        style={{ fontSize: 13 }}
+                      >
+                        {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                      </select>
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => updateUser.mutate({ id: u.id, ...userForm })}
@@ -422,65 +403,12 @@ function UsersSection() {
                       {u.name || u.email}
                     </span>
 
-                    {/* Role: badge normal ou select de edição */}
-                    {editingRole === u.id ? (
-                      <div className="flex items-center gap-1">
-                        <select
-                          value={roleValue}
-                          onChange={e => setRoleValue(e.target.value)}
-                          className="input text-xs py-0.5 px-1.5 h-6"
-                          style={{ fontSize: 12, minWidth: 90 }}
-                          autoFocus
-                        >
-                          {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
-                        </select>
-                        <button
-                          onClick={() => changeRole.mutate({ id: u.id, role: roleValue })}
-                          disabled={changeRole.isPending}
-                          className="p-0.5"
-                          style={{ color: 'var(--color-primary)' }}
-                          title="Confirmar"
-                        >
-                          {changeRole.isPending
-                            ? <Loader2 size={12} className="animate-spin" />
-                            : <Check size={12} />}
-                        </button>
-                        <button
-                          onClick={() => setEditingRole(null)}
-                          className="p-0.5"
-                          style={{ color: 'var(--color-text-faint)' }}
-                          title="Cancelar"
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => startEditRole(u)}
-                        title="Editar role"
-                        className="flex items-center gap-1 group"
-                      >
-                        <RoleBadge role={u.role} />
-                        <Pencil
-                          size={10}
-                          className="opacity-0 group-hover:opacity-70 transition-opacity"
-                          style={{ color: 'var(--color-text-faint)' }}
-                        />
-                      </button>
-                    )}
+                    <RoleBadge role={u.role} />
 
                     {!u.is_active && (
                       <span className="text-xs italic" style={{ color: 'var(--color-text-faint)' }}>inativo</span>
                     )}
                   </div>
-                  {roleFeedback?.userId === u.id && (
-                    <div
-                      className="text-xs mt-1"
-                      style={{ color: roleFeedback.isError ? 'var(--color-error)' : 'var(--color-success)' }}
-                    >
-                      {roleFeedback.msg}
-                    </div>
-                  )}
                   {userFeedback?.userId === u.id && (
                     <div
                       className="text-xs mt-1"
