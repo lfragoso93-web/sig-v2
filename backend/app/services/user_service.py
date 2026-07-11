@@ -82,6 +82,20 @@ async def admin_update_user(
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    removes_active_superadmin = (
+        user.role == UserRole.superadmin
+        and user.is_active
+        and (
+            (data.role is not None and data.role != UserRole.superadmin)
+            or data.is_active is False
+        )
+    )
+    if removes_active_superadmin and await count_active_superadmins(db) <= 1:
+        raise HTTPException(status_code=400, detail="Nao e possivel remover o ultimo SuperAdmin ativo")
+    if data.email and data.email != user.email:
+        existing = await get_user_by_email(db, data.email)
+        if existing and existing.id != user_id:
+            raise HTTPException(status_code=400, detail="E-mail já cadastrado")
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(user, field, value)
     await db.commit()
@@ -107,11 +121,23 @@ async def delete_user(db: AsyncSession, user_id: int) -> None:
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    if user.role == UserRole.superadmin and user.is_active and await count_active_superadmins(db) <= 1:
+        raise HTTPException(status_code=400, detail="Nao e possivel remover o ultimo SuperAdmin ativo")
 
     # DELETE SQL direto — PostgreSQL executa ON DELETE CASCADE nas FKs
     stmt = delete(User).where(User.id == user_id)
     await db.execute(stmt)
     await db.commit()
+
+
+async def count_active_superadmins(db: AsyncSession) -> int:
+    result = await db.execute(
+        select(func.count()).select_from(User).where(
+            User.role == UserRole.superadmin,
+            User.is_active.is_(True),
+        )
+    )
+    return result.scalar_one()
 
 
 async def count_users(db: AsyncSession) -> int:

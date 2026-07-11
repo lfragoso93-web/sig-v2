@@ -6,14 +6,14 @@ from app.core.security import hash_password
 from app.models.user import User, UserRole
 from app.schemas.user import (
     UserCreate, UserListResponse, UserResponse,
-    UserAdminUpdate, AdminResetPasswordRequest,
+    UserAdminUpdate, UserRoleUpdate, AdminResetPasswordRequest,
 )
 from app.schemas.auth import MessageResponse
 from app.schemas.config import SystemConfigResponse, SystemConfigUpdate, SystemConfigBulkUpdate
 from app.schemas.pagination import PaginatedResponse
 from app.services.user_service import (
     create_user, list_users, get_user_by_id,
-    admin_update_user, delete_user, count_users
+    admin_update_user, delete_user, count_users, count_active_superadmins
 )
 from app.services.config_service import get_all_configs, update_config, bulk_update_configs
 from app.services import backup_service
@@ -99,6 +99,19 @@ async def admin_update_user_endpoint(
     return await admin_update_user(db, user_id, data)
 
 
+@router.put("/users/{user_id}/role", response_model=UserResponse)
+async def admin_update_user_role_endpoint(
+    user_id: int,
+    data: UserRoleUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
+):
+    """Altera apenas o perfil do usuario."""
+    if user_id == current_user.id and data.role != UserRole.superadmin:
+        raise HTTPException(status_code=400, detail="Voce nao pode remover seu proprio SuperAdmin")
+    return await admin_update_user(db, user_id, UserAdminUpdate(role=data.role))
+
+
 @router.delete("/users/{user_id}", response_model=MessageResponse)
 async def admin_delete_user(
     user_id: int,
@@ -124,6 +137,8 @@ async def admin_toggle_user_active(
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    if user.role == UserRole.superadmin and user.is_active and await count_active_superadmins(db) <= 1:
+        raise HTTPException(status_code=400, detail="Nao e possivel remover o ultimo SuperAdmin ativo")
     user.is_active = not user.is_active
     await db.flush()
     await db.refresh(user)

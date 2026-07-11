@@ -31,6 +31,13 @@ function safeNum(v: unknown): number {
   return isFinite(n) ? n : 0
 }
 
+function positionValue(p: { current_value?: number | null; invested_value?: number | null }): number {
+  if (p.current_value !== null && p.current_value !== undefined) {
+    return safeNum(p.current_value)
+  }
+  return safeNum(p.invested_value)
+}
+
 const ASSET_TYPE_LABELS: Record<string, string> = {
   ACAO: 'Ações', ACAO_NACIONAL: 'Ações', FII: 'FIIs',
   ETF_NACIONAL: 'ETFs BR', STOCK: 'Stocks', ETF_INTERNACIONAL: 'ETFs INT',
@@ -178,7 +185,7 @@ function ConsolidacaoSection({ portfolioId }: { portfolioId: number }) {
     for (const p of allPositions) {
       const t = p.asset_type ?? 'OUTROS'
       if (!map[t]) map[t] = { total: 0, count: 0 }
-      map[t].total += safeNum(p.current_value)
+      map[t].total += positionValue(p)
       map[t].count += 1
     }
     const grandTotal = Object.values(map).reduce((s, v) => s + v.total, 0)
@@ -294,7 +301,7 @@ function AnaliseSection({ portfolioId }: { portfolioId: number }) {
     const map: Record<string, number> = {}
     for (const p of allPositions) {
       const t = p.asset_type ?? 'OUTROS'
-      map[t] = (map[t] ?? 0) + safeNum(p.current_value)
+      map[t] = (map[t] ?? 0) + positionValue(p)
     }
     const total = Object.values(map).reduce((s, v) => s + v, 0)
     return Object.entries(map)
@@ -309,14 +316,14 @@ function AnaliseSection({ portfolioId }: { portfolioId: number }) {
   }, [allPositions])
 
   const byAsset = useMemo(() => {
-    const total = allPositions.reduce((s: number, p: any) => s + safeNum(p.current_value), 0)
+    const total = allPositions.reduce((s: number, p: any) => s + positionValue(p), 0)
     return allPositions
-      .filter((p: any) => safeNum(p.current_value) > 0)
+      .filter((p: any) => positionValue(p) > 0)
       .map((p: any, i: number) => ({
         label: p.ticker ?? p.asset_code ?? '?',
         type:  p.asset_type ?? 'OUTROS',
-        value: safeNum(p.current_value),
-        pct:   total > 0 ? (safeNum(p.current_value) / total) * 100 : 0,
+        value: positionValue(p),
+        pct:   total > 0 ? (positionValue(p) / total) * 100 : 0,
         color: CHART_COLORS[i % CHART_COLORS.length],
       }))
       .sort((a: any, b: any) => b.value - a.value)
@@ -406,13 +413,13 @@ function AnaliseSection({ portfolioId }: { portfolioId: number }) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
               <div className="flex justify-center">
                 {(() => {
-                  const classPositions = allPositions.filter((p: any) => p.asset_type === cls.type && safeNum(p.current_value) > 0)
+                  const classPositions = allPositions.filter((p: any) => p.asset_type === cls.type && positionValue(p) > 0)
                   const donutItems = classPositions
                     .map((p: any, i: number) => ({
                       asset_type: p.asset_type ?? cls.type,
                       label: p.ticker ?? p.asset_code ?? '?',
-                      value: safeNum(p.current_value),
-                      percentage: cls.value > 0 ? (safeNum(p.current_value) / cls.value) * 100 : 0,
+                      value: positionValue(p),
+                      percentage: cls.value > 0 ? (positionValue(p) / cls.value) * 100 : 0,
                       color: CHART_COLORS[i % CHART_COLORS.length],
                     }))
                     .sort((a: any, b: any) => b.value - a.value)
@@ -423,13 +430,14 @@ function AnaliseSection({ portfolioId }: { portfolioId: number }) {
               </div>
               <div className="flex flex-col">
                 {allPositions
-                  .filter((p: any) => p.asset_type === cls.type && safeNum(p.current_value) > 0)
-                  .sort((a: any, b: any) => safeNum(b.current_value) - safeNum(a.current_value))
+                  .filter((p: any) => p.asset_type === cls.type && positionValue(p) > 0)
+                  .sort((a: any, b: any) => positionValue(b) - positionValue(a))
                   .map((p: any, i: number) => {
                     const classTotal = allPositions
                       .filter((pp: any) => pp.asset_type === cls.type)
-                      .reduce((s: number, pp: any) => s + safeNum(pp.current_value), 0)
-                    const pct = classTotal > 0 ? (safeNum(p.current_value) / classTotal) * 100 : 0
+                      .reduce((s: number, pp: any) => s + positionValue(pp), 0)
+                    const value = positionValue(p)
+                    const pct = classTotal > 0 ? (value / classTotal) * 100 : 0
                     const color = CHART_COLORS[i % CHART_COLORS.length]
                     return (
                       <div key={p.ticker ?? i} className="flex items-center gap-3 py-2" style={{ borderBottom: '1px solid var(--color-divider)' }}>
@@ -440,7 +448,7 @@ function AnaliseSection({ portfolioId }: { portfolioId: number }) {
                           <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 9999, transition: 'width 500ms ease' }} />
                         </div>
                         <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text)', width: 88, textAlign: 'right' }}>
-                          {formatBRL(safeNum(p.current_value))}
+                          {formatBRL(value)}
                         </span>
                         <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', width: 44, textAlign: 'right' }}>
                           {safeNum(pct).toFixed(0)}%

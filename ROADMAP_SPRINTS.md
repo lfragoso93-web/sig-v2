@@ -1,6 +1,6 @@
 # Roadmap de Sprints — SGI v2
 
-> Última atualização: 10/07/2026
+> Última atualização: 11/07/2026
 
 ---
 
@@ -56,8 +56,9 @@
 - [x] Automatizar manutenção de snapshots.
 - [x] Corrigir ganho realizado, retorno mensal e retorno de 12 meses.
 - [x] Remover seletores locais de carteira em Rentabilidade e Proventos.
-- [ ] Corrigir dropdown/lista suspensa cortada na tabela do Resumo.
-- [ ] Revisar variação exibida no cabeçalho das classes.
+- [x] Corrigir dropdown/lista suspensa cortada na tabela do Resumo.
+- [x] Separar variação diária da rentabilidade acumulada por classe.
+- [x] Adicionar teste frontend para a tabela de posições.
 - [ ] Finalizar QA de carteira vazia, apenas renda fixa e posições zeradas.
 
 ### 5J-B — Importação CSV — Issue #82
@@ -68,6 +69,7 @@
 - [x] `dry_run` e persistência efetiva.
 - [x] Validação linha a linha.
 - [x] Mensagens em português.
+- [x] Bloquear confirmação enquanto houver erros, linhas ignoradas ou falhas globais.
 - [x] Invalidação dos caches financeiros.
 - [x] Testes de upload, dry-run e persistência.
 
@@ -92,6 +94,13 @@
 - [ ] Validar localmente preços de todos os RendA+ mantidos em carteira.
 - [ ] Adicionar testes do fallback de preço.
 
+### 5J-H — Integridade de carteiras
+
+- [x] Excluir dependências da carteira de forma explícita.
+- [x] Preservar registros de auditoria desacoplando `portfolio_id` antes da exclusão.
+- [x] Invalidar caches após alterações e exclusões.
+- [ ] Executar QA com carteiras contendo todas as classes de ativos.
+
 ---
 
 ## 🔄 Próximas entregas prioritárias
@@ -103,13 +112,17 @@
 - [ ] Lock global.
 - [ ] Auditoria e status da operação.
 - [ ] Storage persistente.
+- [x] Simplificar a interface administrativa removendo ações ainda não suportadas.
 
 ### 5J-D — Administração de usuários — Issue #98
 
-- [ ] Corrigir edição de usuários.
-- [ ] Revisar permissões de superadmin.
-- [ ] Proteger o último superadmin.
-- [ ] Validar isolamento de dados entre contas.
+- [x] Implementar serviços de criação, listagem, edição e exclusão.
+- [x] Corrigir edição de nome, papel e status do usuário.
+- [x] Revisar permissões de superadmin.
+- [x] Proteger o último superadmin.
+- [x] Ajustar schemas usados pelo painel administrativo.
+- [x] Migrar o painel para os tokens visuais atuais.
+- [ ] Validar isolamento de dados entre contas em QA funcional.
 
 ### 5J-E — Compliance — Issue #80
 

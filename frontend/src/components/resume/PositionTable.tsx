@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { MoreHorizontal, Plus, List, BarChart2 as AnalyseIcon, ChevronDown, Target, Clock } from 'lucide-react'
 import { formatBRL, formatPercent, fmtMoney } from '@/utils/format'
 import { formatTreasuryName } from '@/utils/treasury'
@@ -54,21 +54,18 @@ function investedValueOf(p: PositionGroup['positions'][number]): number {
   return safeNum(p.invested_value) || safeNum(p.quantity) * safeNum(p.average_price)
 }
 
-function calcGroupVariation(group: PositionGroup): { variationPct: number | null; totalInvested: number } {
+function calcGroupHeaderMetrics(group: PositionGroup): { variationPct: number | null; totalInvested: number } {
   let invested = 0
-  let current = 0
-  let hasQuote = false
 
   for (const p of group.positions) {
     invested += investedValueOf(p)
-    if (p.current_price !== null && p.current_price !== undefined) {
-      current += safeNum(p.current_value)
-      hasQuote = true
-    }
   }
 
-  if (!hasQuote || invested === 0) return { variationPct: null, totalInvested: invested }
-  return { variationPct: ((current - invested) / invested) * 100, totalInvested: invested }
+  const variationPct = group.daily_variation_pct
+  return {
+    variationPct: typeof variationPct === 'number' ? variationPct : null,
+    totalInvested: invested,
+  }
 }
 
 function getGroupQuoteTimestamp(group: PositionGroup): string | null {
@@ -118,24 +115,45 @@ function useIsDesktop(breakpoint = 768) {
 
 interface AssetMenuProps { ticker: string; assetLabel: string; assetType: string }
 
+interface MenuCoords {
+  top: number
+  left: number
+  maxHeight: number
+}
+
 function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
   const [open, setOpen] = useState(false)
-  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null)
+  const [coords, setCoords] = useState<MenuCoords | null>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
+  const location = useLocation()
   const openTransactionModal = useAppStore(s => s.openTransactionModal)
 
   const updateCoords = () => {
     const rect = buttonRef.current?.getBoundingClientRect()
     if (!rect) return
     const menuWidth = 210
+    const estimatedMenuHeight = 116
     const margin = 8
     const left = Math.min(
       Math.max(margin, rect.right - menuWidth),
       window.innerWidth - menuWidth - margin,
     )
-    setCoords({ top: rect.bottom + 4, left })
+    const spaceBelow = window.innerHeight - rect.bottom - margin
+    const spaceAbove = rect.top - margin
+    const opensUp = spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow
+    const availableHeight = Math.max(
+      96,
+      opensUp ? spaceAbove - 4 : spaceBelow - 4,
+    )
+    const menuHeight = Math.min(estimatedMenuHeight, availableHeight)
+    const rawTop = opensUp ? rect.top - menuHeight - 4 : rect.bottom + 4
+    const top = Math.min(
+      Math.max(margin, rawTop),
+      window.innerHeight - menuHeight - margin,
+    )
+    setCoords({ top, left, maxHeight: availableHeight })
   }
 
   useLayoutEffect(() => {
@@ -151,20 +169,30 @@ function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
       setOpen(false)
     }
 
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false)
+    }
+
     function handleReposition() {
       updateCoords()
     }
 
     document.addEventListener('mousedown', handleMouseDown)
+    document.addEventListener('keydown', handleKeyDown)
     window.addEventListener('resize', handleReposition)
     window.addEventListener('scroll', handleReposition, true)
 
     return () => {
       document.removeEventListener('mousedown', handleMouseDown)
+      document.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('resize', handleReposition)
       window.removeEventListener('scroll', handleReposition, true)
     }
   }, [open])
+
+  useEffect(() => {
+    setOpen(false)
+  }, [location.pathname, location.search])
 
   const items = [
     {
@@ -209,6 +237,7 @@ function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
         onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-text-muted)')}
         onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-text-faint)')}
         aria-label="Opções"
+        aria-haspopup="menu"
         aria-expanded={open}
       >
         <MoreHorizontal size={14} />
@@ -221,21 +250,25 @@ function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
             position: 'fixed',
             top: coords.top,
             left: coords.left,
-            zIndex: 9999,
+            zIndex: 120,
             width: 210,
+            maxHeight: coords.maxHeight,
             borderRadius: 'var(--radius-lg)',
-            overflow: 'hidden',
+            overflowY: 'auto',
+            overflowX: 'hidden',
             background: 'var(--color-surface)',
             boxShadow: 'var(--shadow-lg)',
             border: '1px solid oklch(from var(--color-text) l c h / 0.1)',
           }}
           onClick={e => e.stopPropagation()}
+          role="menu"
         >
           {items.map((item, i) => (
             <button
               key={item.label}
               type="button"
               onClick={item.onClick}
+              role="menuitem"
               style={{
                 width: '100%', display: 'flex', alignItems: 'center', gap: 8,
                 padding: '8px 12px', border: 'none', background: 'transparent',
@@ -441,7 +474,7 @@ interface ClassGroupHeaderProps {
 }
 
 function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGroupHeaderProps) {
-  const { variationPct, totalInvested } = calcGroupVariation(group)
+  const { variationPct, totalInvested } = calcGroupHeaderMetrics(group)
   const rentabilidade = group.rentabilidade_pct ?? null
   const target = group.target_pct ?? null
   const assetType = group.positions[0]?.asset_type ?? ''
@@ -507,16 +540,15 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
               {formatBRL(safeNum(group.total_value))}
             </span>
           </LabeledValue>
-          {variationPct !== null && (
-            <>
-              <Divider />
-              <LabeledValue label="Var. atual">
-                <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: varColor, fontVariantNumeric: 'tabular-nums' }}>
-                  {variationPct >= 0 ? '+' : ''}{formatPercent(variationPct)}
-                </span>
-              </LabeledValue>
-            </>
-          )}
+          <Divider />
+          <LabeledValue label="Variação">
+            <span
+              title={group.variation_reference_date ? `Referencia: ${group.variation_reference_date}` : 'Sem referencia historica'}
+              style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: varColor, fontVariantNumeric: 'tabular-nums' }}
+            >
+              {variationPct !== null ? `${variationPct >= 0 ? '+' : ''}${formatPercent(variationPct)}` : '—'}
+            </span>
+          </LabeledValue>
           {rentabilidade !== null && (
             <>
               <Divider />

@@ -8,10 +8,13 @@ from app.services.user_service import (
     get_user_by_id,
     create_user,
     update_user,
+    admin_update_user,
     list_users,
+    delete_user,
 )
 from app.models.user import User, UserRole
-from app.schemas.user import UserCreate, UserUpdate
+from app.schemas.user import UserAdminUpdate, UserCreate, UserRoleUpdate, UserUpdate
+from app.routers.admin import admin_toggle_user_active, admin_update_user_role_endpoint, require_superadmin
 
 
 @pytest.mark.asyncio
@@ -181,6 +184,224 @@ class TestUpdateUser:
             await update_user(db, 999, data)
         
         assert exc_info.value.status_code == 404
+
+
+@pytest.mark.asyncio
+class TestAdminUpdateUser:
+
+    async def test_admin_update_user_role_success(self):
+        db = AsyncMock(spec=AsyncSession)
+
+        existing_user = MagicMock(spec=User)
+        existing_user.id = 2
+        existing_user.role = UserRole.user
+
+        get_result = MagicMock()
+        get_result.scalar_one_or_none = MagicMock(return_value=existing_user)
+
+        db.execute = AsyncMock(return_value=get_result)
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+
+        user = await admin_update_user(
+            db,
+            2,
+            UserAdminUpdate(role=UserRole.superadmin),
+        )
+
+        assert user.role == UserRole.superadmin
+        db.commit.assert_called_once()
+
+    async def test_admin_update_user_name_and_email_success(self):
+        db = AsyncMock(spec=AsyncSession)
+
+        existing_user = MagicMock(spec=User)
+        existing_user.id = 2
+        existing_user.name = "Old Name"
+        existing_user.email = "old@example.com"
+
+        get_result = MagicMock()
+        get_result.scalar_one_or_none = MagicMock(return_value=existing_user)
+
+        email_result = MagicMock()
+        email_result.scalar_one_or_none = MagicMock(return_value=None)
+
+        db.execute = AsyncMock(side_effect=[get_result, email_result])
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+
+        user = await admin_update_user(
+            db,
+            2,
+            UserAdminUpdate(name="New Name", email="new@example.com"),
+        )
+
+        assert user.name == "New Name"
+        assert user.email == "new@example.com"
+        db.commit.assert_called_once()
+
+    async def test_admin_update_user_rejects_duplicate_email(self):
+        db = AsyncMock(spec=AsyncSession)
+
+        existing_user = MagicMock(spec=User)
+        existing_user.id = 2
+        existing_user.email = "old@example.com"
+
+        duplicate_user = MagicMock(spec=User)
+        duplicate_user.id = 3
+        duplicate_user.email = "used@example.com"
+
+        get_result = MagicMock()
+        get_result.scalar_one_or_none = MagicMock(return_value=existing_user)
+
+        email_result = MagicMock()
+        email_result.scalar_one_or_none = MagicMock(return_value=duplicate_user)
+
+        db.execute = AsyncMock(side_effect=[get_result, email_result])
+
+        from fastapi import HTTPException
+        with pytest.raises(HTTPException) as exc_info:
+            await admin_update_user(
+                db,
+                2,
+                UserAdminUpdate(email="used@example.com"),
+            )
+
+        assert exc_info.value.status_code == 400
+        db.commit.assert_not_called()
+
+    async def test_admin_update_user_blocks_last_active_superadmin_demotion(self):
+        db = AsyncMock(spec=AsyncSession)
+
+        existing_user = MagicMock(spec=User)
+        existing_user.id = 2
+        existing_user.role = UserRole.superadmin
+        existing_user.is_active = True
+
+        get_result = MagicMock()
+        get_result.scalar_one_or_none = MagicMock(return_value=existing_user)
+
+        count_result = MagicMock()
+        count_result.scalar_one = MagicMock(return_value=1)
+
+        db.execute = AsyncMock(side_effect=[get_result, count_result])
+
+        from fastapi import HTTPException
+        with pytest.raises(HTTPException) as exc_info:
+            await admin_update_user(
+                db,
+                2,
+                UserAdminUpdate(role=UserRole.user),
+            )
+
+        assert exc_info.value.status_code == 400
+        db.commit.assert_not_called()
+
+    async def test_admin_update_user_blocks_last_active_superadmin_deactivation(self):
+        db = AsyncMock(spec=AsyncSession)
+
+        existing_user = MagicMock(spec=User)
+        existing_user.id = 2
+        existing_user.role = UserRole.superadmin
+        existing_user.is_active = True
+
+        get_result = MagicMock()
+        get_result.scalar_one_or_none = MagicMock(return_value=existing_user)
+
+        count_result = MagicMock()
+        count_result.scalar_one = MagicMock(return_value=1)
+
+        db.execute = AsyncMock(side_effect=[get_result, count_result])
+
+        from fastapi import HTTPException
+        with pytest.raises(HTTPException) as exc_info:
+            await admin_update_user(
+                db,
+                2,
+                UserAdminUpdate(is_active=False),
+            )
+
+        assert exc_info.value.status_code == 400
+        db.commit.assert_not_called()
+
+    async def test_delete_user_blocks_last_active_superadmin(self):
+        db = AsyncMock(spec=AsyncSession)
+
+        existing_user = MagicMock(spec=User)
+        existing_user.id = 2
+        existing_user.role = UserRole.superadmin
+        existing_user.is_active = True
+
+        get_result = MagicMock()
+        get_result.scalar_one_or_none = MagicMock(return_value=existing_user)
+
+        count_result = MagicMock()
+        count_result.scalar_one = MagicMock(return_value=1)
+
+        db.execute = AsyncMock(side_effect=[get_result, count_result])
+
+        from fastapi import HTTPException
+        with pytest.raises(HTTPException) as exc_info:
+            await delete_user(db, 2)
+
+        assert exc_info.value.status_code == 400
+        db.commit.assert_not_called()
+
+    async def test_toggle_active_blocks_last_active_superadmin(self):
+        db = AsyncMock(spec=AsyncSession)
+
+        target_user = MagicMock(spec=User)
+        target_user.id = 2
+        target_user.role = UserRole.superadmin
+        target_user.is_active = True
+
+        current_user = MagicMock(spec=User)
+        current_user.id = 1
+        current_user.role = UserRole.superadmin
+
+        get_result = MagicMock()
+        get_result.scalar_one_or_none = MagicMock(return_value=target_user)
+
+        count_result = MagicMock()
+        count_result.scalar_one = MagicMock(return_value=1)
+
+        db.execute = AsyncMock(side_effect=[get_result, count_result])
+
+        from fastapi import HTTPException
+        with pytest.raises(HTTPException) as exc_info:
+            await admin_toggle_user_active(2, db=db, current_user=current_user)
+
+        assert exc_info.value.status_code == 400
+        db.flush.assert_not_called()
+
+    async def test_admin_role_endpoint_blocks_self_demotion(self):
+        db = AsyncMock(spec=AsyncSession)
+
+        current_user = MagicMock(spec=User)
+        current_user.id = 1
+        current_user.role = UserRole.superadmin
+
+        from fastapi import HTTPException
+        with pytest.raises(HTTPException) as exc_info:
+            await admin_update_user_role_endpoint(
+                user_id=1,
+                data=UserRoleUpdate(role=UserRole.user),
+                db=db,
+                current_user=current_user,
+            )
+
+        assert exc_info.value.status_code == 400
+        db.execute.assert_not_called()
+
+    async def test_require_superadmin_blocks_common_user(self):
+        current_user = MagicMock(spec=User)
+        current_user.role = UserRole.user
+
+        from fastapi import HTTPException
+        with pytest.raises(HTTPException) as exc_info:
+            require_superadmin(current_user)
+
+        assert exc_info.value.status_code == 403
 
 
 @pytest.mark.asyncio

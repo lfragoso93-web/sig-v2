@@ -9,11 +9,12 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Users, Settings, BarChart2, Trash2, Power, Plus, Save,
-  ChevronDown, ChevronUp, Loader2, Pencil, Check, X, KeyRound, BookOpen,
+  ChevronDown, ChevronUp, Loader2, Pencil, Check, KeyRound, BookOpen, Database,
 } from 'lucide-react'
 import api from '@/services/api'
 import PasswordInput from '@/components/ui/PasswordInput'
 import AuditLogsPanel from '@/components/admin/AuditLogsPanel'
+import BackupPanel from '@/components/admin/BackupPanel'
 
 // ── Types ────────────────────────────────────────────
 interface AdminUser {
@@ -44,7 +45,7 @@ const fetchUsers   = (page: number, search: string) =>
   api.get('/admin/users', { params: { page, page_size: 10, search: search || undefined } }).then(r => r.data)
 const fetchConfigs = () => api.get<SystemConfig[]>('/admin/config').then(r => r.data)
 
-const ROLES = ['user', 'admin', 'superadmin'] as const
+const ROLES = ['user', 'superadmin'] as const
 
 // ── Sub-components ──────────────────────────────────────
 function SectionHeader({ icon: Icon, title, open, onToggle }: {
@@ -181,8 +182,9 @@ function UsersSection() {
   const [page,            setPage]            = useState(1)
   const [search,          setSearch]          = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [editingRole,     setEditingRole]     = useState<number | null>(null)
-  const [roleValue,       setRoleValue]       = useState('')
+  const [editingUser,     setEditingUser]     = useState<number | null>(null)
+  const [userForm,        setUserForm]        = useState({ name: '', email: '', role: 'user' })
+  const [userFeedback,    setUserFeedback]    = useState<{ userId: number; msg: string; isError: boolean } | null>(null)
   // Controla qual usuário está com o form de reset aberto (null = nenhum)
   const [resettingId,     setResettingId]     = useState<number | null>(null)
 
@@ -202,12 +204,21 @@ function UsersSection() {
     onSuccess:  () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
   })
 
-  const changeRole = useMutation({
-    mutationFn: ({ id, role }: { id: number; role: string }) =>
-      api.put(`/admin/users/${id}/role`, { role }),
-    onSuccess: () => {
+  const updateUser = useMutation({
+    mutationFn: ({ id, name, email, role }: { id: number; name: string; email: string; role: string }) =>
+      api.put(`/admin/users/${id}`, { name, email, role }),
+    onSuccess: (_res, vars) => {
       qc.invalidateQueries({ queryKey: ['admin-users'] })
-      setEditingRole(null)
+      setUserFeedback({ userId: vars.id, msg: 'Usuário atualizado.', isError: false })
+      setEditingUser(null)
+    },
+    onError: (e: any, vars) => {
+      const detail = e?.response?.data?.detail
+      setUserFeedback({
+        userId: vars.id,
+        msg: typeof detail === 'string' ? detail : 'Erro ao atualizar usuário.',
+        isError: true,
+      })
     },
   })
 
@@ -234,9 +245,10 @@ function UsersSection() {
   const users: AdminUser[] = data?.items ?? []
   const totalPages: number = data?.total_pages ?? 1
 
-  function startEditRole(u: AdminUser) {
-    setEditingRole(u.id)
-    setRoleValue(u.role)
+  function startEditUser(u: AdminUser) {
+    setEditingUser(u.id)
+    setUserForm({ name: u.name ?? '', email: u.email ?? '', role: u.role ?? 'user' })
+    setUserFeedback(null)
   }
 
   return (
@@ -338,66 +350,91 @@ function UsersSection() {
                 }}
               >
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
+                  {editingUser === u.id && (
+                    <div className="flex flex-col gap-1.5 mb-2">
+                      <input
+                        value={userForm.name}
+                        onChange={e => setUserForm(v => ({ ...v, name: e.target.value }))}
+                        className="input text-xs py-1 px-2"
+                        style={{ fontSize: 13 }}
+                        placeholder="Nome"
+                        autoFocus
+                      />
+                      <input
+                        type="email"
+                        value={userForm.email}
+                        onChange={e => setUserForm(v => ({ ...v, email: e.target.value }))}
+                        className="input text-xs py-1 px-2"
+                        style={{ fontSize: 13 }}
+                        placeholder="E-mail"
+                      />
+                      <select
+                        value={userForm.role}
+                        onChange={e => setUserForm(v => ({ ...v, role: e.target.value }))}
+                        className="input text-xs py-1 px-2"
+                        style={{ fontSize: 13 }}
+                      >
+                        {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => updateUser.mutate({ id: u.id, ...userForm })}
+                          disabled={updateUser.isPending || !userForm.name.trim() || !userForm.email.trim()}
+                          className="btn btn-primary text-xs px-2 py-1 disabled:opacity-50"
+                          style={{ minHeight: 28 }}
+                        >
+                          {updateUser.isPending ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                          Salvar
+                        </button>
+                        <button
+                          onClick={() => setEditingUser(null)}
+                          className="text-xs px-2 py-1 rounded"
+                          style={{ color: 'var(--color-text-muted)' }}
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <div
+                    className="flex items-center gap-2 flex-wrap"
+                    style={{ display: editingUser === u.id ? 'none' : undefined }}
+                  >
                     <span className="text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>
                       {u.name || u.email}
                     </span>
 
-                    {/* Role: badge normal ou select de edição */}
-                    {editingRole === u.id ? (
-                      <div className="flex items-center gap-1">
-                        <select
-                          value={roleValue}
-                          onChange={e => setRoleValue(e.target.value)}
-                          className="input text-xs py-0.5 px-1.5 h-6"
-                          style={{ fontSize: 12, minWidth: 90 }}
-                          autoFocus
-                        >
-                          {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
-                        </select>
-                        <button
-                          onClick={() => changeRole.mutate({ id: u.id, role: roleValue })}
-                          disabled={changeRole.isPending}
-                          className="p-0.5"
-                          style={{ color: 'var(--color-primary)' }}
-                          title="Confirmar"
-                        >
-                          {changeRole.isPending
-                            ? <Loader2 size={12} className="animate-spin" />
-                            : <Check size={12} />}
-                        </button>
-                        <button
-                          onClick={() => setEditingRole(null)}
-                          className="p-0.5"
-                          style={{ color: 'var(--color-text-faint)' }}
-                          title="Cancelar"
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => startEditRole(u)}
-                        title="Editar role"
-                        className="flex items-center gap-1 group"
-                      >
-                        <RoleBadge role={u.role} />
-                        <Pencil
-                          size={10}
-                          className="opacity-0 group-hover:opacity-70 transition-opacity"
-                          style={{ color: 'var(--color-text-faint)' }}
-                        />
-                      </button>
-                    )}
+                    <RoleBadge role={u.role} />
 
                     {!u.is_active && (
                       <span className="text-xs italic" style={{ color: 'var(--color-text-faint)' }}>inativo</span>
                     )}
                   </div>
-                  <div className="text-xs truncate" style={{ color: 'var(--color-text-faint)' }}>{u.email}</div>
+                  {userFeedback?.userId === u.id && (
+                    <div
+                      className="text-xs mt-1"
+                      style={{ color: userFeedback.isError ? 'var(--color-error)' : 'var(--color-success)' }}
+                    >
+                      {userFeedback.msg}
+                    </div>
+                  )}
+                  <div
+                    className="text-xs truncate"
+                    style={{ color: 'var(--color-text-faint)', display: editingUser === u.id ? 'none' : undefined }}
+                  >
+                    {u.email}
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={() => startEditUser(u)}
+                    title="Editar usuário"
+                    className="p-1.5 rounded"
+                    style={{ color: editingUser === u.id ? 'var(--color-primary)' : 'var(--color-text-faint)' }}
+                  >
+                    <Pencil size={13} />
+                  </button>
                   {/* Botão reset de senha */}
                   <button
                     onClick={() => setResettingId(id => id === u.id ? null : u.id)}
@@ -506,7 +543,14 @@ function ConfigsSection() {
   )
 
   return (
-    <div className="flex flex-col gap-2 py-2">
+    <div className="flex flex-col gap-4 py-2">
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2 pt-1">
+          <Settings size={14} style={{ color: 'var(--color-primary)' }} />
+          <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
+            Variáveis do sistema
+          </span>
+        </div>
       {configs.length === 0 && (
         <p className="text-xs text-center py-4" style={{ color: 'var(--color-text-muted)' }}>
           Nenhuma configuração cadastrada.
@@ -553,11 +597,22 @@ function ConfigsSection() {
           </div>
         </div>
       ))}
+
+      </div>
+
+      <div className="flex flex-col gap-2 pt-2" style={{ borderTop: '1px solid var(--color-divider)' }}>
+        <div className="flex items-center gap-2 pt-1">
+          <Database size={14} style={{ color: 'var(--color-primary)' }} />
+          <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
+            Backup e restauração
+          </span>
+        </div>
+        <BackupPanel />
+      </div>
     </div>
   )
 }
 
-// ── Main export ──────────────────────────────────────────
 export default function AdminPanel() {
   const [openStats,   setOpenStats]   = useState(true)
   const [openUsers,   setOpenUsers]   = useState(true)

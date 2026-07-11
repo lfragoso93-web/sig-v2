@@ -348,6 +348,31 @@ PETR4,ACAO,buy,invalid,25.50,2024-01-15,10.00,BRL,"""
 
         assert result["success"] is False
         assert result["error_count"] > 0
+        db.add.assert_not_called()
+
+    async def test_import_is_atomic_when_any_row_has_error(self):
+        content = """ticker,asset_type,operation,quantity,price,date,fees,currency,notes
+PETR4,ACAO,buy,100,25.50,2024-01-15,10.00,BRL,ok
+VALE3,ACAO,buy,invalid,80.00,2024-02-20,5.00,BRL,erro"""
+
+        db = AsyncMock(spec=AsyncSession)
+
+        portfolio = MagicMock(spec=Portfolio)
+        portfolio.user_id = 1
+
+        portfolio_result = MagicMock()
+        portfolio_result.scalar_one_or_none = MagicMock(return_value=portfolio)
+
+        db.execute = AsyncMock(return_value=portfolio_result)
+        db.add = MagicMock()
+
+        result = await import_csv_transactions(content, 1, 1, db)
+
+        assert result["success"] is False
+        assert result["imported_count"] == 0
+        assert result["error_count"] == 1
+        db.add.assert_not_called()
+        db.commit.assert_not_awaited()
 
     async def test_import_with_warnings_skipped(self):
         future_date = "2099-12-31"
@@ -366,4 +391,6 @@ PETR4,ACAO,buy,100,25.50,{future_date},10.00,BRL,"""
 
         result = await import_csv_transactions(content, 1, 1, db)
 
+        assert result["success"] is False
+        assert result["imported_count"] == 0
         assert result["skipped_count"] == 1
