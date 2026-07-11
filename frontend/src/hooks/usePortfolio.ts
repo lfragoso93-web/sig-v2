@@ -26,6 +26,9 @@ export interface PositionGroup {
   total_value: number
   total_invested?: number
   variation_pct?: number
+  daily_variation_value?: number | null
+  daily_variation_pct?: number | null
+  variation_reference_date?: string | null
   rentabilidade_pct?: number
   target_pct?: number
   positions: PositionItem[]

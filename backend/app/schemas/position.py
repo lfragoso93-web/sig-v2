@@ -41,6 +41,9 @@ class AssetGroupOut(BaseModel):
     total_value:       float
     total_invested:    Optional[float] = None
     variation_pct:     Optional[float] = None
+    daily_variation_value: Optional[float] = None
+    daily_variation_pct: Optional[float] = None
+    variation_reference_date: Optional[str] = None
     rentabilidade_pct: Optional[float] = None
     target_pct:        Optional[float] = None
     positions:         list[PositionOut] = []

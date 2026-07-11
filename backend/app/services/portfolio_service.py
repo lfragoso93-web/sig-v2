@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction, OperationType
 from app.models.dividend import Dividend
-from app.models.asset import Asset
+from app.models.asset import Asset, AssetType
 from app.models.audit_log import AuditLog
 from app.models.corporate_event import CorporateEvent
 from app.models.fixed_income import FixedIncomeInvestment
@@ -28,6 +28,7 @@ from app.services.fixed_income_valuation_service import (
     get_fixed_income_valuations,
     valuation_to_position_payload,
 )
+from app.services.price_history_service import get_prices_at_date_batch
 
 logger = logging.getLogger(__name__)
 
@@ -275,6 +276,65 @@ async def _fetch_logos_batch(db: AsyncSession, tickers: list[str]) -> dict[str, 
         select(Asset.ticker, Asset.logo_url).where(Asset.ticker.in_(tickers))
     )
     return {row.ticker: row.logo_url for row in result.all()}
+
+
+def build_group_performance_metrics(
+    current_value: float,
+    total_invested: float,
+    previous_value: float | None,
+    proventos_grupo: float = 0.0,
+) -> dict:
+    capital_result = current_value - total_invested
+    daily_variation_value = None
+    daily_variation_pct = None
+    if previous_value is not None and previous_value > 0:
+        daily_variation_value = current_value - previous_value
+        daily_variation_pct = daily_variation_value / previous_value * 100
+
+    rentabilidade_pct = None
+    if total_invested > 0:
+        rentabilidade_pct = (capital_result + proventos_grupo) / total_invested * 100
+
+    return {
+        "daily_variation_value": (
+            round(daily_variation_value, 2)
+            if daily_variation_value is not None
+            else None
+        ),
+        "daily_variation_pct": (
+            round(daily_variation_pct, 4)
+            if daily_variation_pct is not None
+            else None
+        ),
+        "rentabilidade_pct": (
+            round(rentabilidade_pct, 4)
+            if rentabilidade_pct is not None
+            else None
+        ),
+    }
+
+
+def _asset_type_enum(asset_type: str | None) -> AssetType:
+    try:
+        return AssetType(normalize_type(asset_type))
+    except (ValueError, KeyError):
+        return AssetType.ACAO
+
+
+async def _fetch_previous_prices_batch(
+    db: AsyncSession,
+    positions: list[dict],
+) -> tuple[dict[str, float], str]:
+    previous_date = (DateType.today() - timedelta(days=1)).isoformat()
+    tickers_with_types = [
+        (p["ticker"], _asset_type_enum(p.get("asset_type")))
+        for p in positions
+        if p.get("current_price") is not None
+        and normalize_type(p.get("asset_type")) in _MARKET_PRICE_TYPES
+    ]
+    if not tickers_with_types:
+        return {}, previous_date
+    return await get_prices_at_date_batch(db, tickers_with_types, previous_date), previous_date
 
 
 async def sum_dividends(db: AsyncSession, portfolio_id: int, cutoff: DateType | None = None) -> float:
@@ -538,6 +598,8 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
 
     enriched = await _non_fixed_income_enriched(db, portfolio_id)
     targets_map = await get_targets_map(db, portfolio_id)
+    previous_prices, previous_reference_date = await _fetch_previous_prices_batch(db, enriched)
+    fx_today = await get_usd_brl_today(db)
 
     tickers = [e["ticker"] for e in enriched]
     logos = await _fetch_logos_batch(db, tickers)
@@ -614,31 +676,53 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
         if g["positions"] and g["positions"][0].get("asset_type") == RENDA_FIXA_TYPE:
             inv = g["total_invested"]
             cur = g["total_value"]
-            g["variation_pct"] = round((cur - inv) / inv * 100, 4) if inv > 0 else None
+            metrics = build_group_performance_metrics(cur, inv, None, 0.0)
+            g["daily_variation_value"] = None
+            g["daily_variation_pct"] = None
+            g["variation_pct"] = None
+            g["variation_reference_date"] = None
             g["proventos_grupo"] = 0.0
-            g["rentabilidade_pct"] = g["variation_pct"]
+            g["rentabilidade_pct"] = metrics["rentabilidade_pct"]
             g["target_pct"] = targets_map.get(RENDA_FIXA_TYPE)
             continue
 
         quoted_positions = [p for p in g["positions"] if p["current_price_brl"] is not None]
-        if quoted_positions:
-            quoted_cur = sum(p["current_value"] for p in quoted_positions)
-            quoted_inv = sum(p["invested_value"] for p in quoted_positions)
-            g["variation_pct"] = round((quoted_cur - quoted_inv) / quoted_inv * 100, 4) if quoted_inv > 0 else None
-        else:
-            g["variation_pct"] = None
-
         proventos_grupo = sum(
             dividends_by_ticker.get(p["ticker"], 0.0)
             for p in g["positions"]
         )
         g["proventos_grupo"] = round(proventos_grupo, 2)
-        if quoted_positions and quoted_inv > 0:
-            quoted_gain = quoted_cur - quoted_inv
-            lucro_grupo = quoted_gain + proventos_grupo
-            g["rentabilidade_pct"] = round(lucro_grupo / quoted_inv * 100, 4)
-        else:
-            g["rentabilidade_pct"] = None
+        quoted_cur = sum(p["current_value"] for p in quoted_positions)
+        quoted_inv = sum(p["invested_value"] for p in quoted_positions)
+        previous_values: list[float] = []
+        for p in quoted_positions:
+            previous_price = previous_prices.get(p["ticker"])
+            if previous_price is None:
+                previous_values = []
+                break
+            price_brl = previous_price * fx_today if p.get("is_usd") else previous_price
+            previous_values.append(p["quantity"] * price_brl)
+
+        previous_value = (
+            sum(previous_values)
+            if quoted_positions and len(previous_values) == len(quoted_positions)
+            else None
+        )
+        metrics = build_group_performance_metrics(
+            quoted_cur,
+            quoted_inv,
+            previous_value,
+            proventos_grupo,
+        )
+        g["daily_variation_value"] = metrics["daily_variation_value"]
+        g["daily_variation_pct"] = metrics["daily_variation_pct"]
+        g["variation_pct"] = metrics["daily_variation_pct"]
+        g["variation_reference_date"] = (
+            previous_reference_date
+            if metrics["daily_variation_pct"] is not None
+            else None
+        )
+        g["rentabilidade_pct"] = metrics["rentabilidade_pct"]
 
         g["target_pct"] = targets_map.get(g["positions"][0]["asset_type"]) if g["positions"] else None
 

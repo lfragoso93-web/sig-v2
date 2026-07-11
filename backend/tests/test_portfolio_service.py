@@ -14,6 +14,7 @@ from app.services.portfolio_service import (
     get_portfolio_positions,
     calc_raw_positions,
     sum_dividends,
+    build_group_performance_metrics,
 )
 from app.models.transaction import OperationType
 from app.schemas.portfolio import PortfolioCreate, PortfolioUpdate
@@ -337,3 +338,37 @@ async def test_is_sell():
     assert _is_sell("venda") is True
     assert _is_sell(OperationType.buy) is False
     assert _is_sell("buy") is False
+
+
+def test_group_metrics_positive_rentabilidade_negative_variation():
+    metrics = build_group_performance_metrics(
+        current_value=1100.0,
+        total_invested=1000.0,
+        previous_value=1200.0,
+    )
+
+    assert metrics["rentabilidade_pct"] == 10.0
+    assert metrics["daily_variation_pct"] == pytest.approx(-8.3333, rel=1e-4)
+
+
+def test_group_metrics_negative_rentabilidade_positive_variation():
+    metrics = build_group_performance_metrics(
+        current_value=900.0,
+        total_invested=1000.0,
+        previous_value=800.0,
+    )
+
+    assert metrics["rentabilidade_pct"] == -10.0
+    assert metrics["daily_variation_pct"] == 12.5
+
+
+def test_group_metrics_without_historical_reference():
+    metrics = build_group_performance_metrics(
+        current_value=1100.0,
+        total_invested=1000.0,
+        previous_value=None,
+    )
+
+    assert metrics["rentabilidade_pct"] == 10.0
+    assert metrics["daily_variation_value"] is None
+    assert metrics["daily_variation_pct"] is None

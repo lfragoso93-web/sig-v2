@@ -54,21 +54,18 @@ function investedValueOf(p: PositionGroup['positions'][number]): number {
   return safeNum(p.invested_value) || safeNum(p.quantity) * safeNum(p.average_price)
 }
 
-function calcGroupVariation(group: PositionGroup): { variationPct: number | null; totalInvested: number } {
+function calcGroupHeaderMetrics(group: PositionGroup): { variationPct: number | null; totalInvested: number } {
   let invested = 0
-  let current = 0
-  let hasQuote = false
 
   for (const p of group.positions) {
     invested += investedValueOf(p)
-    if (p.current_price !== null && p.current_price !== undefined) {
-      current += safeNum(p.current_value)
-      hasQuote = true
-    }
   }
 
-  if (!hasQuote || invested === 0) return { variationPct: null, totalInvested: invested }
-  return { variationPct: ((current - invested) / invested) * 100, totalInvested: invested }
+  const variationPct = group.daily_variation_pct
+  return {
+    variationPct: typeof variationPct === 'number' ? variationPct : null,
+    totalInvested: invested,
+  }
 }
 
 function getGroupQuoteTimestamp(group: PositionGroup): string | null {
@@ -477,7 +474,7 @@ interface ClassGroupHeaderProps {
 }
 
 function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGroupHeaderProps) {
-  const { variationPct, totalInvested } = calcGroupVariation(group)
+  const { variationPct, totalInvested } = calcGroupHeaderMetrics(group)
   const rentabilidade = group.rentabilidade_pct ?? null
   const target = group.target_pct ?? null
   const assetType = group.positions[0]?.asset_type ?? ''
@@ -543,16 +540,15 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
               {formatBRL(safeNum(group.total_value))}
             </span>
           </LabeledValue>
-          {variationPct !== null && (
-            <>
-              <Divider />
-              <LabeledValue label="Var. atual">
-                <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: varColor, fontVariantNumeric: 'tabular-nums' }}>
-                  {variationPct >= 0 ? '+' : ''}{formatPercent(variationPct)}
-                </span>
-              </LabeledValue>
-            </>
-          )}
+          <Divider />
+          <LabeledValue label="Variação">
+            <span
+              title={group.variation_reference_date ? `Referencia: ${group.variation_reference_date}` : 'Sem referencia historica'}
+              style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: varColor, fontVariantNumeric: 'tabular-nums' }}
+            >
+              {variationPct !== null ? `${variationPct >= 0 ? '+' : ''}${formatPercent(variationPct)}` : '—'}
+            </span>
+          </LabeledValue>
           {rentabilidade !== null && (
             <>
               <Divider />
