@@ -9,11 +9,12 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Users, Settings, BarChart2, Trash2, Power, Plus, Save,
-  ChevronDown, ChevronUp, Loader2, Pencil, Check, KeyRound, BookOpen,
+  ChevronDown, ChevronUp, Loader2, Pencil, Check, KeyRound, BookOpen, Database,
 } from 'lucide-react'
 import api from '@/services/api'
 import PasswordInput from '@/components/ui/PasswordInput'
 import AuditLogsPanel from '@/components/admin/AuditLogsPanel'
+import BackupPanel from '@/components/admin/BackupPanel'
 
 // ── Types ────────────────────────────────────────────
 interface AdminUser {
@@ -542,7 +543,14 @@ function ConfigsSection() {
   )
 
   return (
-    <div className="flex flex-col gap-2 py-2">
+    <div className="flex flex-col gap-4 py-2">
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2 pt-1">
+          <Settings size={14} style={{ color: 'var(--color-primary)' }} />
+          <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
+            Variáveis do sistema
+          </span>
+        </div>
       {configs.length === 0 && (
         <p className="text-xs text-center py-4" style={{ color: 'var(--color-text-muted)' }}>
           Nenhuma configuração cadastrada.
@@ -589,11 +597,22 @@ function ConfigsSection() {
           </div>
         </div>
       ))}
+
+      </div>
+
+      <div className="flex flex-col gap-2 pt-2" style={{ borderTop: '1px solid var(--color-divider)' }}>
+        <div className="flex items-center gap-2 pt-1">
+          <Database size={14} style={{ color: 'var(--color-primary)' }} />
+          <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
+            Backup e restauração
+          </span>
+        </div>
+        <BackupPanel />
+      </div>
     </div>
   )
 }
 
-// ── Main export ──────────────────────────────────────────
 export default function AdminPanel() {
   const [openStats,   setOpenStats]   = useState(true)
   const [openUsers,   setOpenUsers]   = useState(true)

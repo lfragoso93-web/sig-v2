@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { Database, Download, Trash2, RotateCcw, Loader2, AlertTriangle, CheckCircle } from 'lucide-react'
+import {
+  Database, Download, Trash2, RotateCcw, Loader2,
+  AlertTriangle, CheckCircle, ChevronDown, ChevronUp,
+} from 'lucide-react'
 import api from '@/services/api'
 
 interface Backup {
@@ -25,11 +28,13 @@ export default function BackupPanel() {
   const [selectedBackup, setSelectedBackup] = useState<string | null>(null)
   const [showRestoreWarning, setShowRestoreWarning] = useState(false)
   const [feedback, setFeedback] = useState<{ msg: string; isError: boolean } | null>(null)
+  const isOpen = expandedSection === 'backups'
 
   const { data: backupsData, isLoading: isLoadingBackups, refetch } = useQuery({
     queryKey: ['admin_backups'],
     queryFn: fetchBackups,
-    refetchInterval: 5000,
+    enabled: isOpen,
+    refetchInterval: isOpen ? 5000 : false,
   })
 
   const createBackup = useMutation({
@@ -90,15 +95,13 @@ export default function BackupPanel() {
     document.body.removeChild(link)
   }
 
-  const isOpen = expandedSection === 'backups'
-
   return (
     <div style={{
       background: 'var(--color-surface)',
       border: '1px solid oklch(from var(--color-text) l c h / 0.1)',
       borderRadius: 'var(--radius-lg)',
       padding: '1.5rem',
-      marginBottom: '1.5rem',
+      marginBottom: 0,
     }}>
       {/* Header */}
       <button
@@ -443,21 +446,5 @@ export default function BackupPanel() {
         </div>
       )}
     </div>
-  )
-}
-
-function ChevronUp({ size, style }: { size: number; style?: React.CSSProperties }) {
-  return (
-    <svg width={size} height={size} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <polyline points="18 15 12 9 6 15" />
-    </svg>
-  )
-}
-
-function ChevronDown({ size, style }: { size: number; style?: React.CSSProperties }) {
-  return (
-    <svg width={size} height={size} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <polyline points="6 9 12 15 18 9" />
-    </svg>
   )
 }
