@@ -7,18 +7,31 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
-### Em andamento — Compliance da documentação e API pública (11/07/2026) — #80
+### Em desenvolvimento — Compliance público e hardening documental (11/07/2026)
 
-- Iniciada a remoção de nomes explícitos de provedores da documentação pública.
-- README atualizado com terminologia genérica para fontes de dados.
-- Prioridades revisadas após o fechamento das issues #124, #98 e #82.
-- Próximos blocos: OpenAPI, mensagens públicas, configuração compatível e teste de regressão documental.
+#### Documentação
+
+- README, roadmap, changelog e documentos auxiliares passaram a usar termos genéricos para fontes externas de dados.
+- Documentos antigos de análise foram atualizados para refletir o estado atual do sistema.
+- Prioridades concluídas foram removidas das seções de próximos focos.
+
+#### API pública
+
+- OpenAPI passou a sanitizar descrições, exemplos e valores padrão que identifiquem fornecedores externos.
+- Endpoints públicos de cotação passaram a devolver uma origem genérica de dados de mercado.
+- Exceções exibidas em modo debug passaram a remover nomes de fornecedores antes da resposta HTTP.
+- Logs internos e módulos de integração preservam os identificadores técnicos necessários à operação.
+
+#### Testes
+
+- Adicionado teste de compliance dos documentos públicos.
+- Adicionado teste de compliance do OpenAPI e dos metadados públicos de cotação.
 
 ---
 
 ### Concluído — Resumo, administração e integridade operacional (11/07/2026)
 
-> Entrega consolidada na `main` pela PR #126.
+> Entrega consolidada na PR #126 e validada antes do merge em `main`.
 
 #### Backend
 
@@ -46,7 +59,6 @@ Formato baseado em Keep a Changelog.
 
 - Cobertura backend ampliada para métricas de grupos, exclusão de carteiras, CSV e regras administrativas.
 - Adicionado teste frontend para tabela de posições e comportamento do menu contextual.
-- Fluxos validados funcionalmente antes do merge.
 
 ---
 
@@ -133,8 +145,8 @@ Formato baseado em Keep a Changelog.
 
 ## Próximos focos
 
-- Concluir compliance da documentação e API pública (#80).
-- Implementar backup seguro como primeira fase de Backup/Restore (#83).
+- Concluir compliance público e configuração compatível (#80).
+- Robustecer Backup/Restore (#83).
 - Implementar Google OAuth (#97).
-- Refinar a página Patrimônio (#90).
-- Avançar em Análise (#57), Janela Global do Ativo (#58) e IRPF (#56).
+- Refinar a experiência da página Patrimônio (#90).
+- Avançar em IRPF (#56), Análise (#57) e Janela Global do Ativo (#58).
