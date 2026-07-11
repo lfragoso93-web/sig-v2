@@ -23,9 +23,9 @@ class Settings(BaseSettings):
 
     # Provedor principal de dados de mercado
     QUOTES_PROVIDER_TOKEN: Optional[str] = None
-    MARKET_DATA_BASE_URL: str = "https://brapi.dev/api"
-    MARKET_DATA_RATE_LIMIT: float = 2.0
-    MARKET_DATA_RATE_BURST: int = 5
+    MARKET_DATA_BASE_URL: Optional[str] = None
+    MARKET_DATA_RATE_LIMIT: Optional[float] = None
+    MARKET_DATA_RATE_BURST: Optional[int] = None
 
     # Fonte complementar de dados internacionais
     INTL_DATA_KEY: Optional[str] = None
@@ -82,9 +82,21 @@ class Settings(BaseSettings):
         """Resolve nomes genericos e legados sem quebrar ambientes existentes."""
         quotes_token = self.QUOTES_PROVIDER_TOKEN or self.BRAPI_TOKEN
         intl_key = self.INTL_DATA_KEY or self.ALPHA_VANTAGE_API_KEY
-        base_url = self.BRAPI_BASE_URL or self.MARKET_DATA_BASE_URL
-        rate_limit = self.BRAPI_RATE_LIMIT if self.BRAPI_RATE_LIMIT is not None else self.MARKET_DATA_RATE_LIMIT
-        rate_burst = self.BRAPI_RATE_BURST if self.BRAPI_RATE_BURST is not None else self.MARKET_DATA_RATE_BURST
+        base_url = self.MARKET_DATA_BASE_URL or self.BRAPI_BASE_URL or "https://brapi.dev/api"
+        rate_limit = (
+            self.MARKET_DATA_RATE_LIMIT
+            if self.MARKET_DATA_RATE_LIMIT is not None
+            else self.BRAPI_RATE_LIMIT
+            if self.BRAPI_RATE_LIMIT is not None
+            else 2.0
+        )
+        rate_burst = (
+            self.MARKET_DATA_RATE_BURST
+            if self.MARKET_DATA_RATE_BURST is not None
+            else self.BRAPI_RATE_BURST
+            if self.BRAPI_RATE_BURST is not None
+            else 5
+        )
 
         object.__setattr__(self, "QUOTES_PROVIDER_TOKEN", quotes_token)
         object.__setattr__(self, "BRAPI_TOKEN", quotes_token)
