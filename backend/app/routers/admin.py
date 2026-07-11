@@ -13,7 +13,7 @@ from app.schemas.config import SystemConfigResponse, SystemConfigUpdate, SystemC
 from app.schemas.pagination import PaginatedResponse
 from app.services.user_service import (
     create_user, list_users, get_user_by_id,
-    admin_update_user, delete_user, count_users
+    admin_update_user, delete_user, count_users, count_active_superadmins
 )
 from app.services.config_service import get_all_configs, update_config, bulk_update_configs
 from app.services import backup_service
@@ -137,6 +137,8 @@ async def admin_toggle_user_active(
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    if user.role == UserRole.superadmin and user.is_active and await count_active_superadmins(db) <= 1:
+        raise HTTPException(status_code=400, detail="Nao e possivel remover o ultimo SuperAdmin ativo")
     user.is_active = not user.is_active
     await db.flush()
     await db.refresh(user)

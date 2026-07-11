@@ -10,10 +10,11 @@ from app.services.user_service import (
     update_user,
     admin_update_user,
     list_users,
+    delete_user,
 )
 from app.models.user import User, UserRole
 from app.schemas.user import UserAdminUpdate, UserCreate, UserRoleUpdate, UserUpdate
-from app.routers.admin import admin_update_user_role_endpoint, require_superadmin
+from app.routers.admin import admin_toggle_user_active, admin_update_user_role_endpoint, require_superadmin
 
 
 @pytest.mark.asyncio
@@ -268,6 +269,110 @@ class TestAdminUpdateUser:
 
         assert exc_info.value.status_code == 400
         db.commit.assert_not_called()
+
+    async def test_admin_update_user_blocks_last_active_superadmin_demotion(self):
+        db = AsyncMock(spec=AsyncSession)
+
+        existing_user = MagicMock(spec=User)
+        existing_user.id = 2
+        existing_user.role = UserRole.superadmin
+        existing_user.is_active = True
+
+        get_result = MagicMock()
+        get_result.scalar_one_or_none = MagicMock(return_value=existing_user)
+
+        count_result = MagicMock()
+        count_result.scalar_one = MagicMock(return_value=1)
+
+        db.execute = AsyncMock(side_effect=[get_result, count_result])
+
+        from fastapi import HTTPException
+        with pytest.raises(HTTPException) as exc_info:
+            await admin_update_user(
+                db,
+                2,
+                UserAdminUpdate(role=UserRole.user),
+            )
+
+        assert exc_info.value.status_code == 400
+        db.commit.assert_not_called()
+
+    async def test_admin_update_user_blocks_last_active_superadmin_deactivation(self):
+        db = AsyncMock(spec=AsyncSession)
+
+        existing_user = MagicMock(spec=User)
+        existing_user.id = 2
+        existing_user.role = UserRole.superadmin
+        existing_user.is_active = True
+
+        get_result = MagicMock()
+        get_result.scalar_one_or_none = MagicMock(return_value=existing_user)
+
+        count_result = MagicMock()
+        count_result.scalar_one = MagicMock(return_value=1)
+
+        db.execute = AsyncMock(side_effect=[get_result, count_result])
+
+        from fastapi import HTTPException
+        with pytest.raises(HTTPException) as exc_info:
+            await admin_update_user(
+                db,
+                2,
+                UserAdminUpdate(is_active=False),
+            )
+
+        assert exc_info.value.status_code == 400
+        db.commit.assert_not_called()
+
+    async def test_delete_user_blocks_last_active_superadmin(self):
+        db = AsyncMock(spec=AsyncSession)
+
+        existing_user = MagicMock(spec=User)
+        existing_user.id = 2
+        existing_user.role = UserRole.superadmin
+        existing_user.is_active = True
+
+        get_result = MagicMock()
+        get_result.scalar_one_or_none = MagicMock(return_value=existing_user)
+
+        count_result = MagicMock()
+        count_result.scalar_one = MagicMock(return_value=1)
+
+        db.execute = AsyncMock(side_effect=[get_result, count_result])
+
+        from fastapi import HTTPException
+        with pytest.raises(HTTPException) as exc_info:
+            await delete_user(db, 2)
+
+        assert exc_info.value.status_code == 400
+        db.commit.assert_not_called()
+
+    async def test_toggle_active_blocks_last_active_superadmin(self):
+        db = AsyncMock(spec=AsyncSession)
+
+        target_user = MagicMock(spec=User)
+        target_user.id = 2
+        target_user.role = UserRole.superadmin
+        target_user.is_active = True
+
+        current_user = MagicMock(spec=User)
+        current_user.id = 1
+        current_user.role = UserRole.superadmin
+
+        get_result = MagicMock()
+        get_result.scalar_one_or_none = MagicMock(return_value=target_user)
+
+        count_result = MagicMock()
+        count_result.scalar_one = MagicMock(return_value=1)
+
+        db.execute = AsyncMock(side_effect=[get_result, count_result])
+
+        from fastapi import HTTPException
+        with pytest.raises(HTTPException) as exc_info:
+            await admin_toggle_user_active(2, db=db, current_user=current_user)
+
+        assert exc_info.value.status_code == 400
+        db.flush.assert_not_called()
 
     async def test_admin_role_endpoint_blocks_self_demotion(self):
         db = AsyncMock(spec=AsyncSession)
