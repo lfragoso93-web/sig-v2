@@ -22,10 +22,19 @@ Formato baseado em Keep a Changelog.
 - Exceções exibidas em modo debug passaram a remover nomes de fornecedores antes da resposta HTTP.
 - Logs internos e módulos de integração preservam os identificadores técnicos necessários à operação.
 
+#### Configuração
+
+- Adicionadas variáveis genéricas para token, URL e limites do provedor principal de dados de mercado.
+- Adicionada variável genérica para a fonte complementar de dados internacionais.
+- Variáveis legadas permanecem aceitas como fallback temporário para evitar quebra de ambientes existentes.
+- Quando nomes novos e antigos coexistem, a configuração genérica tem precedência.
+- `.env.example` passou a expor somente os nomes genéricos.
+
 #### Testes
 
 - Adicionado teste de compliance dos documentos públicos.
 - Adicionado teste de compliance do OpenAPI e dos metadados públicos de cotação.
+- Adicionados testes de compatibilidade, fallback e precedência das variáveis de configuração.
 
 ---
 
