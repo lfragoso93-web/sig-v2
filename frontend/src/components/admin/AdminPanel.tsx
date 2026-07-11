@@ -44,7 +44,7 @@ const fetchUsers   = (page: number, search: string) =>
   api.get('/admin/users', { params: { page, page_size: 10, search: search || undefined } }).then(r => r.data)
 const fetchConfigs = () => api.get<SystemConfig[]>('/admin/config').then(r => r.data)
 
-const ROLES = ['user', 'admin', 'superadmin'] as const
+const ROLES = ['user', 'superadmin'] as const
 
 // ── Sub-components ──────────────────────────────────────
 function SectionHeader({ icon: Icon, title, open, onToggle }: {
@@ -183,6 +183,7 @@ function UsersSection() {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [editingRole,     setEditingRole]     = useState<number | null>(null)
   const [roleValue,       setRoleValue]       = useState('')
+  const [roleFeedback,    setRoleFeedback]    = useState<{ userId: number; msg: string; isError: boolean } | null>(null)
   // Controla qual usuário está com o form de reset aberto (null = nenhum)
   const [resettingId,     setResettingId]     = useState<number | null>(null)
 
@@ -205,9 +206,18 @@ function UsersSection() {
   const changeRole = useMutation({
     mutationFn: ({ id, role }: { id: number; role: string }) =>
       api.put(`/admin/users/${id}/role`, { role }),
-    onSuccess: () => {
+    onSuccess: (_res, vars) => {
       qc.invalidateQueries({ queryKey: ['admin-users'] })
+      setRoleFeedback({ userId: vars.id, msg: 'Perfil atualizado.', isError: false })
       setEditingRole(null)
+    },
+    onError: (e: any, vars) => {
+      const detail = e?.response?.data?.detail
+      setRoleFeedback({
+        userId: vars.id,
+        msg: typeof detail === 'string' ? detail : 'Erro ao atualizar perfil.',
+        isError: true,
+      })
     },
   })
 
@@ -237,6 +247,7 @@ function UsersSection() {
   function startEditRole(u: AdminUser) {
     setEditingRole(u.id)
     setRoleValue(u.role)
+    setRoleFeedback(null)
   }
 
   return (
@@ -394,6 +405,14 @@ function UsersSection() {
                       <span className="text-xs italic" style={{ color: 'var(--color-text-faint)' }}>inativo</span>
                     )}
                   </div>
+                  {roleFeedback?.userId === u.id && (
+                    <div
+                      className="text-xs mt-1"
+                      style={{ color: roleFeedback.isError ? 'var(--color-error)' : 'var(--color-success)' }}
+                    >
+                      {roleFeedback.msg}
+                    </div>
+                  )}
                   <div className="text-xs truncate" style={{ color: 'var(--color-text-faint)' }}>{u.email}</div>
                 </div>
 

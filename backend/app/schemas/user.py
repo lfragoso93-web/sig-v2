@@ -64,6 +64,10 @@ class UserAdminUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
+class UserRoleUpdate(BaseModel):
+    role: UserRole
+
+
 class AdminResetPasswordRequest(BaseModel):
     new_password: str
 

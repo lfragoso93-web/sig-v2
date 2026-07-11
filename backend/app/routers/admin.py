@@ -6,7 +6,7 @@ from app.core.security import hash_password
 from app.models.user import User, UserRole
 from app.schemas.user import (
     UserCreate, UserListResponse, UserResponse,
-    UserAdminUpdate, AdminResetPasswordRequest,
+    UserAdminUpdate, UserRoleUpdate, AdminResetPasswordRequest,
 )
 from app.schemas.auth import MessageResponse
 from app.schemas.config import SystemConfigResponse, SystemConfigUpdate, SystemConfigBulkUpdate
@@ -97,6 +97,19 @@ async def admin_update_user_endpoint(
     if user_id == current_user.id and data.role and data.role != UserRole.superadmin:
         raise HTTPException(status_code=400, detail="Você não pode remover seu próprio SuperAdmin")
     return await admin_update_user(db, user_id, data)
+
+
+@router.put("/users/{user_id}/role", response_model=UserResponse)
+async def admin_update_user_role_endpoint(
+    user_id: int,
+    data: UserRoleUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
+):
+    """Altera apenas o perfil do usuario."""
+    if user_id == current_user.id and data.role != UserRole.superadmin:
+        raise HTTPException(status_code=400, detail="Voce nao pode remover seu proprio SuperAdmin")
+    return await admin_update_user(db, user_id, UserAdminUpdate(role=data.role))
 
 
 @router.delete("/users/{user_id}", response_model=MessageResponse)

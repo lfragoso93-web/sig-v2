@@ -8,10 +8,12 @@ from app.services.user_service import (
     get_user_by_id,
     create_user,
     update_user,
+    admin_update_user,
     list_users,
 )
 from app.models.user import User, UserRole
-from app.schemas.user import UserCreate, UserUpdate
+from app.schemas.user import UserAdminUpdate, UserCreate, UserRoleUpdate, UserUpdate
+from app.routers.admin import admin_update_user_role_endpoint, require_superadmin
 
 
 @pytest.mark.asyncio
@@ -181,6 +183,62 @@ class TestUpdateUser:
             await update_user(db, 999, data)
         
         assert exc_info.value.status_code == 404
+
+
+@pytest.mark.asyncio
+class TestAdminUpdateUser:
+
+    async def test_admin_update_user_role_success(self):
+        db = AsyncMock(spec=AsyncSession)
+
+        existing_user = MagicMock(spec=User)
+        existing_user.id = 2
+        existing_user.role = UserRole.user
+
+        get_result = MagicMock()
+        get_result.scalar_one_or_none = MagicMock(return_value=existing_user)
+
+        db.execute = AsyncMock(return_value=get_result)
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+
+        user = await admin_update_user(
+            db,
+            2,
+            UserAdminUpdate(role=UserRole.superadmin),
+        )
+
+        assert user.role == UserRole.superadmin
+        db.commit.assert_called_once()
+
+    async def test_admin_role_endpoint_blocks_self_demotion(self):
+        db = AsyncMock(spec=AsyncSession)
+
+        current_user = MagicMock(spec=User)
+        current_user.id = 1
+        current_user.role = UserRole.superadmin
+
+        from fastapi import HTTPException
+        with pytest.raises(HTTPException) as exc_info:
+            await admin_update_user_role_endpoint(
+                user_id=1,
+                data=UserRoleUpdate(role=UserRole.user),
+                db=db,
+                current_user=current_user,
+            )
+
+        assert exc_info.value.status_code == 400
+        db.execute.assert_not_called()
+
+    async def test_require_superadmin_blocks_common_user(self):
+        current_user = MagicMock(spec=User)
+        current_user.role = UserRole.user
+
+        from fastapi import HTTPException
+        with pytest.raises(HTTPException) as exc_info:
+            require_superadmin(current_user)
+
+        assert exc_info.value.status_code == 403
 
 
 @pytest.mark.asyncio
