@@ -7,9 +7,18 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Em andamento — Compliance da documentação e API pública (11/07/2026) — #80
+
+- Iniciada a remoção de nomes explícitos de provedores da documentação pública.
+- README atualizado com terminologia genérica para fontes de dados.
+- Prioridades revisadas após o fechamento das issues #124, #98 e #82.
+- Próximos blocos: OpenAPI, mensagens públicas, configuração compatível e teste de regressão documental.
+
+---
+
 ### Concluído — Resumo, administração e integridade operacional (11/07/2026)
 
-> Evolução posterior à PR #125, preparada para nova consolidação em `main`.
+> Entrega consolidada na `main` pela PR #126.
 
 #### Backend
 
@@ -37,6 +46,7 @@ Formato baseado em Keep a Changelog.
 
 - Cobertura backend ampliada para métricas de grupos, exclusão de carteiras, CSV e regras administrativas.
 - Adicionado teste frontend para tabela de posições e comportamento do menu contextual.
+- Fluxos validados funcionalmente antes do merge.
 
 ---
 
@@ -60,7 +70,7 @@ Formato baseado em Keep a Changelog.
 - Seed histórico tornado idempotente com `ON CONFLICT DO NOTHING`.
 - Tickers sem histórico passaram a usar cooldown de indisponibilidade.
 - Catálogo de Tesouro Direto consolidado com symbols canônicos.
-- Adicionado fallback de preços do Tesouro Transparente para RendA+ e Educa+.
+- Adicionado fallback de preços por fonte oficial secundária para RendA+ e Educa+.
 
 #### Frontend
 
@@ -123,9 +133,8 @@ Formato baseado em Keep a Changelog.
 
 ## Próximos focos
 
-- Finalizar QA da issue #124 em cenários de borda.
-- Robustecer Backup/Restore (#83).
-- Concluir QA funcional da administração de usuários (#98).
-- Revisar compliance da documentação/API (#80).
+- Concluir compliance da documentação e API pública (#80).
+- Implementar backup seguro como primeira fase de Backup/Restore (#83).
 - Implementar Google OAuth (#97).
-- Avançar em IRPF (#56), Análise (#57) e Janela Global do Ativo (#58).
+- Refinar a página Patrimônio (#90).
+- Avançar em Análise (#57), Janela Global do Ativo (#58) e IRPF (#56).
