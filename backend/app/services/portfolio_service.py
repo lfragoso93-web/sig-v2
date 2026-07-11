@@ -737,15 +737,33 @@ async def get_asset_distribution(db: AsyncSession, portfolio_id: int, user_id: i
 
     by_type: dict[str, float] = {}
     for e in enriched:
-        at = e.get("asset_type") or "OUTRO"
+        at = normalize_type(e.get("asset_type")) or "OUTRO"
         val = e["current_value"] if e["current_value"] is not None else e["total_invested"]
+        if val <= 0:
+            continue
         by_type[at] = by_type.get(at, 0) + val
 
     rf_current = float(rf_totals["current_value"])
     if rf_current > 0:
         by_type[RENDA_FIXA_TYPE] = by_type.get(RENDA_FIXA_TYPE, 0) + rf_current
 
-    total = sum(by_type.values())
+    return build_asset_distribution_items(by_type)
+
+
+def build_asset_distribution_items(by_type: dict[str, float]) -> list[dict]:
+    positive_by_type = {
+        asset_type: value
+        for asset_type, value in by_type.items()
+        if value > 0
+    }
+
+    if not positive_by_type:
+        return []
+
+    total = sum(positive_by_type.values())
+    if total <= 0:
+        return []
+
     return [
         {
             "asset_type": at,
@@ -754,5 +772,5 @@ async def get_asset_distribution(db: AsyncSession, portfolio_id: int, user_id: i
             "percentage": round(v / total * 100, 4) if total else 0,
             "color": _TYPE_COLOR.get(at, "#6b7280"),
         }
-        for at, v in sorted(by_type.items(), key=lambda x: x[1], reverse=True)
+        for at, v in sorted(positive_by_type.items(), key=lambda x: x[1], reverse=True)
     ]

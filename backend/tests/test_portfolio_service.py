@@ -15,6 +15,7 @@ from app.services.portfolio_service import (
     calc_raw_positions,
     sum_dividends,
     build_group_performance_metrics,
+    build_asset_distribution_items,
 )
 from app.models.transaction import OperationType
 from app.schemas.portfolio import PortfolioCreate, PortfolioUpdate
@@ -372,3 +373,32 @@ def test_group_metrics_without_historical_reference():
     assert metrics["rentabilidade_pct"] == 10.0
     assert metrics["daily_variation_value"] is None
     assert metrics["daily_variation_pct"] is None
+
+
+def test_asset_distribution_ignores_empty_classes():
+    items = build_asset_distribution_items({
+        "ACAO": 100.0,
+        "FII": 300.0,
+        "CRIPTO": 0.0,
+    })
+
+    assert [item["asset_type"] for item in items] == ["FII", "ACAO"]
+    assert sum(item["percentage"] for item in items) == pytest.approx(100.0)
+
+
+def test_asset_distribution_supported_classes_sum_to_100():
+    items = build_asset_distribution_items({
+        "RENDA_FIXA": 250.0,
+        "TESOURO_DIRETO": 250.0,
+        "STOCK": 250.0,
+        "CRIPTO": 250.0,
+    })
+
+    assert {item["asset_type"] for item in items} == {
+        "RENDA_FIXA",
+        "TESOURO_DIRETO",
+        "STOCK",
+        "CRIPTO",
+    }
+    assert sum(item["value"] for item in items) == 1000.0
+    assert sum(item["percentage"] for item in items) == pytest.approx(100.0)
