@@ -7,9 +7,41 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Concluído — Compliance público e hardening documental (11/07/2026) — #80
+
+#### Documentação
+
+- README, roadmap, changelog e documentos auxiliares passaram a usar termos genéricos para fontes externas de dados.
+- Documentos antigos de análise foram atualizados para refletir o estado atual do sistema.
+- Prioridades concluídas foram removidas das seções de próximos focos.
+- A evolução para provedores configuráveis pelo Superadmin foi registrada no backlog pela issue #127.
+
+#### API pública
+
+- OpenAPI passou a sanitizar descrições, exemplos e valores padrão que identifiquem fornecedores externos.
+- Endpoints públicos de cotação passaram a devolver uma origem genérica de dados de mercado.
+- Exceções exibidas em modo debug passaram a remover nomes de fornecedores antes da resposta HTTP.
+- Logs internos e módulos de integração preservam os identificadores técnicos necessários à operação.
+
+#### Configuração
+
+- Adicionadas variáveis genéricas para token, URL e limites do provedor principal de dados de mercado.
+- Adicionada variável genérica para a fonte complementar de dados internacionais.
+- Variáveis legadas permanecem aceitas como fallback temporário para evitar quebra de ambientes existentes.
+- Quando nomes novos e antigos coexistem, a configuração genérica tem precedência.
+- `.env.example` passou a expor somente os nomes genéricos.
+
+#### Testes
+
+- Adicionado teste de compliance dos documentos públicos.
+- Adicionado teste de compliance do OpenAPI e dos metadados públicos de cotação.
+- Adicionados testes de compatibilidade, fallback e precedência das variáveis de configuração.
+
+---
+
 ### Concluído — Resumo, administração e integridade operacional (11/07/2026)
 
-> Evolução posterior à PR #125, preparada para nova consolidação em `main`.
+> Entrega consolidada na PR #126 e validada antes do merge em `main`.
 
 #### Backend
 
@@ -60,7 +92,7 @@ Formato baseado em Keep a Changelog.
 - Seed histórico tornado idempotente com `ON CONFLICT DO NOTHING`.
 - Tickers sem histórico passaram a usar cooldown de indisponibilidade.
 - Catálogo de Tesouro Direto consolidado com symbols canônicos.
-- Adicionado fallback de preços do Tesouro Transparente para RendA+ e Educa+.
+- Adicionado fallback de preços por fonte oficial secundária para RendA+ e Educa+.
 
 #### Frontend
 
@@ -123,9 +155,8 @@ Formato baseado em Keep a Changelog.
 
 ## Próximos focos
 
-- Finalizar QA da issue #124 em cenários de borda.
 - Robustecer Backup/Restore (#83).
-- Concluir QA funcional da administração de usuários (#98).
-- Revisar compliance da documentação/API (#80).
 - Implementar Google OAuth (#97).
+- Refinar a experiência da página Patrimônio (#90).
 - Avançar em IRPF (#56), Análise (#57) e Janela Global do Ativo (#58).
+- Manter a arquitetura de provedores configuráveis pelo Superadmin no backlog (#127).

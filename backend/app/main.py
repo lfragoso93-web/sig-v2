@@ -2,6 +2,8 @@ import asyncio
 import logging
 import traceback
 from contextlib import asynccontextmanager
+from typing import Any
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -30,17 +32,48 @@ from app.routers import rentabilidade
 
 logger = logging.getLogger(__name__)
 
+_PROVIDER_TERMS = (
+    "brapi",
+    "yfinance",
+    "yahoo finance",
+    "alpha vantage",
+    "tesouro transparente",
+)
+_PUBLIC_MARKET_DATA_SOURCE = "market_data_provider"
+
+
+def _sanitize_provider_text(value: str) -> str:
+    sanitized = value
+    for term in _PROVIDER_TERMS:
+        sanitized = sanitized.replace(term, _PUBLIC_MARKET_DATA_SOURCE)
+        sanitized = sanitized.replace(term.upper(), _PUBLIC_MARKET_DATA_SOURCE)
+        sanitized = sanitized.replace(term.title(), _PUBLIC_MARKET_DATA_SOURCE)
+    return sanitized
+
+
+def _sanitize_public_payload(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _sanitize_public_payload(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_sanitize_public_payload(item) for item in value]
+    if isinstance(value, str):
+        return _sanitize_provider_text(value)
+    return value
+
 
 async def _boot_sequence() -> None:
     """
     Sequência de inicialização executada em background após o app subir.
 
     Etapa 1 - Seed de ativos B3/cripto.
-    Etapa 1b - Seed/atualização do catálogo de Tesouro Direto via BRAPI.
+    Etapa 1b - Seed/atualização do catálogo de Tesouro Direto.
     Etapa 1c - Reconciliação de lançamentos antigos de Tesouro Direto.
-    Etapa 1d - Histórico/snapshot de Tesouro Direto via BRAPI.
+    Etapa 1d - Histórico/snapshot de Tesouro Direto.
     Etapa 2 - Backfill histórico de preços.
-    Etapa 3 - Backfill/incremental de benchmarks SGS/BCB para Renda Fixa.
+    Etapa 3 - Backfill/incremental de benchmarks para Renda Fixa.
     """
     await asyncio.sleep(3)
 
@@ -73,7 +106,7 @@ async def _boot_sequence() -> None:
     try:
         from app.services.treasury_catalog_service import seed_treasury_assets
 
-        logger.info("[Boot] Etapa 1b: atualizando catálogo Tesouro Direto BRAPI")
+        logger.info("[Boot] Etapa 1b: atualizando catálogo Tesouro Direto")
         async with AsyncSessionLocal() as db:
             treasury_seed = await seed_treasury_assets(db)
         logger.info(
@@ -109,7 +142,7 @@ async def _boot_sequence() -> None:
             update_treasury_latest_prices,
         )
 
-        logger.info("[Boot] Etapa 1d: verificando histórico Tesouro Direto BRAPI")
+        logger.info("[Boot] Etapa 1d: verificando histórico Tesouro Direto")
         treasury_stats = await import_missing_treasury_price_history()
         logger.info("[Boot] Etapa 1d: histórico Tesouro Direto atualizado: %s", treasury_stats)
         async with AsyncSessionLocal() as db:
@@ -132,12 +165,12 @@ async def _boot_sequence() -> None:
     try:
         from app.services.benchmark_rate_service import import_missing_benchmark_history
 
-        logger.info("[Boot] Etapa 3: verificando benchmarks SGS/BCB")
+        logger.info("[Boot] Etapa 3: verificando benchmarks de renda fixa")
         async with AsyncSessionLocal() as db:
             stats = await import_missing_benchmark_history(db)
-        logger.info("[Boot] Etapa 3: benchmarks SGS/BCB atualizados: %s", stats)
+        logger.info("[Boot] Etapa 3: benchmarks de renda fixa atualizados: %s", stats)
     except Exception as e:
-        logger.error("[Boot] Etapa 3 (benchmarks SGS/BCB) falhou: %s", e)
+        logger.error("[Boot] Etapa 3 (benchmarks de renda fixa) falhou: %s", e)
 
     logger.info("[Boot] sequencia de inicializacao concluida")
 
@@ -182,9 +215,9 @@ async def global_exception_handler(request: Request, exc: Exception):
         return JSONResponse(
             status_code=500,
             content={
-                "detail": str(exc),
+                "detail": _sanitize_provider_text(str(exc)),
                 "type": type(exc).__name__,
-                "traceback": tb,
+                "traceback": _sanitize_provider_text(tb),
                 "path": str(request.url),
             },
         )
@@ -194,7 +227,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-def custom_openapi():
+def custom_openapi() -> dict[str, Any]:
     if app.openapi_schema:
         return app.openapi_schema
     schema = get_openapi(
@@ -214,8 +247,11 @@ def custom_openapi():
         {"OAuth2PasswordBearer": []},
         {"HTTPBearer": []},
     ]
-    app.openapi_schema = schema
-    return schema
+    sanitized_schema = _sanitize_public_payload(schema)
+    if not isinstance(sanitized_schema, dict):
+        raise TypeError("OpenAPI sanitizado deve ser um dicionario")
+    app.openapi_schema = sanitized_schema
+    return sanitized_schema
 
 
 app.openapi = custom_openapi  # type: ignore[method-assign]

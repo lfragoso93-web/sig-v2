@@ -1,618 +1,193 @@
-# PLANO DE AÇÃO EXECUTÁVEL — SGI v2
+# Plano de Ação Executável — SGI v2
 
-**Data:** 02 de Julho de 2026  
-**Duração Estimada:** 8-12 semanas  
-**Equipe Recomendada:** 2 devs (1 backend, 1 frontend) + 1 QA part-time
+**Atualizado em:** 11 de julho de 2026  
+**Branch de desenvolvimento:** `stable-15jun`
 
----
-
-## 📊 Visão Geral dos Gaps
-
-**Total:** 21 gaps identificados  
-**Esforço Total:** ~120-150 horas  
-**Status:** 78% de completude funcional
-
-```
-Criticidade:  🔴 4 CRÍTICOS | 🟡 13 MÉDIOS | 🟢 4 BAIXOS
-Categoria:    6 áreas (Performance, Frontend, Features, Testes, Docs, Segurança)
-```
-
-📖 **Referência Completa:** `GAPS_ANALISE_COMPLETA.md`
+Este plano substitui o roteiro criado em 2 de julho de 2026. Desde então, foram concluídos e validados os blocos de consolidação financeira, importação CSV, administração de usuários, integridade de carteiras e correções da página Resumo.
 
 ---
 
-## 🎯 SPRINT 1: Produção-Ready (Semana 1-2) — 30-40h
+## Objetivo do ciclo atual
 
-### Objetivo
-Tornar aplicativo seguro, performático e pronto para produção imediata.
+Concluir a estabilização operacional e preparar o sistema para novas funcionalidades sem reabrir divergências nos contratos financeiros.
 
-### Tarefas (Em Ordem de Execução)
+### Regras de execução
 
-#### 1.1 🔴 Corrigir Índices PostgreSQL (2h)
-**Status:** ❌ NÃO INICIADO  
-**Arquivos:** 
-- `backend/alembic/versions/024_add_additional_indexes.py` ← JÁ EXISTE (apenas indexes de dividends)
-- Precisa criar: `025_add_performance_indexes.py`
-
-**O que fazer:**
-```bash
-# Criar nova migration
-cd backend
-alembic revision -m "add performance indexes"
-
-# Adicionar ao arquivo gerado:
-CREATE INDEX CONCURRENTLY idx_tx_portfolio_date 
-  ON transactions (portfolio_id, date ASC);
-
-CREATE INDEX CONCURRENTLY idx_price_history_ticker_date 
-  ON price_history (ticker, date DESC);
-
-CREATE INDEX CONCURRENTLY idx_portfolio_snapshot_portfolio_date 
-  ON portfolio_snapshot (portfolio_id, snapshot_date DESC);
-
-CREATE INDEX CONCURRENTLY idx_fx_rates_date 
-  ON fx_rates (rate_date DESC);
-```
-
-**Impacto:** -30-50% latência em queries críticas  
-**Teste:** `EXPLAIN ANALYZE` em 3 queries principais (vide doc)
+1. Trabalhar sempre na `stable-15jun`.
+2. Dividir mudanças em commits pequenos.
+3. Não misturar compliance, infraestrutura e novas funcionalidades na mesma entrega.
+4. Adicionar testes proporcionais ao risco.
+5. Atualizar README, roadmap e changelog antes da PR para `main`.
 
 ---
 
-#### 1.2 🔴 Ativar Monitoramento de Queries (1h)
-**Status:** ❌ NÃO INICIADO  
-**Arquivo:** `docker-compose.yml`
+## Bloco 1 — Compliance da documentação e API pública — #80
 
-**O que fazer:**
-```yaml
-postgresql:
-  environment:
-    - log_min_duration_statement=100  # loga queries > 100ms
-    - shared_preload_libraries=pg_stat_statements
-    - log_connections=on
-```
+**Status:** Em andamento  
+**Objetivo:** remover detalhes de fornecedores das superfícies públicas sem quebrar integrações existentes.
 
-**Teste:** `SELECT query, calls, mean_exec_time FROM pg_stat_statements`
+### Etapa 1.1 — Documentação principal
 
----
+- [x] Revisar README.
+- [x] Revisar CHANGELOG.
+- [x] Revisar ROADMAP.
+- [x] Atualizar documentos de gaps e planejamento desatualizados.
+- [ ] Revisar documentos auxiliares restantes.
 
-#### 1.3 🟡 Completar Cache Redis (2-3h)
-**Status:** ⚠️ PARCIAL (só tem cache em rentabilidade)  
-**Arquivo:** `backend/app/services/portfolio_service.py`
+### Etapa 1.2 — OpenAPI e respostas públicas
 
-**O que fazer:**
-```python
-# Decorador já existe em rentabilidade_service.py
-# Adicionar em portfolio_service.py:
+- [ ] Revisar títulos, descrições e exemplos dos endpoints.
+- [ ] Substituir identificadores de fornecedor em campos públicos por valores genéricos.
+- [ ] Garantir que exceções retornadas ao cliente não incluam detalhes internos.
+- [ ] Manter nomes técnicos apenas em logs internos e módulos de integração.
 
-@cache_key("portfolio", portfolio_id, "summary", ttl=120)
-async def get_portfolio_summary(db, portfolio_id):
-    # ... implementação existente
-    
-@cache_key("portfolio", portfolio_id, "positions", ttl=120)
-async def get_portfolio_positions(db, portfolio_id):
-    # ... implementação existente
+### Etapa 1.3 — Configuração
 
-# Invalidar cache em transaction_service quando nova transação criada
-```
+- [ ] Preservar variáveis atuais para evitar quebra de ambientes.
+- [ ] Introduzir aliases genéricos quando necessário.
+- [ ] Documentar depreciação antes de remover qualquer nome legado.
 
-**Teste:** Redis hitrate deve aumentar 50%+ em 2 min
+### Etapa 1.4 — Regressão
 
----
+- [ ] Adicionar teste de varredura dos documentos públicos.
+- [ ] Adicionar teste da descrição OpenAPI e schemas expostos.
+- [ ] Executar testes backend e build do frontend.
 
-#### 1.4 🟢 Sprint 6A: Remover Referências a APIs Externas (2h)
-**Status:** ❌ NÃO INICIADO (Planejado mas não feito)  
-**Arquivos:**
-- `README.md` — remover nomes: BRAPI, YFinance, Alpha Vantage
-- `backend/app/main.py` — descrições de endpoints
-- `.env.example` — comentários
-- `CHANGELOG.md` — histórico
+### Critério de aceite
 
-**O que fazer:**
-```python
-# Em main.py, mudar:
-"Integração com BRAPI para cotações"
-# Para:
-"Integração com provedor de cotações"
-
-# Em .env.example:
-# BRAPI_TOKEN=seu_token_aqui  # Provedor de cotações brasileiro
-# ALPHA_VANTAGE_API_KEY=...   # Provedor de dados internacionais
-```
-
-**Teste:** Varrer codebase com grep para "BRAPI\|YFinance\|Alpha"
+- Nenhum nome de fornecedor em documentos públicos.
+- OpenAPI e respostas públicas com terminologia genérica.
+- Configurações existentes continuam funcionando.
+- Testes de compliance passam em CI.
 
 ---
 
-#### 1.5 🟡 Setup de Testes Frontend (4-5h)
-**Status:** ❌ NÃO INICIADO (0% cobertura)  
-**Arquivo:** `frontend/`
+## Bloco 2 — Backup seguro — primeira fase da #83
 
-**O que fazer:**
-```bash
-cd frontend
+**Status:** Próximo  
+**Objetivo:** permitir geração de backup sem introduzir o risco operacional do restore direto.
 
-# 1. Instalar dependências
-npm install -D vitest @testing-library/react @testing-library/dom jsdom
+### Etapa 2.1 — Serviço de backup
 
-# 2. Criar vitest.config.ts
-cat > vitest.config.ts << 'EOF'
-import { defineConfig } from 'vitest/config';
-import react from '@vitejs/plugin-react';
+- [ ] Criar serviço dedicado para geração de dump comprimido.
+- [ ] Usar arquivo temporário fora de diretórios públicos.
+- [ ] Calcular checksum SHA-256.
+- [ ] Definir nome com timestamp e identificador da aplicação.
+- [ ] Remover arquivos expirados automaticamente.
 
-export default defineConfig({
-  plugins: [react()],
-  test: {
-    globals: true,
-    environment: 'jsdom',
-    setupFiles: './src/test/setup.ts',
-  },
-});
-EOF
+### Etapa 2.2 — Segurança
 
-# 3. Criar arquivo setup
-mkdir -p src/test
-cat > src/test/setup.ts << 'EOF'
-import { expect, afterEach } from 'vitest';
-import { cleanup } from '@testing-library/react';
-afterEach(() => cleanup());
-EOF
+- [ ] Restringir a superadmin.
+- [ ] Adicionar lock contra execuções simultâneas.
+- [ ] Registrar início, sucesso e falha em auditoria.
+- [ ] Não retornar comandos, credenciais ou paths internos ao frontend.
 
-# 4. Adicionar a package.json:
-"test": "vitest",
-"test:coverage": "vitest --coverage",
-"test:watch": "vitest --watch"
+### Etapa 2.3 — API e frontend
 
-# 5. Criar primeiro teste (exemplo)
-mkdir -p src/components/ui/__tests__
-cat > src/components/ui/__tests__/KpiCard.test.tsx << 'EOF'
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import KpiCard from '../KpiCard';
+- [ ] Criar endpoint autenticado para download.
+- [ ] Exibir estado de processamento.
+- [ ] Apresentar checksum e data do backup.
+- [ ] Tratar falhas com mensagens operacionais genéricas.
 
-describe('KpiCard', () => {
-  it('renders title and value', () => {
-    render(<KpiCard title="Total" value="R$ 100.000" change={5} />);
-    expect(screen.getByText('Total')).toBeInTheDocument();
-    expect(screen.getByText('R$ 100.000')).toBeInTheDocument();
-  });
-});
-EOF
+### Etapa 2.4 — Validação
 
-# 6. Rodar testes
-npm test
-```
+- [ ] Testar geração do arquivo.
+- [ ] Restaurar manualmente em banco isolado.
+- [ ] Comparar migrations, tabelas e registros essenciais.
+- [ ] Documentar procedimento de recuperação.
 
-**Saída esperada:** ✅ Primeiro teste passando
+### Fora de escopo
+
+O restore pela aplicação será tratado em uma issue/fase separada após definição de modo de manutenção, reautenticação forte, backup pré-restore, validação de versão e rollback.
 
 ---
 
-#### 1.6 🟡 Verificar N+1 Fixes (1h)
-**Status:** ⚠️ JÁ IMPLEMENTADO (vide QUERY_OPTIMIZATION.md)  
-**Verificar:**
-```bash
-# Em backend/app/services/:
-grep -n "_calc_totals" portfolio_snapshot_service.py  # Deve ter batch prefetch
-grep -n "sum_dividends" portfolio_service.py          # Deve ter single query
-grep -n "_calc_invested_up_to_both" rentabilidade_service.py  # Dual query
-```
+## Bloco 3 — Google OAuth — #97
 
-**Se tudo OK:** ✅ Skip esta tarefa
+**Status:** Planejado
 
----
+### Backend
 
-### Checklist Sprint 1
+- [ ] Criar modelo de identidade externa.
+- [ ] Adicionar migration.
+- [ ] Validar token e e-mail verificado.
+- [ ] Implementar vínculo seguro com conta existente.
+- [ ] Definir política de cadastro automático.
+- [ ] Preservar login por e-mail e senha.
 
-- [ ] 1.1 — Índices PostgreSQL aplicados + EXPLAIN ANALYZE OK
-- [ ] 1.2 — Monitoramento habilitado, logs de query lentas aparecendo
-- [ ] 1.3 — Cache Redis funcional em `/resumo` e `/posicoes`
-- [ ] 1.4 — Grep retorna 0 ocorrências de nomes de APIs externas em docs
-- [ ] 1.5 — `npm test` passa com pelo menos 5 testes frontend
-- [ ] 1.6 — N+1 fixes verificados ou já OK
+### Frontend
 
-**Saída esperada:** App pronto para staging/produção com performance baseline
+- [ ] Adicionar botão de login.
+- [ ] Implementar callback.
+- [ ] Tratar conflito, cancelamento e falha.
+- [ ] Manter o fluxo atual como alternativa.
 
----
+### Testes
 
-## 🎯 SPRINT 2: Features Críticas (Semana 3-4) — 40-60h
-
-### Objetivo
-Implementar features planejadas que estão 100% faltando.
-
-### Tarefas (Por Prioridade)
-
-#### 2.1 🔴 CSV Import de Ativos (12-15h)
-**Status:** ❌ NÃO INICIADO (Sprint 6D planejada mas nunca feita)
-
-**Escopo:**
-- ✅ Backend: `GET /api/v1/assets/csv-template` + `POST /api/v1/portfolios/{id}/import-csv`
-- ✅ Frontend: Modal com preview + confirmação
-- ✅ Validação linha-a-linha com relatório de erros
-- ✅ Importação atômica (tudo ou rollback)
-
-**Arquivos a criar/modificar:**
-```python
-# backend/app/routers/portfolios.py
-@router.get("/{portfolio_id}/csv-template")
-async def get_csv_template():
-    """Retorna template CSV para download"""
-
-@router.post("/{portfolio_id}/import-csv")
-async def import_csv(portfolio_id: int, file: UploadFile):
-    """Importa transações em massa com validação"""
-    
-# backend/app/services/csv_import_service.py (novo)
-class CSVImportService:
-    async def validate_and_import(...)
-    async def generate_template(...)
-```
-
-```typescript
-// frontend/src/components/ImportCSVModal.tsx (novo)
-export const ImportCSVModal = ({ portfolioId }) => {
-  // Preview de linhas
-  // Validação em tempo real
-  // Confirmação antes de importar
-}
-
-// frontend/src/pages/Transacoes.tsx
-// Adicionar botão "Importar CSV"
-```
-
-**Teste:** 
-```bash
-# Criar CSV com 10 linhas
-# Importar com 1 erro (linha inválida)
-# Verificar que apenas 9 linhas foram importadas
-# Relatório mostra erro na linha X
-```
+- [ ] Novo usuário.
+- [ ] Conta existente com vínculo permitido.
+- [ ] E-mail não verificado.
+- [ ] Conflito de identidade.
+- [ ] Token inválido ou expirado.
 
 ---
 
-#### 2.2 🔴 Backup & Restore do Banco (12-15h)
-**Status:** ❌ NÃO INICIADO (Sprint 10B planejada mas nunca feita)
+## Bloco 4 — Refinamento de Patrimônio — #90
 
-**Escopo:**
-- ✅ Backend: `POST /admin/database/backup` + `POST /admin/database/restore`
-- ✅ Frontend: Painel admin com botões
-- ✅ Autenticação dupla (senha + confirmação)
-- ✅ Backup armazenado em volume com TTL 24h
+**Status:** Planejado
 
-**Arquivos a criar:**
-```python
-# backend/app/routers/admin.py (adicionar)
-@router.post("/database/backup")
-async def backup_database(current_user = Depends(require_superadmin)):
-    """Gera dump PostgreSQL para download"""
-    
-@router.post("/database/restore")
-async def restore_database(file: UploadFile, password: str):
-    """Restaura banco de arquivo de backup"""
-    
-# backend/app/services/backup_service.py (novo)
-async def backup_database() -> bytes
-async def restore_database(backup_file: bytes) -> None
-```
-
-```typescript
-// frontend/src/components/admin/BackupPanel.tsx (novo)
-// Botões: Fazer Backup, Restaurar Backup
-// Modal de confirmação com aviso de downtime
-```
-
-**Teste:**
-```bash
-# Fazer backup
-# Corromper 1 registro no DB
-# Restaurar backup
-# Verificar que registro foi recuperado
-```
+- [ ] Separar composição, metas, concentração e posições.
+- [ ] Melhorar hierarquia visual e responsividade.
+- [ ] Preservar os contratos canônicos de KPIs.
+- [ ] Cobrir estados vazios e cotações parciais.
+- [ ] Adicionar testes de renderização para layouts principais.
 
 ---
 
-#### 2.3 🟡 Completar IRPF (10-12h)
-**Status:** ⚠️ PARCIAL (interface + backend existem, lógica incompleta)
+## Bloco 5 — Novos módulos de produto
 
-**O que está faltando:**
-- Exportação PDF/CSV de relatório
-- Cálculo consolidado por ano-calendário
-- Isenção para vendas até R$20.000/mês
-- Apuração Day Trade vs Swing Trade
-- Testes de validação
+### Análise de Carteira — #57
 
-**Arquivos:**
-```python
-# backend/app/services/irpf_service.py (expandir)
-async def get_irpf_report_by_year(portfolio_id, year):
-    """Retorna relatório completo do ano"""
-    # Consolidar por ano-calendário
-    # Aplicar isenção de R$ 20k/mês
-    
-async def calculate_daytrade_vs_swingtrade(transactions):
-    """Classifica trades por horizonte"""
-    
-# backend/app/routers/irpf.py (adicionar)
-@router.get("/report/{year}/pdf")
-async def export_irpf_pdf(portfolio_id, year):
-    """Exporta em PDF"""
-```
+- [ ] Concentração por ativo e classe.
+- [ ] Comparação com metas.
+- [ ] Alertas objetivos.
+- [ ] Rebalanceamento por novos aportes.
 
-```typescript
-// frontend/src/pages/IRPFPage.tsx (expandir)
-// Seletor de ano
-// Filtros por mês/classe/tipo de trade
-// Botões: Download PDF, Download CSV
-// Tabela com cálculos mês a mês
-```
+### Janela Global do Ativo — #58
 
-**Teste:**
-```bash
-# Criar 5 transações de venda (R$ 5k cada = R$ 25k no mês)
-# Verificar que isenção foi aplicada (apenas R$ 5k tributável)
-# Exportar PDF e verificar formatação
-```
+- [ ] Consolidar o drawer existente.
+- [ ] Histórico de preços e proventos.
+- [ ] Posição, custo médio e resultado.
+- [ ] Indicadores derivados.
+
+### IRPF — #56
+
+- [ ] Especificar regras fiscais.
+- [ ] Implementar motor de apuração independente.
+- [ ] Cobrir operações e eventos por testes.
+- [ ] Adicionar fechamento mensal/anual.
+- [ ] Implementar relatórios e exportações.
 
 ---
 
-#### 2.4 🟡 Audit Logs (8-10h)
-**Status:** ❌ NÃO INICIADO (Sprint 7B planejada)
+## Checklist de cada entrega
 
-**Escopo:**
-- ✅ Modelo `AuditLog` (user_id, action, resource, timestamp, metadata JSON)
-- ✅ Middleware para captura automática
-- ✅ Endpoint `GET /admin/users/{id}/audit`
-- ✅ Exportação CSV
-- ✅ Tela de auditoria no admin
+### Antes de implementar
 
-**Arquivos:**
-```python
-# backend/app/models/audit_log.py (novo)
-class AuditLog(Base):
-    user_id: int
-    action: str
-    resource: str
-    timestamp: datetime
-    metadata: dict
-    
-# backend/app/middleware/audit_middleware.py (novo)
-async def audit_middleware(request, call_next):
-    # Intercepta POST/PUT/DELETE
-    # Registra em AuditLog
-    
-# backend/alembic/versions/026_create_audit_log_table.py (novo)
-```
+- [ ] Confirmar issue e critérios de aceite.
+- [ ] Confirmar que a `stable-15jun` está sincronizada com `main`.
+- [ ] Identificar dependências e riscos.
 
----
+### Durante a implementação
 
-#### 2.5 🟡 AssetDetailDrawer (8-10h)
-**Status:** ❌ NÃO INICIADO (Sprint 9 planejada)
+- [ ] Criar commits pequenos e temáticos.
+- [ ] Adicionar testes.
+- [ ] Não misturar escopos independentes.
 
-**Escopo:**
-- ✅ Componente drawer que abre ao clicar em ativo
-- ✅ Gráfico de preço histórico (OHLCV)
-- ✅ Histórico de proventos
-- ✅ Dividend Yield (DY) calculado
-- ✅ Disponível em PatrimonioPage, Transacoes, RentabilidadePage
+### Antes da PR
 
-**Arquivos:**
-```typescript
-// frontend/src/components/AssetDetailDrawer.tsx (novo)
-export const AssetDetailDrawer = ({ ticker, isOpen, onClose }) => {
-  // Gráfico de preço
-  // Tabela de proventos
-  // KPIs: DY, P/L, Quantidade
-}
-
-// frontend/src/pages/PatrimonioPage.tsx (modificar)
-// Tornar linhas da tabela clicáveis → abre drawer
-// Mesmo para RentabilidadePage.tsx
-```
-
-**Teste:**
-```bash
-# Clicar em linha de ativo
-# Drawer abre com gráfico
-# Verificar dados estão corretos
-```
-
----
-
-### Checklist Sprint 2
-
-- [ ] 2.1 — CSV import funcional com validação
-- [ ] 2.2 — Backup/restore funcional (teste de recuperação OK)
-- [ ] 2.3 — IRPF exporta PDF com cálculos corretos
-- [ ] 2.4 — Audit logs sendo registrados para todas as ações
-- [ ] 2.5 — Drawer abre ao clicar em ativo com dados corretos
-
-**Saída esperada:** Todas as features planejadas (roadmap) implementadas
-
----
-
-## 🎯 SPRINT 3: Qualidade & UX (Semana 5-7) — 40-50h
-
-### Objetivo
-Melhorar cobertura de testes, documentação, e experiência do usuário.
-
-### Tarefas
-
-#### 3.1 🟡 Expandir Testes Backend (15-20h)
-**Status:** ⚠️ PARCIAL (8 testes existem, faltam 40+)
-
-**Adicionar testes para:**
-- ✅ Todos os routers (admin, assets, class_targets, fixed_income, goals, irpf, treasury)
-- ✅ Services sem cobertura (irpf_service, treasury_service, goals_service)
-- ✅ Fluxos críticos: login → transação → rentabilidade
-
-**Estrutura:**
-```
-backend/tests/
-├── test_auth_service.py          # ✅ Existe
-├── test_portfolio_service.py      # ✅ Existe
-├── test_rentabilidade_service.py  # ✅ Existe
-├── test_irpf_service.py           # ❌ NOVO
-├── test_treasury_service.py       # ❌ NOVO
-├── test_goals_service.py          # ❌ NOVO
-├── test_fixed_income_service.py   # ❌ NOVO
-├── test_admin_router.py           # ❌ NOVO
-├── test_integration_flows.py      # ❌ NOVO (end-to-end)
-└── conftest.py                    # ✅ Existe
-```
-
-**Meta:** Cobertura mínima 50% → 70%
-
----
-
-#### 3.2 🟡 Testes E2E (12-15h)
-**Status:** ❌ NÃO INICIADO (0%)
-
-**Setup Cypress:**
-```bash
-npm install -D cypress @cypress/webpack-dev-server
-npx cypress open
-
-# Criar testes em cypress/e2e/:
-# - auth.cy.ts (login/register/logout)
-# - portfolio.cy.ts (criar carteira, lançar transação)
-# - rentabilidade.cy.ts (ver gráficos e KPIs)
-# - proventos.cy.ts (dividendos)
-```
-
----
-
-#### 3.3 🟡 Layout Mobile Responsivo (6-8h)
-**Status:** ⚠️ PARCIAL (BottomNav existe, mas páginas quebram)
-
-**Testar/Corrigir em:**
-- PatrimonioPage (gráficos overflow)
-- RentabilidadePage (tabelas não scrollam)
-- Modais em telas pequenas
-- Sidebar responsivo
-
-**Usar DevTools:** `Ctrl+Shift+K` → mobile view, testar em iPhone 12/Pixel 5
-
----
-
-#### 3.4 🟢 Documentação de Arquitetura (6-8h)
-**Status:** ❌ NÃO INICIADO
-
-**Criar em `docs/`:**
-- `ARCHITECTURE.md` — decisões de design, padrões
-- `DATABASE_SCHEMA.md` — ERD comentado
-- `DEPLOYMENT.md` — guia de deploy em produção
-- `TROUBLESHOOTING.md` — problemas comuns
-- `API_DESIGN.md` — padrões (paginação, filtros, erros)
-
----
-
-#### 3.5 🟡 Completar AnalisePage & MetasPage (10-12h)
-**Status:** ❌ STUBS VAZIOS
-
-**AnalisePage:**
-- Score de diversificação por setor
-- Concentração por ativo com alertas
-- Comparação vs. metas de alocação
-- Sugestões de rebalanceamento
-
-**MetasPage:**
-- CRUD de metas
-- Progresso visual
-- Alertas de atingida/ultrapassada
-
----
-
-### Checklist Sprint 3
-
-- [ ] 3.1 — Cobertura de testes backend 70%+
-- [ ] 3.2 — 10+ testes E2E passando
-- [ ] 3.3 — App responsivo em mobile (iPhone 12 + Pixel 5)
-- [ ] 3.4 — Documentação completa e atualizada
-- [ ] 3.5 — AnalisePage e MetasPage funcionais
-
-**Saída esperada:** Aplicativo pronto para produção com QA profissional
-
----
-
-## 📈 Timeline Recomendada
-
-```
-Semana 1-2:  Sprint 1 (Performance + Produção)      30-40h
-Semana 3-4:  Sprint 2 (Features Críticas)            40-60h
-Semana 5-7:  Sprint 3 (Qualidade + UX)              40-50h
-─────────────────────────────────────────────────────────
-TOTAL:       ~120-150 horas  (8-12 semanas com 1 dev)
-             (4-6 semanas com 2 devs)
-```
-
----
-
-## 🚀 Como Executar
-
-### Daily Standup
-```
-1. O que foi feito ontem?
-2. O que vai fazer hoje?
-3. Tem bloqueadores?
-→ Max 10 min
-```
-
-### PR Checklist (Antes de Merge)
-```
-- [ ] Feature implementada 100%
-- [ ] Testes adicionados/atualizados
-- [ ] Linting passa (npm run lint / flake8)
-- [ ] TypeCheck passa (tsc / mypy)
-- [ ] Sem console.log ou print statements
-- [ ] Documentação atualizada
-- [ ] Testado em staging
-```
-
-### Deploy Pipeline
-```
-1. Feature branch completa
-2. PR aberta, código revisado
-3. CI/CD passa (lint + test + build)
-4. Merge para main
-5. Deploy automático para staging
-6. QA aprova
-7. Deploy para produção
-```
-
----
-
-## 📚 Referências
-
-| Documento | Uso |
-|-----------|-----|
-| `GAPS_ANALISE_COMPLETA.md` | Detalhes de cada gap |
-| `ROADMAP_SPRINTS.md` | Roadmap original com status |
-| `CHANGELOG.md` | Histórico de implementações |
-| `QUERY_OPTIMIZATION.md` | Análise de performance |
-| `.github/workflows/ci.yml` | Pipeline CI/CD |
-
----
-
-## ✅ Success Criteria
-
-Ao final de 8-12 semanas:
-
-- ✅ Sprint 1: App pronto para produção
-- ✅ Sprint 2: Todas as features planejadas implementadas
-- ✅ Sprint 3: Cobertura de testes 70%+, UX mobile funcional
-- ✅ Zero "multiple head revisions" ou erros de migration
-- ✅ Performance baseline: queries < 200ms, cache hit > 50%
-- ✅ 0 gaps críticos restantes, documentação completa
-
----
-
-## 🎯 Próximos Passos (Hoje)
-
-1. ✅ Escolher dev para coordenar Sprint 1
-2. ✅ Criar issues no GitHub para cada tarefa
-3. ✅ Configurar labels: `gap-1.1`, `gap-2.1`, etc
-4. ✅ Primeira reunião de planejamento (30 min)
-5. ✅ Começar com tarefa 1.1 (Índices PostgreSQL)
-
----
-
-*Plano criado em 02/07/2026 — Abacus AI Agent*
+- [ ] Executar testes backend relevantes.
+- [ ] Executar testes, typecheck e build do frontend quando aplicável.
+- [ ] Validar fluxo funcional.
+- [ ] Atualizar documentação.
+- [ ] Abrir PR da `stable-15jun` para `main` com impacto e validação.

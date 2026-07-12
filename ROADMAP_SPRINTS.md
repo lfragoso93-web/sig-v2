@@ -59,7 +59,7 @@
 - [x] Corrigir dropdown/lista suspensa cortada na tabela do Resumo.
 - [x] Separar variação diária da rentabilidade acumulada por classe.
 - [x] Adicionar teste frontend para a tabela de posições.
-- [ ] Finalizar QA de carteira vazia, apenas renda fixa e posições zeradas.
+- [x] Validar carteira vazia, apenas renda fixa e posições zeradas.
 
 ### 5J-B — Importação CSV — Issue #82
 
@@ -72,12 +72,32 @@
 - [x] Bloquear confirmação enquanto houver erros, linhas ignoradas ou falhas globais.
 - [x] Invalidação dos caches financeiros.
 - [x] Testes de upload, dry-run e persistência.
+- [x] Validação funcional do contrato de importação integral após pré-validação.
+
+### 5J-D — Administração de usuários — Issue #98
+
+- [x] Implementar serviços de criação, listagem, edição e exclusão.
+- [x] Corrigir edição de nome, papel e status do usuário.
+- [x] Revisar permissões de superadmin.
+- [x] Proteger o último superadmin.
+- [x] Ajustar schemas usados pelo painel administrativo.
+- [x] Migrar o painel para os tokens visuais atuais.
+- [x] Validar isolamento de dados entre contas em QA funcional.
+
+### 5J-E — Compliance — Issue #80
+
+- [x] Mapear referências explícitas em documentos públicos principais.
+- [x] Remover nomes explícitos do README, changelog, roadmap e documentos auxiliares.
+- [x] Revisar Swagger/OpenAPI e mensagens públicas.
+- [x] Manter detalhes técnicos somente em módulos internos e logs protegidos.
+- [x] Introduzir variáveis de ambiente genéricas com fallback para nomes legados.
+- [x] Adicionar testes automatizados de compliance documental, API e configuração.
 
 ### 5J-F — Proventos históricos e robustez
 
 - [x] Página vinculada somente à carteira global do topbar.
 - [x] Seed histórico completo por ativo.
-- [x] BRAPI como fonte principal e complemento histórico.
+- [x] Fonte principal de dados com complemento histórico.
 - [x] Materialização por posição elegível.
 - [x] UPSERT idempotente pela constraint de evento.
 - [x] Tratamento de tickers indisponíveis e cooldown temporário.
@@ -90,7 +110,7 @@
 - [x] Catálogo canônico de títulos.
 - [x] Normalização de RendA+ e Educa+.
 - [x] Histórico e snapshots em `asset_prices`.
-- [x] Fallback do Tesouro Transparente para títulos sem `indicators`.
+- [x] Fallback por fonte oficial secundária para títulos sem preço no provedor primário.
 - [ ] Validar localmente preços de todos os RendA+ mantidos em carteira.
 - [ ] Adicionar testes do fallback de preço.
 
@@ -99,7 +119,7 @@
 - [x] Excluir dependências da carteira de forma explícita.
 - [x] Preservar registros de auditoria desacoplando `portfolio_id` antes da exclusão.
 - [x] Invalidar caches após alterações e exclusões.
-- [ ] Executar QA com carteiras contendo todas as classes de ativos.
+- [x] Executar QA com carteiras contendo todas as classes de ativos.
 
 ---
 
@@ -107,34 +127,24 @@
 
 ### 5J-C — Backup/Restore — Issue #83
 
-- [ ] Endpoint autenticado para download.
-- [ ] Confirmação forte no restore.
-- [ ] Lock global.
-- [ ] Auditoria e status da operação.
-- [ ] Storage persistente.
+- [ ] Implementar geração autenticada de backup para download.
+- [ ] Adicionar checksum, lock e auditoria da operação.
+- [ ] Definir retenção e limpeza de arquivos temporários.
+- [ ] Validar restore em ambiente isolado.
+- [ ] Projetar restore controlado como fase posterior.
 - [x] Simplificar a interface administrativa removendo ações ainda não suportadas.
-
-### 5J-D — Administração de usuários — Issue #98
-
-- [x] Implementar serviços de criação, listagem, edição e exclusão.
-- [x] Corrigir edição de nome, papel e status do usuário.
-- [x] Revisar permissões de superadmin.
-- [x] Proteger o último superadmin.
-- [x] Ajustar schemas usados pelo painel administrativo.
-- [x] Migrar o painel para os tokens visuais atuais.
-- [ ] Validar isolamento de dados entre contas em QA funcional.
-
-### 5J-E — Compliance — Issue #80
-
-- [ ] Remover nomes explícitos de provedores da documentação pública.
-- [ ] Revisar Swagger/OpenAPI e mensagens públicas.
-- [ ] Manter detalhes técnicos apenas em arquivos internos e configuração.
 
 ### Auth — Issue #97
 
 - [ ] Implementar Google OAuth.
 - [ ] Vincular conta social a usuário existente.
 - [ ] Cobrir login, callback e erros.
+
+### UX — Issue #90
+
+- [ ] Reorganizar a página Patrimônio em cards claros e responsivos.
+- [ ] Preservar os contratos financeiros canônicos.
+- [ ] Separar composição, metas, concentração e posições.
 
 ---
 
@@ -161,6 +171,13 @@
 - [ ] Histórico de preços.
 - [ ] Histórico de proventos.
 - [ ] Posição, custo médio e resultado.
+
+### Backlog arquitetural — Provedores configuráveis — Issue #127
+
+- [ ] Criar registry/factory de provedores por capacidade.
+- [ ] Permitir configuração pelo Superadmin com credenciais criptografadas.
+- [ ] Preservar fallback para `.env`.
+- [ ] Adicionar health check, teste de conexão, auditoria e rollback.
 
 ---
 

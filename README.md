@@ -25,7 +25,7 @@ A entrega atual consolida a camada financeira, conclui correções relevantes da
 - Proventos vinculados exclusivamente à carteira selecionada no topbar.
 - Seed histórico de proventos idempotente, com complemento histórico e materialização por posição elegível.
 - Tratamento de tickers sem histórico e cache temporário de indisponibilidade.
-- Tesouro Direto com catálogo canônico e fallback de preços do Tesouro Transparente para RendA+ e Educa+.
+- Tesouro Direto com catálogo canônico e fallback de preços por fonte oficial secundária para RendA+ e Educa+.
 - Seletores locais de carteira removidos das páginas Proventos e Rentabilidade.
 
 ### Validação disponível
@@ -33,17 +33,17 @@ A entrega atual consolida a camada financeira, conclui correções relevantes da
 - Cobertura backend ampliada para portfolio, importação CSV e administração de usuários.
 - Teste frontend dedicado ao comportamento da tabela de posições.
 - Fluxos de build, typecheck e Docker Compose mantidos como critérios obrigatórios antes do merge.
+- Resumo, administração de usuários e importação CSV validados funcionalmente e consolidados na `main`.
 
 ---
 
 ## Próximos focos
 
-1. Finalizar o QA da issue #124 em carteira vazia, apenas renda fixa e posições zeradas.
-2. Robustecer Backup/Restore (#83).
-3. Concluir QA funcional da administração de usuários (#98).
-4. Revisar documentação pública e referências a provedores (#80).
-5. Implementar Google OAuth (#97).
-6. Avançar em IRPF (#56), Análise de Carteira (#57) e Janela Global do Ativo (#58).
+1. Concluir compliance da documentação pública, OpenAPI e mensagens expostas (#80).
+2. Implementar a primeira fase segura de Backup/Restore (#83), começando pela geração de backup.
+3. Implementar Google OAuth (#97).
+4. Refinar a experiência da página Patrimônio (#90).
+5. Avançar em Análise de Carteira (#57), Janela Global do Ativo (#58) e IRPF (#56).
 
 ---
 
