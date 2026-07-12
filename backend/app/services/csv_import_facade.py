@@ -8,7 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset
 from app.models.portfolio import Portfolio
-from app.services import csv_import_service as legacy_csv_import_service
+from app.services.csv_import_service import (
+    CSVImportError,
+    _read_upload_text,
+    _safe_float,
+    import_csv_transactions,
+    parse_csv_content,
+)
 from app.services.csv_ticker_resolution import enrich_csv_dry_run_with_ticker_resolution
 from app.services.ticker_change_event_service import register_ticker_change
 from app.services.ticker_resolution_service import ResolvedTicker
@@ -37,11 +43,7 @@ async def _build_dry_run_result(
             "global_errors": ["Carteira não encontrada"],
         }
 
-    rows, global_errors = await legacy_csv_import_service.parse_csv_content(
-        content,
-        portfolio_id,
-        db,
-    )
+    rows, global_errors = await parse_csv_content(content, portfolio_id, db)
     response_rows: list[dict[str, Any]] = []
     error_count = len(global_errors)
     skipped_count = 0
@@ -65,7 +67,7 @@ async def _build_dry_run_result(
             "asset_type": (row.data.get("asset_type") or "").strip().upper() or None,
             "date": (row.data.get("date") or "").strip() or None,
             "operation": (row.data.get("operation") or "").strip().lower() or None,
-            "quantity": legacy_csv_import_service._safe_float(row.data.get("quantity")),
+            "quantity": _safe_float(row.data.get("quantity")),
         })
 
     result = {
@@ -129,8 +131,8 @@ async def import_transactions_csv(
     dry_run: bool = True,
 ) -> dict[str, Any]:
     try:
-        content = await legacy_csv_import_service._read_upload_text(file)
-    except legacy_csv_import_service.CSVImportError as exc:
+        content = await _read_upload_text(file)
+    except CSVImportError as exc:
         return {
             "success": False,
             "imported_count": 0,
@@ -150,7 +152,7 @@ async def import_transactions_csv(
         return validation
 
     await _register_historical_aliases(validation, db=db)
-    return await legacy_csv_import_service.import_csv_transactions(
+    return await import_csv_transactions(
         content=content,
         portfolio_id=portfolio_id,
         user_id=user_id,
