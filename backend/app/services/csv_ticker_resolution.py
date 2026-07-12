@@ -55,6 +55,11 @@ async def enrich_csv_dry_run_with_ticker_resolution(
 
         row["resolved_ticker"] = resolution.current_ticker
         row["ticker_resolution_status"] = resolution.status
+        row["ticker_effective_date"] = (
+            resolution.effective_date.isoformat()
+            if resolution.effective_date is not None
+            else None
+        )
 
         operation_date = _operation_date(row)
         if (
