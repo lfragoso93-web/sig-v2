@@ -212,7 +212,11 @@ async def sanitize_public_provider_metadata(request: Request, call_next):
     if "application/json" not in content_type:
         return response
 
-    body = b"".join([chunk async for chunk in response.body_iterator])
+    body_iterator = getattr(response, "body_iterator", None)
+    if body_iterator is None:
+        return response
+
+    body = b"".join([chunk async for chunk in body_iterator])
     try:
         payload = json.loads(body)
     except (TypeError, ValueError):
