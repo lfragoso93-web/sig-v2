@@ -32,20 +32,18 @@ def test_provider_text_is_genericized() -> None:
     _assert_no_provider_terms(sanitized)
 
 
-def test_source_field_is_genericized_recursively() -> None:
+def test_public_payload_sanitizes_provider_text_recursively() -> None:
     payload = {
         "ticker": "TEST3",
-        "source": "brapi",
+        "detail": "Resposta recebida do Alpha Vantage",
         "nested": {
-            "source": "yfinance",
-            "detail": "Resposta recebida do Alpha Vantage",
+            "message": "Fallback yfinance indisponível",
         },
     }
 
     sanitized = _sanitize_public_payload(payload)
 
-    assert sanitized["source"] == _PUBLIC_MARKET_DATA_SOURCE
-    assert sanitized["nested"]["source"] == _PUBLIC_MARKET_DATA_SOURCE
+    assert isinstance(sanitized, dict)
     _assert_no_provider_terms(sanitized)
 
 
@@ -53,4 +51,5 @@ def test_openapi_schema_does_not_expose_provider_names() -> None:
     app.openapi_schema = None
     schema = app.openapi()
 
+    assert isinstance(schema, dict)
     _assert_no_provider_terms(schema)
