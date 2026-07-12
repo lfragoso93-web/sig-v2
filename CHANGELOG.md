@@ -7,13 +7,14 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
-### Em desenvolvimento — Compliance público e hardening documental (11/07/2026)
+### Concluído — Compliance público e hardening documental (11/07/2026) — #80
 
 #### Documentação
 
 - README, roadmap, changelog e documentos auxiliares passaram a usar termos genéricos para fontes externas de dados.
 - Documentos antigos de análise foram atualizados para refletir o estado atual do sistema.
 - Prioridades concluídas foram removidas das seções de próximos focos.
+- A evolução para provedores configuráveis pelo Superadmin foi registrada no backlog pela issue #127.
 
 #### API pública
 
@@ -154,8 +155,8 @@ Formato baseado em Keep a Changelog.
 
 ## Próximos focos
 
-- Concluir compliance público e configuração compatível (#80).
 - Robustecer Backup/Restore (#83).
 - Implementar Google OAuth (#97).
 - Refinar a experiência da página Patrimônio (#90).
 - Avançar em IRPF (#56), Análise (#57) e Janela Global do Ativo (#58).
+- Manter a arquitetura de provedores configuráveis pelo Superadmin no backlog (#127).
