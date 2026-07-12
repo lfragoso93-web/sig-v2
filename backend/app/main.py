@@ -1,5 +1,4 @@
 import asyncio
-import json
 import logging
 import traceback
 from contextlib import asynccontextmanager
@@ -41,10 +40,6 @@ _PROVIDER_TERMS = (
     "tesouro transparente",
 )
 _PUBLIC_MARKET_DATA_SOURCE = "market_data_provider"
-_PUBLIC_PROVIDER_RESPONSE_PATHS = (
-    "/api/v1/assets/quote/",
-    "/api/v1/assets/tesouro/price",
-)
 
 
 def _sanitize_provider_text(value: str) -> str:
@@ -59,11 +54,7 @@ def _sanitize_provider_text(value: str) -> str:
 def _sanitize_public_payload(value: Any) -> Any:
     if isinstance(value, dict):
         return {
-            key: (
-                _PUBLIC_MARKET_DATA_SOURCE
-                if key == "source" and isinstance(item, str)
-                else _sanitize_public_payload(item)
-            )
+            key: _sanitize_public_payload(item)
             for key, item in value.items()
         }
     if isinstance(value, list):
@@ -202,47 +193,6 @@ app = FastAPI(
 app.state.limiter = limiter
 
 
-@app.middleware("http")
-async def sanitize_public_provider_metadata(request: Request, call_next):
-    response = await call_next(request)
-    if not any(request.url.path.startswith(path) for path in _PUBLIC_PROVIDER_RESPONSE_PATHS):
-        return response
-
-    content_type = response.headers.get("content-type", "")
-    if "application/json" not in content_type:
-        return response
-
-    body_iterator = getattr(response, "body_iterator", None)
-    if body_iterator is None:
-        return response
-
-    body = b"".join([chunk async for chunk in body_iterator])
-    try:
-        payload = json.loads(body)
-    except (TypeError, ValueError):
-        return Response(
-            content=body,
-            status_code=response.status_code,
-            headers={
-                key: value
-                for key, value in response.headers.items()
-                if key.lower() != "content-length"
-            },
-            media_type=response.media_type,
-        )
-
-    headers = {
-        key: value
-        for key, value in response.headers.items()
-        if key.lower() not in {"content-length", "content-type"}
-    }
-    return JSONResponse(
-        content=_sanitize_public_payload(payload),
-        status_code=response.status_code,
-        headers=headers,
-    )
-
-
 def _rate_limit_handler(request: Request, exc: Exception) -> Response:
     return _rate_limit_exceeded_handler(request, exc)  # type: ignore[arg-type]
 
@@ -277,7 +227,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-def custom_openapi():
+def custom_openapi() -> dict[str, Any]:
     if app.openapi_schema:
         return app.openapi_schema
     schema = get_openapi(
@@ -297,8 +247,11 @@ def custom_openapi():
         {"OAuth2PasswordBearer": []},
         {"HTTPBearer": []},
     ]
-    app.openapi_schema = _sanitize_public_payload(schema)
-    return app.openapi_schema
+    sanitized_schema = _sanitize_public_payload(schema)
+    if not isinstance(sanitized_schema, dict):
+        raise TypeError("OpenAPI sanitizado deve ser um dicionario")
+    app.openapi_schema = sanitized_schema
+    return sanitized_schema
 
 
 app.openapi = custom_openapi  # type: ignore[method-assign]
