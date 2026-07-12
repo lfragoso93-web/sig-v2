@@ -59,6 +59,8 @@ class CSVRowValidation(BaseModel):
     warnings: list[str] = []
     status: str
     ticker: Optional[str] = None
+    resolved_ticker: Optional[str] = None
+    ticker_resolution_status: Optional[str] = None
     operation: Optional[str] = None
     quantity: Optional[float] = None
 
@@ -95,8 +97,8 @@ class ClassTargetWithCurrent(BaseModel):
     label: str
     target_pct: float = Field(description="Meta configurada (0 se nao definida)")
     current_pct: float = Field(description="Percentual atual da carteira")
-    delta_pct: float   = Field(description="current_pct - target_pct")
-    color: str         = Field(description="Cor hex para uso no grafico")
+    delta_pct: float = Field(description="current_pct - target_pct")
+    color: str = Field(description="Cor hex para uso no grafico")
 
     class Config:
         from_attributes = True
