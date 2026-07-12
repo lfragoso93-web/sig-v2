@@ -3,6 +3,7 @@ from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction
 from app.models.portfolio_position import PortfolioPosition
 from app.models.asset import Asset
+from app.models.asset_alias import AssetAlias
 from app.models.asset_price import AssetPrice
 from app.models.dividend import Dividend
 from app.models.asset_dividend import AssetDividend
@@ -20,7 +21,7 @@ from app.models.audit_log import AuditLog, AuditAction
 
 __all__ = [
     'User', 'Portfolio', 'Transaction', 'PortfolioPosition',
-    'Asset', 'AssetPrice', 'Dividend', 'AssetDividend',
+    'Asset', 'AssetAlias', 'AssetPrice', 'Dividend', 'AssetDividend',
     'FixedIncomeInvestment', 'Goal',
     'PortfolioSnapshot', 'IRPFReport', 'CorporateEvent',
     'AppConfig', 'SystemConfig', 'PortfolioClassTarget',
