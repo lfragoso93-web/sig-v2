@@ -13,13 +13,14 @@ from app.models.corporate_event import CorporateEvent, CorporateEventStatus, Cor
 from app.services.ticker_resolution_service import ResolvedTicker
 
 
-def _event_key(old_ticker: str, new_ticker: str, effective_date: date) -> str:
-    return f"ticker-change:{old_ticker}:{new_ticker}:{effective_date.isoformat()}"
+def _event_key(portfolio_id: int, old_ticker: str, new_ticker: str, effective_date: date) -> str:
+    return f"ticker-change:{portfolio_id}:{old_ticker}:{new_ticker}:{effective_date.isoformat()}"
 
 
 async def register_ticker_change(
     db: AsyncSession,
     *,
+    portfolio_id: int,
     old_asset: Asset,
     resolution: ResolvedTicker,
 ) -> CorporateEvent | None:
@@ -62,6 +63,7 @@ async def register_ticker_change(
         await db.flush()
 
     event_key = _event_key(
+        portfolio_id,
         resolution.requested_ticker,
         resolution.current_ticker,
         resolution.effective_date,
@@ -75,15 +77,13 @@ async def register_ticker_change(
 
     event = CorporateEvent(
         asset_id=old_asset.id,
+        portfolio_id=portfolio_id,
         ticker=resolution.requested_ticker,
         event_type=CorporateEventType.TICKER_CHANGE,
         status=CorporateEventStatus.PENDENTE,
         event_date=resolution.effective_date,
         ratio=Decimal("1"),
-        description=(
-            f"Ticker alterado de {resolution.requested_ticker} "
-            f"para {resolution.current_ticker}"
-        ),
+        description=f"Ticker alterado para {resolution.current_ticker}",
         brapi_event_id=event_key,
         raw_data=json.dumps({
             "old_ticker": resolution.requested_ticker,
