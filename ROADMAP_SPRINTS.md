@@ -74,6 +74,25 @@
 - [x] Testes de upload, dry-run e persistência.
 - [x] Validação funcional do contrato de importação integral após pré-validação.
 
+### 5J-D — Administração de usuários — Issue #98
+
+- [x] Implementar serviços de criação, listagem, edição e exclusão.
+- [x] Corrigir edição de nome, papel e status do usuário.
+- [x] Revisar permissões de superadmin.
+- [x] Proteger o último superadmin.
+- [x] Ajustar schemas usados pelo painel administrativo.
+- [x] Migrar o painel para os tokens visuais atuais.
+- [x] Validar isolamento de dados entre contas em QA funcional.
+
+### 5J-E — Compliance — Issue #80
+
+- [x] Mapear referências explícitas em documentos públicos principais.
+- [x] Remover nomes explícitos do README, changelog, roadmap e documentos auxiliares.
+- [x] Revisar Swagger/OpenAPI e mensagens públicas.
+- [x] Manter detalhes técnicos somente em módulos internos e logs protegidos.
+- [x] Introduzir variáveis de ambiente genéricas com fallback para nomes legados.
+- [x] Adicionar testes automatizados de compliance documental, API e configuração.
+
 ### 5J-F — Proventos históricos e robustez
 
 - [x] Página vinculada somente à carteira global do topbar.
@@ -102,29 +121,9 @@
 - [x] Invalidar caches após alterações e exclusões.
 - [x] Executar QA com carteiras contendo todas as classes de ativos.
 
-### 5J-D — Administração de usuários — Issue #98
-
-- [x] Implementar serviços de criação, listagem, edição e exclusão.
-- [x] Corrigir edição de nome, papel e status do usuário.
-- [x] Revisar permissões de superadmin.
-- [x] Proteger o último superadmin.
-- [x] Ajustar schemas usados pelo painel administrativo.
-- [x] Migrar o painel para os tokens visuais atuais.
-- [x] Validar isolamento de dados entre contas em QA funcional.
-
 ---
 
 ## 🔄 Próximas entregas prioritárias
-
-### 5J-E — Compliance — Issue #80
-
-- [x] Mapear referências explícitas em documentos públicos principais.
-- [x] Remover nomes explícitos do README, changelog e roadmap.
-- [ ] Revisar documentos públicos auxiliares.
-- [ ] Revisar Swagger/OpenAPI e mensagens públicas.
-- [ ] Manter detalhes técnicos apenas em arquivos internos e configuração.
-- [ ] Preservar compatibilidade das variáveis de ambiente existentes.
-- [ ] Adicionar proteção automatizada contra regressões documentais.
 
 ### 5J-C — Backup/Restore — Issue #83
 
@@ -172,6 +171,13 @@
 - [ ] Histórico de preços.
 - [ ] Histórico de proventos.
 - [ ] Posição, custo médio e resultado.
+
+### Backlog arquitetural — Provedores configuráveis — Issue #127
+
+- [ ] Criar registry/factory de provedores por capacidade.
+- [ ] Permitir configuração pelo Superadmin com credenciais criptografadas.
+- [ ] Preservar fallback para `.env`.
+- [ ] Adicionar health check, teste de conexão, auditoria e rollback.
 
 ---
 
