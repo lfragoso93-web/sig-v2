@@ -16,8 +16,11 @@ alembic upgrade 022
 echo "[entrypoint] Migrando dados de treasury_investments -> transactions..."
 python -m scripts.migrate_treasury
 
-echo "[entrypoint] Executando migrations restantes (023+)..."
-alembic upgrade head
+echo "[entrypoint] Heads Alembic detectadas:"
+alembic heads
+
+echo "[entrypoint] Executando migrations restantes em todas as branches (023+)..."
+alembic upgrade heads
 
 echo "[entrypoint] Garantindo tabelas opcionais usadas pelo ORM..."
 python - <<'PY'
