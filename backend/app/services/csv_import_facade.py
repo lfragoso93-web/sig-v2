@@ -17,6 +17,7 @@ from app.services.csv_import_service import (
 )
 from app.services.csv_ticker_resolution import enrich_csv_dry_run_with_ticker_resolution
 from app.services.ticker_change_event_service import register_ticker_change
+from app.services.ticker_change_processor import apply_pending_ticker_changes
 from app.services.ticker_resolution_service import ResolvedTicker
 
 
@@ -84,6 +85,7 @@ async def _build_dry_run_result(
 async def _register_historical_aliases(
     result: dict[str, Any],
     *,
+    portfolio_id: int,
     db: AsyncSession,
 ) -> None:
     for row in result.get("rows", []):
@@ -112,6 +114,7 @@ async def _register_historical_aliases(
 
         await register_ticker_change(
             db,
+            portfolio_id=portfolio_id,
             old_asset=old_asset,
             resolution=ResolvedTicker(
                 requested_ticker=ticker,
@@ -151,10 +154,18 @@ async def import_transactions_csv(
     if dry_run or not validation.get("success"):
         return validation
 
-    await _register_historical_aliases(validation, db=db)
-    return await import_csv_transactions(
+    await _register_historical_aliases(
+        validation,
+        portfolio_id=portfolio_id,
+        db=db,
+    )
+    result = await import_csv_transactions(
         content=content,
         portfolio_id=portfolio_id,
         user_id=user_id,
         db=db,
     )
+    if result.get("success"):
+        await apply_pending_ticker_changes(db, portfolio_id)
+        await db.commit()
+    return result
