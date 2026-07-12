@@ -1,7 +1,9 @@
 """Aplicacao idempotente de trocas de ticker em carteiras."""
 
 import json
+from dataclasses import dataclass
 from datetime import datetime
+from typing import Iterable
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,12 +15,58 @@ from app.models.transaction import OperationType, Transaction
 _MARKER_PREFIX = "Evento corporativo - troca de ticker"
 
 
+@dataclass(frozen=True)
+class PositionAtEvent:
+    quantity: float
+    total_cost: float
+    asset_type: str
+    currency: str
+
+    @property
+    def average_price(self) -> float:
+        return self.total_cost / self.quantity if self.quantity > 0 else 0.0
+
+
 def _is_buy(operation: object) -> bool:
     return operation == OperationType.buy or str(operation).lower() == "buy"
 
 
 def _is_sell(operation: object) -> bool:
     return operation == OperationType.sell or str(operation).lower() == "sell"
+
+
+def calculate_position_at_event(transactions: Iterable[Transaction]) -> PositionAtEvent:
+    quantity = 0.0
+    total_cost = 0.0
+    asset_type = "ACAO"
+    currency = "BRL"
+
+    for tx in transactions:
+        qty = float(tx.quantity or 0)
+        price = float(tx.price or 0)
+        fees = float(tx.fees or 0)
+        asset_type = str(tx.asset_type)
+        currency = str(tx.currency or "BRL")
+
+        if _is_buy(tx.operation):
+            quantity += qty
+            total_cost += qty * price + fees
+        elif _is_sell(tx.operation) and quantity > 0:
+            sold = min(qty, quantity)
+            fraction = sold / quantity
+            total_cost -= total_cost * fraction
+            quantity -= sold
+
+    if quantity <= 1e-9:
+        quantity = 0.0
+        total_cost = 0.0
+
+    return PositionAtEvent(
+        quantity=quantity,
+        total_cost=total_cost,
+        asset_type=asset_type,
+        currency=currency,
+    )
 
 
 async def apply_ticker_change_event(
@@ -57,43 +105,22 @@ async def apply_ticker_change_event(
         )
         .order_by(Transaction.date, Transaction.id)
     )
+    position = calculate_position_at_event(tx_result.scalars().all())
 
-    quantity = 0.0
-    total_cost = 0.0
-    asset_type = "ACAO"
-    currency = "BRL"
-
-    for tx in tx_result.scalars().all():
-        qty = float(tx.quantity or 0)
-        price = float(tx.price or 0)
-        fees = float(tx.fees or 0)
-        asset_type = str(tx.asset_type)
-        currency = str(tx.currency or "BRL")
-
-        if _is_buy(tx.operation):
-            quantity += qty
-            total_cost += qty * price + fees
-        elif _is_sell(tx.operation) and quantity > 0:
-            sold = min(qty, quantity)
-            fraction = sold / quantity
-            total_cost -= total_cost * fraction
-            quantity -= sold
-
-    if quantity <= 1e-9:
+    if position.quantity <= 0:
         event.status = CorporateEventStatus.APLICADO
         event.applied_at = datetime.utcnow()
         await db.flush()
         return False
 
-    average_price = total_cost / quantity if quantity else 0.0
     common = {
         "portfolio_id": event.portfolio_id,
-        "asset_type": asset_type,
-        "quantity": quantity,
-        "price": average_price,
+        "asset_type": position.asset_type,
+        "quantity": position.quantity,
+        "price": position.average_price,
         "fees": 0.0,
         "date": event.event_date,
-        "currency": currency,
+        "currency": position.currency,
         "notes": marker,
     }
     db.add(Transaction(ticker=old_ticker, operation=OperationType.sell, **common))
