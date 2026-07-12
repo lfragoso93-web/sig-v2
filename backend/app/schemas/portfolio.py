@@ -59,8 +59,11 @@ class CSVRowValidation(BaseModel):
     warnings: list[str] = []
     status: str
     ticker: Optional[str] = None
+    asset_type: Optional[str] = None
+    date: Optional[str] = None
     resolved_ticker: Optional[str] = None
     ticker_resolution_status: Optional[str] = None
+    ticker_effective_date: Optional[str] = None
     operation: Optional[str] = None
     quantity: Optional[float] = None
 
