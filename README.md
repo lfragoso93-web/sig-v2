@@ -7,65 +7,58 @@ A branch padrão de desenvolvimento é `stable-15jun`.
 
 ---
 
-## Status atual — 11/07/2026
+## Status atual — 13/07/2026
 
-A entrega atual consolida a camada financeira, conclui correções relevantes da página Resumo e amplia a segurança dos fluxos administrativos antes das próximas sprints.
+A entrega atual amplia a integridade histórica da carteira, moderniza a integração com dados de mercado e melhora os fluxos de importação e gerenciamento de carteiras.
 
-### Principais entregas
+### Novidades da versão
 
-- Serviço canônico de KPIs para Resumo, Patrimônio, Rentabilidade e endpoints de performance.
-- Evolução patrimonial diária e mensal com manutenção automática de snapshots e fallback histórico.
-- KPIs atuais, resultados realizados, retorno mensal e retorno de 12 meses alinhados.
-- Variação diária por classe separada da rentabilidade acumulada.
-- Menu de ações dos ativos renderizado fora da tabela, sem corte em carteiras com poucas posições.
-- Importação CSV autenticada com modelo, preview, `dry_run`, persistência, mensagens em português, bloqueio de importação inválida e invalidação de cache.
-- Isolamento de carteiras por usuário, inclusive superadmins.
-- Exclusão de carteira com limpeza explícita das entidades dependentes e preservação do histórico de auditoria.
-- Administração de usuários com edição de perfil e papel, validações de segurança e proteção do último superadmin.
-- Proventos vinculados exclusivamente à carteira selecionada no topbar.
-- Seed histórico de proventos idempotente, com complemento histórico e materialização por posição elegível.
-- Tratamento de tickers sem histórico e cache temporário de indisponibilidade.
-- Tesouro Direto com catálogo canônico e fallback de preços por fonte oficial secundária para RendA+ e Educa+.
-- Seletores locais de carteira removidos das páginas Proventos e Rentabilidade.
+- Cliente isolado para a API v2 do provedor principal de mercado.
+- Resolução automática de tickers antigos e renomeados.
+- Validação temporal de ticker pela data efetiva do renome.
+- Persistência de aliases históricos de ativos.
+- Fundação do motor de eventos corporativos com suporte inicial a `TICKER_CHANGE`.
+- Conversão automática de saldo remanescente para o ticker atual sem alterar transações históricas.
+- Reconstrução automática de snapshots diários após importação CSV.
+- Recalculo histórico da rentabilidade após lançamentos retroativos.
+- Filtros interativos nos cards de linhas válidas, avisos e erros do CSV.
+- Edição de nome e descrição de carteiras pelo próprio usuário.
+- Correções no fluxo Alembic para ambientes com múltiplas heads válidas.
 
-### Validação disponível
+### Principais entregas consolidadas
 
-- Cobertura backend ampliada para portfolio, importação CSV e administração de usuários.
-- Teste frontend dedicado ao comportamento da tabela de posições.
-- Fluxos de build, typecheck e Docker Compose mantidos como critérios obrigatórios antes do merge.
-- Resumo, administração de usuários e importação CSV validados funcionalmente e consolidados na `main`.
+- Serviço canônico de KPIs para Resumo, Patrimônio e Rentabilidade.
+- Evolução patrimonial diária e mensal com snapshots automáticos.
+- Importação CSV autenticada com preview, `dry_run`, persistência e validação integral.
+- Isolamento de carteiras por usuário e exclusão segura com auditoria preservada.
+- Administração de usuários com proteção do último superadmin.
+- Proventos vinculados à carteira selecionada no topbar.
+- Tesouro Direto com catálogo canônico e fallback de preços.
 
 ---
 
 ## Próximos focos
 
-1. Concluir compliance da documentação pública, OpenAPI e mensagens expostas (#80).
-2. Implementar a primeira fase segura de Backup/Restore (#83), começando pela geração de backup.
-3. Implementar Google OAuth (#97).
-4. Refinar a experiência da página Patrimônio (#90).
-5. Avançar em Análise de Carteira (#57), Janela Global do Ativo (#58) e IRPF (#56).
+1. Continuar o motor de eventos corporativos e a integração complementar com HG Brasil (#129).
+2. Avançar na cobertura por ticker e no enriquecimento de ativos via API v2 (#130).
+3. Implementar a primeira fase segura de Backup/Restore (#83).
+4. Implementar Google OAuth (#97).
+5. Refinar a experiência da página Patrimônio (#90).
+6. Evoluir Proventos, Análise de Carteira, Janela Global do Ativo e IRPF (#131, #57, #58 e #56).
 
 ---
 
 ## Funcionalidades implementadas
 
-### Resumo e Patrimônio
+### Resumo, Patrimônio e Rentabilidade
 
 - KPIs consolidados de patrimônio, investido, resultado, proventos e variação atual.
 - Evolução diária e mensal com filtros de período.
 - Distribuição por classe e metas de alocação.
-- Variação diária por classe calculada a partir do preço de referência anterior.
-- Rentabilidade acumulada incluindo resultado de capital e proventos.
-- Menu contextual dos ativos com posicionamento responsivo via portal.
-- Score HHI, Top 5 posições e desvio da alocação ideal.
-
-### Rentabilidade
-
-- KPIs atuais vindos da fonte financeira canônica.
+- Variação diária por classe separada da rentabilidade acumulada.
 - Ganho realizado e não realizado.
 - Retorno mensal, 12 meses e desde o início.
-- Gráfico mensal com benchmarks.
-- Distribuição por classe e tabela por ativo.
+- Snapshots diários reconstruídos automaticamente após importações retroativas.
 
 ### Proventos
 
@@ -73,34 +66,33 @@ A entrega atual consolida a camada financeira, conclui correções relevantes da
 - Data Com, Data Ex e pagamento separados.
 - Materialização por carteira conforme posição elegível.
 - Histórico completo por ativo, com seed idempotente.
-- Filtros por status, classe, tipo e ano.
-- Eventos não-cash fora dos totais financeiros.
+- Eventos não monetários fora dos totais financeiros.
 
 ### Importação CSV
 
-- Modelo oficial para download.
-- Preview antes da importação.
-- Validação linha a linha.
-- `dry_run` e persistência efetiva.
-- Importação bloqueada enquanto existirem erros, linhas ignoradas ou falhas globais.
-- Mensagens localizadas e atualização dos caches financeiros.
+- Modelo oficial, preview, validação linha a linha e `dry_run`.
+- Bloqueio enquanto existirem erros, avisos impeditivos ou falhas globais.
+- Cards clicáveis para filtrar linhas válidas, avisos e erros.
+- Resolução de tickers antigos com validação pela data da operação.
+- Rebuild automático de snapshots e invalidação de caches financeiros.
 
-### Tesouro Direto
+### Eventos corporativos e aliases
 
-- Catálogo canônico de títulos.
-- Histórico e preços atuais.
-- Suporte a Selic, Prefixado, IPCA+, RendA+ e Educa+.
-- Fallback oficial para títulos sem preço no provedor primário.
+- Modelo de aliases históricos de ativos.
+- Detecção de renome de ticker via API v2.
+- Evento corporativo `TICKER_CHANGE` idempotente por carteira.
+- Conversão automática de saldo remanescente para o ticker atual.
+- Preservação das compras e vendas históricas originais.
+- Preparação para splits, grupamentos, bonificações, incorporações e conversões futuras.
 
-### Conta, administração e configurações
+### Conta e administração
 
 - Login JWT com refresh token rotativo.
 - Recuperação e alteração autenticada de senha.
 - Carteiras isoladas por usuário.
-- Exclusão segura de carteiras e dados dependentes.
+- Criação, edição e exclusão segura de carteiras.
 - Administração de usuários com edição de nome, papel e status.
 - Proteção contra remoção do último superadmin.
-- Configuração de metas de alocação.
 
 ---
 
@@ -134,50 +126,14 @@ A entrega atual consolida a camada financeira, conclui correções relevantes da
 
 ---
 
-## Estrutura do projeto
-
-```text
-sig-v2/
-├── backend/
-├── frontend/
-├── docs/
-├── docker-compose.yml
-├── docker-compose.prod.yml
-├── CHANGELOG.md
-├── ROADMAP_SPRINTS.md
-└── README.md
-```
-
----
-
 ## Como rodar
-
-### Docker
 
 ```bash
 cp .env.example .env
 docker compose up -d --build
 ```
 
-- Frontend: `http://localhost:5173`
-- Backend: `http://localhost:8000`
-- Swagger: `http://localhost:8000/docs`
-
-### Desenvolvimento local
-
-```bash
-# Backend
-cd backend
-python -m venv .venv
-pip install -r requirements.txt
-alembic upgrade head
-uvicorn app.main:app --reload
-
-# Frontend
-cd frontend
-npm install
-npm run dev
-```
+Para ambientes com múltiplas heads Alembic válidas, o entrypoint aplica `alembic upgrade heads`.
 
 ---
 
@@ -187,7 +143,7 @@ npm run dev
 |---|---|
 | `CHANGELOG.md` | Histórico de mudanças |
 | `ROADMAP_SPRINTS.md` | Entregas e próximas sprints |
+| Inventário técnico da integração de mercado | Arquitetura e contrato da API v2 |
+| `docs/CSV_IMPORT_PIPELINE.md` | Fluxo de validação, importação e rebuild de snapshots |
+| `docs/CORPORATE_ACTIONS.md` | Fundação do motor de eventos corporativos |
 | `docs/REVISAO_INTERFACE.md` | Baseline visual e responsivo |
-| `SUMARIO_EXECUTIVO.md` | Visão executiva |
-| `GAPS_ANALISE_COMPLETA.md` | Gaps identificados |
-| `PLANO_ACAO_EXECUTAVEL.md` | Plano de ação |

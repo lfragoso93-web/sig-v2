@@ -8,6 +8,7 @@ class CorporateEventType(str, enum.Enum):
     DESDOBRAMENTO = "DESDOBRAMENTO"
     GRUPAMENTO = "GRUPAMENTO"
     BONIFICACAO = "BONIFICACAO"
+    TICKER_CHANGE = "TICKER_CHANGE"
 
 
 class CorporateEventStatus(str, enum.Enum):

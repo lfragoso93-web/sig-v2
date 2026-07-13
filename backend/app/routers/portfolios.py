@@ -32,6 +32,8 @@ from app.services.class_target_service import (
     VALID_ASSET_CLASSES,
 )
 from app.services.rentabilidade_service import flush_rentabilidade_cache
+from app.services.csv_ticker_resolution import enrich_csv_dry_run_with_ticker_resolution
+from app.services.csv_snapshot_rebuild_service import rebuild_snapshots_after_csv_import
 from app.services import csv_import_service
 import logging
 
@@ -280,6 +282,7 @@ async def backfill_portfolio_snapshots(
 @router.post("/{portfolio_id}/import-csv", response_model=CSVImportResponse)
 async def import_portfolio_csv(
     portfolio_id: int,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     dry_run: bool = True,
     db: AsyncSession = Depends(get_db),
@@ -293,7 +296,10 @@ async def import_portfolio_csv(
         file=file,
         dry_run=dry_run,
     )
+    if dry_run:
+        result = await enrich_csv_dry_run_with_ticker_resolution(result)
     result = _localize_csv_result(result)
     if not dry_run and result.get("imported_count", 0) > 0:
         await _refresh_after_csv_import(portfolio_id)
+        background_tasks.add_task(rebuild_snapshots_after_csv_import, portfolio_id)
     return result

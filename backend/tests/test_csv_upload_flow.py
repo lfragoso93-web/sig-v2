@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.routers.portfolios import _localize_csv_message, import_portfolio_csv
@@ -115,6 +116,7 @@ def test_csv_messages_are_localized():
 async def test_router_refreshes_caches_after_real_import():
     db = AsyncMock(spec=AsyncSession)
     current_user = SimpleNamespace(id=11)
+    background_tasks = BackgroundTasks()
     service_result = {
         "success": True,
         "imported_count": 2,
@@ -142,6 +144,7 @@ async def test_router_refreshes_caches_after_real_import():
             portfolio_id=5,
             file=FakeUpload(b"csv"),
             dry_run=False,
+            background_tasks=background_tasks,
             db=db,
             current_user=current_user,
         )
@@ -149,4 +152,6 @@ async def test_router_refreshes_caches_after_real_import():
     get_portfolio.assert_awaited_once_with(db, 5, 11)
     invalidate.assert_awaited_once_with(5)
     flush_rentabilidade.assert_awaited_once_with(5)
+    assert len(background_tasks.tasks) == 1
+    assert background_tasks.tasks[0].args == (5,)
     assert result["imported_count"] == 2

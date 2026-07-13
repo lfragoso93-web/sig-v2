@@ -1,6 +1,6 @@
 # Roadmap de Sprints — SGI v2
 
-> Última atualização: 11/07/2026
+> Última atualização: 13/07/2026
 
 ---
 
@@ -27,112 +27,84 @@
 - Resumo, Patrimônio, Rentabilidade, Proventos e interface responsiva.
 - Gráficos, benchmarks, distribuição por classe e metas.
 
-### Sprint 5G/5H — Pipeline de mercado e proventos
-- Eventos corporativos completos.
-- Data Com, Data Ex e pagamento.
-- Materialização por carteira.
-- Validação de eventos cash e não-cash.
+### Sprint 5J — Estabilização funcional e contratos operacionais
 
-### Sprint 5I — Auth, dependências e CI
-- Recuperação e alteração de senha.
-- Correção do build Vite em Docker.
-- Atualizações Dependabot e GitHub Actions.
+- [x] KPIs canônicos para Resumo, Patrimônio e Rentabilidade.
+- [x] Variação diária separada da rentabilidade acumulada.
+- [x] Importação CSV autenticada, integral e com `dry_run`.
+- [x] Administração de usuários e proteção do último superadmin.
+- [x] Compliance de documentação pública e contratos expostos.
+- [x] Proventos históricos, Tesouro Direto e integridade de carteiras.
+- [x] Exclusão segura de carteiras com auditoria preservada.
 
-### Sprint 6B/6C/6E — Patrimônio analítico e revisão visual
-- Score HHI, Top 5 posições e desvio de metas.
-- Limpeza de rotas legadas.
-- Baseline visual e responsivo consolidado.
+### Sprint 5K — Integridade histórica e modernização de dados
+
+- [x] Inventário da integração atual com dados de mercado.
+- [x] Cliente isolado para API v2.
+- [x] Resolução de tickers antigos em lotes.
+- [x] Persistência de aliases históricos.
+- [x] Validação temporal de renome pela data da operação.
+- [x] Filtros interativos no modal de importação CSV.
+- [x] Rebuild automático de snapshots após importação.
+- [x] Edição de nome e descrição de carteiras.
+- [x] Teste estrutural contra IDs Alembic duplicados.
+- [x] Suporte do entrypoint a múltiplas heads Alembic válidas.
 
 ---
 
-## ✅ Sprint 5J — Estabilização funcional e contratos operacionais
+## 🔄 Em desenvolvimento
 
-### 5J-A — Resumo e consolidação financeira — Issue #124
+### Motor de Eventos Corporativos — Issue #129
 
-- [x] Unificar KPIs de Resumo, Patrimônio e Rentabilidade.
-- [x] Criar serviço canônico de patrimônio e resultado.
-- [x] Corrigir resultados negativos e semântica dos cards.
-- [x] Restaurar evolução diária e mensal.
-- [x] Automatizar manutenção de snapshots.
-- [x] Corrigir ganho realizado, retorno mensal e retorno de 12 meses.
-- [x] Remover seletores locais de carteira em Rentabilidade e Proventos.
-- [x] Corrigir dropdown/lista suspensa cortada na tabela do Resumo.
-- [x] Separar variação diária da rentabilidade acumulada por classe.
-- [x] Adicionar teste frontend para a tabela de posições.
-- [x] Validar carteira vazia, apenas renda fixa e posições zeradas.
+#### Fundação concluída
 
-### 5J-B — Importação CSV — Issue #82
+- [x] Adicionar tipo `TICKER_CHANGE`.
+- [x] Registrar alias histórico e evento idempotente por carteira.
+- [x] Calcular saldo remanescente na data efetiva.
+- [x] Preservar quantidade, custo total e preço médio.
+- [x] Manter compras e vendas históricas intactas.
+- [x] Aplicar conversão automática simples 1:1.
 
-- [x] Modelo CSV para download.
-- [x] Preview antes da importação.
-- [x] Upload autenticado.
-- [x] `dry_run` e persistência efetiva.
-- [x] Validação linha a linha.
-- [x] Mensagens em português.
-- [x] Bloquear confirmação enquanto houver erros, linhas ignoradas ou falhas globais.
-- [x] Invalidação dos caches financeiros.
-- [x] Testes de upload, dry-run e persistência.
-- [x] Validação funcional do contrato de importação integral após pré-validação.
+#### Próximos blocos
 
-### 5J-D — Administração de usuários — Issue #98
+- [ ] Executar spike técnico com HG Brasil.
+- [ ] Mapear splits, grupamentos e cobertura por classe.
+- [ ] Implementar providers de eventos corporativos.
+- [ ] Adicionar simulação, confirmação e rollback.
+- [ ] Cobrir bonificações, incorporações, fusões e conversões complexas.
+- [ ] Criar administração e auditoria operacional dos eventos.
 
-- [x] Implementar serviços de criação, listagem, edição e exclusão.
-- [x] Corrigir edição de nome, papel e status do usuário.
-- [x] Revisar permissões de superadmin.
-- [x] Proteger o último superadmin.
-- [x] Ajustar schemas usados pelo painel administrativo.
-- [x] Migrar o painel para os tokens visuais atuais.
-- [x] Validar isolamento de dados entre contas em QA funcional.
+### Evolução da integração de mercado v2 — Issue #130
 
-### 5J-E — Compliance — Issue #80
+#### Fundação concluída
 
-- [x] Mapear referências explícitas em documentos públicos principais.
-- [x] Remover nomes explícitos do README, changelog, roadmap e documentos auxiliares.
-- [x] Revisar Swagger/OpenAPI e mensagens públicas.
-- [x] Manter detalhes técnicos somente em módulos internos e logs protegidos.
-- [x] Introduzir variáveis de ambiente genéricas com fallback para nomes legados.
-- [x] Adicionar testes automatizados de compliance documental, API e configuração.
+- [x] Inventariar endpoints e consumidores atuais.
+- [x] Criar cliente v2 e DTO interno de resolução.
+- [x] Resolver tickers antigos antes da importação.
+- [x] Tratar falhas de rede, HTTP e payload inválido sem interromper o CSV.
+- [x] Integrar renomes ao motor de eventos corporativos.
 
-### 5J-F — Proventos históricos e robustez
+#### Próximos blocos
 
-- [x] Página vinculada somente à carteira global do topbar.
-- [x] Seed histórico completo por ativo.
-- [x] Fonte principal de dados com complemento histórico.
-- [x] Materialização por posição elegível.
-- [x] UPSERT idempotente pela constraint de evento.
-- [x] Tratamento de tickers indisponíveis e cooldown temporário.
-- [x] Redução de ruído do coletor histórico.
-- [ ] Adicionar testes específicos de reexecução e indisponibilidade.
-- [ ] Revisar consistência entre total recebido e KPIs canônicos.
-
-### 5J-G — Tesouro Direto
-
-- [x] Catálogo canônico de títulos.
-- [x] Normalização de RendA+ e Educa+.
-- [x] Histórico e snapshots em `asset_prices`.
-- [x] Fallback por fonte oficial secundária para títulos sem preço no provedor primário.
-- [ ] Validar localmente preços de todos os RendA+ mantidos em carteira.
-- [ ] Adicionar testes do fallback de preço.
-
-### 5J-H — Integridade de carteiras
-
-- [x] Excluir dependências da carteira de forma explícita.
-- [x] Preservar registros de auditoria desacoplando `portfolio_id` antes da exclusão.
-- [x] Invalidar caches após alterações e exclusões.
-- [x] Executar QA com carteiras contendo todas as classes de ativos.
+- [ ] Integrar endpoint de cobertura por ticker.
+- [ ] Persistir cobertura e data da última verificação.
+- [ ] Migrar gradualmente cotações, histórico e proventos para DTOs internos.
+- [ ] Separar bonificações e subscrições de proventos monetários.
+- [ ] Enriquecer FIIs com indicadores, imóveis, vacância, carteira e relatórios.
+- [ ] Enriquecer ações com fundamentos e demonstrações financeiras.
+- [ ] Integrar câmbio histórico e macroeconomia como fonte complementar.
 
 ---
 
 ## 🔄 Próximas entregas prioritárias
 
-### 5J-C — Backup/Restore — Issue #83
+### Backup/Restore — Issue #83
 
 - [ ] Implementar geração autenticada de backup para download.
 - [ ] Adicionar checksum, lock e auditoria da operação.
 - [ ] Definir retenção e limpeza de arquivos temporários.
 - [ ] Validar restore em ambiente isolado.
 - [ ] Projetar restore controlado como fase posterior.
-- [x] Simplificar a interface administrativa removendo ações ainda não suportadas.
 
 ### Auth — Issue #97
 
@@ -140,11 +112,18 @@
 - [ ] Vincular conta social a usuário existente.
 - [ ] Cobrir login, callback e erros.
 
-### UX — Issue #90
+### UX Patrimônio — Issue #90
 
-- [ ] Reorganizar a página Patrimônio em cards claros e responsivos.
+- [ ] Reorganizar a página em cards claros e responsivos.
 - [ ] Preservar os contratos financeiros canônicos.
 - [ ] Separar composição, metas, concentração e posições.
+
+### UX Proventos — Issue #131
+
+- [ ] Exibir tooltip mensal com detalhamento por classe.
+- [ ] Respeitar filtros ativos e conciliar o total mensal.
+- [ ] Suportar hover, teclado e toque.
+- [ ] Evitar cortes por overflow usando portal quando necessário.
 
 ---
 
