@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+from decimal import Decimal
 
-from sqlalchemy import func, select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.portfolio_snapshot import PortfolioSnapshot
+from app.services.twr_service import compound_return_pcts
 
 
 def snapshot_to_enriched_payload(
@@ -86,16 +88,14 @@ async def get_enriched_monthly_evolution(
 
     payloads: list[dict] = []
     for month_rows in grouped.values():
-        factor = 1.0
-        for row in month_rows:
-            factor *= 1.0 + float(row.daily_return_pct) / 100.0
-        monthly_return = (factor - 1.0) * 100.0
-
+        monthly_return = compound_return_pcts(
+            Decimal(str(row.daily_return_pct)) for row in month_rows
+        )
         payload = snapshot_to_enriched_payload(
             month_rows[-1],
             include_monthly_aliases=True,
         )
-        payload["monthly_return_pct"] = monthly_return
+        payload["monthly_return_pct"] = float(monthly_return)
         payloads.append(payload)
 
     return payloads
