@@ -74,6 +74,15 @@ jobs:
             exit 1
           fi
 
+      - name: Upload pytest failure log
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: pytest-failure-log
+          path: backend/pytest.log
+          if-no-files-found: error
+          retention-days: 3
+
   frontend-quality:
     name: Frontend – lint, type check and build
     runs-on: ubuntu-latest
