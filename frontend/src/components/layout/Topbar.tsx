@@ -1,10 +1,11 @@
-import { Sun, Moon, Menu, Plus, Briefcase, ChevronDown, CheckCircle2, Trash2 } from 'lucide-react'
+import { Sun, Moon, Menu, Plus, Briefcase, ChevronDown, CheckCircle2, Trash2, Pencil } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { useAppStore } from '@/store/appStore'
 import UserMenu from './UserMenu'
-import { useDeletePortfolio, usePortfolios } from '@/hooks/usePortfolios'
+import { Portfolio, useDeletePortfolio, usePortfolios } from '@/hooks/usePortfolios'
 import LogoSGI from '@/components/ui/LogoSGI'
 import CreatePortfolioModal from '@/components/modals/CreatePortfolioModal'
+import EditPortfolioModal from '@/components/modals/EditPortfolioModal'
 
 function PortfolioSelector() {
   const { data: portfolios = [], isLoading } = usePortfolios()
@@ -12,6 +13,7 @@ function PortfolioSelector() {
   const deletePortfolio = useDeletePortfolio()
   const [open, setOpen] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
+  const [editingPortfolio, setEditingPortfolio] = useState<Portfolio | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -146,7 +148,7 @@ function PortfolioSelector() {
           <div
             className="absolute left-0 z-50"
             style={{
-              top: 'calc(100% + 8px)', minWidth: 240,
+              top: 'calc(100% + 8px)', minWidth: 270,
               background: 'var(--color-surface-2)',
               border: '1px solid oklch(from var(--color-text) l c h / 0.08)',
               borderRadius: 'var(--radius-xl)',
@@ -189,6 +191,32 @@ function PortfolioSelector() {
                     {isSelected && (
                       <CheckCircle2 size={12} style={{ color: 'var(--color-primary)', flexShrink: 0, marginLeft: 6 }} />
                     )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={e => {
+                      e.stopPropagation()
+                      setOpen(false)
+                      setEditingPortfolio(p)
+                    }}
+                    title="Editar carteira"
+                    aria-label={`Editar carteira ${p.name}`}
+                    style={{
+                      width: 28, height: 28,
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      borderRadius: 'var(--radius-md)', border: 'none', background: 'transparent',
+                      color: 'var(--color-text-faint)', cursor: 'pointer', flexShrink: 0,
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.background = 'oklch(from var(--color-primary) l c h / 0.1)'
+                      e.currentTarget.style.color = 'var(--color-primary)'
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.background = 'transparent'
+                      e.currentTarget.style.color = 'var(--color-text-faint)'
+                    }}
+                  >
+                    <Pencil size={12} />
                   </button>
                   <button
                     type="button"
@@ -258,6 +286,12 @@ function PortfolioSelector() {
       </div>
 
       {showCreate && <CreatePortfolioModal onClose={() => setShowCreate(false)} />}
+      {editingPortfolio && (
+        <EditPortfolioModal
+          portfolio={editingPortfolio}
+          onClose={() => setEditingPortfolio(null)}
+        />
+      )}
     </>
   )
 }
