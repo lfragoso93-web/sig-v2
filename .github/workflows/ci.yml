@@ -68,7 +68,11 @@ jobs:
 
       - name: Tests (pytest)
         working-directory: backend
-        run: pytest -qq -x --tb=line --disable-warnings
+        run: |
+          if ! pytest -qq -x --tb=line --disable-warnings > pytest.log 2>&1; then
+            tail -n 80 pytest.log
+            exit 1
+          fi
 
   frontend-quality:
     name: Frontend – lint, type check and build
