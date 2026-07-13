@@ -68,7 +68,7 @@ jobs:
 
       - name: Tests (pytest)
         working-directory: backend
-        run: pytest -q --tb=short
+        run: pytest -q --tb=short --disable-warnings
 
   frontend-quality:
     name: Frontend – lint, type check and build
