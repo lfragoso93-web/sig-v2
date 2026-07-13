@@ -4,10 +4,12 @@ from app.core.database import get_db
 from app.core.auth import get_current_user
 from app.models.user import User
 from app.services.performance_service import get_portfolio_performance
-from app.services.portfolio_snapshot_service import (
-    get_daily_evolution,
-    get_monthly_evolution,
-    backfill_snapshots,
+from app.services.portfolio_snapshot_read_service import (
+    get_enriched_daily_evolution,
+    get_enriched_monthly_evolution,
+)
+from app.services.portfolio_snapshot_twr_service import (
+    backfill_snapshots_with_returns,
 )
 from app.models.portfolio import Portfolio
 from sqlalchemy import select
@@ -50,14 +52,9 @@ async def evolution_daily(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Retorna evolucao diaria do patrimonio com base nos snapshots.
-    Cada ponto tem: date, market_value, cost_basis, invested_total,
-    unrealized_pnl, realized_pnl, total_pnl, return_pct.
-    """
+    """Retorna evolução diária patrimonial e de rentabilidade TWR."""
     await _assert_portfolio_owner(db, portfolio_id, current_user.id)
-    data = await get_daily_evolution(db, portfolio_id, days=days)
-    return data
+    return await get_enriched_daily_evolution(db, portfolio_id, days=days)
 
 
 @router.get("/{portfolio_id}/evolution/monthly")
@@ -67,14 +64,9 @@ async def evolution_monthly(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Retorna evolucao mensal do patrimonio (ultimo snapshot de cada mes).
-    Cada ponto tem: date, period, value/market_value, invested/invested_total,
-    unrealized_pnl, realized_pnl, total_pnl, return_pct.
-    """
+    """Retorna o último fechamento de cada mês e o retorno mensal composto."""
     await _assert_portfolio_owner(db, portfolio_id, current_user.id)
-    data = await get_monthly_evolution(db, portfolio_id, months=months)
-    return data
+    return await get_enriched_monthly_evolution(db, portfolio_id, months=months)
 
 
 @router.post("/{portfolio_id}/evolution/backfill")
@@ -84,14 +76,13 @@ async def evolution_backfill(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Recalcula snapshots historicos para a carteira.
-    Pode demorar alguns segundos para carteiras com historico longo.
-    """
+    """Reconstrói patrimônio, fluxos, proventos e toda a cadeia TWR."""
     await _assert_portfolio_owner(db, portfolio_id, current_user.id)
-    count = await backfill_snapshots(db, portfolio_id, days_back=days_back)
+    count = await backfill_snapshots_with_returns(db, portfolio_id, days_back=days_back)
     logger.info(
-        "[evolution/backfill] portfolio=%s user=%s snapshots=%s",
-        portfolio_id, current_user.id, count,
+        "[evolution/backfill-twr] portfolio=%s user=%s snapshots=%s",
+        portfolio_id,
+        current_user.id,
+        count,
     )
     return {"snapshots_processed": count, "portfolio_id": portfolio_id}
