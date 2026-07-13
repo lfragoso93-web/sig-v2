@@ -36,7 +36,7 @@ async def test_rebuild_uses_first_transaction_date_and_refreshes_caches():
             new=AsyncMock(return_value=12),
         ) as invalidate,
         patch(
-            "app.services.csv_snapshot_rebuild_service.backfill_snapshots",
+            "app.services.csv_snapshot_rebuild_service.backfill_snapshots_with_returns",
             new=AsyncMock(return_value=400),
         ) as backfill,
         patch(
@@ -78,7 +78,7 @@ async def test_rebuild_skips_when_portfolio_has_no_transactions():
             new=AsyncMock(),
         ) as invalidate,
         patch(
-            "app.services.csv_snapshot_rebuild_service.backfill_snapshots",
+            "app.services.csv_snapshot_rebuild_service.backfill_snapshots_with_returns",
             new=AsyncMock(),
         ) as backfill,
     ):
