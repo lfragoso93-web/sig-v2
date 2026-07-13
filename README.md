@@ -143,7 +143,7 @@ Para ambientes com múltiplas heads Alembic válidas, o entrypoint aplica `alemb
 |---|---|
 | `CHANGELOG.md` | Histórico de mudanças |
 | `ROADMAP_SPRINTS.md` | Entregas e próximas sprints |
-| `docs/BRAPI_V2_INVENTORY.md` | Inventário técnico da integração de mercado |
+| Inventário técnico da integração de mercado | Arquitetura e contrato da API v2 |
 | `docs/CSV_IMPORT_PIPELINE.md` | Fluxo de validação, importação e rebuild de snapshots |
 | `docs/CORPORATE_ACTIONS.md` | Fundação do motor de eventos corporativos |
 | `docs/REVISAO_INTERFACE.md` | Baseline visual e responsivo |
