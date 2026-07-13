@@ -124,7 +124,7 @@ async def test_resolve_tickers_rejects_invalid_envelope() -> None:
 
     client = BrapiV2Client(base_url="https://market.example/api")
     async with _mock_client(handler) as http_client:
-        with pytest.raises(BrapiV2Error, match="Resposta inválida"):
+        with pytest.raises(BrapiV2Error, match="Resposta invalida"):
             await client.resolve_tickers(["PETR4"], client=http_client)
 
 
