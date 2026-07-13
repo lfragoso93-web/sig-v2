@@ -68,7 +68,7 @@ jobs:
 
       - name: Tests (pytest)
         working-directory: backend
-        run: pytest
+        run: pytest -q --tb=short
 
   frontend-quality:
     name: Frontend – lint, type check and build
