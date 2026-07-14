@@ -1,13 +1,4 @@
-"""Backfill global idempotente do historico de precos.
-
-Substitui a antiga regra global baseada em ``asset_prices`` vazia. O processo:
-1. garante no catalogo os ativos encontrados em transacoes;
-2. audita cobertura individual com politica de historico maximo;
-3. sincroniza somente bordas ausentes;
-4. retorna diagnostico por ativo.
-
-O servico nao e chamado por snapshots.
-"""
+"""Backfill global idempotente do historico de precos."""
 from __future__ import annotations
 
 import asyncio
@@ -20,14 +11,13 @@ from app.core.asset_types import INTL_TYPES
 from app.core.database import AsyncSessionLocal
 from app.models.asset import Asset, AssetType
 from app.models.transaction import Transaction
-from app.services.asset_price_coverage_service import audit_asset_price_coverage
-from app.services.asset_price_gap_sync_service import sync_asset_price_gaps
+from app.services.asset_price_coverage_service import AssetPriceCoverage, audit_asset_price_coverage
+from app.services.asset_price_gap_sync_service import AssetGapSyncResult, sync_asset_price_gaps
 
 logger = logging.getLogger(__name__)
 
-# Data operacional ampla. Os provedores retornam somente o historico efetivamente
-# disponivel para cada ativo, portanto nao inventamos registros anteriores.
 MAX_HISTORY_START = date(1900, 1, 1)
+_GLOBAL_SYNC_CONCURRENCY = 4
 _global_backfill_lock = asyncio.Lock()
 
 
@@ -36,21 +26,13 @@ def _currency_for(asset_type: AssetType) -> str:
 
 
 async def ensure_transaction_assets_in_catalog() -> dict:
-    """Cria no catalogo ativos que existem em transacoes, mas nao em ``assets``."""
     created = 0
     invalid = 0
-
     async with AsyncSessionLocal() as db:
-        tx_result = await db.execute(
-            select(Transaction.ticker, Transaction.asset_type).distinct()
-        )
+        tx_result = await db.execute(select(Transaction.ticker, Transaction.asset_type).distinct())
         transaction_assets = tx_result.all()
-
         asset_result = await db.execute(select(Asset.ticker, Asset.asset_type))
-        known = {
-            (str(row.ticker).upper(), str(row.asset_type))
-            for row in asset_result.all()
-        }
+        known = {(str(row.ticker).upper(), str(row.asset_type)) for row in asset_result.all()}
 
         for row in transaction_assets:
             ticker = str(row.ticker or "").upper().strip()
@@ -61,40 +43,48 @@ async def ensure_transaction_assets_in_catalog() -> dict:
             try:
                 asset_type = AssetType(asset_type_raw)
             except ValueError:
-                logger.warning(
-                    "[global_price_backfill] tipo invalido em transacao: %s/%s",
-                    ticker,
-                    asset_type_raw,
-                )
+                logger.warning("[global_price_backfill] tipo invalido: %s/%s", ticker, asset_type_raw)
                 invalid += 1
                 continue
-
             key = (ticker, asset_type.value)
             if key in known:
                 continue
-
             db.add(
                 Asset(
                     ticker=ticker,
                     name=ticker,
                     asset_type=asset_type.value,
                     currency=_currency_for(asset_type),
+                    provider_symbol=ticker,
+                    provider_status="PENDING",
                 )
             )
             known.add(key)
             created += 1
-
         await db.commit()
-
     return {"created": created, "invalid": invalid}
+
+
+async def _sync_candidates(
+    candidates: list[AssetPriceCoverage],
+    *,
+    concurrency: int,
+) -> list[AssetGapSyncResult]:
+    semaphore = asyncio.Semaphore(max(1, concurrency))
+
+    async def _run(item: AssetPriceCoverage) -> AssetGapSyncResult:
+        async with semaphore:
+            return await sync_asset_price_gaps(item)
+
+    return list(await asyncio.gather(*[_run(item) for item in candidates]))
 
 
 async def run_global_asset_price_backfill(
     *,
     required_to: date | None = None,
     history_start: date = MAX_HISTORY_START,
+    concurrency: int = _GLOBAL_SYNC_CONCURRENCY,
 ) -> dict:
-    """Reconcilia catalogo e completa cobertura individual de todos os ativos."""
     if _global_backfill_lock.locked():
         logger.info("[global_price_backfill] ja em execucao — ignorando nova chamada")
         return {
@@ -110,7 +100,6 @@ async def run_global_asset_price_backfill(
 
     async with _global_backfill_lock:
         catalog = await ensure_transaction_assets_in_catalog()
-
         async with AsyncSessionLocal() as db:
             coverage = await audit_asset_price_coverage(
                 db,
@@ -119,12 +108,8 @@ async def run_global_asset_price_backfill(
                 history_start=history_start,
             )
 
-        results = []
-        for item in coverage:
-            if not item.needs_sync:
-                continue
-            results.append(await sync_asset_price_gaps(item))
-
+        candidates = [item for item in coverage if item.needs_sync]
+        results = await _sync_candidates(candidates, concurrency=concurrency)
         payload = {
             "running": False,
             "catalog_created": catalog["created"],
@@ -156,10 +141,11 @@ async def run_global_asset_price_backfill(
             ],
         }
         logger.info(
-            "[global_price_backfill] audited=%d requested=%d inserted=%d errors=%d",
+            "[global_price_backfill] audited=%d requested=%d inserted=%d errors=%d concurrency=%d",
             payload["audited"],
             payload["requested"],
             payload["inserted"],
             payload["errors"],
+            concurrency,
         )
         return payload
