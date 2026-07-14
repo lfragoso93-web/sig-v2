@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
+import re
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -16,7 +18,6 @@ from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
 from app.services.asset_price_coverage_service import (
     AssetPriceCoverage,
-    CoverageRange,
     CoverageStatus,
     audit_asset_price_coverage,
 )
@@ -25,6 +26,17 @@ logger = logging.getLogger(__name__)
 
 _asset_locks: dict[int, asyncio.Lock] = {}
 _asset_locks_guard = asyncio.Lock()
+
+# NUMERIC(18, 8) aceita valores absolutos menores que 10^10. Um preço unitário
+# próximo desse limite é, na prática, dado corrompido de ajuste/grupamento.
+MAX_REASONABLE_UNIT_PRICE = 100_000_000.0
+_FRACTIONAL_TICKER_RE = re.compile(r"^([A-Z0-9]{4,7})F$")
+_FRACTIONAL_TYPES = {
+    AssetType.ACAO,
+    AssetType.FII,
+    AssetType.ETF_NACIONAL,
+    AssetType.BDR,
+}
 
 
 @dataclass(frozen=True)
@@ -57,9 +69,31 @@ def _default_provider(asset_type: AssetType) -> str:
     return "alpha_vantage" if asset_type in INTL_TYPES else "brapi"
 
 
+def normalize_provider_symbol(ticker: str, asset_type: AssetType) -> str:
+    """Normaliza o símbolo do provedor sem alterar o ticker contábil.
+
+    O mercado fracionário brasileiro usa a mesma referência de preço do lote
+    padrão. Ex.: WEGE3F -> WEGE3, TAEE11F -> TAEE11.
+    """
+    normalized = ticker.upper().strip()
+    if asset_type in _FRACTIONAL_TYPES:
+        match = _FRACTIONAL_TICKER_RE.fullmatch(normalized)
+        if match:
+            return match.group(1)
+    return normalized
+
+
 def _default_provider_symbol(ticker: str, asset_type: AssetType) -> str:
     # Cripto e Tesouro terao roteamento dedicado em bloco posterior.
-    return ticker.upper().strip()
+    return normalize_provider_symbol(ticker, asset_type)
+
+
+def _is_valid_price(value: object) -> bool:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return False
+    return math.isfinite(numeric) and 0 < numeric < MAX_REASONABLE_UNIT_PRICE
 
 
 async def _lock_for(asset_id: int) -> asyncio.Lock:
@@ -88,10 +122,29 @@ async def _fetch_range(
         )
 
     filtered: list[tuple[datetime, float]] = []
+    rejected = 0
     for timestamp, close in rows:
         ts = timestamp if timestamp.tzinfo else timestamp.replace(tzinfo=timezone.utc)
-        if missing_range.date_from <= ts.date() <= missing_range.date_to and close and float(close) > 0:
-            filtered.append((ts.astimezone(timezone.utc), float(close)))
+        if not (missing_range.date_from <= ts.date() <= missing_range.date_to):
+            continue
+        if not _is_valid_price(close):
+            rejected += 1
+            logger.warning(
+                "[price_gap_sync] preço rejeitado ticker=%s data=%s close=%r source=%s",
+                ticker,
+                ts.date(),
+                close,
+                source,
+            )
+            continue
+        filtered.append((ts.astimezone(timezone.utc), float(close)))
+
+    if rejected:
+        logger.warning(
+            "[price_gap_sync] ticker=%s rejeitados=%d por validação de preço",
+            ticker,
+            rejected,
+        )
     return filtered, source
 
 
@@ -115,6 +168,8 @@ async def _persist_result(
             return 0
 
         for timestamp, close, source in rows:
+            if not _is_valid_price(close):
+                continue
             stmt = (
                 pg_insert(AssetPrice)
                 .values(
@@ -144,14 +199,16 @@ async def _persist_result(
             asset.provider_status = "OK"
 
         if rows:
-            latest = max(rows, key=lambda item: item[0])
-            last_saved = await db.execute(
-                select(func.max(AssetPrice.timestamp)).where(AssetPrice.asset_id == coverage.asset_id)
-            )
-            last_ts = last_saved.scalar_one_or_none()
-            if last_ts is not None and last_ts <= latest[0]:
-                asset.last_price = Decimal(str(round(latest[1], 8)))
-                asset.last_price_updated_at = latest[0]
+            valid_rows = [item for item in rows if _is_valid_price(item[1])]
+            if valid_rows:
+                latest = max(valid_rows, key=lambda item: item[0])
+                last_saved = await db.execute(
+                    select(func.max(AssetPrice.timestamp)).where(AssetPrice.asset_id == coverage.asset_id)
+                )
+                last_ts = last_saved.scalar_one_or_none()
+                if last_ts is not None and last_ts <= latest[0]:
+                    asset.last_price = Decimal(str(round(latest[1], 8)))
+                    asset.last_price_updated_at = latest[0]
 
         await db.commit()
     return inserted
@@ -196,7 +253,10 @@ async def sync_asset_price_gaps(coverage: AssetPriceCoverage) -> AssetGapSyncRes
         )
 
     provider = coverage.provider or _default_provider(asset_type)
-    provider_symbol = coverage.provider_symbol or _default_provider_symbol(coverage.ticker, asset_type)
+    provider_symbol = normalize_provider_symbol(
+        coverage.provider_symbol or coverage.ticker,
+        asset_type,
+    )
     lock = await _lock_for(coverage.asset_id)
 
     async with lock:
@@ -214,8 +274,6 @@ async def sync_asset_price_gaps(coverage: AssetPriceCoverage) -> AssetGapSyncRes
                 provider_symbol=provider_symbol,
                 start_exhausted=start_requested and inserted_count_will_be_zero(collected, coverage),
             )
-            # Se houve retorno, mas nenhum registro novo na borda inicial, o histórico
-            # anterior já foi esgotado. Atualizamos o status após conhecer inserted.
             if start_requested and inserted == 0:
                 await _persist_result(
                     coverage=coverage,
@@ -226,12 +284,13 @@ async def sync_asset_price_gaps(coverage: AssetPriceCoverage) -> AssetGapSyncRes
                 )
 
             logger.info(
-                "[price_gap_sync] %s ranges=%s received=%d inserted=%d provider=%s",
+                "[price_gap_sync] %s ranges=%s received=%d inserted=%d provider=%s symbol=%s",
                 coverage.ticker,
                 len(ranges),
                 len(collected),
                 inserted,
                 provider,
+                provider_symbol,
             )
             return AssetGapSyncResult(
                 coverage.asset_id,
