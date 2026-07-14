@@ -20,6 +20,19 @@ def test_no_quote_type_never_requires_market_sync() -> None:
     assert status == CoverageStatus.NO_MARKET_QUOTE
 
 
+def test_treasury_uses_dedicated_provider_pipeline() -> None:
+    status = classify_coverage(
+        asset_type=AssetType.TESOURO_DIRETO,
+        asset_exists=True,
+        required_from=date(2025, 1, 1),
+        required_to=date(2026, 7, 13),
+        first_price_date=None,
+        last_price_date=None,
+    )
+
+    assert status == CoverageStatus.DEDICATED_PROVIDER
+
+
 def test_missing_asset_is_reported_before_price_coverage() -> None:
     status = classify_coverage(
         asset_type=AssetType.ACAO,
