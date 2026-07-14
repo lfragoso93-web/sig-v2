@@ -36,6 +36,33 @@ def test_run_step_records_error_and_continues_summary() -> None:
     assert summary.steps[0].error == "provider unavailable"
 
 
+def test_run_step_marks_internal_error_counter_as_failure() -> None:
+    summary = FullMarketRebuildResult(started_at="2026-07-13T00:00:00+00:00")
+
+    async def operation() -> dict:
+        return {"requested": 5, "inserted": 4, "errors": 1}
+
+    asyncio.run(_run_step(summary, "prices", operation))
+
+    assert summary.ok is False
+    assert summary.steps[0].ok is False
+    assert summary.steps[0].error == "errors=1"
+    assert summary.steps[0].result["inserted"] == 4
+
+
+def test_run_step_marks_error_list_as_failure() -> None:
+    summary = FullMarketRebuildResult(started_at="2026-07-13T00:00:00+00:00")
+
+    async def operation() -> dict:
+        return {"materialized": 100, "errors": ["batch A failed"]}
+
+    asyncio.run(_run_step(summary, "proventos", operation))
+
+    assert summary.ok is False
+    assert summary.steps[0].ok is False
+    assert summary.steps[0].error == "errors=1"
+
+
 def test_summary_to_dict_is_json_ready() -> None:
     summary = FullMarketRebuildResult(
         started_at="2026-07-13T00:00:00+00:00",
