@@ -40,6 +40,7 @@ _MAIN_EQUITY_RE = re.compile(r"^[A-Z0-9]{4,6}(3|4|5|6|11|31|32|33|34|35)$")
 
 SYNC_CONCURRENCY = 3
 SYNC_BATCH_DELAY = 2.0
+MATERIALIZE_TICKER_BATCH_SIZE = 50
 
 
 @dataclass
@@ -64,6 +65,10 @@ def _is_event_ticker(ticker: str) -> bool:
     return bool(_MAIN_EQUITY_RE.match(t))
 
 
+def _chunks(values: list[str], size: int) -> list[list[str]]:
+    return [values[index:index + size] for index in range(0, len(values), size)]
+
+
 async def _sync_asset_events(db: AsyncSession, ticker: str, asset_type: str) -> tuple[bool, int]:
     try:
         await run_backfill(db, ticker, asset_type)
@@ -79,14 +84,7 @@ async def run_daily_proventos_sync(
     asset_types: set[str] | None = None,
     concurrency: int = SYNC_CONCURRENCY,
 ) -> ProventosDailySyncResult:
-    """
-    Sincroniza proventos/eventos globais para ativos nacionais cadastrados.
-
-    `run_backfill` opera em modo global quando chamado por este serviço: ele cria
-    ou atualiza eventos em AssetDividend. Em seguida, o seed histórico preenche
-    datas anteriores à cobertura da BRAPI e materializa os vínculos de Dividend
-    das carteiras com posição na data do evento.
-    """
+    """Sincroniza eventos globais e materializa carteiras em lotes seguros."""
     wanted = asset_types or NATIONAL_EVENT_TYPES
     result = ProventosDailySyncResult()
 
@@ -144,19 +142,36 @@ async def run_daily_proventos_sync(
         if i + concurrency < len(pairs):
             await asyncio.sleep(SYNC_BATCH_DELAY)
 
-    try:
-        result.materialized = await materialize_asset_dividends(db=db, commit=True)
-    except Exception as exc:
-        logger.error("[proventos_daily] falha na materialização final: %s", exc)
-        result.errors.append(f"materialize: {exc}")
+    # Evita o limite de 32.767 parâmetros do asyncpg. Cada chamada restringe
+    # AssetDividend a poucos tickers e faz commit independente, preservando os
+    # lotes anteriores caso um lote específico falhe.
+    materialize_tickers = [ticker for ticker, _ in pairs]
+    for ticker_batch in _chunks(materialize_tickers, MATERIALIZE_TICKER_BATCH_SIZE):
+        try:
+            result.materialized += await materialize_asset_dividends(
+                db=db,
+                tickers=ticker_batch,
+                commit=True,
+            )
+        except Exception as exc:
+            await db.rollback()
+            label = f"{ticker_batch[0]}..{ticker_batch[-1]}"
+            logger.error(
+                "[proventos_daily] falha na materialização do lote %s (%s tickers): %s",
+                label,
+                len(ticker_batch),
+                exc,
+            )
+            result.errors.append(f"materialize[{label}]: {exc}")
 
     logger.info(
-        "[proventos_daily] concluído: scanned=%s synced=%s failed=%s skipped=%s historical=%s materialized=%s",
+        "[proventos_daily] concluído: scanned=%s synced=%s failed=%s skipped=%s historical=%s materialized=%s errors=%s",
         result.assets_scanned,
         result.assets_synced,
         result.assets_failed,
         result.assets_skipped,
         result.historical_events,
         result.materialized,
+        len(result.errors),
     )
     return result
