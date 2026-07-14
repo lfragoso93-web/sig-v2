@@ -65,11 +65,7 @@ def classify_coverage(
     last_price_date: date | None,
     grace_days: int = 5,
 ) -> CoverageStatus:
-    """Classifica a cobertura pelas bordas conhecidas do historico.
-
-    ``grace_days`` cobre fins de semana, feriados e diferencas pequenas entre a
-    primeira operacao e o primeiro fechamento disponivel.
-    """
+    """Classifica a cobertura pelas bordas conhecidas do historico."""
     if asset_type in NO_QUOTE_TYPES:
         return CoverageStatus.NO_MARKET_QUOTE
     if not asset_exists:
@@ -96,13 +92,17 @@ async def audit_asset_price_coverage(
     db: AsyncSession,
     *,
     required_to: date | None = None,
+    full_history: bool = False,
+    history_start: date | None = None,
 ) -> list[AssetPriceCoverage]:
     """Lista a cobertura de todos os ativos conhecidos pelo SGI.
 
-    Inclui ativos presentes apenas em transacoes para revelar inconsistencias de
-    catalogo que antes ficavam invisiveis.
+    ``full_history=True`` aplica uma data inicial comum a todos os ativos cotaveis,
+    inclusive aos que ainda nao possuem transacoes. Isso permite ao backfill global
+    solicitar o maximo historico operacional sem depender da primeira compra.
     """
     target = required_to or datetime.now(timezone.utc).date()
+    global_start = history_start or date(1900, 1, 1)
 
     assets_result = await db.execute(select(Asset))
     assets = list(assets_result.scalars().all())
@@ -149,7 +149,11 @@ async def audit_asset_price_coverage(
         first_date = stats.first_ts.date() if stats and stats.first_ts else None
         last_date = stats.last_ts.date() if stats and stats.last_ts else None
         count = int(stats.price_count or 0) if stats else 0
-        required_from = tx_requirements.get((ticker, asset_type_raw))
+        required_from = (
+            global_start
+            if full_history and asset_type not in NO_QUOTE_TYPES
+            else tx_requirements.get((ticker, asset_type_raw))
+        )
         status = classify_coverage(
             asset_type=asset_type,
             asset_exists=asset is not None,
@@ -181,8 +185,15 @@ async def summarize_asset_price_coverage(
     db: AsyncSession,
     *,
     required_to: date | None = None,
+    full_history: bool = False,
+    history_start: date | None = None,
 ) -> dict:
-    report = await audit_asset_price_coverage(db, required_to=required_to)
+    report = await audit_asset_price_coverage(
+        db,
+        required_to=required_to,
+        full_history=full_history,
+        history_start=history_start,
+    )
     by_status: dict[str, int] = {}
     for item in report:
         by_status[item.status.value] = by_status.get(item.status.value, 0) + 1
