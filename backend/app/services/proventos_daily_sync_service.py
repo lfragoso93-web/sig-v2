@@ -1,15 +1,8 @@
 """
-proventos_daily_sync_service.py
+Sincronizacao diaria de eventos/proventos de renda variavel nacional.
 
-Sincronização diária de eventos/proventos de renda variável nacional.
-
-Objetivo:
-  - coletar eventos globais dos ativos nacionais já cadastrados;
-  - atualizar AssetDividend de forma idempotente;
-  - complementar o histórico anterior à cobertura da BRAPI;
-  - materializar automaticamente os eventos para carteiras com posição.
-
-Este serviço é usado pelo scheduler diário e não depende da página de Proventos.
+O servico coleta eventos globais, atualiza AssetDividend de forma idempotente,
+complementa historico e materializa os eventos nas carteiras elegiveis.
 """
 from __future__ import annotations
 
@@ -34,12 +27,12 @@ NATIONAL_EVENT_TYPES = {
     AssetType.BDR.value,
 }
 
-# Tickers fracionários/direitos/recibos não têm agenda própria de eventos.
-# O provento pertence ao ticker principal, por exemplo B3SA3 e não B3SA3F.
 _MAIN_EQUITY_RE = re.compile(r"^[A-Z0-9]{4,6}(3|4|5|6|11|31|32|33|34|35)$")
 
-SYNC_CONCURRENCY = 3
-SYNC_BATCH_DELAY = 2.0
+# Mantem paralelismo abaixo do limite operacional dos provedores, mas elimina
+# o processamento quase serial que fazia o rebuild levar mais de uma hora.
+SYNC_CONCURRENCY = 10
+SYNC_BATCH_DELAY = 0.5
 MATERIALIZE_TICKER_BATCH_SIZE = 50
 
 
@@ -101,15 +94,20 @@ async def run_daily_proventos_sync(
 
     if result.assets_skipped:
         logger.info(
-            "[proventos_daily] %s tickers fracionários/direitos/recibos ignorados no sync de eventos",
+            "[proventos_daily] %s tickers fracionarios/direitos/recibos ignorados no sync de eventos",
             result.assets_skipped,
         )
 
     if not pairs:
-        logger.info("[proventos_daily] nenhum ativo nacional elegível encontrado")
+        logger.info("[proventos_daily] nenhum ativo nacional elegivel encontrado")
         return result
 
-    logger.info("[proventos_daily] iniciando sync global de eventos para %s ativos", len(pairs))
+    concurrency = max(1, min(int(concurrency or SYNC_CONCURRENCY), 10))
+    logger.info(
+        "[proventos_daily] iniciando sync global de eventos para %s ativos concurrency=%s",
+        len(pairs),
+        concurrency,
+    )
 
     from app.core.database import AsyncSessionLocal
 
@@ -142,9 +140,6 @@ async def run_daily_proventos_sync(
         if i + concurrency < len(pairs):
             await asyncio.sleep(SYNC_BATCH_DELAY)
 
-    # Evita o limite de 32.767 parâmetros do asyncpg. Cada chamada restringe
-    # AssetDividend a poucos tickers e faz commit independente, preservando os
-    # lotes anteriores caso um lote específico falhe.
     materialize_tickers = [ticker for ticker, _ in pairs]
     for ticker_batch in _chunks(materialize_tickers, MATERIALIZE_TICKER_BATCH_SIZE):
         try:
@@ -157,7 +152,7 @@ async def run_daily_proventos_sync(
             await db.rollback()
             label = f"{ticker_batch[0]}..{ticker_batch[-1]}"
             logger.error(
-                "[proventos_daily] falha na materialização do lote %s (%s tickers): %s",
+                "[proventos_daily] falha na materializacao do lote %s (%s tickers): %s",
                 label,
                 len(ticker_batch),
                 exc,
@@ -165,7 +160,7 @@ async def run_daily_proventos_sync(
             result.errors.append(f"materialize[{label}]: {exc}")
 
     logger.info(
-        "[proventos_daily] concluído: scanned=%s synced=%s failed=%s skipped=%s historical=%s materialized=%s errors=%s",
+        "[proventos_daily] concluido: scanned=%s synced=%s failed=%s skipped=%s historical=%s materialized=%s errors=%s",
         result.assets_scanned,
         result.assets_synced,
         result.assets_failed,
