@@ -12,13 +12,12 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from app.core.asset_types import INTL_TYPES, NO_QUOTE_TYPES
+from app.core.asset_types import INTL_TYPES, NO_QUOTE_TYPES, yf_ticker
 from app.core.database import AsyncSessionLocal
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
 from app.services.asset_price_coverage_service import (
     AssetPriceCoverage,
-    CoverageStatus,
     audit_asset_price_coverage,
 )
 
@@ -27,8 +26,8 @@ logger = logging.getLogger(__name__)
 _asset_locks: dict[int, asyncio.Lock] = {}
 _asset_locks_guard = asyncio.Lock()
 
-# NUMERIC(18, 8) aceita valores absolutos menores que 10^10. Um preço unitário
-# próximo desse limite é, na prática, dado corrompido de ajuste/grupamento.
+# NUMERIC(18, 8) aceita valores absolutos menores que 10^10. Um preco unitario
+# proximo desse limite e, na pratica, dado corrompido de ajuste/grupamento.
 MAX_REASONABLE_UNIT_PRICE = 100_000_000.0
 _FRACTIONAL_TICKER_RE = re.compile(r"^([A-Z0-9]{4,7})F$")
 _FRACTIONAL_TYPES = {
@@ -37,6 +36,7 @@ _FRACTIONAL_TYPES = {
     AssetType.ETF_NACIONAL,
     AssetType.BDR,
 }
+_INITIAL_RANGE_REASONS = {"missing_start", "missing_all"}
 
 
 @dataclass(frozen=True)
@@ -70,11 +70,7 @@ def _default_provider(asset_type: AssetType) -> str:
 
 
 def normalize_provider_symbol(ticker: str, asset_type: AssetType) -> str:
-    """Normaliza o símbolo do provedor sem alterar o ticker contábil.
-
-    O mercado fracionário brasileiro usa a mesma referência de preço do lote
-    padrão. Ex.: WEGE3F -> WEGE3, TAEE11F -> TAEE11.
-    """
+    """Normaliza o simbolo do provedor sem alterar o ticker contabil."""
     normalized = ticker.upper().strip()
     if asset_type in _FRACTIONAL_TYPES:
         match = _FRACTIONAL_TICKER_RE.fullmatch(normalized)
@@ -84,7 +80,6 @@ def normalize_provider_symbol(ticker: str, asset_type: AssetType) -> str:
 
 
 def _default_provider_symbol(ticker: str, asset_type: AssetType) -> str:
-    # Cripto e Tesouro terao roteamento dedicado em bloco posterior.
     return normalize_provider_symbol(ticker, asset_type)
 
 
@@ -101,25 +96,87 @@ async def _lock_for(asset_id: int) -> asyncio.Lock:
         return _asset_locks.setdefault(asset_id, asyncio.Lock())
 
 
+def _fetch_yf_max_sync(symbol: str) -> list[tuple[datetime, float]]:
+    import yfinance as yf
+
+    try:
+        history = yf.Ticker(symbol).history(
+            period="max",
+            interval="1d",
+            auto_adjust=True,
+        )
+        if history.empty:
+            return []
+        rows: list[tuple[datetime, float]] = []
+        for timestamp, row in history.iterrows():
+            close = row.get("Close")
+            if close is None:
+                continue
+            ts = timestamp.to_pydatetime()
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            else:
+                ts = ts.astimezone(timezone.utc)
+            rows.append((ts, float(close)))
+        return rows
+    except Exception as exc:
+        logger.warning("[price_gap_sync] yfinance period=max falhou symbol=%s: %s", symbol, exc)
+        return []
+
+
+async def _fetch_yf_max(ticker: str, asset_type: AssetType) -> list[tuple[datetime, float]]:
+    from app.services.price_history_service import _run_yf_with_throttle
+
+    symbol = yf_ticker(ticker, asset_type)
+    return await _run_yf_with_throttle(_fetch_yf_max_sync, symbol)
+
+
 async def _fetch_range(
     ticker: str,
     asset_type: AssetType,
     missing_range: MissingPriceRange,
 ) -> tuple[list[tuple[datetime, float]], str]:
+    initial_history = missing_range.reason in _INITIAL_RANGE_REASONS
+    rows: list[tuple[datetime, float]] = []
+    source = ""
+
     if asset_type in INTL_TYPES:
-        from app.services.price_history_backfill_service import _fetch_intl_history
+        if initial_history:
+            rows = await _fetch_yf_max(ticker, asset_type)
+            source = "yfinance_period_max"
+        else:
+            from app.services.price_history_backfill_service import _fetch_intl_history
 
-        days = max((date.today() - missing_range.date_from).days + 1, 2)
-        rows, source = await _fetch_intl_history(ticker, asset_type, days)
+            days = max((date.today() - missing_range.date_from).days + 1, 2)
+            rows, source = await _fetch_intl_history(ticker, asset_type, days)
     else:
-        from app.services.price_history_backfill_service import _fetch_br_history
-
-        rows, source = await _fetch_br_history(
-            ticker,
-            asset_type,
-            missing_range.date_from.isoformat(),
-            missing_range.date_to.isoformat(),
+        from app.integrations.brapi import (
+            fetch_fii_historical_v2,
+            fetch_stocks_historical_v2,
         )
+
+        if asset_type == AssetType.FII:
+            # O endpoint de FIIs documenta apenas startDate/endDate.
+            rows = await fetch_fii_historical_v2(
+                ticker=ticker,
+                date_from=missing_range.date_from.isoformat(),
+                date_to=missing_range.date_to.isoformat(),
+            )
+            source = "brapi_v2_fii"
+        elif initial_history:
+            # A documentacao da BRAPI suporta range=max para acoes, BDRs e ETFs.
+            rows = await fetch_stocks_historical_v2(ticker=ticker, range_="max")
+            source = "brapi_v2_stocks_max"
+            if not rows:
+                rows = await _fetch_yf_max(ticker, asset_type)
+                source = "yfinance_period_max" if rows else ""
+        else:
+            rows = await fetch_stocks_historical_v2(
+                ticker=ticker,
+                date_from=missing_range.date_from.isoformat(),
+                date_to=missing_range.date_to.isoformat(),
+            )
+            source = "brapi_v2_stocks"
 
     filtered: list[tuple[datetime, float]] = []
     rejected = 0
@@ -129,21 +186,17 @@ async def _fetch_range(
             continue
         if not _is_valid_price(close):
             rejected += 1
-            logger.warning(
-                "[price_gap_sync] preço rejeitado ticker=%s data=%s close=%r source=%s",
-                ticker,
-                ts.date(),
-                close,
-                source,
-            )
             continue
         filtered.append((ts.astimezone(timezone.utc), float(close)))
 
     if rejected:
         logger.warning(
-            "[price_gap_sync] ticker=%s rejeitados=%d por validação de preço",
+            "[price_gap_sync] precos rejeitados ticker=%s quantidade=%d source=%s intervalo=%s..%s",
             ticker,
             rejected,
+            source,
+            missing_range.date_from,
+            missing_range.date_to,
         )
     return filtered, source
 
@@ -261,7 +314,7 @@ async def sync_asset_price_gaps(coverage: AssetPriceCoverage) -> AssetGapSyncRes
 
     async with lock:
         collected: list[tuple[datetime, float, str]] = []
-        start_requested = any(item.reason in {"missing_start", "missing_all"} for item in ranges)
+        start_requested = any(item.reason in _INITIAL_RANGE_REASONS for item in ranges)
         try:
             for missing_range in ranges:
                 rows, source = await _fetch_range(provider_symbol, asset_type, missing_range)
@@ -326,7 +379,7 @@ def inserted_count_will_be_zero(
     rows: list[tuple[datetime, float, str]],
     coverage: AssetPriceCoverage,
 ) -> bool:
-    """Heuristica conservadora; a confirmação definitiva ocorre após o upsert."""
+    """Heuristica conservadora; a confirmacao definitiva ocorre apos o upsert."""
     return not rows and coverage.price_count > 0
 
 
