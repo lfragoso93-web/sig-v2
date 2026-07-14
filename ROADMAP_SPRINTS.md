@@ -1,29 +1,36 @@
 # Roadmap de Sprints — SGI v2
 
-> Última atualização: 13/07/2026
+> Última atualização: 14/07/2026
+
+Este documento preserva o histórico de sprints. O acompanhamento modular atual está em [`ROADMAP.md`](./ROADMAP.md).
 
 ---
 
 ## ✅ Sprints concluídas
 
 ### Sprint 1 — Fundação
+
 - FastAPI, SQLAlchemy async, Alembic, PostgreSQL e Redis.
 - Docker Compose, autenticação JWT e health checks.
 - Módulos base de usuários, carteiras, transações e posições.
 
 ### Sprint 2 — Core Financeiro
+
 - Proventos, performance, câmbio, Tesouro Direto e ativos internacionais.
 - Cache Redis, scheduler e rate limiting.
 
 ### Sprint 3 — Funcionalidades avançadas base
+
 - Goals, IRPF base, analysis base, renda fixa, cotações, preços e metas por classe.
 
 ### Sprint 4 — Catálogo e dados
+
 - Seed idempotente de ativos.
 - Backfill de preços.
 - Onboarding e jobs incrementais.
 
 ### Sprint 5 — Dashboard e experiência principal
+
 - Resumo, Patrimônio, Rentabilidade, Proventos e interface responsiva.
 - Gráficos, benchmarks, distribuição por classe e metas.
 
@@ -50,9 +57,51 @@
 - [x] Teste estrutural contra IDs Alembic duplicados.
 - [x] Suporte do entrypoint a múltiplas heads Alembic válidas.
 
+### Sprint 5L — Arquitetura DB-first e TWR
+
+- [x] Remover consultas externas do motor de snapshots.
+- [x] Criar auditoria de cobertura por ativo.
+- [x] Sincronizar lacunas de preços de forma idempotente.
+- [x] Adicionar metadados persistentes de provedor nos ativos.
+- [x] Criar smart sync com `HISTORY_START_EXHAUSTED`.
+- [x] Criar `full_market_rebuild` como comando operacional oficial.
+- [x] Migrar endpoints de evolução diária e mensal para leitura enriquecida.
+- [x] Calcular KPIs de rentabilidade por TWR.
+- [x] Materializar proventos em lotes seguros.
+- [x] Sanitizar preços inválidos antes da persistência.
+- [x] Usar histórico máximo quando a fonte suportar.
+- [x] Separar Tesouro Direto do pipeline genérico de preços.
+
 ---
 
 ## 🔄 Em desenvolvimento
+
+### Rentabilidade
+
+- [x] Backend TWR para Hoje, Mês, 12 meses e Desde o início.
+- [ ] Ajustar cards visuais.
+- [ ] Exibir indicadores de qualidade (`has_partial_prices`, `return_is_estimated`).
+
+### Resumo
+
+- [ ] Revalidar cards contra a camada canônica.
+- [ ] Confirmar Resultado incluindo proventos materializados.
+- [ ] Revisar divergências entre cards do Resumo e Patrimônio.
+- [ ] Corrigir overflow de dropdowns quando necessário.
+
+### Tesouro Direto
+
+- [x] Catálogo e preços atuais dedicados.
+- [x] Histórico dedicado persistido.
+- [ ] Garantir consumo dedicado no snapshot.
+
+### Provedores e cobertura
+
+- [x] Gap sync e smart sync.
+- [x] Histórico máximo por capacidade.
+- [ ] Provider router definitivo.
+- [ ] Roteamento definitivo de cripto.
+- [ ] Evitar duplicação de histórico para mercado fracionário.
 
 ### Motor de Eventos Corporativos — Issue #129
 
@@ -67,36 +116,27 @@
 
 #### Próximos blocos
 
-- [ ] Executar spike técnico com HG Brasil.
+- [ ] Executar spike técnico com fonte complementar.
 - [ ] Mapear splits, grupamentos e cobertura por classe.
 - [ ] Implementar providers de eventos corporativos.
 - [ ] Adicionar simulação, confirmação e rollback.
 - [ ] Cobrir bonificações, incorporações, fusões e conversões complexas.
 - [ ] Criar administração e auditoria operacional dos eventos.
 
-### Evolução da integração de mercado v2 — Issue #130
-
-#### Fundação concluída
-
-- [x] Inventariar endpoints e consumidores atuais.
-- [x] Criar cliente v2 e DTO interno de resolução.
-- [x] Resolver tickers antigos antes da importação.
-- [x] Tratar falhas de rede, HTTP e payload inválido sem interromper o CSV.
-- [x] Integrar renomes ao motor de eventos corporativos.
-
-#### Próximos blocos
-
-- [ ] Integrar endpoint de cobertura por ticker.
-- [ ] Persistir cobertura e data da última verificação.
-- [ ] Migrar gradualmente cotações, histórico e proventos para DTOs internos.
-- [ ] Separar bonificações e subscrições de proventos monetários.
-- [ ] Enriquecer FIIs com indicadores, imóveis, vacância, carteira e relatórios.
-- [ ] Enriquecer ações com fundamentos e demonstrações financeiras.
-- [ ] Integrar câmbio histórico e macroeconomia como fonte complementar.
-
 ---
 
 ## 🔄 Próximas entregas prioritárias
+
+1. Finalizar o consumo dedicado de Tesouro nos snapshots.
+2. Resolver referência canônica de preços para mercado fracionário.
+3. Ajustar UI da página Rentabilidade.
+4. Revisar cards da página Resumo.
+5. Validar novamente o `full_market_rebuild`.
+6. Abrir PR única `stable-15jun` → `main` após validação.
+
+---
+
+## 📋 Backlog planejado
 
 ### Backup/Restore — Issue #83
 
@@ -112,24 +152,7 @@
 - [ ] Vincular conta social a usuário existente.
 - [ ] Cobrir login, callback e erros.
 
-### UX Patrimônio — Issue #90
-
-- [ ] Reorganizar a página em cards claros e responsivos.
-- [ ] Preservar os contratos financeiros canônicos.
-- [ ] Separar composição, metas, concentração e posições.
-
-### UX Proventos — Issue #131
-
-- [ ] Exibir tooltip mensal com detalhamento por classe.
-- [ ] Respeitar filtros ativos e conciliar o total mensal.
-- [ ] Suportar hover, teclado e toque.
-- [ ] Evitar cortes por overflow usando portal quando necessário.
-
----
-
-## 📋 Sprints planejadas
-
-### Sprint 7 — IRPF — Issue #56
+### IRPF — Issue #56
 
 - [ ] Cálculo por ano-calendário.
 - [ ] Isenção de vendas mensais.
@@ -137,21 +160,21 @@
 - [ ] Relatórios e exportações.
 - [ ] Testes de ganho de capital.
 
-### Sprint 8 — Análise de Carteira — Issue #57
+### Análise de Carteira — Issue #57
 
 - [ ] Diversificação por setor e classe.
 - [ ] Alertas de concentração.
 - [ ] Comparação com metas.
 - [ ] Sugestões de rebalanceamento.
 
-### Sprint 9 — Janela Global do Ativo — Issue #58
+### Janela Global do Ativo — Issue #58
 
 - [ ] Drawer global do ativo.
 - [ ] Histórico de preços.
 - [ ] Histórico de proventos.
 - [ ] Posição, custo médio e resultado.
 
-### Backlog arquitetural — Provedores configuráveis — Issue #127
+### Provedores configuráveis — Issue #127
 
 - [ ] Criar registry/factory de provedores por capacidade.
 - [ ] Permitir configuração pelo Superadmin com credenciais criptografadas.
