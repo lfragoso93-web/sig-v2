@@ -1,15 +1,19 @@
 """Backfill enriquecido de snapshots com fluxos, proventos e retorno TWR.
 
-Este módulo mantém o cálculo patrimonial legado isolado e acrescenta a camada de
-performance necessária para reconstruções históricas. Os fluxos externos ainda
-são inferidos a partir das compras e vendas porque o SGI não possui conta-caixa.
-Por isso ``return_is_estimated`` permanece verdadeiro.
+O motor de snapshots e deliberadamente DB-only: ele nunca consulta provedores
+externos. A sincronizacao de mercado deve preencher ``asset_prices`` antes ou em
+paralelo. Quando faltar cobertura, o snapshot usa o fallback patrimonial legado,
+marca ``has_partial_prices`` e permite que a camada de sincronizacao trate a
+lacuna sem bloquear a reconstrucao historica.
+
+Os fluxos externos ainda sao inferidos a partir das compras e vendas porque o
+SGI nao possui conta-caixa. Por isso ``return_is_estimated`` permanece verdadeiro.
 """
 from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Iterable
 
@@ -17,15 +21,13 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.asset import Asset
-from app.models.asset_price import AssetPrice
+from app.core.asset_types import NO_QUOTE_TYPES
+from app.models.asset import AssetType
 from app.models.dividend import Dividend, DividendStatus
 from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.transaction import OperationType, Transaction
-from app.services.portfolio_snapshot_service import (
-    _calc_totals,
-    _prefetch_price_history,
-)
+from app.services.portfolio_snapshot_service import _calc_totals
+from app.services.price_history_service import get_prices_at_date_batch
 from app.services.twr_service import (
     append_compounded_return_pct,
     calculate_daily_twr_pct,
@@ -46,7 +48,7 @@ def _decimal(value: object) -> Decimal:
 
 
 def _operation_value_brl(tx: Transaction) -> tuple[Decimal, Decimal, Decimal]:
-    """Retorna quantidade, preço e taxas em BRL."""
+    """Retorna quantidade, preco e taxas em BRL."""
     fx_rate = _decimal(getattr(tx, "fx_rate", None) or 1)
     quantity = _decimal(tx.quantity)
     price = _decimal(tx.price) * fx_rate
@@ -58,14 +60,57 @@ def _is_technical_transaction(tx: Transaction) -> bool:
     return str(getattr(tx, "notes", "") or "").startswith(_TECHNICAL_EVENT_PREFIX)
 
 
+def _transaction_asset_type(tx: Transaction) -> AssetType:
+    raw = getattr(getattr(tx, "asset_type", None), "value", getattr(tx, "asset_type", None))
+    try:
+        return AssetType(str(raw))
+    except (ValueError, TypeError):
+        logger.warning(
+            "[snapshot_twr] asset_type invalido para %s: %s; usando ACAO",
+            getattr(tx, "ticker", "?"),
+            raw,
+        )
+        return AssetType.ACAO
+
+
+def build_open_quote_requirements(
+    transactions: Iterable[Transaction],
+    target_date: date,
+) -> list[tuple[str, AssetType]]:
+    """Retorna posicoes abertas que realmente dependem de cotacao de mercado.
+
+    Tesouro, renda fixa e demais ``NO_QUOTE_TYPES`` nao entram nesta lista; sua
+    avaliacao pertence aos motores especificos da classe, nao a ``asset_prices``.
+    """
+    quantities: dict[str, Decimal] = defaultdict(lambda: _ZERO)
+    asset_types: dict[str, AssetType] = {}
+
+    for tx in transactions:
+        if tx.date > target_date:
+            break
+        ticker = str(tx.ticker).upper().strip()
+        asset_types[ticker] = _transaction_asset_type(tx)
+        quantity = _decimal(tx.quantity)
+        if tx.operation == OperationType.buy:
+            quantities[ticker] += quantity
+        elif tx.operation == OperationType.sell:
+            quantities[ticker] -= quantity
+
+    return [
+        (ticker, asset_types[ticker])
+        for ticker, quantity in quantities.items()
+        if quantity > 0 and asset_types[ticker] not in NO_QUOTE_TYPES
+    ]
+
+
 def calculate_transaction_components(
     transactions: Iterable[Transaction],
     target_date: date,
 ) -> tuple[Decimal, Decimal]:
-    """Calcula ganho realizado acumulado e fluxo externo líquido do dia.
+    """Calcula ganho realizado acumulado e fluxo externo liquido do dia.
 
-    Compras são tratadas como aportes e vendas como retiradas porque ainda não
-    existe saldo de caixa explícito. Taxas de compra integram o aporte; taxas de
+    Compras sao tratadas como aportes e vendas como retiradas porque ainda nao
+    existe saldo de caixa explicito. Taxas de compra integram o aporte; taxas de
     venda reduzem tanto o valor retirado quanto o ganho realizado.
     """
     states: dict[str, tuple[Decimal, Decimal]] = {}
@@ -114,7 +159,7 @@ def _dividend_value(dividend: Dividend) -> Decimal:
 def build_dividend_totals(
     dividends: Iterable[Dividend],
 ) -> tuple[dict[date, Decimal], dict[date, Decimal]]:
-    """Indexa proventos monetários por data de pagamento e acumulado."""
+    """Indexa proventos monetarios por data de pagamento e acumulado."""
     by_day: dict[date, Decimal] = defaultdict(lambda: _ZERO)
 
     for dividend in dividends:
@@ -152,44 +197,28 @@ def _accumulated_dividends_at(
 
 async def _has_partial_prices(
     db: AsyncSession,
-    portfolio_id: int,
+    transactions: Iterable[Transaction],
     target_date: date,
 ) -> bool:
-    """Detecta posições abertas sem cotação registrada exatamente na data."""
-    tx_result = await db.execute(
-        select(Transaction)
-        .where(
-            Transaction.portfolio_id == portfolio_id,
-            Transaction.date <= target_date,
-        )
-        .order_by(Transaction.date.asc(), Transaction.id.asc())
-    )
-    quantities: dict[str, Decimal] = defaultdict(lambda: _ZERO)
-    for tx in tx_result.scalars().all():
-        quantity = _decimal(tx.quantity)
-        if tx.operation == OperationType.buy:
-            quantities[str(tx.ticker).upper()] += quantity
-        elif tx.operation == OperationType.sell:
-            quantities[str(tx.ticker).upper()] -= quantity
+    """Detecta lacunas usando somente ``asset_prices``.
 
-    open_tickers = [ticker for ticker, quantity in quantities.items() if quantity > 0]
-    if not open_tickers:
+    A checagem reutiliza a janela de ate cinco dias anteriores usada pela leitura
+    patrimonial, portanto fim de semana e feriado nao sao classificados como
+    lacuna quando existe fechamento anterior valido.
+    """
+    requirements = build_open_quote_requirements(transactions, target_date)
+    if not requirements:
         return False
 
-    start = datetime.combine(target_date, time.min, tzinfo=timezone.utc)
-    end = start + timedelta(days=1)
-    result = await db.execute(
-        select(func.count(func.distinct(Asset.ticker)))
-        .select_from(Asset)
-        .join(AssetPrice, AssetPrice.asset_id == Asset.id)
-        .where(
-            Asset.ticker.in_(open_tickers),
-            AssetPrice.timestamp >= start,
-            AssetPrice.timestamp < end,
+    prices = await get_prices_at_date_batch(db, requirements, target_date.isoformat())
+    missing = [ticker for ticker, _ in requirements if ticker not in prices]
+    if missing:
+        logger.warning(
+            "[snapshot_twr] cobertura parcial portfolio_date=%s tickers=%s",
+            target_date,
+            ",".join(sorted(missing)),
         )
-    )
-    exact_prices = int(result.scalar_one() or 0)
-    return exact_prices < len(set(open_tickers))
+    return bool(missing)
 
 
 async def _upsert_enriched_snapshot(
@@ -214,7 +243,12 @@ async def backfill_snapshots_with_returns(
     portfolio_id: int,
     days_back: int | None = None,
 ) -> int:
-    """Reconstrói snapshots úteis e recalcula toda a cadeia TWR do período."""
+    """Reconstroi snapshots e TWR exclusivamente com dados persistidos.
+
+    Esta funcao nunca chama Alpha Vantage, BRAPI, Yahoo Finance ou qualquer outro
+    provedor. Falta de preco e refletida em ``has_partial_prices`` e nao dispara
+    sincronizacao dentro da transacao do snapshot.
+    """
     tx_result = await db.execute(
         select(Transaction)
         .where(Transaction.portfolio_id == portfolio_id)
@@ -239,9 +273,6 @@ async def backfill_snapshots_with_returns(
     start = transactions[0].date
     if days_back is not None:
         start = max(start, date.today() - timedelta(days=days_back))
-
-    total_days = (date.today() - start).days + 1
-    await _prefetch_price_history(db, portfolio_id, days_back=total_days)
 
     previous_value = _ZERO
     accumulated_return = _ZERO
@@ -287,7 +318,7 @@ async def backfill_snapshots_with_returns(
                 "accumulated_return_pct": accumulated_return,
                 "has_partial_prices": await _has_partial_prices(
                     db,
-                    portfolio_id,
+                    transactions,
                     cursor,
                 ),
                 "return_is_estimated": True,
@@ -301,7 +332,7 @@ async def backfill_snapshots_with_returns(
 
     await db.commit()
     logger.info(
-        "[snapshot_twr] portfolio=%s snapshots=%s start=%s",
+        "[snapshot_twr] portfolio=%s snapshots=%s start=%s mode=db_only",
         portfolio_id,
         count,
         start,
