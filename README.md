@@ -7,44 +7,88 @@ A branch padrão de desenvolvimento é `stable-15jun`.
 
 ---
 
-## Status atual — 13/07/2026
+## Status atual — 14/07/2026
 
-A entrega atual amplia a integridade histórica da carteira, moderniza a integração com dados de mercado e melhora os fluxos de importação e gerenciamento de carteiras.
+O SGI v2 está consolidando uma arquitetura **DB-first**: dados de mercado, proventos, benchmarks, Tesouro Direto e snapshots são persistidos antes de alimentar KPIs, páginas e gráficos. O objetivo é reduzir chamadas externas repetidas, tornar cálculos reprodutíveis e permitir auditoria por carteira, ativo e data.
 
-### Novidades da versão
+### Entrega estrutural em validação
 
-- Cliente isolado para a API v2 do provedor principal de mercado.
-- Resolução automática de tickers antigos e renomeados.
-- Validação temporal de ticker pela data efetiva do renome.
-- Persistência de aliases históricos de ativos.
-- Fundação do motor de eventos corporativos com suporte inicial a `TICKER_CHANGE`.
-- Conversão automática de saldo remanescente para o ticker atual sem alterar transações históricas.
-- Reconstrução automática de snapshots diários após importação CSV.
-- Recalculo histórico da rentabilidade após lançamentos retroativos.
-- Filtros interativos nos cards de linhas válidas, avisos e erros do CSV.
-- Edição de nome e descrição de carteiras pelo próprio usuário.
-- Correções no fluxo Alembic para ambientes com múltiplas heads válidas.
-
-### Principais entregas consolidadas
-
-- Serviço canônico de KPIs para Resumo, Patrimônio e Rentabilidade.
-- Evolução patrimonial diária e mensal com snapshots automáticos.
-- Importação CSV autenticada com preview, `dry_run`, persistência e validação integral.
-- Isolamento de carteiras por usuário e exclusão segura com auditoria preservada.
-- Administração de usuários com proteção do último superadmin.
-- Proventos vinculados à carteira selecionada no topbar.
-- Tesouro Direto com catálogo canônico e fallback de preços.
+- Orquestrador oficial `full_market_rebuild` para manutenção completa.
+- Auditoria de cobertura por ativo e identificação de lacunas históricas.
+- Sincronização idempotente de preços apenas para intervalos faltantes.
+- Metadados persistentes de provedor por ativo (`provider`, `provider_symbol`, `provider_status`, tentativas e último erro).
+- Smart sync com estado `HISTORY_START_EXHAUSTED` para não repetir buscas antigas sem ganho.
+- Snapshots TWR reconstruídos exclusivamente a partir do banco.
+- Materialização de proventos em lotes seguros.
+- Sanitização de preços anômalos antes da persistência.
+- Tratamento dedicado para Tesouro Direto e classes sem cotação de mercado.
+- Uso de histórico máximo suportado pelo provedor quando a lacuna é de início de série.
 
 ---
 
-## Próximos focos
+## Arquitetura resumida
 
-1. Continuar o motor de eventos corporativos e a integração complementar com HG Brasil (#129).
-2. Avançar na cobertura por ticker e no enriquecimento de ativos via API v2 (#130).
-3. Implementar a primeira fase segura de Backup/Restore (#83).
-4. Implementar Google OAuth (#97).
-5. Refinar a experiência da página Patrimônio (#90).
-6. Evoluir Proventos, Análise de Carteira, Janela Global do Ativo e IRPF (#131, #57, #58 e #56).
+```text
+Importação CSV / lançamentos manuais
+        ↓
+Transações
+        ↓
+Catálogo de ativos
+        ↓
+Auditoria de cobertura
+        ↓
+Gap sync de preços e dados canônicos
+        ↓
+asset_prices / proventos / benchmarks / Tesouro
+        ↓
+Snapshots patrimoniais + TWR
+        ↓
+KPIs canônicos
+        ↓
+Resumo, Patrimônio, Rentabilidade e Dashboard
+```
+
+Princípios atuais:
+
+- **DB-first:** cálculos de carteira leem dados persistidos; não consultam provedores externos durante snapshots.
+- **Idempotência:** executar o rebuild novamente não deve duplicar registros nem repetir lacunas já esgotadas.
+- **Sessões curtas:** chamadas externas acontecem fora de transações longas do banco.
+- **Separação por classe:** ativos cotados, Tesouro Direto, Renda Fixa e cripto possuem regras próprias.
+- **Qualidade explícita:** snapshots podem indicar `has_partial_prices` e `return_is_estimated` quando a cobertura não é completa.
+
+---
+
+## Comando oficial de manutenção
+
+Para reconstruir a base canônica e recalcular snapshots:
+
+```bash
+python -m app.cli.full_market_rebuild
+```
+
+No Docker Compose:
+
+```bash
+docker compose exec backend python -m app.cli.full_market_rebuild
+```
+
+No PowerShell, salvando o log:
+
+```powershell
+$LogFile = ".\full-market-rebuild-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
+
+docker compose exec backend python -m app.cli.full_market_rebuild 2>&1 |
+    Tee-Object -FilePath $LogFile
+```
+
+O comando executa, em ordem:
+
+1. Reconciliação do catálogo e histórico de preços por lacunas.
+2. Atualização de Tesouro Direto.
+3. Atualização de benchmarks macroeconômicos.
+4. Sincronização e materialização de proventos.
+5. Reconstrução de snapshots TWR.
+6. Auditoria final de cobertura.
 
 ---
 
@@ -57,8 +101,17 @@ A entrega atual amplia a integridade histórica da carteira, moderniza a integra
 - Distribuição por classe e metas de alocação.
 - Variação diária por classe separada da rentabilidade acumulada.
 - Ganho realizado e não realizado.
-- Retorno mensal, 12 meses e desde o início.
+- Retorno diário, mensal, 12 meses e desde o início via cadeia TWR.
 - Snapshots diários reconstruídos automaticamente após importações retroativas.
+
+### Histórico de preços e dados canônicos
+
+- Tabela `asset_prices` como fonte persistida para cálculo patrimonial.
+- Auditoria de cobertura por ativo, data inicial necessária e última data disponível.
+- Gap sync por borda faltante, com locks por ativo e concorrência controlada.
+- Metadados persistentes para provedor, símbolo normalizado, status, tentativas e último erro.
+- Histórico máximo para lacunas iniciais quando suportado pelo provedor.
+- Validação contra preços nulos, negativos, infinitos ou anômalos.
 
 ### Proventos
 
@@ -67,6 +120,7 @@ A entrega atual amplia a integridade histórica da carteira, moderniza a integra
 - Materialização por carteira conforme posição elegível.
 - Histórico completo por ativo, com seed idempotente.
 - Eventos não monetários fora dos totais financeiros.
+- Processamento em lotes para evitar limites de parâmetros do driver de banco.
 
 ### Importação CSV
 
@@ -141,9 +195,26 @@ Para ambientes com múltiplas heads Alembic válidas, o entrypoint aplica `alemb
 
 | Documento | Conteúdo |
 |---|---|
-| `CHANGELOG.md` | Histórico de mudanças |
-| `ROADMAP_SPRINTS.md` | Entregas e próximas sprints |
-| Inventário técnico da integração de mercado | Arquitetura e contrato da API v2 |
-| `docs/CSV_IMPORT_PIPELINE.md` | Fluxo de validação, importação e rebuild de snapshots |
+| `docs/architecture.md` | Arquitetura DB-first, módulos e fluxos |
+| `docs/price-history.md` | Histórico de preços, cobertura e gap sync |
+| `docs/providers.md` | Papéis dos provedores, fallback e metadados |
+| `docs/operations.md` | Comandos operacionais e validação local |
+| `docs/snapshots.md` | Snapshots patrimoniais e TWR |
+| `docs/canonical-data.md` | Dados canônicos e KPIs financeiros |
+| `docs/rentabilidade.md` | Semântica dos cards e retorno TWR |
+| `docs/CSV_IMPORT_PIPELINE.md` | Fluxo de validação, importação e rebuild |
 | `docs/CORPORATE_ACTIONS.md` | Fundação do motor de eventos corporativos |
-| `docs/REVISAO_INTERFACE.md` | Baseline visual e responsivo |
+| `ROADMAP.md` | Roadmap modular atualizado |
+| `ROADMAP_SPRINTS.md` | Histórico de sprints |
+| `CHANGELOG.md` | Histórico de mudanças |
+
+---
+
+## Próximos focos
+
+1. Finalizar resolução canônica de preços para mercado fracionário sem duplicar histórico.
+2. Fazer snapshots de Tesouro consumirem o histórico dedicado da classe.
+3. Revisar roteamento definitivo de cripto e Tesouro conforme cobertura documentada do provedor.
+4. Ajustar visualmente os cards da página Rentabilidade.
+5. Retomar bugs e inconsistências da página Resumo.
+6. Avançar em Eventos Corporativos, Backup/Restore, OAuth, IRPF e Janela Global do Ativo.
