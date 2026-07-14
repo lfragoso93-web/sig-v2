@@ -1,6 +1,7 @@
 """Auditoria DB-only da cobertura historica de precos por ativo."""
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta, timezone
 from enum import Enum
@@ -13,6 +14,14 @@ from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
 from app.models.transaction import Transaction
 
+_FRACTIONAL_RE = re.compile(r"^([A-Z0-9]{4,7})F$")
+_FRACTIONAL_TYPES = {
+    AssetType.ACAO,
+    AssetType.FII,
+    AssetType.ETF_NACIONAL,
+    AssetType.BDR,
+}
+
 
 class CoverageStatus(str, Enum):
     COMPLETE = "COMPLETE"
@@ -23,6 +32,7 @@ class CoverageStatus(str, Enum):
     MISSING_ASSET = "MISSING_ASSET"
     NO_MARKET_QUOTE = "NO_MARKET_QUOTE"
     DEDICATED_PROVIDER = "DEDICATED_PROVIDER"
+    CANONICAL_ALIAS = "CANONICAL_ALIAS"
 
 
 @dataclass(frozen=True)
@@ -71,6 +81,13 @@ def _as_asset_type(value: AssetType | str | None) -> AssetType:
     return AssetType(str(value))
 
 
+def _canonical_ticker(ticker: str, asset_type: AssetType) -> str | None:
+    if asset_type not in _FRACTIONAL_TYPES:
+        return None
+    match = _FRACTIONAL_RE.fullmatch(ticker.upper())
+    return match.group(1) if match else None
+
+
 def classify_coverage(
     *,
     asset_type: AssetType,
@@ -111,17 +128,20 @@ def build_missing_ranges(
     provider_status: str | None = None,
     grace_days: int = 5,
 ) -> tuple[CoverageRange, ...]:
-    """Retorna somente bordas realmente consultaveis pelo pipeline genérico."""
     if status in {
         CoverageStatus.COMPLETE,
         CoverageStatus.NO_MARKET_QUOTE,
         CoverageStatus.DEDICATED_PROVIDER,
+        CoverageStatus.CANONICAL_ALIAS,
         CoverageStatus.MISSING_ASSET,
     }:
         return ()
 
     ranges: list[CoverageRange] = []
-    start_exhausted = str(provider_status or "").upper() == "HISTORY_START_EXHAUSTED"
+    start_exhausted = str(provider_status or "").upper() in {
+        "HISTORY_START_EXHAUSTED",
+        "YAHOO_HISTORY_UNAVAILABLE",
+    }
 
     if status == CoverageStatus.MISSING:
         if required_from is not None and required_from <= required_to:
@@ -139,7 +159,6 @@ def build_missing_ranges(
             start = max(required_from or last_price_date, last_price_date - timedelta(days=grace_days))
             if start <= required_to:
                 ranges.append(CoverageRange(start, required_to, "stale_end"))
-
     return tuple(ranges)
 
 
@@ -187,28 +206,37 @@ async def audit_asset_price_coverage(
             asset_type = AssetType.OUTRO
 
         asset = assets_by_key.get((ticker, asset_type_raw))
-        stats = price_stats.get(asset.id) if asset is not None else None
+        canonical_ticker = _canonical_ticker(ticker, asset_type)
+        canonical_asset = assets_by_key.get((canonical_ticker, asset_type_raw)) if canonical_ticker else None
+        pricing_asset = canonical_asset or asset
+        stats = price_stats.get(pricing_asset.id) if pricing_asset is not None else None
         first_date = stats.first_ts.date() if stats and stats.first_ts else None
         last_date = stats.last_ts.date() if stats and stats.last_ts else None
         generic_full_history = asset_type not in NO_QUOTE_TYPES and asset_type not in DEDICATED_PRICE_TYPES
         required_from = global_start if full_history and generic_full_history else tx_requirements.get((ticker, asset_type_raw))
-        provider_status = getattr(asset, "provider_status", None) if asset is not None else None
-        status = classify_coverage(
-            asset_type=asset_type,
-            asset_exists=asset is not None,
-            required_from=required_from,
-            required_to=target,
-            first_price_date=first_date,
-            last_price_date=last_date,
-        )
-        ranges = build_missing_ranges(
-            status=status,
-            required_from=required_from,
-            required_to=target,
-            first_price_date=first_date,
-            last_price_date=last_date,
-            provider_status=provider_status,
-        )
+        provider_status = getattr(pricing_asset, "provider_status", None) if pricing_asset is not None else None
+
+        if canonical_asset is not None and asset is not None and canonical_asset.id != asset.id:
+            status = CoverageStatus.CANONICAL_ALIAS
+            ranges: tuple[CoverageRange, ...] = ()
+        else:
+            status = classify_coverage(
+                asset_type=asset_type,
+                asset_exists=asset is not None,
+                required_from=required_from,
+                required_to=target,
+                first_price_date=first_date,
+                last_price_date=last_date,
+            )
+            ranges = build_missing_ranges(
+                status=status,
+                required_from=required_from,
+                required_to=target,
+                first_price_date=first_date,
+                last_price_date=last_date,
+                provider_status=provider_status,
+            )
+
         report.append(
             AssetPriceCoverage(
                 ticker=ticker,
@@ -222,11 +250,11 @@ async def audit_asset_price_coverage(
                 status=status,
                 needs_sync=bool(ranges),
                 missing_ranges=ranges,
-                provider=getattr(asset, "provider", None) if asset is not None else None,
-                provider_symbol=getattr(asset, "provider_symbol", None) if asset is not None else None,
+                provider=getattr(pricing_asset, "provider", None) if pricing_asset is not None else None,
+                provider_symbol=canonical_ticker or getattr(pricing_asset, "provider_symbol", None) if pricing_asset is not None else canonical_ticker,
                 provider_status=provider_status,
-                provider_last_sync_at=getattr(asset, "provider_last_sync_at", None) if asset is not None else None,
-                provider_attempts=int(getattr(asset, "provider_attempts", 0) or 0) if asset is not None else 0,
+                provider_last_sync_at=getattr(pricing_asset, "provider_last_sync_at", None) if pricing_asset is not None else None,
+                provider_attempts=int(getattr(pricing_asset, "provider_attempts", 0) or 0) if pricing_asset is not None else 0,
             )
         )
     return report
