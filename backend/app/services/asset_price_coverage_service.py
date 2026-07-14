@@ -8,7 +8,7 @@ from enum import Enum
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.asset_types import NO_QUOTE_TYPES
+from app.core.asset_types import DEDICATED_PRICE_TYPES, NO_QUOTE_TYPES
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
 from app.models.transaction import Transaction
@@ -22,6 +22,7 @@ class CoverageStatus(str, Enum):
     PARTIAL_BOTH = "PARTIAL_BOTH"
     MISSING_ASSET = "MISSING_ASSET"
     NO_MARKET_QUOTE = "NO_MARKET_QUOTE"
+    DEDICATED_PROVIDER = "DEDICATED_PROVIDER"
 
 
 @dataclass(frozen=True)
@@ -82,6 +83,8 @@ def classify_coverage(
 ) -> CoverageStatus:
     if asset_type in NO_QUOTE_TYPES:
         return CoverageStatus.NO_MARKET_QUOTE
+    if asset_type in DEDICATED_PRICE_TYPES:
+        return CoverageStatus.DEDICATED_PROVIDER
     if not asset_exists:
         return CoverageStatus.MISSING_ASSET
     if first_price_date is None or last_price_date is None:
@@ -108,12 +111,13 @@ def build_missing_ranges(
     provider_status: str | None = None,
     grace_days: int = 5,
 ) -> tuple[CoverageRange, ...]:
-    """Retorna somente bordas realmente consultaveis.
-
-    ``HISTORY_START_EXHAUSTED`` informa que o provedor ja devolveu todo o historico
-    anterior disponivel. Nesse caso, nao repetimos a borda inicial em novos rebuilds.
-    """
-    if status in {CoverageStatus.COMPLETE, CoverageStatus.NO_MARKET_QUOTE, CoverageStatus.MISSING_ASSET}:
+    """Retorna somente bordas realmente consultaveis pelo pipeline genérico."""
+    if status in {
+        CoverageStatus.COMPLETE,
+        CoverageStatus.NO_MARKET_QUOTE,
+        CoverageStatus.DEDICATED_PROVIDER,
+        CoverageStatus.MISSING_ASSET,
+    }:
         return ()
 
     ranges: list[CoverageRange] = []
@@ -186,7 +190,8 @@ async def audit_asset_price_coverage(
         stats = price_stats.get(asset.id) if asset is not None else None
         first_date = stats.first_ts.date() if stats and stats.first_ts else None
         last_date = stats.last_ts.date() if stats and stats.last_ts else None
-        required_from = global_start if full_history and asset_type not in NO_QUOTE_TYPES else tx_requirements.get((ticker, asset_type_raw))
+        generic_full_history = asset_type not in NO_QUOTE_TYPES and asset_type not in DEDICATED_PRICE_TYPES
+        required_from = global_start if full_history and generic_full_history else tx_requirements.get((ticker, asset_type_raw))
         provider_status = getattr(asset, "provider_status", None) if asset is not None else None
         status = classify_coverage(
             asset_type=asset_type,
