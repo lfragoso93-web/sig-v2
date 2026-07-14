@@ -1,16 +1,10 @@
-"""Sincronizacao idempotente das bordas ausentes do historico de precos.
-
-O snapshot nunca chama este modulo. A sincronizacao e executada por onboarding, cron
-ou comando administrativo. As sessoes de banco sao curtas: lemos a cobertura,
-liberamos a conexao durante a chamada externa e abrimos outra sessao apenas para
-persistir os dados obtidos.
-"""
+"""Sincronizacao idempotente das lacunas do historico de precos."""
 from __future__ import annotations
 
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy import func, select
@@ -22,6 +16,7 @@ from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
 from app.services.asset_price_coverage_service import (
     AssetPriceCoverage,
+    CoverageRange,
     CoverageStatus,
     audit_asset_price_coverage,
 )
@@ -30,7 +25,6 @@ logger = logging.getLogger(__name__)
 
 _asset_locks: dict[int, asyncio.Lock] = {}
 _asset_locks_guard = asyncio.Lock()
-_GRACE_DAYS = 5
 
 
 @dataclass(frozen=True)
@@ -53,41 +47,19 @@ class AssetGapSyncResult:
 
 
 def build_missing_edge_ranges(coverage: AssetPriceCoverage) -> tuple[MissingPriceRange, ...]:
-    """Calcula somente lacunas nas bordas conhecidas do historico.
+    return tuple(
+        MissingPriceRange(item.date_from, item.date_to, item.reason)
+        for item in coverage.missing_ranges
+    )
 
-    Lacunas internas serao tratadas em etapa posterior. Um pequeno overlap e
-    proposital para cobrir feriados e permitir upsert idempotente.
-    """
-    if not coverage.needs_sync or coverage.asset_id is None:
-        return ()
-    if coverage.status in {CoverageStatus.NO_MARKET_QUOTE, CoverageStatus.MISSING_ASSET}:
-        return ()
 
-    required_from = coverage.required_from
-    required_to = coverage.required_to
-    ranges: list[MissingPriceRange] = []
+def _default_provider(asset_type: AssetType) -> str:
+    return "alpha_vantage" if asset_type in INTL_TYPES else "brapi"
 
-    if coverage.status == CoverageStatus.MISSING:
-        if required_from is not None and required_from <= required_to:
-            ranges.append(MissingPriceRange(required_from, required_to, "missing_all"))
-        return tuple(ranges)
 
-    if coverage.status in {CoverageStatus.PARTIAL_START, CoverageStatus.PARTIAL_BOTH}:
-        if required_from is not None and coverage.first_price_date is not None:
-            end = min(required_to, coverage.first_price_date + timedelta(days=_GRACE_DAYS))
-            if required_from <= end:
-                ranges.append(MissingPriceRange(required_from, end, "missing_start"))
-
-    if coverage.status in {CoverageStatus.STALE, CoverageStatus.PARTIAL_BOTH}:
-        if coverage.last_price_date is not None:
-            start = max(
-                required_from or coverage.last_price_date,
-                coverage.last_price_date - timedelta(days=_GRACE_DAYS),
-            )
-            if start <= required_to:
-                ranges.append(MissingPriceRange(start, required_to, "stale_end"))
-
-    return tuple(ranges)
+def _default_provider_symbol(ticker: str, asset_type: AssetType) -> str:
+    # Cripto e Tesouro terao roteamento dedicado em bloco posterior.
+    return ticker.upper().strip()
 
 
 async def _lock_for(asset_id: int) -> asyncio.Lock:
@@ -100,7 +72,6 @@ async def _fetch_range(
     asset_type: AssetType,
     missing_range: MissingPriceRange,
 ) -> tuple[list[tuple[datetime, float]], str]:
-    """Busca um intervalo sem manter conexao de banco aberta."""
     if asset_type in INTL_TYPES:
         from app.services.price_history_backfill_service import _fetch_intl_history
 
@@ -124,20 +95,30 @@ async def _fetch_range(
     return filtered, source
 
 
-async def _persist_rows(
-    asset_id: int,
+async def _persist_result(
+    *,
+    coverage: AssetPriceCoverage,
     rows: list[tuple[datetime, float, str]],
+    provider: str,
+    provider_symbol: str,
+    start_exhausted: bool,
+    error: str | None = None,
 ) -> int:
-    if not rows:
+    if coverage.asset_id is None:
         return 0
 
     inserted = 0
     async with AsyncSessionLocal() as db:
+        asset_result = await db.execute(select(Asset).where(Asset.id == coverage.asset_id))
+        asset = asset_result.scalar_one_or_none()
+        if asset is None:
+            return 0
+
         for timestamp, close, source in rows:
             stmt = (
                 pg_insert(AssetPrice)
                 .values(
-                    asset_id=asset_id,
+                    asset_id=coverage.asset_id,
                     timestamp=timestamp,
                     close=Decimal(str(round(close, 8))),
                     source=source or "gap_sync",
@@ -149,23 +130,34 @@ async def _persist_rows(
             if result.scalar_one_or_none() is not None:
                 inserted += 1
 
-        latest = max(rows, key=lambda item: item[0])
-        asset_result = await db.execute(select(Asset).where(Asset.id == asset_id))
-        asset = asset_result.scalar_one_or_none()
-        if asset is not None:
+        now = datetime.now(timezone.utc)
+        asset.provider = provider
+        asset.provider_symbol = provider_symbol
+        asset.provider_last_sync_at = now
+        asset.provider_attempts = int(asset.provider_attempts or 0) + 1
+        asset.provider_last_error = error
+        if error:
+            asset.provider_status = "FAILED"
+        elif start_exhausted:
+            asset.provider_status = "HISTORY_START_EXHAUSTED"
+        else:
+            asset.provider_status = "OK"
+
+        if rows:
+            latest = max(rows, key=lambda item: item[0])
             last_saved = await db.execute(
-                select(func.max(AssetPrice.timestamp)).where(AssetPrice.asset_id == asset_id)
+                select(func.max(AssetPrice.timestamp)).where(AssetPrice.asset_id == coverage.asset_id)
             )
             last_ts = last_saved.scalar_one_or_none()
             if last_ts is not None and last_ts <= latest[0]:
                 asset.last_price = Decimal(str(round(latest[1], 8)))
                 asset.last_price_updated_at = latest[0]
+
         await db.commit()
     return inserted
 
 
 async def sync_asset_price_gaps(coverage: AssetPriceCoverage) -> AssetGapSyncResult:
-    """Sincroniza as lacunas de um ativo auditado, com lock por asset_id."""
     ranges = build_missing_edge_ranges(coverage)
     if coverage.asset_id is None or not ranges:
         return AssetGapSyncResult(
@@ -182,73 +174,115 @@ async def sync_asset_price_gaps(coverage: AssetPriceCoverage) -> AssetGapSyncRes
         asset_type = AssetType(coverage.asset_type)
     except ValueError as exc:
         return AssetGapSyncResult(
-            asset_id=coverage.asset_id,
-            ticker=coverage.ticker,
-            status_before=coverage.status.value,
-            requested_ranges=ranges,
-            rows_received=0,
-            rows_inserted=0,
-            skipped=True,
-            error=str(exc),
+            coverage.asset_id,
+            coverage.ticker,
+            coverage.status.value,
+            ranges,
+            0,
+            0,
+            True,
+            str(exc),
         )
 
     if asset_type in NO_QUOTE_TYPES:
         return AssetGapSyncResult(
-            asset_id=coverage.asset_id,
-            ticker=coverage.ticker,
-            status_before=coverage.status.value,
-            requested_ranges=(),
-            rows_received=0,
-            rows_inserted=0,
-            skipped=True,
+            coverage.asset_id,
+            coverage.ticker,
+            coverage.status.value,
+            (),
+            0,
+            0,
+            True,
         )
 
+    provider = coverage.provider or _default_provider(asset_type)
+    provider_symbol = coverage.provider_symbol or _default_provider_symbol(coverage.ticker, asset_type)
     lock = await _lock_for(coverage.asset_id)
+
     async with lock:
         collected: list[tuple[datetime, float, str]] = []
+        start_requested = any(item.reason in {"missing_start", "missing_all"} for item in ranges)
         try:
             for missing_range in ranges:
-                rows, source = await _fetch_range(coverage.ticker, asset_type, missing_range)
+                rows, source = await _fetch_range(provider_symbol, asset_type, missing_range)
                 collected.extend((timestamp, close, source) for timestamp, close in rows)
-            inserted = await _persist_rows(coverage.asset_id, collected)
+
+            inserted = await _persist_result(
+                coverage=coverage,
+                rows=collected,
+                provider=provider,
+                provider_symbol=provider_symbol,
+                start_exhausted=start_requested and inserted_count_will_be_zero(collected, coverage),
+            )
+            # Se houve retorno, mas nenhum registro novo na borda inicial, o histórico
+            # anterior já foi esgotado. Atualizamos o status após conhecer inserted.
+            if start_requested and inserted == 0:
+                await _persist_result(
+                    coverage=coverage,
+                    rows=[],
+                    provider=provider,
+                    provider_symbol=provider_symbol,
+                    start_exhausted=True,
+                )
+
             logger.info(
-                "[price_gap_sync] %s ranges=%s received=%d inserted=%d",
+                "[price_gap_sync] %s ranges=%s received=%d inserted=%d provider=%s",
                 coverage.ticker,
                 len(ranges),
                 len(collected),
                 inserted,
+                provider,
             )
             return AssetGapSyncResult(
-                asset_id=coverage.asset_id,
-                ticker=coverage.ticker,
-                status_before=coverage.status.value,
-                requested_ranges=ranges,
-                rows_received=len(collected),
-                rows_inserted=inserted,
+                coverage.asset_id,
+                coverage.ticker,
+                coverage.status.value,
+                ranges,
+                len(collected),
+                inserted,
             )
         except Exception as exc:
+            await _persist_result(
+                coverage=coverage,
+                rows=[],
+                provider=provider,
+                provider_symbol=provider_symbol,
+                start_exhausted=False,
+                error=str(exc),
+            )
             logger.exception("[price_gap_sync] falha para %s", coverage.ticker)
             return AssetGapSyncResult(
-                asset_id=coverage.asset_id,
-                ticker=coverage.ticker,
-                status_before=coverage.status.value,
-                requested_ranges=ranges,
-                rows_received=len(collected),
-                rows_inserted=0,
-                error=str(exc),
+                coverage.asset_id,
+                coverage.ticker,
+                coverage.status.value,
+                ranges,
+                len(collected),
+                0,
+                False,
+                str(exc),
             )
 
 
-async def sync_all_asset_price_gaps(*, required_to: date | None = None) -> dict:
-    """Audita todos os ativos e sincroniza apenas os que possuem bordas ausentes."""
+def inserted_count_will_be_zero(
+    rows: list[tuple[datetime, float, str]],
+    coverage: AssetPriceCoverage,
+) -> bool:
+    """Heuristica conservadora; a confirmação definitiva ocorre após o upsert."""
+    return not rows and coverage.price_count > 0
+
+
+async def sync_all_asset_price_gaps(*, required_to: date | None = None, concurrency: int = 4) -> dict:
     async with AsyncSessionLocal() as db:
         coverage = await audit_asset_price_coverage(db, required_to=required_to)
 
-    results: list[AssetGapSyncResult] = []
-    for item in coverage:
-        if item.needs_sync:
-            results.append(await sync_asset_price_gaps(item))
+    candidates = [item for item in coverage if item.needs_sync]
+    semaphore = asyncio.Semaphore(max(1, concurrency))
 
+    async def _run(item: AssetPriceCoverage) -> AssetGapSyncResult:
+        async with semaphore:
+            return await sync_asset_price_gaps(item)
+
+    results = await asyncio.gather(*[_run(item) for item in candidates])
     return {
         "audited": len(coverage),
         "requested": len(results),
