@@ -2,9 +2,10 @@
 Fonte única de verdade para classificação de tipos de ativo.
 
 Regras de provedor:
-  - BRAPI (plano PRO) → primária para todos os ativos BR e cripto
+  - BRAPI (plano PRO) → primária para ativos BR e cripto
   - yfinance          → primária para ativos internacionais (STOCK, ETF_INTERNACIONAL)
-                        fallback para ativos BR quando BRAPI falha
+                         fallback para ativos BR quando BRAPI falha
+  - Tesouro Direto    → serviço dedicado BRAPI Treasury, nunca o sincronizador genérico
 
 Nunca importar AssetType diretamente nos serviços de cotação —
 usar os sets abaixo para evitar divergência entre arquivos.
@@ -18,7 +19,7 @@ BR_TYPES: frozenset[AssetType] = frozenset({
     AssetType.ACAO,
     AssetType.FII,
     AssetType.ETF_NACIONAL,
-    AssetType.BDR,           # BDR negocia na B3 — provedor BRAPI
+    AssetType.BDR,
     AssetType.TESOURO_DIRETO,
     AssetType.CRIPTO,
 })
@@ -30,23 +31,23 @@ INTL_TYPES: frozenset[AssetType] = frozenset({
 })
 
 # ── Ativos sem cotação de mercado disponível via API ─────────────────────────
-# RENDA_FIXA não tem ticker de mercado; OUTRO não tem ticker definido
-# TESOURO_DIRETO foi removido daqui: usa fetch_treasury_list para buyPrice atual
 NO_QUOTE_TYPES: frozenset[AssetType] = frozenset({
     AssetType.RENDA_FIXA,
     AssetType.OUTRO,
 })
 
-# ── Tipos que usam o endpoint de Tesouro Direto da BRAPI (não /quote/{ticker}) ──
-TREASURY_TYPES: frozenset[AssetType] = frozenset({
+# ── Tipos tratados por pipeline dedicado e excluídos do gap sync genérico ─────
+DEDICATED_PRICE_TYPES: frozenset[AssetType] = frozenset({
     AssetType.TESOURO_DIRETO,
 })
+
+# ── Tipos que usam o endpoint de Tesouro Direto da BRAPI ──────────────────────
+TREASURY_TYPES: frozenset[AssetType] = DEDICATED_PRICE_TYPES
 
 # ── Todos os tipos reconhecidos ───────────────────────────────────────────────
 ALL_TYPES: frozenset[AssetType] = BR_TYPES | INTL_TYPES | frozenset({AssetType.OUTRO})
 
-# ── Tipos BR que têm histórico diário disponível via BRAPI Pro ───────────────
-# TESOURO_DIRETO e RENDA_FIXA usam endpoints próprios (não /quote/{ticker})
+# ── Tipos com histórico diário no sincronizador BRAPI genérico ────────────────
 BRAPI_HISTORY_TYPES: frozenset[AssetType] = frozenset({
     AssetType.ACAO,
     AssetType.FII,
@@ -55,7 +56,7 @@ BRAPI_HISTORY_TYPES: frozenset[AssetType] = frozenset({
     AssetType.CRIPTO,
 })
 
-# ── Tipos que usam sufixo .SA no yfinance (fallback histórico BR) ─────────────
+# ── Tipos que usam sufixo .SA no yfinance ─────────────────────────────────────
 YF_SA_SUFFIX_TYPES: frozenset[AssetType] = frozenset({
     AssetType.ACAO,
     AssetType.FII,
@@ -63,7 +64,6 @@ YF_SA_SUFFIX_TYPES: frozenset[AssetType] = frozenset({
     AssetType.BDR,
 })
 
-# ── Tipos que cotam em BRL ────────────────────────────────────────────────────
 BRL_TYPES: frozenset[AssetType] = frozenset({
     AssetType.ACAO,
     AssetType.FII,
@@ -74,7 +74,6 @@ BRL_TYPES: frozenset[AssetType] = frozenset({
     AssetType.CRIPTO,
 })
 
-# ── Tipos que cotam em USD ────────────────────────────────────────────────────
 USD_TYPES: frozenset[AssetType] = frozenset({
     AssetType.STOCK,
     AssetType.ETF_INTERNACIONAL,
@@ -82,7 +81,6 @@ USD_TYPES: frozenset[AssetType] = frozenset({
 
 
 def provider_for(asset_type: AssetType) -> str:
-    """Retorna o provedor primário para o tipo de ativo."""
     if asset_type in NO_QUOTE_TYPES:
         return "none"
     if asset_type in TREASURY_TYPES:
@@ -91,16 +89,10 @@ def provider_for(asset_type: AssetType) -> str:
         return "yfinance"
     if asset_type in BR_TYPES:
         return "brapi"
-    return "brapi"  # fallback seguro para tipo desconhecido
+    return "brapi"
 
 
 def yf_ticker(ticker: str, asset_type: AssetType) -> str:
-    """
-    Converte ticker interno para formato yfinance.
-    - Ações/FIIs/ETFs BR/BDRs → adiciona sufixo .SA se não tiver
-    - Cripto                   → adiciona sufixo -USD (ex: BTC → BTC-USD)
-    - Internacionais           → mantém como está
-    """
     t = ticker.upper()
     if asset_type in YF_SA_SUFFIX_TYPES:
         return t if t.endswith(".SA") else f"{t}.SA"
