@@ -72,7 +72,7 @@ async def _boot_sequence() -> None:
     Etapa 1b - Seed/atualização do catálogo de Tesouro Direto.
     Etapa 1c - Reconciliação de lançamentos antigos de Tesouro Direto.
     Etapa 1d - Histórico/snapshot de Tesouro Direto.
-    Etapa 2 - Backfill histórico de preços.
+    Etapa 2 - Backfill global idempotente de preços, ativo a ativo.
     Etapa 3 - Backfill/incremental de benchmarks para Renda Fixa.
     """
     await asyncio.sleep(3)
@@ -155,12 +155,14 @@ async def _boot_sequence() -> None:
         logger.warning("[Boot] Etapa 2 abortada: etapa 1 falhou")
     else:
         try:
-            from app.services.price_history_backfill_service import run_initial_backfill
-            logger.info("[Boot] Etapa 2: verificando necessidade de backfill de precos")
-            await run_initial_backfill()
-            logger.info("[Boot] Etapa 2: backfill de precos concluido")
+            from app.services.asset_price_global_backfill_service import (
+                run_global_asset_price_backfill,
+            )
+            logger.info("[Boot] Etapa 2: auditando cobertura individual de precos")
+            stats = await run_global_asset_price_backfill()
+            logger.info("[Boot] Etapa 2: backfill global idempotente concluido: %s", stats)
         except Exception as e:
-            logger.error("[Boot] Etapa 2 (backfill de precos) falhou: %s", e)
+            logger.error("[Boot] Etapa 2 (backfill global de precos) falhou: %s", e)
 
     try:
         from app.services.benchmark_rate_service import import_missing_benchmark_history
