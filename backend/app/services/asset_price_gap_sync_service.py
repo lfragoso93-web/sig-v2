@@ -26,8 +26,6 @@ logger = logging.getLogger(__name__)
 _asset_locks: dict[int, asyncio.Lock] = {}
 _asset_locks_guard = asyncio.Lock()
 
-# NUMERIC(18, 8) aceita valores absolutos menores que 10^10. Um preco unitario
-# proximo desse limite e, na pratica, dado corrompido de ajuste/grupamento.
 MAX_REASONABLE_UNIT_PRICE = 100_000_000.0
 _FRACTIONAL_TICKER_RE = re.compile(r"^([A-Z0-9]{4,7})F$")
 _FRACTIONAL_TYPES = {
@@ -37,6 +35,18 @@ _FRACTIONAL_TYPES = {
     AssetType.BDR,
 }
 _INITIAL_RANGE_REASONS = {"missing_start", "missing_all"}
+_CRYPTO_SYMBOLS = {
+    "BITCOIN": "BTC-USD",
+    "BTC": "BTC-USD",
+    "ETHEREUM": "ETH-USD",
+    "ETH": "ETH-USD",
+    "CARDANO": "ADA-USD",
+    "ADA": "ADA-USD",
+    "SOLANA": "SOL-USD",
+    "SOL": "SOL-USD",
+    "RIPPLE": "XRP-USD",
+    "XRP": "XRP-USD",
+}
 
 
 @dataclass(frozen=True)
@@ -66,21 +76,20 @@ def build_missing_edge_ranges(coverage: AssetPriceCoverage) -> tuple[MissingPric
 
 
 def _default_provider(asset_type: AssetType) -> str:
+    if asset_type == AssetType.CRIPTO:
+        return "yfinance"
     return "alpha_vantage" if asset_type in INTL_TYPES else "brapi"
 
 
 def normalize_provider_symbol(ticker: str, asset_type: AssetType) -> str:
-    """Normaliza o simbolo do provedor sem alterar o ticker contabil."""
     normalized = ticker.upper().strip()
+    if asset_type == AssetType.CRIPTO:
+        return _CRYPTO_SYMBOLS.get(normalized, normalized if normalized.endswith("-USD") else f"{normalized}-USD")
     if asset_type in _FRACTIONAL_TYPES:
         match = _FRACTIONAL_TICKER_RE.fullmatch(normalized)
         if match:
             return match.group(1)
     return normalized
-
-
-def _default_provider_symbol(ticker: str, asset_type: AssetType) -> str:
-    return normalize_provider_symbol(ticker, asset_type)
 
 
 def _is_valid_price(value: object) -> bool:
@@ -100,11 +109,7 @@ def _fetch_yf_max_sync(symbol: str) -> list[tuple[datetime, float]]:
     import yfinance as yf
 
     try:
-        history = yf.Ticker(symbol).history(
-            period="max",
-            interval="1d",
-            auto_adjust=True,
-        )
+        history = yf.Ticker(symbol).history(period="max", interval="1d", auto_adjust=True)
         if history.empty:
             return []
         rows: list[tuple[datetime, float]] = []
@@ -113,50 +118,50 @@ def _fetch_yf_max_sync(symbol: str) -> list[tuple[datetime, float]]:
             if close is None:
                 continue
             ts = timestamp.to_pydatetime()
-            if ts.tzinfo is None:
-                ts = ts.replace(tzinfo=timezone.utc)
-            else:
-                ts = ts.astimezone(timezone.utc)
+            ts = ts.replace(tzinfo=timezone.utc) if ts.tzinfo is None else ts.astimezone(timezone.utc)
             rows.append((ts, float(close)))
         return rows
     except Exception as exc:
-        logger.warning("[price_gap_sync] yfinance period=max falhou symbol=%s: %s", symbol, exc)
+        logger.info("[price_gap_sync] yahoo max indisponivel symbol=%s: %s", symbol, exc)
         return []
 
 
-async def _fetch_yf_max(ticker: str, asset_type: AssetType) -> list[tuple[datetime, float]]:
+async def _fetch_yf_max(symbol: str, asset_type: AssetType) -> list[tuple[datetime, float]]:
     from app.services.price_history_service import _run_yf_with_throttle
 
-    symbol = yf_ticker(ticker, asset_type)
-    return await _run_yf_with_throttle(_fetch_yf_max_sync, symbol)
+    resolved = symbol if asset_type == AssetType.CRIPTO else yf_ticker(symbol, asset_type)
+    return await _run_yf_with_throttle(_fetch_yf_max_sync, resolved)
 
 
 async def _fetch_range(
     ticker: str,
     asset_type: AssetType,
     missing_range: MissingPriceRange,
-) -> tuple[list[tuple[datetime, float]], str]:
+) -> tuple[list[tuple[datetime, float]], str, str | None]:
     initial_history = missing_range.reason in _INITIAL_RANGE_REASONS
     rows: list[tuple[datetime, float]] = []
     source = ""
+    terminal_status: str | None = None
 
-    if asset_type in INTL_TYPES:
+    if asset_type == AssetType.CRIPTO:
+        rows = await _fetch_yf_max(ticker, asset_type)
+        source = "yfinance_crypto_max"
+        if not rows:
+            terminal_status = "YAHOO_HISTORY_UNAVAILABLE"
+    elif asset_type in INTL_TYPES:
         if initial_history:
             rows = await _fetch_yf_max(ticker, asset_type)
             source = "yfinance_period_max"
+            if not rows:
+                terminal_status = "YAHOO_HISTORY_UNAVAILABLE"
         else:
             from app.services.price_history_backfill_service import _fetch_intl_history
-
             days = max((date.today() - missing_range.date_from).days + 1, 2)
             rows, source = await _fetch_intl_history(ticker, asset_type, days)
     else:
-        from app.integrations.brapi import (
-            fetch_fii_historical_v2,
-            fetch_stocks_historical_v2,
-        )
+        from app.integrations.brapi import fetch_fii_historical_v2, fetch_stocks_historical_v2
 
         if asset_type == AssetType.FII:
-            # O endpoint de FIIs documenta apenas startDate/endDate.
             rows = await fetch_fii_historical_v2(
                 ticker=ticker,
                 date_from=missing_range.date_from.isoformat(),
@@ -164,12 +169,10 @@ async def _fetch_range(
             )
             source = "brapi_v2_fii"
         elif initial_history:
-            # A documentacao da BRAPI suporta range=max para acoes, BDRs e ETFs.
             rows = await fetch_stocks_historical_v2(ticker=ticker, range_="max")
             source = "brapi_v2_stocks_max"
             if not rows:
-                rows = await _fetch_yf_max(ticker, asset_type)
-                source = "yfinance_period_max" if rows else ""
+                terminal_status = "HISTORY_START_EXHAUSTED"
         else:
             rows = await fetch_stocks_historical_v2(
                 ticker=ticker,
@@ -192,13 +195,9 @@ async def _fetch_range(
     if rejected:
         logger.warning(
             "[price_gap_sync] precos rejeitados ticker=%s quantidade=%d source=%s intervalo=%s..%s",
-            ticker,
-            rejected,
-            source,
-            missing_range.date_from,
-            missing_range.date_to,
+            ticker, rejected, source, missing_range.date_from, missing_range.date_to,
         )
-    return filtered, source
+    return filtered, source, terminal_status
 
 
 async def _persist_result(
@@ -207,7 +206,7 @@ async def _persist_result(
     rows: list[tuple[datetime, float, str]],
     provider: str,
     provider_symbol: str,
-    start_exhausted: bool,
+    status: str,
     error: str | None = None,
 ) -> int:
     if coverage.asset_id is None:
@@ -221,8 +220,6 @@ async def _persist_result(
             return 0
 
         for timestamp, close, source in rows:
-            if not _is_valid_price(close):
-                continue
             stmt = (
                 pg_insert(AssetPrice)
                 .values(
@@ -238,30 +235,22 @@ async def _persist_result(
             if result.scalar_one_or_none() is not None:
                 inserted += 1
 
-        now = datetime.now(timezone.utc)
         asset.provider = provider
         asset.provider_symbol = provider_symbol
-        asset.provider_last_sync_at = now
+        asset.provider_last_sync_at = datetime.now(timezone.utc)
         asset.provider_attempts = int(asset.provider_attempts or 0) + 1
         asset.provider_last_error = error
-        if error:
-            asset.provider_status = "FAILED"
-        elif start_exhausted:
-            asset.provider_status = "HISTORY_START_EXHAUSTED"
-        else:
-            asset.provider_status = "OK"
+        asset.provider_status = "FAILED" if error else status
 
         if rows:
-            valid_rows = [item for item in rows if _is_valid_price(item[1])]
-            if valid_rows:
-                latest = max(valid_rows, key=lambda item: item[0])
-                last_saved = await db.execute(
-                    select(func.max(AssetPrice.timestamp)).where(AssetPrice.asset_id == coverage.asset_id)
-                )
-                last_ts = last_saved.scalar_one_or_none()
-                if last_ts is not None and last_ts <= latest[0]:
-                    asset.last_price = Decimal(str(round(latest[1], 8)))
-                    asset.last_price_updated_at = latest[0]
+            latest = max(rows, key=lambda item: item[0])
+            last_saved = await db.execute(
+                select(func.max(AssetPrice.timestamp)).where(AssetPrice.asset_id == coverage.asset_id)
+            )
+            last_ts = last_saved.scalar_one_or_none()
+            if last_ts is not None and last_ts <= latest[0]:
+                asset.last_price = Decimal(str(round(latest[1], 8)))
+                asset.last_price_updated_at = latest[0]
 
         await db.commit()
     return inserted
@@ -270,88 +259,45 @@ async def _persist_result(
 async def sync_asset_price_gaps(coverage: AssetPriceCoverage) -> AssetGapSyncResult:
     ranges = build_missing_edge_ranges(coverage)
     if coverage.asset_id is None or not ranges:
-        return AssetGapSyncResult(
-            asset_id=coverage.asset_id,
-            ticker=coverage.ticker,
-            status_before=coverage.status.value,
-            requested_ranges=ranges,
-            rows_received=0,
-            rows_inserted=0,
-            skipped=True,
-        )
+        return AssetGapSyncResult(coverage.asset_id, coverage.ticker, coverage.status.value, ranges, 0, 0, True)
 
     try:
         asset_type = AssetType(coverage.asset_type)
     except ValueError as exc:
-        return AssetGapSyncResult(
-            coverage.asset_id,
-            coverage.ticker,
-            coverage.status.value,
-            ranges,
-            0,
-            0,
-            True,
-            str(exc),
-        )
+        return AssetGapSyncResult(coverage.asset_id, coverage.ticker, coverage.status.value, ranges, 0, 0, True, str(exc))
 
     if asset_type in NO_QUOTE_TYPES:
-        return AssetGapSyncResult(
-            coverage.asset_id,
-            coverage.ticker,
-            coverage.status.value,
-            (),
-            0,
-            0,
-            True,
-        )
+        return AssetGapSyncResult(coverage.asset_id, coverage.ticker, coverage.status.value, (), 0, 0, True)
 
     provider = coverage.provider or _default_provider(asset_type)
-    provider_symbol = normalize_provider_symbol(
-        coverage.provider_symbol or coverage.ticker,
-        asset_type,
-    )
+    provider_symbol = normalize_provider_symbol(coverage.provider_symbol or coverage.ticker, asset_type)
     lock = await _lock_for(coverage.asset_id)
 
     async with lock:
         collected: list[tuple[datetime, float, str]] = []
-        start_requested = any(item.reason in _INITIAL_RANGE_REASONS for item in ranges)
+        terminal_statuses: list[str] = []
         try:
             for missing_range in ranges:
-                rows, source = await _fetch_range(provider_symbol, asset_type, missing_range)
+                rows, source, terminal_status = await _fetch_range(provider_symbol, asset_type, missing_range)
                 collected.extend((timestamp, close, source) for timestamp, close in rows)
+                if terminal_status:
+                    terminal_statuses.append(terminal_status)
 
+            final_status = terminal_statuses[-1] if terminal_statuses and not collected else "OK"
             inserted = await _persist_result(
                 coverage=coverage,
                 rows=collected,
                 provider=provider,
                 provider_symbol=provider_symbol,
-                start_exhausted=start_requested and inserted_count_will_be_zero(collected, coverage),
+                status=final_status,
             )
-            if start_requested and inserted == 0:
-                await _persist_result(
-                    coverage=coverage,
-                    rows=[],
-                    provider=provider,
-                    provider_symbol=provider_symbol,
-                    start_exhausted=True,
-                )
 
             logger.info(
-                "[price_gap_sync] %s ranges=%s received=%d inserted=%d provider=%s symbol=%s",
-                coverage.ticker,
-                len(ranges),
-                len(collected),
-                inserted,
-                provider,
-                provider_symbol,
+                "[price_gap_sync] %s ranges=%s received=%d inserted=%d provider=%s symbol=%s status=%s",
+                coverage.ticker, len(ranges), len(collected), inserted, provider, provider_symbol, final_status,
             )
             return AssetGapSyncResult(
-                coverage.asset_id,
-                coverage.ticker,
-                coverage.status.value,
-                ranges,
-                len(collected),
-                inserted,
+                coverage.asset_id, coverage.ticker, coverage.status.value, ranges, len(collected), inserted
             )
         except Exception as exc:
             await _persist_result(
@@ -359,28 +305,13 @@ async def sync_asset_price_gaps(coverage: AssetPriceCoverage) -> AssetGapSyncRes
                 rows=[],
                 provider=provider,
                 provider_symbol=provider_symbol,
-                start_exhausted=False,
+                status="FAILED",
                 error=str(exc),
             )
             logger.exception("[price_gap_sync] falha para %s", coverage.ticker)
             return AssetGapSyncResult(
-                coverage.asset_id,
-                coverage.ticker,
-                coverage.status.value,
-                ranges,
-                len(collected),
-                0,
-                False,
-                str(exc),
+                coverage.asset_id, coverage.ticker, coverage.status.value, ranges, len(collected), 0, False, str(exc)
             )
-
-
-def inserted_count_will_be_zero(
-    rows: list[tuple[datetime, float, str]],
-    coverage: AssetPriceCoverage,
-) -> bool:
-    """Heuristica conservadora; a confirmacao definitiva ocorre apos o upsert."""
-    return not rows and coverage.price_count > 0
 
 
 async def sync_all_asset_price_gaps(*, required_to: date | None = None, concurrency: int = 4) -> dict:
@@ -407,11 +338,7 @@ async def sync_all_asset_price_gaps(*, required_to: date | None = None, concurre
                 "ticker": item.ticker,
                 "status_before": item.status_before,
                 "ranges": [
-                    {
-                        "date_from": r.date_from.isoformat(),
-                        "date_to": r.date_to.isoformat(),
-                        "reason": r.reason,
-                    }
+                    {"date_from": r.date_from.isoformat(), "date_to": r.date_to.isoformat(), "reason": r.reason}
                     for r in item.requested_ranges
                 ],
                 "rows_received": item.rows_received,
