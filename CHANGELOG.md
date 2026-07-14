@@ -7,6 +7,88 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Adicionado — Arquitetura DB-first, histórico canônico e TWR (14/07/2026)
+
+#### Backend
+
+- Novo orquestrador operacional `full_market_rebuild` para manutenção completa de mercado.
+- Auditoria de cobertura histórica por ativo.
+- Sincronização idempotente de lacunas de preços.
+- Locks por ativo no gap sync.
+- Concorrência controlada no backfill global.
+- Metadados persistentes de provedor nos ativos:
+  - `provider`;
+  - `provider_symbol`;
+  - `provider_status`;
+  - `provider_last_sync_at`;
+  - `provider_last_error`;
+  - `provider_attempts`.
+- Smart sync com `HISTORY_START_EXHAUSTED` para evitar repetição de histórico inicial já esgotado.
+- Uso de histórico máximo quando a fonte e rota suportam essa capacidade.
+- Uso de `period=max` no fallback internacional de histórico amplo.
+- Sanitização de preços antes da persistência em `asset_prices`.
+- Resumo agregado de preços rejeitados por ativo/fonte.
+- Normalização de símbolo de provedor para mercado fracionário.
+- Tesouro Direto removido do pipeline genérico de gap sync.
+- Serviço dedicado de histórico de Tesouro preservado como fonte da classe.
+- Materialização de proventos em lotes seguros para evitar limite de parâmetros do driver.
+- Propagação de erros internos dos serviços para o status final do rebuild.
+- Snapshots TWR reconstruídos exclusivamente com dados persistidos no banco.
+- Endpoints de evolução diária e mensal migrados para leitura enriquecida.
+- KPIs de Rentabilidade passaram a expor retorno diário, mensal, 12 meses e desde o início.
+
+#### Regras de negócio
+
+- Snapshots não fazem chamadas externas.
+- Resultado financeiro permanece separado de rentabilidade percentual.
+- Resultado considera ganho realizado, ganho não realizado e proventos recebidos.
+- Rentabilidade usa composição TWR diária.
+- Classes sem cotação de mercado genérica não entram na sincronização de preços.
+- Lacunas antigas sem histórico adicional são marcadas como esgotadas, não como erro recorrente.
+
+#### Operação
+
+- Comando oficial:
+
+```bash
+python -m app.cli.full_market_rebuild
+```
+
+- O rebuild executa:
+  1. catálogo e preços;
+  2. Tesouro Direto;
+  3. benchmarks;
+  4. proventos;
+  5. snapshots TWR;
+  6. auditoria final.
+- O status final agora reflete erros internos retornados pelas etapas.
+- Documentação operacional adicionada para execução via Docker e PowerShell.
+
+#### Documentação
+
+- README atualizado para a arquitetura DB-first.
+- Adicionado `ROADMAP.md` modular.
+- Atualizado `ROADMAP_SPRINTS.md` com a Sprint 5L.
+- Adicionados documentos:
+  - `docs/architecture.md`;
+  - `docs/price-history.md`;
+  - `docs/providers.md`;
+  - `docs/operations.md`;
+  - `docs/snapshots.md`;
+  - `docs/canonical-data.md`;
+  - `docs/rentabilidade.md`.
+
+#### Pendências registradas
+
+- Consumo dedicado de Tesouro nos snapshots.
+- Referência canônica de preço para mercado fracionário sem duplicação física de histórico.
+- Provider router definitivo.
+- Roteamento final de cripto.
+- Ajuste visual dos cards da página Rentabilidade.
+- Revisão dos cards da página Resumo.
+
+---
+
 ### Adicionado — Integração v2, aliases e eventos corporativos (13/07/2026)
 
 #### Backend
@@ -134,10 +216,13 @@ Formato baseado em Keep a Changelog.
 
 ## Próximos focos
 
+- Validar o rebuild completo após a documentação e últimas correções de histórico.
+- Corrigir consumo de Tesouro nos snapshots.
+- Evitar duplicação física de histórico para tickers fracionários.
+- Ajustar cards da página Rentabilidade.
+- Revisar cards da página Resumo.
 - Continuar o motor de eventos corporativos (#129).
-- Avançar na evolução da integração de mercado v2 (#130).
 - Robustecer Backup/Restore (#83).
 - Implementar Google OAuth (#97).
-- Refinar Patrimônio (#90) e Proventos (#131).
 - Avançar em IRPF (#56), Análise (#57) e Janela Global do Ativo (#58).
 - Manter provedores configuráveis pelo Superadmin no backlog (#127).
