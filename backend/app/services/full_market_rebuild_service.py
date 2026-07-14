@@ -71,6 +71,55 @@ def _jsonable(value: Any) -> Any:
     return str(value)
 
 
+def _result_error(result: Any) -> str | None:
+    """Detecta falhas devolvidas no payload, mesmo sem exception.
+
+    Serviços de lote são deliberadamente resilientes e retornam contadores/listas
+    de erro. O orquestrador precisa refletir isso no status geral.
+    """
+    payload = _jsonable(result)
+    if not isinstance(payload, dict):
+        return None
+
+    errors = payload.get("errors")
+    if isinstance(errors, int) and errors > 0:
+        return f"errors={errors}"
+    if isinstance(errors, (list, tuple, set)) and errors:
+        return f"errors={len(errors)}"
+    if isinstance(errors, str) and errors.strip():
+        return errors.strip()
+
+    failed = payload.get("assets_failed")
+    if isinstance(failed, int) and failed > 0:
+        return f"assets_failed={failed}"
+
+    # Alguns orquestradores retornam uma lista detalhada de ativos.
+    assets = payload.get("assets")
+    if isinstance(assets, list):
+        asset_errors = sum(
+            1 for item in assets
+            if isinstance(item, dict) and item.get("error")
+        )
+        if asset_errors:
+            return f"asset_errors={asset_errors}"
+    return None
+
+
+def _compact_result(result: Any) -> Any:
+    payload = _jsonable(result)
+    if not isinstance(payload, dict):
+        return payload
+    compact = dict(payload)
+    assets = compact.pop("assets", None)
+    if isinstance(assets, list):
+        compact["assets_count"] = len(assets)
+        compact["asset_errors"] = sum(
+            1 for item in assets
+            if isinstance(item, dict) and item.get("error")
+        )
+    return compact
+
+
 async def _run_step(
     summary: FullMarketRebuildResult,
     name: str,
@@ -81,19 +130,26 @@ async def _run_step(
     try:
         result = await operation()
         duration = round(monotonic() - started, 3)
+        internal_error = _result_error(result)
+        step_ok = internal_error is None
+        if not step_ok:
+            summary.ok = False
         summary.steps.append(
             RebuildStepResult(
                 name=name,
-                ok=True,
+                ok=step_ok,
                 duration_seconds=duration,
                 result=result,
+                error=internal_error,
             )
         )
-        logger.info(
-            "[full_market_rebuild] OK etapa=%s duracao=%.3fs resultado=%s",
+        logger.log(
+            logging.INFO if step_ok else logging.ERROR,
+            "[full_market_rebuild] %s etapa=%s duracao=%.3fs resultado=%s",
+            "OK" if step_ok else "PARCIAL",
             name,
             duration,
-            _jsonable(result),
+            _compact_result(result),
         )
     except Exception as exc:
         duration = round(monotonic() - started, 3)
