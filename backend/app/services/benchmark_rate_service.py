@@ -1,7 +1,7 @@
 """
-Serviço de benchmarks macroeconômicos para Renda Fixa.
+Servico de benchmarks macroeconomicos para Renda Fixa.
 
-- Persiste séries históricas do SGS/BCB em rate_history.
+- Persiste series historicas do SGS/BCB em rate_history.
 - Atualiza incrementalmente via scheduler.
 - Fornece fatores acumulados para valuation de Renda Fixa.
 """
@@ -23,6 +23,9 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_HISTORY_START = date(2010, 1, 1)
 _RATE_HISTORY_UNIQUE_INDEX = "ix_rate_history_indicator_date_unique"
+_DAILY_INCREMENTAL_DAYS = 10
+_MONTHLY_INCREMENTAL_DAYS = 120
+_MONTHLY_INDICATORS = {"IPCA", "IGPM"}
 
 
 def _to_decimal(value: object, default: str = "0") -> Decimal:
@@ -41,14 +44,6 @@ def _daily_rate_from_annual_pct(annual_pct: Decimal) -> Decimal:
 
 
 async def ensure_rate_history_unique_index(db: AsyncSession) -> None:
-    """
-    Garante idempotência do upsert em bases antigas.
-
-    O model declara UniqueConstraint(indicator, date), mas algumas bases locais já
-    tinham a tabela rate_history sem a constraint nomeada. Criamos um índice único
-    equivalente para suportar ON CONFLICT (indicator, date) sem depender do nome
-    da constraint/migration original.
-    """
     await db.execute(
         text(
             f"CREATE UNIQUE INDEX IF NOT EXISTS {_RATE_HISTORY_UNIQUE_INDEX} "
@@ -59,7 +54,6 @@ async def ensure_rate_history_unique_index(db: AsyncSession) -> None:
 
 async def _upsert_rate_rows(db: AsyncSession, rows: list[dict]) -> int:
     await ensure_rate_history_unique_index(db)
-
     inserted_or_updated = 0
     for row in rows:
         values = {
@@ -99,7 +93,6 @@ async def import_benchmark_history(
     limit_last: Optional[int] = None,
     commit: bool = True,
 ) -> dict[str, int]:
-    """Importa séries SGS/BCB para rate_history."""
     selected = [i.upper() for i in (indicators or SGS_INDICATORS.keys())]
     series = await fetch_many_sgs_series(
         indicators=selected,
@@ -114,7 +107,7 @@ async def import_benchmark_history(
 
     if commit:
         await db.commit()
-    logger.info("[benchmarks] importação BCB concluída: %s", stats)
+    logger.info("[benchmarks] importacao BCB concluida: %s", stats)
     return stats
 
 
@@ -123,10 +116,7 @@ async def import_missing_benchmark_history(
     start_date: date = DEFAULT_HISTORY_START,
     end_date: Optional[date] = None,
 ) -> dict[str, int]:
-    """
-    Backfill inicial: se a tabela estiver vazia para algum indicador, importa
-    histórico desde start_date. Se já houver dados, atualiza apenas últimos 10 dias.
-    """
+    """Backfill inicial e atualizacao incremental por frequencia da serie."""
     await ensure_rate_history_unique_index(db)
 
     today = end_date or date.today()
@@ -138,25 +128,22 @@ async def import_missing_benchmark_history(
         )
         count = count_result.scalar_one() or 0
         if count == 0:
-            partial = await import_benchmark_history(
-                db,
-                indicators=[indicator],
-                start_date=start_date,
-                end_date=today,
-                commit=False,
-            )
+            window_start = start_date
         else:
-            partial = await import_benchmark_history(
-                db,
-                indicators=[indicator],
-                start_date=today - timedelta(days=10),
-                end_date=today,
-                commit=False,
-            )
+            lookback = _MONTHLY_INCREMENTAL_DAYS if indicator in _MONTHLY_INDICATORS else _DAILY_INCREMENTAL_DAYS
+            window_start = today - timedelta(days=lookback)
+
+        partial = await import_benchmark_history(
+            db,
+            indicators=[indicator],
+            start_date=window_start,
+            end_date=today,
+            commit=False,
+        )
         stats.update(partial)
 
     await db.commit()
-    logger.info("[benchmarks] backfill/incremental concluído: %s", stats)
+    logger.info("[benchmarks] backfill/incremental concluido: %s", stats)
     return stats
 
 
@@ -196,12 +183,6 @@ async def benchmark_factor(
     multiplier_pct: Decimal = Decimal("100"),
     spread_annual_pct: Decimal = Decimal("0"),
 ) -> Decimal:
-    """
-    Retorna fator acumulado entre start_date e end_date.
-
-    CDI/SELIC: usa taxa diária em % a.d. e aplica multiplier_pct.
-    IPCA/IGPM: usa taxa mensal em % a.m. e soma spread anual por dias corridos.
-    """
     indicator = indicator.upper()
     if end_date <= start_date:
         return Decimal("1")
@@ -232,11 +213,6 @@ async def benchmark_factor(
 
 
 async def latest_annual_reference_pct(db: AsyncSession, indicator: str, fallback: Decimal) -> Decimal:
-    """
-    Compatibilidade para telas/relatórios que ainda esperam uma taxa anual.
-    CDI/SELIC anualiza a última taxa diária por 252 dias úteis.
-    IPCA/IGPM anualiza a última taxa mensal por 12 meses.
-    """
     row = await latest_rate(db, indicator)
     if not row:
         return fallback
