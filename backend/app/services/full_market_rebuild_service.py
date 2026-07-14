@@ -72,11 +72,6 @@ def _jsonable(value: Any) -> Any:
 
 
 def _result_error(result: Any) -> str | None:
-    """Detecta falhas devolvidas no payload, mesmo sem exception.
-
-    Serviços de lote são deliberadamente resilientes e retornam contadores/listas
-    de erro. O orquestrador precisa refletir isso no status geral.
-    """
     payload = _jsonable(result)
     if not isinstance(payload, dict):
         return None
@@ -93,7 +88,6 @@ def _result_error(result: Any) -> str | None:
     if isinstance(failed, int) and failed > 0:
         return f"assets_failed={failed}"
 
-    # Alguns orquestradores retornam uma lista detalhada de ativos.
     assets = payload.get("assets")
     if isinstance(assets, list):
         asset_errors = sum(
@@ -204,10 +198,13 @@ async def _sync_benchmarks() -> dict[str, int]:
 
 
 async def _sync_proventos() -> Any:
-    from app.services.proventos_daily_sync_service import run_daily_proventos_sync
+    from app.services.proventos_daily_sync_service import (
+        SYNC_CONCURRENCY,
+        run_daily_proventos_sync,
+    )
 
     async with AsyncSessionLocal() as db:
-        return await run_daily_proventos_sync(db, concurrency=1)
+        return await run_daily_proventos_sync(db, concurrency=SYNC_CONCURRENCY)
 
 
 async def _rebuild_all_twr_snapshots() -> dict[str, int]:
