@@ -6,15 +6,11 @@ logger = logging.getLogger(__name__)
 
 scheduler = AsyncIOScheduler(timezone="America/Sao_Paulo")
 
-BRAPI_CHUNK_DELAY = 1.0  # segundos entre chunks BRAPI
+BRAPI_CHUNK_DELAY = 1.0
 
 
 def start_scheduler() -> None:
-    """
-    Registra jobs de cotação, benchmarks, catálogo, histórico de Tesouro Direto,
-    sincronização diária de proventos/eventos e pipeline incremental dos ativos
-    mantidos em carteira.
-    """
+    """Registra jobs operacionais e de manutenção de dados de mercado."""
 
     @scheduler.scheduled_job(
         CronTrigger(day_of_week="mon-fri", hour="9-18", minute="*/15"),
@@ -173,6 +169,23 @@ def start_scheduler() -> None:
                 logger.error("[scheduler] Erro no pipeline incremental da carteira: %s", e)
 
     @scheduler.scheduled_job(
+        CronTrigger(day_of_week="mon-fri", hour=20, minute=45),
+        id="global_asset_price_gap_maintenance",
+        name="Auditar e preencher lacunas globais de preços",
+        max_instances=1,
+        coalesce=True,
+    )
+    async def global_asset_price_gap_maintenance():
+        from app.services.asset_price_global_backfill_service import (
+            run_global_asset_price_backfill,
+        )
+        try:
+            result = await run_global_asset_price_backfill()
+            logger.info("[scheduler] Cobertura global de preços atualizada: %s", result)
+        except Exception as e:
+            logger.error("[scheduler] Erro na cobertura global de preços: %s", e)
+
+    @scheduler.scheduled_job(
         CronTrigger(day_of_week="mon-fri", hour=21, minute=0),
         id="portfolio_snapshot_auto_maintenance",
         name="Manutencao automatica de snapshots patrimoniais e TWR",
@@ -193,5 +206,5 @@ def start_scheduler() -> None:
 
     scheduler.start()
     logger.info(
-        "Scheduler iniciado — cotações intraday + Tesouro Direto + benchmarks SGS/BCB + proventos diários + pipeline carteira + snapshots TWR"
+        "Scheduler iniciado — cotações intraday + Tesouro Direto + benchmarks + proventos + pipeline + cobertura global de preços + snapshots TWR"
     )
