@@ -1,0 +1,232 @@
+"""Orquestracao manual completa da base canonica de mercado do SGI.
+
+Este servico concentra as rotinas administrativas pesadas em uma unica sequencia
+observavel e idempotente. O motor de snapshots continua DB-only: todas as coletas
+externas terminam antes da reconstrucao patrimonial/TWR.
+"""
+from __future__ import annotations
+
+import logging
+from dataclasses import asdict, dataclass, field, is_dataclass
+from datetime import datetime, timezone
+from time import monotonic
+from typing import Any, Awaitable, Callable
+
+from sqlalchemy import select
+
+from app.core.database import AsyncSessionLocal
+from app.models.portfolio import Portfolio
+from app.models.transaction import Transaction
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class RebuildStepResult:
+    name: str
+    ok: bool
+    duration_seconds: float
+    result: Any = None
+    error: str | None = None
+
+
+@dataclass
+class FullMarketRebuildResult:
+    started_at: str
+    finished_at: str | None = None
+    duration_seconds: float = 0.0
+    ok: bool = True
+    steps: list[RebuildStepResult] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "started_at": self.started_at,
+            "finished_at": self.finished_at,
+            "duration_seconds": self.duration_seconds,
+            "ok": self.ok,
+            "steps": [
+                {
+                    "name": step.name,
+                    "ok": step.ok,
+                    "duration_seconds": step.duration_seconds,
+                    "result": _jsonable(step.result),
+                    "error": step.error,
+                }
+                for step in self.steps
+            ],
+        }
+
+
+def _jsonable(value: Any) -> Any:
+    if is_dataclass(value) and not isinstance(value, type):
+        return {key: _jsonable(item) for key, item in asdict(value).items()}
+    if isinstance(value, dict):
+        return {str(key): _jsonable(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_jsonable(item) for item in value]
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value)
+
+
+async def _run_step(
+    summary: FullMarketRebuildResult,
+    name: str,
+    operation: Callable[[], Awaitable[Any]],
+) -> None:
+    started = monotonic()
+    logger.info("[full_market_rebuild] INICIO etapa=%s", name)
+    try:
+        result = await operation()
+        duration = round(monotonic() - started, 3)
+        summary.steps.append(
+            RebuildStepResult(
+                name=name,
+                ok=True,
+                duration_seconds=duration,
+                result=result,
+            )
+        )
+        logger.info(
+            "[full_market_rebuild] OK etapa=%s duracao=%.3fs resultado=%s",
+            name,
+            duration,
+            _jsonable(result),
+        )
+    except Exception as exc:
+        duration = round(monotonic() - started, 3)
+        summary.ok = False
+        summary.steps.append(
+            RebuildStepResult(
+                name=name,
+                ok=False,
+                duration_seconds=duration,
+                error=str(exc),
+            )
+        )
+        logger.exception(
+            "[full_market_rebuild] ERRO etapa=%s duracao=%.3fs",
+            name,
+            duration,
+        )
+
+
+async def _sync_global_asset_prices() -> dict[str, Any]:
+    from app.services.asset_price_global_backfill_service import (
+        run_global_asset_price_backfill,
+    )
+
+    return await run_global_asset_price_backfill()
+
+
+async def _sync_treasury() -> dict[str, Any]:
+    from app.services.treasury_catalog_service import seed_treasury_assets
+    from app.services.treasury_price_history_service import (
+        import_missing_treasury_price_history,
+        update_treasury_latest_prices,
+    )
+
+    async with AsyncSessionLocal() as db:
+        catalog = await seed_treasury_assets(db)
+    history = await import_missing_treasury_price_history()
+    async with AsyncSessionLocal() as db:
+        latest = await update_treasury_latest_prices(db)
+    return {
+        "catalog": _jsonable(catalog),
+        "history": history,
+        "latest_prices": len(latest),
+    }
+
+
+async def _sync_benchmarks() -> dict[str, int]:
+    from app.services.benchmark_rate_service import import_missing_benchmark_history
+
+    async with AsyncSessionLocal() as db:
+        return await import_missing_benchmark_history(db)
+
+
+async def _sync_proventos() -> Any:
+    from app.services.proventos_daily_sync_service import run_daily_proventos_sync
+
+    async with AsyncSessionLocal() as db:
+        return await run_daily_proventos_sync(db, concurrency=1)
+
+
+async def _rebuild_all_twr_snapshots() -> dict[str, int]:
+    from app.services.portfolio_snapshot_twr_service import (
+        backfill_snapshots_with_returns,
+    )
+
+    async with AsyncSessionLocal() as db:
+        rows = await db.execute(
+            select(Portfolio.id)
+            .join(Transaction, Transaction.portfolio_id == Portfolio.id)
+            .where(Portfolio.is_active.is_(True))
+            .distinct()
+            .order_by(Portfolio.id.asc())
+        )
+        portfolio_ids = [row.id for row in rows.all()]
+
+    processed = 0
+    snapshots = 0
+    errors = 0
+    for portfolio_id in portfolio_ids:
+        try:
+            async with AsyncSessionLocal() as db:
+                snapshots += await backfill_snapshots_with_returns(db, portfolio_id)
+            processed += 1
+        except Exception:
+            errors += 1
+            logger.exception(
+                "[full_market_rebuild] falha ao reconstruir TWR portfolio=%s",
+                portfolio_id,
+            )
+
+    return {
+        "portfolios": len(portfolio_ids),
+        "processed": processed,
+        "errors": errors,
+        "snapshots": snapshots,
+    }
+
+
+async def _final_coverage_audit() -> dict[str, Any]:
+    from app.services.asset_price_coverage_service import (
+        summarize_asset_price_coverage,
+    )
+
+    async with AsyncSessionLocal() as db:
+        return await summarize_asset_price_coverage(db, full_history=True)
+
+
+async def run_full_market_rebuild() -> FullMarketRebuildResult:
+    """Executa a manutencao completa em ordem segura e retorna resumo estruturado."""
+    started_dt = datetime.now(timezone.utc)
+    started_clock = monotonic()
+    summary = FullMarketRebuildResult(started_at=started_dt.isoformat())
+
+    logger.info("=" * 72)
+    logger.info("SGI V2 FULL MARKET REBUILD - INICIO")
+    logger.info("=" * 72)
+
+    await _run_step(summary, "catalog_and_asset_prices", _sync_global_asset_prices)
+    await _run_step(summary, "treasury", _sync_treasury)
+    await _run_step(summary, "benchmarks", _sync_benchmarks)
+    await _run_step(summary, "proventos", _sync_proventos)
+    await _run_step(summary, "twr_snapshots", _rebuild_all_twr_snapshots)
+    await _run_step(summary, "final_coverage_audit", _final_coverage_audit)
+
+    finished_dt = datetime.now(timezone.utc)
+    summary.finished_at = finished_dt.isoformat()
+    summary.duration_seconds = round(monotonic() - started_clock, 3)
+
+    logger.info("=" * 72)
+    logger.info(
+        "SGI V2 FULL MARKET REBUILD - FIM ok=%s duracao=%.3fs",
+        summary.ok,
+        summary.duration_seconds,
+    )
+    logger.info("=" * 72)
+    return summary
