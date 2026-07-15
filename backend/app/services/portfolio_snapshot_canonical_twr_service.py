@@ -29,6 +29,7 @@ from app.services.twr_service import (
 logger = logging.getLogger(__name__)
 _ZERO = Decimal("0")
 _MONEY = Decimal("0.01")
+_DIAGNOSTIC_PREFIXES = ("fixed_income_", "treasury_")
 
 
 async def backfill_canonical_snapshots_with_returns(
@@ -97,10 +98,12 @@ async def backfill_canonical_snapshots_with_returns(
                 daily_return,
             )
 
+            # Campos auxiliares do valuation canônico pertencem apenas ao retorno
+            # operacional/log. Eles não são colunas de portfolio_snapshots.
             snapshot_fields = {
                 key: value
                 for key, value in totals.items()
-                if not key.startswith("fixed_income_")
+                if not key.startswith(_DIAGNOSTIC_PREFIXES)
             }
             values = {
                 **snapshot_fields,
