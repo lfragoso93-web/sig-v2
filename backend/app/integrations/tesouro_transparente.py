@@ -9,13 +9,13 @@ from __future__ import annotations
 import csv
 import io
 import logging
+import re
+import unicodedata
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Iterable
 
 import httpx
-
-from app.integrations.brapi_treasury import canonical_treasury_symbol_from_text
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +80,14 @@ def _first(row: dict[str, str], *names: str) -> str:
     return ""
 
 
+def _normalize(value: str) -> str:
+    raw = unicodedata.normalize("NFKD", value or "")
+    raw = "".join(ch for ch in raw if not unicodedata.combining(ch))
+    raw = raw.lower().replace("+", " mais ")
+    raw = re.sub(r"[^a-z0-9]+", " ", raw)
+    return re.sub(r"\s+", " ", raw).strip()
+
+
 def _parse_date(value: str) -> datetime | None:
     raw = (value or "").strip()
     if not raw:
@@ -89,6 +97,35 @@ def _parse_date(value: str) -> datetime | None:
             return datetime.strptime(raw[:10], fmt).replace(tzinfo=timezone.utc)
         except ValueError:
             continue
+    return None
+
+
+def _canonical_symbol(title: str, maturity: str) -> str | None:
+    normalized = _normalize(title)
+    maturity_dt = _parse_date(maturity)
+    year_match = re.search(r"20\d{2}", f"{title} {maturity}")
+    year = int(year_match.group(0)) if year_match else None
+
+    if "renda" in normalized and year:
+        return f"tesouro-renda-mais-{year}"
+    if "educa" in normalized and year:
+        return f"tesouro-educa-mais-{year}"
+    if maturity_dt is None:
+        return None
+
+    suffix = maturity_dt.strftime("%d%m%Y")
+    has_coupon = "juros semestrais" in normalized
+    if "selic" in normalized:
+        return f"tesouro-selic-{suffix}"
+    if "prefixado" in normalized:
+        base = "tesouro-prefixado-com-juros-semestrais" if has_coupon else "tesouro-prefixado"
+        return f"{base}-{suffix}"
+    if "ipca" in normalized:
+        base = "tesouro-ipca-com-juros-semestrais" if has_coupon else "tesouro-ipca"
+        return f"{base}-{suffix}"
+    if "igp m" in normalized or "igpm" in normalized:
+        base = "tesouro-igpm-com-juros-semestrais" if has_coupon else "tesouro-igpm"
+        return f"{base}-{suffix}"
     return None
 
 
@@ -121,7 +158,7 @@ def parse_history_csv(
     for row in reader:
         title = _first(row, "Tipo Titulo", "Tipo Título", "Titulo", "Título", "Nome")
         maturity = _first(row, "Data Vencimento", "Vencimento")
-        symbol = canonical_treasury_symbol_from_text(f"{title} {maturity}")
+        symbol = _canonical_symbol(title, maturity)
         if not symbol:
             continue
         symbol = symbol.lower()
