@@ -21,7 +21,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.asset_types import NO_QUOTE_TYPES
+from app.core.asset_types import DEDICATED_PRICE_TYPES, NO_QUOTE_TYPES
 from app.models.asset import AssetType
 from app.models.dividend import Dividend, DividendStatus
 from app.models.portfolio_snapshot import PortfolioSnapshot
@@ -39,6 +39,7 @@ _ZERO = Decimal("0")
 _MONEY = Decimal("0.01")
 _TECHNICAL_EVENT_PREFIX = "Evento corporativo - troca de ticker"
 _NON_CASH_DIVIDEND_TYPES = {"BONIFICACAO", "SUBSCRICAO"}
+_NON_MARKET_VALUATION_TYPES = NO_QUOTE_TYPES | DEDICATED_PRICE_TYPES
 
 
 def _decimal(value: object) -> Decimal:
@@ -77,10 +78,12 @@ def build_open_quote_requirements(
     transactions: Iterable[Transaction],
     target_date: date,
 ) -> list[tuple[str, AssetType]]:
-    """Retorna posicoes abertas que realmente dependem de cotacao de mercado.
+    """Retorna apenas posicoes abertas dependentes de cotacao de mercado.
 
-    Tesouro, renda fixa e demais ``NO_QUOTE_TYPES`` nao entram nesta lista; sua
-    avaliacao pertence aos motores especificos da classe, nao a ``asset_prices``.
+    Renda fixa, Tesouro e demais tipos dedicados nao entram nesta lista. Eles
+    pertencem aos respectivos motores de valuation e nao devem gerar lacunas em
+    ``asset_prices`` nem marcar o snapshot como parcial por falta de cotacao
+    generica.
     """
     quantities: dict[str, Decimal] = defaultdict(lambda: _ZERO)
     asset_types: dict[str, AssetType] = {}
@@ -99,7 +102,7 @@ def build_open_quote_requirements(
     return [
         (ticker, asset_types[ticker])
         for ticker, quantity in quantities.items()
-        if quantity > 0 and asset_types[ticker] not in NO_QUOTE_TYPES
+        if quantity > 0 and asset_types[ticker] not in _NON_MARKET_VALUATION_TYPES
     ]
 
 
@@ -107,12 +110,7 @@ def calculate_transaction_components(
     transactions: Iterable[Transaction],
     target_date: date,
 ) -> tuple[Decimal, Decimal]:
-    """Calcula ganho realizado acumulado e fluxo externo liquido do dia.
-
-    Compras sao tratadas como aportes e vendas como retiradas porque ainda nao
-    existe saldo de caixa explicito. Taxas de compra integram o aporte; taxas de
-    venda reduzem tanto o valor retirado quanto o ganho realizado.
-    """
+    """Calcula ganho realizado acumulado e fluxo externo liquido do dia."""
     states: dict[str, tuple[Decimal, Decimal]] = {}
     realized_pnl = _ZERO
     net_external_flow = _ZERO
@@ -159,7 +157,6 @@ def _dividend_value(dividend: Dividend) -> Decimal:
 def build_dividend_totals(
     dividends: Iterable[Dividend],
 ) -> tuple[dict[date, Decimal], dict[date, Decimal]]:
-    """Indexa proventos monetarios por data de pagamento e acumulado."""
     by_day: dict[date, Decimal] = defaultdict(lambda: _ZERO)
 
     for dividend in dividends:
@@ -200,12 +197,6 @@ async def _has_partial_prices(
     transactions: Iterable[Transaction],
     target_date: date,
 ) -> bool:
-    """Detecta lacunas usando somente ``asset_prices``.
-
-    A checagem reutiliza a janela de ate cinco dias anteriores usada pela leitura
-    patrimonial, portanto fim de semana e feriado nao sao classificados como
-    lacuna quando existe fechamento anterior valido.
-    """
     requirements = build_open_quote_requirements(transactions, target_date)
     if not requirements:
         return False
@@ -243,12 +234,7 @@ async def backfill_snapshots_with_returns(
     portfolio_id: int,
     days_back: int | None = None,
 ) -> int:
-    """Reconstroi snapshots e TWR exclusivamente com dados persistidos.
-
-    Esta funcao nunca chama Alpha Vantage, BRAPI, Yahoo Finance ou qualquer outro
-    provedor. Falta de preco e refletida em ``has_partial_prices`` e nao dispara
-    sincronizacao dentro da transacao do snapshot.
-    """
+    """Reconstroi snapshots e TWR exclusivamente com dados persistidos."""
     tx_result = await db.execute(
         select(Transaction)
         .where(Transaction.portfolio_id == portfolio_id)
