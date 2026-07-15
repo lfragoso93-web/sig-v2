@@ -1,9 +1,9 @@
 """
 Serviço de catálogo do Tesouro Direto.
 
-Fonte de verdade: tabela assets, populada a partir da BRAPI e de fallbacks
-públicos do Tesouro. O sistema deve sempre operar com o `symbol` canônico para
-cotações e histórico.
+Fonte de verdade: tabela assets, populada a partir de fontes públicas do Tesouro
+e da BRAPI. Itens sintéticos podem auxiliar a resolução de aliases, mas nunca
+são persistidos como novos ativos.
 """
 from __future__ import annotations
 
@@ -25,6 +25,7 @@ from app.models.asset import Asset, AssetType
 logger = logging.getLogger(__name__)
 
 _TREASURY_TYPE = AssetType.TESOURO_DIRETO.value
+_SYNTHETIC_SOURCE = "synthetic_treasury_long_term"
 
 
 @dataclass
@@ -91,7 +92,7 @@ def _sector(item: dict) -> str:
 
 
 async def seed_treasury_assets(db: AsyncSession, commit: bool = True) -> TreasurySeedResult:
-    """Importa/atualiza títulos do Tesouro Direto em assets."""
+    """Importa/atualiza apenas títulos confirmados por fontes externas reais."""
     result = TreasurySeedResult()
     try:
         items = await fetch_treasury_list()
@@ -101,6 +102,10 @@ async def seed_treasury_assets(db: AsyncSession, commit: bool = True) -> Treasur
         return result
 
     for item in items:
+        if str(item.get("source") or "").strip().lower() == _SYNTHETIC_SOURCE:
+            result.skipped += 1
+            continue
+
         symbol = _symbol(item)
         if not symbol:
             result.errors += 1
@@ -128,7 +133,6 @@ async def seed_treasury_assets(db: AsyncSession, commit: bool = True) -> Treasur
                 )
                 result.created += 1
                 continue
-
             changed = False
             if name and existing.name != name:
                 existing.name = name
@@ -167,14 +171,7 @@ async def _treasury_assets(db: AsyncSession) -> list[Asset]:
 
 
 async def resolve_treasury_symbol(db: AsyncSession, raw: str | None) -> Optional[str]:
-    """
-    Resolve texto/ticker informado pelo usuário para o symbol canônico.
-
-    Exemplo importante:
-    "TESOURO RENDA+ APOSENTADORIA EXTRA 2060" -> tesouro-renda-mais-2060
-    "Tesouro RendA+ 2060" -> tesouro-renda-mais-2060
-    "Tesouro Educa+ 2040" -> tesouro-educa-mais-2040
-    """
+    """Resolve texto/ticker informado pelo usuário para o símbolo canônico."""
     value = (raw or "").strip()
     if not value:
         return None
