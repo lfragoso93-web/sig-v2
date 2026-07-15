@@ -84,7 +84,10 @@ def _default_provider(asset_type: AssetType) -> str:
 def normalize_provider_symbol(ticker: str, asset_type: AssetType) -> str:
     normalized = ticker.upper().strip()
     if asset_type == AssetType.CRIPTO:
-        return _CRYPTO_SYMBOLS.get(normalized, normalized if normalized.endswith("-USD") else f"{normalized}-USD")
+        return _CRYPTO_SYMBOLS.get(
+            normalized,
+            normalized if normalized.endswith("-USD") else f"{normalized}-USD",
+        )
     if asset_type in _FRACTIONAL_TYPES:
         match = _FRACTIONAL_TICKER_RE.fullmatch(normalized)
         if match:
@@ -133,34 +136,44 @@ async def _fetch_yf_max(symbol: str, asset_type: AssetType) -> list[tuple[dateti
     return await _run_yf_with_throttle(_fetch_yf_max_sync, resolved)
 
 
+def _empty_status(missing_range: MissingPriceRange) -> str:
+    if missing_range.reason == "missing_all":
+        return "HISTORY_UNAVAILABLE"
+    if missing_range.reason == "missing_start":
+        return "HISTORY_START_EXHAUSTED"
+    return "HISTORY_END_UNAVAILABLE"
+
+
 async def _fetch_range(
     ticker: str,
     asset_type: AssetType,
     missing_range: MissingPriceRange,
-) -> tuple[list[tuple[datetime, float]], str, str | None]:
+) -> tuple[list[tuple[datetime, float]], str, str | None, str]:
     initial_history = missing_range.reason in _INITIAL_RANGE_REASONS
     rows: list[tuple[datetime, float]] = []
     source = ""
     terminal_status: str | None = None
+    effective_provider = _default_provider(asset_type)
 
     if asset_type == AssetType.CRIPTO:
         rows = await _fetch_yf_max(ticker, asset_type)
         source = "yfinance_crypto_max"
-        if not rows:
-            terminal_status = "YAHOO_HISTORY_UNAVAILABLE"
+        effective_provider = "yfinance"
     elif asset_type in INTL_TYPES:
         if initial_history:
             rows = await _fetch_yf_max(ticker, asset_type)
             source = "yfinance_period_max"
-            if not rows:
-                terminal_status = "YAHOO_HISTORY_UNAVAILABLE"
+            effective_provider = "yfinance"
         else:
             from app.services.price_history_backfill_service import _fetch_intl_history
+
             days = max((date.today() - missing_range.date_from).days + 1, 2)
             rows, source = await _fetch_intl_history(ticker, asset_type, days)
+            effective_provider = "yfinance" if "yfinance" in str(source).lower() else "alpha_vantage"
     else:
         from app.integrations.brapi import fetch_fii_historical_v2, fetch_stocks_historical_v2
 
+        effective_provider = "brapi"
         if asset_type == AssetType.FII:
             rows = await fetch_fii_historical_v2(
                 ticker=ticker,
@@ -171,8 +184,6 @@ async def _fetch_range(
         elif initial_history:
             rows = await fetch_stocks_historical_v2(ticker=ticker, range_="max")
             source = "brapi_v2_stocks_max"
-            if not rows:
-                terminal_status = "HISTORY_START_EXHAUSTED"
         else:
             rows = await fetch_stocks_historical_v2(
                 ticker=ticker,
@@ -192,12 +203,18 @@ async def _fetch_range(
             continue
         filtered.append((ts.astimezone(timezone.utc), float(close)))
 
+    if not filtered:
+        terminal_status = _empty_status(missing_range)
     if rejected:
         logger.warning(
             "[price_gap_sync] precos rejeitados ticker=%s quantidade=%d source=%s intervalo=%s..%s",
-            ticker, rejected, source, missing_range.date_from, missing_range.date_to,
+            ticker,
+            rejected,
+            source,
+            missing_range.date_from,
+            missing_range.date_to,
         )
-    return filtered, source, terminal_status
+    return filtered, source, terminal_status, effective_provider
 
 
 async def _persist_result(
@@ -256,34 +273,81 @@ async def _persist_result(
     return inserted
 
 
+def _merge_terminal_statuses(statuses: list[str]) -> str:
+    values = set(statuses)
+    if "HISTORY_UNAVAILABLE" in values:
+        return "HISTORY_UNAVAILABLE"
+    if "HISTORY_START_EXHAUSTED" in values and "HISTORY_END_UNAVAILABLE" in values:
+        return "HISTORY_UNAVAILABLE"
+    if "HISTORY_END_UNAVAILABLE" in values:
+        return "HISTORY_END_UNAVAILABLE"
+    if "HISTORY_START_EXHAUSTED" in values:
+        return "HISTORY_START_EXHAUSTED"
+    return "OK"
+
+
 async def sync_asset_price_gaps(coverage: AssetPriceCoverage) -> AssetGapSyncResult:
     ranges = build_missing_edge_ranges(coverage)
     if coverage.asset_id is None or not ranges:
-        return AssetGapSyncResult(coverage.asset_id, coverage.ticker, coverage.status.value, ranges, 0, 0, True)
+        return AssetGapSyncResult(
+            coverage.asset_id,
+            coverage.ticker,
+            coverage.status.value,
+            ranges,
+            0,
+            0,
+            True,
+        )
 
     try:
         asset_type = AssetType(coverage.asset_type)
     except ValueError as exc:
-        return AssetGapSyncResult(coverage.asset_id, coverage.ticker, coverage.status.value, ranges, 0, 0, True, str(exc))
+        return AssetGapSyncResult(
+            coverage.asset_id,
+            coverage.ticker,
+            coverage.status.value,
+            ranges,
+            0,
+            0,
+            True,
+            str(exc),
+        )
 
     if asset_type in NO_QUOTE_TYPES:
-        return AssetGapSyncResult(coverage.asset_id, coverage.ticker, coverage.status.value, (), 0, 0, True)
+        return AssetGapSyncResult(
+            coverage.asset_id,
+            coverage.ticker,
+            coverage.status.value,
+            (),
+            0,
+            0,
+            True,
+        )
 
-    provider = coverage.provider or _default_provider(asset_type)
-    provider_symbol = normalize_provider_symbol(coverage.provider_symbol or coverage.ticker, asset_type)
+    provider_symbol = normalize_provider_symbol(
+        coverage.provider_symbol or coverage.ticker,
+        asset_type,
+    )
     lock = await _lock_for(coverage.asset_id)
 
     async with lock:
         collected: list[tuple[datetime, float, str]] = []
         terminal_statuses: list[str] = []
+        effective_providers: list[str] = []
         try:
             for missing_range in ranges:
-                rows, source, terminal_status = await _fetch_range(provider_symbol, asset_type, missing_range)
+                rows, source, terminal_status, effective_provider = await _fetch_range(
+                    provider_symbol,
+                    asset_type,
+                    missing_range,
+                )
                 collected.extend((timestamp, close, source) for timestamp, close in rows)
+                effective_providers.append(effective_provider)
                 if terminal_status:
                     terminal_statuses.append(terminal_status)
 
-            final_status = terminal_statuses[-1] if terminal_statuses and not collected else "OK"
+            provider = effective_providers[-1] if effective_providers else _default_provider(asset_type)
+            final_status = _merge_terminal_statuses(terminal_statuses)
             inserted = await _persist_result(
                 coverage=coverage,
                 rows=collected,
@@ -292,14 +356,37 @@ async def sync_asset_price_gaps(coverage: AssetPriceCoverage) -> AssetGapSyncRes
                 status=final_status,
             )
 
+            initial_requested = any(item.reason in _INITIAL_RANGE_REASONS for item in ranges)
+            if initial_requested and collected and inserted == 0 and final_status == "OK":
+                final_status = "HISTORY_START_EXHAUSTED"
+                await _persist_result(
+                    coverage=coverage,
+                    rows=[],
+                    provider=provider,
+                    provider_symbol=provider_symbol,
+                    status=final_status,
+                )
+
             logger.info(
                 "[price_gap_sync] %s ranges=%s received=%d inserted=%d provider=%s symbol=%s status=%s",
-                coverage.ticker, len(ranges), len(collected), inserted, provider, provider_symbol, final_status,
+                coverage.ticker,
+                len(ranges),
+                len(collected),
+                inserted,
+                provider,
+                provider_symbol,
+                final_status,
             )
             return AssetGapSyncResult(
-                coverage.asset_id, coverage.ticker, coverage.status.value, ranges, len(collected), inserted
+                coverage.asset_id,
+                coverage.ticker,
+                coverage.status.value,
+                ranges,
+                len(collected),
+                inserted,
             )
         except Exception as exc:
+            provider = effective_providers[-1] if effective_providers else _default_provider(asset_type)
             await _persist_result(
                 coverage=coverage,
                 rows=[],
@@ -310,11 +397,22 @@ async def sync_asset_price_gaps(coverage: AssetPriceCoverage) -> AssetGapSyncRes
             )
             logger.exception("[price_gap_sync] falha para %s", coverage.ticker)
             return AssetGapSyncResult(
-                coverage.asset_id, coverage.ticker, coverage.status.value, ranges, len(collected), 0, False, str(exc)
+                coverage.asset_id,
+                coverage.ticker,
+                coverage.status.value,
+                ranges,
+                len(collected),
+                0,
+                False,
+                str(exc),
             )
 
 
-async def sync_all_asset_price_gaps(*, required_to: date | None = None, concurrency: int = 4) -> dict:
+async def sync_all_asset_price_gaps(
+    *,
+    required_to: date | None = None,
+    concurrency: int = 4,
+) -> dict:
     async with AsyncSessionLocal() as db:
         coverage = await audit_asset_price_coverage(db, required_to=required_to)
 
@@ -338,7 +436,11 @@ async def sync_all_asset_price_gaps(*, required_to: date | None = None, concurre
                 "ticker": item.ticker,
                 "status_before": item.status_before,
                 "ranges": [
-                    {"date_from": r.date_from.isoformat(), "date_to": r.date_to.isoformat(), "reason": r.reason}
+                    {
+                        "date_from": r.date_from.isoformat(),
+                        "date_to": r.date_to.isoformat(),
+                        "reason": r.reason,
+                    }
                     for r in item.requested_ranges
                 ],
                 "rows_received": item.rows_received,
