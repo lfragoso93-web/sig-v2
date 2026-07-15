@@ -1,7 +1,7 @@
 """Ponto de entrada canônico do full market rebuild.
 
-Reutiliza o orquestrador estável e substitui somente a etapa de snapshots pelo
-backfill que usa os motores de valuation dedicados.
+Reutiliza o orquestrador estável e substitui as etapas de Tesouro e snapshots
+pelas versões orientadas ao catálogo oficial e aos motores dedicados.
 """
 from __future__ import annotations
 
@@ -23,6 +23,25 @@ from app.services.portfolio_snapshot_canonical_twr_service import (
 
 logger = logging.getLogger(__name__)
 _ZERO = Decimal("0")
+
+
+async def _sync_treasury_v2() -> dict:
+    """Executa catálogo oficial, histórico e preço atual do Tesouro."""
+    from app.services.treasury_catalog_v2_service import sync_treasury_catalog_v2
+    from app.services.treasury_official_history_service import rebuild_official_treasury_history
+    from app.services.treasury_price_history_service import update_treasury_latest_prices
+
+    async with AsyncSessionLocal() as db:
+        catalog = await sync_treasury_catalog_v2(db)
+    history = await rebuild_official_treasury_history()
+    async with AsyncSessionLocal() as db:
+        latest = await update_treasury_latest_prices(db)
+    return {
+        "catalog": base_rebuild._jsonable(catalog),
+        "catalog_mode": "tesouro_transparente_v2",
+        "history": history,
+        "latest_prices": len(latest),
+    }
 
 
 async def _rebuild_all_canonical_twr_snapshots() -> dict:
@@ -107,9 +126,11 @@ def _log_canonical_valuation(summary) -> None:
 
 
 async def run_full_market_rebuild():
-    """Executa o orquestrador existente com a etapa TWR canônica."""
+    """Executa o orquestrador existente com Tesouro v2 e TWR canônico."""
+    original_treasury = base_rebuild._sync_treasury
     original_snapshots = base_rebuild._rebuild_all_twr_snapshots
     original_step_payload = base_rebuild._step_payload
+    base_rebuild._sync_treasury = _sync_treasury_v2
     base_rebuild._rebuild_all_twr_snapshots = _rebuild_all_canonical_twr_snapshots
     base_rebuild._step_payload = _canonical_step_payload
     try:
@@ -117,5 +138,6 @@ async def run_full_market_rebuild():
         _log_canonical_valuation(result)
         return result
     finally:
+        base_rebuild._sync_treasury = original_treasury
         base_rebuild._rebuild_all_twr_snapshots = original_snapshots
         base_rebuild._step_payload = original_step_payload
