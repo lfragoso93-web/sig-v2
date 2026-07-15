@@ -137,12 +137,18 @@ def build_missing_ranges(
     }:
         return ()
 
-    ranges: list[CoverageRange] = []
-    start_exhausted = str(provider_status or "").upper() in {
-        "HISTORY_START_EXHAUSTED",
+    normalized_provider_status = str(provider_status or "").upper()
+    history_unavailable = normalized_provider_status in {
+        "HISTORY_UNAVAILABLE",
         "YAHOO_HISTORY_UNAVAILABLE",
     }
+    start_exhausted = history_unavailable or normalized_provider_status == "HISTORY_START_EXHAUSTED"
+    end_unavailable = history_unavailable or normalized_provider_status == "HISTORY_END_UNAVAILABLE"
 
+    if history_unavailable:
+        return ()
+
+    ranges: list[CoverageRange] = []
     if status == CoverageStatus.MISSING:
         if required_from is not None and required_from <= required_to:
             ranges.append(CoverageRange(required_from, required_to, "missing_all"))
@@ -154,7 +160,7 @@ def build_missing_ranges(
             if required_from <= end:
                 ranges.append(CoverageRange(required_from, end, "missing_start"))
 
-    if status in {CoverageStatus.STALE, CoverageStatus.PARTIAL_BOTH}:
+    if status in {CoverageStatus.STALE, CoverageStatus.PARTIAL_BOTH} and not end_unavailable:
         if last_price_date is not None:
             start = max(required_from or last_price_date, last_price_date - timedelta(days=grace_days))
             if start <= required_to:
@@ -251,10 +257,23 @@ async def audit_asset_price_coverage(
                 needs_sync=bool(ranges),
                 missing_ranges=ranges,
                 provider=getattr(pricing_asset, "provider", None) if pricing_asset is not None else None,
-                provider_symbol=canonical_ticker or getattr(pricing_asset, "provider_symbol", None) if pricing_asset is not None else canonical_ticker,
+                provider_symbol=(
+                    canonical_ticker
+                    or getattr(pricing_asset, "provider_symbol", None)
+                    if pricing_asset is not None
+                    else canonical_ticker
+                ),
                 provider_status=provider_status,
-                provider_last_sync_at=getattr(pricing_asset, "provider_last_sync_at", None) if pricing_asset is not None else None,
-                provider_attempts=int(getattr(pricing_asset, "provider_attempts", 0) or 0) if pricing_asset is not None else 0,
+                provider_last_sync_at=(
+                    getattr(pricing_asset, "provider_last_sync_at", None)
+                    if pricing_asset is not None
+                    else None
+                ),
+                provider_attempts=(
+                    int(getattr(pricing_asset, "provider_attempts", 0) or 0)
+                    if pricing_asset is not None
+                    else 0
+                ),
             )
         )
     return report
