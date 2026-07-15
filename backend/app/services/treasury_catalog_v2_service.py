@@ -44,6 +44,7 @@ class TreasuryCatalogV2Result:
     legacy_aliases: int = 0
     maturity_aliases: int = 0
     migrated_prices: int = 0
+    migration_collisions_skipped: int = 0
     resources: int = 0
     errors: int = 0
 
@@ -198,6 +199,13 @@ async def sync_treasury_catalog_v2(
                 result.unchanged += 1
 
         legacy_symbol = item.get("legacy_maturity_symbol") or ""
+        # Alguns anos de vencimento tambem sao anos comerciais validos de outro
+        # titulo (principalmente Educa+). Nesses casos nao existe um alias seguro:
+        # migrar criaria uma cadeia circular e deixaria o sync nao idempotente.
+        if legacy_symbol and legacy_symbol in official_symbols:
+            result.migration_collisions_skipped += 1
+            continue
+
         legacy_asset = by_exact.get(legacy_symbol) if legacy_symbol and legacy_symbol != symbol else None
         if legacy_asset is not None and int(legacy_asset.id) != int(asset.id):
             result.migrated_prices += await _migrate_asset_prices(
@@ -230,7 +238,7 @@ async def sync_treasury_catalog_v2(
         await db.commit()
 
     logger.info(
-        "[treasury_catalog_v2] official=%d created=%d updated=%d unchanged=%d review=%d aliases=%d maturity_aliases=%d migrated_prices=%d errors=%d",
+        "[treasury_catalog_v2] official=%d created=%d updated=%d unchanged=%d review=%d aliases=%d maturity_aliases=%d migrated_prices=%d collisions=%d errors=%d",
         result.official_titles,
         result.created,
         result.updated,
@@ -239,6 +247,7 @@ async def sync_treasury_catalog_v2(
         result.legacy_aliases,
         result.maturity_aliases,
         result.migrated_prices,
+        result.migration_collisions_skipped,
         result.errors,
     )
     return result
