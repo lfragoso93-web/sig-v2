@@ -36,6 +36,8 @@ _LOOKBACK_DAYS = 10
 
 _DATE_FIELDS = (
     "date",
+    "baseDate",
+    "base_date",
     "timestamp",
     "datetime",
     "referenceDate",
