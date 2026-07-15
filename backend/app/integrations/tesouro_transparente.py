@@ -100,18 +100,43 @@ def _parse_date(value: str) -> datetime | None:
     return None
 
 
+def _commercial_year(title: str, maturity_dt: datetime) -> int:
+    """Converte vencimento oficial no ano comercial exibido pelas corretoras.
+
+    RendA+ paga renda por 20 anos: o vencimento oficial ocorre 19 anos depois do
+    ano comercial. Educa+ paga por 5 anos: o vencimento ocorre 4 anos depois.
+    """
+    normalized = _normalize(title)
+    if "renda" in normalized:
+        return maturity_dt.year - 19
+    if "educa" in normalized:
+        return maturity_dt.year - 4
+    return maturity_dt.year
+
+
+def _legacy_maturity_symbol(title: str, maturity: str) -> str | None:
+    """Retorna o símbolo antigo baseado no ano de vencimento, para migração."""
+    normalized = _normalize(title)
+    maturity_dt = _parse_date(maturity)
+    if maturity_dt is None:
+        return None
+    if "renda" in normalized:
+        return f"tesouro-renda-mais-{maturity_dt.year}"
+    if "educa" in normalized:
+        return f"tesouro-educa-mais-{maturity_dt.year}"
+    return None
+
+
 def _canonical_symbol(title: str, maturity: str) -> str | None:
     normalized = _normalize(title)
     maturity_dt = _parse_date(maturity)
-    year_match = re.search(r"20\d{2}", f"{title} {maturity}")
-    year = int(year_match.group(0)) if year_match else None
-
-    if "renda" in normalized and year:
-        return f"tesouro-renda-mais-{year}"
-    if "educa" in normalized and year:
-        return f"tesouro-educa-mais-{year}"
     if maturity_dt is None:
         return None
+
+    if "renda" in normalized:
+        return f"tesouro-renda-mais-{_commercial_year(title, maturity_dt)}"
+    if "educa" in normalized:
+        return f"tesouro-educa-mais-{_commercial_year(title, maturity_dt)}"
 
     suffix = maturity_dt.strftime("%d%m%Y")
     has_coupon = "juros semestrais" in normalized
