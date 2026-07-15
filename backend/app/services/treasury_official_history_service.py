@@ -8,18 +8,21 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from decimal import Decimal
 
 import httpx
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.integrations.brapi_treasury import is_brapi_treasury_symbol
 from app.models.asset import Asset, AssetType
+from app.models.asset_price import AssetPrice
+from app.services.asset_last_price_refresh_service import refresh_asset_last_prices
 from app.services.treasury_history_rebuild_service import (
     _last_saved_date,
-    _persist_rows,
     extract_treasury_history,
 )
 
@@ -27,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 _LIST_URL = "https://brapi.dev/api/v2/treasury/list"
 _HISTORY_URL = "https://brapi.dev/api/v2/treasury/indicators/history"
+_SOURCE = "brapi_treasury"
 _CHUNK_SIZE = 20
 _DEFAULT_YEARS = 10
 _LOOKBACK_DAYS = 10
@@ -87,6 +91,33 @@ async def _official_symbols(client: httpx.AsyncClient) -> list[str]:
     return sorted(symbols)
 
 
+async def _persist_history_rows(
+    db,
+    asset_id: int,
+    rows: list[tuple[datetime, float]],
+) -> int:
+    """Persiste apenas ``asset_prices`` sem alterar a linha de ``assets``."""
+    changed = 0
+    for timestamp, close in rows:
+        value = Decimal(str(round(close, 8)))
+        stmt = (
+            pg_insert(AssetPrice)
+            .values(
+                asset_id=asset_id,
+                timestamp=timestamp,
+                close=value,
+                source=_SOURCE,
+            )
+            .on_conflict_do_update(
+                constraint="uq_price_asset_timestamp",
+                set_={"close": value, "source": _SOURCE},
+            )
+        )
+        await db.execute(stmt)
+        changed += 1
+    return changed
+
+
 async def rebuild_official_treasury_history() -> dict[str, object]:
     today = date.today()
     async with httpx.AsyncClient(timeout=60.0) as client:
@@ -98,6 +129,7 @@ async def rebuild_official_treasury_history() -> dict[str, object]:
                 "matched_assets": 0,
                 "imported": 0,
                 "empty_payloads": 0,
+                "last_prices_refreshed": 0,
                 "history": {},
             }
 
@@ -121,6 +153,7 @@ async def rebuild_official_treasury_history() -> dict[str, object]:
             stats = {symbol: 0 for symbol in assets_by_symbol}
             empty_payloads = 0
             diagnostics: list[dict[str, object]] = []
+            touched_asset_ids: set[int] = set()
 
             for (start, end), symbols in windows.items():
                 unique_symbols = sorted(set(symbols))
@@ -152,22 +185,30 @@ async def rebuild_official_treasury_history() -> dict[str, object]:
                         asset = assets_by_symbol.get(symbol)
                         if asset is None or not rows:
                             continue
-                        stats[symbol] += await _persist_rows(db, asset, rows)
+                        stats[symbol] += await _persist_history_rows(db, int(asset.id), rows)
+                        touched_asset_ids.add(int(asset.id))
                     await db.commit()
+
+            last_prices_refreshed = 0
+            if touched_asset_ids:
+                last_prices_refreshed = await refresh_asset_last_prices(db, touched_asset_ids)
+                await db.commit()
 
     imported = sum(stats.values())
     logger.info(
-        "[treasury_history_official] concluido official=%d matched=%d imported=%d empty=%d",
+        "[treasury_history_official] concluido official=%d matched=%d imported=%d empty=%d refreshed=%d",
         len(official_symbols),
         len(assets_by_symbol),
         imported,
         empty_payloads,
+        last_prices_refreshed,
     )
     return {
         "official_symbols": len(official_symbols),
         "matched_assets": len(assets_by_symbol),
         "imported": imported,
         "empty_payloads": empty_payloads,
+        "last_prices_refreshed": last_prices_refreshed,
         "diagnostics": diagnostics[:2],
         "history": stats,
     }
