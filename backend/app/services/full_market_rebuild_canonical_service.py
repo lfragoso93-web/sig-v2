@@ -91,6 +91,21 @@ def _canonical_step_payload(summary, name: str) -> dict:
     return {}
 
 
+def _log_canonical_valuation(summary) -> None:
+    payload = _canonical_step_payload(summary, "twr_snapshots")
+    logger.info(
+        "[canonical_valuation] fixed_income_invested=%s fixed_income_current=%s "
+        "fixed_income_income=%s treasury_correction=%s treasury_matched=%s "
+        "treasury_unresolved=%s",
+        payload.get("fixed_income_invested", 0),
+        payload.get("fixed_income_current", 0),
+        payload.get("fixed_income_income", 0),
+        payload.get("treasury_correction", 0),
+        payload.get("treasury_matched", 0),
+        payload.get("treasury_unresolved", 0),
+    )
+
+
 async def run_full_market_rebuild():
     """Executa o orquestrador existente com a etapa TWR canônica."""
     original_snapshots = base_rebuild._rebuild_all_twr_snapshots
@@ -98,7 +113,9 @@ async def run_full_market_rebuild():
     base_rebuild._rebuild_all_twr_snapshots = _rebuild_all_canonical_twr_snapshots
     base_rebuild._step_payload = _canonical_step_payload
     try:
-        return await base_rebuild.run_full_market_rebuild()
+        result = await base_rebuild.run_full_market_rebuild()
+        _log_canonical_valuation(result)
+        return result
     finally:
         base_rebuild._rebuild_all_twr_snapshots = original_snapshots
         base_rebuild._step_payload = original_step_payload
