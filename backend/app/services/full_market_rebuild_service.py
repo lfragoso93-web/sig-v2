@@ -111,6 +111,11 @@ def _compact_result(result: Any) -> Any:
             1 for item in assets
             if isinstance(item, dict) and item.get("error")
         )
+    history = compact.get("history")
+    if isinstance(history, dict) and len(history) > 20:
+        compact["history_count"] = len(history)
+        compact["history_nonzero"] = sum(1 for value in history.values() if value)
+        compact.pop("history", None)
     return compact
 
 
@@ -173,14 +178,12 @@ async def _sync_global_asset_prices() -> dict[str, Any]:
 
 async def _sync_treasury() -> dict[str, Any]:
     from app.services.treasury_catalog_service import seed_treasury_assets
-    from app.services.treasury_price_history_service import (
-        import_missing_treasury_price_history,
-        update_treasury_latest_prices,
-    )
+    from app.services.treasury_history_rebuild_service import rebuild_treasury_history
+    from app.services.treasury_price_history_service import update_treasury_latest_prices
 
     async with AsyncSessionLocal() as db:
         catalog = await seed_treasury_assets(db)
-    history = await import_missing_treasury_price_history()
+    history = await rebuild_treasury_history()
     async with AsyncSessionLocal() as db:
         latest = await update_treasury_latest_prices(db)
     return {
