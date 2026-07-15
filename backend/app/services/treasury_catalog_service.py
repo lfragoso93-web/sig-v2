@@ -13,7 +13,7 @@ import unicodedata
 from dataclasses import dataclass
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.integrations.brapi_treasury import (
@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 _TREASURY_TYPE = AssetType.TESOURO_DIRETO.value
 _SYNTHETIC_SOURCE = "synthetic_treasury_long_term"
+_INACTIVE_STATUS = "NOT_APPLICABLE"
 
 
 @dataclass
@@ -163,15 +164,16 @@ async def seed_treasury_assets(db: AsyncSession, commit: bool = True) -> Treasur
     return result
 
 
-async def _treasury_assets(db: AsyncSession) -> list[Asset]:
-    result = await db.execute(
-        select(Asset).where(Asset.asset_type == _TREASURY_TYPE)
-    )
+async def _treasury_assets(db: AsyncSession, *, active_only: bool = True) -> list[Asset]:
+    stmt = select(Asset).where(Asset.asset_type == _TREASURY_TYPE)
+    if active_only:
+        stmt = stmt.where(func.coalesce(Asset.provider_status, "") != _INACTIVE_STATUS)
+    result = await db.execute(stmt)
     return list(result.scalars().all())
 
 
 async def resolve_treasury_symbol(db: AsyncSession, raw: str | None) -> Optional[str]:
-    """Resolve texto/ticker informado pelo usuário para o símbolo canônico."""
+    """Resolve texto/ticker para um slug oficial ativo do Tesouro."""
     value = (raw or "").strip()
     if not value:
         return None
@@ -180,10 +182,11 @@ async def resolve_treasury_symbol(db: AsyncSession, raw: str | None) -> Optional
     exact = await db.execute(
         select(Asset.ticker).where(
             Asset.asset_type == _TREASURY_TYPE,
-            Asset.ticker == lower,
+            func.lower(Asset.ticker) == lower,
+            func.coalesce(Asset.provider_status, "") != _INACTIVE_STATUS,
         )
     )
-    found = exact.scalar_one_or_none()
+    found = exact.scalars().first()
     if found:
         return str(found).lower()
 
@@ -192,10 +195,11 @@ async def resolve_treasury_symbol(db: AsyncSession, raw: str | None) -> Optional
         canonical_exists = await db.execute(
             select(Asset.ticker).where(
                 Asset.asset_type == _TREASURY_TYPE,
-                Asset.ticker == canonical,
+                func.lower(Asset.ticker) == canonical.lower(),
+                func.coalesce(Asset.provider_status, "") != _INACTIVE_STATUS,
             )
         )
-        found = canonical_exists.scalar_one_or_none()
+        found = canonical_exists.scalars().first()
         if found:
             return str(found).lower()
 
@@ -203,26 +207,27 @@ async def resolve_treasury_symbol(db: AsyncSession, raw: str | None) -> Optional
         select(Asset.ticker).where(
             Asset.asset_type == _TREASURY_TYPE,
             Asset.name.ilike(value),
+            func.coalesce(Asset.provider_status, "") != _INACTIVE_STATUS,
         )
     )
-    found = name_exact.scalar_one_or_none()
+    found = name_exact.scalars().first()
     if found:
         return str(found).lower()
 
-    assets = await _treasury_assets(db)
+    assets = await _treasury_assets(db, active_only=True)
     if not assets:
         try:
             await seed_treasury_assets(db, commit=True)
-            assets = await _treasury_assets(db)
+            assets = await _treasury_assets(db, active_only=True)
         except Exception as exc:
             logger.warning("[treasury_catalog] seed sob demanda falhou: %s", exc)
 
     if canonical:
         for asset in assets:
-            if str(asset.ticker or "").lower() == canonical:
-                return canonical
+            if str(asset.ticker or "").lower() == canonical.lower():
+                return canonical.lower()
         logger.info("[treasury_catalog] %r resolvido por regra canônica para %s", value, canonical)
-        return canonical
+        return canonical.lower()
 
     raw_norm = normalize_treasury_text(value)
     raw_slug = slug_from_text(value)
