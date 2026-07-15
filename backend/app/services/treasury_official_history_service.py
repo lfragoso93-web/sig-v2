@@ -32,6 +32,7 @@ _OFFICIAL_SOURCE = "tesouro_transparente"
 _FALLBACK_SOURCE = "brapi_treasury"
 _DEFAULT_YEARS = 10
 _LOOKBACK_DAYS = 10
+_INACTIVE_STATUS = "NOT_APPLICABLE"
 
 
 async def _persist_history_rows(db, asset_id: int, rows: list[tuple[datetime, float]], source: str) -> int:
@@ -53,10 +54,17 @@ async def _persist_history_rows(db, asset_id: int, rows: list[tuple[datetime, fl
 
 async def _canonical_assets(db) -> tuple[dict[str, Asset], dict[str, list[str]], list[str]]:
     result = await db.execute(
-        select(Asset).where(Asset.asset_type == AssetType.TESOURO_DIRETO.value)
+        select(Asset).where(
+            Asset.asset_type == AssetType.TESOURO_DIRETO.value,
+            Asset.provider_status != _INACTIVE_STATUS,
+        )
     )
     assets = list(result.scalars().all())
-    exact = {str(asset.ticker or "").strip().lower(): asset for asset in assets if asset.ticker}
+    exact = {
+        str(asset.ticker or "").strip(): asset
+        for asset in assets
+        if asset.ticker and str(asset.ticker).strip() == str(asset.ticker).strip().lower()
+    }
 
     grouped: dict[str, list[Asset]] = defaultdict(list)
     unresolved: list[str] = []
@@ -76,7 +84,7 @@ async def _canonical_assets(db) -> tuple[dict[str, Asset], dict[str, list[str]],
             canonical_asset = max(
                 candidates,
                 key=lambda item: (
-                    str(item.ticker or "").lower() == canonical,
+                    str(item.ticker or "").strip() == canonical,
                     bool(getattr(item, "last_price_updated_at", None)),
                     -int(item.id),
                 ),
@@ -86,7 +94,7 @@ async def _canonical_assets(db) -> tuple[dict[str, Asset], dict[str, list[str]],
             {
                 str(item.ticker or "").strip()
                 for item in candidates
-                if str(item.ticker or "").strip().lower() != canonical
+                if str(item.ticker or "").strip() != canonical
             }
         )
     return selected, aliases, sorted(set(unresolved))
