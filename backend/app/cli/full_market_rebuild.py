@@ -10,7 +10,7 @@ import json
 import logging
 import sys
 
-from app.services.full_market_rebuild_service import run_full_market_rebuild
+from app.services.full_market_rebuild_canonical_service import run_full_market_rebuild
 
 
 def _configure_logging() -> None:
