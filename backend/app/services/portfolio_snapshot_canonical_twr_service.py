@@ -16,11 +16,11 @@ from app.services.portfolio_canonical_valuation_service import (
 from app.services.portfolio_snapshot_twr_service import (
     _accumulated_dividends_at,
     _decimal,
-    _has_partial_prices,
     _upsert_enriched_snapshot,
     build_dividend_totals,
     calculate_transaction_components,
 )
+from app.services.silent_price_coverage_service import has_partial_prices_silent
 from app.services.twr_service import (
     append_compounded_return_pct,
     calculate_daily_twr_pct,
@@ -98,8 +98,6 @@ async def backfill_canonical_snapshots_with_returns(
                 daily_return,
             )
 
-            # Campos auxiliares do valuation canônico pertencem apenas ao retorno
-            # operacional/log. Eles não são colunas de portfolio_snapshots.
             snapshot_fields = {
                 key: value
                 for key, value in totals.items()
@@ -112,7 +110,7 @@ async def backfill_canonical_snapshots_with_returns(
                 "dividends_accumulated": dividends_accumulated,
                 "daily_return_pct": daily_return,
                 "accumulated_return_pct": accumulated_return,
-                "has_partial_prices": await _has_partial_prices(
+                "has_partial_prices": await has_partial_prices_silent(
                     db,
                     transactions,
                     cursor,
