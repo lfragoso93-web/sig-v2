@@ -178,12 +178,14 @@ async def _sync_global_asset_prices() -> dict[str, Any]:
 
 async def _sync_treasury() -> dict[str, Any]:
     from app.services.treasury_catalog_service import seed_treasury_assets
-    from app.services.treasury_history_rebuild_service import rebuild_treasury_history
+    from app.services.treasury_official_history_service import (
+        rebuild_official_treasury_history,
+    )
     from app.services.treasury_price_history_service import update_treasury_latest_prices
 
     async with AsyncSessionLocal() as db:
         catalog = await seed_treasury_assets(db)
-    history = await rebuild_treasury_history()
+    history = await rebuild_official_treasury_history()
     async with AsyncSessionLocal() as db:
         latest = await update_treasury_latest_prices(db)
     return {
