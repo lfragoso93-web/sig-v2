@@ -59,7 +59,9 @@ async def audit_treasury_canonical_assets(db: AsyncSession) -> dict[str, object]
         entries = []
         for asset in sorted(grouped, key=lambda item: int(item.id)):
             ticker = str(asset.ticker or "")
-            is_canonical = ticker.lower() == canonical.lower()
+            # O registro canônico é exatamente o slug minúsculo persistido.
+            # Variantes em caixa alta continuam sendo aliases migráveis.
+            is_canonical = ticker == canonical
             if not is_canonical:
                 migration_candidates += 1
             entries.append(
