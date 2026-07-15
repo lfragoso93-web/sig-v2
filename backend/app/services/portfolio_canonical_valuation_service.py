@@ -76,6 +76,18 @@ async def _base_totals_without_dedicated_lookup(
 
     prices = await get_prices_at_date_batch(db, requirements, target_date.isoformat()) if requirements else {}
 
+    fx_snapshot = Decimal("1")
+    if any(state.is_usd for state in positions.values()):
+        try:
+            from app.services.fx_service import get_usd_brl_for_date
+            fx_snapshot = Decimal(str(await get_usd_brl_for_date(db, target_date) or 1))
+        except Exception:
+            try:
+                from app.services.fx_service import get_usd_brl_today
+                fx_snapshot = Decimal(str(await get_usd_brl_today(db) or 1))
+            except Exception:
+                fx_snapshot = Decimal("1")
+
     market_value = _ZERO
     cost_basis = _ZERO
     realized_pnl = _ZERO
@@ -85,7 +97,8 @@ async def _base_totals_without_dedicated_lookup(
             close = state.avg_price
         else:
             close = Decimal(str(prices.get(ticker, float(state.avg_price))))
-        market_value += state.qty * close
+        close_brl = close * fx_snapshot if state.is_usd else close
+        market_value += state.qty * close_brl
         cost_basis += state.cost
         realized_pnl += state.realized_pnl
 
