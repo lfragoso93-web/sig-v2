@@ -1,8 +1,7 @@
 """Composição canônica do valuation diário da carteira.
 
-Mantém o valuation legado para ativos de mercado e substitui somente o componente
-Renda Fixa pelo motor dedicado baseado em benchmarks persistidos. A integração é
-incremental para permitir comparação segura dos snapshots antes/depois.
+Mantém o valuation legado para ativos de mercado e substitui os componentes de
+Renda Fixa e Tesouro pelos motores dedicados baseados em dados persistidos.
 """
 from __future__ import annotations
 
@@ -12,6 +11,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.asset import AssetType
 from app.models.transaction import Transaction
 from app.services.fixed_income_valuation_service import (
     RENDA_FIXA_TYPE,
@@ -21,11 +21,17 @@ from app.services.fixed_income_valuation_service import (
     _is_buy,
     _is_sell,
 )
-from app.services.portfolio_snapshot_service import _calc_totals as _legacy_calc_totals
+from app.services.portfolio_snapshot_service import (
+    _build_positions_at,
+    _calc_totals as _legacy_calc_totals,
+)
+from app.services.price_history_service import get_price_at_date
+from app.services.treasury_catalog_service import resolve_treasury_symbol
 
 _ZERO = Decimal("0")
 _MONEY = Decimal("0.01")
 _PCT = Decimal("0.0001")
+_TREASURY_TYPE = AssetType.TESOURO_DIRETO.value
 
 
 async def _fixed_income_totals_at_date(
@@ -63,23 +69,63 @@ async def _fixed_income_totals_at_date(
     }
 
 
+async def _treasury_correction_at_date(
+    db: AsyncSession,
+    portfolio_id: int,
+    target_date: date,
+) -> dict[str, Decimal | int]:
+    """Substitui o proxy por custo médio pelo preço do ativo oficial do Tesouro."""
+    positions = await _build_positions_at(db, portfolio_id, target_date)
+    correction = _ZERO
+    matched = 0
+    unresolved = 0
+
+    for ticker, state in positions.items():
+        raw_type = state.asset_type.value if hasattr(state.asset_type, "value") else str(state.asset_type or "")
+        if raw_type.upper() != _TREASURY_TYPE:
+            continue
+
+        canonical = await resolve_treasury_symbol(db, ticker)
+        if not canonical:
+            unresolved += 1
+            continue
+
+        price = await get_price_at_date(
+            db,
+            canonical,
+            AssetType.TESOURO_DIRETO,
+            target_date.isoformat(),
+        )
+        if price is None:
+            unresolved += 1
+            continue
+
+        canonical_value = state.qty * Decimal(str(price))
+        proxy_value = state.qty * state.avg_price
+        correction += canonical_value - proxy_value
+        matched += 1
+
+    return {
+        "correction": correction.quantize(_MONEY),
+        "matched": matched,
+        "unresolved": unresolved,
+    }
+
+
 async def calculate_canonical_portfolio_totals(
     db: AsyncSession,
     portfolio_id: int,
     target_date: date,
 ) -> dict:
-    """Retorna os totais legados corrigidos pelo valuation dedicado de Renda Fixa.
-
-    O motor legado avalia Renda Fixa pelo custo médio quando não encontra cotação.
-    Portanto, substituímos esse componente pelo saldo corrigido sem alterar o custo
-    contábil ou o fluxo líquido histórico da carteira.
-    """
+    """Retorna os totais legados corrigidos por Renda Fixa e Tesouro."""
     totals = await _legacy_calc_totals(db, portfolio_id, target_date)
     fixed_income = await _fixed_income_totals_at_date(db, portfolio_id, target_date)
+    treasury = await _treasury_correction_at_date(db, portfolio_id, target_date)
 
-    correction = fixed_income["current_value"] - fixed_income["invested_amount"]
-    market_value = Decimal(str(totals["market_value"])) + correction
-    unrealized_pnl = Decimal(str(totals["unrealized_pnl"])) + correction
+    fixed_income_correction = fixed_income["current_value"] - fixed_income["invested_amount"]
+    total_correction = fixed_income_correction + Decimal(str(treasury["correction"]))
+    market_value = Decimal(str(totals["market_value"])) + total_correction
+    unrealized_pnl = Decimal(str(totals["unrealized_pnl"])) + total_correction
     realized_pnl = Decimal(str(totals["realized_pnl"]))
     total_pnl = realized_pnl + unrealized_pnl
     cost_basis = Decimal(str(totals["cost_basis"]))
@@ -102,4 +148,7 @@ async def calculate_canonical_portfolio_totals(
         "fixed_income_invested": fixed_income["invested_amount"],
         "fixed_income_current": fixed_income["current_value"],
         "fixed_income_income": fixed_income["income_amount"],
+        "treasury_correction": treasury["correction"],
+        "treasury_matched": treasury["matched"],
+        "treasury_unresolved": treasury["unresolved"],
     }
