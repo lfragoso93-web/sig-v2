@@ -1,6 +1,10 @@
 from datetime import date
 
-from app.integrations.tesouro_transparente import parse_history_csv
+from app.integrations.tesouro_transparente import (
+    _canonical_symbol,
+    _legacy_maturity_symbol,
+    parse_history_csv,
+)
 
 
 def test_parse_history_csv_normalizes_treasury_families():
@@ -10,8 +14,8 @@ Tesouro Prefixado;01/01/2029;15/07/2026;812,35
 Tesouro Prefixado com Juros Semestrais;01/01/2031;15/07/2026;1.015,42
 Tesouro IPCA+;15/05/2029;15/07/2026;3.982,10
 Tesouro IPCA+ com Juros Semestrais;15/08/2032;15/07/2026;4.100,25
-Tesouro RendA+ Aposentadoria Extra;15/12/2060;15/07/2026;1.245,60
-Tesouro Educa+;15/12/2031;15/07/2026;1.105,70
+Tesouro RendA+ Aposentadoria Extra;15/12/2079;15/07/2026;1.245,60
+Tesouro Educa+;15/12/2030;15/07/2026;1.105,70
 """
 
     parsed = parse_history_csv(
@@ -27,17 +31,41 @@ Tesouro Educa+;15/12/2031;15/07/2026;1.105,70
         "tesouro-ipca-15052029",
         "tesouro-ipca-com-juros-semestrais-15082032",
         "tesouro-renda-mais-2060",
-        "tesouro-educa-mais-2031",
+        "tesouro-educa-mais-2026",
     }
     assert parsed["tesouro-selic-01032031"][0][1] == 15247.81
     assert parsed["tesouro-renda-mais-2060"][0][1] == 1245.60
+
+
+def test_commercial_year_rules_for_renda_and_educa():
+    assert _canonical_symbol(
+        "Tesouro Renda+ Aposentadoria Extra", "15/12/2049"
+    ) == "tesouro-renda-mais-2030"
+    assert _canonical_symbol(
+        "Tesouro Renda+ Aposentadoria Extra", "15/12/2079"
+    ) == "tesouro-renda-mais-2060"
+    assert _canonical_symbol(
+        "Tesouro Renda+ Aposentadoria Extra", "15/12/2084"
+    ) == "tesouro-renda-mais-2065"
+    assert _canonical_symbol(
+        "Tesouro Educa+", "15/12/2030"
+    ) == "tesouro-educa-mais-2026"
+
+
+def test_legacy_maturity_symbols_are_available_for_migration():
+    assert _legacy_maturity_symbol(
+        "Tesouro Renda+ Aposentadoria Extra", "15/12/2079"
+    ) == "tesouro-renda-mais-2079"
+    assert _legacy_maturity_symbol(
+        "Tesouro Educa+", "15/12/2030"
+    ) == "tesouro-educa-mais-2030"
 
 
 def test_parse_history_csv_filters_symbols_and_dates():
     csv_text = """Tipo Titulo;Data Vencimento;Data Base;PU Compra Manha
 Tesouro Selic;01/03/2031;14/07/2026;15.240,00
 Tesouro Selic;01/03/2031;15/07/2026;15.247,81
-Tesouro RendA+ Aposentadoria Extra;15/12/2060;15/07/2026;1.245,60
+Tesouro RendA+ Aposentadoria Extra;15/12/2079;15/07/2026;1.245,60
 """
 
     parsed = parse_history_csv(
