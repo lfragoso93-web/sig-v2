@@ -4,8 +4,8 @@ Ordem de coleta:
 1. Tesouro Transparente/CKAN (dados oficiais);
 2. BRAPI somente para símbolos sem cobertura oficial.
 
-Os preços são persistidos com a fonte efetivamente utilizada e o cache de último
-preço é atualizado em lote após o commit do histórico.
+Aliases legados são resolvidos para um único ativo canônico antes da coleta. Nenhum
+registro antigo é removido por esta rotina.
 """
 from __future__ import annotations
 
@@ -23,6 +23,7 @@ from app.integrations.tesouro_transparente import fetch_official_treasury_histor
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
 from app.services.asset_last_price_refresh_service import refresh_asset_last_prices
+from app.services.treasury_catalog_service import resolve_treasury_symbol
 from app.services.treasury_history_rebuild_service import _last_saved_date
 
 logger = logging.getLogger(__name__)
@@ -33,24 +34,13 @@ _DEFAULT_YEARS = 10
 _LOOKBACK_DAYS = 10
 
 
-async def _persist_history_rows(
-    db,
-    asset_id: int,
-    rows: list[tuple[datetime, float]],
-    source: str,
-) -> int:
-    """Persiste somente ``asset_prices`` e registra a origem real do preço."""
+async def _persist_history_rows(db, asset_id: int, rows: list[tuple[datetime, float]], source: str) -> int:
     changed = 0
     for timestamp, close in rows:
         value = Decimal(str(round(close, 8)))
         stmt = (
             pg_insert(AssetPrice)
-            .values(
-                asset_id=asset_id,
-                timestamp=timestamp,
-                close=value,
-                source=source,
-            )
+            .values(asset_id=asset_id, timestamp=timestamp, close=value, source=source)
             .on_conflict_do_update(
                 constraint="uq_price_asset_timestamp",
                 set_={"close": value, "source": source},
@@ -61,22 +51,54 @@ async def _persist_history_rows(
     return changed
 
 
+async def _canonical_assets(db) -> tuple[dict[str, Asset], dict[str, list[str]], list[str]]:
+    result = await db.execute(
+        select(Asset).where(Asset.asset_type == AssetType.TESOURO_DIRETO.value)
+    )
+    assets = list(result.scalars().all())
+    exact = {str(asset.ticker or "").strip().lower(): asset for asset in assets if asset.ticker}
+
+    grouped: dict[str, list[Asset]] = defaultdict(list)
+    unresolved: list[str] = []
+    for asset in assets:
+        ticker = str(asset.ticker or "").strip()
+        canonical = await resolve_treasury_symbol(db, ticker)
+        if not canonical:
+            unresolved.append(ticker)
+            continue
+        grouped[canonical.lower()].append(asset)
+
+    selected: dict[str, Asset] = {}
+    aliases: dict[str, list[str]] = {}
+    for canonical, candidates in grouped.items():
+        canonical_asset = exact.get(canonical)
+        if canonical_asset is None:
+            canonical_asset = max(
+                candidates,
+                key=lambda item: (
+                    str(item.ticker or "").lower() == canonical,
+                    bool(getattr(item, "last_price_updated_at", None)),
+                    -int(item.id),
+                ),
+            )
+        selected[canonical] = canonical_asset
+        aliases[canonical] = sorted(
+            {
+                str(item.ticker or "").strip()
+                for item in candidates
+                if str(item.ticker or "").strip().lower() != canonical
+            }
+        )
+    return selected, aliases, sorted(set(unresolved))
+
+
 async def rebuild_official_treasury_history() -> dict[str, object]:
-    """Atualiza o histórico usando fonte oficial e BRAPI como segunda opção."""
     today = date.today()
 
     async with AsyncSessionLocal() as db:
-        result = await db.execute(
-            select(Asset).where(Asset.asset_type == AssetType.TESOURO_DIRETO.value)
-        )
-        assets = list(result.scalars().all())
-        assets_by_symbol = {
-            str(asset.ticker).strip().lower(): asset
-            for asset in assets
-            if str(asset.ticker or "").strip()
-        }
+        assets_by_symbol, aliases_by_symbol, unresolved_assets = await _canonical_assets(db)
         if not assets_by_symbol:
-            logger.warning("[treasury_history_official] nenhum ativo de Tesouro cadastrado")
+            logger.warning("[treasury_history_official] nenhum ativo canônico de Tesouro cadastrado")
             return {
                 "official_symbols": 0,
                 "matched_assets": 0,
@@ -87,6 +109,8 @@ async def rebuild_official_treasury_history() -> dict[str, object]:
                 "fallback_symbols": 0,
                 "empty_payloads": 0,
                 "last_prices_refreshed": 0,
+                "alias_groups": 0,
+                "unresolved_assets": unresolved_assets,
                 "history": {},
             }
 
@@ -116,16 +140,9 @@ async def rebuild_official_treasury_history() -> dict[str, object]:
             missing: list[str] = []
             for symbol in unique_symbols:
                 rows = official_history.get(symbol) or []
-                asset = assets_by_symbol.get(symbol)
-                if asset is None:
-                    continue
+                asset = assets_by_symbol[symbol]
                 if rows:
-                    count = await _persist_history_rows(
-                        db,
-                        int(asset.id),
-                        rows,
-                        _OFFICIAL_SOURCE,
-                    )
+                    count = await _persist_history_rows(db, int(asset.id), rows, _OFFICIAL_SOURCE)
                     stats[symbol] += count
                     source_stats[_OFFICIAL_SOURCE] += count
                     official_covered_symbols.add(symbol)
@@ -134,7 +151,13 @@ async def rebuild_official_treasury_history() -> dict[str, object]:
                     missing.append(symbol)
             await db.commit()
 
-            brapi_symbols = [symbol for symbol in missing if is_brapi_treasury_symbol(symbol)]
+            brapi_symbols = sorted(
+                {
+                    symbol
+                    for symbol in missing
+                    if is_brapi_treasury_symbol(symbol)
+                }
+            )
             fallback_requested_symbols.update(brapi_symbols)
             if brapi_symbols:
                 fallback_history = await fetch_treasury_history(
@@ -144,25 +167,16 @@ async def rebuild_official_treasury_history() -> dict[str, object]:
                 )
                 for symbol in brapi_symbols:
                     rows = fallback_history.get(symbol) or []
-                    asset = assets_by_symbol.get(symbol)
-                    if asset is None or not rows:
+                    if not rows:
                         continue
-                    count = await _persist_history_rows(
-                        db,
-                        int(asset.id),
-                        rows,
-                        _FALLBACK_SOURCE,
-                    )
+                    asset = assets_by_symbol[symbol]
+                    count = await _persist_history_rows(db, int(asset.id), rows, _FALLBACK_SOURCE)
                     stats[symbol] += count
                     source_stats[_FALLBACK_SOURCE] += count
                     touched_asset_ids.add(int(asset.id))
                 await db.commit()
 
-            unresolved = [
-                symbol
-                for symbol in missing
-                if not stats.get(symbol)
-            ]
+            unresolved = [symbol for symbol in missing if not stats.get(symbol)]
             if unresolved:
                 empty_payloads += len(unresolved)
                 logger.info(
@@ -177,14 +191,15 @@ async def rebuild_official_treasury_history() -> dict[str, object]:
             await db.commit()
 
     imported = sum(stats.values())
+    alias_groups = sum(1 for aliases in aliases_by_symbol.values() if aliases)
     logger.info(
-        "[treasury_history_official] concluido assets=%d imported=%d official=%d fallback=%d official_covered=%d fallback_symbols=%d empty=%d refreshed=%d",
+        "[treasury_history_official] concluido canonical=%d aliases=%d imported=%d official=%d fallback=%d covered=%d empty=%d refreshed=%d",
         len(assets_by_symbol),
+        alias_groups,
         imported,
         source_stats[_OFFICIAL_SOURCE],
         source_stats[_FALLBACK_SOURCE],
         len(official_covered_symbols),
-        len(fallback_requested_symbols),
         empty_payloads,
         last_prices_refreshed,
     )
@@ -200,5 +215,8 @@ async def rebuild_official_treasury_history() -> dict[str, object]:
         "last_prices_refreshed": last_prices_refreshed,
         "primary_source": _OFFICIAL_SOURCE,
         "fallback_source": _FALLBACK_SOURCE,
+        "alias_groups": alias_groups,
+        "aliases": {key: value for key, value in aliases_by_symbol.items() if value},
+        "unresolved_assets": unresolved_assets,
         "history": stats,
     }
