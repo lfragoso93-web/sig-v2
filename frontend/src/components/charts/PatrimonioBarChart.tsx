@@ -166,7 +166,7 @@ export default function PatrimonioBarChart({ data, loading }: Props) {
 
   return (
     <ResponsiveContainer width="100%" height={300}>
-      <BarChart data={chartData} margin={{ top: 8, right: 8, left: 4, bottom: 4 }} barCategoryGap="18%" barGap={2}>
+      <BarChart data={chartData} margin={{ top: 8, right: 8, left: 4, bottom: 4 }} barCategoryGap="18%">
         <CartesianGrid
           strokeDasharray="3 3"
           stroke="oklch(from var(--color-text) l c h / 0.08)"
@@ -201,15 +201,17 @@ export default function PatrimonioBarChart({ data, loading }: Props) {
         <Bar
           dataKey="aplicado"
           name="Valor aplicado"
+          stackId="patrimonio"
           fill="var(--color-success)"
           radius={[3, 3, 0, 0]}
-          maxBarSize={30}
+          maxBarSize={42}
         />
         <Bar
           dataKey="resultado"
           name="Ganho / perda de capital"
+          stackId="patrimonio"
           radius={[3, 3, 3, 3]}
-          maxBarSize={30}
+          maxBarSize={42}
         >
           {chartData.map(point => (
             <Cell
