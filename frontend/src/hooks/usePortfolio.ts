@@ -53,36 +53,37 @@ export interface AssetDistribution {
 export type AssetTypeDistribution = AssetDistribution
 
 export interface PortfolioSummary {
-  total_invested: number
-  current_value: number
-  total_gain: number
-  total_gain_pct: number
-  daily_change?: number
-  daily_change_pct?: number
-  total_patrimonio?: number
-  total_investido?: number
-  lucro_total?: number
-  variacao_valor?: number
-  variacao_percentual?: number
-  rentabilidade_total?: number
-  rentabilidade_acumulada?: number
-  rentabilidade_diaria?: number | null
-  rentabilidade_source?: string
-  dividendos_recebidos_12m?: number
-  total_proventos?: number
-  proventos_em_carteira?: number
-  proventos_as_of?: string | null
-  proventos_source?: string
-  has_partial_prices?: boolean
-  assets_without_price?: string[]
-  valuation_mode?: string
-  valuation_updated_at?: string | null
-  performance_as_of?: string | null
-  snapshot_date?: string | null
-  summary_source?: string
-  return_is_estimated?: boolean
-  is_reconciled?: boolean | null
-  reconciliation?: Record<string, unknown> | null
+  summary_version: 'summary.v2'
+  total_patrimonio: number
+  total_investido: number
+  lucro_total: number
+  variacao_valor: number
+  variacao_percentual: number
+  ganho_nao_realizado: number
+  ganho_realizado: number
+  rentabilidade_total: number
+  rentabilidade_acumulada: number
+  rentabilidade_diaria: number | null
+  rentabilidade_source: 'snapshot_twr' | 'valuation_fallback'
+  dividendos_recebidos_12m: number
+  total_proventos: number
+  proventos_as_of: string
+  proventos_source: 'received_cash_dividends'
+  has_partial_prices: boolean
+  assets_without_price: string[]
+  price_assets_total: number
+  price_assets_covered: number
+  price_coverage_pct: number
+  usd_brl_rate: number
+  valuation_mode: 'intraday'
+  valuation_updated_at: string | null
+  performance_as_of: string | null
+  snapshot_id: number | null
+  snapshot_date: string | null
+  summary_source: 'intraday_valuation_with_snapshot_twr' | 'valuation_fallback'
+  return_is_estimated: boolean
+  is_reconciled: boolean | null
+  reconciliation: Record<string, unknown> | null
 }
 
 export interface PortfolioListItem {
