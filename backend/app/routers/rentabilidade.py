@@ -18,20 +18,15 @@ from app.models.user import User
 from app.models.portfolio import Portfolio
 from app.schemas.rentabilidade import RentabilidadeKpisResponse
 from app.services.rentabilidade_kpi_service import get_rentabilidade_kpis
-from app.services.rentabilidade_service import get_rentabilidade_por_ativo
+from app.services.rentabilidade_asset_result_service import get_canonical_asset_results
 from app.services.rentabilidade_class_service import get_canonical_class_performance
 from app.services.rentabilidade_benchmark_service import get_persisted_monthly_benchmarks
 
 logger = logging.getLogger(__name__)
-
 router = APIRouter(tags=["rentabilidade"])
 
 
-async def _assert_owner(
-    db: AsyncSession,
-    portfolio_id: int,
-    user_id: int,
-) -> None:
+async def _assert_owner(db: AsyncSession, portfolio_id: int, user_id: int) -> None:
     result = await db.execute(
         select(Portfolio).where(
             Portfolio.id == portfolio_id,
@@ -64,7 +59,7 @@ async def rentabilidade_ativos(
 ):
     """Resultado monetário por ativo; percentuais simples não representam TWR."""
     await _assert_owner(db, portfolio_id, current_user.id)
-    return await get_rentabilidade_por_ativo(db, portfolio_id)
+    return await get_canonical_asset_results(db, portfolio_id, current_user.id)
 
 
 @router.get("/{portfolio_id}/rentabilidade/classes")
@@ -73,7 +68,7 @@ async def rentabilidade_classes(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Valuation intradiário e TWR fechado por classe."""
+    """Valuation atual e TWR fechado por classe, quando disponível."""
     await _assert_owner(db, portfolio_id, current_user.id)
     return await get_canonical_class_performance(db, portfolio_id, current_user.id)
 
