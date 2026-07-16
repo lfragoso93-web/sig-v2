@@ -6,6 +6,7 @@ Endpoints:
   GET /portfolios/{portfolio_id}/rentabilidade/ativos
   GET /portfolios/{portfolio_id}/rentabilidade/classes
   GET /portfolios/{portfolio_id}/rentabilidade/benchmarks/monthly
+  GET /portfolios/{portfolio_id}/rentabilidade/reconciliation
 """
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -21,6 +22,7 @@ from app.services.rentabilidade_kpi_service import get_rentabilidade_kpis
 from app.services.rentabilidade_asset_result_service import get_canonical_asset_results
 from app.services.rentabilidade_class_service import get_canonical_class_performance
 from app.services.rentabilidade_benchmark_service import get_persisted_monthly_benchmarks
+from app.services.rentabilidade_reconciliation_service import reconcile_rentabilidade_page
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["rentabilidade"])
@@ -83,3 +85,14 @@ async def rentabilidade_benchmarks_monthly(
     """Retornos mensais de benchmarks lidos exclusivamente do banco."""
     await _assert_owner(db, portfolio_id, current_user.id)
     return await get_persisted_monthly_benchmarks(db, months=months)
+
+
+@router.get("/{portfolio_id}/rentabilidade/reconciliation")
+async def rentabilidade_reconciliation(
+    portfolio_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Reconcilia Rentabilidade com summary.v2 e totais canônicos por classe."""
+    await _assert_owner(db, portfolio_id, current_user.id)
+    return await reconcile_rentabilidade_page(db, portfolio_id, current_user.id)
