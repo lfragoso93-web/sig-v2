@@ -163,10 +163,16 @@ async def _get_received_dividend_totals(db: AsyncSession, portfolio_id: int) -> 
 
 
 def _quality_metadata(valuation: dict) -> dict:
+    assets_without_price = tuple(valuation.get("assets_without_price", ()))
+    total = int(valuation.get("price_assets_total", len(assets_without_price)))
+    covered = int(valuation.get("price_assets_covered", max(0, total - len(assets_without_price))))
+    coverage = valuation.get("price_coverage_pct")
+    if coverage is None:
+        coverage = covered / total * 100 if total else 100.0
     return {
-        "price_assets_total": valuation["price_assets_total"],
-        "price_assets_covered": valuation["price_assets_covered"],
-        "price_coverage_pct": valuation["price_coverage_pct"],
+        "price_assets_total": total,
+        "price_assets_covered": covered,
+        "price_coverage_pct": round(float(coverage), 2),
     }
 
 
