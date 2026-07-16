@@ -59,7 +59,27 @@ async def get_class_twr_availability(db: AsyncSession, portfolio_id: int) -> lis
     if int(fixed_income_result.scalar_one() or 0) > 0:
         types.add(AssetType.RENDA_FIXA)
 
-    return class_twr_availability(types)
+    latest_result = await db.execute(
+        select(
+            PortfolioClassSnapshot.asset_type,
+            func.max(PortfolioClassSnapshot.snapshot_date),
+        )
+        .where(PortfolioClassSnapshot.portfolio_id == portfolio_id)
+        .group_by(PortfolioClassSnapshot.asset_type)
+    )
+    latest_by_type = {row.asset_type: row[1] for row in latest_result.all()}
+
+    rows = class_twr_availability(types)
+    for row in rows:
+        latest = latest_by_type.get(row["asset_type"])
+        row["engine_supported"] = row["available"]
+        row["data_available"] = latest is not None
+        row["latest_snapshot_date"] = latest.isoformat() if latest is not None else None
+        row["available"] = bool(row["engine_supported"] and row["data_available"])
+        if row["engine_supported"] and not row["data_available"]:
+            row["status"] = "awaiting_backfill"
+            row["reason"] = "O motor é suportado, mas o histórico por classe ainda não foi materializado."
+    return rows
 
 
 async def get_daily_class_evolution(
