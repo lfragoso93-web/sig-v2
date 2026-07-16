@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.core.asset_types import INTL_TYPES, NO_QUOTE_TYPES, yf_ticker
