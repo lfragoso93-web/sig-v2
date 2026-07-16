@@ -89,22 +89,37 @@ function ClasseBar({ classe }: { classe: RentabilidadeClasse }) {
             <span className="text-[10px]" style={{ color: 'var(--color-text-faint)' }}>TWR acumulado{classe.return_is_estimated ? ' estimado' : ''}</span>
           </div>
         ) : (
-          <span className="text-[10px] text-right max-w-[145px]" style={{ color: 'var(--color-text-faint)' }}>
-            {classe.performance_status === 'awaiting_backfill' ? 'Histórico aguardando materialização' : classe.performance_reason ?? 'TWR indisponível'}
-          </span>
+          <div className="flex flex-col items-end max-w-[170px]">
+            <span className="text-[10px] font-semibold" style={{ color: 'var(--color-text-muted)' }}>TWR indisponível</span>
+            <span className="text-[10px] text-right" style={{ color: 'var(--color-text-faint)' }}>
+              {classe.performance_status === 'awaiting_backfill' ? 'Histórico aguardando materialização' : 'Série diária dedicada ainda não disponível'}
+            </span>
+          </div>
         )}
       </div>
-      <div className="flex items-center justify-between gap-3 mb-2">
-        <span className="text-xs tabular-nums" style={{ color: 'var(--color-text-muted)' }}>{formatBRL(currentValue)}</span>
-        <span className="text-xs tabular-nums" style={{ color: pnlColor(capitalResult) }}>{capitalResult == null ? '—' : `${pnlSign(capitalResult)}${formatBRL(capitalResult)}`}</span>
+
+      <div className="grid grid-cols-2 gap-3 mb-2">
+        <div className="flex flex-col">
+          <span className="text-[10px]" style={{ color: 'var(--color-text-faint)' }}>Patrimônio atual</span>
+          <span className="text-xs tabular-nums" style={{ color: 'var(--color-text)' }}>{formatBRL(currentValue)}</span>
+        </div>
+        <div className="flex flex-col items-end">
+          <span className="text-[10px] text-right" style={{ color: 'var(--color-text-faint)' }}>{classe.result_label}</span>
+          <span className="text-xs tabular-nums" style={{ color: pnlColor(capitalResult) }}>{capitalResult == null ? '—' : `${pnlSign(capitalResult)}${formatBRL(capitalResult)}`}</span>
+        </div>
       </div>
+
       <div className="w-full rounded-full" style={{ height: 7, background: 'var(--color-surface-dynamic)' }}>
         <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(allocation, 100)}%`, background: 'var(--color-primary)' }} />
       </div>
       <div className="flex justify-between gap-2 mt-1 text-[10px]" style={{ color: 'var(--color-text-faint)' }}>
         <span>{allocation.toFixed(1)}% do patrimônio</span>
-        <span>{reference ? `TWR até ${reference}` : 'Resultado patrimonial atual'}</span>
+        <span>{reference ? `TWR até ${reference}` : classe.valuation_label}</span>
       </div>
+
+      {!classe.twr_available && classe.performance_reason && (
+        <p className="text-[10px] mt-2" style={{ color: 'var(--color-text-faint)' }}>{classe.performance_reason}</p>
+      )}
       {classe.has_partial_prices && <p className="text-[10px] mt-1" style={{ color: 'var(--color-warning)' }}>Cobertura parcial de preços no fechamento da classe</p>}
     </div>
   )
