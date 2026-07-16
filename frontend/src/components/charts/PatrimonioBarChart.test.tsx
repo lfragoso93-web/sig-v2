@@ -15,6 +15,7 @@ describe('buildPatrimonioChartData', () => {
         accumulated_return_pct: 8.7654,
         return_is_estimated: true,
         has_partial_prices: false,
+        history_source: 'portfolio_snapshot',
       },
     ])
 
@@ -27,6 +28,7 @@ describe('buildPatrimonioChartData', () => {
       twr: 8.7654,
       partial: false,
       estimated: true,
+      source: 'portfolio_snapshot',
     })
   })
 
@@ -41,6 +43,7 @@ describe('buildPatrimonioChartData', () => {
 
     expect(point.resultado).toBe(250)
     expect(point.twr).toBeNull()
+    expect(point.source).toBe('unknown')
   })
 
   it('preserves zero TWR instead of treating it as missing', () => {
@@ -50,9 +53,11 @@ describe('buildPatrimonioChartData', () => {
         value: 1000,
         invested: 1000,
         accumulated_return_pct: 0,
+        history_source: 'db_derived_class_history',
       },
     ])
 
     expect(point.twr).toBe(0)
+    expect(point.source).toBe('db_derived_class_history')
   })
 })
