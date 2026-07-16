@@ -18,8 +18,6 @@ interface Props {
   singleSeries?: boolean
 }
 
-const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-
 function monthLabel(value: string) {
   const [year, month] = value.split('-')
   if (!year || !month) return value
@@ -37,7 +35,7 @@ interface TooltipProps {
   payload?: Array<{ payload: ChartPoint }>
 }
 
-interface ChartPoint {
+export interface ChartPoint {
   name: string
   date: string
   patrimonio: number
@@ -46,6 +44,26 @@ interface ChartPoint {
   twr: number | null
   partial: boolean
   estimated: boolean
+}
+
+export function buildPatrimonioChartData(data: PatrimonioHistoryPoint[]): ChartPoint[] {
+  return data.map(point => {
+    const patrimonio = Number(point.value || 0)
+    const aplicado = Number(point.invested || 0)
+    return {
+      name: monthLabel(point.period ?? point.date.slice(0, 7)),
+      date: point.date,
+      patrimonio,
+      aplicado,
+      resultado: Number(point.capital_result ?? patrimonio - aplicado),
+      twr: point.accumulated_return_pct !== undefined
+        && Number.isFinite(Number(point.accumulated_return_pct))
+        ? Number(point.accumulated_return_pct)
+        : null,
+      partial: Boolean(point.has_partial_prices),
+      estimated: Boolean(point.return_is_estimated),
+    }
+  })
 }
 
 function EvolutionTooltip({ active, payload }: TooltipProps) {
@@ -125,22 +143,7 @@ export default function PatrimonioBarChart({ data, loading }: Props) {
     )
   }
 
-  const chartData: ChartPoint[] = data.map(point => {
-    const patrimonio = Number(point.value || 0)
-    const aplicado = Number(point.invested || 0)
-    return {
-      name: monthLabel(point.period ?? point.date.slice(0, 7)),
-      date: point.date,
-      patrimonio,
-      aplicado,
-      resultado: Number(point.capital_result ?? patrimonio - aplicado),
-      twr: Number.isFinite(Number(point.accumulated_return_pct))
-        ? Number(point.accumulated_return_pct)
-        : null,
-      partial: Boolean(point.has_partial_prices),
-      estimated: Boolean(point.return_is_estimated),
-    }
-  })
+  const chartData = buildPatrimonioChartData(data)
 
   return (
     <ResponsiveContainer width="100%" height={250}>
