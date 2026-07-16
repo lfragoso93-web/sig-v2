@@ -6,40 +6,41 @@ export interface DailyPoint {
   market_value: number
   cost_basis: number
   invested_total: number
+  net_external_flow: number
   unrealized_pnl: number
   realized_pnl: number
   total_pnl: number
   return_pct: number
+  daily_return_pct: number
+  accumulated_return_pct: number
+  dividends_day: number
+  dividends_accumulated: number
+  has_partial_prices: boolean
+  return_is_estimated: boolean
+  history_source: string
 }
 
-export interface MonthlyPoint {
-  date: string
+export interface MonthlyPoint extends DailyPoint {
   period: string
   value: number
   invested: number
-  market_value: number
-  cost_basis: number
-  invested_total: number
-  unrealized_pnl: number
-  realized_pnl: number
-  total_pnl: number
-  return_pct: number
+  monthly_return_pct: number
 }
 
 export type PeriodOption = '6m' | '12m' | '24m' | 'all'
 
 export const PERIOD_DAYS: Record<PeriodOption, number> = {
-  '6m':  180,
+  '6m': 180,
   '12m': 365,
   '24m': 730,
-  'all': 3650,
+  'all': 0,
 }
 
 export const PERIOD_MONTHS: Record<PeriodOption, number> = {
-  '6m':  6,
+  '6m': 6,
   '12m': 12,
   '24m': 24,
-  'all': 120,
+  'all': 0,
 }
 
 export function useDailyEvolution(
