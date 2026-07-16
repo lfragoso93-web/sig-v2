@@ -42,8 +42,6 @@ export interface ChartPoint {
   patrimonio: number
   aplicado: number
   resultado: number
-  baseVisual: number
-  resultadoVisual: number
   twr: number | null
   partial: boolean
   estimated: boolean
@@ -62,11 +60,6 @@ export function buildPatrimonioChartData(data: PatrimonioHistoryPoint[]): ChartP
       patrimonio,
       aplicado,
       resultado,
-      // A faixa de resultado precisa permanecer visível também quando negativa.
-      // Por isso a barra-base usa o menor valor e a diferença é desenhada como
-      // magnitude positiva, recebendo cor vermelha ou verde conforme o sinal real.
-      baseVisual: Math.min(patrimonio, aplicado),
-      resultadoVisual: Math.abs(resultado),
       twr: point.accumulated_return_pct !== undefined
         && Number.isFinite(Number(point.accumulated_return_pct))
         ? Number(point.accumulated_return_pct)
@@ -76,6 +69,15 @@ export function buildPatrimonioChartData(data: PatrimonioHistoryPoint[]): ChartP
       source: point.history_source ?? 'unknown',
     }
   })
+}
+
+export function getSymmetricAxisLimit(data: ChartPoint[]): number {
+  const maxAbsolute = data.reduce(
+    (maxValue, point) => Math.max(maxValue, Math.abs(point.aplicado), Math.abs(point.resultado)),
+    0,
+  )
+  if (maxAbsolute === 0) return 1
+  return Math.ceil(maxAbsolute * 1.08)
 }
 
 function EvolutionTooltip({ active, payload }: TooltipProps) {
@@ -160,16 +162,17 @@ export default function PatrimonioBarChart({ data, loading }: Props) {
   }
 
   const chartData = buildPatrimonioChartData(data)
+  const axisLimit = getSymmetricAxisLimit(chartData)
 
   return (
-    <ResponsiveContainer width="100%" height={250}>
-      <BarChart data={chartData} margin={{ top: 8, right: 8, left: 4, bottom: 4 }} barCategoryGap="18%">
+    <ResponsiveContainer width="100%" height={300}>
+      <BarChart data={chartData} margin={{ top: 8, right: 8, left: 4, bottom: 4 }} barCategoryGap="18%" barGap={2}>
         <CartesianGrid
           strokeDasharray="3 3"
           stroke="oklch(from var(--color-text) l c h / 0.08)"
           vertical={false}
         />
-        <ReferenceLine y={0} stroke="oklch(from var(--color-text) l c h / 0.25)" />
+        <ReferenceLine y={0} stroke="oklch(from var(--color-text) l c h / 0.4)" strokeWidth={1.5} />
         <XAxis
           dataKey="name"
           tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }}
@@ -181,6 +184,7 @@ export default function PatrimonioBarChart({ data, loading }: Props) {
           interval="preserveStartEnd"
         />
         <YAxis
+          domain={[-axisLimit, axisLimit]}
           tickFormatter={(value: number) => formatBRL(value, true)}
           tick={{ fontSize: 9, fill: 'var(--color-text-muted)' }}
           axisLine={false}
@@ -195,19 +199,17 @@ export default function PatrimonioBarChart({ data, loading }: Props) {
           wrapperStyle={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}
         />
         <Bar
-          dataKey="baseVisual"
+          dataKey="aplicado"
           name="Valor aplicado"
-          stackId="patrimonio"
           fill="var(--color-success)"
           radius={[3, 3, 0, 0]}
-          maxBarSize={42}
+          maxBarSize={30}
         />
         <Bar
-          dataKey="resultadoVisual"
+          dataKey="resultado"
           name="Ganho / perda de capital"
-          stackId="patrimonio"
           radius={[3, 3, 3, 3]}
-          maxBarSize={42}
+          maxBarSize={30}
         >
           {chartData.map(point => (
             <Cell
