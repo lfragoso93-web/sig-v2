@@ -30,6 +30,7 @@ from app.services.realized_pnl_service import get_realized_pnl
 
 logger = logging.getLogger(__name__)
 _CACHE_TTL = 120
+_SUMMARY_VERSION = "summary.v2"
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +48,7 @@ class PortfolioSummaryInput:
 
 
 def build_portfolio_summary(data: PortfolioSummaryInput) -> dict:
+    """Monta exclusivamente os campos financeiros canônicos do Resumo."""
     total_invested = float(data.total_invested)
     current_value = float(data.current_value)
     unrealized_pnl = current_value - total_invested
@@ -79,17 +81,11 @@ def build_portfolio_summary(data: PortfolioSummaryInput) -> dict:
         ),
         "dividendos_recebidos_12m": round(float(data.dividends_12m), 2),
         "total_proventos": round(total_dividends, 2),
-        "proventos_em_carteira": round(total_dividends, 2),
-        "ganho_capital": round(unrealized_pnl, 2),
         "ganho_nao_realizado": round(unrealized_pnl, 2),
         "ganho_realizado": round(realized_pnl, 2),
         "has_partial_prices": bool(data.has_partial_prices),
         "assets_without_price": list(data.assets_without_price),
         "usd_brl_rate": round(float(data.usd_brl_rate), 4),
-        "total_invested": round(total_invested, 2),
-        "current_value": round(current_value, 2),
-        "total_gain": round(unrealized_pnl, 2),
-        "total_gain_pct": round(variation_pct, 4),
     }
 
 
@@ -115,12 +111,25 @@ async def _get_intraday_valuation(db: AsyncSession, portfolio_id: int) -> dict:
         else position["total_invested"]
         for position in enriched
     ) + float(fixed_income["current_value"])
+
+    price_eligible_positions = [
+        position
+        for position in enriched
+        if position["asset_type"] in _MARKET_PRICE_TYPES
+    ]
     assets_without_price = tuple(
         position["ticker"]
-        for position in enriched
+        for position in price_eligible_positions
         if position.get("current_price") is None
-        and position["asset_type"] in _MARKET_PRICE_TYPES
     )
+    price_assets_total = len(price_eligible_positions)
+    price_assets_covered = price_assets_total - len(assets_without_price)
+    price_coverage_pct = (
+        price_assets_covered / price_assets_total * 100
+        if price_assets_total
+        else 100.0
+    )
+
     tickers = [position["ticker"] for position in enriched]
     valuation_updated_at = None
     if tickers:
@@ -133,6 +142,9 @@ async def _get_intraday_valuation(db: AsyncSession, portfolio_id: int) -> dict:
         "total_invested": total_invested,
         "current_value": current_value,
         "assets_without_price": assets_without_price,
+        "price_assets_total": price_assets_total,
+        "price_assets_covered": price_assets_covered,
+        "price_coverage_pct": round(price_coverage_pct, 2),
         "valuation_updated_at": valuation_updated_at,
     }
 
@@ -148,6 +160,14 @@ async def _get_received_dividend_totals(db: AsyncSession, portfolio_id: int) -> 
     )
     total = await sum_received_dividends(db, portfolio_id, as_of=today)
     return total_12m, total
+
+
+def _quality_metadata(valuation: dict) -> dict:
+    return {
+        "price_assets_total": valuation["price_assets_total"],
+        "price_assets_covered": valuation["price_assets_covered"],
+        "price_coverage_pct": valuation["price_coverage_pct"],
+    }
 
 
 async def _build_summary_from_latest_snapshot(
@@ -174,6 +194,8 @@ async def _build_summary_from_latest_snapshot(
     )
     summary.update(
         {
+            "summary_version": _SUMMARY_VERSION,
+            "snapshot_id": getattr(snapshot, "id", None),
             "snapshot_date": snapshot.snapshot_date.isoformat(),
             "performance_as_of": snapshot.snapshot_date.isoformat(),
             "proventos_as_of": date.today().isoformat(),
@@ -182,6 +204,7 @@ async def _build_summary_from_latest_snapshot(
             "valuation_updated_at": valuation["valuation_updated_at"],
             "summary_source": "intraday_valuation_with_snapshot_twr",
             "return_is_estimated": bool(snapshot.return_is_estimated),
+            **_quality_metadata(valuation),
         }
     )
     reconciliation = reconcile_snapshot_summary(
@@ -220,6 +243,8 @@ async def _build_summary_from_valuation_fallback(db: AsyncSession, portfolio_id:
     )
     summary.update(
         {
+            "summary_version": _SUMMARY_VERSION,
+            "snapshot_id": None,
             "snapshot_date": None,
             "performance_as_of": None,
             "proventos_as_of": date.today().isoformat(),
@@ -230,6 +255,7 @@ async def _build_summary_from_valuation_fallback(db: AsyncSession, portfolio_id:
             "return_is_estimated": True,
             "is_reconciled": None,
             "reconciliation": None,
+            **_quality_metadata(valuation),
         }
     )
     return summary
