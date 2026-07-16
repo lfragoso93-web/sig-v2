@@ -1,14 +1,14 @@
 """Fonte canônica para os KPIs consolidados de uma carteira.
 
 Patrimônio, investido, resultado e cobertura usam valuation intradiário. TWR e
-metadados de performance usam o último snapshot fechado. Carteiras sem snapshot
-mantêm o fallback integral de valuation.
+metadados de performance usam o último snapshot fechado. Proventos usam apenas
+valores monetários efetivamente recebidos, pela data de pagamento.
 """
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.cache import cache_get, cache_set
 from app.models.asset import Asset
 from app.models.portfolio_snapshot import PortfolioSnapshot
+from app.services.dividend_aggregation_service import sum_received_dividends
 from app.services.fixed_income_valuation_service import get_fixed_income_totals
 from app.services.fx_service import get_usd_brl_today
 from app.services.portfolio_reconciliation_service import reconcile_snapshot_summary
@@ -24,7 +25,6 @@ from app.services.portfolio_service import (
     _cache_key,
     _non_fixed_income_enriched,
     get_portfolio,
-    sum_dividends,
 )
 from app.services.realized_pnl_service import get_realized_pnl
 
@@ -137,21 +137,33 @@ async def _get_intraday_valuation(db: AsyncSession, portfolio_id: int) -> dict:
     }
 
 
+async def _get_received_dividend_totals(db: AsyncSession, portfolio_id: int) -> tuple[float, float]:
+    today = date.today()
+    cutoff_12m = (datetime.now(timezone.utc) - timedelta(days=365)).date()
+    total_12m = await sum_received_dividends(
+        db,
+        portfolio_id,
+        cutoff=cutoff_12m,
+        as_of=today,
+    )
+    total = await sum_received_dividends(db, portfolio_id, as_of=today)
+    return total_12m, total
+
+
 async def _build_summary_from_latest_snapshot(
     db: AsyncSession,
     portfolio_id: int,
     snapshot: PortfolioSnapshot,
 ) -> dict:
     valuation = await _get_intraday_valuation(db, portfolio_id)
-    cutoff_12m = (datetime.now(timezone.utc) - timedelta(days=365)).date()
-    dividends_12m = await sum_dividends(db, portfolio_id, cutoff=cutoff_12m)
+    dividends_12m, total_dividends = await _get_received_dividend_totals(db, portfolio_id)
 
     summary = build_portfolio_summary(
         PortfolioSummaryInput(
             total_invested=valuation["total_invested"],
             current_value=valuation["current_value"],
             dividends_12m=dividends_12m,
-            total_dividends=float(snapshot.dividends_accumulated),
+            total_dividends=total_dividends,
             realized_pnl=float(snapshot.realized_pnl),
             has_partial_prices=bool(valuation["assets_without_price"]),
             assets_without_price=valuation["assets_without_price"],
@@ -164,6 +176,8 @@ async def _build_summary_from_latest_snapshot(
         {
             "snapshot_date": snapshot.snapshot_date.isoformat(),
             "performance_as_of": snapshot.snapshot_date.isoformat(),
+            "proventos_as_of": date.today().isoformat(),
+            "proventos_source": "received_cash_dividends",
             "valuation_mode": "intraday",
             "valuation_updated_at": valuation["valuation_updated_at"],
             "summary_source": "intraday_valuation_with_snapshot_twr",
@@ -190,9 +204,7 @@ async def _build_summary_from_latest_snapshot(
 
 async def _build_summary_from_valuation_fallback(db: AsyncSession, portfolio_id: int) -> dict:
     valuation = await _get_intraday_valuation(db, portfolio_id)
-    cutoff_12m = (datetime.now(timezone.utc) - timedelta(days=365)).date()
-    dividends_12m = await sum_dividends(db, portfolio_id, cutoff=cutoff_12m)
-    total_dividends = await sum_dividends(db, portfolio_id)
+    dividends_12m, total_dividends = await _get_received_dividend_totals(db, portfolio_id)
     realized_pnl = await get_realized_pnl(db, portfolio_id)
     summary = build_portfolio_summary(
         PortfolioSummaryInput(
@@ -210,6 +222,8 @@ async def _build_summary_from_valuation_fallback(db: AsyncSession, portfolio_id:
         {
             "snapshot_date": None,
             "performance_as_of": None,
+            "proventos_as_of": date.today().isoformat(),
+            "proventos_source": "received_cash_dividends",
             "valuation_mode": "intraday",
             "valuation_updated_at": valuation["valuation_updated_at"],
             "summary_source": "valuation_fallback",
