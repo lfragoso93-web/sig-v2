@@ -175,7 +175,7 @@ export default function PatrimonioBarChart({ data, loading }: Props) {
         <Legend
           verticalAlign="top"
           height={30}
-          iconType="roundRect"
+          iconType="rect"
           wrapperStyle={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}
         />
         <Bar
