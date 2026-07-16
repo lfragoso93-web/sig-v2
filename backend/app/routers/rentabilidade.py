@@ -5,9 +5,10 @@ Endpoints:
   GET /portfolios/{portfolio_id}/rentabilidade/kpis
   GET /portfolios/{portfolio_id}/rentabilidade/ativos
   GET /portfolios/{portfolio_id}/rentabilidade/classes
+  GET /portfolios/{portfolio_id}/rentabilidade/benchmarks/monthly
 """
 import logging
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +19,7 @@ from app.models.portfolio import Portfolio
 from app.services.rentabilidade_kpi_service import get_rentabilidade_kpis
 from app.services.rentabilidade_service import get_rentabilidade_por_ativo
 from app.services.rentabilidade_class_service import get_canonical_class_performance
+from app.services.rentabilidade_benchmark_service import get_persisted_monthly_benchmarks
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +47,7 @@ async def rentabilidade_kpis(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """KPIs atuais canônicos combinados com métricas históricas TWR."""
+    """KPIs atuais canônicos combinados com métricas históricas de retorno."""
     await _assert_owner(db, portfolio_id, current_user.id)
     return await get_rentabilidade_kpis(db, portfolio_id, current_user.id)
 
@@ -56,7 +58,7 @@ async def rentabilidade_ativos(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Resultado por ativo; não representa TWR individual."""
+    """Resultado monetário por ativo; percentuais simples não representam TWR."""
     await _assert_owner(db, portfolio_id, current_user.id)
     return await get_rentabilidade_por_ativo(db, portfolio_id)
 
@@ -67,10 +69,18 @@ async def rentabilidade_classes(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Valuation intradiário e TWR fechado canônico por classe."""
+    """Valuation intradiário e TWR fechado por classe."""
     await _assert_owner(db, portfolio_id, current_user.id)
-    return await get_canonical_class_performance(
-        db,
-        portfolio_id,
-        current_user.id,
-    )
+    return await get_canonical_class_performance(db, portfolio_id, current_user.id)
+
+
+@router.get("/{portfolio_id}/rentabilidade/benchmarks/monthly")
+async def rentabilidade_benchmarks_monthly(
+    portfolio_id: int,
+    months: int = Query(default=12, ge=0, le=1200),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Retornos mensais de benchmarks lidos exclusivamente do banco."""
+    await _assert_owner(db, portfolio_id, current_user.id)
+    return await get_persisted_monthly_benchmarks(db, months=months)
