@@ -70,6 +70,24 @@ def aggregate_received_dividends(
     return total.quantize(Decimal("0.01"))
 
 
+def _received_amount_expression():
+    return func.coalesce(Dividend.net_value, Dividend.total_received, Dividend.total_value, 0)
+
+
+def _received_payment_date_expression():
+    return func.coalesce(Dividend.payment_date, Dividend.date_pagamento)
+
+
+def _received_cash_filters(portfolio_id: int):
+    payment_date = _received_payment_date_expression()
+    return (
+        Dividend.portfolio_id == portfolio_id,
+        Dividend.status == DividendStatus.RECEBIDO,
+        payment_date.is_not(None),
+        func.upper(func.coalesce(Dividend.dividend_type, "")).notin_(_NON_CASH_TYPES),
+    )
+
+
 async def sum_received_dividends(
     db: AsyncSession,
     portfolio_id: int,
@@ -78,13 +96,9 @@ async def sum_received_dividends(
     as_of: date | None = None,
     tickers: list[str] | None = None,
 ) -> float:
-    payment_date = func.coalesce(Dividend.payment_date, Dividend.date_pagamento)
-    amount = func.coalesce(Dividend.net_value, Dividend.total_received, Dividend.total_value, 0)
-    query = select(func.sum(amount)).where(
-        Dividend.portfolio_id == portfolio_id,
-        Dividend.status == DividendStatus.RECEBIDO,
-        payment_date.is_not(None),
-        func.upper(func.coalesce(Dividend.dividend_type, "")).notin_(_NON_CASH_TYPES),
+    payment_date = _received_payment_date_expression()
+    query = select(func.sum(_received_amount_expression())).where(
+        *_received_cash_filters(portfolio_id)
     )
     if cutoff is not None:
         query = query.where(payment_date >= cutoff)
@@ -94,3 +108,37 @@ async def sum_received_dividends(
         query = query.where(Dividend.ticker.in_([ticker.upper() for ticker in tickers]))
     value = (await db.execute(query)).scalar_one_or_none()
     return float(_decimal(value).quantize(Decimal("0.01")))
+
+
+async def sum_received_dividends_by_ticker(
+    db: AsyncSession,
+    portfolio_id: int,
+    tickers: list[str],
+    *,
+    as_of: date | None = None,
+) -> dict[str, float]:
+    """Retorna proventos líquidos recebidos agrupados por ticker."""
+    normalized = sorted({ticker.upper() for ticker in tickers if ticker})
+    if not normalized:
+        return {}
+
+    payment_date = _received_payment_date_expression()
+    query = (
+        select(
+            func.upper(Dividend.ticker).label("ticker"),
+            func.sum(_received_amount_expression()).label("total"),
+        )
+        .where(
+            *_received_cash_filters(portfolio_id),
+            func.upper(Dividend.ticker).in_(normalized),
+        )
+        .group_by(func.upper(Dividend.ticker))
+    )
+    if as_of is not None:
+        query = query.where(payment_date <= as_of)
+
+    rows = (await db.execute(query)).all()
+    return {
+        row.ticker: float(_decimal(row.total).quantize(Decimal("0.01")))
+        for row in rows
+    }
