@@ -40,6 +40,8 @@ class PortfolioSummaryInput:
     has_partial_prices: bool = False
     assets_without_price: tuple[str, ...] = ()
     usd_brl_rate: float = 1.0
+    accumulated_twr_pct: float | None = None
+    daily_twr_pct: float | None = None
 
 
 def build_portfolio_summary(data: PortfolioSummaryInput) -> dict:
@@ -48,11 +50,9 @@ def build_portfolio_summary(data: PortfolioSummaryInput) -> dict:
     Semantica:
     - variacao: ganho ou perda nao realizada sobre o capital ainda empregado;
     - lucro total: nao realizado + realizado + historico integral de proventos;
-    - rentabilidade total: indicador legado temporario sobre capital empregado;
+    - rentabilidade total: TWR acumulado quando fornecido por snapshot;
+    - fallback sem snapshot: lucro total sobre capital empregado;
     - total de proventos: historico integral recebido pela carteira.
-
-    A rentabilidade oficial sera substituida pelo TWR derivado dos snapshots
-    diarios. Ate la, o percentual permanece disponivel por compatibilidade.
     """
     total_invested = float(data.total_invested)
     current_value = float(data.current_value)
@@ -65,10 +65,15 @@ def build_portfolio_summary(data: PortfolioSummaryInput) -> dict:
     realized_pnl = float(data.realized_pnl)
     total_dividends = float(data.total_dividends)
     total_profit = unrealized_pnl + realized_pnl + total_dividends
-    total_return_pct = (
+    fallback_return_pct = (
         total_profit / total_invested * 100
         if total_invested
         else 0.0
+    )
+    total_return_pct = (
+        float(data.accumulated_twr_pct)
+        if data.accumulated_twr_pct is not None
+        else fallback_return_pct
     )
 
     return {
@@ -79,6 +84,17 @@ def build_portfolio_summary(data: PortfolioSummaryInput) -> dict:
         "variacao_valor": round(unrealized_pnl, 2),
         "variacao_percentual": round(variation_pct, 4),
         "rentabilidade_total": round(total_return_pct, 4),
+        "rentabilidade_acumulada": round(total_return_pct, 4),
+        "rentabilidade_diaria": (
+            round(float(data.daily_twr_pct), 6)
+            if data.daily_twr_pct is not None
+            else None
+        ),
+        "rentabilidade_source": (
+            "snapshot_twr"
+            if data.accumulated_twr_pct is not None
+            else "valuation_fallback"
+        ),
         "dividendos_recebidos_12m": round(float(data.dividends_12m), 2),
         "total_proventos": round(total_dividends, 2),
         "proventos_em_carteira": round(total_dividends, 2),
@@ -126,6 +142,8 @@ async def _build_summary_from_latest_snapshot(
             realized_pnl=float(snapshot.realized_pnl),
             has_partial_prices=bool(snapshot.has_partial_prices),
             usd_brl_rate=await get_usd_brl_today(db),
+            accumulated_twr_pct=float(snapshot.accumulated_return_pct),
+            daily_twr_pct=float(snapshot.daily_return_pct),
         )
     )
     summary.update(
