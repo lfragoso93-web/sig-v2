@@ -27,6 +27,52 @@ export interface MonthlyPoint extends DailyPoint {
   monthly_return_pct: number
 }
 
+export interface ClassEvolutionPoint {
+  asset_type: string
+  date: string
+  market_value: number
+  cost_basis: number
+  realized_pnl: number
+  unrealized_pnl: number
+  net_external_flow: number
+  dividends_day: number
+  dividends_accumulated: number
+  daily_return_pct: number
+  accumulated_return_pct: number
+  has_partial_prices: boolean
+  return_is_estimated: boolean
+  valuation_status: 'complete' | 'partial_prices' | string
+  history_source: 'portfolio_class_snapshot'
+}
+
+export interface MonthlyClassEvolutionPoint extends ClassEvolutionPoint {
+  period: string
+  monthly_return_pct: number
+}
+
+export interface ClassTwrAvailability {
+  asset_type: string
+  available: boolean
+  status: 'available' | 'dedicated_history_not_available' | string
+  reason: string | null
+}
+
+export interface ClassReconciliation {
+  is_reconciled: boolean | null
+  is_comparable: boolean
+  status: string
+  unsupported_asset_types: string[]
+  snapshot_date: string | null
+  checks: Array<{
+    field: string
+    expected: number
+    observed: number
+    difference: number
+    tolerance: number
+    is_reconciled: boolean
+  }>
+}
+
 export type PeriodOption = '6m' | '12m' | '24m' | 'all'
 
 export const PERIOD_DAYS: Record<PeriodOption, number> = {
@@ -43,16 +89,25 @@ export const PERIOD_MONTHS: Record<PeriodOption, number> = {
   'all': 0,
 }
 
-export function useDailyEvolution(
-  portfolioId: number | null,
-  period: PeriodOption = '12m',
-) {
+export function useDailyEvolution(portfolioId: number | null, period: PeriodOption = '12m') {
   const days = PERIOD_DAYS[period]
   return useQuery<DailyPoint[]>({
     queryKey: ['evolution-daily', portfolioId, period],
+    queryFn: () => api.get(`/performance/${portfolioId}/evolution/daily`, { params: { days } }).then(r => r.data),
+    enabled: !!portfolioId,
+    placeholderData: [],
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useMonthlyEvolution(portfolioId: number | null, period: PeriodOption = '12m') {
+  const months = PERIOD_MONTHS[period]
+  return useQuery<MonthlyPoint[]>({
+    queryKey: ['evolution-monthly', portfolioId, period],
+    queryFn: () => api.get(`/performance/${portfolioId}/evolution/monthly`, { params: { months } }).then(r => queryKey: ['evolution-monthly', portfolioId, period],
     queryFn: () =>
       api
-        .get(`/performance/${portfolioId}/evolution/daily`, { params: { days } })
+        .get(`/performance/${portfolioId}/evolution/monthly`, { params: { months } })
         .then(r => r.data),
     enabled: !!portfolioId,
     placeholderData: [],
@@ -60,18 +115,49 @@ export function useDailyEvolution(
   })
 }
 
-export function useMonthlyEvolution(
+export function useClassDailyEvolution(
   portfolioId: number | null,
+  assetType: string | null,
+  period: PeriodOption = '12m',
+) {
+  const days = PERIOD_DAYS[period]
+  return useQuery<ClassEvolutionPoint[]>({
+    queryKey: ['class-evolution-daily', portfolioId, assetType, period],
+    queryFn: () =>
+      api
+        .get(`/performance/${portfolioId}/classes/${assetType}/evolution/daily`, { params: { days } })
+        .then(r => r.data),
+    enabled: !!portfolioId && !!assetType,
+    placeholderData: [],
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useClassMonthlyEvolution(
+  portfolioId: number | null,
+  assetType: string | null,
   period: PeriodOption = '12m',
 ) {
   const months = PERIOD_MONTHS[period]
-  return useQuery<MonthlyPoint[]>({
-    queryKey: ['evolution-monthly', portfolioId, period],
-    queryFn: () =>
-      api
-        .get(`/performance/${portfolioId}/evolution/monthly`, { params: { months } })
-        .then(r => r.data),
-    enabled: !!portfolioId,
+  return useQuery<ClassMonthlyPoint[]>({
+    queryKey: ['class-evolution-monthly', portfolioId, assetType, period],
+    queryFn: () => api.get(`/performance/${portfolioId}/classes/${assetType}/evolution/daily`, { params: { days } }).then(r => r.data),
+    enabled: !!portfolioId && !!assetType,
+    placeholderData: [],
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useMonthlyClassEvolution(
+  portfolioId: number | null,
+  assetType: string | null,
+  period: PeriodOption = '12m',
+) {
+  const months = PERIOD_MONTHS[period]
+  return useQuery<MonthlyClassEvolutionPoint[]>({
+    queryKey: ['class-evolution-monthly', portfolioId, assetType, period],
+    queryFn: () => api.get(`/performance/${portfolioId}/classes/${assetType}/evolution/monthly`, { params: { months } }).then(r => r.data),
+    enabled: !!portfolioId && !!assetType,
     placeholderData: [],
     staleTime: 5 * 60 * 1000,
   })
