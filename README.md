@@ -16,7 +16,7 @@ O SGI v2 opera com arquitetura **DB-first**: dados de mercado, Tesouro Direto, R
 - Valuation canônico por classe de ativo.
 - Snapshots diários com TWR diário, mensal e acumulado desde o início.
 - Renda Fixa valorizada por motor dedicado, sem lookup genérico de preços.
-- Tesouro Direto com catálogo v2 e histórico oficial do Tesouro Transparente.
+- Tesouro Direto com catálogo v2 e histórico oficial persistido.
 - RendA+ e Educa+ normalizados pelo ano comercial.
 - Histórico oficial da B3 via COTAHIST para ações, FIIs, ETFs nacionais e BDRs.
 - Carga B3 validada com 2.258 ativos e 984.949 preços entre 2024 e 2026.
@@ -37,7 +37,7 @@ Catálogo canônico de ativos
         ↓
 Fontes oficiais e complementares
         ├── B3 COTAHIST: histórico de renda variável brasileira
-        ├── Tesouro Transparente: catálogo e histórico do Tesouro
+        ├── fonte oficial do Tesouro: catálogo e histórico de títulos
         ├── motor de Renda Fixa: contratos e indexadores
         └── provedores complementares: atualização recente e contingência
         ↓
@@ -55,7 +55,7 @@ Resumo, Patrimônio, Rentabilidade e Dashboard
 Princípios:
 
 - **DB-first:** snapshots não consultam APIs externas.
-- **Fonte oficial primeiro:** B3 e Tesouro Transparente sustentam o histórico doméstico.
+- **Fonte oficial primeiro:** B3 e a fonte oficial do Tesouro sustentam o histórico doméstico.
 - **Idempotência:** rebuilds podem ser reexecutados sem duplicar registros.
 - **Separação por classe:** mercado, Tesouro e Renda Fixa possuem motores próprios.
 - **Qualidade explícita:** cobertura parcial e retorno estimado são persistidos no snapshot.
@@ -120,9 +120,9 @@ python -m app.cli.rebuild_treasury_official_prices
 
 ### Tesouro Direto
 
-- Catálogo oficial orientado pelo Tesouro Transparente.
+- Catálogo orientado pela fonte oficial do Tesouro.
 - Histórico oficial persistido em `asset_prices`.
-- Brapi como fallback secundário.
+- Provedor complementar como fallback secundário.
 - Aliases legados deduplicados sem apagar transações.
 - RendA+ e Educa+ resolvidos pelo ano comercial.
 - Snapshots consumindo preços oficiais, sem fallback por preço médio quando há cobertura.
