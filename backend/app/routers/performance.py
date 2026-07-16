@@ -9,6 +9,12 @@ from app.services.portfolio_snapshot_read_service import (
     get_enriched_monthly_evolution,
 )
 from app.services.portfolio_snapshot_twr_service import backfill_snapshots_with_returns
+from app.services.portfolio_class_snapshot_service import rebuild_class_snapshots
+from app.services.portfolio_class_snapshot_read_service import (
+    get_class_twr_availability,
+    get_daily_class_evolution,
+    get_monthly_class_evolution,
+)
 from app.models.portfolio import Portfolio
 from sqlalchemy import select
 import logging
@@ -42,7 +48,6 @@ async def evolution_daily(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Retorna evolução diária patrimonial e de rentabilidade TWR."""
     await _assert_portfolio_owner(db, portfolio_id, current_user.id)
     return await get_enriched_daily_evolution(db, portfolio_id, days=days)
 
@@ -54,25 +59,64 @@ async def evolution_monthly(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Retorna o último fechamento de cada mês e o retorno mensal composto."""
     await _assert_portfolio_owner(db, portfolio_id, current_user.id)
     return await get_enriched_monthly_evolution(db, portfolio_id, months=months)
+
+
+@router.get("/{portfolio_id}/classes/availability")
+async def class_performance_availability(
+    portfolio_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await _assert_portfolio_owner(db, portfolio_id, current_user.id)
+    return await get_class_twr_availability(db, portfolio_id)
+
+
+@router.get("/{portfolio_id}/classes/{asset_type}/evolution/daily")
+async def class_evolution_daily(
+    portfolio_id: int,
+    asset_type: str,
+    days: int = Query(default=365, ge=0, le=3650),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await _assert_portfolio_owner(db, portfolio_id, current_user.id)
+    return await get_daily_class_evolution(db, portfolio_id, asset_type, days=days)
+
+
+@router.get("/{portfolio_id}/classes/{asset_type}/evolution/monthly")
+async def class_evolution_monthly(
+    portfolio_id: int,
+    asset_type: str,
+    months: int = Query(default=12, ge=0, le=120),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await _assert_portfolio_owner(db, portfolio_id, current_user.id)
+    return await get_monthly_class_evolution(db, portfolio_id, asset_type, months=months)
 
 
 @router.post("/{portfolio_id}/evolution/backfill")
 async def evolution_backfill(
     portfolio_id: int,
-    days_back: int = Query(default=None, ge=1, le=3650, description="Dias para backfill. Omitir = desde a primeira transacao"),
+    days_back: int | None = Query(default=None, ge=1, le=3650, description="Dias para backfill. Omitir = desde a primeira transacao"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Reconstrói patrimônio, fluxos, proventos e toda a cadeia TWR."""
+    """Reconstrói snapshots consolidados e por classe na mesma operação."""
     await _assert_portfolio_owner(db, portfolio_id, current_user.id)
-    count = await backfill_snapshots_with_returns(db, portfolio_id, days_back=days_back)
+    consolidated_count = await backfill_snapshots_with_returns(db, portfolio_id, days_back=days_back)
+    class_count = await rebuild_class_snapshots(db, portfolio_id, days_back=days_back)
     logger.info(
-        "[evolution/backfill-twr] portfolio=%s user=%s snapshots=%s",
+        "[evolution/backfill-twr] portfolio=%s user=%s consolidated=%s classes=%s",
         portfolio_id,
         current_user.id,
-        count,
+        consolidated_count,
+        class_count,
     )
-    return {"snapshots_processed": count, "portfolio_id": portfolio_id}
+    return {
+        "snapshots_processed": consolidated_count,
+        "class_snapshots_processed": class_count,
+        "portfolio_id": portfolio_id,
+    }
