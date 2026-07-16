@@ -16,6 +16,7 @@ from app.core.database import get_db
 from app.core.auth import get_current_user
 from app.models.user import User
 from app.models.portfolio import Portfolio
+from app.schemas.rentabilidade import RentabilidadeKpisResponse
 from app.services.rentabilidade_kpi_service import get_rentabilidade_kpis
 from app.services.rentabilidade_service import get_rentabilidade_por_ativo
 from app.services.rentabilidade_class_service import get_canonical_class_performance
@@ -41,13 +42,16 @@ async def _assert_owner(
         raise HTTPException(status_code=404, detail="Carteira não encontrada.")
 
 
-@router.get("/{portfolio_id}/rentabilidade/kpis")
+@router.get(
+    "/{portfolio_id}/rentabilidade/kpis",
+    response_model=RentabilidadeKpisResponse,
+)
 async def rentabilidade_kpis(
     portfolio_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """KPIs atuais canônicos combinados com métricas históricas de retorno."""
+    """KPIs monetários atuais e TWR fechado, com referências independentes."""
     await _assert_owner(db, portfolio_id, current_user.id)
     return await get_rentabilidade_kpis(db, portfolio_id, current_user.id)
 
