@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, status, BackgroundTasks, HTTPException, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
+import logging
+
 from app.core.database import get_db, AsyncSessionLocal
 from app.core.deps import get_current_user
 from app.models.user import User
@@ -17,10 +19,10 @@ from app.services.portfolio_service import (
     list_portfolios,
     get_portfolio,
     update_portfolio,
-    get_portfolio_positions,
     get_asset_distribution,
     invalidate_portfolio_cache,
 )
+from app.services.canonical_positions_service import get_canonical_portfolio_positions
 from app.services.portfolio_summary_service import get_canonical_portfolio_summary
 from app.services.portfolio_delete_service import delete_portfolio_safely
 from app.services.portfolio_snapshot_service import backfill_snapshots
@@ -36,12 +38,9 @@ from app.services.rentabilidade_service import flush_rentabilidade_cache
 from app.services.csv_ticker_resolution import enrich_csv_dry_run_with_ticker_resolution
 from app.services.csv_snapshot_rebuild_service import rebuild_snapshots_after_csv_import
 from app.services import csv_import_service
-import logging
 
 logger = logging.getLogger(__name__)
-
 router = APIRouter(tags=["portfolios"])
-
 
 _CSV_MESSAGE_EXACT = {
     "CSV file is empty or invalid": "O arquivo CSV está vazio ou inválido",
@@ -59,7 +58,6 @@ _CSV_MESSAGE_EXACT = {
 
 
 def _localize_csv_message(message: str) -> str:
-    """Traduz mensagens conhecidas do importador sem ocultar detalhes técnicos."""
     if message in _CSV_MESSAGE_EXACT:
         return _CSV_MESSAGE_EXACT[message]
 
@@ -107,13 +105,11 @@ def _localize_csv_result(result: dict) -> dict:
 
 
 async def _refresh_after_csv_import(portfolio_id: int) -> None:
-    """Invalida todas as leituras financeiras afetadas por novos lançamentos."""
     await invalidate_portfolio_cache(portfolio_id)
     await flush_rentabilidade_cache(portfolio_id)
 
 
 async def _backfill_bg(portfolio_id: int) -> None:
-    """Roda backfill em background sem bloquear a resposta."""
     try:
         async with AsyncSessionLocal() as db:
             count = await backfill_snapshots(db, portfolio_id)
@@ -183,7 +179,7 @@ async def portfolio_positions(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return await get_portfolio_positions(db, portfolio_id, current_user.id)
+    return await get_canonical_portfolio_positions(db, portfolio_id, current_user.id)
 
 
 @router.get("/{portfolio_id}/asset-distribution")
