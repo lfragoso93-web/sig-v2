@@ -26,12 +26,14 @@ async def _main() -> None:
         removed = 0
         if active_ids:
             result = await db.execute(
-                delete(AssetPrice).where(
+                delete(AssetPrice)
+                .where(
                     AssetPrice.asset_id.in_(active_ids),
                     AssetPrice.source.in_(_OFFICIAL_SOURCES),
                 )
+                .returning(AssetPrice.id)
             )
-            removed = int(result.rowcount or 0)
+            removed = len(result.scalars().all())
             await db.commit()
 
     rebuilt = await rebuild_official_treasury_history()
