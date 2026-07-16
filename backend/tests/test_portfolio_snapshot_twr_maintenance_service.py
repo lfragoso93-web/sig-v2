@@ -39,6 +39,7 @@ async def test_maintenance_processes_only_incomplete_portfolios_and_isolates_err
         "skipped": 1,
         "errors": 1,
         "snapshots": 250,
+        "class_snapshots": 0,
     }
     assert backfill.await_count == 2
     db.rollback.assert_awaited_once()
