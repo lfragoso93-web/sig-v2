@@ -1,14 +1,20 @@
 """Contrato financeiro dos KPIs consolidados da carteira.
 
 Estes testes documentam a semantica atual que deve ser preservada durante a
-migracao do endpoint de Resumo para os snapshots canonicos. Eles nao validam a
-origem dos dados; validam exclusivamente a composicao financeira do contrato.
+migracao do endpoint de Resumo para os snapshots canonicos.
 """
+
+from datetime import date
+from decimal import Decimal
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
+from app.services import portfolio_summary_service
 from app.services.portfolio_summary_service import (
     PortfolioSummaryInput,
+    _build_summary_from_latest_snapshot,
     build_portfolio_summary,
 )
 
@@ -181,3 +187,76 @@ def test_legacy_aliases_match_their_canonical_fields(
     )
 
     assert summary[legacy] == summary[canonical]
+
+
+@pytest.mark.asyncio
+async def test_latest_snapshot_is_primary_source_for_summary(monkeypatch) -> None:
+    snapshot = SimpleNamespace(
+        snapshot_date=date(2026, 7, 16),
+        market_value=Decimal("12500.00"),
+        cost_basis=Decimal("10000.00"),
+        realized_pnl=Decimal("300.00"),
+        dividends_accumulated=Decimal("700.00"),
+        has_partial_prices=True,
+        return_is_estimated=False,
+    )
+    monkeypatch.setattr(
+        portfolio_summary_service,
+        "sum_dividends",
+        AsyncMock(return_value=Decimal("180.00")),
+    )
+    monkeypatch.setattr(
+        portfolio_summary_service,
+        "get_usd_brl_today",
+        AsyncMock(return_value=5.55),
+    )
+
+    summary = await _build_summary_from_latest_snapshot(
+        AsyncMock(),
+        portfolio_id=7,
+        snapshot=snapshot,
+    )
+
+    assert summary["total_patrimonio"] == 12_500
+    assert summary["total_investido"] == 10_000
+    assert summary["variacao_valor"] == 2_500
+    assert summary["ganho_realizado"] == 300
+    assert summary["total_proventos"] == 700
+    assert summary["lucro_total"] == 3_500
+    assert summary["dividendos_recebidos_12m"] == 180
+    assert summary["has_partial_prices"] is True
+    assert summary["snapshot_date"] == "2026-07-16"
+    assert summary["summary_source"] == "portfolio_snapshot"
+    assert summary["return_is_estimated"] is False
+
+
+@pytest.mark.asyncio
+async def test_snapshot_summary_does_not_recompute_positions(monkeypatch) -> None:
+    snapshot = SimpleNamespace(
+        snapshot_date=date(2026, 7, 16),
+        market_value=Decimal("1000.00"),
+        cost_basis=Decimal("900.00"),
+        realized_pnl=Decimal("0.00"),
+        dividends_accumulated=Decimal("0.00"),
+        has_partial_prices=False,
+        return_is_estimated=True,
+    )
+    positions = AsyncMock(side_effect=AssertionError("positions must not be queried"))
+    fixed_income = AsyncMock(side_effect=AssertionError("valuation must not be queried"))
+    monkeypatch.setattr(portfolio_summary_service, "_non_fixed_income_enriched", positions)
+    monkeypatch.setattr(portfolio_summary_service, "get_fixed_income_totals", fixed_income)
+    monkeypatch.setattr(
+        portfolio_summary_service,
+        "sum_dividends",
+        AsyncMock(return_value=Decimal("0.00")),
+    )
+    monkeypatch.setattr(
+        portfolio_summary_service,
+        "get_usd_brl_today",
+        AsyncMock(return_value=1.0),
+    )
+
+    await _build_summary_from_latest_snapshot(AsyncMock(), 1, snapshot)
+
+    positions.assert_not_awaited()
+    fixed_income.assert_not_awaited()
