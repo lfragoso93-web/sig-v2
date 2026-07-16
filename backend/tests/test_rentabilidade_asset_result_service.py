@@ -1,9 +1,23 @@
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.services.rentabilidade_asset_result_service import get_canonical_asset_results
+
+
+def _db_with_transactions(transactions: list[object]) -> AsyncMock:
+    """Monta AsyncSession mockada com resultado síncrono do SQLAlchemy.
+
+    ``AsyncSession.execute`` é assíncrono, mas o ``Result`` devolvido e os métodos
+    ``scalars()``/``all()`` são síncronos. Usar ``AsyncMock`` em toda a cadeia
+    produziria uma coroutine artificial em ``scalars()``.
+    """
+    db = AsyncMock()
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = transactions
+    db.execute.return_value = result
+    return db
 
 
 @pytest.mark.asyncio
@@ -20,8 +34,7 @@ async def test_asset_results_use_canonical_positions_and_realized_pnl():
             "current_value": 120,
         }]
     }]
-    db = AsyncMock()
-    db.execute.return_value.scalars.return_value.all.return_value = []
+    db = _db_with_transactions([])
 
     with patch(
         "app.services.rentabilidade_asset_result_service.get_canonical_portfolio_positions",
@@ -62,8 +75,7 @@ async def test_closed_position_keeps_realized_result_without_fake_twr():
         fees=0,
         fx_rate=1,
     )
-    db = AsyncMock()
-    db.execute.return_value.scalars.return_value.all.return_value = [tx]
+    db = _db_with_transactions([tx])
 
     with patch(
         "app.services.rentabilidade_asset_result_service.get_canonical_portfolio_positions",
