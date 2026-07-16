@@ -58,10 +58,22 @@ export interface PortfolioSummary {
   variacao_valor?: number
   variacao_percentual?: number
   rentabilidade_total?: number
+  rentabilidade_diaria?: number | null
+  rentabilidade_acumulada?: number
+  rentabilidade_source?: string
   dividendos_recebidos_12m?: number
   total_proventos?: number
+  proventos_as_of?: string | null
+  proventos_source?: string
   has_partial_prices?: boolean
   assets_without_price?: string[]
+  valuation_mode?: string
+  valuation_updated_at?: string | null
+  performance_as_of?: string | null
+  snapshot_date?: string | null
+  summary_source?: string
+  return_is_estimated?: boolean
+  is_reconciled?: boolean | null
 }
 
 export interface PortfolioListItem {
