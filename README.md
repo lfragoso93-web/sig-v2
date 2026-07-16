@@ -7,22 +7,22 @@ A branch padrão de desenvolvimento é `stable-15jun`.
 
 ---
 
-## Status atual — 14/07/2026
+## Status atual — 16/07/2026
 
-O SGI v2 está consolidando uma arquitetura **DB-first**: dados de mercado, proventos, benchmarks, Tesouro Direto e snapshots são persistidos antes de alimentar KPIs, páginas e gráficos. O objetivo é reduzir chamadas externas repetidas, tornar cálculos reprodutíveis e permitir auditoria por carteira, ativo e data.
+O SGI v2 opera com arquitetura **DB-first**: dados de mercado, Tesouro Direto, Renda Fixa, proventos, benchmarks e snapshots são persistidos antes de alimentar KPIs, páginas e gráficos.
 
-### Entrega estrutural em validação
+### Entrega estrutural consolidada
 
-- Orquestrador oficial `full_market_rebuild` para manutenção completa.
-- Auditoria de cobertura por ativo e identificação de lacunas históricas.
-- Sincronização idempotente de preços apenas para intervalos faltantes.
-- Metadados persistentes de provedor por ativo (`provider`, `provider_symbol`, `provider_status`, tentativas e último erro).
-- Smart sync com estado `HISTORY_START_EXHAUSTED` para não repetir buscas antigas sem ganho.
-- Snapshots TWR reconstruídos exclusivamente a partir do banco.
-- Materialização de proventos em lotes seguros.
-- Sanitização de preços anômalos antes da persistência.
-- Tratamento dedicado para Tesouro Direto e classes sem cotação de mercado.
-- Uso de histórico máximo suportado pelo provedor quando a lacuna é de início de série.
+- Valuation canônico por classe de ativo.
+- Snapshots diários com TWR diário, mensal e acumulado desde o início.
+- Renda Fixa valorizada por motor dedicado, sem lookup genérico de preços.
+- Tesouro Direto com catálogo v2 e histórico oficial do Tesouro Transparente.
+- RendA+ e Educa+ normalizados pelo ano comercial.
+- Histórico oficial da B3 via COTAHIST para ações, FIIs, ETFs nacionais e BDRs.
+- Carga B3 validada com 2.258 ativos e 984.949 preços entre 2024 e 2026.
+- Ciclo de negociação consciente de pré-listagem, deslistagem e lacunas reais.
+- `has_partial_prices` e `return_is_estimated` calculados pela cobertura real.
+- `full_market_rebuild` como orquestrador operacional oficial.
 
 ---
 
@@ -33,13 +33,17 @@ Importação CSV / lançamentos manuais
         ↓
 Transações
         ↓
-Catálogo de ativos
+Catálogo canônico de ativos
         ↓
-Auditoria de cobertura
+Fontes oficiais e complementares
+        ├── B3 COTAHIST: histórico de renda variável brasileira
+        ├── Tesouro Transparente: catálogo e histórico do Tesouro
+        ├── motor de Renda Fixa: contratos e indexadores
+        └── provedores complementares: atualização recente e contingência
         ↓
-Gap sync de preços e dados canônicos
+asset_prices / proventos / benchmarks
         ↓
-asset_prices / proventos / benchmarks / Tesouro
+Valuation canônico por classe
         ↓
 Snapshots patrimoniais + TWR
         ↓
@@ -48,47 +52,49 @@ KPIs canônicos
 Resumo, Patrimônio, Rentabilidade e Dashboard
 ```
 
-Princípios atuais:
+Princípios:
 
-- **DB-first:** cálculos de carteira leem dados persistidos; não consultam provedores externos durante snapshots.
-- **Idempotência:** executar o rebuild novamente não deve duplicar registros nem repetir lacunas já esgotadas.
-- **Sessões curtas:** chamadas externas acontecem fora de transações longas do banco.
-- **Separação por classe:** ativos cotados, Tesouro Direto, Renda Fixa e cripto possuem regras próprias.
-- **Qualidade explícita:** snapshots podem indicar `has_partial_prices` e `return_is_estimated` quando a cobertura não é completa.
+- **DB-first:** snapshots não consultam APIs externas.
+- **Fonte oficial primeiro:** B3 e Tesouro Transparente sustentam o histórico doméstico.
+- **Idempotência:** rebuilds podem ser reexecutados sem duplicar registros.
+- **Separação por classe:** mercado, Tesouro e Renda Fixa possuem motores próprios.
+- **Qualidade explícita:** cobertura parcial e retorno estimado são persistidos no snapshot.
+- **Pré-listagem não é erro:** antes da primeira cotação oficial, o custo da posição é usado sem marcar lacuna.
 
 ---
 
-## Comando oficial de manutenção
+## Comandos operacionais
 
-Para reconstruir a base canônica e recalcular snapshots:
+### Rebuild completo
 
 ```bash
 python -m app.cli.full_market_rebuild
 ```
 
-No Docker Compose:
-
-```bash
-docker compose exec backend python -m app.cli.full_market_rebuild
-```
-
-No PowerShell, salvando o log:
-
 ```powershell
 $LogFile = ".\full-market-rebuild-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
-
 docker compose exec backend python -m app.cli.full_market_rebuild 2>&1 |
     Tee-Object -FilePath $LogFile
 ```
 
-O comando executa, em ordem:
+### Histórico oficial da B3
 
-1. Reconciliação do catálogo e histórico de preços por lacunas.
-2. Atualização de Tesouro Direto.
-3. Atualização de benchmarks macroeconômicos.
-4. Sincronização e materialização de proventos.
-5. Reconstrução de snapshots TWR.
-6. Auditoria final de cobertura.
+```bash
+python -m app.cli.rebuild_b3_historical_market
+```
+
+Exemplo por intervalo:
+
+```bash
+python -m app.cli.rebuild_b3_historical_market --start-year 2024 --end-year 2026
+```
+
+### Catálogo e histórico oficial do Tesouro
+
+```bash
+python -m app.cli.sync_treasury_catalog_v2
+python -m app.cli.rebuild_treasury_official_prices
+```
 
 ---
 
@@ -97,56 +103,50 @@ O comando executa, em ordem:
 ### Resumo, Patrimônio e Rentabilidade
 
 - KPIs consolidados de patrimônio, investido, resultado, proventos e variação atual.
-- Evolução diária e mensal com filtros de período.
-- Distribuição por classe e metas de alocação.
-- Variação diária por classe separada da rentabilidade acumulada.
-- Ganho realizado e não realizado.
+- Resultado separado de rentabilidade percentual.
+- Resultado composto por ganho realizado, ganho não realizado e proventos.
 - Retorno diário, mensal, 12 meses e desde o início via cadeia TWR.
-- Snapshots diários reconstruídos automaticamente após importações retroativas.
+- Evolução diária e mensal com snapshots reconstruíveis.
+- Indicadores de cobertura real por snapshot.
 
-### Histórico de preços e dados canônicos
+### Histórico de preços
 
-- Tabela `asset_prices` como fonte persistida para cálculo patrimonial.
-- Auditoria de cobertura por ativo, data inicial necessária e última data disponível.
-- Gap sync por borda faltante, com locks por ativo e concorrência controlada.
-- Metadados persistentes para provedor, símbolo normalizado, status, tentativas e último erro.
-- Histórico máximo para lacunas iniciais quando suportado pelo provedor.
-- Validação contra preços nulos, negativos, infinitos ou anômalos.
+- `asset_prices` como fonte persistida para cálculo patrimonial.
+- B3 COTAHIST como histórico primário para ativos brasileiros.
+- Auditoria de cobertura por ativo e data.
+- Gap sync idempotente para complementos recentes.
+- Preservação de ativos deslistados.
+- Classificação de `COMPLETE`, `PRE_LISTING`, `DELISTED`, `REAL_GAP` e `NO_HISTORY`.
+
+### Tesouro Direto
+
+- Catálogo oficial orientado pelo Tesouro Transparente.
+- Histórico oficial persistido em `asset_prices`.
+- Brapi como fallback secundário.
+- Aliases legados deduplicados sem apagar transações.
+- RendA+ e Educa+ resolvidos pelo ano comercial.
+- Snapshots consumindo preços oficiais, sem fallback por preço médio quando há cobertura.
+
+### Renda Fixa
+
+- Contratos reconstruídos por aplicação e resgate.
+- Valorização por indexadores e regras dedicadas.
+- Principal, valor corrigido e rendimento expostos no rebuild.
+- Classe removida do lookup genérico de cotações.
 
 ### Proventos
 
 - Dividendos, JCP, rendimentos, amortizações, bonificações e subscrições.
 - Data Com, Data Ex e pagamento separados.
 - Materialização por carteira conforme posição elegível.
-- Histórico completo por ativo, com seed idempotente.
 - Eventos não monetários fora dos totais financeiros.
-- Processamento em lotes para evitar limites de parâmetros do driver de banco.
 
-### Importação CSV
+### Importação CSV e eventos corporativos
 
-- Modelo oficial, preview, validação linha a linha e `dry_run`.
-- Bloqueio enquanto existirem erros, avisos impeditivos ou falhas globais.
-- Cards clicáveis para filtrar linhas válidas, avisos e erros.
-- Resolução de tickers antigos com validação pela data da operação.
-- Rebuild automático de snapshots e invalidação de caches financeiros.
-
-### Eventos corporativos e aliases
-
-- Modelo de aliases históricos de ativos.
-- Detecção de renome de ticker via API v2.
-- Evento corporativo `TICKER_CHANGE` idempotente por carteira.
-- Conversão automática de saldo remanescente para o ticker atual.
-- Preservação das compras e vendas históricas originais.
-- Preparação para splits, grupamentos, bonificações, incorporações e conversões futuras.
-
-### Conta e administração
-
-- Login JWT com refresh token rotativo.
-- Recuperação e alteração autenticada de senha.
-- Carteiras isoladas por usuário.
-- Criação, edição e exclusão segura de carteiras.
-- Administração de usuários com edição de nome, papel e status.
-- Proteção contra remoção do último superadmin.
+- Preview, `dry_run`, validação linha a linha e mensagens em português.
+- Resolução temporal de tickers antigos.
+- Rebuild automático de snapshots após importações retroativas.
+- Fundação para `TICKER_CHANGE` e futuros eventos corporativos.
 
 ---
 
@@ -154,29 +154,11 @@ O comando executa, em ordem:
 
 ### Backend
 
-| Tecnologia | Uso |
-|---|---|
-| Python 3.12 | Linguagem base |
-| FastAPI | API async |
-| SQLAlchemy async | ORM |
-| Alembic | Migrations |
-| PostgreSQL | Banco de dados |
-| Redis | Cache e locks |
-| APScheduler | Jobs agendados |
-| JWT | Autenticação |
+Python 3.12, FastAPI, SQLAlchemy async, Alembic, PostgreSQL, Redis e APScheduler.
 
 ### Frontend
 
-| Tecnologia | Uso |
-|---|---|
-| React 19 | Interface |
-| TypeScript | Tipagem |
-| Vite | Build |
-| TailwindCSS 4 | Estilos utilitários |
-| Recharts | Gráficos |
-| React Query | Estado servidor |
-| Zustand | Estado global |
-| Axios | Cliente HTTP |
+React 19, TypeScript, Vite, TailwindCSS 4, Recharts, React Query, Zustand e Axios.
 
 ---
 
@@ -187,8 +169,6 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-Para ambientes com múltiplas heads Alembic válidas, o entrypoint aplica `alembic upgrade heads`.
-
 ---
 
 ## Documentação
@@ -197,14 +177,13 @@ Para ambientes com múltiplas heads Alembic válidas, o entrypoint aplica `alemb
 |---|---|
 | `docs/architecture.md` | Arquitetura DB-first, módulos e fluxos |
 | `docs/price-history.md` | Histórico de preços, cobertura e gap sync |
-| `docs/providers.md` | Papéis dos provedores, fallback e metadados |
-| `docs/operations.md` | Comandos operacionais e validação local |
+| `docs/providers.md` | Papéis das fontes e fallbacks |
+| `docs/operations.md` | Comandos operacionais |
 | `docs/snapshots.md` | Snapshots patrimoniais e TWR |
 | `docs/canonical-data.md` | Dados canônicos e KPIs financeiros |
-| `docs/rentabilidade.md` | Semântica dos cards e retorno TWR |
-| `docs/CSV_IMPORT_PIPELINE.md` | Fluxo de validação, importação e rebuild |
-| `docs/CORPORATE_ACTIONS.md` | Fundação do motor de eventos corporativos |
-| `ROADMAP.md` | Roadmap modular atualizado |
+| `docs/rentabilidade.md` | Semântica de retorno e resultado |
+| `docs/CANONICAL_MARKET_REBUILD_2026-07.md` | Consolidação desta entrega estrutural |
+| `ROADMAP.md` | Roadmap modular |
 | `ROADMAP_SPRINTS.md` | Histórico de sprints |
 | `CHANGELOG.md` | Histórico de mudanças |
 
@@ -212,9 +191,8 @@ Para ambientes com múltiplas heads Alembic válidas, o entrypoint aplica `alemb
 
 ## Próximos focos
 
-1. Finalizar resolução canônica de preços para mercado fracionário sem duplicar histórico.
-2. Fazer snapshots de Tesouro consumirem o histórico dedicado da classe.
-3. Revisar roteamento definitivo de cripto e Tesouro conforme cobertura documentada do provedor.
-4. Ajustar visualmente os cards da página Rentabilidade.
-5. Retomar bugs e inconsistências da página Resumo.
-6. Avançar em Eventos Corporativos, Backup/Restore, OAuth, IRPF e Janela Global do Ativo.
+1. Auditar os cards da página Resumo contra os snapshots canônicos.
+2. Confirmar Resultado incluindo todos os proventos materializados.
+3. Revisar a apresentação visual de Rentabilidade e indicadores de qualidade.
+4. Integrar o rebuild histórico B3 ao fluxo operacional completo após validação final.
+5. Avançar em eventos corporativos, Backup/Restore, OAuth, IRPF e Janela Global do Ativo.
