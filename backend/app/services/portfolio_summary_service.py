@@ -21,8 +21,8 @@ from app.services.portfolio_service import (
     _non_fixed_income_enriched,
     get_portfolio,
     sum_dividends,
-    sum_dividends_for_tickers,
 )
+from app.services.realized_pnl_service import get_realized_pnl
 
 _CACHE_TTL = 120
 
@@ -35,7 +35,7 @@ class PortfolioSummaryInput:
     current_value: float
     dividends_12m: float = 0.0
     total_dividends: float = 0.0
-    active_position_dividends: float = 0.0
+    realized_pnl: float = 0.0
     has_partial_prices: bool = False
     assets_without_price: tuple[str, ...] = ()
     usd_brl_rate: float = 1.0
@@ -45,20 +45,25 @@ def build_portfolio_summary(data: PortfolioSummaryInput) -> dict:
     """Monta o contrato canonico de KPIs usado pelas telas financeiras.
 
     Semantica:
-    - variacao: ganho ou perda atual de preco sobre o capital ainda empregado;
-    - lucro total: variacao atual + proventos dos ativos ainda em carteira;
-    - rentabilidade total: lucro total dividido pelo capital empregado;
+    - variacao: ganho ou perda nao realizada sobre o capital ainda empregado;
+    - lucro total: nao realizado + realizado + historico integral de proventos;
+    - rentabilidade total: indicador legado temporario sobre capital empregado;
     - total de proventos: historico integral recebido pela carteira.
+
+    A rentabilidade oficial sera substituida pelo TWR derivado dos snapshots
+    diarios. Ate la, o percentual permanece disponivel por compatibilidade.
     """
     total_invested = float(data.total_invested)
     current_value = float(data.current_value)
-    variation_value = current_value - total_invested
+    unrealized_pnl = current_value - total_invested
     variation_pct = (
-        variation_value / total_invested * 100
+        unrealized_pnl / total_invested * 100
         if total_invested
         else 0.0
     )
-    total_profit = variation_value + float(data.active_position_dividends)
+    realized_pnl = float(data.realized_pnl)
+    total_dividends = float(data.total_dividends)
+    total_profit = unrealized_pnl + realized_pnl + total_dividends
     total_return_pct = (
         total_profit / total_invested * 100
         if total_invested
@@ -70,20 +75,22 @@ def build_portfolio_summary(data: PortfolioSummaryInput) -> dict:
         "total_patrimonio": round(current_value, 2),
         "total_investido": round(total_invested, 2),
         "lucro_total": round(total_profit, 2),
-        "variacao_valor": round(variation_value, 2),
+        "variacao_valor": round(unrealized_pnl, 2),
         "variacao_percentual": round(variation_pct, 4),
         "rentabilidade_total": round(total_return_pct, 4),
         "dividendos_recebidos_12m": round(float(data.dividends_12m), 2),
-        "total_proventos": round(float(data.total_dividends), 2),
-        "proventos_em_carteira": round(float(data.active_position_dividends), 2),
-        "ganho_capital": round(variation_value, 2),
+        "total_proventos": round(total_dividends, 2),
+        "proventos_em_carteira": round(total_dividends, 2),
+        "ganho_capital": round(unrealized_pnl, 2),
+        "ganho_nao_realizado": round(unrealized_pnl, 2),
+        "ganho_realizado": round(realized_pnl, 2),
         "has_partial_prices": bool(data.has_partial_prices),
         "assets_without_price": list(data.assets_without_price),
         "usd_brl_rate": round(float(data.usd_brl_rate), 4),
         # Aliases legados mantidos durante a migracao
         "total_invested": round(total_invested, 2),
         "current_value": round(current_value, 2),
-        "total_gain": round(variation_value, 2),
+        "total_gain": round(unrealized_pnl, 2),
         "total_gain_pct": round(variation_pct, 4),
     }
 
@@ -125,13 +132,7 @@ async def get_canonical_portfolio_summary(
     cutoff_12m = (datetime.now(timezone.utc) - timedelta(days=365)).date()
     dividends_12m = await sum_dividends(db, portfolio_id, cutoff=cutoff_12m)
     total_dividends = await sum_dividends(db, portfolio_id)
-
-    active_tickers = [position["ticker"] for position in enriched]
-    active_position_dividends = await sum_dividends_for_tickers(
-        db,
-        portfolio_id,
-        active_tickers,
-    )
+    realized_pnl = await get_realized_pnl(db, portfolio_id)
 
     summary = build_portfolio_summary(
         PortfolioSummaryInput(
@@ -139,7 +140,7 @@ async def get_canonical_portfolio_summary(
             current_value=current_value,
             dividends_12m=dividends_12m,
             total_dividends=total_dividends,
-            active_position_dividends=active_position_dividends,
+            realized_pnl=realized_pnl,
             has_partial_prices=bool(assets_without_price),
             assets_without_price=assets_without_price,
             usd_brl_rate=await get_usd_brl_today(db),

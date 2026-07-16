@@ -28,14 +28,12 @@ class AssetCurrency(str, enum.Enum):
 class Asset(Base):
     __tablename__ = "assets"
 
-    # unique(ticker, asset_type) — ver migration 008
-    # Permite que o mesmo ticker exista com tipos diferentes (ex: PETR4 ACAO e BDR)
     __table_args__ = (
         UniqueConstraint("ticker", "asset_type", name="uq_assets_ticker_asset_type"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    ticker = Column(String, nullable=False, index=True)  # index=True, unique=False
+    ticker = Column(String, nullable=False, index=True)
     name = Column(String, nullable=True)
     asset_type = Column(String, nullable=False)
     currency = Column(String, default="BRL")
@@ -46,7 +44,15 @@ class Asset(Base):
     sector = Column(String, nullable=True)
     sub_sector = Column(String, nullable=True)
     float_description = Column(Float, nullable=True)
-    logo_url = Column(String, nullable=True)  # URL do logo — preenchido pelo asset_onboarding_service
+    logo_url = Column(String, nullable=True)
+
+    # Cache persistente do roteamento de mercado.
+    provider = Column(String, nullable=True)
+    provider_symbol = Column(String, nullable=True)
+    provider_status = Column(String, nullable=True)
+    provider_last_sync_at = Column(DateTime(timezone=True), nullable=True)
+    provider_last_error = Column(String, nullable=True)
+    provider_attempts = Column(Integer, nullable=False, default=0)
 
     positions = relationship("PortfolioPosition", back_populates="asset")
     prices = relationship("AssetPrice", back_populates="asset")

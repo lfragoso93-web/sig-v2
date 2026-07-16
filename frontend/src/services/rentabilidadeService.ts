@@ -1,7 +1,5 @@
 import api from './api'
 
-// ─── Tipos alinhados com rentabilidade_service.py ─────────────────────────────
-
 export interface RentabilidadeKpis {
   patrimonio_atual:         number
   custo_total:              number
@@ -10,7 +8,6 @@ export interface RentabilidadeKpis {
   ganho_realizado:          number
   total_pnl:                number
   retorno_total_pct:        number
-  /** Variação do dia (D atual vs. último snapshot anterior). Sprint 5B fix. */
   retorno_dia_pct:          number
   retorno_mes_pct:          number
   retorno_12m_pct:          number
@@ -18,6 +15,8 @@ export interface RentabilidadeKpis {
   proventos_total:          number
   proventos_12m:            number
   snapshot_date:            string | null
+  return_is_estimated:      boolean
+  has_partial_prices:       boolean
 }
 
 export interface RentabilidadeAtivo {
@@ -47,8 +46,6 @@ export interface RentabilidadeClasse {
   alocacao_pct:    number
   count:           number
 }
-
-// ─── Service ──────────────────────────────────────────────────────────────────
 
 export const rentabilidadeService = {
   getKpis: (portfolioId: number) =>

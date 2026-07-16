@@ -1,29 +1,33 @@
 # Roadmap de Sprints — SGI v2
 
-> Última atualização: 13/07/2026
+> Última atualização: 16/07/2026
 
----
+Este documento preserva o histórico de sprints. O acompanhamento modular atual está em [`ROADMAP.md`](./ROADMAP.md).
 
-## ✅ Sprints concluídas
+## Sprints concluídas
 
 ### Sprint 1 — Fundação
-- FastAPI, SQLAlchemy async, Alembic, PostgreSQL e Redis.
-- Docker Compose, autenticação JWT e health checks.
-- Módulos base de usuários, carteiras, transações e posições.
+
+- FastAPI, SQLAlchemy async, Alembic, PostgreSQL, Redis e Docker Compose.
+- Autenticação JWT, usuários, carteiras, transações e posições.
 
 ### Sprint 2 — Core Financeiro
+
 - Proventos, performance, câmbio, Tesouro Direto e ativos internacionais.
-- Cache Redis, scheduler e rate limiting.
+- Cache, scheduler e rate limiting.
 
 ### Sprint 3 — Funcionalidades avançadas base
-- Goals, IRPF base, analysis base, renda fixa, cotações, preços e metas por classe.
+
+- Metas, IRPF base, análise base, Renda Fixa, preços e alocação por classe.
 
 ### Sprint 4 — Catálogo e dados
+
 - Seed idempotente de ativos.
 - Backfill de preços.
 - Onboarding e jobs incrementais.
 
 ### Sprint 5 — Dashboard e experiência principal
+
 - Resumo, Patrimônio, Rentabilidade, Proventos e interface responsiva.
 - Gráficos, benchmarks, distribuição por classe e metas.
 
@@ -31,134 +35,106 @@
 
 - [x] KPIs canônicos para Resumo, Patrimônio e Rentabilidade.
 - [x] Variação diária separada da rentabilidade acumulada.
-- [x] Importação CSV autenticada, integral e com `dry_run`.
-- [x] Administração de usuários e proteção do último superadmin.
-- [x] Compliance de documentação pública e contratos expostos.
-- [x] Proventos históricos, Tesouro Direto e integridade de carteiras.
-- [x] Exclusão segura de carteiras com auditoria preservada.
+- [x] Importação CSV com preview e `dry_run`.
+- [x] Administração de usuários e integridade de carteiras.
+- [x] Compliance público e documentação.
 
 ### Sprint 5K — Integridade histórica e modernização de dados
 
-- [x] Inventário da integração atual com dados de mercado.
-- [x] Cliente isolado para API v2.
-- [x] Resolução de tickers antigos em lotes.
-- [x] Persistência de aliases históricos.
-- [x] Validação temporal de renome pela data da operação.
-- [x] Filtros interativos no modal de importação CSV.
-- [x] Rebuild automático de snapshots após importação.
-- [x] Edição de nome e descrição de carteiras.
-- [x] Teste estrutural contra IDs Alembic duplicados.
-- [x] Suporte do entrypoint a múltiplas heads Alembic válidas.
+- [x] Cliente v2 e resolução de tickers antigos.
+- [x] Aliases históricos.
+- [x] Validação temporal de renomes no CSV.
+- [x] Rebuild automático de snapshots após importações.
+- [x] Fundação do evento `TICKER_CHANGE`.
 
----
+### Sprint 5L — Arquitetura DB-first e TWR
 
-## 🔄 Em desenvolvimento
+- [x] Remover consultas externas do motor de snapshots.
+- [x] Auditoria de cobertura por ativo.
+- [x] Gap sync idempotente.
+- [x] Metadados persistentes de provedor.
+- [x] `full_market_rebuild` como comando operacional oficial.
+- [x] TWR diário, mensal, 12 meses e desde o início.
+- [x] Proventos em lotes seguros.
+- [x] Sanitização de preços inválidos.
 
-### Motor de Eventos Corporativos — Issue #129
+### Sprint 5M — Valuation canônico por classe
 
-#### Fundação concluída
+- [x] Renda Fixa valorizada pelo motor dedicado.
+- [x] Tesouro valorizado pelo histórico oficial persistido.
+- [x] Diagnósticos de principal, valor corrigido e rendimento.
+- [x] Diagnósticos de títulos resolvidos e não resolvidos.
+- [x] Exclusão de Tesouro e Renda Fixa do lookup genérico.
+- [x] `return_is_estimated` derivado da cobertura real.
 
-- [x] Adicionar tipo `TICKER_CHANGE`.
-- [x] Registrar alias histórico e evento idempotente por carteira.
-- [x] Calcular saldo remanescente na data efetiva.
-- [x] Preservar quantidade, custo total e preço médio.
-- [x] Manter compras e vendas históricas intactas.
-- [x] Aplicar conversão automática simples 1:1.
+### Sprint 5N — Treasury Catalog v2
 
-#### Próximos blocos
+- [x] Fonte oficial do Tesouro como origem principal.
+- [x] Provedor complementar como fallback.
+- [x] Catálogo oficial idempotente.
+- [x] Deduplicação de aliases legados.
+- [x] RendA+ e Educa+ normalizados pelo ano comercial.
+- [x] Migração segura dos históricos antigos.
+- [x] Reconstrução limpa do histórico oficial.
+- [x] Validação final com `treasury_matched=3` e `treasury_unresolved=0`.
 
-- [ ] Executar spike técnico com HG Brasil.
-- [ ] Mapear splits, grupamentos e cobertura por classe.
-- [ ] Implementar providers de eventos corporativos.
-- [ ] Adicionar simulação, confirmação e rollback.
-- [ ] Cobrir bonificações, incorporações, fusões e conversões complexas.
-- [ ] Criar administração e auditoria operacional dos eventos.
+### Sprint 5O — B3 Historical Market Rebuild
 
-### Evolução da integração de mercado v2 — Issue #130
+- [x] B3 COTAHIST como fonte histórica primária para ativos brasileiros.
+- [x] Leitura anual em lote.
+- [x] Mercado à vista priorizado sobre fracionário.
+- [x] Persistência idempotente em `asset_prices`.
+- [x] Atualização de `last_price`.
+- [x] Ciclo de vida `COMPLETE`, `PRE_LISTING`, `DELISTED`, `REAL_GAP` e `NO_HISTORY`.
+- [x] Validação com 2.258 ativos e 984.949 preços de 2024 a 2026.
+- [x] Preservação de PETZ3 e outros ativos indisponíveis em provedores atuais.
+- [x] Pré-listagem de AREA11 tratada sem falso erro de cobertura.
 
-#### Fundação concluída
+## Em desenvolvimento
 
-- [x] Inventariar endpoints e consumidores atuais.
-- [x] Criar cliente v2 e DTO interno de resolução.
-- [x] Resolver tickers antigos antes da importação.
-- [x] Tratar falhas de rede, HTTP e payload inválido sem interromper o CSV.
-- [x] Integrar renomes ao motor de eventos corporativos.
+### Resumo
 
-#### Próximos blocos
+- [ ] Auditar cards contra snapshots canônicos.
+- [ ] Confirmar Resultado incluindo proventos totais.
+- [ ] Validar Rentabilidade desde o início.
+- [ ] Comparar Resumo e Patrimônio.
+- [ ] Cobrir contratos dos cards com testes.
 
-- [ ] Integrar endpoint de cobertura por ticker.
-- [ ] Persistir cobertura e data da última verificação.
-- [ ] Migrar gradualmente cotações, histórico e proventos para DTOs internos.
-- [ ] Separar bonificações e subscrições de proventos monetários.
-- [ ] Enriquecer FIIs com indicadores, imóveis, vacância, carteira e relatórios.
-- [ ] Enriquecer ações com fundamentos e demonstrações financeiras.
-- [ ] Integrar câmbio histórico e macroeconomia como fonte complementar.
+### Rentabilidade
 
----
+- [x] Backend TWR consolidado.
+- [x] Indicadores de qualidade calculados.
+- [ ] Ajustar apresentação visual.
 
-## 🔄 Próximas entregas prioritárias
+### Proventos
 
-### Backup/Restore — Issue #83
+- [x] Materialização por carteira.
+- [ ] Validar cobertura completa por classe.
+- [ ] Confirmar impacto final nos KPIs durante a auditoria do Resumo.
 
-- [ ] Implementar geração autenticada de backup para download.
-- [ ] Adicionar checksum, lock e auditoria da operação.
-- [ ] Definir retenção e limpeza de arquivos temporários.
-- [ ] Validar restore em ambiente isolado.
-- [ ] Projetar restore controlado como fase posterior.
+### Eventos corporativos — #129
 
-### Auth — Issue #97
+- [x] Fundação de aliases e mudança de ticker.
+- [ ] Splits, grupamentos e bonificações.
+- [ ] Simulação, confirmação e rollback.
+- [ ] Administração e auditoria.
 
-- [ ] Implementar Google OAuth.
-- [ ] Vincular conta social a usuário existente.
-- [ ] Cobrir login, callback e erros.
+## Próximas entregas prioritárias
 
-### UX Patrimônio — Issue #90
+1. Auditoria dos cards da página Resumo.
+2. Validação de Resultado + proventos + TWR desde o início.
+3. Integração operacional do COTAHIST ao rebuild completo.
+4. Ajustes visuais de Rentabilidade.
+5. Próximos blocos de eventos corporativos.
 
-- [ ] Reorganizar a página em cards claros e responsivos.
-- [ ] Preservar os contratos financeiros canônicos.
-- [ ] Separar composição, metas, concentração e posições.
+## Backlog planejado
 
-### UX Proventos — Issue #131
-
-- [ ] Exibir tooltip mensal com detalhamento por classe.
-- [ ] Respeitar filtros ativos e conciliar o total mensal.
-- [ ] Suportar hover, teclado e toque.
-- [ ] Evitar cortes por overflow usando portal quando necessário.
-
----
-
-## 📋 Sprints planejadas
-
-### Sprint 7 — IRPF — Issue #56
-
-- [ ] Cálculo por ano-calendário.
-- [ ] Isenção de vendas mensais.
-- [ ] Day trade e swing trade.
-- [ ] Relatórios e exportações.
-- [ ] Testes de ganho de capital.
-
-### Sprint 8 — Análise de Carteira — Issue #57
-
-- [ ] Diversificação por setor e classe.
-- [ ] Alertas de concentração.
-- [ ] Comparação com metas.
-- [ ] Sugestões de rebalanceamento.
-
-### Sprint 9 — Janela Global do Ativo — Issue #58
-
-- [ ] Drawer global do ativo.
-- [ ] Histórico de preços.
-- [ ] Histórico de proventos.
-- [ ] Posição, custo médio e resultado.
-
-### Backlog arquitetural — Provedores configuráveis — Issue #127
-
-- [ ] Criar registry/factory de provedores por capacidade.
-- [ ] Permitir configuração pelo Superadmin com credenciais criptografadas.
-- [ ] Preservar fallback para `.env`.
-- [ ] Adicionar health check, teste de conexão, auditoria e rollback.
-
----
+- Backup/Restore — #83.
+- Google OAuth — #97.
+- IRPF — #56.
+- Análise de Carteira — #57.
+- Janela Global do Ativo — #58.
+- Provedores configuráveis — #127.
 
 ## Processo de desenvolvimento
 
