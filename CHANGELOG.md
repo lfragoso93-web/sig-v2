@@ -21,8 +21,8 @@ Formato baseado em Keep a Changelog.
 
 #### Treasury Catalog v2
 
-- Tesouro Transparente adotado como fonte principal do catálogo e histórico.
-- Brapi mantida como fallback secundário.
+- Fonte oficial do Tesouro adotada como origem principal do catálogo e histórico.
+- Provedor complementar mantido como fallback secundário.
 - Catálogo oficial sincronizado de forma idempotente.
 - Aliases legados auditados e deduplicados.
 - RendA+ convertido do vencimento final para o ano comercial.
