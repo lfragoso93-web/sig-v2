@@ -65,12 +65,12 @@ async def _portfolio_needs_class_twr_rebuild(db: AsyncSession, portfolio_id: int
         select(Transaction.asset_type)
         .where(
             Transaction.portfolio_id == portfolio_id,
-            Transaction.asset_type.in_(SUPPORTED_CLASS_TWR_TYPES),
+            Transaction.asset_type.in_(list(SUPPORTED_CLASS_TWR_TYPES)),
         )
         .distinct()
     )
     transaction_types = {
-        getattr(value, "value", str(value)).upper()
+        str(getattr(value, "value", value)).upper()
         for value in transaction_types_result.scalars().all()
     }
     if not transaction_types:
