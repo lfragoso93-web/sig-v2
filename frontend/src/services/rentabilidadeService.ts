@@ -38,6 +38,11 @@ export interface RentabilidadeAtivo {
   is_open: boolean
 }
 
+export type ClassValuationMethod =
+  | 'intraday_market_valuation'
+  | 'treasury_mark_to_market'
+  | 'fixed_income_accrual'
+
 export interface RentabilidadeClasse {
   asset_type: string
   current_value: number
@@ -49,6 +54,11 @@ export interface RentabilidadeClasse {
   total_result_pct: number | null
   allocation_pct: number
   asset_count: number
+  current_metrics_available: boolean
+  valuation_method: ClassValuationMethod
+  valuation_label: string
+  result_label: string
+  dedicated_history_required: boolean
   twr_available: boolean
   daily_twr_pct: number | null
   accumulated_twr_pct: number | null
