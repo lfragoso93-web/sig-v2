@@ -36,15 +36,25 @@ export interface RentabilidadeAtivo {
 }
 
 export interface RentabilidadeClasse {
-  asset_type:      string
-  total_invested:  number
-  current_value:   number
-  unrealized_pnl:  number
-  realized_pnl:    number
-  total_pnl:       number
-  total_pnl_pct:   number
-  alocacao_pct:    number
-  count:           number
+  asset_type:              string
+  current_value:           number
+  cost_basis:              number
+  capital_result_value:    number | null
+  capital_result_pct:      number | null
+  received_dividends:      number
+  total_result_value:      number | null
+  total_result_pct:        number | null
+  allocation_pct:          number
+  asset_count:             number
+  twr_available:           boolean
+  daily_twr_pct:           number | null
+  accumulated_twr_pct:     number | null
+  performance_as_of:       string | null
+  has_partial_prices:      boolean | null
+  return_is_estimated:     boolean | null
+  performance_status:      string
+  performance_reason:      string | null
+  performance_source:      'portfolio_class_snapshot' | null
 }
 
 export const rentabilidadeService = {
