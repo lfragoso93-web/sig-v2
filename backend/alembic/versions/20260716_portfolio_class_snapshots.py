@@ -44,13 +44,13 @@ def upgrade() -> None:
         ),
     )
     op.create_index(
-        "idx_pcs_portfolio_type_date_desc",
+        "idx_pcs_portfolio_type_date",
         "portfolio_class_snapshots",
-        ["portfolio_id", "asset_type", sa.text("snapshot_date DESC")],
+        ["portfolio_id", "asset_type", "snapshot_date"],
         unique=False,
     )
 
 
 def downgrade() -> None:
-    op.drop_index("idx_pcs_portfolio_type_date_desc", table_name="portfolio_class_snapshots")
+    op.drop_index("idx_pcs_portfolio_type_date", table_name="portfolio_class_snapshots")
     op.drop_table("portfolio_class_snapshots")
