@@ -10,12 +10,14 @@ import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cache import cache_get, cache_set
 from app.models.asset import Asset
 from app.models.portfolio_snapshot import PortfolioSnapshot
+from app.schemas.portfolio_summary import PortfolioSummaryResponse
 from app.services.dividend_aggregation_service import sum_received_dividends
 from app.services.fixed_income_valuation_service import get_fixed_income_totals
 from app.services.fx_service import get_usd_brl_today
@@ -87,6 +89,11 @@ def build_portfolio_summary(data: PortfolioSummaryInput) -> dict:
         "assets_without_price": list(data.assets_without_price),
         "usd_brl_rate": round(float(data.usd_brl_rate), 4),
     }
+
+
+def _validate_summary_contract(payload: dict) -> dict:
+    """Rejeita campos extras, ausentes ou tipos incompatíveis antes da resposta."""
+    return PortfolioSummaryResponse.model_validate(payload).model_dump()
 
 
 async def _get_latest_snapshot(db: AsyncSession, portfolio_id: int) -> PortfolioSnapshot | None:
@@ -276,12 +283,20 @@ async def get_canonical_portfolio_summary(
     cache_key = _cache_key(portfolio_id, "summary")
     cached = await cache_get(cache_key)
     if cached:
-        return cached
+        try:
+            return _validate_summary_contract(cached)
+        except ValidationError:
+            logger.warning(
+                "[summary_contract] portfolio=%s cache incompatível; recalculando",
+                portfolio_id,
+            )
+
     snapshot = await _get_latest_snapshot(db, portfolio_id)
     summary = (
         await _build_summary_from_latest_snapshot(db, portfolio_id, snapshot)
         if snapshot is not None
         else await _build_summary_from_valuation_fallback(db, portfolio_id)
     )
-    await cache_set(cache_key, summary, ttl=_CACHE_TTL)
-    return summary
+    validated_summary = _validate_summary_contract(summary)
+    await cache_set(cache_key, validated_summary, ttl=_CACHE_TTL)
+    return validated_summary
