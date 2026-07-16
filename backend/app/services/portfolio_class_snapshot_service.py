@@ -63,6 +63,13 @@ def _asset_type(value: object) -> AssetType | None:
         return None
 
 
+def _next_business_date(value: date) -> date:
+    result = value
+    while result.weekday() >= 5:
+        result += timedelta(days=1)
+    return result
+
+
 @dataclass
 class ClassPositionState:
     asset_type: AssetType
@@ -120,7 +127,8 @@ def _group_received_dividends(
         payment_date = received_dividend_date(dividend)
         if asset_type not in SUPPORTED_CLASS_TWR_TYPES or payment_date is None:
             continue
-        totals[(asset_type, payment_date)] += received_dividend_value(dividend)
+        effective_date = _next_business_date(payment_date)
+        totals[(asset_type, effective_date)] += received_dividend_value(dividend)
     return {key: value.quantize(_MONEY) for key, value in totals.items()}
 
 
@@ -210,7 +218,7 @@ async def rebuild_class_snapshots(
         asset_types_by_ticker,
     )
 
-    start = supported_transactions[0].date
+    start = _next_business_date(supported_transactions[0].date)
     await db.execute(
         delete(PortfolioClassSnapshot).where(
             PortfolioClassSnapshot.portfolio_id == portfolio_id
@@ -219,7 +227,7 @@ async def rebuild_class_snapshots(
 
     transactions_by_day: dict[date, list[Transaction]] = defaultdict(list)
     for transaction in supported_transactions:
-        transactions_by_day[transaction.date].append(transaction)
+        transactions_by_day[_next_business_date(transaction.date)].append(transaction)
 
     position_states: dict[str, ClassPositionState] = {}
     return_states: dict[AssetType, ClassReturnState] = defaultdict(ClassReturnState)
