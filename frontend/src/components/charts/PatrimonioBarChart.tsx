@@ -1,12 +1,10 @@
 import {
   BarChart,
   Bar,
-  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts'
@@ -42,6 +40,8 @@ export interface ChartPoint {
   patrimonio: number
   aplicado: number
   resultado: number
+  ganho: number
+  perda: number
   twr: number | null
   partial: boolean
   estimated: boolean
@@ -60,6 +60,8 @@ export function buildPatrimonioChartData(data: PatrimonioHistoryPoint[]): ChartP
       patrimonio,
       aplicado,
       resultado,
+      ganho: Math.max(resultado, 0),
+      perda: Math.min(resultado, 0),
       twr: point.accumulated_return_pct !== undefined
         && Number.isFinite(Number(point.accumulated_return_pct))
         ? Number(point.accumulated_return_pct)
@@ -73,7 +75,11 @@ export function buildPatrimonioChartData(data: PatrimonioHistoryPoint[]): ChartP
 
 export function getSymmetricAxisLimit(data: ChartPoint[]): number {
   const maxAbsolute = data.reduce(
-    (maxValue, point) => Math.max(maxValue, Math.abs(point.aplicado), Math.abs(point.resultado)),
+    (maxValue, point) => Math.max(
+      maxValue,
+      Math.abs(point.aplicado + point.ganho),
+      Math.abs(point.perda),
+    ),
     0,
   )
   if (maxAbsolute === 0) return 1
@@ -148,6 +154,35 @@ function TooltipRow({
   )
 }
 
+function ChartLegend() {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 14,
+        height: 30,
+        fontSize: '0.7rem',
+        color: 'var(--color-text-muted)',
+      }}
+    >
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+        <span style={{ width: 10, height: 8, borderRadius: 2, background: 'var(--color-success)' }} />
+        Valor aplicado
+      </span>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+        <span style={{ width: 10, height: 8, borderRadius: 2, background: 'oklch(from var(--color-success) l c h / 0.55)' }} />
+        Ganho de capital
+      </span>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+        <span style={{ width: 10, height: 8, borderRadius: 2, background: 'var(--color-notification)' }} />
+        Perda de capital
+      </span>
+    </div>
+  )
+}
+
 export default function PatrimonioBarChart({ data, loading }: Props) {
   if (loading) return <div className="skeleton h-64 w-full rounded-xl" />
 
@@ -165,64 +200,58 @@ export default function PatrimonioBarChart({ data, loading }: Props) {
   const axisLimit = getSymmetricAxisLimit(chartData)
 
   return (
-    <ResponsiveContainer width="100%" height={300}>
-      <BarChart data={chartData} margin={{ top: 8, right: 8, left: 4, bottom: 4 }} barCategoryGap="18%">
-        <CartesianGrid
-          strokeDasharray="3 3"
-          stroke="oklch(from var(--color-text) l c h / 0.08)"
-          vertical={false}
-        />
-        <ReferenceLine y={0} stroke="oklch(from var(--color-text) l c h / 0.4)" strokeWidth={1.5} />
-        <XAxis
-          dataKey="name"
-          tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }}
-          axisLine={false}
-          tickLine={false}
-          angle={-42}
-          textAnchor="end"
-          height={46}
-          interval="preserveStartEnd"
-        />
-        <YAxis
-          domain={[-axisLimit, axisLimit]}
-          tickFormatter={(value: number) => formatBRL(value, true)}
-          tick={{ fontSize: 9, fill: 'var(--color-text-muted)' }}
-          axisLine={false}
-          tickLine={false}
-          width={70}
-        />
-        <Tooltip content={<EvolutionTooltip />} cursor={{ fill: 'oklch(from var(--color-text) l c h / 0.05)' }} />
-        <Legend
-          verticalAlign="top"
-          height={30}
-          iconType="rect"
-          wrapperStyle={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}
-        />
-        <Bar
-          dataKey="aplicado"
-          name="Valor aplicado"
-          stackId="patrimonio"
-          fill="var(--color-success)"
-          radius={[3, 3, 0, 0]}
-          maxBarSize={42}
-        />
-        <Bar
-          dataKey="resultado"
-          name="Ganho / perda de capital"
-          stackId="patrimonio"
-          radius={[3, 3, 3, 3]}
-          maxBarSize={42}
-        >
-          {chartData.map(point => (
-            <Cell
-              key={`${point.date}-${point.resultado}`}
-              fill={point.resultado >= 0
-                ? 'oklch(from var(--color-success) l c h / 0.55)'
-                : 'var(--color-notification)'}
-            />
-          ))}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
+    <div>
+      <ChartLegend />
+      <ResponsiveContainer width="100%" height={270}>
+        <BarChart data={chartData} margin={{ top: 0, right: 8, left: 4, bottom: 4 }} barCategoryGap="18%">
+          <CartesianGrid
+            strokeDasharray="3 3"
+            stroke="oklch(from var(--color-text) l c h / 0.08)"
+            vertical={false}
+          />
+          <ReferenceLine y={0} stroke="oklch(from var(--color-text) l c h / 0.4)" strokeWidth={1.5} />
+          <XAxis
+            dataKey="name"
+            tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }}
+            axisLine={false}
+            tickLine={false}
+            angle={-42}
+            textAnchor="end"
+            height={46}
+            interval="preserveStartEnd"
+          />
+          <YAxis
+            domain={[-axisLimit, axisLimit]}
+            tickFormatter={(value: number) => formatBRL(value, true)}
+            tick={{ fontSize: 9, fill: 'var(--color-text-muted)' }}
+            axisLine={false}
+            tickLine={false}
+            width={70}
+          />
+          <Tooltip content={<EvolutionTooltip />} cursor={{ fill: 'oklch(from var(--color-text) l c h / 0.05)' }} />
+          <Bar
+            dataKey="aplicado"
+            stackId="patrimonio"
+            fill="var(--color-success)"
+            radius={[3, 3, 0, 0]}
+            maxBarSize={42}
+          />
+          <Bar
+            dataKey="ganho"
+            stackId="patrimonio"
+            fill="oklch(from var(--color-success) l c h / 0.55)"
+            radius={[3, 3, 0, 0]}
+            maxBarSize={42}
+          />
+          <Bar
+            dataKey="perda"
+            stackId="patrimonio"
+            fill="var(--color-notification)"
+            radius={[0, 0, 3, 3]}
+            maxBarSize={42}
+          />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
   )
 }
