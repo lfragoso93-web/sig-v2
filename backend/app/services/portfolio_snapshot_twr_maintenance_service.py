@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import logging
+from datetime import date
+from decimal import Decimal
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,16 +11,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.portfolio import Portfolio
 from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.transaction import Transaction
+from app.services.dividend_aggregation_service import sum_received_dividends
 from app.services.portfolio_snapshot_twr_service import backfill_snapshots_with_returns
 
 logger = logging.getLogger(__name__)
+_MONEY_TOLERANCE = Decimal("0.01")
 
 
 async def _portfolio_needs_twr_rebuild(
     db: AsyncSession,
     portfolio_id: int,
 ) -> bool:
-    """Detecta histórico ausente ou ainda não enriquecido pelo motor TWR."""
+    """Detecta cobertura ausente ou proventos recebidos ainda não refletidos."""
     first_tx_result = await db.execute(
         select(func.min(Transaction.date)).where(
             Transaction.portfolio_id == portfolio_id
@@ -33,29 +37,35 @@ async def _portfolio_needs_twr_rebuild(
             func.count(PortfolioSnapshot.id),
             func.min(PortfolioSnapshot.snapshot_date),
             func.max(PortfolioSnapshot.snapshot_date),
-            func.count().filter(PortfolioSnapshot.return_is_estimated.is_(True)),
         ).where(PortfolioSnapshot.portfolio_id == portfolio_id)
     )
-    count, min_date, max_date, estimated_count = snapshot_result.one()
-
-    # O TWR permanece marcado como estimado enquanto os fluxos são inferidos.
-    # Portanto, estimated_count não é critério isolado de rebuild. A presença dos
-    # novos campos é garantida pela migration; aqui validamos cobertura temporal.
-    _ = estimated_count
+    count, min_date, max_date = snapshot_result.one()
     if int(count or 0) == 0:
         return True
     if min_date is None or min_date > first_date:
         return True
+    if max_date is None or max_date < date.today():
+        return True
 
-    from datetime import date
-
-    return max_date is None or max_date < date.today()
+    latest_result = await db.execute(
+        select(PortfolioSnapshot.dividends_accumulated)
+        .where(
+            PortfolioSnapshot.portfolio_id == portfolio_id,
+            PortfolioSnapshot.snapshot_date == max_date,
+        )
+        .limit(1)
+    )
+    snapshot_dividends = Decimal(str(latest_result.scalar_one_or_none() or 0))
+    canonical_dividends = Decimal(
+        str(await sum_received_dividends(db, portfolio_id, as_of=max_date))
+    )
+    return abs(snapshot_dividends - canonical_dividends) > _MONEY_TOLERANCE
 
 
 async def maintain_twr_snapshots_for_active_portfolios(
     db: AsyncSession,
 ) -> dict[str, int]:
-    """Reconstrói o TWR somente para carteiras ativas com cobertura incompleta."""
+    """Reconstrói o TWR somente quando cobertura ou proventos estiverem divergentes."""
     result = await db.execute(
         select(Portfolio.id)
         .join(Transaction, Transaction.portfolio_id == Portfolio.id)
