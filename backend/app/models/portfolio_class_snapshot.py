@@ -23,11 +23,10 @@ class PortfolioClassSnapshot(Base, TimestampMixin):
             name="uq_class_snapshot_portfolio_type_date",
         ),
         Index(
-            "idx_pcs_portfolio_type_date_desc",
+            "idx_pcs_portfolio_type_date",
             "portfolio_id",
             "asset_type",
             "snapshot_date",
-            postgresql_ops={"snapshot_date": "DESC"},
         ),
     )
 
