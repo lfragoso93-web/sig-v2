@@ -70,8 +70,12 @@ def reconcile_snapshot_summary(
     classes_market_value: object | None = None,
 ) -> dict:
     """Compara o contrato do Resumo e totais opcionais com o mesmo snapshot."""
+    snapshot_unrealized = getattr(snapshot, "unrealized_pnl", None)
+    if snapshot_unrealized is None:
+        snapshot_unrealized = _decimal(snapshot.market_value) - _decimal(snapshot.cost_basis)
+
     expected_total_result = (
-        _decimal(snapshot.unrealized_pnl)
+        _decimal(snapshot_unrealized)
         + _decimal(snapshot.realized_pnl)
         + _decimal(snapshot.dividends_accumulated)
     )
