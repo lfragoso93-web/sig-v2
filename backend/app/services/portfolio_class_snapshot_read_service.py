@@ -5,10 +5,11 @@ from collections import defaultdict
 from datetime import date, timedelta
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import AssetType
+from app.models.fixed_income import FixedIncomeInvestment
 from app.models.portfolio_class_snapshot import PortfolioClassSnapshot
 from app.models.transaction import Transaction
 from app.services.portfolio_class_snapshot_service import class_twr_availability
@@ -41,13 +42,23 @@ async def get_class_twr_availability(db: AsyncSession, portfolio_id: int) -> lis
         .where(Transaction.portfolio_id == portfolio_id)
         .distinct()
     )
-    types: list[AssetType] = []
+    types: set[AssetType] = set()
     for value in result.scalars().all():
         raw = getattr(value, "value", value)
         try:
-            types.append(AssetType(str(raw).upper()))
+            types.add(AssetType(str(raw).upper()))
         except (TypeError, ValueError):
             continue
+
+    fixed_income_result = await db.execute(
+        select(func.count(FixedIncomeInvestment.id)).where(
+            FixedIncomeInvestment.portfolio_id == portfolio_id,
+            FixedIncomeInvestment.is_active.is_(True),
+        )
+    )
+    if int(fixed_income_result.scalar_one() or 0) > 0:
+        types.add(AssetType.RENDA_FIXA)
+
     return class_twr_availability(types)
 
 
