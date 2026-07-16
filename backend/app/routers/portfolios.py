@@ -23,7 +23,8 @@ from app.services.portfolio_service import (
 )
 from app.services.portfolio_summary_service import get_canonical_portfolio_summary
 from app.services.portfolio_delete_service import delete_portfolio_safely
-from app.services.portfolio_snapshot_service import get_monthly_evolution, backfill_snapshots
+from app.services.portfolio_snapshot_service import backfill_snapshots
+from app.services.portfolio_history_service import get_canonical_monthly_evolution
 from app.services.portfolio_class_evolution_service import get_monthly_evolution_by_class
 from app.services.class_target_service import (
     get_targets_with_current,
@@ -194,10 +195,6 @@ async def asset_distribution(
     return await get_asset_distribution(db, portfolio_id, current_user.id)
 
 
-# ---------------------------------------------------------------------------
-# Sprint 5E — targets-with-current (alvo vs atual, BDR incluido)
-# ---------------------------------------------------------------------------
-
 @router.get(
     "/{portfolio_id}/targets-with-current",
     response_model=list[ClassTargetWithCurrent],
@@ -264,7 +261,7 @@ async def patrimonio_history(
             months=months,
             asset_type=asset_type,
         )
-    return await get_monthly_evolution(db, portfolio_id, months=months)
+    return await get_canonical_monthly_evolution(db, portfolio_id, months=months)
 
 
 @router.post("/{portfolio_id}/snapshots/backfill", status_code=status.HTTP_202_ACCEPTED)
