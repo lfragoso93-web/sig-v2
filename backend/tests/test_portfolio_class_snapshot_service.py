@@ -9,6 +9,7 @@ from app.services.portfolio_class_snapshot_read_service import class_snapshot_pa
 from app.services.portfolio_class_snapshot_service import (
     ClassPositionState,
     _group_received_dividends,
+    _next_business_date,
     class_twr_availability,
 )
 
@@ -35,13 +36,19 @@ def test_availability_refuses_dedicated_history_estimates() -> None:
     assert by_type[AssetType.RENDA_FIXA.value]["status"] == "dedicated_history_not_available"
 
 
-def test_received_dividends_are_grouped_by_class_and_payment_date() -> None:
+def test_non_business_dates_move_to_next_close() -> None:
+    assert _next_business_date(date(2026, 7, 17)) == date(2026, 7, 17)
+    assert _next_business_date(date(2026, 7, 18)) == date(2026, 7, 20)
+    assert _next_business_date(date(2026, 7, 19)) == date(2026, 7, 20)
+
+
+def test_received_dividends_are_grouped_by_class_and_effective_close() -> None:
     dividends = [
         SimpleNamespace(
             ticker="ABCD3",
             status=DividendStatus.RECEBIDO,
             dividend_type="DIVIDENDO",
-            payment_date=date(2026, 7, 10),
+            payment_date=date(2026, 7, 18),
             date_pagamento=None,
             net_value=Decimal("12.34"),
             total_received=None,
@@ -51,7 +58,7 @@ def test_received_dividends_are_grouped_by_class_and_payment_date() -> None:
             ticker="FUND11",
             status=DividendStatus.RECEBIDO,
             dividend_type="RENDIMENTO",
-            payment_date=date(2026, 7, 10),
+            payment_date=date(2026, 7, 20),
             date_pagamento=None,
             net_value=Decimal("5.00"),
             total_received=None,
@@ -61,7 +68,7 @@ def test_received_dividends_are_grouped_by_class_and_payment_date() -> None:
             ticker="ABCD3",
             status="A_RECEBER",
             dividend_type="DIVIDENDO",
-            payment_date=date(2026, 7, 10),
+            payment_date=date(2026, 7, 20),
             date_pagamento=None,
             net_value=Decimal("99.00"),
             total_received=None,
@@ -74,8 +81,8 @@ def test_received_dividends_are_grouped_by_class_and_payment_date() -> None:
         {"ABCD3": AssetType.ACAO, "FUND11": AssetType.FII},
     )
 
-    assert grouped[(AssetType.ACAO, date(2026, 7, 10))] == Decimal("12.34")
-    assert grouped[(AssetType.FII, date(2026, 7, 10))] == Decimal("5.00")
+    assert grouped[(AssetType.ACAO, date(2026, 7, 20))] == Decimal("12.34")
+    assert grouped[(AssetType.FII, date(2026, 7, 20))] == Decimal("5.00")
 
 
 def test_class_snapshot_payload_exposes_quality_and_twr() -> None:
