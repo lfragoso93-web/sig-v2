@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import AssetType
+from app.models.fixed_income import FixedIncomeInvestment
 from app.models.portfolio_class_snapshot import PortfolioClassSnapshot
 from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.transaction import Transaction
@@ -50,6 +51,15 @@ async def reconcile_latest_class_snapshots(
             portfolio_types.add(AssetType(str(raw).upper()))
         except (TypeError, ValueError):
             unknown_types.add(str(raw))
+
+    fixed_income_result = await db.execute(
+        select(func.count(FixedIncomeInvestment.id)).where(
+            FixedIncomeInvestment.portfolio_id == portfolio_id,
+            FixedIncomeInvestment.is_active.is_(True),
+        )
+    )
+    if int(fixed_income_result.scalar_one() or 0) > 0:
+        portfolio_types.add(AssetType.RENDA_FIXA)
 
     unsupported = sorted(
         [item.value for item in portfolio_types if item not in SUPPORTED_CLASS_TWR_TYPES]
