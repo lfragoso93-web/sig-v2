@@ -1,22 +1,25 @@
 import api from './api'
 
 export interface RentabilidadeKpis {
+  contract_version: 'rentabilidade.v2'
   patrimonio_atual: number
-  custo_total: number
-  total_aportado: number
-  ganho_nao_realizado: number
-  ganho_realizado: number
-  total_pnl: number
-  retorno_total_pct: number
-  retorno_dia_pct: number
-  retorno_mes_pct: number
-  retorno_12m_pct: number
-  retorno_desde_inicio_pct: number
+  custo_posicoes_abertas: number
+  resultado_nao_realizado: number
+  resultado_realizado: number
+  resultado_total: number
   proventos_total: number
   proventos_12m: number
-  snapshot_date: string | null
+  twr_dia_pct: number | null
+  twr_mes_pct: number | null
+  twr_12m_pct: number | null
+  twr_desde_inicio_pct: number | null
+  valuation_updated_at: string | null
+  performance_as_of: string | null
+  proventos_as_of: string | null
   return_is_estimated: boolean
   has_partial_prices: boolean
+  price_coverage_pct: number
+  performance_source: 'portfolio_snapshot_twr' | 'unavailable'
 }
 
 export interface RentabilidadeAtivo {
