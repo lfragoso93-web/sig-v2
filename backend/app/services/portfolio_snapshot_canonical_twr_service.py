@@ -29,7 +29,12 @@ from app.services.twr_service import (
 logger = logging.getLogger(__name__)
 _ZERO = Decimal("0")
 _MONEY = Decimal("0.01")
-_DIAGNOSTIC_PREFIXES = ("fixed_income_", "treasury_")
+_DIAGNOSTIC_PREFIXES = (
+    "fixed_income_",
+    "treasury_",
+    "pre_listing_",
+    "real_price_",
+)
 
 
 async def backfill_canonical_snapshots_with_returns(
@@ -98,6 +103,11 @@ async def backfill_canonical_snapshots_with_returns(
                 daily_return,
             )
 
+            has_partial_prices = await has_partial_prices_silent(
+                db,
+                transactions,
+                cursor,
+            )
             snapshot_fields = {
                 key: value
                 for key, value in totals.items()
@@ -110,12 +120,8 @@ async def backfill_canonical_snapshots_with_returns(
                 "dividends_accumulated": dividends_accumulated,
                 "daily_return_pct": daily_return,
                 "accumulated_return_pct": accumulated_return,
-                "has_partial_prices": await has_partial_prices_silent(
-                    db,
-                    transactions,
-                    cursor,
-                ),
-                "return_is_estimated": True,
+                "has_partial_prices": has_partial_prices,
+                "return_is_estimated": has_partial_prices,
             }
             await _upsert_enriched_snapshot(db, portfolio_id, cursor, values)
             previous_value = current_value
