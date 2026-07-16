@@ -44,6 +44,7 @@ export interface ChartPoint {
   twr: number | null
   partial: boolean
   estimated: boolean
+  source: string
 }
 
 export function buildPatrimonioChartData(data: PatrimonioHistoryPoint[]): ChartPoint[] {
@@ -62,6 +63,7 @@ export function buildPatrimonioChartData(data: PatrimonioHistoryPoint[]): ChartP
         : null,
       partial: Boolean(point.has_partial_prices),
       estimated: Boolean(point.return_is_estimated),
+      source: point.history_source ?? 'unknown',
     }
   })
 }
@@ -69,6 +71,10 @@ export function buildPatrimonioChartData(data: PatrimonioHistoryPoint[]): ChartP
 function EvolutionTooltip({ active, payload }: TooltipProps) {
   const point = payload?.[0]?.payload
   if (!active || !point) return null
+
+  const referenceLabel = point.source === 'portfolio_snapshot'
+    ? 'Snapshot'
+    : 'Fechamento mensal da classe'
 
   return (
     <div
@@ -100,7 +106,7 @@ function EvolutionTooltip({ active, payload }: TooltipProps) {
         />
       )}
       <div style={{ marginTop: 9, color: 'var(--color-text-faint)', fontSize: '0.68rem' }}>
-        Snapshot de {fullDate(point.date)}{point.partial ? ' · cobertura parcial' : ''}
+        {referenceLabel} de {fullDate(point.date)}{point.partial ? ' · cobertura parcial' : ''}
       </div>
     </div>
   )
