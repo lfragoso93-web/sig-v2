@@ -1,13 +1,13 @@
 """add portfolio class snapshots
 
-Revision ID: 20260716_portfolio_class_snapshots
+Revision ID: 20260716_class_snapshots
 Revises: 20260714_asset_provider_metadata
 Create Date: 2026-07-16
 """
 from alembic import op
 import sqlalchemy as sa
 
-revision = "20260716_portfolio_class_snapshots"
+revision = "20260716_class_snapshots"
 down_revision = "20260714_asset_provider_metadata"
 branch_labels = None
 depends_on = None
