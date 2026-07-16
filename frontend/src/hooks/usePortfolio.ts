@@ -9,13 +9,14 @@ export interface PositionItem {
   asset_label: string
   quantity: number
   average_price: number
-  current_price: number
-  current_value: number
+  current_price: number | null
+  current_value: number | null
   invested_value: number
-  variation_value: number
-  variation_percent: number
+  variation_value: number | null
+  variation_percent: number | null
   allocation_pct: number
   logo_url?: string | null
+  quote_updated_at?: string | null
 }
 
 export interface PositionGroup {
@@ -23,10 +24,18 @@ export interface PositionGroup {
   count: number
   total_value: number
   total_invested?: number
-  variation_pct?: number
+  variation_pct?: number | null
   daily_variation_value?: number | null
   daily_variation_pct?: number | null
   variation_reference_date?: string | null
+  capital_result_value?: number
+  capital_result_pct?: number | null
+  received_dividends?: number
+  total_result_value?: number
+  total_result_pct?: number | null
+  performance_source?: string
+  proventos_as_of?: string | null
+  /** @deprecated retorno simples legado; não representa TWR */
   rentabilidade_pct?: number
   target_pct?: number
   positions: PositionItem[]
