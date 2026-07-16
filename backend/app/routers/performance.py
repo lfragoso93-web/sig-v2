@@ -15,6 +15,9 @@ from app.services.portfolio_class_snapshot_read_service import (
     get_daily_class_evolution,
     get_monthly_class_evolution,
 )
+from app.services.portfolio_class_reconciliation_service import (
+    reconcile_latest_class_snapshots,
+)
 from app.models.portfolio import Portfolio
 from sqlalchemy import select
 import logging
@@ -71,6 +74,16 @@ async def class_performance_availability(
 ):
     await _assert_portfolio_owner(db, portfolio_id, current_user.id)
     return await get_class_twr_availability(db, portfolio_id)
+
+
+@router.get("/{portfolio_id}/classes/reconciliation/latest")
+async def class_performance_reconciliation(
+    portfolio_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await _assert_portfolio_owner(db, portfolio_id, current_user.id)
+    return await reconcile_latest_class_snapshots(db, portfolio_id)
 
 
 @router.get("/{portfolio_id}/classes/{asset_type}/evolution/daily")
