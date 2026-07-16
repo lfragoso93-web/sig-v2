@@ -89,22 +89,30 @@ export const PERIOD_MONTHS: Record<PeriodOption, number> = {
   'all': 0,
 }
 
-export function useDailyEvolution(portfolioId: number | null, period: PeriodOption = '12m') {
+export function useDailyEvolution(
+  portfolioId: number | null,
+  period: PeriodOption = '12m',
+) {
   const days = PERIOD_DAYS[period]
   return useQuery<DailyPoint[]>({
     queryKey: ['evolution-daily', portfolioId, period],
-    queryFn: () => api.get(`/performance/${portfolioId}/evolution/daily`, { params: { days } }).then(r => r.data),
+    queryFn: () =>
+      api
+        .get(`/performance/${portfolioId}/evolution/daily`, { params: { days } })
+        .then(r => r.data),
     enabled: !!portfolioId,
     placeholderData: [],
     staleTime: 5 * 60 * 1000,
   })
 }
 
-export function useMonthlyEvolution(portfolioId: number | null, period: PeriodOption = '12m') {
+export function useMonthlyEvolution(
+  portfolioId: number | null,
+  period: PeriodOption = '12m',
+) {
   const months = PERIOD_MONTHS[period]
   return useQuery<MonthlyPoint[]>({
     queryKey: ['evolution-monthly', portfolioId, period],
-    queryFn: () => api.get(`/performance/${portfolioId}/evolution/monthly`, { params: { months } }).then(r => queryKey: ['evolution-monthly', portfolioId, period],
     queryFn: () =>
       api
         .get(`/performance/${portfolioId}/evolution/monthly`, { params: { months } })
@@ -125,7 +133,9 @@ export function useClassDailyEvolution(
     queryKey: ['class-evolution-daily', portfolioId, assetType, period],
     queryFn: () =>
       api
-        .get(`/performance/${portfolioId}/classes/${assetType}/evolution/daily`, { params: { days } })
+        .get(`/performance/${portfolioId}/classes/${assetType}/evolution/daily`, {
+          params: { days },
+        })
         .then(r => r.data),
     enabled: !!portfolioId && !!assetType,
     placeholderData: [],
@@ -139,26 +149,39 @@ export function useClassMonthlyEvolution(
   period: PeriodOption = '12m',
 ) {
   const months = PERIOD_MONTHS[period]
-  return useQuery<ClassMonthlyPoint[]>({
+  return useQuery<MonthlyClassEvolutionPoint[]>({
     queryKey: ['class-evolution-monthly', portfolioId, assetType, period],
-    queryFn: () => api.get(`/performance/${portfolioId}/classes/${assetType}/evolution/daily`, { params: { days } }).then(r => r.data),
+    queryFn: () =>
+      api
+        .get(`/performance/${portfolioId}/classes/${assetType}/evolution/monthly`, {
+          params: { months },
+        })
+        .then(r => r.data),
     enabled: !!portfolioId && !!assetType,
     placeholderData: [],
     staleTime: 5 * 60 * 1000,
   })
 }
 
-export function useMonthlyClassEvolution(
-  portfolioId: number | null,
-  assetType: string | null,
-  period: PeriodOption = '12m',
-) {
-  const months = PERIOD_MONTHS[period]
-  return useQuery<MonthlyClassEvolutionPoint[]>({
-    queryKey: ['class-evolution-monthly', portfolioId, assetType, period],
-    queryFn: () => api.get(`/performance/${portfolioId}/classes/${assetType}/evolution/monthly`, { params: { months } }).then(r => r.data),
-    enabled: !!portfolioId && !!assetType,
+export function useClassTwrAvailability(portfolioId: number | null) {
+  return useQuery<ClassTwrAvailability[]>({
+    queryKey: ['class-twr-availability', portfolioId],
+    queryFn: () =>
+      api.get(`/performance/${portfolioId}/classes/availability`).then(r => r.data),
+    enabled: !!portfolioId,
     placeholderData: [],
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useClassReconciliation(portfolioId: number | null) {
+  return useQuery<ClassReconciliation>({
+    queryKey: ['class-twr-reconciliation', portfolioId],
+    queryFn: () =>
+      api
+        .get(`/performance/${portfolioId}/classes/reconciliation/latest`)
+        .then(r => r.data),
+    enabled: !!portfolioId,
     staleTime: 5 * 60 * 1000,
   })
 }
