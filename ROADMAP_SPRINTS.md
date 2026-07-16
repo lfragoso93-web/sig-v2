@@ -87,30 +87,60 @@ Este documento preserva o histórico de sprints. O acompanhamento modular atual 
 - [x] Atualização de `last_price`.
 - [x] Ciclo de vida `COMPLETE`, `PRE_LISTING`, `DELISTED`, `REAL_GAP` e `NO_HISTORY`.
 - [x] Validação com 2.258 ativos e 984.949 preços de 2024 a 2026.
-- [x] Preservação de PETZ3 e outros ativos indisponíveis em provedores atuais.
-- [x] Pré-listagem de AREA11 tratada sem falso erro de cobertura.
+
+### Sprint 5P — Auditoria funcional da página Resumo
+
+- [x] KPIs confrontados com valuation e snapshots canônicos.
+- [x] Proventos líquidos recebidos usados nos totais.
+- [x] Contrato `summary.v2` estrito e versionado.
+- [x] Cobertura de preços e referências temporais expostas.
+- [x] Histórico mensal e período completo corrigidos.
+- [x] Tabela de posições migrada para métricas canônicas.
+- [x] Scheduler intradiário ajustado para 90 minutos.
+- [ ] Bug visual do gráfico divergente registrado na issue #147.
+
+### Sprint 5Q — Auditoria funcional da página Patrimônio
+
+- [x] Cards alinhados à semântica do Resumo.
+- [x] Evolução diária e mensal usando custo das posições abertas.
+- [x] Fluxos externos segregados do resultado.
+- [x] Período “Tudo” sem limite artificial.
+- [x] Consolidação por classe consumindo endpoint canônico.
+- [ ] Restaurar gráficos históricos por classe — issue #148.
+
+### Sprint 5R — Infraestrutura TWR por classe
+
+- [x] Modelo e migration de `PortfolioClassSnapshot`.
+- [x] TWR diário e acumulado para classes com histórico suportado.
+- [x] Backfill integrado ao endpoint de evolução.
+- [x] Manutenção noturna consolidada e por classe.
+- [x] Reconciliação com o snapshot consolidado.
+- [x] Tratamento de fluxos em fins de semana.
+- [x] Disponibilidade, materialização e qualidade expostas.
+- [ ] TWR dedicado de Tesouro e Renda Fixa — issue #149.
+
+### Sprint 5S — Auditoria funcional da página Rentabilidade
+
+- [x] Contrato `rentabilidade.v2` estrito e versionado.
+- [x] KPIs monetários derivados do `summary.v2`.
+- [x] TWR mensal corrigido para composição dos retornos diários.
+- [x] TWR por classe separado de resultado simples.
+- [x] Tesouro e Renda Fixa com semântica explícita de valuation e resultado.
+- [x] CDI e IPCA migrados para séries persistidas servidas pelo backend.
+- [x] Resultado por ativo migrado para posições e PnL realizado canônicos.
+- [x] Reconciliação final entre Rentabilidade, Resumo, Patrimônio e classes.
+- [x] Ausência de snapshots representada por `null`, sem falso zero.
+- [ ] Histórico persistido do IBOV — issue #150.
+- [ ] Remoção definitiva do serviço legado — issue #151.
 
 ## Em desenvolvimento
-
-### Resumo
-
-- [ ] Auditar cards contra snapshots canônicos.
-- [ ] Confirmar Resultado incluindo proventos totais.
-- [ ] Validar Rentabilidade desde o início.
-- [ ] Comparar Resumo e Patrimônio.
-- [ ] Cobrir contratos dos cards com testes.
-
-### Rentabilidade
-
-- [x] Backend TWR consolidado.
-- [x] Indicadores de qualidade calculados.
-- [ ] Ajustar apresentação visual.
 
 ### Proventos
 
 - [x] Materialização por carteira.
+- [x] Totais canônicos líquidos recebidos.
 - [ ] Validar cobertura completa por classe.
-- [ ] Confirmar impacto final nos KPIs durante a auditoria do Resumo.
+- [ ] Melhorar diagnóstico de eventos não materializados.
 
 ### Eventos corporativos — #129
 
@@ -121,11 +151,12 @@ Este documento preserva o histórico de sprints. O acompanhamento modular atual 
 
 ## Próximas entregas prioritárias
 
-1. Auditoria dos cards da página Resumo.
-2. Validação de Resultado + proventos + TWR desde o início.
-3. Integração operacional do COTAHIST ao rebuild completo.
-4. Ajustes visuais de Rentabilidade.
-5. Próximos blocos de eventos corporativos.
+1. Restaurar os gráficos por classe da página Patrimônio (#148).
+2. Implementar TWR dedicado de Tesouro e Renda Fixa (#149).
+3. Materializar histórico persistido do IBOV (#150).
+4. Remover o serviço legado de rentabilidade (#151).
+5. Corrigir o gráfico divergente da página Resumo (#147).
+6. Concluir validação funcional do módulo Proventos.
 
 ## Backlog planejado
 
@@ -140,6 +171,6 @@ Este documento preserva o histórico de sprints. O acompanhamento modular atual 
 
 1. Desenvolvimento sempre na `stable-15jun`.
 2. Commits pequenos e isolados.
-3. Validação local de build, testes e fluxo funcional.
+3. Validação local, GitHub Actions e Render.
 4. Atualização de README, roadmap e changelog ao consolidar uma entrega.
 5. PR única para `main` ao concluir um bloco estável.
