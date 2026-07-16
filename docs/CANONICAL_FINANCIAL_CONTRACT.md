@@ -45,6 +45,38 @@ Essa diferença não representa erro de reconciliação.
 - `return_is_estimated=true`: o snapshot possui pelo menos uma premissa estimada.
 - `summary_source=valuation_fallback`: não existe snapshot fechado; a rentabilidade não deve ser tratada como TWR oficial.
 
+## TWR por classe
+
+O TWR por classe usa a tabela `portfolio_class_snapshots`, com um registro por carteira,
+classe e data. Cada registro contém patrimônio, custo, fluxo externo, proventos,
+retorno diário, retorno acumulado e estado de qualidade.
+
+Regras obrigatórias:
+
+- compras e vendas da classe são tratadas como fluxos externos da série da classe;
+- proventos são líquidos, recebidos e associados pela data de pagamento;
+- TWR mensal é a composição dos retornos diários, nunca uma divisão simples;
+- ausência de preço marca `has_partial_prices` e `valuation_status=partial_prices`;
+- `return_is_estimated=true` permanece enquanto os fluxos forem inferidos das transações;
+- a soma das classes só é reconciliada com o consolidado quando todas as classes da carteira possuem valuation histórico suportado;
+- TWRs de classes não são somados para produzir o TWR consolidado.
+
+Classes atualmente suportadas pelo histórico genérico persistido:
+
+```text
+ACAO
+FII
+ETF_NACIONAL
+ETF_INTERNACIONAL
+STOCK
+BDR
+CRIPTO
+```
+
+Tesouro Direto e Renda Fixa exigem motores históricos dedicados. Até esses motores
+serem conectados aos snapshots por classe, a API retorna
+`dedicated_history_not_available`. Nenhum retorno simples ou aproximação é exibido.
+
 ## Versão do Resumo
 
 O endpoint da página Resumo usa o contrato `summary.v2`.
