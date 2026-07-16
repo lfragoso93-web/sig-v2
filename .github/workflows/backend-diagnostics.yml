@@ -1,0 +1,69 @@
+name: Backend diagnostics
+
+on:
+  pull_request:
+    branches: ["**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-diagnostics-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-diagnostics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements-test.txt
+
+      - name: Run flake8
+        id: flake8
+        continue-on-error: true
+        working-directory: backend
+        run: |
+          flake8 app \
+            --max-line-length=120 \
+            --extend-ignore=E501,E221 \
+            --per-file-ignores="app/models/*.py:F821,F401" \
+            > flake8.log 2>&1
+
+      - name: Run mypy
+        id: mypy
+        continue-on-error: true
+        working-directory: backend
+        run: mypy app > mypy.log 2>&1
+
+      - name: Run pytest
+        id: pytest
+        continue-on-error: true
+        working-directory: backend
+        run: pytest -qq -x --tb=line --disable-warnings > pytest.log 2>&1
+
+      - name: Upload backend diagnostics
+        uses: actions/upload-artifact@v6
+        with:
+          name: backend-diagnostics
+          path: |
+            backend/flake8.log
+            backend/mypy.log
+            backend/pytest.log
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Fail when a check failed
+        if: steps.flake8.outcome == 'failure' || steps.mypy.outcome == 'failure' || steps.pytest.outcome == 'failure'
+        run: exit 1
