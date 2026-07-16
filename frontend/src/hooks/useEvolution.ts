@@ -41,7 +41,7 @@ export interface ClassEvolutionPoint {
   accumulated_return_pct: number
   has_partial_prices: boolean
   return_is_estimated: boolean
-  valuation_status: 'complete' | 'partial_prices' | string
+  valuation_status: string
   history_source: 'portfolio_class_snapshot'
 }
 
@@ -53,7 +53,10 @@ export interface MonthlyClassEvolutionPoint extends ClassEvolutionPoint {
 export interface ClassTwrAvailability {
   asset_type: string
   available: boolean
-  status: 'available' | 'dedicated_history_not_available' | string
+  engine_supported: boolean
+  data_available: boolean
+  latest_snapshot_date: string | null
+  status: string
   reason: string | null
 }
 
