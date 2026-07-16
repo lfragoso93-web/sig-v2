@@ -34,19 +34,15 @@ function tooltipLabelFormatter(label: unknown): string {
   }
 }
 
-function tooltipFormatter(
-  value: unknown,
-  name: unknown,
-): [string, string] {
+function tooltipFormatter(value: unknown, name: unknown): [string, string] {
   const num = typeof value === 'number' ? value : Number(value ?? 0)
   const key = String(name ?? '')
   return [
     formatBRL(num),
-    key === 'market_value' ? 'Valor de mercado' : 'Custo / investido',
+    key === 'market_value' ? 'Patrimônio no fechamento' : 'Custo das posições abertas',
   ]
 }
 
-// Subsampla para no maximo maxPoints para evitar render pesado
 function subsample<T>(arr: T[], maxPoints: number): T[] {
   if (arr.length <= maxPoints) return arr
   const step = Math.ceil(arr.length / maxPoints)
@@ -59,7 +55,7 @@ export default function EvolutionLineChart({ data }: Props) {
   if (!display.length) {
     return (
       <div className="flex items-center justify-center h-64 text-sm" style={{ color: 'var(--color-text-muted)' }}>
-        Sem dados de evolucao para o periodo selecionado.
+        Sem dados de evolução para o período selecionado.
       </div>
     )
   }
@@ -69,19 +65,15 @@ export default function EvolutionLineChart({ data }: Props) {
       <AreaChart data={display} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
         <defs>
           <linearGradient id="gradMarket" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%"  stopColor="var(--color-primary)" stopOpacity={0.18} />
+            <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.18} />
             <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0} />
           </linearGradient>
-          <linearGradient id="gradInvested" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%"  stopColor="var(--color-text-muted)" stopOpacity={0.10} />
+          <linearGradient id="gradCost" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="var(--color-text-muted)" stopOpacity={0.10} />
             <stop offset="95%" stopColor="var(--color-text-muted)" stopOpacity={0} />
           </linearGradient>
         </defs>
-        <CartesianGrid
-          strokeDasharray="3 3"
-          stroke="var(--color-divider)"
-          vertical={false}
-        />
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-divider)" vertical={false} />
         <XAxis
           dataKey="date"
           tickFormatter={xTickFormatter}
@@ -101,11 +93,11 @@ export default function EvolutionLineChart({ data }: Props) {
           labelFormatter={tooltipLabelFormatter as never}
           formatter={tooltipFormatter as never}
           contentStyle={{
-            background:   'var(--color-surface-2)',
-            border:       '1px solid var(--color-border)',
+            background: 'var(--color-surface-2)',
+            border: '1px solid var(--color-border)',
             borderRadius: 8,
-            fontSize:     12,
-            color:        'var(--color-text)',
+            fontSize: 12,
+            color: 'var(--color-text)',
           }}
           itemStyle={{ color: 'var(--color-text)' }}
           labelStyle={{ fontWeight: 600, marginBottom: 4, color: 'var(--color-text-muted)' }}
@@ -113,16 +105,16 @@ export default function EvolutionLineChart({ data }: Props) {
         <Legend
           iconType="circle"
           iconSize={8}
-          formatter={name => name === 'market_value' ? 'Valor de mercado' : 'Custo / investido'}
+          formatter={name => name === 'market_value' ? 'Patrimônio no fechamento' : 'Custo das posições abertas'}
           wrapperStyle={{ fontSize: 12, paddingTop: 8, color: 'var(--color-text-muted)' }}
         />
         <Area
           type="monotone"
-          dataKey="invested_total"
+          dataKey="cost_basis"
           stroke="var(--color-text-muted)"
           strokeWidth={1.5}
           strokeDasharray="4 3"
-          fill="url(#gradInvested)"
+          fill="url(#gradCost)"
           dot={false}
           activeDot={{ r: 3 }}
         />

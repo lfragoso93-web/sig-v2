@@ -29,26 +29,16 @@ def _transaction_fx_rate(tx: Transaction) -> float:
     is_usd = currency == "USD" or asset_type in _USD_ASSET_TYPES
     if not is_usd:
         return 1.0
-
     saved = getattr(tx, "fx_rate", None)
     if saved is not None and float(saved or 0) > 0:
         return float(saved)
     return 1.0
 
 
-def calculate_realized_pnl(transactions: list[Transaction]) -> float:
-    """Calcula PnL realizado por custo medio movel.
-
-    Compras incorporam taxas ao custo. Vendas reconhecem o valor liquido recebido,
-    descontando taxas, e removem o custo medio proporcional. Posicoes totalmente
-    encerradas continuam contribuindo para o total realizado da carteira.
-
-    Renda fixa permanece fora deste calculo porque seus resgates exigem separar
-    principal e rendimento no servico especifico de valuation.
-    """
+def calculate_realized_pnl_by_ticker(transactions: list[Transaction]) -> dict[str, float]:
+    """Calcula PnL realizado por ticker usando custo medio movel e taxas liquidas."""
     state: dict[str, dict[str, float]] = {}
-    total_realized = 0.0
-
+    realized: dict[str, float] = {}
     ordered = sorted(
         transactions,
         key=lambda tx: (getattr(tx, "date", date.min), getattr(tx, "id", 0) or 0),
@@ -57,26 +47,23 @@ def calculate_realized_pnl(transactions: list[Transaction]) -> float:
     for tx in ordered:
         if _asset_type_name(tx.asset_type) == RENDA_FIXA_TYPE:
             continue
-
         ticker = str(tx.ticker or "").upper().strip()
         if not ticker:
             continue
-
         quantity = float(tx.quantity or 0)
         price = float(tx.price or 0)
         fees = float(tx.fees or 0)
         fx_rate = _transaction_fx_rate(tx)
         price_brl = price * fx_rate
         fees_brl = fees * fx_rate
-
         position = state.setdefault(ticker, {"quantity": 0.0, "cost": 0.0})
+        realized.setdefault(ticker, 0.0)
         operation = _operation_name(tx.operation)
 
         if operation in {OperationType.buy.value, "compra"}:
             position["quantity"] += quantity
             position["cost"] += quantity * price_brl + fees_brl
             continue
-
         if operation not in {OperationType.sell.value, "venda"} or position["quantity"] <= 0:
             continue
 
@@ -84,18 +71,26 @@ def calculate_realized_pnl(transactions: list[Transaction]) -> float:
         average_cost = position["cost"] / position["quantity"]
         sold_cost = sold_quantity * average_cost
         net_proceeds = sold_quantity * price_brl - fees_brl
-
-        total_realized += net_proceeds - sold_cost
+        realized[ticker] += net_proceeds - sold_cost
         position["quantity"] = max(0.0, position["quantity"] - sold_quantity)
         position["cost"] = max(0.0, position["cost"] - sold_cost)
 
-    return round(total_realized, 2)
+    return {ticker: round(value, 2) for ticker, value in realized.items()}
 
 
-async def get_realized_pnl(db: AsyncSession, portfolio_id: int) -> float:
+def calculate_realized_pnl(transactions: list[Transaction]) -> float:
+    return round(sum(calculate_realized_pnl_by_ticker(transactions).values()), 2)
+
+
+async def get_realized_pnl_by_ticker(db: AsyncSession, portfolio_id: int) -> dict[str, float]:
     result = await db.execute(
         select(Transaction)
         .where(Transaction.portfolio_id == portfolio_id)
         .order_by(Transaction.date.asc(), Transaction.id.asc())
     )
-    return calculate_realized_pnl(list(result.scalars().all()))
+    return calculate_realized_pnl_by_ticker(list(result.scalars().all()))
+
+
+async def get_realized_pnl(db: AsyncSession, portfolio_id: int) -> float:
+    realized = await get_realized_pnl_by_ticker(db, portfolio_id)
+    return round(sum(realized.values()), 2)

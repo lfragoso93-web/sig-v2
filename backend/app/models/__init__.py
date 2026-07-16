@@ -10,6 +10,7 @@ from app.models.asset_dividend import AssetDividend
 from app.models.fixed_income import FixedIncomeInvestment
 from app.models.goal import Goal
 from app.models.portfolio_snapshot import PortfolioSnapshot
+from app.models.portfolio_class_snapshot import PortfolioClassSnapshot
 from app.models.irpf import IRPFReport
 from app.models.corporate_event import CorporateEvent
 from app.models.config import AppConfig
@@ -23,7 +24,7 @@ __all__ = [
     'User', 'Portfolio', 'Transaction', 'PortfolioPosition',
     'Asset', 'AssetAlias', 'AssetPrice', 'Dividend', 'AssetDividend',
     'FixedIncomeInvestment', 'Goal',
-    'PortfolioSnapshot', 'IRPFReport', 'CorporateEvent',
+    'PortfolioSnapshot', 'PortfolioClassSnapshot', 'IRPFReport', 'CorporateEvent',
     'AppConfig', 'SystemConfig', 'PortfolioClassTarget',
     'RateHistory', 'DividendsSyncJob', 'AuditLog', 'AuditAction',
 ]

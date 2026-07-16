@@ -12,8 +12,6 @@ logger = logging.getLogger(__name__)
 
 _CACHE_PREFIX = "portfolio"
 
-# Tabelas que podem possuir dados vinculados a uma carteira.
-# Algumas instalações antigas podem não ter todas as tabelas ou podem ter schemas parciais.
 _PORTFOLIO_DEPENDENT_TABLES = (
     "dividends",
     "corporate_events",
@@ -22,6 +20,7 @@ _PORTFOLIO_DEPENDENT_TABLES = (
     "irpf_reports",
     "portfolio_class_targets",
     "portfolio_positions",
+    "portfolio_class_snapshots",
     "portfolio_snapshots",
     "transactions",
 )
@@ -64,7 +63,6 @@ async def _delete_from_table_by_portfolio(db: AsyncSession, table_name: str, por
             table_name,
         )
         return
-
     await db.execute(
         text(f"DELETE FROM {table_name} WHERE portfolio_id = :portfolio_id"),
         {"portfolio_id": portfolio_id},
@@ -72,13 +70,6 @@ async def _delete_from_table_by_portfolio(db: AsyncSession, table_name: str, por
 
 
 async def delete_portfolio_safely(db: AsyncSession, portfolio_id: int, user_id: int) -> None:
-    """Exclui uma carteira própria sem acionar cascades/lazy-loads do ORM.
-
-    O fluxo usa SQL direto porque bancos migrados antigos podem conter models
-    presentes no código com tabelas/colunas ainda não materializadas. Chamar
-    `db.delete(portfolio)` faz o SQLAlchemy carregar relações em cascade e pode
-    quebrar em colunas inexistentes, como `goals.current_value`.
-    """
     result = await db.execute(
         text(
             """

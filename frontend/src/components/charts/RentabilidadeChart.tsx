@@ -1,16 +1,4 @@
-/**
- * RentabilidadeChart
- * Gráfico de retorno % mês a mês da carteira com linhas de benchmark.
- *
- * Dados da carteira: useMonthlyEvolution (field: return_pct)
- * Benchmark:
- *   - IBOV: histórico mensal via BRAPI (/quote/^BVSP/historical)
- *   - CDI:  taxa anual do BCB (endpoint 12/últimos, divisão simples por 12)
- *   - IPCA: índice mensal do BCB (endpoint 433)
- *
- * A comparação usa retorno acumulado indexado a 100 no primeiro mês do período.
- */
-import { useState, useEffect } from 'react'
+import { useMemo, useState } from 'react'
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -20,345 +8,181 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ReferenceLine,
 } from 'recharts'
 import { useMonthlyEvolution, type PeriodOption } from '@/hooks/useEvolution'
-
-// ── Tipos ──────────────────────────────────────────────────────────────────────
-
-interface BenchmarkPoint {
-  date: string  // YYYY-MM
-  ibov?: number // retorno % mensal
-  cdi?:  number
-  ipca?: number
-}
+import { useMonthlyBenchmarks } from '@/hooks/useRentabilidade'
 
 interface ChartPoint {
-  label:     string  // "Jan/25"
-  carteira:  number  // return_pct do mês
-  ibov?:     number
-  cdi?:      number
-  ipca?:     number
+  period: string
+  label: string
+  carteira: number
+  ibov?: number
+  cdi?: number
+  ipca?: number
+  estimated: boolean
+  partial: boolean
+  snapshotDate: string
 }
 
-// ── Fetch benchmarks via APIs públicas ──────────────────────────────────────────────
-
-async function fetchIbovMonthly(_months: number): Promise<Record<string, number>> {
-  try {
-    const url = `https://brapi.dev/api/quote/%5EBVSP?range=2y&interval=1mo&fundamental=false`
-    const res = await fetch(url)
-    const json = await res.json()
-    const hist: { date: string; adjustedClose: number }[] =
-      json?.results?.[0]?.historicalDataPrice ?? []
-    const map: Record<string, number> = {}
-    // calcular retorno % mês a mês
-    for (let i = 1; i < hist.length; i++) {
-      const prev = hist[i - 1].adjustedClose
-      const curr = hist[i].adjustedClose
-      if (!prev) continue
-      const ym = hist[i].date.slice(0, 7) // YYYY-MM
-      map[ym] = ((curr - prev) / prev) * 100
-    }
-    return map
-  } catch {
-    return {}
-  }
-}
-
-async function fetchCdiMonthly(months: number): Promise<Record<string, number>> {
-  try {
-    // BCB série 4391 = CDI Over acumulado no mês (%)
-    const url = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.4391/dados/ultimos/${months + 2}?formato=json`
-    const res = await fetch(url)
-    const json: { data: string; valor: string }[] = await res.json()
-    const map: Record<string, number> = {}
-    for (const p of json) {
-      // data vem como DD/MM/YYYY
-      const [_d, m, y] = p.data.split('/')
-      const ym = `${y}-${m.padStart(2, '0')}`
-      map[ym] = parseFloat(p.valor)
-    }
-    return map
-  } catch {
-    return {}
-  }
-}
-
-async function fetchIpcaMonthly(months: number): Promise<Record<string, number>> {
-  try {
-    // BCB série 433 = IPCA variação mensal (%)
-    const url = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados/ultimos/${months + 2}?formato=json`
-    const res = await fetch(url)
-    const json: { data: string; valor: string }[] = await res.json()
-    const map: Record<string, number> = {}
-    for (const p of json) {
-      const [_d, m, y] = p.data.split('/')
-      const ym = `${y}-${m.padStart(2, '0')}`
-      map[ym] = parseFloat(p.valor)
-    }
-    return map
-  } catch {
-    return {}
-  }
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────────────────
-
-const MONTH_SHORT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
-
-function ymToLabel(ym: string): string {
-  const [y, m] = ym.split('-')
-  return `${MONTH_SHORT[parseInt(m) - 1]}/${y.slice(2)}`
-}
-
-function pct(v: number) {
-  return `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`
-}
-
+const MONTH_SHORT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 const PERIOD_OPTIONS: { label: string; value: PeriodOption }[] = [
-  { label: '6 meses',   value: '6m'  },
-  { label: '12 meses',  value: '12m' },
-  { label: '24 meses',  value: '24m' },
+  { label: '6 meses', value: '6m' },
+  { label: '12 meses', value: '12m' },
+  { label: '24 meses', value: '24m' },
   { label: 'Todo período', value: 'all' },
 ]
 
-const PERIOD_MONTHS: Record<PeriodOption, number> = {
-  '6m': 6, '12m': 12, '24m': 24, 'all': 120,
+function ymToLabel(ym: string): string {
+  const [year, month] = ym.split('-')
+  return `${MONTH_SHORT[Number(month) - 1]}/${year.slice(2)}`
 }
 
-// ── Tooltip customizado ───────────────────────────────────────────────────────────────
+function pct(value: number): string {
+  return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
+}
 
-function CustomTooltip({ active, payload, label }: any) {
+function CustomTooltip({ active, payload }: any) {
   if (!active || !payload?.length) return null
+  const point = payload[0]?.payload as ChartPoint | undefined
+  if (!point) return null
+
   return (
-    <div style={{
-      background: 'var(--color-surface-2)',
-      border: '1px solid oklch(from var(--color-text) l c h / 0.1)',
-      borderRadius: 'var(--radius-md)',
-      padding: '8px 12px',
-      fontSize: 'var(--text-xs)',
-      boxShadow: '0 4px 12px oklch(0 0 0 / 0.15)',
-      minWidth: 140,
-    }}>
-      <p style={{ fontWeight: 700, color: 'var(--color-text)', marginBottom: 6 }}>{label}</p>
-      {payload.map((p: any) => (
-        <div key={p.dataKey} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, color: p.color }}>
-          <span>{p.name}</span>
+    <div
+      style={{
+        background: 'var(--color-surface-2)',
+        border: '1px solid oklch(from var(--color-text) l c h / 0.1)',
+        borderRadius: 'var(--radius-md)',
+        padding: '8px 12px',
+        fontSize: 'var(--text-xs)',
+        boxShadow: '0 4px 12px oklch(0 0 0 / 0.15)',
+        minWidth: 180,
+      }}
+    >
+      <p style={{ fontWeight: 700, color: 'var(--color-text)', marginBottom: 6 }}>{point.label}</p>
+      {payload.map((entry: any) => (
+        <div key={entry.dataKey} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, color: entry.color }}>
+          <span>{entry.name}</span>
           <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-            {p.value != null ? pct(p.value) : '—'}
+            {entry.value != null ? pct(Number(entry.value)) : '—'}
           </span>
         </div>
       ))}
+      <p style={{ marginTop: 6, color: 'var(--color-text-faint)', fontSize: 10 }}>
+        Fechamento de {new Date(`${point.snapshotDate}T00:00:00`).toLocaleDateString('pt-BR')}
+        {point.estimated ? ' · estimado' : ''}
+        {point.partial ? ' · cobertura parcial' : ''}
+      </p>
     </div>
   )
 }
 
-// ── Componente principal ──────────────────────────────────────────────────────────────────
-
 export default function RentabilidadeChart({ portfolioId }: { portfolioId: number }) {
-  const [period,     setPeriod]     = useState<PeriodOption>('12m')
-  const [benchmarks, setBenchmarks] = useState<BenchmarkPoint[]>([])
-  const [loading,    setLoading]    = useState(false)
-  const [showIbov,   setShowIbov]   = useState(true)
-  const [showCdi,    setShowCdi]    = useState(true)
-  const [showIpca,   setShowIpca]   = useState(false)
+  const [period, setPeriod] = useState<PeriodOption>('12m')
+  const [showIbov, setShowIbov] = useState(true)
+  const [showCdi, setShowCdi] = useState(true)
+  const [showIpca, setShowIpca] = useState(false)
 
-  const months = PERIOD_MONTHS[period]
   const { data: monthly, isLoading: loadingMonthly } = useMonthlyEvolution(portfolioId, period)
+  const benchmarkMonths = period === 'all' ? 0 : period === '24m' ? 24 : period === '12m' ? 12 : 6
+  const { data: benchmarks, isLoading: loadingBenchmarks } = useMonthlyBenchmarks(portfolioId, benchmarkMonths)
 
-  // Busca benchmarks quando o período muda
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    Promise.all([
-      fetchIbovMonthly(months),
-      fetchCdiMonthly(months),
-      fetchIpcaMonthly(months),
-    ]).then(([ibovMap, cdiMap, ipcaMap]) => {
-      if (cancelled) return
-      // Unir todos os meses conhecidos
-      const allYm = new Set([...Object.keys(ibovMap), ...Object.keys(cdiMap), ...Object.keys(ipcaMap)])
-      const pts: BenchmarkPoint[] = Array.from(allYm)
-        .sort()
-        .map(ym => ({ date: ym, ibov: ibovMap[ym], cdi: cdiMap[ym], ipca: ipcaMap[ym] }))
-      setBenchmarks(pts)
-      setLoading(false)
+  const chartData = useMemo<ChartPoint[]>(() => {
+    const benchmarkByPeriod = new Map((benchmarks?.points ?? []).map(point => [point.period, point]))
+    return (monthly ?? []).map(point => {
+      const periodKey = point.period || point.date.slice(0, 7)
+      const benchmark = benchmarkByPeriod.get(periodKey)
+      return {
+        period: periodKey,
+        label: ymToLabel(periodKey),
+        carteira: Number(point.monthly_return_pct ?? 0),
+        ibov: benchmark?.ibov_monthly_pct ?? undefined,
+        cdi: benchmark?.cdi_monthly_pct ?? undefined,
+        ipca: benchmark?.ipca_monthly_pct ?? undefined,
+        estimated: Boolean(point.return_is_estimated),
+        partial: Boolean(point.has_partial_prices),
+        snapshotDate: point.date,
+      }
     })
-    return () => { cancelled = true }
-  }, [months])
+  }, [benchmarks, monthly])
 
-  // Merge carteira + benchmarks por mês YYYY-MM
-  const chartData: ChartPoint[] = (monthly ?? []).map(p => {
-    const ym = p.date.slice(0, 7)
-    const bm = benchmarks.find(b => b.date === ym)
-    return {
-      label:    ymToLabel(ym),
-      carteira: p.return_pct,
-      ibov:     bm?.ibov,
-      cdi:      bm?.cdi,
-      ipca:     bm?.ipca,
-    }
-  })
+  const availability = benchmarks?.availability
+  const benchmarkButtons = [
+    { label: 'IBOV', active: showIbov, available: availability?.IBOV.available ?? false, toggle: () => setShowIbov(value => !value) },
+    { label: 'CDI', active: showCdi, available: availability?.CDI.available ?? false, toggle: () => setShowCdi(value => !value) },
+    { label: 'IPCA', active: showIpca, available: availability?.IPCA.available ?? false, toggle: () => setShowIpca(value => !value) },
+  ]
 
-  const isLoading = loadingMonthly || loading
+  const loading = loadingMonthly || loadingBenchmarks
 
   return (
     <div className="card p-4">
-      {/* Header */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem',
-      }}>
-        <span className="section-card-title">Rentabilidade mensal</span>
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+        <div className="flex flex-col">
+          <span className="section-card-title">TWR mensal</span>
+          <span className="text-[10px]" style={{ color: 'var(--color-text-faint)' }}>
+            Carteira e benchmarks mensais servidos por séries persistidas
+          </span>
+        </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          {/* Toggles de benchmark */}
-          {([
-            { key: 'ibov', label: 'IBOV', show: showIbov, toggle: () => setShowIbov(v => !v), color: '#f59e0b' },
-            { key: 'cdi',  label: 'CDI',  show: showCdi,  toggle: () => setShowCdi(v => !v),  color: '#6366f1' },
-            { key: 'ipca', label: 'IPCA', show: showIpca, toggle: () => setShowIpca(v => !v), color: '#10b981' },
-          ] as const).map(b => (
+        <div className="flex items-center gap-2 flex-wrap">
+          {benchmarkButtons.map(item => (
             <button
-              key={b.key}
-              onClick={b.toggle}
+              key={item.label}
+              onClick={item.toggle}
+              disabled={!item.available}
+              title={item.available ? undefined : 'Histórico persistido ainda indisponível'}
+              className="px-2 py-1 rounded-full text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
               style={{
-                fontSize: 'var(--text-xs)', fontWeight: 600,
-                padding: '2px 10px',
-                borderRadius: 'var(--radius-full)',
-                border: `1px solid ${b.show ? b.color : 'oklch(from var(--color-text) l c h / 0.12)'}`,
-                background: b.show ? `${b.color}1a` : 'transparent',
-                color: b.show ? b.color : 'var(--color-text-faint)',
-                cursor: 'pointer',
-                transition: 'all 0.15s',
+                border: '1px solid var(--color-divider)',
+                background: item.active && item.available ? 'oklch(from var(--color-primary) l c h / 0.12)' : 'transparent',
+                color: item.active && item.available ? 'var(--color-primary)' : 'var(--color-text-faint)',
               }}
             >
-              {b.label}
+              {item.label}
             </button>
           ))}
-
-          {/* Seletor de período */}
-          <div style={{ display: 'flex', gap: 4 }}>
-            {PERIOD_OPTIONS.map(o => (
-              <button
-                key={o.value}
-                onClick={() => setPeriod(o.value)}
-                style={{
-                  fontSize: 'var(--text-xs)', fontWeight: 600,
-                  padding: '2px 10px',
-                  borderRadius: 'var(--radius-full)',
-                  border: '1px solid oklch(from var(--color-text) l c h / 0.1)',
-                  background: period === o.value
-                    ? 'oklch(from var(--color-primary) l c h / 0.12)'
-                    : 'transparent',
-                  color: period === o.value ? 'var(--color-primary)' : 'var(--color-text-muted)',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s',
-                }}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
+          {PERIOD_OPTIONS.map(option => (
+            <button
+              key={option.value}
+              onClick={() => setPeriod(option.value)}
+              className="px-2 py-1 rounded-full text-xs font-semibold"
+              style={{
+                border: '1px solid var(--color-divider)',
+                background: period === option.value ? 'oklch(from var(--color-primary) l c h / 0.12)' : 'transparent',
+                color: period === option.value ? 'var(--color-primary)' : 'var(--color-text-muted)',
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Gráfico */}
-      {isLoading ? (
-        <div
-          className="animate-pulse rounded-lg"
-          style={{ height: 260, background: 'var(--color-surface-offset)' }}
-        />
+      {loading ? (
+        <div className="animate-pulse rounded-lg" style={{ height: 280, background: 'var(--color-surface-offset)' }} />
       ) : chartData.length === 0 ? (
-        <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-faint)' }}>
-            Sem dados para o período selecionado
-          </span>
+        <div className="flex items-center justify-center" style={{ height: 280 }}>
+          <span className="text-xs" style={{ color: 'var(--color-text-faint)' }}>Sem snapshots para o período selecionado</span>
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height={260}>
-          <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -16, bottom: 0 }}>
-            <CartesianGrid
-              strokeDasharray="3 3"
-              stroke="oklch(from var(--color-text) l c h / 0.06)"
-              vertical={false}
-            />
-            <XAxis
-              dataKey="label"
-              tick={{ fontSize: 10, fill: 'var(--color-text-faint)' }}
-              axisLine={false}
-              tickLine={false}
-              interval="preserveStartEnd"
-            />
-            <YAxis
-              tickFormatter={v => `${v > 0 ? '+' : ''}${v.toFixed(1)}%`}
-              tick={{ fontSize: 10, fill: 'var(--color-text-faint)' }}
-              axisLine={false}
-              tickLine={false}
-              width={52}
-            />
+        <ResponsiveContainer width="100%" height={280}>
+          <ComposedChart data={chartData} margin={{ top: 6, right: 8, left: -10, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="oklch(from var(--color-text) l c h / 0.06)" vertical={false} />
+            <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'var(--color-text-faint)' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+            <YAxis tickFormatter={value => `${value > 0 ? '+' : ''}${Number(value).toFixed(1)}%`} tick={{ fontSize: 10, fill: 'var(--color-text-faint)' }} axisLine={false} tickLine={false} width={54} />
             <Tooltip content={<CustomTooltip />} />
-            <ReferenceLine y={0} stroke="oklch(from var(--color-text) l c h / 0.15)" strokeWidth={1} />
-
-            {/* Barras da carteira */}
-            <Bar
-              dataKey="carteira"
-              name="Carteira"
-              radius={[3, 3, 0, 0]}
-              maxBarSize={32}
-              fill="var(--color-primary)"
-              label={false}
-            />
-
-            {/* Linhas de benchmark */}
-            {showIbov && (
-              <Line
-                dataKey="ibov"
-                name="IBOV"
-                type="monotone"
-                stroke="#f59e0b"
-                strokeWidth={1.5}
-                dot={false}
-                connectNulls
-              />
-            )}
-            {showCdi && (
-              <Line
-                dataKey="cdi"
-                name="CDI"
-                type="monotone"
-                stroke="#6366f1"
-                strokeWidth={1.5}
-                strokeDasharray="4 2"
-                dot={false}
-                connectNulls
-              />
-            )}
-            {showIpca && (
-              <Line
-                dataKey="ipca"
-                name="IPCA"
-                type="monotone"
-                stroke="#10b981"
-                strokeWidth={1.5}
-                strokeDasharray="2 2"
-                dot={false}
-                connectNulls
-              />
-            )}
-
-            <Legend
-              iconType="plainline"
-              iconSize={12}
-              wrapperStyle={{ fontSize: 'var(--text-xs)', paddingTop: 8 }}
-            />
+            <ReferenceLine y={0} stroke="oklch(from var(--color-text) l c h / 0.18)" />
+            <Bar dataKey="carteira" name="Carteira (TWR)" fill="var(--color-primary)" radius={[3, 3, 0, 0]} maxBarSize={30} />
+            {showIbov && availability?.IBOV.available && <Line type="monotone" dataKey="ibov" name="IBOV" connectNulls dot={false} strokeWidth={2} />}
+            {showCdi && availability?.CDI.available && <Line type="monotone" dataKey="cdi" name="CDI" connectNulls dot={false} strokeWidth={2} />}
+            {showIpca && availability?.IPCA.available && <Line type="monotone" dataKey="ipca" name="IPCA" connectNulls dot={false} strokeWidth={2} />}
           </ComposedChart>
         </ResponsiveContainer>
       )}
 
-      {/* Nota de rodapé */}
-      <p style={{ fontSize: '0.65rem', color: 'var(--color-text-faint)', marginTop: 4, textAlign: 'right' }}>
-        Carteira: retorno % mensal do patrimônio · IBOV: BRAPI · CDI: BCB série 4391 · IPCA: BCB série 433
+      <p className="text-[10px] mt-2" style={{ color: 'var(--color-text-faint)' }}>
+        Nenhuma consulta externa é realizada pelo navegador. Benchmarks sem histórico materializado permanecem indisponíveis.
       </p>
     </div>
   )

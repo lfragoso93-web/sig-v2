@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
-import { BarChart2, TrendingUp, DollarSign, Briefcase, AlertTriangle } from 'lucide-react'
-import clsx from 'clsx'
+import { BarChart2, TrendingUp, DollarSign, Briefcase, AlertTriangle, Clock3 } from 'lucide-react'
 import {
   usePortfolioList,
   usePatrimonioHistory,
@@ -9,7 +8,7 @@ import {
 } from '@/hooks/usePortfolio'
 import { useAppStore } from '@/store/appStore'
 import { formatBRL, formatPercent, signClass } from '@/utils/format'
-import { mapPortfolioSummaryMetrics } from '@/utils/portfolioSummary'
+import { formatReferenceDate, mapPortfolioSummaryMetrics } from '@/utils/portfolioSummary'
 import KpiCard from '@/components/ui/KpiCard'
 import SkeletonCard from '@/components/ui/SkeletonCard'
 import EmptyState from '@/components/ui/EmptyState'
@@ -108,6 +107,9 @@ export default function ResumePage() {
 
   const metrics = mapPortfolioSummaryMetrics(summary)
   const loadingKpiCards = loadingPortfolios || loadingSummary
+  const valuationReference = formatReferenceDate(metrics.valuationUpdatedAt)
+  const performanceReference = formatReferenceDate(metrics.performanceAsOf)
+  const proventosReference = formatReferenceDate(metrics.proventosAsOf)
 
   if (loadingPortfolios) {
     return (
@@ -143,21 +145,61 @@ export default function ResumePage() {
           [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
         ) : summary ? (
           <>
-            <KpiCard label="Patrimônio Total" value={formatBRL(metrics.patrimonio)} subValue={formatBRL(metrics.aportado)} subLabel="Valor investido" change={metrics.variacaoPct} />
-            <KpiCard label="Resultado" value={formatBRL(metrics.lucroTotal)} valueColor={signClass(metrics.lucroTotal)} subLabel="Ganho de capital + proventos" />
-            <KpiCard label="Proventos (12m)" value={formatBRL(metrics.proventos12m)} subValue={formatBRL(metrics.proventosTotal)} subLabel="Total recebido" />
             <KpiCard
-              label="Variação"
-              value={formatBRL(metrics.variacaoValor)}
-              valueColor={signClass(metrics.variacaoValor)}
-              change={metrics.variacaoPct}
-              bottomLine={<span className={clsx('text-xs font-semibold tabular-nums', signClass(metrics.rentabilidadePct))}>{metrics.rentabilidadePct >= 0 ? '+' : ''}{formatPercent(metrics.rentabilidadePct)} rentab. total</span>}
+              label="Patrimônio Total"
+              value={formatBRL(metrics.patrimonio)}
+              subValue={formatBRL(metrics.aportado)}
+              subLabel="Custo atual das posições abertas"
+            />
+            <KpiCard
+              label="Resultado Total"
+              value={formatBRL(metrics.lucroTotal)}
+              valueColor={signClass(metrics.lucroTotal)}
+              subValue={formatBRL(metrics.variacaoValor)}
+              subLabel="Não realizado; total inclui realizado e proventos"
+            />
+            <KpiCard
+              label="Proventos Recebidos (12m)"
+              value={formatBRL(metrics.proventos12m)}
+              subValue={formatBRL(metrics.proventosTotal)}
+              subLabel="Total líquido recebido"
+            />
+            <KpiCard
+              label="Rentabilidade (TWR)"
+              value={`${metrics.rentabilidadePct >= 0 ? '+' : ''}${formatPercent(metrics.rentabilidadePct)}`}
+              valueColor={signClass(metrics.rentabilidadePct)}
+              subValue={`${metrics.variacaoPct >= 0 ? '+' : ''}${formatPercent(metrics.variacaoPct)}`}
+              subLabel="Variação patrimonial das posições abertas"
+              bottomLine={metrics.rentabilidadeDiariaPct !== null ? (
+                <span className={`text-xs font-semibold tabular-nums ${signClass(metrics.rentabilidadeDiariaPct)}`}>
+                  {metrics.rentabilidadeDiariaPct >= 0 ? '+' : ''}{formatPercent(metrics.rentabilidadeDiariaPct)} no último fechamento
+                </span>
+              ) : undefined}
             />
           </>
         ) : (
           <div className="col-span-4 py-8 text-center text-xs" style={{ color: 'var(--color-text-muted)' }}>Nenhum dado disponível. Adicione lançamentos para começar.</div>
         )}
       </div>
+
+      {summary && (valuationReference || performanceReference || proventosReference) && (
+        <div
+          className="card"
+          style={{
+            display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem 1rem',
+            padding: '0.65rem 1rem', color: 'var(--color-text-muted)', fontSize: 'var(--text-xs)',
+          }}
+        >
+          <Clock3 size={14} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
+          {valuationReference && <span>Patrimônio e posições: {valuationReference}</span>}
+          {performanceReference && (
+            <span>
+              TWR até: {performanceReference}{metrics.returnIsEstimated ? ' (estimado)' : ''}
+            </span>
+          )}
+          {proventosReference && <span>Proventos até: {proventosReference}</span>}
+        </div>
+      )}
 
       {metrics.hasPartialPrices && (
         <div

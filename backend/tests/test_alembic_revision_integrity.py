@@ -6,6 +6,7 @@ from pathlib import Path
 
 
 VERSIONS_DIR = Path(__file__).resolve().parents[1] / "alembic" / "versions"
+ALEMBIC_VERSION_MAX_LENGTH = 32
 
 
 def _literal_assignment(path: Path, variable: str) -> str | None:
@@ -34,3 +35,21 @@ def test_alembic_revision_ids_are_unique() -> None:
             revisions[revision] = path
 
     assert not duplicates, "Revisions Alembic duplicadas: " + "; ".join(duplicates)
+
+
+def test_alembic_revision_ids_fit_version_table() -> None:
+    oversized: list[str] = []
+
+    for path in sorted(VERSIONS_DIR.glob("*.py")):
+        revision = _literal_assignment(path, "revision")
+        if revision is None:
+            continue
+        if len(revision) > ALEMBIC_VERSION_MAX_LENGTH:
+            oversized.append(
+                f"{revision} ({len(revision)} chars) em {path.name}"
+            )
+
+    assert not oversized, (
+        f"Revisions Alembic excedem VARCHAR({ALEMBIC_VERSION_MAX_LENGTH}): "
+        + "; ".join(oversized)
+    )

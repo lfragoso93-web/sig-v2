@@ -2,7 +2,8 @@
 Sincronizacao diaria de eventos/proventos de renda variavel nacional.
 
 O servico coleta eventos globais, atualiza AssetDividend de forma idempotente,
-complementa historico e materializa os eventos nas carteiras elegiveis.
+complementa historico, materializa os eventos nas carteiras elegiveis e invalida
+os consumidores financeiros afetados.
 """
 from __future__ import annotations
 
@@ -15,8 +16,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset, AssetType
+from app.models.transaction import Transaction
 from app.services.dividend_backfill_service import run_backfill, materialize_asset_dividends
 from app.services.dividend_history_seed_service import seed_full_dividend_history
+from app.services.portfolio_service import invalidate_portfolio_cache
 
 logger = logging.getLogger(__name__)
 
@@ -28,9 +31,6 @@ NATIONAL_EVENT_TYPES = {
 }
 
 _MAIN_EQUITY_RE = re.compile(r"^[A-Z0-9]{4,6}(3|4|5|6|11|31|32|33|34|35)$")
-
-# Mantem paralelismo abaixo do limite operacional dos provedores, mas elimina
-# o processamento quase serial que fazia o rebuild levar mais de uma hora.
 SYNC_CONCURRENCY = 10
 SYNC_BATCH_DELAY = 0.5
 MATERIALIZE_TICKER_BATCH_SIZE = 50
@@ -44,6 +44,7 @@ class ProventosDailySyncResult:
     assets_skipped: int = 0
     materialized: int = 0
     historical_events: int = 0
+    portfolios_invalidated: int = 0
     errors: list[str] = field(default_factory=list)
 
 
@@ -70,6 +71,20 @@ async def _sync_asset_events(db: AsyncSession, ticker: str, asset_type: str) -> 
     except Exception as exc:
         logger.error("[proventos_daily] falha ao sincronizar %s/%s: %s", ticker, asset_type, exc)
         return False, 0
+
+
+async def _invalidate_affected_portfolios(db: AsyncSession, tickers: list[str]) -> int:
+    if not tickers:
+        return 0
+    rows = await db.execute(
+        select(Transaction.portfolio_id)
+        .where(Transaction.ticker.in_(tickers))
+        .distinct()
+    )
+    portfolio_ids = [row.portfolio_id for row in rows.all()]
+    for portfolio_id in portfolio_ids:
+        await invalidate_portfolio_cache(portfolio_id)
+    return len(portfolio_ids)
 
 
 async def run_daily_proventos_sync(
@@ -159,14 +174,20 @@ async def run_daily_proventos_sync(
             )
             result.errors.append(f"materialize[{label}]: {exc}")
 
+    result.portfolios_invalidated = await _invalidate_affected_portfolios(
+        db,
+        materialize_tickers,
+    )
+
     logger.info(
-        "[proventos_daily] concluido: scanned=%s synced=%s failed=%s skipped=%s historical=%s materialized=%s errors=%s",
+        "[proventos_daily] concluido: scanned=%s synced=%s failed=%s skipped=%s historical=%s materialized=%s portfolios_invalidated=%s errors=%s",
         result.assets_scanned,
         result.assets_synced,
         result.assets_failed,
         result.assets_skipped,
         result.historical_events,
         result.materialized,
+        result.portfolios_invalidated,
         len(result.errors),
     )
     return result

@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from app.models.fixed_income import FixedIncomeInvestment
     from app.models.goals import Goal
     from app.models.irpf import IRPFReport
+    from app.models.portfolio_class_snapshot import PortfolioClassSnapshot
     from app.models.portfolio_class_target import PortfolioClassTarget
     from app.models.portfolio_position import PortfolioPosition
     from app.models.portfolio_snapshot import PortfolioSnapshot
@@ -28,7 +29,6 @@ class Portfolio(Base, TimestampMixin):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    # Relacionamentos
     user: Mapped["User"] = relationship("User", back_populates="portfolios")
     transactions: Mapped[list["Transaction"]] = relationship(
         "Transaction", back_populates="portfolio", cascade="all, delete-orphan"
@@ -47,6 +47,9 @@ class Portfolio(Base, TimestampMixin):
     )
     snapshots: Mapped[list["PortfolioSnapshot"]] = relationship(
         "PortfolioSnapshot", back_populates="portfolio", cascade="all, delete-orphan"
+    )
+    class_snapshots: Mapped[list["PortfolioClassSnapshot"]] = relationship(
+        "PortfolioClassSnapshot", back_populates="portfolio", cascade="all, delete-orphan"
     )
     irpf_reports: Mapped[list["IRPFReport"]] = relationship(
         "IRPFReport", back_populates="portfolio", cascade="all, delete-orphan"
