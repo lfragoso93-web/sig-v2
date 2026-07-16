@@ -27,7 +27,7 @@ from app.services.dividend_aggregation_service import (
     received_dividend_date,
     received_dividend_value,
 )
-from app.services.fx_service import get_usd_brl_for_date
+from app.services.fx_service import get_usd_brl_at_date
 from app.services.price_history_service import get_prices_at_date_batch
 from app.services.twr_service import append_compounded_return_pct, calculate_daily_twr_pct
 
@@ -275,7 +275,7 @@ async def rebuild_class_snapshots(
                 )
                 fx_rate = Decimal("1")
                 if asset_type in _USD_TYPES and requirements:
-                    fx_rate = _decimal(await get_usd_brl_for_date(db, cursor))
+                    fx_rate = _decimal(await get_usd_brl_at_date(db, cursor.isoformat()))
 
                 market_value = _ZERO
                 cost_basis = _ZERO
