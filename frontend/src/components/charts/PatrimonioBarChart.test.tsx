@@ -4,7 +4,7 @@ import { buildPatrimonioChartData, getSymmetricAxisLimit } from './PatrimonioBar
 
 
 describe('buildPatrimonioChartData', () => {
-  it('preserves a negative capital result below zero', () => {
+  it('places a negative capital result exclusively in the loss series', () => {
     const [point] = buildPatrimonioChartData([
       {
         date: '2026-07-31',
@@ -25,6 +25,8 @@ describe('buildPatrimonioChartData', () => {
       patrimonio: 20739.67,
       aplicado: 22149.25,
       resultado: -1409.58,
+      ganho: 0,
+      perda: -1409.58,
       twr: 8.7654,
       partial: false,
       estimated: true,
@@ -32,7 +34,7 @@ describe('buildPatrimonioChartData', () => {
     })
   })
 
-  it('preserves a positive result above zero', () => {
+  it('places a positive capital result exclusively in the gain series', () => {
     const [point] = buildPatrimonioChartData([
       {
         date: '2026-06-30',
@@ -42,6 +44,8 @@ describe('buildPatrimonioChartData', () => {
     ])
 
     expect(point.resultado).toBe(250)
+    expect(point.ganho).toBe(250)
+    expect(point.perda).toBe(0)
     expect(point.twr).toBeNull()
     expect(point.source).toBe('unknown')
   })
@@ -58,13 +62,15 @@ describe('buildPatrimonioChartData', () => {
     ])
 
     expect(point.resultado).toBe(0)
+    expect(point.ganho).toBe(0)
+    expect(point.perda).toBe(0)
     expect(point.twr).toBe(0)
     expect(point.source).toBe('db_derived_class_history')
   })
 })
 
 describe('getSymmetricAxisLimit', () => {
-  it('creates the same distance above and below zero', () => {
+  it('covers the applied capital plus positive gain and the negative loss', () => {
     const points = buildPatrimonioChartData([
       {
         date: '2026-06-30',
@@ -83,7 +89,7 @@ describe('getSymmetricAxisLimit', () => {
     const limit = getSymmetricAxisLimit(points)
 
     expect(limit).toBeGreaterThan(23000)
-    expect([-limit, limit]).toEqual([-limit, limit])
+    expect(limit).toBeGreaterThan(1851.77)
   })
 
   it('uses a safe domain for a zeroed portfolio', () => {
