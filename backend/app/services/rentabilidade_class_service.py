@@ -32,6 +32,17 @@ async def _latest_snapshots_by_class(
     return latest
 
 
+def _group_asset_type(group: dict) -> str:
+    direct = group.get("asset_type") or group.get("type")
+    if direct:
+        return str(direct).upper()
+    for position in group.get("positions", []):
+        value = position.get("asset_type")
+        if value:
+            return str(value).upper()
+    return ""
+
+
 async def get_canonical_class_performance(
     db: AsyncSession,
     portfolio_id: int,
@@ -49,7 +60,7 @@ async def get_canonical_class_performance(
     rows: list[dict] = []
 
     for group in groups:
-        asset_type = str(group.get("asset_type") or group.get("type") or "").upper()
+        asset_type = _group_asset_type(group)
         if not asset_type:
             continue
 
@@ -72,7 +83,7 @@ async def get_canonical_class_performance(
                     current_value / total_portfolio_value * 100,
                     4,
                 ) if total_portfolio_value > 0 else 0.0,
-                "asset_count": len(group.get("positions", [])),
+                "asset_count": int(group.get("count") or len(group.get("positions", []))),
                 "twr_available": bool(snapshot is not None and status.get("available")),
                 "daily_twr_pct": float(snapshot.daily_return_pct) if snapshot else None,
                 "accumulated_twr_pct": (
