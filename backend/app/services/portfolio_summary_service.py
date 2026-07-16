@@ -1,18 +1,19 @@
 """Fonte canonica para os KPIs consolidados de uma carteira.
 
-Este modulo concentra a semantica financeira exibida em Resumo, Patrimonio e
-futuros consumidores. A coleta de posicoes, cotacoes, renda fixa e proventos
-continua em servicos especializados; a composicao final dos indicadores passa
-por ``build_portfolio_summary``.
+O snapshot patrimonial mais recente e a fonte primaria dos valores financeiros.
+A recomposicao por posicoes permanece apenas como contingencia explicita para
+carteiras que ainda nao possuem snapshots.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cache import cache_get, cache_set
+from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.services.fixed_income_valuation_service import get_fixed_income_totals
 from app.services.fx_service import get_usd_brl_today
 from app.services.portfolio_service import (
@@ -95,19 +96,52 @@ def build_portfolio_summary(data: PortfolioSummaryInput) -> dict:
     }
 
 
-async def get_canonical_portfolio_summary(
+async def _get_latest_snapshot(
     db: AsyncSession,
     portfolio_id: int,
-    user_id: int,
+) -> PortfolioSnapshot | None:
+    result = await db.execute(
+        select(PortfolioSnapshot)
+        .where(PortfolioSnapshot.portfolio_id == portfolio_id)
+        .order_by(PortfolioSnapshot.snapshot_date.desc())
+        .limit(1)
+    )
+    return result.scalars().first()
+
+
+async def _build_summary_from_latest_snapshot(
+    db: AsyncSession,
+    portfolio_id: int,
+    snapshot: PortfolioSnapshot,
 ) -> dict:
-    """Coleta os dados especializados e retorna o resumo financeiro canonico."""
-    await get_portfolio(db, portfolio_id, user_id)
+    cutoff_12m = (datetime.now(timezone.utc) - timedelta(days=365)).date()
+    dividends_12m = await sum_dividends(db, portfolio_id, cutoff=cutoff_12m)
 
-    cache_key = _cache_key(portfolio_id, "summary")
-    cached = await cache_get(cache_key)
-    if cached:
-        return cached
+    summary = build_portfolio_summary(
+        PortfolioSummaryInput(
+            total_invested=float(snapshot.cost_basis),
+            current_value=float(snapshot.market_value),
+            dividends_12m=dividends_12m,
+            total_dividends=float(snapshot.dividends_accumulated),
+            realized_pnl=float(snapshot.realized_pnl),
+            has_partial_prices=bool(snapshot.has_partial_prices),
+            usd_brl_rate=await get_usd_brl_today(db),
+        )
+    )
+    summary.update(
+        {
+            "snapshot_date": snapshot.snapshot_date.isoformat(),
+            "summary_source": "portfolio_snapshot",
+            "return_is_estimated": bool(snapshot.return_is_estimated),
+        }
+    )
+    return summary
 
+
+async def _build_summary_from_valuation_fallback(
+    db: AsyncSession,
+    portfolio_id: int,
+) -> dict:
     enriched = await _non_fixed_income_enriched(db, portfolio_id)
     fixed_income = await get_fixed_income_totals(db, portfolio_id)
 
@@ -146,6 +180,34 @@ async def get_canonical_portfolio_summary(
             usd_brl_rate=await get_usd_brl_today(db),
         )
     )
+    summary.update(
+        {
+            "snapshot_date": None,
+            "summary_source": "valuation_fallback",
+            "return_is_estimated": True,
+        }
+    )
+    return summary
+
+
+async def get_canonical_portfolio_summary(
+    db: AsyncSession,
+    portfolio_id: int,
+    user_id: int,
+) -> dict:
+    """Retorna KPIs do snapshot mais recente ou contingencia sem snapshot."""
+    await get_portfolio(db, portfolio_id, user_id)
+
+    cache_key = _cache_key(portfolio_id, "summary")
+    cached = await cache_get(cache_key)
+    if cached:
+        return cached
+
+    snapshot = await _get_latest_snapshot(db, portfolio_id)
+    if snapshot is not None:
+        summary = await _build_summary_from_latest_snapshot(db, portfolio_id, snapshot)
+    else:
+        summary = await _build_summary_from_valuation_fallback(db, portfolio_id)
 
     await cache_set(cache_key, summary, ttl=_CACHE_TTL)
     return summary
