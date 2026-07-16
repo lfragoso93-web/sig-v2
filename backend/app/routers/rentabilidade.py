@@ -16,10 +16,8 @@ from app.core.auth import get_current_user
 from app.models.user import User
 from app.models.portfolio import Portfolio
 from app.services.rentabilidade_kpi_service import get_rentabilidade_kpis
-from app.services.rentabilidade_service import (
-    get_rentabilidade_por_ativo,
-    get_rentabilidade_por_classe,
-)
+from app.services.rentabilidade_service import get_rentabilidade_por_ativo
+from app.services.rentabilidade_class_service import get_canonical_class_performance
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +45,7 @@ async def rentabilidade_kpis(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """KPIs atuais canônicos combinados com métricas históricas de retorno."""
+    """KPIs atuais canônicos combinados com métricas históricas TWR."""
     await _assert_owner(db, portfolio_id, current_user.id)
     return await get_rentabilidade_kpis(db, portfolio_id, current_user.id)
 
@@ -58,10 +56,7 @@ async def rentabilidade_ativos(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Rentabilidade por ativo: posições abertas (com cotação atual)
-    e posições zeradas (com lucro/prejuízo realizado acumulado).
-    """
+    """Resultado por ativo; não representa TWR individual."""
     await _assert_owner(db, portfolio_id, current_user.id)
     return await get_rentabilidade_por_ativo(db, portfolio_id)
 
@@ -72,9 +67,10 @@ async def rentabilidade_classes(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Rentabilidade agrupada por classe de ativo (ACAO, FII, ETF, etc.)
-    com alocação percentual sobre o patrimônio total.
-    """
+    """Valuation intradiário e TWR fechado canônico por classe."""
     await _assert_owner(db, portfolio_id, current_user.id)
-    return await get_rentabilidade_por_classe(db, portfolio_id)
+    return await get_canonical_class_performance(
+        db,
+        portfolio_id,
+        current_user.id,
+    )
