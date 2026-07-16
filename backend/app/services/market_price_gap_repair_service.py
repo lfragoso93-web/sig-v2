@@ -2,26 +2,28 @@
 
 Ordem de fontes:
 1. BRAPI para ativos brasileiros;
-2. Yahoo Finance com period=max quando a BRAPI não cobrir a série.
+2. Yahoo Finance com period=max;
+3. B3 COTAHIST para ativos deslistados ou séries ainda incompletas.
 
 O serviço é idempotente e não remove preços existentes.
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.core.asset_types import yf_ticker
 from app.core.database import AsyncSessionLocal
+from app.integrations.b3_cotahist import fetch_b3_cotahist
 from app.integrations.brapi import fetch_fii_historical_v2, fetch_stocks_historical_v2
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
+from app.models.transaction import Transaction
 from app.services.asset_last_price_refresh_service import refresh_asset_last_prices
 from app.services.price_history_service import _run_yf_with_throttle
 
@@ -37,6 +39,8 @@ class MarketGapRepairItem:
     source: str | None = None
     received: int = 0
     inserted: int = 0
+    transaction_start: str | None = None
+    first_price: str | None = None
     error: str | None = None
 
 
@@ -70,7 +74,10 @@ def _fetch_yahoo_max_sync(symbol: str) -> list[tuple[datetime, float]]:
     return rows
 
 
-async def _fetch_rows(ticker: str, asset_type: AssetType) -> tuple[list[tuple[datetime, float]], str]:
+async def _fetch_provider_rows(
+    ticker: str,
+    asset_type: AssetType,
+) -> tuple[list[tuple[datetime, float]], str]:
     rows: list[tuple[datetime, float]] = []
     source = ""
     try:
@@ -87,16 +94,36 @@ async def _fetch_rows(ticker: str, asset_type: AssetType) -> tuple[list[tuple[da
     except Exception as exc:
         logger.warning("[market_gap_repair] BRAPI falhou ticker=%s erro=%s", ticker, exc)
 
-    if rows:
-        return rows, source
-
     symbol = yf_ticker(ticker, asset_type)
-    try:
-        rows = await _run_yf_with_throttle(_fetch_yahoo_max_sync, symbol)
-        return rows, "yfinance_period_max_repair"
-    except Exception as exc:
-        logger.warning("[market_gap_repair] Yahoo falhou ticker=%s symbol=%s erro=%s", ticker, symbol, exc)
-        return [], ""
+    if not rows:
+        try:
+            rows = await _run_yf_with_throttle(_fetch_yahoo_max_sync, symbol)
+            source = "yfinance_period_max_repair"
+        except Exception as exc:
+            logger.warning("[market_gap_repair] Yahoo falhou ticker=%s symbol=%s erro=%s", ticker, symbol, exc)
+    return rows, source
+
+
+async def _persist_rows(db, asset_id: int, rows: list[tuple[datetime, float]], source: str) -> int:
+    inserted_count = 0
+    for timestamp, close in rows:
+        if close <= 0:
+            continue
+        stmt = (
+            pg_insert(AssetPrice)
+            .values(
+                asset_id=asset_id,
+                timestamp=timestamp,
+                close=Decimal(str(round(close, 8))),
+                source=source,
+            )
+            .on_conflict_do_nothing(constraint="uq_price_asset_timestamp")
+            .returning(AssetPrice.id)
+        )
+        inserted = await db.execute(stmt)
+        if inserted.scalar_one_or_none() is not None:
+            inserted_count += 1
+    return inserted_count
 
 
 async def repair_market_price_gaps(
@@ -107,7 +134,7 @@ async def repair_market_price_gaps(
     touched: set[int] = set()
 
     async with AsyncSessionLocal() as db:
-        assets_result = await db.execute(select(Asset).where(Asset.ticker.in_(requested)))
+        assets_result = await db.execute(select(Asset).where(func.upper(Asset.ticker).in_(requested)))
         assets = {str(asset.ticker).upper(): asset for asset in assets_result.scalars().all()}
 
         for ticker in requested:
@@ -121,34 +148,55 @@ async def repair_market_price_gaps(
             try:
                 asset_type = AssetType(getattr(asset.asset_type, "value", asset.asset_type))
                 item.asset_type = asset_type.value
-                rows, source = await _fetch_rows(ticker, asset_type)
+
+                tx_start_result = await db.execute(
+                    select(func.min(Transaction.date)).where(func.upper(Transaction.ticker) == ticker)
+                )
+                tx_start = tx_start_result.scalar_one_or_none()
+                item.transaction_start = tx_start.isoformat() if tx_start else None
+                start_year = tx_start.year if tx_start else max(datetime.now(timezone.utc).year - 10, 2000)
+
+                rows, source = await _fetch_provider_rows(ticker, asset_type)
+                inserted = await _persist_rows(db, int(asset.id), rows, source or "market_gap_repair")
+
+                first_price_result = await db.execute(
+                    select(func.min(AssetPrice.timestamp)).where(AssetPrice.asset_id == int(asset.id))
+                )
+                first_price = first_price_result.scalar_one_or_none()
+
+                needs_b3 = not rows or (
+                    tx_start is not None
+                    and (first_price is None or first_price.date() > tx_start)
+                )
+                if needs_b3:
+                    b3_rows = await fetch_b3_cotahist(
+                        ticker,
+                        start_year=max(start_year - 1, 2000),
+                        end_year=datetime.now(timezone.utc).year,
+                    )
+                    b3_inserted = await _persist_rows(db, int(asset.id), b3_rows, "b3_cotahist")
+                    if b3_rows:
+                        rows = b3_rows
+                        source = "b3_cotahist"
+                    inserted += b3_inserted
+
+                await db.commit()
+                first_price_result = await db.execute(
+                    select(func.min(AssetPrice.timestamp)).where(AssetPrice.asset_id == int(asset.id))
+                )
+                first_price = first_price_result.scalar_one_or_none()
+                item.first_price = first_price.date().isoformat() if first_price else None
                 item.source = source or None
                 item.received = len(rows)
-                for timestamp, close in rows:
-                    if close <= 0:
-                        continue
-                    stmt = (
-                        pg_insert(AssetPrice)
-                        .values(
-                            asset_id=int(asset.id),
-                            timestamp=timestamp,
-                            close=Decimal(str(round(close, 8))),
-                            source=source or "market_gap_repair",
-                        )
-                        .on_conflict_do_nothing(constraint="uq_price_asset_timestamp")
-                        .returning(AssetPrice.id)
-                    )
-                    inserted = await db.execute(stmt)
-                    if inserted.scalar_one_or_none() is not None:
-                        item.inserted += 1
-                if rows:
+                item.inserted = inserted
+
+                if first_price is not None:
                     touched.add(int(asset.id))
                     result.repaired += 1
-                    result.inserted += item.inserted
+                    result.inserted += inserted
                 else:
                     item.error = "history_unavailable"
                     result.errors += 1
-                await db.commit()
             except Exception as exc:
                 await db.rollback()
                 item.error = str(exc)
