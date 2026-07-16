@@ -12,7 +12,7 @@ import {
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import type { MonthlyPoint } from '@/hooks/useEvolution'
-import { formatBRL, formatPercent } from '@/utils/format'
+import { formatBRL } from '@/utils/format'
 
 interface Props {
   data: MonthlyPoint[]
@@ -35,16 +35,12 @@ function tooltipLabelFormatter(label: unknown): string {
   }
 }
 
-function tooltipFormatter(
-  value: unknown,
-  name: unknown,
-): [string, string] {
+function tooltipFormatter(value: unknown, name: unknown): [string, string] {
   const num = typeof value === 'number' ? value : Number(value ?? 0)
   const key = String(name ?? '')
-  if (key === 'return_pct') return [formatPercent(num), 'Rentabilidade']
   return [
     formatBRL(num),
-    key === 'value' ? 'Valor de mercado' : 'Investido',
+    key === 'value' ? 'Patrimônio no fechamento' : 'Custo das posições abertas',
   ]
 }
 
@@ -52,7 +48,7 @@ export default function EvolutionBarChart({ data }: Props) {
   if (!data.length) {
     return (
       <div className="flex items-center justify-center h-64 text-sm" style={{ color: 'var(--color-text-muted)' }}>
-        Sem dados mensais para o periodo selecionado.
+        Sem dados mensais para o período selecionado.
       </div>
     )
   }
@@ -60,11 +56,7 @@ export default function EvolutionBarChart({ data }: Props) {
   return (
     <ResponsiveContainer width="100%" height={280}>
       <BarChart data={data} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
-        <CartesianGrid
-          strokeDasharray="3 3"
-          stroke="var(--color-divider)"
-          vertical={false}
-        />
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-divider)" vertical={false} />
         <XAxis
           dataKey="date"
           tickFormatter={xTickFormatter}
@@ -84,11 +76,11 @@ export default function EvolutionBarChart({ data }: Props) {
           labelFormatter={tooltipLabelFormatter as never}
           formatter={tooltipFormatter as never}
           contentStyle={{
-            background:   'var(--color-surface-2)',
-            border:       '1px solid var(--color-border)',
+            background: 'var(--color-surface-2)',
+            border: '1px solid var(--color-border)',
             borderRadius: 8,
-            fontSize:     12,
-            color:        'var(--color-text)',
+            fontSize: 12,
+            color: 'var(--color-text)',
           }}
           itemStyle={{ color: 'var(--color-text)' }}
           labelStyle={{ fontWeight: 600, marginBottom: 4, color: 'var(--color-text-muted)' }}
@@ -96,28 +88,19 @@ export default function EvolutionBarChart({ data }: Props) {
         <Legend
           iconType="circle"
           iconSize={8}
-          formatter={name =>
-            name === 'value' ? 'Valor de mercado' : 'Investido'
-          }
+          formatter={name => name === 'value' ? 'Patrimônio no fechamento' : 'Custo das posições abertas'}
           wrapperStyle={{ fontSize: 12, paddingTop: 8, color: 'var(--color-text-muted)' }}
         />
-        <Bar dataKey="invested" fill="var(--color-surface-dynamic)" radius={[3, 3, 0, 0]}>
+        <Bar dataKey="invested" radius={[3, 3, 0, 0]}>
           {data.map((_, i) => (
-            <Cell
-              key={i}
-              fill="oklch(from var(--color-text-muted) l c h / 0.25)"
-            />
+            <Cell key={i} fill="oklch(from var(--color-text-muted) l c h / 0.25)" />
           ))}
         </Bar>
         <Bar dataKey="value" radius={[3, 3, 0, 0]}>
           {data.map((d, i) => (
             <Cell
               key={i}
-              fill={
-                d.value >= d.invested
-                  ? 'var(--color-primary)'
-                  : 'var(--color-notification)'
-              }
+              fill={d.value >= d.invested ? 'var(--color-primary)' : 'var(--color-notification)'}
             />
           ))}
         </Bar>
