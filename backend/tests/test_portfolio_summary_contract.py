@@ -99,8 +99,8 @@ async def test_intraday_valuation_is_used_with_closed_snapshot_twr(monkeypatch) 
     )
     monkeypatch.setattr(
         portfolio_summary_service,
-        "sum_dividends",
-        AsyncMock(return_value=Decimal("180.00")),
+        "_get_received_dividend_totals",
+        AsyncMock(return_value=(180.0, 720.0)),
     )
     monkeypatch.setattr(
         portfolio_summary_service,
@@ -113,8 +113,11 @@ async def test_intraday_valuation_is_used_with_closed_snapshot_twr(monkeypatch) 
     assert summary["total_patrimonio"] == 12_800
     assert summary["total_investido"] == 10_200
     assert summary["variacao_valor"] == 2_600
+    assert summary["total_proventos"] == 720
+    assert summary["dividendos_recebidos_12m"] == 180
     assert summary["rentabilidade_total"] == 9.8765
     assert summary["performance_as_of"] == "2026-07-15"
+    assert summary["proventos_source"] == "received_cash_dividends"
     assert summary["valuation_mode"] == "intraday"
     assert summary["valuation_updated_at"] == "2026-07-16T14:30:00+00:00"
     assert summary["summary_source"] == "intraday_valuation_with_snapshot_twr"
@@ -144,7 +147,11 @@ async def test_intraday_summary_does_not_compare_market_value_to_closed_snapshot
             "valuation_updated_at": None,
         }),
     )
-    monkeypatch.setattr(portfolio_summary_service, "sum_dividends", AsyncMock(return_value=0.0))
+    monkeypatch.setattr(
+        portfolio_summary_service,
+        "_get_received_dividend_totals",
+        AsyncMock(return_value=(0.0, 0.0)),
+    )
     monkeypatch.setattr(portfolio_summary_service, "get_usd_brl_today", AsyncMock(return_value=1.0))
 
     summary = await _build_summary_from_latest_snapshot(AsyncMock(), 1, snapshot)
