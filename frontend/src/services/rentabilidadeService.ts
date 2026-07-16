@@ -25,17 +25,19 @@ export interface RentabilidadeKpis {
 export interface RentabilidadeAtivo {
   ticker: string
   name: string
-  asset_type: string
+  asset_type: string | null
   quantity: number
   avg_price: number
+  current_price: number | null
   total_invested: number
   current_value: number
   unrealized_pnl: number
-  unrealized_pct: number
+  unrealized_pct: number | null
   realized_pnl: number
   total_pnl: number
-  total_pnl_pct: number
+  total_pnl_pct: number | null
   is_open: boolean
+  result_source: 'canonical_positions_and_realized_pnl' | 'canonical_realized_pnl'
 }
 
 export type ClassValuationMethod =
