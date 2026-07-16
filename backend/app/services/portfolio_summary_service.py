@@ -6,6 +6,7 @@ carteiras que ainda nao possuem snapshots.
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -16,6 +17,7 @@ from app.core.cache import cache_get, cache_set
 from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.services.fixed_income_valuation_service import get_fixed_income_totals
 from app.services.fx_service import get_usd_brl_today
+from app.services.portfolio_reconciliation_service import reconcile_snapshot_summary
 from app.services.portfolio_service import (
     _MARKET_PRICE_TYPES,
     _cache_key,
@@ -25,6 +27,7 @@ from app.services.portfolio_service import (
 )
 from app.services.realized_pnl_service import get_realized_pnl
 
+logger = logging.getLogger(__name__)
 _CACHE_TTL = 120
 
 
@@ -77,7 +80,6 @@ def build_portfolio_summary(data: PortfolioSummaryInput) -> dict:
     )
 
     return {
-        # Contrato canonico
         "total_patrimonio": round(current_value, 2),
         "total_investido": round(total_invested, 2),
         "lucro_total": round(total_profit, 2),
@@ -104,7 +106,6 @@ def build_portfolio_summary(data: PortfolioSummaryInput) -> dict:
         "has_partial_prices": bool(data.has_partial_prices),
         "assets_without_price": list(data.assets_without_price),
         "usd_brl_rate": round(float(data.usd_brl_rate), 4),
-        # Aliases legados mantidos durante a migracao
         "total_invested": round(total_invested, 2),
         "current_value": round(current_value, 2),
         "total_gain": round(unrealized_pnl, 2),
@@ -153,6 +154,19 @@ async def _build_summary_from_latest_snapshot(
             "return_is_estimated": bool(snapshot.return_is_estimated),
         }
     )
+
+    reconciliation = reconcile_snapshot_summary(snapshot, summary)
+    summary["reconciliation"] = reconciliation
+    summary["is_reconciled"] = reconciliation["is_reconciled"]
+    if not reconciliation["is_reconciled"]:
+        logger.error(
+            "[summary_reconciliation] portfolio=%s snapshot_date=%s failed_fields=%s checks=%s",
+            portfolio_id,
+            snapshot.snapshot_date,
+            reconciliation["failed_fields"],
+            reconciliation["checks"],
+        )
+
     return summary
 
 
@@ -203,6 +217,8 @@ async def _build_summary_from_valuation_fallback(
             "snapshot_date": None,
             "summary_source": "valuation_fallback",
             "return_is_estimated": True,
+            "is_reconciled": None,
+            "reconciliation": None,
         }
     )
     return summary
