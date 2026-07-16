@@ -69,8 +69,8 @@ Este documento preserva o histórico de sprints. O acompanhamento modular atual 
 
 ### Sprint 5N — Treasury Catalog v2
 
-- [x] Tesouro Transparente como fonte principal.
-- [x] Brapi como fallback.
+- [x] Fonte oficial do Tesouro como origem principal.
+- [x] Provedor complementar como fallback.
 - [x] Catálogo oficial idempotente.
 - [x] Deduplicação de aliases legados.
 - [x] RendA+ e Educa+ normalizados pelo ano comercial.
