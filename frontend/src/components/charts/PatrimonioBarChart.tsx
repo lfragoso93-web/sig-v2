@@ -1,6 +1,7 @@
 import {
   BarChart,
   Bar,
+  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -41,6 +42,8 @@ export interface ChartPoint {
   patrimonio: number
   aplicado: number
   resultado: number
+  baseVisual: number
+  resultadoVisual: number
   twr: number | null
   partial: boolean
   estimated: boolean
@@ -51,12 +54,19 @@ export function buildPatrimonioChartData(data: PatrimonioHistoryPoint[]): ChartP
   return data.map(point => {
     const patrimonio = Number(point.value || 0)
     const aplicado = Number(point.invested || 0)
+    const resultado = Number(point.capital_result ?? patrimonio - aplicado)
+
     return {
       name: monthLabel(point.period ?? point.date.slice(0, 7)),
       date: point.date,
       patrimonio,
       aplicado,
-      resultado: Number(point.capital_result ?? patrimonio - aplicado),
+      resultado,
+      // A faixa de resultado precisa permanecer visível também quando negativa.
+      // Por isso a barra-base usa o menor valor e a diferença é desenhada como
+      // magnitude positiva, recebendo cor vermelha ou verde conforme o sinal real.
+      baseVisual: Math.min(patrimonio, aplicado),
+      resultadoVisual: Math.abs(resultado),
       twr: point.accumulated_return_pct !== undefined
         && Number.isFinite(Number(point.accumulated_return_pct))
         ? Number(point.accumulated_return_pct)
@@ -185,7 +195,7 @@ export default function PatrimonioBarChart({ data, loading }: Props) {
           wrapperStyle={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}
         />
         <Bar
-          dataKey="aplicado"
+          dataKey="baseVisual"
           name="Valor aplicado"
           stackId="patrimonio"
           fill="var(--color-success)"
@@ -193,13 +203,21 @@ export default function PatrimonioBarChart({ data, loading }: Props) {
           maxBarSize={42}
         />
         <Bar
-          dataKey="resultado"
+          dataKey="resultadoVisual"
           name="Ganho / perda de capital"
           stackId="patrimonio"
-          fill="oklch(from var(--color-success) l c h / 0.55)"
           radius={[3, 3, 3, 3]}
           maxBarSize={42}
-        />
+        >
+          {chartData.map(point => (
+            <Cell
+              key={`${point.date}-${point.resultado}`}
+              fill={point.resultado >= 0
+                ? 'oklch(from var(--color-success) l c h / 0.55)'
+                : 'var(--color-notification)'}
+            />
+          ))}
+        </Bar>
       </BarChart>
     </ResponsiveContainer>
   )
