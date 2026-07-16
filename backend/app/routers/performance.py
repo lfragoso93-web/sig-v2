@@ -8,28 +8,18 @@ from app.services.portfolio_snapshot_read_service import (
     get_enriched_daily_evolution,
     get_enriched_monthly_evolution,
 )
-from app.services.portfolio_snapshot_twr_service import (
-    backfill_snapshots_with_returns,
-)
+from app.services.portfolio_snapshot_twr_service import backfill_snapshots_with_returns
 from app.models.portfolio import Portfolio
 from sqlalchemy import select
 import logging
 
 logger = logging.getLogger(__name__)
-
 router = APIRouter(tags=["performance"])
 
 
-async def _assert_portfolio_owner(
-    db: AsyncSession,
-    portfolio_id: int,
-    user_id: int,
-) -> None:
+async def _assert_portfolio_owner(db: AsyncSession, portfolio_id: int, user_id: int) -> None:
     result = await db.execute(
-        select(Portfolio).where(
-            Portfolio.id == portfolio_id,
-            Portfolio.user_id == user_id,
-        )
+        select(Portfolio).where(Portfolio.id == portfolio_id, Portfolio.user_id == user_id)
     )
     if result.scalar_one_or_none() is None:
         raise HTTPException(status_code=404, detail="Carteira nao encontrada.")
@@ -48,7 +38,7 @@ async def portfolio_performance(
 @router.get("/{portfolio_id}/evolution/daily")
 async def evolution_daily(
     portfolio_id: int,
-    days: int = Query(default=365, ge=7, le=3650, description="Numero de dias para buscar (7-3650)"),
+    days: int = Query(default=365, ge=0, le=3650, description="Dias para buscar; 0 retorna todo o histórico"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -60,7 +50,7 @@ async def evolution_daily(
 @router.get("/{portfolio_id}/evolution/monthly")
 async def evolution_monthly(
     portfolio_id: int,
-    months: int = Query(default=12, ge=1, le=120, description="Numero de meses para buscar (1-120)"),
+    months: int = Query(default=12, ge=0, le=120, description="Meses para buscar; 0 retorna todo o histórico"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
