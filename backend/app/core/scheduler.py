@@ -8,58 +8,57 @@ scheduler = AsyncIOScheduler(timezone="America/Sao_Paulo")
 BRAPI_CHUNK_DELAY = 1.0
 
 
+def _intraday_quote_triggers() -> tuple[CronTrigger, CronTrigger]:
+    """Retorna a cadência de 90 minutos entre 09:00 e 18:00 em dias úteis."""
+    return (
+        CronTrigger(day_of_week="mon-fri", hour="9,12,15,18", minute=0),
+        CronTrigger(day_of_week="mon-fri", hour="10,13,16", minute=30),
+    )
+
+
 def start_scheduler() -> None:
     """Registra jobs operacionais e de manutenção de dados de mercado."""
 
-    @scheduler.scheduled_job(CronTrigger(day_of_week="mon-fri", hour="9-18", minute="*/15"), id="update_quotes_acoes", name="Atualizar cotacoes BRAPI — ACAO")
-    async def update_quotes_acoes():
-        from app.core.database import AsyncSessionLocal
-        from app.models.asset import AssetType
-        from app.services.quote_cache_invalidation_service import refresh_quotes_and_invalidate
-        async with AsyncSessionLocal() as db:
-            try:
-                updated, invalidated = await refresh_quotes_and_invalidate(db, [AssetType.ACAO])
-                logger.info("[scheduler] ACAO: %s preços, %s carteiras invalidadas", updated, invalidated)
-            except Exception as e:
-                logger.error("[scheduler] Erro ao atualizar ACAO: %s", e)
+    intraday_full_hour, intraday_half_hour = _intraday_quote_triggers()
 
-    @scheduler.scheduled_job(CronTrigger(day_of_week="mon-fri", hour="9-18", minute="*/15"), id="update_quotes_fiis", name="Atualizar cotacoes BRAPI — FII")
-    async def update_quotes_fiis():
+    @scheduler.scheduled_job(
+        intraday_full_hour,
+        id="update_quotes_intraday_full_hour",
+        name="Atualizar cotações intradiárias — lote completo (hora cheia)",
+        max_instances=1,
+        coalesce=True,
+    )
+    @scheduler.scheduled_job(
+        intraday_half_hour,
+        id="update_quotes_intraday_half_hour",
+        name="Atualizar cotações intradiárias — lote completo (meia hora)",
+        max_instances=1,
+        coalesce=True,
+    )
+    async def update_quotes_intraday():
         from app.core.database import AsyncSessionLocal
         from app.models.asset import AssetType
         from app.services.quote_cache_invalidation_service import refresh_quotes_and_invalidate
-        async with AsyncSessionLocal() as db:
-            try:
-                updated, invalidated = await refresh_quotes_and_invalidate(db, [AssetType.FII])
-                logger.info("[scheduler] FII: %s preços, %s carteiras invalidadas", updated, invalidated)
-            except Exception as e:
-                logger.error("[scheduler] Erro ao atualizar FII: %s", e)
 
-    @scheduler.scheduled_job(CronTrigger(day_of_week="mon-fri", hour="9-18", minute="*/15"), id="update_quotes_etf_bdr", name="Atualizar cotacoes BRAPI — ETF_NACIONAL / BDR")
-    async def update_quotes_etf_bdr():
-        from app.core.database import AsyncSessionLocal
-        from app.models.asset import AssetType
-        from app.services.quote_cache_invalidation_service import refresh_quotes_and_invalidate
-        types = [AssetType.ETF_NACIONAL, AssetType.BDR]
+        asset_types = [
+            AssetType.ACAO,
+            AssetType.FII,
+            AssetType.ETF_NACIONAL,
+            AssetType.BDR,
+            AssetType.STOCK,
+            AssetType.ETF_INTERNACIONAL,
+            AssetType.CRIPTO,
+        ]
         async with AsyncSessionLocal() as db:
             try:
-                updated, invalidated = await refresh_quotes_and_invalidate(db, types)
-                logger.info("[scheduler] ETF/BDR: %s preços, %s carteiras invalidadas", updated, invalidated)
+                updated, invalidated = await refresh_quotes_and_invalidate(db, asset_types)
+                logger.info(
+                    "[scheduler] Intraday: %s preços, %s carteiras invalidadas",
+                    updated,
+                    invalidated,
+                )
             except Exception as e:
-                logger.error("[scheduler] Erro ao atualizar ETF_NACIONAL/BDR: %s", e)
-
-    @scheduler.scheduled_job(CronTrigger(day_of_week="mon-fri", hour="9-18", minute="*/15"), id="update_quotes_intl", name="Atualizar cotacoes — STOCK / ETF_INTERNACIONAL")
-    async def update_quotes_intl():
-        from app.core.database import AsyncSessionLocal
-        from app.models.asset import AssetType
-        from app.services.quote_cache_invalidation_service import refresh_quotes_and_invalidate
-        types = [AssetType.STOCK, AssetType.ETF_INTERNACIONAL]
-        async with AsyncSessionLocal() as db:
-            try:
-                updated, invalidated = await refresh_quotes_and_invalidate(db, types)
-                logger.info("[scheduler] INTL: %s preços, %s carteiras invalidadas", updated, invalidated)
-            except Exception as e:
-                logger.error("[scheduler] Erro ao atualizar INTL: %s", e)
+                logger.error("[scheduler] Erro ao atualizar cotações intradiárias: %s", e)
 
     @scheduler.scheduled_job(CronTrigger(day_of_week="mon-fri", hour=7, minute=5), id="update_treasury_catalog", name="Atualizar catálogo BRAPI — Tesouro Direto")
     async def update_treasury_catalog():
@@ -137,4 +136,4 @@ def start_scheduler() -> None:
                 logger.error("[scheduler] Erro na manutencao de snapshots TWR: %s", e)
 
     scheduler.start()
-    logger.info("Scheduler iniciado — cotações intraday + Tesouro Direto + benchmarks + proventos + pipeline + cobertura global de preços + snapshots TWR")
+    logger.info("Scheduler iniciado — cotações intraday a cada 90 min + Tesouro Direto + benchmarks + proventos + pipeline + cobertura global de preços + snapshots TWR")
