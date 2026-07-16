@@ -1,7 +1,7 @@
 """Contrato financeiro dos KPIs consolidados da carteira.
 
-Estes testes documentam a semantica atual que deve ser preservada durante a
-migracao do endpoint de Resumo para os snapshots canonicos.
+Estes testes documentam a semantica preservada durante a migracao do endpoint
+de Resumo para os snapshots canonicos e fixam o TWR como rentabilidade oficial.
 """
 
 from datetime import date
@@ -26,6 +26,9 @@ CANONICAL_KEYS = {
     "variacao_valor",
     "variacao_percentual",
     "rentabilidade_total",
+    "rentabilidade_acumulada",
+    "rentabilidade_diaria",
+    "rentabilidade_source",
     "dividendos_recebidos_12m",
     "total_proventos",
     "proventos_em_carteira",
@@ -94,7 +97,7 @@ def test_total_result_combines_unrealized_realized_and_dividends() -> None:
     assert summary["lucro_total"] == 2_500
 
 
-def test_current_total_return_is_profit_over_employed_capital() -> None:
+def test_fallback_return_remains_profit_over_employed_capital() -> None:
     summary = build_portfolio_summary(
         PortfolioSummaryInput(
             total_invested=10_000,
@@ -104,8 +107,30 @@ def test_current_total_return_is_profit_over_employed_capital() -> None:
         )
     )
 
-    # Contrato temporario: ainda nao representa o TWR dos snapshots.
     assert summary["rentabilidade_total"] == 25
+    assert summary["rentabilidade_acumulada"] == 25
+    assert summary["rentabilidade_diaria"] is None
+    assert summary["rentabilidade_source"] == "valuation_fallback"
+
+
+def test_snapshot_twr_overrides_profit_over_employed_capital() -> None:
+    summary = build_portfolio_summary(
+        PortfolioSummaryInput(
+            total_invested=10_000,
+            current_value=15_000,
+            realized_pnl=2_000,
+            total_dividends=1_000,
+            accumulated_twr_pct=12.345678,
+            daily_twr_pct=-0.1234567,
+        )
+    )
+
+    # O retorno financeiro simples seria 80%, mas a rentabilidade oficial e o TWR.
+    assert summary["lucro_total"] == 8_000
+    assert summary["rentabilidade_total"] == 12.3457
+    assert summary["rentabilidade_acumulada"] == 12.3457
+    assert summary["rentabilidade_diaria"] == -0.123457
+    assert summary["rentabilidade_source"] == "snapshot_twr"
 
 
 def test_negative_portfolio_keeps_negative_signs() -> None:
@@ -137,6 +162,20 @@ def test_zero_invested_capital_does_not_divide_by_zero() -> None:
     assert summary["variacao_percentual"] == 0
     assert summary["rentabilidade_total"] == 0
     assert summary["lucro_total"] == 300
+
+
+def test_zero_cost_snapshot_preserves_nonzero_twr() -> None:
+    summary = build_portfolio_summary(
+        PortfolioSummaryInput(
+            total_invested=0,
+            current_value=0,
+            accumulated_twr_pct=8.765432,
+            daily_twr_pct=0.25,
+        )
+    )
+
+    assert summary["rentabilidade_total"] == 8.7654
+    assert summary["rentabilidade_diaria"] == 0.25
 
 
 def test_dividend_periods_remain_independent() -> None:
@@ -197,6 +236,8 @@ async def test_latest_snapshot_is_primary_source_for_summary(monkeypatch) -> Non
         cost_basis=Decimal("10000.00"),
         realized_pnl=Decimal("300.00"),
         dividends_accumulated=Decimal("700.00"),
+        daily_return_pct=Decimal("0.345678"),
+        accumulated_return_pct=Decimal("9.876543"),
         has_partial_prices=True,
         return_is_estimated=False,
     )
@@ -223,6 +264,10 @@ async def test_latest_snapshot_is_primary_source_for_summary(monkeypatch) -> Non
     assert summary["ganho_realizado"] == 300
     assert summary["total_proventos"] == 700
     assert summary["lucro_total"] == 3_500
+    assert summary["rentabilidade_total"] == 9.8765
+    assert summary["rentabilidade_acumulada"] == 9.8765
+    assert summary["rentabilidade_diaria"] == 0.345678
+    assert summary["rentabilidade_source"] == "snapshot_twr"
     assert summary["dividendos_recebidos_12m"] == 180
     assert summary["has_partial_prices"] is True
     assert summary["snapshot_date"] == "2026-07-16"
@@ -238,6 +283,8 @@ async def test_snapshot_summary_does_not_recompute_positions(monkeypatch) -> Non
         cost_basis=Decimal("900.00"),
         realized_pnl=Decimal("0.00"),
         dividends_accumulated=Decimal("0.00"),
+        daily_return_pct=Decimal("0.100000"),
+        accumulated_return_pct=Decimal("1.000000"),
         has_partial_prices=False,
         return_is_estimated=True,
     )
