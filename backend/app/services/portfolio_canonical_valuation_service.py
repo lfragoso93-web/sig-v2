@@ -23,8 +23,9 @@ from app.services.fixed_income_valuation_service import (
     _is_buy,
     _is_sell,
 )
+from app.services.lifecycle_aware_price_service import get_prices_at_date_with_lifecycle
 from app.services.portfolio_snapshot_service import _build_positions_at
-from app.services.price_history_service import get_price_at_date, get_prices_at_date_batch
+from app.services.price_history_service import get_price_at_date
 from app.services.treasury_catalog_service import resolve_treasury_symbol
 
 _ZERO = Decimal("0")
@@ -58,6 +59,8 @@ async def _base_totals_without_dedicated_lookup(
             "unrealized_pnl": _ZERO,
             "total_pnl": _ZERO,
             "return_pct": _ZERO,
+            "pre_listing_assets": 0,
+            "real_price_gaps": 0,
         }
 
     tickers = list(positions)
@@ -74,7 +77,14 @@ async def _base_totals_without_dedicated_lookup(
         if current_type not in _NON_MARKET_TYPES:
             requirements.append((ticker, current_type))
 
-    prices = await get_prices_at_date_batch(db, requirements, target_date.isoformat()) if requirements else {}
+    if requirements:
+        prices, pre_listing, real_gaps = await get_prices_at_date_with_lifecycle(
+            db,
+            requirements,
+            target_date,
+        )
+    else:
+        prices, pre_listing, real_gaps = {}, set(), set()
 
     fx_snapshot = Decimal("1")
     if any(state.is_usd for state in positions.values()):
@@ -96,7 +106,7 @@ async def _base_totals_without_dedicated_lookup(
         if current_type in _NON_MARKET_TYPES:
             close = state.avg_price
         else:
-            close = Decimal(str(prices.get(ticker, float(state.avg_price))))
+            close = Decimal(str(prices.get(ticker.upper(), float(state.avg_price))))
         close_brl = close * fx_snapshot if state.is_usd else close
         market_value += state.qty * close_brl
         cost_basis += state.cost
@@ -145,6 +155,8 @@ async def _base_totals_without_dedicated_lookup(
         "unrealized_pnl": unrealized_pnl.quantize(_MONEY),
         "total_pnl": total_pnl.quantize(_MONEY),
         "return_pct": return_pct.quantize(_PCT),
+        "pre_listing_assets": len(pre_listing),
+        "real_price_gaps": len(real_gaps),
     }
 
 
