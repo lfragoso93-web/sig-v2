@@ -7,7 +7,7 @@ Referência: 17/07/2026
 ## Objetivo
 
 Este documento inventaria os contratos, endpoints e consumidores atuais da página
-Resumo antes das correções funcionais. A página deve permanecer uma projeção do
+Resumo durante as correções funcionais. A página deve permanecer uma projeção do
 domínio financeiro canônico; nenhum consumidor frontend pode criar uma fórmula
 financeira concorrente.
 
@@ -40,9 +40,9 @@ financeira concorrente.
 | `total_patrimonio` | Soma do valor atual das posições abertas | Intradiária | Valuation canônico | Resumo e Patrimônio |
 | `total_investido` | Custo contábil atual das posições abertas | Intradiária | Valuation canônico | Resumo e Patrimônio |
 | `ganho_nao_realizado` / `variacao_valor` | Patrimônio menos custo atual | Intradiária | Derivado no backend | Resumo, Patrimônio e tabela |
-| `ganho_realizado` | Ganhos/perdas reconhecidos em vendas | Deve ser atual para o Resumo | Último snapshot quando existe | Resumo e Patrimônio |
+| `ganho_realizado` | Ganhos/perdas reconhecidos em vendas | Atual | Serviço canônico de P&L realizado | Resumo e Patrimônio |
 | `total_proventos` | Eventos monetários líquidos recebidos | Data de pagamento até hoje | Agregação canônica | Resumo e Patrimônio |
-| `lucro_total` | Não realizado + realizado + proventos | Atual | Composição de referências mistas | Resumo e Patrimônio |
+| `lucro_total` | Não realizado + realizado + proventos | Atual | Valuation + P&L realizado + proventos atuais | Resumo e Patrimônio |
 | `rentabilidade_total` | TWR acumulada | Último fechamento | Último snapshot | Resumo e Patrimônio |
 | `rentabilidade_diaria` | TWR diária | Último fechamento | Último snapshot | Resumo |
 | `dividendos_recebidos_12m` | Eventos líquidos dos últimos 365 dias | Até hoje | Agregação canônica | Resumo |
@@ -50,16 +50,11 @@ financeira concorrente.
 
 ## Achados arquiteturais
 
-### A1 — Resultado realizado pode ficar temporalmente defasado
+### A1 — Resolvido: resultado realizado atual separado do TWR fechado
 
-Quando existe snapshot, `portfolio_summary_service` usa
-`snapshot.realized_pnl` para compor `ganho_realizado` e `lucro_total`, embora
-patrimônio, custo e proventos sejam atuais. Uma venda posterior ao último snapshot
-pode deixar o “Resultado Total” temporariamente incorreto.
-
-Direção: calcular o P&L realizado atual pelo serviço canônico para os KPIs
-intradiários. O snapshot deve continuar sendo a única fonte do TWR e da performance
-fechada.
+`portfolio_summary_service` usa o serviço canônico de P&L realizado para
+`ganho_realizado` e `lucro_total`. O último snapshot permanece exclusivamente como
+fonte do TWR acumulado, TWR diário e metadados de performance fechada.
 
 ### A2 — Gráfico por classe ainda contorna `PortfolioClassSnapshot`
 
@@ -83,15 +78,11 @@ Direção: migrar o consumidor do Resumo para os endpoints `/performance`; depoi
 de confirmar ausência de outros consumidores, descontinuar o endpoint redundante
 em bloco separado.
 
-### A4 — Campo legado de rentabilidade permanece no frontend
+### A4 — Resolvido: campo legado de rentabilidade removido
 
-`PositionGroup.rentabilidade_pct` está marcado como legado, o backend canônico o
-remove explicitamente, mas `PositionTable` ainda tenta renderizá-lo como
-“Rentab. total”. O resultado hoje depende da ausência do campo, não de um contrato
-limpo.
-
-Direção: remover o campo e o ramo visual legado. Rentabilidade por classe só deve
-ser exibida quando vier de `PortfolioClassSnapshot` com referência e
+`PositionGroup.rentabilidade_pct` e o ramo visual “Rentab. total” foram removidos.
+O contrato backend de posições rejeita campos de retorno legado. Rentabilidade por
+classe só poderá retornar por `PortfolioClassSnapshot`, com referência e
 disponibilidade explícitas.
 
 ### A5 — Mapeamento permissivo pode mascarar quebra de contrato
@@ -117,11 +108,17 @@ reconciliar entre si, na mesma referência intradiária:
 Direção: adicionar reconciliação específica do valuation atual, com tolerância de
 R$ 0,01, sem comparar intraday contra snapshot fechado.
 
-### A7 — Dropdown já usa portal, mas precisa de regressão
+### A7 — Resolvido: dropdown em portal coberto por regressão
 
-O menu de ativos já é renderizado com `createPortal`, coordenadas de viewport,
-reposição em scroll/resize e containers com `overflow: visible`. A correção
-estrutural existe; falta teste de regressão com poucas e muitas linhas.
+O menu de ativos usa `createPortal`, coordenadas de viewport e reposição em
+scroll/resize. A cobertura frontend valida o comportamento com uma e vinte linhas.
+
+### A9 — Parcialmente resolvido: contrato e totais por classe
+
+`GET /portfolios/{id}/positions` possui agora `response_model` estrito para
+grupos e posições. `total_invested` é obrigatório e o frontend consome esse total
+canônico diretamente, sem somar valores arredondados por posição. Ainda falta a
+reconciliação automatizada entre summary, distribuição e grupos, descrita em A6.
 
 ### A8 — Correção do gráfico aguarda validação visual
 
@@ -141,10 +138,9 @@ publicado.
 
 ## Sequência recomendada de correção
 
-1. Adicionar testes que demonstrem o P&L realizado defasado e a reconciliação
-   intradiária ausente.
-2. Corrigir a composição monetária atual do `summary.v2` sem alterar TWR.
-3. Remover o campo legado de rentabilidade da tabela e cobrir o dropdown.
+1. Concluído: demonstrar por teste o P&L realizado defasado.
+2. Concluído: corrigir a composição monetária atual do `summary.v2` sem alterar TWR.
+3. Concluído: remover o retorno legado, validar o contrato de posições e cobrir o dropdown.
 4. Migrar o gráfico consolidado e por classe para os endpoints de performance.
 5. Remover o endpoint/recomposição redundante somente após auditar consumidores.
 6. Validar visualmente a #147.
