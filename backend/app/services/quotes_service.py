@@ -76,7 +76,7 @@ def _mem_set(ticker: str, price: float) -> None:
     _mem_cache[ticker] = (price, time.time() + MEM_CACHE_TTL)
 
 
-def _asset_lookup_stmt(ticker: str, asset_type) :
+def _asset_lookup_stmt(ticker: str, asset_type):
     at_str = _asset_type_str(asset_type)
     stmt = select(Asset).where(Asset.asset_type == at_str)
     if at_str == AssetType.TESOURO_DIRETO.value:
