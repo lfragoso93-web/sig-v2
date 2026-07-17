@@ -25,8 +25,8 @@ O SGI v2 opera com arquitetura **DB-first**: catálogo, preços, taxas, provento
 
 O fluxo usado pela página Resumo foi alinhado ao pipeline canônico:
 
-- BRAPI como fonte primária de preço recente;
-- Tesouro Transparente como fallback oficial;
+- provedor primário de mercado para preços recentes;
+- dados abertos oficiais do Tesouro como fallback;
 - último preço persistido como contingência;
 - resolução case-insensitive de tickers e aliases;
 - preço devolvido pelo ticker original da posição;
@@ -44,7 +44,7 @@ Transações
         ↓
 Catálogo canônico de ativos
         ↓
-B3 COTAHIST | Tesouro Transparente | SGS/BCB | motores dedicados
+B3 COTAHIST | dados abertos oficiais do Tesouro | séries macroeconômicas | motores dedicados
         ↓
 asset_prices / rate_history / proventos
         ↓
@@ -70,7 +70,7 @@ python -m app.cli.rebuild_treasury_official_prices
 
 ## Prioridades atuais
 
-1. Página Resumo: KPIs, variação versus rentabilidade, dropdowns e consistência visual.
+1. Página Resumo (#161): reconciliação canônica de KPIs, tabela, gráfico e contratos.
 2. Proventos: cobertura por classe, materialização e diagnósticos.
 3. Patrimônio: restaurar gráficos históricos por classe (#148).
 4. Rentabilidade: TWR dedicado para Tesouro e Renda Fixa (#149) e IBOV persistido (#150).
@@ -98,7 +98,7 @@ A primeira entrada em produção exige:
 1. backup validado;
 2. limpeza controlada de dados reconstruíveis;
 3. seed B3 COTAHIST;
-4. seed Tesouro Transparente;
+4. seed oficial do Tesouro Direto;
 5. seed de benchmarks e proventos;
 6. importação CSV completa da carteira;
 7. rebuild de posições e snapshots;
@@ -128,3 +128,4 @@ docker compose up -d --build
 - `docs/providers.md` — fontes e fallbacks.
 - `docs/operations.md` — operação e rebuilds.
 - `docs/CANONICAL_FINANCIAL_CONTRACT.md` — contrato financeiro oficial.
+- `docs/RESUMO_ARCHITECTURAL_AUDIT.md` — matriz de contratos e divergências da página Resumo.
