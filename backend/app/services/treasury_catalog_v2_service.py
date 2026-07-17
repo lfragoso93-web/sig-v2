@@ -52,6 +52,17 @@ class TreasuryCatalogV2Result:
         return asdict(self)
 
 
+@dataclass
+class OfficialTreasuryCatalogFetch:
+    catalog: dict[str, dict[str, str]]
+    resources: int = 0
+    errors: int = 0
+
+    @property
+    def complete(self) -> bool:
+        return self.resources > 0 and self.errors == 0
+
+
 def _catalog_rows(text: str) -> dict[str, dict[str, str]]:
     sample = text[:8192]
     delimiter = ";" if sample.count(";") >= sample.count(",") else ","
@@ -73,9 +84,10 @@ def _catalog_rows(text: str) -> dict[str, dict[str, str]]:
     return catalog
 
 
-async def fetch_official_treasury_catalog() -> dict[str, dict[str, str]]:
-    """Baixa e consolida todos os recursos CSV oficiais descobertos pelo CKAN."""
+async def _fetch_official_treasury_catalog_status() -> OfficialTreasuryCatalogFetch:
+    """Baixa os CSVs oficiais e informa se a leitura foi completa."""
     merged: dict[str, dict[str, str]] = {}
+    errors = 0
     async with httpx.AsyncClient(timeout=90.0, follow_redirects=True) as client:
         resources = await discover_csv_resources(client)
         for url in resources:
@@ -84,8 +96,18 @@ async def fetch_official_treasury_catalog() -> dict[str, dict[str, str]]:
                 response.raise_for_status()
                 merged.update(_catalog_rows(response.text))
             except Exception as exc:
+                errors += 1
                 logger.warning("[treasury_catalog_v2] falha recurso=%s erro=%s", url, exc)
-    return merged
+    return OfficialTreasuryCatalogFetch(
+        catalog=merged,
+        resources=len(resources),
+        errors=errors,
+    )
+
+
+async def fetch_official_treasury_catalog() -> dict[str, dict[str, str]]:
+    """Baixa e consolida os recursos CSV oficiais descobertos pelo CKAN."""
+    return (await _fetch_official_treasury_catalog_status()).catalog
 
 
 async def _migrate_asset_prices(
@@ -136,15 +158,18 @@ async def sync_treasury_catalog_v2(
     *,
     commit: bool = True,
 ) -> TreasuryCatalogV2Result:
-    """Sincroniza assets oficiais e marca, sem excluir, registros fora do catalogo."""
+    """Sincroniza assets oficiais e marca registros ausentes apenas em carga completa."""
     result = TreasuryCatalogV2Result()
     try:
-        official = await fetch_official_treasury_catalog()
+        fetched = await _fetch_official_treasury_catalog_status()
     except Exception:
         logger.exception("[treasury_catalog_v2] falha ao carregar catalogo oficial")
         result.errors += 1
         return result
 
+    official = fetched.catalog
+    result.resources = fetched.resources
+    result.errors = fetched.errors
     result.official_titles = len(official)
     if not official:
         result.errors += 1
@@ -154,37 +179,44 @@ async def sync_treasury_catalog_v2(
         select(Asset).where(Asset.asset_type == AssetType.TESOURO_DIRETO.value)
     )
     assets = list(rows.scalars().all())
-    by_exact = {str(asset.ticker or ""): asset for asset in assets}
-    official_symbols = set(official)
+    by_normalized = {
+        str(asset.ticker or "").strip().lower(): asset
+        for asset in assets
+        if str(asset.ticker or "").strip()
+    }
+    official_symbols = {symbol.lower() for symbol in official}
     now = datetime.now(timezone.utc)
     maturity_alias_ids: set[int] = set()
 
     for symbol, item in official.items():
-        asset = by_exact.get(symbol)
+        normalized_symbol = symbol.lower()
+        asset = by_normalized.get(normalized_symbol)
         if asset is None:
             asset = Asset(
-                ticker=symbol,
+                ticker=normalized_symbol,
                 name=item["name"],
                 asset_type=AssetType.TESOURO_DIRETO.value,
                 currency="BRL",
                 sector="Tesouro Direto | fonte=tesouro_transparente",
                 provider=_OFFICIAL_PROVIDER,
-                provider_symbol=symbol,
+                provider_symbol=normalized_symbol,
                 provider_status="OK",
                 provider_last_sync_at=now,
             )
             db.add(asset)
             await db.flush()
-            by_exact[symbol] = asset
+            by_normalized[normalized_symbol] = asset
             assets.append(asset)
             result.created += 1
         else:
             changed = False
             expected = {
+                "ticker": normalized_symbol,
                 "name": item["name"],
                 "currency": "BRL",
+                "sector": "Tesouro Direto | fonte=tesouro_transparente",
                 "provider": _OFFICIAL_PROVIDER,
-                "provider_symbol": symbol,
+                "provider_symbol": normalized_symbol,
                 "provider_status": "OK",
                 "provider_last_error": None,
             }
@@ -198,15 +230,12 @@ async def sync_treasury_catalog_v2(
             else:
                 result.unchanged += 1
 
-        legacy_symbol = item.get("legacy_maturity_symbol") or ""
-        # Alguns anos de vencimento tambem sao anos comerciais validos de outro
-        # titulo (principalmente Educa+). Nesses casos nao existe um alias seguro:
-        # migrar criaria uma cadeia circular e deixaria o sync nao idempotente.
+        legacy_symbol = str(item.get("legacy_maturity_symbol") or "").lower()
         if legacy_symbol and legacy_symbol in official_symbols:
             result.migration_collisions_skipped += 1
             continue
 
-        legacy_asset = by_exact.get(legacy_symbol) if legacy_symbol and legacy_symbol != symbol else None
+        legacy_asset = by_normalized.get(legacy_symbol) if legacy_symbol and legacy_symbol != normalized_symbol else None
         if legacy_asset is not None and int(legacy_asset.id) != int(asset.id):
             result.migrated_prices += await _migrate_asset_prices(
                 db,
@@ -219,27 +248,35 @@ async def sync_treasury_catalog_v2(
             maturity_alias_ids.add(int(legacy_asset.id))
             result.maturity_aliases += 1
 
-    for asset in assets:
-        if int(asset.id) in maturity_alias_ids:
-            continue
-        ticker = str(asset.ticker or "").strip()
-        lower = ticker.lower()
-        if ticker in official_symbols:
-            continue
-        if lower in official_symbols:
-            result.legacy_aliases += 1
-        if asset.provider_status != _REVIEW_STATUS or asset.provider_last_error != _REVIEW_REASON:
-            asset.provider_status = _REVIEW_STATUS
-            asset.provider_last_error = _REVIEW_REASON
-            asset.provider_last_sync_at = now
-            result.review_marked += 1
+    if fetched.complete:
+        for asset in assets:
+            if int(asset.id) in maturity_alias_ids:
+                continue
+            ticker = str(asset.ticker or "").strip()
+            normalized_ticker = ticker.lower()
+            if normalized_ticker in official_symbols:
+                continue
+            if ticker != normalized_ticker and normalized_ticker in official_symbols:
+                result.legacy_aliases += 1
+            if asset.provider_status != _REVIEW_STATUS or asset.provider_last_error != _REVIEW_REASON:
+                asset.provider_status = _REVIEW_STATUS
+                asset.provider_last_error = _REVIEW_REASON
+                asset.provider_last_sync_at = now
+                result.review_marked += 1
+    else:
+        logger.warning(
+            "[treasury_catalog_v2] carga parcial: recursos=%d erros=%d; inativacao ignorada",
+            fetched.resources,
+            fetched.errors,
+        )
 
     if commit:
         await db.commit()
 
     logger.info(
-        "[treasury_catalog_v2] official=%d created=%d updated=%d unchanged=%d review=%d aliases=%d maturity_aliases=%d migrated_prices=%d collisions=%d errors=%d",
+        "[treasury_catalog_v2] official=%d resources=%d created=%d updated=%d unchanged=%d review=%d aliases=%d maturity_aliases=%d migrated_prices=%d collisions=%d errors=%d",
         result.official_titles,
+        result.resources,
         result.created,
         result.updated,
         result.unchanged,
