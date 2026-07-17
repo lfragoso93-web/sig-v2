@@ -23,7 +23,7 @@ export interface PositionGroup {
   label: string
   count: number
   total_value: number
-  total_invested?: number
+  total_invested: number
   variation_pct?: number | null
   daily_variation_value?: number | null
   daily_variation_pct?: number | null
