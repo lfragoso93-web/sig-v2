@@ -61,8 +61,9 @@ A reconstrução limpa do catálogo, históricos e carteira ficou reservada para
 
 ## Em desenvolvimento
 
-### Página Resumo
+### Página Resumo — #161
 
+- [x] Mapear contratos, endpoints e divergências arquiteturais.
 - [ ] Revisar KPIs atuais e sinal de retorno negativo.
 - [ ] Garantir distinção entre variação diária e rentabilidade acumulada.
 - [ ] Revisar dropdowns e overflow das tabelas.
@@ -108,7 +109,7 @@ Pendente de validação isolada:
 - [ ] Dry-run da limpeza.
 - [ ] Limpeza de dados reconstruíveis.
 - [ ] Seed B3 COTAHIST.
-- [ ] Seed Tesouro Transparente.
+- [ ] Seed oficial do Tesouro Direto.
 - [ ] Seed de benchmarks e proventos.
 - [ ] Importação CSV completa da carteira.
 - [ ] Rebuild de posições e snapshots.
@@ -128,7 +129,7 @@ Pendente de validação isolada:
 ## Backlog
 
 - Eventos corporativos — #129.
-- Evolução da integração BRAPI — #130.
+- Evolução da integração de dados de mercado — #130.
 - Backup/Restore — #83.
 - Google OAuth — #97.
 - IRPF — #56.
