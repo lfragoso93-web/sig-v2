@@ -190,6 +190,7 @@ async def _build_summary_from_latest_snapshot(
 ) -> dict:
     valuation = await _get_intraday_valuation(db, portfolio_id)
     dividends_12m, total_dividends = await _get_received_dividend_totals(db, portfolio_id)
+    realized_pnl = await get_realized_pnl(db, portfolio_id)
 
     summary = build_portfolio_summary(
         PortfolioSummaryInput(
@@ -197,7 +198,7 @@ async def _build_summary_from_latest_snapshot(
             current_value=valuation["current_value"],
             dividends_12m=dividends_12m,
             total_dividends=total_dividends,
-            realized_pnl=float(snapshot.realized_pnl),
+            realized_pnl=realized_pnl,
             has_partial_prices=bool(valuation["assets_without_price"]),
             assets_without_price=valuation["assets_without_price"],
             usd_brl_rate=await get_usd_brl_today(db),

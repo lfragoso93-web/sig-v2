@@ -76,7 +76,7 @@ def test_zero_cost_snapshot_preserves_twr() -> None:
 
 
 @pytest.mark.asyncio
-async def test_intraday_valuation_is_used_with_closed_snapshot_twr(monkeypatch) -> None:
+async def test_intraday_summary_uses_current_realized_pnl_with_closed_snapshot_twr(monkeypatch) -> None:
     snapshot = SimpleNamespace(
         snapshot_date=date(2026, 7, 15),
         market_value=Decimal("12000.00"),
@@ -107,12 +107,19 @@ async def test_intraday_valuation_is_used_with_closed_snapshot_twr(monkeypatch) 
         "get_usd_brl_today",
         AsyncMock(return_value=5.55),
     )
+    monkeypatch.setattr(
+        portfolio_summary_service,
+        "get_realized_pnl",
+        AsyncMock(return_value=450.0),
+    )
 
     summary = await _build_summary_from_latest_snapshot(AsyncMock(), 7, snapshot)
 
     assert summary["total_patrimonio"] == 12_800
     assert summary["total_investido"] == 10_200
     assert summary["variacao_valor"] == 2_600
+    assert summary["ganho_realizado"] == 450
+    assert summary["lucro_total"] == 3_770
     assert summary["total_proventos"] == 720
     assert summary["dividendos_recebidos_12m"] == 180
     assert summary["rentabilidade_total"] == 9.8765
@@ -153,6 +160,11 @@ async def test_intraday_summary_does_not_compare_market_value_to_closed_snapshot
         AsyncMock(return_value=(0.0, 0.0)),
     )
     monkeypatch.setattr(portfolio_summary_service, "get_usd_brl_today", AsyncMock(return_value=1.0))
+    monkeypatch.setattr(
+        portfolio_summary_service,
+        "get_realized_pnl",
+        AsyncMock(return_value=0.0),
+    )
 
     summary = await _build_summary_from_latest_snapshot(AsyncMock(), 1, snapshot)
 
