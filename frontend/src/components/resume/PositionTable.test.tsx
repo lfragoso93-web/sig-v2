@@ -101,6 +101,21 @@ describe('PositionTable asset menu', () => {
     expect(within(menu).getAllByRole('menuitem')).toHaveLength(3)
   })
 
+  it('usa o total investido canônico do grupo sem recompor as posições', () => {
+    const group = buildGroup(1)
+    group.total_invested = 1_234.56
+
+    render(
+      <MemoryRouter>
+        <PositionTable groups={[group]} portfolioId={46} />
+      </MemoryRouter>,
+    )
+
+    const groupHeader = screen.getByText('Ações').closest('button')
+    expect(groupHeader).not.toBeNull()
+    expect(within(groupHeader as HTMLElement).getByText(/1\.234,56/)).toBeTruthy()
+  })
+
   it('ignora rentabilidade simples legada mesmo se o payload vier poluído', () => {
     const pollutedGroup = {
       ...buildGroup(1),
