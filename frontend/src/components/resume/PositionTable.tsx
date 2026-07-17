@@ -475,13 +475,11 @@ interface ClassGroupHeaderProps {
 
 function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGroupHeaderProps) {
   const { variationPct, totalInvested } = calcGroupHeaderMetrics(group)
-  const rentabilidade = group.rentabilidade_pct ?? null
   const target = group.target_pct ?? null
   const assetType = group.positions[0]?.asset_type ?? ''
   const [showTargetModal, setShowTargetModal] = useState(false)
 
   const varColor = variationPct === null ? 'var(--color-text-faint)' : variationPct >= 0 ? 'var(--color-success)' : 'var(--color-error)'
-  const rentColor = rentabilidade === null ? 'var(--color-text-faint)' : rentabilidade >= 0 ? 'var(--color-success)' : 'var(--color-error)'
 
   const Divider = () => <span style={{ width: 1, height: 12, background: 'oklch(from var(--color-text) l c h / 0.1)', flexShrink: 0 }} />
   const LabeledValue = ({ label, children }: { label: string; children: React.ReactNode }) => (
@@ -549,16 +547,6 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
               {variationPct !== null ? `${variationPct >= 0 ? '+' : ''}${formatPercent(variationPct)}` : '—'}
             </span>
           </LabeledValue>
-          {rentabilidade !== null && (
-            <>
-              <Divider />
-              <LabeledValue label="Rentab. total">
-                <span style={{ fontSize: '0.68rem', fontWeight: 500, color: rentColor, fontVariantNumeric: 'tabular-nums' }}>
-                  {rentabilidade >= 0 ? '+' : ''}{formatPercent(rentabilidade)}
-                </span>
-              </LabeledValue>
-            </>
-          )}
           <Divider />
           <span
             role="button"
