@@ -14,6 +14,7 @@ from app.schemas.portfolio import (
     ClassTargetUpsert,
     CSVImportResponse,
 )
+from app.schemas.portfolio_positions import PositionGroupResponse
 from app.services.portfolio_service import (
     create_portfolio,
     list_portfolios,
@@ -173,7 +174,11 @@ async def portfolio_summary(
     return await get_canonical_portfolio_summary(db, portfolio_id, current_user.id)
 
 
-@router.get("/{portfolio_id}/positions")
+@router.get(
+    "/{portfolio_id}/positions",
+    response_model=list[PositionGroupResponse],
+    response_model_exclude_unset=True,
+)
 async def portfolio_positions(
     portfolio_id: int,
     db: AsyncSession = Depends(get_db),
