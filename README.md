@@ -7,22 +7,26 @@ A branch padrão de desenvolvimento é `stable-15jun`.
 
 ---
 
-## Status atual — 14/07/2026
+## Status atual — 16/07/2026
 
-O SGI v2 está consolidando uma arquitetura **DB-first**: dados de mercado, proventos, benchmarks, Tesouro Direto e snapshots são persistidos antes de alimentar KPIs, páginas e gráficos. O objetivo é reduzir chamadas externas repetidas, tornar cálculos reprodutíveis e permitir auditoria por carteira, ativo e data.
+O SGI v2 opera com arquitetura **DB-first**: dados de mercado, Tesouro Direto, Renda Fixa, proventos, benchmarks e snapshots são persistidos antes de alimentar KPIs, páginas e gráficos.
 
-### Entrega estrutural em validação
+A auditoria funcional das páginas **Resumo**, **Patrimônio** e **Rentabilidade** foi concluída. Os contratos monetários atuais usam o mesmo valuation canônico; performance histórica usa exclusivamente snapshots TWR; estados estimados, cobertura parcial e referências temporais são expostos ao usuário.
 
-- Orquestrador oficial `full_market_rebuild` para manutenção completa.
-- Auditoria de cobertura por ativo e identificação de lacunas históricas.
-- Sincronização idempotente de preços apenas para intervalos faltantes.
-- Metadados persistentes de provedor por ativo (`provider`, `provider_symbol`, `provider_status`, tentativas e último erro).
-- Smart sync com estado `HISTORY_START_EXHAUSTED` para não repetir buscas antigas sem ganho.
-- Snapshots TWR reconstruídos exclusivamente a partir do banco.
-- Materialização de proventos em lotes seguros.
-- Sanitização de preços anômalos antes da persistência.
-- Tratamento dedicado para Tesouro Direto e classes sem cotação de mercado.
-- Uso de histórico máximo suportado pelo provedor quando a lacuna é de início de série.
+### Entrega consolidada
+
+- Valuation canônico por classe de ativo.
+- `summary.v2` e `rentabilidade.v2` validados em runtime.
+- Snapshots patrimoniais diários com TWR diário, mensal e acumulado.
+- Snapshots diários por classe para ativos com histórico persistido suportado.
+- Renda Fixa valorizada por motor dedicado, sem lookup genérico de preços.
+- Tesouro Direto com catálogo v2 e histórico oficial persistido.
+- Histórico oficial da B3 via COTAHIST para ações, FIIs, ETFs nacionais e BDRs.
+- Proventos líquidos recebidos agregados por competência de pagamento.
+- Benchmarks CDI e IPCA servidos pelo backend a partir de séries persistidas.
+- Reconciliação entre Resumo, Patrimônio, Rentabilidade, snapshots e classes.
+- Atualização intradiária de preços a cada 90 minutos em dias úteis.
+- `has_partial_prices`, `price_coverage_pct` e `return_is_estimated` explícitos.
 
 ---
 
@@ -33,120 +37,149 @@ Importação CSV / lançamentos manuais
         ↓
 Transações
         ↓
-Catálogo de ativos
+Catálogo canônico de ativos
         ↓
-Auditoria de cobertura
+Fontes oficiais e complementares
+        ├── B3 COTAHIST: histórico de renda variável brasileira
+        ├── fonte oficial do Tesouro: catálogo e histórico de títulos
+        ├── SGS/BCB: CDI, Selic, IPCA e IGP-M
+        ├── motor de Renda Fixa: contratos e indexadores
+        └── provedores complementares: atualização recente e contingência
         ↓
-Gap sync de preços e dados canônicos
+asset_prices / rate_history / proventos
         ↓
-asset_prices / proventos / benchmarks / Tesouro
+Valuation canônico por classe
         ↓
-Snapshots patrimoniais + TWR
+PortfolioSnapshot + PortfolioClassSnapshot
         ↓
-KPIs canônicos
+TWR + reconciliação + cobertura
         ↓
-Resumo, Patrimônio, Rentabilidade e Dashboard
+summary.v2 / rentabilidade.v2 / posições canônicas
+        ↓
+Resumo, Patrimônio, Rentabilidade e demais módulos
 ```
 
-Princípios atuais:
+Princípios:
 
-- **DB-first:** cálculos de carteira leem dados persistidos; não consultam provedores externos durante snapshots.
-- **Idempotência:** executar o rebuild novamente não deve duplicar registros nem repetir lacunas já esgotadas.
-- **Sessões curtas:** chamadas externas acontecem fora de transações longas do banco.
-- **Separação por classe:** ativos cotados, Tesouro Direto, Renda Fixa e cripto possuem regras próprias.
-- **Qualidade explícita:** snapshots podem indicar `has_partial_prices` e `return_is_estimated` quando a cobertura não é completa.
+- **DB-first:** páginas e snapshots não dependem de consultas externas realizadas pelo navegador.
+- **Fonte oficial primeiro:** B3 e a fonte oficial do Tesouro sustentam o histórico doméstico.
+- **Uma semântica financeira:** patrimônio, custo, resultado, proventos e TWR têm definições centralizadas.
+- **Separação temporal:** valuation intradiário e performance fechada possuem referências independentes.
+- **Idempotência:** rebuilds podem ser reexecutados sem duplicar registros.
+- **Separação por classe:** mercado, Tesouro e Renda Fixa possuem motores próprios.
+- **Qualidade explícita:** cobertura parcial, retorno estimado e indisponibilidade são informados.
+- **Ausência não vira zero:** TWR indisponível é retornado como `null`, nunca como `0%` inventado.
 
 ---
 
-## Comando oficial de manutenção
+## Páginas auditadas
 
-Para reconstruir a base canônica e recalcular snapshots:
+### Resumo
+
+- KPIs reconciliados com valuation, snapshots e proventos canônicos.
+- Patrimônio intradiário separado de TWR fechado.
+- Histórico mensal baseado no último snapshot de cada mês.
+- Tabela de posições com variação diária separada de resultado acumulado.
+- Contrato `summary.v2` estrito, com metadados de diagnóstico e cobertura.
+
+### Patrimônio
+
+- Cards alinhados ao mesmo contrato financeiro do Resumo.
+- Histórico diário e mensal usando custo das posições abertas, não aportes acumulados.
+- Fluxos externos preservados separadamente no tooltip.
+- Período “Tudo” sem limite artificial.
+- Distribuição por classe consumida do endpoint canônico.
+
+### Rentabilidade
+
+- Contrato `rentabilidade.v2` para KPIs monetários e TWR.
+- TWR diário, mensal, 12 meses e desde o início composto a partir dos snapshots.
+- TWR por classe para ações, FIIs, ETFs, BDRs, stocks e cripto quando materializado.
+- Tesouro e Renda Fixa exibem valuation e resultado atuais sem promover retorno simples a TWR.
+- CDI e IPCA lidos do banco; IBOV permanece indisponível até materialização persistida.
+- Resultado por ativo derivado de posições e resultado realizado canônicos.
+- Endpoint de reconciliação da página com tolerância monetária de R$ 0,01.
+
+---
+
+## Comandos operacionais
+
+### Rebuild completo
 
 ```bash
 python -m app.cli.full_market_rebuild
 ```
 
-No Docker Compose:
-
-```bash
-docker compose exec backend python -m app.cli.full_market_rebuild
-```
-
-No PowerShell, salvando o log:
-
 ```powershell
 $LogFile = ".\full-market-rebuild-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
-
 docker compose exec backend python -m app.cli.full_market_rebuild 2>&1 |
     Tee-Object -FilePath $LogFile
 ```
 
-O comando executa, em ordem:
+### Histórico oficial da B3
 
-1. Reconciliação do catálogo e histórico de preços por lacunas.
-2. Atualização de Tesouro Direto.
-3. Atualização de benchmarks macroeconômicos.
-4. Sincronização e materialização de proventos.
-5. Reconstrução de snapshots TWR.
-6. Auditoria final de cobertura.
+```bash
+python -m app.cli.rebuild_b3_historical_market
+```
+
+```bash
+python -m app.cli.rebuild_b3_historical_market --start-year 2024 --end-year 2026
+```
+
+### Catálogo e histórico oficial do Tesouro
+
+```bash
+python -m app.cli.sync_treasury_catalog_v2
+python -m app.cli.rebuild_treasury_official_prices
+```
+
+### Materialização de snapshots
+
+```http
+POST /performance/{portfolio_id}/evolution/backfill
+```
+
+O backfill reconstrói snapshots consolidados e snapshots por classe suportada.
 
 ---
 
 ## Funcionalidades implementadas
 
-### Resumo, Patrimônio e Rentabilidade
+### Dados e valuation
 
-- KPIs consolidados de patrimônio, investido, resultado, proventos e variação atual.
-- Evolução diária e mensal com filtros de período.
-- Distribuição por classe e metas de alocação.
-- Variação diária por classe separada da rentabilidade acumulada.
-- Ganho realizado e não realizado.
-- Retorno diário, mensal, 12 meses e desde o início via cadeia TWR.
-- Snapshots diários reconstruídos automaticamente após importações retroativas.
-
-### Histórico de preços e dados canônicos
-
-- Tabela `asset_prices` como fonte persistida para cálculo patrimonial.
-- Auditoria de cobertura por ativo, data inicial necessária e última data disponível.
-- Gap sync por borda faltante, com locks por ativo e concorrência controlada.
-- Metadados persistentes para provedor, símbolo normalizado, status, tentativas e último erro.
-- Histórico máximo para lacunas iniciais quando suportado pelo provedor.
-- Validação contra preços nulos, negativos, infinitos ou anômalos.
+- B3 COTAHIST como histórico primário para ativos brasileiros.
+- Tesouro Direto com catálogo e histórico oficiais persistidos.
+- Renda Fixa reconstruída por aplicação, indexador, vencimento e resgates.
+- Câmbio histórico persistido para ativos internacionais.
+- Auditoria de cobertura e ciclo de vida de negociação.
+- Classificação `COMPLETE`, `PRE_LISTING`, `DELISTED`, `REAL_GAP` e `NO_HISTORY`.
 
 ### Proventos
 
-- Dividendos, JCP, rendimentos, amortizações, bonificações e subscrições.
-- Data Com, Data Ex e pagamento separados.
-- Materialização por carteira conforme posição elegível.
-- Histórico completo por ativo, com seed idempotente.
+- Dividendos, JCP, rendimentos e amortizações monetárias.
 - Eventos não monetários fora dos totais financeiros.
-- Processamento em lotes para evitar limites de parâmetros do driver de banco.
+- Somente eventos `RECEBIDO`, com valor líquido prioritário.
+- Competência pela data de pagamento.
+- Materialização por carteira conforme posição elegível.
 
-### Importação CSV
+### Importação CSV e eventos corporativos
 
-- Modelo oficial, preview, validação linha a linha e `dry_run`.
-- Bloqueio enquanto existirem erros, avisos impeditivos ou falhas globais.
-- Cards clicáveis para filtrar linhas válidas, avisos e erros.
-- Resolução de tickers antigos com validação pela data da operação.
-- Rebuild automático de snapshots e invalidação de caches financeiros.
+- Preview, `dry_run`, validação linha a linha e mensagens em português.
+- Resolução temporal de tickers antigos.
+- Rebuild automático de snapshots após importações retroativas.
+- Fundação para `TICKER_CHANGE` e futuros eventos corporativos.
 
-### Eventos corporativos e aliases
+---
 
-- Modelo de aliases históricos de ativos.
-- Detecção de renome de ticker via API v2.
-- Evento corporativo `TICKER_CHANGE` idempotente por carteira.
-- Conversão automática de saldo remanescente para o ticker atual.
-- Preservação das compras e vendas históricas originais.
-- Preparação para splits, grupamentos, bonificações, incorporações e conversões futuras.
+## Pendências conhecidas
 
-### Conta e administração
+- #147 — corrigir alinhamento visual de perdas no gráfico da página Resumo.
+- #148 — restaurar gráficos históricos por classe na página Patrimônio.
+- #149 — implementar TWR diário dedicado para Tesouro Direto e Renda Fixa.
+- #150 — materializar histórico persistido do IBOV.
+- #151 — remover definitivamente o serviço legado de rentabilidade.
 
-- Login JWT com refresh token rotativo.
-- Recuperação e alteração autenticada de senha.
-- Carteiras isoladas por usuário.
-- Criação, edição e exclusão segura de carteiras.
-- Administração de usuários com edição de nome, papel e status.
-- Proteção contra remoção do último superadmin.
+Essas pendências não alteram os contratos monetários já reconciliados; indisponibilidades são apresentadas explicitamente.
 
 ---
 
@@ -154,29 +187,11 @@ O comando executa, em ordem:
 
 ### Backend
 
-| Tecnologia | Uso |
-|---|---|
-| Python 3.12 | Linguagem base |
-| FastAPI | API async |
-| SQLAlchemy async | ORM |
-| Alembic | Migrations |
-| PostgreSQL | Banco de dados |
-| Redis | Cache e locks |
-| APScheduler | Jobs agendados |
-| JWT | Autenticação |
+Python 3.12, FastAPI, SQLAlchemy async, Alembic, PostgreSQL, Redis e APScheduler.
 
 ### Frontend
 
-| Tecnologia | Uso |
-|---|---|
-| React 19 | Interface |
-| TypeScript | Tipagem |
-| Vite | Build |
-| TailwindCSS 4 | Estilos utilitários |
-| Recharts | Gráficos |
-| React Query | Estado servidor |
-| Zustand | Estado global |
-| Axios | Cliente HTTP |
+React 19, TypeScript, Vite, TailwindCSS 4, Recharts, React Query, Zustand e Axios.
 
 ---
 
@@ -187,8 +202,6 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-Para ambientes com múltiplas heads Alembic válidas, o entrypoint aplica `alembic upgrade heads`.
-
 ---
 
 ## Documentação
@@ -197,14 +210,14 @@ Para ambientes com múltiplas heads Alembic válidas, o entrypoint aplica `alemb
 |---|---|
 | `docs/architecture.md` | Arquitetura DB-first, módulos e fluxos |
 | `docs/price-history.md` | Histórico de preços, cobertura e gap sync |
-| `docs/providers.md` | Papéis dos provedores, fallback e metadados |
-| `docs/operations.md` | Comandos operacionais e validação local |
+| `docs/providers.md` | Papéis das fontes e fallbacks |
+| `docs/operations.md` | Comandos operacionais |
 | `docs/snapshots.md` | Snapshots patrimoniais e TWR |
 | `docs/canonical-data.md` | Dados canônicos e KPIs financeiros |
-| `docs/rentabilidade.md` | Semântica dos cards e retorno TWR |
-| `docs/CSV_IMPORT_PIPELINE.md` | Fluxo de validação, importação e rebuild |
-| `docs/CORPORATE_ACTIONS.md` | Fundação do motor de eventos corporativos |
-| `ROADMAP.md` | Roadmap modular atualizado |
+| `docs/rentabilidade.md` | Semântica de retorno e resultado |
+| `docs/CANONICAL_FINANCIAL_CONTRACT.md` | Contrato financeiro oficial do sistema |
+| `docs/CANONICAL_MARKET_REBUILD_2026-07.md` | Consolidação da arquitetura de mercado |
+| `ROADMAP.md` | Roadmap modular |
 | `ROADMAP_SPRINTS.md` | Histórico de sprints |
 | `CHANGELOG.md` | Histórico de mudanças |
 
@@ -212,9 +225,9 @@ Para ambientes com múltiplas heads Alembic válidas, o entrypoint aplica `alemb
 
 ## Próximos focos
 
-1. Finalizar resolução canônica de preços para mercado fracionário sem duplicar histórico.
-2. Fazer snapshots de Tesouro consumirem o histórico dedicado da classe.
-3. Revisar roteamento definitivo de cripto e Tesouro conforme cobertura documentada do provedor.
-4. Ajustar visualmente os cards da página Rentabilidade.
-5. Retomar bugs e inconsistências da página Resumo.
-6. Avançar em Eventos Corporativos, Backup/Restore, OAuth, IRPF e Janela Global do Ativo.
+1. Restaurar os gráficos históricos por classe da página Patrimônio (#148).
+2. Implementar TWR dedicado de Tesouro e Renda Fixa (#149).
+3. Materializar o benchmark IBOV no banco (#150).
+4. Remover o serviço legado de rentabilidade (#151).
+5. Corrigir o comportamento visual do gráfico divergente (#147).
+6. Continuar Proventos, eventos corporativos, Backup/Restore, OAuth, IRPF e Janela Global do Ativo.

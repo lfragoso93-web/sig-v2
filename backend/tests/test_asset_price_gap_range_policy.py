@@ -12,7 +12,7 @@ def test_brapi_uses_range_max_for_initial_stock_history() -> None:
         "app.integrations.brapi.fetch_stocks_historical_v2",
         new=AsyncMock(return_value=expected),
     ) as fetch:
-        rows, source = asyncio.run(
+        rows, source, terminal_status, provider = asyncio.run(
             _fetch_range(
                 "PETR4",
                 AssetType.ACAO,
@@ -23,6 +23,8 @@ def test_brapi_uses_range_max_for_initial_stock_history() -> None:
     fetch.assert_awaited_once_with(ticker="PETR4", range_="max")
     assert rows == expected
     assert source == "brapi_v2_stocks_max"
+    assert terminal_status is None
+    assert provider == "brapi"
 
 
 def test_fii_keeps_documented_date_window() -> None:
@@ -31,7 +33,7 @@ def test_fii_keeps_documented_date_window() -> None:
         "app.integrations.brapi.fetch_fii_historical_v2",
         new=AsyncMock(return_value=expected),
     ) as fetch:
-        rows, source = asyncio.run(
+        rows, source, terminal_status, provider = asyncio.run(
             _fetch_range(
                 "MXRF11",
                 AssetType.FII,
@@ -46,6 +48,8 @@ def test_fii_keeps_documented_date_window() -> None:
     )
     assert rows == expected
     assert source == "brapi_v2_fii"
+    assert terminal_status is None
+    assert provider == "brapi"
 
 
 def test_yfinance_uses_period_max_for_initial_international_history() -> None:
@@ -54,7 +58,7 @@ def test_yfinance_uses_period_max_for_initial_international_history() -> None:
         "app.services.asset_price_gap_sync_service._fetch_yf_max",
         new=AsyncMock(return_value=expected),
     ) as fetch:
-        rows, source = asyncio.run(
+        rows, source, terminal_status, provider = asyncio.run(
             _fetch_range(
                 "NVDA",
                 AssetType.STOCK,
@@ -65,3 +69,5 @@ def test_yfinance_uses_period_max_for_initial_international_history() -> None:
     fetch.assert_awaited_once_with("NVDA", AssetType.STOCK)
     assert rows == expected
     assert source == "yfinance_period_max"
+    assert terminal_status is None
+    assert provider == "yfinance"

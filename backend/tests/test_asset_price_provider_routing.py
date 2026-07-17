@@ -36,7 +36,7 @@ async def test_brapi_vazia_nao_dispara_yahoo(monkeypatch):
     monkeypatch.setattr("app.integrations.brapi.fetch_stocks_historical_v2", fake_brapi)
     monkeypatch.setattr("app.services.asset_price_gap_sync_service._fetch_yf_max", fake_yahoo)
 
-    rows, source, status = await _fetch_range(
+    rows, source, status, provider = await _fetch_range(
         "A1GT34",
         AssetType.BDR,
         MissingPriceRange(date(1900, 1, 1), date.today(), "missing_start"),
@@ -45,4 +45,5 @@ async def test_brapi_vazia_nao_dispara_yahoo(monkeypatch):
     assert rows == []
     assert source == "brapi_v2_stocks_max"
     assert status == "HISTORY_START_EXHAUSTED"
+    assert provider == "brapi"
     assert calls == {"brapi": 1, "yahoo": 0}

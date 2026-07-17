@@ -1,6 +1,7 @@
 """Auditoria DB-only dos metadados necessários ao valuation de Renda Fixa."""
 from __future__ import annotations
 
+import re
 from collections import Counter
 
 from sqlalchemy import select
@@ -15,6 +16,10 @@ from app.services.fixed_income_valuation_service import (
 
 def _operation_value(value: object) -> str:
     return getattr(value, "value", str(value or "")).lower()
+
+
+def _has_explicit_indexer(notes: object) -> bool:
+    return bool(re.search(r"Indexador:\s*[^|\-\n]+", str(notes or ""), re.IGNORECASE))
 
 
 async def audit_fixed_income_contracts(db: AsyncSession) -> dict[str, object]:
@@ -40,10 +45,12 @@ async def audit_fixed_income_contracts(db: AsyncSession) -> dict[str, object]:
     missing_tickers: Counter[str] = Counter()
 
     for tx in purchases:
-        indexer, rate, maturity = _parse_notes(getattr(tx, "notes", None))
-        # CDI/Selic a 100% podem omitir taxa. Prefixado e inflação+ exigem taxa explícita.
+        notes = getattr(tx, "notes", None)
+        indexer, rate, maturity = _parse_notes(notes)
+        # O valuation pode assumir CDI por compatibilidade, mas a auditoria exige
+        # que o contrato informe explicitamente o indexador.
         requires_rate = indexer in {"PREFIXADO", "IPCA_PLUS", "IGPM_PLUS"}
-        metadata_ok = bool(indexer) and (not requires_rate or rate > 0)
+        metadata_ok = _has_explicit_indexer(notes) and (not requires_rate or rate > 0)
         if metadata_ok:
             complete += 1
             indexers[indexer] += 1

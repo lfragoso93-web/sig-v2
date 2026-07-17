@@ -8,7 +8,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import sys
 
 from app.services.full_market_rebuild_canonical_service import run_full_market_rebuild
 
