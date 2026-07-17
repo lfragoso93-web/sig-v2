@@ -13,7 +13,7 @@ from typing import Iterable, Optional
 
 import httpx
 
-from app.integrations.brapi_treasury import canonical_treasury_symbol_from_text
+from app.integrations.tesouro_transparente import _canonical_symbol
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +96,7 @@ def _parse_latest_prices(text: str, wanted: set[str]) -> dict[str, tuple[date, f
     for row in reader:
         title = _first(row, _TITLE_FIELDS)
         maturity = _first(row, _MATURITY_FIELDS)
-        symbol = canonical_treasury_symbol_from_text(f"{title} {maturity}")
+        symbol = _canonical_symbol(title, maturity)
         if not symbol or symbol not in wanted:
             continue
 
