@@ -113,18 +113,18 @@ R$ 0,01, sem comparar intraday contra snapshot fechado.
 O menu de ativos usa `createPortal`, coordenadas de viewport e reposição em
 scroll/resize. A cobertura frontend valida o comportamento com uma e vinte linhas.
 
+### A8 — Correção do gráfico aguarda validação visual
+
+`PatrimonioBarChart` já usa `stackOffset="sign"` e possui teste de transformação
+para ganho/perda. A issue #147 permanece aberta até validação no ambiente
+publicado.
+
 ### A9 — Parcialmente resolvido: contrato e totais por classe
 
 `GET /portfolios/{id}/positions` possui agora `response_model` estrito para
 grupos e posições. `total_invested` é obrigatório e o frontend consome esse total
 canônico diretamente, sem somar valores arredondados por posição. Ainda falta a
 reconciliação automatizada entre summary, distribuição e grupos, descrita em A6.
-
-### A8 — Correção do gráfico aguarda validação visual
-
-`PatrimonioBarChart` já usa `stackOffset="sign"` e possui teste de transformação
-para ganho/perda. A issue #147 permanece aberta até validação no ambiente
-publicado.
 
 ## Contratos que devem permanecer
 
