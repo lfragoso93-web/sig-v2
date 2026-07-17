@@ -54,20 +54,6 @@ function investedValueOf(p: PositionGroup['positions'][number]): number {
   return safeNum(p.invested_value) || safeNum(p.quantity) * safeNum(p.average_price)
 }
 
-function calcGroupHeaderMetrics(group: PositionGroup): { variationPct: number | null; totalInvested: number } {
-  let invested = 0
-
-  for (const p of group.positions) {
-    invested += investedValueOf(p)
-  }
-
-  const variationPct = group.daily_variation_pct
-  return {
-    variationPct: typeof variationPct === 'number' ? variationPct : null,
-    totalInvested: invested,
-  }
-}
-
 function getGroupQuoteTimestamp(group: PositionGroup): string | null {
   const timestamps: number[] = []
   for (const p of group.positions) {
@@ -474,7 +460,7 @@ interface ClassGroupHeaderProps {
 }
 
 function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGroupHeaderProps) {
-  const { variationPct, totalInvested } = calcGroupHeaderMetrics(group)
+  const variationPct = typeof group.daily_variation_pct === 'number' ? group.daily_variation_pct : null
   const target = group.target_pct ?? null
   const assetType = group.positions[0]?.asset_type ?? ''
   const [showTargetModal, setShowTargetModal] = useState(false)
@@ -529,7 +515,7 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
           <Divider />
           <LabeledValue label="Invest.">
             <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, ...cellText, fontVariantNumeric: 'tabular-nums' }}>
-              {formatBRL(totalInvested || safeNum(group.total_invested ?? group.total_value))}
+              {formatBRL(safeNum(group.total_invested))}
             </span>
           </LabeledValue>
           <Divider />
