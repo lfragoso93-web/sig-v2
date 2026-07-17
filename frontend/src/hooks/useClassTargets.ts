@@ -44,6 +44,13 @@ export function useClassTargets(portfolioId: number | null) {
   })
 }
 
+function invalidateTargetConsumers(queryClient: ReturnType<typeof useQueryClient>, portfolioId: number | null) {
+  queryClient.invalidateQueries({ queryKey: ['class-targets', portfolioId] })
+  queryClient.invalidateQueries({ queryKey: ['positions', portfolioId] })
+  queryClient.invalidateQueries({ queryKey: ['asset-distribution', portfolioId] })
+  queryClient.invalidateQueries({ queryKey: ['summary', portfolioId] })
+}
+
 // ---------------------------------------------------------------------------
 // Mutation: upsert (cria ou atualiza meta por asset_type)
 // ---------------------------------------------------------------------------
@@ -60,7 +67,7 @@ export function useUpsertClassTarget(portfolioId: number | null) {
       return res.data
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['class-targets', portfolioId] })
+      invalidateTargetConsumers(queryClient, portfolioId)
     },
   })
 }
@@ -80,7 +87,7 @@ export function useDeleteClassTarget(portfolioId: number | null) {
       return res.data
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['class-targets', portfolioId] })
+      invalidateTargetConsumers(queryClient, portfolioId)
     },
   })
 }
