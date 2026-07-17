@@ -5,13 +5,20 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — CI e conformidade documental (17/07/2026)
+
+- Corrigido erro `E203` que bloqueava o lint do backend.
+- Documentos públicos passaram a descrever fontes por função, preservando a política de não exposição de provedores.
+- Auditoria arquitetural da página Resumo formalizada na issue #161.
+
+
 ### Corrigido — Tesouro Direto e pipeline de preços (17/07/2026)
 
 - Corrigida a resolução canônica de RendA+ e Educa+ pelo ano comercial.
 - Catálogo do Tesouro sincronizado de forma incremental e idempotente.
-- Fallback do Tesouro Transparente passou a percorrer todos os recursos CSV oficiais.
+- Fallback do dados abertos oficiais do Tesouro passou a percorrer todos os recursos CSV oficiais.
 - Parser oficial passou a tolerar BOM, espaços e variações de cabeçalho.
-- Fluxo utilizado pela página Resumo passou a usar BRAPI, Tesouro Transparente e último preço persistido.
+- Fluxo utilizado pela página Resumo passou a usar provedor primário de mercado, dados abertos oficiais do Tesouro e último preço persistido.
 - Cotação passou a ser devolvida pelo ticker original da posição.
 - Consultas e atualizações do ativo do Tesouro passaram a ser case-insensitive.
 - Criação automática de ativos duplicados com `name=ticker` foi bloqueada.
@@ -21,7 +28,7 @@ Formato baseado em Keep a Changelog.
 ### Documentado — Rebuild pré-produção (17/07/2026)
 
 - Criada a issue #158 para a reconstrução limpa da base antes do go-live.
-- Definida a ordem: backup, dry-run, limpeza controlada, COTAHIST, Tesouro Transparente, benchmarks, proventos, CSV da carteira, snapshots e reconciliação.
+- Definida a ordem: backup, dry-run, limpeza controlada, COTAHIST, dados abertos oficiais do Tesouro, benchmarks, proventos, CSV da carteira, snapshots e reconciliação.
 - O rebuild deixou de bloquear o desenvolvimento atual e passou a ser requisito formal de entrada em produção.
 
 ### Dependências — Auditoria Dependabot (17/07/2026)
@@ -65,7 +72,7 @@ Pendências formalizadas na issue #159:
 ### Fontes oficiais e valuation canônico — 16/07/2026
 
 - B3 COTAHIST adotado como histórico primário de ações, FIIs, ETFs nacionais e BDRs.
-- Tesouro Transparente adotado como fonte oficial do catálogo e histórico do Tesouro.
+- dados abertos oficiais do Tesouro adotado como fonte oficial do catálogo e histórico do Tesouro.
 - Renda Fixa valorizada por motor dedicado.
 - Snapshots reconstruídos com dados persistidos.
 - Cobertura parcial e retorno estimado explicitados.
