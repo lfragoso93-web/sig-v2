@@ -21,6 +21,43 @@ from app.services.portfolio_snapshot_twr_service import backfill_snapshots_with_
 
 logger = logging.getLogger(__name__)
 _MONEY_TOLERANCE = Decimal("0.01")
+_RETURN_TOLERANCE = Decimal("0.000001")
+
+
+def _decimal(value: object) -> Decimal:
+    if isinstance(value, Decimal):
+        return value
+    return Decimal(str(value or 0))
+
+
+def _latest_snapshot_has_legacy_zero_twr(
+    latest: PortfolioSnapshot,
+    previous: PortfolioSnapshot | None,
+) -> bool:
+    """Detecta snapshot diário criado pelo refresh legado sem TWR materializado.
+
+    O refresh patrimonial simples pode inserir o fechamento do dia apenas com os
+    campos monetários. Como os campos TWR possuem default zero, esse registro fica
+    indistinguível de uma performance realmente neutra quando observado sozinho.
+    A comparação com o fechamento anterior e com o retorno simples evita que esse
+    zero técnico seja promovido ao contrato ``summary.v2``.
+    """
+    if previous is None:
+        return False
+
+    latest_accumulated = _decimal(latest.accumulated_return_pct)
+    latest_daily = _decimal(latest.daily_return_pct)
+    previous_accumulated = _decimal(previous.accumulated_return_pct)
+    simple_return = _decimal(latest.return_pct)
+
+    twr_is_zero = (
+        abs(latest_accumulated) <= _RETURN_TOLERANCE
+        and abs(latest_daily) <= _RETURN_TOLERANCE
+    )
+    historical_twr_exists = abs(previous_accumulated) > _RETURN_TOLERANCE
+    monetary_return_exists = abs(simple_return) > _RETURN_TOLERANCE
+
+    return twr_is_zero and (historical_twr_exists or monetary_return_exists)
 
 
 async def _portfolio_needs_twr_rebuild(db: AsyncSession, portfolio_id: int) -> bool:
@@ -44,19 +81,34 @@ async def _portfolio_needs_twr_rebuild(db: AsyncSession, portfolio_id: int) -> b
     if max_date is None or max_date < date.today():
         return True
 
-    latest_result = await db.execute(
-        select(PortfolioSnapshot.dividends_accumulated)
-        .where(
-            PortfolioSnapshot.portfolio_id == portfolio_id,
-            PortfolioSnapshot.snapshot_date == max_date,
-        )
-        .limit(1)
+    latest_rows_result = await db.execute(
+        select(PortfolioSnapshot)
+        .where(PortfolioSnapshot.portfolio_id == portfolio_id)
+        .order_by(PortfolioSnapshot.snapshot_date.desc())
+        .limit(2)
     )
-    snapshot_dividends = Decimal(str(latest_result.scalar_one_or_none() or 0))
+    latest_rows = list(latest_rows_result.scalars().all())
+    latest = latest_rows[0] if latest_rows else None
+    previous = latest_rows[1] if len(latest_rows) > 1 else None
+    if latest is None:
+        return True
+
     canonical_dividends = Decimal(
-        str(await sum_received_dividends(db, portfolio_id, as_of=max_date))
+        str(await sum_received_dividends(db, portfolio_id, as_of=latest.snapshot_date))
     )
-    return abs(snapshot_dividends - canonical_dividends) > _MONEY_TOLERANCE
+    snapshot_dividends = _decimal(latest.dividends_accumulated)
+    if abs(snapshot_dividends - canonical_dividends) > _MONEY_TOLERANCE:
+        return True
+
+    if _latest_snapshot_has_legacy_zero_twr(latest, previous):
+        logger.warning(
+            "[snapshot_twr_auto] portfolio=%s snapshot=%s possui TWR técnico zerado; reconstruindo",
+            portfolio_id,
+            latest.snapshot_date,
+        )
+        return True
+
+    return False
 
 
 async def _portfolio_needs_class_twr_rebuild(db: AsyncSession, portfolio_id: int) -> bool:
