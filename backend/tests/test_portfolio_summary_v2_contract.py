@@ -120,6 +120,11 @@ async def test_snapshot_summary_validates_full_v2_contract(monkeypatch) -> None:
         "get_usd_brl_today",
         AsyncMock(return_value=5.5),
     )
+    monkeypatch.setattr(
+        portfolio_summary_service,
+        "get_realized_pnl",
+        AsyncMock(return_value=10.0),
+    )
 
     summary = await _build_summary_from_latest_snapshot(AsyncMock(), 7, snapshot)
     validated = _validate_summary_contract(summary)
@@ -132,6 +137,7 @@ async def test_snapshot_summary_validates_full_v2_contract(monkeypatch) -> None:
     assert validated["total_patrimonio"] == 1_000
     assert validated["total_investido"] == 900
     assert validated["lucro_total"] == 120
+    assert validated["ganho_realizado"] == 10
     assert validated["rentabilidade_total"] == 2.5
     assert validated["total_proventos"] == 10
     assert validated["is_reconciled"] is True
