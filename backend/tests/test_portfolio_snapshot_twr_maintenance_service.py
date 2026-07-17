@@ -1,8 +1,10 @@
+from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.services.portfolio_snapshot_twr_maintenance_service import (
+    _latest_snapshot_has_legacy_zero_twr,
     maintain_twr_snapshots_for_active_portfolios,
 )
 
@@ -45,6 +47,64 @@ async def test_maintenance_processes_only_incomplete_portfolios_and_isolates_err
     db.rollback.assert_awaited_once()
 
 
+def test_detects_latest_snapshot_overwritten_with_zero_twr():
+    previous = SnapshotStub(
+        accumulated_return_pct="8.125",
+        daily_return_pct="0.45",
+        return_pct="7.9",
+    )
+    latest = SnapshotStub(
+        accumulated_return_pct="0",
+        daily_return_pct="0",
+        return_pct="8.2",
+    )
+
+    assert _latest_snapshot_has_legacy_zero_twr(latest, previous) is True
+
+
+def test_keeps_legitimate_zero_twr_without_prior_performance():
+    previous = SnapshotStub(
+        accumulated_return_pct="0",
+        daily_return_pct="0",
+        return_pct="0",
+    )
+    latest = SnapshotStub(
+        accumulated_return_pct="0",
+        daily_return_pct="0",
+        return_pct="0",
+    )
+
+    assert _latest_snapshot_has_legacy_zero_twr(latest, previous) is False
+
+
+def test_keeps_materialized_nonzero_twr():
+    previous = SnapshotStub(
+        accumulated_return_pct="4.2",
+        daily_return_pct="0.1",
+        return_pct="4.0",
+    )
+    latest = SnapshotStub(
+        accumulated_return_pct="4.5",
+        daily_return_pct="0.3",
+        return_pct="4.4",
+    )
+
+    assert _latest_snapshot_has_legacy_zero_twr(latest, previous) is False
+
+
 class SimpleRow:
     def __init__(self, portfolio_id: int):
         self.id = portfolio_id
+
+
+class SnapshotStub:
+    def __init__(
+        self,
+        *,
+        accumulated_return_pct: str,
+        daily_return_pct: str,
+        return_pct: str,
+    ):
+        self.accumulated_return_pct = Decimal(accumulated_return_pct)
+        self.daily_return_pct = Decimal(daily_return_pct)
+        self.return_pct = Decimal(return_pct)
