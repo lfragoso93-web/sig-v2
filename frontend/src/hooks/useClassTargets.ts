@@ -61,7 +61,7 @@ export function useUpsertClassTarget(portfolioId: number | null) {
     mutationFn: async (payload: ClassTargetUpsertPayload) => {
       if (!portfolioId) throw new Error('portfolioId requerido')
       const res = await api.put(
-        `/portfolios/${portfolioId}/targets`,
+        `/portfolios/${portfolioId}/class-targets/${payload.asset_type}`,
         payload
       )
       return res.data
@@ -82,7 +82,7 @@ export function useDeleteClassTarget(portfolioId: number | null) {
     mutationFn: async (assetType: string) => {
       if (!portfolioId) throw new Error('portfolioId requerido')
       const res = await api.delete(
-        `/portfolios/${portfolioId}/targets/${assetType}`
+        `/portfolios/${portfolioId}/class-targets/${assetType}`
       )
       return res.data
     },
