@@ -35,8 +35,6 @@ export interface PositionGroup {
   total_result_pct?: number | null
   performance_source?: string
   proventos_as_of?: string | null
-  /** @deprecated retorno simples legado; não representa TWR */
-  rentabilidade_pct?: number
   target_pct?: number
   positions: PositionItem[]
 }
