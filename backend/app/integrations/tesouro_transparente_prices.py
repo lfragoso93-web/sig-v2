@@ -13,12 +13,12 @@ from typing import Iterable, Optional
 
 import httpx
 
-from app.integrations.tesouro_transparente import _canonical_symbol
+from app.integrations.tesouro_transparente import (
+    _canonical_symbol,
+    discover_csv_resources,
+)
 
 logger = logging.getLogger(__name__)
-
-_PACKAGE_URL = "https://www.tesourotransparente.gov.br/ckan/api/3/action/package_show"
-_DATASET_ID = "precos-e-taxas-dos-titulos-publicos-ofertados-no-tesouro-direto"
 
 _TITLE_FIELDS = ("Tipo Titulo", "Tipo Título", "Titulo", "Título", "Nome")
 _MATURITY_FIELDS = ("Data Vencimento", "Vencimento")
@@ -39,8 +39,12 @@ _PRICE_FIELDS = (
 
 
 def _first(row: dict, fields: tuple[str, ...]) -> str:
+    normalized = {
+        str(key or "").lstrip("\ufeff").strip().lower(): value
+        for key, value in row.items()
+    }
     for field in fields:
-        value = row.get(field)
+        value = normalized.get(field.strip().lower())
         if value not in (None, ""):
             return str(value).strip()
     return ""
@@ -74,19 +78,6 @@ def _parse_number(value: object) -> Optional[float]:
         return None
 
 
-def _resource_urls(payload: dict) -> list[str]:
-    resources = (((payload or {}).get("result") or {}).get("resources") or [])
-    urls: list[str] = []
-    for resource in resources:
-        if not isinstance(resource, dict):
-            continue
-        fmt = str(resource.get("format") or "").lower()
-        url = str(resource.get("url") or resource.get("download_url") or "")
-        if url and ("csv" in fmt or url.lower().endswith(".csv")):
-            urls.append(url)
-    return urls
-
-
 def _parse_latest_prices(text: str, wanted: set[str]) -> dict[str, tuple[date, float]]:
     sample = text[:4096]
     delimiter = ";" if sample.count(";") >= sample.count(",") else ","
@@ -102,8 +93,12 @@ def _parse_latest_prices(text: str, wanted: set[str]) -> dict[str, tuple[date, f
 
         row_date = _parse_date(_first(row, _DATE_FIELDS)) or date.min
         price = None
+        normalized_row = {
+            str(key or "").lstrip("\ufeff").strip().lower(): value
+            for key, value in row.items()
+        }
         for field in _PRICE_FIELDS:
-            price = _parse_number(row.get(field))
+            price = _parse_number(normalized_row.get(field.strip().lower()))
             if price is not None:
                 break
         if price is None:
@@ -123,18 +118,15 @@ async def fetch_tesouro_transparente_prices(symbols: Iterable[str]) -> dict[str,
         return {}
 
     async with httpx.AsyncClient(timeout=45.0, follow_redirects=True) as client:
-        try:
-            package = await client.get(_PACKAGE_URL, params={"id": _DATASET_ID})
-            package.raise_for_status()
-            urls = _resource_urls(package.json())
-        except Exception as exc:
-            logger.info("[treasury_transparente] catálogo de recursos indisponível: %s", exc)
+        urls = await discover_csv_resources(client)
+        if not urls:
+            logger.info("[treasury_transparente] nenhum recurso CSV oficial disponível")
             return {}
 
         consolidated: dict[str, tuple[date, float]] = {}
-        for url in urls[:5]:
+        for url in urls:
             try:
-                response = await client.get(url)
+                response = await client.get(url, timeout=90.0)
                 response.raise_for_status()
                 found = _parse_latest_prices(response.text, wanted)
             except Exception as exc:
