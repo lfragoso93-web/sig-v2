@@ -1,8 +1,6 @@
 # Roadmap modular — SGI v2
 
-> Última atualização: 16/07/2026
-
-Este roadmap organiza o SGI v2 por módulos de produto e arquitetura.
+> Última atualização: 17/07/2026
 
 ## Visão geral
 
@@ -10,142 +8,128 @@ Este roadmap organiza o SGI v2 por módulos de produto e arquitetura.
 |---|---|---:|
 | Core backend e autenticação | Estável | 100% |
 | Carteiras e transações | Estável | 100% |
-| Importação CSV | Estável | 95% |
+| Importação CSV | Estável, revisão pré-produção pendente | 95% |
 | Dados canônicos | Consolidado | 100% |
 | Histórico B3 COTAHIST | Consolidado | 100% |
-| Tesouro Direto — valuation | Consolidado | 100% |
-| Renda Fixa — valuation | Consolidado | 100% |
-| Snapshots TWR consolidados | Consolidado | 100% |
-| Snapshots TWR por classe de mercado | Consolidado | 100% |
+| Tesouro Direto — valuation atual | Validado | 100% |
+| Renda Fixa — valuation atual | Consolidado | 100% |
+| Snapshots consolidados | Consolidado | 100% |
+| Snapshots por classe de mercado | Consolidado | 100% |
 | Proventos | Em validação final | 92% |
-| Página Resumo | Auditoria concluída | 95% |
+| Página Resumo | Em refinamento funcional | 95% |
 | Página Patrimônio | Auditoria concluída, regressão visual mapeada | 90% |
-| Página Rentabilidade | Auditoria e contratos concluídos | 95% |
+| Página Rentabilidade | Contratos concluídos | 95% |
+| Dependências | Auditoria parcial, pendências mapeadas | 80% |
+| Rebuild pré-produção | Planejado e bloqueador do go-live | 10% |
 | Eventos corporativos | Fundação pronta | 30% |
 | IRPF | Planejado | 15% |
 | Backup/Restore | Planejado | 10% |
 | OAuth social | Planejado | 0% |
 
-## Concluído ou consolidado
+## Consolidado
 
-### Contrato financeiro e páginas principais
+### Contrato financeiro
 
-- Contrato financeiro oficial documentado em `docs/CANONICAL_FINANCIAL_CONTRACT.md`.
-- `summary.v2` e `rentabilidade.v2` validados em runtime com campos extras proibidos.
-- Patrimônio, custo, resultado realizado, resultado não realizado e proventos usam fontes compartilhadas.
+- `summary.v2` e `rentabilidade.v2` estritos.
 - Valuation intradiário separado de performance fechada.
-- Ausência de TWR representada por `null`, sem falso `0%`.
-- Metadados de cobertura, estimativa, fonte e data de referência expostos.
-- Reconciliação monetária entre Resumo, Patrimônio, Rentabilidade e snapshots.
+- Resultado realizado, não realizado e proventos com fontes compartilhadas.
+- Ausência de TWR representada por `null`.
+- Cobertura, estimativa e data de referência expostas.
+- Reconciliação monetária entre páginas e snapshots.
 
-### Resumo
+### Tesouro Direto
 
-- KPIs auditados contra valuation, snapshots e proventos canônicos.
-- Histórico mensal baseado no último snapshot de cada mês.
-- “Todo período” sem corte artificial.
-- Tabela de posições com variação diária separada de resultado acumulado.
-- Proventos por classe/ticker usando somente eventos líquidos recebidos.
-- Pendência visual do gráfico divergente registrada na issue #147.
+- Catálogo canônico persistido.
+- RendA+ e Educa+ normalizados pelo ano comercial.
+- BRAPI como fonte primária de preço recente.
+- Tesouro Transparente como fallback oficial.
+- Último preço persistido como contingência.
+- Resolução case-insensitive de ticker e alias.
+- Preço associado ao ticker original da posição.
+- Criação automática de ativos duplicados bloqueada.
+- Valores atuais validados na interface.
 
-### Patrimônio
+A reconstrução limpa do catálogo, históricos e carteira ficou reservada para o checklist pré-produção (#158).
 
-- Cards alinhados à semântica financeira canônica.
-- Evolução diária e mensal usando custo das posições abertas.
-- Aportes e retiradas preservados como fluxo externo separado.
-- Distribuição por classe consumida do endpoint canônico.
-- Regressão dos gráficos históricos por classe registrada na issue #148.
+### Histórico e snapshots
 
-### Rentabilidade
-
-- KPIs monetários derivados de `summary.v2`.
-- TWR diário, mensal, 12 meses e desde o início derivado dos snapshots.
-- TWR por classe materializado para ações, FIIs, ETFs, BDRs, stocks e cripto.
-- Tesouro e Renda Fixa exibem valuation e resultado atuais com TWR explicitamente indisponível.
-- CDI e IPCA servidos do banco; nenhuma consulta externa é feita pelo navegador.
-- Resultado por ativo derivado de posições e PnL realizado canônicos.
-- Endpoint de reconciliação com tolerância monetária de R$ 0,01.
-
-### Dados canônicos e snapshots
-
-- Valuation dedicado para mercado, Tesouro e Renda Fixa.
-- `PortfolioSnapshot` para o consolidado.
-- `PortfolioClassSnapshot` para classes suportadas.
-- TWR diário e acumulado persistido.
-- `has_partial_prices` e `return_is_estimated` derivados da cobertura real.
-- Backfill consolidado e por classe integrado à manutenção noturna.
-
-### Histórico de mercado brasileiro
-
-- B3 COTAHIST como fonte histórica oficial.
-- Carga idempotente para ações, FIIs, ETFs nacionais e BDRs.
-- 2.258 ativos e 984.949 preços carregados no primeiro rebuild validado.
-- Preservação de ativos deslistados.
-- Pré-listagem separada de lacuna real.
-
-### Tesouro Direto e Renda Fixa
-
-- Tesouro com catálogo e histórico oficiais persistidos.
-- Renda Fixa reconstruída por aplicação, indexador e resgate.
-- Ambas removidas do lookup genérico de mercado.
-- TWR diário dedicado pendente na issue #149.
-
-### Benchmarks
-
-- CDI composto a partir das taxas diárias persistidas.
-- IPCA mensal lido de `rate_history`.
-- IBOV permanece indisponível até materialização da série persistida (#150).
-
-### Full market rebuild
-
-- Comando oficial `python -m app.cli.full_market_rebuild`.
-- Orquestração de catálogo, preços, Tesouro, benchmarks, proventos, snapshots e auditoria.
-- Execuções idempotentes e diagnósticos estruturados.
+- B3 COTAHIST como histórico primário de renda variável brasileira.
+- Histórico oficial do Tesouro persistido.
+- `PortfolioSnapshot` e `PortfolioClassSnapshot` materializados.
+- Backfills idempotentes.
+- Cobertura parcial e retorno estimado explícitos.
 
 ## Em desenvolvimento
+
+### Página Resumo — #161
+
+- [x] Mapear contratos, endpoints e divergências arquiteturais.
+- [ ] Revisar KPIs atuais e sinal de retorno negativo.
+- [ ] Garantir distinção entre variação diária e rentabilidade acumulada.
+- [ ] Revisar dropdowns e overflow das tabelas.
+- [ ] Padronizar cards com a página Patrimônio.
+- [ ] Corrigir visual do gráfico divergente (#147).
 
 ### Proventos
 
 - [x] Eventos canônicos e materialização por carteira.
-- [x] Processamento em lotes seguros.
-- [x] Totais financeiros usando apenas eventos recebidos líquidos.
+- [x] Totais financeiros usando eventos líquidos recebidos.
 - [ ] Validar cobertura completa por classe.
-- [ ] Melhorar diagnósticos de eventos não materializados.
+- [ ] Melhorar diagnóstico de eventos não materializados.
+- [ ] Validar seed de ativos de renda variável.
+- [ ] Implementar tooltip mensal por classe (#131).
 
-### Pendências da auditoria funcional
+### Patrimônio e Rentabilidade
 
-- [ ] #147 — corrigir perda abaixo do zero no gráfico de evolução patrimonial.
-- [ ] #148 — restaurar gráficos históricos por classe na página Patrimônio.
-- [ ] #149 — implementar TWR diário dedicado para Tesouro e Renda Fixa.
-- [ ] #150 — materializar histórico persistido do IBOV.
-- [ ] #151 — remover serviço legado de rentabilidade e caches obsoletos.
+- [ ] Restaurar gráficos históricos por classe (#148).
+- [ ] Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
+- [ ] Materializar histórico persistido do IBOV (#150).
+- [ ] Remover serviço legado de rentabilidade (#151).
 
-### B3 Historical Market Rebuild
+### Dependabot — #159
 
-- [x] Leitura em lote por arquivo anual.
-- [x] Persistência idempotente.
-- [x] Ciclo de vida de negociação.
-- [ ] Integrar a carga anual ao `full_market_rebuild` após validação operacional final.
-- [ ] Definir política automática para download do ano corrente.
+Integrado e validado na `stable-15jun`:
 
-### Motor de eventos corporativos — #129
+- [x] react-hook-form 7.81.0.
+- [x] Recharts 3.9.2.
+- [x] aiosqlite 0.22.1.
+- [x] Uvicorn 0.51.0.
+- [x] redis-py 8.0.1.
 
-- [x] Fundação de aliases e `TICKER_CHANGE`.
-- [ ] Splits, grupamentos e bonificações.
-- [ ] Simulação, confirmação e rollback.
-- [ ] Administração e auditoria operacional.
+Pendente de validação isolada:
+
+- [ ] #146 — build-tools, incluindo TypeScript 7.0.2.
+- [ ] #138 — ESLint e typescript-eslint.
+- [ ] #137 — httpx 0.28.1.
+- [ ] #133 — mypy 2.2.0.
+
+### Pré-produção — #158
+
+- [ ] Backup e teste de restauração.
+- [ ] Dry-run da limpeza.
+- [ ] Limpeza de dados reconstruíveis.
+- [ ] Seed B3 COTAHIST.
+- [ ] Seed oficial do Tesouro Direto.
+- [ ] Seed de benchmarks e proventos.
+- [ ] Importação CSV completa da carteira.
+- [ ] Rebuild de posições e snapshots.
+- [ ] Auditoria de cobertura e reconciliação final.
 
 ## Próximas prioridades
 
-1. Restaurar gráficos históricos por classe na página Patrimônio (#148).
-2. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
-3. Materializar o benchmark IBOV (#150).
-4. Remover definitivamente o serviço legado de rentabilidade (#151).
-5. Corrigir o gráfico divergente da página Resumo (#147).
-6. Concluir validação funcional do módulo Proventos.
-7. Evoluir eventos corporativos, Backup/Restore, OAuth, IRPF e Janela Global do Ativo.
+1. Refinar Página Resumo.
+2. Concluir validação funcional de Proventos.
+3. Restaurar históricos por classe em Patrimônio (#148).
+4. Implementar TWR dedicado de Tesouro e Renda Fixa (#149).
+5. Materializar IBOV (#150).
+6. Remover rentabilidade legada (#151).
+7. Validar Dependabot pendente (#159).
+8. Executar rebuild limpo antes do go-live (#158).
 
 ## Backlog
 
+- Eventos corporativos — #129.
+- Evolução da integração de dados de mercado — #130.
 - Backup/Restore — #83.
 - Google OAuth — #97.
 - IRPF — #56.
@@ -157,6 +141,6 @@ Este roadmap organiza o SGI v2 por módulos de produto e arquitetura.
 
 1. Desenvolvimento na `stable-15jun`.
 2. Commits pequenos e isolados.
-3. Validação com Docker, Render e comandos operacionais.
-4. Atualização de README, roadmap e changelog.
-5. PR única para `main` ao fechar bloco estrutural.
+3. Validação em ambiente de desenvolvimento.
+4. Atualização de issues, README, ROADMAP e CHANGELOG.
+5. PR da `stable-15jun` para `main` ao fechar bloco estrutural.

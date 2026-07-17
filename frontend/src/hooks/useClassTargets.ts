@@ -44,6 +44,13 @@ export function useClassTargets(portfolioId: number | null) {
   })
 }
 
+function invalidateTargetConsumers(queryClient: ReturnType<typeof useQueryClient>, portfolioId: number | null) {
+  queryClient.invalidateQueries({ queryKey: ['class-targets', portfolioId] })
+  queryClient.invalidateQueries({ queryKey: ['positions', portfolioId] })
+  queryClient.invalidateQueries({ queryKey: ['asset-distribution', portfolioId] })
+  queryClient.invalidateQueries({ queryKey: ['summary', portfolioId] })
+}
+
 // ---------------------------------------------------------------------------
 // Mutation: upsert (cria ou atualiza meta por asset_type)
 // ---------------------------------------------------------------------------
@@ -54,13 +61,13 @@ export function useUpsertClassTarget(portfolioId: number | null) {
     mutationFn: async (payload: ClassTargetUpsertPayload) => {
       if (!portfolioId) throw new Error('portfolioId requerido')
       const res = await api.put(
-        `/portfolios/${portfolioId}/targets`,
+        `/portfolios/${portfolioId}/class-targets/${payload.asset_type}`,
         payload
       )
       return res.data
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['class-targets', portfolioId] })
+      invalidateTargetConsumers(queryClient, portfolioId)
     },
   })
 }
@@ -75,12 +82,12 @@ export function useDeleteClassTarget(portfolioId: number | null) {
     mutationFn: async (assetType: string) => {
       if (!portfolioId) throw new Error('portfolioId requerido')
       const res = await api.delete(
-        `/portfolios/${portfolioId}/targets/${assetType}`
+        `/portfolios/${portfolioId}/class-targets/${assetType}`
       )
       return res.data
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['class-targets', portfolioId] })
+      invalidateTargetConsumers(queryClient, portfolioId)
     },
   })
 }
