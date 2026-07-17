@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { BarChart2, TrendingUp, DollarSign, Briefcase, AlertTriangle, Clock3 } from 'lucide-react'
+import { BarChart2, TrendingUp, DollarSign, Briefcase, AlertTriangle } from 'lucide-react'
 import {
   usePortfolioList,
   usePatrimonioHistory,
@@ -8,7 +8,7 @@ import {
 } from '@/hooks/usePortfolio'
 import { useAppStore } from '@/store/appStore'
 import { formatBRL, formatPercent, signClass } from '@/utils/format'
-import { formatReferenceDate, mapPortfolioSummaryMetrics } from '@/utils/portfolioSummary'
+import { mapPortfolioSummaryMetrics } from '@/utils/portfolioSummary'
 import KpiCard from '@/components/ui/KpiCard'
 import SkeletonCard from '@/components/ui/SkeletonCard'
 import EmptyState from '@/components/ui/EmptyState'
@@ -107,9 +107,6 @@ export default function ResumePage() {
 
   const metrics = mapPortfolioSummaryMetrics(summary)
   const loadingKpiCards = loadingPortfolios || loadingSummary
-  const valuationReference = formatReferenceDate(metrics.valuationUpdatedAt)
-  const performanceReference = formatReferenceDate(metrics.performanceAsOf)
-  const proventosReference = formatReferenceDate(metrics.proventosAsOf)
 
   if (loadingPortfolios) {
     return (
@@ -181,25 +178,6 @@ export default function ResumePage() {
           <div className="col-span-4 py-8 text-center text-xs" style={{ color: 'var(--color-text-muted)' }}>Nenhum dado disponível. Adicione lançamentos para começar.</div>
         )}
       </div>
-
-      {summary && (valuationReference || performanceReference || proventosReference) && (
-        <div
-          className="card"
-          style={{
-            display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem 1rem',
-            padding: '0.65rem 1rem', color: 'var(--color-text-muted)', fontSize: 'var(--text-xs)',
-          }}
-        >
-          <Clock3 size={14} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
-          {valuationReference && <span>Patrimônio e posições: {valuationReference}</span>}
-          {performanceReference && (
-            <span>
-              TWR até: {performanceReference}{metrics.returnIsEstimated ? ' (estimado)' : ''}
-            </span>
-          )}
-          {proventosReference && <span>Proventos até: {proventosReference}</span>}
-        </div>
-      )}
 
       {metrics.hasPartialPrices && (
         <div
