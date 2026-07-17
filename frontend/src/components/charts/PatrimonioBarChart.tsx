@@ -203,7 +203,12 @@ export default function PatrimonioBarChart({ data, loading }: Props) {
     <div>
       <ChartLegend />
       <ResponsiveContainer width="100%" height={270}>
-        <BarChart data={chartData} margin={{ top: 0, right: 8, left: 4, bottom: 4 }} barCategoryGap="18%">
+        <BarChart
+          data={chartData}
+          margin={{ top: 0, right: 8, left: 4, bottom: 4 }}
+          barCategoryGap="18%"
+          stackOffset="sign"
+        >
           <CartesianGrid
             strokeDasharray="3 3"
             stroke="oklch(from var(--color-text) l c h / 0.08)"
