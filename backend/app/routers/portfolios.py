@@ -15,6 +15,7 @@ from app.schemas.portfolio import (
     CSVImportResponse,
 )
 from app.schemas.portfolio_positions import PositionGroupResponse
+from app.schemas.portfolio_intraday_reconciliation import IntradayReconciliationResponse
 from app.services.portfolio_service import (
     create_portfolio,
     list_portfolios,
@@ -24,6 +25,7 @@ from app.services.portfolio_service import (
     invalidate_portfolio_cache,
 )
 from app.services.canonical_positions_service import get_canonical_portfolio_positions
+from app.services.portfolio_intraday_reconciliation_service import get_intraday_reconciliation
 from app.services.portfolio_summary_service import get_canonical_portfolio_summary
 from app.services.portfolio_delete_service import delete_portfolio_safely
 from app.services.portfolio_snapshot_service import backfill_snapshots
@@ -194,6 +196,18 @@ async def asset_distribution(
     current_user: User = Depends(get_current_user),
 ):
     return await get_asset_distribution(db, portfolio_id, current_user.id)
+
+
+@router.get(
+    "/{portfolio_id}/reconciliation/intraday",
+    response_model=IntradayReconciliationResponse,
+)
+async def intraday_reconciliation(
+    portfolio_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return await get_intraday_reconciliation(db, portfolio_id, current_user.id)
 
 
 @router.get(
