@@ -3,7 +3,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { PositionGroup } from '@/hooks/usePortfolio'
-import PositionTable from './PositionTable'
+import PositionTable, { investedValueOf } from './PositionTable'
 
 vi.mock('@/components/ui/AssetLogo', () => ({
   default: () => <span aria-hidden="true" />,
@@ -142,6 +142,15 @@ describe('PositionTable', () => {
     const groupHeader = screen.getByText('Ações').closest('button')
     expect(groupHeader).not.toBeNull()
     expect(within(groupHeader as HTMLElement).getByText(/1\.234,56/)).toBeTruthy()
+  })
+
+  it('preserva custo canônico zero sem recompor quantidade por preço médio', () => {
+    const position = buildGroup(1).positions[0]
+    position.invested_value = 0
+    position.quantity = 10
+    position.average_price = 123.45
+
+    expect(investedValueOf(position)).toBe(0)
   })
 
   it('ignora rentabilidade simples legada mesmo se o payload vier poluído', () => {
