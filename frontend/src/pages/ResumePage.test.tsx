@@ -29,7 +29,12 @@ vi.mock('@/store/appStore', () => ({
 }))
 
 vi.mock('@/components/ui/KpiCard', () => ({
-  default: ({ label }: { label: string }) => <div>{label}</div>,
+  default: ({ label, bottomLine }: { label: string; bottomLine?: React.ReactNode }) => (
+    <div>
+      <span>{label}</span>
+      {bottomLine}
+    </div>
+  ),
 }))
 
 vi.mock('@/components/ui/SkeletonCard', () => ({
@@ -86,6 +91,23 @@ describe('ResumePage position states', () => {
 
     expect(screen.getByText('Nenhum ativo encontrado')).toBeTruthy()
     expect(screen.getByText(/Adicione um lançamento/)).toBeTruthy()
+  })
+
+  it('não apresenta retorno estimado como TWR', () => {
+    mocks.usePortfolioSummaryData.mockReturnValue({
+      data: {
+        rentabilidade_total: 12.5,
+        rentabilidade_source: 'valuation_fallback',
+        return_is_estimated: true,
+      },
+      isLoading: false,
+    })
+
+    render(<ResumePage />)
+
+    expect(screen.getByText('Retorno estimado')).toBeTruthy()
+    expect(screen.getByText(/TWR indisponível sem snapshot/)).toBeTruthy()
+    expect(screen.queryByText('Rentabilidade (TWR)')).toBeNull()
   })
 
   it('explicita cobertura parcial e os ativos sem preço', () => {
