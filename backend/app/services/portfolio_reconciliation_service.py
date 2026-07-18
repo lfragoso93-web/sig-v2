@@ -46,7 +46,13 @@ def _decimal(value: object) -> Decimal:
     return Decimal(str(value or 0))
 
 
-def _check(field: str, expected: object, observed: object, tolerance: Decimal = MONEY_TOLERANCE) -> ReconciliationCheck:
+def build_reconciliationbuild_reconciliation_check(
+    field: str,
+    expected: object,
+    observed: object,
+    tolerance: Decimal = MONEY_TOLERANCE,
+) -> ReconciliationCheck:
+    """Cria uma comparação determinística sem impor referência temporal."""
     return ReconciliationCheck(
         field=field,
         expected=_decimal(expected),
@@ -75,7 +81,7 @@ def reconcile_snapshot_summary(
     )
 
     checks = [
-        _check(
+        build_reconciliation_check(
             "rentabilidade_total",
             snapshot.accumulated_return_pct,
             summary.get("rentabilidade_total"),
@@ -86,18 +92,18 @@ def reconcile_snapshot_summary(
     if comparable_valuation:
         checks.extend(
             [
-                _check("total_patrimonio", snapshot.market_value, summary.get("total_patrimonio")),
-                _check("total_investido", snapshot.cost_basis, summary.get("total_investido")),
-                _check("lucro_total", expected_total_result, summary.get("lucro_total")),
+                build_reconciliation_check("total_patrimonio", snapshot.market_value, summary.get("total_patrimonio")),
+                build_reconciliation_check("total_investido", snapshot.cost_basis, summary.get("total_investido")),
+                build_reconciliation_check("lucro_total", expected_total_result, summary.get("lucro_total")),
             ]
         )
 
     if comparable_valuation and positions_market_value is not None:
-        checks.append(_check("positions_market_value", snapshot.market_value, positions_market_value))
+        checks.append(build_reconciliation_check("positions_market_value", snapshot.market_value, positions_market_value))
     if comparable_valuation and positions_cost_basis is not None:
-        checks.append(_check("positions_cost_basis", snapshot.cost_basis, positions_cost_basis))
+        checks.append(build_reconciliation_check("positions_cost_basis", snapshot.cost_basis, positions_cost_basis))
     if comparable_valuation and classes_market_value is not None:
-        checks.append(_check("classes_market_value", snapshot.market_value, classes_market_value))
+        checks.append(build_reconciliation_check("classes_market_value", snapshot.market_value, classes_market_value))
 
     serialized = [check.to_dict() for check in checks]
     failed_fields = [item["field"] for item in serialized if not item["is_reconciled"]]
