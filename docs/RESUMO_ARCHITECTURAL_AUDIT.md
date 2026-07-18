@@ -32,6 +32,7 @@ financeira concorrente.
 | Gráfico canônico por classe já disponível | `useClassMonthlyEvolution` | `GET /performance/{id}/classes/{type}/evolution/monthly` | leitura de snapshots por classe | `PortfolioClassSnapshot` |
 | Disponibilidade por classe | `useClassTwrAvailability` | `GET /performance/{id}/classes/availability` | leitura de snapshots por classe | Cobertura e suporte do motor histórico |
 | Reconciliação por classe | `useClassReconciliation` | `GET /performance/{id}/classes/reconciliation/latest` | reconciliação de classes | Snapshots consolidados e por classe |
+| Reconciliação intradiária | auditoria operacional | `GET /portfolios/{id}/reconciliation/intraday` | `portfolio_intraday_reconciliation_service` | `summary.v2` + posições + distribuição, sem snapshots |
 
 ## Matriz dos KPIs
 
@@ -94,19 +95,15 @@ ausência ou valor inválido em zero. Embora o backend valide `summary.v2` com
 Direção: consumir o tipo estrito `PortfolioSummary` e rejeitar/explicitar payload
 inválido. Zero financeiro válido deve continuar distinto de ausência de dado.
 
-### A6 — Reconciliação atual não compara os consumidores intradiários
+### A6 — Resolvido: consumidores intradiários reconciliados entre si
 
-A reconciliação do Resumo compara TWR com o snapshot. Por decisão correta, não
-compara patrimônio intradiário com fechamento anterior. Porém, ainda falta
-reconciliar entre si, na mesma referência intradiária:
+`GET /portfolios/{id}/reconciliation/intraday` materializa `summary.v2`, grupos
+de posições e distribuição por classe na mesma requisição. O serviço compara
+patrimônio, custo, resultado não realizado e resultado de capital por grupo com
+tolerância de R$ 0,01.
 
-- summary;
-- soma das posições;
-- distribuição por classe;
-- totais dos grupos da tabela.
-
-Direção: adicionar reconciliação específica do valuation atual, com tolerância de
-R$ 0,01, sem comparar intraday contra snapshot fechado.
+O contrato declara `valuation_mode=intraday` e `snapshot_evaluated=false`.
+TWR, rentabilidade e valores de fechamento não participam dessas comparações.
 
 ### A7 — Resolvido: dropdown em portal coberto por regressão
 
@@ -119,12 +116,12 @@ scroll/resize. A cobertura frontend valida o comportamento com uma e vinte linha
 para ganho/perda. A issue #147 permanece aberta até validação no ambiente
 publicado.
 
-### A9 — Parcialmente resolvido: contrato e totais por classe
+### A9 — Resolvido: contrato e totais por classe
 
-`GET /portfolios/{id}/positions` possui agora `response_model` estrito para
-grupos e posições. `total_invested` é obrigatório e o frontend consome esse total
-canônico diretamente, sem somar valores arredondados por posição. Ainda falta a
-reconciliação automatizada entre summary, distribuição e grupos, descrita em A6.
+`GET /portfolios/{id}/positions` possui `response_model` estrito para grupos e
+posições. `total_invested` é obrigatório e o frontend consome esse total canônico
+diretamente, sem somar valores arredondados por posição. A6 cobre a reconciliação
+automatizada com os demais consumidores intradiários.
 
 ## Contratos que devem permanecer
 
@@ -141,7 +138,8 @@ reconciliação automatizada entre summary, distribuição e grupos, descrita em
 1. Concluído: demonstrar por teste o P&L realizado defasado.
 2. Concluído: corrigir a composição monetária atual do `summary.v2` sem alterar TWR.
 3. Concluído: remover o retorno legado, validar o contrato de posições e cobrir o dropdown.
-4. Migrar o gráfico consolidado e por classe para os endpoints de performance.
-5. Remover o endpoint/recomposição redundante somente após auditar consumidores.
-6. Validar visualmente a #147.
-7. Sincronizar documentação viva ao concluir o bloco estrutural.
+4. Concluído: reconciliar `summary.v2`, posições e distribuição na referência intradiária.
+5. Migrar o gráfico consolidado e por classe para os endpoints de performance.
+6. Remover o endpoint/recomposição redundante somente após auditar consumidores.
+7. Validar visualmente a #147.
+8. Sincronizar documentação viva ao concluir o bloco estrutural.
