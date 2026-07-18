@@ -14,7 +14,7 @@ import {
 import { useClassTargets } from '@/hooks/useClassTargets'
 import { useAppStore } from '@/store/appStore'
 import { formatBRL, formatPercent, signClass } from '@/utils/format'
-import { formatReferenceDate } from '@/utils/portfolioSummary'
+import { formatReferenceDate, mapPortfolioSummaryMetrics } from '@/utils/portfolioSummary'
 import KpiCard from '@/components/ui/KpiCard'
 import SkeletonCard from '@/components/ui/SkeletonCard'
 import EmptyState from '@/components/ui/EmptyState'
@@ -253,7 +253,13 @@ function ConcentrationSection({ groups }: { groups: PositionGroup[] }) {
 
 export default function PatrimonioPage() {
   const portfolioId = useAppStore(state => state.selectedPortfolioId)
-  const { data: summary, isLoading: loadingSummary } = usePortfolioSummary(portfolioId ?? 0)
+  const { data: summary, isLoading: loadingSummary, error: summaryError } = usePortfolioSummary(portfolioId ?? 0)
+  const metrics = summary ? mapPortfolioSummaryMetrics(summary) : null
+  const isEstimatedReturn = Boolean(
+    metrics?.returnIsEstimated || metrics?.rentabilidadeSource === 'valuation_fallback',
+  )
+  const summaryContractError = summaryError instanceof Error
+    && summaryError.message.startsWith('Contrato summary.v2 inválido:')
   const { data: groups = [] } = usePositions(portfolioId ?? 0)
 
   if (!portfolioId) {
@@ -264,9 +270,9 @@ export default function PatrimonioPage() {
     )
   }
 
-  const valuationReference = formatReferenceDate(summary?.valuation_updated_at)
-  const performanceReference = formatReferenceDate(summary?.performance_as_of)
-  const proventosReference = formatReferenceDate(summary?.proventos_as_of)
+  const valuationReference = formatReferenceDate(metrics?.valuationUpdatedAt)
+  const performanceReference = formatReferenceDate(metrics?.performanceAsOf)
+  const proventosReference = formatReferenceDate(metrics?.proventosAsOf)
 
   return (
     <div className="page-container">
@@ -280,34 +286,51 @@ export default function PatrimonioPage() {
       <div className="kpi-grid">
         {loadingSummary ? (
           [...Array(4)].map((_, index) => <SkeletonCard key={index} />)
-        ) : summary ? (
+        ) : summaryContractError ? (
+          <div
+            className="col-span-4 rounded-xl px-4 py-5 text-center"
+            style={{
+              color: 'var(--color-error)',
+              border: '1px solid oklch(from var(--color-error) l c h / 0.25)',
+              background: 'oklch(from var(--color-error) l c h / 0.08)',
+            }}
+          >
+            <p className="text-sm font-semibold">Contrato financeiro inválido. Os KPIs foram ocultados.</p>
+            <p className="text-xs mt-1">{summaryError.message}</p>
+          </div>
+        ) : summary && metrics ? (
           <>
             <KpiCard
               label="Patrimônio atual"
-              value={formatBRL(safeNum(summary.total_patrimonio))}
-              subValue={formatBRL(safeNum(summary.total_investido))}
+              value={formatBRL(metrics.patrimonio)}
+              subValue={formatBRL(metrics.aportado)}
               subLabel="Custo das posições abertas"
             />
             <KpiCard
               label="Resultado patrimonial"
-              value={formatBRL(safeNum(summary.ganho_nao_realizado))}
-              valueColor={signClass(safeNum(summary.ganho_nao_realizado))}
-              change={safeNum(summary.variacao_percentual)}
+              value={formatBRL(metrics.ganhoNaoRealizado)}
+              valueColor={signClass(metrics.ganhoNaoRealizado)}
+              change={metrics.variacaoPct}
               subLabel="Não realizado sobre posições abertas"
             />
             <KpiCard
               label="Resultado total"
-              value={formatBRL(safeNum(summary.lucro_total))}
-              valueColor={signClass(safeNum(summary.lucro_total))}
-              subValue={formatBRL(safeNum(summary.ganho_realizado))}
+              value={formatBRL(metrics.lucroTotal)}
+              valueColor={signClass(metrics.lucroTotal)}
+              subValue={formatBRL(metrics.ganhoRealizado)}
               subLabel="Realizado; total inclui proventos"
             />
             <KpiCard
-              label="Rentabilidade (TWR)"
-              value={`${safeNum(summary.rentabilidade_total) >= 0 ? '+' : ''}${formatPercent(safeNum(summary.rentabilidade_total))}`}
-              valueColor={signClass(safeNum(summary.rentabilidade_total))}
-              subValue={formatBRL(safeNum(summary.total_proventos))}
+              label={isEstimatedReturn ? 'Retorno estimado' : 'Rentabilidade (TWR)'}
+              value={`${metrics.rentabilidadePct >= 0 ? '+' : ''}${formatPercent(metrics.rentabilidadePct)}`}
+              valueColor={signClass(metrics.rentabilidadePct)}
+              subValue={formatBRL(metrics.proventosTotal)}
               subLabel="Proventos líquidos recebidos"
+              bottomLine={isEstimatedReturn ? (
+                <span className="text-xs font-semibold" style={{ color: 'var(--color-warning)' }}>
+                  Estimativa do valuation atual; TWR indisponível sem snapshot
+                </span>
+              ) : undefined}
             />
           </>
         ) : (
@@ -317,10 +340,10 @@ export default function PatrimonioPage() {
         )}
       </div>
 
-      {summary && (
+      {summary && metrics && (
         <div className="card px-4 py-3 flex flex-wrap gap-x-6 gap-y-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
           <span>Patrimônio e posições: {valuationReference ?? 'sem horário de cotação'}</span>
-          <span>TWR até: {performanceReference ?? 'sem snapshot fechado'}{summary.return_is_estimated ? ' (estimado)' : ''}</span>
+          <span>TWR até: {performanceReference ?? 'sem snapshot fechado'}{metrics.returnIsEstimated ? ' (estimado)' : ''}</span>
           <span>Proventos até: {proventosReference ?? '—'}</span>
           <span>Cobertura de preços: {safeNum(summary.price_coverage_pct).toFixed(1)}%</span>
         </div>
