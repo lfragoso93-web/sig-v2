@@ -106,7 +106,11 @@ export default function ResumePage() {
 
   const activeAssetType = assetClass === ASSET_CLASS_ALL ? null : assetClass
 
-  const { data: summary, isLoading: loadingSummary } = usePortfolioSummaryData(portfolioId)
+  const {
+    data: summary,
+    isLoading: loadingSummary,
+    error: summaryError,
+  } = usePortfolioSummaryData(portfolioId)
   const { data: positions, isLoading: loadingPositions } = usePositions(portfolioId)
   const { data: classAvailability, isLoading: loadingClassAvailability } = useClassTwrAvailability(portfolioId)
 
@@ -146,6 +150,8 @@ export default function ResumePage() {
     metrics?.returnIsEstimated || metrics?.rentabilidadeSource === 'valuation_fallback',
   )
   const loadingKpiCards = loadingPortfolios || loadingSummary
+  const summaryContractError = summaryError instanceof Error
+    && summaryError.message.startsWith('Contrato summary.v2 inválido:')
 
   if (loadingPortfolios) {
     return (
@@ -179,6 +185,18 @@ export default function ResumePage() {
       <div className="kpi-grid">
         {loadingKpiCards ? (
           [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
+        ) : summaryContractError ? (
+          <div
+            className="col-span-4 rounded-xl px-4 py-5 text-center"
+            style={{
+              color: 'var(--color-error)',
+              border: '1px solid oklch(from var(--color-error) l c h / 0.25)',
+              background: 'oklch(from var(--color-error) l c h / 0.08)',
+            }}
+          >
+            <p className="text-sm font-semibold">Contrato financeiro inválido. Os KPIs foram ocultados.</p>
+            <p className="text-xs mt-1">{summaryError.message}</p>
+          </div>
         ) : summary && metrics ? (
           <>
             <KpiCard
