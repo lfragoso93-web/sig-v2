@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import ResumePage from './ResumePage'
@@ -6,16 +6,23 @@ import ResumePage from './ResumePage'
 const mocks = vi.hoisted(() => ({
   usePortfolioList: vi.fn(),
   usePortfolioSummaryData: vi.fn(),
-  usePatrimonioHistory: vi.fn(),
   usePositions: vi.fn(),
+  useMonthlyEvolution: vi.fn(),
+  useClassMonthlyEvolution: vi.fn(),
+  useClassTwrAvailability: vi.fn(),
   setSelectedPortfolioId: vi.fn(),
 }))
 
 vi.mock('@/hooks/usePortfolio', () => ({
   usePortfolioList: mocks.usePortfolioList,
   usePortfolioSummaryData: mocks.usePortfolioSummaryData,
-  usePatrimonioHistory: mocks.usePatrimonioHistory,
   usePositions: mocks.usePositions,
+}))
+
+vi.mock('@/hooks/useEvolution', () => ({
+  useMonthlyEvolution: mocks.useMonthlyEvolution,
+  useClassMonthlyEvolution: mocks.useClassMonthlyEvolution,
+  useClassTwrAvailability: mocks.useClassTwrAvailability,
 }))
 
 vi.mock('@/store/appStore', () => ({
@@ -42,7 +49,9 @@ vi.mock('@/components/ui/SkeletonCard', () => ({
 }))
 
 vi.mock('@/components/charts/PatrimonioBarChart', () => ({
-  default: () => <div data-testid="patrimonio-chart" />,
+  default: ({ data }: { data: Array<{ history_source?: string }> }) => (
+    <div data-testid="patrimonio-chart">{data[0]?.history_source}</div>
+  ),
 }))
 
 vi.mock('@/components/resume/PositionTable', () => ({
@@ -64,7 +73,15 @@ describe('ResumePage position states', () => {
       data: undefined,
       isLoading: false,
     })
-    mocks.usePatrimonioHistory.mockReturnValue({
+    mocks.useMonthlyEvolution.mockReturnValue({
+      data: [],
+      isLoading: false,
+    })
+    mocks.useClassMonthlyEvolution.mockReturnValue({
+      data: [],
+      isLoading: false,
+    })
+    mocks.useClassTwrAvailability.mockReturnValue({
       data: [],
       isLoading: false,
     })
@@ -72,6 +89,68 @@ describe('ResumePage position states', () => {
       data: [],
       isLoading: false,
     })
+  })
+
+  it('usa snapshots mensais consolidados como fonte padrão', () => {
+    mocks.useMonthlyEvolution.mockReturnValue({
+      data: [{ history_source: 'portfolio_snapshot' }],
+      isLoading: false,
+    })
+
+    render(<ResumePage />)
+
+    expect(mocks.useMonthlyEvolution).toHaveBeenCalledWith(46, '12m')
+    expect(screen.getByTestId('patrimonio-chart').textContent).toBe('portfolio_snapshot')
+  })
+
+  it('usa snapshots de classe somente quando a classe está disponível', () => {
+    mocks.useClassTwrAvailability.mockReturnValue({
+      data: [{
+        asset_type: 'FII',
+        available: true,
+        engine_supported: true,
+        data_available: true,
+        latest_snapshot_date: '2026-07-17',
+        status: 'available',
+        reason: null,
+      }],
+      isLoading: false,
+    })
+    mocks.useClassMonthlyEvolution.mockReturnValue({
+      data: [{ history_source: 'portfolio_class_snapshot' }],
+      isLoading: false,
+    })
+
+    render(<ResumePage />)
+    fireEvent.change(screen.getAllByRole('combobox')[0], {
+      target: { value: 'FII' },
+    })
+
+    expect(mocks.useClassMonthlyEvolution).toHaveBeenLastCalledWith(46, 'FII', '12m')
+    expect(screen.getByTestId('patrimonio-chart').textContent).toBe('portfolio_class_snapshot')
+  })
+
+  it('não consulta recomposição quando o snapshot da classe está indisponível', () => {
+    mocks.useClassTwrAvailability.mockReturnValue({
+      data: [{
+        asset_type: 'FII',
+        available: false,
+        engine_supported: true,
+        data_available: false,
+        latest_snapshot_date: null,
+        status: 'awaiting_backfill',
+        reason: 'Histórico ainda não materializado.',
+      }],
+      isLoading: false,
+    })
+
+    render(<ResumePage />)
+    fireEvent.change(screen.getAllByRole('combobox')[0], {
+      target: { value: 'FII' },
+    })
+
+    expect(mocks.useClassMonthlyEvolution).toHaveBeenLastCalledWith(46, null, '12m')
+    expect(screen.getByText('Histórico ainda não materializado.')).toBeTruthy()
   })
 
   it('mantém skeletons enquanto as posições ainda estão carregando', () => {
