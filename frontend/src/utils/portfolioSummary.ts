@@ -60,3 +60,15 @@ export function mapPortfolioSummaryMetrics(summary: PortfolioSummary): Portfolio
     returnIsEstimated: summary.return_is_estimated,
   }
 }
+
+export function getPortfolioReturnPresentation(
+  metrics: PortfolioSummaryMetrics | null,
+): { isEstimated: boolean; label: 'Retorno estimado' | 'Rentabilidade (TWR)' } {
+  const isEstimated = Boolean(
+    metrics?.returnIsEstimated || metrics?.rentabilidadeSource === 'valuation_fallback',
+  )
+  return {
+    isEstimated,
+    label: isEstimated ? 'Retorno estimado' : 'Rentabilidade (TWR)',
+  }
+}
