@@ -2,6 +2,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from app.schemas.portfolio_intraday_reconciliation import IntradayReconciliationResponse
 from app.services.portfolio_intraday_reconciliation_service import (
     get_intraday_reconciliation,
     reconcile_intraday_consumers,
@@ -124,6 +125,8 @@ async def test_get_intraday_reconciliation_materializes_all_contracts():
     summary_mock.assert_awaited_once()
     positions_mock.assert_awaited_once()
     distribution_mock.assert_awaited_once()
-    assert result["portfolio_id"] == 46
-    assert result["valuation_updated_at"] == "2026-07-18T12:00:00+00:00"
-    assert result["is_reconciled"] is True
+    response = IntradayReconciliationResponse.model_validate(result)
+
+    assert response.portfolio_id == 46
+    assert response.valuation_updated_at == "2026-07-18T12:00:00+00:00"
+    assert response.is_reconciled is True
