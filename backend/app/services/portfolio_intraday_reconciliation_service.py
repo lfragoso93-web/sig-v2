@@ -62,8 +62,13 @@ def reconcile_intraday_consumers(
     ]
 
     for index, group in enumerate(position_groups):
-        positions = group.get("positions") or []
-        first_position = positions[0] if positions else {}
+        raw_positions = group.get("positions")
+        positions = raw_positions if isinstance(raw_positions, list) else []
+        first_position: Mapping[str, object] = (
+            positions[0]
+            if positions and isinstance(positions[0], Mapping)
+            else {}
+        )
         group_key = (
             first_position.get("asset_type")
             or group.get("label")
