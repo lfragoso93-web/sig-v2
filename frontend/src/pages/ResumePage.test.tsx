@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { makePortfolioSummary } from '@/test/fixtures/portfolioSummary'
 import ResumePage from './ResumePage'
 
 const mocks = vi.hoisted(() => ({
@@ -11,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   useClassMonthlyEvolution: vi.fn(),
   useClassTwrAvailability: vi.fn(),
   setSelectedPortfolioId: vi.fn(),
+  kpiProps: [] as Array<{ label: string; value: string; subValue?: string }>,
 }))
 
 vi.mock('@/hooks/usePortfolio', () => ({
@@ -36,12 +38,22 @@ vi.mock('@/store/appStore', () => ({
 }))
 
 vi.mock('@/components/ui/KpiCard', () => ({
-  default: ({ label, bottomLine }: { label: string; bottomLine?: React.ReactNode }) => (
-    <div>
-      <span>{label}</span>
-      {bottomLine}
-    </div>
-  ),
+  default: (props: {
+    label: string
+    value: string
+    subValue?: string
+    bottomLine?: React.ReactNode
+  }) => {
+    mocks.kpiProps.push(props)
+    return (
+      <div>
+        <span>{props.label}</span>
+        <span>{props.value}</span>
+        {props.subValue && <span>{props.subValue}</span>}
+        {props.bottomLine}
+      </div>
+    )
+  },
 }))
 
 vi.mock('@/components/ui/SkeletonCard', () => ({
@@ -65,6 +77,7 @@ vi.mock('@/components/modals/CreatePortfolioModal', () => ({
 describe('ResumePage position states', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.kpiProps.length = 0
     mocks.usePortfolioList.mockReturnValue({
       data: [{ id: 46, name: 'Carteira principal' }],
       isLoading: false,
@@ -187,13 +200,49 @@ describe('ResumePage position states', () => {
     expect(screen.queryByText('Patrimônio Total')).toBeNull()
   })
 
+  it('preserva sinais negativos e valores canônicos nos KPIs', () => {
+    mocks.usePortfolioSummaryData.mockReturnValue({
+      data: makePortfolioSummary(),
+      isLoading: false,
+    })
+
+    render(<ResumePage />)
+
+    expect(mocks.kpiProps).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        label: 'Patrimônio Total',
+        value: expect.stringContaining('900'),
+        subValue: expect.stringContaining('1.000'),
+      }),
+      expect.objectContaining({
+        label: 'Resultado Total',
+        value: expect.stringContaining('-'),
+        subValue: expect.stringContaining('-'),
+      }),
+      expect.objectContaining({
+        label: 'Proventos Recebidos (12m)',
+        value: expect.stringContaining('20'),
+        subValue: expect.stringContaining('25'),
+      }),
+      expect.objectContaining({
+        label: 'Rentabilidade (TWR)',
+        value: expect.stringContaining('-7.5'),
+        subValue: expect.stringContaining('-10'),
+      }),
+    ]))
+  })
+
   it('não apresenta retorno estimado como TWR', () => {
     mocks.usePortfolioSummaryData.mockReturnValue({
-      data: {
+      data: makePortfolioSummary({
         rentabilidade_total: 12.5,
         rentabilidade_source: 'valuation_fallback',
         return_is_estimated: true,
-      },
+        summary_source: 'valuation_fallback',
+        snapshot_id: null,
+        snapshot_date: null,
+        performance_as_of: null,
+      }),
       isLoading: false,
     })
 
@@ -206,10 +255,10 @@ describe('ResumePage position states', () => {
 
   it('explicita cobertura parcial e os ativos sem preço', () => {
     mocks.usePortfolioSummaryData.mockReturnValue({
-      data: {
+      data: makePortfolioSummary({
         has_partial_prices: true,
         assets_without_price: ['PETR4', 'VALE3'],
-      },
+      }),
       isLoading: false,
     })
 
