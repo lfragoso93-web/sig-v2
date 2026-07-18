@@ -130,6 +130,17 @@ Quando `summary.v2` retorna `valuation_fallback`/`return_is_estimated`, o card
 usa “Retorno estimado” e informa que o TWR está indisponível sem snapshot. O
 fallback não é apresentado como rentabilidade TWR.
 
+### A11 — Resolvido: KPIs reconciliados entre Resumo e Patrimônio
+
+As duas páginas consomem o mesmo `summary.v2`, o mesmo mapper estrito e a mesma
+regra de apresentação do retorno. Patrimônio, custo, resultado não realizado,
+resultado realizado, resultado total, proventos e TWR preservam os valores e sinais
+do contrato backend.
+
+O fallback intradiário recebe “Retorno estimado” nas duas páginas e nunca é
+rotulado como TWR. A fixture de regressão cobre patrimônio 900, custo 1.000,
+resultado total e não realizado negativos, proventos 20/25 e TWR negativo.
+
 ## Contratos que devem permanecer
 
 - `summary.v2` como contrato único dos KPIs.
@@ -150,5 +161,6 @@ fallback não é apresentado como rentabilidade TWR.
 6. Concluído: migrar o gráfico consolidado e por classe para os endpoints de performance.
 7. Concluído: remover o endpoint/recomposição redundante após auditar consumidores.
 8. Concluído: validar `summary.v2` nas fronteiras backend e frontend.
-9. Validar visualmente a #147.
-10. Sincronizar documentação viva ao concluir o bloco estrutural.
+9. Concluído: reconciliar KPIs e semântica de retorno entre Resumo e Patrimônio.
+10. Validar visualmente a #147.
+11. Sincronizar documentação viva ao concluir o bloco estrutural.
