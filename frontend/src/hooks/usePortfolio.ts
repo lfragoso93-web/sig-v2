@@ -90,6 +90,112 @@ export interface PortfolioListItem {
   description?: string
 }
 
+const SUMMARY_KEYS = new Set<keyof PortfolioSummary>([
+  'summary_version',
+  'total_patrimonio',
+  'total_investido',
+  'lucro_total',
+  'variacao_valor',
+  'variacao_percentual',
+  'ganho_nao_realizado',
+  'ganho_realizado',
+  'rentabilidade_total',
+  'rentabilidade_acumulada',
+  'rentabilidade_diaria',
+  'rentabilidade_source',
+  'dividendos_recebidos_12m',
+  'total_proventos',
+  'proventos_as_of',
+  'proventos_source',
+  'has_partial_prices',
+  'assets_without_price',
+  'price_assets_total',
+  'price_assets_covered',
+  'price_coverage_pct',
+  'usd_brl_rate',
+  'valuation_mode',
+  'valuation_updated_at',
+  'performance_as_of',
+  'snapshot_id',
+  'snapshot_date',
+  'summary_source',
+  'return_is_estimated',
+  'is_reconciled',
+  'reconciliation',
+])
+
+const SUMMARY_NUMBER_KEYS: (keyof PortfolioSummary)[] = [
+  'total_patrimonio',
+  'total_investido',
+  'lucro_total',
+  'variacao_valor',
+  'variacao_percentual',
+  'ganho_nao_realizado',
+  'ganho_realizado',
+  'rentabilidade_total',
+  'rentabilidade_acumulada',
+  'dividendos_recebidos_12m',
+  'total_proventos',
+  'price_assets_total',
+  'price_assets_covered',
+  'price_coverage_pct',
+  'usd_brl_rate',
+]
+
+function contractError(field: string): never {
+  throw new Error(`Contrato summary.v2 inválido: ${field}`)
+}
+
+function isNullableString(value: unknown): value is string | null {
+  return value === null || typeof value === 'string'
+}
+
+export function parsePortfolioSummary(payload: unknown): PortfolioSummary {
+  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
+    return contractError('payload')
+  }
+
+  const summary = payload as Record<string, unknown>
+  const unexpectedKey = Object.keys(summary).find(key => !SUMMARY_KEYS.has(key as keyof PortfolioSummary))
+  if (unexpectedKey) contractError(unexpectedKey)
+
+  for (const key of SUMMARY_KEYS) {
+    if (!(key in summary)) contractError(key)
+  }
+  for (const key of SUMMARY_NUMBER_KEYS) {
+    if (typeof summary[key] !== 'number' || !Number.isFinite(summary[key])) contractError(key)
+  }
+
+  if (summary.summary_version !== 'summary.v2') contractError('summary_version')
+  if (summary.rentabilidade_diaria !== null
+    && (typeof summary.rentabilidade_diaria !== 'number' || !Number.isFinite(summary.rentabilidade_diaria))) {
+    contractError('rentabilidade_diaria')
+  }
+  if (summary.rentabilidade_source !== 'snapshot_twr'
+    && summary.rentabilidade_source !== 'valuation_fallback') contractError('rentabilidade_source')
+  if (typeof summary.proventos_as_of !== 'string') contractError('proventos_as_of')
+  if (summary.proventos_source !== 'received_cash_dividends') contractError('proventos_source')
+  if (typeof summary.has_partial_prices !== 'boolean') contractError('has_partial_prices')
+  if (!Array.isArray(summary.assets_without_price)
+    || summary.assets_without_price.some(item => typeof item !== 'string')) contractError('assets_without_price')
+  if (summary.valuation_mode !== 'intraday') contractError('valuation_mode')
+  if (!isNullableString(summary.valuation_updated_at)) contractError('valuation_updated_at')
+  if (!isNullableString(summary.performance_as_of)) contractError('performance_as_of')
+  if (summary.snapshot_id !== null
+    && (typeof summary.snapshot_id !== 'number' || !Number.isInteger(summary.snapshot_id))) contractError('snapshot_id')
+  if (!isNullableString(summary.snapshot_date)) contractError('snapshot_date')
+  if (summary.summary_source !== 'intraday_valuation_with_snapshot_twr'
+    && summary.summary_source !== 'valuation_fallback') contractError('summary_source')
+  if (typeof summary.return_is_estimated !== 'boolean') contractError('return_is_estimated')
+  if (summary.is_reconciled !== null && typeof summary.is_reconciled !== 'boolean') contractError('is_reconciled')
+  if (summary.reconciliation !== null
+    && (typeof summary.reconciliation !== 'object' || Array.isArray(summary.reconciliation))) {
+    contractError('reconciliation')
+  }
+
+  return summary as unknown as PortfolioSummary
+}
+
 const STALE_2MIN = 2 * 60 * 1000
 
 export function usePositions(portfolioId: number | null) {
@@ -114,7 +220,9 @@ export function useAssetDistribution(portfolioId: number | null) {
 export function usePortfolioSummaryData(portfolioId: number | null) {
   return useQuery<PortfolioSummary>({
     queryKey: ['summary', portfolioId],
-    queryFn: () => api.get(`/portfolios/${portfolioId}/summary`).then(r => r.data),
+    queryFn: () => api
+      .get(`/portfolios/${portfolioId}/summary`)
+      .then(r => parsePortfolioSummary(r.data)),
     enabled: !!portfolioId,
     staleTime: STALE_2MIN,
   })
@@ -129,4 +237,3 @@ export function usePortfolioList() {
     staleTime: 30_000,
   })
 }
-
