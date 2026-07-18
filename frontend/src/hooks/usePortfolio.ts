@@ -90,18 +90,6 @@ export interface PortfolioListItem {
   description?: string
 }
 
-export interface PatrimonioHistoryPoint {
-  date: string
-  period?: string
-  value: number
-  invested?: number
-  capital_result?: number
-  accumulated_return_pct?: number
-  has_partial_prices?: boolean
-  return_is_estimated?: boolean
-  history_source?: 'portfolio_snapshot' | 'db_derived_class_history' | string
-}
-
 const STALE_2MIN = 2 * 60 * 1000
 
 export function usePositions(portfolioId: number | null) {
@@ -142,24 +130,3 @@ export function usePortfolioList() {
   })
 }
 
-export function usePatrimonioHistory(
-  portfolioId: number | null,
-  months = 12,
-  assetType?: string | null,
-) {
-  return useQuery<PatrimonioHistoryPoint[]>({
-    queryKey: ['patrimonio-history', portfolioId, months, assetType ?? 'all'],
-    queryFn: () =>
-      api
-        .get(`/portfolios/${portfolioId}/patrimonio-history`, {
-          params: {
-            months: months >= 60 ? 0 : months,
-            ...(assetType ? { asset_type: assetType } : {}),
-          },
-        })
-        .then(r => r.data),
-    enabled: !!portfolioId,
-    staleTime: STALE_2MIN,
-    placeholderData: [],
-  })
-}
