@@ -86,6 +86,17 @@ function getGroupQuoteTimestamp(group: PositionGroup): string | null {
 const cellText = { color: 'var(--color-text)' }
 const cellFaint = { color: 'var(--color-text-faint)' }
 
+function MissingQuoteValue() {
+  return (
+    <span
+      title="Cotação atual indisponível; nenhum resultado foi calculado"
+      style={{ color: 'var(--color-text-faint)', fontSize: '0.68rem', whiteSpace: 'nowrap' }}
+    >
+      Sem cotação
+    </span>
+  )
+}
+
 function useIsDesktop(breakpoint = 768) {
   const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= breakpoint)
 
@@ -302,14 +313,14 @@ function PositionCard({ item, onAssetClick }: PositionCardProps) {
 
   const fields = isRF
     ? [
-        { label: 'Total Inv.', value: fmtMoney(investedValue, 'BRL') },
-        { label: 'Valor Atual', value: hasQuote ? fmtMoney(safeNum(item.current_value), 'BRL') : '—' },
+        { label: 'Custo Atual', value: fmtMoney(investedValue, 'BRL') },
+        { label: 'Valor Atual', value: hasQuote ? fmtMoney(safeNum(item.current_value), 'BRL') : <MissingQuoteValue /> },
       ]
     : [
         { label: 'Qtd', value: fmtQty(item.quantity) },
         { label: 'P. Médio', value: fmtMoney(safeNum(item.average_price), currency) },
-        { label: 'Total Inv.', value: fmtMoney(investedValue, 'BRL') },
-        { label: 'Valor Atual', value: hasQuote ? fmtMoney(safeNum(item.current_value), 'BRL') : '—' },
+        { label: 'Custo Atual', value: fmtMoney(investedValue, 'BRL') },
+        { label: 'Valor Atual', value: hasQuote ? fmtMoney(safeNum(item.current_value), 'BRL') : <MissingQuoteValue /> },
       ]
 
   return (
@@ -347,7 +358,7 @@ function PositionCard({ item, onAssetClick }: PositionCardProps) {
           </div>
         ))}
         <div style={{ gridColumn: '1 / -1' }}>
-          <div style={{ fontSize: '0.65rem', marginBottom: 2, color: 'var(--color-text-faint)' }}>Resultado</div>
+          <div style={{ fontSize: '0.65rem', marginBottom: 2, color: 'var(--color-text-faint)' }}>Resultado de Capital</div>
           {hasQuote ? (
             <div style={{ fontWeight: 600, fontSize: 'var(--text-xs)', color: varColor, fontVariantNumeric: 'tabular-nums' }}>
               {fmtMoney(result, 'BRL')}
@@ -355,7 +366,7 @@ function PositionCard({ item, onAssetClick }: PositionCardProps) {
                 ({formatPercent(safeNum(item.variation_percent))})
               </span>
             </div>
-          ) : <span style={cellFaint}>—</span>}
+          ) : <MissingQuoteValue />}
         </div>
       </div>
     </button>
@@ -513,21 +524,21 @@ function ClassGroupHeader({ group, collapsed, onToggle, portfolioId }: ClassGrou
             {group.count} {group.count === 1 ? 'ativo' : 'ativos'}
           </span>
           <Divider />
-          <LabeledValue label="Invest.">
+          <LabeledValue label="Custo">
             <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, ...cellText, fontVariantNumeric: 'tabular-nums' }}>
               {formatBRL(safeNum(group.total_invested))}
             </span>
           </LabeledValue>
           <Divider />
-          <LabeledValue label="Atual">
+          <LabeledValue label="Valor atual">
             <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, ...cellText, fontVariantNumeric: 'tabular-nums' }}>
               {formatBRL(safeNum(group.total_value))}
             </span>
           </LabeledValue>
           <Divider />
-          <LabeledValue label="Variação">
+          <LabeledValue label="Variação diária">
             <span
-              title={group.variation_reference_date ? `Referencia: ${group.variation_reference_date}` : 'Sem referencia historica'}
+              title={group.variation_reference_date ? `Referência: ${group.variation_reference_date}` : 'Sem referência histórica'}
               style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: varColor, fontVariantNumeric: 'tabular-nums' }}
             >
               {variationPct !== null ? `${variationPct >= 0 ? '+' : ''}${formatPercent(variationPct)}` : '—'}
@@ -576,17 +587,17 @@ const COLS_DEFAULT = [
   { key: 'qtd', label: 'Qtd', align: 'right', width: '8%' },
   { key: 'pm', label: 'P. Médio', align: 'right', width: '11%' },
   { key: 'pa', label: 'P. Atual', align: 'right', width: '11%', info: 'Cotação via provedor de mercado' },
-  { key: 'inv', label: 'Total Inv.', align: 'right', width: '13%' },
+  { key: 'inv', label: 'Custo Atual', align: 'right', width: '13%' },
   { key: 'atual', label: 'Valor Atual', align: 'right', width: '13%' },
-  { key: 'resultado', label: 'Resultado', align: 'right', width: '11%' },
+  { key: 'resultado', label: 'Resultado de Capital', align: 'right', width: '11%' },
   { key: 'acoes', label: '', align: 'right', width: '3%' },
 ]
 
 const COLS_RENDA_FIXA = [
   { key: 'ativo', label: 'Ativo', align: 'left', width: '45%' },
-  { key: 'inv', label: 'Total Inv.', align: 'right', width: '20%' },
+  { key: 'inv', label: 'Custo Atual', align: 'right', width: '20%' },
   { key: 'atual', label: 'Valor Atual', align: 'right', width: '20%' },
-  { key: 'resultado', label: 'Resultado', align: 'right', width: '12%' },
+  { key: 'resultado', label: 'Resultado de Capital', align: 'right', width: '12%' },
   { key: 'acoes', label: '', align: 'right', width: '3%' },
 ]
 
@@ -682,9 +693,7 @@ function ClassTable({ group, portfolioId, onAssetClick }: { group: PositionGroup
                             {fmtMoney(safeNum(item.average_price), currency)}
                           </td>
                           <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                            <span style={hasQuote ? cellText : cellFaint}>
-                              {hasQuote ? fmtMoney(safeNum(item.current_price), currency) : '—'}
-                            </span>
+                            {hasQuote ? fmtMoney(safeNum(item.current_price), currency) : <MissingQuoteValue />}
                           </td>
                         </>
                       )}
@@ -693,7 +702,7 @@ function ClassTable({ group, portfolioId, onAssetClick }: { group: PositionGroup
                         {fmtMoney(investedValue, 'BRL')}
                       </td>
                       <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...cellText }}>
-                        {hasQuote ? fmtMoney(safeNum(item.current_value), 'BRL') : <span style={cellFaint}>—</span>}
+                        {hasQuote ? fmtMoney(safeNum(item.current_value), 'BRL') : <MissingQuoteValue />}
                       </td>
                       <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
                         {hasQuote ? (
@@ -701,7 +710,7 @@ function ClassTable({ group, portfolioId, onAssetClick }: { group: PositionGroup
                             <div style={{ fontWeight: 600 }}>{fmtMoney(result, 'BRL')}</div>
                             <div style={{ fontSize: '0.65rem', fontWeight: 500, opacity: 0.8 }}>{formatPercent(safeNum(item.variation_percent))}</div>
                           </div>
-                        ) : <span style={cellFaint}>—</span>}
+                        ) : <MissingQuoteValue />}
                       </td>
                       <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right', overflow: 'visible' }}>
                         <AssetMenu ticker={item.ticker} assetLabel={isTesouro ? item.ticker : (item.asset_label ?? item.ticker)} assetType={safeType} />
