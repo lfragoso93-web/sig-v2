@@ -46,7 +46,7 @@ def _decimal(value: object) -> Decimal:
     return Decimal(str(value or 0))
 
 
-def build_reconciliationbuild_reconciliation_check(
+def build_reconciliation_check(
     field: str,
     expected: object,
     observed: object,
