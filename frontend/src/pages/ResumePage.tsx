@@ -106,6 +106,7 @@ export default function ResumePage() {
   const { data: positions,         isLoading: loadingPositions } = usePositions(portfolioId)
 
   const metrics = mapPortfolioSummaryMetrics(summary)
+  const isEstimatedReturn = metrics.returnIsEstimated || metrics.rentabilidadeSource === 'valuation_fallback'
   const loadingKpiCards = loadingPortfolios || loadingSummary
 
   if (loadingPortfolios) {
@@ -162,12 +163,16 @@ export default function ResumePage() {
               subLabel="Total líquido recebido"
             />
             <KpiCard
-              label="Rentabilidade (TWR)"
+              label={isEstimatedReturn ? 'Retorno estimado' : 'Rentabilidade (TWR)'}
               value={`${metrics.rentabilidadePct >= 0 ? '+' : ''}${formatPercent(metrics.rentabilidadePct)}`}
               valueColor={signClass(metrics.rentabilidadePct)}
               subValue={`${metrics.variacaoPct >= 0 ? '+' : ''}${formatPercent(metrics.variacaoPct)}`}
               subLabel="Variação patrimonial das posições abertas"
-              bottomLine={metrics.rentabilidadeDiariaPct !== null ? (
+              bottomLine={isEstimatedReturn ? (
+                <span className="text-xs font-semibold" style={{ color: 'var(--color-warning)' }}>
+                  Estimativa do valuation atual; TWR indisponível sem snapshot
+                </span>
+              ) : metrics.rentabilidadeDiariaPct !== null ? (
                 <span className={`text-xs font-semibold tabular-nums ${signClass(metrics.rentabilidadeDiariaPct)}`}>
                   {metrics.rentabilidadeDiariaPct >= 0 ? '+' : ''}{formatPercent(metrics.rentabilidadeDiariaPct)} no último fechamento
                 </span>
