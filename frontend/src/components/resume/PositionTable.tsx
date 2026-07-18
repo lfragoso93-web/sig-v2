@@ -50,8 +50,8 @@ function displayName(ticker: string, assetType: string | null | undefined): stri
   return ticker
 }
 
-function investedValueOf(p: PositionGroup['positions'][number]): number {
-  return safeNum(p.invested_value) || safeNum(p.quantity) * safeNum(p.average_price)
+export function investedValueOf(p: PositionGroup['positions'][number]): number {
+  return p.invested_value
 }
 
 function getGroupQuoteTimestamp(group: PositionGroup): string | null {
