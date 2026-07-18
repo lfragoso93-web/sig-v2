@@ -80,14 +80,15 @@ O contrato backend de posições rejeita campos de retorno legado. Rentabilidade
 classe só poderá retornar por `PortfolioClassSnapshot`, com referência e
 disponibilidade explícitas.
 
-### A5 — Mapeamento permissivo pode mascarar quebra de contrato
+### A5 — Resolvido: `summary.v2` validado nas duas fronteiras
 
-`PortfolioSummaryLike` torna campos obrigatórios opcionais e `safeNum` converte
-ausência ou valor inválido em zero. Embora o backend valide `summary.v2` com
-`extra="forbid"`, o frontend pode transformar payload incompleto em KPI zero.
+A rota `GET /portfolios/{id}/summary` declara `PortfolioSummaryResponse` como
+`response_model`, mantendo o contrato estrito também no OpenAPI e na serialização.
 
-Direção: consumir o tipo estrito `PortfolioSummary` e rejeitar/explicitar payload
-inválido. Zero financeiro válido deve continuar distinto de ausência de dado.
+O frontend valida todos os campos, tipos, literais e chaves adicionais antes de
+armazenar a resposta no React Query. O mapper aceita somente `PortfolioSummary`
+validado e não converte ausência ou valor inválido em zero. Em caso de violação,
+os KPIs são ocultados e a interface explicita o campo incompatível.
 
 ### A6 — Resolvido: consumidores intradiários reconciliados entre si
 
@@ -148,5 +149,6 @@ fallback não é apresentado como rentabilidade TWR.
 5. Concluído: explicitar loading, vazio, cobertura parcial, preço ausente e retorno estimado.
 6. Concluído: migrar o gráfico consolidado e por classe para os endpoints de performance.
 7. Concluído: remover o endpoint/recomposição redundante após auditar consumidores.
-8. Validar visualmente a #147.
-9. Sincronizar documentação viva ao concluir o bloco estrutural.
+8. Concluído: validar `summary.v2` nas fronteiras backend e frontend.
+9. Validar visualmente a #147.
+10. Sincronizar documentação viva ao concluir o bloco estrutural.
