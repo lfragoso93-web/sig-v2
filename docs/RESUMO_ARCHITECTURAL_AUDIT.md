@@ -44,7 +44,7 @@ financeira concorrente.
 | `ganho_realizado` | Ganhos/perdas reconhecidos em vendas | Atual | Serviço canônico de P&L realizado | Resumo e Patrimônio |
 | `total_proventos` | Eventos monetários líquidos recebidos | Data de pagamento até hoje | Agregação canônica | Resumo e Patrimônio |
 | `lucro_total` | Não realizado + realizado + proventos | Atual | Valuation + P&L realizado + proventos atuais | Resumo e Patrimônio |
-| `rentabilidade_total` | TWR acumulada | Último fechamento | Último snapshot | Resumo e Patrimônio |
+| `rentabilidade_total` | TWR acumulada; fallback identificado como estimativa quando não há snapshot | Fechamento ou estimativa intradiária explícita | Snapshot ou `valuation_fallback` | Resumo e Patrimônio |
 | `rentabilidade_diaria` | TWR diária | Último fechamento | Último snapshot | Resumo |
 | `dividendos_recebidos_12m` | Eventos líquidos dos últimos 365 dias | Até hoje | Agregação canônica | Resumo |
 | `price_coverage_pct` | Ativos precificáveis cobertos / total | Intradiária | Valuation canônico | Metadados de qualidade |
@@ -123,6 +123,17 @@ posições. `total_invested` é obrigatório e o frontend consome esse total can
 diretamente, sem somar valores arredondados por posição. A6 cobre a reconciliação
 automatizada com os demais consumidores intradiários.
 
+### A10 — Resolvido: estados e semântica da tabela
+
+A primeira consulta de posições preserva o estado de carregamento até a resposta
+real, sem usar lista vazia como placeholder. A interface distingue custo atual,
+valor atual, resultado de capital e variação diária. Ativos sem preço exibem
+“Sem cotação”, enquanto o aviso consolidado lista a cobertura parcial.
+
+Quando `summary.v2` retorna `valuation_fallback`/`return_is_estimated`, o card
+usa “Retorno estimado” e informa que o TWR está indisponível sem snapshot. O
+fallback não é apresentado como rentabilidade TWR.
+
 ## Contratos que devem permanecer
 
 - `summary.v2` como contrato único dos KPIs.
@@ -139,7 +150,8 @@ automatizada com os demais consumidores intradiários.
 2. Concluído: corrigir a composição monetária atual do `summary.v2` sem alterar TWR.
 3. Concluído: remover o retorno legado, validar o contrato de posições e cobrir o dropdown.
 4. Concluído: reconciliar `summary.v2`, posições e distribuição na referência intradiária.
-5. Migrar o gráfico consolidado e por classe para os endpoints de performance.
-6. Remover o endpoint/recomposição redundante somente após auditar consumidores.
-7. Validar visualmente a #147.
-8. Sincronizar documentação viva ao concluir o bloco estrutural.
+5. Concluído: explicitar loading, vazio, cobertura parcial, preço ausente e retorno estimado.
+6. Migrar o gráfico consolidado e por classe para os endpoints de performance.
+7. Remover o endpoint/recomposição redundante somente após auditar consumidores.
+8. Validar visualmente a #147.
+9. Sincronizar documentação viva ao concluir o bloco estrutural.
