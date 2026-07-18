@@ -2,10 +2,15 @@ import { useState, useEffect } from 'react'
 import { BarChart2, TrendingUp, DollarSign, Briefcase, AlertTriangle } from 'lucide-react'
 import {
   usePortfolioList,
-  usePatrimonioHistory,
   usePositions,
   usePortfolioSummaryData,
 } from '@/hooks/usePortfolio'
+import {
+  useClassMonthlyEvolution,
+  useClassTwrAvailability,
+  useMonthlyEvolution,
+} from '@/hooks/useEvolution'
+import type { PeriodOption } from '@/hooks/useEvolution'
 import { useAppStore } from '@/store/appStore'
 import { formatBRL, formatPercent, signClass } from '@/utils/format'
 import { mapPortfolioSummaryMetrics } from '@/utils/portfolioSummary'
@@ -17,10 +22,10 @@ import PositionTable from '@/components/resume/PositionTable'
 import CreatePortfolioModal from '@/components/modals/CreatePortfolioModal'
 
 const PERIOD_OPTIONS = [
-  { label: 'Últimos 6 meses',  value: 6  },
-  { label: 'Últimos 12 meses', value: 12 },
-  { label: 'Últimos 24 meses', value: 24 },
-  { label: 'Todo período',     value: 60 },
+  { label: 'Últimos 6 meses', value: '6m' },
+  { label: 'Últimos 12 meses', value: '12m' },
+  { label: 'Últimos 24 meses', value: '24m' },
+  { label: 'Todo período', value: 'all' },
 ]
 
 const ASSET_CLASS_ALL = 'all'
@@ -79,7 +84,7 @@ export default function ResumePage() {
   const globalPortfolioId = useAppStore(s => s.selectedPortfolioId)
   const setGlobal         = useAppStore(s => s.setSelectedPortfolioId)
 
-  const [period,          setPeriod]          = useState(12)
+  const [period,          setPeriod]          = useState<PeriodOption>('12m')
   const [assetClass,      setAssetClass]      = useState(ASSET_CLASS_ALL)
   const [showCreateModal, setShowCreateModal] = useState(false)
 
@@ -101,9 +106,40 @@ export default function ResumePage() {
 
   const activeAssetType = assetClass === ASSET_CLASS_ALL ? null : assetClass
 
-  const { data: summary,           isLoading: loadingSummary } = usePortfolioSummaryData(portfolioId)
-  const { data: patrimonioHistory, isLoading: loadingHistory } = usePatrimonioHistory(portfolioId, period, activeAssetType)
-  const { data: positions,         isLoading: loadingPositions } = usePositions(portfolioId)
+  const { data: summary, isLoading: loadingSummary } = usePortfolioSummaryData(portfolioId)
+  const { data: positions, isLoading: loadingPositions } = usePositions(portfolioId)
+  const { data: classAvailability, isLoading: loadingClassAvailability } = useClassTwrAvailability(portfolioId)
+
+  const selectedClassAvailability = activeAssetType
+    ? classAvailability?.find(item => item.asset_type === activeAssetType)
+    : null
+  const availableClassAssetType = selectedClassAvailability?.available
+    ? activeAssetType
+    : null
+
+  const { data: monthlyHistory, isLoading: loadingMonthlyHistory } = useMonthlyEvolution(
+    activeAssetType ? null : portfolioId,
+    period,
+  )
+  const { data: classMonthlyHistory, isLoading: loadingClassMonthlyHistory } = useClassMonthlyEvolution(
+    portfolioId,
+    availableClassAssetType,
+    period,
+  )
+
+  const patrimonioHistory = activeAssetType ? classMonthlyHistory : monthlyHistory
+  const classHistoryUnavailable = Boolean(
+    activeAssetType
+    && !loadingClassAvailability
+    && selectedClassAvailability?.available !== true,
+  )
+  const loadingHistory = activeAssetType
+    ? loadingClassAvailability
+      || (selectedClassAvailability?.available === true && loadingClassMonthlyHistory)
+    : loadingMonthlyHistory
+  const historyEmptyMessage = classHistoryUnavailable
+    ? selectedClassAvailability?.reason ?? 'Histórico canônico ainda não disponível para esta classe.'
+    : 'Sem dados históricos para esta seleção'
 
   const metrics = mapPortfolioSummaryMetrics(summary)
   const isEstimatedReturn = metrics.returnIsEstimated || metrics.rentabilidadeSource === 'valuation_fallback'
@@ -213,17 +249,17 @@ export default function ResumePage() {
           </div>
           <div className="responsive-actions">
             <ChartSelect value={assetClass} onChange={v => setAssetClass(v)} options={ASSET_CLASS_OPTIONS} />
-            <ChartSelect value={period} onChange={v => setPeriod(Number(v))} options={PERIOD_OPTIONS} />
+            <ChartSelect value={period} onChange={v => setPeriod(v as PeriodOption)} options={PERIOD_OPTIONS} />
           </div>
         </div>
 
         {loadingHistory ? (
           <div className="animate-pulse rounded-lg" style={{ height: 220, background: 'var(--color-surface-offset)' }} />
         ) : patrimonioHistory?.length ? (
-          <PatrimonioBarChart data={patrimonioHistory} singleSeries={assetClass !== ASSET_CLASS_ALL} />
+          <PatrimonioBarChart data={patrimonioHistory} />
         ) : (
-          <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-faint)' }}>Sem dados históricos para esta seleção</span>
+          <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '1rem' }}>
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-faint)' }}>{historyEmptyMessage}</span>
           </div>
         )}
       </div>
