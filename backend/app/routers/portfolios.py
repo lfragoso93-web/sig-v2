@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, status, BackgroundTasks, HTTPException, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional
 import logging
 
 from app.core.database import get_db, AsyncSessionLocal
@@ -29,8 +28,6 @@ from app.services.portfolio_intraday_reconciliation_service import get_intraday_
 from app.services.portfolio_summary_service import get_canonical_portfolio_summary
 from app.services.portfolio_delete_service import delete_portfolio_safely
 from app.services.portfolio_snapshot_service import backfill_snapshots
-from app.services.portfolio_history_service import get_canonical_monthly_evolution
-from app.services.portfolio_class_evolution_service import get_monthly_evolution_by_class
 from app.services.class_target_service import (
     get_targets_with_current,
     upsert_target,
@@ -258,25 +255,6 @@ async def delete_class_target(
     asset_type_norm = asset_type.upper()
     await delete_target(db, portfolio_id, asset_type_norm)
     return None
-
-
-@router.get("/{portfolio_id}/patrimonio-history")
-async def patrimonio_history(
-    portfolio_id: int,
-    months: int = 12,
-    asset_type: Optional[str] = None,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    await get_portfolio(db, portfolio_id, current_user.id)
-    if asset_type:
-        return await get_monthly_evolution_by_class(
-            db,
-            portfolio_id,
-            months=months,
-            asset_type=asset_type,
-        )
-    return await get_canonical_monthly_evolution(db, portfolio_id, months=months)
 
 
 @router.post("/{portfolio_id}/snapshots/backfill", status_code=status.HTTP_202_ACCEPTED)
