@@ -172,6 +172,21 @@ describe('ResumePage position states', () => {
     expect(screen.getByText(/Adicione um lançamento/)).toBeTruthy()
   })
 
+  it('explicita contrato summary.v2 inválido sem renderizar KPIs zerados', () => {
+    mocks.usePortfolioSummaryData.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new Error('Contrato summary.v2 inválido: total_patrimonio'),
+    })
+
+    render(<ResumePage />)
+
+    expect(screen.getByText(/Contrato financeiro inválido/)).toBeTruthy()
+    expect(screen.getByText(/total_patrimonio/)).toBeTruthy()
+    expect(screen.queryByText('Patrimônio Total')).toBeNull()
+  })
+
   it('não apresenta retorno estimado como TWR', () => {
     mocks.usePortfolioSummaryData.mockReturnValue({
       data: {
