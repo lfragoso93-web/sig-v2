@@ -141,6 +141,17 @@ O fallback intradiário recebe “Retorno estimado” nas duas páginas e nunca 
 rotulado como TWR. A fixture de regressão cobre patrimônio 900, custo 1.000,
 resultado total e não realizado negativos, proventos 20/25 e TWR negativo.
 
+### A12 — Resolvido: frontend sem recomposição financeira no Resumo
+
+A tabela consome `invested_value`, `current_value`, `variation_value` e os
+totais de grupo diretamente do contrato canônico de posições. O fallback
+`quantity * average_price` foi removido; custo canônico igual a zero permanece
+zero.
+
+KPIs usam `summary.v2` e gráficos usam campos dos snapshots. As operações locais
+restantes no Resumo tratam somente contagem, seleção, layout e formatação, sem
+criar valores monetários ou percentuais concorrentes.
+
 ## Contratos que devem permanecer
 
 - `summary.v2` como contrato único dos KPIs.
@@ -162,5 +173,6 @@ resultado total e não realizado negativos, proventos 20/25 e TWR negativo.
 7. Concluído: remover o endpoint/recomposição redundante após auditar consumidores.
 8. Concluído: validar `summary.v2` nas fronteiras backend e frontend.
 9. Concluído: reconciliar KPIs e semântica de retorno entre Resumo e Patrimônio.
-10. Validar visualmente a #147.
-11. Sincronizar documentação viva ao concluir o bloco estrutural.
+10. Concluído: remover recomposições financeiras restantes do frontend do Resumo.
+11. Validar visualmente a #147.
+12. Sincronizar documentação viva ao concluir o bloco estrutural.
