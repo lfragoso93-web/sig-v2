@@ -15,6 +15,7 @@ from app.schemas.portfolio import (
 )
 from app.schemas.portfolio_positions import PositionGroupResponse
 from app.schemas.portfolio_intraday_reconciliation import IntradayReconciliationResponse
+from app.schemas.portfolio_summary import PortfolioSummaryResponse
 from app.services.portfolio_service import (
     create_portfolio,
     list_portfolios,
@@ -164,7 +165,7 @@ async def delete_user_portfolio(
     return None
 
 
-@router.get("/{portfolio_id}/summary")
+@router.get("/{portfolio_id}/summary", response_model=PortfolioSummaryResponse)
 async def portfolio_summary(
     portfolio_id: int,
     db: AsyncSession = Depends(get_db),
