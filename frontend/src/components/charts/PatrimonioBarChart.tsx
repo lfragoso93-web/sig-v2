@@ -8,13 +8,23 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts'
-import type { PatrimonioHistoryPoint } from '@/hooks/usePortfolio'
 import { formatBRL, formatPercent, signClass } from '@/utils/format'
 
+export interface PatrimonioEvolutionPoint {
+  date: string
+  period?: string
+  market_value: number
+  cost_basis: number
+  unrealized_pnl: number
+  accumulated_return_pct?: number
+  has_partial_prices?: boolean
+  return_is_estimated?: boolean
+  history_source?: 'portfolio_snapshot' | 'portfolio_class_snapshot' | string
+}
+
 interface Props {
-  data: PatrimonioHistoryPoint[]
+  data: PatrimonioEvolutionPoint[]
   loading?: boolean
-  singleSeries?: boolean
 }
 
 function monthLabel(value: string) {
@@ -48,11 +58,11 @@ export interface ChartPoint {
   source: string
 }
 
-export function buildPatrimonioChartData(data: PatrimonioHistoryPoint[]): ChartPoint[] {
+export function buildPatrimonioChartData(data: PatrimonioEvolutionPoint[]): ChartPoint[] {
   return data.map(point => {
-    const patrimonio = Number(point.value || 0)
-    const aplicado = Number(point.invested || 0)
-    const resultado = Number(point.capital_result ?? patrimonio - aplicado)
+    const patrimonio = Number(point.market_value)
+    const aplicado = Number(point.cost_basis)
+    const resultado = Number(point.unrealized_pnl)
 
     return {
       name: monthLabel(point.period ?? point.date.slice(0, 7)),
@@ -90,9 +100,9 @@ function EvolutionTooltip({ active, payload }: TooltipProps) {
   const point = payload?.[0]?.payload
   if (!active || !point) return null
 
-  const referenceLabel = point.source === 'portfolio_snapshot'
-    ? 'Snapshot'
-    : 'Fechamento mensal da classe'
+  const referenceLabel = point.source === 'portfolio_class_snapshot'
+    ? 'Snapshot mensal da classe'
+    : 'Snapshot consolidado'
 
   return (
     <div
