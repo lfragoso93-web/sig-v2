@@ -14,7 +14,11 @@ import {
 import { useClassTargets } from '@/hooks/useClassTargets'
 import { useAppStore } from '@/store/appStore'
 import { formatBRL, formatPercent, signClass } from '@/utils/format'
-import { formatReferenceDate, mapPortfolioSummaryMetrics } from '@/utils/portfolioSummary'
+import {
+  formatReferenceDate,
+  getPortfolioReturnPresentation,
+  mapPortfolioSummaryMetrics,
+} from '@/utils/portfolioSummary'
 import KpiCard from '@/components/ui/KpiCard'
 import SkeletonCard from '@/components/ui/SkeletonCard'
 import EmptyState from '@/components/ui/EmptyState'
@@ -255,9 +259,7 @@ export default function PatrimonioPage() {
   const portfolioId = useAppStore(state => state.selectedPortfolioId)
   const { data: summary, isLoading: loadingSummary, error: summaryError } = usePortfolioSummary(portfolioId ?? 0)
   const metrics = summary ? mapPortfolioSummaryMetrics(summary) : null
-  const isEstimatedReturn = Boolean(
-    metrics?.returnIsEstimated || metrics?.rentabilidadeSource === 'valuation_fallback',
-  )
+  const returnPresentation = getPortfolioReturnPresentation(metrics)
   const summaryContractError = summaryError instanceof Error
     && summaryError.message.startsWith('Contrato summary.v2 inválido:')
   const { data: groups = [] } = usePositions(portfolioId ?? 0)
@@ -321,12 +323,12 @@ export default function PatrimonioPage() {
               subLabel="Realizado; total inclui proventos"
             />
             <KpiCard
-              label={isEstimatedReturn ? 'Retorno estimado' : 'Rentabilidade (TWR)'}
+              label={returnPresentation.label}
               value={`${metrics.rentabilidadePct >= 0 ? '+' : ''}${formatPercent(metrics.rentabilidadePct)}`}
               valueColor={signClass(metrics.rentabilidadePct)}
               subValue={formatBRL(metrics.proventosTotal)}
               subLabel="Proventos líquidos recebidos"
-              bottomLine={isEstimatedReturn ? (
+              bottomLine={returnPresentation.isEstimated ? (
                 <span className="text-xs font-semibold" style={{ color: 'var(--color-warning)' }}>
                   Estimativa do valuation atual; TWR indisponível sem snapshot
                 </span>
