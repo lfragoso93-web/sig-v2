@@ -110,7 +110,6 @@ export function usePositions(portfolioId: number | null) {
     queryFn: () => api.get(`/portfolios/${portfolioId}/positions`).then(r => r.data),
     enabled: !!portfolioId,
     staleTime: STALE_2MIN,
-    placeholderData: [],
   })
 }
 
