@@ -26,10 +26,8 @@ financeira concorrente.
 |---|---|---|---|---|
 | KPIs | `usePortfolioSummaryData` | `GET /portfolios/{id}/summary` | `portfolio_summary_service` | Valuation intradiário + último `PortfolioSnapshot` + proventos recebidos |
 | Tabela de ativos | `usePositions` | `GET /portfolios/{id}/positions` | `canonical_positions_service` | Posições/valuation atual + proventos recebidos por ticker |
-| Gráfico consolidado | `usePatrimonioHistory` | `GET /portfolios/{id}/patrimonio-history` | `portfolio_history_service` | Último `PortfolioSnapshot` de cada mês |
-| Gráfico por classe | `usePatrimonioHistory` | `GET /portfolios/{id}/patrimonio-history?asset_type=...` | `portfolio_class_evolution_service` | Recomposição por transações e preços históricos |
-| Gráfico canônico consolidado já disponível | `useMonthlyEvolution` | `GET /performance/{id}/evolution/monthly` | leitura de snapshots enriquecidos | `PortfolioSnapshot` |
-| Gráfico canônico por classe já disponível | `useClassMonthlyEvolution` | `GET /performance/{id}/classes/{type}/evolution/monthly` | leitura de snapshots por classe | `PortfolioClassSnapshot` |
+| Gráfico consolidado | `useMonthlyEvolution` | `GET /performance/{id}/evolution/monthly` | `portfolio_snapshot_read_service` | `PortfolioSnapshot` |
+| Gráfico por classe | `useClassMonthlyEvolution` + `useClassTwrAvailability` | `GET /performance/{id}/classes/{type}/evolution/monthly` | `portfolio_class_snapshot_read_service` | `PortfolioClassSnapshot` |
 | Disponibilidade por classe | `useClassTwrAvailability` | `GET /performance/{id}/classes/availability` | leitura de snapshots por classe | Cobertura e suporte do motor histórico |
 | Reconciliação por classe | `useClassReconciliation` | `GET /performance/{id}/classes/reconciliation/latest` | reconciliação de classes | Snapshots consolidados e por classe |
 | Reconciliação intradiária | auditoria operacional | `GET /portfolios/{id}/reconciliation/intraday` | `portfolio_intraday_reconciliation_service` | `summary.v2` + posições + distribuição, sem snapshots |
@@ -57,27 +55,19 @@ financeira concorrente.
 `ganho_realizado` e `lucro_total`. O último snapshot permanece exclusivamente como
 fonte do TWR acumulado, TWR diário e metadados de performance fechada.
 
-### A2 — Gráfico por classe ainda contorna `PortfolioClassSnapshot`
+### A2 — Resolvido: gráfico por classe usa `PortfolioClassSnapshot`
 
-O filtro por classe do Resumo chama
-`portfolio_class_evolution_service.get_monthly_evolution_by_class`, que recompõe
-quantidade, custo e valor por transações e preços históricos e usa custo médio
-quando falta cotação. Isso produz `history_source=db_derived_class_history` e cria
-uma segunda regra financeira fora do pipeline de snapshots.
+O filtro por classe do Resumo consulta primeiro a disponibilidade canônica e só
+carrega `/performance/{id}/classes/{type}/evolution/monthly` quando o snapshot
+da classe está materializado. Classes indisponíveis exibem o motivo informado
+pela API; nenhuma recomposição por transações ou preços ocorre no frontend.
 
-Direção: migrar o Resumo para os endpoints de `PortfolioClassSnapshot`, respeitar
-a disponibilidade por classe e não exibir aproximação para motores ainda não
-suportados.
+### A3 — Parcialmente resolvido: consumidor histórico redundante removido do Resumo
 
-### A3 — Endpoint histórico redundante
-
-`/portfolios/{id}/patrimonio-history` replica parte do domínio já publicado em
-`/performance/{id}/evolution/monthly` e alterna entre duas fontes conforme o
-filtro. Isso torna o contrato temporal dependente de um parâmetro.
-
-Direção: migrar o consumidor do Resumo para os endpoints `/performance`; depois
-de confirmar ausência de outros consumidores, descontinuar o endpoint redundante
-em bloco separado.
+O `ResumePage` não consome mais `/portfolios/{id}/patrimonio-history`: os
+gráficos consolidado e por classe usam exclusivamente os endpoints de
+`/performance` baseados em snapshots. O endpoint legado permanece até a auditoria
+dos demais consumidores e deve ser removido em bloco separado se não houver uso.
 
 ### A4 — Resolvido: campo legado de rentabilidade removido
 
@@ -110,11 +100,12 @@ TWR, rentabilidade e valores de fechamento não participam dessas comparações.
 O menu de ativos usa `createPortal`, coordenadas de viewport e reposição em
 scroll/resize. A cobertura frontend valida o comportamento com uma e vinte linhas.
 
-### A8 — Correção do gráfico aguarda validação visual
+### A8 — Cobertura automatizada concluída; validação visual publicada pendente
 
-`PatrimonioBarChart` já usa `stackOffset="sign"` e possui teste de transformação
-para ganho/perda. A issue #147 permanece aberta até validação no ambiente
-publicado.
+`PatrimonioBarChart` usa `stackOffset="sign"` e consome diretamente
+`market_value`, `cost_basis` e `unrealized_pnl` dos snapshots. Os testes cobrem
+ganho e perda e comprovam que o frontend não recompõe o resultado por subtração.
+A issue #147 permanece aberta somente até a validação visual no ambiente publicado.
 
 ### A9 — Resolvido: contrato e totais por classe
 
@@ -151,7 +142,7 @@ fallback não é apresentado como rentabilidade TWR.
 3. Concluído: remover o retorno legado, validar o contrato de posições e cobrir o dropdown.
 4. Concluído: reconciliar `summary.v2`, posições e distribuição na referência intradiária.
 5. Concluído: explicitar loading, vazio, cobertura parcial, preço ausente e retorno estimado.
-6. Migrar o gráfico consolidado e por classe para os endpoints de performance.
+6. Concluído: migrar o gráfico consolidado e por classe para os endpoints de performance.
 7. Remover o endpoint/recomposição redundante somente após auditar consumidores.
 8. Validar visualmente a #147.
 9. Sincronizar documentação viva ao concluir o bloco estrutural.
