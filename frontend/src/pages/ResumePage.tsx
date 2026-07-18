@@ -13,7 +13,10 @@ import {
 import type { PeriodOption } from '@/hooks/useEvolution'
 import { useAppStore } from '@/store/appStore'
 import { formatBRL, formatPercent, signClass } from '@/utils/format'
-import { mapPortfolioSummaryMetrics } from '@/utils/portfolioSummary'
+import {
+  getPortfolioReturnPresentation,
+  mapPortfolioSummaryMetrics,
+} from '@/utils/portfolioSummary'
 import KpiCard from '@/components/ui/KpiCard'
 import SkeletonCard from '@/components/ui/SkeletonCard'
 import EmptyState from '@/components/ui/EmptyState'
@@ -146,9 +149,7 @@ export default function ResumePage() {
     : 'Sem dados históricos para esta seleção'
 
   const metrics = summary ? mapPortfolioSummaryMetrics(summary) : null
-  const isEstimatedReturn = Boolean(
-    metrics?.returnIsEstimated || metrics?.rentabilidadeSource === 'valuation_fallback',
-  )
+  const returnPresentation = getPortfolioReturnPresentation(metrics)
   const loadingKpiCards = loadingPortfolios || loadingSummary
   const summaryContractError = summaryError instanceof Error
     && summaryError.message.startsWith('Contrato summary.v2 inválido:')
@@ -219,12 +220,12 @@ export default function ResumePage() {
               subLabel="Total líquido recebido"
             />
             <KpiCard
-              label={isEstimatedReturn ? 'Retorno estimado' : 'Rentabilidade (TWR)'}
+              label={returnPresentation.label}
               value={`${metrics.rentabilidadePct >= 0 ? '+' : ''}${formatPercent(metrics.rentabilidadePct)}`}
               valueColor={signClass(metrics.rentabilidadePct)}
               subValue={`${metrics.variacaoPct >= 0 ? '+' : ''}${formatPercent(metrics.variacaoPct)}`}
               subLabel="Variação patrimonial das posições abertas"
-              bottomLine={isEstimatedReturn ? (
+              bottomLine={returnPresentation.isEstimated ? (
                 <span className="text-xs font-semibold" style={{ color: 'var(--color-warning)' }}>
                   Estimativa do valuation atual; TWR indisponível sem snapshot
                 </span>
