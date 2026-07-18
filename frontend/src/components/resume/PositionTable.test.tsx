@@ -60,7 +60,7 @@ function mockButtonPosition(button: HTMLButtonElement, top: number): void {
   } as DOMRect)
 }
 
-describe('PositionTable asset menu', () => {
+describe('PositionTable', () => {
   beforeEach(() => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 })
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 })
@@ -99,6 +99,34 @@ describe('PositionTable asset menu', () => {
     expect(menu.parentElement).toBe(document.body)
     expect(menu.style.position).toBe('fixed')
     expect(within(menu).getAllByRole('menuitem')).toHaveLength(3)
+  })
+
+  it('explicita custo, resultado de capital e variação diária', () => {
+    render(
+      <MemoryRouter>
+        <PositionTable groups={[buildGroup(1)]} portfolioId={46} />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByText('Custo Atual')).toBeTruthy()
+    expect(screen.getByText('Resultado de Capital')).toBeTruthy()
+    expect(screen.getByText('Variação diária')).toBeTruthy()
+  })
+
+  it('identifica valores indisponíveis quando o ativo não tem cotação', () => {
+    const group = buildGroup(1)
+    group.positions[0].current_price = null
+    group.positions[0].current_value = null
+    group.positions[0].variation_value = null
+    group.positions[0].variation_percent = null
+
+    render(
+      <MemoryRouter>
+        <PositionTable groups={[group]} portfolioId={46} />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getAllByText('Sem cotação')).toHaveLength(3)
   })
 
   it('usa o total investido canônico do grupo sem recompor as posições', () => {
