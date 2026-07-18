@@ -141,8 +141,10 @@ export default function ResumePage() {
     ? selectedClassAvailability?.reason ?? 'Histórico canônico ainda não disponível para esta classe.'
     : 'Sem dados históricos para esta seleção'
 
-  const metrics = mapPortfolioSummaryMetrics(summary)
-  const isEstimatedReturn = metrics.returnIsEstimated || metrics.rentabilidadeSource === 'valuation_fallback'
+  const metrics = summary ? mapPortfolioSummaryMetrics(summary) : null
+  const isEstimatedReturn = Boolean(
+    metrics?.returnIsEstimated || metrics?.rentabilidadeSource === 'valuation_fallback',
+  )
   const loadingKpiCards = loadingPortfolios || loadingSummary
 
   if (loadingPortfolios) {
@@ -177,7 +179,7 @@ export default function ResumePage() {
       <div className="kpi-grid">
         {loadingKpiCards ? (
           [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
-        ) : summary ? (
+        ) : summary && metrics ? (
           <>
             <KpiCard
               label="Patrimônio Total"
@@ -220,7 +222,7 @@ export default function ResumePage() {
         )}
       </div>
 
-      {metrics.hasPartialPrices && (
+      {metrics?.hasPartialPrices && (
         <div
           className="card"
           style={{
