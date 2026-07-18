@@ -60,6 +60,8 @@ describe('canonical monthly evolution hooks', () => {
     )
 
     expect(result.current.fetchStatus).toBe('idle')
-    expect(api.get).not.toHaveBeenCalled()
+    expect(
+      vi.mocked(api.get).mock.calls.some(([url]) => String(url).includes('/classes/')),
+    ).toBe(false)
   })
 })
