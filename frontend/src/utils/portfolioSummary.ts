@@ -6,6 +6,8 @@ export interface PortfolioSummaryMetrics {
   lucroTotal: number
   variacaoValor: number
   variacaoPct: number
+  ganhoNaoRealizado: number
+  ganhoRealizado: number
   rentabilidadePct: number
   rentabilidadeDiariaPct: number | null
   proventos12m: number
@@ -42,6 +44,8 @@ export function mapPortfolioSummaryMetrics(summary: PortfolioSummary): Portfolio
     lucroTotal: summary.lucro_total,
     variacaoValor: summary.variacao_valor,
     variacaoPct: summary.variacao_percentual,
+    ganhoNaoRealizado: summary.ganho_nao_realizado,
+    ganhoRealizado: summary.ganho_realizado,
     rentabilidadePct: summary.rentabilidade_total,
     rentabilidadeDiariaPct: summary.rentabilidade_diaria,
     proventos12m: summary.dividendos_recebidos_12m,
