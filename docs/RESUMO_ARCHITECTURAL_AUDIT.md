@@ -2,7 +2,7 @@
 
 Issue de acompanhamento: #161  
 Branch: `stable-15jun`  
-Referência: 17/07/2026
+Referência: 18/07/2026
 
 ## Objetivo
 
@@ -62,12 +62,16 @@ carrega `/performance/{id}/classes/{type}/evolution/monthly` quando o snapshot
 da classe está materializado. Classes indisponíveis exibem o motivo informado
 pela API; nenhuma recomposição por transações ou preços ocorre no frontend.
 
-### A3 — Parcialmente resolvido: consumidor histórico redundante removido do Resumo
+### A3 — Resolvido: endpoint e recomposição histórica redundantes removidos
 
-O `ResumePage` não consome mais `/portfolios/{id}/patrimonio-history`: os
-gráficos consolidado e por classe usam exclusivamente os endpoints de
-`/performance` baseados em snapshots. O endpoint legado permanece até a auditoria
-dos demais consumidores e deve ser removido em bloco separado se não houver uso.
+A auditoria das páginas registradas no router confirmou que nenhum consumidor
+ativo dependia de `/portfolios/{id}/patrimonio-history`. O hook frontend, a rota,
+o serviço consolidado duplicado e o serviço que recompunha classes por transações,
+preços históricos e fallback de custo médio foram removidos.
+
+Históricos consolidados e por classe permanecem publicados exclusivamente pelos
+endpoints de `/performance`, com origem em `PortfolioSnapshot` e
+`PortfolioClassSnapshot`.
 
 ### A4 — Resolvido: campo legado de rentabilidade removido
 
@@ -143,6 +147,6 @@ fallback não é apresentado como rentabilidade TWR.
 4. Concluído: reconciliar `summary.v2`, posições e distribuição na referência intradiária.
 5. Concluído: explicitar loading, vazio, cobertura parcial, preço ausente e retorno estimado.
 6. Concluído: migrar o gráfico consolidado e por classe para os endpoints de performance.
-7. Remover o endpoint/recomposição redundante somente após auditar consumidores.
+7. Concluído: remover o endpoint/recomposição redundante após auditar consumidores.
 8. Validar visualmente a #147.
 9. Sincronizar documentação viva ao concluir o bloco estrutural.
