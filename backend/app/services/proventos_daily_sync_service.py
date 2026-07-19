@@ -93,7 +93,7 @@ async def load_proventos_sync_pairs(
     db: AsyncSession,
     *,
     asset_types: set[str] | None = None,
-    only_held: bool = True,
+    only_held: bool = False,
 ) -> tuple[list[tuple[str, str]], int]:
     """Carrega tickers elegíveis sem varrer o catálogo quando há carteira."""
     wanted = asset_types or NATIONAL_EVENT_TYPES
