@@ -2,15 +2,26 @@ import api from './api'
 
 export interface ProventosSummary {
   total_recebido: number
-  total_liquido_recebido?: number
-  total_bruto_recebido?: number
+  total_liquido_recebido: number
+  total_bruto_recebido: number
   total_a_receber: number
-  total_liquido_a_receber?: number
-  total_bruto_a_receber?: number
+  total_liquido_a_receber: number
+  total_bruto_a_receber: number
   total_12m: number
   media_mensal_12m: number
-  eventos_nao_cash?: number
+  eventos_nao_cash: number
 }
+
+export type ProventoStatus = 'RECEBIDO' | 'PENDENTE' | 'CANCELADO' | 'A_RECEBER'
+
+export type ProventoType =
+  | 'DIVIDENDO'
+  | 'JCP'
+  | 'RENDIMENTO'
+  | 'AMORTIZACAO'
+  | 'BONIFICACAO'
+  | 'SUBSCRICAO'
+  | 'OUTROS'
 
 export interface ProventoDistribution {
   ticker: string
@@ -30,9 +41,9 @@ export interface ProventoItem {
   id: number
   ticker: string
   asset_type: string
-  dividend_type: string
-  is_cash?: boolean
-  status: 'RECEBIDO' | 'A_RECEBER'
+  dividend_type: ProventoType
+  is_cash: boolean
+  status: ProventoStatus
   record_date: string | null
   ex_date: string
   payment_date: string | null
@@ -55,12 +66,6 @@ export interface ProventosListResponse {
   page: number
   page_size: number
   items: ProventoItem[]
-}
-
-export interface ProventosEvolucao {
-  month: string
-  recebido: number
-  a_receber: number
 }
 
 export interface ProventosFilters {
