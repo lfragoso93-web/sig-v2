@@ -15,7 +15,7 @@ Mapear o fluxo atual de Proventos antes de qualquer mudança funcional, preserva
 | Evento global | Armazena eventos conhecidos por ativo, independentemente da carteira | `AssetDividend` |
 | Direito da carteira | Materializa quantidade elegível e valor do investidor | `Dividend`, `dividend_backfill_service` |
 | Coleta | Busca e normaliza eventos de mercado | pipeline de mercado, sincronização diária e serviços BRAPI |
-| Leitura/API | Reconcilia e agrega resumo, lista, histórico e distribuição | `proventos_service`, router `/proventos` |
+| Leitura/API | Autoriza e agrega resumo, lista, histórico e distribuição sem escrita | `proventos_service`, router `/proventos` |
 | Frontend | Exibe KPIs, filtros, gráfico e tabela | `ProventosPage`, hooks e serviço HTTP |
 
 ## Contratos temporais e financeiros
@@ -33,10 +33,10 @@ Mapear o fluxo atual de Proventos antes de qualquer mudança funcional, preserva
 |---|---|---|
 | `GET /proventos/summary` | KPIs consolidados | ano, status, classe e tipo |
 | `GET /proventos` | tabela paginada | ano, status, classe e tipo |
-| `GET /proventos/history` | série histórica | status, classe e tipo |
-| `GET /proventos/distribution` | distribuição mensal | apenas quantidade de meses |
+| `GET /proventos/history` | série histórica | ano, status, classe e tipo |
+| `GET /proventos/distribution` | distribuição mensal ou anual | meses, ano, status, classe e tipo |
 
-A distribuição não recebe o mesmo conjunto de filtros dos demais componentes. Assim, o gráfico pode representar um universo diferente dos KPIs e da tabela quando o usuário filtra a página.
+Os quatro agregados compartilham o mesmo construtor de filtros. O frontend inclui o mesmo objeto de filtros nas chamadas e nas chaves de cache.
 
 ## Achados
 
@@ -44,13 +44,13 @@ A distribuição não recebe o mesmo conjunto de filtros dos demais componentes.
 
 A sincronização diária de Proventos e o pipeline de mercado podem coletar e materializar os mesmos eventos em execuções distintas. A idempotência reduz duplicações persistidas, mas não elimina custo, concorrência nem complexidade operacional.
 
-### P1 — Escrita durante leitura
+### Resolvido — Leitura sem escrita
 
-Os quatro endpoints acionam a reconciliação por `ensure_portfolio_proventos`. Não há chamada externa nesse caminho, porém uma consulta da página pode escrever no banco. O estado correto deve ser produzido por seed, onboarding, pipeline ou tarefa explícita; a leitura deve tornar-se previsível e observável.
+Os quatro endpoints executam somente autorização e agregação. A materialização ocorre nos pipelines; mutações de transações disparam reconciliação explícita para recalcular ou remover direitos.
 
-### P1 — Filtros divergentes
+### Resolvido — Filtros e contratos divergentes
 
-Resumo, lista, histórico e distribuição não compartilham um contrato único. A divergência precisa ser caracterizada por testes antes da correção.
+Resumo, lista, histórico e distribuição compartilham filtros canônicos. Os quatro endpoints possuem contratos Pydantic estritos e o frontend envia o mesmo universo de filtros a todos os consumidores.
 
 ### P2 — Serviços de coleta paralelos
 
@@ -86,25 +86,22 @@ As dependências #146, #138, #137 e #133 não serão alteradas durante esta fase
 
 ## Estratégia de consolidação
 
-1. Adicionar testes de caracterização do comportamento atual.
-2. Criar contratos estritos e um objeto de filtros comum para todos os agregados.
-3. Tornar a leitura independente de materialização.
-4. Centralizar elegibilidade, posição e regras monetárias.
+1. ~~Adicionar testes de caracterização do comportamento atual.~~ Concluído.
+2. ~~Criar contratos estritos e um objeto de filtros comum para todos os agregados.~~ Concluído.
+3. ~~Tornar a leitura independente de materialização.~~ Concluído.
+4. ~~Centralizar elegibilidade e posição.~~ Concluído; regras monetárias ainda serão consolidadas.
 5. Consolidar coleta e agendamento, removendo duplicidades somente após teste de consumidores.
 6. Normalizar o modelo com migração compatível e coordenada com #158.
 7. Validar ações, FIIs, ETFs e BDRs em seed, coleta e materialização.
 8. Revisar frontend e então executar a melhoria #131.
 9. Sincronizar documentação e promover o bloco estrutural à `main`.
 
-## Primeiro bloco de implementação recomendado
+## Próximo bloco recomendado
 
-Criar testes de caracterização para:
+Consolidar a coleta e o scheduler:
 
-- consistência dos filtros entre resumo, lista, histórico e distribuição;
-- exclusão de eventos não monetários;
-- elegibilidade por data de corte/registro;
-- reconhecimento por data de pagamento;
-- idempotência da materialização;
-- ausência de chamadas externas nos endpoints de leitura.
-
-Somente depois desses testes o contrato da distribuição deve ser alterado.
+- identificar todos os consumidores de `dividends_sync_service.py`;
+- escolher uma única porta de entrada para coleta e materialização;
+- eliminar execuções sobrepostas;
+- preservar onboarding e comandos manuais;
+- comprovar o comportamento com testes antes de remover o serviço legado.
