@@ -13,7 +13,10 @@ from app.models.transaction import Transaction, OperationType
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
 from app.models.dividend import Dividend, DividendStatus, DividendType
-from app.services.dividend_entitlement_service import calculate_net_quantity
+from app.services.dividend_entitlement_service import (
+    calculate_net_quantity,
+    calculate_net_value,
+)
 from app.services.dividend_type_service import normalize_dividend_type
 
 logger = logging.getLogger(__name__)
@@ -416,7 +419,7 @@ async def backfill_dividends(db: AsyncSession, portfolio_id: int | None, ticker:
                     continue
 
                 total = qty * parsed.value_per_unit
-                net = total * 0.85 if dividend_type == DividendType.JCP else total
+                net = calculate_net_value(dividend_type, total)
                 div = existing_divs.get((pid, asset_div.id))
                 if div is None:
                     div = Dividend(
@@ -507,7 +510,7 @@ async def materialize_asset_dividends(db: AsyncSession, tickers: Optional[list[s
                 continue
 
             total = qty * value
-            net = total * 0.85 if dividend_type == DividendType.JCP else total
+            net = calculate_net_value(dividend_type, total)
             div = existing_divs.get((pid, asset_div.id))
             if div is None:
                 div = Dividend(
