@@ -126,7 +126,7 @@ primeiro estado de loading; os mensais preservam `undefined` durante a carga.
 - Testes caracterizam isolamento por carteira e fonte `portfolio_class_snapshot`.
 - O mensal usa o último fechamento do período e compõe os TWRs diários.
 - Disponibilidade exige simultaneamente motor suportado e snapshot materializado.
-- Contratos estritos cobrem evolução consolidada e por classe, disponibilidade e reconciliação.\n- Fontes históricas, estados e campos de reconciliação são validados sem recomputar valores.\n- Janelas de 6, 12 e 24 meses começam no primeiro dia exato do mês inicial; `0` preserva todo o histórico.\n- Consolidado e classes usam a mesma função de fronteira mensal.\n- Loading, erro com retry, vazio real e sucesso são estados distintos na evolução.\n- Suíte backend disponível: 89 testes aprovados.
+- Contratos estritos cobrem evolução consolidada e por classe, disponibilidade e reconciliação.\n- Fontes históricas, estados e campos de reconciliação são validados sem recomputar valores.\n- Janelas de 6, 12 e 24 meses começam no primeiro dia exato do mês inicial; `0` preserva todo o histórico.\n- Consolidado e classes usam a mesma função de fronteira mensal.\n- Loading, erro com retry, vazio real e sucesso são estados distintos na evolução.\n- Suíte backend disponível: 89 testes aprovados.\n- O router de performance possui teste de compilação do fonte após a correção do incidente de startup causado por escapes literais.
 - Suíte frontend disponível: 53 testes aprovados e typecheck focado válido.
 - Nenhum workflow remoto foi disparado neste bloco.
 
