@@ -104,6 +104,7 @@ async def list_proventos(
 async def proventos_historico_mensal(
     portfolio_id: int,
     status: Optional[str] = Query(None),
+    year: Optional[int] = Query(None),
     asset_type: Optional[str] = Query(None),
     dividend_type: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
@@ -114,6 +115,7 @@ async def proventos_historico_mensal(
         db,
         portfolio_id,
         status=_parse_status(status),
+        year=year,
         asset_type=asset_type,
         dividend_type=_parse_dividend_type(dividend_type),
     )
@@ -123,8 +125,20 @@ async def proventos_historico_mensal(
 async def proventos_distribuicao(
     portfolio_id: int,
     months: int = Query(12, ge=1, le=120),
+    status: Optional[str] = Query(None),
+    year: Optional[int] = Query(None),
+    asset_type: Optional[str] = Query(None),
+    dividend_type: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     await _prepare_proventos(portfolio_id, current_user, db)
-    return await get_distribution(db, portfolio_id, months=months)
+    return await get_distribution(
+        db,
+        portfolio_id,
+        months=months,
+        status=_parse_status(status),
+        year=year,
+        asset_type=asset_type,
+        dividend_type=_parse_dividend_type(dividend_type),
+    )
