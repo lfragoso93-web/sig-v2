@@ -3,8 +3,6 @@ proventos_service.py — agregacoes e leituras de proventos.
 """
 from __future__ import annotations
 
-import logging
-import time
 from datetime import date
 from typing import Optional
 
@@ -16,12 +14,6 @@ from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
 from app.models.dividend import Dividend, DividendStatus, DividendType
 from app.models.transaction import Transaction, OperationType
-from app.services.dividend_backfill_service import materialize_asset_dividends
-
-logger = logging.getLogger(__name__)
-
-_AUTO_MATERIALIZE_TTL_SECONDS = 60.0
-_auto_materialize_cache: dict[int, float] = {}
 
 _NON_CASH_DIVIDEND_TYPES = (
     DividendType.BONIFICACAO,
@@ -105,91 +97,6 @@ def _year_filter(year: int):
             extract("year", AssetDividend.ex_date) == year,
         ),
     )
-
-
-def _calc_net_qty(txs: list[tuple], ref_date: date) -> float:
-    qty = 0.0
-    for tx_date, op, q in txs:
-        if tx_date > ref_date:
-            continue
-        op_val = op.value if isinstance(op, OperationType) else str(op)
-        if op_val == "buy":
-            qty += float(q)
-        elif op_val == "sell":
-            qty -= float(q)
-    return max(qty, 0.0)
-
-
-async def _reconcile_portfolio_dividend_rights(db: AsyncSession, portfolio_id: int, tickers: list[str]) -> int:
-    """
-    Remove materializações que não fazem mais sentido após alteração/exclusão de
-    transações. O evento global permanece em AssetDividend; só o vínculo da
-    carteira é removido se a carteira não tinha posição na Data Com/Data Ex.
-    """
-    if not tickers:
-        return 0
-
-    tx_rows = await db.execute(
-        select(Transaction.ticker, Transaction.date, Transaction.operation, Transaction.quantity)
-        .where(Transaction.portfolio_id == portfolio_id, Transaction.ticker.in_(tickers))
-    )
-    txs_by_ticker: dict[str, list[tuple]] = {}
-    for ticker, tx_date, op, qty in tx_rows.all():
-        txs_by_ticker.setdefault(str(ticker).upper(), []).append((tx_date, op, qty))
-
-    div_rows = await db.execute(
-        select(Dividend, AssetDividend, Asset.ticker)
-        .join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
-        .join(Asset, AssetDividend.asset_id == Asset.id)
-        .where(Dividend.portfolio_id == portfolio_id, Asset.ticker.in_(tickers))
-    )
-
-    removed = 0
-    for div, asset_div, ticker in div_rows.all():
-        entitlement_date = asset_div.record_date or asset_div.ex_date
-        qty = _calc_net_qty(txs_by_ticker.get(str(ticker).upper(), []), entitlement_date)
-        if qty <= 0:
-            await db.delete(div)
-            removed += 1
-
-    return removed
-
-
-async def ensure_portfolio_proventos(db: AsyncSession, portfolio_id: int, force: bool = False) -> int:
-    """
-    Garante que a página de Proventos reflita automaticamente os ativos da carteira.
-
-    Não chama provedores externos. Materializa eventos globais já coletados e
-    reconcilia vínculos da carteira usando a posição do investidor na Data Com.
-    """
-    now = time.monotonic()
-    if not force and now < _auto_materialize_cache.get(portfolio_id, 0.0):
-        return 0
-
-    rows = await db.execute(
-        select(Transaction.ticker)
-        .where(Transaction.portfolio_id == portfolio_id)
-        .distinct()
-    )
-    tickers = [str(row[0]).upper() for row in rows.all() if row[0]]
-    if not tickers:
-        _auto_materialize_cache[portfolio_id] = now + _AUTO_MATERIALIZE_TTL_SECONDS
-        return 0
-
-    changed = await materialize_asset_dividends(db=db, tickers=tickers, portfolio_id=portfolio_id, commit=False)
-    removed = await _reconcile_portfolio_dividend_rights(db, portfolio_id, tickers)
-    await db.commit()
-
-    _auto_materialize_cache[portfolio_id] = time.monotonic() + _AUTO_MATERIALIZE_TTL_SECONDS
-    total = changed + removed
-    if total:
-        logger.info(
-            "[proventos] portfolio=%s: auto-sync concluido (%s criados/atualizados, %s removidos)",
-            portfolio_id,
-            changed,
-            removed,
-        )
-    return total
 
 
 async def _sum_value(db: AsyncSession, portfolio_id: int, column, *conditions) -> float:
