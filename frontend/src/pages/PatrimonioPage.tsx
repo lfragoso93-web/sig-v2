@@ -26,6 +26,7 @@ import AssetDonutChart from '@/components/charts/AssetDonutChart'
 import AllocationTargetWidget from '@/components/resume/AllocationTargetWidget'
 import EvolutionLineChart from '@/components/charts/EvolutionLineChart'
 import EvolutionBarChart from '@/components/charts/EvolutionBarChart'
+import EvolutionQueryState from '@/components/charts/EvolutionQueryState'
 
 function safeNum(value: unknown): number {
   const parsed = Number(value)
@@ -79,10 +80,10 @@ function ToggleGroup<T extends string>({
 function EvolutionSection({ portfolioId }: { portfolioId: number }) {
   const [period, setPeriod] = useState<PeriodOption>('12m')
   const [view, setView] = useState<ViewMode>('mensal')
-  const { data: daily, isLoading: loadingDaily } = useDailyEvolution(portfolioId, period)
-  const { data: monthly, isLoading: loadingMonthly } = useMonthlyEvolution(portfolioId, period)
-  const data = view === 'mensal' ? monthly : daily
-  const loading = view === 'mensal' ? loadingMonthly : loadingDaily
+  const dailyQuery = useDailyEvolution(portfolioId, period)
+  const monthlyQuery = useMonthlyEvolution(portfolioId, period)
+  const activeQuery = view === 'mensal' ? monthlyQuery : dailyQuery
+  const data = activeQuery.data
 
   return (
     <div className="card">
@@ -108,17 +109,18 @@ function EvolutionSection({ portfolioId }: { portfolioId: number }) {
         </div>
       </div>
       <div className="p-4">
-        {loading ? (
-          <div className="h-64 skeleton rounded" />
-        ) : !data?.length ? (
-          <div className="h-64 flex items-center justify-center text-sm" style={{ color: 'var(--color-text-muted)' }}>
-            Nenhum snapshot para o período selecionado.
-          </div>
-        ) : view === 'diario' ? (
-          <EvolutionLineChart data={daily ?? []} />
-        ) : (
-          <EvolutionBarChart data={monthly ?? []} />
-        )}
+        <EvolutionQueryState
+          isLoading={activeQuery.isLoading}
+          isError={activeQuery.isError}
+          isEmpty={!data?.length}
+          onRetry={() => { void activeQuery.refetch() }}
+        >
+          {view === 'diario' ? (
+            <EvolutionLineChart data={dailyQuery.data ?? []} />
+          ) : (
+            <EvolutionBarChart data={monthlyQuery.data ?? []} />
+          )}
+        </EvolutionQueryState>
       </div>
     </div>
   )
