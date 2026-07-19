@@ -4,12 +4,14 @@ proventos_service.py — agregacoes e leituras de proventos.
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import and_, cast, extract, func, or_, select, String
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.asset_types import asset_type_label
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
 from app.models.dividend import Dividend, DividendStatus, DividendType
@@ -334,6 +336,7 @@ async def get_monthly_history(
         select(
             extract("year", AssetDividend.payment_date).label("year"),
             extract("month", AssetDividend.payment_date).label("month"),
+            Asset.asset_type,
             func.sum(Dividend.net_value).label("total"),
         )
         .select_from(Dividend)
@@ -355,21 +358,64 @@ async def get_monthly_history(
         *_filter_conditions(status, year, asset_type, dividend_type)
     )
 
-    stmt = stmt.group_by("year", "month").order_by("year", "month")
+    stmt = stmt.group_by("year", "month", Asset.asset_type).order_by("year", "month")
     rows = (await db.execute(stmt)).fetchall()
 
-    data: dict[int, dict[int, float]] = {}
-    for r in rows:
-        y, m = int(r.year), int(r.month)
-        data.setdefault(y, {})[m] = float(r.total or 0.0)
+    money_step = Decimal("0.01")
+    data: dict[int, dict[int, dict[str, Decimal]]] = {}
+    for row in rows:
+        value = Decimal(str(row.total or 0)).quantize(money_step, rounding=ROUND_HALF_UP)
+        if value <= 0:
+            continue
+        year_value, month_value = int(row.year), int(row.month)
+        class_values = data.setdefault(year_value, {}).setdefault(month_value, {})
+        class_values[row.asset_type] = class_values.get(row.asset_type, Decimal("0")) + value
 
     result = []
-    for year in sorted(data.keys(), reverse=True):
-        months_vals = [data[year].get(m) for m in range(1, 13)]
-        values = [v for v in months_vals if v is not None]
-        total = sum(values)
+    for year_value in sorted(data.keys(), reverse=True):
+        months_vals: list[float | None] = []
+        month_details = []
+
+        for month_value in range(1, 13):
+            class_values = data[year_value].get(month_value)
+            if not class_values:
+                months_vals.append(None)
+                continue
+
+            by_asset_class = sorted(
+                (
+                    {
+                        "asset_type": asset_type,
+                        "label": asset_type_label(asset_type),
+                        "value": float(value.quantize(money_step, rounding=ROUND_HALF_UP)),
+                    }
+                    for asset_type, value in class_values.items()
+                    if value > 0
+                ),
+                key=lambda item: (-item["value"], item["label"]),
+            )
+            month_total = round(sum(item["value"] for item in by_asset_class), 2)
+            months_vals.append(month_total)
+            month_details.append(
+                {
+                    "month": month_value,
+                    "total": month_total,
+                    "by_asset_class": by_asset_class,
+                }
+            )
+
+        values = [value for value in months_vals if value is not None]
+        total = round(sum(values), 2)
         media = total / len(values) if values else 0.0
-        result.append({"year": year, "months": months_vals, "total": round(total, 2), "media": round(media, 2)})
+        result.append(
+            {
+                "year": year_value,
+                "months": months_vals,
+                "total": total,
+                "media": round(media, 2),
+                "month_details": month_details,
+            }
+        )
     return result
 
 
