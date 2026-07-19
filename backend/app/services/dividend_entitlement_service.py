@@ -31,8 +31,16 @@ def calculate_net_quantity(txs: list[tuple], reference_date: date) -> float:
     return max(quantity, 0.0)
 
 
-def _net_value(dividend_type: DividendType, total_value: float) -> float:
-    return total_value * 0.85 if dividend_type == DividendType.JCP else total_value
+JCP_NET_FACTOR = 0.85
+
+
+def calculate_net_value(dividend_type: DividendType, total_value: float) -> float:
+    """Aplica a regra financeira canônica ao valor bruto do direito."""
+    return (
+        total_value * JCP_NET_FACTOR
+        if dividend_type == DividendType.JCP
+        else total_value
+    )
 
 
 def _dividend_type(value: DividendType | str) -> DividendType:
@@ -97,7 +105,7 @@ async def reconcile_portfolio_dividend_rights(
         event_type = _dividend_type(event.dividend_type)
         value_per_unit = float(event.value_per_unit or 0.0)
         total_value = quantity * value_per_unit
-        net_value = _net_value(event_type, total_value)
+        net_value = calculate_net_value(event_type, total_value)
         payment_date = event.payment_date
 
         dividend.quantity = Decimal(str(quantity))
