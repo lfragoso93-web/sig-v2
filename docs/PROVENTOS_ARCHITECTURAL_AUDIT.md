@@ -2,7 +2,7 @@
 
 > Issue de controle: [#165](https://github.com/lfragoso93-web/sig-v2/issues/165)
 >
-> Estado auditado: 19/07/2026, após a conclusão dos itens 1 a 6 da Fase 2.
+> Estado auditado: 19/07/2026, após a conclusão dos itens 1 a 8 da Fase 2.
 
 ## Objetivo
 
@@ -38,8 +38,8 @@ consultada somente na materialização, pela data de corte/registro do evento.
 |---|---|---|
 | `GET /proventos/summary` | KPIs consolidados | ano, status, classe e tipo |
 | `GET /proventos` | tabela paginada | ano, status, classe e tipo |
-| `GET /proventos/history` | série histórica | ano, status, classe e tipo |
-| `GET /proventos/distribution` | distribuição mensal ou anual | meses, ano, status, classe e tipo |
+| `GET /proventos/historico-mensal` | série histórica e composição mensal por classe | ano, status, classe e tipo |
+| `GET /proventos/distribuicao` | distribuição mensal ou anual | meses, ano, status, classe e tipo |
 
 Os quatro endpoints possuem contratos Pydantic estritos. Backend e frontend
 usam o mesmo universo de filtros e as leituras não materializam direitos.
@@ -120,6 +120,19 @@ dinheiro. O cliente e o hook de sincronização manual sem consumidores foram
 removidos. Testes de fluxo cobrem carteira ausente, estados da consulta,
 propagação dos filtros, vazio e semântica da tabela.
 
+### Detalhamento mensal por classe
+
+O histórico mensal agrega ano, mês e classe em uma única consulta. O payload
+preserva `months`, `total` e `media` e acrescenta `month_details` apenas
+para meses positivos. Cada detalhe reutiliza o catálogo canônico de rótulos,
+ordena as classes por valor e deriva o total das mesmas parcelas monetárias
+arredondadas exibidas, garantindo reconciliação.
+
+As células com composição abrem um popover renderizado em portal, ajustado às
+bordas da viewport e acessível por hover, foco, teclado e toque. `Esc`, saída da
+área interativa e toque/clique externo fecham o detalhe. Meses vazios permanecem
+não interativos.
+
 ## Pendências arquiteturais
 
 ### P2 — Identidade do evento
@@ -143,11 +156,10 @@ impacto observado deve ser registrado nas Issues #165 e #159.
 6. ~~Validar seed, coleta e materialização para ações, FIIs, ETFs e BDRs.~~ Concluído.
 7. ~~Validar classificação e valores por tipo de evento.~~ Concluído.
 8. ~~Revisar frontend, gráficos, tabelas, indicadores, estados e contratos.~~ Concluído.
-9. Implementar o detalhamento mensal da Issue #131.
+9. ~~Implementar o detalhamento mensal da Issue #131.~~ Concluído.
 10. Sincronizar README, ROADMAP e CHANGELOG e promover o bloco estrutural à `main`.
 
 ## Próximo bloco recomendado
 
-Executar o item 8 da Issue #165, acompanhado pela Issue #131: detalhamento
-mensal por classe com total reconciliado, filtros compartilhados, interação por
-mouse, teclado e toque e testes backend/frontend.
+Executar o item 9 da Issue #165: validação final da Fase 2, sincronização de
+README, ROADMAP e CHANGELOG e abertura da PR estrutural para a `main`.
