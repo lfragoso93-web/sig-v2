@@ -58,8 +58,8 @@ permanecem explicitamente indisponíveis até a Fase 4.
 | `GET /performance/{id}/classes/{tipo}/evolution/daily` | snapshot por classe | hook existente, sem consumidor de página |
 | `GET /performance/{id}/classes/{tipo}/evolution/monthly` | snapshot por classe | consumido apenas por Resumo |
 
-Todos validam a propriedade da carteira, mas ainda retornam dicionários sem
-`response_model` Pydantic estrito.
+Todos validam a propriedade da carteira e os seis endpoints de leitura agora
+aplicam `response_model` Pydantic estrito, com rejeição de campos extras.
 
 ## Consumidores frontend
 
@@ -89,7 +89,7 @@ primeiro estado de loading; os mensais preservam `undefined` durante a carga.
 
 ## Inconsistências encontradas
 
-1. Contratos de resposta dos endpoints de performance não são estritos.
+1. ~~Contratos de resposta dos endpoints de performance não são estritos.~~ Resolvido com schemas versionados por fonte.
 2. A página Patrimônio não consome a fundação por classe já disponível.
 3. A reconciliação canônica existe no backend, mas não é observável na página.
 4. O recorte mensal usa `months * 31`, aproximação que não representa uma
@@ -106,7 +106,7 @@ primeiro estado de loading; os mensais preservam `undefined` durante a carga.
 
 1. ~~Caracterizar contratos, períodos, disponibilidade e reconciliação.~~ Concluído.
 2. ~~Remover o cliente legado comprovadamente sem consumidores.~~ Concluído.
-3. Introduzir schemas Pydantic estritos sem alterar valores.
+3. ~~Introduzir schemas Pydantic estritos sem alterar valores.~~ Concluído.
 4. Tornar períodos e estados de consulta determinísticos.
 5. Criar apresentação reutilizável para evolução consolidada ou por classe.
 6. Integrar seleção, disponibilidade, qualidade e reconciliação em Patrimônio.
@@ -128,11 +128,11 @@ primeiro estado de loading; os mensais preservam `undefined` durante a carga.
 - Testes caracterizam isolamento por carteira e fonte `portfolio_class_snapshot`.
 - O mensal usa o último fechamento do período e compõe os TWRs diários.
 - Disponibilidade exige simultaneamente motor suportado e snapshot materializado.
-- Suíte backend disponível: 81 testes aprovados.
+- Contratos estritos cobrem evolução consolidada e por classe, disponibilidade e reconciliação.\n- Fontes históricas, estados e campos de reconciliação são validados sem recomputar valores.\n- Suíte backend disponível: 85 testes aprovados.
 - Suíte frontend disponível: 48 testes aprovados e typecheck focado válido.
 - Nenhum workflow remoto foi disparado neste bloco.
 
 ## Próximo bloco recomendado
 
-Definir schemas Pydantic estritos para evolução diária/mensal, disponibilidade e
-reconciliação e aplicá-los aos endpoints sem alterar os valores produzidos.
+Corrigir a semântica dos períodos e os estados de loading, erro e vazio sem
+alterar os números canônicos.
