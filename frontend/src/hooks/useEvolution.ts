@@ -104,7 +104,6 @@ export function useDailyEvolution(
         .get(`/performance/${portfolioId}/evolution/daily`, { params: { days } })
         .then(r => r.data),
     enabled: !!portfolioId,
-    placeholderData: [],
     staleTime: 5 * 60 * 1000,
   })
 }
@@ -140,7 +139,6 @@ export function useClassDailyEvolution(
         })
         .then(r => r.data),
     enabled: !!portfolioId && !!assetType,
-    placeholderData: [],
     staleTime: 5 * 60 * 1000,
   })
 }
