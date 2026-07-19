@@ -131,9 +131,9 @@ async def run_daily_proventos_sync(
     asset_types: set[str] | None = None,
     concurrency: int = SYNC_CONCURRENCY,
     *,
-    only_held: bool = True,
+    only_held: bool = False,
 ) -> ProventosDailySyncResult:
-    """Sincroniza eventos e materializa apenas o universo operacional solicitado."""
+    """Coleta o catálogo global e materializa apenas carteiras elegíveis."""
     result = ProventosDailySyncResult()
 
     pairs, skipped = await load_proventos_sync_pairs(
