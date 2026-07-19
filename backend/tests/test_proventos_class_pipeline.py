@@ -1,6 +1,7 @@
 """Matriz ponta a ponta das classes nacionais com Proventos."""
 
 from datetime import date
+from decimal import Decimal
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -10,7 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
 from app.models.dividend import Dividend, DividendType
-from app.services.dividend_backfill_service import backfill_dividends
+from app.models.portfolio import Portfolio
+from app.models.transaction import OperationType, Transaction
+from app.services.dividend_backfill_service import (
+    backfill_dividends,
+    materialize_asset_dividends,
+)
 
 
 NATIONAL_DIVIDEND_CLASSES = [
@@ -71,3 +77,77 @@ async def test_global_collection_does_not_require_portfolio_position(
     assert event.dividend_type == expected_type
     assert float(event.value_per_unit) == pytest.approx(1.25)
     assert rights == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "ticker,asset_type,_label,event_type",
+    NATIONAL_DIVIDEND_CLASSES,
+)
+async def test_materialization_is_linked_and_idempotent_for_every_class(
+    db: AsyncSession,
+    portfolio: Portfolio,
+    ticker: str,
+    asset_type: str,
+    _label: str,
+    event_type: DividendType,
+):
+    asset = Asset(
+        ticker=ticker,
+        name=ticker,
+        asset_type=asset_type,
+        currency="BRL",
+    )
+    db.add(asset)
+    await db.flush()
+    db.add(
+        Transaction(
+            portfolio_id=portfolio.id,
+            ticker=ticker,
+            asset_type=asset_type,
+            operation=OperationType.buy,
+            quantity=Decimal("10"),
+            price=Decimal("100"),
+            date=date(2026, 1, 2),
+        )
+    )
+    event = AssetDividend(
+        asset_id=asset.id,
+        record_date=date(2026, 1, 9),
+        ex_date=date(2026, 1, 12),
+        payment_date=date(2026, 1, 30),
+        value_per_unit=Decimal("1.25"),
+        dividend_type=event_type,
+        source="test",
+    )
+    db.add(event)
+    await db.flush()
+
+    await materialize_asset_dividends(
+        db,
+        tickers=[ticker],
+        portfolio_id=portfolio.id,
+        commit=False,
+    )
+    await materialize_asset_dividends(
+        db,
+        tickers=[ticker],
+        portfolio_id=portfolio.id,
+        commit=False,
+    )
+
+    rights = (
+        await db.execute(
+            select(Dividend).where(
+                Dividend.portfolio_id == portfolio.id,
+                Dividend.asset_dividend_id == event.id,
+            )
+        )
+    ).scalars().all()
+
+    assert len(rights) == 1
+    assert rights[0].ticker == ticker
+    assert rights[0].dividend_type == event_type.value
+    assert float(rights[0].quantity) == pytest.approx(10.0)
+    assert float(rights[0].total_value) == pytest.approx(12.5)
+    assert float(rights[0].net_value) == pytest.approx(12.5)
