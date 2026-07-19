@@ -152,6 +152,16 @@ KPIs usam `summary.v2` e gráficos usam campos dos snapshots. As operações loc
 restantes no Resumo tratam somente contagem, seleção, layout e formatação, sem
 criar valores monetários ou percentuais concorrentes.
 
+### A13 — Resolvido: venda parcial e encerramento cobertos no resultado atual
+
+A cobertura integra o custo médio móvel e taxas do serviço canônico de P&L realizado
+ao builder de `summary.v2`. Na venda parcial, o teste preserva custo aberto 606,
+resultado não realizado 54, realizado 72 e resultado total 126.
+
+Na posição totalmente encerrada, patrimônio e custo abertos permanecem zero,
+enquanto o resultado realizado e o resultado total preservam 80. Nenhum valor
+fechado é reintroduzido como posição atual.
+
 ## Contratos que devem permanecer
 
 - `summary.v2` como contrato único dos KPIs.
@@ -174,5 +184,6 @@ criar valores monetários ou percentuais concorrentes.
 8. Concluído: validar `summary.v2` nas fronteiras backend e frontend.
 9. Concluído: reconciliar KPIs e semântica de retorno entre Resumo e Patrimônio.
 10. Concluído: remover recomposições financeiras restantes do frontend do Resumo.
-11. Validar visualmente a #147.
-12. Sincronizar documentação viva ao concluir o bloco estrutural.
+11. Concluído: cobrir venda parcial e posição totalmente encerrada no `summary.v2`.
+12. Validar visualmente a #147.
+13. Sincronizar documentação viva ao concluir o bloco estrutural.
