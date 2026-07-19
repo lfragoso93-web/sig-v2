@@ -1,6 +1,6 @@
 # Roadmap modular — SGI v2
 
-> Última atualização: 17/07/2026
+> Última atualização: 18/07/2026
 
 ## Visão geral
 
@@ -16,7 +16,7 @@
 | Snapshots consolidados | Consolidado | 100% |
 | Snapshots por classe de mercado | Consolidado | 100% |
 | Proventos | Em validação final | 92% |
-| Página Resumo | Em refinamento funcional | 95% |
+| Página Resumo | Validação final | 98% |
 | Página Patrimônio | Auditoria concluída, regressão visual mapeada | 90% |
 | Página Rentabilidade | Contratos concluídos | 95% |
 | Dependências | Auditoria parcial, pendências mapeadas | 80% |
@@ -64,11 +64,12 @@ A reconstrução limpa do catálogo, históricos e carteira ficou reservada para
 ### Página Resumo — #161
 
 - [x] Mapear contratos, endpoints e divergências arquiteturais.
-- [ ] Revisar KPIs atuais e sinal de retorno negativo.
-- [ ] Garantir distinção entre variação diária e rentabilidade acumulada.
-- [ ] Revisar dropdowns e overflow das tabelas.
-- [ ] Padronizar cards com a página Patrimônio.
-- [ ] Corrigir visual do gráfico divergente (#147).
+- [x] Revisar KPIs atuais e sinal de retorno negativo.
+- [x] Garantir distinção entre variação diária e rentabilidade acumulada.
+- [x] Revisar dropdowns e overflow das tabelas.
+- [x] Padronizar cards com a página Patrimônio.
+- [x] Corrigir e validar o gráfico divergente (#147).
+- [ ] Executar suítes finais, consolidar evidências e abrir a PR estrutural.
 
 ### Proventos
 
@@ -117,7 +118,7 @@ Pendente de validação isolada:
 
 ## Próximas prioridades
 
-1. Refinar Página Resumo.
+1. Finalizar validação e PR da Página Resumo (#161).
 2. Concluir validação funcional de Proventos.
 3. Restaurar históricos por classe em Patrimônio (#148).
 4. Implementar TWR dedicado de Tesouro e Renda Fixa (#149).
