@@ -5,6 +5,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from app.core.scheduler import (
     HELD_MARKET_PIPELINE_EVENT_OPTIONS,
+    PROVENTOS_SYNC_ONLY_HELD,
     scheduler,
     start_scheduler,
 )
@@ -40,3 +41,7 @@ def test_market_pipeline_does_not_collect_or_materialize_events():
         "sync_events": False,
         "materialize": False,
     }
+
+
+def test_proventos_scheduler_collects_the_global_catalog():
+    assert PROVENTOS_SYNC_ONLY_HELD is False
