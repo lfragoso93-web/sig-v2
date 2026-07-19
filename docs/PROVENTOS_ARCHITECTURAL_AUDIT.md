@@ -106,6 +106,20 @@ materialização e reconciliação. Mesmo direitos legados não monetários com
 valores indevidos são excluídos dos KPIs, histórico e distribuição e aparecem
 na lista identificados por `is_cash=false`.
 
+### Frontend e estados da página
+
+As interfaces TypeScript refletem os campos obrigatórios e enums do contrato
+Pydantic. A página diferencia loading, erro e vazio em indicadores,
+distribuição, histórico e lista, sem converter falha em zero. Os filtros usam o
+mesmo objeto nos quatro hooks, possuem nomes acessíveis e expõem seleção por
+`aria-pressed`.
+
+A tabela confia no `is_cash` canônico, apresenta estados pendente/cancelado com
+rótulos próprios e nunca exibe valores legados de eventos não monetários como
+dinheiro. O cliente e o hook de sincronização manual sem consumidores foram
+removidos. Testes de fluxo cobrem carteira ausente, estados da consulta,
+propagação dos filtros, vazio e semântica da tabela.
+
 ## Pendências arquiteturais
 
 ### P2 — Identidade do evento
@@ -113,12 +127,6 @@ na lista identificados por `is_cash=false`.
 A unicidade de `AssetDividend` ainda considera ativo, data ex e tipo. Antes de
 alterá-la, é necessário comprovar com dados de provedor como representar eventos
 legítimos do mesmo tipo e data sem colidir ou duplicar.
-
-### P3 — Frontend
-
-Ainda faltam a revisão dos estados principais, gráficos, tabelas, indicadores,
-acessibilidade e testes de integração da página. O detalhamento mensal permanece
-acompanhado pela Issue #131.
 
 ## Riscos preservados fora do escopo
 
@@ -134,11 +142,12 @@ impacto observado deve ser registrado nas Issues #165 e #159.
 5. ~~Inventariar o modelo e preparar a migração segura com a #158.~~ Concluído.
 6. ~~Validar seed, coleta e materialização para ações, FIIs, ETFs e BDRs.~~ Concluído.
 7. ~~Validar classificação e valores por tipo de evento.~~ Concluído.
-8. Revisar frontend e implementar a melhoria #131.
-9. Sincronizar README, ROADMAP e CHANGELOG e promover o bloco estrutural à `main`.
+8. ~~Revisar frontend, gráficos, tabelas, indicadores, estados e contratos.~~ Concluído.
+9. Implementar o detalhamento mensal da Issue #131.
+10. Sincronizar README, ROADMAP e CHANGELOG e promover o bloco estrutural à `main`.
 
 ## Próximo bloco recomendado
 
-Revisar o frontend de Proventos: contratos efetivamente consumidos, KPIs,
-gráficos, tabela, estados vazios/erro/carregamento, acessibilidade e testes dos
-fluxos principais antes de implementar o detalhamento mensal da Issue #131.
+Executar o item 8 da Issue #165, acompanhado pela Issue #131: detalhamento
+mensal por classe com total reconciliado, filtros compartilhados, interação por
+mouse, teclado e toque e testes backend/frontend.
