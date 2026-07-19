@@ -104,8 +104,8 @@ primeiro estado de loading; os mensais preservam `undefined` durante a carga.
 
 ## Sequência segura
 
-1. Caracterizar contratos, períodos, disponibilidade e reconciliação.
-2. Remover o cliente legado comprovadamente sem consumidores.
+1. ~~Caracterizar contratos, períodos, disponibilidade e reconciliação.~~ Concluído.
+2. ~~Remover o cliente legado comprovadamente sem consumidores.~~ Concluído.
 3. Introduzir schemas Pydantic estritos sem alterar valores.
 4. Tornar períodos e estados de consulta determinísticos.
 5. Criar apresentação reutilizável para evolução consolidada ou por classe.
@@ -121,7 +121,18 @@ primeiro estado de loading; os mensais preservam `undefined` durante a carga.
 - Dependências #146, #138, #137 e #133: Issue #159.
 - Rebuild destrutivo ou completo da base: Issue #158.
 
+## Evidências do bloco inicial
+
+- Cliente `portfolioService.ts` removido; nenhuma referência ou consumidor foi encontrado.
+- Rota frontend obsoleta `/patrimonio-history` eliminada com o cliente.
+- Testes caracterizam isolamento por carteira e fonte `portfolio_class_snapshot`.
+- O mensal usa o último fechamento do período e compõe os TWRs diários.
+- Disponibilidade exige simultaneamente motor suportado e snapshot materializado.
+- Suíte backend disponível: 81 testes aprovados.
+- Suíte frontend disponível: 48 testes aprovados e typecheck focado válido.
+- Nenhum workflow remoto foi disparado neste bloco.
+
 ## Próximo bloco recomendado
 
-Adicionar testes de caracterização dos payloads diário/mensal, disponibilidade,
-reconciliação e isolamento por carteira antes de introduzir schemas estritos.
+Definir schemas Pydantic estritos para evolução diária/mensal, disponibilidade e
+reconciliação e aplicá-los aos endpoints sem alterar os valores produzidos.
