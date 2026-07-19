@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import {
   proventosService,
   ProventoDistribution,
@@ -72,20 +72,5 @@ export function useProventosList(
     queryFn:     () => proventosService.getList(portfolioId!, params),
     enabled:     !!portfolioId,
     placeholderData: { total: 0, page: 1, page_size: 50, items: [] },
-  })
-}
-
-// ─── Sync manual ──────────────────────────────────────────────────────────────
-
-export function useSyncProventos(portfolioId: number | null) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: () => proventosService.sync(portfolioId!),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['proventos-summary',     portfolioId] })
-      qc.invalidateQueries({ queryKey: ['proventos-distribuicao', portfolioId] })
-      qc.invalidateQueries({ queryKey: ['proventos-historico',    portfolioId] })
-      qc.invalidateQueries({ queryKey: ['proventos-list',         portfolioId] })
-    },
   })
 }
