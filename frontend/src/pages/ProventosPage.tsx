@@ -59,15 +59,15 @@ export default function ProventosPage() {
   }), [assetTypeFilter, dividendTypeFilter, statusFilter, yearFilter])
 
   const { data: summary, isLoading: loadingSummary } = useProventosSummary(portfolioId, proventosFilters)
-  const { data: distribuicao } = useProventosDistribuicao(portfolioId)
+  const { data: distribuicao } = useProventosDistribuicao(
+    portfolioId,
+    12,
+    proventosFilters,
+  )
   const hasDistribuicao = (distribuicao?.length ?? 0) > 0
 
-  const { data: historico, isLoading: loadingHistorico } = useProventosHistoricoMensal(
-    portfolioId,
-    proventosFilters.status,
-    proventosFilters.asset_type,
-    proventosFilters.dividend_type,
-  )
+  const { data: historico, isLoading: loadingHistorico } =
+    useProventosHistoricoMensal(portfolioId, proventosFilters)
   const { data: lista, isLoading: loadingLista } = useProventosList(portfolioId, {
     ...proventosFilters,
     page,
@@ -110,7 +110,7 @@ export default function ProventosPage() {
       <div className={hasDistribuicao ? 'proventos-layout has-distribution' : 'proventos-layout'}>
         {hasDistribuicao && (
           <div className="card p-4 proventos-distribution-card">
-            <div className="section-card-header"><span className="text-xs font-semibold">Por ativo (12m)</span></div>
+            <div className="section-card-header"><span className="text-xs font-semibold">Por ativo ({yearFilter ?? '12m'})</span></div>
             <ProventosDonutChart data={distribuicao!} />
           </div>
         )}
