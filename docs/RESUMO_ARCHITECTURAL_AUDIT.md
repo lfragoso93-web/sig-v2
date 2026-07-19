@@ -175,6 +175,18 @@ a Renda Fixa participa dos totais pelo serviço canônico próprio. A TWR de 8,2
 continua vindo exclusivamente do último snapshot fechado, sem ser recomposta a
 partir do valuation intradiário.
 
+### A15 — Resolvido: cobertura completa e parcial de preços explícita
+
+A regressão de `summary.v2` cobre dois ativos precificáveis. Com ambas as
+cotações disponíveis, o contrato publica cobertura 2/2 (100%), lista vazia de
+ativos sem preço e `has_partial_prices=false`.
+
+Quando a cotação do FII está ausente, a cobertura passa a 1/2 (50%), o ticker é
+publicado em `assets_without_price` e `has_partial_prices=true`. O patrimônio
+preserva o custo atual desse ativo como fallback explícito; a ausência de preço
+não transforma a posição em zero nem afeta a Renda Fixa, cuja valoração permanece
+no serviço canônico próprio.
+
 ## Contratos que devem permanecer
 
 - `summary.v2` como contrato único dos KPIs.
@@ -199,5 +211,6 @@ partir do valuation intradiário.
 10. Concluído: remover recomposições financeiras restantes do frontend do Resumo.
 11. Concluído: cobrir venda parcial e posição totalmente encerrada no `summary.v2`.
 12. Concluído: cobrir carteira mista no valuation atual sem alterar a TWR fechada.
-13. Validar visualmente a #147.
-14. Sincronizar documentação viva ao concluir o bloco estrutural.
+13. Concluído: cobrir qualidade de preços completa e parcial no `summary.v2`.
+14. Validar visualmente a #147.
+15. Sincronizar documentação viva ao concluir o bloco estrutural.
