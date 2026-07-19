@@ -18,6 +18,14 @@ from app.services.portfolio_class_snapshot_read_service import (
 from app.services.portfolio_class_reconciliation_service import (
     reconcile_latest_class_snapshots,
 )
+from app.schemas.portfolio_evolution import (
+    PortfolioClassAvailabilityResponse,
+    PortfolioClassDailyEvolutionResponse,
+    PortfolioClassMonthlyEvolutionResponse,
+    PortfolioClassReconciliationResponse,
+    PortfolioDailyEvolutionResponse,
+    PortfolioMonthlyEvolutionResponse,
+)
 from app.models.portfolio import Portfolio
 from sqlalchemy import select
 import logging
@@ -44,7 +52,7 @@ async def portfolio_performance(
     return await get_portfolio_performance(db, portfolio_id, current_user.id)
 
 
-@router.get("/{portfolio_id}/evolution/daily")
+@router.get(\n    "/{portfolio_id}/evolution/daily",\n    response_model=list[PortfolioDailyEvolutionResponse],\n)
 async def evolution_daily(
     portfolio_id: int,
     days: int = Query(default=365, ge=0, le=3650, description="Dias para buscar; 0 retorna todo o histórico"),
@@ -55,7 +63,7 @@ async def evolution_daily(
     return await get_enriched_daily_evolution(db, portfolio_id, days=days)
 
 
-@router.get("/{portfolio_id}/evolution/monthly")
+@router.get(\n    "/{portfolio_id}/evolution/monthly",\n    response_model=list[PortfolioMonthlyEvolutionResponse],\n)
 async def evolution_monthly(
     portfolio_id: int,
     months: int = Query(default=12, ge=0, le=120, description="Meses para buscar; 0 retorna todo o histórico"),
@@ -66,7 +74,7 @@ async def evolution_monthly(
     return await get_enriched_monthly_evolution(db, portfolio_id, months=months)
 
 
-@router.get("/{portfolio_id}/classes/availability")
+@router.get(\n    "/{portfolio_id}/classes/availability",\n    response_model=list[PortfolioClassAvailabilityResponse],\n)
 async def class_performance_availability(
     portfolio_id: int,
     db: AsyncSession = Depends(get_db),
@@ -76,7 +84,7 @@ async def class_performance_availability(
     return await get_class_twr_availability(db, portfolio_id)
 
 
-@router.get("/{portfolio_id}/classes/reconciliation/latest")
+@router.get(\n    "/{portfolio_id}/classes/reconciliation/latest",\n    response_model=PortfolioClassReconciliationResponse,\n)
 async def class_performance_reconciliation(
     portfolio_id: int,
     db: AsyncSession = Depends(get_db),
@@ -86,7 +94,7 @@ async def class_performance_reconciliation(
     return await reconcile_latest_class_snapshots(db, portfolio_id)
 
 
-@router.get("/{portfolio_id}/classes/{asset_type}/evolution/daily")
+@router.get(\n    "/{portfolio_id}/classes/{asset_type}/evolution/daily",\n    response_model=list[PortfolioClassDailyEvolutionResponse],\n)
 async def class_evolution_daily(
     portfolio_id: int,
     asset_type: str,
@@ -98,7 +106,7 @@ async def class_evolution_daily(
     return await get_daily_class_evolution(db, portfolio_id, asset_type, days=days)
 
 
-@router.get("/{portfolio_id}/classes/{asset_type}/evolution/monthly")
+@router.get(\n    "/{portfolio_id}/classes/{asset_type}/evolution/monthly",\n    response_model=list[PortfolioClassMonthlyEvolutionResponse],\n)
 async def class_evolution_monthly(
     portfolio_id: int,
     asset_type: str,
