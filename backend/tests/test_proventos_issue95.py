@@ -206,7 +206,7 @@ async def test_issue165_year_is_recognized_by_payment_date(
     previous_summary = await get_summary(db, portfolio.id, year=current_year - 1)
     current_items = await list_items(db, portfolio.id, year=current_year)
     previous_items = await list_items(db, portfolio.id, year=current_year - 1)
-    history = await get_monthly_history(db, portfolio.id)
+    history = await get_monthly_history(db, portfolio.id, year=current_year)
 
     assert current_summary["total_liquido_recebido"] == pytest.approx(75.0)
     assert previous_summary["total_liquido_recebido"] == pytest.approx(0.0)
@@ -217,7 +217,7 @@ async def test_issue165_year_is_recognized_by_payment_date(
 
 
 @pytest.mark.asyncio
-async def test_issue165_distribution_documents_current_unfiltered_contract(
+async def test_issue165_distribution_uses_the_same_filters_as_summary(
     db: AsyncSession,
     portfolio: Portfolio,
 ):
@@ -252,8 +252,13 @@ async def test_issue165_distribution_documents_current_unfiltered_contract(
     await make_dividend(db, portfolio.id, fii_event, "60.00", "60.00")
 
     filtered_summary = await get_summary(db, portfolio.id, asset_type="FII")
-    distribution = await get_distribution(db, portfolio.id, months=12)
+    distribution = await get_distribution(
+        db,
+        portfolio.id,
+        months=12,
+        asset_type="FII",
+    )
 
     assert filtered_summary["total_liquido_recebido"] == pytest.approx(60.0)
-    assert {row["ticker"] for row in distribution} == {"WEGE3", "KNRI11"}
-    assert sum(row["total"] for row in distribution) == pytest.approx(100.0)
+    assert {row["ticker"] for row in distribution} == {"KNRI11"}
+    assert sum(row["total"] for row in distribution) == pytest.approx(60.0)
