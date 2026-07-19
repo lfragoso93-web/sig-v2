@@ -92,10 +92,8 @@ primeiro estado de loading; os mensais preservam `undefined` durante a carga.
 1. ~~Contratos de resposta dos endpoints de performance não são estritos.~~ Resolvido com schemas versionados por fonte.
 2. A página Patrimônio não consome a fundação por classe já disponível.
 3. A reconciliação canônica existe no backend, mas não é observável na página.
-4. O recorte mensal usa `months * 31`, aproximação que não representa uma
-   fronteira mensal determinística.
-5. Loading, erro, vazio, aguardando backfill e classe sem motor ainda não têm
-   estados uniformes.
+4. ~~O recorte mensal usa `months * 31`.~~ Resolvido com janela de meses-calendário compartilhada.
+5. Loading, erro e vazio da evolução consolidada possuem boundary uniforme; aguardando backfill e classe sem motor serão integrados com a seleção por classe.
 6. `frontend/src/services/portfolioService.ts` não possui consumidores e aponta
    para `/patrimonio-history`, endpoint inexistente.
 7. O catálogo de opções de classe está duplicado no frontend.
@@ -107,7 +105,7 @@ primeiro estado de loading; os mensais preservam `undefined` durante a carga.
 1. ~~Caracterizar contratos, períodos, disponibilidade e reconciliação.~~ Concluído.
 2. ~~Remover o cliente legado comprovadamente sem consumidores.~~ Concluído.
 3. ~~Introduzir schemas Pydantic estritos sem alterar valores.~~ Concluído.
-4. Tornar períodos e estados de consulta determinísticos.
+4. ~~Tornar períodos e estados de consulta determinísticos.~~ Concluído.
 5. Criar apresentação reutilizável para evolução consolidada ou por classe.
 6. Integrar seleção, disponibilidade, qualidade e reconciliação em Patrimônio.
 7. Validar a soma das classes somente quando o backend declarar comparabilidade.
@@ -128,11 +126,10 @@ primeiro estado de loading; os mensais preservam `undefined` durante a carga.
 - Testes caracterizam isolamento por carteira e fonte `portfolio_class_snapshot`.
 - O mensal usa o último fechamento do período e compõe os TWRs diários.
 - Disponibilidade exige simultaneamente motor suportado e snapshot materializado.
-- Contratos estritos cobrem evolução consolidada e por classe, disponibilidade e reconciliação.\n- Fontes históricas, estados e campos de reconciliação são validados sem recomputar valores.\n- Suíte backend disponível: 85 testes aprovados.
-- Suíte frontend disponível: 48 testes aprovados e typecheck focado válido.
+- Contratos estritos cobrem evolução consolidada e por classe, disponibilidade e reconciliação.\n- Fontes históricas, estados e campos de reconciliação são validados sem recomputar valores.\n- Janelas de 6, 12 e 24 meses começam no primeiro dia exato do mês inicial; `0` preserva todo o histórico.\n- Consolidado e classes usam a mesma função de fronteira mensal.\n- Loading, erro com retry, vazio real e sucesso são estados distintos na evolução.\n- Suíte backend disponível: 89 testes aprovados.
+- Suíte frontend disponível: 53 testes aprovados e typecheck focado válido.
 - Nenhum workflow remoto foi disparado neste bloco.
 
 ## Próximo bloco recomendado
 
-Corrigir a semântica dos períodos e os estados de loading, erro e vazio sem
-alterar os números canônicos.
+Restaurar a seleção e os gráficos por classe na página Patrimônio, reutilizando\nos endpoints e estados canônicos existentes.
