@@ -18,8 +18,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.asset import Asset, AssetType
 from app.models.transaction import Transaction
 from app.services.dividend_backfill_service import run_backfill, materialize_asset_dividends
-from app.services.dividend_history_seed_service import seed_full_dividend_history
-from app.services.portfolio_service import invalidate_portfolio_cache
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +62,8 @@ def _chunks(values: list[str], size: int) -> list[list[str]]:
 
 
 async def _sync_asset_events(db: AsyncSession, ticker: str, asset_type: str) -> tuple[bool, int]:
+    from app.services.dividend_history_seed_service import seed_full_dividend_history
+
     try:
         await run_backfill(db, ticker, asset_type)
         historical = await seed_full_dividend_history(db, ticker, asset_type)
@@ -74,6 +74,8 @@ async def _sync_asset_events(db: AsyncSession, ticker: str, asset_type: str) -> 
 
 
 async def _invalidate_affected_portfolios(db: AsyncSession, tickers: list[str]) -> int:
+    from app.services.portfolio_service import invalidate_portfolio_cache
+
     if not tickers:
         return 0
     rows = await db.execute(
