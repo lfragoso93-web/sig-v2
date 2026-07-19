@@ -226,8 +226,8 @@ describe('ResumePage position states', () => {
       }),
       expect.objectContaining({
         label: 'Rentabilidade (TWR)',
-        value: expect.stringContaining('-7.5'),
-        subValue: expect.stringContaining('-10'),
+        value: '-7,50%',
+        subValue: '-10,00%',
       }),
     ]))
   })
