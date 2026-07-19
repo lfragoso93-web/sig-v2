@@ -105,12 +105,16 @@ TWR, rentabilidade e valores de fechamento não participam dessas comparações.
 O menu de ativos usa `createPortal`, coordenadas de viewport e reposição em
 scroll/resize. A cobertura frontend valida o comportamento com uma e vinte linhas.
 
-### A8 — Cobertura automatizada concluída; validação visual publicada pendente
+### A8 — Resolvido: ganho e perda separados no gráfico patrimonial
 
 `PatrimonioBarChart` usa `stackOffset="sign"` e consome diretamente
 `market_value`, `cost_basis` e `unrealized_pnl` dos snapshots. Os testes cobrem
 ganho e perda e comprovam que o frontend não recompõe o resultado por subtração.
-A issue #147 permanece aberta somente até a validação visual no ambiente publicado.
+
+A renderização isolada com Recharts 3.9.2 confirmou a linha zero, o mesmo centro de
+categoria para as três séries, a perda abaixo de zero e o ganho acima do aplicado.
+O tooltip preserva patrimônio, custo e resultado canônicos. A issue #147 foi
+validada e encerrada.
 
 ### A9 — Resolvido: contrato e totais por classe
 
@@ -212,5 +216,5 @@ no serviço canônico próprio.
 11. Concluído: cobrir venda parcial e posição totalmente encerrada no `summary.v2`.
 12. Concluído: cobrir carteira mista no valuation atual sem alterar a TWR fechada.
 13. Concluído: cobrir qualidade de preços completa e parcial no `summary.v2`.
-14. Validar visualmente a #147.
+14. Concluído: validar visualmente e encerrar a #147.
 15. Sincronizar documentação viva ao concluir o bloco estrutural.
