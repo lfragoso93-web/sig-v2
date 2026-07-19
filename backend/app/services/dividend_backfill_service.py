@@ -14,6 +14,7 @@ from app.models.transaction import Transaction, OperationType
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
 from app.models.dividend import Dividend, DividendStatus, DividendType
+from app.services.dividend_entitlement_service import calculate_net_quantity
 
 logger = logging.getLogger(__name__)
 
@@ -127,19 +128,6 @@ def _dividend_type_from_value(value) -> DividendType:
         return DividendType(raw)
     except ValueError:
         return DividendType.OUTROS
-
-
-def _calc_net_qty(txs: list[tuple], ref_date: date) -> float:
-    qty = 0.0
-    for tx_date, op, q in txs:
-        if tx_date > ref_date:
-            continue
-        op_str = op.value if isinstance(op, OperationType) else str(op).lower()
-        if op_str == "buy":
-            qty += float(q)
-        elif op_str == "sell":
-            qty -= float(q)
-    return max(qty, 0.0)
 
 
 def _apply_dividend_legacy_fields(div: Dividend, ex_date: date, payment_date: date | None, quantity: float, value_per_unit: float) -> None:
@@ -448,7 +436,7 @@ async def backfill_dividends(db: AsyncSession, portfolio_id: int | None, ticker:
             entitlement_date = parsed.record_date or parsed.ex_date
 
             for pid in portfolio_ids:
-                qty = _calc_net_qty(txs_by_portfolio.get(pid, []), entitlement_date)
+                qty = calculate_net_quantity(txs_by_portfolio.get(pid, []), entitlement_date)
                 if qty <= 0:
                     continue
 
@@ -539,7 +527,7 @@ async def materialize_asset_dividends(db: AsyncSession, tickers: Optional[list[s
             txs = txs_by_key.get((pid, asset.ticker), [])
             if not txs:
                 continue
-            qty = _calc_net_qty(txs, entitlement_date)
+            qty = calculate_net_quantity(txs, entitlement_date)
             if qty <= 0:
                 continue
 
