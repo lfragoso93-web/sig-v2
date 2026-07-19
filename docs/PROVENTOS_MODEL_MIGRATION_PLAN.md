@@ -1,6 +1,6 @@
 # Plano de migração do modelo de Proventos
 
-Status: preparação em andamento na Issue #165. A contração física do schema depende do rebuild controlado da Issue #158.
+Status: inventário e preparação concluídos na Issue #165. A contração física do schema permanece coordenada com o rebuild controlado da Issue #158.
 
 ## Objetivo
 
@@ -46,6 +46,28 @@ Resultados possíveis do dry-run:
 | `legacy_divergence` | campos canônicos e legados do direito divergem |
 | `invalid_identity` | faltam dados obrigatórios ou o tipo não é normalizável com segurança |
 | `duplicate_right` | a carteira já possui ou passaria a possuir dois direitos para o evento |
+
+### Evidência do ambiente de desenvolvimento — 19/07/2026
+
+O dry-run foi executado pelo Docker Compose após rebuild da `stable-15jun` e
+retornou:
+
+```json
+{
+  "ambiguous": 0,
+  "duplicate_right": 0,
+  "invalid_identity": 0,
+  "legacy_divergence": 0,
+  "matched": 0,
+  "no_candidate": 0,
+  "scanned": 0
+}
+```
+
+Conclusão: não há direitos históricos sem `asset_dividend_id` nessa base e,
+portanto, nenhum backfill deve ser aplicado. A rotina permanece exclusivamente
+read-only para auditoria antes da #158. A nulabilidade e a remoção dos campos
+legados continuam adiadas para a contração controlada do schema.
 
 ## Mapeamento de campos
 
