@@ -257,6 +257,56 @@ class TestMaterializeAssetDividends:
         assert div is not None
         assert float(div.total_value) == pytest.approx(100.0)
 
+    async def test_materializacao_repetida_nao_duplica_direito(
+        self,
+        db: AsyncSession,
+        portfolio: Portfolio,
+    ):
+        asset = Asset(ticker="EGIE3", name="EGIE3", asset_type="ACAO", currency="BRL")
+        db.add(asset)
+        await db.flush()
+        await _make_tx(db, portfolio.id, "EGIE3", OperationType.buy, 80, date(2024, 1, 1))
+
+        event = AssetDividend(
+            asset_id=asset.id,
+            record_date=date(2024, 3, 1),
+            ex_date=date(2024, 3, 4),
+            payment_date=date(2024, 3, 15),
+            value_per_unit=Decimal("1.25"),
+            dividend_type=DividendType.DIVIDENDO,
+            source="test",
+        )
+        db.add(event)
+        await db.flush()
+
+        await materialize_asset_dividends(
+            db,
+            tickers=["EGIE3"],
+            portfolio_id=portfolio.id,
+            commit=False,
+        )
+        await materialize_asset_dividends(
+            db,
+            tickers=["EGIE3"],
+            portfolio_id=portfolio.id,
+            commit=False,
+        )
+
+        from sqlalchemy import select
+
+        dividends = (
+            await db.execute(
+                select(Dividend).where(
+                    Dividend.portfolio_id == portfolio.id,
+                    Dividend.asset_dividend_id == event.id,
+                )
+            )
+        ).scalars().all()
+
+        assert len(dividends) == 1
+        assert float(dividends[0].quantity) == pytest.approx(80.0)
+        assert float(dividends[0].net_value) == pytest.approx(100.0)
+
 
 @pytest.mark.asyncio
 class TestBackfillAllTickers:
