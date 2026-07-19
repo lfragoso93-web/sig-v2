@@ -60,6 +60,22 @@ class ProventosListResponse(BaseModel):
     items: list[ProventoItemResponse]
 
 
+class ProventosAssetClassAmountResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    asset_type: str
+    label: str
+    value: float = Field(gt=0)
+
+
+class ProventosMonthDetailResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    month: int = Field(ge=1, le=12)
+    total: float = Field(gt=0)
+    by_asset_class: list[ProventosAssetClassAmountResponse]
+
+
 class ProventosMonthlyHistoryResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -67,6 +83,7 @@ class ProventosMonthlyHistoryResponse(BaseModel):
     months: list[float | None] = Field(min_length=12, max_length=12)
     total: float
     media: float
+    month_details: list[ProventosMonthDetailResponse]
 
 
 class ProventosDistributionResponse(BaseModel):
