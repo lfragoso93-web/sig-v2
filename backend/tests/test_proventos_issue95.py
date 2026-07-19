@@ -141,6 +141,98 @@ async def test_issue95_history_and_distribution_ignore_non_cash(db: AsyncSession
     assert distribution[0]["percentage"] == pytest.approx(100.0)
 
 
+@pytest.mark.asyncio
+async def test_issue131_monthly_history_breaks_total_down_by_asset_class(
+    db: AsyncSession,
+    portfolio: Portfolio,
+):
+    payment_date = date(2026, 3, 20)
+    assets = [
+        await make_asset(db, "PETR4", "ACAO"),
+        await make_asset(db, "MXRF11", "FII"),
+        await make_asset(db, "BOVA11", "ETF_NACIONAL"),
+    ]
+    values = ["23.645", "90.80", "37.00"]
+
+    for asset, value in zip(assets, values):
+        await make_tx(db, portfolio.id, asset.ticker, date(2025, 1, 1))
+        event = await make_event(
+            db,
+            asset,
+            date(2026, 3, 1),
+            date(2026, 3, 2),
+            payment_date,
+            DividendType.RENDIMENTO if asset.asset_type == "FII" else DividendType.DIVIDENDO,
+        )
+        await make_dividend(db, portfolio.id, event, value, value)
+
+    history = await get_monthly_history(db, portfolio.id)
+
+    march = history[0]["month_details"][0]
+    assert march["month"] == 3
+    assert march["by_asset_class"] == [
+        {"asset_type": "FII", "label": "FIIs", "value": 90.8},
+        {"asset_type": "ETF_NACIONAL", "label": "ETFs nacionais", "value": 37.0},
+        {"asset_type": "ACAO", "label": "Ações", "value": 23.65},
+    ]
+    assert march["total"] == pytest.approx(151.45)
+    assert history[0]["months"][2] == pytest.approx(march["total"])
+    assert sum(item["value"] for item in march["by_asset_class"]) == pytest.approx(march["total"])
+
+
+@pytest.mark.asyncio
+async def test_issue131_monthly_breakdown_respects_filters_and_portfolio_isolation(
+    db: AsyncSession,
+    portfolio: Portfolio,
+):
+    other_portfolio = Portfolio(
+        user_id=portfolio.user_id,
+        name="Outra carteira",
+        description="",
+    )
+    db.add(other_portfolio)
+    await db.flush()
+
+    asset = await make_asset(db, "HGLG11", "FII")
+    event = await make_event(
+        db,
+        asset,
+        date(2026, 4, 1),
+        date(2026, 4, 2),
+        date(2026, 4, 20),
+        DividendType.RENDIMENTO,
+    )
+    for target, value in ((portfolio, "60.00"), (other_portfolio, "900.00")):
+        await make_tx(db, target.id, asset.ticker, date(2025, 1, 1))
+        await make_dividend(db, target.id, event, value, value)
+
+    non_cash = await make_event(
+        db,
+        asset,
+        date(2026, 4, 3),
+        date(2026, 4, 4),
+        date(2026, 4, 20),
+        DividendType.BONIFICACAO,
+    )
+    await make_dividend(db, portfolio.id, non_cash, "500.00", "500.00")
+
+    history = await get_monthly_history(
+        db,
+        portfolio.id,
+        status=DividendStatus.RECEBIDO,
+        year=2026,
+        asset_type="FII",
+        dividend_type=DividendType.RENDIMENTO,
+    )
+
+    assert history[0]["total"] == pytest.approx(60.0)
+    assert history[0]["month_details"] == [{
+        "month": 4,
+        "total": 60.0,
+        "by_asset_class": [{"asset_type": "FII", "label": "FIIs", "value": 60.0}],
+    }]
+
+
 
 @pytest.mark.asyncio
 async def test_issue165_filters_keep_aggregates_in_the_same_cash_universe(
