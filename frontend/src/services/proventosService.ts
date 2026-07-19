@@ -30,11 +30,24 @@ export interface ProventoDistribution {
   percentage: number
 }
 
+export interface ProventosAssetClassAmount {
+  asset_type: string
+  label: string
+  value: number
+}
+
+export interface ProventosMonthDetail {
+  month: number
+  total: number
+  by_asset_class: ProventosAssetClassAmount[]
+}
+
 export interface ProventosHistoricoMes {
   year: number
   months: (number | null)[]
   total: number
   media: number
+  month_details: ProventosMonthDetail[]
 }
 
 export interface ProventoItem {
