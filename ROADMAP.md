@@ -1,6 +1,6 @@
 # Roadmap modular — SGI v2
 
-> Última atualização: 18/07/2026
+> Última atualização: 19/07/2026
 
 ## Visão geral
 
@@ -15,7 +15,7 @@
 | Renda Fixa — valuation atual | Consolidado | 100% |
 | Snapshots consolidados | Consolidado | 100% |
 | Snapshots por classe de mercado | Consolidado | 100% |
-| Proventos | Fase 2 — auditoria estrutural iniciada | 92% |
+| Proventos | Fase 2 concluída na `stable-15jun`; promoção pendente | 100% |
 | Página Resumo | Concluída e promovida pela PR #164 | 100% |
 | Página Patrimônio | Auditoria concluída, regressão visual mapeada | 90% |
 | Página Rentabilidade | Contratos concluídos | 95% |
@@ -75,13 +75,15 @@ A reconstrução limpa do catálogo, históricos e carteira ficou reservada para
 
 - [x] Preservar as entregas funcionais das Issues #92 e #95.
 - [x] Mapear arquitetura, contratos, duplicidades e riscos atuais.
-- [ ] Adicionar testes de caracterização antes de alterar comportamento.
-- [ ] Unificar contratos e filtros de resumo, lista, histórico e distribuição.
-- [ ] Separar leitura de materialização e centralizar elegibilidade.
-- [ ] Consolidar coleta e scheduler após validar consumidores.
-- [ ] Validar seed, coleta e materialização de ações, FIIs, ETFs e BDRs.
-- [ ] Revisar API, frontend, gráficos, tabelas e indicadores.
-- [ ] Implementar tooltip mensal por classe (#131).
+- [x] Adicionar testes de caracterização antes de alterar comportamento.
+- [x] Unificar contratos e filtros de resumo, lista, histórico e distribuição.
+- [x] Separar leitura de materialização e centralizar elegibilidade.
+- [x] Consolidar coleta e scheduler após validar consumidores.
+- [x] Validar seed, coleta e materialização de ações, FIIs, ETFs e BDRs.
+- [x] Revisar API, frontend, gráficos, tabelas e indicadores.
+- [x] Implementar tooltip mensal por classe (#131).
+- [x] Validar suítes backend/frontend e sincronizar a documentação viva.
+- [ ] Promover a Fase 2 para a `main` pela PR estrutural.
 
 ### Patrimônio e Rentabilidade
 
