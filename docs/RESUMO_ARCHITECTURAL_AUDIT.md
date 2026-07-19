@@ -191,6 +191,24 @@ preserva o custo atual desse ativo como fallback explícito; a ausência de pre�
 não transforma a posição em zero nem afeta a Renda Fixa, cuja valoração permanece
 no serviço canônico próprio.
 
+### A16 — Validado: suítes focais e reconciliação final da Fase 1
+
+A validação local executou 20 testes backend de contrato, P&L realizado,
+reconciliação intradiária, carteira mista e cobertura de preços, todos aprovados.
+No frontend, 34 testes de gráfico, tabela, hooks, KPIs e contrato foram aprovados
+em seis arquivos.
+
+A primeira execução frontend identificou somente uma expectativa de teste que
+usava ponto decimal para um percentual formatado em `pt-BR`. A asserção foi
+alinhada a `-7,50%` e `-10,00%`; o componente e o contrato financeiro não
+precisaram de alteração.
+
+Não foi encontrada divergência remanescente entre números equivalentes do Resumo,
+Patrimônio, posições e valuation canônico dentro das tolerâncias documentadas.
+A promoção para `main` permanece pendente apenas da sincronização de ancestralidade:
+`main` contém dois commits de merge sem diferenças de arquivos em relação ao
+conteúdo já incorporado à `stable-15jun`.
+
 ## Contratos que devem permanecer
 
 - `summary.v2` como contrato único dos KPIs.
@@ -217,4 +235,5 @@ no serviço canônico próprio.
 12. Concluído: cobrir carteira mista no valuation atual sem alterar a TWR fechada.
 13. Concluído: cobrir qualidade de preços completa e parcial no `summary.v2`.
 14. Concluído: validar visualmente e encerrar a #147.
-15. Sincronizar documentação viva ao concluir o bloco estrutural.
+15. Concluído: sincronizar documentação viva e executar as suítes focais.
+16. Sincronizar a ancestralidade de `main`, revalidar e abrir a PR estrutural.
