@@ -31,10 +31,14 @@ export function useProventosSummary(portfolioId: number | null, params?: Provent
 
 // ─── Distribuicao por ativo ──────────────────────────────────────────────
 
-export function useProventosDistribuicao(portfolioId: number | null, months = 12) {
+export function useProventosDistribuicao(
+  portfolioId: number | null,
+  months = 12,
+  params?: ProventosFilters,
+) {
   return useQuery<ProventoDistribution[]>({
-    queryKey:    ['proventos-distribuicao', portfolioId, months],
-    queryFn:     () => proventosService.getDistribuicao(portfolioId!, months),
+    queryKey:    ['proventos-distribuicao', portfolioId, months, params],
+    queryFn:     () => proventosService.getDistribuicao(portfolioId!, months, params),
     enabled:     !!portfolioId,
     placeholderData: [],
   })
@@ -43,15 +47,12 @@ export function useProventosDistribuicao(portfolioId: number | null, months = 12
 // ─── Historico mensal ──────────────────────────────────────────────────────
 
 export function useProventosHistoricoMensal(
-  portfolioId:    number | null,
-  status?:        string,
-  assetType?:     string,
-  dividendType?:  string,
+  portfolioId: number | null,
+  params?: ProventosFilters,
 ) {
   return useQuery<ProventosHistoricoMes[]>({
-    queryKey:    ['proventos-historico', portfolioId, status, assetType, dividendType],
-    queryFn:     () =>
-      proventosService.getHistoricoMensal(portfolioId!, status, assetType, dividendType),
+    queryKey:    ['proventos-historico', portfolioId, params],
+    queryFn:     () => proventosService.getHistoricoMensal(portfolioId!, params),
     enabled:     !!portfolioId,
     placeholderData: [],
   })
