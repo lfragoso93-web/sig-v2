@@ -1,5 +1,4 @@
 import logging
-import unicodedata
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
@@ -15,6 +14,7 @@ from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
 from app.models.dividend import Dividend, DividendStatus, DividendType
 from app.services.dividend_entitlement_service import calculate_net_quantity
+from app.services.dividend_type_service import normalize_dividend_type
 
 logger = logging.getLogger(__name__)
 
@@ -53,44 +53,6 @@ class ParsedDividendEvent:
         yield self.payment_date
         yield self.value_per_unit
         yield self.dividend_type
-
-
-def _strip_accents(value: str) -> str:
-    normalized = unicodedata.normalize("NFKD", value)
-    return "".join(ch for ch in normalized if not unicodedata.combining(ch))
-
-
-def _norm_label(value: str | None) -> str:
-    if not value:
-        return ""
-    clean = _strip_accents(str(value)).upper().strip()
-    return " ".join(clean.replace("_", " ").replace("-", " ").split())
-
-
-def normalize_dividend_type(
-    raw: str | DividendType | None,
-    category: str | None = None,
-) -> DividendType:
-    """Normaliza rótulos de provedores e valores legados no enum canônico."""
-    if isinstance(raw, DividendType):
-        return raw
-    label = _norm_label(raw)
-    cat = _norm_label(category)
-    if "SUBSCR" in label or "SUBSCR" in cat:
-        return DividendType.SUBSCRICAO
-    if "BONIFIC" in label or "BONIFIC" in cat or "STOCK" in cat:
-        return DividendType.BONIFICACAO
-    if "JCP" in label or "JUROS SOBRE CAPITAL" in label:
-        return DividendType.JCP
-    if "AMORT" in label:
-        return DividendType.AMORTIZACAO
-    if "REND" in label or "FII" in cat:
-        return DividendType.RENDIMENTO
-    if "DIVID" in label:
-        return DividendType.DIVIDENDO
-    if label in {item.value for item in DividendType}:
-        return DividendType(label)
-    return DividendType.OUTROS
 
 
 def _map_dividend_type(raw: str | None, category: str | None = None) -> str:
