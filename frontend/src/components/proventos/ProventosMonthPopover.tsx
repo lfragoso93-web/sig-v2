@@ -75,8 +75,8 @@ export default function ProventosMonthPopover({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault()
-        onClose()
         anchor.focus()
+        onClose()
       }
     }
 
