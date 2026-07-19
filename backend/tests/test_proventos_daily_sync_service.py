@@ -31,7 +31,32 @@ async def _make_transaction(
 
 
 @pytest.mark.asyncio
-async def test_daily_sync_defaults_to_held_national_assets(
+async def test_daily_sync_defaults_to_the_global_asset_catalog(
+    db: AsyncSession,
+):
+    db.add_all(
+        [
+            Asset(ticker="PETR4", name="PETR4", asset_type="ACAO", currency="BRL"),
+            Asset(ticker="MXRF11", name="MXRF11", asset_type="FII", currency="BRL"),
+            Asset(ticker="BBAS3", name="BBAS3", asset_type="ACAO", currency="BRL"),
+            Asset(ticker="PETR4F", name="PETR4F", asset_type="ACAO", currency="BRL"),
+            Asset(ticker="BTC", name="BTC", asset_type="CRIPTO", currency="BRL"),
+        ]
+    )
+    await db.flush()
+
+    pairs, skipped = await load_proventos_sync_pairs(db)
+
+    assert pairs == [
+        ("BBAS3", "ACAO"),
+        ("PETR4", "ACAO"),
+        ("MXRF11", "FII"),
+    ]
+    assert skipped == 1
+
+
+@pytest.mark.asyncio
+async def test_daily_sync_allows_explicit_held_scope(
     db: AsyncSession,
     portfolio: Portfolio,
 ):
@@ -50,38 +75,10 @@ async def test_daily_sync_defaults_to_held_national_assets(
     )
     await db.flush()
 
-    pairs, skipped = await load_proventos_sync_pairs(db)
+    pairs, skipped = await load_proventos_sync_pairs(
+        db,
+        only_held=True,
+    )
 
     assert pairs == [("PETR4", "ACAO"), ("MXRF11", "FII")]
     assert skipped == 1
-
-
-@pytest.mark.asyncio
-async def test_daily_sync_allows_explicit_full_catalog_scope(
-    db: AsyncSession,
-):
-    db.add_all(
-        [
-            Asset(
-                ticker="BBAS3",
-                name="BBAS3",
-                asset_type="ACAO",
-                currency="BRL",
-            ),
-            Asset(
-                ticker="KNRI11",
-                name="KNRI11",
-                asset_type="FII",
-                currency="BRL",
-            ),
-        ]
-    )
-    await db.flush()
-
-    pairs, skipped = await load_proventos_sync_pairs(
-        db,
-        only_held=False,
-    )
-
-    assert pairs == [("BBAS3", "ACAO"), ("KNRI11", "FII")]
-    assert skipped == 0
