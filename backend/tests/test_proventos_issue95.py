@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
@@ -131,3 +131,129 @@ async def test_issue95_history_and_distribution_ignore_non_cash(db: AsyncSession
     assert distribution[0]["ticker"] == "MXRF11"
     assert distribution[0]["total"] == pytest.approx(120.0)
     assert distribution[0]["percentage"] == pytest.approx(100.0)
+
+
+
+@pytest.mark.asyncio
+async def test_issue165_filters_keep_aggregates_in_the_same_cash_universe(
+    db: AsyncSession,
+    portfolio: Portfolio,
+):
+    today = date.today()
+    bought_on = today - timedelta(days=120)
+    record_date = today - timedelta(days=30)
+    ex_date = today - timedelta(days=29)
+    payment_date = today - timedelta(days=5)
+
+    stock = await make_asset(db, "VALE3")
+    fii = await make_asset(db, "HGLG11", "FII")
+    await make_tx(db, portfolio.id, stock.ticker, bought_on)
+    await make_tx(db, portfolio.id, fii.ticker, bought_on)
+
+    stock_event = await make_event(
+        db,
+        stock,
+        record_date,
+        ex_date,
+        payment_date,
+        DividendType.DIVIDENDO,
+    )
+    fii_event = await make_event(
+        db,
+        fii,
+        record_date,
+        ex_date,
+        payment_date,
+        DividendType.RENDIMENTO,
+    )
+    await make_dividend(db, portfolio.id, stock_event, "100.00", "100.00")
+    await make_dividend(db, portfolio.id, fii_event, "60.00", "60.00")
+
+    filters = {
+        "asset_type": "FII",
+        "dividend_type": DividendType.RENDIMENTO,
+    }
+    summary = await get_summary(db, portfolio.id, **filters)
+    items = await list_items(db, portfolio.id, **filters)
+    history = await get_monthly_history(db, portfolio.id, **filters)
+
+    assert summary["total_liquido_recebido"] == pytest.approx(60.0)
+    assert items["total"] == 1
+    assert items["items"][0]["ticker"] == "HGLG11"
+    assert sum(row["total"] for row in history) == pytest.approx(60.0)
+
+
+@pytest.mark.asyncio
+async def test_issue165_year_is_recognized_by_payment_date(
+    db: AsyncSession,
+    portfolio: Portfolio,
+):
+    current_year = date.today().year
+    asset = await make_asset(db, "TAEE11")
+    await make_tx(db, portfolio.id, asset.ticker, date(current_year - 2, 1, 2))
+
+    event = await make_event(
+        db,
+        asset,
+        date(current_year - 1, 12, 15),
+        date(current_year - 1, 12, 16),
+        date(current_year, 1, 15),
+        DividendType.DIVIDENDO,
+    )
+    await make_dividend(db, portfolio.id, event, "75.00", "75.00")
+
+    current_summary = await get_summary(db, portfolio.id, year=current_year)
+    previous_summary = await get_summary(db, portfolio.id, year=current_year - 1)
+    current_items = await list_items(db, portfolio.id, year=current_year)
+    previous_items = await list_items(db, portfolio.id, year=current_year - 1)
+    history = await get_monthly_history(db, portfolio.id)
+
+    assert current_summary["total_liquido_recebido"] == pytest.approx(75.0)
+    assert previous_summary["total_liquido_recebido"] == pytest.approx(0.0)
+    assert current_items["total"] == 1
+    assert previous_items["total"] == 0
+    assert history[0]["year"] == current_year
+    assert history[0]["months"][0] == pytest.approx(75.0)
+
+
+@pytest.mark.asyncio
+async def test_issue165_distribution_documents_current_unfiltered_contract(
+    db: AsyncSession,
+    portfolio: Portfolio,
+):
+    today = date.today()
+    bought_on = today - timedelta(days=120)
+    record_date = today - timedelta(days=30)
+    ex_date = today - timedelta(days=29)
+    payment_date = today - timedelta(days=5)
+
+    stock = await make_asset(db, "WEGE3")
+    fii = await make_asset(db, "KNRI11", "FII")
+    await make_tx(db, portfolio.id, stock.ticker, bought_on)
+    await make_tx(db, portfolio.id, fii.ticker, bought_on)
+
+    stock_event = await make_event(
+        db,
+        stock,
+        record_date,
+        ex_date,
+        payment_date,
+        DividendType.DIVIDENDO,
+    )
+    fii_event = await make_event(
+        db,
+        fii,
+        record_date,
+        ex_date,
+        payment_date,
+        DividendType.RENDIMENTO,
+    )
+    await make_dividend(db, portfolio.id, stock_event, "40.00", "40.00")
+    await make_dividend(db, portfolio.id, fii_event, "60.00", "60.00")
+
+    filtered_summary = await get_summary(db, portfolio.id, asset_type="FII")
+    distribution = await get_distribution(db, portfolio.id, months=12)
+
+    assert filtered_summary["total_liquido_recebido"] == pytest.approx(60.0)
+    assert {row["ticker"] for row in distribution} == {"WEGE3", "KNRI11"}
+    assert sum(row["total"] for row in distribution) == pytest.approx(100.0)
