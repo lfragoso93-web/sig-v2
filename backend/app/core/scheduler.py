@@ -11,6 +11,7 @@ HELD_MARKET_PIPELINE_EVENT_OPTIONS = {
     "sync_events": False,
     "materialize": False,
 }
+PROVENTOS_SYNC_ONLY_HELD = False
 
 
 def _cron_trigger(**kwargs) -> CronTrigger:
@@ -113,7 +114,10 @@ def start_scheduler() -> None:
         from app.services.proventos_daily_sync_service import run_daily_proventos_sync
         async with AsyncSessionLocal() as db:
             try:
-                result = await run_daily_proventos_sync(db)
+                result = await run_daily_proventos_sync(
+                    db,
+                    only_held=PROVENTOS_SYNC_ONLY_HELD,
+                )
                 logger.info("[scheduler] Proventos diários atualizados: %s", result)
             except Exception as e:
                 logger.error("[scheduler] Erro ao sincronizar proventos diários: %s", e)
