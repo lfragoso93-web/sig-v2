@@ -162,6 +162,19 @@ Na posição totalmente encerrada, patrimônio e custo abertos permanecem zero,
 enquanto o resultado realizado e o resultado total preservam 80. Nenhum valor
 fechado é reintroduzido como posição atual.
 
+### A14 — Resolvido: carteira mista coberta no valuation atual
+
+A regressão de `summary.v2` combina Ação B3, Tesouro Direto, Stock exterior e
+Renda Fixa. Os valores já normalizados pelo valuation canônico resultam em custo
+atual de R$ 11.000,00, patrimônio de R$ 11.850,00 e resultado não realizado de
+R$ 850,00.
+
+Resultado realizado de R$ 300,00 e proventos de R$ 250,00 completam o resultado
+total de R$ 1.400,00. A cobertura dos três ativos precificáveis permanece em 100%;
+a Renda Fixa participa dos totais pelo serviço canônico próprio. A TWR de 8,25%
+continua vindo exclusivamente do último snapshot fechado, sem ser recomposta a
+partir do valuation intradiário.
+
 ## Contratos que devem permanecer
 
 - `summary.v2` como contrato único dos KPIs.
@@ -185,5 +198,6 @@ fechado é reintroduzido como posição atual.
 9. Concluído: reconciliar KPIs e semântica de retorno entre Resumo e Patrimônio.
 10. Concluído: remover recomposições financeiras restantes do frontend do Resumo.
 11. Concluído: cobrir venda parcial e posição totalmente encerrada no `summary.v2`.
-12. Validar visualmente a #147.
-13. Sincronizar documentação viva ao concluir o bloco estrutural.
+12. Concluído: cobrir carteira mista no valuation atual sem alterar a TWR fechada.
+13. Validar visualmente a #147.
+14. Sincronizar documentação viva ao concluir o bloco estrutural.
