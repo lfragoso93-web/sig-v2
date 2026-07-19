@@ -16,7 +16,6 @@ from app.schemas.proventos import (
     ProventosSummaryResponse,
 )
 from app.services.proventos_service import (
-    ensure_portfolio_proventos,
     get_distribution,
     get_monthly_history,
     get_summary,
@@ -34,11 +33,6 @@ async def _assert_owner(portfolio_id: int, user: User, db: AsyncSession) -> Port
     if not portfolio:
         raise HTTPException(status_code=404, detail="Carteira nao encontrada.")
     return portfolio
-
-
-async def _prepare_proventos(portfolio_id: int, user: User, db: AsyncSession) -> None:
-    await _assert_owner(portfolio_id, user, db)
-    await ensure_portfolio_proventos(db, portfolio_id)
 
 
 def _parse_status(status: Optional[str]) -> Optional[DividendStatus]:
@@ -70,7 +64,7 @@ async def proventos_summary(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _prepare_proventos(portfolio_id, current_user, db)
+    await _assert_owner(portfolio_id, current_user, db)
     return await get_summary(
         db,
         portfolio_id,
@@ -93,7 +87,7 @@ async def list_proventos(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _prepare_proventos(portfolio_id, current_user, db)
+    await _assert_owner(portfolio_id, current_user, db)
     return await list_items(
         db,
         portfolio_id,
@@ -119,7 +113,7 @@ async def proventos_historico_mensal(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _prepare_proventos(portfolio_id, current_user, db)
+    await _assert_owner(portfolio_id, current_user, db)
     return await get_monthly_history(
         db,
         portfolio_id,
@@ -144,7 +138,7 @@ async def proventos_distribuicao(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _prepare_proventos(portfolio_id, current_user, db)
+    await _assert_owner(portfolio_id, current_user, db)
     return await get_distribution(
         db,
         portfolio_id,
