@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
 from app.models.dividend import Dividend, DividendType
-from app.services.dividend_backfill_service import normalize_dividend_type
+from app.services.dividend_type_service import normalize_dividend_type
 
 
 class LegacyLinkStatus(str, Enum):
