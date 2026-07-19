@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 from decimal import Decimal
+from unittest.mock import AsyncMock
 
 import pytest
 from pydantic import ValidationError
@@ -306,3 +307,38 @@ async def test_issue165_strict_response_contracts_validate_service_payloads(
             **summary,
             "campo_inesperado": True,
         })
+
+
+
+@pytest.mark.asyncio
+async def test_issue165_read_services_do_not_mutate_session(
+    db: AsyncSession,
+    portfolio: Portfolio,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    today = date.today()
+    asset = await make_asset(db, "SANB11")
+    await make_tx(db, portfolio.id, asset.ticker, today - timedelta(days=120))
+    event = await make_event(
+        db,
+        asset,
+        today - timedelta(days=30),
+        today - timedelta(days=29),
+        today - timedelta(days=5),
+        DividendType.DIVIDENDO,
+    )
+    await make_dividend(db, portfolio.id, event, "50.00", "50.00")
+    await db.flush()
+
+    commit_mock = AsyncMock()
+    monkeypatch.setattr(db, "commit", commit_mock)
+
+    await get_summary(db, portfolio.id)
+    await list_items(db, portfolio.id)
+    await get_monthly_history(db, portfolio.id)
+    await get_distribution(db, portfolio.id)
+
+    commit_mock.assert_not_awaited()
+    assert list(db.new) == []
+    assert list(db.dirty) == []
+    assert list(db.deleted) == []
