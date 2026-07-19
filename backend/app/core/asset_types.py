@@ -37,6 +37,7 @@ def asset_type_label(asset_type: AssetType | str) -> str:
         return str(asset_type).replace("_", " ").title()
     return ASSET_TYPE_LABELS[normalized]
 
+
 # ── Ativos que usam BRAPI como provedor primário ──────────────────────────────
 # RENDA_FIXA removido daqui — não tem cotação de mercado (está em NO_QUOTE_TYPES)
 BR_TYPES: frozenset[AssetType] = frozenset({
