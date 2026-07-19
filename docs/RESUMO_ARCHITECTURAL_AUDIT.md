@@ -205,9 +205,10 @@ precisaram de alteração.
 
 Não foi encontrada divergência remanescente entre números equivalentes do Resumo,
 Patrimônio, posições e valuation canônico dentro das tolerâncias documentadas.
-A promoção para `main` permanece pendente apenas da sincronização de ancestralidade:
-`main` contém dois commits de merge sem diferenças de arquivos em relação ao
-conteúdo já incorporado à `stable-15jun`.
+A comparação de promoção identificou dois commits exclusivos de `main`, ambos
+merges das PRs #160 e #163 e sem diferenças de arquivos. A PR estrutural pode
+reconciliar essa ancestralidade diretamente no merge, evitando um commit
+intermediário e uma execução adicional de CI.
 
 ## Contratos que devem permanecer
 
@@ -236,4 +237,4 @@ conteúdo já incorporado à `stable-15jun`.
 13. Concluído: cobrir qualidade de preços completa e parcial no `summary.v2`.
 14. Concluído: validar visualmente e encerrar a #147.
 15. Concluído: sincronizar documentação viva e executar as suítes focais.
-16. Sincronizar a ancestralidade de `main`, revalidar e abrir a PR estrutural.
+16. Concluído: validar a divergência sem diferenças de arquivos e abrir a PR estrutural.
