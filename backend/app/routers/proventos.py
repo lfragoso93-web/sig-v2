@@ -9,6 +9,12 @@ from app.core.deps import get_current_user
 from app.models.dividend import DividendStatus, DividendType
 from app.models.portfolio import Portfolio
 from app.models.user import User
+from app.schemas.proventos import (
+    ProventosDistributionResponse,
+    ProventosListResponse,
+    ProventosMonthlyHistoryResponse,
+    ProventosSummaryResponse,
+)
 from app.services.proventos_service import (
     ensure_portfolio_proventos,
     get_distribution,
@@ -54,7 +60,7 @@ def _parse_dividend_type(dividend_type: Optional[str]) -> Optional[DividendType]
         raise HTTPException(status_code=422, detail=f"Tipo de provento invalido. Use um de: {valid}.")
 
 
-@router.get("/summary")
+@router.get("/summary", response_model=ProventosSummaryResponse)
 async def proventos_summary(
     portfolio_id: int,
     status: Optional[str] = Query(None),
@@ -75,7 +81,7 @@ async def proventos_summary(
     )
 
 
-@router.get("")
+@router.get("", response_model=ProventosListResponse)
 async def list_proventos(
     portfolio_id: int,
     status: Optional[str] = Query(None),
@@ -100,7 +106,10 @@ async def list_proventos(
     )
 
 
-@router.get("/historico-mensal")
+@router.get(
+    "/historico-mensal",
+    response_model=list[ProventosMonthlyHistoryResponse],
+)
 async def proventos_historico_mensal(
     portfolio_id: int,
     status: Optional[str] = Query(None),
@@ -121,7 +130,10 @@ async def proventos_historico_mensal(
     )
 
 
-@router.get("/distribuicao")
+@router.get(
+    "/distribuicao",
+    response_model=list[ProventosDistributionResponse],
+)
 async def proventos_distribuicao(
     portfolio_id: int,
     months: int = Query(12, ge=1, le=120),
