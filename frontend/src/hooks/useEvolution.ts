@@ -121,7 +121,6 @@ export function useMonthlyEvolution(
         .get(`/performance/${portfolioId}/evolution/monthly`, { params: { months } })
         .then(r => r.data),
     enabled: !!portfolioId,
-    placeholderData: [],
     staleTime: 5 * 60 * 1000,
   })
 }
@@ -161,7 +160,6 @@ export function useClassMonthlyEvolution(
         })
         .then(r => r.data),
     enabled: !!portfolioId && !!assetType,
-    placeholderData: [],
     staleTime: 5 * 60 * 1000,
   })
 }
@@ -172,7 +170,6 @@ export function useClassTwrAvailability(portfolioId: number | null) {
     queryFn: () =>
       api.get(`/performance/${portfolioId}/classes/availability`).then(r => r.data),
     enabled: !!portfolioId,
-    placeholderData: [],
     staleTime: 5 * 60 * 1000,
   })
 }

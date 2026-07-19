@@ -9,9 +9,9 @@ describe('buildPatrimonioChartData', () => {
       {
         date: '2026-07-31',
         period: '2026-07',
-        value: 20739.67,
-        invested: 22149.25,
-        capital_result: -1409.58,
+        market_value: 20739.67,
+        cost_basis: 22149.25,
+        unrealized_pnl: -1409.58,
         accumulated_return_pct: 8.7654,
         return_is_estimated: true,
         has_partial_prices: false,
@@ -38,13 +38,14 @@ describe('buildPatrimonioChartData', () => {
     const [point] = buildPatrimonioChartData([
       {
         date: '2026-06-30',
-        value: 1250,
-        invested: 1000,
+        market_value: 1250,
+        cost_basis: 1000,
+        unrealized_pnl: 225,
       },
     ])
 
-    expect(point.resultado).toBe(250)
-    expect(point.ganho).toBe(250)
+    expect(point.resultado).toBe(225)
+    expect(point.ganho).toBe(225)
     expect(point.perda).toBe(0)
     expect(point.twr).toBeNull()
     expect(point.source).toBe('unknown')
@@ -54,8 +55,9 @@ describe('buildPatrimonioChartData', () => {
     const [point] = buildPatrimonioChartData([
       {
         date: '2026-05-30',
-        value: 1000,
-        invested: 1000,
+        market_value: 1000,
+        cost_basis: 1000,
+        unrealized_pnl: 0,
         accumulated_return_pct: 0,
         history_source: 'db_derived_class_history',
       },
@@ -74,15 +76,15 @@ describe('getSymmetricAxisLimit', () => {
     const points = buildPatrimonioChartData([
       {
         date: '2026-06-30',
-        value: 19486.43,
-        invested: 21338.20,
-        capital_result: -1851.77,
+        market_value: 19486.43,
+        cost_basis: 21338.20,
+        unrealized_pnl: -1851.77,
       },
       {
         date: '2026-07-31',
-        value: 23000,
-        invested: 21500,
-        capital_result: 1500,
+        market_value: 23000,
+        cost_basis: 21500,
+        unrealized_pnl: 1500,
       },
     ])
 
@@ -94,7 +96,7 @@ describe('getSymmetricAxisLimit', () => {
 
   it('uses a safe domain for a zeroed portfolio', () => {
     const points = buildPatrimonioChartData([
-      { date: '2026-07-31', value: 0, invested: 0 },
+      { date: '2026-07-31', market_value: 0, cost_basis: 0, unrealized_pnl: 0 },
     ])
 
     expect(getSymmetricAxisLimit(points)).toBe(1)

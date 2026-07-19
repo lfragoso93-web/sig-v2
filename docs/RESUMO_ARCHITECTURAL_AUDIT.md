@@ -2,12 +2,12 @@
 
 Issue de acompanhamento: #161  
 Branch: `stable-15jun`  
-Referência: 17/07/2026
+Referência: 18/07/2026
 
 ## Objetivo
 
 Este documento inventaria os contratos, endpoints e consumidores atuais da página
-Resumo antes das correções funcionais. A página deve permanecer uma projeção do
+Resumo durante as correções funcionais. A página deve permanecer uma projeção do
 domínio financeiro canônico; nenhum consumidor frontend pode criar uma fórmula
 financeira concorrente.
 
@@ -26,12 +26,11 @@ financeira concorrente.
 |---|---|---|---|---|
 | KPIs | `usePortfolioSummaryData` | `GET /portfolios/{id}/summary` | `portfolio_summary_service` | Valuation intradiário + último `PortfolioSnapshot` + proventos recebidos |
 | Tabela de ativos | `usePositions` | `GET /portfolios/{id}/positions` | `canonical_positions_service` | Posições/valuation atual + proventos recebidos por ticker |
-| Gráfico consolidado | `usePatrimonioHistory` | `GET /portfolios/{id}/patrimonio-history` | `portfolio_history_service` | Último `PortfolioSnapshot` de cada mês |
-| Gráfico por classe | `usePatrimonioHistory` | `GET /portfolios/{id}/patrimonio-history?asset_type=...` | `portfolio_class_evolution_service` | Recomposição por transações e preços históricos |
-| Gráfico canônico consolidado já disponível | `useMonthlyEvolution` | `GET /performance/{id}/evolution/monthly` | leitura de snapshots enriquecidos | `PortfolioSnapshot` |
-| Gráfico canônico por classe já disponível | `useClassMonthlyEvolution` | `GET /performance/{id}/classes/{type}/evolution/monthly` | leitura de snapshots por classe | `PortfolioClassSnapshot` |
+| Gráfico consolidado | `useMonthlyEvolution` | `GET /performance/{id}/evolution/monthly` | `portfolio_snapshot_read_service` | `PortfolioSnapshot` |
+| Gráfico por classe | `useClassMonthlyEvolution` + `useClassTwrAvailability` | `GET /performance/{id}/classes/{type}/evolution/monthly` | `portfolio_class_snapshot_read_service` | `PortfolioClassSnapshot` |
 | Disponibilidade por classe | `useClassTwrAvailability` | `GET /performance/{id}/classes/availability` | leitura de snapshots por classe | Cobertura e suporte do motor histórico |
 | Reconciliação por classe | `useClassReconciliation` | `GET /performance/{id}/classes/reconciliation/latest` | reconciliação de classes | Snapshots consolidados e por classe |
+| Reconciliação intradiária | auditoria operacional | `GET /portfolios/{id}/reconciliation/intraday` | `portfolio_intraday_reconciliation_service` | `summary.v2` + posições + distribuição, sem snapshots |
 
 ## Matriz dos KPIs
 
@@ -40,94 +39,176 @@ financeira concorrente.
 | `total_patrimonio` | Soma do valor atual das posições abertas | Intradiária | Valuation canônico | Resumo e Patrimônio |
 | `total_investido` | Custo contábil atual das posições abertas | Intradiária | Valuation canônico | Resumo e Patrimônio |
 | `ganho_nao_realizado` / `variacao_valor` | Patrimônio menos custo atual | Intradiária | Derivado no backend | Resumo, Patrimônio e tabela |
-| `ganho_realizado` | Ganhos/perdas reconhecidos em vendas | Deve ser atual para o Resumo | Último snapshot quando existe | Resumo e Patrimônio |
+| `ganho_realizado` | Ganhos/perdas reconhecidos em vendas | Atual | Serviço canônico de P&L realizado | Resumo e Patrimônio |
 | `total_proventos` | Eventos monetários líquidos recebidos | Data de pagamento até hoje | Agregação canônica | Resumo e Patrimônio |
-| `lucro_total` | Não realizado + realizado + proventos | Atual | Composição de referências mistas | Resumo e Patrimônio |
-| `rentabilidade_total` | TWR acumulada | Último fechamento | Último snapshot | Resumo e Patrimônio |
+| `lucro_total` | Não realizado + realizado + proventos | Atual | Valuation + P&L realizado + proventos atuais | Resumo e Patrimônio |
+| `rentabilidade_total` | TWR acumulada; fallback identificado como estimativa quando não há snapshot | Fechamento ou estimativa intradiária explícita | Snapshot ou `valuation_fallback` | Resumo e Patrimônio |
 | `rentabilidade_diaria` | TWR diária | Último fechamento | Último snapshot | Resumo |
 | `dividendos_recebidos_12m` | Eventos líquidos dos últimos 365 dias | Até hoje | Agregação canônica | Resumo |
 | `price_coverage_pct` | Ativos precificáveis cobertos / total | Intradiária | Valuation canônico | Metadados de qualidade |
 
 ## Achados arquiteturais
 
-### A1 — Resultado realizado pode ficar temporalmente defasado
+### A1 — Resolvido: resultado realizado atual separado do TWR fechado
 
-Quando existe snapshot, `portfolio_summary_service` usa
-`snapshot.realized_pnl` para compor `ganho_realizado` e `lucro_total`, embora
-patrimônio, custo e proventos sejam atuais. Uma venda posterior ao último snapshot
-pode deixar o “Resultado Total” temporariamente incorreto.
+`portfolio_summary_service` usa o serviço canônico de P&L realizado para
+`ganho_realizado` e `lucro_total`. O último snapshot permanece exclusivamente como
+fonte do TWR acumulado, TWR diário e metadados de performance fechada.
 
-Direção: calcular o P&L realizado atual pelo serviço canônico para os KPIs
-intradiários. O snapshot deve continuar sendo a única fonte do TWR e da performance
-fechada.
+### A2 — Resolvido: gráfico por classe usa `PortfolioClassSnapshot`
 
-### A2 — Gráfico por classe ainda contorna `PortfolioClassSnapshot`
+O filtro por classe do Resumo consulta primeiro a disponibilidade canônica e só
+carrega `/performance/{id}/classes/{type}/evolution/monthly` quando o snapshot
+da classe está materializado. Classes indisponíveis exibem o motivo informado
+pela API; nenhuma recomposição por transações ou preços ocorre no frontend.
 
-O filtro por classe do Resumo chama
-`portfolio_class_evolution_service.get_monthly_evolution_by_class`, que recompõe
-quantidade, custo e valor por transações e preços históricos e usa custo médio
-quando falta cotação. Isso produz `history_source=db_derived_class_history` e cria
-uma segunda regra financeira fora do pipeline de snapshots.
+### A3 — Resolvido: endpoint e recomposição histórica redundantes removidos
 
-Direção: migrar o Resumo para os endpoints de `PortfolioClassSnapshot`, respeitar
-a disponibilidade por classe e não exibir aproximação para motores ainda não
-suportados.
+A auditoria das páginas registradas no router confirmou que nenhum consumidor
+ativo dependia de `/portfolios/{id}/patrimonio-history`. O hook frontend, a rota,
+o serviço consolidado duplicado e o serviço que recompunha classes por transações,
+preços históricos e fallback de custo médio foram removidos.
 
-### A3 — Endpoint histórico redundante
+Históricos consolidados e por classe permanecem publicados exclusivamente pelos
+endpoints de `/performance`, com origem em `PortfolioSnapshot` e
+`PortfolioClassSnapshot`.
 
-`/portfolios/{id}/patrimonio-history` replica parte do domínio já publicado em
-`/performance/{id}/evolution/monthly` e alterna entre duas fontes conforme o
-filtro. Isso torna o contrato temporal dependente de um parâmetro.
+### A4 — Resolvido: campo legado de rentabilidade removido
 
-Direção: migrar o consumidor do Resumo para os endpoints `/performance`; depois
-de confirmar ausência de outros consumidores, descontinuar o endpoint redundante
-em bloco separado.
-
-### A4 — Campo legado de rentabilidade permanece no frontend
-
-`PositionGroup.rentabilidade_pct` está marcado como legado, o backend canônico o
-remove explicitamente, mas `PositionTable` ainda tenta renderizá-lo como
-“Rentab. total”. O resultado hoje depende da ausência do campo, não de um contrato
-limpo.
-
-Direção: remover o campo e o ramo visual legado. Rentabilidade por classe só deve
-ser exibida quando vier de `PortfolioClassSnapshot` com referência e
+`PositionGroup.rentabilidade_pct` e o ramo visual “Rentab. total” foram removidos.
+O contrato backend de posições rejeita campos de retorno legado. Rentabilidade por
+classe só poderá retornar por `PortfolioClassSnapshot`, com referência e
 disponibilidade explícitas.
 
-### A5 — Mapeamento permissivo pode mascarar quebra de contrato
+### A5 — Resolvido: `summary.v2` validado nas duas fronteiras
 
-`PortfolioSummaryLike` torna campos obrigatórios opcionais e `safeNum` converte
-ausência ou valor inválido em zero. Embora o backend valide `summary.v2` com
-`extra="forbid"`, o frontend pode transformar payload incompleto em KPI zero.
+A rota `GET /portfolios/{id}/summary` declara `PortfolioSummaryResponse` como
+`response_model`, mantendo o contrato estrito também no OpenAPI e na serialização.
 
-Direção: consumir o tipo estrito `PortfolioSummary` e rejeitar/explicitar payload
-inválido. Zero financeiro válido deve continuar distinto de ausência de dado.
+O frontend valida todos os campos, tipos, literais e chaves adicionais antes de
+armazenar a resposta no React Query. O mapper aceita somente `PortfolioSummary`
+validado e não converte ausência ou valor inválido em zero. Em caso de violação,
+os KPIs são ocultados e a interface explicita o campo incompatível.
 
-### A6 — Reconciliação atual não compara os consumidores intradiários
+### A6 — Resolvido: consumidores intradiários reconciliados entre si
 
-A reconciliação do Resumo compara TWR com o snapshot. Por decisão correta, não
-compara patrimônio intradiário com fechamento anterior. Porém, ainda falta
-reconciliar entre si, na mesma referência intradiária:
+`GET /portfolios/{id}/reconciliation/intraday` materializa `summary.v2`, grupos
+de posições e distribuição por classe na mesma requisição. O serviço compara
+patrimônio, custo, resultado não realizado e resultado de capital por grupo com
+tolerância de R$ 0,01.
 
-- summary;
-- soma das posições;
-- distribuição por classe;
-- totais dos grupos da tabela.
+O contrato declara `valuation_mode=intraday` e `snapshot_evaluated=false`.
+TWR, rentabilidade e valores de fechamento não participam dessas comparações.
 
-Direção: adicionar reconciliação específica do valuation atual, com tolerância de
-R$ 0,01, sem comparar intraday contra snapshot fechado.
+### A7 — Resolvido: dropdown em portal coberto por regressão
 
-### A7 — Dropdown já usa portal, mas precisa de regressão
+O menu de ativos usa `createPortal`, coordenadas de viewport e reposição em
+scroll/resize. A cobertura frontend valida o comportamento com uma e vinte linhas.
 
-O menu de ativos já é renderizado com `createPortal`, coordenadas de viewport,
-reposição em scroll/resize e containers com `overflow: visible`. A correção
-estrutural existe; falta teste de regressão com poucas e muitas linhas.
+### A8 — Resolvido: ganho e perda separados no gráfico patrimonial
 
-### A8 — Correção do gráfico aguarda validação visual
+`PatrimonioBarChart` usa `stackOffset="sign"` e consome diretamente
+`market_value`, `cost_basis` e `unrealized_pnl` dos snapshots. Os testes cobrem
+ganho e perda e comprovam que o frontend não recompõe o resultado por subtração.
 
-`PatrimonioBarChart` já usa `stackOffset="sign"` e possui teste de transformação
-para ganho/perda. A issue #147 permanece aberta até validação no ambiente
-publicado.
+A renderização isolada com Recharts 3.9.2 confirmou a linha zero, o mesmo centro de
+categoria para as três séries, a perda abaixo de zero e o ganho acima do aplicado.
+O tooltip preserva patrimônio, custo e resultado canônicos. A issue #147 foi
+validada e encerrada.
+
+### A9 — Resolvido: contrato e totais por classe
+
+`GET /portfolios/{id}/positions` possui `response_model` estrito para grupos e
+posições. `total_invested` é obrigatório e o frontend consome esse total canônico
+diretamente, sem somar valores arredondados por posição. A6 cobre a reconciliação
+automatizada com os demais consumidores intradiários.
+
+### A10 — Resolvido: estados e semântica da tabela
+
+A primeira consulta de posições preserva o estado de carregamento até a resposta
+real, sem usar lista vazia como placeholder. A interface distingue custo atual,
+valor atual, resultado de capital e variação diária. Ativos sem preço exibem
+“Sem cotação”, enquanto o aviso consolidado lista a cobertura parcial.
+
+Quando `summary.v2` retorna `valuation_fallback`/`return_is_estimated`, o card
+usa “Retorno estimado” e informa que o TWR está indisponível sem snapshot. O
+fallback não é apresentado como rentabilidade TWR.
+
+### A11 — Resolvido: KPIs reconciliados entre Resumo e Patrimônio
+
+As duas páginas consomem o mesmo `summary.v2`, o mesmo mapper estrito e a mesma
+regra de apresentação do retorno. Patrimônio, custo, resultado não realizado,
+resultado realizado, resultado total, proventos e TWR preservam os valores e sinais
+do contrato backend.
+
+O fallback intradiário recebe “Retorno estimado” nas duas páginas e nunca é
+rotulado como TWR. A fixture de regressão cobre patrimônio 900, custo 1.000,
+resultado total e não realizado negativos, proventos 20/25 e TWR negativo.
+
+### A12 — Resolvido: frontend sem recomposição financeira no Resumo
+
+A tabela consome `invested_value`, `current_value`, `variation_value` e os
+totais de grupo diretamente do contrato canônico de posições. O fallback
+`quantity * average_price` foi removido; custo canônico igual a zero permanece
+zero.
+
+KPIs usam `summary.v2` e gráficos usam campos dos snapshots. As operações locais
+restantes no Resumo tratam somente contagem, seleção, layout e formatação, sem
+criar valores monetários ou percentuais concorrentes.
+
+### A13 — Resolvido: venda parcial e encerramento cobertos no resultado atual
+
+A cobertura integra o custo médio móvel e taxas do serviço canônico de P&L realizado
+ao builder de `summary.v2`. Na venda parcial, o teste preserva custo aberto 606,
+resultado não realizado 54, realizado 72 e resultado total 126.
+
+Na posição totalmente encerrada, patrimônio e custo abertos permanecem zero,
+enquanto o resultado realizado e o resultado total preservam 80. Nenhum valor
+fechado é reintroduzido como posição atual.
+
+### A14 — Resolvido: carteira mista coberta no valuation atual
+
+A regressão de `summary.v2` combina Ação B3, Tesouro Direto, Stock exterior e
+Renda Fixa. Os valores já normalizados pelo valuation canônico resultam em custo
+atual de R$ 11.000,00, patrimônio de R$ 11.850,00 e resultado não realizado de
+R$ 850,00.
+
+Resultado realizado de R$ 300,00 e proventos de R$ 250,00 completam o resultado
+total de R$ 1.400,00. A cobertura dos três ativos precificáveis permanece em 100%;
+a Renda Fixa participa dos totais pelo serviço canônico próprio. A TWR de 8,25%
+continua vindo exclusivamente do último snapshot fechado, sem ser recomposta a
+partir do valuation intradiário.
+
+### A15 — Resolvido: cobertura completa e parcial de preços explícita
+
+A regressão de `summary.v2` cobre dois ativos precificáveis. Com ambas as
+cotações disponíveis, o contrato publica cobertura 2/2 (100%), lista vazia de
+ativos sem preço e `has_partial_prices=false`.
+
+Quando a cotação do FII está ausente, a cobertura passa a 1/2 (50%), o ticker é
+publicado em `assets_without_price` e `has_partial_prices=true`. O patrimônio
+preserva o custo atual desse ativo como fallback explícito; a ausência de preço
+não transforma a posição em zero nem afeta a Renda Fixa, cuja valoração permanece
+no serviço canônico próprio.
+
+### A16 — Validado: suítes focais e reconciliação final da Fase 1
+
+A validação local executou 20 testes backend de contrato, P&L realizado,
+reconciliação intradiária, carteira mista e cobertura de preços, todos aprovados.
+No frontend, 34 testes de gráfico, tabela, hooks, KPIs e contrato foram aprovados
+em seis arquivos.
+
+A primeira execução frontend identificou somente uma expectativa de teste que
+usava ponto decimal para um percentual formatado em `pt-BR`. A asserção foi
+alinhada a `-7,50%` e `-10,00%`; o componente e o contrato financeiro não
+precisaram de alteração.
+
+Não foi encontrada divergência remanescente entre números equivalentes do Resumo,
+Patrimônio, posições e valuation canônico dentro das tolerâncias documentadas.
+A comparação de promoção identificou dois commits exclusivos de `main`, ambos
+merges das PRs #160 e #163 e sem diferenças de arquivos. A PR estrutural pode
+reconciliar essa ancestralidade diretamente no merge, evitando um commit
+intermediário e uma execução adicional de CI.
 
 ## Contratos que devem permanecer
 
@@ -141,11 +222,19 @@ publicado.
 
 ## Sequência recomendada de correção
 
-1. Adicionar testes que demonstrem o P&L realizado defasado e a reconciliação
-   intradiária ausente.
-2. Corrigir a composição monetária atual do `summary.v2` sem alterar TWR.
-3. Remover o campo legado de rentabilidade da tabela e cobrir o dropdown.
-4. Migrar o gráfico consolidado e por classe para os endpoints de performance.
-5. Remover o endpoint/recomposição redundante somente após auditar consumidores.
-6. Validar visualmente a #147.
-7. Sincronizar documentação viva ao concluir o bloco estrutural.
+1. Concluído: demonstrar por teste o P&L realizado defasado.
+2. Concluído: corrigir a composição monetária atual do `summary.v2` sem alterar TWR.
+3. Concluído: remover o retorno legado, validar o contrato de posições e cobrir o dropdown.
+4. Concluído: reconciliar `summary.v2`, posições e distribuição na referência intradiária.
+5. Concluído: explicitar loading, vazio, cobertura parcial, preço ausente e retorno estimado.
+6. Concluído: migrar o gráfico consolidado e por classe para os endpoints de performance.
+7. Concluído: remover o endpoint/recomposição redundante após auditar consumidores.
+8. Concluído: validar `summary.v2` nas fronteiras backend e frontend.
+9. Concluído: reconciliar KPIs e semântica de retorno entre Resumo e Patrimônio.
+10. Concluído: remover recomposições financeiras restantes do frontend do Resumo.
+11. Concluído: cobrir venda parcial e posição totalmente encerrada no `summary.v2`.
+12. Concluído: cobrir carteira mista no valuation atual sem alterar a TWR fechada.
+13. Concluído: cobrir qualidade de preços completa e parcial no `summary.v2`.
+14. Concluído: validar visualmente e encerrar a #147.
+15. Concluído: sincronizar documentação viva e executar as suítes focais.
+16. Concluído: validar a divergência sem diferenças de arquivos e abrir a PR estrutural.

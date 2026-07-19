@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, status, BackgroundTasks, HTTPException, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional
 import logging
 
 from app.core.database import get_db, AsyncSessionLocal
@@ -14,6 +13,9 @@ from app.schemas.portfolio import (
     ClassTargetUpsert,
     CSVImportResponse,
 )
+from app.schemas.portfolio_positions import PositionGroupResponse
+from app.schemas.portfolio_intraday_reconciliation import IntradayReconciliationResponse
+from app.schemas.portfolio_summary import PortfolioSummaryResponse
 from app.services.portfolio_service import (
     create_portfolio,
     list_portfolios,
@@ -23,11 +25,10 @@ from app.services.portfolio_service import (
     invalidate_portfolio_cache,
 )
 from app.services.canonical_positions_service import get_canonical_portfolio_positions
+from app.services.portfolio_intraday_reconciliation_service import get_intraday_reconciliation
 from app.services.portfolio_summary_service import get_canonical_portfolio_summary
 from app.services.portfolio_delete_service import delete_portfolio_safely
 from app.services.portfolio_snapshot_service import backfill_snapshots
-from app.services.portfolio_history_service import get_canonical_monthly_evolution
-from app.services.portfolio_class_evolution_service import get_monthly_evolution_by_class
 from app.services.class_target_service import (
     get_targets_with_current,
     upsert_target,
@@ -164,7 +165,7 @@ async def delete_user_portfolio(
     return None
 
 
-@router.get("/{portfolio_id}/summary")
+@router.get("/{portfolio_id}/summary", response_model=PortfolioSummaryResponse)
 async def portfolio_summary(
     portfolio_id: int,
     db: AsyncSession = Depends(get_db),
@@ -173,7 +174,11 @@ async def portfolio_summary(
     return await get_canonical_portfolio_summary(db, portfolio_id, current_user.id)
 
 
-@router.get("/{portfolio_id}/positions")
+@router.get(
+    "/{portfolio_id}/positions",
+    response_model=list[PositionGroupResponse],
+    response_model_exclude_unset=True,
+)
 async def portfolio_positions(
     portfolio_id: int,
     db: AsyncSession = Depends(get_db),
@@ -189,6 +194,18 @@ async def asset_distribution(
     current_user: User = Depends(get_current_user),
 ):
     return await get_asset_distribution(db, portfolio_id, current_user.id)
+
+
+@router.get(
+    "/{portfolio_id}/reconciliation/intraday",
+    response_model=IntradayReconciliationResponse,
+)
+async def intraday_reconciliation(
+    portfolio_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return await get_intraday_reconciliation(db, portfolio_id, current_user.id)
 
 
 @router.get(
@@ -239,25 +256,6 @@ async def delete_class_target(
     asset_type_norm = asset_type.upper()
     await delete_target(db, portfolio_id, asset_type_norm)
     return None
-
-
-@router.get("/{portfolio_id}/patrimonio-history")
-async def patrimonio_history(
-    portfolio_id: int,
-    months: int = 12,
-    asset_type: Optional[str] = None,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    await get_portfolio(db, portfolio_id, current_user.id)
-    if asset_type:
-        return await get_monthly_evolution_by_class(
-            db,
-            portfolio_id,
-            months=months,
-            asset_type=asset_type,
-        )
-    return await get_canonical_monthly_evolution(db, portfolio_id, months=months)
 
 
 @router.post("/{portfolio_id}/snapshots/backfill", status_code=status.HTTP_202_ACCEPTED)

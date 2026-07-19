@@ -2,13 +2,21 @@ import { useState, useEffect } from 'react'
 import { BarChart2, TrendingUp, DollarSign, Briefcase, AlertTriangle } from 'lucide-react'
 import {
   usePortfolioList,
-  usePatrimonioHistory,
   usePositions,
   usePortfolioSummaryData,
 } from '@/hooks/usePortfolio'
+import {
+  useClassMonthlyEvolution,
+  useClassTwrAvailability,
+  useMonthlyEvolution,
+} from '@/hooks/useEvolution'
+import type { PeriodOption } from '@/hooks/useEvolution'
 import { useAppStore } from '@/store/appStore'
 import { formatBRL, formatPercent, signClass } from '@/utils/format'
-import { mapPortfolioSummaryMetrics } from '@/utils/portfolioSummary'
+import {
+  getPortfolioReturnPresentation,
+  mapPortfolioSummaryMetrics,
+} from '@/utils/portfolioSummary'
 import KpiCard from '@/components/ui/KpiCard'
 import SkeletonCard from '@/components/ui/SkeletonCard'
 import EmptyState from '@/components/ui/EmptyState'
@@ -17,10 +25,10 @@ import PositionTable from '@/components/resume/PositionTable'
 import CreatePortfolioModal from '@/components/modals/CreatePortfolioModal'
 
 const PERIOD_OPTIONS = [
-  { label: 'Últimos 6 meses',  value: 6  },
-  { label: 'Últimos 12 meses', value: 12 },
-  { label: 'Últimos 24 meses', value: 24 },
-  { label: 'Todo período',     value: 60 },
+  { label: 'Últimos 6 meses', value: '6m' },
+  { label: 'Últimos 12 meses', value: '12m' },
+  { label: 'Últimos 24 meses', value: '24m' },
+  { label: 'Todo período', value: 'all' },
 ]
 
 const ASSET_CLASS_ALL = 'all'
@@ -79,7 +87,7 @@ export default function ResumePage() {
   const globalPortfolioId = useAppStore(s => s.selectedPortfolioId)
   const setGlobal         = useAppStore(s => s.setSelectedPortfolioId)
 
-  const [period,          setPeriod]          = useState(12)
+  const [period,          setPeriod]          = useState<PeriodOption>('12m')
   const [assetClass,      setAssetClass]      = useState(ASSET_CLASS_ALL)
   const [showCreateModal, setShowCreateModal] = useState(false)
 
@@ -101,12 +109,50 @@ export default function ResumePage() {
 
   const activeAssetType = assetClass === ASSET_CLASS_ALL ? null : assetClass
 
-  const { data: summary,           isLoading: loadingSummary } = usePortfolioSummaryData(portfolioId)
-  const { data: patrimonioHistory, isLoading: loadingHistory } = usePatrimonioHistory(portfolioId, period, activeAssetType)
-  const { data: positions,         isLoading: loadingPositions } = usePositions(portfolioId)
+  const {
+    data: summary,
+    isLoading: loadingSummary,
+    error: summaryError,
+  } = usePortfolioSummaryData(portfolioId)
+  const { data: positions, isLoading: loadingPositions } = usePositions(portfolioId)
+  const { data: classAvailability, isLoading: loadingClassAvailability } = useClassTwrAvailability(portfolioId)
 
-  const metrics = mapPortfolioSummaryMetrics(summary)
+  const selectedClassAvailability = activeAssetType
+    ? classAvailability?.find(item => item.asset_type === activeAssetType)
+    : null
+  const availableClassAssetType = selectedClassAvailability?.available
+    ? activeAssetType
+    : null
+
+  const { data: monthlyHistory, isLoading: loadingMonthlyHistory } = useMonthlyEvolution(
+    activeAssetType ? null : portfolioId,
+    period,
+  )
+  const { data: classMonthlyHistory, isLoading: loadingClassMonthlyHistory } = useClassMonthlyEvolution(
+    portfolioId,
+    availableClassAssetType,
+    period,
+  )
+
+  const patrimonioHistory = activeAssetType ? classMonthlyHistory : monthlyHistory
+  const classHistoryUnavailable = Boolean(
+    activeAssetType
+    && !loadingClassAvailability
+    && selectedClassAvailability?.available !== true,
+  )
+  const loadingHistory = activeAssetType
+    ? loadingClassAvailability
+      || (selectedClassAvailability?.available === true && loadingClassMonthlyHistory)
+    : loadingMonthlyHistory
+  const historyEmptyMessage = classHistoryUnavailable
+    ? selectedClassAvailability?.reason ?? 'Histórico canônico ainda não disponível para esta classe.'
+    : 'Sem dados históricos para esta seleção'
+
+  const metrics = summary ? mapPortfolioSummaryMetrics(summary) : null
+  const returnPresentation = getPortfolioReturnPresentation(metrics)
   const loadingKpiCards = loadingPortfolios || loadingSummary
+  const summaryContractError = summaryError instanceof Error
+    && summaryError.message.startsWith('Contrato summary.v2 inválido:')
 
   if (loadingPortfolios) {
     return (
@@ -140,7 +186,19 @@ export default function ResumePage() {
       <div className="kpi-grid">
         {loadingKpiCards ? (
           [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
-        ) : summary ? (
+        ) : summaryContractError ? (
+          <div
+            className="col-span-4 rounded-xl px-4 py-5 text-center"
+            style={{
+              color: 'var(--color-error)',
+              border: '1px solid oklch(from var(--color-error) l c h / 0.25)',
+              background: 'oklch(from var(--color-error) l c h / 0.08)',
+            }}
+          >
+            <p className="text-sm font-semibold">Contrato financeiro inválido. Os KPIs foram ocultados.</p>
+            <p className="text-xs mt-1">{summaryError.message}</p>
+          </div>
+        ) : summary && metrics ? (
           <>
             <KpiCard
               label="Patrimônio Total"
@@ -162,12 +220,16 @@ export default function ResumePage() {
               subLabel="Total líquido recebido"
             />
             <KpiCard
-              label="Rentabilidade (TWR)"
+              label={returnPresentation.label}
               value={`${metrics.rentabilidadePct >= 0 ? '+' : ''}${formatPercent(metrics.rentabilidadePct)}`}
               valueColor={signClass(metrics.rentabilidadePct)}
               subValue={`${metrics.variacaoPct >= 0 ? '+' : ''}${formatPercent(metrics.variacaoPct)}`}
               subLabel="Variação patrimonial das posições abertas"
-              bottomLine={metrics.rentabilidadeDiariaPct !== null ? (
+              bottomLine={returnPresentation.isEstimated ? (
+                <span className="text-xs font-semibold" style={{ color: 'var(--color-warning)' }}>
+                  Estimativa do valuation atual; TWR indisponível sem snapshot
+                </span>
+              ) : metrics.rentabilidadeDiariaPct !== null ? (
                 <span className={`text-xs font-semibold tabular-nums ${signClass(metrics.rentabilidadeDiariaPct)}`}>
                   {metrics.rentabilidadeDiariaPct >= 0 ? '+' : ''}{formatPercent(metrics.rentabilidadeDiariaPct)} no último fechamento
                 </span>
@@ -179,7 +241,7 @@ export default function ResumePage() {
         )}
       </div>
 
-      {metrics.hasPartialPrices && (
+      {metrics?.hasPartialPrices && (
         <div
           className="card"
           style={{
@@ -208,17 +270,17 @@ export default function ResumePage() {
           </div>
           <div className="responsive-actions">
             <ChartSelect value={assetClass} onChange={v => setAssetClass(v)} options={ASSET_CLASS_OPTIONS} />
-            <ChartSelect value={period} onChange={v => setPeriod(Number(v))} options={PERIOD_OPTIONS} />
+            <ChartSelect value={period} onChange={v => setPeriod(v as PeriodOption)} options={PERIOD_OPTIONS} />
           </div>
         </div>
 
         {loadingHistory ? (
           <div className="animate-pulse rounded-lg" style={{ height: 220, background: 'var(--color-surface-offset)' }} />
         ) : patrimonioHistory?.length ? (
-          <PatrimonioBarChart data={patrimonioHistory} singleSeries={assetClass !== ASSET_CLASS_ALL} />
+          <PatrimonioBarChart data={patrimonioHistory} />
         ) : (
-          <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-faint)' }}>Sem dados históricos para esta seleção</span>
+          <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '1rem' }}>
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-faint)' }}>{historyEmptyMessage}</span>
           </div>
         )}
       </div>
