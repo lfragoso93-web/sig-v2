@@ -92,7 +92,4 @@ export const proventosService = {
     portfolioId: number,
     params?: ProventosFilters & { page?: number; page_size?: number },
   ) => api.get<ProventosListResponse>(`/portfolios/${portfolioId}/proventos`, { params }).then(r => r.data),
-
-  sync: (portfolioId: number) =>
-    api.post<{ message: string; queued: number; tickers: string[] }>(`/portfolios/${portfolioId}/dividends/sync`).then(r => r.data),
 }
