@@ -20,7 +20,8 @@ O SGI v2 opera com arquitetura **DB-first**: catálogo, preços, taxas, provento
 - Proventos monetários líquidos agregados por data de pagamento.
 - Reconciliação entre Resumo, Patrimônio, Rentabilidade e snapshots.
 - Cobertura parcial e retornos estimados explicitados no contrato.
-- Página Resumo reconciliada com valuation e snapshots canônicos; gráfico de ganho/perda validado.
+- Página Resumo concluída, reconciliada com valuation e snapshots canônicos e promovida pela PR #164.
+- Fase 2 de Proventos iniciada sob a Issue #165, com auditoria arquitetural e critérios de aceite definidos.
 
 ### Tesouro Direto — Blocos 3.1 e 3.2
 
@@ -71,13 +72,12 @@ python -m app.cli.rebuild_treasury_official_prices
 
 ## Prioridades atuais
 
-1. Finalizar a página Resumo (#161): suítes finais, evidências e PR estrutural.
-2. Proventos: cobertura por classe, materialização e diagnósticos.
-3. Patrimônio: restaurar gráficos históricos por classe (#148).
-4. Rentabilidade: TWR dedicado para Tesouro e Renda Fixa (#149) e IBOV persistido (#150).
-5. Remover o serviço legado de rentabilidade (#151).
-6. Validar dependências pendentes do Dependabot (#159).
-7. Executar rebuild limpo da base antes do go-live (#158).
+1. Proventos (#165): caracterizar contratos, unificar filtros, consolidar materialização e validar todas as classes.
+2. Patrimônio: restaurar gráficos históricos por classe (#148).
+3. Rentabilidade: TWR dedicado para Tesouro e Renda Fixa (#149) e IBOV persistido (#150).
+4. Remover o serviço legado de rentabilidade (#151).
+5. Validar dependências pendentes do Dependabot (#159).
+6. Executar rebuild limpo da base antes do go-live (#158).
 
 ## Dependências
 
@@ -129,3 +129,4 @@ docker compose up -d --build
 - `docs/operations.md` — operação e rebuilds.
 - `docs/CANONICAL_FINANCIAL_CONTRACT.md` — contrato financeiro oficial.
 - `docs/RESUMO_ARCHITECTURAL_AUDIT.md` — matriz de contratos e divergências da página Resumo.
+- `docs/PROVENTOS_ARCHITECTURAL_AUDIT.md` — fluxo, contratos, riscos e sequência da Fase 2.
