@@ -238,7 +238,7 @@ async def _count_non_cash(db: AsyncSession, portfolio_id: int, *conditions) -> i
     return int(res.scalar_one() or 0)
 
 
-def _summary_filter_conditions(
+def _filter_conditions(
     status: Optional[DividendStatus] = None,
     year: Optional[int] = None,
     asset_type: Optional[str] = None,
@@ -266,7 +266,7 @@ async def get_summary(
 ) -> dict:
     today = date.today()
     start_12m = today - relativedelta(months=12)
-    filters = _summary_filter_conditions(status, year, asset_type, dividend_type)
+    filters = _filter_conditions(status, year, asset_type, dividend_type)
 
     total_recebido = await _sum_value(
         db,
@@ -369,14 +369,9 @@ async def list_items(
         )
     )
 
-    if status:
-        base = base.where(_status_filter(status))
-    if year:
-        base = base.where(_year_filter(year))
-    if asset_type:
-        base = base.where(Asset.asset_type == asset_type)
-    if dividend_type:
-        base = base.where(_dividend_type_filter(dividend_type))
+    base = base.where(
+        *_filter_conditions(status, year, asset_type, dividend_type)
+    )
 
     count_res = await db.execute(select(func.count()).select_from(base.subquery()))
     total = count_res.scalar_one()
@@ -423,6 +418,7 @@ async def get_monthly_history(
     db: AsyncSession,
     portfolio_id: int,
     status: Optional[DividendStatus] = None,
+    year: Optional[int] = None,
     asset_type: Optional[str] = None,
     dividend_type: Optional[DividendType] = None,
 ) -> list[dict]:
@@ -448,12 +444,9 @@ async def get_monthly_history(
             _entitled_after_first_buy_filter(first_buy),
         )
     )
-    if status:
-        stmt = stmt.where(_status_filter(status))
-    if asset_type:
-        stmt = stmt.where(Asset.asset_type == asset_type)
-    if dividend_type:
-        stmt = stmt.where(_dividend_type_filter(dividend_type))
+    stmt = stmt.where(
+        *_filter_conditions(status, year, asset_type, dividend_type)
+    )
 
     stmt = stmt.group_by("year", "month").order_by("year", "month")
     rows = (await db.execute(stmt)).fetchall()
@@ -473,9 +466,18 @@ async def get_monthly_history(
     return result
 
 
-async def get_distribution(db: AsyncSession, portfolio_id: int, months: int = 12) -> list[dict]:
+async def get_distribution(
+    db: AsyncSession,
+    portfolio_id: int,
+    months: int = 12,
+    status: Optional[DividendStatus] = None,
+    year: Optional[int] = None,
+    asset_type: Optional[str] = None,
+    dividend_type: Optional[DividendType] = None,
+) -> list[dict]:
     start = date.today() - relativedelta(months=months)
     first_buy = _first_buy_subquery()
+    period_conditions = [] if year else [AssetDividend.payment_date >= start]
     stmt = (
         select(Asset.ticker, Asset.asset_type, func.sum(Dividend.net_value).label("total"))
         .select_from(Dividend)
@@ -488,9 +490,11 @@ async def get_distribution(db: AsyncSession, portfolio_id: int, months: int = 12
         )
         .where(
             Dividend.portfolio_id == portfolio_id,
-            AssetDividend.payment_date >= start,
+            AssetDividend.payment_date.isnot(None),
             _cash_type_filter(),
             _entitled_after_first_buy_filter(first_buy),
+            *period_conditions,
+            *_filter_conditions(status, year, asset_type, dividend_type),
         )
         .group_by(Asset.ticker, Asset.asset_type)
         .order_by(func.sum(Dividend.net_value).desc())
