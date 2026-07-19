@@ -9,8 +9,13 @@ from app.core.deps import get_current_user
 from app.models.dividend import DividendStatus, DividendType
 from app.models.portfolio import Portfolio
 from app.models.user import User
+from app.schemas.proventos import (
+    ProventosDistributionResponse,
+    ProventosListResponse,
+    ProventosMonthlyHistoryResponse,
+    ProventosSummaryResponse,
+)
 from app.services.proventos_service import (
-    ensure_portfolio_proventos,
     get_distribution,
     get_monthly_history,
     get_summary,
@@ -28,11 +33,6 @@ async def _assert_owner(portfolio_id: int, user: User, db: AsyncSession) -> Port
     if not portfolio:
         raise HTTPException(status_code=404, detail="Carteira nao encontrada.")
     return portfolio
-
-
-async def _prepare_proventos(portfolio_id: int, user: User, db: AsyncSession) -> None:
-    await _assert_owner(portfolio_id, user, db)
-    await ensure_portfolio_proventos(db, portfolio_id)
 
 
 def _parse_status(status: Optional[str]) -> Optional[DividendStatus]:
@@ -54,7 +54,7 @@ def _parse_dividend_type(dividend_type: Optional[str]) -> Optional[DividendType]
         raise HTTPException(status_code=422, detail=f"Tipo de provento invalido. Use um de: {valid}.")
 
 
-@router.get("/summary")
+@router.get("/summary", response_model=ProventosSummaryResponse)
 async def proventos_summary(
     portfolio_id: int,
     status: Optional[str] = Query(None),
@@ -64,7 +64,7 @@ async def proventos_summary(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _prepare_proventos(portfolio_id, current_user, db)
+    await _assert_owner(portfolio_id, current_user, db)
     return await get_summary(
         db,
         portfolio_id,
@@ -75,7 +75,7 @@ async def proventos_summary(
     )
 
 
-@router.get("")
+@router.get("", response_model=ProventosListResponse)
 async def list_proventos(
     portfolio_id: int,
     status: Optional[str] = Query(None),
@@ -87,7 +87,7 @@ async def list_proventos(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _prepare_proventos(portfolio_id, current_user, db)
+    await _assert_owner(portfolio_id, current_user, db)
     return await list_items(
         db,
         portfolio_id,
@@ -100,31 +100,51 @@ async def list_proventos(
     )
 
 
-@router.get("/historico-mensal")
+@router.get(
+    "/historico-mensal",
+    response_model=list[ProventosMonthlyHistoryResponse],
+)
 async def proventos_historico_mensal(
     portfolio_id: int,
     status: Optional[str] = Query(None),
+    year: Optional[int] = Query(None),
     asset_type: Optional[str] = Query(None),
     dividend_type: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _prepare_proventos(portfolio_id, current_user, db)
+    await _assert_owner(portfolio_id, current_user, db)
     return await get_monthly_history(
         db,
         portfolio_id,
         status=_parse_status(status),
+        year=year,
         asset_type=asset_type,
         dividend_type=_parse_dividend_type(dividend_type),
     )
 
 
-@router.get("/distribuicao")
+@router.get(
+    "/distribuicao",
+    response_model=list[ProventosDistributionResponse],
+)
 async def proventos_distribuicao(
     portfolio_id: int,
     months: int = Query(12, ge=1, le=120),
+    status: Optional[str] = Query(None),
+    year: Optional[int] = Query(None),
+    asset_type: Optional[str] = Query(None),
+    dividend_type: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _prepare_proventos(portfolio_id, current_user, db)
-    return await get_distribution(db, portfolio_id, months=months)
+    await _assert_owner(portfolio_id, current_user, db)
+    return await get_distribution(
+        db,
+        portfolio_id,
+        months=months,
+        status=_parse_status(status),
+        year=year,
+        asset_type=asset_type,
+        dividend_type=_parse_dividend_type(dividend_type),
+    )

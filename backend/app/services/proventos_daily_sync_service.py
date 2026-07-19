@@ -18,8 +18,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.asset import Asset, AssetType
 from app.models.transaction import Transaction
 from app.services.dividend_backfill_service import run_backfill, materialize_asset_dividends
-from app.services.dividend_history_seed_service import seed_full_dividend_history
-from app.services.portfolio_service import invalidate_portfolio_cache
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +62,8 @@ def _chunks(values: list[str], size: int) -> list[list[str]]:
 
 
 async def _sync_asset_events(db: AsyncSession, ticker: str, asset_type: str) -> tuple[bool, int]:
+    from app.services.dividend_history_seed_service import seed_full_dividend_history
+
     try:
         await run_backfill(db, ticker, asset_type)
         historical = await seed_full_dividend_history(db, ticker, asset_type)
@@ -74,6 +74,8 @@ async def _sync_asset_events(db: AsyncSession, ticker: str, asset_type: str) -> 
 
 
 async def _invalidate_affected_portfolios(db: AsyncSession, tickers: list[str]) -> int:
+    from app.services.portfolio_service import invalidate_portfolio_cache
+
     if not tickers:
         return 0
     rows = await db.execute(
@@ -87,25 +89,60 @@ async def _invalidate_affected_portfolios(db: AsyncSession, tickers: list[str]) 
     return len(portfolio_ids)
 
 
+async def load_proventos_sync_pairs(
+    db: AsyncSession,
+    *,
+    asset_types: set[str] | None = None,
+    only_held: bool = False,
+) -> tuple[list[tuple[str, str]], int]:
+    """Carrega tickers elegíveis sem varrer o catálogo quando há carteira."""
+    wanted = asset_types or NATIONAL_EVENT_TYPES
+    if only_held:
+        stmt = (
+            select(Transaction.ticker, Transaction.asset_type)
+            .where(Transaction.asset_type.in_(sorted(wanted)))
+            .distinct()
+            .order_by(Transaction.asset_type, Transaction.ticker)
+        )
+    else:
+        stmt = (
+            select(Asset.ticker, Asset.asset_type)
+            .where(Asset.asset_type.in_(sorted(wanted)))
+            .order_by(Asset.asset_type, Asset.ticker)
+        )
+
+    rows = await db.execute(stmt)
+    raw_pairs = [
+        (str(ticker).upper(), str(asset_type))
+        for ticker, asset_type in rows.all()
+        if ticker and asset_type
+    ]
+    unique_pairs = sorted(set(raw_pairs), key=lambda item: (item[1], item[0]))
+    eligible_pairs = [
+        (ticker, asset_type)
+        for ticker, asset_type in unique_pairs
+        if _is_event_ticker(ticker)
+    ]
+    return eligible_pairs, len(unique_pairs) - len(eligible_pairs)
+
+
 async def run_daily_proventos_sync(
     db: AsyncSession,
     asset_types: set[str] | None = None,
     concurrency: int = SYNC_CONCURRENCY,
+    *,
+    only_held: bool = False,
 ) -> ProventosDailySyncResult:
-    """Sincroniza eventos globais e materializa carteiras em lotes seguros."""
-    wanted = asset_types or NATIONAL_EVENT_TYPES
+    """Coleta o catálogo global e materializa apenas carteiras elegíveis."""
     result = ProventosDailySyncResult()
 
-    rows = await db.execute(
-        select(Asset.ticker, Asset.asset_type)
-        .where(Asset.asset_type.in_(sorted(wanted)))
-        .order_by(Asset.asset_type, Asset.ticker)
+    pairs, skipped = await load_proventos_sync_pairs(
+        db,
+        asset_types=asset_types,
+        only_held=only_held,
     )
-    raw_pairs = [(str(t).upper(), str(at)) for t, at in rows.all() if t and at]
-    unique_pairs = sorted(set(raw_pairs), key=lambda x: (x[1], x[0]))
-    pairs = [(ticker, at) for ticker, at in unique_pairs if _is_event_ticker(ticker)]
     result.assets_scanned = len(pairs)
-    result.assets_skipped = len(unique_pairs) - len(pairs)
+    result.assets_skipped = skipped
 
     if result.assets_skipped:
         logger.info(

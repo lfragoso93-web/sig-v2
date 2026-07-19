@@ -1,6 +1,6 @@
 # Roadmap modular — SGI v2
 
-> Última atualização: 18/07/2026
+> Última atualização: 19/07/2026
 
 ## Visão geral
 
@@ -15,8 +15,8 @@
 | Renda Fixa — valuation atual | Consolidado | 100% |
 | Snapshots consolidados | Consolidado | 100% |
 | Snapshots por classe de mercado | Consolidado | 100% |
-| Proventos | Em validação final | 92% |
-| Página Resumo | Validação final | 98% |
+| Proventos | Fase 2 concluída na `stable-15jun`; promoção pendente | 100% |
+| Página Resumo | Concluída e promovida pela PR #164 | 100% |
 | Página Patrimônio | Auditoria concluída, regressão visual mapeada | 90% |
 | Página Rentabilidade | Contratos concluídos | 95% |
 | Dependências | Auditoria parcial, pendências mapeadas | 80% |
@@ -69,16 +69,21 @@ A reconstrução limpa do catálogo, históricos e carteira ficou reservada para
 - [x] Revisar dropdowns e overflow das tabelas.
 - [x] Padronizar cards com a página Patrimônio.
 - [x] Corrigir e validar o gráfico divergente (#147).
-- [ ] Executar suítes finais, consolidar evidências e abrir a PR estrutural.
+- [x] Executar suítes finais, consolidar evidências e promover pela PR #164.
 
-### Proventos
+### Proventos — #165
 
-- [x] Eventos canônicos e materialização por carteira.
-- [x] Totais financeiros usando eventos líquidos recebidos.
-- [ ] Validar cobertura completa por classe.
-- [ ] Melhorar diagnóstico de eventos não materializados.
-- [ ] Validar seed de ativos de renda variável.
-- [ ] Implementar tooltip mensal por classe (#131).
+- [x] Preservar as entregas funcionais das Issues #92 e #95.
+- [x] Mapear arquitetura, contratos, duplicidades e riscos atuais.
+- [x] Adicionar testes de caracterização antes de alterar comportamento.
+- [x] Unificar contratos e filtros de resumo, lista, histórico e distribuição.
+- [x] Separar leitura de materialização e centralizar elegibilidade.
+- [x] Consolidar coleta e scheduler após validar consumidores.
+- [x] Validar seed, coleta e materialização de ações, FIIs, ETFs e BDRs.
+- [x] Revisar API, frontend, gráficos, tabelas e indicadores.
+- [x] Implementar tooltip mensal por classe (#131).
+- [x] Validar suítes backend/frontend e sincronizar a documentação viva.
+- [ ] Promover a Fase 2 para a `main` pela PR estrutural.
 
 ### Patrimônio e Rentabilidade
 
@@ -118,14 +123,13 @@ Pendente de validação isolada:
 
 ## Próximas prioridades
 
-1. Finalizar validação e PR da Página Resumo (#161).
-2. Concluir validação funcional de Proventos.
-3. Restaurar históricos por classe em Patrimônio (#148).
-4. Implementar TWR dedicado de Tesouro e Renda Fixa (#149).
-5. Materializar IBOV (#150).
-6. Remover rentabilidade legada (#151).
-7. Validar Dependabot pendente (#159).
-8. Executar rebuild limpo antes do go-live (#158).
+1. Concluir a reconstrução canônica de Proventos (#165).
+2. Restaurar históricos por classe em Patrimônio (#148).
+3. Implementar TWR dedicado de Tesouro e Renda Fixa (#149).
+4. Materializar IBOV (#150).
+5. Remover rentabilidade legada (#151).
+6. Validar Dependabot pendente (#159).
+7. Executar rebuild limpo antes do go-live (#158).
 
 ## Backlog
 

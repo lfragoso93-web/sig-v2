@@ -5,6 +5,34 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Concluído — Fase 2 Proventos (19/07/2026)
+
+- Pipeline DB-first consolidado entre evento global, direito materializado da carteira e reconhecimento pela data de pagamento.
+- Coleta diária baseada no catálogo global de ativos elegíveis, sem limitar a descoberta à posição atual da carteira.
+- Leitura da página separada de materialização e cálculo de elegibilidade centralizado pela data de corte.
+- Contratos Pydantic e TypeScript estritos para KPIs, lista, histórico mensal e distribuição.
+- Filtros de ano, status, classe e tipo compartilhados por todos os componentes.
+- Serviço FII paralelo, cliente batch e rotas administrativas residuais removidos após auditoria de consumidores.
+- Dividendos, JCP, rendimentos, amortizações, bonificações e subscrições normalizados e cobertos por testes.
+- Seed, coleta, materialização, rastreabilidade e idempotência validados para ações, FIIs, ETFs nacionais e BDRs.
+- Eventos não monetários excluídos dos agregados financeiros pelo contrato canônico `is_cash`.
+- Histórico mensal ampliado com composição reconciliada por classe em uma única consulta.
+- Popover mensal acessível por hover, foco, teclado e toque, renderizado em portal e ajustado à viewport.
+- Frontend passou a diferenciar loading, erro e vazio sem converter ausência ou falha em zero.
+- Validação final local: 78 testes backend e 48 testes frontend aprovados, além do typecheck TypeScript.
+- Migração destrutiva dos campos legados permanece reservada ao rebuild controlado da Issue #158.
+- Dependências #146, #138, #137 e #133 não foram alteradas.
+
+
+### Planejamento — Fase 2 Proventos (18/07/2026)
+
+- Página Resumo concluída e promovida para a `main` pela PR #164.
+- Criada a Issue-mãe #165 para reconstrução e validação ponta a ponta de Proventos.
+- Arquitetura atual auditada, incluindo contratos temporais, filtros divergentes, escrita durante leitura, serviços paralelos e legado de modelo.
+- Definida a sequência: testes de caracterização, contratos e filtros, separação de leitura/materialização, consolidação do pipeline, validação por classe e revisão do frontend.
+- Issues #92 e #95 preservadas como entregas concluídas; #131 vinculada como sub-bloco posterior.
+- Dependências #146, #138, #137 e #133 permanecem fora do escopo desta fase.
+
 ### Corrigido — Página Resumo (18/07/2026)
 
 - KPIs reconciliados entre Resumo, Patrimônio e valuation canônico.
@@ -62,9 +90,9 @@ Pendências formalizadas na issue #159:
 
 ### Planejamento — Próximo ciclo
 
-- Página Resumo retorna ao topo da fila: KPIs, sinal de retorno, variação versus rentabilidade, dropdowns e consistência visual.
-- Proventos permanece como segunda prioridade: cobertura por classe, seed, materialização e diagnósticos.
-- Patrimônio e Rentabilidade seguem pelas issues #148, #149, #150 e #151.
+- Página Resumo concluída; a Fase 2 de Proventos passa a ser a prioridade ativa (#165).
+- O primeiro bloco de código será composto por testes de caracterização, sem mudança funcional.
+- Patrimônio e Rentabilidade seguem pelas issues #148, #149, #150 e #151 após Proventos.
 
 ### Auditoria funcional canônica — 16/07/2026
 
@@ -99,11 +127,10 @@ Pendências formalizadas na issue #159:
 
 ## Próximos focos
 
-1. Página Resumo.
-2. Proventos.
-3. Gráficos históricos por classe (#148).
-4. TWR dedicado de Tesouro e Renda Fixa (#149).
-5. IBOV persistido (#150).
-6. Remoção do serviço legado (#151).
-7. Dependências pendentes (#159).
-8. Rebuild pré-produção (#158).
+1. Proventos (#165).
+2. Gráficos históricos por classe (#148).
+3. TWR dedicado de Tesouro e Renda Fixa (#149).
+4. IBOV persistido (#150).
+5. Remoção do serviço legado (#151).
+6. Dependências pendentes (#159).
+7. Rebuild pré-produção (#158).

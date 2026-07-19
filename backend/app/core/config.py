@@ -1,7 +1,6 @@
 from pydantic_settings import BaseSettings
 from pydantic import field_validator, model_validator
 from typing import Optional
-import re
 
 
 _DEFAULT_ADMIN_PASSWORD = "Admin@" + "1234!"
@@ -44,12 +43,6 @@ class Settings(BaseSettings):
     SUPERADMIN_PASSWORD: str = _DEFAULT_ADMIN_PASSWORD
     SUPERADMIN_NAME: str = "Super Admin"
 
-    ENABLE_DIVIDENDS_SYNC: bool = False
-    DIVIDENDS_BOOTSTRAP_ON_STARTUP: bool = False
-    DIVIDENDS_BOOTSTRAP_START_DATE: str = "2018-01-01"
-    DIVIDENDS_SYNC_LOOKBACK_DAYS: int = 7
-    DIVIDENDS_BATCH_SIZE: int = 20
-
     @model_validator(mode="after")
     def resolve_provider_compatibility(self) -> "Settings":
         quotes_token = self.QUOTES_PROVIDER_TOKEN or self.BRAPI_TOKEN
@@ -77,29 +70,6 @@ class Settings(BaseSettings):
         object.__setattr__(self, "MARKET_DATA_RATE_BURST", rate_burst)
         object.__setattr__(self, "BRAPI_RATE_BURST", rate_burst)
         return self
-
-    @field_validator("DIVIDENDS_BATCH_SIZE")
-    @classmethod
-    def validate_dividends_batch_size(cls, v: int) -> int:
-        if v < 1:
-            raise ValueError("DIVIDENDS_BATCH_SIZE deve ser >= 1")
-        if v > 20:
-            raise ValueError("DIVIDENDS_BATCH_SIZE deve ser <= 20")
-        return v
-
-    @field_validator("DIVIDENDS_SYNC_LOOKBACK_DAYS")
-    @classmethod
-    def validate_dividends_sync_lookback_days(cls, v: int) -> int:
-        if v < 0:
-            raise ValueError("DIVIDENDS_SYNC_LOOKBACK_DAYS deve ser >= 0")
-        return v
-
-    @field_validator("DIVIDENDS_BOOTSTRAP_START_DATE")
-    @classmethod
-    def validate_dividends_bootstrap_start_date(cls, v: str) -> str:
-        if not re.match(r"^\d{4}-\d{2}-\d{2}$", v):
-            raise ValueError("DIVIDENDS_BOOTSTRAP_START_DATE deve estar no formato YYYY-MM-DD")
-        return v
 
     @field_validator("SECRET_KEY")
     @classmethod

@@ -1,5 +1,4 @@
 import logging
-import unicodedata
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
@@ -10,10 +9,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.integrations.brapi import BRAPI_BASE, _auth_headers
-from app.models.transaction import Transaction, OperationType
+from app.models.transaction import Transaction
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
 from app.models.dividend import Dividend, DividendStatus, DividendType
+from app.services.dividend_entitlement_service import (
+    calculate_net_quantity,
+    calculate_net_value,
+)
+from app.services.dividend_type_service import normalize_dividend_type
 
 logger = logging.getLogger(__name__)
 
@@ -54,34 +58,9 @@ class ParsedDividendEvent:
         yield self.dividend_type
 
 
-def _strip_accents(value: str) -> str:
-    normalized = unicodedata.normalize("NFKD", value)
-    return "".join(ch for ch in normalized if not unicodedata.combining(ch))
-
-
-def _norm_label(value: str | None) -> str:
-    if not value:
-        return ""
-    clean = _strip_accents(str(value)).upper().strip()
-    return " ".join(clean.replace("_", " ").replace("-", " ").split())
-
-
 def _map_dividend_type(raw: str | None, category: str | None = None) -> str:
-    label = _norm_label(raw)
-    cat = _norm_label(category)
-    if "SUBSCR" in label or "SUBSCR" in cat:
-        return DividendType.SUBSCRICAO.value
-    if "BONIFIC" in label or "BONIFIC" in cat or "STOCK" in cat:
-        return DividendType.BONIFICACAO.value
-    if "JCP" in label or "JUROS SOBRE CAPITAL" in label:
-        return DividendType.JCP.value
-    if "AMORT" in label:
-        return DividendType.AMORTIZACAO.value
-    if "REND" in label or "FII" in cat:
-        return DividendType.RENDIMENTO.value
-    if "DIVID" in label:
-        return DividendType.DIVIDENDO.value
-    return DividendType.OUTROS.value
+    """Compatibilidade interna para o parser que ainda trabalha com strings."""
+    return normalize_dividend_type(raw, category).value
 
 
 def _parse_date(value: Any) -> date | None:
@@ -127,19 +106,6 @@ def _dividend_type_from_value(value) -> DividendType:
         return DividendType(raw)
     except ValueError:
         return DividendType.OUTROS
-
-
-def _calc_net_qty(txs: list[tuple], ref_date: date) -> float:
-    qty = 0.0
-    for tx_date, op, q in txs:
-        if tx_date > ref_date:
-            continue
-        op_str = op.value if isinstance(op, OperationType) else str(op).lower()
-        if op_str == "buy":
-            qty += float(q)
-        elif op_str == "sell":
-            qty -= float(q)
-    return max(qty, 0.0)
 
 
 def _apply_dividend_legacy_fields(div: Dividend, ex_date: date, payment_date: date | None, quantity: float, value_per_unit: float) -> None:
@@ -448,12 +414,12 @@ async def backfill_dividends(db: AsyncSession, portfolio_id: int | None, ticker:
             entitlement_date = parsed.record_date or parsed.ex_date
 
             for pid in portfolio_ids:
-                qty = _calc_net_qty(txs_by_portfolio.get(pid, []), entitlement_date)
+                qty = calculate_net_quantity(txs_by_portfolio.get(pid, []), entitlement_date)
                 if qty <= 0:
                     continue
 
                 total = qty * parsed.value_per_unit
-                net = total * 0.85 if dividend_type == DividendType.JCP else total
+                net = calculate_net_value(dividend_type, total)
                 div = existing_divs.get((pid, asset_div.id))
                 if div is None:
                     div = Dividend(
@@ -539,12 +505,12 @@ async def materialize_asset_dividends(db: AsyncSession, tickers: Optional[list[s
             txs = txs_by_key.get((pid, asset.ticker), [])
             if not txs:
                 continue
-            qty = _calc_net_qty(txs, entitlement_date)
+            qty = calculate_net_quantity(txs, entitlement_date)
             if qty <= 0:
                 continue
 
             total = qty * value
-            net = total * 0.85 if dividend_type == DividendType.JCP else total
+            net = calculate_net_value(dividend_type, total)
             div = existing_divs.get((pid, asset_div.id))
             if div is None:
                 div = Dividend(

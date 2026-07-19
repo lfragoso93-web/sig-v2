@@ -2,15 +2,26 @@ import api from './api'
 
 export interface ProventosSummary {
   total_recebido: number
-  total_liquido_recebido?: number
-  total_bruto_recebido?: number
+  total_liquido_recebido: number
+  total_bruto_recebido: number
   total_a_receber: number
-  total_liquido_a_receber?: number
-  total_bruto_a_receber?: number
+  total_liquido_a_receber: number
+  total_bruto_a_receber: number
   total_12m: number
   media_mensal_12m: number
-  eventos_nao_cash?: number
+  eventos_nao_cash: number
 }
+
+export type ProventoStatus = 'RECEBIDO' | 'PENDENTE' | 'CANCELADO' | 'A_RECEBER'
+
+export type ProventoType =
+  | 'DIVIDENDO'
+  | 'JCP'
+  | 'RENDIMENTO'
+  | 'AMORTIZACAO'
+  | 'BONIFICACAO'
+  | 'SUBSCRICAO'
+  | 'OUTROS'
 
 export interface ProventoDistribution {
   ticker: string
@@ -19,20 +30,33 @@ export interface ProventoDistribution {
   percentage: number
 }
 
+export interface ProventosAssetClassAmount {
+  asset_type: string
+  label: string
+  value: number
+}
+
+export interface ProventosMonthDetail {
+  month: number
+  total: number
+  by_asset_class: ProventosAssetClassAmount[]
+}
+
 export interface ProventosHistoricoMes {
   year: number
   months: (number | null)[]
   total: number
   media: number
+  month_details: ProventosMonthDetail[]
 }
 
 export interface ProventoItem {
   id: number
   ticker: string
   asset_type: string
-  dividend_type: string
-  is_cash?: boolean
-  status: 'RECEBIDO' | 'A_RECEBER'
+  dividend_type: ProventoType
+  is_cash: boolean
+  status: ProventoStatus
   record_date: string | null
   ex_date: string
   payment_date: string | null
@@ -57,12 +81,6 @@ export interface ProventosListResponse {
   items: ProventoItem[]
 }
 
-export interface ProventosEvolucao {
-  month: string
-  recebido: number
-  a_receber: number
-}
-
 export interface ProventosFilters {
   status?: string
   year?: number
@@ -74,19 +92,22 @@ export const proventosService = {
   getSummary: (portfolioId: number, params?: ProventosFilters) =>
     api.get<ProventosSummary>(`/portfolios/${portfolioId}/proventos/summary`, { params }).then(r => r.data),
 
-  getDistribuicao: (portfolioId: number, months = 12) =>
-    api.get<ProventoDistribution[]>(`/portfolios/${portfolioId}/proventos/distribuicao`, { params: { months } }).then(r => r.data),
+  getDistribuicao: (
+    portfolioId: number,
+    months = 12,
+    params?: ProventosFilters,
+  ) =>
+    api.get<ProventoDistribution[]>(`/portfolios/${portfolioId}/proventos/distribuicao`, {
+      params: { ...params, months },
+    }).then(r => r.data),
 
-  getHistoricoMensal: (portfolioId: number, status?: string, assetType?: string, dividendType?: string) =>
+  getHistoricoMensal: (portfolioId: number, params?: ProventosFilters) =>
     api.get<ProventosHistoricoMes[]>(`/portfolios/${portfolioId}/proventos/historico-mensal`, {
-      params: { status: status || undefined, asset_type: assetType || undefined, dividend_type: dividendType || undefined },
+      params,
     }).then(r => r.data),
 
   getList: (
     portfolioId: number,
     params?: ProventosFilters & { page?: number; page_size?: number },
   ) => api.get<ProventosListResponse>(`/portfolios/${portfolioId}/proventos`, { params }).then(r => r.data),
-
-  sync: (portfolioId: number) =>
-    api.post<{ message: string; queued: number; tickers: string[] }>(`/portfolios/${portfolioId}/dividends/sync`).then(r => r.data),
 }

@@ -13,6 +13,31 @@ usar os sets abaixo para evitar divergência entre arquivos.
 
 from app.models.asset import AssetType
 
+# Rótulos públicos canônicos. APIs e componentes de apresentação devem
+# reutilizar este catálogo em vez de manter mapas locais divergentes.
+ASSET_TYPE_LABELS: dict[AssetType, str] = {
+    AssetType.ACAO: "Ações",
+    AssetType.FII: "FIIs",
+    AssetType.ETF_NACIONAL: "ETFs nacionais",
+    AssetType.ETF_INTERNACIONAL: "ETFs internacionais",
+    AssetType.STOCK: "Stocks",
+    AssetType.CRIPTO: "Criptomoedas",
+    AssetType.TESOURO_DIRETO: "Tesouro Direto",
+    AssetType.RENDA_FIXA: "Renda fixa",
+    AssetType.BDR: "BDRs",
+    AssetType.OUTRO: "Outros",
+}
+
+
+def asset_type_label(asset_type: AssetType | str) -> str:
+    """Retorna o rótulo canônico, preservando tipos futuros desconhecidos."""
+    try:
+        normalized = asset_type if isinstance(asset_type, AssetType) else AssetType(asset_type)
+    except ValueError:
+        return str(asset_type).replace("_", " ").title()
+    return ASSET_TYPE_LABELS[normalized]
+
+
 # ── Ativos que usam BRAPI como provedor primário ──────────────────────────────
 # RENDA_FIXA removido daqui — não tem cotação de mercado (está em NO_QUOTE_TYPES)
 BR_TYPES: frozenset[AssetType] = frozenset({

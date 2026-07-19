@@ -1,4 +1,4 @@
-import { ProventoItem } from '@/services/proventosService'
+import { ProventoItem, ProventoStatus } from '@/services/proventosService'
 import { formatBRL, formatQuantity } from '@/utils/format'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -15,8 +15,6 @@ const DIVIDEND_TYPE_LABELS: Record<string, string> = {
   SUBSCRICAO: 'Subscrição', OUTROS: 'Outros',
 }
 
-const NON_CASH_TYPES = new Set(['BONIFICACAO', 'SUBSCRICAO'])
-
 function fmt(dateStr: string | null): string {
   if (!dateStr) return '—'
   try { return format(parseISO(dateStr), 'dd/MM/yyyy', { locale: ptBR }) } catch { return dateStr }
@@ -27,35 +25,35 @@ function fmtMaybeMoney(value: number | null | undefined): string {
   return formatBRL(value)
 }
 
-function isCashEvent(item: ProventoItem): boolean {
-  if (typeof item.is_cash === 'boolean') return item.is_cash
-  return !NON_CASH_TYPES.has(item.dividend_type)
-}
-
 const cellText  = { color: 'var(--color-text)' }
 const cellMuted = { color: 'var(--color-text-muted)' }
 const cellFaint = { color: 'var(--color-text-faint)' }
 
-function StatusBadge({ status }: { status: string }) {
-  const isRecebido = status === 'RECEBIDO'
+const STATUS_CONFIG: Record<ProventoStatus, { label: string; color: string }> = {
+  RECEBIDO: { label: 'Recebido', color: 'var(--color-success)' },
+  A_RECEBER: { label: 'A receber', color: 'var(--color-primary)' },
+  PENDENTE: { label: 'Pendente', color: 'var(--color-warning, var(--color-primary))' },
+  CANCELADO: { label: 'Cancelado', color: 'var(--color-danger, var(--color-text-muted))' },
+}
+
+function StatusBadge({ status }: { status: ProventoStatus }) {
+  const config = STATUS_CONFIG[status]
   return (
     <span
       className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
       style={{
-        background: isRecebido
-          ? 'oklch(from var(--color-success) l c h / 0.15)'
-          : 'oklch(from var(--color-primary) l c h / 0.15)',
-        color: isRecebido ? 'var(--color-success)' : 'var(--color-primary)',
+        background: `color-mix(in oklch, ${config.color} 15%, transparent)`,
+        color: config.color,
       }}
     >
-      {isRecebido ? 'Recebido' : 'A receber'}
+      {config.label}
     </span>
   )
 }
 
 function ProventoCard({ item }: { item: ProventoItem }) {
   const typeLabel = DIVIDEND_TYPE_LABELS[item.dividend_type] ?? item.dividend_type
-  const cash = isCashEvent(item)
+  const cash = item.is_cash
   return (
     <div
       className="rounded-xl p-3 flex flex-col gap-2"
@@ -128,7 +126,7 @@ export default function MeusProventosTable({ data }: { data: ProventoItem[] }) {
           </thead>
           <tbody>
             {data.map(item => {
-              const cash = isCashEvent(item)
+              const cash = item.is_cash
               return (
                 <tr
                   key={item.id}

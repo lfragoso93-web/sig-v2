@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import {
   proventosService,
   ProventoDistribution,
@@ -31,29 +31,28 @@ export function useProventosSummary(portfolioId: number | null, params?: Provent
 
 // ─── Distribuicao por ativo ──────────────────────────────────────────────
 
-export function useProventosDistribuicao(portfolioId: number | null, months = 12) {
+export function useProventosDistribuicao(
+  portfolioId: number | null,
+  months = 12,
+  params?: ProventosFilters,
+) {
   return useQuery<ProventoDistribution[]>({
-    queryKey:    ['proventos-distribuicao', portfolioId, months],
-    queryFn:     () => proventosService.getDistribuicao(portfolioId!, months),
+    queryKey:    ['proventos-distribuicao', portfolioId, months, params],
+    queryFn:     () => proventosService.getDistribuicao(portfolioId!, months, params),
     enabled:     !!portfolioId,
-    placeholderData: [],
   })
 }
 
 // ─── Historico mensal ──────────────────────────────────────────────────────
 
 export function useProventosHistoricoMensal(
-  portfolioId:    number | null,
-  status?:        string,
-  assetType?:     string,
-  dividendType?:  string,
+  portfolioId: number | null,
+  params?: ProventosFilters,
 ) {
   return useQuery<ProventosHistoricoMes[]>({
-    queryKey:    ['proventos-historico', portfolioId, status, assetType, dividendType],
-    queryFn:     () =>
-      proventosService.getHistoricoMensal(portfolioId!, status, assetType, dividendType),
+    queryKey:    ['proventos-historico', portfolioId, params],
+    queryFn:     () => proventosService.getHistoricoMensal(portfolioId!, params),
     enabled:     !!portfolioId,
-    placeholderData: [],
   })
 }
 
@@ -70,21 +69,5 @@ export function useProventosList(
     queryKey:    ['proventos-list', portfolioId, params],
     queryFn:     () => proventosService.getList(portfolioId!, params),
     enabled:     !!portfolioId,
-    placeholderData: { total: 0, page: 1, page_size: 50, items: [] },
-  })
-}
-
-// ─── Sync manual ──────────────────────────────────────────────────────────────
-
-export function useSyncProventos(portfolioId: number | null) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: () => proventosService.sync(portfolioId!),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['proventos-summary',     portfolioId] })
-      qc.invalidateQueries({ queryKey: ['proventos-distribuicao', portfolioId] })
-      qc.invalidateQueries({ queryKey: ['proventos-historico',    portfolioId] })
-      qc.invalidateQueries({ queryKey: ['proventos-list',         portfolioId] })
-    },
   })
 }
