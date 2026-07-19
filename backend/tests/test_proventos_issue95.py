@@ -2,6 +2,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset
@@ -9,6 +10,12 @@ from app.models.asset_dividend import AssetDividend
 from app.models.dividend import Dividend, DividendStatus, DividendType
 from app.models.portfolio import Portfolio
 from app.models.transaction import OperationType, Transaction
+from app.schemas.proventos import (
+    ProventosDistributionResponse,
+    ProventosListResponse,
+    ProventosMonthlyHistoryResponse,
+    ProventosSummaryResponse,
+)
 from app.services.proventos_service import get_distribution, get_monthly_history, get_summary, list_items
 
 
@@ -262,3 +269,40 @@ async def test_issue165_distribution_uses_the_same_filters_as_summary(
     assert filtered_summary["total_liquido_recebido"] == pytest.approx(60.0)
     assert {row["ticker"] for row in distribution} == {"KNRI11"}
     assert sum(row["total"] for row in distribution) == pytest.approx(60.0)
+
+
+
+@pytest.mark.asyncio
+async def test_issue165_strict_response_contracts_validate_service_payloads(
+    db: AsyncSession,
+    portfolio: Portfolio,
+):
+    today = date.today()
+    asset = await make_asset(db, "BBDC4")
+    await make_tx(db, portfolio.id, asset.ticker, today - timedelta(days=120))
+
+    event = await make_event(
+        db,
+        asset,
+        today - timedelta(days=30),
+        today - timedelta(days=29),
+        today - timedelta(days=5),
+        DividendType.DIVIDENDO,
+    )
+    await make_dividend(db, portfolio.id, event, "90.00", "90.00")
+
+    summary = await get_summary(db, portfolio.id)
+    items = await list_items(db, portfolio.id)
+    history = await get_monthly_history(db, portfolio.id)
+    distribution = await get_distribution(db, portfolio.id)
+
+    ProventosSummaryResponse.model_validate(summary)
+    ProventosListResponse.model_validate(items)
+    ProventosMonthlyHistoryResponse.model_validate(history[0])
+    ProventosDistributionResponse.model_validate(distribution[0])
+
+    with pytest.raises(ValidationError):
+        ProventosSummaryResponse.model_validate({
+            **summary,
+            "campo_inesperado": True,
+        })
