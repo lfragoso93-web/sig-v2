@@ -16,7 +16,7 @@ import { useAppStore } from '@/store/appStore'
 
 const ASSET_TYPE_OPTIONS = [
   { label: 'Todos os ativos', value: '' },
-  { label: 'Acoes', value: 'ACAO' },
+  { label: 'Ações', value: 'ACAO' },
   { label: 'FIIs', value: 'FII' },
   { label: 'ETFs Nacionais', value: 'ETF_NACIONAL' },
   { label: 'BDRs', value: 'BDR' },
@@ -29,9 +29,9 @@ const PROVENTO_TYPE_OPTIONS = [
   { label: 'Dividendos', value: 'DIVIDENDO' },
   { label: 'JCP', value: 'JCP' },
   { label: 'Rendimentos', value: 'RENDIMENTO' },
-  { label: 'Amortizacao', value: 'AMORTIZACAO' },
-  { label: 'Bonificacao', value: 'BONIFICACAO' },
-  { label: 'Subscricao', value: 'SUBSCRICAO' },
+  { label: 'Amortização', value: 'AMORTIZACAO' },
+  { label: 'Bonificação', value: 'BONIFICACAO' },
+  { label: 'Subscrição', value: 'SUBSCRICAO' },
   { label: 'Outros', value: 'OUTROS' },
 ]
 
@@ -58,17 +58,33 @@ export default function ProventosPage() {
     dividend_type: dividendTypeFilter || undefined,
   }), [assetTypeFilter, dividendTypeFilter, statusFilter, yearFilter])
 
-  const { data: summary, isLoading: loadingSummary } = useProventosSummary(portfolioId, proventosFilters)
-  const { data: distribuicao } = useProventosDistribuicao(
+  const {
+    data: summary,
+    isLoading: loadingSummary,
+    isError: summaryError,
+  } = useProventosSummary(portfolioId, proventosFilters)
+  const {
+    data: distribuicao,
+    isLoading: loadingDistribuicao,
+    isError: distribuicaoError,
+  } = useProventosDistribuicao(
     portfolioId,
     12,
     proventosFilters,
   )
   const hasDistribuicao = (distribuicao?.length ?? 0) > 0
 
-  const { data: historico, isLoading: loadingHistorico } =
+  const {
+    data: historico,
+    isLoading: loadingHistorico,
+    isError: historicoError,
+  } =
     useProventosHistoricoMensal(portfolioId, proventosFilters)
-  const { data: lista, isLoading: loadingLista } = useProventosList(portfolioId, {
+  const {
+    data: lista,
+    isLoading: loadingLista,
+    isError: listaError,
+  } = useProventosList(portfolioId, {
     ...proventosFilters,
     page,
     page_size: PAGE_SIZE,
@@ -101,31 +117,44 @@ export default function ProventosPage() {
       </div>
 
       <div className="kpi-grid proventos-kpi-grid">
-        <KpiCard label="Recebido liquido" value={formatBRL(summary?.total_liquido_recebido ?? summary?.total_recebido ?? 0)} subValue={formatBRL(summary?.total_bruto_recebido ?? summary?.total_recebido ?? 0)} subLabel="Bruto recebido" />
-        <KpiCard label="A receber liquido" value={formatBRL(summary?.total_liquido_a_receber ?? summary?.total_a_receber ?? 0)} subValue={formatBRL(summary?.total_bruto_a_receber ?? summary?.total_a_receber ?? 0)} subLabel="Bruto a receber" valueColor="text-primary" />
-        <KpiCard label="Ultimos 12 meses" value={formatBRL(summary?.total_12m ?? 0)} subLabel="Eventos financeiros" />
-        <KpiCard label="Media mensal (12m)" value={formatBRL(summary?.media_mensal_12m ?? 0)} subValue={(summary?.eventos_nao_cash ?? 0).toString()} subLabel="Eventos nao-cash" />
+        {loadingSummary && [...Array(4)].map((_, i) => (
+          <div key={i} data-testid="proventos-kpi-loading" className="card h-24 skeleton rounded" />
+        ))}
+        {summaryError && (
+          <p role="alert" className="card p-4 text-xs" style={{ color: 'var(--color-danger, var(--color-text-muted))' }}>
+            Não foi possível carregar os indicadores de proventos.
+          </p>
+        )}
+        {!loadingSummary && !summaryError && summary && (
+          <>
+            <KpiCard label="Recebido líquido" value={formatBRL(summary.total_liquido_recebido)} subValue={formatBRL(summary.total_bruto_recebido)} subLabel="Bruto recebido" />
+            <KpiCard label="A receber líquido" value={formatBRL(summary.total_liquido_a_receber)} subValue={formatBRL(summary.total_bruto_a_receber)} subLabel="Bruto a receber" valueColor="text-primary" />
+            <KpiCard label="Últimos 12 meses" value={formatBRL(summary.total_12m)} subLabel="Eventos financeiros" />
+            <KpiCard label="Média mensal (12m)" value={formatBRL(summary.media_mensal_12m)} subValue={summary.eventos_nao_cash.toString()} subLabel="Eventos não monetários" />
+          </>
+        )}
       </div>
 
-      <div className={hasDistribuicao ? 'proventos-layout has-distribution' : 'proventos-layout'}>
-        {hasDistribuicao && (
-          <div className="card p-4 proventos-distribution-card">
-            <div className="section-card-header"><span className="text-xs font-semibold">Por ativo ({yearFilter ?? '12m'})</span></div>
-            <ProventosDonutChart data={distribuicao!} />
-          </div>
-        )}
+      <div className="proventos-layout has-distribution">
+        <div className="card p-4 proventos-distribution-card">
+          <div className="section-card-header"><span className="text-xs font-semibold">Por ativo ({yearFilter ?? '12m'})</span></div>
+          {loadingDistribuicao && <div data-testid="proventos-distribution-loading" className="h-40 skeleton rounded" />}
+          {distribuicaoError && <p role="alert" className="text-xs p-4" style={{ color: 'var(--color-danger, var(--color-text-muted))' }}>Não foi possível carregar a distribuição.</p>}
+          {!loadingDistribuicao && !distribuicaoError && hasDistribuicao && <ProventosDonutChart data={distribuicao!} />}
+          {!loadingDistribuicao && !distribuicaoError && !hasDistribuicao && <p className="text-xs p-4" style={{ color: 'var(--color-text-muted)' }}>Sem distribuição para os filtros selecionados.</p>}
+        </div>
 
         <div className="proventos-content">
           <div className="filter-bar proventos-filter-bar">
-            <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: 'var(--color-surface-offset)' }}>
+            <div role="group" aria-label="Status do provento" className="flex items-center gap-1 p-1 rounded-lg" style={{ background: 'var(--color-surface-offset)' }}>
               {[{ label: 'Todos', value: '' }, { label: 'Recebidos', value: 'RECEBIDO' }, { label: 'A receber', value: 'A_RECEBER' }].map(o => (
-                <button key={o.value} onClick={() => setStatusFilter(o.value)} className="px-3 py-1 rounded text-xs font-medium transition-colors" style={{ background: statusFilter === o.value ? 'oklch(from var(--color-primary) l c h / 0.15)' : 'transparent', color: statusFilter === o.value ? 'var(--color-primary)' : 'var(--color-text-muted)' }}>{o.label}</button>
+                <button key={o.value} aria-pressed={statusFilter === o.value} onClick={() => setStatusFilter(o.value)} className="px-3 py-1 rounded text-xs font-medium transition-colors" style={{ background: statusFilter === o.value ? 'oklch(from var(--color-primary) l c h / 0.15)' : 'transparent', color: statusFilter === o.value ? 'var(--color-primary)' : 'var(--color-text-muted)' }}>{o.label}</button>
               ))}
             </div>
-            <select value={assetTypeFilter} onChange={e => setAssetTypeFilter(e.target.value)} className="input text-xs proventos-select">
+            <select aria-label="Tipo de ativo" value={assetTypeFilter} onChange={e => setAssetTypeFilter(e.target.value)} className="input text-xs proventos-select">
               {ASSET_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
-            <select value={dividendTypeFilter} onChange={e => setDividendTypeFilter(e.target.value)} className="input text-xs proventos-select">
+            <select aria-label="Tipo de provento" value={dividendTypeFilter} onChange={e => setDividendTypeFilter(e.target.value)} className="input text-xs proventos-select">
               {PROVENTO_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
@@ -133,20 +162,20 @@ export default function ProventosPage() {
           <div className="card overflow-hidden proventos-table-card">
             <div className="section-card-header"><span className="text-xs font-semibold">Historico mensal</span></div>
             <div className="p-4 proventos-table-wrap">
-              {loadingHistorico || loadingSummary ? <div className="flex flex-col gap-2">{[...Array(4)].map((_, i) => <div key={i} className="h-8 skeleton rounded" />)}</div> : <ProventosHistoricoTable data={historico ?? []} />}
+              {loadingHistorico ? <div className="flex flex-col gap-2">{[...Array(4)].map((_, i) => <div key={i} className="h-8 skeleton rounded" />)}</div> : historicoError ? <p role="alert" className="text-xs p-4" style={{ color: 'var(--color-danger, var(--color-text-muted))' }}>Não foi possível carregar o histórico mensal.</p> : <ProventosHistoricoTable data={historico ?? []} />}
             </div>
           </div>
 
           <div className="card overflow-hidden proventos-table-card">
             <div className="section-card-header flex-wrap gap-2">
               <span className="text-xs font-semibold">Meus proventos</span>
-              <div className="flex items-center gap-1 flex-wrap justify-end">
-                <button onClick={() => setYearFilter(undefined)} className="px-2 py-0.5 rounded text-xs font-medium transition-colors" style={{ background: yearFilter === undefined ? 'oklch(from var(--color-primary) l c h / 0.15)' : 'transparent', color: yearFilter === undefined ? 'var(--color-primary)' : 'var(--color-text-muted)' }}>Todos</button>
-                {YEARS.map(y => <button key={y} onClick={() => setYearFilter(y)} className="px-2 py-0.5 rounded text-xs font-medium transition-colors" style={{ background: yearFilter === y ? 'oklch(from var(--color-primary) l c h / 0.15)' : 'transparent', color: yearFilter === y ? 'var(--color-primary)' : 'var(--color-text-muted)' }}>{y}</button>)}
+              <div role="group" aria-label="Ano do pagamento" className="flex items-center gap-1 flex-wrap justify-end">
+                <button aria-pressed={yearFilter === undefined} onClick={() => setYearFilter(undefined)} className="px-2 py-0.5 rounded text-xs font-medium transition-colors" style={{ background: yearFilter === undefined ? 'oklch(from var(--color-primary) l c h / 0.15)' : 'transparent', color: yearFilter === undefined ? 'var(--color-primary)' : 'var(--color-text-muted)' }}>Todos</button>
+                {YEARS.map(y => <button key={y} aria-pressed={yearFilter === y} onClick={() => setYearFilter(y)} className="px-2 py-0.5 rounded text-xs font-medium transition-colors" style={{ background: yearFilter === y ? 'oklch(from var(--color-primary) l c h / 0.15)' : 'transparent', color: yearFilter === y ? 'var(--color-primary)' : 'var(--color-text-muted)' }}>{y}</button>)}
               </div>
             </div>
             <div className="p-4 proventos-table-wrap">
-              {loadingLista ? <div className="flex flex-col gap-2">{[...Array(5)].map((_, i) => <div key={i} className="h-10 skeleton rounded" />)}</div> : <MeusProventosTable data={lista?.items ?? []} />}
+              {loadingLista ? <div className="flex flex-col gap-2">{[...Array(5)].map((_, i) => <div key={i} className="h-10 skeleton rounded" />)}</div> : listaError ? <p role="alert" className="text-xs p-4" style={{ color: 'var(--color-danger, var(--color-text-muted))' }}>Não foi possível carregar os eventos.</p> : <MeusProventosTable data={lista?.items ?? []} />}
               {totalItems > 0 && (
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-3 text-[10px]" style={{ color: 'var(--color-text-faint)' }}>
                   <span>Exibindo {firstItem}-{lastItem} de {totalItems} eventos</span>
