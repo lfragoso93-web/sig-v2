@@ -89,6 +89,23 @@ reservadas à #158.
 A matriz usa eventos monetários, posição anterior à data de corte e verifica
 quantidade, valor bruto, valor líquido e `asset_dividend_id`.
 
+### Regras financeiras por tipo
+
+| Tipo | Evento global | Direito financeiro | Regra do líquido | Agregados financeiros |
+|---|---:|---:|---:|---:|
+| Dividendo | sim | sim | 100% do bruto | inclui |
+| JCP | sim | sim | 85% do bruto | inclui o líquido |
+| Rendimento | sim | sim | 100% do bruto | inclui |
+| Amortização | sim | sim | 100% do bruto | inclui |
+| Bonificação | sim | não | não aplicável | exclui |
+| Subscrição | sim | não | não aplicável | exclui |
+
+A normalização dos seis tipos é canônica e testada. A função
+`calculate_net_value` concentra a regra de líquido usada por coleta,
+materialização e reconciliação. Mesmo direitos legados não monetários com
+valores indevidos são excluídos dos KPIs, histórico e distribuição e aparecem
+na lista identificados por `is_cash=false`.
+
 ## Pendências arquiteturais
 
 ### P2 — Identidade do evento
@@ -96,12 +113,6 @@ quantidade, valor bruto, valor líquido e `asset_dividend_id`.
 A unicidade de `AssetDividend` ainda considera ativo, data ex e tipo. Antes de
 alterá-la, é necessário comprovar com dados de provedor como representar eventos
 legítimos do mesmo tipo e data sem colidir ou duplicar.
-
-### P2 — Regras financeiras por tipo
-
-O JCP líquido ainda usa fator fixo de 85%. Dividendos, JCP, rendimentos,
-amortizações e eventos não monetários precisam de matriz explícita de
-classificação, valores e bordas antes da revisão do frontend.
 
 ### P3 — Frontend
 
@@ -122,12 +133,12 @@ impacto observado deve ser registrado nas Issues #165 e #159.
 4. ~~Consolidar coleta e scheduler; remover o serviço FII paralelo.~~ Concluído.
 5. ~~Inventariar o modelo e preparar a migração segura com a #158.~~ Concluído.
 6. ~~Validar seed, coleta e materialização para ações, FIIs, ETFs e BDRs.~~ Concluído.
-7. Validar classificação e valores por tipo de evento.
+7. ~~Validar classificação e valores por tipo de evento.~~ Concluído.
 8. Revisar frontend e implementar a melhoria #131.
 9. Sincronizar README, ROADMAP e CHANGELOG e promover o bloco estrutural à `main`.
 
 ## Próximo bloco recomendado
 
-Criar a matriz de eventos monetários e não monetários: dividendos, JCP,
-rendimentos, amortizações, bonificações e subscrições. A matriz deve validar
-normalização, bruto, líquido, exclusão dos agregados financeiros e idempotência.
+Revisar o frontend de Proventos: contratos efetivamente consumidos, KPIs,
+gráficos, tabela, estados vazios/erro/carregamento, acessibilidade e testes dos
+fluxos principais antes de implementar o detalhamento mensal da Issue #131.
