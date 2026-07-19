@@ -74,12 +74,18 @@ export const proventosService = {
   getSummary: (portfolioId: number, params?: ProventosFilters) =>
     api.get<ProventosSummary>(`/portfolios/${portfolioId}/proventos/summary`, { params }).then(r => r.data),
 
-  getDistribuicao: (portfolioId: number, months = 12) =>
-    api.get<ProventoDistribution[]>(`/portfolios/${portfolioId}/proventos/distribuicao`, { params: { months } }).then(r => r.data),
+  getDistribuicao: (
+    portfolioId: number,
+    months = 12,
+    params?: ProventosFilters,
+  ) =>
+    api.get<ProventoDistribution[]>(`/portfolios/${portfolioId}/proventos/distribuicao`, {
+      params: { ...params, months },
+    }).then(r => r.data),
 
-  getHistoricoMensal: (portfolioId: number, status?: string, assetType?: string, dividendType?: string) =>
+  getHistoricoMensal: (portfolioId: number, params?: ProventosFilters) =>
     api.get<ProventosHistoricoMes[]>(`/portfolios/${portfolioId}/proventos/historico-mensal`, {
-      params: { status: status || undefined, asset_type: assetType || undefined, dividend_type: dividendType || undefined },
+      params,
     }).then(r => r.data),
 
   getList: (
