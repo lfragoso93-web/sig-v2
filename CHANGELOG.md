@@ -5,6 +5,16 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — Página Resumo (18/07/2026)
+
+- KPIs reconciliados entre Resumo, Patrimônio e valuation canônico.
+- `summary.v2` e posições validados nas fronteiras backend e frontend, sem recomposição financeira local.
+- Resultado atual coberto para vendas parciais, posições encerradas e carteiras mistas.
+- Cobertura completa e parcial de preços explicitada, preservando custo quando falta cotação.
+- Histórico consolidado e por classe migrado para snapshots canônicos.
+- Gráfico patrimonial validado com ganho acima do aplicado e perda abaixo da linha zero; issue #147 encerrada.
+- Dropdown, loading, estados vazios, estimativas e sinais negativos cobertos por regressão.
+
 ### Corrigido — CI e conformidade documental (17/07/2026)
 
 - Corrigido erro `E203` que bloqueava o lint do backend.
