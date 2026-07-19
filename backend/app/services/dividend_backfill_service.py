@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.integrations.brapi import BRAPI_BASE, _auth_headers
-from app.models.transaction import Transaction, OperationType
+from app.models.transaction import Transaction
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
 from app.models.dividend import Dividend, DividendStatus, DividendType
