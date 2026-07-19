@@ -4,7 +4,7 @@ Plataforma pessoal para acompanhamento, consolidação e análise de investiment
 
 A branch padrão de desenvolvimento é `stable-15jun`. A promoção para `main` ocorre por PR após validação e atualização da documentação viva.
 
-## Status atual — 18/07/2026
+## Status atual — 19/07/2026
 
 O SGI v2 opera com arquitetura **DB-first**: catálogo, preços, taxas, proventos e snapshots são persistidos antes de alimentar KPIs, páginas e gráficos.
 
@@ -21,7 +21,8 @@ O SGI v2 opera com arquitetura **DB-first**: catálogo, preços, taxas, provento
 - Reconciliação entre Resumo, Patrimônio, Rentabilidade e snapshots.
 - Cobertura parcial e retornos estimados explicitados no contrato.
 - Página Resumo concluída, reconciliada com valuation e snapshots canônicos e promovida pela PR #164.
-- Fase 2 de Proventos iniciada sob a Issue #165, com auditoria arquitetural e critérios de aceite definidos.
+- Fase 2 de Proventos concluída sob a Issue #165: pipeline DB-first, contratos estritos, filtros compartilhados, coleta global e materialização rastreável.
+- Histórico mensal de proventos reconciliado por classe, com detalhamento acessível por mouse, teclado e toque.
 
 ### Tesouro Direto — Blocos 3.1 e 3.2
 
@@ -72,9 +73,9 @@ python -m app.cli.rebuild_treasury_official_prices
 
 ## Prioridades atuais
 
-1. Proventos (#165): caracterizar contratos, unificar filtros, consolidar materialização e validar todas as classes.
-2. Patrimônio: restaurar gráficos históricos por classe (#148).
-3. Rentabilidade: TWR dedicado para Tesouro e Renda Fixa (#149) e IBOV persistido (#150).
+1. Patrimônio: restaurar gráficos históricos por classe e reconciliá-los com snapshots e valuation (#148).
+2. Rentabilidade: implementar TWR dedicado para Tesouro e Renda Fixa (#149).
+3. Materializar o histórico persistido do IBOV (#150).
 4. Remover o serviço legado de rentabilidade (#151).
 5. Validar dependências pendentes do Dependabot (#159).
 6. Executar rebuild limpo da base antes do go-live (#158).
