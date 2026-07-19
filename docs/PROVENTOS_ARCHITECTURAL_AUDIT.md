@@ -2,7 +2,7 @@
 
 > Issue de controle: [#165](https://github.com/lfragoso93-web/sig-v2/issues/165)
 >
-> Estado auditado: 19/07/2026, após a conclusão dos itens 1 a 8 da Fase 2.
+> Estado auditado: 19/07/2026, após a conclusão técnica e documental da Fase 2.
 
 ## Objetivo
 
@@ -133,6 +133,15 @@ bordas da viewport e acessível por hover, foco, teclado e toque. `Esc`, saída 
 área interativa e toque/clique externo fecham o detalhe. Meses vazios permanecem
 não interativos.
 
+### Evidências finais
+
+- Backend: 78 testes aprovados.
+- Frontend: 48 testes aprovados.
+- TypeScript: typecheck aprovado.
+- Dry-run do vínculo legado: nenhum registro ou risco encontrado na base validada.
+- Branch: `stable-15jun` à frente da `main` e sem divergência na auditoria pré-PR.
+- Dependências #146, #138, #137 e #133: preservadas sem alteração.
+
 ## Pendências arquiteturais
 
 ### P2 — Identidade do evento
@@ -157,9 +166,10 @@ impacto observado deve ser registrado nas Issues #165 e #159.
 7. ~~Validar classificação e valores por tipo de evento.~~ Concluído.
 8. ~~Revisar frontend, gráficos, tabelas, indicadores, estados e contratos.~~ Concluído.
 9. ~~Implementar o detalhamento mensal da Issue #131.~~ Concluído.
-10. Sincronizar README, ROADMAP e CHANGELOG e promover o bloco estrutural à `main`.
+10. ~~Sincronizar README, ROADMAP e CHANGELOG.~~ Concluído; promoção para a `main` pela PR estrutural.
 
 ## Próximo bloco recomendado
 
-Executar o item 9 da Issue #165: validação final da Fase 2, sincronização de
-README, ROADMAP e CHANGELOG e abertura da PR estrutural para a `main`.
+Concluir a promoção da Fase 2 para a `main`. Após o merge, iniciar a Fase 3
+pela Issue #148, reconciliando gráficos históricos e por classe com snapshots e
+valuation canônico.
