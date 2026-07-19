@@ -42,7 +42,7 @@ Os quatro agregados compartilham o mesmo construtor de filtros. O frontend inclu
 
 ### Resolvido — Agenda canônica de eventos
 
-A coleta/materialização de eventos ocorre uma vez em dias úteis, às 18:10, para ativos mantidos. O pipeline noturno permanece responsável por preços e logos, com `sync_events=False` e `materialize=False`. O escopo de catálogo completo continua disponível apenas por chamada explícita.
+A coleta de eventos ocorre uma vez em dias úteis, às 18:10, para todos os ativos nacionais elegíveis do catálogo. A materialização continua limitada às carteiras com posição na data de corte. O pipeline noturno permanece responsável por preços e logos, com `sync_events=False` e `materialize=False`; `only_held=True` existe apenas como opção operacional explícita.
 
 ### Resolvido — Leitura sem escrita
 
