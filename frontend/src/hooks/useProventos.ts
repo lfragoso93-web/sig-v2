@@ -40,7 +40,6 @@ export function useProventosDistribuicao(
     queryKey:    ['proventos-distribuicao', portfolioId, months, params],
     queryFn:     () => proventosService.getDistribuicao(portfolioId!, months, params),
     enabled:     !!portfolioId,
-    placeholderData: [],
   })
 }
 
@@ -54,7 +53,6 @@ export function useProventosHistoricoMensal(
     queryKey:    ['proventos-historico', portfolioId, params],
     queryFn:     () => proventosService.getHistoricoMensal(portfolioId!, params),
     enabled:     !!portfolioId,
-    placeholderData: [],
   })
 }
 
@@ -71,6 +69,5 @@ export function useProventosList(
     queryKey:    ['proventos-list', portfolioId, params],
     queryFn:     () => proventosService.getList(portfolioId!, params),
     enabled:     !!portfolioId,
-    placeholderData: { total: 0, page: 1, page_size: 50, items: [] },
   })
 }
