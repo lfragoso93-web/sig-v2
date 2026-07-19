@@ -7,6 +7,10 @@ logger = logging.getLogger(__name__)
 SCHEDULER_TIMEZONE = "America/Sao_Paulo"
 scheduler = AsyncIOScheduler(timezone=SCHEDULER_TIMEZONE)
 BRAPI_CHUNK_DELAY = 1.0
+HELD_MARKET_PIPELINE_EVENT_OPTIONS = {
+    "sync_events": False,
+    "materialize": False,
+}
 
 
 def _cron_trigger(**kwargs) -> CronTrigger:
@@ -97,8 +101,13 @@ def start_scheduler() -> None:
             except Exception as e:
                 logger.error("[scheduler] Erro ao atualizar benchmarks SGS/BCB: %s", e)
 
-    @scheduler.scheduled_job(_cron_trigger(hour=9, minute=0), id="sync_daily_proventos_morning", name="Sincronizar proventos/eventos BRAPI — renda variável nacional (09:00)", max_instances=1, coalesce=True)
-    @scheduler.scheduled_job(_cron_trigger(hour=18, minute=10), id="sync_daily_proventos_evening", name="Sincronizar proventos/eventos BRAPI — renda variável nacional (18:10)", max_instances=1, coalesce=True)
+    @scheduler.scheduled_job(
+        _cron_trigger(day_of_week="mon-fri", hour=18, minute=10),
+        id="sync_daily_proventos_evening",
+        name="Sincronizar proventos/eventos — ativos mantidos (18:10)",
+        max_instances=1,
+        coalesce=True,
+    )
     async def sync_daily_proventos():
         from app.core.database import AsyncSessionLocal
         from app.services.proventos_daily_sync_service import run_daily_proventos_sync
@@ -116,7 +125,22 @@ def start_scheduler() -> None:
         from app.services.market_pipeline_batch_service import run_market_pipeline_batch
         async with AsyncSessionLocal() as db:
             try:
-                result = await run_market_pipeline_batch(db, asset_types={AssetType.ACAO, AssetType.FII, AssetType.ETF_NACIONAL, AssetType.BDR}, only_held=True, concurrency=1, delay=0.5, full=False, sync_prices=True, sync_logo=True, sync_events=True, materialize=True)
+                result = await run_market_pipeline_batch(
+                    db,
+                    asset_types={
+                        AssetType.ACAO,
+                        AssetType.FII,
+                        AssetType.ETF_NACIONAL,
+                        AssetType.BDR,
+                    },
+                    only_held=True,
+                    concurrency=1,
+                    delay=0.5,
+                    full=False,
+                    sync_prices=True,
+                    sync_logo=True,
+                    **HELD_MARKET_PIPELINE_EVENT_OPTIONS,
+                )
                 logger.info("[scheduler] Pipeline incremental da carteira atualizado: %s", result)
             except Exception as e:
                 logger.error("[scheduler] Erro no pipeline incremental da carteira: %s", e)
@@ -142,4 +166,4 @@ def start_scheduler() -> None:
                 logger.error("[scheduler] Erro na manutencao de snapshots TWR: %s", e)
 
     scheduler.start()
-    logger.info("Scheduler iniciado — cotações intraday a cada 90 min + Tesouro Direto + benchmarks + proventos + pipeline + cobertura global de preços + snapshots TWR")
+    logger.info("Scheduler iniciado — cotações intraday a cada 90 min + Tesouro Direto + benchmarks + proventos diário + pipeline sem eventos + cobertura global de preços + snapshots TWR")
