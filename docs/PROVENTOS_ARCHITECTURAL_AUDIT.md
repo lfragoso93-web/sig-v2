@@ -40,9 +40,9 @@ Os quatro agregados compartilham o mesmo construtor de filtros. O frontend inclu
 
 ## Achados
 
-### P1 — Processamento sobreposto no scheduler
+### Resolvido — Agenda canônica de eventos
 
-A sincronização diária de Proventos e o pipeline de mercado podem coletar e materializar os mesmos eventos em execuções distintas. A idempotência reduz duplicações persistidas, mas não elimina custo, concorrência nem complexidade operacional.
+A coleta/materialização de eventos ocorre uma vez em dias úteis, às 18:10, para ativos mantidos. O pipeline noturno permanece responsável por preços e logos, com `sync_events=False` e `materialize=False`. O escopo de catálogo completo continua disponível apenas por chamada explícita.
 
 ### Resolvido — Leitura sem escrita
 
@@ -52,9 +52,11 @@ Os quatro endpoints executam somente autorização e agregação. A materializa�
 
 Resumo, lista, histórico e distribuição compartilham filtros canônicos. Os quatro endpoints possuem contratos Pydantic estritos e o frontend envia o mesmo universo de filtros a todos os consumidores.
 
-### P2 — Serviços de coleta paralelos
+### Resolvido — Serviço FII paralelo
 
-`dividends_sync_service.py` mantém uma implementação específica de FIIs enquanto o pipeline unificado e `dividend_backfill_service` cobrem coleta e materialização. Consumidores e diferenças de regra devem ser comprovados antes da remoção.
+`dividends_sync_service.py` e seu cliente batch exclusivo foram removidos após a comprovação de que não possuíam consumidores operacionais. Onboarding, endpoint manual e scheduler usam o pipeline canônico.
+
+O modelo/tabela `dividends_sync_jobs` permanece temporariamente para evitar alteração de banco fora do bloco de normalização. Sua retirada será coordenada com a Issue #158.
 
 ### P2 — Contratos de resposta implícitos
 
@@ -90,7 +92,7 @@ As dependências #146, #138, #137 e #133 não serão alteradas durante esta fase
 2. ~~Criar contratos estritos e um objeto de filtros comum para todos os agregados.~~ Concluído.
 3. ~~Tornar a leitura independente de materialização.~~ Concluído.
 4. ~~Centralizar elegibilidade e posição.~~ Concluído; regras monetárias ainda serão consolidadas.
-5. Consolidar coleta e agendamento, removendo duplicidades somente após teste de consumidores.
+5. ~~Consolidar coleta e agendamento, removendo duplicidades somente após teste de consumidores.~~ Concluído.
 6. Normalizar o modelo com migração compatível e coordenada com #158.
 7. Validar ações, FIIs, ETFs e BDRs em seed, coleta e materialização.
 8. Revisar frontend e então executar a melhoria #131.
@@ -98,10 +100,10 @@ As dependências #146, #138, #137 e #133 não serão alteradas durante esta fase
 
 ## Próximo bloco recomendado
 
-Consolidar a coleta e o scheduler:
+Normalizar o modelo com migração segura:
 
-- identificar todos os consumidores de `dividends_sync_service.py`;
-- escolher uma única porta de entrada para coleta e materialização;
-- eliminar execuções sobrepostas;
-- preservar onboarding e comandos manuais;
-- comprovar o comportamento com testes antes de remover o serviço legado.
+- definir a identidade canônica de `AssetDividend`;
+- inventariar registros de `Dividend` sem vínculo global;
+- planejar a remoção dos campos duplicados e de `dividends_sync_jobs`;
+- manter compatibilidade até o rebuild da Issue #158;
+- evitar qualquer alteração destrutiva antes do dry-run pré-produção.
