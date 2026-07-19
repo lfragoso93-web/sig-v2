@@ -67,22 +67,35 @@ def _norm_label(value: str | None) -> str:
     return " ".join(clean.replace("_", " ").replace("-", " ").split())
 
 
-def _map_dividend_type(raw: str | None, category: str | None = None) -> str:
+def normalize_dividend_type(
+    raw: str | DividendType | None,
+    category: str | None = None,
+) -> DividendType:
+    """Normaliza rótulos de provedores e valores legados no enum canônico."""
+    if isinstance(raw, DividendType):
+        return raw
     label = _norm_label(raw)
     cat = _norm_label(category)
     if "SUBSCR" in label or "SUBSCR" in cat:
-        return DividendType.SUBSCRICAO.value
+        return DividendType.SUBSCRICAO
     if "BONIFIC" in label or "BONIFIC" in cat or "STOCK" in cat:
-        return DividendType.BONIFICACAO.value
+        return DividendType.BONIFICACAO
     if "JCP" in label or "JUROS SOBRE CAPITAL" in label:
-        return DividendType.JCP.value
+        return DividendType.JCP
     if "AMORT" in label:
-        return DividendType.AMORTIZACAO.value
+        return DividendType.AMORTIZACAO
     if "REND" in label or "FII" in cat:
-        return DividendType.RENDIMENTO.value
+        return DividendType.RENDIMENTO
     if "DIVID" in label:
-        return DividendType.DIVIDENDO.value
-    return DividendType.OUTROS.value
+        return DividendType.DIVIDENDO
+    if label in {item.value for item in DividendType}:
+        return DividendType(label)
+    return DividendType.OUTROS
+
+
+def _map_dividend_type(raw: str | None, category: str | None = None) -> str:
+    """Compatibilidade interna para o parser que ainda trabalha com strings."""
+    return normalize_dividend_type(raw, category).value
 
 
 def _parse_date(value: Any) -> date | None:
