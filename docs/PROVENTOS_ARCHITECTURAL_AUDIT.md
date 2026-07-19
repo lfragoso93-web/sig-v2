@@ -2,108 +2,132 @@
 
 > Issue de controle: [#165](https://github.com/lfragoso93-web/sig-v2/issues/165)
 >
-> Estado auditado: início da Fase 2, após a promoção da Página Resumo para a `main`.
+> Estado auditado: 19/07/2026, após a conclusão dos itens 1 a 6 da Fase 2.
 
 ## Objetivo
 
-Mapear o fluxo atual de Proventos antes de qualquer mudança funcional, preservar as entregas válidas das Issues #92 e #95 e orientar a consolidação do módulo em blocos pequenos e testáveis.
+Manter o fluxo de Proventos DB-first, rastreável e coerente entre catálogo
+global, direito da carteira, API e frontend, preservando as entregas válidas das
+Issues #92 e #95.
 
-## Arquitetura atual
+## Arquitetura vigente
 
-| Camada | Responsabilidade atual | Componentes principais |
+| Camada | Responsabilidade | Componentes principais |
 |---|---|---|
-| Evento global | Armazena eventos conhecidos por ativo, independentemente da carteira | `AssetDividend` |
-| Direito da carteira | Materializa quantidade elegível e valor do investidor | `Dividend`, `dividend_backfill_service` |
-| Coleta | Busca e normaliza eventos de mercado | pipeline de mercado, sincronização diária e serviços BRAPI |
-| Leitura/API | Autoriza e agrega resumo, lista, histórico e distribuição sem escrita | `proventos_service`, router `/proventos` |
+| Evento global | Armazena eventos de todos os ativos do catálogo, independentemente de posição | `AssetDividend` |
+| Direito da carteira | Materializa quantidade elegível e valores bruto/líquido | `Dividend`, serviço de elegibilidade |
+| Coleta | Busca e normaliza eventos uma vez por dia útil | sincronização diária e pipeline canônico |
+| Leitura/API | Autoriza e agrega sem escrita ou acesso a provedor | `proventos_service`, router `/proventos` |
 | Frontend | Exibe KPIs, filtros, gráfico e tabela | `ProventosPage`, hooks e serviço HTTP |
+
+A coleta global usa o catálogo de `assets` por padrão. A posição do investidor é
+consultada somente na materialização, pela data de corte/registro do evento.
 
 ## Contratos temporais e financeiros
 
 1. A data de corte/registro define a elegibilidade da posição.
 2. A data de pagamento define o reconhecimento do fluxo de caixa.
-3. Dividendos, JCP e amortizações são eventos monetários.
-4. Bonificações e demais eventos não monetários não podem compor valores, KPIs ou gráficos financeiros.
-5. A página deve consumir exclusivamente dados persistidos; provedores externos pertencem aos pipelines.
-6. A materialização deve ser idempotente e rastreável ao evento global que a originou.
+3. Dividendos, JCP, rendimentos e amortizações são eventos monetários.
+4. Bonificações, subscrições e demais eventos não monetários não compõem KPIs ou gráficos financeiros.
+5. A página consome exclusivamente dados persistidos.
+6. A materialização é idempotente e rastreável ao evento global.
 
-## Endpoints auditados
+## Endpoints canônicos
 
-| Endpoint | Finalidade | Filtros atuais |
+| Endpoint | Finalidade | Filtros compartilhados |
 |---|---|---|
 | `GET /proventos/summary` | KPIs consolidados | ano, status, classe e tipo |
 | `GET /proventos` | tabela paginada | ano, status, classe e tipo |
 | `GET /proventos/history` | série histórica | ano, status, classe e tipo |
 | `GET /proventos/distribution` | distribuição mensal ou anual | meses, ano, status, classe e tipo |
 
-Os quatro agregados compartilham o mesmo construtor de filtros. O frontend inclui o mesmo objeto de filtros nas chamadas e nas chaves de cache.
+Os quatro endpoints possuem contratos Pydantic estritos. Backend e frontend
+usam o mesmo universo de filtros e as leituras não materializam direitos.
 
-## Achados
+## Itens consolidados
 
-### Resolvido — Agenda canônica de eventos
+### Agenda e coleta global
 
-A coleta de eventos ocorre uma vez em dias úteis, às 18:10, para todos os ativos nacionais elegíveis do catálogo. A materialização continua limitada às carteiras com posição na data de corte. O pipeline noturno permanece responsável por preços e logos, com `sync_events=False` e `materialize=False`; `only_held=True` existe apenas como opção operacional explícita.
+A coleta ocorre uma vez em dias úteis, às 18:10, para todos os ativos nacionais
+elegíveis do catálogo. O pipeline noturno processa preços e logos com eventos e
+materialização desativados. `only_held=True` existe apenas como opção operacional
+explícita.
 
-### Resolvido — Leitura sem escrita
+### Leitura, mutação e elegibilidade
 
-Os quatro endpoints executam somente autorização e agregação. A materialização ocorre nos pipelines; mutações de transações disparam reconciliação explícita para recalcular ou remover direitos.
+Leituras executam somente autorização e agregação. Mutações de transações
+disparam reconciliação explícita para recalcular ou remover direitos. O cálculo
+de posição na data de corte é compartilhado pelos fluxos de materialização e
+reconciliação.
 
-### Resolvido — Filtros e contratos divergentes
+### Serviço FII legado
 
-Resumo, lista, histórico e distribuição compartilham filtros canônicos. Os quatro endpoints possuem contratos Pydantic estritos e o frontend envia o mesmo universo de filtros a todos os consumidores.
+O sincronizador FII paralelo, o cliente batch e a configuração exclusiva foram
+removidos. Uma auditoria posterior encontrou duas rotas administrativas
+residuais que ainda importavam o serviço removido; elas foram eliminadas no
+commit `fcc7bb34c22eb3a06673d68d2043c7818dfd94d1`. Não havia consumidor no
+frontend. `dividends_sync_jobs` permanece apenas para contração controlada na
+Issue #158.
 
-### Resolvido — Serviço FII paralelo
+### Modelo legado e rastreabilidade
 
-`dividends_sync_service.py` e seu cliente batch exclusivo foram removidos após a comprovação de que não possuíam consumidores operacionais. Onboarding, endpoint manual e scheduler usam o pipeline canônico.
+O inventário read-only e o dry-run de vínculos foram implementados. A execução
+real via Docker Compose em 19/07/2026 retornou `scanned: 0` e zero em todas as
+categorias de risco. Assim, nenhum backfill deve ser aplicado nesta base. A
+remoção física dos campos duplicados e a eventual restrição `NOT NULL` continuam
+reservadas à #158.
 
-O modelo/tabela `dividends_sync_jobs` permanece temporariamente para evitar alteração de banco fora do bloco de normalização. Sua retirada será coordenada com a Issue #158.
+### Matriz por classe
 
-### P2 — Contratos de resposta implícitos
+| Classe | Seed | Coleta global sem posição | Materialização rastreável | Reprocessamento sem duplicar |
+|---|---:|---:|---:|---:|
+| Ação | validado | validado | validado | validado |
+| FII | validado | validado | validado | validado |
+| ETF nacional | validado | validado | validado | validado |
+| BDR | validado | validado | validado | validado |
 
-Os endpoints não possuem modelos Pydantic estritos de resposta. O frontend replica interfaces TypeScript manualmente, sem validação de execução. Mudanças de shape podem passar despercebidas entre backend e frontend.
+A matriz usa eventos monetários, posição anterior à data de corte e verifica
+quantidade, valor bruto, valor líquido e `asset_dividend_id`.
 
-### P2 — Modelo com campos duplicados
-
-`Dividend` preserva pares canônicos e legados para datas, quantidade e valor unitário. A compatibilidade é útil durante a transição, mas amplia a possibilidade de divergência. A remoção física deve ser planejada junto ao rebuild pré-produção da Issue #158.
-
-### P2 — Vínculo global anulável
-
-`Dividend.asset_dividend_id` ainda pode ser nulo. Direitos antigos ou criados por caminhos paralelos podem não ter rastreabilidade completa ao evento global.
+## Pendências arquiteturais
 
 ### P2 — Identidade do evento
 
-A unicidade de `AssetDividend` considera ativo, data ex e tipo. É necessário validar eventos legítimos do mesmo tipo na mesma data e definir uma chave canônica que suporte reprocessamento sem colidir nem duplicar.
+A unicidade de `AssetDividend` ainda considera ativo, data ex e tipo. Antes de
+alterá-la, é necessário comprovar com dados de provedor como representar eventos
+legítimos do mesmo tipo e data sem colidir ou duplicar.
 
-### P2 — Regras financeiras espalhadas
+### P2 — Regras financeiras por tipo
 
-O cálculo da posição elegível existe em mais de um serviço. O JCP líquido usa o fator fixo de 85%. Essas regras precisam de uma única implementação, contrato documentado e testes de borda.
+O JCP líquido ainda usa fator fixo de 85%. Dividendos, JCP, rendimentos,
+amortizações e eventos não monetários precisam de matriz explícita de
+classificação, valores e bordas antes da revisão do frontend.
 
-### P3 — Lacunas de frontend
+### P3 — Frontend
 
-Os anos do filtro são limitados a uma janela fixa, há rótulos sem padronização textual e o cliente mantém uma operação de sincronização que não é usada pela página auditada. Também faltam testes de integração dos filtros e estados principais.
+Ainda faltam a revisão dos estados principais, gráficos, tabelas, indicadores,
+acessibilidade e testes de integração da página. O detalhamento mensal permanece
+acompanhado pela Issue #131.
 
 ## Riscos preservados fora do escopo
 
-As dependências #146, #138, #137 e #133 não serão alteradas durante esta fase. Qualquer impacto observado será registrado na Issue #165 e na Issue #159.
+As dependências #146, #138, #137 e #133 não são alteradas nesta fase. Qualquer
+impacto observado deve ser registrado nas Issues #165 e #159.
 
-## Estratégia de consolidação
+## Sequência da consolidação
 
-1. ~~Adicionar testes de caracterização do comportamento atual.~~ Concluído.
-2. ~~Criar contratos estritos e um objeto de filtros comum para todos os agregados.~~ Concluído.
-3. ~~Tornar a leitura independente de materialização.~~ Concluído.
-4. ~~Centralizar elegibilidade e posição.~~ Concluído; regras monetárias ainda serão consolidadas.
-5. ~~Consolidar coleta e agendamento, removendo duplicidades somente após teste de consumidores.~~ Concluído.
-6. Normalizar o modelo com migração compatível e coordenada com #158.
-7. Validar ações, FIIs, ETFs e BDRs em seed, coleta e materialização.
-8. Revisar frontend e então executar a melhoria #131.
-9. Sincronizar documentação e promover o bloco estrutural à `main`.
+1. ~~Caracterizar o comportamento e documentar a arquitetura.~~ Concluído.
+2. ~~Criar contratos estritos e filtros compartilhados.~~ Concluído.
+3. ~~Separar leitura de materialização e centralizar elegibilidade.~~ Concluído.
+4. ~~Consolidar coleta e scheduler; remover o serviço FII paralelo.~~ Concluído.
+5. ~~Inventariar o modelo e preparar a migração segura com a #158.~~ Concluído.
+6. ~~Validar seed, coleta e materialização para ações, FIIs, ETFs e BDRs.~~ Concluído.
+7. Validar classificação e valores por tipo de evento.
+8. Revisar frontend e implementar a melhoria #131.
+9. Sincronizar README, ROADMAP e CHANGELOG e promover o bloco estrutural à `main`.
 
 ## Próximo bloco recomendado
 
-Normalizar o modelo com migração segura:
-
-- definir a identidade canônica de `AssetDividend`;
-- inventariar registros de `Dividend` sem vínculo global;
-- planejar a remoção dos campos duplicados e de `dividends_sync_jobs`;
-- manter compatibilidade até o rebuild da Issue #158;
-- evitar qualquer alteração destrutiva antes do dry-run pré-produção.
+Criar a matriz de eventos monetários e não monetários: dividendos, JCP,
+rendimentos, amortizações, bonificações e subscrições. A matriz deve validar
+normalização, bruto, líquido, exclusão dos agregados financeiros e idempotência.
