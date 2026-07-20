@@ -21,42 +21,31 @@ docker compose logs -f backend
 
 ---
 
-## Inventário pré-produção sem escrita
+## Inventário pré-produção read-only
 
-Antes de backup, limpeza ou rebuild, execute o inventário read-only:
+Comando oficial:
 
-```bash
-python -m app.cli.pre_prod_inventory
-```
-
-Via Docker Compose:
-
-```bash
+```powershell
 docker compose exec backend python -m app.cli.pre_prod_inventory
 ```
 
-PowerShell com artefato JSON:
+Salvar o JSON em UTF-8 no PowerShell 7+:
 
 ```powershell
 $ReportFile = ".\pre-prod-inventory-$(Get-Date -Format 'yyyyMMdd-HHmmss').json"
-
 docker compose exec backend python -m app.cli.pre_prod_inventory |
     Tee-Object -FilePath $ReportFile
 ```
 
-O relatório usa o contrato `pre-prod-inventory.v1` e contém:
+O contrato atual é `pre-prod-inventory.v2`. Para aprovar o inventário, confirme:
 
-- classificação das tabelas como preservadas, exportáveis, reconstruíveis ou não classificadas;
-- contagem de registros por tabela;
-- aliases duplicados;
-- aliases e preços órfãos;
-- preços duplicados por ativo e timestamp;
-- snapshots consolidados duplicados por carteira e data;
-- marcadores explícitos de segurança indicando zero escritas, zero limpeza e zero rebuild.
+- `unclassified_tables` igual a `0`;
+- `blocking_findings` igual a `0`;
+- `read_only` igual a `true`;
+- `writes_executed` igual a `0`;
+- justificativa presente em todas as tabelas.
 
-O comando retorna código `1` quando encontra inconsistências bloqueadoras. Isso não significa que o inventário falhou: o JSON continua sendo o artefato oficial para análise. A sessão sempre termina com rollback e o serviço não importa rotinas de rebuild.
-
-Runbook completo: `docs/PRE_PROD_REBUILD_RUNBOOK.md`.
+O CLI retorna código diferente de zero quando existe achado bloqueador ou tabela desconhecida. Nenhuma limpeza ou rebuild é executada por esse comando.
 
 ---
 
@@ -154,25 +143,19 @@ Durante uma execução saudável:
 docker compose up -d --build backend
 ```
 
-2. Executar inventário:
-
-```bash
-docker compose exec backend python -m app.cli.pre_prod_inventory
-```
-
-3. Executar manutenção quando o bloco autorizar escrita:
+2. Executar manutenção:
 
 ```bash
 docker compose exec backend python -m app.cli.full_market_rebuild
 ```
 
-4. Conferir logs:
+3. Conferir logs:
 
 ```bash
 docker compose logs -f --since 10m backend
 ```
 
-5. Validar no frontend:
+4. Validar no frontend:
 
 - Resumo;
 - Patrimônio;
@@ -209,10 +192,15 @@ Se os horários forem alterados, preserve a dependência lógica.
 - Antes de validar Resumo, Patrimônio e Rentabilidade.
 - Antes de abrir PR estrutural para `main`.
 
-O inventário `pre_prod_inventory` deve ser executado antes de qualquer rebuild destrutivo ou limpeza pré-produção.
-
 ---
 
 ## Observação sobre PowerShell
+
+O CLI de inventário configura `stdout` e `stderr` em UTF-8. Em terminais antigos, execute antes:
+
+```powershell
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+$OutputEncoding = [Console]::OutputEncoding
+```
 
 O PowerShell pode exibir `NativeCommandError` quando o processo escreve em `stderr`, mesmo sem falha real. A fonte de verdade é o JSON final e o código de saída do comando.
