@@ -6,11 +6,12 @@ from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
+import re
 import subprocess
 from typing import Callable, Sequence
 
 
-BACKUP_REPORT_SCHEMA_VERSION = "pre-prod-backup.v1"
+BACKUP_REPORT_SCHEMA_VERSION = "pre-prod-backup.v2"
 DEFAULT_ARTIFACT_ROOT = Path("artifacts/pre-prod-rebuild")
 
 
@@ -32,6 +33,8 @@ class BackupReport:
     artifact_directory: str
     branch: str
     commit_sha: str
+    pg_dump_major: int
+    server_major: int
     dump_file: str
     dump_size_bytes: int
     sha256: str
@@ -123,6 +126,20 @@ def write_json(path: Path, payload: dict[str, object]) -> None:
     )
 
 
+def _postgres_major(version_text: str, *, server_version_num: bool = False) -> int:
+    normalized = version_text.strip()
+    if server_version_num:
+        if not normalized.isdigit():
+            raise BackupError("server_version_num PostgreSQL inválido")
+        value = int(normalized)
+        return value // 10000 if value >= 100000 else value // 10000
+
+    match = re.search(r"\b(\d+)(?:\.\d+)+\b", normalized)
+    if not match:
+        raise BackupError("não foi possível identificar a versão do pg_dump")
+    return int(match.group(1))
+
+
 def create_postgres_backup(
     *,
     database_url: str,
@@ -141,12 +158,50 @@ def create_postgres_backup(
     dump_path = directory / "database.dump"
     inventory_path = directory / "origin-inventory.json"
     contents_path = directory / "database.contents.txt"
+    client_version_path = directory / "pg-client-version.txt"
+    server_version_path = directory / "source-server-version.txt"
     checksum_path = directory / "database.dump.sha256"
     report_path = directory / "backup-report.json"
 
     write_json(inventory_path, inventory)
 
     commands = [
+        run_checked(
+            ["pg_dump", "--version"],
+            runner=runner,
+            stdout_path=client_version_path,
+        ),
+        run_checked(
+            [
+                "psql",
+                "--no-psqlrc",
+                "--tuples-only",
+                "--no-align",
+                "--set",
+                "ON_ERROR_STOP=1",
+                "--dbname",
+                database_url,
+                "--command",
+                "SHOW server_version_num",
+            ],
+            runner=runner,
+            stdout_path=server_version_path,
+        ),
+    ]
+    pg_dump_major = _postgres_major(
+        client_version_path.read_text(encoding="utf-8")
+    )
+    server_major = _postgres_major(
+        server_version_path.read_text(encoding="utf-8"),
+        server_version_num=True,
+    )
+    if pg_dump_major != server_major:
+        raise BackupError(
+            "major do pg_dump diverge do servidor PostgreSQL: "
+            f"cliente={pg_dump_major}, servidor={server_major}"
+        )
+
+    commands.append(
         run_checked(
             [
                 "pg_dump",
@@ -160,7 +215,7 @@ def create_postgres_backup(
             ],
             runner=runner,
         )
-    ]
+    )
     if not dump_path.is_file() or dump_path.stat().st_size == 0:
         raise BackupError("pg_dump terminou sem produzir um arquivo não vazio")
 
@@ -186,6 +241,8 @@ def create_postgres_backup(
         artifact_directory=str(directory),
         branch=branch,
         commit_sha=commit_sha,
+        pg_dump_major=pg_dump_major,
+        server_major=server_major,
         dump_file=dump_path.name,
         dump_size_bytes=dump_path.stat().st_size,
         sha256=checksum,
