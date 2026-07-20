@@ -20,7 +20,7 @@
 | Página Patrimônio | Fase 3 concluída na `stable-15jun`; promoção pendente | 100% |
 | Página Rentabilidade | Contratos concluídos | 95% |
 | Dependências | Auditoria concluída; incompatibilidade TS7 corrigida | 100% |
-| Rebuild pré-produção | Runbook e inventário read-only implementados | 30% |
+| Rebuild pré-produção | Inventário real classificado e read-only | 40% |
 | Eventos corporativos | Fundação pronta | 30% |
 | IRPF | Planejado | 15% |
 | Backup/Restore | Planejado | 10% |
@@ -75,11 +75,13 @@ A reconstrução limpa do catálogo, históricos e carteira ficou reservada para
 ### Pré-produção — #158 / #176
 
 - [x] Runbook operacional com classificação de dados e critérios de abortar.
-- [x] Serviço read-only de inventário com contrato `pre-prod-inventory.v1`.
-- [x] CLI `python -m app.cli.pre_prod_inventory`.
+- [x] Serviço read-only de inventário com contrato `pre-prod-inventory.v2`.
+- [x] CLI `python -m app.cli.pre_prod_inventory` com saída UTF-8.
 - [x] Testes que bloqueiam verbos SQL de escrita durante o inventário.
-- [ ] Executar o inventário no PostgreSQL real e anexar o JSON à Issue #176.
-- [ ] Backup e teste de restauração.
+- [x] Inventário executado no PostgreSQL real: 24 tabelas, 4.671.361 registros e zero inconsistências canônicas.
+- [x] Política completa para tabelas preservadas, exportáveis e reconstruíveis; nenhuma tabela conhecida permanece sem classificação.
+- [ ] Revalidar a versão v2 no PostgreSQL e anexar o JSON final à Issue #176.
+- [ ] Backup, checksum e teste de restauração em banco isolado.
 - [ ] Dry-run da limpeza com relatório de impacto.
 - [ ] Limpeza de dados reconstruíveis.
 - [ ] Seed B3 COTAHIST.
@@ -91,8 +93,8 @@ A reconstrução limpa do catálogo, históricos e carteira ficou reservada para
 
 ## Próximas prioridades
 
-1. Validar o inventário pré-produção no PostgreSQL e revisar tabelas não classificadas (#176).
-2. Preparar backup e teste de restauração (#158).
+1. Revalidar `pre-prod-inventory.v2` e confirmar `unclassified_tables=0` (#176).
+2. Preparar backup com SHA-256 e teste de restauração (#158).
 3. Implementar TWR dedicado de Tesouro e Renda Fixa (#149).
 4. Materializar IBOV (#150).
 5. Remover rentabilidade legada (#151).
