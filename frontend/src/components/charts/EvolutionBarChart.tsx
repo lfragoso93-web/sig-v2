@@ -11,11 +11,11 @@ import {
 } from 'recharts'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import type { MonthlyPoint } from '@/hooks/useEvolution'
+import type { MonthlyClassEvolutionPoint, MonthlyPoint } from '@/hooks/useEvolution'
 import { formatBRL, formatPercent, signClass } from '@/utils/format'
 
 interface Props {
-  data: MonthlyPoint[]
+  data: Array<MonthlyPoint | MonthlyClassEvolutionPoint>
 }
 
 function xTickFormatter(value: string): string {
@@ -39,7 +39,7 @@ function MonthlyTooltip({
   payload,
 }: {
   active?: boolean
-  payload?: Array<{ payload: MonthlyPoint }>
+  payload?: Array<{ payload: MonthlyPoint | MonthlyClassEvolutionPoint }>
 }) {
   const point = payload?.[0]?.payload
   if (!active || !point) return null
@@ -108,19 +108,19 @@ export default function EvolutionBarChart({ data }: Props) {
         <Legend
           iconType="circle"
           iconSize={8}
-          formatter={name => name === 'value' ? 'Patrimônio no fechamento' : 'Custo das posições abertas'}
+          formatter={name => name === 'market_value' ? 'Patrimônio no fechamento' : 'Custo das posições abertas'}
           wrapperStyle={{ fontSize: 12, paddingTop: 8, color: 'var(--color-text-muted)' }}
         />
-        <Bar dataKey="invested" radius={[3, 3, 0, 0]}>
+        <Bar dataKey="cost_basis" radius={[3, 3, 0, 0]}>
           {data.map((_, index) => (
             <Cell key={index} fill="oklch(from var(--color-text-muted) l c h / 0.25)" />
           ))}
         </Bar>
-        <Bar dataKey="value" radius={[3, 3, 0, 0]}>
+        <Bar dataKey="market_value" radius={[3, 3, 0, 0]}>
           {data.map((point, index) => (
             <Cell
               key={index}
-              fill={point.value >= point.invested ? 'var(--color-primary)' : 'var(--color-notification)'}
+              fill={point.market_value >= point.cost_basis ? 'var(--color-primary)' : 'var(--color-notification)'}
             />
           ))}
         </Bar>
