@@ -134,9 +134,12 @@ primeiro estado de loading; os mensais preservam `undefined` durante a carga.
 - Seleção por classe usa exclusivamente os tipos informados pelo endpoint de disponibilidade.
 - Gráficos diário e mensal leem diretamente `market_value` e `cost_basis` dos contratos canônicos.
 - Classes sem motor ou sem backfill exibem o motivo do backend e não disparam consulta de série.
-- Tooltips diário e mensal exibem patrimônio, custo, resultados realizado e não realizado, TWR do período e acumulado.\n- Fonte do snapshot, cobertura parcial e retorno estimado são apresentados diretamente pelos flags persistidos.\n- Suíte frontend disponível: 59 testes aprovados e dois typechecks focados válidos.
+- Tooltips diário e mensal exibem patrimônio, custo, resultados realizado e não realizado, TWR do período e acumulado.
+- Fonte do snapshot, cobertura parcial e retorno estimado são apresentados diretamente pelos flags persistidos.
+- Suíte frontend disponível: 59 testes aprovados e dois typechecks focados válidos.
 - Nenhum workflow remoto foi disparado neste bloco.
 
 ## Próximo bloco recomendado
 
-Validar e tornar observável a reconciliação entre snapshot consolidado, soma das\nclasses e valuation atual somente quando as datas forem comparáveis.
+Validar e tornar observável a reconciliação entre snapshot consolidado, soma das
+classes e valuation atual somente quando as datas forem comparáveis.
