@@ -5,6 +5,19 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Adicionado — backup e restauração isolada pré-produção (20/07/2026)
+
+- Adicionado o CLI `pre_prod_backup` com trava da branch, SHA Git completo, inventário v2 da origem, `pg_dump` custom, arquivo não vazio, inspeção por `pg_restore --list` e checksum SHA-256.
+- Adicionado o CLI `pre_prod_restore` com confirmação explícita, recusa da origem, nome de banco diferente, preflight de destino vazio e restore atômico com falha imediata.
+- O inventário `pre-prod-inventory.v2` é executado novamente na restauração.
+- A reconciliação compara migrations, tabelas, políticas, contagens e achados e só aprova com zero bloqueios.
+- URLs de banco são redigidas dos manifestos e relatórios; a origem registra zero escritas.
+- Artefatos são persistidos em `artifacts/pre-prod-rebuild/<run-id>/` e excluídos do Git.
+- A imagem backend passou a incluir os clientes PostgreSQL exigidos.
+- Testes cobrem dump vazio, destino original, destino não vazio, credenciais e divergências.
+- O procedimento e os critérios de abortar foram sincronizados no runbook e em `docs/operations.md`.
+- A implementação da Issue #183 está pronta; sua conclusão depende da execução no PostgreSQL real e de `reconciliation-report.json` com `ok=true`.
+
 ### Concluído — classificação integral do inventário pré-produção (20/07/2026)
 
 - O contrato de inventário foi evoluído para `pre-prod-inventory.v2`.
@@ -155,8 +168,8 @@ Formato baseado em Keep a Changelog.
 
 ## Próximos focos
 
-1. Revalidar `pre-prod-inventory.v2` no PostgreSQL e confirmar zero tabelas não classificadas (#176).
-2. Preparar backup com checksum e teste de restauração (#158).
+1. Executar e validar backup/restauração isolada no PostgreSQL real (#183).
+2. Somente após encerrar #183, preparar o dry-run de limpeza (#158).
 3. TWR dedicado de Tesouro e Renda Fixa (#149).
 4. IBOV persistido (#150).
 5. Remoção do serviço legado (#151).
