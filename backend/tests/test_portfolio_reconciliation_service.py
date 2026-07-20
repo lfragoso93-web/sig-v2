@@ -94,3 +94,20 @@ def test_optional_consumers_are_explicitly_not_evaluated_when_absent() -> None:
 
     assert result["positions_evaluated"] is False
     assert result["classes_evaluated"] is False
+
+
+def test_intraday_summary_does_not_compare_valuation_with_closed_snapshot() -> None:
+    result = reconcile_snapshot_summary(
+        _snapshot(),
+        _summary(total_patrimonio=99999, total_investido=1, lucro_total=-500),
+        valuation_mode="intraday",
+        positions_market_value=1,
+        positions_cost_basis=1,
+        classes_market_value=1,
+    )
+
+    assert result["valuation_comparable_to_snapshot"] is False
+    assert result["valuation_reconciliation_status"] == "not_comparable_intraday"
+    assert result["positions_evaluated"] is False
+    assert result["classes_evaluated"] is False
+    assert [check["field"] for check in result["checks"]] == ["rentabilidade_total"]
