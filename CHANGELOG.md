@@ -5,6 +5,24 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Concluído — Fase 3 Patrimônio (20/07/2026)
+
+- Evolução consolidada e por classe passou a consumir exclusivamente `PortfolioSnapshot` e `PortfolioClassSnapshot`.
+- Períodos de 6, 12 e 24 meses usam fronteiras determinísticas de meses-calendário; todo o histórico permanece sem corte artificial.
+- Estados de loading, erro com retry, vazio, aguardando backfill e classe sem motor dedicado são distintos.
+- Seletor de classes e catálogo de rótulos foram centralizados e compartilhados.
+- Tooltips diário e mensal apresentam patrimônio, custo, resultados, TWR, fonte, cobertura parcial e estimativa diretamente dos contratos canônicos.
+- Reconciliação consolidado × classes é avaliada apenas na mesma `snapshot_date`.
+- Reconciliação intradiária compara somente `summary.v2`, posições e distribuição materializados na mesma referência.
+- O frontend valida estritamente os dois contratos e não recalcula diferenças financeiras.
+- Clientes órfãos `portfolioService.ts` e `usePerformance.ts`, incluindo referências a `/patrimonio-history` e `/equity-history`, foram removidos.
+- Contratos Pydantic estritos foram adicionados aos seis endpoints de leitura patrimonial.
+- Validação local disponível: 68 testes frontend aprovados, typecheck focado de Patrimônio e compilação Python aprovados.
+- Nenhum workflow remoto foi disparado, preservando a cota da conta gratuita.
+- TWR de Tesouro Direto e Renda Fixa permanece explicitamente fora do escopo e segue na Issue #149.
+- Dependências #146, #138, #137 e #133 não foram alteradas.
+
+
 ### Concluído — Fase 2 Proventos (19/07/2026)
 
 - Pipeline DB-first consolidado entre evento global, direito materializado da carteira e reconhecimento pela data de pagamento.
@@ -127,10 +145,8 @@ Pendências formalizadas na issue #159:
 
 ## Próximos focos
 
-1. Proventos (#165).
-2. Gráficos históricos por classe (#148).
-3. TWR dedicado de Tesouro e Renda Fixa (#149).
-4. IBOV persistido (#150).
-5. Remoção do serviço legado (#151).
-6. Dependências pendentes (#159).
-7. Rebuild pré-produção (#158).
+1. TWR dedicado de Tesouro e Renda Fixa (#149).
+2. IBOV persistido (#150).
+3. Remoção do serviço legado (#151).
+4. Dependências pendentes (#159).
+5. Rebuild pré-produção (#158).
