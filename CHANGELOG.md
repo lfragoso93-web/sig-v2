@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — validação pré-merge da Fase 3 (20/07/2026)
+
+- Componentes frontend órfãos que ainda importavam o hook legado `usePerformance.ts` foram removidos.
+- O typecheck global deixa de depender de tipos pertencentes a um cliente já eliminado.
+- A remoção preserva os consumidores canônicos atuais: Resumo usa `usePortfolio`, Rentabilidade usa `useRentabilidade` e Patrimônio usa snapshots via `useEvolution`.
+- Nenhum cálculo financeiro foi recriado no frontend e nenhum workflow foi solicitado manualmente.
+
 ### Concluído — Fase 3 Patrimônio (20/07/2026)
 
 - Evolução consolidada e por classe passou a consumir exclusivamente `PortfolioSnapshot` e `PortfolioClassSnapshot`.
