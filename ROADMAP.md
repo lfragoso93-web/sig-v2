@@ -82,10 +82,11 @@ A reconstrução limpa do catálogo, históricos e carteira ficou reservada para
 - [x] Inventário executado no PostgreSQL real: 24 tabelas, 4.671.361 registros e zero inconsistências canônicas.
 - [x] Política completa para tabelas preservadas, exportáveis e reconstruíveis; nenhuma tabela conhecida permanece sem classificação.
 - [x] Issue #176 concluída após validação integral do inventário v2.
-- [x] CLI de backup com pg_dump custom, listagem, SHA-256 e manifesto por execução.
+- [x] CLI de backup v2 com pg_dump PostgreSQL 16, paridade de major, listagem, SHA-256 e manifesto por execução.
 - [x] CLI de restauração com checksum, destino vazio/diferente e transação única.
 - [x] Inventário v2 da restauração e reconciliação de migrations, tabelas, contagens e achados.
-- [ ] Executar backup/restore no PostgreSQL real e anexar a reconciliação aprovada à Issue #183.
+- [x] Confirmar aborto seguro da tentativa v1 incompatível, sem escrita na origem.
+- [ ] Reexecutar backup/restore v2 no PostgreSQL real e anexar a reconciliação aprovada à Issue #183.
 - [ ] Dry-run da limpeza com relatório de impacto.
 - [ ] Limpeza de dados reconstruíveis.
 - [ ] Seed B3 COTAHIST.
