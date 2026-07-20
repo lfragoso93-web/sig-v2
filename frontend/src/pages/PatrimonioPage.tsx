@@ -1,16 +1,11 @@
-import { useMemo, useState } from 'react'
-import { BarChart2, Wallet, Target, TrendingUp, PieChart } from 'lucide-react'
+import { useMemo } from 'react'
+import { Wallet, Target, PieChart } from 'lucide-react'
 import {
   usePortfolioSummary,
   useAssetDistribution,
   usePositions,
   type PositionGroup,
 } from '@/hooks/usePortfolio'
-import {
-  useDailyEvolution,
-  useMonthlyEvolution,
-  type PeriodOption,
-} from '@/hooks/useEvolution'
 import { useClassTargets } from '@/hooks/useClassTargets'
 import { useAppStore } from '@/store/appStore'
 import { formatBRL, formatPercent, signClass } from '@/utils/format'
@@ -24,9 +19,7 @@ import SkeletonCard from '@/components/ui/SkeletonCard'
 import EmptyState from '@/components/ui/EmptyState'
 import AssetDonutChart from '@/components/charts/AssetDonutChart'
 import AllocationTargetWidget from '@/components/resume/AllocationTargetWidget'
-import EvolutionLineChart from '@/components/charts/EvolutionLineChart'
-import EvolutionBarChart from '@/components/charts/EvolutionBarChart'
-import EvolutionQueryState from '@/components/charts/EvolutionQueryState'
+import PortfolioEvolutionSection from '@/components/charts/PortfolioEvolutionSection'
 
 function safeNum(value: unknown): number {
   const parsed = Number(value)
@@ -37,93 +30,6 @@ function positionValue(position: { current_value?: number | null; invested_value
   return position.current_value == null
     ? safeNum(position.invested_value)
     : safeNum(position.current_value)
-}
-
-const PERIODS: { label: string; value: PeriodOption }[] = [
-  { label: '6m', value: '6m' },
-  { label: '12m', value: '12m' },
-  { label: '24m', value: '24m' },
-  { label: 'Tudo', value: 'all' },
-]
-
-type ViewMode = 'diario' | 'mensal'
-
-function ToggleGroup<T extends string>({
-  options,
-  value,
-  onChange,
-}: {
-  options: { label: string; value: T }[]
-  value: T
-  onChange: (value: T) => void
-}) {
-  return (
-    <div className="flex" style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)' }}>
-      {options.map(option => (
-        <button
-          key={option.value}
-          type="button"
-          onClick={() => onChange(option.value)}
-          className="px-3 py-1.5 text-xs font-medium transition-colors"
-          style={{
-            background: value === option.value ? 'var(--color-primary)' : 'transparent',
-            color: value === option.value ? '#fff' : 'var(--color-text-muted)',
-          }}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  )
-}
-
-function EvolutionSection({ portfolioId }: { portfolioId: number }) {
-  const [period, setPeriod] = useState<PeriodOption>('12m')
-  const [view, setView] = useState<ViewMode>('mensal')
-  const dailyQuery = useDailyEvolution(portfolioId, period)
-  const monthlyQuery = useMonthlyEvolution(portfolioId, period)
-  const activeQuery = view === 'mensal' ? monthlyQuery : dailyQuery
-  const data = activeQuery.data
-
-  return (
-    <div className="card">
-      <div className="section-card-header" style={{ justifyContent: 'space-between' }}>
-        <div className="flex items-center gap-2">
-          {view === 'diario'
-            ? <TrendingUp size={14} style={{ color: 'var(--color-primary)' }} />
-            : <BarChart2 size={14} style={{ color: 'var(--color-primary)' }} />}
-          <div>
-            <span className="section-card-title">Evolução do Patrimônio</span>
-            <p className="text-xs mt-1" style={{ color: 'var(--color-text-faint)' }}>
-              Fechamentos canônicos; não representa o valuation intradiário dos cards.
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <ToggleGroup<ViewMode>
-            options={[{ label: 'Diário', value: 'diario' }, { label: 'Mensal', value: 'mensal' }]}
-            value={view}
-            onChange={setView}
-          />
-          <ToggleGroup<PeriodOption> options={PERIODS} value={period} onChange={setPeriod} />
-        </div>
-      </div>
-      <div className="p-4">
-        <EvolutionQueryState
-          isLoading={activeQuery.isLoading}
-          isError={activeQuery.isError}
-          isEmpty={!data?.length}
-          onRetry={() => { void activeQuery.refetch() }}
-        >
-          {view === 'diario' ? (
-            <EvolutionLineChart data={dailyQuery.data ?? []} />
-          ) : (
-            <EvolutionBarChart data={monthlyQuery.data ?? []} />
-          )}
-        </EvolutionQueryState>
-      </div>
-    </div>
-  )
 }
 
 function ConsolidationSection({ portfolioId }: { portfolioId: number }) {
@@ -353,7 +259,7 @@ export default function PatrimonioPage() {
         </div>
       )}
 
-      <EvolutionSection portfolioId={portfolioId} />
+      <PortfolioEvolutionSection portfolioId={portfolioId} />
       <ConsolidationSection portfolioId={portfolioId} />
       <ConcentrationSection groups={groups} />
     </div>
