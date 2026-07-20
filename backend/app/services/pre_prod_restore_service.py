@@ -203,15 +203,30 @@ def reconcile_inventories(
     source_migrations: list[str],
     restored_migrations: list[str],
 ) -> ReconciliationReport:
+    def object_list(
+        payload: dict[str, object],
+        key: str,
+    ) -> list[dict[str, object]]:
+        value = payload.get(key)
+        if not isinstance(value, list):
+            return []
+        return [item for item in value if isinstance(item, dict)]
+
+    def total(payload: dict[str, object], key: str, default: int) -> object:
+        totals = payload.get("totals")
+        if not isinstance(totals, dict):
+            return default
+        return totals.get(key, default)
+
     source_tables = {
         str(item["name"]): item
-        for item in source_inventory.get("tables", [])
-        if isinstance(item, dict) and "name" in item
+        for item in object_list(source_inventory, "tables")
+        if "name" in item
     }
     restored_tables = {
         str(item["name"]): item
-        for item in restored_inventory.get("tables", [])
-        if isinstance(item, dict) and "name" in item
+        for item in object_list(restored_inventory, "tables")
+        if "name" in item
     }
     shared_names = sorted(source_tables.keys() & restored_tables.keys())
     classification_mismatches = [
@@ -238,8 +253,8 @@ def reconcile_inventories(
     def findings(payload: dict[str, object]) -> dict[str, tuple[object, object]]:
         return {
             str(item["code"]): (item.get("severity"), item.get("count"))
-            for item in payload.get("findings", [])
-            if isinstance(item, dict) and "code" in item
+            for item in object_list(payload, "findings")
+            if "code" in item
         }
 
     source_findings = findings(source_inventory)
@@ -267,8 +282,8 @@ def reconcile_inventories(
             classification_mismatches,
             row_count_mismatches,
             finding_mismatches,
-            restored_inventory.get("totals", {}).get("unclassified_tables", 1),
-            restored_inventory.get("totals", {}).get("blocking_findings", 1),
+            total(restored_inventory, "unclassified_tables", 1),
+            total(restored_inventory, "blocking_findings", 1),
         )
     )
     return ReconciliationReport(
