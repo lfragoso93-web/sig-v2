@@ -20,10 +20,11 @@
 | Página Patrimônio | Fase 3 concluída na `stable-15jun`; promoção pendente | 100% |
 | Página Rentabilidade | Contratos concluídos | 95% |
 | Dependências | Auditoria concluída; incompatibilidade TS7 corrigida | 100% |
-| Rebuild pré-produção | Inventário real classificado e read-only | 40% |
+| Rebuild pré-produção | Backup/restore implementados; validação real pendente | 55% |
+| Backup/Restore pré-produção | CLIs e reconciliação implementados (#183) | 80% |
 | Eventos corporativos | Fundação pronta | 30% |
 | IRPF | Planejado | 15% |
-| Backup/Restore | Planejado | 10% |
+| Backup/Restore administrativo | Planejado (#83) | 10% |
 | OAuth social | Planejado | 0% |
 
 ## Consolidado
@@ -72,7 +73,7 @@ A reconstrução limpa do catálogo, históricos e carteira ficou reservada para
 - [x] TypeScript 7 revertido para 6.0.3 após incompatibilidade com `typescript-eslint@8.64.0` (#182).
 - [x] Build Docker do frontend confirmado pelo usuário.
 
-### Pré-produção — #158 / #176
+### Pré-produção — #158 / #176 / #183
 
 - [x] Runbook operacional com classificação de dados e critérios de abortar.
 - [x] Serviço read-only de inventário com contrato `pre-prod-inventory.v2`.
@@ -80,8 +81,11 @@ A reconstrução limpa do catálogo, históricos e carteira ficou reservada para
 - [x] Testes que bloqueiam verbos SQL de escrita durante o inventário.
 - [x] Inventário executado no PostgreSQL real: 24 tabelas, 4.671.361 registros e zero inconsistências canônicas.
 - [x] Política completa para tabelas preservadas, exportáveis e reconstruíveis; nenhuma tabela conhecida permanece sem classificação.
-- [ ] Revalidar a versão v2 no PostgreSQL e anexar o JSON final à Issue #176.
-- [ ] Backup, checksum e teste de restauração em banco isolado.
+- [x] Issue #176 concluída após validação integral do inventário v2.
+- [x] CLI de backup com pg_dump custom, listagem, SHA-256 e manifesto por execução.
+- [x] CLI de restauração com checksum, destino vazio/diferente e transação única.
+- [x] Inventário v2 da restauração e reconciliação de migrations, tabelas, contagens e achados.
+- [ ] Executar backup/restore no PostgreSQL real e anexar a reconciliação aprovada à Issue #183.
 - [ ] Dry-run da limpeza com relatório de impacto.
 - [ ] Limpeza de dados reconstruíveis.
 - [ ] Seed B3 COTAHIST.
@@ -93,8 +97,8 @@ A reconstrução limpa do catálogo, históricos e carteira ficou reservada para
 
 ## Próximas prioridades
 
-1. Revalidar `pre-prod-inventory.v2` e confirmar `unclassified_tables=0` (#176).
-2. Preparar backup com SHA-256 e teste de restauração (#158).
+1. Executar e validar o ciclo real de backup/restauração isolada (#183).
+2. Somente após encerrar #183, preparar o dry-run de limpeza (#158).
 3. Implementar TWR dedicado de Tesouro e Renda Fixa (#149).
 4. Materializar IBOV (#150).
 5. Remover rentabilidade legada (#151).
