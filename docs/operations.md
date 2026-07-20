@@ -1,6 +1,6 @@
 # Operação — SGI v2
 
-> Última atualização: 14/07/2026
+> Última atualização: 20/07/2026
 
 Este guia descreve os comandos de manutenção, validação e diagnóstico do SGI v2.
 
@@ -18,6 +18,45 @@ Ver logs do backend:
 ```bash
 docker compose logs -f backend
 ```
+
+---
+
+## Inventário pré-produção sem escrita
+
+Antes de backup, limpeza ou rebuild, execute o inventário read-only:
+
+```bash
+python -m app.cli.pre_prod_inventory
+```
+
+Via Docker Compose:
+
+```bash
+docker compose exec backend python -m app.cli.pre_prod_inventory
+```
+
+PowerShell com artefato JSON:
+
+```powershell
+$ReportFile = ".\pre-prod-inventory-$(Get-Date -Format 'yyyyMMdd-HHmmss').json"
+
+docker compose exec backend python -m app.cli.pre_prod_inventory |
+    Tee-Object -FilePath $ReportFile
+```
+
+O relatório usa o contrato `pre-prod-inventory.v1` e contém:
+
+- classificação das tabelas como preservadas, exportáveis, reconstruíveis ou não classificadas;
+- contagem de registros por tabela;
+- aliases duplicados;
+- aliases e preços órfãos;
+- preços duplicados por ativo e timestamp;
+- snapshots consolidados duplicados por carteira e data;
+- marcadores explícitos de segurança indicando zero escritas, zero limpeza e zero rebuild.
+
+O comando retorna código `1` quando encontra inconsistências bloqueadoras. Isso não significa que o inventário falhou: o JSON continua sendo o artefato oficial para análise. A sessão sempre termina com rollback e o serviço não importa rotinas de rebuild.
+
+Runbook completo: `docs/PRE_PROD_REBUILD_RUNBOOK.md`.
 
 ---
 
@@ -115,19 +154,25 @@ Durante uma execução saudável:
 docker compose up -d --build backend
 ```
 
-2. Executar manutenção:
+2. Executar inventário:
+
+```bash
+docker compose exec backend python -m app.cli.pre_prod_inventory
+```
+
+3. Executar manutenção quando o bloco autorizar escrita:
 
 ```bash
 docker compose exec backend python -m app.cli.full_market_rebuild
 ```
 
-3. Conferir logs:
+4. Conferir logs:
 
 ```bash
 docker compose logs -f --since 10m backend
 ```
 
-4. Validar no frontend:
+5. Validar no frontend:
 
 - Resumo;
 - Patrimônio;
@@ -163,6 +208,8 @@ Se os horários forem alterados, preserve a dependência lógica.
 - Após correção de provedor ou histórico de preços.
 - Antes de validar Resumo, Patrimônio e Rentabilidade.
 - Antes de abrir PR estrutural para `main`.
+
+O inventário `pre_prod_inventory` deve ser executado antes de qualquer rebuild destrutivo ou limpeza pré-produção.
 
 ---
 
