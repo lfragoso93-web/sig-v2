@@ -21,10 +21,11 @@ O SGI v2 opera com arquitetura **DB-first**: catálogo, preços, taxas, provento
 - Reconciliação entre Resumo, Patrimônio, Rentabilidade e snapshots.
 - Cobertura parcial e retornos estimados explicitados no contrato.
 - Página Resumo concluída, reconciliada com valuation e snapshots canônicos e promovida pela PR #164.
-- Fase 2 de Proventos concluída sob a Issue #165 e promovida pela PR #166.
-- Fase 3 de Patrimônio concluída sob a Issue #148.
-- Auditoria Dependabot concluída e Issue #159 encerrada.
-- Inventário read-only pré-produção disponível pelo contrato `pre-prod-inventory.v1`.
+- Fase 2 de Proventos concluída sob a Issue #165 e promovida pela PR #166: pipeline DB-first, contratos estritos, filtros compartilhados, coleta global e materialização rastreável.
+- Histórico mensal de proventos reconciliado por classe, com detalhamento acessível por mouse, teclado e toque.
+- Fase 3 de Patrimônio concluída sob a Issue #148: históricos consolidados e por classe, períodos determinísticos, tooltips canônicos e reconciliações observáveis por base temporal.
+- Valuation intradiário reconciliado entre `summary.v2`, posições e distribuição; snapshots consolidados reconciliados com classes somente na mesma data.
+- Inventário pré-produção read-only validado no PostgreSQL real, com 24 tabelas, 4.671.361 registros, zero inconsistências canônicas e política completa de classificação no contrato `pre-prod-inventory.v2`.
 
 ### Tesouro Direto — Blocos 3.1 e 3.2
 
@@ -38,7 +39,7 @@ O fluxo usado pela página Resumo foi alinhado ao pipeline canônico:
 - criação automática de ativos duplicados bloqueada;
 - regressões para RendA+ adicionadas.
 
-Os valores atuais de Selic e RendA+ foram validados na interface. A limpeza integral da base está registrada na Issue #158.
+Os valores atuais de Selic e RendA+ foram validados na interface. A limpeza integral da base foi adiada para o checklist pré-produção e está registrada na issue #158.
 
 ## Arquitetura resumida
 
@@ -76,31 +77,32 @@ python -m app.cli.rebuild_treasury_official_prices
 
 ## Prioridades atuais
 
-1. Validar o inventário pré-produção em banco real e anexar o relatório à Issue #176.
-2. Preparar backup e teste de restauração da Issue #158.
-3. Rentabilidade: implementar TWR dedicado para Tesouro e Renda Fixa (#149).
+1. Revalidar `pre-prod-inventory.v2` e confirmar zero tabelas não classificadas (#176).
+2. Preparar backup com checksum e teste de restauração isolada (#158).
+3. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
 4. Materializar o histórico persistido do IBOV (#150).
 5. Remover o serviço legado de rentabilidade (#151).
 
 ## Dependências
 
-A auditoria do Dependabot foi concluída na Issue #159. As atualizações compatíveis foram integradas à `stable-15jun`; TypeScript 7 foi revertido para a linha 6.0.3 após incompatibilidade confirmada com `typescript-eslint@8.64.0` na Issue #182.
+A auditoria Dependabot da Issue #159 foi concluída. Atualizações compatíveis foram incorporadas à `stable-15jun` em blocos isolados. A incompatibilidade entre TypeScript 7 e `typescript-eslint@8.64.0` foi corrigida pela Issue #182, mantendo resolução estrita de peer dependencies.
 
 ## Pré-produção
 
 A primeira entrada em produção exige:
 
-1. inventário read-only e relatório de impacto;
-2. backup validado e teste de restauração;
-3. limpeza controlada de dados reconstruíveis;
-4. seed B3 COTAHIST;
-5. seed oficial do Tesouro Direto;
-6. seed de benchmarks e proventos;
-7. importação CSV completa da carteira;
-8. rebuild de posições e snapshots;
-9. reconciliação financeira e auditoria de cobertura.
+1. inventário read-only aprovado e sem tabelas desconhecidas;
+2. backup validado com checksum e restauração isolada;
+3. exportação controlada das transações, renda fixa e eventos corporativos;
+4. limpeza controlada de dados reconstruíveis;
+5. seed B3 COTAHIST;
+6. seed oficial do Tesouro Direto;
+7. seed de benchmarks, câmbio e proventos;
+8. importação CSV completa da carteira;
+9. rebuild de posições e snapshots;
+10. reconciliação financeira e auditoria de cobertura.
 
-Checklist completo: Issue #158. Runbook operacional: `docs/PRE_PROD_REBUILD_RUNBOOK.md`.
+Checklist completo: issue #158. Runbook operacional: `docs/PRE_PROD_REBUILD_RUNBOOK.md`.
 
 ## Stack
 
@@ -122,8 +124,8 @@ docker compose up -d --build
 - `CHANGELOG.md` — mudanças relevantes.
 - `docs/architecture.md` — arquitetura DB-first.
 - `docs/providers.md` — fontes e fallbacks.
-- `docs/operations.md` — operação, inventário e rebuilds.
-- `docs/PRE_PROD_REBUILD_RUNBOOK.md` — segurança e sequência do rebuild pré-produção.
+- `docs/operations.md` — operação e rebuilds.
+- `docs/PRE_PROD_REBUILD_RUNBOOK.md` — política e sequência do rebuild pré-produção.
 - `docs/CANONICAL_FINANCIAL_CONTRACT.md` — contrato financeiro oficial.
 - `docs/RESUMO_ARCHITECTURAL_AUDIT.md` — matriz de contratos e divergências da página Resumo.
 - `docs/PROVENTOS_ARCHITECTURAL_AUDIT.md` — fluxo, contratos, riscos e sequência da Fase 2.
