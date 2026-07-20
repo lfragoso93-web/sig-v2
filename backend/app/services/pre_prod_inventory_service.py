@@ -16,36 +16,114 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal
 
-REPORT_SCHEMA_VERSION = "pre-prod-inventory.v1"
+REPORT_SCHEMA_VERSION = "pre-prod-inventory.v2"
 _SAFE_IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_]*$")
 
-PRESERVED_TABLES = {
-    "alembic_version",
-    "app_configs",
-    "audit_logs",
-    "goals",
-    "portfolio_class_targets",
-    "portfolios",
-    "system_configs",
-    "users",
-}
-
-EXPORTED_TABLES = {
-    "fixed_income_investments",
-    "transactions",
-}
-
-REBUILDABLE_TABLES = {
-    "asset_aliases",
-    "asset_dividends",
-    "asset_prices",
-    "assets",
-    "dividends",
-    "dividends_sync_jobs",
-    "portfolio_class_snapshots",
-    "portfolio_positions",
-    "portfolio_snapshots",
-    "rate_history",
+TABLE_POLICIES: dict[str, tuple[str, str]] = {
+    "alembic_version": (
+        "preserved",
+        "Controle estrutural das migrations aplicadas; nunca deve ser reconstruído pelo rebuild de dados.",
+    ),
+    "app_configs": (
+        "preserved",
+        "Configuração funcional persistida da aplicação.",
+    ),
+    "audit_logs": (
+        "preserved",
+        "Trilha histórica de auditoria que não pode ser regenerada.",
+    ),
+    "goal_allocations": (
+        "preserved",
+        "Alocações definidas pelo usuário para metas financeiras.",
+    ),
+    "goals": (
+        "preserved",
+        "Metas financeiras definidas pelo usuário.",
+    ),
+    "irpf_losses": (
+        "preserved",
+        "Saldos fiscais históricos e prejuízos acumulados informados ou apurados.",
+    ),
+    "irpf_records": (
+        "preserved",
+        "Registros fiscais associados ao histórico da carteira.",
+    ),
+    "irpf_reports": (
+        "preserved",
+        "Relatórios fiscais emitidos que devem permanecer rastreáveis.",
+    ),
+    "portfolio_class_targets": (
+        "preserved",
+        "Metas de alocação configuradas pelo usuário.",
+    ),
+    "portfolios": (
+        "preserved",
+        "Entidade principal da carteira e seus metadados.",
+    ),
+    "system_configs": (
+        "preserved",
+        "Configuração operacional persistida do sistema.",
+    ),
+    "users": (
+        "preserved",
+        "Identidades e credenciais dos usuários.",
+    ),
+    "corporate_events": (
+        "export_before_cleanup",
+        "Eventos podem conter estado aplicado, vínculo com carteira e dados brutos não integralmente reproduzíveis.",
+    ),
+    "fixed_income_investments": (
+        "export_before_cleanup",
+        "Investimentos de renda fixa contêm condições contratuais informadas pelo usuário.",
+    ),
+    "transactions": (
+        "export_before_cleanup",
+        "Livro-razão financeiro informado pelo usuário e fonte dos rebuilds posteriores.",
+    ),
+    "asset_aliases": (
+        "rebuildable",
+        "Aliases canônicos podem ser recriados a partir do catálogo e dos eventos corporativos exportados.",
+    ),
+    "asset_dividends": (
+        "rebuildable",
+        "Direitos materializados podem ser recalculados a partir de eventos e transações preservadas.",
+    ),
+    "asset_prices": (
+        "rebuildable",
+        "Histórico de preços possui fontes oficiais e rotinas idempotentes de seed.",
+    ),
+    "assets": (
+        "rebuildable",
+        "Catálogo canônico é reconstruído pelas fontes oficiais e reconciliado com as transações exportadas.",
+    ),
+    "dividends": (
+        "rebuildable",
+        "Eventos globais de proventos podem ser novamente coletados e normalizados.",
+    ),
+    "dividends_sync_jobs": (
+        "rebuildable",
+        "Estado técnico de sincronização pode ser reiniciado após o seed.",
+    ),
+    "fx_rates": (
+        "rebuildable",
+        "Cache de cotações PTAX é idempotente e regenerável pela fonte oficial.",
+    ),
+    "portfolio_class_snapshots": (
+        "rebuildable",
+        "Snapshots por classe são derivados de transações, posições e preços persistidos.",
+    ),
+    "portfolio_positions": (
+        "rebuildable",
+        "Posições são projeções derivadas do livro de transações.",
+    ),
+    "portfolio_snapshots": (
+        "rebuildable",
+        "Snapshots consolidados são derivados de transações, posições, preços e proventos.",
+    ),
+    "rate_history": (
+        "rebuildable",
+        "Séries macroeconômicas são regeneráveis por fontes oficiais.",
+    ),
 }
 
 
@@ -53,6 +131,7 @@ REBUILDABLE_TABLES = {
 class TableInventory:
     name: str
     classification: str
+    rationale: str
     row_count: int
 
 
@@ -79,14 +158,18 @@ class PreProdInventoryReport:
         return asdict(self)
 
 
+def _table_policy(name: str) -> tuple[str, str]:
+    return TABLE_POLICIES.get(
+        name,
+        (
+            "unclassified",
+            "Tabela desconhecida para esta versão da política; exige revisão arquitetural antes de qualquer limpeza.",
+        ),
+    )
+
+
 def _classify_table(name: str) -> str:
-    if name in PRESERVED_TABLES:
-        return "preserved"
-    if name in EXPORTED_TABLES:
-        return "export_before_cleanup"
-    if name in REBUILDABLE_TABLES:
-        return "rebuildable"
-    return "unclassified"
+    return _table_policy(name)[0]
 
 
 def _quote_identifier(name: str) -> str:
@@ -246,14 +329,18 @@ async def build_pre_prod_inventory(
         dialect = bind.dialect.name
         names = await _table_names(active_session, dialect)
 
-        tables = [
-            TableInventory(
-                name=name,
-                classification=_classify_table(name),
-                row_count=await _row_count(active_session, name),
+        tables: list[TableInventory] = []
+        for name in names:
+            classification, rationale = _table_policy(name)
+            tables.append(
+                TableInventory(
+                    name=name,
+                    classification=classification,
+                    rationale=rationale,
+                    row_count=await _row_count(active_session, name),
+                )
             )
-            for name in names
-        ]
+
         findings = await _canonical_findings(active_session, set(names))
 
         totals = {
