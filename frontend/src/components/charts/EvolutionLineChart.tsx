@@ -12,6 +12,7 @@ import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import type { ClassEvolutionPoint, DailyPoint } from '@/hooks/useEvolution'
 import { formatBRL } from '@/utils/format'
+import EvolutionChartTooltip from './EvolutionChartTooltip'
 
 interface Props {
   data: Array<DailyPoint | ClassEvolutionPoint>
@@ -23,24 +24,6 @@ function xTickFormatter(value: string): string {
   } catch {
     return value
   }
-}
-
-function tooltipLabelFormatter(label: unknown): string {
-  const str = typeof label === 'string' ? label : String(label ?? '')
-  try {
-    return format(parseISO(str), "dd 'de' MMMM yyyy", { locale: ptBR })
-  } catch {
-    return str
-  }
-}
-
-function tooltipFormatter(value: unknown, name: unknown): [string, string] {
-  const num = typeof value === 'number' ? value : Number(value ?? 0)
-  const key = String(name ?? '')
-  return [
-    formatBRL(num),
-    key === 'market_value' ? 'Patrimônio no fechamento' : 'Custo das posições abertas',
-  ]
 }
 
 function subsample<T>(arr: T[], maxPoints: number): T[] {
@@ -89,19 +72,7 @@ export default function EvolutionLineChart({ data }: Props) {
           tickLine={false}
           width={68}
         />
-        <Tooltip
-          labelFormatter={tooltipLabelFormatter as never}
-          formatter={tooltipFormatter as never}
-          contentStyle={{
-            background: 'var(--color-surface-2)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 8,
-            fontSize: 12,
-            color: 'var(--color-text)',
-          }}
-          itemStyle={{ color: 'var(--color-text)' }}
-          labelStyle={{ fontWeight: 600, marginBottom: 4, color: 'var(--color-text-muted)' }}
-        />
+        <Tooltip content={<EvolutionChartTooltip granularity="daily" />} />
         <Legend
           iconType="circle"
           iconSize={8}
