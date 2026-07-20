@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
-
 import pytest
 from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -83,7 +81,7 @@ async def test_inventory_is_read_only_and_reports_canonical_findings() -> None:
         event.remove(engine.sync_engine, "before_cursor_execute", capture_statement)
         await engine.dispose()
 
-    assert report.schema_version == "pre-prod-inventory.v1"
+    assert report.schema_version == "pre-prod-inventory.v2"
     assert report.mode == "dry-run"
     assert report.safety == {
         "read_only": True,
@@ -101,6 +99,8 @@ async def test_inventory_is_read_only_and_reports_canonical_findings() -> None:
         "duplicate_portfolio_snapshots": 1,
     }
 
+    assert all(table.rationale for table in report.tables)
+
     write_verbs = {"INSERT", "UPDATE", "DELETE", "TRUNCATE", "DROP", "ALTER", "CREATE"}
     executed_verbs = {
         statement.split(maxsplit=1)[0].upper()
@@ -114,8 +114,12 @@ async def test_inventory_is_read_only_and_reports_canonical_findings() -> None:
     ("table_name", "classification"),
     [
         ("users", "preserved"),
+        ("goal_allocations", "preserved"),
+        ("irpf_reports", "preserved"),
         ("transactions", "export_before_cleanup"),
+        ("corporate_events", "export_before_cleanup"),
         ("asset_prices", "rebuildable"),
+        ("fx_rates", "rebuildable"),
         ("future_table", "unclassified"),
     ],
 )
@@ -126,3 +130,12 @@ def test_inventory_classification_is_exposed_in_report(
     from app.services.pre_prod_inventory_service import _classify_table
 
     assert _classify_table(table_name) == classification
+
+
+def test_unknown_table_has_blocking_review_rationale() -> None:
+    from app.services.pre_prod_inventory_service import _table_policy
+
+    classification, rationale = _table_policy("future_table")
+
+    assert classification == "unclassified"
+    assert "revisão arquitetural" in rationale
