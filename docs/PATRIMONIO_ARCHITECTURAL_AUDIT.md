@@ -54,7 +54,8 @@ permanecem explicitamente indisponíveis até a Fase 4.
 | `GET /performance/{id}/evolution/daily` | snapshot consolidado | consumido por Patrimônio |
 | `GET /performance/{id}/evolution/monthly` | snapshot consolidado | consumido por Patrimônio e Resumo |
 | `GET /performance/{id}/classes/availability` | carteira + snapshots por classe | consumido apenas por Resumo |
-| `GET /performance/{id}/classes/reconciliation/latest` | consolidado x soma das classes | sem consumidor frontend |
+| `GET /performance/{id}/classes/reconciliation/latest` | consolidado x soma das classes na mesma data | consumido por Patrimônio |
+| `GET /portfolios/{id}/reconciliation/intraday` | `summary.v2` x posições x distribuição | consumido por Patrimônio |
 | `GET /performance/{id}/classes/{tipo}/evolution/daily` | snapshot por classe | hook existente, sem consumidor de página |
 | `GET /performance/{id}/classes/{tipo}/evolution/monthly` | snapshot por classe | consumido apenas por Resumo |
 
@@ -76,22 +77,25 @@ Exibe:
 - KPIs atuais vindos de `summary.v2`;
 - evolução consolidada diária e mensal;
 - distribuição intradiária por classe;
-- concentração e top posições.
+- concentração e top posições;
+- integridade do valuation intradiário entre `summary.v2`, posições e distribuição;
+- reconciliação do snapshot consolidado com snapshots por classe na mesma data.
 
 Oferece seleção histórica consolidada ou por classe e consulta disponibilidade.
-A reconciliação ainda não é apresentada na página.
+Estados sem data/base comparável permanecem neutros e não são convertidos em divergência.
 
 ### Hooks
 
-`useEvolution.ts` já contém hooks consolidados, por classe, disponibilidade e
-reconciliação. Os hooks diários usam `placeholderData: []`, o que pode ocultar o
-primeiro estado de loading; os mensais preservam `undefined` durante a carga.
+`useEvolution.ts` concentra as séries consolidadas, por classe e disponibilidade.
+`useReconciliation.ts` valida estritamente os contratos de reconciliação de
+fechamento e intradiária antes de expô-los à página. Nenhum hook usa
+`placeholderData` para ocultar a primeira carga.
 
 ## Inconsistências encontradas
 
 1. ~~Contratos de resposta dos endpoints de performance não são estritos.~~ Resolvido com schemas versionados por fonte.
 2. ~~A página Patrimônio não consome a fundação por classe já disponível.~~ Resolvido com seleção diária/mensal por classe.
-3. A reconciliação canônica existe no backend, mas não é observável na página.
+3. ~~A reconciliação canônica existe no backend, mas não é observável na página.~~ Resolvido com painel de integridade separado por base temporal.
 4. ~~O recorte mensal usa `months * 31`.~~ Resolvido com janela de meses-calendário compartilhada.
 5. Loading, erro, vazio, aguardando backfill e classe sem motor possuem apresentação explícita na evolução.
 6. ~~`frontend/src/services/portfolioService.ts` não possui consumidores e aponta para endpoint inexistente.~~ Resolvido pela remoção do cliente legado.
@@ -106,7 +110,7 @@ primeiro estado de loading; os mensais preservam `undefined` durante a carga.
 4. ~~Tornar períodos e estados de consulta determinísticos.~~ Concluído.
 5. ~~Criar apresentação reutilizável para evolução consolidada ou por classe.~~ Concluído.
 6. ~~Integrar seleção, disponibilidade e qualidade em Patrimônio.~~ Concluído.
-7. Validar a soma das classes somente quando o backend declarar comparabilidade.
+7. ~~Validar a soma das classes somente quando o backend declarar comparabilidade.~~ Concluído.
 8. Sincronizar documentação e promover a Fase 3 por PR.
 
 ## Fora do escopo
@@ -136,10 +140,12 @@ primeiro estado de loading; os mensais preservam `undefined` durante a carga.
 - Classes sem motor ou sem backfill exibem o motivo do backend e não disparam consulta de série.
 - Tooltips diário e mensal exibem patrimônio, custo, resultados realizado e não realizado, TWR do período e acumulado.
 - Fonte do snapshot, cobertura parcial e retorno estimado são apresentados diretamente pelos flags persistidos.
-- Suíte frontend disponível: 59 testes aprovados e dois typechecks focados válidos.
+- Suíte frontend disponível: 68 testes aprovados e typecheck focado de Patrimônio válido.
+- Testes de regressão impedem a comparação monetária entre valuation intradiário e snapshot fechado.
+- O painel apresenta somente diferenças e estados calculados pelo backend; não há reconciliação financeira local.
 - Nenhum workflow remoto foi disparado neste bloco.
 
 ## Próximo bloco recomendado
 
-Validar e tornar observável a reconciliação entre snapshot consolidado, soma das
-classes e valuation atual somente quando as datas forem comparáveis.
+Executar as suítes finais da Fase 3, revisar consumidores legados remanescentes,
+sincronizar README, ROADMAP e CHANGELOG e abrir a PR estrutural para `main`.
