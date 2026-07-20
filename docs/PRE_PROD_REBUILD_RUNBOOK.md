@@ -2,6 +2,7 @@
 
 > Issue-mãe: #158  
 > Bloco de preparação: #176  
+> Backup e restauração isolada: #183  
 > Última atualização: 20/07/2026
 
 ## Objetivo
@@ -77,8 +78,15 @@ artifacts/pre-prod-rebuild/YYYYMMDD-HHMMSS/
 
 Ela deve conter:
 
-- `database.dump` ou backup SQL equivalente;
-- checksum do backup;
+- `database.dump` em formato custom;
+- `database.dump.sha256`;
+- `database.contents.txt`;
+- `backup-report.json`;
+- `origin-inventory.json`;
+- `restored-inventory.json`;
+- `origin-migrations.txt` e `restored-migrations.txt`;
+- `restore-report.json`;
+- `reconciliation-report.json`;
 - inventário de tabelas e contagens antes da execução;
 - exportação validada da carteira;
 - relatório de dry-run;
@@ -100,13 +108,31 @@ Esses artefatos não devem ser versionados no Git.
 
 ### 2. Gerar e validar backup
 
-O backup deve incluir esquema e dados. A validação mínima exige:
+O backup deve incluir esquema e dados. Os CLIs oficiais são:
 
-- comando concluído com código zero;
-- arquivo não vazio;
-- checksum registrado;
-- listagem do conteúdo possível;
-- teste de restauração em banco isolado antes da limpeza real.
+```powershell
+docker compose exec backend python -m app.cli.pre_prod_backup --help
+docker compose exec backend python -m app.cli.pre_prod_restore --help
+```
+
+O procedimento completo, com variáveis e criação do banco isolado, está em
+`docs/operations.md`.
+
+A validação mínima exige:
+
+- `pg_dump` concluído com código zero;
+- arquivo custom não vazio;
+- checksum SHA-256 registrado e revalidado antes do restore;
+- conteúdo listado por `pg_restore --list`;
+- alvo com nome diferente e zero tabelas antes do restore;
+- restore atômico em banco isolado;
+- nova execução de `pre-prod-inventory.v2` na restauração;
+- migrations, tabelas, classificações, contagens e achados reconciliados;
+- relatório final com `ok=true`;
+- confirmação de zero escritas na origem.
+
+Os CLIs não contêm limpeza nem rebuild canônico. A origem é consultada somente
+pelo inventário, `pg_dump` e leitura da versão de migration.
 
 ### 3. Exportar a carteira
 
@@ -194,6 +220,17 @@ Uma segunda execução, sem novos dados externos ou transações, deve:
 - reconciliar os mesmos valores financeiros;
 - produzir relatório comparável ao anterior.
 
+## Estado do bloco #183
+
+A implementação dos CLIs, artefatos, checksum, restore isolado, novo inventário e
+reconciliação está concluída na `stable-15jun`.
+
+A Issue #183 permanece aberta até a execução no PostgreSQL real produzir
+`reconciliation-report.json` com `ok=true` e os artefatos serem revisados.
+Nenhuma limpeza ou rebuild canônico está autorizada antes desse aceite.
+
 ## Próximo bloco
 
-Gerar backup versionado por execução, checksum SHA-256 e teste de restauração em banco isolado. Nenhuma limpeza será autorizada até a restauração ser validada.
+Concluir a validação real da Issue #183 e anexar o resumo da reconciliação.
+Somente depois do encerramento formal será permitido planejar o dry-run de
+limpeza da Issue #158.
