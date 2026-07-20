@@ -10,11 +10,11 @@ import {
 } from 'recharts'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import type { DailyPoint } from '@/hooks/useEvolution'
+import type { ClassEvolutionPoint, DailyPoint } from '@/hooks/useEvolution'
 import { formatBRL } from '@/utils/format'
 
 interface Props {
-  data: DailyPoint[]
+  data: Array<DailyPoint | ClassEvolutionPoint>
 }
 
 function xTickFormatter(value: string): string {
