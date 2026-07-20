@@ -1,6 +1,6 @@
 # Roadmap modular — SGI v2
 
-> Última atualização: 19/07/2026
+> Última atualização: 20/07/2026
 
 ## Visão geral
 
@@ -15,9 +15,9 @@
 | Renda Fixa — valuation atual | Consolidado | 100% |
 | Snapshots consolidados | Consolidado | 100% |
 | Snapshots por classe de mercado | Consolidado | 100% |
-| Proventos | Fase 2 concluída na `stable-15jun`; promoção pendente | 100% |
+| Proventos | Fase 2 concluída e promovida pela PR #166 | 100% |
 | Página Resumo | Concluída e promovida pela PR #164 | 100% |
-| Página Patrimônio | Auditoria concluída, regressão visual mapeada | 90% |
+| Página Patrimônio | Fase 3 concluída na `stable-15jun`; promoção pendente | 100% |
 | Página Rentabilidade | Contratos concluídos | 95% |
 | Dependências | Auditoria parcial, pendências mapeadas | 80% |
 | Rebuild pré-produção | Planejado e bloqueador do go-live | 10% |
@@ -83,11 +83,19 @@ A reconstrução limpa do catálogo, históricos e carteira ficou reservada para
 - [x] Revisar API, frontend, gráficos, tabelas e indicadores.
 - [x] Implementar tooltip mensal por classe (#131).
 - [x] Validar suítes backend/frontend e sincronizar a documentação viva.
-- [ ] Promover a Fase 2 para a `main` pela PR estrutural.
+- [x] Promover a Fase 2 para a `main` pela PR #166.
 
-### Patrimônio e Rentabilidade
+### Patrimônio — #148
 
-- [ ] Restaurar gráficos históricos por classe (#148).
+- [x] Restaurar gráficos históricos consolidados e por classe.
+- [x] Padronizar períodos, estados de consulta e tooltips canônicos.
+- [x] Exibir cobertura parcial e retorno estimado sem cálculo paralelo.
+- [x] Reconciliar consolidado × classes somente na mesma data.
+- [x] Reconciliar consumidores do valuation intradiário sem comparar com o fechamento.
+- [x] Remover clientes legados sem consumidores e endpoints frontend obsoletos.
+
+### Rentabilidade
+
 - [ ] Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
 - [ ] Materializar histórico persistido do IBOV (#150).
 - [ ] Remover serviço legado de rentabilidade (#151).
@@ -123,13 +131,11 @@ Pendente de validação isolada:
 
 ## Próximas prioridades
 
-1. Concluir a reconstrução canônica de Proventos (#165).
-2. Restaurar históricos por classe em Patrimônio (#148).
-3. Implementar TWR dedicado de Tesouro e Renda Fixa (#149).
-4. Materializar IBOV (#150).
-5. Remover rentabilidade legada (#151).
-6. Validar Dependabot pendente (#159).
-7. Executar rebuild limpo antes do go-live (#158).
+1. Implementar TWR dedicado de Tesouro e Renda Fixa (#149).
+2. Materializar IBOV (#150).
+3. Remover rentabilidade legada (#151).
+4. Validar Dependabot pendente (#159).
+5. Executar rebuild limpo antes do go-live (#158).
 
 ## Backlog
 
