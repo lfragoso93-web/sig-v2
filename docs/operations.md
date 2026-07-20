@@ -72,8 +72,12 @@ docker compose exec `
     backend python -m app.cli.pre_prod_backup --run-id $RunId
 ```
 
+O contrato atual do backup é `pre-prod-backup.v2`. Backups v1 são incompatíveis
+e devem permanecer apenas como evidência da execução abortada.
+
 O backup só termina com código zero quando:
 
+- o major do `pg_dump` é igual ao major do servidor PostgreSQL;
 - `pg_dump` gera um arquivo custom não vazio;
 - `pg_restore --list` consegue inspecionar o dump;
 - o checksum SHA-256 é registrado;
@@ -85,13 +89,15 @@ Crie um banco vazio e exclusivo para a restauração. O exemplo abaixo usa o mes
 cluster PostgreSQL, mas um banco logicamente isolado:
 
 ```powershell
-$DbUser = if ($env:POSTGRES_USER) { $env:POSTGRES_USER } else { "sgi" }
-$DbPassword = if ($env:POSTGRES_PASSWORD) { $env:POSTGRES_PASSWORD } else { "sgi" }
+$DbUser = (docker compose exec -T db printenv POSTGRES_USER).Trim()
+$DbPassword = (docker compose exec -T db printenv POSTGRES_PASSWORD).Trim()
 $RestoreDb = "sgi_restore_$($RunId -replace '-', '_')"
 
 docker compose exec db createdb --username $DbUser $RestoreDb
 
-$RestoreUrl = "postgresql://$DbUser`:$DbPassword@db:5432/$RestoreDb"
+$EscapedUser = [uri]::EscapeDataString($DbUser)
+$EscapedPassword = [uri]::EscapeDataString($DbPassword)
+$RestoreUrl = "postgresql://$EscapedUser`:$EscapedPassword@db:5432/$RestoreDb"
 $ArtifactDir = "/app/artifacts/pre-prod-rebuild/$RunId"
 
 docker compose exec `
@@ -100,8 +106,8 @@ docker compose exec `
     $ArtifactDir --confirm-isolated-target
 ```
 
-Se usuário ou senha possuírem caracteres reservados de URL, codifique-os antes de
-montar `$RestoreUrl`.
+Uma execução abortada não deve reutilizar o dump, o `run_id` nem o banco
+isolado. Gere um novo backup v2 e um novo banco.
 
 O restore é recusado quando o destino coincide com a origem, usa o mesmo nome de
 banco, contém qualquer tabela ou diverge do checksum. A aplicação usa
