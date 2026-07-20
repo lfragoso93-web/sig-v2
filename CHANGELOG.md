@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — auditoria de dependências da PR #184 (20/07/2026)
+
+- `brace-expansion` transitivo foi atualizado de 5.0.6 para 5.0.7, corrigindo `GHSA-3jxr-9vmj-r5cp`.
+- O `package-lock.json` foi reconciliado com `typescript@6.0.3` e deixou de carregar os binários opcionais órfãos do TypeScript 7.
+- `npm audit --audit-level=high` passou com zero vulnerabilidades.
+
+
 ### Adicionado — backup e restauração isolada pré-produção (20/07/2026)
 
 - Adicionado o CLI `pre_prod_backup` com trava da branch, SHA Git completo, inventário v2 da origem, `pg_dump` custom, arquivo não vazio, inspeção por `pg_restore --list` e checksum SHA-256.
