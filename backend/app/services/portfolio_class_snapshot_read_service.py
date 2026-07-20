@@ -13,6 +13,7 @@ from app.models.fixed_income import FixedIncomeInvestment
 from app.models.portfolio_class_snapshot import PortfolioClassSnapshot
 from app.models.transaction import Transaction
 from app.services.portfolio_class_snapshot_service import class_twr_availability
+from app.services.portfolio_evolution_period_service import monthly_window_start
 from app.services.twr_service import compound_return_pcts
 
 
@@ -110,10 +111,9 @@ async def get_monthly_class_evolution(
         PortfolioClassSnapshot.portfolio_id == portfolio_id,
         PortfolioClassSnapshot.asset_type == asset_type.upper(),
     )
-    if months > 0:
-        query = query.where(
-            PortfolioClassSnapshot.snapshot_date >= date.today() - timedelta(days=months * 31)
-        )
+    start_date = monthly_window_start(months)
+    if start_date is not None:
+        query = query.where(PortfolioClassSnapshot.snapshot_date >= start_date)
     result = await db.execute(query.order_by(PortfolioClassSnapshot.snapshot_date.asc()))
     rows = list(result.scalars().all())
     grouped: dict[str, list[PortfolioClassSnapshot]] = defaultdict(list)

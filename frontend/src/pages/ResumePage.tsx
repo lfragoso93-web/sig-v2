@@ -21,28 +21,16 @@ import KpiCard from '@/components/ui/KpiCard'
 import SkeletonCard from '@/components/ui/SkeletonCard'
 import EmptyState from '@/components/ui/EmptyState'
 import PatrimonioBarChart from '@/components/charts/PatrimonioBarChart'
+import EvolutionClassSelect from '@/components/charts/EvolutionClassSelect'
 import PositionTable from '@/components/resume/PositionTable'
 import CreatePortfolioModal from '@/components/modals/CreatePortfolioModal'
+import { ASSET_CLASS_ALL, assetTypeLabel } from '@/utils/assetTypes'
 
 const PERIOD_OPTIONS = [
   { label: 'Últimos 6 meses', value: '6m' },
   { label: 'Últimos 12 meses', value: '12m' },
   { label: 'Últimos 24 meses', value: '24m' },
   { label: 'Todo período', value: 'all' },
-]
-
-const ASSET_CLASS_ALL = 'all'
-const ASSET_CLASS_OPTIONS = [
-  { label: 'Todas as classes',     value: ASSET_CLASS_ALL     },
-  { label: 'Ações',               value: 'ACAO'              },
-  { label: 'FIIs',                 value: 'FII'               },
-  { label: 'ETF Nacional',         value: 'ETF_NACIONAL'      },
-  { label: 'ETF Internacional',    value: 'ETF_INTERNACIONAL' },
-  { label: "Stock / Int'l",        value: 'STOCK'             },
-  { label: 'BDRs',                 value: 'BDR'               },
-  { label: 'Tesouro Direto',       value: 'TESOURO_DIRETO'    },
-  { label: 'Renda Fixa',           value: 'RENDA_FIXA'        },
-  { label: 'Cripto',               value: 'CRIPTO'            },
 ]
 
 function ChartSelect({
@@ -116,6 +104,13 @@ export default function ResumePage() {
   } = usePortfolioSummaryData(portfolioId)
   const { data: positions, isLoading: loadingPositions } = usePositions(portfolioId)
   const { data: classAvailability, isLoading: loadingClassAvailability } = useClassTwrAvailability(portfolioId)
+
+  useEffect(() => {
+    if (loadingClassAvailability || !classAvailability || assetClass === ASSET_CLASS_ALL) return
+    if (!classAvailability.some(item => item.asset_type === assetClass)) {
+      setAssetClass(ASSET_CLASS_ALL)
+    }
+  }, [assetClass, classAvailability, loadingClassAvailability])
 
   const selectedClassAvailability = activeAssetType
     ? classAvailability?.find(item => item.asset_type === activeAssetType)
@@ -264,12 +259,17 @@ export default function ResumePage() {
             <span className="section-card-title">Evolução Patrimonial</span>
             {assetClass !== ASSET_CLASS_ALL && (
               <span style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--color-primary)', background: 'oklch(from var(--color-primary) l c h / 0.1)', border: '1px solid oklch(from var(--color-primary) l c h / 0.2)', borderRadius: 'var(--radius-full)', padding: '1px 8px' }}>
-                {ASSET_CLASS_OPTIONS.find(o => o.value === assetClass)?.label}
+                {assetTypeLabel(assetClass)}
               </span>
             )}
           </div>
           <div className="responsive-actions">
-            <ChartSelect value={assetClass} onChange={v => setAssetClass(v)} options={ASSET_CLASS_OPTIONS} />
+            <EvolutionClassSelect
+              value={assetClass}
+              availability={classAvailability}
+              isLoading={loadingClassAvailability}
+              onChange={setAssetClass}
+            />
             <ChartSelect value={period} onChange={v => setPeriod(v as PeriodOption)} options={PERIOD_OPTIONS} />
           </div>
         </div>

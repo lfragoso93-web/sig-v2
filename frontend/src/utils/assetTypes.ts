@@ -1,26 +1,48 @@
 export const ASSET_TYPE_LABELS: Record<string, string> = {
-  ACAO_NACIONAL:     'Ações',
-  FII:               'FIIs',
-  ETF_NACIONAL:      'ETFs Nac.',
-  BDR:               'BDRs',
-  TESOURO_DIRETO:    'Tesouro Direto',
-  STOCK:             'Stocks',
-  ETF_INTERNACIONAL: 'ETFs Int.',
-  REIT:              'REITs',
-  CRIPTO:            'Criptomoedas',
-  RENDA_FIXA:        'Renda Fixa',
+  ACAO: 'Ações',
+  ACAO_NACIONAL: 'Ações',
+  FII: 'FIIs',
+  ETF_NACIONAL: 'ETF Nacional',
+  ETF_INTERNACIONAL: 'ETF Internacional',
+  STOCK: 'Stocks internacionais',
+  BDR: 'BDRs',
+  TESOURO_DIRETO: 'Tesouro Direto',
+  RENDA_FIXA: 'Renda Fixa',
+  CRIPTO: 'Criptomoedas',
+  OUTRO: 'Outros',
 }
 
-// Paleta por tipo — alinhada com o design system
 export const ASSET_TYPE_COLORS: Record<string, string> = {
-  ACAO_NACIONAL:     '#01696f',  // primary teal
-  FII:               '#006494',  // blue
-  ETF_NACIONAL:      '#437a22',  // green
-  BDR:               '#7a39bb',  // purple
-  TESOURO_DIRETO:    '#d19900',  // gold
-  STOCK:             '#da7101',  // orange
-  ETF_INTERNACIONAL: '#a13544',  // notification red
-  REIT:              '#a12c7b',  // error pink
-  CRIPTO:            '#4f98a3',  // primary teal dark mode
-  RENDA_FIXA:        '#6daa45',  // success green
+  ACAO: '#01696f',
+  ACAO_NACIONAL: '#01696f',
+  FII: '#006494',
+  ETF_NACIONAL: '#437a22',
+  BDR: '#7a39bb',
+  TESOURO_DIRETO: '#d19900',
+  STOCK: '#da7101',
+  ETF_INTERNACIONAL: '#a13544',
+  CRIPTO: '#4f98a3',
+  RENDA_FIXA: '#6daa45',
+  OUTRO: '#64748b',
+}
+
+export const ASSET_CLASS_ALL = 'all'
+
+export interface AssetClassOption {
+  label: string
+  value: string
+}
+
+export function assetTypeLabel(assetType: string): string {
+  return ASSET_TYPE_LABELS[assetType] ?? assetType
+}
+
+export function buildAssetClassOptions(assetTypes: string[]): AssetClassOption[] {
+  const uniqueTypes = [...new Set(assetTypes.filter(Boolean))]
+    .sort((left, right) => assetTypeLabel(left).localeCompare(assetTypeLabel(right), 'pt-BR'))
+
+  return [
+    { label: 'Todas as classes', value: ASSET_CLASS_ALL },
+    ...uniqueTypes.map(value => ({ label: assetTypeLabel(value), value })),
+  ]
 }

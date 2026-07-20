@@ -4,7 +4,7 @@ Plataforma pessoal para acompanhamento, consolidação e análise de investiment
 
 A branch padrão de desenvolvimento é `stable-15jun`. A promoção para `main` ocorre por PR após validação e atualização da documentação viva.
 
-## Status atual — 19/07/2026
+## Status atual — 20/07/2026
 
 O SGI v2 opera com arquitetura **DB-first**: catálogo, preços, taxas, proventos e snapshots são persistidos antes de alimentar KPIs, páginas e gráficos.
 
@@ -21,8 +21,10 @@ O SGI v2 opera com arquitetura **DB-first**: catálogo, preços, taxas, provento
 - Reconciliação entre Resumo, Patrimônio, Rentabilidade e snapshots.
 - Cobertura parcial e retornos estimados explicitados no contrato.
 - Página Resumo concluída, reconciliada com valuation e snapshots canônicos e promovida pela PR #164.
-- Fase 2 de Proventos concluída sob a Issue #165: pipeline DB-first, contratos estritos, filtros compartilhados, coleta global e materialização rastreável.
+- Fase 2 de Proventos concluída sob a Issue #165 e promovida pela PR #166: pipeline DB-first, contratos estritos, filtros compartilhados, coleta global e materialização rastreável.
 - Histórico mensal de proventos reconciliado por classe, com detalhamento acessível por mouse, teclado e toque.
+- Fase 3 de Patrimônio concluída sob a Issue #148: históricos consolidados e por classe, períodos determinísticos, tooltips canônicos e reconciliações observáveis por base temporal.
+- Valuation intradiário reconciliado entre `summary.v2`, posições e distribuição; snapshots consolidados reconciliados com classes somente na mesma data.
 
 ### Tesouro Direto — Blocos 3.1 e 3.2
 
@@ -73,12 +75,11 @@ python -m app.cli.rebuild_treasury_official_prices
 
 ## Prioridades atuais
 
-1. Patrimônio: restaurar gráficos históricos por classe e reconciliá-los com snapshots e valuation (#148).
-2. Rentabilidade: implementar TWR dedicado para Tesouro e Renda Fixa (#149).
-3. Materializar o histórico persistido do IBOV (#150).
-4. Remover o serviço legado de rentabilidade (#151).
-5. Validar dependências pendentes do Dependabot (#159).
-6. Executar rebuild limpo da base antes do go-live (#158).
+1. Rentabilidade: implementar TWR dedicado para Tesouro e Renda Fixa (#149).
+2. Materializar o histórico persistido do IBOV (#150).
+3. Remover o serviço legado de rentabilidade (#151).
+4. Validar dependências pendentes do Dependabot (#159).
+5. Executar rebuild limpo da base antes do go-live (#158).
 
 ## Dependências
 
@@ -131,3 +132,4 @@ docker compose up -d --build
 - `docs/CANONICAL_FINANCIAL_CONTRACT.md` — contrato financeiro oficial.
 - `docs/RESUMO_ARCHITECTURAL_AUDIT.md` — matriz de contratos e divergências da página Resumo.
 - `docs/PROVENTOS_ARCHITECTURAL_AUDIT.md` — fluxo, contratos, riscos e sequência da Fase 2.
+- `docs/PATRIMONIO_ARCHITECTURAL_AUDIT.md` — snapshots, históricos por classe e reconciliações da Fase 3.

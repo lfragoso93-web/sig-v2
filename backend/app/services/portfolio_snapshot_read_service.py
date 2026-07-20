@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.portfolio_snapshot import PortfolioSnapshot
+from app.services.portfolio_evolution_period_service import monthly_window_start
 from app.services.twr_service import compound_return_pcts
 
 
@@ -68,8 +69,9 @@ async def get_enriched_monthly_evolution(
 ) -> list[dict]:
     """Retorna o último snapshot de cada mês com retorno mensal composto."""
     query = select(PortfolioSnapshot).where(PortfolioSnapshot.portfolio_id == portfolio_id)
-    if months > 0:
-        query = query.where(PortfolioSnapshot.snapshot_date >= date.today() - timedelta(days=months * 31))
+    start_date = monthly_window_start(months)
+    if start_date is not None:
+        query = query.where(PortfolioSnapshot.snapshot_date >= start_date)
     rows_result = await db.execute(query.order_by(PortfolioSnapshot.snapshot_date.asc()))
     rows = list(rows_result.scalars().all())
     if not rows:

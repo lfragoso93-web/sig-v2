@@ -1,12 +1,14 @@
 import type { PropsWithChildren } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { renderHook } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import api from '@/services/api'
 import {
   PERIOD_MONTHS,
+  useClassDailyEvolution,
   useClassMonthlyEvolution,
+  useDailyEvolution,
   useMonthlyEvolution,
 } from './useEvolution'
 
@@ -15,6 +17,10 @@ vi.mock('@/services/api', () => ({
     get: vi.fn(),
   },
 }))
+
+beforeEach(() => {
+  vi.clearAllMocks()
+})
 
 function createWrapper() {
   const queryClient = new QueryClient({
@@ -48,6 +54,29 @@ describe('canonical monthly evolution hooks', () => {
     const { result } = renderHook(() => useMonthlyEvolution(46, '12m'), {
       wrapper: createWrapper(),
     })
+
+    expect(result.current.isLoading).toBe(true)
+    expect(result.current.data).toBeUndefined()
+  })
+
+  it('não converte loading diário em uma série vazia', () => {
+    vi.mocked(api.get).mockReturnValue(new Promise(() => undefined))
+
+    const { result } = renderHook(() => useDailyEvolution(46, '6m'), {
+      wrapper: createWrapper(),
+    })
+
+    expect(result.current.isLoading).toBe(true)
+    expect(result.current.data).toBeUndefined()
+  })
+
+  it('não converte loading diário por classe em uma série vazia', () => {
+    vi.mocked(api.get).mockReturnValue(new Promise(() => undefined))
+
+    const { result } = renderHook(
+      () => useClassDailyEvolution(46, 'ACAO', '6m'),
+      { wrapper: createWrapper() },
+    )
 
     expect(result.current.isLoading).toBe(true)
     expect(result.current.data).toBeUndefined()
