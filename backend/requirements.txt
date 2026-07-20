@@ -18,7 +18,7 @@ apscheduler==3.11.3
 email-validator==2.3.0
 redis==8.0.1
 reportlab==5.0.0
-slowapi>=0.0.7
+slowapi>=0.1.10
 limits>=5.8.0
 pytest==9.1.1
 pytest-asyncio==1.4.0
