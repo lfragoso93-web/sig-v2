@@ -94,11 +94,9 @@ primeiro estado de loading; os mensais preservam `undefined` durante a carga.
 3. A reconciliação canônica existe no backend, mas não é observável na página.
 4. ~~O recorte mensal usa `months * 31`.~~ Resolvido com janela de meses-calendário compartilhada.
 5. Loading, erro, vazio, aguardando backfill e classe sem motor possuem apresentação explícita na evolução.
-6. `frontend/src/services/portfolioService.ts` não possui consumidores e aponta
-   para `/patrimonio-history`, endpoint inexistente.
+6. ~~`frontend/src/services/portfolioService.ts` não possui consumidores e aponta para endpoint inexistente.~~ Resolvido pela remoção do cliente legado.
 7. ~~O catálogo de opções de classe está duplicado no frontend.~~ Resolvido com seletor compartilhado alimentado pela disponibilidade do backend.
-8. `return_is_estimated` é materializado como verdadeiro no motor atual e deve
-   ser apresentado como qualidade, sem interpretação local.
+8. ~~`return_is_estimated` deve ser apresentado como qualidade, sem interpretação local.~~ Resolvido nos tooltips canônicos.
 
 ## Sequência segura
 
@@ -107,7 +105,7 @@ primeiro estado de loading; os mensais preservam `undefined` durante a carga.
 3. ~~Introduzir schemas Pydantic estritos sem alterar valores.~~ Concluído.
 4. ~~Tornar períodos e estados de consulta determinísticos.~~ Concluído.
 5. ~~Criar apresentação reutilizável para evolução consolidada ou por classe.~~ Concluído.
-6. Integrar seleção, disponibilidade, qualidade e reconciliação em Patrimônio.
+6. ~~Integrar seleção, disponibilidade e qualidade em Patrimônio.~~ Concluído.
 7. Validar a soma das classes somente quando o backend declarar comparabilidade.
 8. Sincronizar documentação e promover a Fase 3 por PR.
 
@@ -136,10 +134,9 @@ primeiro estado de loading; os mensais preservam `undefined` durante a carga.
 - Seleção por classe usa exclusivamente os tipos informados pelo endpoint de disponibilidade.
 - Gráficos diário e mensal leem diretamente `market_value` e `cost_basis` dos contratos canônicos.
 - Classes sem motor ou sem backfill exibem o motivo do backend e não disparam consulta de série.
-- Suíte frontend disponível: 57 testes aprovados e dois typechecks focados válidos.
+- Tooltips diário e mensal exibem patrimônio, custo, resultados realizado e não realizado, TWR do período e acumulado.\n- Fonte do snapshot, cobertura parcial e retorno estimado são apresentados diretamente pelos flags persistidos.\n- Suíte frontend disponível: 59 testes aprovados e dois typechecks focados válidos.
 - Nenhum workflow remoto foi disparado neste bloco.
 
 ## Próximo bloco recomendado
 
-Exibir patrimônio, custo, resultado, TWR, cobertura parcial e estimativa nos
-tooltips da evolução consolidada e por classe.
+Validar e tornar observável a reconciliação entre snapshot consolidado, soma das\nclasses e valuation atual somente quando as datas forem comparáveis.
