@@ -5,6 +5,17 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Concluído — classificação integral do inventário pré-produção (20/07/2026)
+
+- O contrato de inventário foi evoluído para `pre-prod-inventory.v2`.
+- As 24 tabelas observadas no PostgreSQL real passaram a ter classificação e justificativa arquitetural explícitas.
+- Metas, configurações, auditoria e dados fiscais são preservados.
+- Transações, renda fixa e eventos corporativos exigem exportação antes de qualquer limpeza.
+- Catálogo, preços, PTAX, séries, proventos, posições e snapshots permanecem reconstruíveis.
+- Tabelas futuras continuam `unclassified` e fazem o CLI retornar código diferente de zero.
+- A saída do CLI foi padronizada em UTF-8 para evitar corrupção de acentos no PowerShell.
+- O runbook e o ROADMAP foram sincronizados; o próximo bloqueio é backup com checksum e restauração isolada.
+
 ### Adicionado — inventário pré-produção read-only (20/07/2026)
 
 - Criado o contrato versionado `pre-prod-inventory.v1` para inventário da base antes do rebuild.
@@ -13,7 +24,7 @@ Formato baseado em Keep a Changelog.
 - O CLI `python -m app.cli.pre_prod_inventory` executa somente consultas e sempre encerra a sessão com rollback.
 - Testes com SQLite instrumentado impedem `INSERT`, `UPDATE`, `DELETE`, `TRUNCATE`, `DROP`, `ALTER` e `CREATE` durante o inventário.
 - `docs/operations.md`, README e ROADMAP foram sincronizados com a Issue #176 e o runbook da Issue #158.
-- A execução no PostgreSQL real e a anexação do JSON à Issue #176 permanecem como validação operacional pendente.
+- A execução inicial no PostgreSQL real registrou 24 tabelas, 4.671.361 linhas e zero inconsistências canônicas.
 
 ### Corrigido — compatibilidade do build frontend (20/07/2026)
 
@@ -144,8 +155,8 @@ Formato baseado em Keep a Changelog.
 
 ## Próximos focos
 
-1. Executar o inventário read-only no PostgreSQL e revisar tabelas não classificadas (#176).
-2. Preparar backup e teste de restauração (#158).
+1. Revalidar `pre-prod-inventory.v2` no PostgreSQL e confirmar zero tabelas não classificadas (#176).
+2. Preparar backup com checksum e teste de restauração (#158).
 3. TWR dedicado de Tesouro e Renda Fixa (#149).
 4. IBOV persistido (#150).
 5. Remoção do serviço legado (#151).
