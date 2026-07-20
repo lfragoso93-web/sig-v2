@@ -127,6 +127,10 @@ def restore_postgres_backup(
     if not dump_path.is_file() or dump_path.stat().st_size == 0:
         raise BackupError("database.dump ausente ou vazio")
     backup_report = _load_json(report_path)
+    if backup_report.get("schema_version") != "pre-prod-backup.v2":
+        raise BackupError(
+            "backup incompatível; gere novamente com pre-prod-backup.v2"
+        )
     expected_checksum = backup_report.get("sha256")
     actual_checksum = sha256_file(dump_path)
     if expected_checksum != actual_checksum:
