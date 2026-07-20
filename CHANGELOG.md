@@ -5,6 +5,23 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Adicionado — inventário pré-produção read-only (20/07/2026)
+
+- Criado o contrato versionado `pre-prod-inventory.v1` para inventário da base antes do rebuild.
+- Tabelas são classificadas como preservadas, exportáveis antes da limpeza, reconstruíveis ou não classificadas.
+- O relatório inclui contagens por tabela, aliases duplicados, aliases e preços órfãos, preços duplicados e snapshots consolidados duplicados.
+- O CLI `python -m app.cli.pre_prod_inventory` executa somente consultas e sempre encerra a sessão com rollback.
+- Testes com SQLite instrumentado impedem `INSERT`, `UPDATE`, `DELETE`, `TRUNCATE`, `DROP`, `ALTER` e `CREATE` durante o inventário.
+- `docs/operations.md`, README e ROADMAP foram sincronizados com a Issue #176 e o runbook da Issue #158.
+- A execução no PostgreSQL real e a anexação do JSON à Issue #176 permanecem como validação operacional pendente.
+
+### Corrigido — compatibilidade do build frontend (20/07/2026)
+
+- TypeScript 7.0.2 foi revertido para 6.0.3 por incompatibilidade declarada com `typescript-eslint@8.64.0`.
+- A correção preservou resolução estrita de peer dependencies, sem `--force` ou `--legacy-peer-deps`.
+- O usuário confirmou o build Docker normal e a Issue #182 foi encerrada.
+- A auditoria Dependabot da Issue #159 permanece concluída.
+
 ### Corrigido — validação pré-merge da Fase 3 (20/07/2026)
 
 - Componentes frontend órfãos que ainda importavam o hook legado `usePerformance.ts` foram removidos.
@@ -27,8 +44,6 @@ Formato baseado em Keep a Changelog.
 - Validação local disponível: 68 testes frontend aprovados, typecheck focado de Patrimônio e compilação Python aprovados.
 - Nenhum workflow remoto foi disparado, preservando a cota da conta gratuita.
 - TWR de Tesouro Direto e Renda Fixa permanece explicitamente fora do escopo e segue na Issue #149.
-- Dependências #146, #138, #137 e #133 não foram alteradas.
-
 
 ### Concluído — Fase 2 Proventos (19/07/2026)
 
@@ -46,8 +61,6 @@ Formato baseado em Keep a Changelog.
 - Frontend passou a diferenciar loading, erro e vazio sem converter ausência ou falha em zero.
 - Validação final local: 78 testes backend e 48 testes frontend aprovados, além do typecheck TypeScript.
 - Migração destrutiva dos campos legados permanece reservada ao rebuild controlado da Issue #158.
-- Dependências #146, #138, #137 e #133 não foram alteradas.
-
 
 ### Planejamento — Fase 2 Proventos (18/07/2026)
 
@@ -56,7 +69,6 @@ Formato baseado em Keep a Changelog.
 - Arquitetura atual auditada, incluindo contratos temporais, filtros divergentes, escrita durante leitura, serviços paralelos e legado de modelo.
 - Definida a sequência: testes de caracterização, contratos e filtros, separação de leitura/materialização, consolidação do pipeline, validação por classe e revisão do frontend.
 - Issues #92 e #95 preservadas como entregas concluídas; #131 vinculada como sub-bloco posterior.
-- Dependências #146, #138, #137 e #133 permanecem fora do escopo desta fase.
 
 ### Corrigido — Página Resumo (18/07/2026)
 
@@ -74,12 +86,11 @@ Formato baseado em Keep a Changelog.
 - Documentos públicos passaram a descrever fontes por função, preservando a política de não exposição de provedores.
 - Auditoria arquitetural da página Resumo formalizada na issue #161.
 
-
 ### Corrigido — Tesouro Direto e pipeline de preços (17/07/2026)
 
 - Corrigida a resolução canônica de RendA+ e Educa+ pelo ano comercial.
 - Catálogo do Tesouro sincronizado de forma incremental e idempotente.
-- Fallback do dados abertos oficiais do Tesouro passou a percorrer todos os recursos CSV oficiais.
+- Fallback dos dados abertos oficiais do Tesouro passou a percorrer todos os recursos CSV oficiais.
 - Parser oficial passou a tolerar BOM, espaços e variações de cabeçalho.
 - Fluxo utilizado pela página Resumo passou a usar provedor primário de mercado, dados abertos oficiais do Tesouro e último preço persistido.
 - Cotação passou a ser devolvida pelo ticker original da posição.
@@ -96,28 +107,9 @@ Formato baseado em Keep a Changelog.
 
 ### Dependências — Auditoria Dependabot (17/07/2026)
 
-Atualizações auditadas e integradas na `stable-15jun`:
-
-- react-hook-form 7.81.0;
-- Recharts 3.9.2;
-- aiosqlite 0.22.1;
-- Uvicorn 0.51.0;
-- redis-py 8.0.1.
-
-Os PRs originais #140, #139, #135, #132 e #136 foram encerrados após confirmação das integrações equivalentes #153 a #157.
-
-Pendências formalizadas na issue #159:
-
-- #146 — build-tools, incluindo TypeScript 7.0.2;
-- #138 — ESLint e typescript-eslint;
-- #137 — httpx 0.28.1;
-- #133 — mypy 2.2.0.
-
-### Planejamento — Próximo ciclo
-
-- Página Resumo concluída; a Fase 2 de Proventos passa a ser a prioridade ativa (#165).
-- O primeiro bloco de código será composto por testes de caracterização, sem mudança funcional.
-- Patrimônio e Rentabilidade seguem pelas issues #148, #149, #150 e #151 após Proventos.
+- Atualizações compatíveis foram auditadas e integradas na `stable-15jun` em commits isolados.
+- A Issue #159 foi encerrada após não restarem PRs Dependabot abertos.
+- A regressão específica de TypeScript 7 foi tratada separadamente na Issue #182.
 
 ### Auditoria funcional canônica — 16/07/2026
 
@@ -135,7 +127,7 @@ Pendências formalizadas na issue #159:
 ### Fontes oficiais e valuation canônico — 16/07/2026
 
 - B3 COTAHIST adotado como histórico primário de ações, FIIs, ETFs nacionais e BDRs.
-- dados abertos oficiais do Tesouro adotado como fonte oficial do catálogo e histórico do Tesouro.
+- Dados abertos oficiais do Tesouro adotados como fonte oficial do catálogo e histórico do Tesouro.
 - Renda Fixa valorizada por motor dedicado.
 - Snapshots reconstruídos com dados persistidos.
 - Cobertura parcial e retorno estimado explicitados.
@@ -152,8 +144,8 @@ Pendências formalizadas na issue #159:
 
 ## Próximos focos
 
-1. TWR dedicado de Tesouro e Renda Fixa (#149).
-2. IBOV persistido (#150).
-3. Remoção do serviço legado (#151).
-4. Dependências pendentes (#159).
-5. Rebuild pré-produção (#158).
+1. Executar o inventário read-only no PostgreSQL e revisar tabelas não classificadas (#176).
+2. Preparar backup e teste de restauração (#158).
+3. TWR dedicado de Tesouro e Renda Fixa (#149).
+4. IBOV persistido (#150).
+5. Remoção do serviço legado (#151).
