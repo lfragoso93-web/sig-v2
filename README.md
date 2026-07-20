@@ -26,6 +26,7 @@ O SGI v2 opera com arquitetura **DB-first**: catálogo, preços, taxas, provento
 - Fase 3 de Patrimônio concluída sob a Issue #148: históricos consolidados e por classe, períodos determinísticos, tooltips canônicos e reconciliações observáveis por base temporal.
 - Valuation intradiário reconciliado entre `summary.v2`, posições e distribuição; snapshots consolidados reconciliados com classes somente na mesma data.
 - Inventário pré-produção read-only validado no PostgreSQL real, com 24 tabelas, 4.671.361 registros, zero inconsistências canônicas e política completa de classificação no contrato `pre-prod-inventory.v2`.
+- CLIs `pre_prod_backup` e `pre_prod_restore` implementados com dump custom, SHA-256, restauração transacional em banco vazio e isolado, novo inventário v2 e reconciliação integral; execução real da Issue #183 pendente.
 
 ### Tesouro Direto — Blocos 3.1 e 3.2
 
@@ -77,8 +78,8 @@ python -m app.cli.rebuild_treasury_official_prices
 
 ## Prioridades atuais
 
-1. Revalidar `pre-prod-inventory.v2` e confirmar zero tabelas não classificadas (#176).
-2. Preparar backup com checksum e teste de restauração isolada (#158).
+1. Executar e validar backup/restauração isolada no PostgreSQL real (#183).
+2. Somente após encerrar #183, preparar o dry-run de limpeza da #158.
 3. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
 4. Materializar o histórico persistido do IBOV (#150).
 5. Remover o serviço legado de rentabilidade (#151).
@@ -92,7 +93,7 @@ A auditoria Dependabot da Issue #159 foi concluída. Atualizações compatíveis
 A primeira entrada em produção exige:
 
 1. inventário read-only aprovado e sem tabelas desconhecidas;
-2. backup validado com checksum e restauração isolada;
+2. backup validado com checksum e restauração isolada — CLIs implementados; execução real da #183 pendente;
 3. exportação controlada das transações, renda fixa e eventos corporativos;
 4. limpeza controlada de dados reconstruíveis;
 5. seed B3 COTAHIST;
