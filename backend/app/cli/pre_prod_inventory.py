@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import sys
 
 from app.services.pre_prod_inventory_service import build_pre_prod_inventory
 
@@ -19,13 +20,26 @@ def _configure_logging() -> None:
     )
 
 
+def _configure_utf8_output() -> None:
+    """Padroniza stdout/stderr em UTF-8, inclusive quando consumidos pelo PowerShell."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            reconfigure(encoding="utf-8", errors="strict")
+
+
 async def _main() -> int:
     report = await build_pre_prod_inventory()
     print(json.dumps(report.to_dict(), ensure_ascii=False, indent=2))
-    return 1 if report.totals["blocking_findings"] else 0
+    has_blockers = bool(
+        report.totals["blocking_findings"]
+        or report.totals["unclassified_tables"]
+    )
+    return 1 if has_blockers else 0
 
 
 def main() -> None:
+    _configure_utf8_output()
     _configure_logging()
     try:
         exit_code = asyncio.run(_main())
