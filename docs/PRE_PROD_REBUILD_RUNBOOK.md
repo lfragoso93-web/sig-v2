@@ -20,34 +20,52 @@ Este runbook trata da operação controlada de pré-produção. A futura interfa
 - Cada etapa deve produzir contagens, duração, erros e ativos não resolvidos.
 - Uma falha interrompe a sequência; etapas posteriores não devem mascarar erro anterior.
 
-## Classificação inicial dos dados
+## Política oficial de classificação
+
+A fonte executável da política é `TABLE_POLICIES`, em `pre_prod_inventory_service.py`. Cada tabela recebe classificação e justificativa no relatório `pre-prod-inventory.v2`.
 
 ### Preservar
 
-- usuários, perfis, autenticação e permissões;
-- configurações administrativas e de provedores;
-- migrations e metadados estruturais;
-- dados que não possam ser regenerados por fonte canônica.
+- `alembic_version`;
+- `app_configs`;
+- `audit_logs`;
+- `goal_allocations`;
+- `goals`;
+- `irpf_losses`;
+- `irpf_records`;
+- `irpf_reports`;
+- `portfolio_class_targets`;
+- `portfolios`;
+- `system_configs`;
+- `users`.
 
-### Exportar e reimportar de forma controlada
+Essas tabelas contêm estrutura aplicada, identidade, configuração, preferências, trilha de auditoria ou histórico fiscal não integralmente regenerável.
 
-- carteiras;
-- transações de compra, venda, renda fixa e Tesouro;
-- lançamentos manuais não derivados;
-- vínculos de propriedade do usuário.
+### Exportar antes de qualquer limpeza
+
+- `corporate_events`;
+- `fixed_income_investments`;
+- `transactions`.
+
+Eventos corporativos podem conter estado aplicado e dados brutos; renda fixa contém condições contratuais; transações formam o livro-razão financeiro. Nenhuma delas pode ser perdida ou presumida como regenerável.
 
 ### Reconstruir
 
-- catálogo e aliases canônicos;
-- preços B3/COTAHIST;
-- catálogo e preços oficiais do Tesouro;
-- séries de benchmarks;
-- eventos e direitos de proventos materializados;
-- posições, custos médios e valuations derivados;
-- `PortfolioSnapshot` e `PortfolioClassSnapshot`;
-- relatórios de cobertura e reconciliação.
+- `asset_aliases`;
+- `asset_dividends`;
+- `asset_prices`;
+- `assets`;
+- `dividends`;
+- `dividends_sync_jobs`;
+- `fx_rates`;
+- `portfolio_class_snapshots`;
+- `portfolio_positions`;
+- `portfolio_snapshots`;
+- `rate_history`.
 
-A lista definitiva de tabelas deve ser gerada pelo dry-run a partir dos modelos e migrations atuais. Este documento não autoriza truncamento por nomes presumidos.
+Essas tabelas possuem fonte oficial, pipeline idempotente ou são projeções derivadas dos dados preservados/exportados.
+
+Qualquer tabela nova ou desconhecida permanece `unclassified`, faz o CLI retornar código diferente de zero e exige revisão arquitetural antes da limpeza.
 
 ## Artefatos obrigatórios
 
@@ -99,17 +117,19 @@ O backup deve incluir esquema e dados. A validação mínima exige:
 
 ### 4. Executar dry-run
 
+```powershell
+docker compose exec backend python -m app.cli.pre_prod_inventory
+```
+
 O dry-run não pode escrever nem excluir dados. Deve informar:
 
-- tabelas preservadas;
-- tabelas candidatas à limpeza;
+- classificação e justificativa por tabela;
 - contagens atuais por tabela;
-- dependências e ordem de limpeza;
 - ativos/aliases ambíguos;
 - preços órfãos;
 - snapshots inconsistentes;
-- estimativa de volume por pipeline;
-- comandos que seriam executados.
+- totais por política;
+- confirmação explícita de ausência de escrita.
 
 ### 5. Aprovar ou abortar
 
@@ -118,6 +138,7 @@ Abortar se ocorrer qualquer uma das condições:
 - backup não restaurável;
 - exportação da carteira divergente;
 - tabela de usuário/configuração classificada para limpeza;
+- qualquer tabela `unclassified`;
 - ativos não resolvidos sem tratamento explícito;
 - migrations pendentes;
 - dry-run com erro ou escrita detectada.
@@ -133,7 +154,7 @@ Ordem:
 1. catálogo e aliases;
 2. B3 COTAHIST;
 3. Tesouro oficial;
-4. benchmarks;
+4. benchmarks e câmbio;
 5. eventos e proventos;
 6. importação da carteira;
 7. posições e custos médios;
@@ -175,4 +196,4 @@ Uma segunda execução, sem novos dados externos ou transações, deve:
 
 ## Próximo bloco
 
-Implementar o comando de inventário e dry-run sem escrita, com saída JSON versionada e testes automatizados. Nenhuma limpeza deve ser implementada no mesmo commit.
+Gerar backup versionado por execução, checksum SHA-256 e teste de restauração em banco isolado. Nenhuma limpeza será autorizada até a restauração ser validada.
