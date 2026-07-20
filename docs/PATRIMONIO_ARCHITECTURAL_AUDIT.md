@@ -78,8 +78,8 @@ Exibe:
 - distribuição intradiária por classe;
 - concentração e top posições.
 
-Não oferece seleção histórica por classe e não consulta disponibilidade nem
-reconciliação.
+Oferece seleção histórica consolidada ou por classe e consulta disponibilidade.
+A reconciliação ainda não é apresentada na página.
 
 ### Hooks
 
@@ -90,13 +90,13 @@ primeiro estado de loading; os mensais preservam `undefined` durante a carga.
 ## Inconsistências encontradas
 
 1. ~~Contratos de resposta dos endpoints de performance não são estritos.~~ Resolvido com schemas versionados por fonte.
-2. A página Patrimônio não consome a fundação por classe já disponível.
+2. ~~A página Patrimônio não consome a fundação por classe já disponível.~~ Resolvido com seleção diária/mensal por classe.
 3. A reconciliação canônica existe no backend, mas não é observável na página.
 4. ~~O recorte mensal usa `months * 31`.~~ Resolvido com janela de meses-calendário compartilhada.
-5. Loading, erro e vazio da evolução consolidada possuem boundary uniforme; aguardando backfill e classe sem motor serão integrados com a seleção por classe.
+5. Loading, erro, vazio, aguardando backfill e classe sem motor possuem apresentação explícita na evolução.
 6. `frontend/src/services/portfolioService.ts` não possui consumidores e aponta
    para `/patrimonio-history`, endpoint inexistente.
-7. O catálogo de opções de classe está duplicado no frontend.
+7. ~~O catálogo de opções de classe está duplicado no frontend.~~ Resolvido com seletor compartilhado alimentado pela disponibilidade do backend.
 8. `return_is_estimated` é materializado como verdadeiro no motor atual e deve
    ser apresentado como qualidade, sem interpretação local.
 
@@ -106,7 +106,7 @@ primeiro estado de loading; os mensais preservam `undefined` durante a carga.
 2. ~~Remover o cliente legado comprovadamente sem consumidores.~~ Concluído.
 3. ~~Introduzir schemas Pydantic estritos sem alterar valores.~~ Concluído.
 4. ~~Tornar períodos e estados de consulta determinísticos.~~ Concluído.
-5. Criar apresentação reutilizável para evolução consolidada ou por classe.
+5. ~~Criar apresentação reutilizável para evolução consolidada ou por classe.~~ Concluído.
 6. Integrar seleção, disponibilidade, qualidade e reconciliação em Patrimônio.
 7. Validar a soma das classes somente quando o backend declarar comparabilidade.
 8. Sincronizar documentação e promover a Fase 3 por PR.
@@ -126,10 +126,20 @@ primeiro estado de loading; os mensais preservam `undefined` durante a carga.
 - Testes caracterizam isolamento por carteira e fonte `portfolio_class_snapshot`.
 - O mensal usa o último fechamento do período e compõe os TWRs diários.
 - Disponibilidade exige simultaneamente motor suportado e snapshot materializado.
-- Contratos estritos cobrem evolução consolidada e por classe, disponibilidade e reconciliação.\n- Fontes históricas, estados e campos de reconciliação são validados sem recomputar valores.\n- Janelas de 6, 12 e 24 meses começam no primeiro dia exato do mês inicial; `0` preserva todo o histórico.\n- Consolidado e classes usam a mesma função de fronteira mensal.\n- Loading, erro com retry, vazio real e sucesso são estados distintos na evolução.\n- Suíte backend disponível: 89 testes aprovados.\n- O router de performance possui teste de compilação do fonte após a correção do incidente de startup causado por escapes literais.
-- Suíte frontend disponível: 53 testes aprovados e typecheck focado válido.
+- Contratos estritos cobrem evolução consolidada e por classe, disponibilidade e reconciliação.
+- Fontes históricas, estados e campos de reconciliação são validados sem recomputar valores.
+- Janelas de 6, 12 e 24 meses começam no primeiro dia exato do mês inicial; `0` preserva todo o histórico.
+- Consolidado e classes usam a mesma função de fronteira mensal.
+- Loading, erro com retry, vazio real e sucesso são estados distintos na evolução.
+- Suíte backend disponível: 89 testes aprovados.
+- O router de performance possui teste de compilação do fonte após a correção do incidente de startup causado por escapes literais.
+- Seleção por classe usa exclusivamente os tipos informados pelo endpoint de disponibilidade.
+- Gráficos diário e mensal leem diretamente `market_value` e `cost_basis` dos contratos canônicos.
+- Classes sem motor ou sem backfill exibem o motivo do backend e não disparam consulta de série.
+- Suíte frontend disponível: 57 testes aprovados e dois typechecks focados válidos.
 - Nenhum workflow remoto foi disparado neste bloco.
 
 ## Próximo bloco recomendado
 
-Restaurar a seleção e os gráficos por classe na página Patrimônio, reutilizando\nos endpoints e estados canônicos existentes.
+Exibir patrimônio, custo, resultado, TWR, cobertura parcial e estimativa nos
+tooltips da evolução consolidada e por classe.
