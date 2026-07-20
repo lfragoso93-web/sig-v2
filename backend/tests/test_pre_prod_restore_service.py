@@ -19,7 +19,12 @@ def _artifacts(path: Path) -> None:
     dump = b"postgres-custom-dump"
     (path / "database.dump").write_bytes(dump)
     (path / "backup-report.json").write_text(
-        json.dumps({"sha256": hashlib.sha256(dump).hexdigest()}),
+        json.dumps(
+            {
+                "schema_version": "pre-prod-backup.v2",
+                "sha256": hashlib.sha256(dump).hexdigest(),
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -72,6 +77,22 @@ def test_restore_rejects_original_database(tmp_path: Path) -> None:
             artifact_directory=tmp_path,
             source_database_url="postgresql://user:secret@db:5432/sgi",
             target_database_url="postgresql://user:secret@db:5432/sgi",
+            runner=_runner,
+        )
+
+
+def test_restore_rejects_legacy_backup_contract(tmp_path: Path) -> None:
+    _artifacts(tmp_path)
+    report_path = tmp_path / "backup-report.json"
+    payload = json.loads(report_path.read_text(encoding="utf-8"))
+    payload["schema_version"] = "pre-prod-backup.v1"
+    report_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(BackupError, match="pre-prod-backup.v2"):
+        restore_postgres_backup(
+            artifact_directory=tmp_path,
+            source_database_url="postgresql://user:secret@db:5432/sgi",
+            target_database_url="postgresql://user:secret@db:5432/sgi_restore_test",
             runner=_runner,
         )
 
