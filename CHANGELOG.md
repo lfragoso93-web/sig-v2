@@ -5,6 +5,16 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — compatibilidade do backup PostgreSQL (20/07/2026)
+
+- Corrigida a imagem backend para executar `pg_dump`, `pg_restore` e `psql` do PostgreSQL 16, alinhados ao servidor.
+- O contrato evoluiu para `pre-prod-backup.v2` e registra os majors do cliente e do servidor.
+- O backup aborta antes do dump quando os majors divergem.
+- O restore recusa archives v1 que podem conter parâmetros incompatíveis, como `transaction_timeout`.
+- Testes cobrem incompatibilidade de major e rejeição do contrato legado.
+- A tentativa real v1 abortou de forma segura dentro da transação isolada, com zero escritas na origem e sem limpeza ou rebuild.
+
+
 ### Corrigido — auditoria de dependências da PR #184 (20/07/2026)
 
 - `brace-expansion` transitivo foi atualizado de 5.0.6 para 5.0.7, corrigindo `GHSA-3jxr-9vmj-r5cp`.
