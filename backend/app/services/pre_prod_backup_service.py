@@ -69,7 +69,7 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _redacted_command(command: Sequence[str]) -> str:
+def redacted_command(command: Sequence[str]) -> str:
     redacted: list[str] = []
     hide_next = False
     for value in command:
@@ -86,7 +86,7 @@ def _redacted_command(command: Sequence[str]) -> str:
     return " ".join(redacted)
 
 
-def _run_checked(
+def run_checked(
     command: Sequence[str],
     *,
     runner: Runner,
@@ -111,9 +111,9 @@ def _run_checked(
     if completed.returncode != 0:
         stderr = (completed.stderr or "").strip()
         raise BackupError(
-            f"comando falhou ({completed.returncode}): {_redacted_command(command)}; {stderr}"
+            f"comando falhou ({completed.returncode}): {redacted_command(command)}; {stderr}"
         )
-    return CommandResult(_redacted_command(command), completed.returncode)
+    return CommandResult(redacted_command(command), completed.returncode)
 
 
 def write_json(path: Path, payload: dict[str, object]) -> None:
@@ -147,7 +147,7 @@ def create_postgres_backup(
     write_json(inventory_path, inventory)
 
     commands = [
-        _run_checked(
+        run_checked(
             [
                 "pg_dump",
                 "--format=custom",
@@ -165,7 +165,7 @@ def create_postgres_backup(
         raise BackupError("pg_dump terminou sem produzir um arquivo não vazio")
 
     commands.append(
-        _run_checked(
+        run_checked(
             ["pg_restore", "--list", str(dump_path)],
             runner=runner,
             stdout_path=contents_path,
