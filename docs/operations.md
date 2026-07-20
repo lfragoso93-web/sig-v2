@@ -49,6 +49,80 @@ O CLI retorna código diferente de zero quando existe achado bloqueador ou tabel
 
 ---
 
+## Backup validado e restauração isolada — Issue #183
+
+Pré-requisitos:
+
+- executar somente na branch `stable-15jun`;
+- congelar importações e escritas concorrentes durante o ciclo;
+- confirmar que o inventário v2 da origem não possui bloqueios;
+- nunca reutilizar um banco de restauração;
+- não executar limpeza nem rebuild neste bloco.
+
+O backend persiste os artefatos em `./artifacts/pre-prod-rebuild/<run-id>/`.
+No PowerShell:
+
+```powershell
+$RunId = Get-Date -Format "yyyyMMdd-HHmmss"
+$CommitSha = (git rev-parse stable-15jun).Trim()
+
+docker compose exec `
+    -e "PRE_PROD_BRANCH=stable-15jun" `
+    -e "PRE_PROD_COMMIT_SHA=$CommitSha" `
+    backend python -m app.cli.pre_prod_backup --run-id $RunId
+```
+
+O backup só termina com código zero quando:
+
+- `pg_dump` gera um arquivo custom não vazio;
+- `pg_restore --list` consegue inspecionar o dump;
+- o checksum SHA-256 é registrado;
+- o inventário da origem usa `pre-prod-inventory.v2` sem bloqueios;
+- branch e SHA completo estão registrados;
+- nenhuma escrita é executada na origem.
+
+Crie um banco vazio e exclusivo para a restauração. O exemplo abaixo usa o mesmo
+cluster PostgreSQL, mas um banco logicamente isolado:
+
+```powershell
+$DbUser = if ($env:POSTGRES_USER) { $env:POSTGRES_USER } else { "sgi" }
+$DbPassword = if ($env:POSTGRES_PASSWORD) { $env:POSTGRES_PASSWORD } else { "sgi" }
+$RestoreDb = "sgi_restore_$($RunId -replace '-', '_')"
+
+docker compose exec db createdb --username $DbUser $RestoreDb
+
+$RestoreUrl = "postgresql://$DbUser`:$DbPassword@db:5432/$RestoreDb"
+$ArtifactDir = "/app/artifacts/pre-prod-rebuild/$RunId"
+
+docker compose exec `
+    -e "PRE_PROD_RESTORE_DATABASE_URL=$RestoreUrl" `
+    backend python -m app.cli.pre_prod_restore `
+    $ArtifactDir --confirm-isolated-target
+```
+
+Se usuário ou senha possuírem caracteres reservados de URL, codifique-os antes de
+montar `$RestoreUrl`.
+
+O restore é recusado quando o destino coincide com a origem, usa o mesmo nome de
+banco, contém qualquer tabela ou diverge do checksum. A aplicação usa
+`pg_restore --single-transaction --exit-on-error`.
+
+Aprovar somente quando `reconciliation-report.json` apresentar:
+
+- `ok=true`;
+- contratos de origem e restauração iguais a `pre-prod-inventory.v2`;
+- migrations idênticas;
+- nenhuma tabela ausente ou inesperada;
+- nenhuma divergência de classificação, contagem ou achado;
+- zero tabelas não classificadas e zero achados bloqueantes;
+- `source_database_writes_executed=0`;
+- `cleanup_executed=false` e `rebuild_executed=false`.
+
+Não remova o banco isolado nem altere a origem até os artefatos serem revisados e
+anexados à Issue #183.
+
+---
+
 ## Rebuild completo de mercado
 
 Comando oficial:
