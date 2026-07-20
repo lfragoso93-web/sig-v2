@@ -81,7 +81,8 @@ Ela deve conter:
 - `database.dump` em formato custom;
 - `database.dump.sha256`;
 - `database.contents.txt`;
-- `backup-report.json`;
+- `pg-client-version.txt` e `source-server-version.txt`;
+- `backup-report.json` no contrato `pre-prod-backup.v2`;
 - `origin-inventory.json`;
 - `restored-inventory.json`;
 - `origin-migrations.txt` e `restored-migrations.txt`;
@@ -120,6 +121,7 @@ O procedimento completo, com variáveis e criação do banco isolado, está em
 
 A validação mínima exige:
 
+- major do `pg_dump` idêntico ao major do servidor PostgreSQL;
 - `pg_dump` concluído com código zero;
 - arquivo custom não vazio;
 - checksum SHA-256 registrado e revalidado antes do restore;
@@ -133,6 +135,9 @@ A validação mínima exige:
 
 Os CLIs não contêm limpeza nem rebuild canônico. A origem é consultada somente
 pelo inventário, `pg_dump` e leitura da versão de migration.
+
+Backups `pre-prod-backup.v1` são recusados pelo restore. Uma execução abortada por
+incompatibilidade de versão exige novo `run_id`, novo dump v2 e novo banco vazio.
 
 ### 3. Exportar a carteira
 
