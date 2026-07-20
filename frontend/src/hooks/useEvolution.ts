@@ -60,22 +60,6 @@ export interface ClassTwrAvailability {
   reason: string | null
 }
 
-export interface ClassReconciliation {
-  is_reconciled: boolean | null
-  is_comparable: boolean
-  status: string
-  unsupported_asset_types: string[]
-  snapshot_date: string | null
-  checks: Array<{
-    field: string
-    expected: number
-    observed: number
-    difference: number
-    tolerance: number
-    is_reconciled: boolean
-  }>
-}
-
 export type PeriodOption = '6m' | '12m' | '24m' | 'all'
 
 export const PERIOD_DAYS: Record<PeriodOption, number> = {
@@ -172,14 +156,3 @@ export function useClassTwrAvailability(portfolioId: number | null) {
   })
 }
 
-export function useClassReconciliation(portfolioId: number | null) {
-  return useQuery<ClassReconciliation>({
-    queryKey: ['class-twr-reconciliation', portfolioId],
-    queryFn: () =>
-      api
-        .get(`/performance/${portfolioId}/classes/reconciliation/latest`)
-        .then(r => r.data),
-    enabled: !!portfolioId,
-    staleTime: 5 * 60 * 1000,
-  })
-}
