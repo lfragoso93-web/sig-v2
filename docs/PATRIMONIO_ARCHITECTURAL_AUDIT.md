@@ -88,8 +88,11 @@ Estados sem data/base comparável permanecem neutros e não são convertidos em 
 
 `useEvolution.ts` concentra as séries consolidadas, por classe e disponibilidade.
 `useReconciliation.ts` valida estritamente os contratos de reconciliação de
-fechamento e intradiária antes de expô-los à página. Nenhum hook usa
-`placeholderData` para ocultar a primeira carga.
+fechamento e intradiária antes de expô-los à página. Nenhum hook patrimonial usa
+`placeholderData` para ocultar a primeira carga. Os clientes órfãos
+`portfolioService.ts` e `usePerformance.ts` foram removidos após busca sem
+consumidores; suas rotas inexistentes `/patrimonio-history` e `/equity-history`
+não permanecem no frontend.
 
 ## Inconsistências encontradas
 
@@ -111,7 +114,7 @@ fechamento e intradiária antes de expô-los à página. Nenhum hook usa
 5. ~~Criar apresentação reutilizável para evolução consolidada ou por classe.~~ Concluído.
 6. ~~Integrar seleção, disponibilidade e qualidade em Patrimônio.~~ Concluído.
 7. ~~Validar a soma das classes somente quando o backend declarar comparabilidade.~~ Concluído.
-8. Sincronizar documentação e promover a Fase 3 por PR.
+8. ~~Sincronizar documentação e promover a Fase 3 por PR.~~ Documentação sincronizada; PR estrutural é a ação final.
 
 ## Fora do escopo
 
@@ -123,7 +126,7 @@ fechamento e intradiária antes de expô-los à página. Nenhum hook usa
 
 ## Evidências do bloco inicial
 
-- Cliente `portfolioService.ts` removido; nenhuma referência ou consumidor foi encontrado.
+- Clientes `portfolioService.ts` e `usePerformance.ts` removidos; nenhuma referência ou consumidor foi encontrado.
 - Rota frontend obsoleta `/patrimonio-history` eliminada com o cliente.
 - Testes caracterizam isolamento por carteira e fonte `portfolio_class_snapshot`.
 - O mensal usa o último fechamento do período e compõe os TWRs diários.
@@ -144,8 +147,10 @@ fechamento e intradiária antes de expô-los à página. Nenhum hook usa
 - Testes de regressão impedem a comparação monetária entre valuation intradiário e snapshot fechado.
 - O painel apresenta somente diferenças e estados calculados pelo backend; não há reconciliação financeira local.
 - Nenhum workflow remoto foi disparado neste bloco.
+- `stable-15jun` estava 46 commits à frente e 0 atrás da `main` antes dos commits documentais finais.
+- README, ROADMAP e CHANGELOG foram sincronizados em commits independentes.
 
 ## Próximo bloco recomendado
 
-Executar as suítes finais da Fase 3, revisar consumidores legados remanescentes,
-sincronizar README, ROADMAP e CHANGELOG e abrir a PR estrutural para `main`.
+Promover a Fase 3 pela PR estrutural `stable-15jun` → `main` e iniciar a
+Issue #149 somente após o merge.
