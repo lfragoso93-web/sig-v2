@@ -11,6 +11,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import re
 import sys
 
 from app.core.config import settings
@@ -53,6 +54,8 @@ async def _main(arguments: argparse.Namespace) -> int:
         raise BackupError("backup pré-produção deve executar na branch stable-15jun")
     if not arguments.commit_sha:
         raise BackupError("informe --commit-sha ou PRE_PROD_COMMIT_SHA")
+    if not re.fullmatch(r"[0-9a-fA-F]{40}", arguments.commit_sha):
+        raise BackupError("commit SHA deve conter exatamente 40 caracteres hexadecimais")
 
     inventory = await build_pre_prod_inventory()
     if inventory.totals["blocking_findings"] or inventory.totals["unclassified_tables"]:
