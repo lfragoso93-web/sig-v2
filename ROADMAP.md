@@ -19,8 +19,8 @@
 | Página Resumo | Concluída e promovida pela PR #164 | 100% |
 | Página Patrimônio | Fase 3 concluída na `stable-15jun`; promoção pendente | 100% |
 | Página Rentabilidade | Contratos concluídos | 95% |
-| Dependências | Auditoria parcial, pendências mapeadas | 80% |
-| Rebuild pré-produção | Planejado e bloqueador do go-live | 10% |
+| Dependências | Auditoria concluída; incompatibilidade TS7 corrigida | 100% |
+| Rebuild pré-produção | Runbook e inventário read-only implementados | 30% |
 | Eventos corporativos | Fundação pronta | 30% |
 | IRPF | Planejado | 15% |
 | Backup/Restore | Planejado | 10% |
@@ -41,9 +41,7 @@
 
 - Catálogo canônico persistido.
 - RendA+ e Educa+ normalizados pelo ano comercial.
-- BRAPI como fonte primária de preço recente.
-- Tesouro Transparente como fallback oficial.
-- Último preço persistido como contingência.
+- Fonte primária de preço recente, fallback oficial e último preço persistido.
 - Resolução case-insensitive de ticker e alias.
 - Preço associado ao ticker original da posição.
 - Criação automática de ativos duplicados bloqueada.
@@ -61,39 +59,6 @@ A reconstrução limpa do catálogo, históricos e carteira ficou reservada para
 
 ## Em desenvolvimento
 
-### Página Resumo — #161
-
-- [x] Mapear contratos, endpoints e divergências arquiteturais.
-- [x] Revisar KPIs atuais e sinal de retorno negativo.
-- [x] Garantir distinção entre variação diária e rentabilidade acumulada.
-- [x] Revisar dropdowns e overflow das tabelas.
-- [x] Padronizar cards com a página Patrimônio.
-- [x] Corrigir e validar o gráfico divergente (#147).
-- [x] Executar suítes finais, consolidar evidências e promover pela PR #164.
-
-### Proventos — #165
-
-- [x] Preservar as entregas funcionais das Issues #92 e #95.
-- [x] Mapear arquitetura, contratos, duplicidades e riscos atuais.
-- [x] Adicionar testes de caracterização antes de alterar comportamento.
-- [x] Unificar contratos e filtros de resumo, lista, histórico e distribuição.
-- [x] Separar leitura de materialização e centralizar elegibilidade.
-- [x] Consolidar coleta e scheduler após validar consumidores.
-- [x] Validar seed, coleta e materialização de ações, FIIs, ETFs e BDRs.
-- [x] Revisar API, frontend, gráficos, tabelas e indicadores.
-- [x] Implementar tooltip mensal por classe (#131).
-- [x] Validar suítes backend/frontend e sincronizar a documentação viva.
-- [x] Promover a Fase 2 para a `main` pela PR #166.
-
-### Patrimônio — #148
-
-- [x] Restaurar gráficos históricos consolidados e por classe.
-- [x] Padronizar períodos, estados de consulta e tooltips canônicos.
-- [x] Exibir cobertura parcial e retorno estimado sem cálculo paralelo.
-- [x] Reconciliar consolidado × classes somente na mesma data.
-- [x] Reconciliar consumidores do valuation intradiário sem comparar com o fechamento.
-- [x] Remover clientes legados sem consumidores e endpoints frontend obsoletos.
-
 ### Rentabilidade
 
 - [ ] Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
@@ -102,25 +67,20 @@ A reconstrução limpa do catálogo, históricos e carteira ficou reservada para
 
 ### Dependabot — #159
 
-Integrado e validado na `stable-15jun`:
+- [x] Auditoria concluída e Issue #159 encerrada.
+- [x] Atualizações compatíveis integradas em blocos isolados.
+- [x] TypeScript 7 revertido para 6.0.3 após incompatibilidade com `typescript-eslint@8.64.0` (#182).
+- [x] Build Docker do frontend confirmado pelo usuário.
 
-- [x] react-hook-form 7.81.0.
-- [x] Recharts 3.9.2.
-- [x] aiosqlite 0.22.1.
-- [x] Uvicorn 0.51.0.
-- [x] redis-py 8.0.1.
+### Pré-produção — #158 / #176
 
-Pendente de validação isolada:
-
-- [ ] #146 — build-tools, incluindo TypeScript 7.0.2.
-- [ ] #138 — ESLint e typescript-eslint.
-- [ ] #137 — httpx 0.28.1.
-- [ ] #133 — mypy 2.2.0.
-
-### Pré-produção — #158
-
+- [x] Runbook operacional com classificação de dados e critérios de abortar.
+- [x] Serviço read-only de inventário com contrato `pre-prod-inventory.v1`.
+- [x] CLI `python -m app.cli.pre_prod_inventory`.
+- [x] Testes que bloqueiam verbos SQL de escrita durante o inventário.
+- [ ] Executar o inventário no PostgreSQL real e anexar o JSON à Issue #176.
 - [ ] Backup e teste de restauração.
-- [ ] Dry-run da limpeza.
+- [ ] Dry-run da limpeza com relatório de impacto.
 - [ ] Limpeza de dados reconstruíveis.
 - [ ] Seed B3 COTAHIST.
 - [ ] Seed oficial do Tesouro Direto.
@@ -131,17 +91,17 @@ Pendente de validação isolada:
 
 ## Próximas prioridades
 
-1. Implementar TWR dedicado de Tesouro e Renda Fixa (#149).
-2. Materializar IBOV (#150).
-3. Remover rentabilidade legada (#151).
-4. Validar Dependabot pendente (#159).
-5. Executar rebuild limpo antes do go-live (#158).
+1. Validar o inventário pré-produção no PostgreSQL e revisar tabelas não classificadas (#176).
+2. Preparar backup e teste de restauração (#158).
+3. Implementar TWR dedicado de Tesouro e Renda Fixa (#149).
+4. Materializar IBOV (#150).
+5. Remover rentabilidade legada (#151).
 
 ## Backlog
 
 - Eventos corporativos — #129.
 - Evolução da integração de dados de mercado — #130.
-- Backup/Restore — #83.
+- Backup/Restore administrativo — #83.
 - Google OAuth — #97.
 - IRPF — #56.
 - Análise de Carteira — #57.
