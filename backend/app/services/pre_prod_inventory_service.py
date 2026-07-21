@@ -319,8 +319,15 @@ async def _canonical_findings(
 
 async def build_pre_prod_inventory(
     session: AsyncSession | None = None,
+    *,
+    rollback_supplied_session: bool = True,
 ) -> PreProdInventoryReport:
-    """Gera inventário read-only e devolve um relatório JSON serializável."""
+    """Gera inventário read-only e devolve um relatório JSON serializável.
+
+    O chamador pode manter uma transação read-only fornecida aberta para compartilhar
+    o mesmo snapshot com outra ferramenta PostgreSQL. Sessões criadas pelo serviço
+    continuam sempre encerradas por rollback.
+    """
     owns_session = session is None
     active_session = session or AsyncSessionLocal()
 
@@ -377,6 +384,7 @@ async def build_pre_prod_inventory(
             },
         )
     finally:
-        await active_session.rollback()
+        if owns_session or rollback_supplied_session:
+            await active_session.rollback()
         if owns_session:
             await active_session.close()
