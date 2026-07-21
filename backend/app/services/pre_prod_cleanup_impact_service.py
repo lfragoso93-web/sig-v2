@@ -41,7 +41,9 @@ async def build_pre_prod_cleanup_impact(
             f"{inventory.schema_version!r}"
         )
 
-    tables = [CleanupImpactTable.from_inventory(table) for table in inventory.tables]
+    tables = [
+        CleanupImpactTable.from_inventory(table) for table in inventory.tables
+    ]
     blockers = sorted(table.name for table in tables if table.blocked)
 
     return PreProdCleanupImpactReport(
