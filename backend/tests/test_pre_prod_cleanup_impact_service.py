@@ -9,7 +9,15 @@ from app.services.pre_prod_cleanup_impact_service import (
 )
 
 
-_WRITE_VERBS = {"INSERT", "UPDATE", "DELETE", "TRUNCATE", "DROP", "ALTER", "CREATE"}
+_WRITE_VERBS = {
+    "INSERT",
+    "UPDATE",
+    "DELETE",
+    "TRUNCATE",
+    "DROP",
+    "ALTER",
+    "CREATE",
+}
 
 
 @pytest.mark.asyncio
