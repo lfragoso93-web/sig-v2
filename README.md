@@ -26,7 +26,7 @@ O SGI v2 opera com arquitetura **DB-first**: catálogo, preços, taxas, provento
 - Fase 3 de Patrimônio concluída sob a Issue #148: históricos consolidados e por classe, períodos determinísticos, tooltips canônicos e reconciliações observáveis por base temporal.
 - Valuation intradiário reconciliado entre `summary.v2`, posições e distribuição; snapshots consolidados reconciliados com classes somente na mesma data.
 - Inventário pré-produção read-only validado no PostgreSQL real, com 24 tabelas, 4.671.361 registros, zero inconsistências canônicas e política completa de classificação no contrato `pre-prod-inventory.v2`.
-- CLIs `pre_prod_backup` e `pre_prod_restore` implementados com contrato `pre-prod-backup.v3`, paridade obrigatória entre cliente e servidor PostgreSQL 16, snapshot único `REPEATABLE READ READ ONLY` para inventário e dump, SHA-256, restauração transacional em banco vazio e isolado e reconciliação integral. O ciclo v2 restaurou com segurança, mas revelou 998 preços coletados entre snapshots distintos; a validação real v3 da Issue #183 está pendente.
+- Backup `pre-prod-backup.v3` validado no PostgreSQL real com cliente/servidor 16/16, snapshot único `REPEATABLE READ READ ONLY`, dump de 41.819.289 bytes, SHA-256, restauração em banco vazio e isolado e reconciliação `ok=true`, sem divergências e com zero escritas na origem. A Issue #183 foi concluída e a PR #184 promovida para a `main`.
 
 ### Tesouro Direto — Blocos 3.1 e 3.2
 
@@ -78,30 +78,31 @@ python -m app.cli.rebuild_treasury_official_prices
 
 ## Prioridades atuais
 
-1. Executar e validar backup/restauração isolada no PostgreSQL real (#183).
-2. Somente após encerrar #183, preparar o dry-run de limpeza da #158.
+1. Implementar e validar o dry-run read-only da limpeza e o relatório de impacto (#185).
+2. Somente após concluir #185, preparar a exportação controlada das tabelas exportáveis da #158.
 3. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
 4. Materializar o histórico persistido do IBOV (#150).
 5. Remover o serviço legado de rentabilidade (#151).
 
 ## Dependências
 
-A auditoria Dependabot da Issue #159 foi concluída. Atualizações compatíveis foram incorporadas à `stable-15jun` em blocos isolados. A incompatibilidade entre TypeScript 7 e `typescript-eslint@8.64.0` foi corrigida pela Issue #182, mantendo resolução estrita de peer dependencies.
+A auditoria Dependabot da Issue #159 foi concluída. Atualizações compatíveis foram incorporadas à `stable-15jun` em blocos isolados. A incompatibilidade entre TypeScript 7 e `typescript-eslint@8.64.0` foi corrigida pela Issue #182, mantendo resolução estrita de peer dependencies. Não há PR Dependabot aberta após o merge da PR #184.
 
 ## Pré-produção
 
 A primeira entrada em produção exige:
 
 1. inventário read-only aprovado e sem tabelas desconhecidas;
-2. backup validado com checksum e restauração isolada — CLIs implementados; execução real da #183 pendente;
-3. exportação controlada das transações, renda fixa e eventos corporativos;
-4. limpeza controlada de dados reconstruíveis;
-5. seed B3 COTAHIST;
-6. seed oficial do Tesouro Direto;
-7. seed de benchmarks, câmbio e proventos;
-8. importação CSV completa da carteira;
-9. rebuild de posições e snapshots;
-10. reconciliação financeira e auditoria de cobertura.
+2. backup validado com checksum e restauração isolada — concluído pela Issue #183;
+3. dry-run read-only da limpeza e relatório de impacto — Issue #185;
+4. exportação controlada das transações, renda fixa e eventos corporativos;
+5. limpeza controlada de dados reconstruíveis;
+6. seed B3 COTAHIST;
+7. seed oficial do Tesouro Direto;
+8. seed de benchmarks, câmbio e proventos;
+9. importação CSV completa da carteira;
+10. rebuild de posições e snapshots;
+11. reconciliação financeira e auditoria de cobertura.
 
 Checklist completo: issue #158. Runbook operacional: `docs/PRE_PROD_REBUILD_RUNBOOK.md`.
 
