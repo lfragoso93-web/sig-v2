@@ -11,7 +11,7 @@ import subprocess
 from typing import Callable, Sequence
 
 
-BACKUP_REPORT_SCHEMA_VERSION = "pre-prod-backup.v2"
+BACKUP_REPORT_SCHEMA_VERSION = "pre-prod-backup.v3"
 DEFAULT_ARTIFACT_ROOT = Path("artifacts/pre-prod-rebuild")
 
 
@@ -35,6 +35,7 @@ class BackupReport:
     commit_sha: str
     pg_dump_major: int
     server_major: int
+    consistent_snapshot: bool
     dump_file: str
     dump_size_bytes: int
     sha256: str
@@ -146,6 +147,7 @@ def create_postgres_backup(
     inventory: dict[str, object],
     branch: str,
     commit_sha: str,
+    snapshot_id: str,
     artifact_root: Path = DEFAULT_ARTIFACT_ROOT,
     run_id: str | None = None,
     runner: Runner = subprocess.run,
@@ -153,6 +155,8 @@ def create_postgres_backup(
     """Cria dump custom, listagem, checksum e manifesto sem escrever na origem."""
     if not database_url.startswith(("postgresql://", "postgres://")):
         raise BackupError("pre_prod_backup aceita somente uma DATABASE_URL PostgreSQL síncrona")
+    if not snapshot_id.strip():
+        raise BackupError("snapshot PostgreSQL exportado é obrigatório")
 
     directory = create_run_directory(artifact_root, run_id)
     dump_path = directory / "database.dump"
@@ -208,6 +212,8 @@ def create_postgres_backup(
                 "--format=custom",
                 "--no-owner",
                 "--no-privileges",
+                "--snapshot",
+                snapshot_id,
                 "--file",
                 str(dump_path),
                 "--dbname",
@@ -243,6 +249,7 @@ def create_postgres_backup(
         commit_sha=commit_sha,
         pg_dump_major=pg_dump_major,
         server_major=server_major,
+        consistent_snapshot=True,
         dump_file=dump_path.name,
         dump_size_bytes=dump_path.stat().st_size,
         sha256=checksum,
