@@ -1,6 +1,6 @@
 # Roadmap modular — SGI v2
 
-> Última atualização: 20/07/2026
+> Última atualização: 21/07/2026
 
 ## Visão geral
 
@@ -21,7 +21,7 @@
 | Página Rentabilidade | Contratos concluídos | 95% |
 | Dependências | Auditoria concluída; incompatibilidade TS7 corrigida | 100% |
 | Rebuild pré-produção | Backup/restore implementados; validação real pendente | 55% |
-| Backup/Restore pré-produção | CLIs e reconciliação implementados (#183) | 80% |
+| Backup/Restore pré-produção | Snapshot consistente v3 implementado; revalidação real pendente (#183) | 85% |
 | Eventos corporativos | Fundação pronta | 30% |
 | IRPF | Planejado | 15% |
 | Backup/Restore administrativo | Planejado (#83) | 10% |
@@ -82,11 +82,12 @@ A reconstrução limpa do catálogo, históricos e carteira ficou reservada para
 - [x] Inventário executado no PostgreSQL real: 24 tabelas, 4.671.361 registros e zero inconsistências canônicas.
 - [x] Política completa para tabelas preservadas, exportáveis e reconstruíveis; nenhuma tabela conhecida permanece sem classificação.
 - [x] Issue #176 concluída após validação integral do inventário v2.
-- [x] CLI de backup v2 com pg_dump PostgreSQL 16, paridade de major, listagem, SHA-256 e manifesto por execução.
+- [x] CLI de backup v3 com pg_dump PostgreSQL 16, paridade de major, snapshot único com o inventário, listagem, SHA-256 e manifesto por execução.
 - [x] CLI de restauração com checksum, destino vazio/diferente e transação única.
 - [x] Inventário v2 da restauração e reconciliação de migrations, tabelas, contagens e achados.
 - [x] Confirmar aborto seguro da tentativa v1 incompatível, sem escrita na origem.
-- [ ] Reexecutar backup/restore v2 no PostgreSQL real e anexar a reconciliação aprovada à Issue #183.
+- [x] Restaurar o backup v2 no banco isolado e diagnosticar divergência temporal de 998 linhas em `asset_prices`, sem escrita na origem.
+- [ ] Reexecutar backup/restore v3 no PostgreSQL real e anexar a reconciliação aprovada à Issue #183.
 - [ ] Dry-run da limpeza com relatório de impacto.
 - [ ] Limpeza de dados reconstruíveis.
 - [ ] Seed B3 COTAHIST.
