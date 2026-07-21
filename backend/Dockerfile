@@ -1,3 +1,7 @@
+# ---- PostgreSQL 16 client stage ----
+# Keep dump/restore binaries on the same major as the PostgreSQL server.
+FROM postgres:16-bookworm AS postgres-client
+
 # ---- deps stage ----
 FROM python:3.12-slim AS deps
 
@@ -25,9 +29,15 @@ RUN apt-get update \
     && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
         libpq5 \
+        postgresql-client \
         curl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# Sobrescreve os clientes genéricos da distribuição com PostgreSQL 16.
+COPY --from=postgres-client /usr/lib/postgresql/16/bin/pg_dump /usr/local/bin/pg_dump
+COPY --from=postgres-client /usr/lib/postgresql/16/bin/pg_restore /usr/local/bin/pg_restore
+COPY --from=postgres-client /usr/lib/postgresql/16/bin/psql /usr/local/bin/psql
 
 COPY --from=deps /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=deps /usr/local/bin /usr/local/bin

@@ -4,7 +4,7 @@ Plataforma pessoal para acompanhamento, consolidação e análise de investiment
 
 A branch padrão de desenvolvimento é `stable-15jun`. A promoção para `main` ocorre por PR após validação e atualização da documentação viva.
 
-## Status atual — 20/07/2026
+## Status atual — 21/07/2026
 
 O SGI v2 opera com arquitetura **DB-first**: catálogo, preços, taxas, proventos e snapshots são persistidos antes de alimentar KPIs, páginas e gráficos.
 
@@ -25,6 +25,8 @@ O SGI v2 opera com arquitetura **DB-first**: catálogo, preços, taxas, provento
 - Histórico mensal de proventos reconciliado por classe, com detalhamento acessível por mouse, teclado e toque.
 - Fase 3 de Patrimônio concluída sob a Issue #148: históricos consolidados e por classe, períodos determinísticos, tooltips canônicos e reconciliações observáveis por base temporal.
 - Valuation intradiário reconciliado entre `summary.v2`, posições e distribuição; snapshots consolidados reconciliados com classes somente na mesma data.
+- Inventário pré-produção read-only validado no PostgreSQL real, com 24 tabelas, 4.671.361 registros, zero inconsistências canônicas e política completa de classificação no contrato `pre-prod-inventory.v2`.
+- CLIs `pre_prod_backup` e `pre_prod_restore` implementados com contrato `pre-prod-backup.v3`, paridade obrigatória entre cliente e servidor PostgreSQL 16, snapshot único `REPEATABLE READ READ ONLY` para inventário e dump, SHA-256, restauração transacional em banco vazio e isolado e reconciliação integral. O ciclo v2 restaurou com segurança, mas revelou 998 preços coletados entre snapshots distintos; a validação real v3 da Issue #183 está pendente.
 
 ### Tesouro Direto — Blocos 3.1 e 3.2
 
@@ -67,6 +69,7 @@ Princípios: DB-first, fonte oficial primeiro, idempotência, ausência não con
 ## Comandos operacionais
 
 ```bash
+python -m app.cli.pre_prod_inventory
 python -m app.cli.full_market_rebuild
 python -m app.cli.rebuild_b3_historical_market
 python -m app.cli.sync_treasury_catalog_v2
@@ -75,38 +78,32 @@ python -m app.cli.rebuild_treasury_official_prices
 
 ## Prioridades atuais
 
-1. Rentabilidade: implementar TWR dedicado para Tesouro e Renda Fixa (#149).
-2. Materializar o histórico persistido do IBOV (#150).
-3. Remover o serviço legado de rentabilidade (#151).
-4. Validar dependências pendentes do Dependabot (#159).
-5. Executar rebuild limpo da base antes do go-live (#158).
+1. Executar e validar backup/restauração isolada no PostgreSQL real (#183).
+2. Somente após encerrar #183, preparar o dry-run de limpeza da #158.
+3. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
+4. Materializar o histórico persistido do IBOV (#150).
+5. Remover o serviço legado de rentabilidade (#151).
 
 ## Dependências
 
-Atualizações já auditadas e incorporadas à `stable-15jun`:
-
-- react-hook-form 7.81.0;
-- Recharts 3.9.2;
-- aiosqlite 0.22.1;
-- Uvicorn 0.51.0;
-- redis-py 8.0.1.
-
-Pendentes de validação isolada: build-tools/TypeScript 7, ESLint stack, httpx 0.28.1 e mypy 2.2.0. O acompanhamento oficial está na issue #159.
+A auditoria Dependabot da Issue #159 foi concluída. Atualizações compatíveis foram incorporadas à `stable-15jun` em blocos isolados. A incompatibilidade entre TypeScript 7 e `typescript-eslint@8.64.0` foi corrigida pela Issue #182, mantendo resolução estrita de peer dependencies.
 
 ## Pré-produção
 
 A primeira entrada em produção exige:
 
-1. backup validado;
-2. limpeza controlada de dados reconstruíveis;
-3. seed B3 COTAHIST;
-4. seed oficial do Tesouro Direto;
-5. seed de benchmarks e proventos;
-6. importação CSV completa da carteira;
-7. rebuild de posições e snapshots;
-8. reconciliação financeira e auditoria de cobertura.
+1. inventário read-only aprovado e sem tabelas desconhecidas;
+2. backup validado com checksum e restauração isolada — CLIs implementados; execução real da #183 pendente;
+3. exportação controlada das transações, renda fixa e eventos corporativos;
+4. limpeza controlada de dados reconstruíveis;
+5. seed B3 COTAHIST;
+6. seed oficial do Tesouro Direto;
+7. seed de benchmarks, câmbio e proventos;
+8. importação CSV completa da carteira;
+9. rebuild de posições e snapshots;
+10. reconciliação financeira e auditoria de cobertura.
 
-Checklist completo: issue #158.
+Checklist completo: issue #158. Runbook operacional: `docs/PRE_PROD_REBUILD_RUNBOOK.md`.
 
 ## Stack
 
@@ -129,6 +126,7 @@ docker compose up -d --build
 - `docs/architecture.md` — arquitetura DB-first.
 - `docs/providers.md` — fontes e fallbacks.
 - `docs/operations.md` — operação e rebuilds.
+- `docs/PRE_PROD_REBUILD_RUNBOOK.md` — política e sequência do rebuild pré-produção.
 - `docs/CANONICAL_FINANCIAL_CONTRACT.md` — contrato financeiro oficial.
 - `docs/RESUMO_ARCHITECTURAL_AUDIT.md` — matriz de contratos e divergências da página Resumo.
 - `docs/PROVENTOS_ARCHITECTURAL_AUDIT.md` — fluxo, contratos, riscos e sequência da Fase 2.

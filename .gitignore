@@ -45,3 +45,6 @@ Thumbs.db
 
 # Uploads temporários
 /backend/uploads/tmp/
+
+# Artefatos operacionais pré-produção
+/artifacts/pre-prod-rebuild/
