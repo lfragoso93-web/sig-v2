@@ -110,6 +110,25 @@ async def test_inventory_is_read_only_and_reports_canonical_findings() -> None:
     assert executed_verbs.isdisjoint(write_verbs)
 
 
+@pytest.mark.asyncio
+async def test_inventory_can_preserve_supplied_read_only_transaction() -> None:
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+
+    try:
+        async with session_factory() as session:
+            await session.begin()
+            await build_pre_prod_inventory(
+                session,
+                rollback_supplied_session=False,
+            )
+
+            assert session.in_transaction()
+            await session.rollback()
+    finally:
+        await engine.dispose()
+
+
 @pytest.mark.parametrize(
     ("table_name", "classification"),
     [
