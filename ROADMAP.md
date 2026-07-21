@@ -17,11 +17,12 @@
 | Snapshots por classe de mercado | Consolidado | 100% |
 | Proventos | Fase 2 concluída e promovida pela PR #166 | 100% |
 | Página Resumo | Concluída e promovida pela PR #164 | 100% |
-| Página Patrimônio | Fase 3 concluída na `stable-15jun`; promoção pendente | 100% |
+| Página Patrimônio | Fase 3 concluída e promovida pela PR #184 | 100% |
 | Página Rentabilidade | Contratos concluídos | 95% |
-| Dependências | Auditoria concluída; incompatibilidade TS7 corrigida | 100% |
-| Rebuild pré-produção | Backup/restore implementados; validação real pendente | 55% |
-| Backup/Restore pré-produção | Snapshot consistente v3 implementado; revalidação real pendente (#183) | 85% |
+| Dependências | Auditoria concluída; nenhuma PR aberta | 100% |
+| Rebuild pré-produção | Backup/restore validados; dry-run iniciado | 65% |
+| Backup/Restore pré-produção | Validação real v3 concluída (#183) | 100% |
+| Dry-run de limpeza | Planejado e rastreado pela Issue #185 | 10% |
 | Eventos corporativos | Fundação pronta | 30% |
 | IRPF | Planejado | 15% |
 | Backup/Restore administrativo | Planejado (#83) | 10% |
@@ -72,8 +73,9 @@ A reconstrução limpa do catálogo, históricos e carteira ficou reservada para
 - [x] Atualizações compatíveis integradas em blocos isolados.
 - [x] TypeScript 7 revertido para 6.0.3 após incompatibilidade com `typescript-eslint@8.64.0` (#182).
 - [x] Build Docker do frontend confirmado pelo usuário.
+- [x] Nenhuma PR Dependabot aberta após o merge da PR #184.
 
-### Pré-produção — #158 / #176 / #183
+### Pré-produção — #158 / #176 / #183 / #185
 
 - [x] Runbook operacional com classificação de dados e critérios de abortar.
 - [x] Serviço read-only de inventário com contrato `pre-prod-inventory.v2`.
@@ -87,8 +89,11 @@ A reconstrução limpa do catálogo, históricos e carteira ficou reservada para
 - [x] Inventário v2 da restauração e reconciliação de migrations, tabelas, contagens e achados.
 - [x] Confirmar aborto seguro da tentativa v1 incompatível, sem escrita na origem.
 - [x] Restaurar o backup v2 no banco isolado e diagnosticar divergência temporal de 998 linhas em `asset_prices`, sem escrita na origem.
-- [ ] Reexecutar backup/restore v3 no PostgreSQL real e anexar a reconciliação aprovada à Issue #183.
-- [ ] Dry-run da limpeza com relatório de impacto.
+- [x] Reexecutar backup/restore v3 no PostgreSQL real: snapshot consistente, reconciliação `ok=true` e zero escritas na origem.
+- [x] Encerrar a Issue #183 e promover a PR #184 para a `main`.
+- [ ] Implementar dry-run read-only da limpeza e relatório de impacto (#185).
+- [ ] Executar o dry-run no PostgreSQL real e anexar evidências de zero escrita.
+- [ ] Exportar dados das tabelas classificadas como exportáveis.
 - [ ] Limpeza de dados reconstruíveis.
 - [ ] Seed B3 COTAHIST.
 - [ ] Seed oficial do Tesouro Direto.
@@ -99,8 +104,8 @@ A reconstrução limpa do catálogo, históricos e carteira ficou reservada para
 
 ## Próximas prioridades
 
-1. Executar e validar o ciclo real de backup/restauração isolada (#183).
-2. Somente após encerrar #183, preparar o dry-run de limpeza (#158).
+1. Implementar e validar o dry-run read-only da limpeza (#185).
+2. Somente após encerrar #185, preparar a exportação controlada das tabelas exportáveis (#158).
 3. Implementar TWR dedicado de Tesouro e Renda Fixa (#149).
 4. Materializar IBOV (#150).
 5. Remover rentabilidade legada (#151).
