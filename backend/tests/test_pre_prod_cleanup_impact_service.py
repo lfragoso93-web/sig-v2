@@ -85,7 +85,10 @@ async def test_cleanup_impact_builds_from_inventory_without_writes() -> None:
     assert report.totals.blocked_tables == 0
     assert report.ok is True
     assert report.blockers == []
+    assert report.safety.read_only is True
     assert report.safety.writes_executed == 0
+    assert report.safety.cleanup_executed is False
+    assert report.safety.rebuild_executed is False
 
     executed_verbs = {
         statement.split(maxsplit=1)[0].upper()
