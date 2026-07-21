@@ -36,6 +36,7 @@ def test_backup_creates_exclusive_auditable_artifacts(tmp_path: Path) -> None:
         inventory={"schema_version": "pre-prod-inventory.v2"},
         branch="stable-15jun",
         commit_sha="abc123",
+        snapshot_id="00000003-0000001B-1",
         artifact_root=tmp_path,
         run_id="test-run",
         runner=_successful_runner,
@@ -52,7 +53,13 @@ def test_backup_creates_exclusive_auditable_artifacts(tmp_path: Path) -> None:
         "source-server-version.txt",
     }
     assert report.dump_size_bytes > 0
+    assert report.schema_version == "pre-prod-backup.v3"
     assert report.pg_dump_major == report.server_major == 16
+    assert report.consistent_snapshot is True
+    assert any(
+        "--snapshot 00000003-0000001B-1" in item.command
+        for item in report.commands
+    )
     assert len(report.sha256) == 64
     assert report.safety["source_database_writes_executed"] == 0
     assert "secret" not in " ".join(item.command for item in report.commands)
@@ -63,6 +70,7 @@ def test_backup_creates_exclusive_auditable_artifacts(tmp_path: Path) -> None:
             inventory={},
             branch="stable-15jun",
             commit_sha="abc123",
+            snapshot_id="00000003-0000001B-1",
             artifact_root=tmp_path,
             run_id="test-run",
             runner=_successful_runner,
@@ -76,6 +84,7 @@ def test_backup_rejects_non_postgresql_source(tmp_path: Path) -> None:
             inventory={},
             branch="stable-15jun",
             commit_sha="abc123",
+            snapshot_id="00000003-0000001B-1",
             artifact_root=tmp_path,
             runner=_successful_runner,
         )
@@ -99,6 +108,7 @@ def test_backup_aborts_when_pg_dump_does_not_create_file(tmp_path: Path) -> None
             inventory={},
             branch="stable-15jun",
             commit_sha="abc123",
+            snapshot_id="00000003-0000001B-1",
             artifact_root=tmp_path,
             run_id="empty-dump",
             runner=runner,
@@ -121,7 +131,21 @@ def test_backup_rejects_client_server_major_mismatch(tmp_path: Path) -> None:
             inventory={},
             branch="stable-15jun",
             commit_sha="abc123",
+            snapshot_id="00000003-0000001B-1",
             artifact_root=tmp_path,
             run_id="version-mismatch",
             runner=runner,
+        )
+
+
+def test_backup_requires_exported_snapshot(tmp_path: Path) -> None:
+    with pytest.raises(BackupError, match="snapshot PostgreSQL exportado"):
+        create_postgres_backup(
+            database_url="postgresql://user:secret@db:5432/sgi",
+            inventory={},
+            branch="stable-15jun",
+            commit_sha="abc123",
+            snapshot_id="",
+            artifact_root=tmp_path,
+            runner=_successful_runner,
         )
