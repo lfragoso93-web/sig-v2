@@ -137,4 +137,6 @@ async def test_cleanup_impact_blocks_unclassified_table() -> None:
     assert report.ok is False
     assert report.blockers == ["future_table"]
     assert report.totals.blocked_tables == 1
+    assert report.tables[0].classification == "unclassified"
     assert report.tables[0].proposed_action == "block"
+    assert report.tables[0].blocked is True
