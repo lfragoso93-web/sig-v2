@@ -14,7 +14,10 @@ from pathlib import Path
 import re
 import sys
 
+from sqlalchemy import text
+
 from app.core.config import settings
+from app.core.database import AsyncSessionLocal
 from app.services.pre_prod_backup_service import (
     BackupError,
     DEFAULT_ARTIFACT_ROOT,
@@ -57,18 +60,39 @@ async def _main(arguments: argparse.Namespace) -> int:
     if not re.fullmatch(r"[0-9a-fA-F]{40}", arguments.commit_sha):
         raise BackupError("commit SHA deve conter exatamente 40 caracteres hexadecimais")
 
-    inventory = await build_pre_prod_inventory()
-    if inventory.totals["blocking_findings"] or inventory.totals["unclassified_tables"]:
-        raise BackupError("inventário da origem possui bloqueios; backup operacional abortado")
+    async with AsyncSessionLocal() as snapshot_session:
+        await snapshot_session.execute(
+            text(
+                "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"
+            )
+        )
+        snapshot_result = await snapshot_session.execute(
+            text("SELECT pg_export_snapshot()")
+        )
+        snapshot_id = str(snapshot_result.scalar_one())
+        inventory = await build_pre_prod_inventory(
+            snapshot_session,
+            rollback_supplied_session=False,
+        )
+        if (
+            inventory.totals["blocking_findings"]
+            or inventory.totals["unclassified_tables"]
+        ):
+            raise BackupError(
+                "inventário da origem possui bloqueios; backup operacional abortado"
+            )
 
-    report = create_postgres_backup(
-        database_url=settings.DATABASE_URL,
-        inventory=inventory.to_dict(),
-        branch=arguments.branch,
-        commit_sha=arguments.commit_sha,
-        artifact_root=arguments.artifact_root,
-        run_id=arguments.run_id,
-    )
+        report = await asyncio.to_thread(
+            create_postgres_backup,
+            database_url=settings.DATABASE_URL,
+            inventory=inventory.to_dict(),
+            branch=arguments.branch,
+            commit_sha=arguments.commit_sha,
+            snapshot_id=snapshot_id,
+            artifact_root=arguments.artifact_root,
+            run_id=arguments.run_id,
+        )
+        await snapshot_session.rollback()
     print(json.dumps(report.to_dict(), ensure_ascii=False, indent=2))
     return 0
 
