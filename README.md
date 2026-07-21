@@ -4,7 +4,7 @@ Plataforma pessoal para acompanhamento, consolidação e análise de investiment
 
 A branch padrão de desenvolvimento é `stable-15jun`. A promoção para `main` ocorre por PR após validação e atualização da documentação viva.
 
-## Status atual — 20/07/2026
+## Status atual — 21/07/2026
 
 O SGI v2 opera com arquitetura **DB-first**: catálogo, preços, taxas, proventos e snapshots são persistidos antes de alimentar KPIs, páginas e gráficos.
 
@@ -26,7 +26,7 @@ O SGI v2 opera com arquitetura **DB-first**: catálogo, preços, taxas, provento
 - Fase 3 de Patrimônio concluída sob a Issue #148: históricos consolidados e por classe, períodos determinísticos, tooltips canônicos e reconciliações observáveis por base temporal.
 - Valuation intradiário reconciliado entre `summary.v2`, posições e distribuição; snapshots consolidados reconciliados com classes somente na mesma data.
 - Inventário pré-produção read-only validado no PostgreSQL real, com 24 tabelas, 4.671.361 registros, zero inconsistências canônicas e política completa de classificação no contrato `pre-prod-inventory.v2`.
-- CLIs `pre_prod_backup` e `pre_prod_restore` implementados com contrato `pre-prod-backup.v2`, paridade obrigatória entre cliente e servidor PostgreSQL 16, dump custom, SHA-256, restauração transacional em banco vazio e isolado, novo inventário v2 e reconciliação integral; nova execução real da Issue #183 pendente.
+- CLIs `pre_prod_backup` e `pre_prod_restore` implementados com contrato `pre-prod-backup.v3`, paridade obrigatória entre cliente e servidor PostgreSQL 16, snapshot único `REPEATABLE READ READ ONLY` para inventário e dump, SHA-256, restauração transacional em banco vazio e isolado e reconciliação integral. O ciclo v2 restaurou com segurança, mas revelou 998 preços coletados entre snapshots distintos; a validação real v3 da Issue #183 está pendente.
 
 ### Tesouro Direto — Blocos 3.1 e 3.2
 
