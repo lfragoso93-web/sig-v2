@@ -5,6 +5,16 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — consistência temporal do backup PostgreSQL (21/07/2026)
+
+- O backup v2 foi restaurado integralmente em banco isolado, com checksum válido, migrations e 24 tabelas reconciliadas.
+- A reconciliação detectou 998 linhas adicionais de `asset_prices` no dump porque o inventário e o `pg_dump` usavam snapshots distintos enquanto a coleta seguia ativa.
+- O contrato evoluiu para `pre-prod-backup.v3`: inventário e dump agora compartilham um snapshot PostgreSQL exportado em transação `REPEATABLE READ READ ONLY`.
+- O `pg_dump` recebe `--snapshot`, e o manifesto registra `consistent_snapshot=true`.
+- O restore recusa backups v1/v2 e manifestos sem comprovação de snapshot consistente.
+- Testes cobrem propriedade da transação, snapshot obrigatório, propagação ao dump e rejeição de artefatos temporalmente inconsistentes.
+- A origem permaneceu com zero escritas; nenhuma limpeza ou rebuild foi executado.
+
 ### Corrigido — compatibilidade do backup PostgreSQL (20/07/2026)
 
 - Corrigida a imagem backend para executar `pg_dump`, `pg_restore` e `psql` do PostgreSQL 16, alinhados ao servidor.
