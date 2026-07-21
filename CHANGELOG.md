@@ -5,6 +5,14 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Planejado — dry-run de limpeza pré-produção (21/07/2026)
+
+- A validação operacional do backup `pre-prod-backup.v3` foi concluída no PostgreSQL real com snapshot consistente, cliente/servidor 16/16, restauração isolada e reconciliação `ok=true`.
+- A Issue #183 foi encerrada e a PR #184 promovida para a `main`.
+- A Issue #185 foi criada para implementar um dry-run estritamente read-only, com relatório de impacto, dependências e evidências de zero escrita antes de qualquer limpeza.
+- README e ROADMAP foram avançados para refletir o novo gate; não há PR Dependabot aberta.
+- Nenhuma operação de limpeza, exportação ou rebuild foi executada.
+
 ### Corrigido — consistência temporal do backup PostgreSQL (21/07/2026)
 
 - O backup v2 foi restaurado integralmente em banco isolado, com checksum válido, migrations e 24 tabelas reconciliadas.
@@ -195,8 +203,8 @@ Formato baseado em Keep a Changelog.
 
 ## Próximos focos
 
-1. Executar e validar backup/restauração isolada no PostgreSQL real (#183).
-2. Somente após encerrar #183, preparar o dry-run de limpeza (#158).
+1. Implementar e validar o dry-run read-only da limpeza (#185).
+2. Somente após encerrar #185, preparar a exportação controlada das tabelas exportáveis (#158).
 3. TWR dedicado de Tesouro e Renda Fixa (#149).
 4. IBOV persistido (#150).
 5. Remoção do serviço legado (#151).
