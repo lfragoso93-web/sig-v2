@@ -1,6 +1,6 @@
 # Operação — SGI v2
 
-> Última atualização: 20/07/2026
+> Última atualização: 21/07/2026
 
 Este guia descreve os comandos de manutenção, validação e diagnóstico do SGI v2.
 
@@ -72,8 +72,10 @@ docker compose exec `
     backend python -m app.cli.pre_prod_backup --run-id $RunId
 ```
 
-O contrato atual do backup é `pre-prod-backup.v2`. Backups v1 são incompatíveis
-e devem permanecer apenas como evidência da execução abortada.
+O contrato atual do backup é `pre-prod-backup.v3`. Backups v1 e v2 são
+incompatíveis e devem permanecer apenas como evidência das execuções abortadas.
+O v3 executa inventário e `pg_dump` no mesmo snapshot exportado em transação
+`REPEATABLE READ READ ONLY`, mesmo quando tabelas reconstruíveis recebem novos dados.
 
 O backup só termina com código zero quando:
 
@@ -82,6 +84,7 @@ O backup só termina com código zero quando:
 - `pg_restore --list` consegue inspecionar o dump;
 - o checksum SHA-256 é registrado;
 - o inventário da origem usa `pre-prod-inventory.v2` sem bloqueios;
+- `consistent_snapshot=true`, comprovando que inventário e dump usam o mesmo estado lógico;
 - branch e SHA completo estão registrados;
 - nenhuma escrita é executada na origem.
 
@@ -107,7 +110,7 @@ docker compose exec `
 ```
 
 Uma execução abortada não deve reutilizar o dump, o `run_id` nem o banco
-isolado. Gere um novo backup v2 e um novo banco.
+isolado. Gere um novo backup v3 e um novo banco.
 
 O restore é recusado quando o destino coincide com a origem, usa o mesmo nome de
 banco, contém qualquer tabela ou diverge do checksum. A aplicação usa
