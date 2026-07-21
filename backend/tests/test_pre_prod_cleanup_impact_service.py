@@ -66,6 +66,11 @@ async def test_cleanup_impact_builds_from_inventory_without_writes() -> None:
         event.remove(engine.sync_engine, "before_cursor_execute", capture_statement)
         await engine.dispose()
 
+    assert report.schema_version == "pre-prod-cleanup-impact.v1"
+    assert report.inventory_schema_version == "pre-prod-inventory.v2"
+    assert report.branch == "stable-15jun"
+    assert report.commit_sha == "a" * 40
+
     actions = {table.name: table.proposed_action for table in report.tables}
     assert actions == {
         "asset_prices": "clean_and_rebuild",
