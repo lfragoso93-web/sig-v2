@@ -8,7 +8,7 @@ Fix 2026-06-30:
 - Adicionado alias PortfolioResponse = PortfolioRead para compatibilidade
   com router que importa PortfolioResponse.
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
 from decimal import Decimal
 import datetime
@@ -28,14 +28,13 @@ class PortfolioUpdate(BaseModel):
 
 
 class PortfolioRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     user_id: int
     name: str
     description: Optional[str] = None
     created_at: datetime.datetime
-
-    class Config:
-        from_attributes = True
 
 
 # Alias para compatibilidade com routers que importam PortfolioResponse
@@ -78,13 +77,12 @@ class CSVImportResponse(BaseModel):
 
 
 class ClassTargetRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     portfolio_id: int
     asset_type: str
     target_pct: Decimal
-
-    class Config:
-        from_attributes = True
 
 
 # ---------------------------------------------------------------------------
@@ -96,12 +94,12 @@ class ClassTargetWithCurrent(BaseModel):
     Combina a distribuicao atual da carteira com as metas configuradas.
     Inclui BDR explicitamente (Sprint 5E - Issue #79).
     """
+
+    model_config = ConfigDict(from_attributes=True)
+
     asset_type: str
     label: str
     target_pct: float = Field(description="Meta configurada (0 se nao definida)")
     current_pct: float = Field(description="Percentual atual da carteira")
     delta_pct: float = Field(description="current_pct - target_pct")
     color: str = Field(description="Cor hex para uso no grafico")
-
-    class Config:
-        from_attributes = True
