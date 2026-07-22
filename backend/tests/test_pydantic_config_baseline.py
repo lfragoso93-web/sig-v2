@@ -1,20 +1,19 @@
-"""Baseline estrutural para a migração Pydantic ConfigDict da Issue #186.
-
-Este teste deve ser atualizado no mesmo commit que remover a última configuração
-legada. Enquanto a migração não termina, ele impede que novas ``class Config``
-sejam adicionadas silenciosamente ao backend.
-"""
+"""Regressões da migração Pydantic ConfigDict da Issue #186."""
 
 from __future__ import annotations
 
 import ast
+from datetime import datetime, timezone
+from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
+
+from app.core.config import Settings
+from app.schemas.audit_log import AuditLogResponse
+from app.schemas.portfolio import ClassTargetRead, ClassTargetWithCurrent, PortfolioRead
 
 
 APP_ROOT = Path(__file__).resolve().parents[1] / "app"
-EXPECTED_LEGACY_CONFIGS = {
-    "schemas/audit_log.py:AuditLogResponse.Config",
-}
 
 
 def _legacy_config_classes() -> set[str]:
@@ -35,7 +34,57 @@ def _legacy_config_classes() -> set[str]:
     return found
 
 
-def test_legacy_pydantic_config_inventory_is_explicit() -> None:
-    """Falha quando uma nova configuração baseada em classe é introduzida."""
+def test_backend_has_no_legacy_pydantic_config_classes() -> None:
+    assert _legacy_config_classes() == set()
 
-    assert _legacy_config_classes() == EXPECTED_LEGACY_CONFIGS
+
+def test_settings_preserves_environment_configuration() -> None:
+    assert Settings.model_config["env_file"] == ".env"
+    assert Settings.model_config["case_sensitive"] is True
+
+
+def test_portfolio_schemas_preserve_from_attributes() -> None:
+    now = datetime.now(timezone.utc)
+
+    portfolio = PortfolioRead.model_validate(
+        SimpleNamespace(id=1, user_id=2, name="Principal", description=None, created_at=now)
+    )
+    target = ClassTargetRead.model_validate(
+        SimpleNamespace(id=3, portfolio_id=1, asset_type="FII", target_pct=Decimal("20"))
+    )
+    current = ClassTargetWithCurrent.model_validate(
+        SimpleNamespace(
+            asset_type="FII",
+            label="Fundos Imobiliarios",
+            target_pct=20.0,
+            current_pct=18.5,
+            delta_pct=-1.5,
+            color="#000000",
+        )
+    )
+
+    assert portfolio.name == "Principal"
+    assert target.target_pct == Decimal("20")
+    assert current.delta_pct == -1.5
+
+
+def test_audit_log_schema_preserves_from_attributes() -> None:
+    now = datetime.now(timezone.utc)
+    audit_log = AuditLogResponse.model_validate(
+        SimpleNamespace(
+            id=1,
+            user_id=2,
+            action="CREATE",
+            resource_type="portfolio",
+            resource_id=3,
+            portfolio_id=3,
+            ip_address=None,
+            user_agent=None,
+            status="SUCCESS",
+            error_message=None,
+            created_at=now,
+        )
+    )
+
+    assert audit_log.resource_type == "portfolio"
+    assert audit_log.created_at == now
