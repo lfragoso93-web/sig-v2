@@ -1,8 +1,10 @@
 """Grafo dirigido reutilizável para dependências entre tabelas.
 
 A aresta ``dependent -> dependency`` significa que a tabela de origem depende da
-tabela de destino. O módulo é puro: não acessa banco, não executa SQL e não
-conhece políticas de limpeza.
+tabela de destino. Restrições diferentes entre o mesmo par de tabelas continuam
+registradas para auditoria, mas contam como uma única relação na ordenação.
+O módulo é puro: não acessa banco, não executa SQL e não conhece políticas de
+limpeza.
 """
 from __future__ import annotations
 
