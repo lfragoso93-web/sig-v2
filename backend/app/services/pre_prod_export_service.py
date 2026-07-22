@@ -83,7 +83,12 @@ def _csv_value(value: Any) -> Any:
     if isinstance(value, UUID):
         return str(value)
     if isinstance(value, (dict, list)):
-        return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        return json.dumps(
+            value,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
     if isinstance(value, bytes):
         return "\\x" + value.hex()
     return value
@@ -97,7 +102,10 @@ def _prepare_paths(output_root: Path, run_id: str) -> ExportPaths:
     if final_directory.exists() or temporary_directory.exists():
         raise FileExistsError(f"export artifacts already exist for run_id {run_id!r}")
     temporary_directory.mkdir(parents=True, exist_ok=False)
-    return ExportPaths(final_directory=final_directory, temporary_directory=temporary_directory)
+    return ExportPaths(
+        final_directory=final_directory,
+        temporary_directory=temporary_directory,
+    )
 
 
 def _validate_gate(report: PreProdCleanupImpactReport) -> list[str]:
@@ -114,7 +122,10 @@ def _validate_gate(report: PreProdCleanupImpactReport) -> list[str]:
     return tables
 
 
-async def _read_columns(session: AsyncSession, table_name: str) -> list[ExportColumn]:
+async def _read_columns(
+    session: AsyncSession,
+    table_name: str,
+) -> list[ExportColumn]:
     result = await session.execute(
         text(
             """
@@ -187,8 +198,16 @@ async def build_pre_prod_export(
     generated_at: str,
     output_root: Path,
     session: AsyncSession | None = None,
+    transaction_started: bool = False,
 ) -> PreProdExportManifest:
-    """Exporta exatamente as tabelas aprovadas pelo gate e publica o manifesto."""
+    """Exporta exatamente as tabelas aprovadas pelo gate e publica o manifesto.
+
+    ``transaction_started`` só deve ser usado quando o chamador já abriu a
+    transação REPEATABLE READ READ ONLY compartilhada com o cleanup impact.
+    """
+    if transaction_started and session is None:
+        raise ValueError("transaction_started requires a supplied session")
+
     export_tables = _validate_gate(cleanup_impact)
     cleanup_payload = cleanup_impact.to_dict()
     cleanup_sha256 = _sha256_bytes(_canonical_json_bytes(cleanup_payload))
@@ -197,9 +216,10 @@ async def build_pre_prod_export(
     active_session = session or AsyncSessionLocal()
 
     try:
-        await active_session.execute(
-            text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
-        )
+        if not transaction_started:
+            await active_session.execute(
+                text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+            )
         artifacts: list[ExportTableArtifact] = []
         for table_name in export_tables:
             columns = await _read_columns(active_session, table_name)
@@ -233,7 +253,9 @@ async def build_pre_prod_export(
                     format=EXPORT_FORMAT,
                     byte_size=destination.stat().st_size,
                     data_sha256=_sha256_file(destination),
-                    schema_sha256=_sha256_bytes(_canonical_json_bytes(schema_payload)),
+                    schema_sha256=_sha256_bytes(
+                        _canonical_json_bytes(schema_payload)
+                    ),
                     columns=columns,
                 )
             )
@@ -257,9 +279,12 @@ async def build_pre_prod_export(
         )
         manifest_path = paths.temporary_directory / "manifest.json"
         manifest_path.write_bytes(
-            json.dumps(manifest.to_dict(), ensure_ascii=False, indent=2, sort_keys=True).encode(
-                "utf-8"
-            )
+            json.dumps(
+                manifest.to_dict(),
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            ).encode("utf-8")
             + b"\n"
         )
         paths.final_directory.parent.mkdir(parents=True, exist_ok=True)
