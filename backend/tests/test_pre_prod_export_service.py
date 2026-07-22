@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from app.services import pre_prod_export_service as service
 from app.services.pre_prod_cleanup_impact_contract import (
     IMPACT_REPORT_MODE,
     IMPACT_REPORT_SCHEMA_VERSION,
@@ -15,7 +16,6 @@ from app.services.pre_prod_cleanup_impact_contract import (
     PreProdCleanupImpactReport,
 )
 from app.services.pre_prod_export_contract import ExportColumn
-from app.services import pre_prod_export_service as service
 
 
 class FakeSession:
