@@ -1,60 +1,63 @@
 # Arquitetura — SGI v2
 
-> Última atualização: 14/07/2026
+> Última atualização: 22/07/2026
 
-Este documento descreve a arquitetura atual do SGI v2 após a migração para o modelo **DB-first**.
-
----
+Este documento descreve a arquitetura atual do SGI v2 após a consolidação do modelo **DB-first**, dos contratos financeiros canônicos e dos controles de reconstrução pré-produção.
 
 ## Objetivo
 
-O sistema deve calcular patrimônio, resultado, proventos e rentabilidade com base em dados persistidos e auditáveis. Provedores externos servem para preencher lacunas do banco, não para responder diretamente a cada cálculo de carteira.
+O sistema calcula patrimônio, resultado, proventos e rentabilidade com base em dados persistidos, versionados e auditáveis. Provedores externos preenchem o banco por jobs ou comandos operacionais; páginas, KPIs e snapshots não devem consultar provedores durante o cálculo financeiro.
 
----
-
-## Fluxo principal
+## Fluxo financeiro principal
 
 ```text
 CSV / lançamentos manuais
         ↓
-transactions
+transactions + fixed_income_investments + corporate_events
         ↓
-asset catalog
+catálogo canônico de ativos
         ↓
-coverage auditor
+COTAHIST B3 | Tesouro oficial | séries macro | provedores normalizados
         ↓
-price gap sync
+asset_prices + rate_history + proventos canônicos
         ↓
-asset_prices + benchmarks + dividends + treasury history
+valuation dedicado por classe
         ↓
-portfolio snapshots
+PortfolioSnapshot + PortfolioClassSnapshot
         ↓
-TWR daily chain
+summary.v2 + rentabilidade.v2 + posições canônicas
         ↓
-canonical KPIs
-        ↓
-Resumo / Patrimônio / Rentabilidade / Dashboard
+Resumo / Patrimônio / Rentabilidade / Proventos / demais módulos
 ```
 
----
+## Princípios obrigatórios
 
-## Princípios
+### DB-first
 
-### 1. DB-first
+Serviços financeiros leem dados persistidos. Chamadas externas pertencem a sincronizadores, jobs, adapters ou comandos de manutenção.
 
-Serviços de cálculo financeiro leem apenas o banco. Eles não devem chamar provedores externos durante a execução de snapshots, KPIs ou telas.
+### Contrato financeiro único
 
-### 2. Sincronização antes do cálculo
+`summary.v2` e `rentabilidade.v2` são as fontes oficiais de leitura financeira. O frontend valida esses contratos e não recompõe patrimônio, resultado ou rentabilidade localmente.
 
-Dados externos são coletados por jobs de sincronização, pelo scheduler ou pelo comando `full_market_rebuild`.
+### Separação temporal
 
-### 3. Idempotência
+- valuation intradiário representa o estado atual da carteira;
+- snapshots representam performance fechada em uma data;
+- consolidado e classes só são reconciliados quando compartilham a mesma `snapshot_date`;
+- ausência de TWR é representada por `null`, nunca por retorno simples.
 
-Executar uma manutenção duas vezes deve produzir o mesmo estado lógico, sem duplicar preços, dividendos ou snapshots.
+### Idempotência
 
-### 4. Conexões curtas
+Reexecutar seed, sincronização, materialização ou rebuild deve produzir o mesmo estado lógico sem duplicar preços, proventos, posições ou snapshots.
 
-Chamadas HTTP não devem manter sessões ou transações do PostgreSQL abertas. O fluxo recomendado é:
+### Qualidade explícita
+
+Cobertura parcial, preços ausentes, retornos estimados, fonte e data de referência devem aparecer nos contratos. Ausência ou falha não pode ser convertida silenciosamente em zero.
+
+### Conexões curtas
+
+Chamadas HTTP não mantêm transações PostgreSQL abertas:
 
 ```text
 ler estado mínimo
@@ -65,121 +68,116 @@ persistir em lote
 commit
 ```
 
-### 5. Qualidade explícita
-
-Quando faltam preços ou os retornos dependem de fluxos inferidos, isso deve aparecer nos campos:
-
-- `has_partial_prices`
-- `return_is_estimated`
-
----
-
 ## Módulos centrais
 
 | Módulo | Responsabilidade |
 |---|---|
-| `transactions` | Fonte contábil dos lançamentos do usuário |
-| `assets` | Catálogo canônico e metadados de provedor |
+| `transactions` | Fonte contábil das operações do usuário |
+| `fixed_income_investments` | Aplicações e regras específicas de Renda Fixa |
+| `corporate_events` | Fundação dos eventos que afetam identidade, quantidade e custo |
+| `assets` | Catálogo canônico, aliases e metadados |
 | `asset_prices` | Histórico diário persistido de preços |
+| `rate_history` | Séries macroeconômicas persistidas |
 | `asset_price_coverage_service` | Auditoria de cobertura por ativo |
 | `asset_price_gap_sync_service` | Preenchimento de lacunas históricas |
-| `asset_price_global_backfill_service` | Orquestração global de catálogo e preços |
-| `dividend_*` | Eventos canônicos e materialização por carteira |
-| `treasury_price_history_service` | Histórico dedicado de Tesouro Direto |
-| `portfolio_snapshot_twr_service` | Snapshots DB-only com fluxos, proventos e TWR |
-| `full_market_rebuild_service` | Manutenção operacional completa |
+| `dividend_*` | Eventos globais, elegibilidade e materialização por carteira |
+| `treasury_price_history_service` | Histórico oficial dedicado do Tesouro Direto |
+| valuation por classe | Patrimônio, custo e resultado atual por regra financeira específica |
+| `portfolio_snapshot_twr_service` | Snapshots DB-only e cadeia TWR das classes suportadas |
+| `full_market_rebuild_service` | Rebuild operacional de dados de mercado e snapshots |
 
----
+## Proventos
 
-## Dados canônicos
+O pipeline canônico separa:
 
-O SGI mantém dados canônicos para evitar divergência entre páginas.
+1. descoberta do evento global;
+2. persistência e normalização;
+3. elegibilidade da carteira na data de corte;
+4. materialização do direito;
+5. reconhecimento financeiro pela data de pagamento.
+
+Eventos não monetários permanecem rastreáveis, mas não entram nos agregados quando `is_cash=false`.
+
+## Pré-produção e reconstrução
+
+A reconstrução completa é diferente do `full_market_rebuild`. Ela protege dados de negócio antes de limpar dados reconstruíveis.
 
 ```text
-Transações
- + Preços históricos
- + Proventos materializados
- + Benchmarks
- + Tesouro
+pre-prod-inventory.v2
         ↓
-Snapshot diário
+pre-prod-backup.v3 + restore isolado
         ↓
-KPIs canônicos
+pre-prod-cleanup-impact.v2
+        ↓
+pre-prod-export.v1
+        ↓
+limpeza controlada ainda pendente
+        ↓
+seeds canônicos
+        ↓
+reimportação da carteira
+        ↓
+rebuild de posições e snapshots
+        ↓
+reconciliação financeira final
 ```
 
-As páginas Resumo, Patrimônio e Rentabilidade devem consumir os mesmos contratos financeiros, mudando apenas a forma de apresentação.
+### Classificação atual
 
----
+- 11 tabelas preservadas;
+- 3 tabelas exportadas antes da limpeza;
+- 10 tabelas reconstruíveis;
+- nenhuma tabela não classificada;
+- nenhum achado bloqueante na validação real.
+
+As tabelas exportáveis são `transactions`, `fixed_income_investments` e `corporate_events`.
+
+### Garantias já consolidadas
+
+- inventário e exportação somente leitura;
+- backup e inventário no mesmo snapshot `REPEATABLE READ READ ONLY`;
+- checksum SHA-256;
+- restore apenas em banco vazio e isolado;
+- gate de foreign keys e ciclos;
+- artefatos versionados e sem sobrescrita;
+- normalização de `ordinal_position` na projeção CSV;
+- zero escritas na origem durante inventário, backup, impacto e exportação.
 
 ## Scheduler diário
 
-A ordem recomendada é:
+A dependência lógica deve ser preservada:
 
 ```text
-20:20 — sincronização incremental de ativos
-20:45 — auditoria global e gap sync
-20:50 — benchmarks e Tesouro
-20:55 — proventos
-21:00 — snapshots e TWR
+sincronizar catálogo e preços
+        ↓
+atualizar Tesouro e benchmarks
+        ↓
+sincronizar e materializar proventos
+        ↓
+reconstruir snapshots
+        ↓
+servir KPIs canônicos
 ```
-
-Os horários podem ser ajustados, mas a regra deve ser mantida: **sincronizar dados antes de reconstruir snapshots**.
-
----
-
-## Fluxo manual completo
-
-```bash
-python -m app.cli.full_market_rebuild
-```
-
-Etapas:
-
-1. Catálogo e preços por lacuna.
-2. Tesouro Direto.
-3. Benchmarks.
-4. Proventos.
-5. Snapshots TWR.
-6. Auditoria final.
-
-O comando continua executando etapas mesmo que uma delas registre erro interno, mas o resultado final deve ficar `ok=false` quando houver falhas relevantes.
-
----
 
 ## Tipos de ativos
 
 | Classe | Tratamento |
 |---|---|
-| Ações, ETFs nacionais e BDRs | Histórico em `asset_prices` via fonte principal |
-| FIIs | Histórico em `asset_prices` via rota dedicada |
-| Stocks e ETFs internacionais | Fonte internacional, com fallback controlado |
-| Cripto | Em revisão para roteamento definitivo |
-| Tesouro Direto | Serviço dedicado de Tesouro |
-| Renda Fixa | Motor interno, sem cotação de mercado genérica |
-
----
-
-## Estados de cobertura
-
-| Estado | Significado |
-|---|---|
-| `COMPLETE` | Histórico cobre o intervalo necessário |
-| `MISSING` | Nenhum preço encontrado |
-| `PARTIAL_START` | Falta histórico antes do primeiro preço salvo |
-| `STALE` | Histórico está desatualizado na cauda |
-| `PARTIAL_BOTH` | Faltam início e cauda |
-| `NO_MARKET_QUOTE` | Classe não depende de cotação externa |
-| `DEDICATED_PROVIDER` | Classe possui serviço próprio |
-| `MISSING_ASSET` | Transação sem ativo correspondente no catálogo |
-
-`PARTIAL_START` pode ser aceitável quando o provedor já retornou todo o histórico disponível. Nesse caso, `provider_status=HISTORY_START_EXHAUSTED` impede repetir a mesma busca.
-
----
+| Ações, ETFs nacionais e BDRs | Histórico em `asset_prices`, prioritariamente B3 COTAHIST |
+| FIIs | Histórico persistido e coleta específica de proventos |
+| Stocks e ETFs internacionais | Adapter internacional com fallback controlado |
+| Cripto | Histórico persistido; roteamento definitivo ainda pendente |
+| Tesouro Direto | Catálogo, preços e valuation dedicados |
+| Renda Fixa | Motor de accrual/indexador, sem cotação genérica |
 
 ## Pendências arquiteturais conhecidas
 
-- Resolver `pricing_asset_id` para tickers fracionários sem duplicar histórico.
-- Fazer snapshots de Tesouro consumirem diretamente o histórico dedicado.
-- Finalizar roteamento de cripto e Tesouro após validação completa de cobertura do provedor.
-- Evoluir locks em memória para locks distribuídos caso haja múltiplas réplicas.
-- Consolidar provider router definitivo por capacidade.
+1. Migrar configurações Pydantic legadas para `ConfigDict` (#186).
+2. Implementar a limpeza executável e concluir o rebuild pré-produção (#158).
+3. Remover o serviço legado de rentabilidade e caches obsoletos (#151).
+4. Materializar o histórico persistido do IBOV (#150).
+5. Implementar TWR diário dedicado, separando Tesouro e Renda Fixa (#149).
+6. Consolidar o motor de eventos corporativos independente do fornecedor (#129).
+7. Evoluir adapters brapi v2 sem expor payloads de fornecedor ao domínio (#130).
+8. Consolidar provider registry por capacidade antes da configuração dinâmica (#127).
+9. Evoluir locks em memória para locks distribuídos antes de múltiplas réplicas.
