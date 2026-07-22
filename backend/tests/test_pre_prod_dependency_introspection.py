@@ -5,6 +5,7 @@ from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.services.pre_prod_dependency_introspection import (
+    build_table_dependency_plan,
     discover_table_dependencies,
 )
 
@@ -59,10 +60,7 @@ async def test_discovers_sqlite_foreign_keys_without_writes() -> None:
         event.remove(engine.sync_engine, "before_cursor_execute", capture_statement)
         await engine.dispose()
 
-    assert [
-        (edge.dependent, edge.dependency)
-        for edge in dependencies
-    ] == [
+    assert [(edge.dependent, edge.dependency) for edge in dependencies] == [
         ("asset_prices", "assets"),
         ("portfolio_positions", "assets"),
     ]
@@ -77,7 +75,53 @@ async def test_discovers_sqlite_foreign_keys_without_writes() -> None:
 
 
 @pytest.mark.asyncio
-async def test_self_referential_foreign_key_is_preserved() -> None:
+async def test_introspection_builds_safe_dependency_plan() -> None:
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as connection:
+        await connection.execute(text("PRAGMA foreign_keys = ON"))
+        await connection.execute(text("CREATE TABLE assets (id INTEGER PRIMARY KEY)"))
+        await connection.execute(
+            text(
+                "CREATE TABLE portfolio_positions ("
+                "id INTEGER PRIMARY KEY, "
+                "asset_id INTEGER REFERENCES assets(id)"
+                ")"
+            )
+        )
+        await connection.execute(
+            text(
+                "CREATE TABLE portfolio_snapshots ("
+                "id INTEGER PRIMARY KEY, "
+                "position_id INTEGER REFERENCES portfolio_positions(id)"
+                ")"
+            )
+        )
+
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with session_factory() as session:
+            plan = await build_table_dependency_plan(
+                session,
+                tables=["assets", "portfolio_positions", "portfolio_snapshots"],
+            )
+    finally:
+        await engine.dispose()
+
+    assert plan.ok is True
+    assert plan.rebuild_order == [
+        "assets",
+        "portfolio_positions",
+        "portfolio_snapshots",
+    ]
+    assert plan.cleanup_order == [
+        "portfolio_snapshots",
+        "portfolio_positions",
+        "assets",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_self_referential_foreign_key_blocks_plan() -> None:
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     async with engine.begin() as connection:
         await connection.execute(text("PRAGMA foreign_keys = ON"))
@@ -93,16 +137,17 @@ async def test_self_referential_foreign_key_is_preserved() -> None:
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
         async with session_factory() as session:
-            dependencies = await discover_table_dependencies(
+            plan = await build_table_dependency_plan(
                 session,
                 tables=["categories"],
             )
     finally:
         await engine.dispose()
 
-    assert len(dependencies) == 1
-    assert dependencies[0].dependent == "categories"
-    assert dependencies[0].dependency == "categories"
+    assert plan.ok is False
+    assert plan.rebuild_order == []
+    assert plan.cleanup_order == []
+    assert plan.cycles == [["categories", "categories"]]
 
 
 @pytest.mark.asyncio
@@ -163,18 +208,22 @@ async def test_duplicate_table_names_do_not_duplicate_introspection() -> None:
         await engine.dispose()
 
     assert dependencies == []
-    assert sum(statement.upper().startswith("PRAGMA FOREIGN_KEY_LIST") for statement in statements) == 1
+    assert (
+        sum(
+            statement.upper().startswith("PRAGMA FOREIGN_KEY_LIST")
+            for statement in statements
+        )
+        == 1
+    )
 
 
-def test_empty_table_name_is_rejected() -> None:
+@pytest.mark.asyncio
+async def test_empty_table_name_is_rejected() -> None:
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
-
-    async def run() -> None:
+    try:
         async with session_factory() as session:
-            await discover_table_dependencies(session, tables=[""])
-
-    with pytest.raises(ValueError, match="cannot be empty"):
-        import asyncio
-
-        asyncio.run(run())
+            with pytest.raises(ValueError, match="cannot be empty"):
+                await discover_table_dependencies(session, tables=[""])
+    finally:
+        await engine.dispose()
