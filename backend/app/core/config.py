@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator, model_validator
 from typing import Optional
 
@@ -8,6 +8,8 @@ _DEFAULT_SECRET_KEY = "change-me-" + "in-production"
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
+
     DATABASE_URL: str = "postgresql://sgi:sgi@db:5432/sgi"
     ASYNC_DATABASE_URL: str = "postgresql+asyncpg://sgi:sgi@db:5432/sgi"
     APP_DEBUG: bool = False
@@ -92,10 +94,6 @@ class Settings(BaseSettings):
             if len(v) < 10:
                 raise ValueError("SUPERADMIN_PASSWORD deve ter no minimo 10 caracteres em producao")
         return v
-
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
 
 
 settings = Settings()
