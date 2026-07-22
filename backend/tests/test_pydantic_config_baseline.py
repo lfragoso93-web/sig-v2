@@ -1,7 +1,7 @@
 """Baseline estrutural para a migração Pydantic ConfigDict da Issue #186.
 
 Este teste deve ser atualizado no mesmo commit que remover a última configuração
-legada. Enquanto a migração não começa, ele impede que novas ``class Config``
+legada. Enquanto a migração não termina, ele impede que novas ``class Config``
 sejam adicionadas silenciosamente ao backend.
 """
 
@@ -13,7 +13,6 @@ from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parents[1] / "app"
 EXPECTED_LEGACY_CONFIGS = {
-    "core/config.py:Settings.Config",
     "schemas/audit_log.py:AuditLogResponse.Config",
     "schemas/portfolio.py:ClassTargetRead.Config",
     "schemas/portfolio.py:ClassTargetWithCurrent.Config",
