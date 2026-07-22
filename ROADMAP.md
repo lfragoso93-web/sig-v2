@@ -6,7 +6,7 @@
 
 | Módulo | Status | Progresso |
 |---|---|---:|
-| Core backend e autenticação | Estável | 100% |
+| Core backend e autenticação | Estável; ConfigDict implementado, validação pendente | 99% |
 | Carteiras e transações | Estável | 100% |
 | Importação CSV | Estável, revisão pré-produção pendente | 95% |
 | Dados canônicos | Consolidado | 100% |
@@ -62,6 +62,16 @@ A reconstrução limpa do catálogo, históricos e carteira permanece reservada 
 
 ## Em desenvolvimento
 
+### Estabilização Pydantic — #186
+
+- [x] Mapear as cinco configurações baseadas em `class Config`.
+- [x] Migrar `Settings` para `SettingsConfigDict`.
+- [x] Migrar schemas de portfólio e auditoria para `ConfigDict(from_attributes=True)`.
+- [x] Adicionar regressão estrutural que proíbe novas configurações legadas.
+- [x] Adicionar testes de leitura por atributos e configuração de ambiente.
+- [ ] Executar a suíte relacionada e confirmar zero `PydanticDeprecatedSince20`.
+- [ ] Encerrar a Issue #186 após validação local.
+
 ### Rentabilidade
 
 - [ ] Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
@@ -97,13 +107,12 @@ A reconstrução limpa do catálogo, históricos e carteira permanece reservada 
 
 ## Próximas prioridades
 
-1. Sincronizar e manter a `stable-15jun` alinhada à `main` após a PR #191 — concluído em 22/07/2026.
-2. Eliminar os warnings Pydantic v2 em bloco isolado (#186).
-3. Implementar o contrato e o serviço de limpeza controlada da #158, sem executar escrita real neste primeiro sub-bloco.
-4. Executar a limpeza e o rebuild pré-produção em etapas auditáveis.
-5. Remover o serviço legado de rentabilidade (#151).
-6. Materializar IBOV (#150).
-7. Implementar TWR dedicado, separando Tesouro e Renda Fixa (#149).
+1. Validar a migração `ConfigDict` e encerrar a Issue #186.
+2. Implementar o contrato e o serviço de limpeza controlada da #158, sem executar escrita real neste primeiro sub-bloco.
+3. Executar a limpeza e o rebuild pré-produção em etapas auditáveis.
+4. Remover o serviço legado de rentabilidade (#151).
+5. Materializar IBOV (#150).
+6. Implementar TWR dedicado, separando Tesouro e Renda Fixa (#149).
 
 ## Backlog
 
