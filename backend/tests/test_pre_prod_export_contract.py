@@ -163,11 +163,26 @@ def test_column_metadata_preserves_order_and_uniqueness() -> None:
         )
 
 
+def test_snapshot_rejects_duplicate_exported_tables() -> None:
+    with pytest.raises(ValueError, match="snapshot exported tables must be unique"):
+        _source(["transactions", "transactions"])
+
+
 def test_manifest_rejects_duplicate_tables_and_paths() -> None:
     first = _table("transactions")
+    duplicate = _table("transactions", path="tables/transactions-copy.csv")
 
-    with pytest.raises(ValueError, match="table names must be unique"):
-        _manifest([first, first])
+    with pytest.raises(ValueError, match="manifest table names must be unique"):
+        PreProdExportManifest(
+            schema_version=EXPORT_MANIFEST_SCHEMA_VERSION,
+            generated_at="2026-07-22T15:00:00+00:00",
+            run_id="20260722-120000",
+            branch="stable-15jun",
+            commit_sha="d" * 40,
+            source=_source(["transactions"]),
+            tables=[first, duplicate],
+            safety=ExportSafety(),
+        )
 
     with pytest.raises(ValueError, match="artifact paths must be unique"):
         _manifest(
