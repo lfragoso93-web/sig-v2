@@ -172,12 +172,12 @@ servir KPIs canônicos
 
 ## Pendências arquiteturais conhecidas
 
-1. Migrar configurações Pydantic legadas para `ConfigDict` (#186).
-2. Implementar a limpeza executável e concluir o rebuild pré-produção (#158).
-3. Remover o serviço legado de rentabilidade e caches obsoletos (#151).
-4. Materializar o histórico persistido do IBOV (#150).
-5. Implementar TWR diário dedicado, separando Tesouro e Renda Fixa (#149).
-6. Consolidar o motor de eventos corporativos independente do fornecedor (#129).
-7. Evoluir adapters brapi v2 sem expor payloads de fornecedor ao domínio (#130).
-8. Consolidar provider registry por capacidade antes da configuração dinâmica (#127).
+1. Implementar a limpeza executável e concluir o rebuild pré-produção (#158).
+2. Remover o serviço legado de rentabilidade e caches obsoletos (#151).
+3. Materializar o histórico persistido do IBOV (#150).
+4. Implementar TWR diário dedicado, separando Tesouro e Renda Fixa (#149).
+5. Consolidar o motor de eventos corporativos independente do fornecedor (#129).
+6. Evoluir adapters brapi v2 sem expor payloads de fornecedor ao domínio (#130).
+7. Consolidar provider registry por capacidade antes da configuração dinâmica (#127).
+8. Migrar timestamps UTC legados para objetos timezone-aware (#192).
 9. Evoluir locks em memória para locks distribuídos antes de múltiplas réplicas.
