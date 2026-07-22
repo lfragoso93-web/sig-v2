@@ -142,6 +142,7 @@ async def _read_columns(
         ),
         {"table_name": table_name},
     )
+    rows = list(result)
     columns = [
         ExportColumn(
             name=row.column_name,
@@ -149,9 +150,9 @@ async def _read_columns(
                 row.udt_name if row.data_type == "USER-DEFINED" else row.data_type
             ),
             nullable=row.is_nullable == "YES",
-            ordinal_position=row.ordinal_position,
+            ordinal_position=export_ordinal,
         )
-        for row in result
+        for export_ordinal, row in enumerate(rows, start=1)
     ]
     if not columns:
         raise ValueError(f"export table not found in public schema: {table_name!r}")
