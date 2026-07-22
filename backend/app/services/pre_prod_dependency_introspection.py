@@ -11,7 +11,11 @@ from collections.abc import Iterable
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.pre_prod_dependency_graph import TableDependency
+from app.services.pre_prod_dependency_graph import (
+    DependencyPlan,
+    TableDependency,
+    TableDependencyGraph,
+)
 
 
 _POSTGRES_FOREIGN_KEYS_SQL = """
@@ -84,6 +88,23 @@ async def discover_table_dependencies(
             edge.constraint_name or "",
         ),
     )
+
+
+async def build_table_dependency_plan(
+    session: AsyncSession,
+    *,
+    tables: Iterable[str],
+) -> DependencyPlan:
+    """Descobre as FKs e produz ordens seguras ou ciclos bloqueantes."""
+    normalized_tables = _normalize_tables(tables)
+    dependencies = await discover_table_dependencies(
+        session,
+        tables=normalized_tables,
+    )
+    return TableDependencyGraph(
+        tables=normalized_tables,
+        dependencies=dependencies,
+    ).build_plan()
 
 
 async def _discover_postgres_dependencies(
