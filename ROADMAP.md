@@ -20,7 +20,7 @@
 | Página Patrimônio | Fase 3 concluída e promovida pela PR #184 | 100% |
 | Página Rentabilidade | Contratos concluídos | 95% |
 | Dependências | Auditoria concluída; nenhuma PR aberta | 100% |
-| Configuração Pydantic v2 | Migração concluída; validação integral final pendente (#186) | 98% |
+| Configuração Pydantic v2 | Migração validada e Issue #186 encerrada | 100% |
 | Rebuild pré-produção | Backup/restore, dry-run e exportação validados | 80% |
 | Backup/Restore pré-produção | Validação real v3 concluída (#183) | 100% |
 | Dry-run de limpeza | Validado no PostgreSQL real (#185) | 100% |
@@ -88,8 +88,10 @@ A reconstrução limpa do catálogo, históricos e carteira permanece reservada 
 - [x] Confirmar ausência de `PydanticDeprecatedSince20` durante a coleta e execução integral.
 - [x] Isolar os testes de compatibilidade das variáveis reais do container.
 - [x] Tornar o teste documental compatível com a imagem isolada do backend sem enfraquecer a validação no checkout completo.
-- [ ] Reexecutar a suíte integral após os dois ajustes de infraestrutura de teste.
-- [ ] Encerrar a Issue após ausência de regressões.
+- [x] Reexecutar a suíte integral após os dois ajustes de infraestrutura de teste.
+- [x] Encerrar a Issue após ausência de regressões.
+
+Validação final: `666 passed`, `1 skipped` intencional e zero `PydanticDeprecatedSince20`.
 
 ### Pré-produção — #158 / #176 / #183 / #185 / #188
 
@@ -112,12 +114,12 @@ A reconstrução limpa do catálogo, históricos e carteira permanece reservada 
 
 ## Próximas prioridades
 
-1. Revalidar e encerrar a migração Pydantic v2 (#186).
-2. Implementar o contrato e o serviço de limpeza controlada da #158, sem executar escrita real neste primeiro sub-bloco.
-3. Executar a limpeza e o rebuild pré-produção em etapas auditáveis.
-4. Remover o serviço legado de rentabilidade (#151).
-5. Materializar IBOV (#150).
-6. Implementar TWR dedicado, separando Tesouro e Renda Fixa (#149).
+1. Implementar o contrato e o serviço de limpeza controlada da #158, sem executar escrita real neste primeiro sub-bloco.
+2. Executar a limpeza e o rebuild pré-produção em etapas auditáveis.
+3. Remover o serviço legado de rentabilidade (#151).
+4. Materializar IBOV (#150).
+5. Implementar TWR dedicado, separando Tesouro e Renda Fixa (#149).
+6. Migrar timestamps UTC para timezone-aware (#192).
 
 ## Backlog
 
@@ -129,6 +131,7 @@ A reconstrução limpa do catálogo, históricos e carteira permanece reservada 
 - Análise de Carteira — #57.
 - Janela Global do Ativo — #58.
 - Provedores configuráveis — #127.
+- Timestamps UTC timezone-aware — #192.
 
 ## Processo
 
