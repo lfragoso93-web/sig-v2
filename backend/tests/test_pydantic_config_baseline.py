@@ -9,8 +9,11 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from app.core.config import Settings
+from app.schemas.asset import AssetRead
 from app.schemas.audit_log import AuditLogResponse
+from app.schemas.dividend import DividendRead
 from app.schemas.portfolio import ClassTargetRead, ClassTargetWithCurrent, PortfolioRead
+from app.schemas.treasury import TreasuryPositionResponse
 
 
 APP_ROOT = Path(__file__).resolve().parents[1] / "app"
@@ -88,3 +91,45 @@ def test_audit_log_schema_preserves_from_attributes() -> None:
 
     assert audit_log.resource_type == "portfolio"
     assert audit_log.created_at == now
+
+
+def test_additional_read_schemas_preserve_from_attributes() -> None:
+    asset = AssetRead.model_validate(
+        SimpleNamespace(
+            id=1,
+            ticker="PETR4",
+            name="Petrobras",
+            asset_type="ACAO",
+            sector=None,
+            currency="BRL",
+            logo_url=None,
+            last_price=30.0,
+        )
+    )
+    dividend = DividendRead.model_validate(
+        SimpleNamespace(
+            id=2,
+            ticker="PETR4",
+            ex_date="2026-07-01",
+            payment_date="2026-07-15",
+            value_per_unit=1.25,
+            dividend_type="DIVIDENDO",
+            total_received=12.5,
+            portfolio_id=1,
+        )
+    )
+    treasury = TreasuryPositionResponse.model_validate(
+        SimpleNamespace(
+            id=3,
+            portfolio_id=1,
+            brapi_name="Tesouro Selic 2029",
+            ticker="TESOURO-SELIC-2029",
+            purchase_price=100.0,
+            quantity=1.0,
+            invested_value=100.0,
+        )
+    )
+
+    assert asset.ticker == "PETR4"
+    assert dividend.total_received == 12.5
+    assert treasury.invested_value == 100.0
