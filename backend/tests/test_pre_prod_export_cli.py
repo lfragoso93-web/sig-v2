@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -53,11 +54,16 @@ def _cleanup(*, ok: bool = True):  # type: ignore[no-untyped-def]
             proposed_action="preserve",
         ),
     ]
+    payload = {
+        "schema_version": "pre-prod-cleanup-impact.v2",
+        "ok": ok,
+        "blockers": [] if ok else ["future_table"],
+    }
     return SimpleNamespace(
         ok=ok,
-        blockers=[] if ok else ["future_table"],
+        blockers=payload["blockers"],
         tables=tables,
-        to_dict=lambda: {"ok": ok, "blockers": [] if ok else ["future_table"]},
+        to_dict=lambda: payload,
     )
 
 
@@ -99,6 +105,25 @@ def test_reconcile_counts_rejects_divergence() -> None:
         cli._reconcile_counts(_cleanup(), _manifest(transaction_rows=3))
 
 
+def test_publish_cleanup_impact_is_atomic_and_refuses_overwrite(tmp_path) -> None:
+    run_directory = tmp_path / "run-1"
+    destination = cli._publish_cleanup_impact(
+        cleanup_impact=_cleanup(),
+        run_directory=run_directory,
+    )
+
+    assert destination == run_directory / "cleanup-impact.json"
+    assert destination.is_file()
+    assert not (run_directory / ".cleanup-impact.json.tmp").exists()
+    assert json.loads(destination.read_text(encoding="utf-8"))["ok"] is True
+
+    with pytest.raises(FileExistsError, match="already exists"):
+        cli._publish_cleanup_impact(
+            cleanup_impact=_cleanup(),
+            run_directory=run_directory,
+        )
+
+
 @pytest.mark.asyncio
 async def test_main_uses_one_read_only_snapshot(
     tmp_path,
@@ -108,6 +133,8 @@ async def test_main_uses_one_read_only_snapshot(
     session = FakeSession()
     cleanup = _cleanup()
     manifest = _manifest()
+    run_directory = tmp_path / "20260722-120000"
+    (run_directory / "export").mkdir(parents=True)
 
     monkeypatch.setattr(cli, "AsyncSessionLocal", lambda: session)
 
@@ -130,7 +157,10 @@ async def test_main_uses_one_read_only_snapshot(
     assert "REPEATABLE READ, READ ONLY" in session.executed[0]
     assert session.rollback_calls >= 1
     assert session.close_calls == 1
-    assert '"reconciled": true' in capsys.readouterr().out
+    assert (run_directory / "cleanup-impact.json").is_file()
+    output = capsys.readouterr().out
+    assert '"reconciled": true' in output
+    assert '"cleanup_impact_path"' in output
 
 
 @pytest.mark.asyncio
