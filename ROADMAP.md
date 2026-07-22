@@ -1,6 +1,6 @@
 # Roadmap modular — SGI v2
 
-> Última atualização: 21/07/2026
+> Última atualização: 22/07/2026
 
 ## Visão geral
 
@@ -20,9 +20,9 @@
 | Página Patrimônio | Fase 3 concluída e promovida pela PR #184 | 100% |
 | Página Rentabilidade | Contratos concluídos | 95% |
 | Dependências | Auditoria concluída; nenhuma PR aberta | 100% |
-| Rebuild pré-produção | Backup/restore validados; dry-run iniciado | 65% |
+| Rebuild pré-produção | Backup/restore e dry-run validados | 75% |
 | Backup/Restore pré-produção | Validação real v3 concluída (#183) | 100% |
-| Dry-run de limpeza | Planejado e rastreado pela Issue #185 | 10% |
+| Dry-run de limpeza | Validado no PostgreSQL real (#185) | 100% |
 | Eventos corporativos | Fundação pronta | 30% |
 | IRPF | Planejado | 15% |
 | Backup/Restore administrativo | Planejado (#83) | 10% |
@@ -81,7 +81,7 @@ A reconstrução limpa do catálogo, históricos e carteira ficou reservada para
 - [x] Serviço read-only de inventário com contrato `pre-prod-inventory.v2`.
 - [x] CLI `python -m app.cli.pre_prod_inventory` com saída UTF-8.
 - [x] Testes que bloqueiam verbos SQL de escrita durante o inventário.
-- [x] Inventário executado no PostgreSQL real: 24 tabelas, 4.671.361 registros e zero inconsistências canônicas.
+- [x] Inventário executado no PostgreSQL real: 24 tabelas e zero inconsistências canônicas.
 - [x] Política completa para tabelas preservadas, exportáveis e reconstruíveis; nenhuma tabela conhecida permanece sem classificação.
 - [x] Issue #176 concluída após validação integral do inventário v2.
 - [x] CLI de backup v3 com pg_dump PostgreSQL 16, paridade de major, snapshot único com o inventário, listagem, SHA-256 e manifesto por execução.
@@ -91,8 +91,10 @@ A reconstrução limpa do catálogo, históricos e carteira ficou reservada para
 - [x] Restaurar o backup v2 no banco isolado e diagnosticar divergência temporal de 998 linhas em `asset_prices`, sem escrita na origem.
 - [x] Reexecutar backup/restore v3 no PostgreSQL real: snapshot consistente, reconciliação `ok=true` e zero escritas na origem.
 - [x] Encerrar a Issue #183 e promover a PR #184 para a `main`.
-- [ ] Implementar dry-run read-only da limpeza e relatório de impacto (#185).
-- [ ] Executar o dry-run no PostgreSQL real e anexar evidências de zero escrita.
+- [x] Implementar contrato `pre-prod-cleanup-impact.v2`, DAG reutilizável, introspecção de foreign keys, serviço e CLI read-only (#185).
+- [x] Validar 45 testes relacionados, sem falhas; avisos Pydantic rastreados separadamente na Issue #186.
+- [x] Executar o dry-run no PostgreSQL real: 24 tabelas, 4.673.320 linhas, 11 preservadas, 3 exportáveis, 10 reconstruíveis, zero bloqueios, zero ciclos e zero escritas.
+- [x] Persistir o artefato `artifacts/pre-prod-rebuild/20260722-101848/cleanup-impact.json` com `ok=true` e exit code `0`.
 - [ ] Exportar dados das tabelas classificadas como exportáveis.
 - [ ] Limpeza de dados reconstruíveis.
 - [ ] Seed B3 COTAHIST.
@@ -104,14 +106,15 @@ A reconstrução limpa do catálogo, históricos e carteira ficou reservada para
 
 ## Próximas prioridades
 
-1. Implementar e validar o dry-run read-only da limpeza (#185).
-2. Somente após encerrar #185, preparar a exportação controlada das tabelas exportáveis (#158).
+1. Promover a conclusão estrutural da Issue #185 para a `main`.
+2. Preparar a exportação controlada de `transactions`, `fixed_income_investments` e `corporate_events` no escopo da #158.
 3. Implementar TWR dedicado de Tesouro e Renda Fixa (#149).
 4. Materializar IBOV (#150).
 5. Remover rentabilidade legada (#151).
 
 ## Backlog
 
+- Migração das configurações Pydantic v2 para `ConfigDict` — #186.
 - Eventos corporativos — #129.
 - Evolução da integração de dados de mercado — #130.
 - Backup/Restore administrativo — #83.
