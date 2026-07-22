@@ -79,6 +79,18 @@ def test_cycle_blocks_both_orders() -> None:
     assert plan.cycles == [["a", "b", "c", "a"]]
 
 
+def test_self_reference_is_reported_as_cycle() -> None:
+    graph = TableDependencyGraph(
+        tables=["categories"],
+        dependencies=[TableDependency("categories", "categories", "fk_parent")],
+    )
+
+    plan = graph.build_plan()
+
+    assert plan.ok is False
+    assert plan.cycles == [["categories", "categories"]]
+
+
 def test_duplicate_edges_do_not_change_plan() -> None:
     edge = TableDependency("asset_prices", "assets", "fk_prices_assets")
     graph = TableDependencyGraph(
@@ -90,17 +102,24 @@ def test_duplicate_edges_do_not_change_plan() -> None:
     assert graph.build_plan().rebuild_order == ["assets", "asset_prices"]
 
 
+def test_edges_with_optional_constraint_names_are_sorted_safely() -> None:
+    graph = TableDependencyGraph(
+        tables=["assets", "asset_prices"],
+        dependencies=[
+            TableDependency("asset_prices", "assets", None),
+            TableDependency("asset_prices", "assets", "fk_prices_assets"),
+        ],
+    )
+
+    assert len(graph.dependencies) == 2
+
+
 def test_unknown_table_reference_is_rejected() -> None:
     with pytest.raises(ValueError, match="unknown table"):
         TableDependencyGraph(
             tables=["assets"],
             dependencies=[TableDependency("asset_prices", "assets")],
         )
-
-
-def test_self_reference_is_rejected() -> None:
-    with pytest.raises(ValueError, match="self-referential"):
-        TableDependency("assets", "assets")
 
 
 def test_lookup_for_unknown_table_is_rejected() -> None:
