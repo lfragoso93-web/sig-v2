@@ -102,7 +102,7 @@ def test_duplicate_edges_do_not_change_plan() -> None:
     assert graph.build_plan().rebuild_order == ["assets", "asset_prices"]
 
 
-def test_edges_with_optional_constraint_names_are_sorted_safely() -> None:
+def test_multiple_constraints_between_same_tables_count_as_one_relation() -> None:
     graph = TableDependencyGraph(
         tables=["assets", "asset_prices"],
         dependencies=[
@@ -112,6 +112,8 @@ def test_edges_with_optional_constraint_names_are_sorted_safely() -> None:
     )
 
     assert len(graph.dependencies) == 2
+    assert graph.direct_dependencies("asset_prices") == ["assets"]
+    assert graph.build_plan().rebuild_order == ["assets", "asset_prices"]
 
 
 def test_unknown_table_reference_is_rejected() -> None:
