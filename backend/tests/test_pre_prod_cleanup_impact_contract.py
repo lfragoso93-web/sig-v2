@@ -7,6 +7,8 @@ import pytest
 from app.services.pre_prod_cleanup_impact_contract import (
     IMPACT_REPORT_MODE,
     IMPACT_REPORT_SCHEMA_VERSION,
+    CleanupImpactDependency,
+    CleanupImpactDependencyPlan,
     CleanupImpactSafety,
     CleanupImpactTable,
     CleanupImpactTotals,
@@ -29,6 +31,12 @@ def _inventory_table(
 
 
 def _report(tables: list[CleanupImpactTable]) -> PreProdCleanupImpactReport:
+    export_required = sorted(
+        table.name for table in tables if table.proposed_action == "export_required"
+    )
+    rebuildable = sorted(
+        table.name for table in tables if table.proposed_action == "clean_and_rebuild"
+    )
     blockers = [table.name for table in tables if table.blocked]
     return PreProdCleanupImpactReport(
         schema_version=IMPACT_REPORT_SCHEMA_VERSION,
@@ -39,6 +47,13 @@ def _report(tables: list[CleanupImpactTable]) -> PreProdCleanupImpactReport:
         inventory_schema_version="pre-prod-inventory.v2",
         tables=tables,
         totals=CleanupImpactTotals.from_tables(tables),
+        dependency_plan=CleanupImpactDependencyPlan(
+            dependencies=[],
+            cleanup_order=list(reversed(export_required + rebuildable)),
+            rebuild_order=rebuildable,
+            export_required_before_cleanup=export_required,
+            cycles=[],
+        ),
         blockers=blockers,
         safety=CleanupImpactSafety(),
     )
@@ -96,9 +111,7 @@ def test_totals_are_derived_from_proposed_actions() -> None:
         ),
     ]
 
-    totals = CleanupImpactTotals.from_tables(tables)
-
-    assert totals == CleanupImpactTotals(
+    assert CleanupImpactTotals.from_tables(tables) == CleanupImpactTotals(
         tables=4,
         rows=17,
         preserved_tables=1,
@@ -141,17 +154,102 @@ def test_report_is_ok_when_all_tables_are_classified() -> None:
     )
 
     assert report.ok is True
-    assert report.blockers == []
+    assert report.dependency_plan.export_required_before_cleanup == ["transactions"]
+    assert report.dependency_plan.rebuild_order == ["asset_prices"]
     assert report.safety == CleanupImpactSafety()
 
 
-def test_report_rejects_inconsistent_totals() -> None:
+def test_preserved_table_cannot_appear_in_cleanup_order() -> None:
     report = _report(
         [
             CleanupImpactTable.from_inventory(
                 _inventory_table("users", "preserved")
+            ),
+            CleanupImpactTable.from_inventory(
+                _inventory_table("asset_prices", "rebuildable")
+            ),
+        ]
+    )
+
+    with pytest.raises(ValueError, match="preserved tables"):
+        replace(
+            report,
+            dependency_plan=replace(
+                report.dependency_plan,
+                cleanup_order=["asset_prices", "users"],
+            ),
+        )
+
+
+def test_export_required_table_cannot_bypass_export_gate() -> None:
+    report = _report(
+        [
+            CleanupImpactTable.from_inventory(
+                _inventory_table("transactions", "export_before_cleanup")
             )
         ]
+    )
+
+    with pytest.raises(ValueError, match="export gate"):
+        replace(
+            report,
+            dependency_plan=replace(
+                report.dependency_plan,
+                export_required_before_cleanup=[],
+            ),
+        )
+
+
+def test_rebuild_order_must_match_exactly_rebuildable_tables() -> None:
+    report = _report(
+        [
+            CleanupImpactTable.from_inventory(
+                _inventory_table("asset_prices", "rebuildable")
+            )
+        ]
+    )
+
+    with pytest.raises(ValueError, match="exactly rebuildable"):
+        replace(
+            report,
+            dependency_plan=replace(report.dependency_plan, rebuild_order=[]),
+        )
+
+
+def test_cycle_is_a_formal_blocker() -> None:
+    tables = [
+        CleanupImpactTable.from_inventory(
+            _inventory_table("asset_prices", "rebuildable")
+        )
+    ]
+    report = PreProdCleanupImpactReport(
+        schema_version=IMPACT_REPORT_SCHEMA_VERSION,
+        generated_at="2026-07-21T12:00:00+00:00",
+        mode=IMPACT_REPORT_MODE,
+        branch="stable-15jun",
+        commit_sha="a" * 40,
+        inventory_schema_version="pre-prod-inventory.v2",
+        tables=tables,
+        totals=CleanupImpactTotals.from_tables(tables),
+        dependency_plan=CleanupImpactDependencyPlan(
+            dependencies=[
+                CleanupImpactDependency("asset_prices", "asset_prices", "fk_self")
+            ],
+            cleanup_order=["asset_prices"],
+            rebuild_order=["asset_prices"],
+            export_required_before_cleanup=[],
+            cycles=[["asset_prices", "asset_prices"]],
+        ),
+        blockers=["referential_cycle:asset_prices->asset_prices"],
+        safety=CleanupImpactSafety(),
+    )
+
+    assert report.ok is False
+
+
+def test_report_rejects_inconsistent_totals() -> None:
+    report = _report(
+        [CleanupImpactTable.from_inventory(_inventory_table("users", "preserved"))]
     )
 
     with pytest.raises(ValueError, match="totals do not match"):
@@ -166,19 +264,6 @@ def test_report_rejects_inconsistent_totals() -> None:
                 blocked_tables=0,
             ),
         )
-
-
-def test_report_rejects_blockers_that_do_not_match_tables() -> None:
-    report = _report(
-        [
-            CleanupImpactTable.from_inventory(
-                _inventory_table("future_table", "unclassified")
-            )
-        ]
-    )
-
-    with pytest.raises(ValueError, match="blockers must match"):
-        replace(report, blockers=[])
 
 
 @pytest.mark.parametrize(
