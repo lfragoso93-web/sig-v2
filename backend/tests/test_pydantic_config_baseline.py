@@ -9,6 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from app.core.config import Settings
+from app.routers.assets import AssetListItem
 from app.schemas.asset import AssetRead
 from app.schemas.audit_log import AuditLogResponse
 from app.schemas.dividend import DividendRead
@@ -129,7 +130,18 @@ def test_additional_read_schemas_preserve_from_attributes() -> None:
             invested_value=100.0,
         )
     )
+    listed_asset = AssetListItem.model_validate(
+        SimpleNamespace(
+            id=4,
+            ticker="MXRF11",
+            name="Maxi Renda",
+            asset_type="FII",
+            last_price=10.0,
+            last_price_updated_at=None,
+        )
+    )
 
     assert asset.ticker == "PETR4"
     assert dividend.total_received == 12.5
     assert treasury.invested_value == 100.0
+    assert listed_asset.asset_type == "FII"
