@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -116,7 +117,7 @@ def test_prepare_paths_rejects_existing_artifacts(tmp_path: Path) -> None:
         service._prepare_paths(tmp_path, "run-1")
 
 
-@pytest.mark.parametrize("run_id", ["", "../escape", "a/b", ".", ".."])
+@pytest.mark.parametrize("run_id", ["", "../escape", "a/b", ".", ".."]) 
 def test_prepare_paths_rejects_unsafe_run_id(tmp_path: Path, run_id: str) -> None:
     with pytest.raises(ValueError, match="safe directory"):
         service._prepare_paths(tmp_path, run_id)
@@ -127,6 +128,34 @@ def test_csv_value_is_deterministic() -> None:
     assert service._csv_value(True) == "true"
     assert service._csv_value({"b": 2, "a": 1}) == '{"a":1,"b":2}'
     assert service._csv_value(b"\x00\xff") == "\\x00ff"
+
+
+@pytest.mark.asyncio
+async def test_read_columns_normalizes_postgres_ordinal_gaps() -> None:
+    class ColumnSession(FakeSession):
+        async def execute(self, statement, params=None):  # type: ignore[no-untyped-def]
+            self.executed.append(str(statement))
+            return [
+                SimpleNamespace(
+                    column_name="id",
+                    data_type="uuid",
+                    udt_name="uuid",
+                    is_nullable="NO",
+                    ordinal_position=1,
+                ),
+                SimpleNamespace(
+                    column_name="amount",
+                    data_type="numeric",
+                    udt_name="numeric",
+                    is_nullable="YES",
+                    ordinal_position=3,
+                ),
+            ]
+
+    columns = await service._read_columns(ColumnSession(), "transactions")  # type: ignore[arg-type]
+
+    assert [column.name for column in columns] == ["id", "amount"]
+    assert [column.ordinal_position for column in columns] == [1, 2]
 
 
 @pytest.mark.asyncio
