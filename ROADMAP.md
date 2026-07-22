@@ -20,7 +20,7 @@
 | Página Patrimônio | Fase 3 concluída e promovida pela PR #184 | 100% |
 | Página Rentabilidade | Contratos concluídos | 95% |
 | Dependências | Auditoria concluída; nenhuma PR aberta | 100% |
-| Configuração Pydantic v2 | Migração ampliada após validação local; nova suíte pendente (#186) | 95% |
+| Configuração Pydantic v2 | Migração concluída; validação integral final pendente (#186) | 98% |
 | Rebuild pré-produção | Backup/restore, dry-run e exportação validados | 80% |
 | Backup/Restore pré-produção | Validação real v3 concluída (#183) | 100% |
 | Dry-run de limpeza | Validado no PostgreSQL real (#185) | 100% |
@@ -84,8 +84,12 @@ A reconstrução limpa do catálogo, históricos e carteira permanece reservada 
 - [x] Adicionar inventário AST que bloqueia novas `class Config`.
 - [x] Incorporar os quatro pontos adicionais revelados pela validação local: ativos, proventos, Tesouro e `AssetListItem`.
 - [x] Adicionar regressões de leitura por atributos para os schemas adicionais.
-- [ ] Reexecutar a suíte com `PydanticDeprecatedSince20` tratado como erro.
-- [ ] Encerrar a Issue após zero warnings e ausência de regressões.
+- [x] Confirmar a suíte dedicada com `5 passed`.
+- [x] Confirmar ausência de `PydanticDeprecatedSince20` durante a coleta e execução integral.
+- [x] Isolar os testes de compatibilidade das variáveis reais do container.
+- [x] Tornar o teste documental compatível com a imagem isolada do backend sem enfraquecer a validação no checkout completo.
+- [ ] Reexecutar a suíte integral após os dois ajustes de infraestrutura de teste.
+- [ ] Encerrar a Issue após ausência de regressões.
 
 ### Pré-produção — #158 / #176 / #183 / #185 / #188
 
