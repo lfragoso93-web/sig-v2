@@ -5,6 +5,18 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Concluído — exportação auditável pré-produção (22/07/2026)
+
+- Adicionado o contrato versionado `pre-prod-export.v1` para exportações auditáveis das tabelas classificadas como `export_before_cleanup`.
+- Adicionado o serviço de exportação CSV determinística com manifesto, contagens, tamanho em bytes, SHA-256 de dados e SHA-256 de schema.
+- O gate `pre-prod-cleanup-impact.v2` e a exportação compartilham uma única sessão e um único snapshot PostgreSQL `REPEATABLE READ READ ONLY`.
+- Adicionada a CLI `python -m app.cli.pre_prod_export`, com exit codes distintos para sucesso, falha operacional, gate bloqueado, divergência de reconciliação e interrupção.
+- Artefatos são publicados atomicamente em `artifacts/pre-prod-rebuild/<run-id>/export`, sem sobrescrever execuções anteriores.
+- O runbook `docs/pre-prod-export-runbook.md` documenta execução PowerShell, artefatos, critérios de validação e códigos de saída.
+- Corrigida a introspecção de schema para normalizar `ordinal_position` segundo a projeção CSV, preservando ordinais contíguos mesmo quando o PostgreSQL mantém lacunas após remoção de colunas.
+- A execução real `20260722-134741` exportou `corporate_events`, `fixed_income_investments` e `transactions`: 3 tabelas, 323 linhas e 47.576 bytes.
+- A validação real retornou `reconciled=true`, exit code `0`, `source_writes_executed=0`, `cleanup_executed=false`, `rebuild_executed=false` e `overwrite_performed=false`.
+
 ### Concluído — dry-run de limpeza pré-produção (22/07/2026)
 
 - Adicionado o contrato versionado `pre-prod-cleanup-impact.v2`, derivado do inventário canônico `pre-prod-inventory.v2`.
@@ -206,8 +218,8 @@ Formato baseado em Keep a Changelog.
 
 ## Próximos focos
 
-1. Promover a conclusão estrutural da Issue #185 para a `main`.
-2. Preparar a exportação controlada de `transactions`, `fixed_income_investments` e `corporate_events` no escopo da #158.
+1. Promover a conclusão estrutural da Issue #188 para a `main` pela PR #191.
+2. Implementar a limpeza controlada das tabelas reconstruíveis no escopo da #158.
 3. TWR dedicado de Tesouro e Renda Fixa (#149).
 4. IBOV persistido (#150).
 5. Remoção do serviço legado (#151).
