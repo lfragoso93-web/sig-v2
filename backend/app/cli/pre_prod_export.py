@@ -115,9 +115,35 @@ def _reconcile_counts(cleanup_impact, manifest) -> None:  # type: ignore[no-unty
         )
 
 
+def _publish_cleanup_impact(*, cleanup_impact, run_directory: Path) -> Path:  # type: ignore[no-untyped-def]
+    """Publica o gate aprovado de forma atômica e sem sobrescrita."""
+    destination = run_directory / "cleanup-impact.json"
+    temporary = run_directory / ".cleanup-impact.json.tmp"
+    if destination.exists() or temporary.exists():
+        raise FileExistsError("cleanup impact artifact already exists")
+    run_directory.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(
+        cleanup_impact.to_dict(),
+        ensure_ascii=False,
+        indent=2,
+        sort_keys=True,
+    ).encode("utf-8") + b"\n"
+    try:
+        with temporary.open("xb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        temporary.replace(destination)
+    except Exception:
+        temporary.unlink(missing_ok=True)
+        raise
+    return destination
+
+
 async def _main(arguments: argparse.Namespace) -> int:
     run_id = _validate_arguments(arguments)
     generated_at = datetime.now(timezone.utc).isoformat()
+    run_directory = arguments.artifact_root / run_id
     session = AsyncSessionLocal()
 
     try:
@@ -147,18 +173,20 @@ async def _main(arguments: argparse.Namespace) -> int:
         )
         try:
             _reconcile_counts(cleanup_impact, manifest)
-        except ExportReconciliationError:
-            shutil.rmtree(
-                arguments.artifact_root / run_id / "export",
-                ignore_errors=True,
+            cleanup_impact_path = _publish_cleanup_impact(
+                cleanup_impact=cleanup_impact,
+                run_directory=run_directory,
             )
+        except Exception:
+            shutil.rmtree(run_directory / "export", ignore_errors=True)
+            (run_directory / "cleanup-impact.json").unlink(missing_ok=True)
+            (run_directory / ".cleanup-impact.json.tmp").unlink(missing_ok=True)
             raise
 
         output = {
             "run_id": run_id,
-            "artifact_directory": str(
-                arguments.artifact_root / run_id / "export"
-            ),
+            "artifact_directory": str(run_directory / "export"),
+            "cleanup_impact_path": str(cleanup_impact_path),
             "cleanup_impact": cleanup_impact.to_dict(),
             "manifest": manifest.to_dict(),
             "reconciled": True,
