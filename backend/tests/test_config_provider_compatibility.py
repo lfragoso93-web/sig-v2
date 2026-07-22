@@ -1,4 +1,28 @@
+import pytest
+
 from app.core.config import Settings
+
+
+_PROVIDER_ENVIRONMENT_VARIABLES = (
+    "QUOTES_PROVIDER_TOKEN",
+    "MARKET_DATA_BASE_URL",
+    "MARKET_DATA_RATE_LIMIT",
+    "MARKET_DATA_RATE_BURST",
+    "INTL_DATA_KEY",
+    "BRAPI_TOKEN",
+    "BRAPI_BASE_URL",
+    "BRAPI_RATE_LIMIT",
+    "BRAPI_RATE_BURST",
+    "ALPHA_VANTAGE_API_KEY",
+)
+
+
+@pytest.fixture(autouse=True)
+def isolate_provider_environment(monkeypatch):
+    """Evita que credenciais reais do container contaminem testes de precedência."""
+
+    for variable_name in _PROVIDER_ENVIRONMENT_VARIABLES:
+        monkeypatch.delenv(variable_name, raising=False)
 
 
 def make_settings(**values):
