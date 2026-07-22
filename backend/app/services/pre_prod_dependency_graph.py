@@ -106,9 +106,11 @@ class TableDependencyGraph:
         dependency_count = {table: 0 for table in self._tables}
         dependents: dict[str, set[str]] = {table: set() for table in self._tables}
 
-        for edge in self._dependencies:
-            dependency_count[edge.dependent] += 1
-            dependents[edge.dependency].add(edge.dependent)
+        for dependent, dependency in {
+            (edge.dependent, edge.dependency) for edge in self._dependencies
+        }:
+            dependency_count[dependent] += 1
+            dependents[dependency].add(dependent)
 
         ready = sorted(
             table for table, count in dependency_count.items() if count == 0
