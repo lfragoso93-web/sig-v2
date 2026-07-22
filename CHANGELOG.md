@@ -5,6 +5,19 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Concluído — dry-run de limpeza pré-produção (22/07/2026)
+
+- Adicionado o contrato versionado `pre-prod-cleanup-impact.v2`, derivado do inventário canônico `pre-prod-inventory.v2`.
+- Adicionados DAG reutilizável e introspecção read-only de foreign keys para produzir ordens seguras de limpeza e reconstrução.
+- O plano identifica dependências, gate de exportação, ciclos referenciais e bloqueadores sem executar limpeza, exportação ou rebuild.
+- Adicionada a CLI `python -m app.cli.pre_prod_cleanup_impact`, com validação de branch/SHA, artefato JSON auditável e exit codes distintos para aprovação, bloqueio e falha operacional.
+- Relatórios aprovados e bloqueados são preservados em `artifacts/pre-prod-rebuild/<run-id>/cleanup-impact.json`, sem sobrescrita de execuções anteriores.
+- O runbook `docs/pre-prod-cleanup-impact-runbook.md` documenta execução, critérios de aborto, paths e leitura dos códigos de saída.
+- A suíte relacionada passou com 45 testes e zero falhas; cinco warnings de configuração Pydantic v2 foram registrados separadamente na Issue #186.
+- O dry-run real `20260722-101848` foi executado no PostgreSQL: 24 tabelas, 4.673.320 linhas, 11 preservadas, 3 com exportação obrigatória e 10 reconstruíveis.
+- A execução real retornou `ok=true`, exit code `0`, zero bloqueios, zero ciclos, `writes_executed=0`, `cleanup_executed=false` e `rebuild_executed=false`.
+- O gate de exportação foi confirmado para `transactions`, `fixed_income_investments` e `corporate_events`.
+
 ### Corrigido — consistência temporal do backup PostgreSQL (21/07/2026)
 
 - O backup v2 foi restaurado integralmente em banco isolado, com checksum válido, migrations e 24 tabelas reconciliadas.
@@ -24,13 +37,11 @@ Formato baseado em Keep a Changelog.
 - Testes cobrem incompatibilidade de major e rejeição do contrato legado.
 - A tentativa real v1 abortou de forma segura dentro da transação isolada, com zero escritas na origem e sem limpeza ou rebuild.
 
-
 ### Corrigido — auditoria de dependências da PR #184 (20/07/2026)
 
 - `brace-expansion` transitivo foi atualizado de 5.0.6 para 5.0.7, corrigindo `GHSA-3jxr-9vmj-r5cp`.
 - O `package-lock.json` foi reconciliado com `typescript@6.0.3` e deixou de carregar os binários opcionais órfãos do TypeScript 7.
 - `npm audit --audit-level=high` passou com zero vulnerabilidades.
-
 
 ### Adicionado — backup e restauração isolada pré-produção (20/07/2026)
 
@@ -195,8 +206,8 @@ Formato baseado em Keep a Changelog.
 
 ## Próximos focos
 
-1. Executar e validar backup/restauração isolada no PostgreSQL real (#183).
-2. Somente após encerrar #183, preparar o dry-run de limpeza (#158).
+1. Promover a conclusão estrutural da Issue #185 para a `main`.
+2. Preparar a exportação controlada de `transactions`, `fixed_income_investments` e `corporate_events` no escopo da #158.
 3. TWR dedicado de Tesouro e Renda Fixa (#149).
 4. IBOV persistido (#150).
 5. Remoção do serviço legado (#151).

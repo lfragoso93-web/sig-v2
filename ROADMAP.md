@@ -1,6 +1,6 @@
 # Roadmap modular — SGI v2
 
-> Última atualização: 21/07/2026
+> Última atualização: 22/07/2026
 
 ## Visão geral
 
@@ -17,11 +17,12 @@
 | Snapshots por classe de mercado | Consolidado | 100% |
 | Proventos | Fase 2 concluída e promovida pela PR #166 | 100% |
 | Página Resumo | Concluída e promovida pela PR #164 | 100% |
-| Página Patrimônio | Fase 3 concluída na `stable-15jun`; promoção pendente | 100% |
+| Página Patrimônio | Fase 3 concluída e promovida pela PR #184 | 100% |
 | Página Rentabilidade | Contratos concluídos | 95% |
-| Dependências | Auditoria concluída; incompatibilidade TS7 corrigida | 100% |
-| Rebuild pré-produção | Backup/restore implementados; validação real pendente | 55% |
-| Backup/Restore pré-produção | Snapshot consistente v3 implementado; revalidação real pendente (#183) | 85% |
+| Dependências | Auditoria concluída; nenhuma PR aberta | 100% |
+| Rebuild pré-produção | Backup/restore e dry-run validados | 75% |
+| Backup/Restore pré-produção | Validação real v3 concluída (#183) | 100% |
+| Dry-run de limpeza | Validado no PostgreSQL real (#185) | 100% |
 | Eventos corporativos | Fundação pronta | 30% |
 | IRPF | Planejado | 15% |
 | Backup/Restore administrativo | Planejado (#83) | 10% |
@@ -72,14 +73,15 @@ A reconstrução limpa do catálogo, históricos e carteira ficou reservada para
 - [x] Atualizações compatíveis integradas em blocos isolados.
 - [x] TypeScript 7 revertido para 6.0.3 após incompatibilidade com `typescript-eslint@8.64.0` (#182).
 - [x] Build Docker do frontend confirmado pelo usuário.
+- [x] Nenhuma PR Dependabot aberta após o merge da PR #184.
 
-### Pré-produção — #158 / #176 / #183
+### Pré-produção — #158 / #176 / #183 / #185
 
 - [x] Runbook operacional com classificação de dados e critérios de abortar.
 - [x] Serviço read-only de inventário com contrato `pre-prod-inventory.v2`.
 - [x] CLI `python -m app.cli.pre_prod_inventory` com saída UTF-8.
 - [x] Testes que bloqueiam verbos SQL de escrita durante o inventário.
-- [x] Inventário executado no PostgreSQL real: 24 tabelas, 4.671.361 registros e zero inconsistências canônicas.
+- [x] Inventário executado no PostgreSQL real: 24 tabelas e zero inconsistências canônicas.
 - [x] Política completa para tabelas preservadas, exportáveis e reconstruíveis; nenhuma tabela conhecida permanece sem classificação.
 - [x] Issue #176 concluída após validação integral do inventário v2.
 - [x] CLI de backup v3 com pg_dump PostgreSQL 16, paridade de major, snapshot único com o inventário, listagem, SHA-256 e manifesto por execução.
@@ -87,8 +89,13 @@ A reconstrução limpa do catálogo, históricos e carteira ficou reservada para
 - [x] Inventário v2 da restauração e reconciliação de migrations, tabelas, contagens e achados.
 - [x] Confirmar aborto seguro da tentativa v1 incompatível, sem escrita na origem.
 - [x] Restaurar o backup v2 no banco isolado e diagnosticar divergência temporal de 998 linhas em `asset_prices`, sem escrita na origem.
-- [ ] Reexecutar backup/restore v3 no PostgreSQL real e anexar a reconciliação aprovada à Issue #183.
-- [ ] Dry-run da limpeza com relatório de impacto.
+- [x] Reexecutar backup/restore v3 no PostgreSQL real: snapshot consistente, reconciliação `ok=true` e zero escritas na origem.
+- [x] Encerrar a Issue #183 e promover a PR #184 para a `main`.
+- [x] Implementar contrato `pre-prod-cleanup-impact.v2`, DAG reutilizável, introspecção de foreign keys, serviço e CLI read-only (#185).
+- [x] Validar 45 testes relacionados, sem falhas; avisos Pydantic rastreados separadamente na Issue #186.
+- [x] Executar o dry-run no PostgreSQL real: 24 tabelas, 4.673.320 linhas, 11 preservadas, 3 exportáveis, 10 reconstruíveis, zero bloqueios, zero ciclos e zero escritas.
+- [x] Persistir o artefato `artifacts/pre-prod-rebuild/20260722-101848/cleanup-impact.json` com `ok=true` e exit code `0`.
+- [ ] Exportar dados das tabelas classificadas como exportáveis.
 - [ ] Limpeza de dados reconstruíveis.
 - [ ] Seed B3 COTAHIST.
 - [ ] Seed oficial do Tesouro Direto.
@@ -99,14 +106,15 @@ A reconstrução limpa do catálogo, históricos e carteira ficou reservada para
 
 ## Próximas prioridades
 
-1. Executar e validar o ciclo real de backup/restauração isolada (#183).
-2. Somente após encerrar #183, preparar o dry-run de limpeza (#158).
+1. Promover a conclusão estrutural da Issue #185 para a `main`.
+2. Preparar a exportação controlada de `transactions`, `fixed_income_investments` e `corporate_events` no escopo da #158.
 3. Implementar TWR dedicado de Tesouro e Renda Fixa (#149).
 4. Materializar IBOV (#150).
 5. Remover rentabilidade legada (#151).
 
 ## Backlog
 
+- Migração das configurações Pydantic v2 para `ConfigDict` — #186.
 - Eventos corporativos — #129.
 - Evolução da integração de dados de mercado — #130.
 - Backup/Restore administrativo — #83.

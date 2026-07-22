@@ -4,7 +4,7 @@ Plataforma pessoal para acompanhamento, consolidação e análise de investiment
 
 A branch padrão de desenvolvimento é `stable-15jun`. A promoção para `main` ocorre por PR após validação e atualização da documentação viva.
 
-## Status atual — 21/07/2026
+## Status atual — 22/07/2026
 
 O SGI v2 opera com arquitetura **DB-first**: catálogo, preços, taxas, proventos e snapshots são persistidos antes de alimentar KPIs, páginas e gráficos.
 
@@ -25,8 +25,9 @@ O SGI v2 opera com arquitetura **DB-first**: catálogo, preços, taxas, provento
 - Histórico mensal de proventos reconciliado por classe, com detalhamento acessível por mouse, teclado e toque.
 - Fase 3 de Patrimônio concluída sob a Issue #148: históricos consolidados e por classe, períodos determinísticos, tooltips canônicos e reconciliações observáveis por base temporal.
 - Valuation intradiário reconciliado entre `summary.v2`, posições e distribuição; snapshots consolidados reconciliados com classes somente na mesma data.
-- Inventário pré-produção read-only validado no PostgreSQL real, com 24 tabelas, 4.671.361 registros, zero inconsistências canônicas e política completa de classificação no contrato `pre-prod-inventory.v2`.
-- CLIs `pre_prod_backup` e `pre_prod_restore` implementados com contrato `pre-prod-backup.v3`, paridade obrigatória entre cliente e servidor PostgreSQL 16, snapshot único `REPEATABLE READ READ ONLY` para inventário e dump, SHA-256, restauração transacional em banco vazio e isolado e reconciliação integral. O ciclo v2 restaurou com segurança, mas revelou 998 preços coletados entre snapshots distintos; a validação real v3 da Issue #183 está pendente.
+- Inventário pré-produção read-only validado no PostgreSQL real, com 24 tabelas, política completa de classificação e contrato `pre-prod-inventory.v2`.
+- Backup `pre-prod-backup.v3` validado no PostgreSQL real com cliente/servidor 16/16, snapshot único `REPEATABLE READ READ ONLY`, dump com SHA-256, restauração em banco vazio e isolado e reconciliação `ok=true`, sem divergências e com zero escritas na origem. A Issue #183 foi concluída e a PR #184 promovida para a `main`.
+- Dry-run de limpeza validado no PostgreSQL real pelo contrato `pre-prod-cleanup-impact.v2`: 24 tabelas, 4.673.320 linhas, 11 preservadas, 3 com exportação obrigatória, 10 reconstruíveis, zero bloqueios, zero ciclos e zero escritas. A execução `20260722-101848` retornou `ok=true` e exit code `0`.
 
 ### Tesouro Direto — Blocos 3.1 e 3.2
 
@@ -70,6 +71,9 @@ Princípios: DB-first, fonte oficial primeiro, idempotência, ausência não con
 
 ```bash
 python -m app.cli.pre_prod_inventory
+python -m app.cli.pre_prod_backup
+python -m app.cli.pre_prod_restore
+python -m app.cli.pre_prod_cleanup_impact
 python -m app.cli.full_market_rebuild
 python -m app.cli.rebuild_b3_historical_market
 python -m app.cli.sync_treasury_catalog_v2
@@ -78,32 +82,33 @@ python -m app.cli.rebuild_treasury_official_prices
 
 ## Prioridades atuais
 
-1. Executar e validar backup/restauração isolada no PostgreSQL real (#183).
-2. Somente após encerrar #183, preparar o dry-run de limpeza da #158.
-3. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
-4. Materializar o histórico persistido do IBOV (#150).
-5. Remover o serviço legado de rentabilidade (#151).
+1. Preparar a exportação controlada das tabelas exportáveis da #158, somente após a promoção da Issue #185.
+2. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
+3. Materializar o histórico persistido do IBOV (#150).
+4. Remover o serviço legado de rentabilidade (#151).
+5. Tratar a dívida técnica de configuração Pydantic v2 registrada na Issue #186.
 
 ## Dependências
 
-A auditoria Dependabot da Issue #159 foi concluída. Atualizações compatíveis foram incorporadas à `stable-15jun` em blocos isolados. A incompatibilidade entre TypeScript 7 e `typescript-eslint@8.64.0` foi corrigida pela Issue #182, mantendo resolução estrita de peer dependencies.
+A auditoria Dependabot da Issue #159 foi concluída. Atualizações compatíveis foram incorporadas à `stable-15jun` em blocos isolados. A incompatibilidade entre TypeScript 7 e `typescript-eslint@8.64.0` foi corrigida pela Issue #182, mantendo resolução estrita de peer dependencies. Não há PR Dependabot aberta após o merge da PR #184.
 
 ## Pré-produção
 
 A primeira entrada em produção exige:
 
-1. inventário read-only aprovado e sem tabelas desconhecidas;
-2. backup validado com checksum e restauração isolada — CLIs implementados; execução real da #183 pendente;
-3. exportação controlada das transações, renda fixa e eventos corporativos;
-4. limpeza controlada de dados reconstruíveis;
-5. seed B3 COTAHIST;
-6. seed oficial do Tesouro Direto;
-7. seed de benchmarks, câmbio e proventos;
-8. importação CSV completa da carteira;
-9. rebuild de posições e snapshots;
-10. reconciliação financeira e auditoria de cobertura.
+1. inventário read-only aprovado e sem tabelas desconhecidas — concluído;
+2. backup validado com checksum e restauração isolada — concluído pela Issue #183;
+3. dry-run read-only da limpeza e relatório de impacto — validado pela Issue #185;
+4. exportação controlada das transações, renda fixa e eventos corporativos;
+5. limpeza controlada de dados reconstruíveis;
+6. seed B3 COTAHIST;
+7. seed oficial do Tesouro Direto;
+8. seed de benchmarks, câmbio e proventos;
+9. importação CSV completa da carteira;
+10. rebuild de posições e snapshots;
+11. reconciliação financeira e auditoria de cobertura.
 
-Checklist completo: issue #158. Runbook operacional: `docs/PRE_PROD_REBUILD_RUNBOOK.md`.
+Checklist completo: issue #158. Runbook geral: `docs/PRE_PROD_REBUILD_RUNBOOK.md`. Runbook do dry-run: `docs/pre-prod-cleanup-impact-runbook.md`.
 
 ## Stack
 
@@ -127,6 +132,7 @@ docker compose up -d --build
 - `docs/providers.md` — fontes e fallbacks.
 - `docs/operations.md` — operação e rebuilds.
 - `docs/PRE_PROD_REBUILD_RUNBOOK.md` — política e sequência do rebuild pré-produção.
+- `docs/pre-prod-cleanup-impact-runbook.md` — execução, artefato, exit codes e critérios de aborto do dry-run.
 - `docs/CANONICAL_FINANCIAL_CONTRACT.md` — contrato financeiro oficial.
 - `docs/RESUMO_ARCHITECTURAL_AUDIT.md` — matriz de contratos e divergências da página Resumo.
 - `docs/PROVENTOS_ARCHITECTURAL_AUDIT.md` — fluxo, contratos, riscos e sequência da Fase 2.
