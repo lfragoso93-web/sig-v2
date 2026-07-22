@@ -23,7 +23,7 @@
 | Rebuild pré-produção | Backup/restore, dry-run e exportação validados | 80% |
 | Backup/Restore pré-produção | Validação real v3 concluída (#183) | 100% |
 | Dry-run de limpeza | Validado no PostgreSQL real (#185) | 100% |
-| Exportação pré-produção | Validada no PostgreSQL real (#188) | 100% |
+| Exportação pré-produção | Validada e promovida pela PR #191 (#188) | 100% |
 | Eventos corporativos | Fundação pronta | 30% |
 | IRPF | Planejado | 15% |
 | Backup/Restore administrativo | Planejado (#83) | 10% |
@@ -50,7 +50,7 @@
 - Criação automática de ativos duplicados bloqueada.
 - Valores atuais validados na interface.
 
-A reconstrução limpa do catálogo, históricos e carteira ficou reservada para o checklist pré-produção (#158).
+A reconstrução limpa do catálogo, históricos e carteira permanece reservada ao checklist pré-produção da Issue #158.
 
 ### Histórico e snapshots
 
@@ -74,52 +74,39 @@ A reconstrução limpa do catálogo, históricos e carteira ficou reservada para
 - [x] Atualizações compatíveis integradas em blocos isolados.
 - [x] TypeScript 7 revertido para 6.0.3 após incompatibilidade com `typescript-eslint@8.64.0` (#182).
 - [x] Build Docker do frontend confirmado pelo usuário.
-- [x] Nenhuma PR Dependabot aberta após o merge da PR #184.
+- [x] Nenhuma PR Dependabot aberta após o merge da PR #191.
 
 ### Pré-produção — #158 / #176 / #183 / #185 / #188
 
-- [x] Runbook operacional com classificação de dados e critérios de abortar.
-- [x] Serviço read-only de inventário com contrato `pre-prod-inventory.v2`.
-- [x] CLI `python -m app.cli.pre_prod_inventory` com saída UTF-8.
-- [x] Testes que bloqueiam verbos SQL de escrita durante o inventário.
-- [x] Inventário executado no PostgreSQL real: 24 tabelas e zero inconsistências canônicas.
-- [x] Política completa para tabelas preservadas, exportáveis e reconstruíveis; nenhuma tabela conhecida permanece sem classificação.
-- [x] Issue #176 concluída após validação integral do inventário v2.
-- [x] CLI de backup v3 com pg_dump PostgreSQL 16, paridade de major, snapshot único com o inventário, listagem, SHA-256 e manifesto por execução.
-- [x] CLI de restauração com checksum, destino vazio/diferente e transação única.
-- [x] Inventário v2 da restauração e reconciliação de migrations, tabelas, contagens e achados.
-- [x] Confirmar aborto seguro da tentativa v1 incompatível, sem escrita na origem.
-- [x] Restaurar o backup v2 no banco isolado e diagnosticar divergência temporal de 998 linhas em `asset_prices`, sem escrita na origem.
-- [x] Reexecutar backup/restore v3 no PostgreSQL real: snapshot consistente, reconciliação `ok=true` e zero escritas na origem.
-- [x] Encerrar a Issue #183 e promover a PR #184 para a `main`.
-- [x] Implementar contrato `pre-prod-cleanup-impact.v2`, DAG reutilizável, introspecção de foreign keys, serviço e CLI read-only (#185).
-- [x] Validar 45 testes relacionados, sem falhas; avisos Pydantic rastreados separadamente na Issue #186.
-- [x] Executar o dry-run no PostgreSQL real: 24 tabelas, 4.673.320 linhas, 11 preservadas, 3 exportáveis, 10 reconstruíveis, zero bloqueios, zero ciclos e zero escritas.
-- [x] Persistir o artefato `artifacts/pre-prod-rebuild/20260722-101848/cleanup-impact.json` com `ok=true` e exit code `0`.
-- [x] Implementar contrato `pre-prod-export.v1`, serviço, CLI e runbook de exportação auditável (#188).
-- [x] Compartilhar o mesmo snapshot `REPEATABLE READ READ ONLY` entre gate de impacto e exportação.
-- [x] Exportar `corporate_events`, `fixed_income_investments` e `transactions` com SHA-256 de dados e schema, sem sobrescrita.
-- [x] Normalizar ordinais do artefato CSV para preservar contrato contíguo mesmo após colunas removidas no PostgreSQL.
-- [x] Executar a exportação real `20260722-134741`: 3 tabelas, 323 linhas, 47.576 bytes, `reconciled=true`, exit code `0` e zero escritas.
-- [ ] Limpeza de dados reconstruíveis.
+- [x] Inventário read-only `pre-prod-inventory.v2` validado no PostgreSQL real.
+- [x] Política integral: 11 tabelas preservadas, 3 exportáveis e 10 reconstruíveis.
+- [x] Backup `pre-prod-backup.v3` e restauração isolada reconciliados.
+- [x] Dry-run `pre-prod-cleanup-impact.v2` aprovado, sem bloqueios, ciclos ou escritas.
+- [x] Exportação `pre-prod-export.v1` das tabelas `corporate_events`, `fixed_income_investments` e `transactions`.
+- [x] Execução real `20260722-134741`: 3 tabelas, 323 linhas, 47.576 bytes, `reconciled=true` e exit code `0`.
+- [x] Incompatibilidade de `ordinal_position` do PostgreSQL corrigida e protegida por regressão.
+- [x] Issue #188 encerrada e PR #191 promovida para a `main`.
+- [ ] Implementar contrato e serviço de limpeza controlada.
+- [ ] Executar limpeza das tabelas reconstruíveis com gate aprovado.
 - [ ] Seed B3 COTAHIST.
 - [ ] Seed oficial do Tesouro Direto.
-- [ ] Seed de benchmarks e proventos.
+- [ ] Seed de benchmarks, câmbio e proventos.
 - [ ] Importação CSV completa da carteira.
 - [ ] Rebuild de posições e snapshots.
 - [ ] Auditoria de cobertura e reconciliação final.
 
 ## Próximas prioridades
 
-1. Promover a conclusão estrutural da Issue #188 para a `main` pela PR #191.
-2. Implementar a limpeza controlada das tabelas reconstruíveis no escopo da #158, usando o gate e os artefatos já validados.
-3. Implementar TWR dedicado de Tesouro e Renda Fixa (#149).
-4. Materializar IBOV (#150).
-5. Remover rentabilidade legada (#151).
+1. Sincronizar e manter a `stable-15jun` alinhada à `main` após a PR #191 — concluído em 22/07/2026.
+2. Eliminar os warnings Pydantic v2 em bloco isolado (#186).
+3. Implementar o contrato e o serviço de limpeza controlada da #158, sem executar escrita real neste primeiro sub-bloco.
+4. Executar a limpeza e o rebuild pré-produção em etapas auditáveis.
+5. Remover o serviço legado de rentabilidade (#151).
+6. Materializar IBOV (#150).
+7. Implementar TWR dedicado, separando Tesouro e Renda Fixa (#149).
 
 ## Backlog
 
-- Migração das configurações Pydantic v2 para `ConfigDict` — #186.
 - Eventos corporativos — #129.
 - Evolução da integração de dados de mercado — #130.
 - Backup/Restore administrativo — #83.
@@ -134,5 +121,5 @@ A reconstrução limpa do catálogo, históricos e carteira ficou reservada para
 1. Desenvolvimento na `stable-15jun`.
 2. Commits pequenos e isolados.
 3. Validação em ambiente de desenvolvimento.
-4. Atualização de issues, README, ROADMAP e CHANGELOG.
+4. Atualização contínua de Issues, README, ROADMAP, CHANGELOG e documentação técnica.
 5. PR da `stable-15jun` para `main` ao fechar bloco estrutural.
