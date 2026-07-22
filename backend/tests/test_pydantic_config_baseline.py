@@ -14,9 +14,6 @@ from pathlib import Path
 APP_ROOT = Path(__file__).resolve().parents[1] / "app"
 EXPECTED_LEGACY_CONFIGS = {
     "schemas/audit_log.py:AuditLogResponse.Config",
-    "schemas/portfolio.py:ClassTargetRead.Config",
-    "schemas/portfolio.py:ClassTargetWithCurrent.Config",
-    "schemas/portfolio.py:PortfolioRead.Config",
 }
 
 
