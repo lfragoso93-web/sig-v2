@@ -191,18 +191,28 @@ class PreProdCleanupImpactReport:
             raise ValueError("rebuild order cannot contain duplicate tables")
         if preserved.intersection(cleanup_order):
             raise ValueError("preserved tables cannot appear in cleanup order")
-        if set(rebuild_order) != rebuildable:
-            raise ValueError("rebuild order must contain exactly rebuildable tables")
         if set(export_gate) != export_required:
             raise ValueError("export gate must contain exactly export-required tables")
-        if not export_required.issubset(cleanup_order):
-            raise ValueError("export-required tables must remain gated in cleanup order")
-        if not set(cleanup_order).issubset(export_required | rebuildable):
-            raise ValueError("cleanup order contains a non-cleanable table")
+
+        if self.dependency_plan.cycles:
+            if cleanup_order or rebuild_order:
+                raise ValueError("cyclic dependency plan cannot expose execution orders")
+        else:
+            if set(rebuild_order) != rebuildable:
+                raise ValueError("rebuild order must contain exactly rebuildable tables")
+            if not export_required.issubset(cleanup_order):
+                raise ValueError(
+                    "export-required tables must remain gated in cleanup order"
+                )
+            if not set(cleanup_order).issubset(export_required | rebuildable):
+                raise ValueError("cleanup order contains a non-cleanable table")
 
         expected_blockers = sorted(
             [table.name for table in self.tables if table.blocked]
-            + ["referential_cycle:" + "->".join(cycle) for cycle in self.dependency_plan.cycles]
+            + [
+                "referential_cycle:" + "->".join(cycle)
+                for cycle in self.dependency_plan.cycles
+            ]
         )
         if sorted(self.blockers) != expected_blockers:
             raise ValueError("blockers must match blocked tables and dependency cycles")
