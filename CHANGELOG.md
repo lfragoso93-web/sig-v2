@@ -5,6 +5,15 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — migração Pydantic v2 para ConfigDict (22/07/2026)
+
+- Configurações baseadas em `class Config` foram migradas para `ConfigDict` ou `SettingsConfigDict`.
+- A validação local revelou quatro ocorrências adicionais não identificadas no primeiro mapeamento: `AssetRead`, `DividendRead`, `TreasuryPositionResponse` e `AssetListItem`.
+- A regressão estrutural agora percorre todo o backend via AST e falha caso qualquer nova `class Config` seja introduzida.
+- Testes preservam `from_attributes`, carregamento de `.env` e `case_sensitive=True`.
+- A validação final passou com `666 passed`, `1 skipped` intencional e zero `PydanticDeprecatedSince20`.
+- A Issue #186 foi encerrada; os warnings remanescentes de `datetime.utcnow()` foram separados na Issue #192.
+
 ### Concluído — exportação auditável pré-produção (22/07/2026)
 
 - Adicionado o contrato versionado `pre-prod-export.v1` para exportações auditáveis das tabelas classificadas como `export_before_cleanup`.
@@ -218,8 +227,8 @@ Formato baseado em Keep a Changelog.
 
 ## Próximos focos
 
-1. Promover a conclusão estrutural da Issue #188 para a `main` pela PR #191.
-2. Implementar a limpeza controlada das tabelas reconstruíveis no escopo da #158.
-3. TWR dedicado de Tesouro e Renda Fixa (#149).
-4. IBOV persistido (#150).
-5. Remoção do serviço legado (#151).
+1. Implementar a limpeza controlada das tabelas reconstruíveis no escopo da #158.
+2. Remover o serviço legado de rentabilidade (#151).
+3. Materializar IBOV (#150).
+4. Implementar TWR dedicado por classe (#149).
+5. Migrar timestamps UTC legados para timezone-aware (#192).

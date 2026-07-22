@@ -28,7 +28,8 @@ O SGI v2 opera com arquitetura **DB-first**: catálogo, preços, taxas, provento
 - Inventário pré-produção read-only validado no PostgreSQL real, com 24 tabelas, política completa de classificação e contrato `pre-prod-inventory.v2`.
 - Backup `pre-prod-backup.v3` validado no PostgreSQL real com cliente/servidor 16/16, snapshot único `REPEATABLE READ READ ONLY`, dump com SHA-256, restauração em banco vazio e isolado e reconciliação `ok=true`, sem divergências e com zero escritas na origem. A Issue #183 foi concluída e a PR #184 promovida para a `main`.
 - Dry-run de limpeza validado no PostgreSQL real pelo contrato `pre-prod-cleanup-impact.v2`: 24 tabelas, 4.673.320 linhas, 11 preservadas, 3 com exportação obrigatória, 10 reconstruíveis, zero bloqueios, zero ciclos e zero escritas. A execução `20260722-101848` retornou `ok=true` e exit code `0`.
-- Exportação auditável `pre-prod-export.v1` validada no PostgreSQL real em snapshot único `REPEATABLE READ READ ONLY`: `corporate_events`, `fixed_income_investments` e `transactions` reconciliadas em 323 linhas, com SHA-256 de dados e schema, zero escritas na origem e `reconciled=true`. A execução `20260722-134741` retornou exit code `0`.
+- Exportação auditável `pre-prod-export.v1` validada no PostgreSQL real em snapshot único `REPEATABLE READ READ ONLY`: `corporate_events`, `fixed_income_investments` e `transactions` reconciliadas em 323 linhas, com SHA-256 de dados e schema, zero escritas na origem e `reconciled=true`. A execução `20260722-134741` retornou exit code `0`, a Issue #188 foi encerrada e a PR #191 promovida para a `main`.
+- Migração integral das configurações Pydantic v2 para `ConfigDict` concluída na Issue #186. A suíte dedicada passou com 5 testes e a validação final registrou `666 passed`, `1 skipped` intencional e zero `PydanticDeprecatedSince20`.
 
 ### Tesouro Direto — Blocos 3.1 e 3.2
 
@@ -84,15 +85,16 @@ python -m app.cli.rebuild_treasury_official_prices
 
 ## Prioridades atuais
 
-1. Implementar a limpeza controlada das tabelas reconstruíveis da #158, usando o gate aprovado e os artefatos exportados da Issue #188.
-2. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
-3. Materializar o histórico persistido do IBOV (#150).
-4. Remover o serviço legado de rentabilidade (#151).
-5. Tratar a dívida técnica de configuração Pydantic v2 registrada na Issue #186.
+1. Implementar o contrato e o serviço de limpeza controlada das tabelas reconstruíveis da #158, usando o gate aprovado e os artefatos exportados da Issue #188, sem executar escrita real no primeiro sub-bloco.
+2. Executar a limpeza e o rebuild pré-produção em etapas auditáveis.
+3. Remover o serviço legado de rentabilidade (#151).
+4. Materializar o histórico persistido do IBOV (#150).
+5. Implementar TWR dedicado, separando Tesouro Direto e Renda Fixa (#149).
+6. Migrar timestamps UTC legados para timezone-aware (#192).
 
 ## Dependências
 
-A auditoria Dependabot da Issue #159 foi concluída. Atualizações compatíveis foram incorporadas à `stable-15jun` em blocos isolados. A incompatibilidade entre TypeScript 7 e `typescript-eslint@8.64.0` foi corrigida pela Issue #182, mantendo resolução estrita de peer dependencies. Não há PR Dependabot aberta após o merge da PR #184.
+A auditoria Dependabot da Issue #159 foi concluída. Atualizações compatíveis foram incorporadas à `stable-15jun` em blocos isolados. A incompatibilidade entre TypeScript 7 e `typescript-eslint@8.64.0` foi corrigida pela Issue #182, mantendo resolução estrita de peer dependencies. Não há PR Dependabot aberta após o merge da PR #191.
 
 ## Pré-produção
 
@@ -101,7 +103,7 @@ A primeira entrada em produção exige:
 1. inventário read-only aprovado e sem tabelas desconhecidas — concluído;
 2. backup validado com checksum e restauração isolada — concluído pela Issue #183;
 3. dry-run read-only da limpeza e relatório de impacto — validado pela Issue #185;
-4. exportação controlada das transações, renda fixa e eventos corporativos — validada pela Issue #188;
+4. exportação controlada das transações, renda fixa e eventos corporativos — validada pela Issue #188 e promovida pela PR #191;
 5. limpeza controlada de dados reconstruíveis;
 6. seed B3 COTAHIST;
 7. seed oficial do Tesouro Direto;

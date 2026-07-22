@@ -3,7 +3,7 @@ from fastapi.responses import Response
 from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import logging
@@ -124,15 +124,14 @@ class TickerSuggestion(BaseModel):
 
 
 class AssetListItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     ticker: str
     name: Optional[str] = None
     asset_type: str
     last_price: Optional[float] = None
     last_price_updated_at: Optional[str] = None
-
-    class Config:
-        from_attributes = True
 
 
 class AssetListResponse(BaseModel):

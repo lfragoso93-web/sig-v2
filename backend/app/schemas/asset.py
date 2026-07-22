@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 from app.models.asset import AssetType
 
@@ -23,12 +23,11 @@ class AssetUpdate(BaseModel):
 
 
 class AssetRead(AssetBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     logo_url: Optional[str] = None
     last_price: Optional[float] = None
-
-    class Config:
-        from_attributes = True
 
 
 # Alias para compatibilidade com routers que importam AssetResponse

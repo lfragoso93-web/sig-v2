@@ -4,12 +4,15 @@ Schemas de resposta para Tesouro Direto.
 Como o Tesouro e gerenciado via transactions, nao ha schema de Create/Update
 dedicado. O dado entra pelo endpoint padrao de transactions.
 """
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 
 
 class TreasuryPositionResponse(BaseModel):
     """Representa um lote de compra de Tesouro Direto enriquecido com cotacao."""
+
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     portfolio_id: int
     brapi_name: str
@@ -26,6 +29,3 @@ class TreasuryPositionResponse(BaseModel):
     rentabilidade_pct: Optional[float] = None
     quantidade_cotas: Optional[float] = None
     notes: Optional[str] = None
-
-    class Config:
-        from_attributes = True

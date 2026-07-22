@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 from datetime import date
 
@@ -12,12 +12,11 @@ class DividendCreate(BaseModel):
 
 
 class DividendRead(DividendCreate):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     total_received: Optional[float] = None
     portfolio_id: Optional[int] = None
-
-    class Config:
-        from_attributes = True
 
 
 # Alias de compatibilidade usado pelos routers
