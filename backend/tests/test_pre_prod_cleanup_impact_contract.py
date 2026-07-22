@@ -216,7 +216,7 @@ def test_rebuild_order_must_match_exactly_rebuildable_tables() -> None:
         )
 
 
-def test_cycle_is_a_formal_blocker() -> None:
+def test_cycle_is_a_formal_blocker_without_execution_orders() -> None:
     tables = [
         CleanupImpactTable.from_inventory(
             _inventory_table("asset_prices", "rebuildable")
@@ -235,8 +235,8 @@ def test_cycle_is_a_formal_blocker() -> None:
             dependencies=[
                 CleanupImpactDependency("asset_prices", "asset_prices", "fk_self")
             ],
-            cleanup_order=["asset_prices"],
-            rebuild_order=["asset_prices"],
+            cleanup_order=[],
+            rebuild_order=[],
             export_required_before_cleanup=[],
             cycles=[["asset_prices", "asset_prices"]],
         ),
@@ -245,6 +245,15 @@ def test_cycle_is_a_formal_blocker() -> None:
     )
 
     assert report.ok is False
+
+    with pytest.raises(ValueError, match="cannot expose execution orders"):
+        replace(
+            report,
+            dependency_plan=replace(
+                report.dependency_plan,
+                cleanup_order=["asset_prices"],
+            ),
+        )
 
 
 def test_report_rejects_inconsistent_totals() -> None:
