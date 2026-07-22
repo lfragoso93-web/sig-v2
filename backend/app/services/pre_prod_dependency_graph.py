@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
-@dataclass(frozen=True, order=True)
+@dataclass(frozen=True)
 class TableDependency:
     dependent: str
     dependency: str
@@ -18,8 +18,6 @@ class TableDependency:
     def __post_init__(self) -> None:
         if not self.dependent.strip() or not self.dependency.strip():
             raise ValueError("dependency table names cannot be empty")
-        if self.dependent == self.dependency:
-            raise ValueError("self-referential dependencies are not supported")
 
 
 @dataclass(frozen=True)
@@ -55,7 +53,14 @@ class TableDependencyGraph:
                 )
 
         self._tables = normalized_tables
-        self._dependencies = sorted(set(dependencies))
+        self._dependencies = sorted(
+            set(dependencies),
+            key=lambda edge: (
+                edge.dependent,
+                edge.dependency,
+                edge.constraint_name or "",
+            ),
+        )
 
     @property
     def tables(self) -> list[str]:
@@ -68,17 +73,21 @@ class TableDependencyGraph:
     def direct_dependencies(self, table: str) -> list[str]:
         self._require_table(table)
         return sorted(
-            edge.dependency
-            for edge in self._dependencies
-            if edge.dependent == table
+            {
+                edge.dependency
+                for edge in self._dependencies
+                if edge.dependent == table
+            }
         )
 
     def direct_dependents(self, table: str) -> list[str]:
         self._require_table(table)
         return sorted(
-            edge.dependent
-            for edge in self._dependencies
-            if edge.dependency == table
+            {
+                edge.dependent
+                for edge in self._dependencies
+                if edge.dependency == table
+            }
         )
 
     def build_plan(self) -> DependencyPlan:
