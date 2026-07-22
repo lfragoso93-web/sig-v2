@@ -6,7 +6,7 @@
 
 | Módulo | Status | Progresso |
 |---|---|---:|
-| Core backend e autenticação | Estável; ConfigDict implementado, validação pendente | 99% |
+| Core backend e autenticação | Estável | 100% |
 | Carteiras e transações | Estável | 100% |
 | Importação CSV | Estável, revisão pré-produção pendente | 95% |
 | Dados canônicos | Consolidado | 100% |
@@ -20,6 +20,7 @@
 | Página Patrimônio | Fase 3 concluída e promovida pela PR #184 | 100% |
 | Página Rentabilidade | Contratos concluídos | 95% |
 | Dependências | Auditoria concluída; nenhuma PR aberta | 100% |
+| Configuração Pydantic v2 | Migração ampliada após validação local; nova suíte pendente (#186) | 95% |
 | Rebuild pré-produção | Backup/restore, dry-run e exportação validados | 80% |
 | Backup/Restore pré-produção | Validação real v3 concluída (#183) | 100% |
 | Dry-run de limpeza | Validado no PostgreSQL real (#185) | 100% |
@@ -62,16 +63,6 @@ A reconstrução limpa do catálogo, históricos e carteira permanece reservada 
 
 ## Em desenvolvimento
 
-### Estabilização Pydantic — #186
-
-- [x] Mapear as cinco configurações baseadas em `class Config`.
-- [x] Migrar `Settings` para `SettingsConfigDict`.
-- [x] Migrar schemas de portfólio e auditoria para `ConfigDict(from_attributes=True)`.
-- [x] Adicionar regressão estrutural que proíbe novas configurações legadas.
-- [x] Adicionar testes de leitura por atributos e configuração de ambiente.
-- [ ] Executar a suíte relacionada e confirmar zero `PydanticDeprecatedSince20`.
-- [ ] Encerrar a Issue #186 após validação local.
-
 ### Rentabilidade
 
 - [ ] Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
@@ -85,6 +76,16 @@ A reconstrução limpa do catálogo, históricos e carteira permanece reservada 
 - [x] TypeScript 7 revertido para 6.0.3 após incompatibilidade com `typescript-eslint@8.64.0` (#182).
 - [x] Build Docker do frontend confirmado pelo usuário.
 - [x] Nenhuma PR Dependabot aberta após o merge da PR #191.
+
+### Pydantic v2 — #186
+
+- [x] Migrar `Settings` para `SettingsConfigDict`.
+- [x] Migrar schemas de portfólio e auditoria inicialmente identificados.
+- [x] Adicionar inventário AST que bloqueia novas `class Config`.
+- [x] Incorporar os quatro pontos adicionais revelados pela validação local: ativos, proventos, Tesouro e `AssetListItem`.
+- [x] Adicionar regressões de leitura por atributos para os schemas adicionais.
+- [ ] Reexecutar a suíte com `PydanticDeprecatedSince20` tratado como erro.
+- [ ] Encerrar a Issue após zero warnings e ausência de regressões.
 
 ### Pré-produção — #158 / #176 / #183 / #185 / #188
 
@@ -107,7 +108,7 @@ A reconstrução limpa do catálogo, históricos e carteira permanece reservada 
 
 ## Próximas prioridades
 
-1. Validar a migração `ConfigDict` e encerrar a Issue #186.
+1. Revalidar e encerrar a migração Pydantic v2 (#186).
 2. Implementar o contrato e o serviço de limpeza controlada da #158, sem executar escrita real neste primeiro sub-bloco.
 3. Executar a limpeza e o rebuild pré-produção em etapas auditáveis.
 4. Remover o serviço legado de rentabilidade (#151).
