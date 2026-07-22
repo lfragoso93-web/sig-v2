@@ -11,7 +11,8 @@ Formato baseado em Keep a Changelog.
 - A validação local revelou quatro ocorrências adicionais não identificadas no primeiro mapeamento: `AssetRead`, `DividendRead`, `TreasuryPositionResponse` e `AssetListItem`.
 - A regressão estrutural agora percorre todo o backend via AST e falha caso qualquer nova `class Config` seja introduzida.
 - Testes preservam `from_attributes`, carregamento de `.env` e `case_sensitive=True`.
-- A Issue #186 permanece aberta até a suíte completa confirmar zero `PydanticDeprecatedSince20`.
+- A validação final passou com `666 passed`, `1 skipped` intencional e zero `PydanticDeprecatedSince20`.
+- A Issue #186 foi encerrada; os warnings remanescentes de `datetime.utcnow()` foram separados na Issue #192.
 
 ### Concluído — exportação auditável pré-produção (22/07/2026)
 
@@ -226,8 +227,8 @@ Formato baseado em Keep a Changelog.
 
 ## Próximos focos
 
-1. Revalidar e encerrar a Issue #186.
-2. Implementar a limpeza controlada das tabelas reconstruíveis no escopo da #158.
-3. Remover o serviço legado de rentabilidade (#151).
-4. Materializar IBOV (#150).
-5. Implementar TWR dedicado por classe (#149).
+1. Implementar a limpeza controlada das tabelas reconstruíveis no escopo da #158.
+2. Remover o serviço legado de rentabilidade (#151).
+3. Materializar IBOV (#150).
+4. Implementar TWR dedicado por classe (#149).
+5. Migrar timestamps UTC legados para timezone-aware (#192).
