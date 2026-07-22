@@ -21,10 +21,11 @@
 | Página Rentabilidade | Contratos concluídos | 95% |
 | Dependências | Auditoria concluída; nenhuma PR aberta | 100% |
 | Configuração Pydantic v2 | Migração validada e Issue #186 encerrada | 100% |
-| Rebuild pré-produção | Backup/restore, dry-run e exportação validados | 80% |
+| Rebuild pré-produção | Plano seguro implementado; validação real e execução pendentes | 84% |
 | Backup/Restore pré-produção | Validação real v3 concluída (#183) | 100% |
 | Dry-run de limpeza | Validado no PostgreSQL real (#185) | 100% |
 | Exportação pré-produção | Validada e promovida pela PR #191 (#188) | 100% |
+| Planejamento seguro da limpeza | Implementado e promovido pela PR #194 | 95% |
 | Eventos corporativos | Fundação pronta | 30% |
 | IRPF | Planejado | 15% |
 | Backup/Restore administrativo | Planejado (#83) | 10% |
@@ -75,7 +76,7 @@ A reconstrução limpa do catálogo, históricos e carteira permanece reservada 
 - [x] Atualizações compatíveis integradas em blocos isolados.
 - [x] TypeScript 7 revertido para 6.0.3 após incompatibilidade com `typescript-eslint@8.64.0` (#182).
 - [x] Build Docker do frontend confirmado pelo usuário.
-- [x] Nenhuma PR Dependabot aberta após o merge da PR #191.
+- [x] Nenhuma PR Dependabot aberta após o merge da PR #194.
 
 ### Pydantic v2 — #186
 
@@ -103,8 +104,12 @@ Validação final: `666 passed`, `1 skipped` intencional e zero `PydanticDepreca
 - [x] Execução real `20260722-134741`: 3 tabelas, 323 linhas, 47.576 bytes, `reconciled=true` e exit code `0`.
 - [x] Incompatibilidade de `ordinal_position` do PostgreSQL corrigida e protegida por regressão.
 - [x] Issue #188 encerrada e PR #191 promovida para a `main`.
-- [ ] Implementar contrato e serviço de limpeza controlada.
-- [ ] Executar limpeza das tabelas reconstruíveis com gate aprovado.
+- [x] Contrato `pre-prod-cleanup-execution.v1` e CLI `pre_prod_cleanup_plan` implementados.
+- [x] Checksums, identidade operacional, gate, DAG, publicação atômica e rollback de exportação cobertos.
+- [x] PR #194 promovida para a `main` com 33 testes focados aprovados.
+- [ ] Validar em ambiente real uma nova cadeia exportação + plano com o mesmo `run_id`.
+- [ ] Abrir sub-bloco específico para a execução destrutiva controlada.
+- [ ] Executar limpeza das tabelas reconstruíveis somente após aprovação explícita.
 - [ ] Seed B3 COTAHIST.
 - [ ] Seed oficial do Tesouro Direto.
 - [ ] Seed de benchmarks, câmbio e proventos.
@@ -114,12 +119,13 @@ Validação final: `666 passed`, `1 skipped` intencional e zero `PydanticDepreca
 
 ## Próximas prioridades
 
-1. Implementar o contrato e o serviço de limpeza controlada da #158, sem executar escrita real neste primeiro sub-bloco.
-2. Executar a limpeza e o rebuild pré-produção em etapas auditáveis.
-3. Remover o serviço legado de rentabilidade (#151).
-4. Materializar IBOV (#150).
-5. Implementar TWR dedicado, separando Tesouro e Renda Fixa (#149).
-6. Migrar timestamps UTC para timezone-aware (#192).
+1. Validar em ambiente real a cadeia íntegra de exportação + `pre_prod_cleanup_plan`, sem escrever no banco.
+2. Especificar e revisar o sub-bloco destrutivo da limpeza, ainda sem executá-lo.
+3. Executar a limpeza e o rebuild pré-produção em etapas auditáveis somente após aprovação do gate.
+4. Remover o serviço legado de rentabilidade (#151).
+5. Materializar IBOV (#150).
+6. Implementar TWR dedicado, separando Tesouro e Renda Fixa (#149).
+7. Migrar timestamps UTC para timezone-aware (#192).
 
 ## Backlog
 
