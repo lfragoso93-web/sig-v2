@@ -28,6 +28,7 @@ O SGI v2 opera com arquitetura **DB-first**: catálogo, preços, taxas, provento
 - Inventário pré-produção read-only validado no PostgreSQL real, com 24 tabelas, política completa de classificação e contrato `pre-prod-inventory.v2`.
 - Backup `pre-prod-backup.v3` validado no PostgreSQL real com cliente/servidor 16/16, snapshot único `REPEATABLE READ READ ONLY`, dump com SHA-256, restauração em banco vazio e isolado e reconciliação `ok=true`, sem divergências e com zero escritas na origem. A Issue #183 foi concluída e a PR #184 promovida para a `main`.
 - Dry-run de limpeza validado no PostgreSQL real pelo contrato `pre-prod-cleanup-impact.v2`: 24 tabelas, 4.673.320 linhas, 11 preservadas, 3 com exportação obrigatória, 10 reconstruíveis, zero bloqueios, zero ciclos e zero escritas. A execução `20260722-101848` retornou `ok=true` e exit code `0`.
+- Exportação auditável `pre-prod-export.v1` validada no PostgreSQL real em snapshot único `REPEATABLE READ READ ONLY`: `corporate_events`, `fixed_income_investments` e `transactions` reconciliadas em 323 linhas, com SHA-256 de dados e schema, zero escritas na origem e `reconciled=true`. A execução `20260722-134741` retornou exit code `0`.
 
 ### Tesouro Direto — Blocos 3.1 e 3.2
 
@@ -74,6 +75,7 @@ python -m app.cli.pre_prod_inventory
 python -m app.cli.pre_prod_backup
 python -m app.cli.pre_prod_restore
 python -m app.cli.pre_prod_cleanup_impact
+python -m app.cli.pre_prod_export
 python -m app.cli.full_market_rebuild
 python -m app.cli.rebuild_b3_historical_market
 python -m app.cli.sync_treasury_catalog_v2
@@ -82,7 +84,7 @@ python -m app.cli.rebuild_treasury_official_prices
 
 ## Prioridades atuais
 
-1. Preparar a exportação controlada das tabelas exportáveis da #158, somente após a promoção da Issue #185.
+1. Implementar a limpeza controlada das tabelas reconstruíveis da #158, usando o gate aprovado e os artefatos exportados da Issue #188.
 2. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
 3. Materializar o histórico persistido do IBOV (#150).
 4. Remover o serviço legado de rentabilidade (#151).
@@ -99,7 +101,7 @@ A primeira entrada em produção exige:
 1. inventário read-only aprovado e sem tabelas desconhecidas — concluído;
 2. backup validado com checksum e restauração isolada — concluído pela Issue #183;
 3. dry-run read-only da limpeza e relatório de impacto — validado pela Issue #185;
-4. exportação controlada das transações, renda fixa e eventos corporativos;
+4. exportação controlada das transações, renda fixa e eventos corporativos — validada pela Issue #188;
 5. limpeza controlada de dados reconstruíveis;
 6. seed B3 COTAHIST;
 7. seed oficial do Tesouro Direto;
@@ -108,7 +110,7 @@ A primeira entrada em produção exige:
 10. rebuild de posições e snapshots;
 11. reconciliação financeira e auditoria de cobertura.
 
-Checklist completo: issue #158. Runbook geral: `docs/PRE_PROD_REBUILD_RUNBOOK.md`. Runbook do dry-run: `docs/pre-prod-cleanup-impact-runbook.md`.
+Checklist completo: issue #158. Runbook geral: `docs/PRE_PROD_REBUILD_RUNBOOK.md`. Runbook do dry-run: `docs/pre-prod-cleanup-impact-runbook.md`. Runbook da exportação: `docs/pre-prod-export-runbook.md`.
 
 ## Stack
 
@@ -133,6 +135,7 @@ docker compose up -d --build
 - `docs/operations.md` — operação e rebuilds.
 - `docs/PRE_PROD_REBUILD_RUNBOOK.md` — política e sequência do rebuild pré-produção.
 - `docs/pre-prod-cleanup-impact-runbook.md` — execução, artefato, exit codes e critérios de aborto do dry-run.
+- `docs/pre-prod-export-runbook.md` — execução read-only, artefatos, manifesto, reconciliação e códigos de saída da exportação.
 - `docs/CANONICAL_FINANCIAL_CONTRACT.md` — contrato financeiro oficial.
 - `docs/RESUMO_ARCHITECTURAL_AUDIT.md` — matriz de contratos e divergências da página Resumo.
 - `docs/PROVENTOS_ARCHITECTURAL_AUDIT.md` — fluxo, contratos, riscos e sequência da Fase 2.

@@ -20,9 +20,10 @@
 | Página Patrimônio | Fase 3 concluída e promovida pela PR #184 | 100% |
 | Página Rentabilidade | Contratos concluídos | 95% |
 | Dependências | Auditoria concluída; nenhuma PR aberta | 100% |
-| Rebuild pré-produção | Backup/restore e dry-run validados | 75% |
+| Rebuild pré-produção | Backup/restore, dry-run e exportação validados | 80% |
 | Backup/Restore pré-produção | Validação real v3 concluída (#183) | 100% |
 | Dry-run de limpeza | Validado no PostgreSQL real (#185) | 100% |
+| Exportação pré-produção | Validada no PostgreSQL real (#188) | 100% |
 | Eventos corporativos | Fundação pronta | 30% |
 | IRPF | Planejado | 15% |
 | Backup/Restore administrativo | Planejado (#83) | 10% |
@@ -75,7 +76,7 @@ A reconstrução limpa do catálogo, históricos e carteira ficou reservada para
 - [x] Build Docker do frontend confirmado pelo usuário.
 - [x] Nenhuma PR Dependabot aberta após o merge da PR #184.
 
-### Pré-produção — #158 / #176 / #183 / #185
+### Pré-produção — #158 / #176 / #183 / #185 / #188
 
 - [x] Runbook operacional com classificação de dados e critérios de abortar.
 - [x] Serviço read-only de inventário com contrato `pre-prod-inventory.v2`.
@@ -95,7 +96,11 @@ A reconstrução limpa do catálogo, históricos e carteira ficou reservada para
 - [x] Validar 45 testes relacionados, sem falhas; avisos Pydantic rastreados separadamente na Issue #186.
 - [x] Executar o dry-run no PostgreSQL real: 24 tabelas, 4.673.320 linhas, 11 preservadas, 3 exportáveis, 10 reconstruíveis, zero bloqueios, zero ciclos e zero escritas.
 - [x] Persistir o artefato `artifacts/pre-prod-rebuild/20260722-101848/cleanup-impact.json` com `ok=true` e exit code `0`.
-- [ ] Exportar dados das tabelas classificadas como exportáveis.
+- [x] Implementar contrato `pre-prod-export.v1`, serviço, CLI e runbook de exportação auditável (#188).
+- [x] Compartilhar o mesmo snapshot `REPEATABLE READ READ ONLY` entre gate de impacto e exportação.
+- [x] Exportar `corporate_events`, `fixed_income_investments` e `transactions` com SHA-256 de dados e schema, sem sobrescrita.
+- [x] Normalizar ordinais do artefato CSV para preservar contrato contíguo mesmo após colunas removidas no PostgreSQL.
+- [x] Executar a exportação real `20260722-134741`: 3 tabelas, 323 linhas, 47.576 bytes, `reconciled=true`, exit code `0` e zero escritas.
 - [ ] Limpeza de dados reconstruíveis.
 - [ ] Seed B3 COTAHIST.
 - [ ] Seed oficial do Tesouro Direto.
@@ -106,8 +111,8 @@ A reconstrução limpa do catálogo, históricos e carteira ficou reservada para
 
 ## Próximas prioridades
 
-1. Promover a conclusão estrutural da Issue #185 para a `main`.
-2. Preparar a exportação controlada de `transactions`, `fixed_income_investments` e `corporate_events` no escopo da #158.
+1. Promover a conclusão estrutural da Issue #188 para a `main` pela PR #191.
+2. Implementar a limpeza controlada das tabelas reconstruíveis no escopo da #158, usando o gate e os artefatos já validados.
 3. Implementar TWR dedicado de Tesouro e Renda Fixa (#149).
 4. Materializar IBOV (#150).
 5. Remover rentabilidade legada (#151).

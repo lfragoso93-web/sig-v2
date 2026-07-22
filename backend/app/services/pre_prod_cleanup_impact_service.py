@@ -34,8 +34,13 @@ async def build_pre_prod_cleanup_impact(
     branch: str,
     commit_sha: str,
     session: AsyncSession | None = None,
+    rollback_supplied_session: bool = True,
 ) -> PreProdCleanupImpactReport:
-    """Constrói o dry-run no mesmo snapshot read-only de inventário e FKs."""
+    """Constrói o dry-run no mesmo snapshot read-only de inventário e FKs.
+
+    Quando uma sessão é fornecida, o chamador pode preservar a transação para
+    compartilhar exatamente o mesmo snapshot com a exportação auditável.
+    """
     owns_session = session is None
     active_session = session or AsyncSessionLocal()
 
@@ -113,6 +118,7 @@ async def build_pre_prod_cleanup_impact(
             safety=CleanupImpactSafety(),
         )
     finally:
-        await active_session.rollback()
+        if owns_session or rollback_supplied_session:
+            await active_session.rollback()
         if owns_session:
             await active_session.close()
