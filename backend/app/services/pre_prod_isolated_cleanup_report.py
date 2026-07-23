@@ -1,7 +1,7 @@
 """Relatório auditável da limpeza controlada em PostgreSQL isolado.
 
-Este módulo transforma o resultado transacional em um artefato UTF-8, redigido,
-publicado de forma atômica e sem sobrescrever uma execução anterior.
+Este módulo transforma resultados transacionais e abortos autorizados em artefatos
+UTF-8, redigidos, publicados de forma atômica e sem sobrescrita.
 """
 from __future__ import annotations
 
@@ -24,6 +24,7 @@ from app.services.pre_prod_isolated_cleanup_executor import (
 
 DEFAULT_ARTIFACT_ROOT = Path("artifacts/pre-prod-rebuild")
 EXECUTION_REPORT_NAME = "execution.json"
+_ALLOWED_FAILURE_STATES = frozenset({"aborted", "rolled_back"})
 
 
 class IsolatedCleanupReportError(RuntimeError):
@@ -62,6 +63,39 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _base_report(
+    *,
+    authorization: IsolatedCleanupAuthorization,
+    started_at: str,
+    finished_at: str,
+    final_state: str,
+    lock_acquired: bool,
+    committed: bool,
+    tables: tuple[Mapping[str, Any], ...],
+    totals: Mapping[str, int],
+    abort_reason: str | None,
+) -> IsolatedCleanupExecutionReport:
+    return IsolatedCleanupExecutionReport(
+        schema_version=ISOLATED_CLEANUP_REPORT_SCHEMA_VERSION,
+        run_id=authorization.plan.run_id,
+        branch=APPROVED_BRANCH,
+        commit_sha=authorization.plan.commit_sha,
+        target_database=authorization.target.redacted_label,
+        plan_sha256=authorization.plan.plan_sha256,
+        started_at=started_at,
+        finished_at=finished_at,
+        final_state=final_state,
+        lock_acquired=lock_acquired,
+        committed=committed,
+        preserved_tables_unchanged=True,
+        rebuild_started=False,
+        cleanup_order=authorization.plan.cleanup_order,
+        tables=tables,
+        totals=totals,
+        abort_reason=abort_reason,
+    )
+
+
 def build_execution_report(
     *,
     authorization: IsolatedCleanupAuthorization,
@@ -86,21 +120,13 @@ def build_execution_report(
         )
 
     table_payloads = tuple(asdict(table) for table in result.tables)
-    return IsolatedCleanupExecutionReport(
-        schema_version=ISOLATED_CLEANUP_REPORT_SCHEMA_VERSION,
-        run_id=authorization.plan.run_id,
-        branch=APPROVED_BRANCH,
-        commit_sha=authorization.plan.commit_sha,
-        target_database=authorization.target.redacted_label,
-        plan_sha256=authorization.plan.plan_sha256,
+    return _base_report(
+        authorization=authorization,
         started_at=started_at,
         finished_at=finished_at,
         final_state="committed",
         lock_acquired=result.lock_acquired,
         committed=True,
-        preserved_tables_unchanged=True,
-        rebuild_started=False,
-        cleanup_order=authorization.plan.cleanup_order,
         tables=table_payloads,
         totals={
             "tables": len(result.tables),
@@ -109,6 +135,45 @@ def build_execution_report(
             "rows_after": sum(table.actual_rows_after for table in result.tables),
             "database_writes": result.rows_deleted,
         },
+        abort_reason=None,
+    )
+
+
+def build_failure_report(
+    *,
+    authorization: IsolatedCleanupAuthorization,
+    started_at: str,
+    finished_at: str,
+    final_state: str,
+    abort_reason: str,
+    lock_acquired: bool,
+) -> IsolatedCleanupExecutionReport:
+    """Constrói evidência redigida para aborto ou rollback já autorizado.
+
+    ``abort_reason`` deve ser um código estável controlado pela aplicação. Mensagens
+    de exceção, URLs e credenciais nunca devem ser repassadas para este contrato.
+    """
+    if final_state not in _ALLOWED_FAILURE_STATES:
+        raise IsolatedCleanupReportError("invalid failure report final_state")
+    if not abort_reason or any(character.isspace() for character in abort_reason):
+        raise IsolatedCleanupReportError("abort_reason must be a stable non-empty code")
+
+    return _base_report(
+        authorization=authorization,
+        started_at=started_at,
+        finished_at=finished_at,
+        final_state=final_state,
+        lock_acquired=lock_acquired,
+        committed=False,
+        tables=(),
+        totals={
+            "tables": 0,
+            "rows_before": 0,
+            "rows_deleted": 0,
+            "rows_after": 0,
+            "database_writes": 0,
+        },
+        abort_reason=abort_reason,
     )
 
 
