@@ -1,6 +1,6 @@
 # Roadmap modular — SGI v2
 
-> Última atualização: 22/07/2026
+> Última atualização: 23/07/2026
 
 ## Visão geral
 
@@ -21,11 +21,12 @@
 | Página Rentabilidade | Contratos concluídos | 95% |
 | Dependências | Auditoria concluída; nenhuma PR aberta | 100% |
 | Configuração Pydantic v2 | Migração validada e Issue #186 encerrada | 100% |
-| Rebuild pré-produção | Plano seguro implementado; validação real e execução pendentes | 84% |
+| Rebuild pré-produção | Ensaio da limpeza isolada em preparação | 87% |
 | Backup/Restore pré-produção | Validação real v3 concluída (#183) | 100% |
 | Dry-run de limpeza | Validado no PostgreSQL real (#185) | 100% |
 | Exportação pré-produção | Validada e promovida pela PR #191 (#188) | 100% |
-| Planejamento seguro da limpeza | Implementado e promovido pela PR #194 | 95% |
+| Planejamento seguro da limpeza | Validado pela Issue #195 e PR #194 | 100% |
+| Limpeza isolada | Executor, CLI e artefato implementados; ensaio real pendente (#196 / PR #198) | 85% |
 | Eventos corporativos | Fundação pronta | 30% |
 | IRPF | Planejado | 15% |
 | Backup/Restore administrativo | Planejado (#83) | 10% |
@@ -94,7 +95,7 @@ A reconstrução limpa do catálogo, históricos e carteira permanece reservada 
 
 Validação final: `666 passed`, `1 skipped` intencional e zero `PydanticDeprecatedSince20`.
 
-### Pré-produção — #158 / #176 / #183 / #185 / #188
+### Pré-produção — #158 / #176 / #183 / #185 / #188 / #195 / #196
 
 - [x] Inventário read-only `pre-prod-inventory.v2` validado no PostgreSQL real.
 - [x] Política integral: 11 tabelas preservadas, 3 exportáveis e 10 reconstruíveis.
@@ -107,9 +108,17 @@ Validação final: `666 passed`, `1 skipped` intencional e zero `PydanticDepreca
 - [x] Contrato `pre-prod-cleanup-execution.v1` e CLI `pre_prod_cleanup_plan` implementados.
 - [x] Checksums, identidade operacional, gate, DAG, publicação atômica e rollback de exportação cobertos.
 - [x] PR #194 promovida para a `main` com 33 testes focados aprovados.
-- [ ] Validar em ambiente real uma nova cadeia exportação + plano com o mesmo `run_id`.
-- [ ] Abrir sub-bloco específico para a execução destrutiva controlada.
-- [ ] Executar limpeza das tabelas reconstruíveis somente após aprovação explícita.
+- [x] Cadeia real de exportação + plano validada sem escrita no banco pela Issue #195.
+- [x] Issue #196 aberta para a execução controlada em banco isolado.
+- [x] Executor transacional com lock, contagens, ordem canônica, pós-condições e rollback integral implementado.
+- [x] CLI `pre_prod_isolated_cleanup` e relatórios `committed`, `aborted` e `rolled_back` implementados.
+- [x] Validação local concluída com 43 testes aprovados e `compileall` sem erros.
+- [x] Runbook D0 do ensaio isolado concluído com gates, comandos PowerShell, reconciliação e descarte.
+- [ ] Implementar captura automática de baseline e pós-execução das tabelas preservadas.
+- [ ] Executar cenário de sucesso em PostgreSQL descartável restaurado do backup v3.
+- [ ] Executar e reconciliar cenário de rollback em nova restauração e novo `run_id`.
+- [ ] Promover a PR #198 para a `main` após o bloco estrutural validado.
+- [ ] Avaliar autorização separada para limpeza da pré-produção real somente após o ensaio aprovado.
 - [ ] Seed B3 COTAHIST.
 - [ ] Seed oficial do Tesouro Direto.
 - [ ] Seed de benchmarks, câmbio e proventos.
@@ -119,13 +128,14 @@ Validação final: `666 passed`, `1 skipped` intencional e zero `PydanticDepreca
 
 ## Próximas prioridades
 
-1. Validar em ambiente real a cadeia íntegra de exportação + `pre_prod_cleanup_plan`, sem escrever no banco.
-2. Especificar e revisar o sub-bloco destrutivo da limpeza, ainda sem executá-lo.
-3. Executar a limpeza e o rebuild pré-produção em etapas auditáveis somente após aprovação do gate.
-4. Remover o serviço legado de rentabilidade (#151).
-5. Materializar IBOV (#150).
-6. Implementar TWR dedicado, separando Tesouro e Renda Fixa (#149).
-7. Migrar timestamps UTC para timezone-aware (#192).
+1. Implementar captura automática e reconciliação das tabelas preservadas para o ensaio da Issue #196.
+2. Executar os cenários de sucesso e rollback somente em banco PostgreSQL descartável.
+3. Promover a PR #198 após validação integral do ensaio isolado.
+4. Executar limpeza e rebuild pré-produção apenas após nova autorização explícita.
+5. Remover o serviço legado de rentabilidade (#151).
+6. Materializar IBOV (#150).
+7. Implementar TWR dedicado, separando Tesouro Direto e Renda Fixa (#149).
+8. Migrar timestamps UTC para timezone-aware (#192).
 
 ## Backlog
 
