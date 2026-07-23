@@ -17,6 +17,7 @@ from app.services.pre_prod_isolated_cleanup_contract import (
 )
 from app.services.pre_prod_isolated_cleanup_executor import (
     IsolatedCleanupCountMismatchError,
+    IsolatedCleanupPostconditionError,
 )
 
 RUN_ID = "20260723-190000"
@@ -171,14 +172,14 @@ def test_invalid_confirmation_aborts_before_engine_creation(tmp_path: Path) -> N
     assert called is False
 
 
-def test_count_mismatch_maps_to_plan_divergence_and_disposes_engine(
+def test_count_mismatch_publishes_redacted_abort_and_disposes_engine(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     engine = _FakeEngine()
 
     def fail_count(**_: object) -> object:
-        raise IsolatedCleanupCountMismatchError("rows differ")
+        raise IsolatedCleanupCountMismatchError("rows differ at postgresql://user:secret@host/db")
 
     monkeypatch.setattr(cli, "execute_isolated_cleanup", fail_count)
 
@@ -187,8 +188,44 @@ def test_count_mismatch_maps_to_plan_divergence_and_disposes_engine(
         engine_factory=lambda _: engine,
     )
 
+    destination = tmp_path / "artifacts" / RUN_ID / "cleanup" / "execution.json"
+    payload = json.loads(destination.read_text(encoding="utf-8"))
+    serialized = json.dumps(payload)
     assert exit_code == cli.CleanupExitCode.PLAN_DIVERGENCE
     assert engine.disposed is True
+    assert payload["final_state"] == "aborted"
+    assert payload["abort_reason"] == "precondition_count_mismatch"
+    assert payload["committed"] is False
+    assert payload["totals"]["database_writes"] == 0
+    assert "secret" not in serialized
+    assert "postgresql://" not in serialized
+
+
+def test_postcondition_failure_publishes_rollback_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    engine = _FakeEngine()
+
+    def fail_postcondition(**_: object) -> object:
+        raise IsolatedCleanupPostconditionError("sensitive runtime detail")
+
+    monkeypatch.setattr(cli, "execute_isolated_cleanup", fail_postcondition)
+
+    exit_code = cli.run(
+        _arguments(tmp_path),
+        engine_factory=lambda _: engine,
+    )
+
+    destination = tmp_path / "artifacts" / RUN_ID / "cleanup" / "execution.json"
+    payload = json.loads(destination.read_text(encoding="utf-8"))
+    serialized = json.dumps(payload)
+    assert exit_code == cli.CleanupExitCode.ROLLED_BACK
+    assert engine.disposed is True
+    assert payload["final_state"] == "rolled_back"
+    assert payload["abort_reason"] == "postcondition_failed"
+    assert payload["lock_acquired"] is True
+    assert "sensitive runtime detail" not in serialized
 
 
 def test_success_delegates_execution_and_publication_without_exposing_urls(
