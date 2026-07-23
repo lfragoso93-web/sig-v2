@@ -21,6 +21,7 @@ from app.services.pre_prod_isolated_cleanup_report import (
     IsolatedCleanupReportAlreadyExistsError,
     IsolatedCleanupReportError,
     build_execution_report,
+    build_failure_report,
     execution_report_path,
     publish_execution_report,
 )
@@ -117,6 +118,50 @@ def test_build_execution_report_redacts_target_and_reconciles_totals() -> None:
         "rows_after": 0,
         "database_writes": 5,
     }
+
+
+def test_build_failure_report_is_redacted_and_zero_write() -> None:
+    report = build_failure_report(
+        authorization=_authorization(),
+        started_at="2026-07-23T18:00:00+00:00",
+        finished_at="2026-07-23T18:00:01+00:00",
+        final_state="rolled_back",
+        abort_reason="postcondition_failed",
+        lock_acquired=True,
+    )
+
+    payload = report.to_dict()
+    serialized = json.dumps(payload)
+    assert payload["final_state"] == "rolled_back"
+    assert payload["committed"] is False
+    assert payload["abort_reason"] == "postcondition_failed"
+    assert payload["totals"]["database_writes"] == 0
+    assert payload["tables"] == ()
+    assert "secret" not in serialized
+    assert "postgresql://" not in serialized
+
+
+@pytest.mark.parametrize(
+    ("final_state", "abort_reason"),
+    [
+        ("committed", "unexpected"),
+        ("aborted", "raw exception message"),
+        ("rolled_back", ""),
+    ],
+)
+def test_build_failure_report_rejects_unsafe_contract(
+    final_state: str,
+    abort_reason: str,
+) -> None:
+    with pytest.raises(IsolatedCleanupReportError):
+        build_failure_report(
+            authorization=_authorization(),
+            started_at="start",
+            finished_at="finish",
+            final_state=final_state,
+            abort_reason=abort_reason,
+            lock_acquired=False,
+        )
 
 
 def test_build_execution_report_rejects_mismatched_result() -> None:
