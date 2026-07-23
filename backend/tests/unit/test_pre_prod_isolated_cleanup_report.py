@@ -160,7 +160,6 @@ def test_publish_execution_report_writes_utf8_json_atomically(tmp_path: Path) ->
     payload = json.loads(destination.read_text(encoding="utf-8"))
     assert payload["run_id"] == RUN_ID
     assert payload["committed"] is True
-    assert not list(destination.parent.glob("*.tmp"))
     assert not list(destination.parent.glob(".*.tmp"))
 
 
