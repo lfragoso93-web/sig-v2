@@ -260,8 +260,8 @@ def run(
             report=report,
             artifact_root=arguments.artifact_root,
         )
-    except IsolatedCleanupCountMismatchError as exc:
-        _LOGGER.error("divergência anterior à limpeza: %s", exc)
+    except IsolatedCleanupCountMismatchError:
+        _LOGGER.error("divergência anterior à limpeza; detalhes omitidos")
         try:
             _publish_failure_evidence(
                 authorization=authorization,
@@ -275,8 +275,8 @@ def run(
             _LOGGER.error("falha ao publicar evidência de aborto: %s", report_exc)
             return CleanupExitCode.ARTIFACT_ERROR
         return CleanupExitCode.PLAN_DIVERGENCE
-    except IsolatedCleanupLockUnavailableError as exc:
-        _LOGGER.error("lock operacional indisponível: %s", exc)
+    except IsolatedCleanupLockUnavailableError:
+        _LOGGER.error("lock operacional indisponível; detalhes omitidos")
         try:
             _publish_failure_evidence(
                 authorization=authorization,
@@ -290,8 +290,8 @@ def run(
             _LOGGER.error("falha ao publicar evidência de aborto: %s", report_exc)
             return CleanupExitCode.ARTIFACT_ERROR
         return CleanupExitCode.LOCK_UNAVAILABLE
-    except IsolatedCleanupPostconditionError as exc:
-        _LOGGER.error("execução revertida por pós-condição: %s", exc)
+    except IsolatedCleanupPostconditionError:
+        _LOGGER.error("execução revertida por pós-condição; detalhes omitidos")
         try:
             _publish_failure_evidence(
                 authorization=authorization,
@@ -305,8 +305,8 @@ def run(
             _LOGGER.error("falha ao publicar evidência de rollback: %s", report_exc)
             return CleanupExitCode.ARTIFACT_ERROR
         return CleanupExitCode.ROLLED_BACK
-    except IsolatedCleanupExecutionError as exc:
-        _LOGGER.error("execução revertida: %s", exc)
+    except IsolatedCleanupExecutionError:
+        _LOGGER.error("execução revertida; detalhes omitidos")
         try:
             _publish_failure_evidence(
                 authorization=authorization,
