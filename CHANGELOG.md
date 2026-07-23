@@ -5,6 +5,16 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Adicionado — evidência de aborto e rollback da limpeza isolada (23/07/2026)
+
+- `cleanup/execution.json` agora também registra divergência prévia, lock indisponível e rollback após autorização completa.
+- Estados de falha são limitados a `aborted` e `rolled_back`, com motivos estáveis controlados pela aplicação.
+- Mensagens brutas de exceção, URLs e credenciais não são persistidas no artefato.
+- Logs pós-autorização foram redigidos para impedir vazamento de detalhes sensíveis no console.
+- A publicação continua UTF-8, atômica, durável e sem sobrescrita.
+- Testes com mocks cobrem divergência de contagem, rollback por pós-condição, zero escritas persistidas e ausência de segredos.
+- Nenhuma execução da CLI contra PostgreSQL foi realizada neste bloco.
+
 ### Adicionado — CLI da limpeza isolada (23/07/2026)
 
 - Adicionada a CLI `python -m app.cli.pre_prod_isolated_cleanup`, exclusiva para PostgreSQL isolado.
