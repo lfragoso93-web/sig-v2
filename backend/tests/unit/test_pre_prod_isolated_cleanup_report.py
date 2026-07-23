@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from app.services import pre_prod_isolated_cleanup_report as report_module
 from app.services.pre_prod_isolated_cleanup_contract import (
     ApprovedCleanupPlanIdentity,
     CleanupDatabaseIdentity,
@@ -222,3 +223,16 @@ def test_publish_execution_report_never_overwrites(tmp_path: Path) -> None:
         publish_execution_report(report=report, artifact_root=tmp_path)
 
     assert destination.read_bytes() == original
+
+
+def test_fsync_directory_is_skipped_on_windows(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(report_module.sys, "platform", "win32")
+
+    def fail_if_called(*_: object) -> int:
+        raise AssertionError("os.open must not be called for directories on Windows")
+
+    monkeypatch.setattr(report_module.os, "open", fail_if_called)
+    report_module._fsync_directory(tmp_path)

@@ -5,6 +5,16 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — revisão arquitetural integral (23/07/2026)
+
+- Adicionado `docs/ARCHITECTURAL_REVIEW_2026-07-23.md` com estado, arquitetura, riscos, dívida técnica, revisão das 15 Issues abertas, revisão da PR #198 e fila P0–P3.
+- Corrigida a publicação de `cleanup/execution.json` no Windows, preservando `fsync` de diretório nas plataformas que o suportam.
+- Corrigidos testes frontend obsoletos de portfólios, evolução e normalização do contrato `summary.v2`.
+- Atualizado `backend/TESTING.md`; a suíte possui mais de 100 módulos rastreados, não 21.
+- Atualizada a documentação da introspecção para refletir a integração concluída com `pre-prod-cleanup-impact.v2`.
+- O Actions da PR #198 permanece bloqueado por billing/limite da conta; nenhum job chegou a executar código.
+- Nenhuma limpeza, seed, coleta, restore ou rebuild foi executado nesta revisão.
+
 ### Documentado — preparação do ensaio isolado da limpeza (23/07/2026)
 
 - Criado o runbook `docs/pre-prod-isolated-cleanup-rehearsal-runbook.md` para o Bloco D0 da Issue #196.
@@ -20,7 +30,7 @@ Formato baseado em Keep a Changelog.
 - Logs pós-autorização foram redigidos para impedir vazamento de detalhes sensíveis no console.
 - A publicação continua UTF-8, atômica, durável e sem sobrescrita.
 - Testes com mocks cobrem divergência de contagem, rollback por pós-condição, zero escritas persistidas e ausência de segredos.
-- A validação local dos Blocos B e C foi concluída com 43 testes aprovados e `compileall` sem erros.
+- A validação multiplataforma dos Blocos B e C foi concluída com 44 testes aprovados e `compileall` sem erros.
 
 ### Adicionado — CLI da limpeza isolada (23/07/2026)
 

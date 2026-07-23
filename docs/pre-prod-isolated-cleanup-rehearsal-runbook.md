@@ -4,7 +4,7 @@
 
 Este documento prepara o Bloco D da Issue #196. Ele não autoriza limpeza na base pré-produção real e não deve ser usado fora de um banco PostgreSQL descartável restaurado de um backup `pre-prod-backup.v3` reconciliado.
 
-A implementação da CLI, do executor transacional e dos relatórios de `committed`, `aborted` e `rolled_back` foi validada localmente com 43 testes aprovados e compilação Python sem erros.
+A implementação da CLI, do executor transacional e dos relatórios de `committed`, `aborted` e `rolled_back` foi validada em Windows com 44 testes aprovados e compilação Python sem erros.
 
 ## Objetivo do ensaio
 

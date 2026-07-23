@@ -32,6 +32,10 @@
 | Backup/Restore administrativo | Planejado (#83) | 10% |
 | OAuth social | Planejado | 0% |
 
+Prontidão global estimada para a primeira produção: **88%**. O percentual não
+inclui funcionalidades futuras de produto. Revisão e fila priorizada:
+`docs/ARCHITECTURAL_REVIEW_2026-07-23.md`.
+
 ## Consolidado
 
 ### Contrato financeiro
@@ -112,7 +116,7 @@ Validação final: `666 passed`, `1 skipped` intencional e zero `PydanticDepreca
 - [x] Issue #196 aberta para a execução controlada em banco isolado.
 - [x] Executor transacional com lock, contagens, ordem canônica, pós-condições e rollback integral implementado.
 - [x] CLI `pre_prod_isolated_cleanup` e relatórios `committed`, `aborted` e `rolled_back` implementados.
-- [x] Validação local concluída com 43 testes aprovados e `compileall` sem erros.
+- [x] Validação multiplataforma concluída com 44 testes aprovados e `compileall` sem erros.
 - [x] Runbook D0 do ensaio isolado concluído com gates, comandos PowerShell, reconciliação e descarte.
 - [ ] Implementar captura automática de baseline e pós-execução das tabelas preservadas.
 - [ ] Executar cenário de sucesso em PostgreSQL descartável restaurado do backup v3.

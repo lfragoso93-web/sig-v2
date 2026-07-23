@@ -8,6 +8,11 @@ A branch padrão de desenvolvimento é `stable-15jun`. A promoção para `main` 
 
 O SGI v2 opera com arquitetura **DB-first**: catálogo, preços, taxas, proventos e snapshots são persistidos antes de alimentar KPIs, páginas e gráficos.
 
+A revisão arquitetural integral de 23/07/2026 está em
+`docs/ARCHITECTURAL_REVIEW_2026-07-23.md`. A prontidão estimada para a primeira
+produção é 88%; o ensaio reconciliado da limpeza isolada e a restauração do CI
+da PR #198 são bloqueadores P0. A limpeza da base real continua proibida.
+
 ### Entregas consolidadas
 
 - Valuation canônico por classe de ativo.
@@ -30,7 +35,7 @@ O SGI v2 opera com arquitetura **DB-first**: catálogo, preços, taxas, provento
 - Dry-run de limpeza validado no PostgreSQL real pelo contrato `pre-prod-cleanup-impact.v2`: 24 tabelas, 4.673.320 linhas, 11 preservadas, 3 com exportação obrigatória, 10 reconstruíveis, zero bloqueios, zero ciclos e zero escritas. A execução `20260722-101848` retornou `ok=true` e exit code `0`.
 - Exportação auditável `pre-prod-export.v1` validada no PostgreSQL real em snapshot único `REPEATABLE READ READ ONLY`: `corporate_events`, `fixed_income_investments` e `transactions` reconciliadas em 323 linhas, com SHA-256 de dados e schema, zero escritas na origem e `reconciled=true`. A execução `20260722-134741` retornou exit code `0`, a Issue #188 foi encerrada e a PR #191 promovida para a `main`.
 - Fundação plan-only da limpeza promovida pela PR #194: contrato `pre-prod-cleanup-execution.v1`, CLI `pre_prod_cleanup_plan`, verificação integral de identidade, checksums, gate e DAG, publicação atômica de `cleanup/plan.json`, persistência atômica de `cleanup-impact.json` e rollback de exportação incompleta.
-- Executor e CLI da limpeza isolada implementados na Issue #196 e na PR #198: lock operacional, validação de contagens, transação única, rollback integral, relatórios `committed`, `aborted` e `rolled_back`, publicação atômica e logs redigidos. A validação local passou com 43 testes e `compileall` sem erros.
+- Executor e CLI da limpeza isolada implementados na Issue #196 e na PR #198: lock operacional, validação de contagens, transação única, rollback integral, relatórios `committed`, `aborted` e `rolled_back`, publicação atômica e logs redigidos. A validação multiplataforma passou com 44 testes e `compileall` sem erros.
 - Runbook D0 do ensaio em PostgreSQL descartável concluído, com gates, comandos PowerShell, reconciliação, cenário obrigatório de rollback e descarte do banco. Nenhuma limpeza real foi executada.
 - Migração integral das configurações Pydantic v2 para `ConfigDict` concluída na Issue #186. A suíte dedicada passou com 5 testes e a validação final registrou `666 passed`, `1 skipped` intencional e zero `PydanticDeprecatedSince20`.
 
@@ -112,7 +117,7 @@ A primeira entrada em produção exige:
 3. dry-run read-only da limpeza e relatório de impacto — validado pela Issue #185;
 4. exportação controlada das transações, renda fixa e eventos corporativos — validada pela Issue #188 e promovida pela PR #191;
 5. plano de execução `pre-prod-cleanup-execution.v1` validado sem acesso ao banco — concluído pela Issue #195 e PR #194;
-6. executor, CLI e artefato da limpeza isolada — implementados pela Issue #196 e PR #198, com 43 testes aprovados;
+6. executor, CLI e artefato da limpeza isolada — implementados pela Issue #196 e PR #198, com 44 testes aprovados;
 7. ensaio integral em banco descartável, incluindo sucesso, rollback e reconciliação de tabelas preservadas — pendente;
 8. limpeza controlada de dados reconstruíveis na pré-produção real — não autorizada nesta fase;
 9. seed B3 COTAHIST;

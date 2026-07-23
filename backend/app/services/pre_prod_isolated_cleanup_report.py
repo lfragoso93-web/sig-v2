@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import sys
 from typing import Any, Mapping
 from uuid import uuid4
 
@@ -33,6 +34,17 @@ class IsolatedCleanupReportError(RuntimeError):
 
 class IsolatedCleanupReportAlreadyExistsError(IsolatedCleanupReportError):
     """O artefato final já existe e nunca deve ser sobrescrito."""
+
+
+def _fsync_directory(path: Path) -> None:
+    """Persist directory metadata when supported by the platform."""
+    if sys.platform == "win32":
+        return
+    directory_fd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
 
 
 @dataclass(frozen=True)
@@ -217,11 +229,7 @@ def publish_execution_report(
             raise IsolatedCleanupReportAlreadyExistsError(
                 f"execution report already exists: {destination}"
             ) from exc
-        directory_fd = os.open(destination.parent, os.O_RDONLY)
-        try:
-            os.fsync(directory_fd)
-        finally:
-            os.close(directory_fd)
+        _fsync_directory(destination.parent)
         return destination
     finally:
         temporary.unlink(missing_ok=True)

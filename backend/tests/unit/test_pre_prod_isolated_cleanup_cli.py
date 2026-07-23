@@ -267,9 +267,10 @@ def test_success_delegates_execution_and_publication_without_exposing_urls(
     )
 
     output = capsys.readouterr().out
+    output_payload = json.loads(output)
     assert exit_code == cli.CleanupExitCode.SUCCESS
     assert engine.disposed is True
-    assert str(destination) in output
+    assert output_payload["execution_report"] == str(destination)
     assert "source-user" not in output
     assert "target-user" not in output
     assert "secret" not in output

@@ -17,4 +17,6 @@ Este componente é estritamente read-only e transforma foreign keys reais do ban
 - PostgreSQL: consulta `information_schema.table_constraints` e `information_schema.constraint_column_usage` no schema `public`;
 - SQLite: suporte exclusivo para testes por meio de `PRAGMA foreign_key_list`.
 
-A integração destes dados no contrato versionado `pre-prod-cleanup-impact` pertence ao bloco seguinte da Issue #185.
+A integração destes dados está concluída no contrato versionado
+`pre-prod-cleanup-impact.v2` e alimenta a DAG validada pelo planejamento
+`pre-prod-cleanup-execution.v1`.

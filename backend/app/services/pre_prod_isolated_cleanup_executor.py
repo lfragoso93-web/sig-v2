@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 import hashlib
 import re
-from typing import Any, Mapping, Protocol
+from typing import Any, Mapping
 
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
