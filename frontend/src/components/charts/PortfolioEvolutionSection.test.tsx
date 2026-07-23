@@ -18,6 +18,14 @@ vi.mock('@/hooks/useEvolution', () => ({
   useMonthlyEvolution: vi.fn(),
 }))
 
+vi.mock('./EvolutionBarChart', () => ({
+  default: ({ data }: { data: unknown[] }) => <div>gráfico mensal: {data.length}</div>,
+}))
+
+vi.mock('./EvolutionLineChart', () => ({
+  default: ({ data }: { data: unknown[] }) => <div>gráfico diário: {data.length}</div>,
+}))
+
 function query(data: unknown) {
   return {
     data,

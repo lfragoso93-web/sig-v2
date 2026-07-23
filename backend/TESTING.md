@@ -51,14 +51,14 @@ docker-compose exec -T backend python -m pytest tests/ --cov=app.services --cov-
 
 ## Test Structure
 
-21 comprehensive test files covering all major services:
-- Authentication & User Management: `test_auth_service.py`, `test_user_service.py`
-- Portfolio Management: `test_portfolio_service.py`, `test_transaction_service.py`, `test_position_service.py`
-- Financial Data: `test_proventos_service.py`, `test_dividend_service.py`, `test_dividends_sync_service.py`, `test_dividend_backfill_service.py`
-- Quotes & Assets: `test_quotes_service.py`, `test_asset_service.py`, `test_class_target_service.py`
-- Analysis & Reports: `test_performance_service.py`, `test_irpf_service.py`, `test_rentabilidade_service.py`, `test_treasury_service.py`
-- Administration: `test_audit_log_service.py`, `test_backup_service.py`, `test_csv_import_service.py`
-- Configuration: `test_config_service.py`, `test_goals_service.py`
+The backend currently has more than 100 tracked test modules, organized under
+`tests/`, `tests/services/`, `tests/integrations/`, and `tests/unit/`.
+
+The suite covers authentication, portfolios, transactions, canonical valuation,
+snapshots, returns, dividends, market providers, CSV import, administration,
+pre-production safety contracts, CLI behavior, migrations, and public API/docs
+compliance. Use `pytest --collect-only -q` when an exact current inventory is
+required; do not maintain a manual count here.
 
 ## Test Coverage
 
@@ -89,6 +89,6 @@ python -m pytest tests/ -k "portfolio"
 
 ## Notes
 
-- Tests require `pytest==9.1.0` and `pytest-asyncio==1.4.0` (included in `requirements.txt`)
+- Tests require `pytest==9.1.0` and `pytest-asyncio==1.4.0` (included in `requirements-test.txt`)
 - All external dependencies (API calls, cache operations) are mocked for reliability
 - Tests can be run in isolation without a running database or external services

@@ -5,6 +5,60 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Concluído — ensaio integral da limpeza isolada (23/07/2026)
+
+- A CLI agora captura automaticamente baseline e pós-contagem de todas as
+  tabelas do contrato canônico e publica `preserved-before.json`,
+  `preserved-after.json`, `post-cleanup-inventory.json` e
+  `reconciliation.json` sem sobrescrita.
+- Adicionado mecanismo explícito `--rehearsal-fail-after-table`, restrito ao
+  `cleanup_order`, para comprovar rollback integral dentro da transação.
+- O cenário de sucesso `20260723-213000`, executado somente em restauração
+  descartável do backup v3, removeu 4.673.054 linhas planejadas,
+  preservou as tabelas fora do plano e retornou reconciliação `ok=true`.
+- O cenário de rollback `20260723-213001`, em segunda restauração limpa,
+  retornou exit code `22`, `committed=false`, contagens finais idênticas ao
+  baseline e reconciliação `ok=true`.
+- Os três bancos descartáveis do ensaio foram removidos após a validação. A
+  limpeza da pré-produção real continua proibida e não foi executada.
+
+### Corrigido — revisão arquitetural integral (23/07/2026)
+
+- Adicionado `docs/ARCHITECTURAL_REVIEW_2026-07-23.md` com estado, arquitetura, riscos, dívida técnica, revisão das 15 Issues abertas, revisão da PR #198 e fila P0–P3.
+- Corrigida a publicação de `cleanup/execution.json` no Windows, preservando `fsync` de diretório nas plataformas que o suportam.
+- Corrigidos testes frontend obsoletos de portfólios, evolução e normalização do contrato `summary.v2`.
+- Atualizado `backend/TESTING.md`; a suíte possui mais de 100 módulos rastreados, não 21.
+- Atualizada a documentação da introspecção para refletir a integração concluída com `pre-prod-cleanup-impact.v2`.
+- O Actions da PR #198 permanece bloqueado por billing/limite da conta; nenhum job chegou a executar código.
+- Nenhuma limpeza, seed, coleta, restore ou rebuild foi executado nesta revisão.
+
+### Documentado — preparação do ensaio isolado da limpeza (23/07/2026)
+
+- Criado o runbook `docs/pre-prod-isolated-cleanup-rehearsal-runbook.md` para o Bloco D0 da Issue #196.
+- O procedimento define gates de branch, SHA, backup v3, banco descartável, plano aprovado, ausência de processos concorrentes e confirmação composta.
+- Foram documentados comandos PowerShell para restauração, execução, reconciliação, cenário obrigatório de rollback e descarte do banco.
+- A limpeza na base pré-produção real permanece proibida; nenhuma restauração, limpeza, seed, coleta ou rebuild foi executado neste bloco.
+
+### Adicionado — evidência de aborto e rollback da limpeza isolada (23/07/2026)
+
+- `cleanup/execution.json` agora também registra divergência prévia, lock indisponível e rollback após autorização completa.
+- Estados de falha são limitados a `aborted` e `rolled_back`, com motivos estáveis controlados pela aplicação.
+- Mensagens brutas de exceção, URLs e credenciais não são persistidas no artefato.
+- Logs pós-autorização foram redigidos para impedir vazamento de detalhes sensíveis no console.
+- A publicação continua UTF-8, atômica, durável e sem sobrescrita.
+- Testes com mocks cobrem divergência de contagem, rollback por pós-condição, zero escritas persistidas e ausência de segredos.
+- A validação multiplataforma dos Blocos B e C foi concluída com 44 testes aprovados e `compileall` sem erros.
+
+### Adicionado — CLI da limpeza isolada (23/07/2026)
+
+- Adicionada a CLI `python -m app.cli.pre_prod_isolated_cleanup`, exclusiva para PostgreSQL isolado.
+- A entrada operacional lê `cleanup/plan.json` em UTF-8, revalida branch, SHA, identidade e checksum e exige confirmação composta por argumento explícito.
+- Origem e destino são comparados por host, porta e banco; o destino exige o marcador `sgi-pre-prod-isolated` e driver PostgreSQL síncrono.
+- Códigos de saída distintos separam entrada inválida, identidade, alvo, confirmação, divergência de contagem, lock, rollback e artefato.
+- URLs e credenciais não são impressas nem persistidas; somente `host:port/database` pode aparecer no relatório.
+- Testes unitários com mocks comprovam aborto antes da criação do engine quando os gates falham e descarte do engine em divergências.
+- Nenhuma execução da CLI contra PostgreSQL foi realizada neste bloco.
+
 ### Adicionado — autorização pura da limpeza isolada (23/07/2026)
 
 - Adicionado o contrato versionado `pre-prod-isolated-cleanup.v1`, separado do contrato `plan-only` existente.
@@ -237,7 +291,7 @@ Formato baseado em Keep a Changelog.
 
 ## Próximos focos
 
-1. Implementar a limpeza controlada das tabelas reconstruíveis no escopo da #158.
+1. Concluir o ensaio da limpeza controlada em banco PostgreSQL descartável no escopo da Issue #196.
 2. Remover o serviço legado de rentabilidade (#151).
 3. Materializar IBOV (#150).
 4. Implementar TWR dedicado por classe (#149).

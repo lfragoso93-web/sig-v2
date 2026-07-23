@@ -38,7 +38,7 @@ A execução deve abortar antes da primeira escrita quando qualquer condição a
 
 ## Confirmação operacional
 
-A futura CLI de execução deve exigir confirmação explícita composta, não apenas um booleano genérico. A confirmação deve vincular:
+A CLI exige confirmação explícita composta, não apenas um booleano genérico. A confirmação vincula:
 
 - `run_id`;
 - nome do banco isolado;
@@ -46,7 +46,51 @@ A futura CLI de execução deve exigir confirmação explícita composta, não a
 - checksum do plano;
 - literal inequívoco de autorização para o ambiente isolado.
 
-A confirmação não pode ser persistida como padrão, reutilizada por outra execução nem lida de variável de ambiente genérica.
+Formato exato:
+
+```text
+CLEANUP <run-id> ON <database> AT <commit-sha> WITH <plan-sha256>
+```
+
+A confirmação não pode ser persistida como padrão, reutilizada por outra execução nem lida de variável de ambiente genérica. Ela é obrigatória por `--confirmation`.
+
+## CLI do ambiente isolado
+
+Entrada operacional implementada:
+
+```text
+python -m app.cli.pre_prod_isolated_cleanup
+```
+
+Argumentos obrigatórios:
+
+- `--plan`;
+- `--branch stable-15jun`;
+- `--commit-sha <sha-completo>`;
+- `--source-database-url <url>`;
+- `--target-database-url <url-postgresql-sincrona>`;
+- `--target-isolation-marker sgi-pre-prod-isolated`;
+- `--confirmation "<texto-composto>"`.
+
+O destino deve usar driver PostgreSQL síncrono. URLs completas não são impressas nem persistidas; relatórios usam apenas `host:port/database`.
+
+A CLI foi criada e testada com mocks no Bloco C2. Ela ainda não foi executada contra PostgreSQL.
+
+## Códigos de saída
+
+| Código | Significado |
+| --- | --- |
+| `0` | sucesso com commit e artefato publicado |
+| `1` | falha interna não classificada |
+| `2` | entrada ou JSON inválido |
+| `10` | identidade, branch, SHA ou plano divergente |
+| `11` | alvo inválido, não isolado, igual à origem ou driver inadequado |
+| `12` | confirmação composta inválida |
+| `20` | contagens divergentes antes da primeira escrita |
+| `21` | lock operacional indisponível |
+| `22` | execução revertida por falha transacional ou pós-condição |
+| `30` | falha ao construir ou publicar o artefato |
+| `130` | interrupção pelo operador |
 
 ## Estratégia transacional
 
@@ -82,11 +126,11 @@ Ordem aprovada pela execução real `20260723-095541`:
 12. `asset_aliases`
 13. `assets`
 
-A implementação não deve manter uma segunda lista codificada. A única ordem válida deve vir do plano aprovado e ser novamente validada contra o contrato canônico.
+A implementação não mantém uma segunda lista codificada. A única ordem válida vem do plano aprovado e é novamente validada contra o contrato canônico.
 
 ## Relatório de execução
 
-O artefato futuro deve ser publicado em:
+O artefato deve ser publicado em:
 
 ```text
 artifacts/pre-prod-rebuild/<run-id>/cleanup/execution.json
@@ -108,30 +152,36 @@ Conteúdo mínimo:
 
 A publicação deve ser atômica e sem sobrescrita.
 
+O publicador de sucesso foi implementado no Bloco C1. Ele grava UTF-8 em arquivo temporário no mesmo diretório, sincroniza o conteúdo, cria o destino por hard link exclusivo e sincroniza o diretório final. URL, usuário e senha não entram no artefato; somente o rótulo redigido `host:port/database` é persistido.
+
 ## Sequência de implementação
 
 ### Bloco A — contrato e validações puras
 
-- contrato versionado do relatório;
-- validação da confirmação composta;
-- validação do alvo isolado;
-- validação de plano, identidade e checksum;
-- testes unitários sem banco.
+- [x] contrato versionado do relatório;
+- [x] validação da confirmação composta;
+- [x] validação do alvo isolado;
+- [x] validação de plano, identidade e checksum;
+- [x] testes unitários sem banco.
 
 ### Bloco B — executor transacional
 
-- lock operacional;
-- validação de contagens;
-- limpeza parametrizada pela ordem do plano;
-- rollback integral;
-- testes com banco isolado de teste.
+- [x] lock operacional;
+- [x] validação de contagens;
+- [x] limpeza parametrizada pela ordem do plano;
+- [x] rollback integral;
+- [ ] testes de integração com PostgreSQL isolado.
 
 ### Bloco C — CLI e artefato
 
-- CLI explícita para ambiente isolado;
-- exit codes distintos;
-- relatório atômico;
-- mensagens UTF-8 e URLs redigidas.
+- [x] publicador atômico e sem sobrescrita para `cleanup/execution.json`;
+- [x] relatório de sucesso redigido, UTF-8 e reconciliado;
+- [x] validação local do publicador: 31 testes aprovados;
+- [x] CLI explícita para ambiente isolado;
+- [x] exit codes distintos;
+- [x] testes unitários da CLI sem banco;
+- [ ] relatório de rollback/aborto sem expor credenciais;
+- [ ] validação local do Bloco C2.
 
 ### Bloco D — ensaio real isolado
 
@@ -153,9 +203,11 @@ Somente após o Bloco D reconciliado poderá ser criada uma etapa separada para 
 - alterar tabelas preservadas;
 - promover automaticamente a autorização do ambiente isolado para pré-produção.
 
-## Critério de conclusão deste bloco documental
+## Estado de segurança
 
-- Issue dedicada criada e vinculada à #158;
-- arquitetura e gates documentados;
-- nenhuma escrita em banco executada;
-- próximo bloco limitado a contrato e validações puras.
+- Issue dedicada vinculada à #158;
+- executor, relatório e CLI separados;
+- Bloco C2 implementado somente com mocks;
+- nenhuma execução da CLI contra PostgreSQL;
+- nenhuma escrita, limpeza, coleta, seed ou rebuild realizada;
+- próximo passo limitado à validação local do C2.
