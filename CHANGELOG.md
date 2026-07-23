@@ -5,6 +5,16 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Adicionado — autorização pura da limpeza isolada (23/07/2026)
+
+- Adicionado o contrato versionado `pre-prod-isolated-cleanup.v1`, separado do contrato `plan-only` existente.
+- A autorização exige confirmação composta vinculada a `run_id`, banco de destino, commit SHA completo e checksum SHA-256 canônico do plano.
+- Origem e destino são comparados por host, porta e banco; o destino deve ser diferente e portar o marcador explícito `sgi-pre-prod-isolated`.
+- O plano `pre-prod-cleanup-execution.v1` é revalidado quanto a schema, modo, branch, blockers, identidade, checksum, ordem e histórico de segurança.
+- A serialização do contrato remove o texto de confirmação e não inclui URLs ou credenciais.
+- Testes unitários sem banco cobrem adulteração do plano, confirmação inexata, alvo igual à origem e ausência do marcador de isolamento.
+- Nenhum executor, conexão com banco ou SQL destrutivo foi introduzido neste bloco.
+
 ### Corrigido — migração Pydantic v2 para ConfigDict (22/07/2026)
 
 - Configurações baseadas em `class Config` foram migradas para `ConfigDict` ou `SettingsConfigDict`.
