@@ -108,7 +108,7 @@ Conteúdo mínimo:
 
 A publicação deve ser atômica e sem sobrescrita.
 
-O publicador de sucesso foi implementado no Bloco C1. Ele grava UTF-8 em arquivo temporário no mesmo diretório, sincroniza o conteúdo e usa criação atômica sem substituição do destino. URL, usuário e senha não entram no artefato; somente o rótulo redigido `host:port/database` é persistido.
+O publicador de sucesso foi implementado no Bloco C1. Ele grava UTF-8 em arquivo temporário no mesmo diretório, sincroniza o conteúdo, cria o destino por hard link exclusivo e sincroniza o diretório final. URL, usuário e senha não entram no artefato; somente o rótulo redigido `host:port/database` é persistido.
 
 ## Sequência de implementação
 
@@ -132,6 +132,7 @@ O publicador de sucesso foi implementado no Bloco C1. Ele grava UTF-8 em arquivo
 
 - [x] publicador atômico e sem sobrescrita para `cleanup/execution.json`;
 - [x] relatório de sucesso redigido, UTF-8 e reconciliado;
+- [ ] validar localmente os testes do publicador;
 - [ ] CLI explícita para ambiente isolado;
 - [ ] exit codes distintos;
 - [ ] relatório de rollback/aborto sem expor credenciais.
@@ -161,4 +162,5 @@ Somente após o Bloco D reconciliado poderá ser criada uma etapa separada para 
 - Issue dedicada criada e vinculada à #158;
 - arquitetura e gates documentados;
 - nenhuma escrita em banco executada;
-- Bloco C1 implementado sem integrar a CLI ao banco real ou isolado.
+- Bloco C1 implementado sem integrar a CLI ao banco real ou isolado;
+- validação local do Bloco C1 ainda pendente.
