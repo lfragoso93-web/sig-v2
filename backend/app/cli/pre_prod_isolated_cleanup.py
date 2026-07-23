@@ -38,6 +38,7 @@ from app.services.pre_prod_isolated_cleanup_report import (
     DEFAULT_ARTIFACT_ROOT,
     IsolatedCleanupReportError,
     build_execution_report,
+    build_failure_report,
     publish_execution_report,
     utc_now_iso,
 )
@@ -193,6 +194,29 @@ def _target_engine(database_url: str) -> Engine:
     return create_engine(database_url, pool_pre_ping=True)
 
 
+def _publish_failure_evidence(
+    *,
+    authorization: IsolatedCleanupAuthorization,
+    arguments: argparse.Namespace,
+    started_at: str,
+    final_state: str,
+    abort_reason: str,
+    lock_acquired: bool,
+) -> Path:
+    report = build_failure_report(
+        authorization=authorization,
+        started_at=started_at,
+        finished_at=utc_now_iso(),
+        final_state=final_state,
+        abort_reason=abort_reason,
+        lock_acquired=lock_acquired,
+    )
+    return publish_execution_report(
+        report=report,
+        artifact_root=arguments.artifact_root,
+    )
+
+
 def run(
     arguments: argparse.Namespace,
     *,
@@ -238,12 +262,63 @@ def run(
         )
     except IsolatedCleanupCountMismatchError as exc:
         _LOGGER.error("divergência anterior à limpeza: %s", exc)
+        try:
+            _publish_failure_evidence(
+                authorization=authorization,
+                arguments=arguments,
+                started_at=started_at,
+                final_state="aborted",
+                abort_reason="precondition_count_mismatch",
+                lock_acquired=True,
+            )
+        except IsolatedCleanupReportError as report_exc:
+            _LOGGER.error("falha ao publicar evidência de aborto: %s", report_exc)
+            return CleanupExitCode.ARTIFACT_ERROR
         return CleanupExitCode.PLAN_DIVERGENCE
     except IsolatedCleanupLockUnavailableError as exc:
         _LOGGER.error("lock operacional indisponível: %s", exc)
+        try:
+            _publish_failure_evidence(
+                authorization=authorization,
+                arguments=arguments,
+                started_at=started_at,
+                final_state="aborted",
+                abort_reason="lock_unavailable",
+                lock_acquired=False,
+            )
+        except IsolatedCleanupReportError as report_exc:
+            _LOGGER.error("falha ao publicar evidência de aborto: %s", report_exc)
+            return CleanupExitCode.ARTIFACT_ERROR
         return CleanupExitCode.LOCK_UNAVAILABLE
-    except (IsolatedCleanupPostconditionError, IsolatedCleanupExecutionError) as exc:
+    except IsolatedCleanupPostconditionError as exc:
+        _LOGGER.error("execução revertida por pós-condição: %s", exc)
+        try:
+            _publish_failure_evidence(
+                authorization=authorization,
+                arguments=arguments,
+                started_at=started_at,
+                final_state="rolled_back",
+                abort_reason="postcondition_failed",
+                lock_acquired=True,
+            )
+        except IsolatedCleanupReportError as report_exc:
+            _LOGGER.error("falha ao publicar evidência de rollback: %s", report_exc)
+            return CleanupExitCode.ARTIFACT_ERROR
+        return CleanupExitCode.ROLLED_BACK
+    except IsolatedCleanupExecutionError as exc:
         _LOGGER.error("execução revertida: %s", exc)
+        try:
+            _publish_failure_evidence(
+                authorization=authorization,
+                arguments=arguments,
+                started_at=started_at,
+                final_state="rolled_back",
+                abort_reason="execution_failed",
+                lock_acquired=True,
+            )
+        except IsolatedCleanupReportError as report_exc:
+            _LOGGER.error("falha ao publicar evidência de rollback: %s", report_exc)
+            return CleanupExitCode.ARTIFACT_ERROR
         return CleanupExitCode.ROLLED_BACK
     except IsolatedCleanupReportError as exc:
         _LOGGER.error("falha ao publicar evidência: %s", exc)
