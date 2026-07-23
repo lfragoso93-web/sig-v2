@@ -110,6 +110,14 @@ A publicação deve ser atômica e sem sobrescrita.
 
 O publicador de sucesso foi implementado no Bloco C1. Ele grava UTF-8 em arquivo temporário no mesmo diretório, sincroniza o conteúdo, cria o destino por hard link exclusivo e sincroniza o diretório final. URL, usuário e senha não entram no artefato; somente o rótulo redigido `host:port/database` é persistido.
 
+Commits do Bloco C1:
+
+- `b7b1fcd674a528ec76f78dbe4c26ee33b346001c` — publicador inicial;
+- `7791b289255e88138d559484fef699161b6c7cdb` — testes unitários;
+- `de10efd4e64c4b2373967952a252efdc8e4a1401` — durabilidade do diretório;
+- `63d7e3e3feefce9ce32b998766b1faa91b3a45e7` — documentação do estado;
+- `40417b88170b39b5b1a00c71cb4d0b6f1b7b9c19` — sincronização final da cobertura de teste.
+
 ## Sequência de implementação
 
 ### Bloco A — contrato e validações puras
