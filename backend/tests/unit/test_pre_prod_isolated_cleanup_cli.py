@@ -95,12 +95,20 @@ class _FakeEngine:
 
 
 def test_invalid_utf8_or_json_returns_input_exit_code(tmp_path: Path) -> None:
-    path = tmp_path / "plan.json"
-    path.write_text("not-json", encoding="utf-8")
     arguments = _arguments(tmp_path)
-    arguments.plan = path
+    arguments.plan.write_text("not-json", encoding="utf-8")
+    called = False
 
-    assert cli.run(arguments) == cli.CleanupExitCode.INVALID_INPUT
+    def engine_factory(_: str) -> _FakeEngine:
+        nonlocal called
+        called = True
+        return _FakeEngine()
+
+    assert cli.run(
+        arguments,
+        engine_factory=engine_factory,
+    ) == cli.CleanupExitCode.INVALID_INPUT
+    assert called is False
 
 
 def test_branch_mismatch_aborts_before_engine_creation(tmp_path: Path) -> None:
