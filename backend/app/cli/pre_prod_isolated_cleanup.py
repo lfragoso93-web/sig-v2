@@ -42,6 +42,14 @@ from app.services.pre_prod_isolated_cleanup_report import (
     publish_execution_report,
     utc_now_iso,
 )
+from app.services.pre_prod_isolated_cleanup_reconciliation import (
+    IsolatedCleanupReconciliationError,
+    capture_counts,
+    load_classifications,
+    preserved,
+    publish,
+    reconcile,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -95,7 +103,22 @@ def _arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--target-database-url", required=True)
     parser.add_argument("--target-isolation-marker", required=True)
     parser.add_argument("--confirmation", required=True)
+    parser.add_argument("--rehearsal-fail-after-table")
     return parser.parse_args(argv)
+
+
+def _publish_reconciliation_evidence(
+    arguments: argparse.Namespace,
+    run_id: str,
+    before: Mapping[str, Any],
+    after: Mapping[str, Any],
+    reconciliation: Mapping[str, Any],
+) -> None:
+    directory = arguments.artifact_root / run_id / "cleanup"
+    publish(directory / "preserved-before.json", preserved(before))
+    publish(directory / "preserved-after.json", preserved(after))
+    publish(directory / "post-cleanup-inventory.json", after)
+    publish(directory / "reconciliation.json", reconciliation)
 
 
 def _load_plan(path: Path) -> Mapping[str, Any]:
@@ -242,13 +265,53 @@ def run(
 
     started_at = utc_now_iso()
     engine: Engine | None = None
+    before: Mapping[str, Any] | None = None
+    classifications: Mapping[str, str] | None = None
     try:
+        if isinstance(plan_payload.get("artifacts"), list):
+            classifications = load_classifications(
+                plan_path=arguments.plan,
+                plan_payload=plan_payload,
+            )
+        failure_table = getattr(arguments, "rehearsal_fail_after_table", None)
+        if failure_table is not None and failure_table not in authorization.plan.cleanup_order:
+            raise CliTargetError(
+                "tabela da falha controlada deve pertencer ao cleanup_order"
+            )
+
+        def controlled_failure(table_name: str) -> None:
+            if table_name == failure_table:
+                raise IsolatedCleanupExecutionError("controlled_rehearsal_failure")
+
         engine = engine_factory(arguments.target_database_url)
         with engine.connect() as connection:
+            if classifications is not None:
+                before = capture_counts(connection, classifications)
             result = execute_isolated_cleanup(
                 connection=connection,
                 authorization=authorization,
                 plan_payload=plan_payload,
+                after_table_cleanup=controlled_failure if failure_table else None,
+            )
+            if classifications is not None:
+                after = capture_counts(connection, classifications)
+        if before is not None and classifications is not None:
+            reconciliation = reconcile(
+                before,
+                after,
+                authorization.plan.cleanup_order,
+                committed=True,
+            )
+            if not reconciliation["ok"]:
+                raise IsolatedCleanupReconciliationError(
+                    "post-commit reconciliation failed"
+                )
+            _publish_reconciliation_evidence(
+                arguments,
+                authorization.plan.run_id,
+                before,
+                after,
+                reconciliation,
             )
         report = build_execution_report(
             authorization=authorization,
@@ -308,6 +371,22 @@ def run(
     except IsolatedCleanupExecutionError:
         _LOGGER.error("execução revertida; detalhes omitidos")
         try:
+            if engine is not None and before is not None and classifications is not None:
+                with engine.connect() as connection:
+                    after = capture_counts(connection, classifications)
+                reconciliation = reconcile(
+                    before,
+                    after,
+                    authorization.plan.cleanup_order,
+                    committed=False,
+                )
+                _publish_reconciliation_evidence(
+                    arguments,
+                    authorization.plan.run_id,
+                    before,
+                    after,
+                    reconciliation,
+                )
             _publish_failure_evidence(
                 authorization=authorization,
                 arguments=arguments,
@@ -322,6 +401,9 @@ def run(
         return CleanupExitCode.ROLLED_BACK
     except IsolatedCleanupReportError as exc:
         _LOGGER.error("falha ao publicar evidência: %s", exc)
+        return CleanupExitCode.ARTIFACT_ERROR
+    except IsolatedCleanupReconciliationError as exc:
+        _LOGGER.error("falha na reconciliação auditável: %s", exc)
         return CleanupExitCode.ARTIFACT_ERROR
     except CliTargetError as exc:
         _LOGGER.error("alvo recusado: %s", exc)

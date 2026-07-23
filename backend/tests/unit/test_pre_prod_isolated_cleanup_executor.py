@@ -233,6 +233,33 @@ def test_executor_rolls_back_when_postcondition_fails() -> None:
     assert not any('"transactions"' in sql and sql.startswith("DELETE") for sql in connection.statements)
 
 
+def test_executor_rolls_back_on_controlled_rehearsal_failure() -> None:
+    payload = _plan_payload()
+    connection = _FakeConnection(
+        counts={"asset_prices": [2, 0], "transactions": [1]},
+        delete_rowcounts={"asset_prices": 2},
+    )
+
+    def fail_after_first_table(table_name: str) -> None:
+        assert table_name == "asset_prices"
+        raise IsolatedCleanupExecutionError("controlled rehearsal failure")
+
+    with pytest.raises(IsolatedCleanupExecutionError, match="controlled"):
+        execute_isolated_cleanup(
+            connection=connection,  # type: ignore[arg-type]
+            authorization=_authorization(payload),
+            plan_payload=payload,
+            after_table_cleanup=fail_after_first_table,
+        )
+
+    assert connection.committed is False
+    assert connection.rolled_back is True
+    assert not any(
+        sql.startswith("DELETE") and '"transactions"' in sql
+        for sql in connection.statements
+    )
+
+
 def test_executor_rejects_table_list_that_differs_from_cleanup_order() -> None:
     payload = _plan_payload()
     payload["tables"] = list(reversed(payload["tables"]))

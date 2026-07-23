@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 import hashlib
 import re
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
@@ -139,6 +139,7 @@ def execute_isolated_cleanup(
     connection: Connection,
     authorization: IsolatedCleanupAuthorization,
     plan_payload: Mapping[str, Any],
+    after_table_cleanup: Callable[[str], None] | None = None,
 ) -> IsolatedCleanupExecutionResult:
     """Executa o plano em transação única ou falha com rollback integral.
 
@@ -203,6 +204,8 @@ def execute_isolated_cleanup(
                     actual_rows_after=actual_rows_after,
                 )
             )
+            if after_table_cleanup is not None:
+                after_table_cleanup(table_name)
 
     return IsolatedCleanupExecutionResult(
         run_id=plan.run_id,

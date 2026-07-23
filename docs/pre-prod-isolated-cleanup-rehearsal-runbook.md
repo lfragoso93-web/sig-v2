@@ -208,7 +208,9 @@ Artefato esperado do operador:
 artifacts/pre-prod-rebuild/<cleanup-run-id>/cleanup/preserved-before.json
 ```
 
-Esse arquivo não é produzido automaticamente pela CLI neste estágio e deve ser obtido por procedimento read-only auditável antes do ensaio real.
+A CLI deriva a lista do `cleanup-impact.json` canônico e publica esse baseline
+automaticamente, antes do primeiro `DELETE`. A publicação é atômica e recusa
+sobrescrita.
 
 ## Gate 7 — construir confirmação composta
 
@@ -279,13 +281,25 @@ cleanup/post-cleanup-inventory.json
 cleanup/reconciliation.json
 ```
 
-A geração automática desses três artefatos ainda deve ser implementada ou formalizada antes da execução real do Bloco D.
+A CLI publica automaticamente esses artefatos e o baseline preservado. A
+reconciliação compara todas as tabelas fora do `cleanup_order`, exige zero linhas
+nas tabelas limpas e falha fechada diante de qualquer divergência.
 
 ## Cenário obrigatório de rollback
 
 O Bloco D não estará concluído apenas com o cenário de sucesso. Deve existir um segundo banco descartável ou nova restauração limpa com novo `run_id` para comprovar rollback.
 
 A falha deve ser induzida por mecanismo controlado de teste ou divergência segura, nunca por edição do plano aprovado, DDL, `CASCADE` ou intervenção parcial na transação.
+
+No segundo banco descartável, use o mecanismo explícito de ensaio:
+
+```powershell
+--rehearsal-fail-after-table "<primeira-tabela-do-cleanup-order>"
+```
+
+O argumento só aceita uma tabela presente no `cleanup_order` aprovado. A exceção
+é disparada dentro da transação, após a pós-condição da tabela indicada, para
+comprovar o rollback integral. Nunca use esse argumento fora do ensaio isolado.
 
 Resultado obrigatório:
 
