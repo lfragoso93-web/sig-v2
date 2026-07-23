@@ -127,20 +127,13 @@ def publish_execution_report(
     report: IsolatedCleanupExecutionReport,
     artifact_root: Path = DEFAULT_ARTIFACT_ROOT,
 ) -> Path:
-    """Publica JSON por hard-link atômico, recusando sobrescrita.
-
-    O arquivo temporário é gravado e sincronizado no mesmo diretório. ``os.link``
-    cria o destino somente se ele ainda não existir; assim não há janela de
-    substituição silenciosa de evidência anterior.
-    """
+    """Publica JSON por hard-link atômico, recusando sobrescrita."""
     destination = execution_report_path(
         run_id=report.run_id,
         artifact_root=artifact_root,
     )
     destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_name(
-        f".{destination.name}.{uuid4().hex}.tmp"
-    )
+    temporary = destination.with_name(f".{destination.name}.{uuid4().hex}.tmp")
     payload = json.dumps(
         report.to_dict(),
         ensure_ascii=False,
@@ -159,6 +152,11 @@ def publish_execution_report(
             raise IsolatedCleanupReportAlreadyExistsError(
                 f"execution report already exists: {destination}"
             ) from exc
+        directory_fd = os.open(destination.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
         return destination
     finally:
         temporary.unlink(missing_ok=True)
