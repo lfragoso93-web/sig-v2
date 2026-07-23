@@ -10,8 +10,9 @@ O SGI v2 opera com arquitetura **DB-first**: catálogo, preços, taxas, provento
 
 A revisão arquitetural integral de 23/07/2026 está em
 `docs/ARCHITECTURAL_REVIEW_2026-07-23.md`. A prontidão estimada para a primeira
-produção é 88%; o ensaio reconciliado da limpeza isolada e a restauração do CI
-da PR #198 são bloqueadores P0. A limpeza da base real continua proibida.
+produção é 88%; o ensaio reconciliado da limpeza isolada foi aprovado e a
+promoção da PR #198 permanece como próximo gate P0. A limpeza da base real
+continua proibida.
 
 ### Entregas consolidadas
 
@@ -37,6 +38,11 @@ da PR #198 são bloqueadores P0. A limpeza da base real continua proibida.
 - Fundação plan-only da limpeza promovida pela PR #194: contrato `pre-prod-cleanup-execution.v1`, CLI `pre_prod_cleanup_plan`, verificação integral de identidade, checksums, gate e DAG, publicação atômica de `cleanup/plan.json`, persistência atômica de `cleanup-impact.json` e rollback de exportação incompleta.
 - Executor e CLI da limpeza isolada implementados na Issue #196 e na PR #198: lock operacional, validação de contagens, transação única, rollback integral, relatórios `committed`, `aborted` e `rolled_back`, publicação atômica e logs redigidos. A validação multiplataforma passou com 44 testes e `compileall` sem erros.
 - Runbook D0 do ensaio em PostgreSQL descartável concluído, com gates, comandos PowerShell, reconciliação, cenário obrigatório de rollback e descarte do banco. Nenhuma limpeza real foi executada.
+- Ensaio integral aprovado em duas restaurações descartáveis do backup v3:
+  sucesso `20260723-213000` com 4.673.054 linhas removidas e rollback
+  `20260723-213001` com exit code `22`; ambas as reconciliações retornaram
+  `ok=true`, as tabelas preservadas permaneceram idênticas e os bancos foram
+  descartados.
 - Migração integral das configurações Pydantic v2 para `ConfigDict` concluída na Issue #186. A suíte dedicada passou com 5 testes e a validação final registrou `666 passed`, `1 skipped` intencional e zero `PydanticDeprecatedSince20`.
 
 ### Tesouro Direto — Blocos 3.1 e 3.2
@@ -95,10 +101,8 @@ python -m app.cli.rebuild_treasury_official_prices
 
 ## Prioridades atuais
 
-1. Implementar captura automática e reconciliação das tabelas preservadas para o ensaio isolado da Issue #196.
-2. Executar os cenários de sucesso e rollback somente em PostgreSQL descartável restaurado do backup v3.
-3. Promover a PR #198 após validação integral do bloco estrutural.
-4. Executar a limpeza e o rebuild pré-produção em etapas auditáveis somente após aprovação do ensaio isolado.
+1. Promover a PR #198 após validação final do bloco estrutural.
+2. Executar a limpeza e o rebuild pré-produção em etapas auditáveis somente após nova autorização explícita.
 5. Remover o serviço legado de rentabilidade (#151).
 6. Materializar o histórico persistido do IBOV (#150).
 7. Implementar TWR dedicado, separando Tesouro Direto e Renda Fixa (#149).
@@ -118,7 +122,7 @@ A primeira entrada em produção exige:
 4. exportação controlada das transações, renda fixa e eventos corporativos — validada pela Issue #188 e promovida pela PR #191;
 5. plano de execução `pre-prod-cleanup-execution.v1` validado sem acesso ao banco — concluído pela Issue #195 e PR #194;
 6. executor, CLI e artefato da limpeza isolada — implementados pela Issue #196 e PR #198, com 44 testes aprovados;
-7. ensaio integral em banco descartável, incluindo sucesso, rollback e reconciliação de tabelas preservadas — pendente;
+7. ensaio integral em banco descartável, incluindo sucesso, rollback e reconciliação de tabelas preservadas — concluído;
 8. limpeza controlada de dados reconstruíveis na pré-produção real — não autorizada nesta fase;
 9. seed B3 COTAHIST;
 10. seed oficial do Tesouro Direto;

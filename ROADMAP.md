@@ -21,12 +21,12 @@
 | Página Rentabilidade | Contratos concluídos | 95% |
 | Dependências | Auditoria concluída; nenhuma PR aberta | 100% |
 | Configuração Pydantic v2 | Migração validada e Issue #186 encerrada | 100% |
-| Rebuild pré-produção | Ensaio da limpeza isolada em preparação | 87% |
+| Rebuild pré-produção | Ensaio isolado aprovado; limpeza real ainda não autorizada | 90% |
 | Backup/Restore pré-produção | Validação real v3 concluída (#183) | 100% |
 | Dry-run de limpeza | Validado no PostgreSQL real (#185) | 100% |
 | Exportação pré-produção | Validada e promovida pela PR #191 (#188) | 100% |
 | Planejamento seguro da limpeza | Validado pela Issue #195 e PR #194 | 100% |
-| Limpeza isolada | Executor, CLI e artefato implementados; ensaio real pendente (#196 / PR #198) | 85% |
+| Limpeza isolada | Sucesso e rollback reconciliados em bancos descartáveis (#196 / PR #198) | 100% |
 | Eventos corporativos | Fundação pronta | 30% |
 | IRPF | Planejado | 15% |
 | Backup/Restore administrativo | Planejado (#83) | 10% |
@@ -118,9 +118,9 @@ Validação final: `666 passed`, `1 skipped` intencional e zero `PydanticDepreca
 - [x] CLI `pre_prod_isolated_cleanup` e relatórios `committed`, `aborted` e `rolled_back` implementados.
 - [x] Validação multiplataforma concluída com 44 testes aprovados e `compileall` sem erros.
 - [x] Runbook D0 do ensaio isolado concluído com gates, comandos PowerShell, reconciliação e descarte.
-- [ ] Implementar captura automática de baseline e pós-execução das tabelas preservadas.
-- [ ] Executar cenário de sucesso em PostgreSQL descartável restaurado do backup v3.
-- [ ] Executar e reconciliar cenário de rollback em nova restauração e novo `run_id`.
+- [x] Implementar captura automática de baseline e pós-execução das tabelas preservadas.
+- [x] Executar cenário de sucesso em PostgreSQL descartável restaurado do backup v3 (`20260723-213000`, `ok=true`).
+- [x] Executar e reconciliar cenário de rollback em nova restauração e novo `run_id` (`20260723-213001`, exit code `22`, `ok=true`).
 - [ ] Promover a PR #198 para a `main` após o bloco estrutural validado.
 - [ ] Avaliar autorização separada para limpeza da pré-produção real somente após o ensaio aprovado.
 - [ ] Seed B3 COTAHIST.
@@ -132,10 +132,8 @@ Validação final: `666 passed`, `1 skipped` intencional e zero `PydanticDepreca
 
 ## Próximas prioridades
 
-1. Implementar captura automática e reconciliação das tabelas preservadas para o ensaio da Issue #196.
-2. Executar os cenários de sucesso e rollback somente em banco PostgreSQL descartável.
-3. Promover a PR #198 após validação integral do ensaio isolado.
-4. Executar limpeza e rebuild pré-produção apenas após nova autorização explícita.
+1. Promover a PR #198 após validação final do bloco estrutural.
+2. Executar limpeza e rebuild pré-produção apenas após nova autorização explícita.
 5. Remover o serviço legado de rentabilidade (#151).
 6. Materializar IBOV (#150).
 7. Implementar TWR dedicado, separando Tesouro Direto e Renda Fixa (#149).

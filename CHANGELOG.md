@@ -5,6 +5,23 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Concluído — ensaio integral da limpeza isolada (23/07/2026)
+
+- A CLI agora captura automaticamente baseline e pós-contagem de todas as
+  tabelas do contrato canônico e publica `preserved-before.json`,
+  `preserved-after.json`, `post-cleanup-inventory.json` e
+  `reconciliation.json` sem sobrescrita.
+- Adicionado mecanismo explícito `--rehearsal-fail-after-table`, restrito ao
+  `cleanup_order`, para comprovar rollback integral dentro da transação.
+- O cenário de sucesso `20260723-213000`, executado somente em restauração
+  descartável do backup v3, removeu 4.673.054 linhas planejadas,
+  preservou as tabelas fora do plano e retornou reconciliação `ok=true`.
+- O cenário de rollback `20260723-213001`, em segunda restauração limpa,
+  retornou exit code `22`, `committed=false`, contagens finais idênticas ao
+  baseline e reconciliação `ok=true`.
+- Os três bancos descartáveis do ensaio foram removidos após a validação. A
+  limpeza da pré-produção real continua proibida e não foi executada.
+
 ### Corrigido — revisão arquitetural integral (23/07/2026)
 
 - Adicionado `docs/ARCHITECTURAL_REVIEW_2026-07-23.md` com estado, arquitetura, riscos, dívida técnica, revisão das 15 Issues abertas, revisão da PR #198 e fila P0–P3.
