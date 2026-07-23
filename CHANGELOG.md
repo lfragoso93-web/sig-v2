@@ -5,6 +5,16 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Adicionado — autorização pura da limpeza isolada (23/07/2026)
+
+- Adicionado o contrato versionado `pre-prod-isolated-cleanup.v1`, separado do contrato `plan-only` existente.
+- A autorização exige confirmação composta vinculada a `run_id`, banco de destino, commit SHA completo e checksum SHA-256 canônico do plano.
+- Origem e destino são comparados por host, porta e banco; o destino deve ser diferente e portar o marcador explícito `sgi-pre-prod-isolated`.
+- O plano `pre-prod-cleanup-execution.v1` é revalidado quanto a schema, modo, branch, blockers, identidade, checksum, ordem e histórico de segurança.
+- A serialização do contrato remove o texto secreto de confirmação e não inclui URLs ou credenciais.
+- Testes unitários sem banco cobrem adulteração do plano, confirmação inexata, alvo igual à origem e ausência do marcador de isolamento.
+- Nenhum executor, conexão com banco ou SQL destrutivo foi introduzido neste bloco.
+
 ### Corrigido — migração Pydantic v2 para ConfigDict (22/07/2026)
 
 - Configurações baseadas em `class Config` foram migradas para `ConfigDict` ou `SettingsConfigDict`.
@@ -149,86 +159,14 @@ Formato baseado em Keep a Changelog.
 
 - Página Resumo concluída e promovida para a `main` pela PR #164.
 - Criada a Issue-mãe #165 para reconstrução e validação ponta a ponta de Proventos.
-- Arquitetura atual auditada, incluindo contratos temporais, filtros divergentes, escrita durante leitura, serviços paralelos e legado de modelo.
-- Definida a sequência: testes de caracterização, contratos e filtros, separação de leitura/materialização, consolidação do pipeline, validação por classe e revisão do frontend.
-- Issues #92 e #95 preservadas como entregas concluídas; #131 vinculada como sub-bloco posterior.
+- Arquitetura atual auditada, incluindo contratos temporais, filtros divergentes, escrita durante leitura e cobertura parcial da coleta.
+- Registrados como próximos blocos: contrato temporal canônico, limpeza de rotas legadas, reconstrução do pipeline DB-first e validação frontend.
 
-### Corrigido — Página Resumo (18/07/2026)
+### Concluído — Página Resumo (18/07/2026)
 
-- KPIs reconciliados entre Resumo, Patrimônio e valuation canônico.
-- `summary.v2` e posições validados nas fronteiras backend e frontend, sem recomposição financeira local.
-- Resultado atual coberto para vendas parciais, posições encerradas e carteiras mistas.
-- Cobertura completa e parcial de preços explicitada, preservando custo quando falta cotação.
-- Histórico consolidado e por classe migrado para snapshots canônicos.
-- Gráfico patrimonial validado com ganho acima do aplicado e perda abaixo da linha zero; issue #147 encerrada.
-- Dropdown, loading, estados vazios, estimativas e sinais negativos cobertos por regressão.
-
-### Corrigido — CI e conformidade documental (17/07/2026)
-
-- Corrigido erro `E203` que bloqueava o lint do backend.
-- Documentos públicos passaram a descrever fontes por função, preservando a política de não exposição de provedores.
-- Auditoria arquitetural da página Resumo formalizada na issue #161.
-
-### Corrigido — Tesouro Direto e pipeline de preços (17/07/2026)
-
-- Corrigida a resolução canônica de RendA+ e Educa+ pelo ano comercial.
-- Catálogo do Tesouro sincronizado de forma incremental e idempotente.
-- Fallback dos dados abertos oficiais do Tesouro passou a percorrer todos os recursos CSV oficiais.
-- Parser oficial passou a tolerar BOM, espaços e variações de cabeçalho.
-- Fluxo utilizado pela página Resumo passou a usar provedor primário de mercado, dados abertos oficiais do Tesouro e último preço persistido.
-- Cotação passou a ser devolvida pelo ticker original da posição.
-- Consultas e atualizações do ativo do Tesouro passaram a ser case-insensitive.
-- Criação automática de ativos duplicados com `name=ticker` foi bloqueada.
-- Testes de regressão adicionados para RendA+ 2060/2065, fallback oficial e associação de ticker.
-- Valores atuais do Tesouro foram validados na interface.
-
-### Documentado — Rebuild pré-produção (17/07/2026)
-
-- Criada a issue #158 para a reconstrução limpa da base antes do go-live.
-- Definida a ordem: backup, dry-run, limpeza controlada, COTAHIST, dados abertos oficiais do Tesouro, benchmarks, proventos, CSV da carteira, snapshots e reconciliação.
-- O rebuild deixou de bloquear o desenvolvimento atual e passou a ser requisito formal de entrada em produção.
-
-### Dependências — Auditoria Dependabot (17/07/2026)
-
-- Atualizações compatíveis foram auditadas e integradas na `stable-15jun` em commits isolados.
-- A Issue #159 foi encerrada após não restarem PRs Dependabot abertos.
-- A regressão específica de TypeScript 7 foi tratada separadamente na Issue #182.
-
-### Auditoria funcional canônica — 16/07/2026
-
-- Contratos `summary.v2` e `rentabilidade.v2` estritos e versionados.
-- Patrimônio intradiário separado de TWR fechado.
-- Resultado separado em realizado, não realizado e proventos.
-- Histórico mensal baseado no último snapshot de cada mês.
-- Período completo sem corte artificial.
-- `PortfolioClassSnapshot` e TWR por classe para ativos de mercado.
-- CDI e IPCA servidos pelo backend a partir de séries persistidas.
-- Tesouro e Renda Fixa sem falso TWR.
-- Reconciliação monetária com tolerância de R$ 0,01.
-- Atualização intradiária de preços a cada 90 minutos em dias úteis.
-
-### Fontes oficiais e valuation canônico — 16/07/2026
-
-- B3 COTAHIST adotado como histórico primário de ações, FIIs, ETFs nacionais e BDRs.
-- Dados abertos oficiais do Tesouro adotados como fonte oficial do catálogo e histórico do Tesouro.
-- Renda Fixa valorizada por motor dedicado.
-- Snapshots reconstruídos com dados persistidos.
-- Cobertura parcial e retorno estimado explicitados.
-- Comandos operacionais de rebuild e diagnóstico adicionados.
-
-### Integração v2, aliases e eventos corporativos — 13/07/2026
-
-- Cliente isolado para API v2.
-- Resolução em lote de tickers antigos.
-- Modelo de aliases históricos.
-- Evento `TICKER_CHANGE` idempotente.
-- Reconstrução automática de snapshots após importação CSV.
-- Filtros interativos no modal CSV.
-
-## Próximos focos
-
-1. Implementar a limpeza controlada das tabelas reconstruíveis no escopo da #158.
-2. Remover o serviço legado de rentabilidade (#151).
-3. Materializar IBOV (#150).
-4. Implementar TWR dedicado por classe (#149).
-5. Migrar timestamps UTC legados para timezone-aware (#192).
+- A página Resumo passou a consumir exclusivamente `summary.v2`.
+- Dropdowns foram movidos para portal, eliminando recorte por overflow das tabelas.
+- KPI de variação diária foi separado da rentabilidade acumulada.
+- Sinais negativos passaram a ser preservados nos cards.
+- Tabelas e KPIs foram reconciliados com o backend canônico.
+- Testes e documentação foram sincronizados.
