@@ -4,7 +4,7 @@ Plataforma pessoal para acompanhamento, consolidação e análise de investiment
 
 A branch padrão de desenvolvimento é `stable-15jun`. A promoção para `main` ocorre por PR após validação e atualização da documentação viva.
 
-## Status atual — 22/07/2026
+## Status atual — 23/07/2026
 
 O SGI v2 opera com arquitetura **DB-first**: catálogo, preços, taxas, proventos e snapshots são persistidos antes de alimentar KPIs, páginas e gráficos.
 
@@ -29,7 +29,9 @@ O SGI v2 opera com arquitetura **DB-first**: catálogo, preços, taxas, provento
 - Backup `pre-prod-backup.v3` validado no PostgreSQL real com cliente/servidor 16/16, snapshot único `REPEATABLE READ READ ONLY`, dump com SHA-256, restauração em banco vazio e isolado e reconciliação `ok=true`, sem divergências e com zero escritas na origem. A Issue #183 foi concluída e a PR #184 promovida para a `main`.
 - Dry-run de limpeza validado no PostgreSQL real pelo contrato `pre-prod-cleanup-impact.v2`: 24 tabelas, 4.673.320 linhas, 11 preservadas, 3 com exportação obrigatória, 10 reconstruíveis, zero bloqueios, zero ciclos e zero escritas. A execução `20260722-101848` retornou `ok=true` e exit code `0`.
 - Exportação auditável `pre-prod-export.v1` validada no PostgreSQL real em snapshot único `REPEATABLE READ READ ONLY`: `corporate_events`, `fixed_income_investments` e `transactions` reconciliadas em 323 linhas, com SHA-256 de dados e schema, zero escritas na origem e `reconciled=true`. A execução `20260722-134741` retornou exit code `0`, a Issue #188 foi encerrada e a PR #191 promovida para a `main`.
-- Fundação plan-only da limpeza promovida pela PR #194: contrato `pre-prod-cleanup-execution.v1`, CLI `pre_prod_cleanup_plan`, verificação integral de identidade, checksums, gate e DAG, publicação atômica de `cleanup/plan.json`, persistência atômica de `cleanup-impact.json` e rollback de exportação incompleta. Nenhuma escrita no PostgreSQL ou limpeza real foi executada.
+- Fundação plan-only da limpeza promovida pela PR #194: contrato `pre-prod-cleanup-execution.v1`, CLI `pre_prod_cleanup_plan`, verificação integral de identidade, checksums, gate e DAG, publicação atômica de `cleanup/plan.json`, persistência atômica de `cleanup-impact.json` e rollback de exportação incompleta.
+- Executor e CLI da limpeza isolada implementados na Issue #196 e na PR #198: lock operacional, validação de contagens, transação única, rollback integral, relatórios `committed`, `aborted` e `rolled_back`, publicação atômica e logs redigidos. A validação local passou com 43 testes e `compileall` sem erros.
+- Runbook D0 do ensaio em PostgreSQL descartável concluído, com gates, comandos PowerShell, reconciliação, cenário obrigatório de rollback e descarte do banco. Nenhuma limpeza real foi executada.
 - Migração integral das configurações Pydantic v2 para `ConfigDict` concluída na Issue #186. A suíte dedicada passou com 5 testes e a validação final registrou `666 passed`, `1 skipped` intencional e zero `PydanticDeprecatedSince20`.
 
 ### Tesouro Direto — Blocos 3.1 e 3.2
@@ -79,6 +81,7 @@ python -m app.cli.pre_prod_restore
 python -m app.cli.pre_prod_cleanup_impact
 python -m app.cli.pre_prod_export
 python -m app.cli.pre_prod_cleanup_plan
+python -m app.cli.pre_prod_isolated_cleanup
 python -m app.cli.full_market_rebuild
 python -m app.cli.rebuild_b3_historical_market
 python -m app.cli.sync_treasury_catalog_v2
@@ -87,13 +90,14 @@ python -m app.cli.rebuild_treasury_official_prices
 
 ## Prioridades atuais
 
-1. Validar em ambiente real uma nova cadeia íntegra de exportação + `pre_prod_cleanup_plan`, sem executar escrita no banco.
-2. Especificar em Issue/sub-bloco separado a execução destrutiva controlada, com confirmação explícita, transação, contagens antes/depois e rollback seguro.
-3. Executar a limpeza e o rebuild pré-produção em etapas auditáveis somente após aprovação do gate anterior.
-4. Remover o serviço legado de rentabilidade (#151).
-5. Materializar o histórico persistido do IBOV (#150).
-6. Implementar TWR dedicado, separando Tesouro Direto e Renda Fixa (#149).
-7. Migrar timestamps UTC legados para timezone-aware (#192).
+1. Implementar captura automática e reconciliação das tabelas preservadas para o ensaio isolado da Issue #196.
+2. Executar os cenários de sucesso e rollback somente em PostgreSQL descartável restaurado do backup v3.
+3. Promover a PR #198 após validação integral do bloco estrutural.
+4. Executar a limpeza e o rebuild pré-produção em etapas auditáveis somente após aprovação do ensaio isolado.
+5. Remover o serviço legado de rentabilidade (#151).
+6. Materializar o histórico persistido do IBOV (#150).
+7. Implementar TWR dedicado, separando Tesouro Direto e Renda Fixa (#149).
+8. Migrar timestamps UTC legados para timezone-aware (#192).
 
 ## Dependências
 
@@ -107,16 +111,18 @@ A primeira entrada em produção exige:
 2. backup validado com checksum e restauração isolada — concluído pela Issue #183;
 3. dry-run read-only da limpeza e relatório de impacto — validado pela Issue #185;
 4. exportação controlada das transações, renda fixa e eventos corporativos — validada pela Issue #188 e promovida pela PR #191;
-5. plano de execução `pre-prod-cleanup-execution.v1` validado sem acesso ao banco — implementado pela PR #194, validação real da cadeia ainda pendente;
-6. limpeza controlada de dados reconstruíveis — não autorizada nesta fase;
-7. seed B3 COTAHIST;
-8. seed oficial do Tesouro Direto;
-9. seed de benchmarks, câmbio e proventos;
-10. importação CSV completa da carteira;
-11. rebuild de posições e snapshots;
-12. reconciliação financeira e auditoria de cobertura.
+5. plano de execução `pre-prod-cleanup-execution.v1` validado sem acesso ao banco — concluído pela Issue #195 e PR #194;
+6. executor, CLI e artefato da limpeza isolada — implementados pela Issue #196 e PR #198, com 43 testes aprovados;
+7. ensaio integral em banco descartável, incluindo sucesso, rollback e reconciliação de tabelas preservadas — pendente;
+8. limpeza controlada de dados reconstruíveis na pré-produção real — não autorizada nesta fase;
+9. seed B3 COTAHIST;
+10. seed oficial do Tesouro Direto;
+11. seed de benchmarks, câmbio e proventos;
+12. importação CSV completa da carteira;
+13. rebuild de posições e snapshots;
+14. reconciliação financeira e auditoria de cobertura.
 
-Checklist completo: issue #158. Runbook geral: `docs/PRE_PROD_REBUILD_RUNBOOK.md`. Runbook do dry-run: `docs/pre-prod-cleanup-impact-runbook.md`. Runbook da exportação: `docs/pre-prod-export-runbook.md`. Runbook do planejamento: `docs/pre-prod-cleanup-execution-runbook.md`.
+Checklist completo: issue #158. Runbook geral: `docs/PRE_PROD_REBUILD_RUNBOOK.md`. Runbook do dry-run: `docs/pre-prod-cleanup-impact-runbook.md`. Runbook da exportação: `docs/pre-prod-export-runbook.md`. Runbook da execução: `docs/pre-prod-cleanup-execution-runbook.md`. Runbook do ensaio isolado: `docs/pre-prod-isolated-cleanup-rehearsal-runbook.md`.
 
 ## Stack
 
@@ -143,6 +149,7 @@ docker compose up -d --build
 - `docs/pre-prod-cleanup-impact-runbook.md` — execução, artefato, exit codes e critérios de aborto do dry-run.
 - `docs/pre-prod-export-runbook.md` — execução read-only, artefatos, manifesto, reconciliação e códigos de saída da exportação.
 - `docs/pre-prod-cleanup-execution-runbook.md` — validação plan-only, cadeia de artefatos, plano e códigos de saída.
+- `docs/pre-prod-isolated-cleanup-rehearsal-runbook.md` — gates, restauração, execução, rollback, reconciliação e descarte do ensaio isolado.
 - `docs/CANONICAL_FINANCIAL_CONTRACT.md` — contrato financeiro oficial.
 - `docs/RESUMO_ARCHITECTURAL_AUDIT.md` — matriz de contratos e divergências da página Resumo.
 - `docs/PROVENTOS_ARCHITECTURAL_AUDIT.md` — fluxo, contratos, riscos e sequência da Fase 2.
