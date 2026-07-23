@@ -284,16 +284,18 @@ def run(
                 raise IsolatedCleanupExecutionError("controlled_rehearsal_failure")
 
         engine = engine_factory(arguments.target_database_url)
-        with engine.connect() as connection:
-            if classifications is not None:
+        if classifications is not None:
+            with engine.connect() as connection:
                 before = capture_counts(connection, classifications)
+        with engine.connect() as connection:
             result = execute_isolated_cleanup(
                 connection=connection,
                 authorization=authorization,
                 plan_payload=plan_payload,
                 after_table_cleanup=controlled_failure if failure_table else None,
             )
-            if classifications is not None:
+        if classifications is not None:
+            with engine.connect() as connection:
                 after = capture_counts(connection, classifications)
         if before is not None and classifications is not None:
             reconciliation = reconcile(
