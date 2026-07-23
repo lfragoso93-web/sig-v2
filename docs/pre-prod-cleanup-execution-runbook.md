@@ -86,7 +86,7 @@ A implementação não deve manter uma segunda lista codificada. A única ordem 
 
 ## Relatório de execução
 
-O artefato futuro deve ser publicado em:
+O artefato deve ser publicado em:
 
 ```text
 artifacts/pre-prod-rebuild/<run-id>/cleanup/execution.json
@@ -108,6 +108,8 @@ Conteúdo mínimo:
 
 A publicação deve ser atômica e sem sobrescrita.
 
+O publicador de sucesso foi implementado no Bloco C1. Ele grava UTF-8 em arquivo temporário no mesmo diretório, sincroniza o conteúdo e usa criação atômica sem substituição do destino. URL, usuário e senha não entram no artefato; somente o rótulo redigido `host:port/database` é persistido.
+
 ## Sequência de implementação
 
 ### Bloco A — contrato e validações puras
@@ -128,10 +130,11 @@ A publicação deve ser atômica e sem sobrescrita.
 
 ### Bloco C — CLI e artefato
 
-- CLI explícita para ambiente isolado;
-- exit codes distintos;
-- relatório atômico;
-- mensagens UTF-8 e URLs redigidas.
+- [x] publicador atômico e sem sobrescrita para `cleanup/execution.json`;
+- [x] relatório de sucesso redigido, UTF-8 e reconciliado;
+- [ ] CLI explícita para ambiente isolado;
+- [ ] exit codes distintos;
+- [ ] relatório de rollback/aborto sem expor credenciais.
 
 ### Bloco D — ensaio real isolado
 
@@ -158,4 +161,4 @@ Somente após o Bloco D reconciliado poderá ser criada uma etapa separada para 
 - Issue dedicada criada e vinculada à #158;
 - arquitetura e gates documentados;
 - nenhuma escrita em banco executada;
-- próximo bloco limitado a contrato e validações puras.
+- Bloco C1 implementado sem integrar a CLI ao banco real ou isolado.
