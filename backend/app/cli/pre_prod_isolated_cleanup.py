@@ -1,4 +1,4 @@
-"""CLI exclusiva para limpeza controlada em PostgreSQL isolado.
+"""CLI para limpeza controlada em PostgreSQL isolado ou pré-produção real.
 
 A confirmação composta é obrigatória por argumento. URLs nunca são impressas e o
 executor transacional continua sendo a única camada autorizada a executar DELETE.
@@ -20,6 +20,8 @@ from app.services.pre_prod_isolated_cleanup_contract import (
     APPROVED_BRANCH,
     ISOLATED_CLEANUP_REPORT_SCHEMA_VERSION,
     REQUIRED_ISOLATION_MARKER,
+    REQUIRED_PRE_PROD_MARKER,
+    SUPPORTED_TARGET_MARKERS,
     CleanupDatabaseIdentity,
     CleanupExecutionConfirmation,
     IsolatedCleanupAuthorization,
@@ -93,7 +95,7 @@ def _configure_output() -> None:
 
 def _arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Executa cleanup aprovado somente em PostgreSQL isolado.",
+        description="Executa cleanup aprovado em alvo explicitamente autorizado.",
     )
     parser.add_argument("--plan", type=Path, required=True)
     parser.add_argument("--artifact-root", type=Path, default=DEFAULT_ARTIFACT_ROOT)
@@ -138,7 +140,7 @@ def _database_identity(database_url: str, *, isolation_marker: str | None) -> Cl
     except Exception as exc:
         raise CliTargetError("URL PostgreSQL inválida") from exc
     if not parsed.drivername.startswith("postgresql"):
-        raise CliTargetError("cleanup isolado exige URL PostgreSQL")
+        raise CliTargetError("cleanup exige URL PostgreSQL")
     if not parsed.host or not parsed.database:
         raise CliTargetError("URL PostgreSQL deve informar host e database")
     return CleanupDatabaseIdentity(
@@ -147,6 +149,20 @@ def _database_identity(database_url: str, *, isolation_marker: str | None) -> Cl
         database=parsed.database,
         isolation_marker=isolation_marker,
     )
+
+
+def _validate_target_profile(
+    source: CleanupDatabaseIdentity,
+    target: CleanupDatabaseIdentity,
+) -> None:
+    marker = target.isolation_marker
+    if marker not in SUPPORTED_TARGET_MARKERS:
+        raise CliTargetError("marcador obrigatório de execução ausente ou inválido")
+    same_database = source.normalized_key == target.normalized_key
+    if marker == REQUIRED_ISOLATION_MARKER and same_database:
+        raise CliTargetError("destino isolado deve ser diferente da origem")
+    if marker == REQUIRED_PRE_PROD_MARKER and not same_database:
+        raise CliTargetError("cleanup real exige origem e destino com a mesma identidade")
 
 
 def _build_authorization(
@@ -180,10 +196,7 @@ def _build_authorization(
             arguments.target_database_url,
             isolation_marker=arguments.target_isolation_marker,
         )
-        if target.isolation_marker != REQUIRED_ISOLATION_MARKER:
-            raise CliTargetError("marcador obrigatório de isolamento ausente")
-        if source.normalized_key == target.normalized_key:
-            raise CliTargetError("destino isolado deve ser diferente da origem")
+        _validate_target_profile(source, target)
     except IsolatedCleanupValidationError as exc:
         raise CliTargetError(str(exc)) from exc
 
@@ -423,10 +436,10 @@ def main(argv: list[str] | None = None) -> None:
     try:
         exit_code = run(_arguments(argv))
     except KeyboardInterrupt:
-        _LOGGER.warning("cleanup isolado interrompido")
+        _LOGGER.warning("cleanup interrompido")
         exit_code = CleanupExitCode.INTERRUPTED
     except Exception:
-        _LOGGER.exception("cleanup isolado abortado por falha interna")
+        _LOGGER.exception("cleanup abortado por falha interna")
         exit_code = CleanupExitCode.INTERNAL_ERROR
     raise SystemExit(int(exit_code))
 
