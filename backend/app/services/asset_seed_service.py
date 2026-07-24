@@ -213,7 +213,11 @@ async def _run_crypto_seed(db: AsyncSession, result: SeedResult) -> None:
         await db.commit()
 
 
-async def run_asset_seed(db: AsyncSession, run_backfill: bool = True) -> SeedResult:
+async def run_asset_seed(
+    db: AsyncSession,
+    run_backfill: bool = True,
+    include_crypto: bool = True,
+) -> SeedResult:
     result = SeedResult()
     BATCH_SIZE = 200
     batch_ops = 0
@@ -261,7 +265,8 @@ async def run_asset_seed(db: AsyncSession, run_backfill: bool = True) -> SeedRes
     if batch_ops > 0:
         await db.commit()
 
-    await _run_crypto_seed(db, result)
+    if include_crypto:
+        await _run_crypto_seed(db, result)
 
     logger.info(
         f"[seed] catálogo concluído: {result.created} criados, "

@@ -52,3 +52,21 @@ async def test_seed_catalogs_all_national_dividend_classes(db: AsyncSession):
     assert result.by_type["FII"] == 1
     assert result.by_type["ETF_NACIONAL"] == 1
     assert result.by_type["BDR"] == 1
+
+
+@pytest.mark.asyncio
+async def test_seed_can_exclude_crypto_for_isolated_b3_stage(db: AsyncSession):
+    with (
+        patch(
+            "app.services.asset_seed_service.fetch_all_tickers_v2",
+            new_callable=AsyncMock,
+            return_value=[],
+        ),
+        patch(
+            "app.services.asset_seed_service.fetch_crypto_available_all",
+            new_callable=AsyncMock,
+        ) as crypto,
+    ):
+        await run_asset_seed(db, run_backfill=False, include_crypto=False)
+
+    crypto.assert_not_awaited()
