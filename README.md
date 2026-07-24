@@ -10,7 +10,7 @@ O SGI v2 opera com arquitetura **DB-first**: catálogo, preços, taxas, provento
 
 A PR #202 foi promovida para a `main` e unificou a árvore Alembic no merge `6ee96b003a8c6bf4955b906687faf17d99e7ed09`. A Issue #199 é o gate operacional ativo para a limpeza controlada da pré-produção real.
 
-A nova cadeia operacional `20260724-100752` validou backup v3, exportação, impacto e plano sem blockers, ciclos ou escritas. A autorização humana foi registrada, mas a execução revelou que a CLI aceitava somente banco isolado. O perfil explícito `sgi-pre-prod-real` foi então implementado e validado com 34 testes. Como o código mudou, a cadeia anterior não pode ser reutilizada: após a promoção deste bloco será obrigatório gerar novo backup, nova exportação, novo impacto, novo plano e nova confirmação composta.
+A nova cadeia operacional `20260724-100752` validou backup v3, exportação, impacto e plano sem blockers, ciclos ou escritas. A autorização humana foi registrada, mas a execução revelou que a CLI aceitava somente banco isolado. O perfil explícito `sgi-pre-prod-real` foi então implementado, validado com 34 testes e promovido pela PR #204. Como o código mudou, a cadeia anterior não pode ser reutilizada: será obrigatório gerar novo backup, nova exportação, novo impacto, novo plano e nova confirmação composta.
 
 A limpeza real, seeds, coleta, importação e rebuild ainda não foram executados.
 
@@ -37,6 +37,7 @@ A limpeza real, seeds, coleta, importação e rebuild ainda não foram executado
 - Executor e CLI `pre_prod_isolated_cleanup` promovidos pela PR #198.
 - Perfil isolado `sgi-pre-prod-isolated`: exige origem e destino diferentes.
 - Perfil real `sgi-pre-prod-real`: exige origem e destino com a mesma identidade normalizada.
+- Perfil real promovido para a `main` pela PR #204.
 - Evidências automáticas: `preserved-before.json`, `preserved-after.json`, `post-cleanup-inventory.json`, `reconciliation.json` e `cleanup/execution.json`.
 - Ensaio de sucesso `20260723-213000`: 4.673.054 linhas planejadas removidas, tabelas preservadas inalteradas e `reconciliation.ok=true`.
 - Ensaio de rollback `20260723-213001`: exit code `22`, nenhuma escrita persistida e `reconciliation.ok=true`.
@@ -85,7 +86,7 @@ python -m app.cli.rebuild_treasury_official_prices
 
 ## Prioridades atuais
 
-1. Promover o perfil seguro de alvo real para a `main` por PR.
+1. Criar o wrapper operacional oficial para a CLI de limpeza controlada.
 2. Gerar uma nova cadeia operacional íntegra vinculada ao SHA promovido.
 3. Registrar nova confirmação composta e executar a limpeza real somente pela Issue #199.
 4. Executar seeds, importação e rebuild em blocos separados após reconciliação da limpeza.
@@ -110,7 +111,7 @@ A primeira entrada em produção exige:
 5. plano de execução validado sem acesso ao banco — concluído;
 6. executor, CLI e artefatos auditáveis — concluído;
 7. ensaio integral em banco descartável com sucesso e rollback — concluído;
-8. perfil explícito e testado para a pré-produção real — concluído na `stable-15jun`, promoção pendente;
+8. perfil explícito e testado para a pré-produção real — concluído e promovido pela PR #204;
 9. nova cadeia de artefatos vinculada ao SHA promovido — pendente;
 10. nova autorização composta — pendente;
 11. limpeza controlada dos dados reconstruíveis — pendente;

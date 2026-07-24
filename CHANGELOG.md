@@ -5,6 +5,15 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Documentado — runbook da limpeza real sincronizado (24/07/2026)
+
+- `docs/pre-prod-cleanup-execution-runbook.md` passou a documentar os perfis `sgi-pre-prod-isolated` e `sgi-pre-prod-real`.
+- A cadeia `20260724-100752` foi mantida somente como evidência histórica e declarada inelegível para execução após a mudança de SHA.
+- Gates, confirmação composta, códigos de saída, artefatos e reconciliação imediata foram alinhados à CLI e ao contrato atuais.
+- README e ROADMAP foram sincronizados com a promoção do perfil real pela PR #204.
+- O wrapper operacional oficial foi registrado como próximo bloco antes da geração de uma nova cadeia.
+- Nenhuma CLI, código, banco, limpeza, seed, coleta, importação ou rebuild foi alterado ou executado.
+
 ### Adicionado — perfil seguro para limpeza real da pré-produção (24/07/2026)
 
 - A CLI `pre_prod_isolated_cleanup` passou a aceitar dois perfis mutuamente exclusivos.
@@ -253,7 +262,7 @@ Formato baseado em Keep a Changelog.
 
 ## Próximos focos
 
-1. Promover o perfil `sgi-pre-prod-real` para a `main`.
+1. Criar o wrapper operacional oficial para a CLI de limpeza controlada.
 2. Gerar nova cadeia operacional vinculada ao SHA promovido.
 3. Executar e reconciliar a limpeza real pela Issue #199.
 4. Endurecer ou remover o router administrativo de debug.

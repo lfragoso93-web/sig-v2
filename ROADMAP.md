@@ -26,7 +26,7 @@
 | Exportação pré-produção | Validada e promovida pela PR #191 (#188) | 100% |
 | Planejamento seguro da limpeza | Validado pela Issue #195 e PR #194 | 100% |
 | Limpeza isolada | Sucesso e rollback reconciliados; PR #198 promovida | 100% |
-| Perfil de alvo real | Implementado e validado com 34 testes; promoção pendente | 95% |
+| Perfil de alvo real | Implementado, validado e promovido pela PR #204 | 100% |
 | Rebuild pré-produção | Gate real preparado; nova cadeia operacional pendente | 92% |
 | Eventos corporativos | Fundação pronta | 30% |
 | IRPF | Planejado | 15% |
@@ -85,7 +85,8 @@ Prontidão global estimada para a primeira produção: **89%**. O percentual nã
 - [x] Bloqueio arquitetural da CLI isolada identificado antes da primeira escrita.
 - [x] Perfil `sgi-pre-prod-real` implementado sem duplicar o executor.
 - [x] Perfil real validado com 34 testes e `compileall` sem erros.
-- [ ] Promover o perfil real para a `main` por PR.
+- [x] Perfil real promovido para a `main` pela PR #204.
+- [ ] Criar wrapper operacional oficial para a CLI de limpeza controlada.
 - [ ] Gerar nova cadeia operacional vinculada ao SHA promovido.
 - [ ] Recalcular e revisar a confirmação composta.
 - [ ] Executar limpeza real somente após nova autorização explícita.
@@ -118,7 +119,7 @@ Prontidão global estimada para a primeira produção: **89%**. O percentual nã
 
 ## Próximas prioridades
 
-1. Promover o perfil seguro `sgi-pre-prod-real` para a `main`.
+1. Criar o wrapper operacional oficial para a CLI de limpeza controlada.
 2. Regenerar backup, exportação, impacto e plano no SHA promovido.
 3. Executar e reconciliar a limpeza real pela Issue #199.
 4. Executar seeds, importação e rebuild em blocos independentes.
