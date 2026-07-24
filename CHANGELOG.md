@@ -5,6 +5,16 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — gate de auditoria Node.js (24/07/2026)
+
+- O gate Node.js passou a usar `audit-ci`, preservando falha para qualquer
+  vulnerabilidade nova de severidade alta ou crítica.
+- A vulnerabilidade `GHSA-qwww-vcr4-c8h2` foi permitida somente no caminho
+  `react-router-dom > react-router`, pois afeta RSC Mode/Server Actions e o
+  frontend do SGI v2 é uma SPA Vite sem esses recursos.
+- A exceção é temporária e deve ser removida assim que houver uma versão
+  corrigida do React Router publicada no npm.
+
 ### Corrigido — checksum canônico do plano operacional (24/07/2026)
 
 - A saída de `pre_prod_cleanup_plan` passou a expor `plan_sha256`.

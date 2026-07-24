@@ -1,0 +1,9 @@
+{
+  "$schema": "https://github.com/IBM/audit-ci/raw/main/docs/schema.json",
+  "high": true,
+  "allowlist": [
+    // O frontend e uma SPA Vite e nao habilita RSC Mode nem Server Actions.
+    // Remover assim que o React Router publicar uma versao corrigida.
+    "GHSA-qwww-vcr4-c8h2|react-router-dom>react-router"
+  ]
+}
