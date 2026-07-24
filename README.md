@@ -116,7 +116,7 @@ A primeira entrada em produção exige:
 9. nova cadeia de artefatos vinculada ao SHA promovido — validada em `20260724-135540`, mas invalidada para execução pela correção posterior do checksum;
 10. nova autorização composta — pendente;
 11. limpeza controlada dos dados reconstruíveis — pendente;
-12. seed B3 COTAHIST — pendente;
+12. entrypoint isolado de catálogo + B3 COTAHIST — implementado, execução pendente;
 13. seed oficial do Tesouro Direto — pendente;
 14. seed de benchmarks, câmbio e proventos — pendente;
 15. importação CSV completa da carteira — pendente;

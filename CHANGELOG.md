@@ -5,6 +5,17 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Adicionado — estágio isolado B3 COTAHIST (24/07/2026)
+
+- Criada a CLI `pre_prod_b3_seed` para executar somente catálogo nacional e
+  histórico oficial COTAHIST, sem Tesouro, cripto, benchmarks, proventos ou snapshots.
+- Período e data de corte são obrigatórios e aparecem no JSON final.
+- O estágio registra contagens de ativos e preços antes/depois, resultados do
+  catálogo e COTAHIST e retorna exit code diferente de zero diante de erros.
+- Um advisory lock PostgreSQL impede execuções concorrentes do mesmo estágio.
+- O seed de ativos ganhou a opção retrocompatível `include_crypto=False`.
+- Nenhuma escrita em banco foi executada durante a implementação.
+
 ### Corrigido — gate de auditoria Node.js (24/07/2026)
 
 - O gate Node.js passou a usar `audit-ci`, preservando falha para qualquer

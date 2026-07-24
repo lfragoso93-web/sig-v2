@@ -83,6 +83,7 @@ def _classify_lifecycle(
 async def rebuild_b3_historical_market(
     start_year: int | None = None,
     end_year: int | None = None,
+    cutoff_date: date | None = None,
 ) -> B3HistoricalMarketRebuildResult:
     today = date.today()
     async with AsyncSessionLocal() as db:
@@ -117,6 +118,8 @@ async def rebuild_b3_historical_market(
                         continue
                     result.rows_received += len(rows)
                     for timestamp, close in rows:
+                        if cutoff_date is not None and timestamp.date() > cutoff_date:
+                            continue
                         stmt = (
                             pg_insert(AssetPrice)
                             .values(

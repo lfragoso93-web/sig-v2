@@ -318,6 +318,19 @@ Ordem:
 8. snapshots consolidados e por classe;
 9. auditoria final.
 
+O primeiro estágio possui entrada dedicada e não dispara os demais:
+
+```powershell
+docker compose exec backend python -m app.cli.pre_prod_b3_seed `
+  --start-year <ANO_INICIAL> `
+  --end-year <ANO_FINAL> `
+  --cutoff-date <AAAA-MM-DD>
+```
+
+O JSON deve ser preservado como evidência. Uma segunda execução controlada deve
+retornar `catalog.created=0` e `cotahist.rows_inserted=0`, salvo mudança real na
+fonte entre as execuções. Exit code `2` indica lock concorrente.
+
 O comando operacional de rebuild existente é:
 
 ```powershell

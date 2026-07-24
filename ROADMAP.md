@@ -91,7 +91,7 @@ Prontidão global estimada para a primeira produção: **89%**. O percentual nã
 - [ ] Recalcular e revisar a confirmação composta.
 - [ ] Executar limpeza real somente após nova autorização explícita.
 - [ ] Reconciliar imediatamente `committed=true` e `reconciliation.ok=true`.
-- [ ] Seed B3 COTAHIST.
+- [ ] Executar e reconciliar o seed isolado B3 COTAHIST.
 - [ ] Seed oficial do Tesouro Direto.
 - [ ] Seed de benchmarks, câmbio e proventos.
 - [ ] Importação CSV completa da carteira.
