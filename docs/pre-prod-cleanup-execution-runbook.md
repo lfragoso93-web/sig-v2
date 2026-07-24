@@ -15,6 +15,13 @@ A entrada operacional continua sendo:
 python -m app.cli.pre_prod_isolated_cleanup
 ```
 
+Para a execução real em Windows/PowerShell, a entrada oficial do operador é o
+wrapper versionado:
+
+```text
+scripts/Invoke-PreProdRealCleanup.ps1
+```
+
 O nome histórico da CLI não restringe o alvo ao ambiente isolado. O alvo é
 definido exclusivamente pelo marcador validado pelo contrato.
 
@@ -158,6 +165,11 @@ objetivo explícito for comprovar rollback.
 Usar `sgi-pre-prod-real` e fornecer URLs que representem exatamente a mesma
 identidade normalizada de pré-produção em origem e destino.
 
+O wrapper oficial fixa branch, módulo e marcador, usa a mesma URL síncrona para
+origem e destino, preserva cada parâmetro como um único argumento e propaga sem
+alteração o exit code da CLI. A URL deve existir somente na variável de ambiente
+`PRE_PROD_SYNC_DATABASE_URL`.
+
 Antes da chamada:
 
 1. revisar o plano e o checksum canônico;
@@ -166,10 +178,25 @@ Antes da chamada:
 4. confirmar backup e restauração emergencial;
 5. confirmar que `--rehearsal-fail-after-table` não está presente.
 
-Até a criação do wrapper operacional oficial, a invocação direta da CLI deve ser
-montada somente a partir dos valores revisados da cadeia corrente. Não usar
-`python -c`, `sh -lc` ou comandos PowerShell aninhados para construir ou executar
-a confirmação.
+Executar em PowerShell a partir da raiz do repositório:
+
+```powershell
+$env:PRE_PROD_SYNC_DATABASE_URL = "<url-postgresql-sincrona>"
+
+.\scripts\Invoke-PreProdRealCleanup.ps1 `
+    -PlanPath $PlanPath `
+    -CommitSha $CommitSha `
+    -Confirmation $Confirmation
+
+$CleanupExitCode = $LASTEXITCODE
+```
+
+O valor de `Confirmation` deve ser o texto composto já revisado e autorizado;
+o wrapper não o calcula nem o corrige. O parâmetro opcional `-ArtifactRoot`
+permite alterar a raiz padrão `artifacts/pre-prod-rebuild`.
+
+Não usar invocação direta, `python -c`, `sh -lc`, `Invoke-Expression` ou comandos
+PowerShell aninhados para construir ou executar a confirmação real.
 
 ## Estratégia transacional
 
@@ -263,5 +290,6 @@ Somente após a limpeza real reconciliada:
 - perfil real: PR #204;
 - contrato: `backend/app/services/pre_prod_isolated_cleanup_contract.py`;
 - CLI: `backend/app/cli/pre_prod_isolated_cleanup.py`;
+- wrapper real: `scripts/Invoke-PreProdRealCleanup.ps1`;
 - perfil de alvo real: `docs/pre-prod-real-cleanup-target-profile.md`;
 - runbook geral: `docs/PRE_PROD_REBUILD_RUNBOOK.md`.

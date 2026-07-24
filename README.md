@@ -38,6 +38,7 @@ A limpeza real, seeds, coleta, importação e rebuild ainda não foram executado
 - Perfil isolado `sgi-pre-prod-isolated`: exige origem e destino diferentes.
 - Perfil real `sgi-pre-prod-real`: exige origem e destino com a mesma identidade normalizada.
 - Perfil real promovido para a `main` pela PR #204.
+- Wrapper PowerShell oficial para a execução real, sem comandos aninhados ou reconstrução da confirmação.
 - Evidências automáticas: `preserved-before.json`, `preserved-after.json`, `post-cleanup-inventory.json`, `reconciliation.json` e `cleanup/execution.json`.
 - Ensaio de sucesso `20260723-213000`: 4.673.054 linhas planejadas removidas, tabelas preservadas inalteradas e `reconciliation.ok=true`.
 - Ensaio de rollback `20260723-213001`: exit code `22`, nenhuma escrita persistida e `reconciliation.ok=true`.
@@ -77,7 +78,7 @@ python -m app.cli.pre_prod_restore
 python -m app.cli.pre_prod_cleanup_impact
 python -m app.cli.pre_prod_export
 python -m app.cli.pre_prod_cleanup_plan
-python -m app.cli.pre_prod_isolated_cleanup
+scripts/Invoke-PreProdRealCleanup.ps1
 python -m app.cli.full_market_rebuild
 python -m app.cli.rebuild_b3_historical_market
 python -m app.cli.sync_treasury_catalog_v2
@@ -86,15 +87,14 @@ python -m app.cli.rebuild_treasury_official_prices
 
 ## Prioridades atuais
 
-1. Criar o wrapper operacional oficial para a CLI de limpeza controlada.
-2. Gerar uma nova cadeia operacional íntegra vinculada ao SHA promovido.
-3. Registrar nova confirmação composta e executar a limpeza real somente pela Issue #199.
-4. Executar seeds, importação e rebuild em blocos separados após reconciliação da limpeza.
-5. Endurecer ou remover o router administrativo de debug antes do go-live.
-6. Remover o serviço legado de rentabilidade (#151).
-7. Materializar o histórico persistido do IBOV (#150).
-8. Implementar TWR dedicado para Tesouro Direto e Renda Fixa (#149).
-9. Migrar timestamps UTC legados para timezone-aware (#192).
+1. Gerar uma nova cadeia operacional íntegra vinculada ao SHA promovido.
+2. Registrar nova confirmação composta e executar a limpeza real somente pela Issue #199.
+3. Executar seeds, importação e rebuild em blocos separados após reconciliação da limpeza.
+4. Endurecer ou remover o router administrativo de debug antes do go-live.
+5. Remover o serviço legado de rentabilidade (#151).
+6. Materializar o histórico persistido do IBOV (#150).
+7. Implementar TWR dedicado para Tesouro Direto e Renda Fixa (#149).
+8. Migrar timestamps UTC legados para timezone-aware (#192).
 
 ## Dependências
 

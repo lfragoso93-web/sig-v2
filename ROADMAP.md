@@ -86,7 +86,7 @@ Prontidão global estimada para a primeira produção: **89%**. O percentual nã
 - [x] Perfil `sgi-pre-prod-real` implementado sem duplicar o executor.
 - [x] Perfil real validado com 34 testes e `compileall` sem erros.
 - [x] Perfil real promovido para a `main` pela PR #204.
-- [ ] Criar wrapper operacional oficial para a CLI de limpeza controlada.
+- [x] Wrapper PowerShell oficial criado para a execução real controlada.
 - [ ] Gerar nova cadeia operacional vinculada ao SHA promovido.
 - [ ] Recalcular e revisar a confirmação composta.
 - [ ] Executar limpeza real somente após nova autorização explícita.
@@ -119,15 +119,14 @@ Prontidão global estimada para a primeira produção: **89%**. O percentual nã
 
 ## Próximas prioridades
 
-1. Criar o wrapper operacional oficial para a CLI de limpeza controlada.
-2. Regenerar backup, exportação, impacto e plano no SHA promovido.
-3. Executar e reconciliar a limpeza real pela Issue #199.
-4. Executar seeds, importação e rebuild em blocos independentes.
-5. Endurecer ou remover o router administrativo de debug antes do go-live.
-6. Remover o serviço legado de rentabilidade (#151).
-7. Materializar IBOV (#150).
-8. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
-9. Migrar timestamps UTC para timezone-aware (#192).
+1. Regenerar backup, exportação, impacto e plano no SHA promovido.
+2. Executar e reconciliar a limpeza real pela Issue #199.
+3. Executar seeds, importação e rebuild em blocos independentes.
+4. Endurecer ou remover o router administrativo de debug antes do go-live.
+5. Remover o serviço legado de rentabilidade (#151).
+6. Materializar IBOV (#150).
+7. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
+8. Migrar timestamps UTC para timezone-aware (#192).
 
 ## Backlog
 

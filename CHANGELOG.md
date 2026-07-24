@@ -5,6 +5,17 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Adicionado — wrapper operacional da limpeza real (24/07/2026)
+
+- Criado `scripts/Invoke-PreProdRealCleanup.ps1` como entrada oficial em PowerShell.
+- O wrapper fixa branch `stable-15jun`, perfil `sgi-pre-prod-real` e a CLI canônica.
+- Origem e destino recebem a mesma URL síncrona de `PRE_PROD_SYNC_DATABASE_URL`.
+- Parâmetros são encaminhados por array, sem `python -c`, `sh -lc` ou avaliação dinâmica.
+- A confirmação composta continua explícita, revisada pelo operador e não é recalculada.
+- O exit code da CLI é propagado sem alteração.
+- Adicionados testes estruturais dos invariantes operacionais.
+- Nenhuma limpeza, seed, coleta, importação, rebuild ou alteração de banco foi executada.
+
 ### Documentado — runbook da limpeza real sincronizado (24/07/2026)
 
 - `docs/pre-prod-cleanup-execution-runbook.md` passou a documentar os perfis `sgi-pre-prod-isolated` e `sgi-pre-prod-real`.
