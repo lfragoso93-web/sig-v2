@@ -1,31 +1,41 @@
 # Revisão arquitetural completa — 23/07/2026
 
-## Escopo e conclusão
+## Natureza do documento
 
-Revisão executada na branch `stable-15jun`, sincronizada com `origin/main`
-(`38ad474`, PR #197). A `main` já era ancestral da branch; a sincronização não
-alterou arquivos. Foram revisados arquitetura, documentação viva, contratos
-canônicos, 21 CLIs/scripts operacionais, serviços, integrações, pipelines,
-migrations, estrutura DB-first, 15 Issues abertas e a PR #198.
+Este documento preserva a fotografia arquitetural produzida durante a PR #198. Os achados abaixo refletem o estado observado antes do ensaio PostgreSQL descartável e antes da promoção da PR.
 
-Conclusão: o núcleo financeiro DB-first está consolidado, mas o projeto ainda
-não está pronto para produção. A prontidão aproximada é **88%** considerando o
-escopo da primeira produção; funcionalidades futuras não entram no percentual.
-O bloqueador imediato continua sendo o ensaio reconciliado da limpeza em
-PostgreSQL descartável. A limpeza da base real permanece proibida.
+## Adendo pós-merge — 24/07/2026
+
+Os bloqueadores P0 identificados nesta revisão foram posteriormente resolvidos:
+
+- a portabilidade Windows da publicação atômica foi corrigida;
+- os testes frontend obsoletos foram corrigidos;
+- a captura automática de baseline, pós-contagem e tabelas preservadas foi implementada;
+- os artefatos `preserved-before.json`, `preserved-after.json`, `post-cleanup-inventory.json` e `reconciliation.json` foram integrados à CLI;
+- o cenário de sucesso `20260723-213000` foi reconciliado com 4.673.054 linhas planejadas removidas;
+- o cenário de rollback `20260723-213001` foi reconciliado com exit code `22` e nenhuma escrita persistida;
+- os bancos PostgreSQL descartáveis do ensaio foram removidos;
+- os checks backend, frontend e de segurança foram aprovados;
+- a PR #198 foi mergeada na `main` pelo commit `77783e46042bd32622500705cb7d365f70c728ae`;
+- a Issue #196 foi encerrada como concluída.
+
+A limpeza da pré-produção real não foi executada e permanece condicionada a uma autorização operacional separada no escopo da Issue #158.
+
+## Escopo e conclusão original
+
+A revisão foi executada na branch `stable-15jun`, então sincronizada com a `main`. Foram revisados arquitetura, documentação viva, contratos canônicos, CLIs e scripts operacionais, serviços, integrações, pipelines, migrations, estrutura DB-first, Issues abertas e a PR #198.
+
+Conclusão original: o núcleo financeiro DB-first estava consolidado, mas o projeto ainda não estava pronto para produção. A prontidão aproximada era **88%** considerando o escopo da primeira produção; funcionalidades futuras não entravam no percentual.
 
 ## Estado e arquitetura
 
-- 619 arquivos rastreados; 382 módulos Python e 153 arquivos de frontend.
-- Mais de 100 módulos de teste backend rastreados.
-- Backend FastAPI/SQLAlchemy async/Alembic/PostgreSQL/Redis/APScheduler.
-- Frontend React 19/TypeScript/Vite/React Query/Zustand.
+- Backend FastAPI, SQLAlchemy async, Alembic, PostgreSQL, Redis e APScheduler.
+- Frontend React 19, TypeScript, Vite, React Query e Zustand.
 - Contratos financeiros `summary.v2` e `rentabilidade.v2`.
-- Contratos pré-produção: inventário v2, backup v3, cleanup-impact v2,
-  export v1, cleanup-execution v1 e isolated-cleanup v1.
+- Contratos pré-produção: inventário v2, backup v3, cleanup-impact v2, export v1, cleanup-execution v1 e isolated-cleanup v1.
 - DB-first aplicado a catálogo, preços, taxas, proventos e snapshots.
 - 24 tabelas inventariadas: 11 preservadas, 3 exportáveis e 10 reconstruíveis.
-- Backup/restauração isolada, dry-run e exportação já reconciliados.
+- Backup/restauração isolada, dry-run, exportação, plano e ensaio isolado reconciliados.
 
 ```text
 Entradas (CSV / lançamentos / provedores)
@@ -38,136 +48,86 @@ Entradas (CSV / lançamentos / provedores)
   -> Resumo / Patrimônio / Rentabilidade / Proventos / IRPF
 ```
 
-## Achados e dívida técnica
+## Achados ainda válidos
 
 ### Alta prioridade
 
-1. A PR #198 não estava portátil no Windows: `os.open()` em diretório para
-   `fsync` é recusado nessa plataforma; uma asserção também ignorava o escape
-   JSON de caminhos.
-2. Todos os jobs da execução CI `30034526337` falharam antes de iniciar, com
-   `steps=[]` e `runner_id=0`. A annotation do GitHub aponta pagamento recusado
-   ou limite de gastos da conta.
-3. A suíte frontend tinha um mock hoisted inválido, um teste de contrato sem a
-   normalização esperada e um teste de evolução acoplado ao Recharts real.
-4. A #83 diverge da implementação: backup/restore administrativo existe, mas o
-   restore não exige senha, não recebe upload e não registra a operação no
-   `AuditLog`.
-5. O serviço legado de rentabilidade ainda é dependência de produção:
-   `transactions.py`, `portfolios.py` e `csv_snapshot_rebuild_service.py`
-   importam sua invalidação de cache.
+1. A Issue #83 diverge parcialmente da implementação: backup/restore administrativo existe, mas o restore ainda requer revisão de reautenticação, upload e auditoria no `AuditLog`.
+2. O serviço legado de rentabilidade permanece dependência de produção para invalidação de cache em consumidores residuais.
+3. O router administrativo de debug pode criar usuário privilegiado e redefinir senha quando habilitado; deve ser removido ou isolado antes do go-live.
 
 ### Média prioridade
 
-6. Grandes unidades: `brapi.py` (1.280 linhas), `admin.py` (825),
-   `AddTransactionModal.tsx` (833), `portfolio_service.py` (776),
-   `PositionTable.tsx` (765) e `irpf_service.py` (756).
-7. Entradas frontend duplicadas: `main.tsx` é ativo; `App.tsx`,
-   `router/index.tsx` e `components/ProtectedRoute.tsx` formam camada antiga.
-   Há também reexports para Patrimônio e API.
-8. `backend/app/migrations/versions/013_add_purchase_price_to_treasury.py`
-   fica fora da árvore Alembic oficial e referencia `treasury_investments`, já
-   removida.
-9. O router de debug pode criar usuário privilegiado e redefinir senha quando
-   habilitado. Apesar das proteções existentes, deve ser removido ou isolado
-   antes do go-live.
-10. A #192 foi confirmada: timestamps UTC naive existem em models, backup,
-    eventos corporativos e processamento de ticker.
-11. `backend/TESTING.md` dizia existir 21 testes e apontava dependências para o
-    arquivo errado.
-12. A nota de introspecção tratava como futura uma integração já concluída.
-13. README/ROADMAP declaravam 43 testes verdes para #198 sem qualificar a
-    plataforma; a revisão Windows encontrou cinco falhas antes da correção.
+4. Existem unidades grandes, incluindo integrações de mercado, router administrativo, modal de transação, serviço de portfólio, tabela de posições e serviço de IRPF.
+5. Existem entradas frontend antigas ou duplicadas que devem ser consolidadas incrementalmente.
+6. A migration `013_add_purchase_price_to_treasury.py` permanece fora da árvore Alembic oficial e referencia tabela removida.
+7. Timestamps UTC naive permanecem registrados na Issue #192.
+8. TWR dedicado para Tesouro Direto e Renda Fixa permanece pendente na Issue #149.
+9. O histórico persistido do IBOV permanece pendente na Issue #150.
 
-## Issues abertas
+## Estado das Issues após o adendo
 
-| Issue | Estado após revisão | Ação recomendada |
+| Issue | Estado | Próxima ação |
 |---|---|---|
-| #196 | Válida, parcial | Atualizar D0; manter até integração PostgreSQL, sucesso, rollback e reconciliação |
-| #192 | Válida | Manter; inventário confirmou ocorrências |
-| #158 | Válida, P0 e issue-mãe | Manter; limpeza real proibida antes do ensaio |
-| #151 | Válida | Registrar três consumidores residuais de cache |
-| #150 | Válida | Manter; IBOV persistido segue necessário |
-| #149 | Válida | Manter; Tesouro/RF ainda sem TWR diário dedicado |
-| #130 | Válida, parcial | Marcar inventário, cliente v2, aliases, resolução e CSV existentes |
-| #129 | Válida, fundação parcial | Registrar model/serviço/processador; provider HG, admin e rollback pendentes |
-| #127 | Válida | Manter; registry seguro por capacidade não existe |
-| #97 | Válida | Manter; Google OAuth não implementado |
-| #90 | Válida, parcial | Atualizar cards/evolução/metas existentes; revisão visual ainda pendente |
-| #83 | Válida, parcial | Registrar UI/endpoints e gaps de senha, upload, auditoria, TTL e integração |
-| #58 | Válida, parcial | Marcar drawer/detalhe/preços/posições; demais telas pendentes |
-| #57 | Válida, parcial | Página/router existem; score e recomendações seguem pendentes |
-| #56 | Válida, fortemente parcial | Marcar PDF/CSV, ano, modelo, página e auditoria; manter para regras fiscais/testes |
+| #196 | Concluída | Nenhuma; preservar evidências e histórico |
+| #158 | Aberta, P0 e issue-mãe | Planejar autorização separada da limpeza real e rebuild |
+| #192 | Aberta | Migrar timestamps para UTC timezone-aware |
+| #151 | Aberta | Extrair invalidação e remover serviço legado |
+| #150 | Aberta | Materializar IBOV persistido |
+| #149 | Aberta | Implementar TWR diário dedicado |
+| #130 | Aberta, parcial | Atualizar progresso e concluir enriquecimento |
+| #129 | Aberta, parcial | Concluir motor e fontes de eventos corporativos |
+| #127 | Aberta | Planejar provedores configuráveis |
+| #97 | Aberta | Implementar Google OAuth |
+| #90 | Aberta, parcial | Revisar UX remanescente de Patrimônio |
+| #83 | Aberta, parcial | Endurecer backup/restore administrativo |
+| #58 | Aberta, parcial | Completar janela global do ativo |
+| #57 | Aberta, parcial | Completar análise de carteira |
+| #56 | Aberta, parcial | Completar regras fiscais e testes |
 
-Não há Issue totalmente duplicada ou obsoleta. #158/#196, #129/#130 e #56/#83
-têm dependência intencional. Nenhuma deve ser fechada agora; #56, #58, #83,
-#90, #129 e #130 precisam ser atualizadas antes de nova decisão.
+## PR #198 — resultado final
 
-## Pull Requests
+- Mergeada na `main` em 23/07/2026.
+- Executor transacional, CLI isolada, relatórios e reconciliação promovidos.
+- Cenários de sucesso e rollback aprovados em PostgreSQL descartável.
+- Backend, frontend, análise estática e verificações de segurança aprovados.
+- A capacidade destrutiva permanece limitada por contrato ao alvo explicitamente isolado.
+- A promoção não autoriza automaticamente execução contra pré-produção real.
 
-### PR #198 — `stable-15jun` para `main`
+## Riscos de produção remanescentes
 
-- Draft, mergeável pelo Git, mas `UNSTABLE`.
-- 11 arquivos; cerca de 2.047 inserções e 57 remoções.
-- Risco alto por introduzir capacidade destrutiva, ainda que isolada.
-- Controles adequados: confirmação composta, alvo isolado, lock, contagens,
-  DAG, transação única, rollback e artefato redigido sem sobrescrita.
-- Bloqueios: CI indisponível, portabilidade encontrada na revisão e integração
-  PostgreSQL real ainda pendente.
-- Decisão: **não mergear** até correções, checks verdes e ensaio reconciliado.
+- limpeza real sem nova autorização operacional: crítico;
+- router administrativo de debug: alto;
+- restore administrativo sem reautenticação/auditoria completa: alto;
+- serviço legado de rentabilidade reutilizável: médio-alto;
+- TWR Tesouro/RF e IBOV incompletos: médio, com ausência explícita preservada;
+- timestamps naive, monólitos, duplicações e migration órfã: médio.
 
-Não existe outra PR aberta, inclusive Dependabot, infraestrutura ou
-documentação. As branches Dependabot antigas foram removidas no `fetch`.
+## Fila priorizada pós-merge
 
-## Validações
-
-- `git fetch --prune` e `git merge --ff-only origin/main`.
-- Backend estrutural: 11/11 testes aprovados.
-- PR #198 no Windows antes da correção: 38 aprovados e 5 falhos.
-- Frontend: lint, typecheck e build de produção aprovados.
-- Frontend antes da correção: 79 aprovados, 2 falhos e 1 suíte com erro.
-- CI: causa externa de billing/spending confirmada pela annotation.
-
-## Riscos de produção
-
-- Limpeza real sem ensaio reconciliado: crítico.
-- CI indisponível: crítico para promoção segura.
-- Restore admin sem reautenticação/auditoria: alto.
-- Debug administrativo habilitável: alto.
-- Legado de rentabilidade reutilizável: médio-alto.
-- TWR Tesouro/RF e IBOV incompletos: médio, com ausência explícita preservada.
-- Timestamps naive, monólitos, duplicações e migration órfã: médio.
-
-## Fila priorizada
-
-| Prioridade | Item | Impacto | Dependências | Complexidade | Estimativa |
-|---|---|---|---|---|---|
-| P0 | Restaurar Actions e reexecutar checks | Promoção auditável | Billing/limite | Baixa externa | 0,5 dia |
-| P0 | Validar portabilidade da #198 | Artefato confiável | Nenhuma | Baixa | 0,5 dia |
-| P0 | Automatizar baseline/pós de preservadas | Gate do ensaio | #196/#198 | Média | 1–2 dias |
-| P0 | Executar sucesso e rollback descartáveis | Último gate da limpeza | Backup v3, CI | Alta operacional | 1–2 dias |
-| P0 | Endurecer/remover debug router | Segurança go-live | Decisão operacional | Média | 1 dia |
-| P1 | Concluir backup/restore admin #83 | Restore seguro e auditado | AuditLog | Alta | 3–5 dias |
-| P1 | Remover legado #151 | Elimina fórmulas/cache obsoletos | Extrair invalidação | Média | 2–3 dias |
-| P1 | Materializar IBOV #150 | Benchmark DB-first | Pipeline mercado | Média | 2–4 dias |
-| P1 | TWR Tesouro/RF #149 | Performance por classe | Históricos | Alta | 1–2 semanas |
-| P1 | UTC aware #192 | Coerência temporal | Auditoria de colunas | Média | 2–4 dias |
-| P2 | Regras fiscais #56 | Homologação IRPF | Eventos complexos | Alta | 1–2 semanas |
-| P2 | Consolidar frontend | Menos duplicação | Testes arquitetura | Média | 2–3 dias |
-| P2 | Arquivar migration órfã | Menos ambiguidade | Confirmar uso externo | Baixa | 0,5–1 dia |
-| P2 | Decompor monólitos | Revisão/testabilidade | Blocos por domínio | Alta incremental | 1–2 dias/arquivo |
-| P2 | Cobertura/providers #129/#130 | Qualidade das integrações | Decisão de fonte | Alta | 1–2 semanas |
-| P3 | Google OAuth #97 | Onboarding | Política/segredos | Média | 3–5 dias |
-| P3 | Provedores configuráveis #127 | Flexibilidade futura | Gestão de segredos | Alta | 2–3 semanas |
-| P3 | UX #90, análise #57 e ativo #58 | Evolução de produto | Núcleo estável | Média/Alta | 1–3 semanas/módulo |
+| Prioridade | Item | Impacto |
+|---|---|---|
+| P0 | Criar Issue de autorização da limpeza real | Separa ensaio de execução operacional |
+| P0 | Atualizar a Issue #158 e runbook operacional | Mantém o rebuild auditável |
+| P0 | Endurecer/remover debug router | Segurança de go-live |
+| P1 | Concluir backup/restore admin #83 | Restore seguro e auditado |
+| P1 | Remover legado #151 | Elimina fórmulas e cache obsoletos |
+| P1 | Materializar IBOV #150 | Benchmark DB-first |
+| P1 | TWR Tesouro/RF #149 | Performance por classe |
+| P1 | UTC aware #192 | Coerência temporal |
+| P2 | Regras fiscais #56 | Homologação IRPF |
+| P2 | Consolidar frontend | Menos duplicação |
+| P2 | Arquivar migration órfã | Menos ambiguidade |
+| P2 | Decompor monólitos | Revisão e testabilidade |
+| P2 | Cobertura/providers #129/#130 | Qualidade das integrações |
+| P3 | Google OAuth #97 | Onboarding |
+| P3 | Provedores configuráveis #127 | Flexibilidade futura |
+| P3 | UX #90, análise #57 e ativo #58 | Evolução de produto |
 
 ## Próximos marcos
 
-1. Saneamento local e documentação desta revisão.
-2. Checks locais verdes e commit pequeno.
-3. Atualização das Issues parcialmente implementadas.
-4. Regularização e reexecução do GitHub Actions.
-5. Captura automática de preservadas.
-6. Ensaio PostgreSQL descartável: sucesso e rollback.
-7. Revisão e promoção da PR #198.
-8. Somente com autorização separada: planejar limpeza da base real.
+1. Sincronizar documentação e Issues após o merge da PR #198.
+2. Criar Issue operacional separada para autorização da limpeza real.
+3. Revisar gates, janela, novo backup, nova exportação e novo plano.
+4. Executar qualquer limpeza real somente após aprovação explícita.
+5. Prosseguir com seeds, importação, rebuild e reconciliação em blocos auditáveis.
