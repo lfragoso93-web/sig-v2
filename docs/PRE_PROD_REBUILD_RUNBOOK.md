@@ -266,27 +266,26 @@ Antes da execução real, registrar na Issue #199:
 
 Usar o mesmo URL PostgreSQL síncrono para origem e destino e o marcador `sgi-pre-prod-real`.
 
-Modelo PowerShell, preenchido somente após revisão dos valores:
+Usar o wrapper PowerShell oficial, preenchido somente após revisão dos valores:
 
 ```powershell
 $PlanPath = "artifacts/pre-prod-rebuild/$RunId/cleanup/plan.json"
-$DatabaseUrl = $env:PRE_PROD_SYNC_DATABASE_URL
 $PlanSha = '<sha256-canônico-do-plano>'
 $DatabaseName = '<nome-do-banco>'
 $Confirmation = "CLEANUP $RunId ON $DatabaseName AT $CommitSha WITH $PlanSha"
 
-docker compose exec backend python -m app.cli.pre_prod_isolated_cleanup `
-  --plan $PlanPath `
-  --branch stable-15jun `
-  --commit-sha $CommitSha `
-  --source-database-url $DatabaseUrl `
-  --target-database-url $DatabaseUrl `
-  --target-isolation-marker sgi-pre-prod-real `
-  --confirmation $Confirmation
+.\scripts\Invoke-PreProdRealCleanup.ps1 `
+  -PlanPath $PlanPath `
+  -CommitSha $CommitSha `
+  -Confirmation $Confirmation
+
+$CleanupExitCode = $LASTEXITCODE
 ```
 
 Regras:
 
+- definir previamente `PRE_PROD_SYNC_DATABASE_URL` com a URL PostgreSQL síncrona;
+- usar somente o wrapper versionado para a execução real;
 - não usar `--rehearsal-fail-after-table`;
 - não executar DDL, `TRUNCATE`, `CASCADE` ou comandos paralelos;
 - interromper imediatamente diante de exit code diferente de zero;
