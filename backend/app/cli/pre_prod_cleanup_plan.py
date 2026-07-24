@@ -21,6 +21,7 @@ from app.services.pre_prod_cleanup_execution_service import (
     build_pre_prod_cleanup_execution_plan,
     publish_pre_prod_cleanup_execution_plan,
 )
+from app.services.pre_prod_isolated_cleanup_contract import canonical_json_sha256
 
 DEFAULT_ARTIFACT_ROOT = Path("artifacts/pre-prod-rebuild")
 IDENTITY_EXIT_CODE = 2
@@ -96,10 +97,12 @@ def _main(arguments: argparse.Namespace) -> int:
         plan=plan,
         run_directory=run_directory,
     )
+    plan_sha256 = canonical_json_sha256(plan.to_dict())
     output = {
         "schema_version": plan.schema_version,
         "run_id": plan.run_id,
         "artifact_path": str(destination),
+        "plan_sha256": plan_sha256,
         "plan": plan.to_dict(),
         "database_accessed": False,
         "database_writes_executed": 0,

@@ -149,6 +149,11 @@ checksum canônico do plano. Ela deve ser recalculada a partir da nova cadeia,
 revisada visualmente e registrada como autorização humana explícita na Issue
 #199 antes da execução real.
 
+Use exclusivamente o campo `plan_sha256` emitido por
+`python -m app.cli.pre_prod_cleanup_plan`. O campo pertence ao envelope exibido
+pela CLI e não ao próprio `plan.json`. Não use `Get-FileHash`: a autorização é
+validada contra a serialização JSON canônica.
+
 Uma confirmação anterior não pode ser reutilizada para outro `run_id`, SHA,
 banco ou checksum.
 

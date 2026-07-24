@@ -137,6 +137,8 @@ O JSON final e `cleanup/plan.json` devem registrar:
 
 - `schema_version=pre-prod-cleanup-execution.v1`;
 - mesmo `run_id`, branch e SHA da exportação;
+- `plan_sha256` na saída da CLI, calculado sobre o mesmo JSON canônico que a
+  CLI de limpeza revalida;
 - `database_accessed=false`;
 - `database_writes_executed=0`;
 - `cleanup_executed=false`;
@@ -146,6 +148,11 @@ O JSON final e `cleanup/plan.json` devem registrar:
 - `safety.reusable_run_id=false`;
 - `blockers=[]`;
 - correspondência exata entre o DAG e os artefatos exportados.
+
+O campo `plan_sha256` pertence ao envelope de saída da CLI e não é gravado
+dentro de `cleanup/plan.json`, evitando um checksum autorreferente. Esse valor é
+a fonte oficial para construir a confirmação composta. Não o substitua por
+`Get-FileHash`, pois o hash de bytes formatados pode diferir do JSON canônico.
 
 ## Códigos de saída
 
@@ -182,6 +189,7 @@ Ao concluir a execução, registrar:
 - tabelas, linhas e bytes exportados;
 - `reconciled`;
 - checksums do cleanup impact, manifesto e CSVs;
+- `plan_sha256` canônico emitido pela CLI;
 - invariantes de segurança do `plan.json`;
 - confirmação explícita de zero escrita e zero limpeza.
 

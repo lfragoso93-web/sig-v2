@@ -5,6 +5,28 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — gate de auditoria Node.js (24/07/2026)
+
+- O gate Node.js passou a usar `audit-ci`, preservando falha para qualquer
+  vulnerabilidade nova de severidade alta ou crítica.
+- A vulnerabilidade `GHSA-qwww-vcr4-c8h2` foi permitida somente no caminho
+  `react-router-dom > react-router`, pois afeta RSC Mode/Server Actions e o
+  frontend do SGI v2 é uma SPA Vite sem esses recursos.
+- A exceção é temporária e deve ser removida assim que houver uma versão
+  corrigida do React Router publicada no npm.
+
+### Corrigido — checksum canônico do plano operacional (24/07/2026)
+
+- A saída de `pre_prod_cleanup_plan` passou a expor `plan_sha256`.
+- O checksum usa a mesma serialização JSON canônica revalidada por
+  `pre_prod_isolated_cleanup`.
+- O valor permanece fora do próprio `plan.json`, evitando autorreferência.
+- Runbooks, README e ROADMAP foram sincronizados e proíbem substituir o valor
+  por `Get-FileHash`.
+- A cadeia `20260724-135540` permanece como evidência técnica, mas não autoriza
+  execução após a mudança do SHA.
+- Nenhuma limpeza ou operação de banco foi executada.
+
 ### Adicionado — wrapper operacional da limpeza real (24/07/2026)
 
 - Criado `scripts/Invoke-PreProdRealCleanup.ps1` como entrada oficial em PowerShell.
@@ -273,8 +295,8 @@ Formato baseado em Keep a Changelog.
 
 ## Próximos focos
 
-1. Criar o wrapper operacional oficial para a CLI de limpeza controlada.
-2. Gerar nova cadeia operacional vinculada ao SHA promovido.
+1. Promover a exposição oficial do checksum canônico do plano.
+2. Gerar nova cadeia operacional vinculada ao novo SHA promovido.
 3. Executar e reconciliar a limpeza real pela Issue #199.
 4. Endurecer ou remover o router administrativo de debug.
 5. Remover o serviço legado de rentabilidade (#151).

@@ -119,14 +119,15 @@ Prontidão global estimada para a primeira produção: **89%**. O percentual nã
 
 ## Próximas prioridades
 
-1. Regenerar backup, exportação, impacto e plano no SHA promovido.
-2. Executar e reconciliar a limpeza real pela Issue #199.
-3. Executar seeds, importação e rebuild em blocos independentes.
-4. Endurecer ou remover o router administrativo de debug antes do go-live.
-5. Remover o serviço legado de rentabilidade (#151).
-6. Materializar IBOV (#150).
-7. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
-8. Migrar timestamps UTC para timezone-aware (#192).
+1. Promover a exposição oficial do `plan_sha256` canônico pelo gerador do plano.
+2. Regenerar backup, exportação, impacto e plano no novo SHA promovido.
+3. Executar e reconciliar a limpeza real pela Issue #199.
+4. Executar seeds, importação e rebuild em blocos independentes.
+5. Endurecer ou remover o router administrativo de debug antes do go-live.
+6. Remover o serviço legado de rentabilidade (#151).
+7. Materializar IBOV (#150).
+8. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
+9. Migrar timestamps UTC para timezone-aware (#192).
 
 ## Backlog
 
