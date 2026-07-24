@@ -19,20 +19,21 @@
 | Página Resumo | Concluída e promovida pela PR #164 | 100% |
 | Página Patrimônio | Fase 3 concluída e promovida pela PR #184 | 100% |
 | Página Rentabilidade | Contratos concluídos | 95% |
-| Dependências | Auditoria concluída; nenhuma PR aberta | 100% |
+| Dependências | Auditoria concluída; nenhuma PR aberta no início da Issue #199 | 100% |
 | Configuração Pydantic v2 | Migração validada e Issue #186 encerrada | 100% |
 | Backup/Restore pré-produção | Validação real v3 concluída (#183) | 100% |
 | Dry-run de limpeza | Validado no PostgreSQL real (#185) | 100% |
 | Exportação pré-produção | Validada e promovida pela PR #191 (#188) | 100% |
 | Planejamento seguro da limpeza | Validado pela Issue #195 e PR #194 | 100% |
 | Limpeza isolada | Sucesso e rollback reconciliados; PR #198 promovida | 100% |
-| Rebuild pré-produção | Ensaio isolado aprovado; limpeza real ainda não autorizada | 90% |
+| Perfil de alvo real | Implementado e validado com 34 testes; promoção pendente | 95% |
+| Rebuild pré-produção | Gate real preparado; nova cadeia operacional pendente | 92% |
 | Eventos corporativos | Fundação pronta | 30% |
 | IRPF | Planejado | 15% |
 | Backup/Restore administrativo | Planejado (#83) | 10% |
 | OAuth social | Planejado | 0% |
 
-Prontidão global estimada para a primeira produção: **88%**. O percentual não inclui funcionalidades futuras de produto.
+Prontidão global estimada para a primeira produção: **89%**. O percentual não inclui funcionalidades futuras de produto.
 
 ## Consolidado
 
@@ -65,7 +66,7 @@ Prontidão global estimada para a primeira produção: **88%**. O percentual nã
 
 ## Em desenvolvimento
 
-### Pré-produção — Issue #158
+### Pré-produção — Issues #158 e #199
 
 - [x] Inventário read-only `pre-prod-inventory.v2` validado.
 - [x] Política integral: 11 tabelas preservadas, 3 exportáveis e 10 reconstruíveis.
@@ -78,10 +79,17 @@ Prontidão global estimada para a primeira produção: **88%**. O percentual nã
 - [x] Cenário de sucesso `20260723-213000` reconciliado.
 - [x] Cenário de rollback `20260723-213001` reconciliado.
 - [x] PR #198 promovida para a `main`; Issue #196 encerrada.
-- [ ] Criar e aprovar Issue operacional exclusiva para a limpeza da pré-produção real.
-- [ ] Gerar novo backup imediatamente anterior à janela de execução.
-- [ ] Gerar nova exportação e novo plano com o mesmo `run_id` operacional.
-- [ ] Executar limpeza real somente após autorização explícita.
+- [x] Issue operacional exclusiva #199 criada e ativa.
+- [x] Nova cadeia `20260724-100752` validada sem escrita.
+- [x] Autorização humana explícita registrada na Issue #199.
+- [x] Bloqueio arquitetural da CLI isolada identificado antes da primeira escrita.
+- [x] Perfil `sgi-pre-prod-real` implementado sem duplicar o executor.
+- [x] Perfil real validado com 34 testes e `compileall` sem erros.
+- [ ] Promover o perfil real para a `main` por PR.
+- [ ] Gerar nova cadeia operacional vinculada ao SHA promovido.
+- [ ] Recalcular e revisar a confirmação composta.
+- [ ] Executar limpeza real somente após nova autorização explícita.
+- [ ] Reconciliar imediatamente `committed=true` e `reconciliation.ok=true`.
 - [ ] Seed B3 COTAHIST.
 - [ ] Seed oficial do Tesouro Direto.
 - [ ] Seed de benchmarks, câmbio e proventos.
@@ -100,24 +108,25 @@ Prontidão global estimada para a primeira produção: **88%**. O percentual nã
 - [ ] Endurecer ou remover o router administrativo de debug antes do go-live.
 - [ ] Migrar timestamps UTC para timezone-aware (#192).
 - [ ] Revisar backup/restore administrativo (#83).
-- [ ] Arquivar ou remover migration órfã do Tesouro após confirmação de uso externo.
 
 ### Dependabot — #159
 
 - [x] Auditoria concluída e Issue #159 encerrada.
 - [x] Atualizações compatíveis integradas em blocos isolados.
 - [x] TypeScript 7 revertido para 6.0.3 após incompatibilidade com `typescript-eslint@8.64.0` (#182).
-- [x] Nenhuma PR Dependabot aberta após a promoção da PR #198.
+- [x] Nenhuma PR Dependabot aberta no início da Issue #199.
 
 ## Próximas prioridades
 
-1. Criar e revisar a Issue de autorização da limpeza na pré-produção real.
-2. Atualizar a Issue-mãe #158 com o estado concluído até o ensaio isolado.
-3. Endurecer ou remover o router administrativo de debug antes do go-live.
-4. Remover o serviço legado de rentabilidade (#151).
-5. Materializar IBOV (#150).
-6. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
-7. Migrar timestamps UTC para timezone-aware (#192).
+1. Promover o perfil seguro `sgi-pre-prod-real` para a `main`.
+2. Regenerar backup, exportação, impacto e plano no SHA promovido.
+3. Executar e reconciliar a limpeza real pela Issue #199.
+4. Executar seeds, importação e rebuild em blocos independentes.
+5. Endurecer ou remover o router administrativo de debug antes do go-live.
+6. Remover o serviço legado de rentabilidade (#151).
+7. Materializar IBOV (#150).
+8. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
+9. Migrar timestamps UTC para timezone-aware (#192).
 
 ## Backlog
 
