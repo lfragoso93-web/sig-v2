@@ -8,9 +8,11 @@ A branch padrão de desenvolvimento é `stable-15jun`. A promoção para `main` 
 
 O SGI v2 opera com arquitetura **DB-first**: catálogo, preços, taxas, proventos e snapshots são persistidos antes de alimentar KPIs, páginas e gráficos.
 
-A PR #198 foi promovida para a `main` e a Issue #196 foi encerrada após ensaio integral da limpeza em PostgreSQL descartável, com cenário de sucesso e rollback reconciliados. A `stable-15jun` foi sincronizada com a `main` no merge `77783e46042bd32622500705cb7d365f70c728ae`.
+A PR #202 foi promovida para a `main` e unificou a árvore Alembic no merge `6ee96b003a8c6bf4955b906687faf17d99e7ed09`. A Issue #199 é o gate operacional ativo para a limpeza controlada da pré-produção real.
 
-A limpeza da base pré-produção real permanece proibida. O próximo gate da Issue #158 é uma autorização operacional separada, com novo backup, nova exportação, novo plano e janela controlada.
+A nova cadeia operacional `20260724-100752` validou backup v3, exportação, impacto e plano sem blockers, ciclos ou escritas. A autorização humana foi registrada, mas a execução revelou que a CLI aceitava somente banco isolado. O perfil explícito `sgi-pre-prod-real` foi então implementado e validado com 34 testes. Como o código mudou, a cadeia anterior não pode ser reutilizada: após a promoção deste bloco será obrigatório gerar novo backup, nova exportação, novo impacto, novo plano e nova confirmação composta.
+
+A limpeza real, seeds, coleta, importação e rebuild ainda não foram executados.
 
 ### Entregas consolidadas
 
@@ -33,10 +35,12 @@ A limpeza da base pré-produção real permanece proibida. O próximo gate da Is
 - Exportação `pre-prod-export.v1` validada e promovida pela PR #191.
 - Plano `pre-prod-cleanup-execution.v1` validado sem acesso ao banco pela Issue #195 e PR #194.
 - Executor e CLI `pre_prod_isolated_cleanup` promovidos pela PR #198.
+- Perfil isolado `sgi-pre-prod-isolated`: exige origem e destino diferentes.
+- Perfil real `sgi-pre-prod-real`: exige origem e destino com a mesma identidade normalizada.
 - Evidências automáticas: `preserved-before.json`, `preserved-after.json`, `post-cleanup-inventory.json`, `reconciliation.json` e `cleanup/execution.json`.
 - Ensaio de sucesso `20260723-213000`: 4.673.054 linhas planejadas removidas, tabelas preservadas inalteradas e `reconciliation.ok=true`.
 - Ensaio de rollback `20260723-213001`: exit code `22`, nenhuma escrita persistida e `reconciliation.ok=true`.
-- Bancos descartáveis do ensaio removidos após a validação.
+- Validação local do perfil real: 34 testes aprovados e `compileall` sem erros.
 - Migração Pydantic v2 concluída pela Issue #186.
 
 ## Arquitetura resumida
@@ -81,17 +85,19 @@ python -m app.cli.rebuild_treasury_official_prices
 
 ## Prioridades atuais
 
-1. Planejar, revisar e aprovar separadamente a limpeza controlada da pré-produção real no escopo da Issue #158.
-2. Executar a limpeza e o rebuild pré-produção somente após todos os novos gates operacionais.
-3. Endurecer ou remover o router administrativo de debug antes do go-live.
-4. Remover o serviço legado de rentabilidade (#151).
-5. Materializar o histórico persistido do IBOV (#150).
-6. Implementar TWR dedicado para Tesouro Direto e Renda Fixa (#149).
-7. Migrar timestamps UTC legados para timezone-aware (#192).
+1. Promover o perfil seguro de alvo real para a `main` por PR.
+2. Gerar uma nova cadeia operacional íntegra vinculada ao SHA promovido.
+3. Registrar nova confirmação composta e executar a limpeza real somente pela Issue #199.
+4. Executar seeds, importação e rebuild em blocos separados após reconciliação da limpeza.
+5. Endurecer ou remover o router administrativo de debug antes do go-live.
+6. Remover o serviço legado de rentabilidade (#151).
+7. Materializar o histórico persistido do IBOV (#150).
+8. Implementar TWR dedicado para Tesouro Direto e Renda Fixa (#149).
+9. Migrar timestamps UTC legados para timezone-aware (#192).
 
 ## Dependências
 
-A auditoria Dependabot da Issue #159 foi concluída. Atualizações compatíveis foram incorporadas em blocos isolados e não há PR Dependabot aberta após a promoção da PR #198.
+A auditoria Dependabot da Issue #159 foi concluída. Atualizações compatíveis foram incorporadas em blocos isolados e não havia PR Dependabot aberta no início da Issue #199.
 
 ## Pré-produção
 
@@ -104,16 +110,18 @@ A primeira entrada em produção exige:
 5. plano de execução validado sem acesso ao banco — concluído;
 6. executor, CLI e artefatos auditáveis — concluído;
 7. ensaio integral em banco descartável com sucesso e rollback — concluído;
-8. autorização separada para limpeza na pré-produção real — pendente;
-9. limpeza controlada dos dados reconstruíveis — pendente;
-10. seed B3 COTAHIST — pendente;
-11. seed oficial do Tesouro Direto — pendente;
-12. seed de benchmarks, câmbio e proventos — pendente;
-13. importação CSV completa da carteira — pendente;
-14. rebuild de posições e snapshots — pendente;
-15. reconciliação financeira e auditoria de cobertura — pendente.
+8. perfil explícito e testado para a pré-produção real — concluído na `stable-15jun`, promoção pendente;
+9. nova cadeia de artefatos vinculada ao SHA promovido — pendente;
+10. nova autorização composta — pendente;
+11. limpeza controlada dos dados reconstruíveis — pendente;
+12. seed B3 COTAHIST — pendente;
+13. seed oficial do Tesouro Direto — pendente;
+14. seed de benchmarks, câmbio e proventos — pendente;
+15. importação CSV completa da carteira — pendente;
+16. rebuild de posições e snapshots — pendente;
+17. reconciliação financeira e auditoria de cobertura — pendente.
 
-Checklist completo: Issue #158. Runbooks: `docs/PRE_PROD_REBUILD_RUNBOOK.md`, `docs/pre-prod-cleanup-impact-runbook.md`, `docs/pre-prod-export-runbook.md`, `docs/pre-prod-cleanup-execution-runbook.md` e `docs/pre-prod-isolated-cleanup-rehearsal-runbook.md`.
+Checklist completo: Issue #158. Gate operacional: Issue #199. Runbooks: `docs/PRE_PROD_REBUILD_RUNBOOK.md`, `docs/pre-prod-cleanup-impact-runbook.md`, `docs/pre-prod-export-runbook.md`, `docs/pre-prod-cleanup-execution-runbook.md`, `docs/pre-prod-isolated-cleanup-rehearsal-runbook.md` e `docs/pre-prod-real-cleanup-target-profile.md`.
 
 ## Stack
 
@@ -141,4 +149,5 @@ docker compose up -d --build
 - `docs/pre-prod-export-runbook.md` — exportação e reconciliação.
 - `docs/pre-prod-cleanup-execution-runbook.md` — plano e execução controlada.
 - `docs/pre-prod-isolated-cleanup-rehearsal-runbook.md` — ensaio isolado, rollback e descarte.
+- `docs/pre-prod-real-cleanup-target-profile.md` — gates dos perfis isolado e real.
 - `docs/CANONICAL_FINANCIAL_CONTRACT.md` — contrato financeiro oficial.
