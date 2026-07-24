@@ -1,8 +1,8 @@
-"""Contratos e validações puras para autorizar limpeza em banco isolado.
+"""Contratos e validações puras para autorizar limpeza controlada.
 
 Este módulo não acessa banco, arquivos, variáveis de ambiente ou rede. Ele apenas
-valida identidades e a confirmação explícita que antecederão o executor
-transacional da Issue #196.
+valida identidades e a confirmação explícita que antecedem o executor
+transacional das Issues #196 e #199.
 """
 from __future__ import annotations
 
@@ -16,6 +16,10 @@ APPROVED_PLAN_SCHEMA_VERSION = "pre-prod-cleanup-execution.v1"
 APPROVED_PLAN_MODE = "plan"
 APPROVED_BRANCH = "stable-15jun"
 REQUIRED_ISOLATION_MARKER = "sgi-pre-prod-isolated"
+REQUIRED_PRE_PROD_MARKER = "sgi-pre-prod-real"
+SUPPORTED_TARGET_MARKERS = frozenset(
+    {REQUIRED_ISOLATION_MARKER, REQUIRED_PRE_PROD_MARKER}
+)
 
 
 class IsolatedCleanupValidationError(ValueError):
@@ -139,19 +143,24 @@ class IsolatedCleanupAuthorization:
             raise IsolatedCleanupValidationError(
                 f"unsupported isolated cleanup schema: {self.schema_version!r}"
             )
-        if self.source.normalized_key == self.target.normalized_key:
+        if self.target.isolation_marker not in SUPPORTED_TARGET_MARKERS:
             raise IsolatedCleanupValidationError(
-                "cleanup target must be different from the source database"
+                "cleanup target is missing a supported execution marker"
             )
-        if self.target.isolation_marker != REQUIRED_ISOLATION_MARKER:
+        same_database = self.source.normalized_key == self.target.normalized_key
+        if self.target.isolation_marker == REQUIRED_ISOLATION_MARKER and same_database:
             raise IsolatedCleanupValidationError(
-                "cleanup target is missing the required isolation marker"
+                "isolated cleanup target must be different from the source database"
+            )
+        if self.target.isolation_marker == REQUIRED_PRE_PROD_MARKER and not same_database:
+            raise IsolatedCleanupValidationError(
+                "real pre-production cleanup must target the source database identity"
             )
         if self.confirmation.run_id != self.plan.run_id:
             raise IsolatedCleanupValidationError("confirmation run_id differs from plan")
         if self.confirmation.target_database != self.target.database:
             raise IsolatedCleanupValidationError(
-                "confirmation target database differs from isolated target"
+                "confirmation target database differs from cleanup target"
             )
         if self.confirmation.commit_sha != self.plan.commit_sha:
             raise IsolatedCleanupValidationError("confirmation commit_sha differs from plan")

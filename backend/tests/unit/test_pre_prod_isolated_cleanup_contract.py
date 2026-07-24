@@ -224,7 +224,10 @@ def test_authorization_rejects_source_as_target() -> None:
 def test_authorization_rejects_target_without_isolation_marker() -> None:
     plan = _validated_plan()
 
-    with pytest.raises(IsolatedCleanupValidationError, match="isolation marker"):
+    with pytest.raises(
+        IsolatedCleanupValidationError,
+        match="supported execution marker",
+    ):
         IsolatedCleanupAuthorization(
             schema_version=ISOLATED_CLEANUP_REPORT_SCHEMA_VERSION,
             plan=plan,

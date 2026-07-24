@@ -5,6 +5,21 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Adicionado — perfil seguro para limpeza real da pré-produção (24/07/2026)
+
+- A CLI `pre_prod_isolated_cleanup` passou a aceitar dois perfis mutuamente exclusivos.
+- `sgi-pre-prod-isolated` exige origem e destino diferentes.
+- `sgi-pre-prod-real` exige origem e destino com a mesma identidade normalizada de host, porta e banco.
+- Qualquer marcador desconhecido aborta antes da criação do engine e antes de qualquer escrita.
+- O executor transacional, a confirmação composta, os checksums, o lock, as contagens e o rollback integral foram preservados.
+- Foram adicionados testes específicos para impedir regressões entre os perfis.
+- A validação local concluiu com 34 testes aprovados e `compileall` sem erros.
+- Criado `docs/pre-prod-real-cleanup-target-profile.md`.
+- README, ROADMAP e o runbook principal foram sincronizados.
+- O runbook deixou de listar `app_configs` e `dividends_sync_jobs`, ausentes do inventário canônico atual de 24 tabelas.
+- A cadeia `20260724-100752` foi declarada não reutilizável após a mudança do SHA.
+- A limpeza real, seeds, coleta, importação e rebuild não foram executados neste bloco.
+
 ### Documentado — saneamento pós-merge da limpeza isolada (24/07/2026)
 
 - README e ROADMAP foram sincronizados após o merge da PR #198.
@@ -51,9 +66,9 @@ Formato baseado em Keep a Changelog.
 
 ### Adicionado — CLI da limpeza isolada (23/07/2026)
 
-- Adicionada a CLI `python -m app.cli.pre_prod_isolated_cleanup`, exclusiva para PostgreSQL isolado.
+- Adicionada a CLI `python -m app.cli.pre_prod_isolated_cleanup`, inicialmente exclusiva para PostgreSQL isolado.
 - A entrada lê `cleanup/plan.json` em UTF-8, revalida branch, SHA, identidade e checksum e exige confirmação composta.
-- Origem e destino são comparados por host, porta e banco; o destino exige `sgi-pre-prod-isolated`.
+- Origem e destino são comparados por host, porta e banco.
 - Exit codes distinguem entrada, identidade, alvo, confirmação, divergência, lock, rollback e artefato.
 - URLs e credenciais não são impressas nem persistidas.
 
@@ -61,7 +76,6 @@ Formato baseado em Keep a Changelog.
 
 - Adicionado o contrato `pre-prod-isolated-cleanup.v1`.
 - A autorização exige confirmação vinculada a `run_id`, banco, commit e checksum canônico.
-- O destino deve ser diferente da origem e portar marcador explícito de isolamento.
 - O plano `pre-prod-cleanup-execution.v1` é revalidado quanto a schema, modo, branch, blockers, identidade, checksum e ordem.
 - Testes unitários cobrem adulteração, confirmação inexata, alvo igual à origem e marcador ausente.
 
@@ -239,9 +253,11 @@ Formato baseado em Keep a Changelog.
 
 ## Próximos focos
 
-1. Revisar e aprovar a Issue #199 para a limpeza real da pré-produção.
-2. Endurecer ou remover o router administrativo de debug.
-3. Remover o serviço legado de rentabilidade (#151).
-4. Materializar IBOV (#150).
-5. Implementar TWR dedicado por classe (#149).
-6. Migrar timestamps UTC legados para timezone-aware (#192).
+1. Promover o perfil `sgi-pre-prod-real` para a `main`.
+2. Gerar nova cadeia operacional vinculada ao SHA promovido.
+3. Executar e reconciliar a limpeza real pela Issue #199.
+4. Endurecer ou remover o router administrativo de debug.
+5. Remover o serviço legado de rentabilidade (#151).
+6. Materializar IBOV (#150).
+7. Implementar TWR dedicado por classe (#149).
+8. Migrar timestamps UTC legados para timezone-aware (#192).

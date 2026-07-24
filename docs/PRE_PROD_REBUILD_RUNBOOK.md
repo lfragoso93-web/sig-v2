@@ -1,9 +1,10 @@
 # Runbook de rebuild pré-produção — SGI v2
 
 > Issue-mãe: #158  
-> Bloco de preparação: #176  
 > Backup e restauração isolada: #183  
-> Última atualização: 21/07/2026
+> Executor e ensaio isolado: #196  
+> Limpeza real controlada: #199  
+> Última atualização: 24/07/2026
 
 ## Objetivo
 
@@ -11,24 +12,44 @@ Executar a primeira reconstrução limpa da base canônica de forma reversível,
 
 Este runbook trata da operação controlada de pré-produção. A futura interface administrativa de backup e restore permanece no escopo da Issue #83 e não deve duplicar os comandos ou regras definidos aqui.
 
+## Estado atual
+
+A cadeia técnica foi validada em PostgreSQL real e em banco descartável:
+
+- inventário `pre-prod-inventory.v2`;
+- backup consistente `pre-prod-backup.v3`;
+- restauração isolada reconciliada;
+- impacto `pre-prod-cleanup-impact.v2` em modo read-only;
+- exportação `pre-prod-export.v1`;
+- plano `pre-prod-cleanup-execution.v1` sem acesso ao banco;
+- executor transacional com sucesso e rollback comprovados;
+- perfil isolado `sgi-pre-prod-isolated`;
+- perfil real `sgi-pre-prod-real`, validado localmente com 34 testes.
+
+A execução real ainda não ocorreu. A cadeia `20260724-100752` foi invalidada operacionalmente pela mudança de código necessária para habilitar o perfil real. Após a promoção do novo código, todo o conjunto de artefatos deve ser regenerado com novo `run_id` e novo SHA.
+
 ## Princípios obrigatórios
 
-- Nenhuma limpeza sem backup validado e teste de leitura do arquivo.
-- Nenhuma operação destrutiva antes de um dry-run aprovado.
-- Usuários, autenticação, configurações e segredos não são removidos.
-- Transações e carteira devem ser exportadas e validadas antes da limpeza.
+- Nenhuma limpeza sem backup validado e restauração emergencial disponível.
+- Nenhuma operação destrutiva antes de dry-run, exportação e plano aprovados.
+- Branch, SHA e `run_id` devem coincidir em toda a cadeia.
+- Usuários, autenticação, configurações, auditoria e dados fiscais não são removidos.
+- Transações, renda fixa e eventos corporativos devem ser exportados e validados antes da limpeza.
 - Dados reconstruíveis devem ser recriados exclusivamente pelos pipelines canônicos.
-- Cada etapa deve produzir contagens, duração, erros e ativos não resolvidos.
-- Uma falha interrompe a sequência; etapas posteriores não devem mascarar erro anterior.
+- Cada etapa deve produzir contagens, checksums, duração, estado final e ativos não resolvidos.
+- Uma falha interrompe a sequência; etapas posteriores não podem mascarar erro anterior.
+- Seeds, coleta, importação e rebuild não podem ocorrer durante a transação de limpeza.
+- Nenhum artefato pode ser editado manualmente ou sobrescrito.
 
 ## Política oficial de classificação
 
 A fonte executável da política é `TABLE_POLICIES`, em `pre_prod_inventory_service.py`. Cada tabela recebe classificação e justificativa no relatório `pre-prod-inventory.v2`.
 
-### Preservar
+O inventário real validado contém 24 tabelas: 11 preservadas, 3 exportáveis e 10 reconstruíveis.
+
+### Preservar — 11 tabelas
 
 - `alembic_version`;
-- `app_configs`;
 - `audit_logs`;
 - `goal_allocations`;
 - `goals`;
@@ -42,7 +63,7 @@ A fonte executável da política é `TABLE_POLICIES`, em `pre_prod_inventory_ser
 
 Essas tabelas contêm estrutura aplicada, identidade, configuração, preferências, trilha de auditoria ou histórico fiscal não integralmente regenerável.
 
-### Exportar antes de qualquer limpeza
+### Exportar antes de qualquer limpeza — 3 tabelas
 
 - `corporate_events`;
 - `fixed_income_investments`;
@@ -50,14 +71,13 @@ Essas tabelas contêm estrutura aplicada, identidade, configuração, preferênc
 
 Eventos corporativos podem conter estado aplicado e dados brutos; renda fixa contém condições contratuais; transações formam o livro-razão financeiro. Nenhuma delas pode ser perdida ou presumida como regenerável.
 
-### Reconstruir
+### Reconstruir — 10 tabelas
 
 - `asset_aliases`;
 - `asset_dividends`;
 - `asset_prices`;
 - `assets`;
 - `dividends`;
-- `dividends_sync_jobs`;
 - `fx_rates`;
 - `portfolio_class_snapshots`;
 - `portfolio_positions`;
@@ -66,7 +86,9 @@ Eventos corporativos podem conter estado aplicado e dados brutos; renda fixa con
 
 Essas tabelas possuem fonte oficial, pipeline idempotente ou são projeções derivadas dos dados preservados/exportados.
 
-Qualquer tabela nova ou desconhecida permanece `unclassified`, faz o CLI retornar código diferente de zero e exige revisão arquitetural antes da limpeza.
+`app_configs` e `dividends_sync_jobs` não pertencem ao inventário canônico atual e não devem ser inseridas manualmente na política escrita.
+
+Qualquer tabela nova ou desconhecida permanece `unclassified`, faz a CLI retornar código diferente de zero e exige revisão arquitetural antes da limpeza.
 
 ## Artefatos obrigatórios
 
@@ -76,7 +98,7 @@ Criar uma pasta por execução:
 artifacts/pre-prod-rebuild/YYYYMMDD-HHMMSS/
 ```
 
-Ela deve conter:
+Ela deve conter, conforme a etapa:
 
 - `database.dump` em formato custom;
 - `database.dump.sha256`;
@@ -84,104 +106,206 @@ Ela deve conter:
 - `pg-client-version.txt` e `source-server-version.txt`;
 - `backup-report.json` no contrato `pre-prod-backup.v3`;
 - `origin-inventory.json`;
-- `restored-inventory.json`;
-- `origin-migrations.txt` e `restored-migrations.txt`;
-- `restore-report.json`;
-- `reconciliation-report.json`;
-- inventário de tabelas e contagens antes da execução;
-- exportação validada da carteira;
-- relatório de dry-run;
-- logs de cada etapa;
-- inventário e contagens depois da execução;
-- relatório de reconciliação;
-- lista de ativos não resolvidos.
+- `cleanup-impact.json`;
+- `export/manifest.json`;
+- `export/tables/corporate_events.csv`;
+- `export/tables/fixed_income_investments.csv`;
+- `export/tables/transactions.csv`;
+- `cleanup/plan.json`;
+- `cleanup/execution.json`;
+- `cleanup/preserved-before.json`;
+- `cleanup/preserved-after.json`;
+- `cleanup/post-cleanup-inventory.json`;
+- `cleanup/reconciliation.json`;
+- logs e evidências das etapas posteriores de seed, importação e rebuild.
 
-Esses artefatos não devem ser versionados no Git.
+Esses artefatos não devem ser versionados no Git nem conter URLs completas, usuários, senhas ou segredos.
+
+## Perfis autorizados da CLI
+
+Entrada operacional:
+
+```text
+python -m app.cli.pre_prod_isolated_cleanup
+```
+
+A CLI aceita somente dois marcadores mutuamente exclusivos.
+
+### Perfil isolado
+
+```text
+sgi-pre-prod-isolated
+```
+
+Exige que origem e destino tenham identidades normalizadas diferentes de host, porta e banco. É usado somente em banco descartável restaurado do backup.
+
+### Perfil real
+
+```text
+sgi-pre-prod-real
+```
+
+Exige que `--source-database-url` e `--target-database-url` representem exatamente a mesma identidade normalizada de host, porta e banco. Isso impede que a autorização real seja reutilizada contra um destino diferente.
+
+Qualquer outro marcador aborta antes da criação do engine e antes de qualquer escrita.
+
+## Confirmação composta
+
+Formato exato:
+
+```text
+CLEANUP <run-id> ON <database> AT <commit-sha> WITH <plan-sha256>
+```
+
+A confirmação deve ser recalculada a partir do plano canônico da execução atual. Autorizações anteriores não podem ser promovidas automaticamente para outro `run_id`, SHA, banco ou checksum.
 
 ## Sequência operacional
 
 ### 1. Congelar a referência
 
-- confirmar branch `stable-15jun`;
-- registrar SHA executado;
-- confirmar migrations aplicadas;
-- impedir importações ou alterações concorrentes durante a janela.
+- confirmar branch `stable-15jun` sincronizada com a `main` promovida;
+- registrar SHA completo executado;
+- confirmar working tree limpa;
+- confirmar migrations aplicadas e árvore Alembic com um único head;
+- revisar Issues e PRs abertas, inclusive Dependabot;
+- impedir importações, coleta, seeds, rebuilds e uso concorrente durante a janela;
+- definir responsável, início, critério de cancelamento e restauração emergencial.
 
 ### 2. Gerar e validar backup
 
-O backup deve incluir esquema e dados. Os CLIs oficiais são:
-
 ```powershell
-docker compose exec backend python -m app.cli.pre_prod_backup --help
-docker compose exec backend python -m app.cli.pre_prod_restore --help
-```
+$RunId = Get-Date -Format "yyyyMMdd-HHmmss"
+$CommitSha = (git rev-parse HEAD).Trim()
 
-O procedimento completo, com variáveis e criação do banco isolado, está em
-`docs/operations.md`.
+docker compose exec `
+  -e "PRE_PROD_BRANCH=stable-15jun" `
+  -e "PRE_PROD_COMMIT_SHA=$CommitSha" `
+  backend python -m app.cli.pre_prod_backup --run-id $RunId
+```
 
 A validação mínima exige:
 
 - major do `pg_dump` idêntico ao major do servidor PostgreSQL;
-- inventário e dump vinculados ao mesmo snapshot exportado, com `consistent_snapshot=true`;
+- inventário e dump vinculados ao mesmo snapshot, com `consistent_snapshot=true`;
 - `pg_dump` concluído com código zero;
 - arquivo custom não vazio;
-- checksum SHA-256 registrado e revalidado antes do restore;
+- checksum SHA-256 registrado;
 - conteúdo listado por `pg_restore --list`;
-- alvo com nome diferente e zero tabelas antes do restore;
-- restore atômico em banco isolado;
-- nova execução de `pre-prod-inventory.v2` na restauração;
-- migrations, tabelas, classificações, contagens e achados reconciliados;
-- relatório final com `ok=true`;
 - confirmação de zero escritas na origem.
 
-Os CLIs não contêm limpeza nem rebuild canônico. A origem é consultada somente
-pelo inventário, `pg_dump` e leitura da versão de migration.
-
 Backups `pre-prod-backup.v1` e `pre-prod-backup.v2` são recusados pelo restore.
-O v2 restaurado em 21/07/2026 revelou uma diferença temporal de 998 linhas em
-`asset_prices`, pois inventário e dump observavam snapshots distintos. Uma
-execução abortada exige novo `run_id`, novo dump v3 e novo banco vazio.
 
-### 3. Exportar a carteira
-
-- exportar todas as transações e vínculos necessários;
-- validar cabeçalhos, encoding, datas, decimais e identificadores;
-- comparar contagens do arquivo com o banco;
-- bloquear a execução se houver divergência.
-
-### 4. Executar dry-run
+### 3. Exportar as tabelas obrigatórias
 
 ```powershell
-docker compose exec backend python -m app.cli.pre_prod_inventory
+docker compose exec `
+  -e "PRE_PROD_BRANCH=stable-15jun" `
+  -e "PRE_PROD_COMMIT_SHA=$CommitSha" `
+  backend python -m app.cli.pre_prod_export --run-id $RunId
 ```
 
-O dry-run não pode escrever nem excluir dados. Deve informar:
+A exportação deve:
 
-- classificação e justificativa por tabela;
-- contagens atuais por tabela;
-- ativos/aliases ambíguos;
-- preços órfãos;
-- snapshots inconsistentes;
-- totais por política;
-- confirmação explícita de ausência de escrita.
+- usar snapshot read-only consistente;
+- conter exatamente as três tabelas `export_before_cleanup`;
+- registrar contagens, schema, bytes e SHA-256;
+- retornar `reconciled=true`;
+- bloquear a sequência diante de qualquer divergência.
+
+### 4. Gerar impacto e plano
+
+A exportação gera ou reconcilia `cleanup-impact.json`. Em seguida:
+
+```powershell
+docker compose exec `
+  -e "PRE_PROD_BRANCH=stable-15jun" `
+  -e "PRE_PROD_COMMIT_SHA=$CommitSha" `
+  backend python -m app.cli.pre_prod_cleanup_plan --run-id $RunId
+```
+
+O plano deve confirmar:
+
+- `schema_version=pre-prod-cleanup-execution.v1`;
+- `mode=plan`;
+- `database_accessed=false` durante o planejamento;
+- zero blockers e zero ciclos;
+- checksums dos cinco artefatos de entrada;
+- 13 tabelas no `cleanup_order`;
+- zero escritas, limpeza ou rebuild;
+- ausência de sobrescrita.
 
 ### 5. Aprovar ou abortar
 
 Abortar se ocorrer qualquer uma das condições:
 
-- backup não restaurável;
-- exportação da carteira divergente;
-- tabela de usuário/configuração classificada para limpeza;
+- branch, SHA ou `run_id` divergentes;
+- backup não restaurável ou snapshot inconsistente;
+- exportação incompleta ou não reconciliada;
+- checksum divergente;
+- tabela preservada classificada para limpeza;
 - qualquer tabela `unclassified`;
-- ativos não resolvidos sem tratamento explícito;
+- blockers ou ciclos;
 - migrations pendentes;
-- dry-run com erro ou escrita detectada.
+- processos concorrentes;
+- artefato alterado manualmente;
+- indisponibilidade de restauração emergencial.
 
-### 6. Executar a limpeza controlada
+### 6. Registrar autorização explícita
 
-Somente após aprovação explícita do relatório. A implementação deve usar uma lista permitida de dados reconstruíveis e transação de banco sempre que tecnicamente possível.
+Antes da execução real, registrar na Issue #199:
 
-### 7. Recriar dados canônicos
+- `run_id`;
+- branch;
+- SHA completo;
+- banco-alvo redigido;
+- checksum canônico do plano;
+- confirmação de janela isolada;
+- confirmação composta exata.
+
+### 7. Executar a limpeza real
+
+Usar o mesmo URL PostgreSQL síncrono para origem e destino e o marcador `sgi-pre-prod-real`.
+
+Modelo PowerShell, preenchido somente após revisão dos valores:
+
+```powershell
+$PlanPath = "artifacts/pre-prod-rebuild/$RunId/cleanup/plan.json"
+$DatabaseUrl = $env:PRE_PROD_SYNC_DATABASE_URL
+$PlanSha = '<sha256-canônico-do-plano>'
+$DatabaseName = '<nome-do-banco>'
+$Confirmation = "CLEANUP $RunId ON $DatabaseName AT $CommitSha WITH $PlanSha"
+
+docker compose exec backend python -m app.cli.pre_prod_isolated_cleanup `
+  --plan $PlanPath `
+  --branch stable-15jun `
+  --commit-sha $CommitSha `
+  --source-database-url $DatabaseUrl `
+  --target-database-url $DatabaseUrl `
+  --target-isolation-marker sgi-pre-prod-real `
+  --confirmation $Confirmation
+```
+
+Regras:
+
+- não usar `--rehearsal-fail-after-table`;
+- não executar DDL, `TRUNCATE`, `CASCADE` ou comandos paralelos;
+- interromper imediatamente diante de exit code diferente de zero;
+- não iniciar seed ou rebuild antes da reconciliação.
+
+### 8. Reconciliar imediatamente
+
+Confirmar nos artefatos:
+
+- `final_state=committed`;
+- `committed=true`;
+- tabelas planejadas zeradas;
+- tabelas preservadas inalteradas;
+- `reconciliation.ok=true`;
+- nenhum segredo persistido;
+- nenhuma alteração de schema;
+- nenhum seed, coleta, importação ou rebuild iniciado durante a limpeza.
+
+### 9. Recriar dados canônicos em blocos separados
 
 Ordem:
 
@@ -195,13 +319,13 @@ Ordem:
 8. snapshots consolidados e por classe;
 9. auditoria final.
 
-O comando operacional de rebuild já documentado é:
+O comando operacional de rebuild existente é:
 
 ```powershell
 docker compose exec backend python -m app.cli.full_market_rebuild
 ```
 
-Ele não substitui backup, dry-run, exportação ou limpeza controlada.
+Ele não substitui backup, dry-run, exportação, plano ou limpeza controlada e não deve ser executado automaticamente no mesmo bloco.
 
 ## Relatório final mínimo
 
@@ -228,17 +352,13 @@ Uma segunda execução, sem novos dados externos ou transações, deve:
 - reconciliar os mesmos valores financeiros;
 - produzir relatório comparável ao anterior.
 
-## Estado do bloco #183
+## Estado operacional
 
-A implementação dos CLIs, artefatos, checksum, restore isolado, novo inventário e
-reconciliação está concluída na `stable-15jun`.
-
-A Issue #183 permanece aberta até a execução no PostgreSQL real produzir
-`reconciliation-report.json` com `ok=true` e os artefatos serem revisados.
-Nenhuma limpeza ou rebuild canônico está autorizada antes desse aceite.
-
-## Próximo bloco
-
-Concluir a validação real da Issue #183 e anexar o resumo da reconciliação.
-Somente depois do encerramento formal será permitido planejar o dry-run de
-limpeza da Issue #158.
+- Issue #183: backup e restauração v3 concluídos.
+- Issue #185: impacto read-only concluído.
+- Issue #188 / PR #191: exportação concluída.
+- Issue #195 / PR #194: plano concluído.
+- Issue #196 / PR #198: executor e ensaio isolado concluídos.
+- Issue #199: autorização e execução real em andamento.
+- Cadeia `20260724-100752`: validada, mas não reutilizável após mudança do SHA.
+- Próximo gate: promover o perfil real, gerar nova cadeia e registrar nova autorização composta.
