@@ -4,15 +4,13 @@ Plataforma pessoal para acompanhamento, consolidação e análise de investiment
 
 A branch padrão de desenvolvimento é `stable-15jun`. A promoção para `main` ocorre por PR após validação e atualização da documentação viva.
 
-## Status atual — 23/07/2026
+## Status atual — 24/07/2026
 
 O SGI v2 opera com arquitetura **DB-first**: catálogo, preços, taxas, proventos e snapshots são persistidos antes de alimentar KPIs, páginas e gráficos.
 
-A revisão arquitetural integral de 23/07/2026 está em
-`docs/ARCHITECTURAL_REVIEW_2026-07-23.md`. A prontidão estimada para a primeira
-produção é 88%; o ensaio reconciliado da limpeza isolada foi aprovado e a
-promoção da PR #198 permanece como próximo gate P0. A limpeza da base real
-continua proibida.
+A PR #198 foi promovida para a `main` e a Issue #196 foi encerrada após ensaio integral da limpeza em PostgreSQL descartável, com cenário de sucesso e rollback reconciliados. A `stable-15jun` foi sincronizada com a `main` no merge `77783e46042bd32622500705cb7d365f70c728ae`.
+
+A limpeza da base pré-produção real permanece proibida. O próximo gate da Issue #158 é uma autorização operacional separada, com novo backup, nova exportação, novo plano e janela controlada.
 
 ### Entregas consolidadas
 
@@ -26,38 +24,20 @@ continua proibida.
 - Proventos monetários líquidos agregados por data de pagamento.
 - Reconciliação entre Resumo, Patrimônio, Rentabilidade e snapshots.
 - Cobertura parcial e retornos estimados explicitados no contrato.
-- Página Resumo concluída, reconciliada com valuation e snapshots canônicos e promovida pela PR #164.
-- Fase 2 de Proventos concluída sob a Issue #165 e promovida pela PR #166: pipeline DB-first, contratos estritos, filtros compartilhados, coleta global e materialização rastreável.
-- Histórico mensal de proventos reconciliado por classe, com detalhamento acessível por mouse, teclado e toque.
-- Fase 3 de Patrimônio concluída sob a Issue #148: históricos consolidados e por classe, períodos determinísticos, tooltips canônicos e reconciliações observáveis por base temporal.
-- Valuation intradiário reconciliado entre `summary.v2`, posições e distribuição; snapshots consolidados reconciliados com classes somente na mesma data.
-- Inventário pré-produção read-only validado no PostgreSQL real, com 24 tabelas, política completa de classificação e contrato `pre-prod-inventory.v2`.
-- Backup `pre-prod-backup.v3` validado no PostgreSQL real com cliente/servidor 16/16, snapshot único `REPEATABLE READ READ ONLY`, dump com SHA-256, restauração em banco vazio e isolado e reconciliação `ok=true`, sem divergências e com zero escritas na origem. A Issue #183 foi concluída e a PR #184 promovida para a `main`.
-- Dry-run de limpeza validado no PostgreSQL real pelo contrato `pre-prod-cleanup-impact.v2`: 24 tabelas, 4.673.320 linhas, 11 preservadas, 3 com exportação obrigatória, 10 reconstruíveis, zero bloqueios, zero ciclos e zero escritas. A execução `20260722-101848` retornou `ok=true` e exit code `0`.
-- Exportação auditável `pre-prod-export.v1` validada no PostgreSQL real em snapshot único `REPEATABLE READ READ ONLY`: `corporate_events`, `fixed_income_investments` e `transactions` reconciliadas em 323 linhas, com SHA-256 de dados e schema, zero escritas na origem e `reconciled=true`. A execução `20260722-134741` retornou exit code `0`, a Issue #188 foi encerrada e a PR #191 promovida para a `main`.
-- Fundação plan-only da limpeza promovida pela PR #194: contrato `pre-prod-cleanup-execution.v1`, CLI `pre_prod_cleanup_plan`, verificação integral de identidade, checksums, gate e DAG, publicação atômica de `cleanup/plan.json`, persistência atômica de `cleanup-impact.json` e rollback de exportação incompleta.
-- Executor e CLI da limpeza isolada implementados na Issue #196 e na PR #198: lock operacional, validação de contagens, transação única, rollback integral, relatórios `committed`, `aborted` e `rolled_back`, publicação atômica e logs redigidos. A validação multiplataforma passou com 44 testes e `compileall` sem erros.
-- Runbook D0 do ensaio em PostgreSQL descartável concluído, com gates, comandos PowerShell, reconciliação, cenário obrigatório de rollback e descarte do banco. Nenhuma limpeza real foi executada.
-- Ensaio integral aprovado em duas restaurações descartáveis do backup v3:
-  sucesso `20260723-213000` com 4.673.054 linhas removidas e rollback
-  `20260723-213001` com exit code `22`; ambas as reconciliações retornaram
-  `ok=true`, as tabelas preservadas permaneceram idênticas e os bancos foram
-  descartados.
-- Migração integral das configurações Pydantic v2 para `ConfigDict` concluída na Issue #186. A suíte dedicada passou com 5 testes e a validação final registrou `666 passed`, `1 skipped` intencional e zero `PydanticDeprecatedSince20`.
-
-### Tesouro Direto — Blocos 3.1 e 3.2
-
-O fluxo usado pela página Resumo foi alinhado ao pipeline canônico:
-
-- provedor primário de mercado para preços recentes;
-- dados abertos oficiais do Tesouro como fallback;
-- último preço persistido como contingência;
-- resolução case-insensitive de tickers e aliases;
-- preço devolvido pelo ticker original da posição;
-- criação automática de ativos duplicados bloqueada;
-- regressões para RendA+ adicionadas.
-
-Os valores atuais de Selic e RendA+ foram validados na interface. A limpeza integral da base foi adiada para o checklist pré-produção e está registrada na issue #158.
+- Página Resumo concluída e promovida pela PR #164.
+- Fase 2 de Proventos concluída e promovida pela PR #166.
+- Fase 3 de Patrimônio concluída e promovida pela PR #184.
+- Inventário `pre-prod-inventory.v2` validado no PostgreSQL real: 24 tabelas, 11 preservadas, 3 exportáveis e 10 reconstruíveis.
+- Backup `pre-prod-backup.v3` e restauração isolada reconciliados pela Issue #183.
+- Dry-run `pre-prod-cleanup-impact.v2` aprovado sem bloqueios, ciclos ou escritas pela Issue #185.
+- Exportação `pre-prod-export.v1` validada e promovida pela PR #191.
+- Plano `pre-prod-cleanup-execution.v1` validado sem acesso ao banco pela Issue #195 e PR #194.
+- Executor e CLI `pre_prod_isolated_cleanup` promovidos pela PR #198.
+- Evidências automáticas: `preserved-before.json`, `preserved-after.json`, `post-cleanup-inventory.json`, `reconciliation.json` e `cleanup/execution.json`.
+- Ensaio de sucesso `20260723-213000`: 4.673.054 linhas planejadas removidas, tabelas preservadas inalteradas e `reconciliation.ok=true`.
+- Ensaio de rollback `20260723-213001`: exit code `22`, nenhuma escrita persistida e `reconciliation.ok=true`.
+- Bancos descartáveis do ensaio removidos após a validação.
+- Migração Pydantic v2 concluída pela Issue #186.
 
 ## Arquitetura resumida
 
@@ -68,7 +48,7 @@ Transações
         ↓
 Catálogo canônico de ativos
         ↓
-B3 COTAHIST | dados abertos oficiais do Tesouro | séries macroeconômicas | motores dedicados
+B3 COTAHIST | dados oficiais do Tesouro | séries macroeconômicas | motores dedicados
         ↓
 asset_prices / rate_history / proventos
         ↓
@@ -101,37 +81,39 @@ python -m app.cli.rebuild_treasury_official_prices
 
 ## Prioridades atuais
 
-1. Promover a PR #198 após validação final do bloco estrutural.
-2. Executar a limpeza e o rebuild pré-produção em etapas auditáveis somente após nova autorização explícita.
-5. Remover o serviço legado de rentabilidade (#151).
-6. Materializar o histórico persistido do IBOV (#150).
-7. Implementar TWR dedicado, separando Tesouro Direto e Renda Fixa (#149).
-8. Migrar timestamps UTC legados para timezone-aware (#192).
+1. Planejar, revisar e aprovar separadamente a limpeza controlada da pré-produção real no escopo da Issue #158.
+2. Executar a limpeza e o rebuild pré-produção somente após todos os novos gates operacionais.
+3. Endurecer ou remover o router administrativo de debug antes do go-live.
+4. Remover o serviço legado de rentabilidade (#151).
+5. Materializar o histórico persistido do IBOV (#150).
+6. Implementar TWR dedicado para Tesouro Direto e Renda Fixa (#149).
+7. Migrar timestamps UTC legados para timezone-aware (#192).
 
 ## Dependências
 
-A auditoria Dependabot da Issue #159 foi concluída. Atualizações compatíveis foram incorporadas à `stable-15jun` em blocos isolados. A incompatibilidade entre TypeScript 7 e `typescript-eslint@8.64.0` foi corrigida pela Issue #182, mantendo resolução estrita de peer dependencies. Não há PR Dependabot aberta após o merge da PR #194.
+A auditoria Dependabot da Issue #159 foi concluída. Atualizações compatíveis foram incorporadas em blocos isolados e não há PR Dependabot aberta após a promoção da PR #198.
 
 ## Pré-produção
 
 A primeira entrada em produção exige:
 
-1. inventário read-only aprovado e sem tabelas desconhecidas — concluído;
-2. backup validado com checksum e restauração isolada — concluído pela Issue #183;
-3. dry-run read-only da limpeza e relatório de impacto — validado pela Issue #185;
-4. exportação controlada das transações, renda fixa e eventos corporativos — validada pela Issue #188 e promovida pela PR #191;
-5. plano de execução `pre-prod-cleanup-execution.v1` validado sem acesso ao banco — concluído pela Issue #195 e PR #194;
-6. executor, CLI e artefato da limpeza isolada — implementados pela Issue #196 e PR #198, com 44 testes aprovados;
-7. ensaio integral em banco descartável, incluindo sucesso, rollback e reconciliação de tabelas preservadas — concluído;
-8. limpeza controlada de dados reconstruíveis na pré-produção real — não autorizada nesta fase;
-9. seed B3 COTAHIST;
-10. seed oficial do Tesouro Direto;
-11. seed de benchmarks, câmbio e proventos;
-12. importação CSV completa da carteira;
-13. rebuild de posições e snapshots;
-14. reconciliação financeira e auditoria de cobertura.
+1. inventário read-only aprovado — concluído;
+2. backup validado e restauração isolada — concluído;
+3. dry-run read-only e relatório de impacto — concluído;
+4. exportação controlada das tabelas obrigatórias — concluído;
+5. plano de execução validado sem acesso ao banco — concluído;
+6. executor, CLI e artefatos auditáveis — concluído;
+7. ensaio integral em banco descartável com sucesso e rollback — concluído;
+8. autorização separada para limpeza na pré-produção real — pendente;
+9. limpeza controlada dos dados reconstruíveis — pendente;
+10. seed B3 COTAHIST — pendente;
+11. seed oficial do Tesouro Direto — pendente;
+12. seed de benchmarks, câmbio e proventos — pendente;
+13. importação CSV completa da carteira — pendente;
+14. rebuild de posições e snapshots — pendente;
+15. reconciliação financeira e auditoria de cobertura — pendente.
 
-Checklist completo: issue #158. Runbook geral: `docs/PRE_PROD_REBUILD_RUNBOOK.md`. Runbook do dry-run: `docs/pre-prod-cleanup-impact-runbook.md`. Runbook da exportação: `docs/pre-prod-export-runbook.md`. Runbook da execução: `docs/pre-prod-cleanup-execution-runbook.md`. Runbook do ensaio isolado: `docs/pre-prod-isolated-cleanup-rehearsal-runbook.md`.
+Checklist completo: Issue #158. Runbooks: `docs/PRE_PROD_REBUILD_RUNBOOK.md`, `docs/pre-prod-cleanup-impact-runbook.md`, `docs/pre-prod-export-runbook.md`, `docs/pre-prod-cleanup-execution-runbook.md` e `docs/pre-prod-isolated-cleanup-rehearsal-runbook.md`.
 
 ## Stack
 
@@ -155,11 +137,8 @@ docker compose up -d --build
 - `docs/providers.md` — fontes e fallbacks.
 - `docs/operations.md` — operação e rebuilds.
 - `docs/PRE_PROD_REBUILD_RUNBOOK.md` — política e sequência do rebuild pré-produção.
-- `docs/pre-prod-cleanup-impact-runbook.md` — execução, artefato, exit codes e critérios de aborto do dry-run.
-- `docs/pre-prod-export-runbook.md` — execução read-only, artefatos, manifesto, reconciliação e códigos de saída da exportação.
-- `docs/pre-prod-cleanup-execution-runbook.md` — validação plan-only, cadeia de artefatos, plano e códigos de saída.
-- `docs/pre-prod-isolated-cleanup-rehearsal-runbook.md` — gates, restauração, execução, rollback, reconciliação e descarte do ensaio isolado.
+- `docs/pre-prod-cleanup-impact-runbook.md` — dry-run e critérios de aborto.
+- `docs/pre-prod-export-runbook.md` — exportação e reconciliação.
+- `docs/pre-prod-cleanup-execution-runbook.md` — plano e execução controlada.
+- `docs/pre-prod-isolated-cleanup-rehearsal-runbook.md` — ensaio isolado, rollback e descarte.
 - `docs/CANONICAL_FINANCIAL_CONTRACT.md` — contrato financeiro oficial.
-- `docs/RESUMO_ARCHITECTURAL_AUDIT.md` — matriz de contratos e divergências da página Resumo.
-- `docs/PROVENTOS_ARCHITECTURAL_AUDIT.md` — fluxo, contratos, riscos e sequência da Fase 2.
-- `docs/PATRIMONIO_ARCHITECTURAL_AUDIT.md` — snapshots, históricos por classe e reconciliações da Fase 3.
