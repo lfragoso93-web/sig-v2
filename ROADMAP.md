@@ -1,6 +1,6 @@
 # Roadmap modular — SGI v2
 
-> Última atualização: 23/07/2026
+> Última atualização: 24/07/2026
 
 ## Visão geral
 
@@ -21,20 +21,18 @@
 | Página Rentabilidade | Contratos concluídos | 95% |
 | Dependências | Auditoria concluída; nenhuma PR aberta | 100% |
 | Configuração Pydantic v2 | Migração validada e Issue #186 encerrada | 100% |
-| Rebuild pré-produção | Ensaio isolado aprovado; limpeza real ainda não autorizada | 90% |
 | Backup/Restore pré-produção | Validação real v3 concluída (#183) | 100% |
 | Dry-run de limpeza | Validado no PostgreSQL real (#185) | 100% |
 | Exportação pré-produção | Validada e promovida pela PR #191 (#188) | 100% |
 | Planejamento seguro da limpeza | Validado pela Issue #195 e PR #194 | 100% |
-| Limpeza isolada | Sucesso e rollback reconciliados em bancos descartáveis (#196 / PR #198) | 100% |
+| Limpeza isolada | Sucesso e rollback reconciliados; PR #198 promovida | 100% |
+| Rebuild pré-produção | Ensaio isolado aprovado; limpeza real ainda não autorizada | 90% |
 | Eventos corporativos | Fundação pronta | 30% |
 | IRPF | Planejado | 15% |
 | Backup/Restore administrativo | Planejado (#83) | 10% |
 | OAuth social | Planejado | 0% |
 
-Prontidão global estimada para a primeira produção: **88%**. O percentual não
-inclui funcionalidades futuras de produto. Revisão e fila priorizada:
-`docs/ARCHITECTURAL_REVIEW_2026-07-23.md`.
+Prontidão global estimada para a primeira produção: **88%**. O percentual não inclui funcionalidades futuras de produto.
 
 ## Consolidado
 
@@ -57,8 +55,6 @@ inclui funcionalidades futuras de produto. Revisão e fila priorizada:
 - Criação automática de ativos duplicados bloqueada.
 - Valores atuais validados na interface.
 
-A reconstrução limpa do catálogo, históricos e carteira permanece reservada ao checklist pré-produção da Issue #158.
-
 ### Histórico e snapshots
 
 - B3 COTAHIST como histórico primário de renda variável brasileira.
@@ -69,60 +65,23 @@ A reconstrução limpa do catálogo, históricos e carteira permanece reservada 
 
 ## Em desenvolvimento
 
-### Rentabilidade
+### Pré-produção — Issue #158
 
-- [ ] Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
-- [ ] Materializar histórico persistido do IBOV (#150).
-- [ ] Remover serviço legado de rentabilidade (#151).
-
-### Dependabot — #159
-
-- [x] Auditoria concluída e Issue #159 encerrada.
-- [x] Atualizações compatíveis integradas em blocos isolados.
-- [x] TypeScript 7 revertido para 6.0.3 após incompatibilidade com `typescript-eslint@8.64.0` (#182).
-- [x] Build Docker do frontend confirmado pelo usuário.
-- [x] Nenhuma PR Dependabot aberta após o merge da PR #194.
-
-### Pydantic v2 — #186
-
-- [x] Migrar `Settings` para `SettingsConfigDict`.
-- [x] Migrar schemas de portfólio e auditoria inicialmente identificados.
-- [x] Adicionar inventário AST que bloqueia novas `class Config`.
-- [x] Incorporar os quatro pontos adicionais revelados pela validação local: ativos, proventos, Tesouro e `AssetListItem`.
-- [x] Adicionar regressões de leitura por atributos para os schemas adicionais.
-- [x] Confirmar a suíte dedicada com `5 passed`.
-- [x] Confirmar ausência de `PydanticDeprecatedSince20` durante a coleta e execução integral.
-- [x] Isolar os testes de compatibilidade das variáveis reais do container.
-- [x] Tornar o teste documental compatível com a imagem isolada do backend sem enfraquecer a validação no checkout completo.
-- [x] Reexecutar a suíte integral após os dois ajustes de infraestrutura de teste.
-- [x] Encerrar a Issue após ausência de regressões.
-
-Validação final: `666 passed`, `1 skipped` intencional e zero `PydanticDeprecatedSince20`.
-
-### Pré-produção — #158 / #176 / #183 / #185 / #188 / #195 / #196
-
-- [x] Inventário read-only `pre-prod-inventory.v2` validado no PostgreSQL real.
+- [x] Inventário read-only `pre-prod-inventory.v2` validado.
 - [x] Política integral: 11 tabelas preservadas, 3 exportáveis e 10 reconstruíveis.
 - [x] Backup `pre-prod-backup.v3` e restauração isolada reconciliados.
-- [x] Dry-run `pre-prod-cleanup-impact.v2` aprovado, sem bloqueios, ciclos ou escritas.
-- [x] Exportação `pre-prod-export.v1` das tabelas `corporate_events`, `fixed_income_investments` e `transactions`.
-- [x] Execução real `20260722-134741`: 3 tabelas, 323 linhas, 47.576 bytes, `reconciled=true` e exit code `0`.
-- [x] Incompatibilidade de `ordinal_position` do PostgreSQL corrigida e protegida por regressão.
-- [x] Issue #188 encerrada e PR #191 promovida para a `main`.
-- [x] Contrato `pre-prod-cleanup-execution.v1` e CLI `pre_prod_cleanup_plan` implementados.
-- [x] Checksums, identidade operacional, gate, DAG, publicação atômica e rollback de exportação cobertos.
-- [x] PR #194 promovida para a `main` com 33 testes focados aprovados.
-- [x] Cadeia real de exportação + plano validada sem escrita no banco pela Issue #195.
-- [x] Issue #196 aberta para a execução controlada em banco isolado.
-- [x] Executor transacional com lock, contagens, ordem canônica, pós-condições e rollback integral implementado.
-- [x] CLI `pre_prod_isolated_cleanup` e relatórios `committed`, `aborted` e `rolled_back` implementados.
-- [x] Validação multiplataforma concluída com 44 testes aprovados e `compileall` sem erros.
-- [x] Runbook D0 do ensaio isolado concluído com gates, comandos PowerShell, reconciliação e descarte.
-- [x] Implementar captura automática de baseline e pós-execução das tabelas preservadas.
-- [x] Executar cenário de sucesso em PostgreSQL descartável restaurado do backup v3 (`20260723-213000`, `ok=true`).
-- [x] Executar e reconciliar cenário de rollback em nova restauração e novo `run_id` (`20260723-213001`, exit code `22`, `ok=true`).
-- [ ] Promover a PR #198 para a `main` após o bloco estrutural validado.
-- [ ] Avaliar autorização separada para limpeza da pré-produção real somente após o ensaio aprovado.
+- [x] Dry-run `pre-prod-cleanup-impact.v2` aprovado sem bloqueios, ciclos ou escritas.
+- [x] Exportação `pre-prod-export.v1` reconciliada.
+- [x] Plano `pre-prod-cleanup-execution.v1` validado sem acesso ao banco.
+- [x] Executor transacional, CLI e artefatos auditáveis implementados.
+- [x] Captura automática de baseline, pós-contagem e tabelas preservadas.
+- [x] Cenário de sucesso `20260723-213000` reconciliado.
+- [x] Cenário de rollback `20260723-213001` reconciliado.
+- [x] PR #198 promovida para a `main`; Issue #196 encerrada.
+- [ ] Criar e aprovar Issue operacional exclusiva para a limpeza da pré-produção real.
+- [ ] Gerar novo backup imediatamente anterior à janela de execução.
+- [ ] Gerar nova exportação e novo plano com o mesmo `run_id` operacional.
+- [ ] Executar limpeza real somente após autorização explícita.
 - [ ] Seed B3 COTAHIST.
 - [ ] Seed oficial do Tesouro Direto.
 - [ ] Seed de benchmarks, câmbio e proventos.
@@ -130,14 +89,35 @@ Validação final: `666 passed`, `1 skipped` intencional e zero `PydanticDepreca
 - [ ] Rebuild de posições e snapshots.
 - [ ] Auditoria de cobertura e reconciliação final.
 
+### Rentabilidade
+
+- [ ] Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
+- [ ] Materializar histórico persistido do IBOV (#150).
+- [ ] Remover serviço legado de rentabilidade (#151).
+
+### Segurança e dívida técnica
+
+- [ ] Endurecer ou remover o router administrativo de debug antes do go-live.
+- [ ] Migrar timestamps UTC para timezone-aware (#192).
+- [ ] Revisar backup/restore administrativo (#83).
+- [ ] Arquivar ou remover migration órfã do Tesouro após confirmação de uso externo.
+
+### Dependabot — #159
+
+- [x] Auditoria concluída e Issue #159 encerrada.
+- [x] Atualizações compatíveis integradas em blocos isolados.
+- [x] TypeScript 7 revertido para 6.0.3 após incompatibilidade com `typescript-eslint@8.64.0` (#182).
+- [x] Nenhuma PR Dependabot aberta após a promoção da PR #198.
+
 ## Próximas prioridades
 
-1. Promover a PR #198 após validação final do bloco estrutural.
-2. Executar limpeza e rebuild pré-produção apenas após nova autorização explícita.
-5. Remover o serviço legado de rentabilidade (#151).
-6. Materializar IBOV (#150).
-7. Implementar TWR dedicado, separando Tesouro Direto e Renda Fixa (#149).
-8. Migrar timestamps UTC para timezone-aware (#192).
+1. Criar e revisar a Issue de autorização da limpeza na pré-produção real.
+2. Atualizar a Issue-mãe #158 com o estado concluído até o ensaio isolado.
+3. Endurecer ou remover o router administrativo de debug antes do go-live.
+4. Remover o serviço legado de rentabilidade (#151).
+5. Materializar IBOV (#150).
+6. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
+7. Migrar timestamps UTC para timezone-aware (#192).
 
 ## Backlog
 
@@ -149,7 +129,7 @@ Validação final: `666 passed`, `1 skipped` intencional e zero `PydanticDepreca
 - Análise de Carteira — #57.
 - Janela Global do Ativo — #58.
 - Provedores configuráveis — #127.
-- Timestamps UTC timezone-aware — #192.
+- UX da página Patrimônio — #90.
 
 ## Processo
 
