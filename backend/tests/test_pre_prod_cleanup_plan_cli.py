@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -72,17 +73,24 @@ def test_main_builds_and_publishes_plan_without_database(
         captured["publish"] = kwargs
         return tmp_path / "run-1" / "cleanup" / "plan.json"
 
+    def fake_checksum(payload):  # type: ignore[no-untyped-def]
+        captured["checksum_payload"] = payload
+        return "f" * 64
+
     monkeypatch.setattr(cli, "build_pre_prod_cleanup_execution_plan", fake_build)
     monkeypatch.setattr(cli, "publish_pre_prod_cleanup_execution_plan", fake_publish)
+    monkeypatch.setattr(cli, "canonical_json_sha256", fake_checksum)
 
     assert cli._main(_arguments(tmp_path)) == 0
 
-    output = capsys.readouterr().out
-    assert '"database_accessed": false' in output
-    assert '"database_writes_executed": 0' in output
-    assert '"cleanup_executed": false' in output
+    output = json.loads(capsys.readouterr().out)
+    assert output["plan_sha256"] == "f" * 64
+    assert output["database_accessed"] is False
+    assert output["database_writes_executed"] == 0
+    assert output["cleanup_executed"] is False
     assert captured["build"]["run_id"] == "run-1"  # type: ignore[index]
     assert captured["publish"]["plan"] is plan  # type: ignore[index]
+    assert captured["checksum_payload"] == plan.to_dict()
 
 
 @pytest.mark.parametrize(
