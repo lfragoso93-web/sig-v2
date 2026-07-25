@@ -17,7 +17,7 @@ def _script() -> str:
 def test_wrapper_requires_sha_bound_confirmation_before_docker() -> None:
     script = _script()
 
-    confirmation = 'EXECUTE-TREASURY-IDEMPOTENCY:$NormalizedCommitSha'
+    confirmation = "EXECUTE-TREASURY-IDEMPOTENCY:$NormalizedCommitSha"
     assert confirmation in script
     assert script.index("$ExpectedConfirmation") < script.index("& docker")
     assert "Current branch must be exactly 'stable-15jun'." in script
@@ -34,6 +34,20 @@ def test_wrapper_runs_seed_twice_and_compares_offline_evidence() -> None:
     assert "first.json" in script
     assert "second.json" in script
     assert "idempotency.json" in script
+
+
+def test_wrapper_maps_host_artifacts_to_backend_volume() -> None:
+    script = _script()
+
+    assert "ArtifactRoot must be a repository-relative path under artifacts." in script
+    assert "ArtifactRoot must be inside the mounted artifacts directory." in script
+    assert '$OperationContainerDirectory = "/app/$OperationRelativeDirectory"' in script
+    assert "$FirstEvidenceHostPath" in script
+    assert "$FirstEvidenceContainerPath" in script
+    assert "$SecondEvidenceHostPath" in script
+    assert "$SecondEvidenceContainerPath" in script
+    assert "'--first'\n    $FirstEvidenceContainerPath" in script
+    assert "'--second'\n    $SecondEvidenceContainerPath" in script
 
 
 def test_wrapper_preserves_safe_powershell_execution() -> None:
