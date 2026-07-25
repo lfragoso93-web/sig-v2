@@ -24,9 +24,12 @@ A operação rejeita o estado quando qualquer uma destas condições divergir:
 - referência funcional dos legados em tabelas conhecidas;
 - quantidade diferente de dois preços `brapi_treasury` por legado;
 - campos OHLCV presentes nos quatro registros incompatíveis;
-- `close` diferente de R$ 3.518,20 para `4742` ou R$ 3.769,72 para `4747`;
+- conjunto de `close` diferente de R$ 3.518,20 e R$ 3.522,89 para `4742`;
+- conjunto de `close` diferente de R$ 3.769,72 e R$ 3.777,79 para `4747`;
 - menos de 743 preços `tesouro_transparente` por ativo canônico;
 - preço órfão ou duplicidade por `(asset_id, timestamp)`.
+
+Os quatro preços legados foram confirmados no PostgreSQL real em 25/07/2026. Como cada legado deve possuir exatamente duas linhas, sem OHLCV, a validação simultânea de `min_close` e `max_close` fecha o conjunto aceito sem permitir valores adicionais.
 
 ## Transação
 
