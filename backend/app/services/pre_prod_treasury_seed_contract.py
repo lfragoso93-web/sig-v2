@@ -20,6 +20,28 @@ class TreasurySeedContractError(ValueError):
     """Indica resultado incompatível com o contrato operacional do estágio."""
 
 
+def validate_treasury_seed_identity(
+    *,
+    run_id: str,
+    branch: str,
+    commit_sha: str,
+) -> None:
+    """Valida a identidade antes de qualquer acesso operacional."""
+
+    if not _RUN_ID_PATTERN.fullmatch(run_id):
+        raise TreasurySeedContractError(
+            "run_id deve seguir o formato YYYYMMDD-HHMMSS"
+        )
+    if branch != TREASURY_SEED_BRANCH:
+        raise TreasurySeedContractError(
+            f"branch deve ser {TREASURY_SEED_BRANCH!r}"
+        )
+    if not _COMMIT_SHA_PATTERN.fullmatch(commit_sha):
+        raise TreasurySeedContractError(
+            "commit_sha deve conter 40 caracteres hexadecimais minúsculos"
+        )
+
+
 @dataclass(frozen=True)
 class TreasurySeedCounts:
     assets: int
@@ -81,18 +103,11 @@ class PreProdTreasurySeedResult:
             raise TreasurySeedContractError(
                 f"schema_version não suportado: {self.schema_version!r}"
             )
-        if not _RUN_ID_PATTERN.fullmatch(self.run_id):
-            raise TreasurySeedContractError(
-                "run_id deve seguir o formato YYYYMMDD-HHMMSS"
-            )
-        if self.branch != TREASURY_SEED_BRANCH:
-            raise TreasurySeedContractError(
-                f"branch deve ser {TREASURY_SEED_BRANCH!r}"
-            )
-        if not _COMMIT_SHA_PATTERN.fullmatch(self.commit_sha):
-            raise TreasurySeedContractError(
-                "commit_sha deve conter 40 caracteres hexadecimais minúsculos"
-            )
+        validate_treasury_seed_identity(
+            run_id=self.run_id,
+            branch=self.branch,
+            commit_sha=self.commit_sha,
+        )
         if self.duration_seconds < 0:
             raise TreasurySeedContractError("duration_seconds não pode ser negativo")
         if self.started_at > self.finished_at:
