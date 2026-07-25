@@ -5,6 +5,7 @@ from dataclasses import replace
 import pytest
 
 from app.services.pre_prod_treasury_seed_contract import (
+    TREASURY_SEED_BRANCH,
     TREASURY_SEED_SCHEMA_VERSION,
     PreProdTreasurySeedResult,
     TreasurySeedContractError,
@@ -12,9 +13,15 @@ from app.services.pre_prod_treasury_seed_contract import (
     TreasurySeedCoverage,
 )
 
+RUN_ID = "20260725-170000"
+COMMIT_SHA = "a" * 40
+
 
 def _result(*, ok: bool = True) -> PreProdTreasurySeedResult:
     return PreProdTreasurySeedResult(
+        run_id=RUN_ID,
+        branch=TREASURY_SEED_BRANCH,
+        commit_sha=COMMIT_SHA,
         started_at="2026-07-25T17:00:00+00:00",
         finished_at="2026-07-25T17:01:00+00:00",
         duration_seconds=60.0,
@@ -35,6 +42,9 @@ def test_contract_serializes_versioned_auditable_result() -> None:
     payload = _result().to_dict()
 
     assert payload["schema_version"] == TREASURY_SEED_SCHEMA_VERSION
+    assert payload["run_id"] == RUN_ID
+    assert payload["branch"] == TREASURY_SEED_BRANCH
+    assert payload["commit_sha"] == COMMIT_SHA
     assert payload["ok"] is True
     assert payload["after"]["orphan_prices"] == 0
     assert payload["coverage"]["priced_assets"] == 24
