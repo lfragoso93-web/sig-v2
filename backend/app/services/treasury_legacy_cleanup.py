@@ -1,7 +1,7 @@
 """Limpeza transacional e auditável de dois ativos legados do Tesouro Educa+.
 
-O serviço é intencionalmente específico: qualquer divergência do conjunto aprovado
-interrompe a operação antes de escrita. Dry-run é o comportamento padrão da CLI.
+A implementação é deliberadamente específica. Qualquer divergência do conjunto
+aprovado interrompe a operação antes de escrita.
 """
 from __future__ import annotations
 
@@ -10,7 +10,8 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Callable
 
-from sqlalchemy import Connection, text
+from sqlalchemy import bindparam, text
+from sqlalchemy.engine import Connection
 
 SCHEMA_VERSION = "treasury-legacy-cleanup.v1"
 ASSET_TYPE = "TESOURO_DIRETO"
@@ -31,7 +32,7 @@ MAPPINGS = (
     LegacyMapping(4742, "tesouro-educa-15122030", 4810, "tesouro-educa-mais-2030", Decimal("3518.20")),
     LegacyMapping(4747, "tesouro-educa-15122031", 4823, "tesouro-educa-mais-2031", Decimal("3769.72")),
 )
-
+LEGACY_IDS = [item.legacy_id for item in MAPPINGS]
 FUNCTIONAL_REFERENCES = (
     ("asset_dividends", "asset_id"),
     ("corporate_events", "asset_id"),
@@ -57,24 +58,38 @@ def _asset(connection: Connection, asset_id: int) -> dict[str, Any] | None:
     return dict(row) if row else None
 
 
-def _table_exists(connection: Connection, table_name: str) -> bool:
-    return bool(_scalar(connection, "SELECT to_regclass(:table_name) IS NOT NULL", table_name=table_name))
+def _column_exists(connection: Connection, table_name: str, column_name: str) -> bool:
+    return bool(
+        _scalar(
+            connection,
+            """
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                 WHERE table_schema = current_schema()
+                   AND table_name = :table_name
+                   AND column_name = :column_name
+            )
+            """,
+            table_name=table_name,
+            column_name=column_name,
+        )
+    )
 
 
 def _reference_counts(connection: Connection) -> dict[str, int]:
-    legacy_ids = tuple(item.legacy_id for item in MAPPINGS)
     counts: dict[str, int] = {}
+    statement_cache: dict[str, Any] = {}
     for table_name, column_name in FUNCTIONAL_REFERENCES:
-        if not _table_exists(connection, table_name):
+        if not _column_exists(connection, table_name, column_name):
             continue
         key = f"{table_name}.{column_name}"
-        counts[key] = int(
-            _scalar(
-                connection,
-                f"SELECT count(*) FROM {table_name} WHERE {column_name} IN :legacy_ids",
-                legacy_ids=legacy_ids,
-            )
+        statement = statement_cache.setdefault(
+            key,
+            text(f"SELECT count(*) FROM {table_name} WHERE {column_name} IN :legacy_ids").bindparams(
+                bindparam("legacy_ids", expanding=True)
+            ),
         )
+        counts[key] = int(connection.execute(statement, {"legacy_ids": LEGACY_IDS}).scalar_one())
     return counts
 
 
@@ -83,7 +98,9 @@ def _price_snapshot(connection: Connection, asset_id: int, source: str) -> dict[
         text(
             """
             SELECT count(*) AS count,
-                   count(*) FILTER (WHERE open IS NOT NULL OR high IS NOT NULL OR low IS NOT NULL OR volume IS NOT NULL) AS enriched,
+                   count(*) FILTER (
+                       WHERE open IS NOT NULL OR high IS NOT NULL OR low IS NOT NULL OR volume IS NOT NULL
+                   ) AS enriched,
                    min(close) AS min_close,
                    max(close) AS max_close,
                    min(timestamp) AS min_timestamp,
@@ -161,22 +178,18 @@ def _validate_before(snapshot: dict[str, Any]) -> None:
     for mapping in MAPPINGS:
         legacy = snapshot["assets"][str(mapping.legacy_id)]
         canonical = snapshot["assets"][str(mapping.canonical_id)]
-        expected_legacy = {"id": mapping.legacy_id, "ticker": mapping.legacy_ticker, "asset_type": ASSET_TYPE}
-        expected_canonical = {"id": mapping.canonical_id, "ticker": mapping.canonical_ticker, "asset_type": ASSET_TYPE}
-        if legacy != expected_legacy:
+        if legacy != {"id": mapping.legacy_id, "ticker": mapping.legacy_ticker, "asset_type": ASSET_TYPE}:
             raise TreasuryLegacyCleanupError(f"ativo legado divergente: {mapping.legacy_id}")
-        if canonical != expected_canonical:
+        if canonical != {"id": mapping.canonical_id, "ticker": mapping.canonical_ticker, "asset_type": ASSET_TYPE}:
             raise TreasuryLegacyCleanupError(f"ativo canônico divergente: {mapping.canonical_id}")
-        aliases = snapshot["aliases"][mapping.legacy_ticker]
-        if aliases:
+        if snapshot["aliases"][mapping.legacy_ticker]:
             raise TreasuryLegacyCleanupError(f"alias já existe ou conflita: {mapping.legacy_ticker}")
         legacy_prices = snapshot["legacy_prices"][str(mapping.legacy_id)]
         if legacy_prices["count"] != 2 or legacy_prices["enriched"] != 0:
             raise TreasuryLegacyCleanupError(f"conjunto de preços legado divergente: {mapping.legacy_id}")
-        if Decimal(legacy_prices["min_close"]) != mapping.expected_close or Decimal(legacy_prices["max_close"]) != mapping.expected_close:
+        if legacy_prices["min_close"] != mapping.expected_close or legacy_prices["max_close"] != mapping.expected_close:
             raise TreasuryLegacyCleanupError(f"valor de preço legado divergente: {mapping.legacy_id}")
-        official = snapshot["official_prices"][str(mapping.canonical_id)]
-        if official["count"] < 743:
+        if snapshot["official_prices"][str(mapping.canonical_id)]["count"] < 743:
             raise TreasuryLegacyCleanupError(f"série oficial insuficiente: {mapping.canonical_id}")
     unexpected = {key: value for key, value in snapshot["functional_references"].items() if value}
     if unexpected:
@@ -202,6 +215,17 @@ def _validate_after(before: dict[str, Any], after: dict[str, Any]) -> None:
         raise TreasuryLegacyCleanupError("integridade final divergente")
 
 
+def _already_applied(snapshot: dict[str, Any]) -> bool:
+    return all(
+        snapshot["assets"][str(mapping.legacy_id)] is None
+        and len(snapshot["aliases"][mapping.legacy_ticker]) == 1
+        and snapshot["aliases"][mapping.legacy_ticker][0]["asset_id"] == mapping.canonical_id
+        and snapshot["legacy_prices"][str(mapping.legacy_id)]["count"] == 0
+        and snapshot["official_prices"][str(mapping.canonical_id)]["count"] >= 743
+        for mapping in MAPPINGS
+    ) and snapshot["integrity"] == {"orphan_prices": 0, "duplicate_prices": 0}
+
+
 def execute(
     connection: Connection,
     *,
@@ -210,15 +234,7 @@ def execute(
 ) -> dict[str, Any]:
     started_at = datetime.now(timezone.utc).isoformat()
     before = inspect(connection)
-
-    already_applied = all(
-        before["assets"][str(mapping.legacy_id)] is None
-        and len(before["aliases"][mapping.legacy_ticker]) == 1
-        and before["aliases"][mapping.legacy_ticker][0]["asset_id"] == mapping.canonical_id
-        and before["legacy_prices"][str(mapping.legacy_id)]["count"] == 0
-        for mapping in MAPPINGS
-    )
-    if already_applied:
+    if _already_applied(before):
         return {
             "schema_version": SCHEMA_VERSION,
             "mode": "apply" if apply else "dry-run",
@@ -255,17 +271,19 @@ def execute(
                 "asset_id": mapping.canonical_id,
                 "alias_ticker": mapping.legacy_ticker,
                 "asset_type": ASSET_TYPE,
-                "source_provider": "treasury_legacy_cleanup.v1",
+                "source_provider": SCHEMA_VERSION,
             },
         )
+    delete_prices = text(
+        "DELETE FROM asset_prices WHERE asset_id IN :legacy_ids AND source = :source"
+    ).bindparams(bindparam("legacy_ids", expanding=True))
+    delete_assets = text("DELETE FROM assets WHERE id IN :legacy_ids").bindparams(
+        bindparam("legacy_ids", expanding=True)
+    )
     deleted_prices = connection.execute(
-        text("DELETE FROM asset_prices WHERE asset_id IN :legacy_ids AND source = :source"),
-        {"legacy_ids": tuple(item.legacy_id for item in MAPPINGS), "source": LEGACY_SOURCE},
+        delete_prices, {"legacy_ids": LEGACY_IDS, "source": LEGACY_SOURCE}
     ).rowcount
-    deleted_assets = connection.execute(
-        text("DELETE FROM assets WHERE id IN :legacy_ids"),
-        {"legacy_ids": tuple(item.legacy_id for item in MAPPINGS)},
-    ).rowcount
+    deleted_assets = connection.execute(delete_assets, {"legacy_ids": LEGACY_IDS}).rowcount
     if deleted_prices != 4 or deleted_assets != 2:
         raise TreasuryLegacyCleanupError("contagem de exclusão divergente; rollback obrigatório")
     if before_post_validation:
