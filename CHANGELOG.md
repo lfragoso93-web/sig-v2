@@ -5,6 +5,14 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — portabilidade do teste do wrapper de idempotência (25/07/2026)
+
+- O teste estrutural deixou de assumir um layout físico único para o checkout, que divergia entre GitHub Actions (`<repo>/backend/tests/...`) e a imagem Docker (`/app/tests/...`).
+- O wrapper agora é localizado por descoberta de ancestrais até `scripts/Invoke-PreProdTreasuryIdempotency.ps1`, preservando a validação completa no checkout do repositório.
+- Quando o artefato em teste não inclui `scripts/` — como ocorre na imagem backend construída com contexto `backend/` — a suíte faz `skip` explícito em vez de produzir falso negativo.
+- O comando operacional desse teste deve ser executado no checkout completo/CI; dentro do container Docker ele valida apenas que o artefato não inclui o wrapper por desenho.
+- Nenhum seed, comparador ou escrita em pré-produção foi executado neste bloco.
+
 ### Corrigido — encoding das evidências de idempotência do Tesouro (25/07/2026)
 
 - O wrapper deixou de usar `Tee-Object -FilePath`, cujo encoding implícito no Windows PowerShell produziu evidências UTF-16 incompatíveis com o contrato JSON UTF-8.

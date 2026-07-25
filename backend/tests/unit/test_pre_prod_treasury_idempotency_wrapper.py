@@ -2,16 +2,41 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 
-SCRIPT_PATH = (
-    Path(__file__).resolve().parents[3]
-    / "scripts"
-    / "Invoke-PreProdTreasuryIdempotency.ps1"
-)
+
+SCRIPT_NAME = "Invoke-PreProdTreasuryIdempotency.ps1"
+
+
+def _find_script_path() -> Path | None:
+    test_path = Path(__file__).resolve()
+    for ancestor in (test_path.parent, *test_path.parents):
+        candidate = ancestor / "scripts" / SCRIPT_NAME
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+SCRIPT_PATH = _find_script_path()
 
 
 def _script() -> str:
+    if SCRIPT_PATH is None:
+        pytest.skip(
+            "wrapper PowerShell não está incluído neste artefato; "
+            "execute esta suíte no checkout completo do repositório"
+        )
     return SCRIPT_PATH.read_text(encoding="utf-8")
+
+
+def test_wrapper_script_path_resolves_inside_repository() -> None:
+    if SCRIPT_PATH is None:
+        pytest.skip(
+            "wrapper PowerShell não está incluído neste artefato; "
+            "execute esta suíte no checkout completo do repositório"
+        )
+    assert SCRIPT_PATH.name == SCRIPT_NAME
+    assert SCRIPT_PATH.parent.name == "scripts"
 
 
 def test_wrapper_requires_sha_bound_confirmation_before_docker() -> None:
