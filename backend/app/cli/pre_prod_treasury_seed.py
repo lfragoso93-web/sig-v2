@@ -44,13 +44,13 @@ def _parser() -> argparse.ArgumentParser:
 
 async def _main() -> int:
     args = _parser().parse_args()
-    validate_treasury_seed_identity(
-        run_id=args.run_id,
-        branch=args.branch,
-        commit_sha=args.commit_sha,
-    )
 
     try:
+        validate_treasury_seed_identity(
+            run_id=args.run_id,
+            branch=args.branch,
+            commit_sha=args.commit_sha,
+        )
         async with AsyncSessionLocal() as lock_db, AsyncSessionLocal() as work_db:
             result = await run_pre_prod_treasury_seed(
                 run_id=args.run_id,
