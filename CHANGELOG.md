@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — resolução do wrapper nos testes em container (25/07/2026)
+
+- O teste estrutural do wrapper deixou de subir três níveis a partir de `backend/tests/unit`, o que resolvia incorretamente a raiz como `/` dentro do container.
+- A raiz do repositório em runtime agora é derivada como `/app`, preservando o caminho canônico `/app/scripts/Invoke-PreProdTreasuryIdempotency.ps1`.
+- Foi adicionada uma regressão explícita que exige a existência do script no caminho resolvido antes das demais verificações estruturais.
+- Nenhum seed, comparador ou escrita em pré-produção foi executado neste bloco.
+
 ### Corrigido — encoding das evidências de idempotência do Tesouro (25/07/2026)
 
 - O wrapper deixou de usar `Tee-Object -FilePath`, cujo encoding implícito no Windows PowerShell produziu evidências UTF-16 incompatíveis com o contrato JSON UTF-8.
