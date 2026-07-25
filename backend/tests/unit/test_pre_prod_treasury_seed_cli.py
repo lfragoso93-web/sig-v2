@@ -88,7 +88,8 @@ async def test_cli_redacts_unexpected_exception_message(monkeypatch, capsys):
     exit_code = await cli._main()
 
     assert exit_code == cli.EXIT_UNEXPECTED_FAILURE
-    payload = json.loads(capsys.readouterr().out)
+    output = capsys.readouterr().out
+    payload = json.loads(output)
     assert payload["error"] == "falha inesperada no estágio Tesouro"
     assert payload["type"] == "OSError"
-    assert "senha" not in capsys.readouterr().out
+    assert "senha" not in output
