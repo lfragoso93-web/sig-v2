@@ -12,7 +12,7 @@ def _script() -> str:
 
 
 def test_wrapper_script_path_resolves_inside_repository() -> None:
-    assert REPOSITORY_ROOT.name == "app"
+    assert SCRIPT_PATH.parent == REPOSITORY_ROOT / "scripts"
     assert SCRIPT_PATH.is_file()
 
 
