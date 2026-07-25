@@ -6,6 +6,10 @@ import asyncio
 import json
 
 from app.core.database import AsyncSessionLocal
+from app.services.pre_prod_treasury_seed_contract import (
+    TREASURY_SEED_BRANCH,
+    validate_treasury_seed_identity,
+)
 from app.services.pre_prod_treasury_seed_service import (
     TreasurySeedAlreadyRunningError,
     run_pre_prod_treasury_seed,
@@ -18,20 +22,40 @@ EXIT_UNEXPECTED_FAILURE = 3
 
 
 def _parser() -> argparse.ArgumentParser:
-    return argparse.ArgumentParser(
+    parser = argparse.ArgumentParser(
         description=(
             "Sincroniza somente catálogo e histórico oficial do Tesouro Direto "
             "em uma transação auditável"
         )
     )
+    parser.add_argument("--run-id", required=True, help="Identidade YYYYMMDD-HHMMSS")
+    parser.add_argument(
+        "--branch",
+        required=True,
+        help=f"Branch operacional obrigatória ({TREASURY_SEED_BRANCH})",
+    )
+    parser.add_argument(
+        "--commit-sha",
+        required=True,
+        help="SHA Git completo, hexadecimal minúsculo de 40 caracteres",
+    )
+    return parser
 
 
 async def _main() -> int:
-    _parser().parse_args()
+    args = _parser().parse_args()
+    validate_treasury_seed_identity(
+        run_id=args.run_id,
+        branch=args.branch,
+        commit_sha=args.commit_sha,
+    )
 
     try:
         async with AsyncSessionLocal() as lock_db, AsyncSessionLocal() as work_db:
             result = await run_pre_prod_treasury_seed(
+                run_id=args.run_id,
+                branch=args.branch,
+                commit_sha=args.commit_sha,
                 lock_db=lock_db,
                 work_db=work_db,
             )
@@ -44,7 +68,11 @@ async def _main() -> int:
     except Exception as exc:
         print(
             json.dumps(
-                {"ok": False, "error": "falha inesperada no estágio Tesouro", "type": type(exc).__name__},
+                {
+                    "ok": False,
+                    "error": "falha inesperada no estágio Tesouro",
+                    "type": type(exc).__name__,
+                },
                 ensure_ascii=False,
             )
         )
