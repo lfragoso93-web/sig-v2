@@ -7,9 +7,13 @@ import pytest
 
 from app.services import pre_prod_treasury_seed_service as service
 from app.services.pre_prod_treasury_seed_contract import (
+    TREASURY_SEED_BRANCH,
     TreasurySeedCounts,
     TreasurySeedCoverage,
 )
+
+RUN_ID = "20260725-170000"
+COMMIT_SHA = "a" * 40
 
 
 class _LockSession:
@@ -26,6 +30,14 @@ class _WorkSession:
         self.flush = AsyncMock()
         self.commit = AsyncMock()
         self.rollback = AsyncMock()
+
+
+def _identity() -> dict[str, str]:
+    return {
+        "run_id": RUN_ID,
+        "branch": TREASURY_SEED_BRANCH,
+        "commit_sha": COMMIT_SHA,
+    }
 
 
 def _state(*, prices: int = 10, duplicate_prices: int = 0):
@@ -66,6 +78,7 @@ async def test_orchestrator_runs_real_order_and_commits_once() -> None:
     lock_db = _LockSession()
     work_db = _WorkSession()
     result = await service.run_pre_prod_treasury_seed(
+        **_identity(),
         lock_db=lock_db,
         work_db=work_db,
         catalog_runner=catalog_runner,
@@ -75,6 +88,9 @@ async def test_orchestrator_runs_real_order_and_commits_once() -> None:
 
     assert order == ["catalog", "history"]
     assert result.ok is True
+    assert result.run_id == RUN_ID
+    assert result.branch == TREASURY_SEED_BRANCH
+    assert result.commit_sha == COMMIT_SHA
     assert result.before.prices == 10
     assert result.after.prices == 12
     inspection.assert_has_awaits([call(work_db), call(work_db)])
@@ -91,6 +107,7 @@ async def test_orchestrator_refuses_concurrent_execution_without_touching_work_d
 
     with pytest.raises(service.TreasurySeedAlreadyRunningError):
         await service.run_pre_prod_treasury_seed(
+            **_identity(),
             lock_db=lock_db,
             work_db=work_db,
             catalog_runner=AsyncMock(),
@@ -116,6 +133,7 @@ async def test_orchestrator_rolls_back_and_releases_lock_when_runner_raises() ->
 
     with pytest.raises(RuntimeError, match="catalog failed"):
         await service.run_pre_prod_treasury_seed(
+            **_identity(),
             lock_db=lock_db,
             work_db=work_db,
             catalog_runner=failing_catalog,
@@ -141,6 +159,7 @@ async def test_orchestrator_rolls_back_invalid_final_state() -> None:
     work_db = _WorkSession()
 
     result = await service.run_pre_prod_treasury_seed(
+        **_identity(),
         lock_db=_LockSession(),
         work_db=work_db,
         catalog_runner=AsyncMock(return_value={"errors": 1}),
