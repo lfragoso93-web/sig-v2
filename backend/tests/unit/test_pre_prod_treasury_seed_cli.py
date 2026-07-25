@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import ANY, AsyncMock
 
 import pytest
 
@@ -64,8 +64,8 @@ async def test_cli_returns_zero_and_prints_contract_on_success(monkeypatch, caps
         run_id=RUN_ID,
         branch=BRANCH,
         commit_sha=COMMIT_SHA,
-        lock_db=pytest.ANY,
-        work_db=pytest.ANY,
+        lock_db=ANY,
+        work_db=ANY,
     )
 
 
