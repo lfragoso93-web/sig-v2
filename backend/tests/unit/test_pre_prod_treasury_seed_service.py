@@ -4,7 +4,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, call
 
 import pytest
-
 from app.services import pre_prod_treasury_seed_service as service
 from app.services.pre_prod_treasury_seed_contract import (
     TREASURY_SEED_BRANCH,
@@ -73,7 +72,13 @@ async def test_orchestrator_runs_real_order_and_commits_once() -> None:
 
     async def history_runner(_db):
         order.append("history")
-        return {"imported": 2, "empty_payloads": 0, "unresolved_assets": []}
+        return {
+            "imported": 2,
+            "empty_payloads": 3,
+            "required_empty_payloads": 0,
+            "expected_empty_payloads": 3,
+            "unresolved_assets": [],
+        }
 
     lock_db = _LockSession()
     work_db = _WorkSession()
@@ -165,7 +170,9 @@ async def test_orchestrator_rolls_back_invalid_final_state() -> None:
         catalog_runner=AsyncMock(return_value={"errors": 1}),
         history_runner=AsyncMock(
             return_value={
-                "empty_payloads": 1,
+                "empty_payloads": 2,
+                "required_empty_payloads": 1,
+                "expected_empty_payloads": 1,
                 "unresolved_assets": ["tesouro-selic-2031"],
             }
         ),
@@ -177,8 +184,21 @@ async def test_orchestrator_rolls_back_invalid_final_state() -> None:
     assert result.branch == TREASURY_SEED_BRANCH
     assert result.commit_sha == COMMIT_SHA
     assert len(result.errors) == 4
+    assert "1 payloads vazios bloqueantes" in result.errors[2]
     work_db.rollback.assert_awaited_once()
     work_db.commit.assert_not_awaited()
+
+
+def test_collect_errors_keeps_legacy_empty_payload_contract_blocking() -> None:
+    after, _coverage = _state(prices=10)
+
+    errors = service._collect_errors(
+        catalog={"errors": 0},
+        history={"empty_payloads": 1, "unresolved_assets": []},
+        after=after,
+    )
+
+    assert errors == ["histórico retornou 1 payloads vazios bloqueantes"]
 
 
 @pytest.mark.asyncio
