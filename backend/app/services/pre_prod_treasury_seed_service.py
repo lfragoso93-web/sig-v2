@@ -1,9 +1,9 @@
-"""Orquestração isolada do estágio Tesouro, ainda sem ligação aos serviços reais.
+"""Orquestração transacional do estágio isolado do Tesouro Direto.
 
-A Issue #208 exige exclusão mútua, ordem explícita e evidência antes/depois.
-Neste bloco os executores de catálogo e histórico são dependências obrigatórias:
-isso impede que a fundação seja confundida com autorização operacional enquanto o
-histórico oficial ainda usa sessões próprias e commits parciais.
+Catálogo, histórico e inspeções compartilham uma única sessão de trabalho. Os
+serviços reais são executados com ``commit=False``; somente este orquestrador pode
+confirmar ou reverter o estágio completo. O advisory lock usa sessão separada para
+permanecer ativo durante toda a transação.
 """
 from __future__ import annotations
 
@@ -17,11 +17,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.pre_prod_treasury_seed_contract import PreProdTreasurySeedResult
 from app.services.pre_prod_treasury_seed_inspection import inspect_treasury_seed_state
+from app.services.treasury_catalog_v2_service import sync_treasury_catalog_v2
+from app.services.treasury_official_history_service import rebuild_official_treasury_history
 
 _TREASURY_SEED_LOCK_KEY = 7_317_202_607_25
 
 CatalogRunner = Callable[[AsyncSession], Awaitable[dict[str, Any]]]
-HistoryRunner = Callable[[], Awaitable[dict[str, Any]]]
+HistoryRunner = Callable[[AsyncSession], Awaitable[dict[str, Any]]]
 InspectionRunner = Callable[
     [AsyncSession],
     Awaitable[tuple[Any, Any]],
@@ -32,20 +34,53 @@ class TreasurySeedAlreadyRunningError(RuntimeError):
     """Indica que outra execução mantém o advisory lock do estágio Tesouro."""
 
 
+async def _run_real_catalog(db: AsyncSession) -> dict[str, Any]:
+    result = await sync_treasury_catalog_v2(db, commit=False)
+    return result.to_dict()
+
+
+async def _run_real_history(db: AsyncSession) -> dict[str, Any]:
+    return await rebuild_official_treasury_history(db, commit=False)
+
+
+def _collect_errors(
+    *,
+    catalog: dict[str, Any],
+    history: dict[str, Any],
+    after: Any,
+) -> list[str]:
+    errors: list[str] = []
+    if int(catalog.get("errors", 0) or 0) != 0:
+        errors.append("catálogo oficial retornou erros")
+    unresolved = history.get("unresolved_assets") or []
+    if unresolved:
+        errors.append(f"histórico deixou {len(unresolved)} ativos não resolvidos")
+    if int(history.get("empty_payloads", 0) or 0) != 0:
+        errors.append("histórico retornou payloads vazios")
+    integrity_values = (
+        after.orphan_prices,
+        after.duplicate_prices,
+        after.legacy_assets,
+        after.legacy_prices,
+    )
+    if any(integrity_values):
+        errors.append("integridade final do Tesouro não foi reconciliada")
+    return errors
+
+
 async def run_pre_prod_treasury_seed(
     *,
     lock_db: AsyncSession,
-    inspection_db: AsyncSession,
-    catalog_db: AsyncSession,
-    catalog_runner: CatalogRunner,
-    history_runner: HistoryRunner,
+    work_db: AsyncSession,
+    catalog_runner: CatalogRunner = _run_real_catalog,
+    history_runner: HistoryRunner = _run_real_history,
     inspection_runner: InspectionRunner = inspect_treasury_seed_state,
 ) -> PreProdTreasurySeedResult:
-    """Executa o esqueleto auditável catálogo -> histórico sob lock dedicado.
+    """Executa catálogo -> histórico em uma única transação controlada.
 
-    Os runners são obrigatórios e não possuem defaults de produção. A ligação com os
-    serviços reais só será feita depois que o histórico suportar a estratégia de falha
-    segura definida pela Issue #208.
+    O commit ocorre somente após a inspeção final confirmar ausência de erros e
+    divergências de integridade. Qualquer exceção ou resultado inválido executa
+    rollback antes da liberação do advisory lock.
     """
 
     started = datetime.now(timezone.utc)
@@ -58,27 +93,17 @@ async def run_pre_prod_treasury_seed(
         raise TreasurySeedAlreadyRunningError("estágio Tesouro já está em execução")
 
     try:
-        before, _before_coverage = await inspection_runner(inspection_db)
-        catalog = await catalog_runner(catalog_db)
-        history = await history_runner()
-        after, coverage = await inspection_runner(inspection_db)
+        before, _before_coverage = await inspection_runner(work_db)
+        catalog = await catalog_runner(work_db)
+        history = await history_runner(work_db)
+        await work_db.flush()
+        after, coverage = await inspection_runner(work_db)
+        errors = _collect_errors(catalog=catalog, history=history, after=after)
 
-        errors: list[str] = []
-        if int(catalog.get("errors", 0) or 0) != 0:
-            errors.append("catálogo oficial retornou erros")
-        unresolved = history.get("unresolved_assets") or []
-        if unresolved:
-            errors.append(f"histórico deixou {len(unresolved)} ativos não resolvidos")
-        if int(history.get("empty_payloads", 0) or 0) != 0:
-            errors.append("histórico retornou payloads vazios")
-        integrity_values = (
-            after.orphan_prices,
-            after.duplicate_prices,
-            after.legacy_assets,
-            after.legacy_prices,
-        )
-        if any(integrity_values):
-            errors.append("integridade final do Tesouro não foi reconciliada")
+        if errors:
+            await work_db.rollback()
+        else:
+            await work_db.commit()
 
         finished = datetime.now(timezone.utc)
         return PreProdTreasurySeedResult(
@@ -93,6 +118,9 @@ async def run_pre_prod_treasury_seed(
             history=history,
             errors=tuple(errors),
         )
+    except BaseException:
+        await work_db.rollback()
+        raise
     finally:
         await lock_db.execute(
             text("SELECT pg_advisory_unlock(:lock_key)"),
