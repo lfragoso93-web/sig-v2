@@ -49,6 +49,24 @@ $OperationHostDirectory = $OperationRelativeDirectory.Replace('/', [System.IO.Pa
 $OperationContainerDirectory = "/app/$OperationRelativeDirectory"
 New-Item -ItemType Directory -Path $OperationHostDirectory -Force | Out-Null
 
+function Write-Utf8Lines {
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
+        [object[]]$Lines,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $Text = ($Lines | ForEach-Object { [string]$_ }) -join [Environment]::NewLine
+    [System.IO.File]::WriteAllText(
+        $Path,
+        $Text + [Environment]::NewLine,
+        [System.Text.UTF8Encoding]::new($false)
+    )
+}
+
 function New-DistinctRunId {
     param([string]$PreviousRunId)
 
@@ -87,8 +105,10 @@ function Invoke-TreasurySeed {
         $NormalizedCommitSha
     )
 
-    & docker @DockerArguments | Tee-Object -FilePath $EvidenceHostPath
+    $SeedOutput = @(& docker @DockerArguments)
     $SeedExitCode = $LASTEXITCODE
+    $SeedOutput | ForEach-Object { Write-Output $_ }
+    Write-Utf8Lines -Lines $SeedOutput -Path $EvidenceHostPath
     if ($null -eq $SeedExitCode) {
         throw 'docker did not return an exit code for the Treasury seed.'
     }
@@ -122,8 +142,10 @@ $CompareArguments = @(
     $SecondEvidenceContainerPath
 )
 
-& docker @CompareArguments | Tee-Object -FilePath $ReportHostPath
+$CompareOutput = @(& docker @CompareArguments)
 $CompareExitCode = $LASTEXITCODE
+$CompareOutput | ForEach-Object { Write-Output $_ }
+Write-Utf8Lines -Lines $CompareOutput -Path $ReportHostPath
 if ($null -eq $CompareExitCode) {
     throw 'docker did not return an exit code for the idempotency comparison.'
 }
