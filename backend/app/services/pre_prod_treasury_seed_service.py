@@ -70,6 +70,9 @@ def _collect_errors(
 
 async def run_pre_prod_treasury_seed(
     *,
+    run_id: str,
+    branch: str,
+    commit_sha: str,
     lock_db: AsyncSession,
     work_db: AsyncSession,
     catalog_runner: CatalogRunner = _run_real_catalog,
@@ -107,6 +110,9 @@ async def run_pre_prod_treasury_seed(
 
         finished = datetime.now(timezone.utc)
         return PreProdTreasurySeedResult(
+            run_id=run_id,
+            branch=branch,
+            commit_sha=commit_sha,
             started_at=started.isoformat(),
             finished_at=finished.isoformat(),
             duration_seconds=round(monotonic() - started_clock, 3),

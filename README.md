@@ -45,7 +45,7 @@ A limpeza real, seeds, coleta, importação e rebuild ainda não foram executado
 - Ensaio de rollback `20260723-213001`: exit code `22`, nenhuma escrita persistida e `reconciliation.ok=true`.
 - Validação local do perfil real: 34 testes aprovados e `compileall` sem erros.
 - Migração Pydantic v2 concluída pela Issue #186.
-- CLI transacional `pre_prod_treasury_seed` implementada pela Issue #208, com advisory lock, baseline, commit único, rollback integral e contrato `pre-prod-treasury-seed.v1`; execução real permanece pendente.
+- CLI transacional `pre_prod_treasury_seed` implementada pela Issue #208, com advisory lock, baseline, commit único, rollback integral, identidade obrigatória (`run_id`, branch e SHA) e contrato `pre-prod-treasury-seed.v1`; execução real permanece pendente.
 
 ## Arquitetura resumida
 
@@ -82,7 +82,7 @@ python -m app.cli.pre_prod_export
 python -m app.cli.pre_prod_cleanup_plan
 scripts/Invoke-PreProdRealCleanup.ps1
 python -m app.cli.pre_prod_b3_seed --start-year <ANO> --end-year <ANO> --cutoff-date <AAAA-MM-DD>
-python -m app.cli.pre_prod_treasury_seed
+python -m app.cli.pre_prod_treasury_seed --run-id <YYYYMMDD-HHMMSS> --branch stable-15jun --commit-sha <SHA40>
 python -m app.cli.full_market_rebuild
 python -m app.cli.rebuild_b3_historical_market
 python -m app.cli.sync_treasury_catalog_v2
@@ -123,7 +123,7 @@ A primeira entrada em produção exige:
 10. nova autorização composta — pendente;
 11. limpeza controlada dos dados reconstruíveis — pendente;
 12. entrypoint isolado de catálogo + B3 COTAHIST — implementado, execução pendente;
-13. entrypoint transacional do seed oficial do Tesouro Direto — implementado, execução e idempotência pendentes;
+13. entrypoint transacional do seed oficial do Tesouro Direto — implementado com identidade obrigatória, execução e idempotência pendentes;
 14. seed de benchmarks, câmbio e proventos — pendente;
 15. importação CSV completa da carteira — pendente;
 16. rebuild de posições e snapshots — pendente;

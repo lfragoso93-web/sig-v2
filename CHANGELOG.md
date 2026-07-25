@@ -5,6 +5,20 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Adicionado — identidade operacional do seed do Tesouro (25/07/2026)
+
+- O contrato `pre-prod-treasury-seed.v1` passou a registrar `run_id`, branch e
+  `commit_sha` no JSON final.
+- A CLI exige `run_id` no formato `YYYYMMDD-HHMMSS`, branch `stable-15jun` e
+  SHA Git hexadecimal minúsculo com 40 caracteres.
+- A identidade é validada antes da abertura de qualquer sessão de banco.
+- Entrada inválida retorna código operacional `1`, sem traceback e sem acesso
+  ao banco.
+- Testes de contrato, serviço e CLI cobrem serialização, propagação e rejeição
+  segura da identidade.
+- README, ROADMAP e o runbook do Tesouro foram sincronizados.
+- Nenhum seed, coleta ou escrita foi executado na pré-produção.
+
 ### Adicionado — seed transacional isolado do Tesouro Direto (25/07/2026)
 
 - Criado o contrato `pre-prod-treasury-seed.v1` com baseline, pós-contagens,

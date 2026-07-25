@@ -10,30 +10,48 @@ A implementação pertence à Issue #208 e ao estágio de rebuild controlado da 
 
 A CLI está implementada, mas sua presença no código **não autoriza execução na pré-produção real**. A primeira execução exige revisão do SHA promovido, banco alvo, janela operacional, fonte oficial e plano de preservação da evidência.
 
+## Identidade operacional obrigatória
+
+Toda execução deve informar e publicar no JSON final:
+
+- `run_id` no formato `YYYYMMDD-HHMMSS`;
+- branch exatamente `stable-15jun`;
+- `commit_sha` Git completo, hexadecimal minúsculo, com 40 caracteres.
+
+A CLI valida os três valores antes de abrir qualquer sessão de banco. Identidade inválida retorna código operacional `1` e não inicia catálogo, histórico ou inspeção.
+
 ## Entrada oficial
 
 ```powershell
-docker compose exec backend python -m app.cli.pre_prod_treasury_seed
+$RunId = Get-Date -Format "yyyyMMdd-HHmmss"
+$CommitSha = (git rev-parse HEAD).Trim()
+
+docker compose exec backend python -m app.cli.pre_prod_treasury_seed `
+    --run-id $RunId `
+    --branch stable-15jun `
+    --commit-sha $CommitSha
 ```
 
-Não use `sync_treasury_catalog_v2` e `rebuild_treasury_official_prices` separadamente para o estágio pré-produção. A CLI dedicada é a única entrada que coordena lock, transação, baseline, integridade, commit e rollback.
+Não use `sync_treasury_catalog_v2` e `rebuild_treasury_official_prices` separadamente para o estágio pré-produção. A CLI dedicada é a única entrada que coordena identidade, lock, transação, baseline, integridade, commit e rollback.
 
 ## Fluxo garantido
 
-1. adquire advisory lock PostgreSQL dedicado;
-2. captura baseline de ativos, aliases, preços, órfãos, duplicidades e legado;
-3. executa catálogo oficial com `commit=False`;
-4. executa histórico oficial com `commit=False`;
-5. executa `flush` e inspeção final na mesma sessão;
-6. confirma somente quando catálogo, histórico e integridade estão reconciliados;
-7. executa rollback integral diante de erro ou divergência;
-8. libera o advisory lock;
-9. publica JSON UTF-8 do contrato `pre-prod-treasury-seed.v1`.
+1. valida `run_id`, branch e SHA antes do banco;
+2. adquire advisory lock PostgreSQL dedicado;
+3. captura baseline de ativos, aliases, preços, órfãos, duplicidades e legado;
+4. executa catálogo oficial com `commit=False`;
+5. executa histórico oficial com `commit=False`;
+6. executa `flush` e inspeção final na mesma sessão;
+7. confirma somente quando catálogo, histórico e integridade estão reconciliados;
+8. executa rollback integral diante de erro ou divergência;
+9. libera o advisory lock;
+10. publica JSON UTF-8 do contrato `pre-prod-treasury-seed.v1`.
 
 ## Critérios obrigatórios de sucesso
 
 O JSON só pode retornar `ok=true` quando:
 
+- a identidade publicada corresponde ao comando executado;
 - `catalog.errors=0`;
 - `history.unresolved_assets` está vazio;
 - `history.empty_payloads=0`;
@@ -48,7 +66,7 @@ O JSON só pode retornar `ok=true` quando:
 | Código | Significado |
 |---:|---|
 | `0` | estágio concluído e reconciliado |
-| `1` | falha operacional ou resultado não reconciliado |
+| `1` | identidade inválida, falha operacional ou resultado não reconciliado |
 | `2` | outra execução mantém o advisory lock |
 | `3` | falha inesperada com mensagem sensível redigida |
 
@@ -58,9 +76,13 @@ Preserve a saída integral em arquivo sem editar o JSON:
 
 ```powershell
 $RunId = Get-Date -Format "yyyyMMdd-HHmmss"
+$CommitSha = (git rev-parse HEAD).Trim()
 $EvidencePath = "artifacts/pre-prod-rebuild/treasury-$RunId.json"
 
-docker compose exec backend python -m app.cli.pre_prod_treasury_seed |
+docker compose exec backend python -m app.cli.pre_prod_treasury_seed `
+    --run-id $RunId `
+    --branch stable-15jun `
+    --commit-sha $CommitSha |
     Tee-Object -FilePath $EvidencePath
 
 $ExitCode = $LASTEXITCODE
@@ -68,7 +90,7 @@ $ExitCode = $LASTEXITCODE
 
 Antes de aprovar o estágio, registre na Issue #208:
 
-- branch e SHA executados;
+- `run_id`, branch e SHA publicados no JSON;
 - banco e ambiente identificados sem credenciais;
 - exit code;
 - contagens `before` e `after`;
@@ -79,7 +101,7 @@ Antes de aprovar o estágio, registre na Issue #208:
 
 ## Idempotência
 
-Uma segunda execução controlada deve manter:
+Uma segunda execução controlada, com novo `run_id` e o mesmo SHA promovido, deve manter:
 
 - zero ativos duplicados;
 - zero aliases duplicados;
@@ -93,11 +115,11 @@ A idempotência deve ser comprovada na Issue #208 antes de atualizar a Issue #15
 
 Interrompa o estágio e não avance quando:
 
+- a identidade for inválida ou divergir do SHA aprovado;
 - o lock não puder ser adquirido;
 - a fonte oficial estiver incompleta ou indisponível;
 - houver ativo não resolvido ou payload vazio;
 - qualquer contador de integridade for diferente de zero;
-- o JSON não estiver íntegro;
-- o SHA executado divergir do SHA aprovado.
+- o JSON não estiver íntegro.
 
 Não tente corrigir manualmente o banco durante a mesma janela. Preserve a evidência, atualize a Issue #208 e abra um novo bloco corretivo.

@@ -3,15 +3,15 @@ from __future__ import annotations
 import json
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
-from unittest.mock import ANY, AsyncMock
+from unittest.mock import AsyncMock
 
 import pytest
 
 from app.cli import pre_prod_treasury_seed as cli
+from app.services.pre_prod_treasury_seed_contract import TREASURY_SEED_BRANCH
 from app.services.pre_prod_treasury_seed_service import TreasurySeedAlreadyRunningError
 
-RUN_ID = "20260725-200000"
-BRANCH = "stable-15jun"
+RUN_ID = "20260725-170000"
 COMMIT_SHA = "a" * 40
 
 
@@ -29,7 +29,7 @@ def _sessions(monkeypatch):
         lambda: SimpleNamespace(
             parse_args=lambda: SimpleNamespace(
                 run_id=RUN_ID,
-                branch=BRANCH,
+                branch=TREASURY_SEED_BRANCH,
                 commit_sha=COMMIT_SHA,
             )
         ),
@@ -43,7 +43,7 @@ async def test_cli_returns_zero_and_prints_contract_on_success(monkeypatch, caps
         to_dict=lambda: {
             "schema_version": "pre-prod-treasury-seed.v1",
             "run_id": RUN_ID,
-            "branch": BRANCH,
+            "branch": TREASURY_SEED_BRANCH,
             "commit_sha": COMMIT_SHA,
             "ok": True,
         },
@@ -57,16 +57,39 @@ async def test_cli_returns_zero_and_prints_contract_on_success(monkeypatch, caps
     payload = json.loads(capsys.readouterr().out)
     assert payload["schema_version"] == "pre-prod-treasury-seed.v1"
     assert payload["run_id"] == RUN_ID
-    assert payload["branch"] == BRANCH
+    assert payload["branch"] == TREASURY_SEED_BRANCH
     assert payload["commit_sha"] == COMMIT_SHA
     assert payload["ok"] is True
     runner.assert_awaited_once_with(
         run_id=RUN_ID,
-        branch=BRANCH,
+        branch=TREASURY_SEED_BRANCH,
         commit_sha=COMMIT_SHA,
-        lock_db=ANY,
-        work_db=ANY,
+        lock_db=runner.await_args.kwargs["lock_db"],
+        work_db=runner.await_args.kwargs["work_db"],
     )
+
+
+@pytest.mark.asyncio
+async def test_cli_rejects_invalid_identity_before_opening_sessions(monkeypatch, capsys):
+    sessions = AsyncMock()
+    monkeypatch.setattr(cli, "AsyncSessionLocal", sessions)
+    monkeypatch.setattr(
+        cli,
+        "_parser",
+        lambda: SimpleNamespace(
+            parse_args=lambda: SimpleNamespace(
+                run_id="invalid",
+                branch=TREASURY_SEED_BRANCH,
+                commit_sha=COMMIT_SHA,
+            )
+        ),
+    )
+
+    exit_code = await cli._main()
+
+    assert exit_code == cli.EXIT_OPERATIONAL_FAILURE
+    assert "run_id" in json.loads(capsys.readouterr().out)["error"]
+    sessions.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -107,32 +130,6 @@ async def test_cli_returns_operational_code_for_runtime_error(monkeypatch, capsy
 
     assert exit_code == cli.EXIT_OPERATIONAL_FAILURE
     assert json.loads(capsys.readouterr().out)["error"] == "fonte oficial indisponível"
-
-
-@pytest.mark.asyncio
-async def test_cli_rejects_invalid_identity_before_opening_sessions(monkeypatch, capsys):
-    session_factory = AsyncMock()
-    monkeypatch.setattr(cli, "AsyncSessionLocal", session_factory)
-    monkeypatch.setattr(
-        cli,
-        "_parser",
-        lambda: SimpleNamespace(
-            parse_args=lambda: SimpleNamespace(
-                run_id=RUN_ID,
-                branch="main",
-                commit_sha=COMMIT_SHA,
-            )
-        ),
-    )
-    runner = AsyncMock()
-    monkeypatch.setattr(cli, "run_pre_prod_treasury_seed", runner)
-
-    exit_code = await cli._main()
-
-    assert exit_code == cli.EXIT_OPERATIONAL_FAILURE
-    assert "stable-15jun" in json.loads(capsys.readouterr().out)["error"]
-    session_factory.assert_not_called()
-    runner.assert_not_awaited()
 
 
 @pytest.mark.asyncio

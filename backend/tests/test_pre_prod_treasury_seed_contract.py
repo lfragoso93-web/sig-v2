@@ -11,6 +11,7 @@ from app.services.pre_prod_treasury_seed_contract import (
     TreasurySeedContractError,
     TreasurySeedCounts,
     TreasurySeedCoverage,
+    validate_treasury_seed_identity,
 )
 
 RUN_ID = "20260725-170000"
@@ -48,6 +49,29 @@ def test_contract_serializes_versioned_auditable_result() -> None:
     assert payload["ok"] is True
     assert payload["after"]["orphan_prices"] == 0
     assert payload["coverage"]["priced_assets"] == 24
+
+
+@pytest.mark.parametrize(
+    ("run_id", "branch", "commit_sha", "message"),
+    (
+        ("2026-07-25", TREASURY_SEED_BRANCH, COMMIT_SHA, "run_id"),
+        (RUN_ID, "main", COMMIT_SHA, "branch"),
+        (RUN_ID, TREASURY_SEED_BRANCH, "abc", "commit_sha"),
+        (RUN_ID, TREASURY_SEED_BRANCH, "A" * 40, "commit_sha"),
+    ),
+)
+def test_identity_rejects_noncanonical_values(
+    run_id: str,
+    branch: str,
+    commit_sha: str,
+    message: str,
+) -> None:
+    with pytest.raises(TreasurySeedContractError, match=message):
+        validate_treasury_seed_identity(
+            run_id=run_id,
+            branch=branch,
+            commit_sha=commit_sha,
+        )
 
 
 @pytest.mark.parametrize(
