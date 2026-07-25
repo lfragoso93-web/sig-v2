@@ -173,6 +173,9 @@ async def test_orchestrator_rolls_back_invalid_final_state() -> None:
     )
 
     assert result.ok is False
+    assert result.run_id == RUN_ID
+    assert result.branch == TREASURY_SEED_BRANCH
+    assert result.commit_sha == COMMIT_SHA
     assert len(result.errors) == 4
     work_db.rollback.assert_awaited_once()
     work_db.commit.assert_not_awaited()
