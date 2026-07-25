@@ -29,8 +29,22 @@ def valid_snapshot() -> dict:
             "transactions.asset_id": 0,
         },
         "legacy_prices": {
-            "4742": {"count": 2, "enriched": 0, "min_close": Decimal("3518.20"), "max_close": Decimal("3518.20"), "min_timestamp": "a", "max_timestamp": "b"},
-            "4747": {"count": 2, "enriched": 0, "min_close": Decimal("3769.72"), "max_close": Decimal("3769.72"), "min_timestamp": "a", "max_timestamp": "b"},
+            "4742": {
+                "count": 2,
+                "enriched": 0,
+                "min_close": Decimal("3518.20"),
+                "max_close": Decimal("3522.89"),
+                "min_timestamp": "2026-07-24T12:00:00+00:00",
+                "max_timestamp": "2026-07-25T12:00:00+00:00",
+            },
+            "4747": {
+                "count": 2,
+                "enriched": 0,
+                "min_close": Decimal("3769.72"),
+                "max_close": Decimal("3777.79"),
+                "min_timestamp": "2026-07-24T12:00:00+00:00",
+                "max_timestamp": "2026-07-25T12:00:00+00:00",
+            },
         },
         "official_prices": {
             "4810": {"count": 743, "enriched": 743, "min_close": Decimal("1"), "max_close": Decimal("2"), "min_timestamp": "a", "max_timestamp": "b"},
@@ -89,7 +103,7 @@ def test_apply_and_second_execution_are_safe(monkeypatch):
     assert service.execute(Connection(), apply=True)["status"] == "already-applied"
 
 
-@pytest.mark.parametrize("mutation", ("alias", "reference", "asset", "price", "official"))
+@pytest.mark.parametrize("mutation", ("alias", "reference", "asset", "price_count", "price_value", "official"))
 def test_divergence_is_rejected(monkeypatch, mutation):
     snapshot = valid_snapshot()
     if mutation == "alias":
@@ -98,8 +112,10 @@ def test_divergence_is_rejected(monkeypatch, mutation):
         snapshot["functional_references"]["transactions.asset_id"] = 1
     elif mutation == "asset":
         snapshot["assets"]["4742"]["ticker"] = "outro"
-    elif mutation == "price":
+    elif mutation == "price_count":
         snapshot["legacy_prices"]["4742"]["count"] = 1
+    elif mutation == "price_value":
+        snapshot["legacy_prices"]["4742"]["max_close"] = Decimal("3522.90")
     else:
         snapshot["official_prices"]["4810"]["count"] = 742
     monkeypatch.setattr(service, "inspect", lambda _: snapshot)
