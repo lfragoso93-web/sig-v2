@@ -50,6 +50,28 @@ def test_wrapper_maps_host_artifacts_to_backend_volume() -> None:
     assert "'--second'\n    $SecondEvidenceContainerPath" in script
 
 
+def test_wrapper_persists_evidence_and_report_as_explicit_utf8() -> None:
+    script = _script()
+
+    assert "function Write-Utf8Lines" in script
+    assert "[System.IO.File]::WriteAllText(" in script
+    assert "[System.Text.UTF8Encoding]::new($false)" in script
+    assert "Write-Utf8Lines -Lines $SeedOutput -Path $EvidenceHostPath" in script
+    assert "Write-Utf8Lines -Lines $CompareOutput -Path $ReportHostPath" in script
+    assert "Tee-Object -FilePath" not in script
+
+
+def test_wrapper_preserves_native_exit_codes_before_rendering_output() -> None:
+    script = _script()
+
+    assert script.index("$SeedExitCode = $LASTEXITCODE") < script.index(
+        "$SeedOutput | ForEach-Object"
+    )
+    assert script.index("$CompareExitCode = $LASTEXITCODE") < script.index(
+        "$CompareOutput | ForEach-Object"
+    )
+
+
 def test_wrapper_preserves_safe_powershell_execution() -> None:
     script = _script()
 
