@@ -1,6 +1,6 @@
 # Roadmap modular — SGI v2
 
-> Última atualização: 24/07/2026
+> Última atualização: 25/07/2026
 
 ## Visão geral
 
@@ -27,7 +27,9 @@
 | Planejamento seguro da limpeza | Validado pela Issue #195 e PR #194 | 100% |
 | Limpeza isolada | Sucesso e rollback reconciliados; PR #198 promovida | 100% |
 | Perfil de alvo real | Implementado, validado e promovido pela PR #204 | 100% |
-| Rebuild pré-produção | Gate real preparado; nova cadeia operacional pendente | 92% |
+| Seed isolado B3/COTAHIST | Entry point implementado; execução pendente | 90% |
+| Seed isolado Tesouro | CLI transacional implementada; execução e idempotência pendentes (#208) | 90% |
+| Rebuild pré-produção | Gates estruturais preparados; execuções reais pendentes | 94% |
 | Eventos corporativos | Fundação pronta | 30% |
 | IRPF | Planejado | 15% |
 | Backup/Restore administrativo | Planejado (#83) | 10% |
@@ -55,6 +57,9 @@ Prontidão global estimada para a primeira produção: **89%**. O percentual nã
 - Preço associado ao ticker original da posição.
 - Criação automática de ativos duplicados bloqueada.
 - Valores atuais validados na interface.
+- Contrato `pre-prod-treasury-seed.v1` implementado com baseline, cobertura e integridade.
+- Advisory lock, transação única, commit final e rollback integral coordenados pela CLI `pre_prod_treasury_seed`.
+- Execução real e comprovação de idempotência permanecem pendentes na Issue #208.
 
 ### Histórico e snapshots
 
@@ -66,7 +71,7 @@ Prontidão global estimada para a primeira produção: **89%**. O percentual nã
 
 ## Em desenvolvimento
 
-### Pré-produção — Issues #158 e #199
+### Pré-produção — Issues #158, #199 e #208
 
 - [x] Inventário read-only `pre-prod-inventory.v2` validado.
 - [x] Política integral: 11 tabelas preservadas, 3 exportáveis e 10 reconstruíveis.
@@ -87,12 +92,17 @@ Prontidão global estimada para a primeira produção: **89%**. O percentual nã
 - [x] Perfil real validado com 34 testes e `compileall` sem erros.
 - [x] Perfil real promovido para a `main` pela PR #204.
 - [x] Wrapper PowerShell oficial criado para a execução real controlada.
+- [x] Entry point isolado B3/COTAHIST implementado.
+- [x] Contrato, inspeção, advisory lock e orquestração transacional do Tesouro implementados.
+- [x] Histórico oficial do Tesouro refatorado para sessão externa e `commit=False`.
+- [x] CLI `pre_prod_treasury_seed` e runbook dedicado implementados.
 - [ ] Gerar nova cadeia operacional vinculada ao SHA promovido.
 - [ ] Recalcular e revisar a confirmação composta.
 - [ ] Executar limpeza real somente após nova autorização explícita.
 - [ ] Reconciliar imediatamente `committed=true` e `reconciliation.ok=true`.
 - [ ] Executar e reconciliar o seed isolado B3 COTAHIST.
-- [ ] Seed oficial do Tesouro Direto.
+- [ ] Executar e reconciliar o seed isolado do Tesouro.
+- [ ] Comprovar idempotência do Tesouro em segunda execução controlada.
 - [ ] Seed de benchmarks, câmbio e proventos.
 - [ ] Importação CSV completa da carteira.
 - [ ] Rebuild de posições e snapshots.
@@ -119,15 +129,17 @@ Prontidão global estimada para a primeira produção: **89%**. O percentual nã
 
 ## Próximas prioridades
 
-1. Promover a exposição oficial do `plan_sha256` canônico pelo gerador do plano.
-2. Regenerar backup, exportação, impacto e plano no novo SHA promovido.
+1. Promover o bloco estrutural do seed isolado do Tesouro para a `main`.
+2. Gerar nova cadeia operacional vinculada ao SHA promovido.
 3. Executar e reconciliar a limpeza real pela Issue #199.
-4. Executar seeds, importação e rebuild em blocos independentes.
-5. Endurecer ou remover o router administrativo de debug antes do go-live.
-6. Remover o serviço legado de rentabilidade (#151).
-7. Materializar IBOV (#150).
-8. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
-9. Migrar timestamps UTC para timezone-aware (#192).
+4. Executar e reconciliar B3 e Tesouro em estágios independentes.
+5. Comprovar idempotência e atualizar a Issue #158 antes dos próximos seeds.
+6. Executar benchmarks, câmbio, proventos, importação e rebuild em blocos independentes.
+7. Endurecer ou remover o router administrativo de debug antes do go-live.
+8. Remover o serviço legado de rentabilidade (#151).
+9. Materializar IBOV (#150).
+10. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
+11. Migrar timestamps UTC para timezone-aware (#192).
 
 ## Backlog
 
