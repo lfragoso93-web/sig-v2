@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, call
 
 import pytest
 
@@ -77,7 +77,7 @@ async def test_orchestrator_runs_real_order_and_commits_once() -> None:
     assert result.ok is True
     assert result.before.prices == 10
     assert result.after.prices == 12
-    inspection.assert_has_awaits([pytest.call(work_db), pytest.call(work_db)])
+    inspection.assert_has_awaits([call(work_db), call(work_db)])
     work_db.flush.assert_awaited_once()
     work_db.commit.assert_awaited_once()
     work_db.rollback.assert_not_awaited()
