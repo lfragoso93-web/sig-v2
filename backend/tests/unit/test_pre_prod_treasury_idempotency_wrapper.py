@@ -3,15 +3,17 @@ from __future__ import annotations
 from pathlib import Path
 
 
-SCRIPT_PATH = (
-    Path(__file__).resolve().parents[3]
-    / "scripts"
-    / "Invoke-PreProdTreasuryIdempotency.ps1"
-)
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+SCRIPT_PATH = REPOSITORY_ROOT / "scripts" / "Invoke-PreProdTreasuryIdempotency.ps1"
 
 
 def _script() -> str:
     return SCRIPT_PATH.read_text(encoding="utf-8")
+
+
+def test_wrapper_script_path_resolves_inside_repository() -> None:
+    assert REPOSITORY_ROOT.name == "app"
+    assert SCRIPT_PATH.is_file()
 
 
 def test_wrapper_requires_sha_bound_confirmation_before_docker() -> None:
