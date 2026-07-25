@@ -8,7 +8,7 @@ A implementação pertence à Issue #208 e ao estágio de rebuild controlado da 
 
 ## Estado operacional
 
-A CLI está implementada, mas sua presença no código **não autoriza execução na pré-produção real**. A primeira execução exige revisão do SHA promovido, banco alvo, janela operacional, fonte oficial e plano de preservação da evidência.
+A CLI, o comparador offline e o wrapper estão implementados, mas sua presença no código **não autoriza execução na pré-produção real**. A primeira execução exige revisão do SHA promovido, banco alvo, janela operacional, fonte oficial, confirmação explícita e plano de preservação da evidência.
 
 ## Identidade operacional obrigatória
 
@@ -20,7 +20,7 @@ Toda execução deve informar e publicar no JSON final:
 
 A CLI valida os três valores antes de abrir qualquer sessão de banco. Identidade inválida retorna código operacional `1` e não inicia catálogo, histórico ou inspeção.
 
-## Entrada oficial
+## Entrada oficial para uma execução isolada
 
 ```powershell
 $RunId = Get-Date -Format "yyyyMMdd-HHmmss"
@@ -33,6 +33,40 @@ docker compose exec backend python -m app.cli.pre_prod_treasury_seed `
 ```
 
 Não use `sync_treasury_catalog_v2` e `rebuild_treasury_official_prices` separadamente para o estágio pré-produção. A CLI dedicada é a única entrada que coordena identidade, lock, transação, baseline, integridade, commit e rollback.
+
+## Entrada oficial para prova de idempotência
+
+Após promoção e autorização explícita na Issue #208, use o wrapper:
+
+```powershell
+$CommitSha = (git rev-parse HEAD).Trim().ToLowerInvariant()
+$Confirmation = "EXECUTE-TREASURY-IDEMPOTENCY:$CommitSha"
+
+scripts/Invoke-PreProdTreasuryIdempotency.ps1 `
+    -CommitSha $CommitSha `
+    -Confirmation $Confirmation
+```
+
+O wrapper:
+
+1. exige branch exatamente `stable-15jun`;
+2. exige `HEAD` igual ao SHA informado;
+3. exige confirmação exata `EXECUTE-TREASURY-IDEMPOTENCY:<SHA40>`;
+4. restringe `ArtifactRoot` a um caminho relativo dentro de `artifacts`;
+5. cria dois `run_id` distintos;
+6. executa a CLI transacional duas vezes;
+7. preserva `first.json` e `second.json` no host;
+8. mapeia os mesmos artefatos para `/app/artifacts/...` dentro do backend;
+9. executa o comparador canônico offline;
+10. preserva `idempotency.json` e propaga o exit code do comparador.
+
+O diretório padrão é:
+
+```text
+artifacts/pre-prod-rebuild/treasury-idempotency-<OPERATION_ID>/
+```
+
+Não informe caminho absoluto nem diretório fora de `artifacts`. O backend só enxerga o volume `./artifacts:/app/artifacts`.
 
 ## Fluxo garantido
 
@@ -61,7 +95,7 @@ O JSON só pode retornar `ok=true` quando:
 - `after.legacy_prices=0`;
 - os ativos canônicos permanecem e os IDs legados `4742` e `4747` não reaparecem.
 
-## Exit codes
+## Exit codes do seed
 
 | Código | Significado |
 |---:|---|
@@ -70,7 +104,7 @@ O JSON só pode retornar `ok=true` quando:
 | `2` | outra execução mantém o advisory lock |
 | `3` | falha inesperada com mensagem sensível redigida |
 
-## Evidência
+## Evidência de uma execução isolada
 
 Preserve a saída integral em arquivo sem editar o JSON:
 
@@ -110,7 +144,7 @@ Uma segunda execução controlada, com novo `run_id` e o mesmo SHA promovido, de
 - o baseline da segunda execução igual ao estado final da primeira;
 - as contagens finais e a cobertura temporal estáveis.
 
-Preserve as duas evidências em arquivos distintos e execute o comparador offline:
+O wrapper é a entrada preferencial porque produz e compara as duas evidências dentro da mesma operação controlada. A comparação manual continua disponível para diagnóstico:
 
 ```powershell
 $FirstEvidence = "artifacts/pre-prod-rebuild/treasury-<RUN_ID_1>.json"
@@ -141,11 +175,15 @@ A idempotência deve ser comprovada na Issue #208 antes de atualizar a Issue #15
 Interrompa o estágio e não avance quando:
 
 - a identidade for inválida ou divergir do SHA aprovado;
+- a confirmação não corresponder exatamente ao SHA;
+- a branch não for `stable-15jun`;
+- `ArtifactRoot` for absoluto ou estiver fora de `artifacts`;
 - o lock não puder ser adquirido;
 - a fonte oficial estiver incompleta ou indisponível;
 - houver ativo não resolvido ou payload vazio;
 - qualquer contador de integridade for diferente de zero;
 - o JSON não estiver íntegro;
+- qualquer uma das duas execuções retornar código diferente de `0`;
 - o comparador offline retornar código diferente de `0`.
 
 Não tente corrigir manualmente o banco durante a mesma janela. Preserve a evidência, atualize a Issue #208 e abra um novo bloco corretivo.

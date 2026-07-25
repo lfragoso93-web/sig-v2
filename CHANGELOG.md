@@ -5,6 +5,17 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Adicionado — wrapper operacional de idempotência do Tesouro (25/07/2026)
+
+- Criado `scripts/Invoke-PreProdTreasuryIdempotency.ps1` como entrada oficial para duas execuções consecutivas do seed isolado do Tesouro.
+- O wrapper exige branch `stable-15jun`, `HEAD` igual ao SHA informado e confirmação exata `EXECUTE-TREASURY-IDEMPOTENCY:<SHA40>` antes de qualquer Docker.
+- São gerados dois `run_id` distintos e preservados `first.json`, `second.json` e `idempotency.json` em diretório operacional determinístico.
+- `ArtifactRoot` passou a aceitar somente caminhos relativos dentro de `artifacts`, com separação explícita entre caminhos do host e `/app/artifacts/...` no container.
+- O comparador canônico offline é executado após as duas evidências e seu exit code é propagado sem alteração.
+- Testes estruturais cobrem confirmação, identidade Git, duas execuções, volume de artefatos e ausência de avaliação dinâmica.
+- README, ROADMAP e o runbook do Tesouro foram sincronizados.
+- Os CIs #664 e #666 foram aprovados; nenhum seed, banco ou fonte oficial foi acessado durante a implementação.
+
 ### Adicionado — prova offline de idempotência do seed do Tesouro (25/07/2026)
 
 - Criado o contrato puro `pre-prod-treasury-seed-idempotency.v1` para comparar
