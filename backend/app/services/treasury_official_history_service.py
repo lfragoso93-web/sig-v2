@@ -10,6 +10,7 @@ registro antigo é removido por esta rotina.
 from __future__ import annotations
 
 import logging
+import re
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 from decimal import Decimal
@@ -34,6 +35,42 @@ _FALLBACK_SOURCE = "brapi_treasury"
 _DEFAULT_YEARS = 10
 _LOOKBACK_DAYS = 10
 _INACTIVE_STATUS = "NOT_APPLICABLE"
+_MATURITY_SUFFIX_PATTERN = re.compile(r"-(\d{2})(\d{2})(\d{4})$")
+_MATURITY_YEAR_PATTERN = re.compile(r"-(\d{4})$")
+
+
+def _maturity_date_from_symbol(symbol: str) -> date | None:
+    """Extrai vencimento de símbolos canônicos sem depender de campos adicionais."""
+    normalized = str(symbol or "").strip().lower()
+    full_match = _MATURITY_SUFFIX_PATTERN.search(normalized)
+    if full_match:
+        day, month, year = (int(value) for value in full_match.groups())
+        try:
+            return date(year, month, day)
+        except ValueError:
+            return None
+
+    year_match = _MATURITY_YEAR_PATTERN.search(normalized)
+    if year_match:
+        return date(int(year_match.group(1)), 12, 31)
+    return None
+
+
+def _classify_empty_symbols(
+    symbols: list[str],
+    *,
+    today: date,
+) -> tuple[list[str], list[str]]:
+    """Separa ausências bloqueantes de títulos vencidos sem carga incremental."""
+    required: list[str] = []
+    expected: list[str] = []
+    for symbol in sorted(set(symbols)):
+        maturity = _maturity_date_from_symbol(symbol)
+        if maturity is not None and maturity < today:
+            expected.append(symbol)
+        else:
+            required.append(symbol)
+    return required, expected
 
 
 async def _persist_history_rows(
@@ -126,6 +163,10 @@ async def _rebuild_official_treasury_history(
             "official_covered": 0,
             "fallback_symbols": 0,
             "empty_payloads": 0,
+            "required_empty_payloads": 0,
+            "expected_empty_payloads": 0,
+            "required_empty_symbols": [],
+            "expected_empty_symbols": [],
             "last_prices_refreshed": 0,
             "primary_source": _OFFICIAL_SOURCE,
             "fallback_source": _FALLBACK_SOURCE,
@@ -148,7 +189,7 @@ async def _rebuild_official_treasury_history(
     official_covered_symbols: set[str] = set()
     fallback_requested_symbols: set[str] = set()
     touched_asset_ids: set[int] = set()
-    empty_payloads = 0
+    empty_symbols: set[str] = set()
 
     for (start, end), symbols in windows.items():
         unique_symbols = sorted(set(symbols))
@@ -197,12 +238,17 @@ async def _rebuild_official_treasury_history(
 
         unresolved = [symbol for symbol in missing if not stats.get(symbol)]
         if unresolved:
-            empty_payloads += len(unresolved)
+            empty_symbols.update(unresolved)
             logger.info(
                 "[treasury_history_official] sem histórico após fallback count=%d sample=%s",
                 len(unresolved),
                 unresolved[:5],
             )
+
+    required_empty_symbols, expected_empty_symbols = _classify_empty_symbols(
+        list(empty_symbols),
+        today=today,
+    )
 
     last_prices_refreshed = 0
     if touched_asset_ids:
@@ -214,14 +260,16 @@ async def _rebuild_official_treasury_history(
     imported = sum(stats.values())
     alias_groups = sum(1 for aliases in aliases_by_symbol.values() if aliases)
     logger.info(
-        "[treasury_history_official] concluido canonical=%d aliases=%d imported=%d official=%d fallback=%d covered=%d empty=%d refreshed=%d",
+        "[treasury_history_official] concluido canonical=%d aliases=%d imported=%d official=%d fallback=%d covered=%d empty=%d required_empty=%d expected_empty=%d refreshed=%d",
         len(assets_by_symbol),
         alias_groups,
         imported,
         source_stats[_OFFICIAL_SOURCE],
         source_stats[_FALLBACK_SOURCE],
         len(official_covered_symbols),
-        empty_payloads,
+        len(empty_symbols),
+        len(required_empty_symbols),
+        len(expected_empty_symbols),
         last_prices_refreshed,
     )
     return {
@@ -232,7 +280,11 @@ async def _rebuild_official_treasury_history(
         "fallback_imported": source_stats[_FALLBACK_SOURCE],
         "official_covered": len(official_covered_symbols),
         "fallback_symbols": len(fallback_requested_symbols),
-        "empty_payloads": empty_payloads,
+        "empty_payloads": len(empty_symbols),
+        "required_empty_payloads": len(required_empty_symbols),
+        "expected_empty_payloads": len(expected_empty_symbols),
+        "required_empty_symbols": required_empty_symbols,
+        "expected_empty_symbols": expected_empty_symbols,
         "last_prices_refreshed": last_prices_refreshed,
         "primary_source": _OFFICIAL_SOURCE,
         "fallback_source": _FALLBACK_SOURCE,
@@ -253,7 +305,6 @@ async def rebuild_official_treasury_history(
     Quando ``db`` é informado, o chamador controla o ciclo de vida da sessão. Com
     ``commit=False``, nenhuma confirmação é executada por este serviço.
     """
-
     if db is not None:
         return await _rebuild_official_treasury_history(db, commit=commit)
 
