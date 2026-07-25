@@ -31,9 +31,23 @@ if ($LASTEXITCODE -ne 0 -or $CurrentCommitSha -cne $NormalizedCommitSha) {
     throw 'Current HEAD does not match CommitSha.'
 }
 
+if ([System.IO.Path]::IsPathRooted($ArtifactRoot)) {
+    throw 'ArtifactRoot must be a repository-relative path under artifacts.'
+}
+
+$NormalizedArtifactRoot = $ArtifactRoot.Replace('\', '/').TrimEnd('/')
+if (
+    $NormalizedArtifactRoot -ne 'artifacts' -and
+    -not $NormalizedArtifactRoot.StartsWith('artifacts/', [System.StringComparison]::Ordinal)
+) {
+    throw 'ArtifactRoot must be inside the mounted artifacts directory.'
+}
+
 $OperationId = Get-Date -Format 'yyyyMMdd-HHmmss'
-$OperationDirectory = Join-Path $ArtifactRoot "treasury-idempotency-$OperationId"
-New-Item -ItemType Directory -Path $OperationDirectory -Force | Out-Null
+$OperationRelativeDirectory = "$NormalizedArtifactRoot/treasury-idempotency-$OperationId"
+$OperationHostDirectory = $OperationRelativeDirectory.Replace('/', [System.IO.Path]::DirectorySeparatorChar)
+$OperationContainerDirectory = "/app/$OperationRelativeDirectory"
+New-Item -ItemType Directory -Path $OperationHostDirectory -Force | Out-Null
 
 function New-DistinctRunId {
     param([string]$PreviousRunId)
@@ -54,7 +68,7 @@ function Invoke-TreasurySeed {
         [string]$RunId,
 
         [Parameter(Mandatory = $true)]
-        [string]$EvidencePath
+        [string]$EvidenceHostPath
     )
 
     $DockerArguments = @(
@@ -73,7 +87,7 @@ function Invoke-TreasurySeed {
         $NormalizedCommitSha
     )
 
-    & docker @DockerArguments | Tee-Object -FilePath $EvidencePath
+    & docker @DockerArguments | Tee-Object -FilePath $EvidenceHostPath
     $SeedExitCode = $LASTEXITCODE
     if ($null -eq $SeedExitCode) {
         throw 'docker did not return an exit code for the Treasury seed.'
@@ -84,14 +98,16 @@ function Invoke-TreasurySeed {
 }
 
 $FirstRunId = New-DistinctRunId -PreviousRunId ''
-$FirstEvidencePath = Join-Path $OperationDirectory 'first.json'
-Invoke-TreasurySeed -RunId $FirstRunId -EvidencePath $FirstEvidencePath
+$FirstEvidenceHostPath = Join-Path $OperationHostDirectory 'first.json'
+$FirstEvidenceContainerPath = "$OperationContainerDirectory/first.json"
+Invoke-TreasurySeed -RunId $FirstRunId -EvidenceHostPath $FirstEvidenceHostPath
 
 $SecondRunId = New-DistinctRunId -PreviousRunId $FirstRunId
-$SecondEvidencePath = Join-Path $OperationDirectory 'second.json'
-Invoke-TreasurySeed -RunId $SecondRunId -EvidencePath $SecondEvidencePath
+$SecondEvidenceHostPath = Join-Path $OperationHostDirectory 'second.json'
+$SecondEvidenceContainerPath = "$OperationContainerDirectory/second.json"
+Invoke-TreasurySeed -RunId $SecondRunId -EvidenceHostPath $SecondEvidenceHostPath
 
-$ReportPath = Join-Path $OperationDirectory 'idempotency.json'
+$ReportHostPath = Join-Path $OperationHostDirectory 'idempotency.json'
 $CompareArguments = @(
     'compose'
     'exec'
@@ -101,12 +117,12 @@ $CompareArguments = @(
     '-m'
     'app.cli.pre_prod_treasury_seed_idempotency'
     '--first'
-    $FirstEvidencePath
+    $FirstEvidenceContainerPath
     '--second'
-    $SecondEvidencePath
+    $SecondEvidenceContainerPath
 )
 
-& docker @CompareArguments | Tee-Object -FilePath $ReportPath
+& docker @CompareArguments | Tee-Object -FilePath $ReportHostPath
 $CompareExitCode = $LASTEXITCODE
 if ($null -eq $CompareExitCode) {
     throw 'docker did not return an exit code for the idempotency comparison.'
@@ -117,9 +133,9 @@ if ($null -eq $CompareExitCode) {
     commit_sha = $NormalizedCommitSha
     first_run_id = $FirstRunId
     second_run_id = $SecondRunId
-    first_evidence = $FirstEvidencePath
-    second_evidence = $SecondEvidencePath
-    idempotency_report = $ReportPath
+    first_evidence = $FirstEvidenceHostPath
+    second_evidence = $SecondEvidenceHostPath
+    idempotency_report = $ReportHostPath
     exit_code = $CompareExitCode
 } | ConvertTo-Json -Depth 3
 
