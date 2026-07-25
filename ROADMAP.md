@@ -28,7 +28,7 @@
 | Limpeza isolada | Sucesso e rollback reconciliados; PR #198 promovida | 100% |
 | Perfil de alvo real | Implementado, validado e promovido pela PR #204 | 100% |
 | Seed isolado B3/COTAHIST | Entry point implementado; execução pendente | 90% |
-| Seed isolado Tesouro | Identidade operacional implementada; CI, promoção, execução e idempotência pendentes (#208) | 92% |
+| Seed isolado Tesouro | Identidade e comparador de idempotência implementados; execução real pendente (#208) | 95% |
 | Rebuild pré-produção | Gates estruturais preparados; execuções reais pendentes | 94% |
 | Eventos corporativos | Fundação pronta | 30% |
 | IRPF | Planejado | 15% |
@@ -60,7 +60,8 @@ Prontidão global estimada para a primeira produção: **89%**. O percentual nã
 - Contrato `pre-prod-treasury-seed.v1` implementado com identidade operacional, baseline, cobertura e integridade.
 - Advisory lock, transação única, commit final e rollback integral coordenados pela CLI `pre_prod_treasury_seed`.
 - `run_id`, branch `stable-15jun` e SHA completo são validados antes da abertura das sessões.
-- Execução real e comprovação de idempotência permanecem pendentes na Issue #208.
+- Contrato `pre-prod-treasury-seed-idempotency.v1` e CLI offline implementados para comparar duas evidências sem acesso a banco ou rede.
+- Execução real e comprovação operacional de idempotência permanecem pendentes na Issue #208.
 
 ### Histórico e snapshots
 
@@ -97,15 +98,15 @@ Prontidão global estimada para a primeira produção: **89%**. O percentual nã
 - [x] Contrato, inspeção, advisory lock e orquestração transacional do Tesouro implementados.
 - [x] Histórico oficial do Tesouro refatorado para sessão externa e `commit=False`.
 - [x] CLI `pre_prod_treasury_seed` e runbook dedicado implementados.
-- [x] Identidade operacional (`run_id`, branch e SHA) implementada e validada antes do banco.
-- [ ] Validar o bloco de identidade no CI e promovê-lo para a `main`.
+- [x] Identidade operacional (`run_id`, branch e SHA) implementada, validada e promovida pela PR #210.
+- [x] Contrato e CLI offline de idempotência implementados na PR #211.
 - [ ] Gerar nova cadeia operacional vinculada ao SHA promovido.
 - [ ] Recalcular e revisar a confirmação composta.
 - [ ] Executar limpeza real somente após nova autorização explícita.
 - [ ] Reconciliar imediatamente `committed=true` e `reconciliation.ok=true`.
 - [ ] Executar e reconciliar o seed isolado B3 COTAHIST.
 - [ ] Executar e reconciliar o seed isolado do Tesouro.
-- [ ] Comprovar idempotência do Tesouro em segunda execução controlada.
+- [ ] Comprovar idempotência do Tesouro em segunda execução controlada usando o comparador offline.
 - [ ] Seed de benchmarks, câmbio e proventos.
 - [ ] Importação CSV completa da carteira.
 - [ ] Rebuild de posições e snapshots.
@@ -132,7 +133,7 @@ Prontidão global estimada para a primeira produção: **89%**. O percentual nã
 
 ## Próximas prioridades
 
-1. Validar e promover a identidade operacional do seed isolado do Tesouro.
+1. Validar e promover a PR #211 com o comparador de idempotência do Tesouro.
 2. Gerar nova cadeia operacional vinculada ao SHA promovido.
 3. Executar e reconciliar a limpeza real pela Issue #199.
 4. Executar e reconciliar B3 e Tesouro em estágios independentes.
