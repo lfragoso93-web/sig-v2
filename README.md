@@ -46,6 +46,7 @@ A limpeza real, seeds, coleta, importação e rebuild ainda não foram executado
 - Validação local do perfil real: 34 testes aprovados e `compileall` sem erros.
 - Migração Pydantic v2 concluída pela Issue #186.
 - CLI transacional `pre_prod_treasury_seed` implementada pela Issue #208, com advisory lock, baseline, commit único, rollback integral, identidade obrigatória (`run_id`, branch e SHA) e contrato `pre-prod-treasury-seed.v1`; execução real permanece pendente.
+- Comparador puro e CLI offline de idempotência do Tesouro implementados na PR #211 com o contrato `pre-prod-treasury-seed-idempotency.v1`.
 
 ## Arquitetura resumida
 
@@ -83,25 +84,27 @@ python -m app.cli.pre_prod_cleanup_plan
 scripts/Invoke-PreProdRealCleanup.ps1
 python -m app.cli.pre_prod_b3_seed --start-year <ANO> --end-year <ANO> --cutoff-date <AAAA-MM-DD>
 python -m app.cli.pre_prod_treasury_seed --run-id <YYYYMMDD-HHMMSS> --branch stable-15jun --commit-sha <SHA40>
+python -m app.cli.pre_prod_treasury_seed_idempotency --first <PRIMEIRA_EVIDENCIA.json> --second <SEGUNDA_EVIDENCIA.json>
 python -m app.cli.full_market_rebuild
 python -m app.cli.rebuild_b3_historical_market
 python -m app.cli.sync_treasury_catalog_v2
 python -m app.cli.rebuild_treasury_official_prices
 ```
 
-As CLIs isoladas de B3 e Tesouro não autorizam execução na pré-produção real apenas por estarem disponíveis. Cada estágio exige SHA aprovado, janela operacional, evidência preservada e reconciliação na Issue correspondente.
+As CLIs isoladas de B3 e Tesouro não autorizam execução na pré-produção real apenas por estarem disponíveis. Cada estágio exige SHA aprovado, janela operacional, evidência preservada e reconciliação na Issue correspondente. O comparador de idempotência opera somente sobre arquivos JSON e não acessa banco ou rede.
 
 ## Prioridades atuais
 
 1. Promover a exposição do `plan_sha256` e gerar uma nova cadeia operacional vinculada ao novo SHA.
 2. Registrar nova confirmação composta e executar a limpeza real somente pela Issue #199.
 3. Executar e reconciliar os seeds isolados de B3 e Tesouro em blocos separados após a limpeza.
-4. Executar benchmarks, câmbio, proventos, importação e rebuild em blocos independentes.
-5. Endurecer ou remover o router administrativo de debug antes do go-live.
-6. Remover o serviço legado de rentabilidade (#151).
-7. Materializar o histórico persistido do IBOV (#150).
-8. Implementar TWR dedicado para Tesouro Direto e Renda Fixa (#149).
-9. Migrar timestamps UTC legados para timezone-aware (#192).
+4. Comprovar a idempotência do Tesouro com duas evidências válidas e o comparador offline.
+5. Executar benchmarks, câmbio, proventos, importação e rebuild em blocos independentes.
+6. Endurecer ou remover o router administrativo de debug antes do go-live.
+7. Remover o serviço legado de rentabilidade (#151).
+8. Materializar o histórico persistido do IBOV (#150).
+9. Implementar TWR dedicado para Tesouro Direto e Renda Fixa (#149).
+10. Migrar timestamps UTC legados para timezone-aware (#192).
 
 ## Dependências
 
@@ -123,7 +126,7 @@ A primeira entrada em produção exige:
 10. nova autorização composta — pendente;
 11. limpeza controlada dos dados reconstruíveis — pendente;
 12. entrypoint isolado de catálogo + B3 COTAHIST — implementado, execução pendente;
-13. entrypoint transacional do seed oficial do Tesouro Direto — implementado com identidade obrigatória, execução e idempotência pendentes;
+13. entrypoint transacional do seed oficial do Tesouro Direto — implementado com identidade obrigatória; comparador de idempotência implementado; execução e evidência real pendentes;
 14. seed de benchmarks, câmbio e proventos — pendente;
 15. importação CSV completa da carteira — pendente;
 16. rebuild de posições e snapshots — pendente;
@@ -158,5 +161,5 @@ docker compose up -d --build
 - `docs/pre-prod-cleanup-execution-runbook.md` — plano e execução controlada.
 - `docs/pre-prod-isolated-cleanup-rehearsal-runbook.md` — ensaio isolado, rollback e descarte.
 - `docs/pre-prod-real-cleanup-target-profile.md` — gates dos perfis isolado e real.
-- `docs/pre-prod-treasury-seed-runbook.md` — seed transacional, integridade e evidência do Tesouro.
+- `docs/pre-prod-treasury-seed-runbook.md` — seed transacional, integridade, evidência e prova offline de idempotência do Tesouro.
 - `docs/CANONICAL_FINANCIAL_CONTRACT.md` — contrato financeiro oficial.
