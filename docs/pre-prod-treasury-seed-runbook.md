@@ -10,15 +10,15 @@ A implementação pertence à Issue #208 e ao estágio de rebuild controlado da 
 
 A CLI está implementada, mas sua presença no código **não autoriza execução na pré-produção real**. A primeira execução exige revisão do SHA promovido, banco alvo, janela operacional, fonte oficial e plano de preservação da evidência.
 
-## Identidade obrigatória
+## Identidade operacional obrigatória
 
-Cada execução deve informar e publicar no JSON final:
+Toda execução deve informar e publicar no JSON final:
 
 - `run_id` no formato `YYYYMMDD-HHMMSS`;
 - branch exatamente `stable-15jun`;
-- SHA Git completo, hexadecimal minúsculo de 40 caracteres.
+- `commit_sha` Git completo, hexadecimal minúsculo, com 40 caracteres.
 
-A identidade é validada antes da abertura de qualquer sessão de banco. Divergência de formato, branch ou SHA encerra a CLI com código operacional `1` e zero acesso ao banco.
+A CLI valida os três valores antes de abrir qualquer sessão de banco. Identidade inválida retorna código operacional `1` e não inicia catálogo, histórico ou inspeção.
 
 ## Entrada oficial
 
@@ -36,7 +36,7 @@ Não use `sync_treasury_catalog_v2` e `rebuild_treasury_official_prices` separad
 
 ## Fluxo garantido
 
-1. valida `run_id`, branch e SHA antes de abrir sessões;
+1. valida `run_id`, branch e SHA antes do banco;
 2. adquire advisory lock PostgreSQL dedicado;
 3. captura baseline de ativos, aliases, preços, órfãos, duplicidades e legado;
 4. executa catálogo oficial com `commit=False`;
@@ -45,13 +45,13 @@ Não use `sync_treasury_catalog_v2` e `rebuild_treasury_official_prices` separad
 7. confirma somente quando catálogo, histórico e integridade estão reconciliados;
 8. executa rollback integral diante de erro ou divergência;
 9. libera o advisory lock;
-10. publica JSON UTF-8 do contrato `pre-prod-treasury-seed.v1` vinculado à identidade executada.
+10. publica JSON UTF-8 do contrato `pre-prod-treasury-seed.v1`.
 
 ## Critérios obrigatórios de sucesso
 
 O JSON só pode retornar `ok=true` quando:
 
-- `run_id`, `branch` e `commit_sha` correspondem à execução aprovada;
+- a identidade publicada corresponde ao comando executado;
 - `catalog.errors=0`;
 - `history.unresolved_assets` está vazio;
 - `history.empty_payloads=0`;
@@ -86,7 +86,6 @@ docker compose exec backend python -m app.cli.pre_prod_treasury_seed `
     Tee-Object -FilePath $EvidencePath
 
 $ExitCode = $LASTEXITCODE
-$EvidenceSha256 = (Get-FileHash $EvidencePath -Algorithm SHA256).Hash.ToLowerInvariant()
 ```
 
 Antes de aprovar o estágio, registre na Issue #208:
@@ -116,12 +115,11 @@ A idempotência deve ser comprovada na Issue #208 antes de atualizar a Issue #15
 
 Interrompa o estágio e não avance quando:
 
-- a identidade não corresponder ao SHA aprovado;
+- a identidade for inválida ou divergir do SHA aprovado;
 - o lock não puder ser adquirido;
 - a fonte oficial estiver incompleta ou indisponível;
 - houver ativo não resolvido ou payload vazio;
 - qualquer contador de integridade for diferente de zero;
-- o JSON não estiver íntegro;
-- o SHA executado divergir do SHA aprovado.
+- o JSON não estiver íntegro.
 
 Não tente corrigir manualmente o banco durante a mesma janela. Preserve a evidência, atualize a Issue #208 e abra um novo bloco corretivo.
