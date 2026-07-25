@@ -55,8 +55,13 @@ def _collect_errors(
     unresolved = history.get("unresolved_assets") or []
     if unresolved:
         errors.append(f"histórico deixou {len(unresolved)} ativos não resolvidos")
-    if int(history.get("empty_payloads", 0) or 0) != 0:
-        errors.append("histórico retornou payloads vazios")
+    required_empty_payloads = int(
+        history.get("required_empty_payloads", history.get("empty_payloads", 0)) or 0
+    )
+    if required_empty_payloads != 0:
+        errors.append(
+            f"histórico retornou {required_empty_payloads} payloads vazios bloqueantes"
+        )
     integrity_values = (
         after.orphan_prices,
         after.duplicate_prices,
