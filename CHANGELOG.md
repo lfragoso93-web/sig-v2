@@ -5,6 +5,16 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — ajuda não destrutiva das CLIs do Tesouro (25/07/2026)
+
+- As quatro CLIs operacionais do Tesouro passaram a validar argumentos com
+  `argparse` antes de abrir sessão de banco ou iniciar qualquer serviço.
+- `--help` agora imprime a interface e encerra com código `0`, sem sincronizar,
+  reconstruir ou auditar dados.
+- Argumentos desconhecidos deixam de ser silenciosamente ignorados.
+- Adicionada regressão parametrizada cobrindo catálogo, rebuild oficial e as
+  duas auditorias.
+
 ### Adicionado — estágio isolado B3 COTAHIST (24/07/2026)
 
 - Criada a CLI `pre_prod_b3_seed` para executar somente catálogo nacional e
