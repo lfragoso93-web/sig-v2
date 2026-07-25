@@ -5,6 +5,31 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Adicionado — seed transacional isolado do Tesouro Direto (25/07/2026)
+
+- Criado o contrato `pre-prod-treasury-seed.v1` com baseline, pós-contagens,
+  cobertura temporal e validações de integridade.
+- Catálogo e histórico oficial do Tesouro passaram a compartilhar uma única
+  sessão de trabalho e são executados com `commit=False`.
+- O orquestrador confirma o estágio somente após a inspeção final reconciliada
+  e executa rollback integral em erro, divergência ou exceção.
+- Um advisory lock PostgreSQL dedicado impede execuções concorrentes.
+- Criada a CLI `python -m app.cli.pre_prod_treasury_seed` com saída JSON e
+  códigos distintos para sucesso, falha operacional, concorrência e falha inesperada.
+- Adicionados testes unitários de contrato, inspeção, sessão, commit, rollback e CLI.
+- Criado `docs/pre-prod-treasury-seed-runbook.md` e sincronizados README e ROADMAP.
+- O CI da PR #209 passou; nenhuma execução, coleta ou escrita foi realizada na pré-produção.
+
+### Corrigido — ajuda não destrutiva das CLIs do Tesouro (25/07/2026)
+
+- As quatro CLIs operacionais do Tesouro passaram a validar argumentos com
+  `argparse` antes de abrir sessão de banco ou iniciar qualquer serviço.
+- `--help` agora imprime a interface e encerra com código `0`, sem sincronizar,
+  reconstruir ou auditar dados.
+- Argumentos desconhecidos deixam de ser silenciosamente ignorados.
+- Adicionada regressão parametrizada cobrindo catálogo, rebuild oficial e as
+  duas auditorias.
+
 ### Adicionado — estágio isolado B3 COTAHIST (24/07/2026)
 
 - Criada a CLI `pre_prod_b3_seed` para executar somente catálogo nacional e

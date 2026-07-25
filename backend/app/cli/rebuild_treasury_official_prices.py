@@ -1,6 +1,7 @@
 """Reconstrói apenas os preços oficiais do Tesouro em ativos canônicos ativos."""
 from __future__ import annotations
 
+import argparse
 import asyncio
 import json
 
@@ -51,5 +52,11 @@ async def _main() -> None:
     )
 
 
-if __name__ == "__main__":
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.parse_args()
     asyncio.run(_main())
+
+
+if __name__ == "__main__":
+    main()

@@ -1,6 +1,7 @@
 """CLI para sincronizar o Catalog v2 oficial do Tesouro."""
 from __future__ import annotations
 
+import argparse
 import asyncio
 import json
 
@@ -14,5 +15,11 @@ async def _main() -> None:
     print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2, default=str))
 
 
-if __name__ == "__main__":
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.parse_args()
     asyncio.run(_main())
+
+
+if __name__ == "__main__":
+    main()
