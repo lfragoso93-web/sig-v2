@@ -25,12 +25,27 @@ class LegacyMapping:
     legacy_ticker: str
     canonical_id: int
     canonical_ticker: str
-    expected_close: Decimal
+    expected_min_close: Decimal
+    expected_max_close: Decimal
 
 
 MAPPINGS = (
-    LegacyMapping(4742, "tesouro-educa-15122030", 4810, "tesouro-educa-mais-2030", Decimal("3518.20")),
-    LegacyMapping(4747, "tesouro-educa-15122031", 4823, "tesouro-educa-mais-2031", Decimal("3769.72")),
+    LegacyMapping(
+        4742,
+        "tesouro-educa-15122030",
+        4810,
+        "tesouro-educa-mais-2030",
+        Decimal("3518.20"),
+        Decimal("3522.89"),
+    ),
+    LegacyMapping(
+        4747,
+        "tesouro-educa-15122031",
+        4823,
+        "tesouro-educa-mais-2031",
+        Decimal("3769.72"),
+        Decimal("3777.79"),
+    ),
 )
 LEGACY_IDS = [item.legacy_id for item in MAPPINGS]
 FUNCTIONAL_REFERENCES = (
@@ -187,7 +202,10 @@ def _validate_before(snapshot: dict[str, Any]) -> None:
         legacy_prices = snapshot["legacy_prices"][str(mapping.legacy_id)]
         if legacy_prices["count"] != 2 or legacy_prices["enriched"] != 0:
             raise TreasuryLegacyCleanupError(f"conjunto de preços legado divergente: {mapping.legacy_id}")
-        if legacy_prices["min_close"] != mapping.expected_close or legacy_prices["max_close"] != mapping.expected_close:
+        if (
+            legacy_prices["min_close"] != mapping.expected_min_close
+            or legacy_prices["max_close"] != mapping.expected_max_close
+        ):
             raise TreasuryLegacyCleanupError(f"valor de preço legado divergente: {mapping.legacy_id}")
         if snapshot["official_prices"][str(mapping.canonical_id)]["count"] < 743:
             raise TreasuryLegacyCleanupError(f"série oficial insuficiente: {mapping.canonical_id}")
