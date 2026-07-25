@@ -5,11 +5,15 @@ modela e valida o envelope auditável exigido pela Issue #208.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass, field
 
 TREASURY_SEED_SCHEMA_VERSION = "pre-prod-treasury-seed.v1"
+TREASURY_SEED_BRANCH = "stable-15jun"
 LEGACY_TREASURY_ASSET_IDS = (4742, 4747)
 CANONICAL_TREASURY_ASSET_IDS = (4810, 4823)
+_RUN_ID_PATTERN = re.compile(r"^\d{8}-\d{6}$")
+_COMMIT_SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 
 
 class TreasurySeedContractError(ValueError):
@@ -57,6 +61,9 @@ class TreasurySeedCoverage:
 
 @dataclass(frozen=True)
 class PreProdTreasurySeedResult:
+    run_id: str
+    branch: str
+    commit_sha: str
     started_at: str
     finished_at: str
     duration_seconds: float
@@ -73,6 +80,18 @@ class PreProdTreasurySeedResult:
         if self.schema_version != TREASURY_SEED_SCHEMA_VERSION:
             raise TreasurySeedContractError(
                 f"schema_version não suportado: {self.schema_version!r}"
+            )
+        if not _RUN_ID_PATTERN.fullmatch(self.run_id):
+            raise TreasurySeedContractError(
+                "run_id deve seguir o formato YYYYMMDD-HHMMSS"
+            )
+        if self.branch != TREASURY_SEED_BRANCH:
+            raise TreasurySeedContractError(
+                f"branch deve ser {TREASURY_SEED_BRANCH!r}"
+            )
+        if not _COMMIT_SHA_PATTERN.fullmatch(self.commit_sha):
+            raise TreasurySeedContractError(
+                "commit_sha deve conter 40 caracteres hexadecimais minúsculos"
             )
         if self.duration_seconds < 0:
             raise TreasurySeedContractError("duration_seconds não pode ser negativo")
