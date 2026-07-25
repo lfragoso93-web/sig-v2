@@ -16,6 +16,7 @@ from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal
 from app.integrations.brapi_treasury import fetch_treasury_history, is_brapi_treasury_symbol
@@ -35,7 +36,12 @@ _LOOKBACK_DAYS = 10
 _INACTIVE_STATUS = "NOT_APPLICABLE"
 
 
-async def _persist_history_rows(db, asset_id: int, rows: list[tuple[datetime, float]], source: str) -> int:
+async def _persist_history_rows(
+    db: AsyncSession,
+    asset_id: int,
+    rows: list[tuple[datetime, float]],
+    source: str,
+) -> int:
     changed = 0
     for timestamp, close in rows:
         value = Decimal(str(round(close, 8)))
@@ -52,7 +58,9 @@ async def _persist_history_rows(db, asset_id: int, rows: list[tuple[datetime, fl
     return changed
 
 
-async def _canonical_assets(db) -> tuple[dict[str, Asset], dict[str, list[str]], list[str]]:
+async def _canonical_assets(
+    db: AsyncSession,
+) -> tuple[dict[str, Asset], dict[str, list[str]], list[str]]:
     result = await db.execute(
         select(Asset).where(
             Asset.asset_type == AssetType.TESOURO_DIRETO.value,
@@ -100,103 +108,108 @@ async def _canonical_assets(db) -> tuple[dict[str, Asset], dict[str, list[str]],
     return selected, aliases, sorted(set(unresolved))
 
 
-async def rebuild_official_treasury_history() -> dict[str, object]:
+async def _rebuild_official_treasury_history(
+    db: AsyncSession,
+    *,
+    commit: bool,
+) -> dict[str, object]:
     today = date.today()
+    assets_by_symbol, aliases_by_symbol, unresolved_assets = await _canonical_assets(db)
+    if not assets_by_symbol:
+        logger.warning("[treasury_history_official] nenhum ativo canônico de Tesouro cadastrado")
+        return {
+            "official_symbols": 0,
+            "matched_assets": 0,
+            "imported": 0,
+            "official_imported": 0,
+            "fallback_imported": 0,
+            "official_covered": 0,
+            "fallback_symbols": 0,
+            "empty_payloads": 0,
+            "last_prices_refreshed": 0,
+            "primary_source": _OFFICIAL_SOURCE,
+            "fallback_source": _FALLBACK_SOURCE,
+            "alias_groups": 0,
+            "aliases": {},
+            "unresolved_assets": unresolved_assets,
+            "history": {},
+        }
 
-    async with AsyncSessionLocal() as db:
-        assets_by_symbol, aliases_by_symbol, unresolved_assets = await _canonical_assets(db)
-        if not assets_by_symbol:
-            logger.warning("[treasury_history_official] nenhum ativo canônico de Tesouro cadastrado")
-            return {
-                "official_symbols": 0,
-                "matched_assets": 0,
-                "imported": 0,
-                "official_imported": 0,
-                "fallback_imported": 0,
-                "official_covered": 0,
-                "fallback_symbols": 0,
-                "empty_payloads": 0,
-                "last_prices_refreshed": 0,
-                "alias_groups": 0,
-                "unresolved_assets": unresolved_assets,
-                "history": {},
+    windows: dict[tuple[date, date], list[str]] = defaultdict(list)
+    for symbol, asset in assets_by_symbol.items():
+        last_date = await _last_saved_date(db, int(asset.id))
+        start = today - timedelta(days=_DEFAULT_YEARS * 365)
+        if last_date:
+            start = max(last_date - timedelta(days=2), today - timedelta(days=_LOOKBACK_DAYS))
+        windows[(start, today)].append(symbol)
+
+    stats = {symbol: 0 for symbol in assets_by_symbol}
+    source_stats = {_OFFICIAL_SOURCE: 0, _FALLBACK_SOURCE: 0}
+    official_covered_symbols: set[str] = set()
+    fallback_requested_symbols: set[str] = set()
+    touched_asset_ids: set[int] = set()
+    empty_payloads = 0
+
+    for (start, end), symbols in windows.items():
+        unique_symbols = sorted(set(symbols))
+        official_history = await fetch_official_treasury_history(
+            unique_symbols,
+            start_date=start,
+            end_date=end,
+        )
+
+        missing: list[str] = []
+        for symbol in unique_symbols:
+            rows = official_history.get(symbol) or []
+            asset = assets_by_symbol[symbol]
+            if rows:
+                count = await _persist_history_rows(db, int(asset.id), rows, _OFFICIAL_SOURCE)
+                stats[symbol] += count
+                source_stats[_OFFICIAL_SOURCE] += count
+                official_covered_symbols.add(symbol)
+                touched_asset_ids.add(int(asset.id))
+            else:
+                missing.append(symbol)
+
+        brapi_symbols = sorted(
+            {
+                symbol
+                for symbol in missing
+                if is_brapi_treasury_symbol(symbol)
             }
-
-        windows: dict[tuple[date, date], list[str]] = defaultdict(list)
-        for symbol, asset in assets_by_symbol.items():
-            last_date = await _last_saved_date(db, int(asset.id))
-            start = today - timedelta(days=_DEFAULT_YEARS * 365)
-            if last_date:
-                start = max(last_date - timedelta(days=2), today - timedelta(days=_LOOKBACK_DAYS))
-            windows[(start, today)].append(symbol)
-
-        stats = {symbol: 0 for symbol in assets_by_symbol}
-        source_stats = {_OFFICIAL_SOURCE: 0, _FALLBACK_SOURCE: 0}
-        official_covered_symbols: set[str] = set()
-        fallback_requested_symbols: set[str] = set()
-        touched_asset_ids: set[int] = set()
-        empty_payloads = 0
-
-        for (start, end), symbols in windows.items():
-            unique_symbols = sorted(set(symbols))
-            official_history = await fetch_official_treasury_history(
-                unique_symbols,
+        )
+        fallback_requested_symbols.update(brapi_symbols)
+        if brapi_symbols:
+            fallback_history = await fetch_treasury_history(
+                brapi_symbols,
                 start_date=start,
                 end_date=end,
             )
-
-            missing: list[str] = []
-            for symbol in unique_symbols:
-                rows = official_history.get(symbol) or []
+            for symbol in brapi_symbols:
+                rows = fallback_history.get(symbol) or []
+                if not rows:
+                    continue
                 asset = assets_by_symbol[symbol]
-                if rows:
-                    count = await _persist_history_rows(db, int(asset.id), rows, _OFFICIAL_SOURCE)
-                    stats[symbol] += count
-                    source_stats[_OFFICIAL_SOURCE] += count
-                    official_covered_symbols.add(symbol)
-                    touched_asset_ids.add(int(asset.id))
-                else:
-                    missing.append(symbol)
-            await db.commit()
+                count = await _persist_history_rows(db, int(asset.id), rows, _FALLBACK_SOURCE)
+                stats[symbol] += count
+                source_stats[_FALLBACK_SOURCE] += count
+                touched_asset_ids.add(int(asset.id))
 
-            brapi_symbols = sorted(
-                {
-                    symbol
-                    for symbol in missing
-                    if is_brapi_treasury_symbol(symbol)
-                }
+        unresolved = [symbol for symbol in missing if not stats.get(symbol)]
+        if unresolved:
+            empty_payloads += len(unresolved)
+            logger.info(
+                "[treasury_history_official] sem histórico após fallback count=%d sample=%s",
+                len(unresolved),
+                unresolved[:5],
             )
-            fallback_requested_symbols.update(brapi_symbols)
-            if brapi_symbols:
-                fallback_history = await fetch_treasury_history(
-                    brapi_symbols,
-                    start_date=start,
-                    end_date=end,
-                )
-                for symbol in brapi_symbols:
-                    rows = fallback_history.get(symbol) or []
-                    if not rows:
-                        continue
-                    asset = assets_by_symbol[symbol]
-                    count = await _persist_history_rows(db, int(asset.id), rows, _FALLBACK_SOURCE)
-                    stats[symbol] += count
-                    source_stats[_FALLBACK_SOURCE] += count
-                    touched_asset_ids.add(int(asset.id))
-                await db.commit()
 
-            unresolved = [symbol for symbol in missing if not stats.get(symbol)]
-            if unresolved:
-                empty_payloads += len(unresolved)
-                logger.info(
-                    "[treasury_history_official] sem histórico após fallback count=%d sample=%s",
-                    len(unresolved),
-                    unresolved[:5],
-                )
+    last_prices_refreshed = 0
+    if touched_asset_ids:
+        last_prices_refreshed = await refresh_asset_last_prices(db, touched_asset_ids)
 
-        last_prices_refreshed = 0
-        if touched_asset_ids:
-            last_prices_refreshed = await refresh_asset_last_prices(db, touched_asset_ids)
-            await db.commit()
+    if commit:
+        await db.commit()
 
     imported = sum(stats.values())
     alias_groups = sum(1 for aliases in aliases_by_symbol.values() if aliases)
@@ -228,3 +241,21 @@ async def rebuild_official_treasury_history() -> dict[str, object]:
         "unresolved_assets": unresolved_assets,
         "history": stats,
     }
+
+
+async def rebuild_official_treasury_history(
+    db: AsyncSession | None = None,
+    *,
+    commit: bool = True,
+) -> dict[str, object]:
+    """Reconstrói o histórico usando sessão externa ou uma sessão própria compatível.
+
+    Quando ``db`` é informado, o chamador controla o ciclo de vida da sessão. Com
+    ``commit=False``, nenhuma confirmação é executada por este serviço.
+    """
+
+    if db is not None:
+        return await _rebuild_official_treasury_history(db, commit=commit)
+
+    async with AsyncSessionLocal() as owned_db:
+        return await _rebuild_official_treasury_history(owned_db, commit=commit)
