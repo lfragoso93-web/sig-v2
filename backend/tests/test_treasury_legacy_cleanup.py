@@ -139,3 +139,35 @@ def test_help_and_unknown_arguments_do_not_create_engine(monkeypatch, capsys):
     with pytest.raises(SystemExit) as unknown_exit:
         cli.run(["--unknown"])
     assert unknown_exit.value.code == 2
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    (
+        ["--apply"],
+        ["--apply", "--authorization", "WRONG"],
+        ["--authorization", cli.APPLY_AUTHORIZATION],
+    ),
+)
+def test_invalid_apply_authorization_exits_before_database_access(monkeypatch, arguments):
+    monkeypatch.setattr(
+        cli,
+        "create_engine",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("database access")),
+    )
+    with pytest.raises(SystemExit) as exit_info:
+        cli.run(arguments)
+    assert exit_info.value.code == 2
+
+
+def test_valid_apply_authorization_reaches_engine(monkeypatch):
+    class Engine:
+        def connect(self):
+            raise RuntimeError("engine reached")
+
+        def dispose(self):
+            pass
+
+    monkeypatch.setattr(cli, "create_engine", lambda *_args, **_kwargs: Engine())
+    with pytest.raises(RuntimeError, match="engine reached"):
+        cli.run(["--apply", "--authorization", cli.APPLY_AUTHORIZATION])
