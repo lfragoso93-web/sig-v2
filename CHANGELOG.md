@@ -5,6 +5,22 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Adicionado — prova offline de idempotência do seed do Tesouro (25/07/2026)
+
+- Criado o contrato puro `pre-prod-treasury-seed-idempotency.v1` para comparar
+  duas evidências consecutivas do seed isolado do Tesouro.
+- A comparação exige `run_id` distintos, mesma branch, mesmo `commit_sha`,
+  baseline encadeado, contagens finais estáveis e cobertura temporal estável.
+- Adicionada a CLI offline
+  `python -m app.cli.pre_prod_treasury_seed_idempotency` para ler dois arquivos
+  JSON UTF-8 e publicar o relatório canônico sem acessar banco ou rede.
+- Os códigos de saída distinguem idempotência comprovada (`0`), divergência
+  estrutural (`1`) e entrada ou contrato inválido (`2`).
+- Testes cobrem sucesso, identidade divergente, estado instável, execução com
+  falha, JSON inválido e arquivo ausente.
+- README, ROADMAP e o runbook do Tesouro foram sincronizados.
+- Nenhum seed, coleta ou escrita foi executado na pré-produção.
+
 ### Adicionado — identidade operacional do seed do Tesouro (25/07/2026)
 
 - O contrato `pre-prod-treasury-seed.v1` passou a registrar `run_id`, branch e
