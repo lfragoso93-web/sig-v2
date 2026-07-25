@@ -8,7 +8,9 @@ A implementação pertence à Issue #208 e ao estágio de rebuild controlado da 
 
 ## Estado operacional
 
-A CLI, o comparador offline e o wrapper estão implementados, mas sua presença no código **não autoriza execução na pré-produção real**. A primeira execução exige revisão do SHA promovido, banco alvo, janela operacional, fonte oficial, confirmação explícita e plano de preservação da evidência.
+A CLI, o comparador offline e o wrapper estão implementados, mas sua presença no código **não autoriza execução na pré-produção real**. Cada execução exige revisão do SHA promovido, banco alvo, janela operacional, fonte oficial, confirmação explícita e plano de preservação da evidência.
+
+A primeira tentativa operacional da Issue #208, em `2026-07-25`, confirmou rollback integral diante de payloads vazios classificados de forma excessivamente ampla. A execução não persistiu alterações e motivou a separação auditável entre ausências bloqueantes e ausências esperadas para títulos vencidos.
 
 ## Identidade operacional obrigatória
 
@@ -75,11 +77,22 @@ Não informe caminho absoluto nem diretório fora de `artifacts`. O backend só 
 3. captura baseline de ativos, aliases, preços, órfãos, duplicidades e legado;
 4. executa catálogo oficial com `commit=False`;
 5. executa histórico oficial com `commit=False`;
-6. executa `flush` e inspeção final na mesma sessão;
-7. confirma somente quando catálogo, histórico e integridade estão reconciliados;
-8. executa rollback integral diante de erro ou divergência;
-9. libera o advisory lock;
-10. publica JSON UTF-8 do contrato `pre-prod-treasury-seed.v1`.
+6. classifica ausências de histórico por vencimento;
+7. executa `flush` e inspeção final na mesma sessão;
+8. confirma somente quando catálogo, histórico e integridade estão reconciliados;
+9. executa rollback integral diante de erro ou divergência;
+10. libera o advisory lock;
+11. publica JSON UTF-8 do contrato `pre-prod-treasury-seed.v1`.
+
+## Classificação de payloads vazios
+
+O histórico mantém `history.empty_payloads` como total auditável e publica também:
+
+- `history.required_empty_payloads`: títulos vigentes ou sem vencimento reconhecível que permaneceram sem dados após a fonte oficial e o fallback; são bloqueantes;
+- `history.expected_empty_payloads`: títulos vencidos sem dados na janela incremental; são registrados, mas não bloqueiam isoladamente;
+- `history.required_empty_symbols` e `history.expected_empty_symbols`: listas determinísticas para diagnóstico.
+
+Símbolos com vencimento completo usam o sufixo `DDMMAAAA`. Séries com ano apenas, como Renda+ e Educa+, são consideradas vencidas após `31/12` do ano publicado. Símbolos sem vencimento reconhecível permanecem bloqueantes por segurança.
 
 ## Critérios obrigatórios de sucesso
 
@@ -88,12 +101,14 @@ O JSON só pode retornar `ok=true` quando:
 - a identidade publicada corresponde ao comando executado;
 - `catalog.errors=0`;
 - `history.unresolved_assets` está vazio;
-- `history.empty_payloads=0`;
+- `history.required_empty_payloads=0`;
 - `after.orphan_prices=0`;
 - `after.duplicate_prices=0`;
 - `after.legacy_assets=0`;
 - `after.legacy_prices=0`;
 - os ativos canônicos permanecem e os IDs legados `4742` e `4747` não reaparecem.
+
+`history.expected_empty_payloads` pode ser maior que zero, desde que os símbolos estejam vencidos e todas as demais verificações permaneçam reconciliadas.
 
 ## Exit codes do seed
 
@@ -130,6 +145,7 @@ Antes de aprovar o estágio, registre na Issue #208:
 - contagens `before` e `after`;
 - cobertura temporal;
 - resultados de catálogo e histórico;
+- classificação dos payloads vazios;
 - confirmação de zero órfãos, duplicidades e legado;
 - caminho e checksum do arquivo de evidência.
 
@@ -142,7 +158,8 @@ Uma segunda execução controlada, com novo `run_id` e o mesmo SHA promovido, de
 - zero preços duplicados;
 - zero recriação dos IDs legados;
 - o baseline da segunda execução igual ao estado final da primeira;
-- as contagens finais e a cobertura temporal estáveis.
+- as contagens finais e a cobertura temporal estáveis;
+- a classificação de ausências estável.
 
 O wrapper é a entrada preferencial porque produz e compara as duas evidências dentro da mesma operação controlada. A comparação manual continua disponível para diagnóstico:
 
@@ -180,7 +197,8 @@ Interrompa o estágio e não avance quando:
 - `ArtifactRoot` for absoluto ou estiver fora de `artifacts`;
 - o lock não puder ser adquirido;
 - a fonte oficial estiver incompleta ou indisponível;
-- houver ativo não resolvido ou payload vazio;
+- houver ativo não resolvido;
+- `history.required_empty_payloads` for diferente de zero;
 - qualquer contador de integridade for diferente de zero;
 - o JSON não estiver íntegro;
 - qualquer uma das duas execuções retornar código diferente de `0`;
