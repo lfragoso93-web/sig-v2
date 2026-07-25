@@ -4,7 +4,7 @@ Plataforma pessoal para acompanhamento, consolidação e análise de investiment
 
 A branch padrão de desenvolvimento é `stable-15jun`. A promoção para `main` ocorre por PR após validação e atualização da documentação viva.
 
-## Status atual — 24/07/2026
+## Status atual — 25/07/2026
 
 O SGI v2 opera com arquitetura **DB-first**: catálogo, preços, taxas, proventos e snapshots são persistidos antes de alimentar KPIs, páginas e gráficos.
 
@@ -45,6 +45,7 @@ A limpeza real, seeds, coleta, importação e rebuild ainda não foram executado
 - Ensaio de rollback `20260723-213001`: exit code `22`, nenhuma escrita persistida e `reconciliation.ok=true`.
 - Validação local do perfil real: 34 testes aprovados e `compileall` sem erros.
 - Migração Pydantic v2 concluída pela Issue #186.
+- CLI transacional `pre_prod_treasury_seed` implementada pela Issue #208, com advisory lock, baseline, commit único, rollback integral e contrato `pre-prod-treasury-seed.v1`; execução real permanece pendente.
 
 ## Arquitetura resumida
 
@@ -80,22 +81,27 @@ python -m app.cli.pre_prod_cleanup_impact
 python -m app.cli.pre_prod_export
 python -m app.cli.pre_prod_cleanup_plan
 scripts/Invoke-PreProdRealCleanup.ps1
+python -m app.cli.pre_prod_b3_seed --start-year <ANO> --end-year <ANO> --cutoff-date <AAAA-MM-DD>
+python -m app.cli.pre_prod_treasury_seed
 python -m app.cli.full_market_rebuild
 python -m app.cli.rebuild_b3_historical_market
 python -m app.cli.sync_treasury_catalog_v2
 python -m app.cli.rebuild_treasury_official_prices
 ```
 
+As CLIs isoladas de B3 e Tesouro não autorizam execução na pré-produção real apenas por estarem disponíveis. Cada estágio exige SHA aprovado, janela operacional, evidência preservada e reconciliação na Issue correspondente.
+
 ## Prioridades atuais
 
 1. Promover a exposição do `plan_sha256` e gerar uma nova cadeia operacional vinculada ao novo SHA.
 2. Registrar nova confirmação composta e executar a limpeza real somente pela Issue #199.
-3. Executar seeds, importação e rebuild em blocos separados após reconciliação da limpeza.
-4. Endurecer ou remover o router administrativo de debug antes do go-live.
-5. Remover o serviço legado de rentabilidade (#151).
-6. Materializar o histórico persistido do IBOV (#150).
-7. Implementar TWR dedicado para Tesouro Direto e Renda Fixa (#149).
-8. Migrar timestamps UTC legados para timezone-aware (#192).
+3. Executar e reconciliar os seeds isolados de B3 e Tesouro em blocos separados após a limpeza.
+4. Executar benchmarks, câmbio, proventos, importação e rebuild em blocos independentes.
+5. Endurecer ou remover o router administrativo de debug antes do go-live.
+6. Remover o serviço legado de rentabilidade (#151).
+7. Materializar o histórico persistido do IBOV (#150).
+8. Implementar TWR dedicado para Tesouro Direto e Renda Fixa (#149).
+9. Migrar timestamps UTC legados para timezone-aware (#192).
 
 ## Dependências
 
@@ -117,13 +123,13 @@ A primeira entrada em produção exige:
 10. nova autorização composta — pendente;
 11. limpeza controlada dos dados reconstruíveis — pendente;
 12. entrypoint isolado de catálogo + B3 COTAHIST — implementado, execução pendente;
-13. seed oficial do Tesouro Direto — pendente;
+13. entrypoint transacional do seed oficial do Tesouro Direto — implementado, execução e idempotência pendentes;
 14. seed de benchmarks, câmbio e proventos — pendente;
 15. importação CSV completa da carteira — pendente;
 16. rebuild de posições e snapshots — pendente;
 17. reconciliação financeira e auditoria de cobertura — pendente.
 
-Checklist completo: Issue #158. Gate operacional: Issue #199. Runbooks: `docs/PRE_PROD_REBUILD_RUNBOOK.md`, `docs/pre-prod-cleanup-impact-runbook.md`, `docs/pre-prod-export-runbook.md`, `docs/pre-prod-cleanup-execution-runbook.md`, `docs/pre-prod-isolated-cleanup-rehearsal-runbook.md` e `docs/pre-prod-real-cleanup-target-profile.md`.
+Checklist completo: Issue #158. Gates operacionais: Issues #199 e #208. Runbooks: `docs/PRE_PROD_REBUILD_RUNBOOK.md`, `docs/pre-prod-cleanup-impact-runbook.md`, `docs/pre-prod-export-runbook.md`, `docs/pre-prod-cleanup-execution-runbook.md`, `docs/pre-prod-isolated-cleanup-rehearsal-runbook.md`, `docs/pre-prod-real-cleanup-target-profile.md` e `docs/pre-prod-treasury-seed-runbook.md`.
 
 ## Stack
 
@@ -152,4 +158,5 @@ docker compose up -d --build
 - `docs/pre-prod-cleanup-execution-runbook.md` — plano e execução controlada.
 - `docs/pre-prod-isolated-cleanup-rehearsal-runbook.md` — ensaio isolado, rollback e descarte.
 - `docs/pre-prod-real-cleanup-target-profile.md` — gates dos perfis isolado e real.
+- `docs/pre-prod-treasury-seed-runbook.md` — seed transacional, integridade e evidência do Tesouro.
 - `docs/CANONICAL_FINANCIAL_CONTRACT.md` — contrato financeiro oficial.
