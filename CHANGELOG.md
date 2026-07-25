@@ -5,6 +5,14 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — encoding das evidências de idempotência do Tesouro (25/07/2026)
+
+- O wrapper deixou de usar `Tee-Object -FilePath`, cujo encoding implícito no Windows PowerShell produziu evidências UTF-16 incompatíveis com o contrato JSON UTF-8.
+- `first.json`, `second.json` e `idempotency.json` agora são persistidos explicitamente como UTF-8 sem BOM por `System.IO.File.WriteAllText`.
+- O exit code nativo de cada comando Docker é capturado antes da renderização e persistência da saída.
+- Testes estruturais cobrem o encoding explícito, a ausência de `Tee-Object -FilePath` e a preservação dos exit codes.
+- O incidente ocorreu somente no comparador offline: as duas execuções do seed retornaram `ok=true`, `required_empty_payloads=0`, integridade reconciliada e estado final estável em 88.638 preços.
+
 ### Corrigido — classificação de payloads vazios do Tesouro (25/07/2026)
 
 - O histórico oficial passou a separar payloads vazios bloqueantes de ausências esperadas para títulos vencidos.
