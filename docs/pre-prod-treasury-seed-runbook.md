@@ -107,7 +107,32 @@ Uma segunda execução controlada, com novo `run_id` e o mesmo SHA promovido, de
 - zero aliases duplicados;
 - zero preços duplicados;
 - zero recriação dos IDs legados;
-- crescimento apenas quando a fonte oficial contiver dados novos ou corrigidos.
+- o baseline da segunda execução igual ao estado final da primeira;
+- as contagens finais e a cobertura temporal estáveis.
+
+Preserve as duas evidências em arquivos distintos e execute o comparador offline:
+
+```powershell
+$FirstEvidence = "artifacts/pre-prod-rebuild/treasury-<RUN_ID_1>.json"
+$SecondEvidence = "artifacts/pre-prod-rebuild/treasury-<RUN_ID_2>.json"
+
+python -m app.cli.pre_prod_treasury_seed_idempotency `
+    --first $FirstEvidence `
+    --second $SecondEvidence |
+    Tee-Object -FilePath "artifacts/pre-prod-rebuild/treasury-idempotency.json"
+
+$IdempotencyExitCode = $LASTEXITCODE
+```
+
+O relatório usa o contrato `pre-prod-treasury-seed-idempotency.v1` e retorna:
+
+| Código | Significado |
+|---:|---|
+| `0` | idempotência comprovada |
+| `1` | evidências válidas, mas divergentes |
+| `2` | arquivo ausente, JSON inválido ou contrato incompatível |
+
+A comparação exige `run_id` distintos, mesma branch, mesmo `commit_sha`, encadeamento do baseline e estabilidade de estado e cobertura. O comparador não acessa banco, rede ou variáveis de ambiente.
 
 A idempotência deve ser comprovada na Issue #208 antes de atualizar a Issue #158 e antes de avançar para benchmarks, câmbio ou proventos.
 
@@ -120,6 +145,7 @@ Interrompa o estágio e não avance quando:
 - a fonte oficial estiver incompleta ou indisponível;
 - houver ativo não resolvido ou payload vazio;
 - qualquer contador de integridade for diferente de zero;
-- o JSON não estiver íntegro.
+- o JSON não estiver íntegro;
+- o comparador offline retornar código diferente de `0`.
 
 Não tente corrigir manualmente o banco durante a mesma janela. Preserve a evidência, atualize a Issue #208 e abra um novo bloco corretivo.
