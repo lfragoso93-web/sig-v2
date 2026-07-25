@@ -28,7 +28,7 @@
 | Limpeza isolada | Sucesso e rollback reconciliados; PR #198 promovida | 100% |
 | Perfil de alvo real | Implementado, validado e promovido pela PR #204 | 100% |
 | Seed isolado B3/COTAHIST | Entry point implementado; execução pendente | 90% |
-| Seed isolado Tesouro | CLI transacional implementada; execução e idempotência pendentes (#208) | 90% |
+| Seed isolado Tesouro | Identidade operacional implementada; CI, promoção, execução e idempotência pendentes (#208) | 92% |
 | Rebuild pré-produção | Gates estruturais preparados; execuções reais pendentes | 94% |
 | Eventos corporativos | Fundação pronta | 30% |
 | IRPF | Planejado | 15% |
@@ -57,8 +57,9 @@ Prontidão global estimada para a primeira produção: **89%**. O percentual nã
 - Preço associado ao ticker original da posição.
 - Criação automática de ativos duplicados bloqueada.
 - Valores atuais validados na interface.
-- Contrato `pre-prod-treasury-seed.v1` implementado com baseline, cobertura e integridade.
+- Contrato `pre-prod-treasury-seed.v1` implementado com identidade operacional, baseline, cobertura e integridade.
 - Advisory lock, transação única, commit final e rollback integral coordenados pela CLI `pre_prod_treasury_seed`.
+- `run_id`, branch `stable-15jun` e SHA completo são validados antes da abertura das sessões.
 - Execução real e comprovação de idempotência permanecem pendentes na Issue #208.
 
 ### Histórico e snapshots
@@ -96,6 +97,8 @@ Prontidão global estimada para a primeira produção: **89%**. O percentual nã
 - [x] Contrato, inspeção, advisory lock e orquestração transacional do Tesouro implementados.
 - [x] Histórico oficial do Tesouro refatorado para sessão externa e `commit=False`.
 - [x] CLI `pre_prod_treasury_seed` e runbook dedicado implementados.
+- [x] Identidade operacional (`run_id`, branch e SHA) implementada e validada antes do banco.
+- [ ] Validar o bloco de identidade no CI e promovê-lo para a `main`.
 - [ ] Gerar nova cadeia operacional vinculada ao SHA promovido.
 - [ ] Recalcular e revisar a confirmação composta.
 - [ ] Executar limpeza real somente após nova autorização explícita.
@@ -129,7 +132,7 @@ Prontidão global estimada para a primeira produção: **89%**. O percentual nã
 
 ## Próximas prioridades
 
-1. Promover o bloco estrutural do seed isolado do Tesouro para a `main`.
+1. Validar e promover a identidade operacional do seed isolado do Tesouro.
 2. Gerar nova cadeia operacional vinculada ao SHA promovido.
 3. Executar e reconciliar a limpeza real pela Issue #199.
 4. Executar e reconciliar B3 e Tesouro em estágios independentes.
