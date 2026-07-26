@@ -46,6 +46,10 @@ _RATE_QUANTUM = Decimal("0.00000001")
 _mem_cache: dict[str, tuple[float, float]] = {}
 
 
+# ---------------------------------------------------------------------------
+# Cache L2 - memoria
+# ---------------------------------------------------------------------------
+
 def _normalize_rate(rate: float | Decimal) -> Decimal:
     return Decimal(str(rate)).quantize(_RATE_QUANTUM, rounding=ROUND_HALF_UP)
 
@@ -61,6 +65,10 @@ def _mem_set(date_str: str, rate: float, ttl: float = MEM_CACHE_TTL) -> None:
     _mem_cache[date_str] = (rate, time.time() + ttl)
 
 
+# ---------------------------------------------------------------------------
+# Cache L1 - banco
+# ---------------------------------------------------------------------------
+
 async def _db_get(db: AsyncSession, date_str: str) -> Optional[float]:
     try:
         d = DateType.fromisoformat(date_str)
@@ -74,10 +82,11 @@ async def _db_get(db: AsyncSession, date_str: str) -> Optional[float]:
         if row is None:
             return None
         today = datetime.now(timezone.utc).date()
-        if d >= today and row.created_at:
-            age = (datetime.now(timezone.utc) - row.created_at).total_seconds()
-            if age > DB_TODAY_TTL:
-                return None
+        if d >= today:
+            if row.created_at:
+                age = (datetime.now(timezone.utc) - row.created_at).total_seconds()
+                if age > DB_TODAY_TTL:
+                    return None
         return float(row.rate)
     except Exception as e:
         logger.warning("[fx_service] _db_get error for %s: %s", date_str, e)
@@ -134,6 +143,10 @@ async def _db_set(db: AsyncSession, date_str: str, rate: float) -> None:
         logger.warning("[fx_service] _db_set error for %s: %s", date_str, e)
 
 
+# ---------------------------------------------------------------------------
+# Fallback AwesomeAPI (L3 extra para cotacao atual)
+# ---------------------------------------------------------------------------
+
 async def _awesome_usd_brl_today() -> Optional[float]:
     try:
         import httpx
@@ -182,50 +195,75 @@ async def _awesome_usd_brl_history(
         return []
 
 
+# ---------------------------------------------------------------------------
+# API publica
+# ---------------------------------------------------------------------------
+
 async def get_usd_brl_today(db: AsyncSession) -> float:
+    """
+    Cotacao USD/BRL atual.
+    Ordem: L2 mem -> L1 db (TTL 900s) -> BCB dia atual -> AwesomeAPI -> FALLBACK
+    """
     today_str = datetime.now(timezone.utc).date().isoformat()
+
     cached = _mem_get(today_str)
     if cached is not None:
         return cached
+
     db_val = await _db_get(db, today_str)
     if db_val is not None:
         _mem_set(today_str, db_val)
         return db_val
+
     rate = await fetch_usd_brl_day(today_str)
+
     if rate is None:
         rate = await _awesome_usd_brl_today()
+
     if rate is None:
         logger.error(
             "[fx_service] todas as fontes falharam para USD/BRL hoje — usando FALLBACK_RATE=%s",
             FALLBACK_RATE,
         )
         rate = FALLBACK_RATE
+
     await _db_set(db, today_str, rate)
     _mem_set(today_str, rate)
     return rate
 
 
 async def get_usd_brl_at_date(db: AsyncSession, date_str: str) -> float:
+    """
+    Cotacao USD/BRL em data especifica.
+    Datas >= hoje redirecionadas para get_usd_brl_today (evita chamada BCB com data futura).
+    Ordem: L2 mem -> L1 db (permanente) -> BCB periodo -> AwesomeAPI -> FALLBACK
+    """
     today = datetime.now(timezone.utc).date()
     try:
         target = DateType.fromisoformat(date_str)
     except ValueError:
         logger.warning("[fx_service] date_str invalido: %r — usando hoje", date_str)
         return await get_usd_brl_today(db)
+
     if target >= today:
         return await get_usd_brl_today(db)
+
     cached = _mem_get(date_str)
     if cached is not None:
         return cached
+
     db_val = await _db_get(db, date_str)
     if db_val is not None:
         _mem_set(date_str, db_val, ttl=3600)
         return db_val
+
     window_start = (target - timedelta(days=7)).isoformat()
     rows = await fetch_usd_brl_period(window_start, date_str)
+
     if not rows:
         logger.info("[fx_service] BCB vazio para %s — tentando AwesomeAPI", date_str)
         rows = await _awesome_usd_brl_history(window_start, date_str)
+
     if rows:
         rate = rows[-1][1]
         for row_date, row_rate in rows:
@@ -237,6 +275,7 @@ async def get_usd_brl_at_date(db: AsyncSession, date_str: str) -> float:
             date_str, FALLBACK_RATE,
         )
         rate = FALLBACK_RATE
+
     return rate
 
 
@@ -244,12 +283,20 @@ async def get_usd_brl_batch(
     db: AsyncSession,
     dates: list[str],
 ) -> dict[str, float]:
+    """
+    Retorna {date_str: rate} para multiplas datas.
+
+    Otimizacao: uma unica chamada BCB para todo o range de datas historicas.
+    Datas futuras ou hoje -> cotacao atual (sem chamada BCB).
+    """
     if not dates:
         return {}
+
     unique_dates = sorted(set(dates))
     result: dict[str, float] = {}
     missing: list[str] = []
     today = datetime.now(timezone.utc).date()
+
     for d_str in unique_dates:
         try:
             d = DateType.fromisoformat(d_str)
@@ -259,31 +306,40 @@ async def get_usd_brl_batch(
             rate_today = await get_usd_brl_today(db)
             result[d_str] = rate_today
             continue
+
         cached = _mem_get(d_str)
         if cached is not None:
             result[d_str] = cached
             continue
+
         db_val = await _db_get(db, d_str)
         if db_val is not None:
             result[d_str] = db_val
             _mem_set(d_str, db_val, ttl=3600)
             continue
+
         missing.append(d_str)
+
     if not missing:
         return result
+
     range_start = missing[0]
     range_end_dt = DateType.fromisoformat(missing[-1]) + timedelta(days=7)
     range_end = min(range_end_dt, today - timedelta(days=1)).isoformat()
+
     rows = await fetch_usd_brl_period(range_start, range_end)
+
     if not rows:
         logger.info("[fx_service] BCB vazio para range %s a %s — tentando AwesomeAPI", range_start, range_end)
         rows = await _awesome_usd_brl_history(range_start, range_end)
+
     fetched: dict[str, float] = {}
     for row_date, row_rate in rows:
         d_str = row_date.isoformat()
         fetched[d_str] = row_rate
         await _db_set(db, d_str, row_rate)
         _mem_set(d_str, row_rate, ttl=3600)
+
     for d_str in missing:
         if d_str in fetched:
             result[d_str] = fetched[d_str]
@@ -307,4 +363,5 @@ async def get_usd_brl_batch(
                     d_str, FALLBACK_RATE,
                 )
                 result[d_str] = FALLBACK_RATE
+
     return result
