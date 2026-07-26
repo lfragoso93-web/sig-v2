@@ -54,10 +54,10 @@ class MacroSeedComparison:
 def load_macro_seed_evidence(path: str | Path) -> dict[str, Any]:
     evidence_path = Path(path)
     try:
-        payload = json.loads(evidence_path.read_text(encoding="utf-8"))
+        payload = json.loads(evidence_path.read_text(encoding="utf-8-sig"))
     except FileNotFoundError as exc:
         raise MacroSeedContractError(f"evidência não encontrada: {evidence_path}") from exc
-    except json.JSONDecodeError as exc:
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise MacroSeedContractError(f"evidência JSON inválida: {evidence_path}") from exc
 
     if not isinstance(payload, dict):
