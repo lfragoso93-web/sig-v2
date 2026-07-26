@@ -68,15 +68,30 @@ def test_compare_accepts_idempotent_second_execution():
     assert comparison.to_dict()["schema_version"] == "pre-prod-macro-seed-compare.v1"
 
 
-def test_compare_rejects_new_rows_on_second_execution():
+def test_compare_accepts_processed_upserts_without_row_growth():
     comparison = compare_macro_seed_evidence(
         _evidence("20260725-230632"),
-        _evidence("20260725-231000", imported={"CDI": 1}),
+        _evidence("20260725-231000", imported={"CDI": 7, "SELIC": 7, "IPCA": 4, "IGPM": 4}),
+    )
+
+    assert comparison.ok is True
+    assert comparison.zero_new_rows_on_second_run is True
+    assert comparison.differences == ()
+
+
+def test_compare_rejects_row_growth_on_second_execution():
+    second = _evidence("20260725-231000", imported={"CDI": 1})
+    second["after"]["total_rows"] = 261
+    second["after"]["indicators"][0]["rows"] = 101
+
+    comparison = compare_macro_seed_evidence(
+        _evidence("20260725-230632"),
+        second,
     )
 
     assert comparison.ok is False
     assert comparison.zero_new_rows_on_second_run is False
-    assert "segunda execução importou novas linhas" in comparison.differences
+    assert "segunda execução alterou o total de linhas" in comparison.differences
 
 
 def test_compare_detects_state_change():
