@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from decimal import Decimal
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import httpx
 import pytest
@@ -59,8 +59,8 @@ def test_parse_strict_ptax_rows_rejects_missing_sell_rate() -> None:
 
 @pytest.mark.asyncio
 async def test_fetch_strict_period_uses_official_parameters() -> None:
-    response = AsyncMock()
-    response.raise_for_status = AsyncMock()
+    response = Mock()
+    response.raise_for_status = Mock()
     response.json.return_value = {
         "value": [
             {
@@ -80,7 +80,7 @@ async def test_fetch_strict_period_uses_official_parameters() -> None:
 
     assert rows[0].rate == Decimal("5.40")
     client.get.assert_awaited_once()
-    url, = client.get.await_args.args
+    (url,) = client.get.await_args.args
     params = client.get.await_args.kwargs["params"]
     assert url.endswith(
         "/CotacaoDolarPeriodo(dataInicial=@dataInicial,dataFinalCotacao=@dataFinalCotacao)"
@@ -102,8 +102,8 @@ async def test_fetch_strict_period_rejects_reversed_dates() -> None:
 
 @pytest.mark.asyncio
 async def test_fetch_strict_period_rejects_empty_official_response() -> None:
-    response = AsyncMock()
-    response.raise_for_status = AsyncMock()
+    response = Mock()
+    response.raise_for_status = Mock()
     response.json.return_value = {"value": []}
     client = AsyncMock()
     client.get.return_value = response
