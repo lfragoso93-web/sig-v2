@@ -5,6 +5,39 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Adicionado — persistência e fechamento operacional do seed macro (25/07/2026)
+
+- Criado `scripts/compare_pre_prod_macro_seed.ps1` para persistir a prova offline em `macro-seed-compare.json`.
+- O wrapper recusa sobrescrita, valida `pre-prod-macro-seed-compare.v1`, exige `ok=true` e propaga falha operacional.
+- Adicionado teste estrutural do wrapper, com skip explícito quando o checkout backend não inclui `scripts/`.
+- Criado `docs/pre-prod-macro-seed-runbook.md` com escopo, comandos, critérios de aborto e fronteira arquitetural.
+- README e ROADMAP foram sincronizados com a execução real dos runs `20260725-231557` e `20260725-231604`.
+- A comparação comprovou mesmo commit, estado final estável, zero novas linhas, zero duplicidades, zero indicadores não suportados e `ok=true`.
+- Câmbio e proventos permanecem fora do estágio de benchmarks e devem usar contratos, locks, transações e evidências independentes.
+
+### Corrigido — semântica da idempotência do seed macro (25/07/2026)
+
+- O comparador deixou de tratar `imported` como quantidade de linhas novas, pois o serviço conta linhas submetidas ao UPSERT, incluindo conflitos atualizados.
+- Novas linhas da segunda execução passaram a ser medidas pelo delta real entre `before.total_rows` e `after.total_rows`.
+- A validação preserva o volume processado em `imported` sem produzir falso negativo quando o estado persistido permanece estável.
+- Testes cobrem UPSERT sem crescimento e crescimento real da tabela.
+
+### Corrigido — encoding das evidências macro no Windows (25/07/2026)
+
+- O comparador offline passou a ler JSON com `utf-8-sig`, aceitando evidências UTF-8 com ou sem BOM.
+- Erros de decodificação são normalizados como violações do contrato operacional.
+- Adicionada regressão específica para arquivos produzidos pelo Windows PowerShell.
+
+### Adicionado — seed isolado de benchmarks macroeconômicos (25/07/2026)
+
+- Criado o contrato `pre-prod-macro-seed.v1` para CDI, SELIC, IPCA e IGPM.
+- Implementados inspeção read-only, advisory lock dedicado, transação única, commit final e rollback integral.
+- `benchmark_rate_service` passou a aceitar sessão externa e `commit=False` sem alterar consumidores existentes.
+- Criada a CLI `python -m app.cli.pre_prod_macro_seed` com identidade obrigatória, saída JSON e exit codes distintos.
+- Criado `scripts/pre_prod_macro_seed.ps1` para executar o estágio no container e preservar `macro-seed.json` por `run_id`.
+- Criado o comparador puro `pre-prod-macro-seed-compare.v1` para provar idempotência sem acessar banco ou rede.
+- A suíte do estágio cobre contrato, inspeção, serviço, CLI, wrapper e comparação offline.
+
 ### Corrigido — portabilidade do teste do wrapper de idempotência (25/07/2026)
 
 - O teste estrutural deixou de assumir um layout físico único para o checkout, que divergia entre GitHub Actions (`<repo>/backend/tests/...`) e a imagem Docker (`/app/tests/...`).
