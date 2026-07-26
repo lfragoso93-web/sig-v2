@@ -1,3 +1,4 @@
+from decimal import Decimal
 from unittest.mock import AsyncMock
 
 import pytest
@@ -17,7 +18,7 @@ async def test_persist_usd_brl_rate_commits_by_default() -> None:
 
     _, params = db.execute.await_args.args
     assert params["pair"] == PAIR_USD_BRL
-    assert params["rate"] == 5.43219877
+    assert params["rate"] == Decimal("5.43219877")
 
 
 @pytest.mark.asyncio
