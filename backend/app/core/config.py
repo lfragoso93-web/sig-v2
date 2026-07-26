@@ -8,7 +8,14 @@ _DEFAULT_SECRET_KEY = "change-me-" + "in-production"
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
+    # O mesmo .env e compartilhado entre aplicacao, Docker Compose e rotinas
+    # operacionais. Variaveis que pertencem a outros componentes nao devem
+    # impedir a inicializacao desta classe nem a coleta da suite de testes.
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=True,
+        extra="ignore",
+    )
 
     DATABASE_URL: str = "postgresql://sgi:sgi@db:5432/sgi"
     ASYNC_DATABASE_URL: str = "postgresql+asyncpg://sgi:sgi@db:5432/sgi"
