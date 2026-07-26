@@ -72,6 +72,8 @@ def load_macro_seed_evidence(path: str | Path) -> dict[str, Any]:
     )
     if payload.get("ok") is not True:
         raise MacroSeedContractError("somente evidências bem-sucedidas podem ser comparadas")
+    if not isinstance(payload.get("before"), dict):
+        raise MacroSeedContractError("evidência não contém estado before válido")
     if not isinstance(payload.get("after"), dict):
         raise MacroSeedContractError("evidência não contém estado after válido")
     if not isinstance(payload.get("imported"), dict):
@@ -122,10 +124,17 @@ def compare_macro_seed_evidence(
     if not stable_after_state:
         differences.append("estado final difere entre as execuções")
 
-    imported = second["imported"]
-    zero_new_rows = all(int(imported.get(name, 0)) == 0 for name in MACRO_SEED_INDICATORS)
+    try:
+        second_before_rows = int(second["before"]["total_rows"])
+        second_after_rows = int(second["after"]["total_rows"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise MacroSeedContractError(
+            "evidência não contém total_rows válido em before/after"
+        ) from exc
+
+    zero_new_rows = second_after_rows == second_before_rows
     if not zero_new_rows:
-        differences.append("segunda execução importou novas linhas")
+        differences.append("segunda execução alterou o total de linhas")
 
     duplicate_rows = sum(
         int(item.get("duplicate_rows", 0))
