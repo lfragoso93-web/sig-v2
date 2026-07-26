@@ -128,3 +128,18 @@ def test_compare_files_loads_utf8_json(tmp_path):
     )
 
     assert compare_macro_seed_files(first_path, second_path).ok is True
+
+
+def test_compare_files_loads_utf8_bom_json(tmp_path):
+    first_path = tmp_path / "first-bom.json"
+    second_path = tmp_path / "second-bom.json"
+    first_path.write_text(
+        json.dumps(_evidence("20260725-230632"), ensure_ascii=False),
+        encoding="utf-8-sig",
+    )
+    second_path.write_text(
+        json.dumps(_evidence("20260725-231000"), ensure_ascii=False),
+        encoding="utf-8-sig",
+    )
+
+    assert compare_macro_seed_files(first_path, second_path).ok is True
