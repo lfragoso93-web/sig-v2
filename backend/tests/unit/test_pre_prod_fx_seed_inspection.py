@@ -7,9 +7,18 @@ import pytest
 from app.services.pre_prod_fx_seed_inspection import inspect_fx_seed_state
 
 
+def _db_stub() -> SimpleNamespace:
+    return SimpleNamespace(
+        scalar=AsyncMock(),
+        execute=AsyncMock(),
+        commit=AsyncMock(),
+        rollback=AsyncMock(),
+    )
+
+
 @pytest.mark.asyncio
 async def test_inspect_fx_seed_state_is_read_only_and_maps_database_state() -> None:
-    db = AsyncMock()
+    db = _db_stub()
     db.scalar.return_value = 4
 
     unsupported_result = Mock()
@@ -49,7 +58,7 @@ async def test_inspect_fx_seed_state_is_read_only_and_maps_database_state() -> N
 
 @pytest.mark.asyncio
 async def test_inspect_fx_seed_state_handles_empty_table() -> None:
-    db = AsyncMock()
+    db = _db_stub()
     db.scalar.return_value = None
 
     unsupported_result = Mock()
@@ -79,3 +88,6 @@ async def test_inspect_fx_seed_state_handles_empty_table() -> None:
     assert state.pairs[0].first_date is None
     assert state.pairs[0].last_date is None
     assert state.pairs[0].duplicate_rows == 0
+
+    db.commit.assert_not_awaited()
+    db.rollback.assert_not_awaited()
