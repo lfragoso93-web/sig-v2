@@ -1,0 +1,86 @@
+"""CLI auditável do estágio isolado de séries macroeconômicas."""
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+
+from app.core.database import AsyncSessionLocal
+from app.services.pre_prod_macro_seed_contract import (
+    MACRO_SEED_BRANCH,
+    validate_macro_seed_identity,
+)
+from app.services.pre_prod_macro_seed_service import (
+    MacroSeedAlreadyRunningError,
+    run_pre_prod_macro_seed,
+)
+
+EXIT_OK = 0
+EXIT_OPERATIONAL_FAILURE = 1
+EXIT_ALREADY_RUNNING = 2
+EXIT_UNEXPECTED_FAILURE = 3
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Sincroniza somente séries macroeconômicas canônicas "
+            "em uma transação auditável"
+        )
+    )
+    parser.add_argument("--run-id", required=True, help="Identidade YYYYMMDD-HHMMSS")
+    parser.add_argument(
+        "--branch",
+        required=True,
+        help=f"Branch operacional obrigatória ({MACRO_SEED_BRANCH})",
+    )
+    parser.add_argument(
+        "--commit-sha",
+        required=True,
+        help="SHA Git completo, hexadecimal minúsculo de 40 caracteres",
+    )
+    return parser
+
+
+async def _main() -> int:
+    args = _parser().parse_args()
+
+    try:
+        validate_macro_seed_identity(
+            run_id=args.run_id,
+            branch=args.branch,
+            commit_sha=args.commit_sha,
+        )
+        async with AsyncSessionLocal() as lock_db, AsyncSessionLocal() as work_db:
+            result = await run_pre_prod_macro_seed(
+                run_id=args.run_id,
+                branch=args.branch,
+                commit_sha=args.commit_sha,
+                lock_db=lock_db,
+                work_db=work_db,
+            )
+    except MacroSeedAlreadyRunningError as exc:
+        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+        return EXIT_ALREADY_RUNNING
+    except (ValueError, RuntimeError) as exc:
+        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+        return EXIT_OPERATIONAL_FAILURE
+    except Exception as exc:
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "error": "falha inesperada no estágio macroeconômico",
+                    "type": type(exc).__name__,
+                },
+                ensure_ascii=False,
+            )
+        )
+        return EXIT_UNEXPECTED_FAILURE
+
+    print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2, default=str))
+    return EXIT_OK if result.ok else EXIT_OPERATIONAL_FAILURE
+
+
+if __name__ == "__main__":
+    raise SystemExit(asyncio.run(_main()))
