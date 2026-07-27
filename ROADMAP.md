@@ -1,6 +1,6 @@
 # Roadmap modular — SGI v2
 
-> Última atualização: 25/07/2026
+> Última atualização: 27/07/2026
 
 ## Visão geral
 
@@ -30,7 +30,7 @@
 | Seed isolado B3/COTAHIST | Entry point implementado; execução pendente | 90% |
 | Seed isolado Tesouro | Identidade, comparador e wrapper implementados; execução real pendente (#208) | 97% |
 | Seed isolado de benchmarks | Execução real e idempotência comprovadas (#216) | 100% |
-| Seed isolado de câmbio | Planejamento arquitetural pendente (#216) | 10% |
+| Seed isolado de câmbio | Estrutura concluída; execução real e idempotência pendentes (#217) | 95% |
 | Seed isolado de proventos | Planejamento arquitetural pendente (#216) | 10% |
 | Rebuild pré-produção | Gates estruturais preparados; execuções reais pendentes | 96% |
 | Eventos corporativos | Fundação pronta | 30% |
@@ -77,6 +77,15 @@ Prontidão global estimada para a primeira produção: **90%**. O percentual nã
 - Wrapper `scripts/compare_pre_prod_macro_seed.ps1` persiste a prova offline sem sobrescrever artefatos existentes.
 - Câmbio e proventos permanecem separados deste estágio por fronteira arquitetural.
 
+### Câmbio
+
+- Contrato `pre-prod-fx-seed.v1` implementado para `USD-BRL`, fonte `BCB` e tipo `PTAX_SELL`.
+- Inspeção read-only, cliente PTAX estrito, preparação com `commit=False`, advisory lock, transação única e CLI auditável implementados.
+- A CLI exige `run_id`, branch `stable-15jun`, SHA completo e intervalo inicial/final antes de abrir sessões.
+- Respostas vazias, datas duplicadas, linhas fora da janela e pares não suportados são bloqueantes.
+- `docs/pre-prod-fx-seed-runbook.md` documenta o ensaio controlado e a segunda execução idempotente.
+- Execução real e comprovação operacional de idempotência permanecem pendentes na Issue #217.
+
 ### Histórico e snapshots
 
 - B3 COTAHIST como histórico primário de renda variável brasileira.
@@ -87,7 +96,7 @@ Prontidão global estimada para a primeira produção: **90%**. O percentual nã
 
 ## Em desenvolvimento
 
-### Pré-produção — Issues #158, #199, #208 e #216
+### Pré-produção — Issues #158, #199, #208, #216 e #217
 
 - [x] Inventário read-only `pre-prod-inventory.v2` validado.
 - [x] Política integral: 11 tabelas preservadas, 3 exportáveis e 10 reconstruíveis.
@@ -119,6 +128,8 @@ Prontidão global estimada para a primeira produção: **90%**. O percentual nã
 - [x] Duas execuções reais de benchmarks preservadas e comparadas.
 - [x] Idempotência de benchmarks comprovada com `ok=true`.
 - [x] Persistidor da comparação e runbook de benchmarks implementados.
+- [x] Contrato, inspeção, cliente PTAX estrito, preparação, orquestração e CLI do seed cambial implementados.
+- [x] Runbook do seed cambial implementado e documentação viva sincronizada.
 - [ ] Gerar nova cadeia operacional vinculada ao SHA promovido.
 - [ ] Recalcular e revisar a confirmação composta.
 - [ ] Executar limpeza real somente após nova autorização explícita.
@@ -126,7 +137,8 @@ Prontidão global estimada para a primeira produção: **90%**. O percentual nã
 - [ ] Executar e reconciliar o seed isolado B3 COTAHIST.
 - [ ] Executar e reconciliar o seed isolado do Tesouro.
 - [ ] Comprovar idempotência do Tesouro em segunda execução controlada usando o wrapper oficial.
-- [ ] Inventariar e implementar o estágio isolado de câmbio.
+- [ ] Executar e reconciliar o seed isolado de câmbio.
+- [ ] Comprovar idempotência do câmbio em segunda execução no mesmo SHA e intervalo.
 - [ ] Inventariar e implementar o estágio isolado de proventos.
 - [ ] Importação CSV completa da carteira.
 - [ ] Rebuild de posições e snapshots.
@@ -153,18 +165,17 @@ Prontidão global estimada para a primeira produção: **90%**. O percentual nã
 
 ## Próximas prioridades
 
-1. Persistir e registrar formalmente a comparação validada do seed de benchmarks.
-2. Iniciar auditoria arquitetural do estágio isolado de câmbio.
-3. Gerar nova cadeia operacional vinculada ao SHA promovido.
-4. Executar e reconciliar a limpeza real pela Issue #199.
-5. Executar e reconciliar B3 e Tesouro em estágios independentes.
-6. Implementar e validar o estágio isolado de proventos.
-7. Executar importação e rebuild em blocos independentes.
-8. Endurecer ou remover o router administrativo de debug antes do go-live.
-9. Remover o serviço legado de rentabilidade (#151).
-10. Materializar IBOV (#150).
-11. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
-12. Migrar timestamps UTC para timezone-aware (#192).
+1. Executar e reconciliar o seed cambial em intervalo curto, preservando duas evidências no mesmo SHA.
+2. Gerar nova cadeia operacional vinculada ao SHA promovido.
+3. Executar e reconciliar a limpeza real pela Issue #199.
+4. Executar e reconciliar B3 e Tesouro em estágios independentes.
+5. Implementar e validar o estágio isolado de proventos.
+6. Executar importação e rebuild em blocos independentes.
+7. Endurecer ou remover o router administrativo de debug antes do go-live.
+8. Remover o serviço legado de rentabilidade (#151).
+9. Materializar IBOV (#150).
+10. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
+11. Migrar timestamps UTC para timezone-aware (#192).
 
 ## Backlog
 
