@@ -5,6 +5,17 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Adicionado — seed isolado de câmbio e runbook operacional (27/07/2026)
+
+- Criado o contrato `pre-prod-fx-seed.v1` para o par `USD-BRL`, fonte oficial `BCB` e tipo `PTAX_SELL`.
+- Implementadas inspeção read-only, cliente PTAX estrito sem fallback, preparação com persistência `commit=False`, advisory lock dedicado, transação única, commit final e rollback integral.
+- Criada a CLI `python -m app.cli.pre_prod_fx_seed` com identidade obrigatória, intervalo inicial/final, sessões separadas para lock e trabalho, saída JSON e códigos de saída distintos.
+- Respostas vazias, datas duplicadas, linhas fora da janela, pares não suportados e inconsistências finais são bloqueantes.
+- Criado `docs/pre-prod-fx-seed-runbook.md` com validação unitária, comando PowerShell para duas execuções consecutivas, critérios de sucesso, aborto e evidências exigidas.
+- README e ROADMAP foram sincronizados para marcar a estrutura do estágio como concluída e a execução real/idempotência como pendentes na Issue #217.
+- A suíte incremental do estágio foi validada localmente com 37 testes aprovados antes do bloco documental.
+- Nenhuma coleta PTAX ou escrita em pré-produção foi executada durante a implementação e documentação.
+
 ### Adicionado — persistência e fechamento operacional do seed macro (25/07/2026)
 
 - Criado `scripts/compare_pre_prod_macro_seed.ps1` para persistir a prova offline em `macro-seed-compare.json`.
