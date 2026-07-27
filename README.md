@@ -4,7 +4,7 @@ Plataforma pessoal para acompanhamento, consolidação e análise de investiment
 
 A branch padrão de desenvolvimento é `stable-15jun`. A promoção para `main` ocorre por PR após validação e atualização da documentação viva.
 
-## Status atual — 25/07/2026
+## Status atual — 27/07/2026
 
 O SGI v2 opera com arquitetura **DB-first**: catálogo, preços, taxas, proventos e snapshots são persistidos antes de alimentar KPIs, páginas e gráficos.
 
@@ -51,6 +51,7 @@ A limpeza real, seeds B3/Tesouro, câmbio, proventos, importação e rebuild ain
 - Seed isolado de benchmarks implementado com contrato `pre-prod-macro-seed.v1`, advisory lock, transação única, CLI e wrapper PowerShell.
 - Execuções `20260725-231557` e `20260725-231604` comprovaram estado final estável, zero novas linhas, zero duplicidades e zero indicadores não suportados.
 - Comparador `pre-prod-macro-seed-compare.v1` e persistidor `scripts/compare_pre_prod_macro_seed.ps1` preservam a prova offline em JSON auditável.
+- Seed isolado de câmbio implementado pela Issue #217 com contrato `pre-prod-fx-seed.v1`, inspeção read-only, cliente PTAX estrito, persistência transacional, advisory lock, CLI auditável e runbook dedicado; execução real e prova de idempotência permanecem pendentes.
 
 ## Arquitetura resumida
 
@@ -92,20 +93,21 @@ python -m app.cli.pre_prod_treasury_seed_idempotency --first <PRIMEIRA_EVIDENCIA
 scripts/Invoke-PreProdTreasuryIdempotency.ps1 -CommitSha <SHA40> -Confirmation EXECUTE-TREASURY-IDEMPOTENCY:<SHA40>
 scripts/pre_prod_macro_seed.ps1 -RunId <YYYYMMDD-HHMMSS> -Branch stable-15jun -CommitSha <SHA40>
 scripts/compare_pre_prod_macro_seed.ps1 -FirstEvidence <PRIMEIRA_EVIDENCIA.json> -SecondEvidence <SEGUNDA_EVIDENCIA.json> -RunId <YYYYMMDD-HHMMSS>
+python -m app.cli.pre_prod_fx_seed --run-id <YYYYMMDD-HHMMSS> --branch stable-15jun --commit-sha <SHA40> --start-date <AAAA-MM-DD> --end-date <AAAA-MM-DD>
 python -m app.cli.full_market_rebuild
 python -m app.cli.rebuild_b3_historical_market
 python -m app.cli.sync_treasury_catalog_v2
 python -m app.cli.rebuild_treasury_official_prices
 ```
 
-As CLIs isoladas de B3, Tesouro e benchmarks não autorizam execução na pré-produção real apenas por estarem disponíveis. Cada estágio exige SHA aprovado, janela operacional, evidência preservada e reconciliação na Issue correspondente. Os comparadores de idempotência operam somente sobre arquivos JSON e não acessam banco ou rede.
+As CLIs isoladas de B3, Tesouro, benchmarks e câmbio não autorizam execução na pré-produção real apenas por estarem disponíveis. Cada estágio exige SHA aprovado, janela operacional, evidência preservada e reconciliação na Issue correspondente. Os comparadores de idempotência operam somente sobre arquivos JSON e não acessam banco ou rede.
 
 ## Prioridades atuais
 
 1. Promover a exposição do `plan_sha256` e gerar uma nova cadeia operacional vinculada ao novo SHA.
 2. Registrar nova confirmação composta e executar a limpeza real somente pela Issue #199.
 3. Executar e reconciliar os seeds isolados de B3 e Tesouro em blocos separados após a limpeza.
-4. Implementar e validar o estágio isolado de câmbio.
+4. Executar e reconciliar o estágio isolado de câmbio, incluindo segunda execução idempotente pela Issue #217.
 5. Implementar e validar o estágio isolado de proventos.
 6. Executar importação e rebuild em blocos independentes.
 7. Endurecer ou remover o router administrativo de debug antes do go-live.
@@ -136,13 +138,13 @@ A primeira entrada em produção exige:
 12. entrypoint isolado de catálogo + B3 COTAHIST — implementado, execução pendente;
 13. entrypoint transacional do seed oficial do Tesouro Direto — implementado com identidade obrigatória; comparador e wrapper de idempotência implementados; execução e evidência real pendentes;
 14. seed isolado de benchmarks — executado e idempotência comprovada;
-15. seed isolado de câmbio — pendente;
+15. seed isolado de câmbio — implementação estrutural concluída; execução real e idempotência pendentes;
 16. seed isolado de proventos — pendente;
 17. importação CSV completa da carteira — pendente;
 18. rebuild de posições e snapshots — pendente;
 19. reconciliação financeira e auditoria de cobertura — pendente.
 
-Checklist completo: Issue #158. Gates operacionais: Issues #199, #208 e #216. Runbooks: `docs/PRE_PROD_REBUILD_RUNBOOK.md`, `docs/pre-prod-cleanup-impact-runbook.md`, `docs/pre-prod-export-runbook.md`, `docs/pre-prod-cleanup-execution-runbook.md`, `docs/pre-prod-isolated-cleanup-rehearsal-runbook.md`, `docs/pre-prod-real-cleanup-target-profile.md`, `docs/pre-prod-treasury-seed-runbook.md` e `docs/pre-prod-macro-seed-runbook.md`.
+Checklist completo: Issue #158. Gates operacionais: Issues #199, #208, #216 e #217. Runbooks: `docs/PRE_PROD_REBUILD_RUNBOOK.md`, `docs/pre-prod-cleanup-impact-runbook.md`, `docs/pre-prod-export-runbook.md`, `docs/pre-prod-cleanup-execution-runbook.md`, `docs/pre-prod-isolated-cleanup-rehearsal-runbook.md`, `docs/pre-prod-real-cleanup-target-profile.md`, `docs/pre-prod-treasury-seed-runbook.md`, `docs/pre-prod-macro-seed-runbook.md` e `docs/pre-prod-fx-seed-runbook.md`.
 
 ## Stack
 
@@ -173,4 +175,5 @@ docker compose up -d --build
 - `docs/pre-prod-real-cleanup-target-profile.md` — gates dos perfis isolado e real.
 - `docs/pre-prod-treasury-seed-runbook.md` — seed transacional, integridade, evidência, wrapper e prova offline de idempotência do Tesouro.
 - `docs/pre-prod-macro-seed-runbook.md` — seed transacional de benchmarks, evidência, persistência da comparação e prova operacional de idempotência.
+- `docs/pre-prod-fx-seed-runbook.md` — seed PTAX estrito, transação, evidência e ensaio controlado de idempotência cambial.
 - `docs/CANONICAL_FINANCIAL_CONTRACT.md` — contrato financeiro oficial.
