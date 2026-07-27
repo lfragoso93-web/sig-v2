@@ -115,8 +115,15 @@ async def import_missing_benchmark_history(
     db: AsyncSession,
     start_date: date = DEFAULT_HISTORY_START,
     end_date: Optional[date] = None,
+    *,
+    commit: bool = True,
 ) -> dict[str, int]:
-    """Backfill inicial e atualizacao incremental por frequencia da serie."""
+    """Backfill inicial e atualização incremental por frequência da série.
+
+    ``commit=False`` permite que orquestradores operacionais executem o estágio
+    dentro de uma transação maior, sem alterar o comportamento dos consumidores
+    existentes, que continuam confirmando a sessão por padrão.
+    """
     await ensure_rate_history_unique_index(db)
 
     today = end_date or date.today()
@@ -142,7 +149,8 @@ async def import_missing_benchmark_history(
         )
         stats.update(partial)
 
-    await db.commit()
+    if commit:
+        await db.commit()
     logger.info("[benchmarks] backfill/incremental concluido: %s", stats)
     return stats
 

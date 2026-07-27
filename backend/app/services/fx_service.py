@@ -11,9 +11,10 @@ Estrategia de cache:
        Fallback final: FALLBACK_RATE.
 
 Funcoes publicas:
-  get_usd_brl_today(db)             -> float
-  get_usd_brl_at_date(db, date_str) -> float
-  get_usd_brl_batch(db, dates)      -> dict
+  persist_usd_brl_rate(db, date_str, rate, commit=True) -> None
+  get_usd_brl_today(db)                                -> float
+  get_usd_brl_at_date(db, date_str)                    -> float
+  get_usd_brl_batch(db, dates)                         -> dict
 
 Datas futuras:
   Qualquer data >= hoje e tratada como hoje (retorna cotacao atual).
@@ -25,6 +26,7 @@ Fallback final: FALLBACK_RATE (5.70) — nunca levanta excecao.
 import logging
 import time
 from datetime import date as DateType, datetime, timedelta, timezone
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 
 from sqlalchemy import select, text
@@ -39,6 +41,7 @@ PAIR_USD_BRL = "USD-BRL"
 FALLBACK_RATE = 5.70
 MEM_CACHE_TTL = 60
 DB_TODAY_TTL = 900
+_RATE_QUANTUM = Decimal("0.00000001")
 
 _mem_cache: dict[str, tuple[float, float]] = {}
 
@@ -46,6 +49,10 @@ _mem_cache: dict[str, tuple[float, float]] = {}
 # ---------------------------------------------------------------------------
 # Cache L2 - memoria
 # ---------------------------------------------------------------------------
+
+def _normalize_rate(rate: float | Decimal) -> Decimal:
+    return Decimal(str(rate)).quantize(_RATE_QUANTUM, rounding=ROUND_HALF_UP)
+
 
 def _mem_get(date_str: str) -> Optional[float]:
     entry = _mem_cache.get(date_str)
@@ -86,10 +93,23 @@ async def _db_get(db: AsyncSession, date_str: str) -> Optional[float]:
         return None
 
 
-async def _db_set(db: AsyncSession, date_str: str, rate: float) -> None:
+async def persist_usd_brl_rate(
+    db: AsyncSession,
+    date_str: str,
+    rate: float | Decimal,
+    *,
+    commit: bool = True,
+) -> None:
+    """Persiste USD/BRL por UPSERT, com controle transacional pelo chamador.
+
+    ``commit=True`` preserva o comportamento historico dos consumidores atuais.
+    Orquestradores transacionais devem usar ``commit=False`` e controlar commit
+    ou rollback externamente.
+    """
     try:
         d = DateType.fromisoformat(date_str)
         now = datetime.now(timezone.utc)
+        normalized_rate = _normalize_rate(rate)
         await db.execute(
             text("""
                 INSERT INTO fx_rates (pair, rate_date, rate, created_at)
@@ -97,15 +117,30 @@ async def _db_set(db: AsyncSession, date_str: str, rate: float) -> None:
                 ON CONFLICT (pair, rate_date)
                 DO UPDATE SET rate = EXCLUDED.rate, created_at = EXCLUDED.created_at
             """),
-            {"pair": PAIR_USD_BRL, "rate_date": d, "rate": round(rate, 8), "created_at": now},
+            {
+                "pair": PAIR_USD_BRL,
+                "rate_date": d,
+                "rate": normalized_rate,
+                "created_at": now,
+            },
         )
-        await db.commit()
+        if commit:
+            await db.commit()
+    except Exception:
+        if commit:
+            try:
+                await db.rollback()
+            except Exception:
+                pass
+        raise
+
+
+async def _db_set(db: AsyncSession, date_str: str, rate: float) -> None:
+    """Compatibilidade interna para consumidores existentes."""
+    try:
+        await persist_usd_brl_rate(db, date_str, rate, commit=True)
     except Exception as e:
         logger.warning("[fx_service] _db_set error for %s: %s", date_str, e)
-        try:
-            await db.rollback()
-        except Exception:
-            pass
 
 
 # ---------------------------------------------------------------------------
@@ -180,10 +215,8 @@ async def get_usd_brl_today(db: AsyncSession) -> float:
         _mem_set(today_str, db_val)
         return db_val
 
-    # BCB: tenta cotacao do dia atual
     rate = await fetch_usd_brl_day(today_str)
 
-    # Fallback AwesomeAPI
     if rate is None:
         rate = await _awesome_usd_brl_today()
 
@@ -212,7 +245,6 @@ async def get_usd_brl_at_date(db: AsyncSession, date_str: str) -> float:
         logger.warning("[fx_service] date_str invalido: %r — usando hoje", date_str)
         return await get_usd_brl_today(db)
 
-    # Datas futuras ou hoje -> cotacao atual
     if target >= today:
         return await get_usd_brl_today(db)
 
@@ -225,11 +257,9 @@ async def get_usd_brl_at_date(db: AsyncSession, date_str: str) -> float:
         _mem_set(date_str, db_val, ttl=3600)
         return db_val
 
-    # BCB: busca janela de 7 dias para cobrir feriados/fins de semana
     window_start = (target - timedelta(days=7)).isoformat()
     rows = await fetch_usd_brl_period(window_start, date_str)
 
-    # Fallback AwesomeAPI
     if not rows:
         logger.info("[fx_service] BCB vazio para %s — tentando AwesomeAPI", date_str)
         rows = await _awesome_usd_brl_history(window_start, date_str)
@@ -268,7 +298,6 @@ async def get_usd_brl_batch(
     today = datetime.now(timezone.utc).date()
 
     for d_str in unique_dates:
-        # Datas futuras ou hoje -> cotacao atual
         try:
             d = DateType.fromisoformat(d_str)
         except ValueError:
@@ -294,7 +323,6 @@ async def get_usd_brl_batch(
     if not missing:
         return result
 
-    # Uma unica chamada BCB para todo o range
     range_start = missing[0]
     range_end_dt = DateType.fromisoformat(missing[-1]) + timedelta(days=7)
     range_end = min(range_end_dt, today - timedelta(days=1)).isoformat()
@@ -316,7 +344,6 @@ async def get_usd_brl_batch(
         if d_str in fetched:
             result[d_str] = fetched[d_str]
         else:
-            # Dia util mais proximo anterior (feriado/fim de semana)
             target_dt = DateType.fromisoformat(d_str)
             closest = None
             for fd_str, fr in fetched.items():
