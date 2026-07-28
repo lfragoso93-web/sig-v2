@@ -53,6 +53,7 @@ A limpeza real, seeds B3/Tesouro, proventos, importação e rebuild ainda não f
 - Comparador `pre-prod-macro-seed-compare.v1` e persistidor `scripts/compare_pre_prod_macro_seed.ps1` preservam a prova offline em JSON auditável.
 - Seed isolado de câmbio implementado pela Issue #217 com contrato `pre-prod-fx-seed.v1`, inspeção read-only, cliente PTAX estrito, persistência transacional, advisory lock, CLI auditável e runbook dedicado.
 - Execuções `20260728-103750` e `20260728-104238`, no commit `37c1d800be6f21dfc5c91b332a6ebe8748c0ac1c`, comprovaram estado final estável em 6 linhas, zero novas linhas na segunda execução, zero duplicidades, zero pares não suportados e `ok=true`.
+- Contrato inicial `pre-prod-dividends-seed.v1` publicado pela Issue #226, com leitura limitada a `assets`, `transactions`, `portfolios`, `asset_dividends` e `dividends`, escrita limitada a `asset_dividends` e `dividends`, transação única, advisory lock, rollback integral e prova offline de idempotência obrigatória.
 
 ## Arquitetura resumida
 
@@ -108,7 +109,7 @@ As CLIs isoladas de B3, Tesouro, benchmarks e câmbio não autorizam execução 
 1. Promover a exposição do `plan_sha256` e gerar uma nova cadeia operacional vinculada ao novo SHA.
 2. Registrar nova confirmação composta e executar a limpeza real somente pela Issue #199.
 3. Executar e reconciliar os seeds isolados de B3 e Tesouro em blocos separados após a limpeza.
-4. Implementar e validar o estágio isolado de proventos.
+4. Implementar e validar o estágio isolado de proventos pela Issue #226 e pelo contrato `pre-prod-dividends-seed.v1`.
 5. Executar importação e rebuild em blocos independentes.
 6. Endurecer ou remover o router administrativo de debug antes do go-live.
 7. Remover o serviço legado de rentabilidade (#151).
@@ -118,7 +119,7 @@ As CLIs isoladas de B3, Tesouro, benchmarks e câmbio não autorizam execução 
 
 ## Dependências
 
-A auditoria Dependabot da Issue #159 foi concluída. Atualizações compatíveis foram incorporadas em blocos isolados e não há PR aberta no fechamento deste bloco.
+A auditoria Dependabot da Issue #159 foi concluída. As atualizações compatíveis #218, #220, #222, #223 e #219 foram incorporadas na `stable-15jun` em blocos isolados. A PR #221 permanece aberta e não aplicada por incompatibilidade entre TypeScript 7 e `typescript-eslint`.
 
 ## Pré-produção
 
@@ -139,7 +140,7 @@ A primeira entrada em produção exige:
 13. entrypoint transacional do seed oficial do Tesouro Direto — implementado com identidade obrigatória; comparador e wrapper de idempotência implementados; execução e evidência real pendentes;
 14. seed isolado de benchmarks — executado e idempotência comprovada;
 15. seed isolado de câmbio — executado e idempotência comprovada pela Issue #217;
-16. seed isolado de proventos — pendente;
+16. seed isolado de proventos — contrato inicial publicado; implementação pendente na Issue #226;
 17. importação CSV completa da carteira — pendente;
 18. rebuild de posições e snapshots — pendente;
 19. reconciliação financeira e auditoria de cobertura — pendente.
@@ -176,4 +177,5 @@ docker compose up -d --build
 - `docs/pre-prod-treasury-seed-runbook.md` — seed transacional, integridade, evidência, wrapper e prova offline de idempotência do Tesouro.
 - `docs/pre-prod-macro-seed-runbook.md` — seed transacional de benchmarks, evidência, persistência da comparação e prova operacional de idempotência.
 - `docs/pre-prod-fx-seed-runbook.md` — seed PTAX estrito, transação, evidência e prova operacional de idempotência cambial.
+- `docs/PRE_PROD_DIVIDENDS_SEED_CONTRACT.md` — contrato operacional, fronteiras, integridade e idempotência do estágio isolado de proventos.
 - `docs/CANONICAL_FINANCIAL_CONTRACT.md` — contrato financeiro oficial.
