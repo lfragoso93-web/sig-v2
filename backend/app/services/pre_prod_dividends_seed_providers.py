@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import asyncio
+import warnings
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import httpx
+from pandas.errors import Pandas4Warning
+from yfinance.exceptions import YFTickerMissingError
 
 from app.integrations.brapi import BRAPI_BASE, _auth_headers
 from app.services.dividend_backfill_service import (
@@ -116,6 +119,12 @@ class StrictYahooDividendProvider:
         symbol = _yf_symbol(ticker, asset_type)
         try:
             history = await self._history_fetcher(symbol)
+        except YFTickerMissingError:
+            return StrictDividendProviderResult(
+                source="yfinance_history",
+                rows=(),
+                empty_reason="provider_no_coverage_ticker_missing",
+            )
         except StrictDividendCollectionError:
             raise
         except Exception as exc:
@@ -150,13 +159,19 @@ async def fetch_yahoo_dividend_history(symbol: str) -> list[tuple[date, float]]:
     def _sync() -> list[tuple[date, float]]:
         import yfinance as yf
 
-        history = yf.Ticker(symbol).history(
-            start="1970-01-01",
-            end=(datetime.now(UTC).date() + timedelta(days=1)).isoformat(),
-            actions=True,
-            auto_adjust=False,
-            raise_errors=True,
-        )
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r".*Timestamp\.utcnow is deprecated.*",
+                category=Pandas4Warning,
+            )
+            history = yf.Ticker(symbol).history(
+                start="1970-01-01",
+                end=(datetime.now(UTC).date() + timedelta(days=1)).isoformat(),
+                actions=True,
+                auto_adjust=False,
+                raise_errors=True,
+            )
         if history.empty or "Dividends" not in history.columns:
             return []
 

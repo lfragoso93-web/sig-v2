@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — classificação de cobertura complementar em proventos (28/07/2026)
+
+- Símbolos ausentes na fonte complementar passaram a ser registrados como `provider_no_coverage_ticker_missing`, sem converter falta de cobertura em indisponibilidade global do provedor.
+- Timeouts, erros HTTP e demais falhas operacionais permanecem bloqueantes, preservando o contrato sem fallback silencioso.
+- O aviso de compatibilidade `Timestamp.utcnow` da integração passou a ser filtrado somente dentro da consulta de histórico, sem ocultar outras advertências.
+- Adicionadas regressões para BDR sem cobertura, timeout e erro HTTP; as duas execuções reais da Issue #226 permanecem pendentes.
+
 ### Corrigido — esquema do controle de sincronização de proventos (28/07/2026)
 
 - Adicionada migration Alembic para materializar `dividends_sync_jobs`, tabela técnica já declarada pelo ORM e classificada como reconstruível no inventário.
