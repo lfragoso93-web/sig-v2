@@ -22,6 +22,70 @@ from app.services.pre_prod_dividends_seed_contract import (
 )
 
 
+async def inspect_dividends_seed_groupings(
+    db: AsyncSession,
+) -> tuple[dict, ...]:
+    """Agrupa o estado final canônico sem alterar a sessão."""
+
+    dimensions = (
+        Asset.asset_type,
+        AssetDividend.dividend_type,
+        AssetDividend.source,
+        func.extract("year", AssetDividend.ex_date),
+        Asset.ticker,
+    )
+    global_rows = (
+        await db.execute(
+            select(*dimensions, func.count(AssetDividend.id))
+            .select_from(AssetDividend)
+            .join(Asset, Asset.id == AssetDividend.asset_id)
+            .group_by(*dimensions)
+            .order_by(*dimensions)
+        )
+    ).all()
+    materialized_rows = (
+        await db.execute(
+            select(*dimensions, func.count(Dividend.id))
+            .select_from(Dividend)
+            .join(
+                AssetDividend,
+                AssetDividend.id == Dividend.asset_dividend_id,
+            )
+            .join(Asset, Asset.id == AssetDividend.asset_id)
+            .group_by(*dimensions)
+            .order_by(*dimensions)
+        )
+    ).all()
+
+    grouped: dict[tuple[str, str, str, int, str], dict] = {}
+    for rows, field in (
+        (global_rows, "global_events"),
+        (materialized_rows, "materialized_rights"),
+    ):
+        for asset_type, event_type, source, year, ticker, count in rows:
+            key = (
+                str(asset_type),
+                str(getattr(event_type, "value", event_type)),
+                str(source),
+                int(year),
+                str(ticker).strip().upper(),
+            )
+            item = grouped.setdefault(
+                key,
+                {
+                    "asset_class": key[0],
+                    "event_type": key[1],
+                    "source": key[2],
+                    "year": key[3],
+                    "ticker": key[4],
+                    "global_events": 0,
+                    "materialized_rights": 0,
+                },
+            )
+            item[field] = int(count)
+    return tuple(grouped[key] for key in sorted(grouped))
+
+
 async def _count_rows(db: AsyncSession, model: type) -> int:
     return int(await db.scalar(select(func.count()).select_from(model)) or 0)
 

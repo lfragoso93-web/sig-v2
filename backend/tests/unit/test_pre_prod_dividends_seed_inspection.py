@@ -6,6 +6,7 @@ import pytest
 from app.models.dividend import DividendType
 from app.models.transaction import OperationType
 from app.services.pre_prod_dividends_seed_inspection import (
+    inspect_dividends_seed_groupings,
     inspect_dividends_seed_state,
 )
 
@@ -20,6 +21,39 @@ def _db_stub() -> SimpleNamespace:
         add=Mock(),
         delete=AsyncMock(),
     )
+
+
+@pytest.mark.asyncio
+async def test_groupings_are_canonical_and_read_only() -> None:
+    db = _db_stub()
+    global_result = Mock()
+    global_result.all.return_value = [
+        ("ACAO", DividendType.DIVIDENDO, "brapi", 2026, "petr4", 2),
+    ]
+    materialized_result = Mock()
+    materialized_result.all.return_value = [
+        ("ACAO", DividendType.DIVIDENDO, "brapi", 2026, "PETR4", 3),
+    ]
+    db.execute.side_effect = [global_result, materialized_result]
+
+    result = await inspect_dividends_seed_groupings(db)
+
+    assert result == (
+        {
+            "asset_class": "ACAO",
+            "event_type": "DIVIDENDO",
+            "source": "brapi",
+            "year": 2026,
+            "ticker": "PETR4",
+            "global_events": 2,
+            "materialized_rights": 3,
+        },
+    )
+    db.commit.assert_not_awaited()
+    db.rollback.assert_not_awaited()
+    db.flush.assert_not_awaited()
+    db.add.assert_not_called()
+    db.delete.assert_not_awaited()
 
 
 @pytest.mark.asyncio

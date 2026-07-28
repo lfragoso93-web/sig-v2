@@ -123,6 +123,7 @@ def test_result_serializes_minimum_canonical_envelope() -> None:
         "materialization",
         "after",
         "coverage",
+        "groupings",
         "integrity",
         "errors",
         "ok",

@@ -102,6 +102,19 @@ async def test_runs_single_transaction_and_restricts_window() -> None:
             skipped_non_cash=0,
         )
     )
+    grouping_runner = AsyncMock(
+        return_value=(
+            {
+                "asset_class": "ACAO",
+                "event_type": "DIVIDENDO",
+                "source": "brapi",
+                "year": 2026,
+                "ticker": "PETR4",
+                "global_events": 2,
+                "materialized_rights": 1,
+            },
+        )
+    )
 
     result = await run_pre_prod_dividends_seed(
         run_id=RUN_ID,
@@ -114,6 +127,7 @@ async def test_runs_single_transaction_and_restricts_window() -> None:
         asset_loader=asset_loader,
         collection_runner=collector,
         inspection_runner=inspections,
+        grouping_runner=grouping_runner,
         persistence_runner=persistence,
         materialization_runner=materialization,
     )
@@ -123,6 +137,7 @@ async def test_runs_single_transaction_and_restricts_window() -> None:
     assert result.ok is True
     assert result.collection == {"assets": 1, "normalized_rows": 2}
     assert result.sources[0]["raw_rows"] == 3
+    assert result.groupings[0]["ticker"] == "PETR4"
     db.commit.assert_awaited_once()
     db.rollback.assert_not_awaited()
 
@@ -152,6 +167,7 @@ async def test_rolls_back_when_post_inspection_has_findings() -> None:
         asset_loader=AsyncMock(return_value=()),
         collection_runner=AsyncMock(return_value=()),
         inspection_runner=inspections,
+        grouping_runner=AsyncMock(return_value=()),
         persistence_runner=AsyncMock(
             return_value=DividendsSeedPersistenceResult(
                 created=0,

@@ -24,6 +24,7 @@ from app.services.pre_prod_dividends_seed_contract import (
     PreProdDividendsSeedResult,
 )
 from app.services.pre_prod_dividends_seed_inspection import (
+    inspect_dividends_seed_groupings,
     inspect_dividends_seed_state,
 )
 from app.services.pre_prod_dividends_seed_materialization import (
@@ -36,6 +37,7 @@ from app.services.pre_prod_dividends_seed_persistence import (
 AssetLoader = Callable[[AsyncSession], Awaitable[tuple[StrictDividendAsset, ...]]]
 CollectionRunner = Callable[..., Awaitable[tuple[StrictDividendAssetCollection, ...]]]
 InspectionRunner = Callable[[AsyncSession], Awaitable[Any]]
+GroupingRunner = Callable[[AsyncSession], Awaitable[tuple[dict, ...]]]
 PersistenceRunner = Callable[..., Awaitable[Any]]
 MaterializationRunner = Callable[..., Awaitable[Any]]
 
@@ -113,6 +115,7 @@ async def run_pre_prod_dividends_seed(
     asset_loader: AssetLoader = load_dividends_seed_assets,
     collection_runner: CollectionRunner = collect_dividends_strict,
     inspection_runner: InspectionRunner = inspect_dividends_seed_state,
+    grouping_runner: GroupingRunner = inspect_dividends_seed_groupings,
     persistence_runner: PersistenceRunner = persist_asset_dividends_strict,
     materialization_runner: MaterializationRunner = (
         materialize_portfolio_dividends_strict
@@ -136,6 +139,7 @@ async def run_pre_prod_dividends_seed(
         persistence = await persistence_runner(db=db, collections=restricted)
         materialization = await materialization_runner(db=db, as_of=end_date)
         after, coverage, integrity = await inspection_runner(db)
+        groupings = await grouping_runner(db)
         errors = (
             (f"integridade contém {integrity.blocking_findings} achado(s)",)
             if integrity.blocking_findings
@@ -171,6 +175,7 @@ async def run_pre_prod_dividends_seed(
         coverage=coverage,
         integrity=integrity,
         transaction=transaction,
+        groupings=groupings,
         sources=_source_summary(restricted),
         collection={
             "assets": len(restricted),

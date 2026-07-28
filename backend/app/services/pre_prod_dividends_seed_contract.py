@@ -197,6 +197,7 @@ class PreProdDividendsSeedResult:
     coverage: DividendsSeedCoverage
     integrity: DividendsSeedIntegrity
     transaction: DividendsSeedTransaction
+    groupings: tuple[dict, ...] = ()
     sources: tuple[dict, ...] = ()
     collection: dict = field(default_factory=dict)
     global_persistence: dict = field(default_factory=dict)
