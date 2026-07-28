@@ -124,7 +124,6 @@ async def fetch_strict_usd_brl_period(
         "@dataFinalCotacao": f"'{_to_bcb_date(end)}'",
         "$format": "json",
         "$select": "cotacaoVenda,dataHoraCotacao",
-        "$orderby": "dataHoraCotacao asc",
     }
 
     owns_client = client is None

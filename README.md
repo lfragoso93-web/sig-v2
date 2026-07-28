@@ -4,7 +4,7 @@ Plataforma pessoal para acompanhamento, consolidação e análise de investiment
 
 A branch padrão de desenvolvimento é `stable-15jun`. A promoção para `main` ocorre por PR após validação e atualização da documentação viva.
 
-## Status atual — 27/07/2026
+## Status atual — 28/07/2026
 
 O SGI v2 opera com arquitetura **DB-first**: catálogo, preços, taxas, proventos e snapshots são persistidos antes de alimentar KPIs, páginas e gráficos.
 
@@ -12,7 +12,7 @@ A PR #202 foi promovida para a `main` e unificou a árvore Alembic no merge `6ee
 
 A cadeia operacional `20260724-135540`, vinculada ao merge `4c306c7d755470093e492ed7bb9432c28b935232`, validou backup v3, exportação de 326 registros, impacto e plano de 4.673.920 remoções sem blockers, ciclos ou escritas. A revisão identificou que a saída do gerador não expunha o checksum canônico exigido pela confirmação composta. A CLI agora publica `plan_sha256` no envelope de saída, usando exatamente a serialização revalidada pela limpeza. Como essa correção altera o SHA executável, a cadeia `20260724-135540` permanece evidência técnica e não pode autorizar a limpeza.
 
-A limpeza real, seeds B3/Tesouro, câmbio, proventos, importação e rebuild ainda não foram executados. O seed isolado de benchmarks macroeconômicos foi executado e sua idempotência foi comprovada operacionalmente.
+A limpeza real, seeds B3/Tesouro, proventos, importação e rebuild ainda não foram executados. Os seeds isolados de benchmarks macroeconômicos e câmbio já foram executados e tiveram idempotência comprovada operacionalmente.
 
 ### Entregas consolidadas
 
@@ -51,7 +51,8 @@ A limpeza real, seeds B3/Tesouro, câmbio, proventos, importação e rebuild ain
 - Seed isolado de benchmarks implementado com contrato `pre-prod-macro-seed.v1`, advisory lock, transação única, CLI e wrapper PowerShell.
 - Execuções `20260725-231557` e `20260725-231604` comprovaram estado final estável, zero novas linhas, zero duplicidades e zero indicadores não suportados.
 - Comparador `pre-prod-macro-seed-compare.v1` e persistidor `scripts/compare_pre_prod_macro_seed.ps1` preservam a prova offline em JSON auditável.
-- Seed isolado de câmbio implementado pela Issue #217 com contrato `pre-prod-fx-seed.v1`, inspeção read-only, cliente PTAX estrito, persistência transacional, advisory lock, CLI auditável e runbook dedicado; execução real e prova de idempotência permanecem pendentes.
+- Seed isolado de câmbio implementado pela Issue #217 com contrato `pre-prod-fx-seed.v1`, inspeção read-only, cliente PTAX estrito, persistência transacional, advisory lock, CLI auditável e runbook dedicado.
+- Execuções `20260728-103750` e `20260728-104238`, no commit `37c1d800be6f21dfc5c91b332a6ebe8748c0ac1c`, comprovaram estado final estável em 6 linhas, zero novas linhas na segunda execução, zero duplicidades, zero pares não suportados e `ok=true`.
 
 ## Arquitetura resumida
 
@@ -107,14 +108,13 @@ As CLIs isoladas de B3, Tesouro, benchmarks e câmbio não autorizam execução 
 1. Promover a exposição do `plan_sha256` e gerar uma nova cadeia operacional vinculada ao novo SHA.
 2. Registrar nova confirmação composta e executar a limpeza real somente pela Issue #199.
 3. Executar e reconciliar os seeds isolados de B3 e Tesouro em blocos separados após a limpeza.
-4. Executar e reconciliar o estágio isolado de câmbio, incluindo segunda execução idempotente pela Issue #217.
-5. Implementar e validar o estágio isolado de proventos.
-6. Executar importação e rebuild em blocos independentes.
-7. Endurecer ou remover o router administrativo de debug antes do go-live.
-8. Remover o serviço legado de rentabilidade (#151).
-9. Materializar o histórico persistido do IBOV (#150).
-10. Implementar TWR dedicado para Tesouro Direto e Renda Fixa (#149).
-11. Migrar timestamps UTC legados para timezone-aware (#192).
+4. Implementar e validar o estágio isolado de proventos.
+5. Executar importação e rebuild em blocos independentes.
+6. Endurecer ou remover o router administrativo de debug antes do go-live.
+7. Remover o serviço legado de rentabilidade (#151).
+8. Materializar o histórico persistido do IBOV (#150).
+9. Implementar TWR dedicado para Tesouro Direto e Renda Fixa (#149).
+10. Migrar timestamps UTC legados para timezone-aware (#192).
 
 ## Dependências
 
@@ -138,13 +138,13 @@ A primeira entrada em produção exige:
 12. entrypoint isolado de catálogo + B3 COTAHIST — implementado, execução pendente;
 13. entrypoint transacional do seed oficial do Tesouro Direto — implementado com identidade obrigatória; comparador e wrapper de idempotência implementados; execução e evidência real pendentes;
 14. seed isolado de benchmarks — executado e idempotência comprovada;
-15. seed isolado de câmbio — implementação estrutural concluída; execução real e idempotência pendentes;
+15. seed isolado de câmbio — executado e idempotência comprovada pela Issue #217;
 16. seed isolado de proventos — pendente;
 17. importação CSV completa da carteira — pendente;
 18. rebuild de posições e snapshots — pendente;
 19. reconciliação financeira e auditoria de cobertura — pendente.
 
-Checklist completo: Issue #158. Gates operacionais: Issues #199, #208, #216 e #217. Runbooks: `docs/PRE_PROD_REBUILD_RUNBOOK.md`, `docs/pre-prod-cleanup-impact-runbook.md`, `docs/pre-prod-export-runbook.md`, `docs/pre-prod-cleanup-execution-runbook.md`, `docs/pre-prod-isolated-cleanup-rehearsal-runbook.md`, `docs/pre-prod-real-cleanup-target-profile.md`, `docs/pre-prod-treasury-seed-runbook.md`, `docs/pre-prod-macro-seed-runbook.md` e `docs/pre-prod-fx-seed-runbook.md`.
+Checklist completo: Issue #158. Gates operacionais: Issues #199, #208 e #216. A Issue #217 foi encerrada após a prova de idempotência cambial. Runbooks: `docs/PRE_PROD_REBUILD_RUNBOOK.md`, `docs/pre-prod-cleanup-impact-runbook.md`, `docs/pre-prod-export-runbook.md`, `docs/pre-prod-cleanup-execution-runbook.md`, `docs/pre-prod-isolated-cleanup-rehearsal-runbook.md`, `docs/pre-prod-real-cleanup-target-profile.md`, `docs/pre-prod-treasury-seed-runbook.md`, `docs/pre-prod-macro-seed-runbook.md` e `docs/pre-prod-fx-seed-runbook.md`.
 
 ## Stack
 
@@ -175,5 +175,5 @@ docker compose up -d --build
 - `docs/pre-prod-real-cleanup-target-profile.md` — gates dos perfis isolado e real.
 - `docs/pre-prod-treasury-seed-runbook.md` — seed transacional, integridade, evidência, wrapper e prova offline de idempotência do Tesouro.
 - `docs/pre-prod-macro-seed-runbook.md` — seed transacional de benchmarks, evidência, persistência da comparação e prova operacional de idempotência.
-- `docs/pre-prod-fx-seed-runbook.md` — seed PTAX estrito, transação, evidência e ensaio controlado de idempotência cambial.
+- `docs/pre-prod-fx-seed-runbook.md` — seed PTAX estrito, transação, evidência e prova operacional de idempotência cambial.
 - `docs/CANONICAL_FINANCIAL_CONTRACT.md` — contrato financeiro oficial.

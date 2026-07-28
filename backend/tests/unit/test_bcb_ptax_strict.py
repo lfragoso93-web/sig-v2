@@ -88,6 +88,7 @@ async def test_fetch_strict_period_uses_official_parameters() -> None:
     assert params["@dataInicial"] == "'07-24-2026'"
     assert params["@dataFinalCotacao"] == "'07-25-2026'"
     assert params["$select"] == "cotacaoVenda,dataHoraCotacao"
+    assert "$orderby" not in params
     assert "cotacaoCompra" not in params["$select"]
 
 
