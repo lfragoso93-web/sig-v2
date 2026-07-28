@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — esquema do controle de sincronização de proventos (28/07/2026)
+
+- Adicionada migration Alembic para materializar `dividends_sync_jobs`, tabela técnica já declarada pelo ORM e classificada como reconstruível no inventário.
+- Corrigida a falha operacional `SQLSTATE 42P01` encontrada na inspeção inicial do seed isolado de proventos.
+- Adicionada regressão que confere todas as colunas do modelo, o índice único de `job_name`, o encadeamento no head Alembic e o downgrade.
+- A tentativa no SHA `6a3560f532857d8938727157a23e56d78670cca5` foi abortada antes da coleta e da persistência; as duas execuções reais da Issue #226 permanecem pendentes e exigem nova autorização vinculada ao novo SHA.
+
 ### Corrigido — gate de validação do seed de proventos (28/07/2026)
 
 - Removidas 82 linhas de teste Python anexadas indevidamente ao wrapper `Invoke-PreProdDividendsIdempotency.ps1`, sem alterar sua lógica operacional.
