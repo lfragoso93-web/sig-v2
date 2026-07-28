@@ -139,6 +139,14 @@ def test_result_ok_rejects_blocking_integrity_finding() -> None:
         )
 
 
+def test_coverage_rejects_more_materialized_rights_than_eligible() -> None:
+    with pytest.raises(DividendsSeedContractError, match="excedem"):
+        DividendsSeedCoverage(
+            eligible_materializations=1,
+            materialized_eligible_rights=2,
+        )
+
+
 def test_result_ok_requires_committed_transaction() -> None:
     with pytest.raises(DividendsSeedContractError, match="confirmada"):
         _result(

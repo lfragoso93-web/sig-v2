@@ -10,6 +10,11 @@ from app.models.dividend import Dividend
 from app.models.dividends_sync_job import DividendsSyncJob
 from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction
+from app.services.dividend_entitlement_service import calculate_net_quantity
+from app.services.dividend_type_service import (
+    CASH_DIVIDEND_TYPES,
+    normalize_dividend_type,
+)
 from app.services.pre_prod_dividends_seed_contract import (
     DividendsSeedCounts,
     DividendsSeedCoverage,
@@ -24,6 +29,78 @@ async def _count_rows(db: AsyncSession, model: type) -> int:
 async def _count_duplicate_rows(db: AsyncSession, statement) -> int:
     result = await db.execute(statement)
     return sum(max(int(row.rows) - 1, 0) for row in result.all())
+
+
+async def _inspect_materialization_coverage(
+    db: AsyncSession,
+) -> tuple[int, int, int, int]:
+    event_rows = (
+        await db.execute(
+            select(
+                AssetDividend.id,
+                AssetDividend.record_date,
+                AssetDividend.ex_date,
+                AssetDividend.dividend_type,
+                Asset.ticker,
+            )
+            .join(Asset, Asset.id == AssetDividend.asset_id)
+            .order_by(AssetDividend.id)
+        )
+    ).all()
+    transaction_rows = (
+        await db.execute(
+            select(
+                Transaction.portfolio_id,
+                Transaction.ticker,
+                Transaction.date,
+                Transaction.operation,
+                Transaction.quantity,
+            )
+        )
+    ).all()
+    right_rows = (
+        await db.execute(
+            select(Dividend.portfolio_id, Dividend.asset_dividend_id).where(
+                Dividend.asset_dividend_id.is_not(None)
+            )
+        )
+    ).all()
+
+    transactions: dict[tuple[int, str], list[tuple]] = {}
+    portfolio_ids: set[int] = set()
+    for portfolio_id, ticker, tx_date, operation, quantity in transaction_rows:
+        normalized_ticker = str(ticker).strip().upper()
+        portfolio_ids.add(portfolio_id)
+        transactions.setdefault((portfolio_id, normalized_ticker), []).append(
+            (tx_date, operation, quantity)
+        )
+
+    eligible: set[tuple[int, int]] = set()
+    for event_id, record_date, ex_date, event_type, ticker in event_rows:
+        if normalize_dividend_type(event_type) not in CASH_DIVIDEND_TYPES:
+            continue
+        entitlement_date = record_date or ex_date
+        normalized_ticker = str(ticker).strip().upper()
+        for portfolio_id in portfolio_ids:
+            quantity = calculate_net_quantity(
+                transactions.get((portfolio_id, normalized_ticker), []),
+                entitlement_date,
+            )
+            if quantity > 0:
+                eligible.add((portfolio_id, event_id))
+
+    materialized = {
+        (portfolio_id, event_id)
+        for portfolio_id, event_id in right_rows
+        if event_id is not None
+    }
+    materialized_eligible = eligible & materialized
+    return (
+        len(eligible),
+        len(materialized_eligible),
+        len(eligible - materialized),
+        len(materialized - eligible),
+    )
 
 
 async def inspect_dividends_seed_state(
@@ -56,6 +133,12 @@ async def inspect_dividends_seed_state(
         )
         or 0
     )
+    (
+        eligible_materializations,
+        materialized_eligible_rights,
+        missing_materializations,
+        materializations_without_entitlement,
+    ) = await _inspect_materialization_coverage(db)
     coverage = DividendsSeedCoverage(
         first_ex_date=(
             coverage_row.first_ex_date.isoformat()
@@ -69,6 +152,8 @@ async def inspect_dividends_seed_state(
         ),
         assets_with_events=int(coverage_row.assets_with_events or 0),
         portfolios_with_dividends=portfolios_with_dividends,
+        eligible_materializations=eligible_materializations,
+        materialized_eligible_rights=materialized_eligible_rights,
     )
 
     duplicate_global_events = await _count_duplicate_rows(
@@ -173,6 +258,10 @@ async def inspect_dividends_seed_state(
         missing_ex_dates=missing_ex_dates,
         negative_monetary_values=(
             negative_global_values + negative_materialized_values
+        ),
+        missing_materializations=missing_materializations,
+        materializations_without_entitlement=(
+            materializations_without_entitlement
         ),
     )
     return counts, coverage, integrity

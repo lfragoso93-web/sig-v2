@@ -3,6 +3,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from app.models.dividend import DividendType
+from app.models.transaction import OperationType
 from app.services.pre_prod_dividends_seed_inspection import (
     inspect_dividends_seed_state,
 )
@@ -54,8 +56,38 @@ async def test_inspection_maps_state_and_never_writes() -> None:
         SimpleNamespace(rows=2),
         SimpleNamespace(rows=4),
     ]
+    events_result = Mock()
+    events_result.all.return_value = [
+        (
+            101,
+            date(2026, 7, 20),
+            date(2026, 7, 21),
+            DividendType.DIVIDENDO,
+            "PETR4",
+        ),
+        (
+            102,
+            date(2026, 7, 20),
+            date(2026, 7, 21),
+            DividendType.BONIFICACAO,
+            "PETR4",
+        ),
+    ]
+    transactions_result = Mock()
+    transactions_result.all.return_value = [
+        (7, "petr4", date(2026, 7, 1), OperationType.buy, 10),
+        (8, "PETR4", date(2026, 7, 1), OperationType.buy, 5),
+    ]
+    rights_result = Mock()
+    rights_result.all.return_value = [
+        (7, 101),
+        (9, 101),
+    ]
     db.execute.side_effect = [
         coverage_result,
+        events_result,
+        transactions_result,
+        rights_result,
         duplicate_global_result,
         duplicate_materialization_result,
     ]
@@ -72,6 +104,8 @@ async def test_inspection_maps_state_and_never_writes() -> None:
     assert coverage.last_ex_date == "2026-07-28"
     assert coverage.assets_with_events == 9
     assert coverage.portfolios_with_dividends == 2
+    assert coverage.eligible_materializations == 2
+    assert coverage.materialized_eligible_rights == 1
     assert integrity.duplicate_global_events == 2
     assert integrity.duplicate_materializations == 4
     assert integrity.orphan_asset_dividends == 1
@@ -79,6 +113,8 @@ async def test_inspection_maps_state_and_never_writes() -> None:
     assert integrity.orphan_dividend_portfolios == 3
     assert integrity.missing_ex_dates == 4
     assert integrity.negative_monetary_values == 11
+    assert integrity.missing_materializations == 1
+    assert integrity.materializations_without_entitlement == 1
 
     db.commit.assert_not_awaited()
     db.rollback.assert_not_awaited()
@@ -100,8 +136,13 @@ async def test_inspection_handles_empty_tables_without_writes() -> None:
     )
     no_duplicates = Mock()
     no_duplicates.all.return_value = []
+    no_rows = Mock()
+    no_rows.all.return_value = []
     db.execute.side_effect = [
         coverage_result,
+        no_rows,
+        no_rows,
+        no_rows,
         no_duplicates,
         no_duplicates,
     ]

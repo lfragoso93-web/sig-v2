@@ -4,6 +4,16 @@ import unicodedata
 
 from app.models.dividend import DividendType
 
+CASH_DIVIDEND_TYPES = frozenset(
+    {
+        DividendType.DIVIDENDO,
+        DividendType.JCP,
+        DividendType.RENDIMENTO,
+        DividendType.AMORTIZACAO,
+        DividendType.OUTROS,
+    }
+)
+
 
 def _normalized_label(value: str | None) -> str:
     if not value:

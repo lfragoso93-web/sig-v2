@@ -11,21 +11,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
-from app.models.dividend import Dividend, DividendStatus, DividendType
+from app.models.dividend import Dividend, DividendStatus
 from app.models.transaction import Transaction
 from app.services.dividend_entitlement_service import (
     calculate_net_quantity,
     calculate_net_value,
 )
-from app.services.dividend_type_service import normalize_dividend_type
-
-_CASH_TYPES = {
-    DividendType.DIVIDENDO,
-    DividendType.JCP,
-    DividendType.RENDIMENTO,
-    DividendType.AMORTIZACAO,
-    DividendType.OUTROS,
-}
+from app.services.dividend_type_service import (
+    CASH_DIVIDEND_TYPES,
+    normalize_dividend_type,
+)
 
 
 class DividendsSeedMaterializationError(RuntimeError):
@@ -105,7 +100,7 @@ async def materialize_portfolio_dividends_strict(
     skipped_non_cash = 0
     for asset, event in event_rows:
         event_type = normalize_dividend_type(event.dividend_type)
-        if event_type not in _CASH_TYPES:
+        if event_type not in CASH_DIVIDEND_TYPES:
             skipped_non_cash += 1
             continue
         if event.value_per_unit is None or _decimal(event.value_per_unit) <= 0:
