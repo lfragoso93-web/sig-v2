@@ -5,6 +5,16 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Adicionado — contrato do seed isolado de proventos (28/07/2026)
+
+- Criada a Issue #226 e vinculada às Issues #158 e #216 como gate dedicado do estágio.
+- Publicado `docs/PRE_PROD_DIVIDENDS_SEED_CONTRACT.md` com o contrato `pre-prod-dividends-seed.v1`.
+- Limitadas as leituras a `assets`, `transactions`, `portfolios`, `asset_dividends` e `dividends` e as escritas a `asset_dividends` e `dividends`.
+- Definidos advisory lock dedicado, transação única, rollback integral, identidade por `run_id`/branch/SHA, métricas de cobertura e integridade e prova offline de idempotência.
+- Scheduler, endpoints em background, B3, Tesouro, benchmarks, câmbio, importação, posições, snapshots e `full_market_rebuild` permanecem fora do estágio.
+- README, ROADMAP, runbook geral e auditoria arquitetural foram sincronizados; nenhuma CLI, migration ou escrita em pré-produção foi executada.
+- A PR #221 permanece não aplicada por incompatibilidade entre TypeScript 7 e `typescript-eslint`.
+
 ### Corrigido — compatibilidade da consulta PTAX oficial (28/07/2026)
 
 - Removida a opção OData `$orderby=dataHoraCotacao asc`, rejeitada com HTTP 400 pelo endpoint oficial `CotacaoDolarPeriodo`.
