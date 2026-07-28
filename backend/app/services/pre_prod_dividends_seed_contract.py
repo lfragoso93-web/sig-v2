@@ -1,30 +1,3 @@
-
-.abacusai/
-.env.example
-.github/
-.gitignore
-.removed_code/
-.trivyignore
-CHANGELOG.md
-COMECE_AQUI.md
-GAPS_ANALISE_COMPLETA.md
-MATRIZ_PRIORIZACAO.md
-Makefile
-PLANO_ACAO_EXECUTAVEL.md
-README.md
-RESUME.md
-ROADMAP.md
-ROADMAP_SPRINTS.md
-ROADMAP_VISUAL.md
-SPRINT_3_PROGRESS.md
-SUMARIO_EXECUTIVO.md
-backend/
-docker-compose.prod.yml
-docker-compose.yml
-docs/
-frontend/
-package-lock.json
-scripts/
 """Contrato puro do estágio isolado de proventos.
 
 Este módulo não acessa banco, arquivos, rede ou variáveis de ambiente. Ele
