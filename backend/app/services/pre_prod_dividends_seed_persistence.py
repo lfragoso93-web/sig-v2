@@ -22,6 +22,26 @@ from app.services.pre_prod_dividends_seed_collector import (
 )
 
 _DIVIDENDS_SEED_LOCK_KEY = 7_317_202_607_28
+_NUMERIC_EQUIVALENCE_TOLERANCE = Decimal("0.00000001")
+_CANONICAL_EVENT_FIELDS = (
+    "record_date",
+    "payment_date",
+    "approved_on",
+    "value_per_unit",
+    "gross_value_per_unit",
+    "factor",
+    "complete_factor",
+    "isin_code",
+    "asset_issued",
+    "related_to",
+    "remarks",
+)
+_NUMERIC_EVENT_FIELDS = {
+    "value_per_unit",
+    "gross_value_per_unit",
+    "factor",
+    "complete_factor",
+}
 
 
 class DividendsSeedPersistenceError(RuntimeError):
@@ -63,6 +83,23 @@ def _event_values(event, source: str) -> dict:
         "raw_payload": event.raw_payload,
         "source": source,
     }
+
+
+def _conflicting_event_fields(left: dict, right: dict) -> tuple[str, ...]:
+    """Compara somente atributos canônicos presentes nas duas fontes."""
+
+    conflicts: list[str] = []
+    for field in _CANONICAL_EVENT_FIELDS:
+        left_value = left[field]
+        right_value = right[field]
+        if left_value is None or right_value is None:
+            continue
+        if field in _NUMERIC_EVENT_FIELDS:
+            if abs(left_value - right_value) > _NUMERIC_EQUIVALENCE_TOLERANCE:
+                conflicts.append(field)
+        elif left_value != right_value:
+            conflicts.append(field)
+    return tuple(conflicts)
 
 
 async def persist_asset_dividends_strict(
@@ -125,11 +162,13 @@ async def persist_asset_dividends_strict(
                 prior = seen.get(key)
                 if prior is not None:
                     prior_source, prior_values = prior
-                    if prior_values != values:
+                    conflicts = _conflicting_event_fields(prior_values, values)
+                    if conflicts:
                         raise DividendsSeedPersistenceError(
                             "evento global conflitante entre fontes: "
                             f"{collection.ticker}/{event.ex_date}/"
-                            f"{dividend_type.value} ({prior_source}, {source})"
+                            f"{dividend_type.value} ({prior_source}, {source}); "
+                            f"campos divergentes: {', '.join(conflicts)}"
                         )
                     unchanged += 1
                     continue

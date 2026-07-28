@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — reconciliação multifuente de proventos (28/07/2026)
+
+- A persistência passou a comparar somente atributos econômicos canônicos presentes em ambas as fontes, sem tratar proveniência e payload bruto distintos como conflito.
+- Diferenças numéricas de até oito casas decimais são aceitas de acordo com a precisão persistida; divergências materiais de valor, datas ou metadados comuns continuam bloqueantes.
+- Mensagens de conflito agora identificam os campos divergentes, preservando evidência auditável sem escolher silenciosamente uma fonte.
+- Adicionadas regressões para eventos equivalentes, tolerância numérica, conflito real de data/valor e identidades globais distintas; a execução real da Issue #226 permanece pendente.
+
 ### Corrigido — classificação de cobertura complementar em proventos (28/07/2026)
 
 - Símbolos ausentes na fonte complementar passaram a ser registrados como `provider_no_coverage_ticker_missing`, sem converter falta de cobertura em indisponibilidade global do provedor.

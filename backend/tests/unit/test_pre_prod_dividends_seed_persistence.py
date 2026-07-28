@@ -17,15 +17,22 @@ from app.services.pre_prod_dividends_seed_persistence import (
 )
 
 
-def _collection(*, value: float = 1.25, source: str = "brapi"):
+def _collection(
+    *,
+    value: float = 1.25,
+    source: str = "brapi",
+    record_date: date | None = date(2026, 7, 24),
+    payment_date: date | None = date(2026, 8, 10),
+    raw_payload: dict | None = None,
+):
     event = ParsedDividendEvent(
-        record_date=date(2026, 7, 24),
+        record_date=record_date,
         ex_date=date(2026, 7, 27),
-        payment_date=date(2026, 8, 10),
+        payment_date=payment_date,
         approved_on=None,
         value_per_unit=value,
         dividend_type="DIVIDENDO",
-        raw_payload={"rate": value},
+        raw_payload=raw_payload or {"rate": value},
     )
     return StrictDividendAssetCollection(
         ticker="PETR4",
@@ -177,12 +184,121 @@ async def test_rejects_conflicting_sources_for_same_global_identity() -> None:
     )
     db = _db(assets=[asset])
 
-    with pytest.raises(DividendsSeedPersistenceError, match="conflitante"):
+    with pytest.raises(
+        DividendsSeedPersistenceError,
+        match=r"campos divergentes: value_per_unit",
+    ):
         await persist_asset_dividends_strict(db=db, collections=(combined,))
 
     db.flush.assert_not_awaited()
     db.commit.assert_not_awaited()
     db.rollback.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_reconciles_equivalent_sources_ignoring_provenance_payload() -> None:
+    asset = SimpleNamespace(id=7, ticker="PETR4", asset_type="ACAO")
+    first = _collection(
+        source="brapi",
+        raw_payload={"rate": 1.25, "provider_field": "primary"},
+    )
+    second = _collection(
+        source="yfinance_history",
+        record_date=None,
+        raw_payload={"rate": 1.25},
+    )
+    combined = StrictDividendAssetCollection(
+        ticker="PETR4",
+        asset_type="ACAO",
+        sources=(first.sources[0], second.sources[0]),
+    )
+    db = _db(assets=[asset])
+
+    result = await persist_asset_dividends_strict(db=db, collections=(combined,))
+
+    assert result.created == 1
+    assert result.unchanged == 1
+    created = db.add.call_args.args[0]
+    assert created.source == "brapi"
+    assert created.raw_payload == {
+        "rate": 1.25,
+        "provider_field": "primary",
+    }
+
+
+@pytest.mark.asyncio
+async def test_reconciles_numeric_difference_within_storage_precision() -> None:
+    asset = SimpleNamespace(id=7, ticker="PETR4", asset_type="ACAO")
+    first = _collection(value=1.250000001, source="brapi")
+    second = _collection(value=1.250000009, source="yfinance_history")
+    combined = StrictDividendAssetCollection(
+        ticker="PETR4",
+        asset_type="ACAO",
+        sources=(first.sources[0], second.sources[0]),
+    )
+    db = _db(assets=[asset])
+
+    result = await persist_asset_dividends_strict(db=db, collections=(combined,))
+
+    assert result.created == 1
+    assert result.unchanged == 1
+
+
+@pytest.mark.asyncio
+async def test_rejects_conflicting_dates_and_reports_exact_field() -> None:
+    asset = SimpleNamespace(id=7, ticker="PETR4", asset_type="ACAO")
+    first = _collection(source="brapi")
+    second = _collection(
+        source="yfinance_history",
+        payment_date=date(2026, 8, 11),
+    )
+    combined = StrictDividendAssetCollection(
+        ticker="PETR4",
+        asset_type="ACAO",
+        sources=(first.sources[0], second.sources[0]),
+    )
+    db = _db(assets=[asset])
+
+    with pytest.raises(
+        DividendsSeedPersistenceError,
+        match=r"campos divergentes: payment_date",
+    ):
+        await persist_asset_dividends_strict(db=db, collections=(combined,))
+
+    db.flush.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_distinct_global_identities_remain_separate_events() -> None:
+    asset = SimpleNamespace(id=7, ticker="PETR4", asset_type="ACAO")
+    first = _collection(source="brapi")
+    second_event = ParsedDividendEvent(
+        record_date=date(2026, 7, 25),
+        ex_date=date(2026, 7, 28),
+        payment_date=date(2026, 8, 10),
+        approved_on=None,
+        value_per_unit=1.25,
+        dividend_type="DIVIDENDO",
+        raw_payload={"rate": 1.25},
+    )
+    second_source = StrictDividendSourceCollection(
+        source="yfinance_history",
+        raw_rows=1,
+        normalized_rows=(second_event,),
+        rejected_rows=0,
+        empty_reason=None,
+    )
+    combined = StrictDividendAssetCollection(
+        ticker="PETR4",
+        asset_type="ACAO",
+        sources=(first.sources[0], second_source),
+    )
+    db = _db(assets=[asset])
+
+    result = await persist_asset_dividends_strict(db=db, collections=(combined,))
+
+    assert result.created == 2
+    assert db.add.call_count == 2
 
 
 @pytest.mark.asyncio
