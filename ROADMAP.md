@@ -19,7 +19,7 @@
 | Página Resumo | Concluída e promovida pela PR #164 | 100% |
 | Página Patrimônio | Fase 3 concluída e promovida pela PR #184 | 100% |
 | Página Rentabilidade | Contratos concluídos | 95% |
-| Dependências | Auditoria concluída; nenhuma PR aberta no fechamento deste bloco | 100% |
+| Dependências | Atualizações compatíveis aplicadas; PR #221 bloqueada por incompatibilidade | 95% |
 | Configuração Pydantic v2 | Migração validada e Issue #186 encerrada | 100% |
 | Backup/Restore pré-produção | Validação real v3 concluída (#183) | 100% |
 | Dry-run de limpeza | Validado no PostgreSQL real (#185) | 100% |
@@ -31,7 +31,7 @@
 | Seed isolado Tesouro | Identidade, comparador e wrapper implementados; execução real pendente (#208) | 97% |
 | Seed isolado de benchmarks | Execução real e idempotência comprovadas (#216) | 100% |
 | Seed isolado de câmbio | Execução real e idempotência comprovadas (#217) | 100% |
-| Seed isolado de proventos | Planejamento arquitetural pendente (#216) | 10% |
+| Seed isolado de proventos | Contrato inicial publicado; implementação pendente (#226) | 20% |
 | Rebuild pré-produção | Gates estruturais preparados; execuções reais pendentes | 97% |
 | Eventos corporativos | Fundação pronta | 30% |
 | IRPF | Planejado | 15% |
@@ -88,6 +88,16 @@ Prontidão global estimada para a primeira produção: **91%**. O percentual nã
 - Execuções `20260728-103750` e `20260728-104238`, no commit `37c1d800be6f21dfc5c91b332a6ebe8748c0ac1c`, comprovaram estado final estável em 6 linhas, zero crescimento na segunda execução, zero duplicidades, zero pares não suportados e `ok=true`.
 - A Issue #217 foi encerrada como concluída.
 
+### Proventos — estágio isolado
+
+- Issue dedicada #226 criada e vinculada às Issues #158 e #216.
+- Contrato `pre-prod-dividends-seed.v1` publicado em `docs/PRE_PROD_DIVIDENDS_SEED_CONTRACT.md`.
+- Leitura autorizada: `assets`, `transactions`, `portfolios`, `asset_dividends` e `dividends`.
+- Escrita autorizada: somente `asset_dividends` e `dividends`.
+- Transação única, advisory lock, rollback integral, fontes explícitas e comparador offline são gates obrigatórios.
+- O estágio permanece isolado de B3, Tesouro, benchmarks, câmbio, importação, posições, snapshots e `full_market_rebuild`.
+- Próximo bloco: testes do envelope e inspeção read-only antes de qualquer persistência funcional.
+
 ### Histórico e snapshots
 
 - B3 COTAHIST como histórico primário de renda variável brasileira.
@@ -98,7 +108,7 @@ Prontidão global estimada para a primeira produção: **91%**. O percentual nã
 
 ## Em desenvolvimento
 
-### Pré-produção — Issues #158, #199, #208 e #216
+### Pré-produção — Issues #158, #199, #208, #216 e #226
 
 - [x] Inventário read-only `pre-prod-inventory.v2` validado.
 - [x] Política integral: 11 tabelas preservadas, 3 exportáveis e 10 reconstruíveis.
@@ -135,6 +145,9 @@ Prontidão global estimada para a primeira produção: **91%**. O percentual nã
 - [x] Seed isolado de câmbio executado e reconciliado.
 - [x] Idempotência cambial comprovada em segunda execução no mesmo SHA e intervalo.
 - [x] Issue #217 encerrada após evidência real.
+- [x] Issue #226 criada para o seed isolado de proventos.
+- [x] Contrato inicial `pre-prod-dividends-seed.v1` e fronteiras operacionais publicados.
+- [ ] Implementar envelope, inspeção read-only e validações do seed de proventos.
 - [ ] Gerar nova cadeia operacional vinculada ao SHA promovido.
 - [ ] Recalcular e revisar a confirmação composta.
 - [ ] Executar limpeza real somente após nova autorização explícita.
