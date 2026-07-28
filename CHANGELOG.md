@@ -5,6 +5,15 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — compatibilidade da consulta PTAX oficial (28/07/2026)
+
+- Removida a opção OData `$orderby=dataHoraCotacao asc`, rejeitada com HTTP 400 pelo endpoint oficial `CotacaoDolarPeriodo`.
+- Mantidos `$select=cotacaoVenda,dataHoraCotacao`, deduplicação diária, ordenação local e seleção do boletim mais recente no parser estrito.
+- Adicionada regressão unitária exigindo que `$orderby` não seja enviado.
+- A consulta read-only retornou cinco PTAX de venda entre `2026-07-20` e `2026-07-24`.
+- As execuções `20260728-103750` e `20260728-104238`, no commit `37c1d800be6f21dfc5c91b332a6ebe8748c0ac1c`, comprovaram idempotência com estado final estável em 6 linhas, zero crescimento na segunda execução, zero duplicidades, zero pares não suportados e `ok=true`.
+- A Issue #217 foi encerrada após a reconciliação operacional.
+
 ### Adicionado — seed isolado de câmbio e runbook operacional (27/07/2026)
 
 - Criado o contrato `pre-prod-fx-seed.v1` para o par `USD-BRL`, fonte oficial `BCB` e tipo `PTAX_SELL`.
