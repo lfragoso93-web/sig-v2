@@ -15,6 +15,7 @@ from app.services.pre_prod_dividends_seed_collector import (
     STRICT_DIVIDENDS_ELIGIBLE_TYPES,
     StrictDividendAsset,
     StrictDividendAssetCollection,
+    StrictDividendCollectionError,
     StrictDividendProvider,
     collect_dividends_strict,
 )
@@ -28,9 +29,11 @@ from app.services.pre_prod_dividends_seed_inspection import (
     inspect_dividends_seed_state,
 )
 from app.services.pre_prod_dividends_seed_materialization import (
+    DividendsSeedMaterializationError,
     materialize_portfolio_dividends_strict,
 )
 from app.services.pre_prod_dividends_seed_persistence import (
+    DividendsSeedPersistenceError,
     persist_asset_dividends_strict,
 )
 
@@ -40,6 +43,27 @@ InspectionRunner = Callable[[AsyncSession], Awaitable[Any]]
 GroupingRunner = Callable[[AsyncSession], Awaitable[tuple[dict, ...]]]
 PersistenceRunner = Callable[..., Awaitable[Any]]
 MaterializationRunner = Callable[..., Awaitable[Any]]
+
+
+class DividendsSeedUnexpectedStageError(RuntimeError):
+    """Preserva a etapa de uma falha inesperada sem renderizar dados sensíveis."""
+
+    def __init__(self, stage: str) -> None:
+        super().__init__(f"falha inesperada na etapa {stage}")
+        self.stage = stage
+
+
+async def _run_stage(stage: str, operation: Awaitable[Any]) -> Any:
+    try:
+        return await operation
+    except (
+        StrictDividendCollectionError,
+        DividendsSeedPersistenceError,
+        DividendsSeedMaterializationError,
+    ):
+        raise
+    except Exception as exc:
+        raise DividendsSeedUnexpectedStageError(stage) from exc
 
 
 async def load_dividends_seed_assets(
@@ -128,18 +152,36 @@ async def run_pre_prod_dividends_seed(
         end_date=end_date.isoformat(),
     )
     try:
-        before, _, _ = await inspection_runner(db)
-        assets = await asset_loader(db)
-        collected = await collection_runner(assets=assets, providers=providers)
+        before, _, _ = await _run_stage(
+            "initial_inspection",
+            inspection_runner(db),
+        )
+        assets = await _run_stage("asset_loading", asset_loader(db))
+        collected = await _run_stage(
+            "collection",
+            collection_runner(assets=assets, providers=providers),
+        )
         restricted = _restrict_to_window(
             collected,
             start_date=start_date,
             end_date=end_date,
         )
-        persistence = await persistence_runner(db=db, collections=restricted)
-        materialization = await materialization_runner(db=db, as_of=end_date)
-        after, coverage, integrity = await inspection_runner(db)
-        groupings = await grouping_runner(db)
+        persistence = await _run_stage(
+            "global_persistence",
+            persistence_runner(db=db, collections=restricted),
+        )
+        materialization = await _run_stage(
+            "portfolio_materialization",
+            materialization_runner(db=db, as_of=end_date),
+        )
+        after, coverage, integrity = await _run_stage(
+            "final_inspection",
+            inspection_runner(db),
+        )
+        groupings = await _run_stage(
+            "final_groupings",
+            grouping_runner(db),
+        )
         errors = (
             (f"integridade contém {integrity.blocking_findings} achado(s)",)
             if integrity.blocking_findings

@@ -22,6 +22,7 @@ from app.services.pre_prod_dividends_seed_persistence import (
     DividendsSeedPersistenceResult,
 )
 from app.services.pre_prod_dividends_seed_service import (
+    DividendsSeedUnexpectedStageError,
     run_pre_prod_dividends_seed,
 )
 
@@ -198,7 +199,10 @@ async def test_rolls_back_and_reraises_on_failure() -> None:
         return_value=(_counts(), DividendsSeedCoverage(), DividendsSeedIntegrity())
     )
 
-    with pytest.raises(RuntimeError, match="provider"):
+    with pytest.raises(
+        DividendsSeedUnexpectedStageError,
+        match="collection",
+    ) as exc_info:
         await run_pre_prod_dividends_seed(
             run_id=RUN_ID,
             branch=BRANCH,
@@ -214,5 +218,7 @@ async def test_rolls_back_and_reraises_on_failure() -> None:
             inspection_runner=inspections,
         )
 
+    assert exc_info.value.stage == "collection"
+    assert isinstance(exc_info.value.__cause__, RuntimeError)
     db.rollback.assert_awaited_once()
     db.commit.assert_not_awaited()

@@ -10,6 +10,9 @@ from app.cli import pre_prod_dividends_seed as cli
 from app.services.pre_prod_dividends_seed_persistence import (
     DividendsSeedAlreadyRunningError,
 )
+from app.services.pre_prod_dividends_seed_service import (
+    DividendsSeedUnexpectedStageError,
+)
 
 RUN_ID = "20260728-180000"
 BRANCH = "stable-15jun"
@@ -135,15 +138,21 @@ async def test_cli_has_distinct_exit_for_lock_contention(monkeypatch, capsys):
 
 @pytest.mark.asyncio
 async def test_cli_redacts_unexpected_error(monkeypatch, capsys):
+    database_error = RuntimeError("postgresql://user:secret@host/db")
+    database_error.sqlstate = "42883"
+    staged_error = DividendsSeedUnexpectedStageError("initial_inspection")
+    staged_error.__cause__ = database_error
     monkeypatch.setattr(
         cli,
         "run_pre_prod_dividends_seed",
-        AsyncMock(side_effect=OSError("postgresql://user:secret@host/db")),
+        AsyncMock(side_effect=staged_error),
     )
 
     assert await cli._main() == cli.EXIT_UNEXPECTED_FAILURE
     output = capsys.readouterr().out
     payload = json.loads(output)
     assert payload["error"] == "falha inesperada no estágio de proventos"
-    assert payload["type"] == "OSError"
+    assert payload["stage"] == "initial_inspection"
+    assert payload["type"] == "RuntimeError"
+    assert payload["sqlstate"] == "42883"
     assert "secret" not in output

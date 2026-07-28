@@ -31,6 +31,7 @@ from app.services.pre_prod_dividends_seed_providers import (
     fetch_yahoo_dividend_history,
 )
 from app.services.pre_prod_dividends_seed_service import (
+    DividendsSeedUnexpectedStageError,
     run_pre_prod_dividends_seed,
 )
 
@@ -38,6 +39,18 @@ EXIT_OK = 0
 EXIT_OPERATIONAL_FAILURE = 1
 EXIT_ALREADY_RUNNING = 2
 EXIT_UNEXPECTED_FAILURE = 3
+
+
+def _sqlstate(exc: BaseException) -> str | None:
+    current: BaseException | None = exc
+    visited: set[int] = set()
+    while current is not None and id(current) not in visited:
+        visited.add(id(current))
+        value = getattr(current, "sqlstate", None)
+        if value:
+            return str(value)
+        current = current.__cause__ or current.__context__
+    return None
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -110,12 +123,20 @@ async def _main() -> int:
         print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
         return EXIT_OPERATIONAL_FAILURE
     except Exception as exc:  # noqa: BLE001
+        stage = (
+            exc.stage
+            if isinstance(exc, DividendsSeedUnexpectedStageError)
+            else "cli"
+        )
+        root_cause = exc.__cause__ or exc
         print(
             json.dumps(
                 {
                     "ok": False,
                     "error": "falha inesperada no estágio de proventos",
-                    "type": type(exc).__name__,
+                    "stage": stage,
+                    "type": type(root_cause).__name__,
+                    "sqlstate": _sqlstate(exc),
                 },
                 ensure_ascii=False,
             )
