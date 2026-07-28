@@ -53,7 +53,7 @@ A limpeza real, seeds B3/Tesouro, proventos, importação e rebuild ainda não f
 - Comparador `pre-prod-macro-seed-compare.v1` e persistidor `scripts/compare_pre_prod_macro_seed.ps1` preservam a prova offline em JSON auditável.
 - Seed isolado de câmbio implementado pela Issue #217 com contrato `pre-prod-fx-seed.v1`, inspeção read-only, cliente PTAX estrito, persistência transacional, advisory lock, CLI auditável e runbook dedicado.
 - Execuções `20260728-103750` e `20260728-104238`, no commit `37c1d800be6f21dfc5c91b332a6ebe8748c0ac1c`, comprovaram estado final estável em 6 linhas, zero novas linhas na segunda execução, zero duplicidades, zero pares não suportados e `ok=true`.
-- Seed isolado de proventos implementado pela Issue #226 com contrato `pre-prod-dividends-seed.v1`, coleta BRAPI/Yahoo estrita e sequencial, persistência global, materialização por carteira, advisory lock, transação única e inspeções de reconciliação.
+- Seed isolado de proventos implementado pela Issue #226 com contrato `pre-prod-dividends-seed.v1`, coleta por fontes principal e complementar estrita e sequencial, persistência global, materialização por carteira, advisory lock, transação única e inspeções de reconciliação.
 - Comparador offline, CLI e wrapper `scripts/Invoke-PreProdDividendsIdempotency.ps1` publicados com runbook dedicado; suíte integral no SHA operacional e duas execuções reais permanecem pendentes.
 
 ## Arquitetura resumida
