@@ -3,7 +3,7 @@
 > Issue dedicada: #226  
 > Issue-mãe: #158  
 > Gate agregado: #216  
-> Estado: especificação inicial, sem autorização de execução real  
+> Estado: implementação e runbook publicados, sem autorização de execução real
 > Última atualização: 28/07/2026
 
 ## Objetivo
@@ -288,19 +288,19 @@ controlada deve ser produzida.
 
 ## Gates antes da execução real
 
-- [ ] implementação dividida em commits pequenos;
-- [ ] coletor estrito sem commit e sem fallback silencioso;
-- [ ] persistência global transacional;
-- [ ] materialização transacional;
-- [ ] advisory lock;
-- [ ] inspeções de integridade e cobertura;
-- [ ] CLI e exit codes;
-- [ ] comparador offline;
-- [ ] wrapper PowerShell;
-- [ ] testes unitários e de integração;
-- [ ] suíte backend completa;
-- [ ] README, ROADMAP, CHANGELOG e runbook sincronizados;
-- [ ] Issues #158, #216 e #226 atualizadas;
+- [x] implementação dividida em commits pequenos;
+- [x] coletor estrito sem commit e sem fallback silencioso;
+- [x] persistência global transacional;
+- [x] materialização transacional;
+- [x] advisory lock;
+- [x] inspeções de integridade e cobertura;
+- [x] CLI e exit codes;
+- [x] comparador offline;
+- [x] wrapper PowerShell;
+- [x] testes unitários e de integração;
+- [ ] suíte backend completa no SHA operacional;
+- [x] README, ROADMAP, CHANGELOG e runbook sincronizados;
+- [ ] Issues #158, #216 e #226 reconciliadas com evidências reais;
 - [ ] revisão explícita da janela real.
 
 ## Fora de escopo

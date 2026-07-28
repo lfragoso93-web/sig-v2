@@ -5,6 +5,14 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Adicionado — runbook operacional do seed isolado de proventos (28/07/2026)
+
+- Criado `docs/pre-prod-dividends-seed-runbook.md` com pré-requisitos, fronteira autorizada, validação, comando PowerShell oficial, códigos de saída e critérios de sucesso e aborto.
+- Documentada a dupla execução pelo wrapper `Invoke-PreProdDividendsIdempotency.ps1` e a preservação atômica de `first.json`, `second.json` e `idempotency.json`.
+- README, ROADMAP e contrato `pre-prod-dividends-seed.v1` foram sincronizados com a implementação real de coleta estrita, persistência, materialização, inspeções, CLI e comparador.
+- A publicação do runbook não autoriza execução real; suíte integral no SHA operacional, janela aprovada e duas execuções controladas continuam pendentes na Issue #226.
+- Nenhuma coleta, escrita em banco, migration ou execução em pré-produção ocorreu neste bloco documental.
+
 ### Adicionado — contrato do seed isolado de proventos (28/07/2026)
 
 - Criada a Issue #226 e vinculada às Issues #158 e #216 como gate dedicado do estágio.

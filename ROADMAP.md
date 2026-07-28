@@ -31,7 +31,7 @@
 | Seed isolado Tesouro | Identidade, comparador e wrapper implementados; execução real pendente (#208) | 97% |
 | Seed isolado de benchmarks | Execução real e idempotência comprovadas (#216) | 100% |
 | Seed isolado de câmbio | Execução real e idempotência comprovadas (#217) | 100% |
-| Seed isolado de proventos | Contrato inicial publicado; implementação pendente (#226) | 20% |
+| Seed isolado de proventos | Implementação e runbook publicados; prova real pendente (#226) | 95% |
 | Rebuild pré-produção | Gates estruturais preparados; execuções reais pendentes | 97% |
 | Eventos corporativos | Fundação pronta | 30% |
 | IRPF | Planejado | 15% |
@@ -96,7 +96,10 @@ Prontidão global estimada para a primeira produção: **91%**. O percentual nã
 - Escrita autorizada: somente `asset_dividends` e `dividends`.
 - Transação única, advisory lock, rollback integral, fontes explícitas e comparador offline são gates obrigatórios.
 - O estágio permanece isolado de B3, Tesouro, benchmarks, câmbio, importação, posições, snapshots e `full_market_rebuild`.
-- Próximo bloco: testes do envelope e inspeção read-only antes de qualquer persistência funcional.
+- Coletor BRAPI/Yahoo estrito e sequencial, persistência global, materialização por carteira, inspeções de reconciliação e CLI transacional implementados.
+- Comparador offline e wrapper `scripts/Invoke-PreProdDividendsIdempotency.ps1` preservam as três evidências sem acesso a banco ou rede durante a comparação.
+- `docs/pre-prod-dividends-seed-runbook.md` define pré-condições, comando oficial, critérios de sucesso/aborto e registro das evidências.
+- Suíte integral no SHA operacional e duas execuções reais controladas permanecem pendentes.
 
 ### Histórico e snapshots
 
@@ -147,7 +150,10 @@ Prontidão global estimada para a primeira produção: **91%**. O percentual nã
 - [x] Issue #217 encerrada após evidência real.
 - [x] Issue #226 criada para o seed isolado de proventos.
 - [x] Contrato inicial `pre-prod-dividends-seed.v1` e fronteiras operacionais publicados.
-- [ ] Implementar envelope, inspeção read-only e validações do seed de proventos.
+- [x] Envelope, inspeções, coleta estrita, persistência global e materialização de proventos implementados.
+- [x] CLI transacional, comparador offline, wrapper PowerShell e runbook de proventos publicados.
+- [ ] Executar a suíte integral de proventos no SHA operacional aprovado.
+- [ ] Realizar duas execuções reais controladas e reconciliar as três evidências.
 - [ ] Gerar nova cadeia operacional vinculada ao SHA promovido.
 - [ ] Recalcular e revisar a confirmação composta.
 - [ ] Executar limpeza real somente após nova autorização explícita.
@@ -184,7 +190,7 @@ Prontidão global estimada para a primeira produção: **91%**. O percentual nã
 1. Gerar nova cadeia operacional vinculada ao SHA promovido.
 2. Executar e reconciliar a limpeza real pela Issue #199.
 3. Executar e reconciliar B3 e Tesouro em estágios independentes.
-4. Implementar e validar o estágio isolado de proventos.
+4. Validar e executar a prova controlada de idempotência do estágio isolado de proventos.
 5. Executar importação e rebuild em blocos independentes.
 6. Endurecer ou remover o router administrativo de debug antes do go-live.
 7. Remover o serviço legado de rentabilidade (#151).

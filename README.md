@@ -53,7 +53,8 @@ A limpeza real, seeds B3/Tesouro, proventos, importação e rebuild ainda não f
 - Comparador `pre-prod-macro-seed-compare.v1` e persistidor `scripts/compare_pre_prod_macro_seed.ps1` preservam a prova offline em JSON auditável.
 - Seed isolado de câmbio implementado pela Issue #217 com contrato `pre-prod-fx-seed.v1`, inspeção read-only, cliente PTAX estrito, persistência transacional, advisory lock, CLI auditável e runbook dedicado.
 - Execuções `20260728-103750` e `20260728-104238`, no commit `37c1d800be6f21dfc5c91b332a6ebe8748c0ac1c`, comprovaram estado final estável em 6 linhas, zero novas linhas na segunda execução, zero duplicidades, zero pares não suportados e `ok=true`.
-- Contrato inicial `pre-prod-dividends-seed.v1` publicado pela Issue #226, com leitura limitada a `assets`, `transactions`, `portfolios`, `asset_dividends` e `dividends`, escrita limitada a `asset_dividends` e `dividends`, transação única, advisory lock, rollback integral e prova offline de idempotência obrigatória.
+- Seed isolado de proventos implementado pela Issue #226 com contrato `pre-prod-dividends-seed.v1`, coleta BRAPI/Yahoo estrita e sequencial, persistência global, materialização por carteira, advisory lock, transação única e inspeções de reconciliação.
+- Comparador offline, CLI e wrapper `scripts/Invoke-PreProdDividendsIdempotency.ps1` publicados com runbook dedicado; suíte integral no SHA operacional e duas execuções reais permanecem pendentes.
 
 ## Arquitetura resumida
 
@@ -96,20 +97,23 @@ scripts/Invoke-PreProdTreasuryIdempotency.ps1 -CommitSha <SHA40> -Confirmation E
 scripts/pre_prod_macro_seed.ps1 -RunId <YYYYMMDD-HHMMSS> -Branch stable-15jun -CommitSha <SHA40>
 scripts/compare_pre_prod_macro_seed.ps1 -FirstEvidence <PRIMEIRA_EVIDENCIA.json> -SecondEvidence <SEGUNDA_EVIDENCIA.json> -RunId <YYYYMMDD-HHMMSS>
 python -m app.cli.pre_prod_fx_seed --run-id <YYYYMMDD-HHMMSS> --branch stable-15jun --commit-sha <SHA40> --start-date <AAAA-MM-DD> --end-date <AAAA-MM-DD>
+python -m app.cli.pre_prod_dividends_seed --run-id <YYYYMMDD-HHMMSS> --branch stable-15jun --commit-sha <SHA40> --start-date <AAAA-MM-DD> --end-date <AAAA-MM-DD>
+python -m app.cli.pre_prod_dividends_seed_idempotency --first <PRIMEIRA_EVIDENCIA.json> --second <SEGUNDA_EVIDENCIA.json>
+scripts/Invoke-PreProdDividendsIdempotency.ps1 -CommitSha <SHA40> -Confirmation EXECUTE-DIVIDENDS-IDEMPOTENCY:<SHA40> -StartDate <AAAA-MM-DD> -EndDate <AAAA-MM-DD>
 python -m app.cli.full_market_rebuild
 python -m app.cli.rebuild_b3_historical_market
 python -m app.cli.sync_treasury_catalog_v2
 python -m app.cli.rebuild_treasury_official_prices
 ```
 
-As CLIs isoladas de B3, Tesouro, benchmarks e câmbio não autorizam execução na pré-produção real apenas por estarem disponíveis. Cada estágio exige SHA aprovado, janela operacional, evidência preservada e reconciliação na Issue correspondente. Os comparadores de idempotência operam somente sobre arquivos JSON e não acessam banco ou rede.
+As CLIs isoladas de B3, Tesouro, benchmarks, câmbio e proventos não autorizam execução na pré-produção real apenas por estarem disponíveis. Cada estágio exige SHA aprovado, janela operacional, evidência preservada e reconciliação na Issue correspondente. Os comparadores de idempotência operam somente sobre arquivos JSON e não acessam banco ou rede.
 
 ## Prioridades atuais
 
 1. Promover a exposição do `plan_sha256` e gerar uma nova cadeia operacional vinculada ao novo SHA.
 2. Registrar nova confirmação composta e executar a limpeza real somente pela Issue #199.
 3. Executar e reconciliar os seeds isolados de B3 e Tesouro em blocos separados após a limpeza.
-4. Implementar e validar o estágio isolado de proventos pela Issue #226 e pelo contrato `pre-prod-dividends-seed.v1`.
+4. Validar a suíte integral e executar a prova controlada de idempotência de proventos pela Issue #226.
 5. Executar importação e rebuild em blocos independentes.
 6. Endurecer ou remover o router administrativo de debug antes do go-live.
 7. Remover o serviço legado de rentabilidade (#151).
@@ -178,4 +182,5 @@ docker compose up -d --build
 - `docs/pre-prod-macro-seed-runbook.md` — seed transacional de benchmarks, evidência, persistência da comparação e prova operacional de idempotência.
 - `docs/pre-prod-fx-seed-runbook.md` — seed PTAX estrito, transação, evidência e prova operacional de idempotência cambial.
 - `docs/PRE_PROD_DIVIDENDS_SEED_CONTRACT.md` — contrato operacional, fronteiras, integridade e idempotência do estágio isolado de proventos.
+- `docs/pre-prod-dividends-seed-runbook.md` — validação, dupla execução controlada, critérios de aborto e preservação das evidências de proventos.
 - `docs/CANONICAL_FINANCIAL_CONTRACT.md` — contrato financeiro oficial.
