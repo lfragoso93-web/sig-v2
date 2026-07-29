@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+
 from app.models.dividend import DividendType
 from app.services.dividend_backfill_service import (
     ParsedDividendEvent,
@@ -637,7 +638,10 @@ async def test_abev3_partial_yahoo_component_preserves_brapi_total(
 
 
 @pytest.mark.asyncio
-async def test_absorbed_component_policy_keeps_arbitrary_value_blocking() -> None:
+@pytest.mark.parametrize("candidate_value", [0.05, 0.05998])
+async def test_absorbed_component_policy_keeps_arbitrary_value_blocking(
+    candidate_value: float,
+) -> None:
     asset = SimpleNamespace(id=12, ticker="ABEV3", asset_type="ACAO")
     db = SimpleNamespace(
         scalar=AsyncMock(return_value=True),
@@ -673,7 +677,7 @@ async def test_absorbed_component_policy_keeps_arbitrary_value_blocking() -> Non
     )
     yahoo = _source(
         "yfinance_history",
-        value=0.05,
+        value=candidate_value,
         payment_date=None,
         ex_date=date(2014, 4, 3),
         raw_payload={
