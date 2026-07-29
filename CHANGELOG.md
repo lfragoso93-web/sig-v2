@@ -5,6 +5,19 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+
+### Corrigido — cobertura parcial de estimativas absorvidas (29/07/2026)
+
+- A reconciliação multifuente passou a preservar o total efetivo da fonte principal
+  quando a linha complementar declarada como agregada corresponde, com precisão
+  estrita, a apenas um componente estimado já absorvido por esse total.
+- A política não persiste estimativas, não duplica direitos e não altera a identidade
+  econômica; os componentes absorvidos existem somente como evidência transitória.
+- Linhas sem semântica agregada, valores arbitrários e componentes não absorvidos
+  continuam bloqueantes.
+- Regressões cobrem ABEV3 em 03/04/2014 nas duas ordens de fonte, preservando o
+  evento BRAPI de `0,13` diante do Yahoo `0,059994`, além da contraprova material.
+
 ### Corrigido — agregados complementares multietipo de proventos (29/07/2026)
 
 - O adaptador Yahoo passou a declarar que seu histórico representa o total
