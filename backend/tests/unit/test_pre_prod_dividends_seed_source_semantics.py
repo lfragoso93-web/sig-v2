@@ -340,6 +340,62 @@ async def test_abev3_estimated_components_collapse_into_canonical_total() -> Non
 
 
 @pytest.mark.asyncio
+async def test_estimated_components_ignore_their_provisional_payment_date() -> None:
+    asset = SimpleNamespace(id=12, ticker="ABEV3", asset_type="ACAO")
+    db = SimpleNamespace(
+        scalar=AsyncMock(return_value=True),
+        execute=AsyncMock(side_effect=[_result([asset]), _result([])]),
+        add=Mock(),
+        flush=AsyncMock(),
+        commit=AsyncMock(),
+        rollback=AsyncMock(),
+    )
+
+    def event(
+        value: float,
+        payment_date: date,
+        remarks: str,
+    ) -> ParsedDividendEvent:
+        return ParsedDividendEvent(
+            record_date=date(2014, 4, 2),
+            ex_date=date(2014, 4, 3),
+            payment_date=payment_date,
+            approved_on=date(2014, 3, 25) if remarks else None,
+            value_per_unit=value,
+            dividend_type="DIVIDENDO",
+            remarks=remarks,
+            raw_payload={"rate": value, "remarks": remarks},
+        )
+
+    collection = StrictDividendAssetCollection(
+        ticker="ABEV3",
+        asset_type="ACAO",
+        sources=(
+            StrictDividendSourceCollection(
+                source="brapi",
+                raw_rows=3,
+                normalized_rows=(
+                    event(0.07, date(2014, 4, 2), "csv:payment_date_estimated"),
+                    event(0.06, date(2014, 4, 2), "csv:payment_date_estimated"),
+                    event(0.13, date(2014, 4, 25), ""),
+                ),
+                rejected_rows=0,
+                empty_reason=None,
+            ),
+        ),
+    )
+
+    result = await persist_asset_dividends_strict(db=db, collections=(collection,))
+
+    assert result.created == 1
+    assert result.unchanged == 2
+    created = db.add.call_args.args[0]
+    assert created.value_per_unit == Decimal("0.13")
+    assert created.payment_date == date(2014, 4, 25)
+    assert created.remarks == ""
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "rows",
     [

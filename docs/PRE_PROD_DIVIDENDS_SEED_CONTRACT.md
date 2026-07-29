@@ -235,11 +235,12 @@ tipo quando o pagamento efetivo for distinto. Divergências de valor dentro da
 mesma identidade continuam bloqueantes. A materialização permanece única por
 `portfolio_id + asset_dividend_id`.
 
-Quando uma mesma fonte publicar, na mesma identidade, um único total canônico e
-duas ou mais parcelas explicitamente marcadas com pagamento estimado, as parcelas
-somente podem ser absorvidas se a soma for equivalente ao total na precisão
-canônica. Soma divergente, ausência da marca, total ambíguo ou parcela isolada
-continuam bloqueantes.
+Quando uma mesma fonte publicar, na mesma Data Ex e tipo, um único total canônico
+e duas ou mais parcelas explicitamente marcadas com pagamento estimado, as
+parcelas somente podem ser absorvidas se a soma for equivalente ao total na
+precisão canônica. A data provisória de pagamento das parcelas não participa
+dessa comparação; o total preserva sua data efetiva. Soma divergente, ausência da
+marca, total ambíguo ou parcela isolada continuam bloqueantes.
 
 ## Moeda e câmbio
 

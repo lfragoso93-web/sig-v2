@@ -7,9 +7,10 @@ Formato baseado em Keep a Changelog.
 
 ### Corrigido — reconciliação de parcelas estimadas de proventos (29/07/2026)
 
-- Eventos de uma mesma fonte, identidade e pagamento passaram a reconhecer um total canônico acompanhado por duas ou mais parcelas marcadas como pagamento estimado somente quando a soma é equivalente na precisão canônica.
+- Eventos de uma mesma fonte, Data Ex e tipo passaram a reconhecer um total canônico acompanhado por duas ou mais parcelas marcadas como pagamento estimado somente quando a soma é equivalente na precisão canônica.
+- A data provisória de pagamento das parcelas estimadas não participa da reconciliação; o evento preservado mantém a data efetiva publicada pelo total canônico.
 - Divergência de soma, ausência da marca, total ambíguo ou parcela isolada permanecem bloqueantes.
-- Adicionada regressão para o payload real da ABEV3 em 2015, sem exceção por ticker e sem alterar a identidade econômica persistida.
+- Adicionadas regressões para os payloads reais da ABEV3 em 2014 e 2015, sem exceção por ticker e sem alterar a identidade econômica persistida.
 
 ### Corrigido — compatibilidade do identificador Alembic de proventos (29/07/2026)
 

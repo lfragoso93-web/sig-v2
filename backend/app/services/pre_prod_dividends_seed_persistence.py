@@ -204,7 +204,6 @@ def _collapse_estimated_payment_components(events: tuple) -> tuple[tuple, int]:
         key = (
             event.ex_date,
             normalize_dividend_type(event.dividend_type),
-            event.payment_date or event.ex_date,
         )
         grouped.setdefault(key, []).append(event)
 
