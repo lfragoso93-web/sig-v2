@@ -8,7 +8,7 @@ materializa direitos por carteira.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import ROUND_DOWN, Decimal
 
 from sqlalchemy import select, text, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +23,11 @@ from app.services.pre_prod_dividends_seed_collector import (
 
 _DIVIDENDS_SEED_LOCK_KEY = 7_317_202_607_28
 _NUMERIC_EQUIVALENCE_TOLERANCE = Decimal("0.00000001")
+_MIN_DECLARED_COMPLEMENTARY_SCALE = 6
+_SOURCE_PRECEDENCE = {
+    "brapi": 0,
+    "yfinance_history": 1,
+}
 _CANONICAL_EVENT_FIELDS = (
     "record_date",
     "payment_date",
@@ -85,6 +90,58 @@ def _event_values(event, source: str) -> dict:
     }
 
 
+def _source_sort_key(source_collection) -> tuple[int, str]:
+    source = source_collection.source.strip().lower()
+    return (_SOURCE_PRECEDENCE.get(source, len(_SOURCE_PRECEDENCE)), source)
+
+
+def _declared_precision_equivalent(
+    *,
+    field: str,
+    left: dict,
+    right: dict,
+) -> bool:
+    """Reconcilia apenas precisão complementar explicitamente declarada.
+
+    A fonte complementar pode declarar que publicou um valor truncado em uma
+    escala observada. A equivalência só é aceita para ``value_per_unit``, com no
+    mínimo seis casas decimais, e nunca amplia a precisão de armazenamento de
+    oito casas. Divergências fora desse contrato continuam bloqueantes.
+    """
+
+    if field != "value_per_unit":
+        return False
+
+    candidates = (left, right)
+    for candidate in candidates:
+        payload = candidate.get("raw_payload")
+        if not isinstance(payload, dict):
+            continue
+        comparison = payload.get("canonicalComparison")
+        if not isinstance(comparison, dict):
+            continue
+        field_policy = comparison.get(field)
+        if not isinstance(field_policy, dict):
+            continue
+        if field_policy.get("mode") != "truncate":
+            continue
+        try:
+            scale = int(field_policy.get("scale"))
+        except (TypeError, ValueError):
+            continue
+        if not (_MIN_DECLARED_COMPLEMENTARY_SCALE <= scale <= 8):
+            continue
+
+        left_value = left[field]
+        right_value = right[field]
+        quantum = Decimal(1).scaleb(-scale)
+        return left_value.quantize(quantum, rounding=ROUND_DOWN) == right_value.quantize(
+            quantum,
+            rounding=ROUND_DOWN,
+        )
+    return False
+
+
 def _conflicting_event_fields(left: dict, right: dict) -> tuple[str, ...]:
     """Compara somente atributos canônicos presentes nas duas fontes."""
 
@@ -95,8 +152,11 @@ def _conflicting_event_fields(left: dict, right: dict) -> tuple[str, ...]:
         if left_value is None or right_value is None:
             continue
         if field in _NUMERIC_EVENT_FIELDS:
-            if abs(left_value - right_value) > _NUMERIC_EQUIVALENCE_TOLERANCE:
-                conflicts.append(field)
+            if abs(left_value - right_value) <= _NUMERIC_EQUIVALENCE_TOLERANCE:
+                continue
+            if _declared_precision_equivalent(field=field, left=left, right=right):
+                continue
+            conflicts.append(field)
         elif left_value != right_value:
             conflicts.append(field)
     return tuple(conflicts)
@@ -168,7 +228,7 @@ async def persist_asset_dividends_strict(
 
     for collection in collections:
         asset = assets[(collection.ticker, collection.asset_type)]
-        for source_collection in collection.sources:
+        for source_collection in sorted(collection.sources, key=_source_sort_key):
             source = source_collection.source.strip().lower()
             for event in source_collection.normalized_rows:
                 dividend_type = normalize_dividend_type(event.dividend_type)

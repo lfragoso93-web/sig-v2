@@ -5,6 +5,7 @@ import asyncio
 import warnings
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from typing import Any
 
 import httpx
@@ -24,6 +25,13 @@ from app.services.pre_prod_dividends_seed_collector import (
 )
 
 YahooHistoryFetcher = Callable[[str], Awaitable[list[tuple[date, float]]]]
+
+
+def _decimal_scale(value: float) -> int:
+    """Retorna a escala decimal efetivamente exposta pelo provedor."""
+
+    exponent = Decimal(str(value)).as_tuple().exponent
+    return max(0, -exponent)
 
 
 class StrictBrapiDividendProvider:
@@ -106,7 +114,13 @@ class StrictBrapiDividendProvider:
 
 
 class StrictYahooDividendProvider:
-    """Complementa histórico sem cooldown nem fallback silencioso."""
+    """Complementa histórico sem cooldown nem fallback silencioso.
+
+    O índice de ``Dividends`` do Yahoo representa a data ex do evento, não a
+    data efetiva de pagamento. O adaptador normaliza essa semântica na fronteira
+    e registra a escala numérica observada para reconciliação auditável com a
+    fonte primária.
+    """
 
     def __init__(self, *, history_fetcher: YahooHistoryFetcher) -> None:
         self._history_fetcher = history_fetcher
@@ -134,10 +148,16 @@ class StrictYahooDividendProvider:
 
         rows = tuple(
             {
-                "paymentDate": event_date.isoformat(),
+                "exDate": event_date.isoformat(),
                 "rate": amount,
                 "type": "DIVIDENDO",
                 "eventCategory": "cash",
+                "canonicalComparison": {
+                    "value_per_unit": {
+                        "mode": "truncate",
+                        "scale": _decimal_scale(amount),
+                    }
+                },
             }
             for event_date, amount in history
         )
