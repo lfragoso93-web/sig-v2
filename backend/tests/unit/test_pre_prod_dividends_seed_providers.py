@@ -5,6 +5,8 @@ import httpx
 import pandas as pd
 import pytest
 import yfinance as yf
+from pandas.errors import Pandas4Warning
+from yfinance.exceptions import YFTickerMissingError
 
 from app.services.pre_prod_dividends_seed_collector import StrictDividendCollectionError
 from app.services.pre_prod_dividends_seed_providers import (
@@ -12,8 +14,6 @@ from app.services.pre_prod_dividends_seed_providers import (
     StrictYahooDividendProvider,
     fetch_yahoo_dividend_history,
 )
-from pandas.errors import Pandas4Warning
-from yfinance.exceptions import YFTickerMissingError
 
 
 def _client(handler) -> httpx.AsyncClient:
