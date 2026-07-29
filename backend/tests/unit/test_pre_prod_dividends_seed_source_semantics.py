@@ -562,3 +562,138 @@ async def test_estimated_component_policy_does_not_hide_other_conflicts(
         match="evento global conflitante na mesma fonte",
     ):
         await persist_asset_dividends_strict(db=db, collections=(collection,))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reverse", [False, True])
+async def test_abev3_partial_yahoo_component_preserves_brapi_total(
+    reverse: bool,
+) -> None:
+    asset = SimpleNamespace(id=12, ticker="ABEV3", asset_type="ACAO")
+    db = SimpleNamespace(
+        scalar=AsyncMock(return_value=True),
+        execute=AsyncMock(side_effect=[_result([asset]), _result([])]),
+        add=Mock(),
+        flush=AsyncMock(),
+        commit=AsyncMock(),
+        rollback=AsyncMock(),
+    )
+
+    def brapi_event(
+        value: float,
+        payment_date: date,
+        remarks: str,
+    ) -> ParsedDividendEvent:
+        return ParsedDividendEvent(
+            record_date=date(2014, 4, 2),
+            ex_date=date(2014, 4, 3),
+            payment_date=payment_date,
+            approved_on=date(2014, 3, 25) if remarks else None,
+            value_per_unit=value,
+            dividend_type="DIVIDENDO",
+            remarks=remarks,
+            raw_payload={"rate": value, "remarks": remarks},
+        )
+
+    brapi = StrictDividendSourceCollection(
+        source="brapi",
+        raw_rows=3,
+        normalized_rows=(
+            brapi_event(0.07, date(2014, 4, 2), "csv:payment_date_estimated"),
+            brapi_event(0.06, date(2014, 4, 2), "csv:payment_date_estimated"),
+            brapi_event(0.13, date(2014, 4, 25), ""),
+        ),
+        rejected_rows=0,
+        empty_reason=None,
+    )
+    yahoo = _source(
+        "yfinance_history",
+        value=0.059994,
+        payment_date=None,
+        ex_date=date(2014, 4, 3),
+        raw_payload={
+            "rate": 0.059994,
+            "eventSemantics": "aggregate_cash_by_ex_date",
+            "canonicalComparison": {
+                "value_per_unit": {"mode": "truncate", "scale": 6}
+            },
+        },
+    )
+    sources = (yahoo, brapi) if reverse else (brapi, yahoo)
+    collection = StrictDividendAssetCollection(
+        ticker="ABEV3",
+        asset_type="ACAO",
+        sources=sources,
+    )
+
+    result = await persist_asset_dividends_strict(db=db, collections=(collection,))
+
+    assert result.created == 1
+    assert result.unchanged == 3
+    created = db.add.call_args.args[0]
+    assert created.source == "brapi"
+    assert created.value_per_unit == Decimal("0.13")
+    assert created.payment_date == date(2014, 4, 25)
+
+
+@pytest.mark.asyncio
+async def test_absorbed_component_policy_keeps_arbitrary_value_blocking() -> None:
+    asset = SimpleNamespace(id=12, ticker="ABEV3", asset_type="ACAO")
+    db = SimpleNamespace(
+        scalar=AsyncMock(return_value=True),
+        execute=AsyncMock(side_effect=[_result([asset]), _result([])]),
+        add=Mock(),
+        flush=AsyncMock(),
+        commit=AsyncMock(),
+        rollback=AsyncMock(),
+    )
+
+    def brapi_event(value: float, remarks: str) -> ParsedDividendEvent:
+        return ParsedDividendEvent(
+            record_date=date(2014, 4, 2),
+            ex_date=date(2014, 4, 3),
+            payment_date=date(2014, 4, 25),
+            approved_on=None,
+            value_per_unit=value,
+            dividend_type="DIVIDENDO",
+            remarks=remarks,
+            raw_payload={"rate": value, "remarks": remarks},
+        )
+
+    brapi = StrictDividendSourceCollection(
+        source="brapi",
+        raw_rows=3,
+        normalized_rows=(
+            brapi_event(0.07, "csv:payment_date_estimated"),
+            brapi_event(0.06, "csv:payment_date_estimated"),
+            brapi_event(0.13, ""),
+        ),
+        rejected_rows=0,
+        empty_reason=None,
+    )
+    yahoo = _source(
+        "yfinance_history",
+        value=0.05,
+        payment_date=None,
+        ex_date=date(2014, 4, 3),
+        raw_payload={
+            "rate": 0.05,
+            "eventSemantics": "aggregate_cash_by_ex_date",
+            "canonicalComparison": {
+                "value_per_unit": {"mode": "truncate", "scale": 6}
+            },
+        },
+    )
+    collection = StrictDividendAssetCollection(
+        ticker="ABEV3",
+        asset_type="ACAO",
+        sources=(brapi, yahoo),
+    )
+
+    with pytest.raises(
+        DividendsSeedPersistenceError,
+        match=r"valores divergentes: value_per_unit",
+    ):
+        await persist_asset_dividends_strict(db=db, collections=(collection,))
+
+    db.flush.assert_not_awaited()
