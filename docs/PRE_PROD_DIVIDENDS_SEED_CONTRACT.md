@@ -4,7 +4,7 @@
 > Issue-mãe: #158  
 > Gate agregado: #216  
 > Estado: implementação e runbook publicados, sem autorização de execução real
-> Última atualização: 28/07/2026
+> Última atualização: 29/07/2026
 
 ## Objetivo
 
