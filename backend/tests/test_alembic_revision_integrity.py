@@ -4,7 +4,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-
 VERSIONS_DIR = Path(__file__).resolve().parents[1] / "alembic" / "versions"
 ALEMBIC_VERSION_MAX_LENGTH = 32
 
@@ -12,9 +11,18 @@ ALEMBIC_VERSION_MAX_LENGTH = 32
 def _literal_assignment(path: Path, variable: str) -> str | None:
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     for node in tree.body:
-        if not isinstance(node, ast.Assign):
+        if isinstance(node, ast.Assign):
+            matches_variable = any(
+                isinstance(target, ast.Name) and target.id == variable
+                for target in node.targets
+            )
+        elif isinstance(node, ast.AnnAssign):
+            matches_variable = (
+                isinstance(node.target, ast.Name) and node.target.id == variable
+            )
+        else:
             continue
-        if not any(isinstance(target, ast.Name) and target.id == variable for target in node.targets):
+        if not matches_variable:
             continue
         if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
             return node.value.value

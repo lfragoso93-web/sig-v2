@@ -1,6 +1,6 @@
 """expand asset dividend economic identity
 
-Revision ID: 20260729_expand_dividend_identity
+Revision ID: 20260729_dividend_identity
 Revises: 20260728_dividends_sync_jobs
 Create Date: 2026-07-29
 
@@ -12,7 +12,7 @@ from collections.abc import Sequence
 
 from alembic import op
 
-revision: str = "20260729_expand_dividend_identity"
+revision: str = "20260729_dividend_identity"
 down_revision: str = "20260728_dividends_sync_jobs"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None

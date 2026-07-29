@@ -8,7 +8,7 @@ MIGRATION_PATH = (
     Path(__file__).resolve().parents[2]
     / "alembic"
     / "versions"
-    / "20260729_expand_dividend_identity.py"
+    / "20260729_dividend_identity.py"
 )
 
 
@@ -44,7 +44,8 @@ def test_upgrade_replaces_collapsing_constraint_with_economic_identity() -> None
     sql = execute.call_args.args[0]
     assert "uq_asset_dividend_economic_identity" in sql
     assert "COALESCE(payment_date, ex_date)" in sql
-    assert migration.revision == "20260729_expand_dividend_identity"
+    assert migration.revision == "20260729_dividend_identity"
+    assert len(migration.revision) <= 32
     assert migration.down_revision == "20260728_dividends_sync_jobs"
 
 
