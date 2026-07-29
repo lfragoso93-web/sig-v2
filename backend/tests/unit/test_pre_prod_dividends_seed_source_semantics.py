@@ -4,7 +4,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-
 from app.services.dividend_backfill_service import (
     ParsedDividendEvent,
     _parse_raw_dividend,
@@ -287,3 +286,113 @@ async def test_abev3_same_ex_date_jcps_from_brapi_remain_distinct() -> None:
         Decimal("0.075"),
         Decimal("0.269"),
     }
+
+
+@pytest.mark.asyncio
+async def test_abev3_estimated_components_collapse_into_canonical_total() -> None:
+    asset = SimpleNamespace(id=12, ticker="ABEV3", asset_type="ACAO")
+    db = SimpleNamespace(
+        scalar=AsyncMock(return_value=True),
+        execute=AsyncMock(side_effect=[_result([asset]), _result([])]),
+        add=Mock(),
+        flush=AsyncMock(),
+        commit=AsyncMock(),
+        rollback=AsyncMock(),
+    )
+
+    def event(value: float, remarks: str) -> ParsedDividendEvent:
+        return ParsedDividendEvent(
+            record_date=date(2015, 2, 27),
+            ex_date=date(2015, 3, 2),
+            payment_date=date(2015, 3, 31),
+            approved_on=date(2015, 2, 23) if remarks else None,
+            value_per_unit=value,
+            dividend_type="JCP",
+            remarks=remarks,
+            raw_payload={"rate": value, "remarks": remarks},
+        )
+
+    collection = StrictDividendAssetCollection(
+        ticker="ABEV3",
+        asset_type="ACAO",
+        sources=(
+            StrictDividendSourceCollection(
+                source="brapi",
+                raw_rows=3,
+                normalized_rows=(
+                    event(0.03, "csv:payment_date_estimated"),
+                    event(0.09, ""),
+                    event(0.06, "csv:payment_date_estimated"),
+                ),
+                rejected_rows=0,
+                empty_reason=None,
+            ),
+        ),
+    )
+
+    result = await persist_asset_dividends_strict(db=db, collections=(collection,))
+
+    assert result.created == 1
+    assert result.unchanged == 2
+    created = db.add.call_args.args[0]
+    assert created.value_per_unit == Decimal("0.09")
+    assert created.remarks == ""
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "rows",
+    [
+        (
+            (0.03, "csv:payment_date_estimated"),
+            (0.10, ""),
+            (0.06, "csv:payment_date_estimated"),
+        ),
+        ((0.03, "csv:payment_date_estimated"), (0.03, "")),
+        ((0.03, ""), (0.09, ""), (0.06, "")),
+    ],
+)
+async def test_estimated_component_policy_does_not_hide_other_conflicts(
+    rows: tuple[tuple[float, str], ...],
+) -> None:
+    asset = SimpleNamespace(id=12, ticker="ABEV3", asset_type="ACAO")
+    db = SimpleNamespace(
+        scalar=AsyncMock(return_value=True),
+        execute=AsyncMock(side_effect=[_result([asset]), _result([])]),
+        add=Mock(),
+        flush=AsyncMock(),
+        commit=AsyncMock(),
+        rollback=AsyncMock(),
+    )
+    events = tuple(
+        ParsedDividendEvent(
+            record_date=date(2015, 2, 27),
+            ex_date=date(2015, 3, 2),
+            payment_date=date(2015, 3, 31),
+            approved_on=None,
+            value_per_unit=value,
+            dividend_type="JCP",
+            remarks=remarks,
+            raw_payload={"rate": value, "remarks": remarks},
+        )
+        for value, remarks in rows
+    )
+    collection = StrictDividendAssetCollection(
+        ticker="ABEV3",
+        asset_type="ACAO",
+        sources=(
+            StrictDividendSourceCollection(
+                source="brapi",
+                raw_rows=len(events),
+                normalized_rows=events,
+                rejected_rows=0,
+                empty_reason=None,
+            ),
+        ),
+    )
+
+    with pytest.raises(
+        DividendsSeedPersistenceError,
+        match="evento global conflitante na mesma fonte",
+    ):
+        await persist_asset_dividends_strict(db=db, collections=(collection,))

@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — reconciliação de parcelas estimadas de proventos (29/07/2026)
+
+- Eventos de uma mesma fonte, identidade e pagamento passaram a reconhecer um total canônico acompanhado por duas ou mais parcelas marcadas como pagamento estimado somente quando a soma é equivalente na precisão canônica.
+- Divergência de soma, ausência da marca, total ambíguo ou parcela isolada permanecem bloqueantes.
+- Adicionada regressão para o payload real da ABEV3 em 2015, sem exceção por ticker e sem alterar a identidade econômica persistida.
+
 ### Corrigido — compatibilidade do identificador Alembic de proventos (29/07/2026)
 
 - O identificador da migration de identidade econômica foi reduzido para `20260729_dividend_identity`, respeitando o limite `VARCHAR(32)` de `alembic_version.version_num`.

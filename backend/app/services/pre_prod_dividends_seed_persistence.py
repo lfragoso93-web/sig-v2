@@ -24,6 +24,7 @@ from app.services.pre_prod_dividends_seed_collector import (
 _DIVIDENDS_SEED_LOCK_KEY = 7_317_202_607_28
 _NUMERIC_EQUIVALENCE_TOLERANCE = Decimal("0.00000001")
 _MIN_DECLARED_COMPLEMENTARY_SCALE = 6
+_ESTIMATED_PAYMENT_REMARK = "csv:payment_date_estimated"
 _SOURCE_PRECEDENCE = {
     "brapi": 0,
     "yfinance_history": 1,
@@ -195,6 +196,44 @@ def _render_conflicting_event_values(
     )
 
 
+def _collapse_estimated_payment_components(events: tuple) -> tuple[tuple, int]:
+    """Absorve parcelas estimadas quando já existe o total canônico da fonte."""
+
+    grouped: dict[tuple, list] = {}
+    for event in events:
+        key = (
+            event.ex_date,
+            normalize_dividend_type(event.dividend_type),
+            event.payment_date or event.ex_date,
+        )
+        grouped.setdefault(key, []).append(event)
+
+    retained: list = []
+    collapsed = 0
+    for group in grouped.values():
+        estimated = [
+            event
+            for event in group
+            if _ESTIMATED_PAYMENT_REMARK
+            in str((event.raw_payload or {}).get("remarks") or "")
+        ]
+        canonical = [event for event in group if event not in estimated]
+        if len(estimated) >= 2 and len(canonical) == 1:
+            component_values = [_decimal(event.value_per_unit) for event in estimated]
+            canonical_value = _decimal(canonical[0].value_per_unit)
+            if (
+                canonical_value is not None
+                and all(value is not None for value in component_values)
+                and abs(sum(component_values, Decimal(0)) - canonical_value)
+                <= _NUMERIC_EQUIVALENCE_TOLERANCE
+            ):
+                retained.append(canonical[0])
+                collapsed += len(estimated)
+                continue
+        retained.extend(group)
+    return tuple(retained), collapsed
+
+
 async def persist_asset_dividends_strict(
     *,
     db: AsyncSession,
@@ -257,7 +296,11 @@ async def persist_asset_dividends_strict(
         asset = assets[(collection.ticker, collection.asset_type)]
         for source_collection in sorted(collection.sources, key=_source_sort_key):
             source = source_collection.source.strip().lower()
-            for event in source_collection.normalized_rows:
+            source_events, collapsed = _collapse_estimated_payment_components(
+                source_collection.normalized_rows
+            )
+            unchanged += collapsed
+            for event in source_events:
                 dividend_type = normalize_dividend_type(event.dividend_type)
                 base_key = (asset.id, event.ex_date, dividend_type)
                 values = _event_values(event, source)
