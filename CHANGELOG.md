@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — semântica da fonte complementar e precisão multifuente de proventos (29/07/2026)
+
+- Datas do histórico da fonte complementar agora são normalizadas como Data Ex, sem serem apresentadas incorretamente como data efetiva de pagamento.
+- A fonte principal permanece canônica e determinística independentemente da ordem de entrada, preservando sua data de pagamento, valor e proveniência.
+- Valores monetários da fonte complementar truncados entre seis e oito casas são equivalentes somente quando a escala é declarada no payload normalizado e corresponde à projeção truncada do valor da fonte principal; divergências materiais e eventos com identidades distintas continuam bloqueantes.
+- Regressões cobrem o evento real de AALR3, ordem invertida das fontes, proveniência, datas Ex/pagamento distintas, precisão permitida, conflito material e rollback transacional.
+
 ### Corrigido — evidência de conflitos multifuente de proventos (28/07/2026)
 
 - Diagnósticos bloqueantes agora registram, por campo, os valores normalizados de cada fonte sem expor payload bruto.

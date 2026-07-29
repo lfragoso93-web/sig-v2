@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
@@ -118,7 +119,7 @@ async def test_aalr3_reconciles_declared_yahoo_truncation_deterministically(
     created = db.add.call_args.args[0]
     assert created.source == "brapi"
     assert created.payment_date == date(2019, 5, 7)
-    assert created.value_per_unit == 0.08453883
+    assert created.value_per_unit == Decimal("0.08453883")
     db.commit.assert_not_awaited()
     db.rollback.assert_not_awaited()
 

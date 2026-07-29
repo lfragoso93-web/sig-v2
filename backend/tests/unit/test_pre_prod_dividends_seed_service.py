@@ -19,6 +19,7 @@ from app.services.pre_prod_dividends_seed_materialization import (
     DividendsSeedMaterializationResult,
 )
 from app.services.pre_prod_dividends_seed_persistence import (
+    DividendsSeedPersistenceError,
     DividendsSeedPersistenceResult,
 )
 from app.services.pre_prod_dividends_seed_service import (
@@ -220,5 +221,37 @@ async def test_rolls_back_and_reraises_on_failure() -> None:
 
     assert exc_info.value.stage == "collection"
     assert isinstance(exc_info.value.__cause__, RuntimeError)
+    db.rollback.assert_awaited_once()
+    db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_rolls_back_on_blocking_multisource_conflict() -> None:
+    db = AsyncMock()
+    inspections = AsyncMock(
+        return_value=(_counts(), DividendsSeedCoverage(), DividendsSeedIntegrity())
+    )
+    conflict = DividendsSeedPersistenceError(
+        "evento global conflitante entre fontes"
+    )
+
+    with pytest.raises(DividendsSeedPersistenceError) as exc_info:
+        await run_pre_prod_dividends_seed(
+            run_id=RUN_ID,
+            branch=BRANCH,
+            commit_sha=COMMIT_SHA,
+            start_date=date(2026, 1, 1),
+            end_date=date(2026, 12, 31),
+            db=db,
+            providers=(AsyncMock(),),
+            asset_loader=AsyncMock(
+                return_value=(StrictDividendAsset("PETR4", "ACAO"),)
+            ),
+            collection_runner=AsyncMock(return_value=_collection()),
+            inspection_runner=inspections,
+            persistence_runner=AsyncMock(side_effect=conflict),
+        )
+
+    assert exc_info.value is conflict
     db.rollback.assert_awaited_once()
     db.commit.assert_not_awaited()

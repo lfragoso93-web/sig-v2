@@ -129,10 +129,13 @@ async def test_yahoo_adapter_uses_national_symbol_and_normalizes_rows() -> None:
     assert calls == ["PETR4.SA"]
     assert result.source == "yfinance_history"
     assert result.rows == ({
-        "paymentDate": "2020-01-02",
+        "exDate": "2020-01-02",
         "rate": 0.75,
         "type": "DIVIDENDO",
         "eventCategory": "cash",
+        "canonicalComparison": {
+            "value_per_unit": {"mode": "truncate", "scale": 2},
+        },
     },)
 
 
