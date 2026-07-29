@@ -197,8 +197,10 @@ def _render_conflicting_event_values(
     )
 
 
-def _collapse_estimated_payment_components(events: tuple) -> tuple[tuple, int]:
-    """Absorve parcelas estimadas quando já existe o total canônico da fonte."""
+def _collapse_estimated_payment_components(
+    events: tuple,
+) -> tuple[tuple, tuple]:
+    """Absorve estimativas equivalentes e preserva-as para reconciliação."""
 
     grouped: dict[tuple, list] = {}
     for event in events:
@@ -209,7 +211,7 @@ def _collapse_estimated_payment_components(events: tuple) -> tuple[tuple, int]:
         grouped.setdefault(key, []).append(event)
 
     retained: list = []
-    collapsed = 0
+    collapsed: list = []
     for group in grouped.values():
         estimated = [
             event
@@ -228,10 +230,46 @@ def _collapse_estimated_payment_components(events: tuple) -> tuple[tuple, int]:
                 <= _NUMERIC_EQUIVALENCE_TOLERANCE
             ):
                 retained.append(canonical[0])
-                collapsed += len(estimated)
+                collapsed.extend(estimated)
                 continue
         retained.extend(group)
-    return tuple(retained), collapsed
+    return tuple(retained), tuple(collapsed)
+
+
+def _is_declared_absorbed_component_coverage(
+    *,
+    event,
+    values: dict,
+    components: tuple[dict, ...],
+) -> bool:
+    """Aceita cobertura complementar estrita de uma estimativa absorvida."""
+
+    payload = event.raw_payload
+    if (
+        not isinstance(payload, dict)
+        or payload.get("eventSemantics") != _AGGREGATE_CASH_BY_EX_DATE
+    ):
+        return False
+
+    candidate_value = values["value_per_unit"]
+    if candidate_value is None:
+        return False
+
+    for component in components:
+        component_value = component["value_per_unit"]
+        if component_value is None:
+            continue
+        if (
+            abs(component_value - candidate_value)
+            <= _NUMERIC_EQUIVALENCE_TOLERANCE
+            or _declared_precision_equivalent(
+                field="value_per_unit",
+                left=component,
+                right=values,
+            )
+        ):
+            return True
+    return False
 
 
 def _is_declared_cross_type_aggregate(
@@ -326,6 +364,10 @@ async def persist_asset_dividends_strict(
         tuple[int, object, DividendType],
         list[tuple[str, dict]],
     ] = {}
+    absorbed_components: dict[
+        tuple[int, object, DividendType],
+        tuple[dict, ...],
+    ] = {}
 
     for collection in collections:
         asset = assets[(collection.ticker, collection.asset_type)]
@@ -334,7 +376,14 @@ async def persist_asset_dividends_strict(
             source_events, collapsed = _collapse_estimated_payment_components(
                 source_collection.normalized_rows
             )
-            unchanged += collapsed
+            unchanged += len(collapsed)
+            for component in collapsed:
+                component_type = normalize_dividend_type(component.dividend_type)
+                component_key = (asset.id, component.ex_date, component_type)
+                absorbed_components[component_key] = (
+                    *absorbed_components.get(component_key, ()),
+                    _event_values(component, source),
+                )
             for event in source_events:
                 dividend_type = normalize_dividend_type(event.dividend_type)
                 if _is_declared_cross_type_aggregate(
@@ -366,6 +415,13 @@ async def persist_asset_dividends_strict(
                     None,
                 )
                 if cross_source_prior is not None:
+                    if _is_declared_absorbed_component_coverage(
+                        event=event,
+                        values=values,
+                        components=absorbed_components.get(base_key, ()),
+                    ):
+                        unchanged += 1
+                        continue
                     prior_source, prior_values = cross_source_prior
                     conflicts = _conflicting_event_fields(prior_values, values)
                     raise DividendsSeedPersistenceError(
