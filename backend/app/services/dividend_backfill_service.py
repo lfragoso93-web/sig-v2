@@ -2,17 +2,17 @@ import logging
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Optional, Any
+from typing import Any, Optional
 
 import httpx
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.integrations.brapi import BRAPI_BASE, _auth_headers
-from app.models.transaction import Transaction
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
 from app.models.dividend import Dividend, DividendStatus, DividendType
+from app.models.transaction import Transaction
 from app.services.dividend_entitlement_service import (
     calculate_net_quantity,
     calculate_net_value,
@@ -346,8 +346,12 @@ async def backfill_dividends(db: AsyncSession, portfolio_id: int | None, ticker:
             txs_by_portfolio[pid].append((tx_date, op, qty))
 
     ad_result = await db.execute(select(AssetDividend).where(AssetDividend.asset_id == asset.id))
-    existing_ads: dict[tuple[date, str], AssetDividend] = {
-        (ad.ex_date, _dividend_type_from_value(ad.dividend_type).value): ad
+    existing_ads: dict[tuple[date, str, date], AssetDividend] = {
+        (
+            ad.ex_date,
+            _dividend_type_from_value(ad.dividend_type).value,
+            ad.payment_date or ad.ex_date,
+        ): ad
         for ad in ad_result.scalars().all()
     }
 
@@ -367,7 +371,11 @@ async def backfill_dividends(db: AsyncSession, portfolio_id: int | None, ticker:
 
         try:
             dividend_type = _dividend_type_from_value(parsed.dividend_type)
-            asset_key = (parsed.ex_date, dividend_type.value)
+            asset_key = (
+                parsed.ex_date,
+                dividend_type.value,
+                parsed.payment_date or parsed.ex_date,
+            )
             asset_div = existing_ads.get(asset_key)
             if asset_div is None:
                 asset_div = AssetDividend(

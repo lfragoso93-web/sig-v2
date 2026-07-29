@@ -5,6 +5,14 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — identidade econômica de eventos globais de proventos (29/07/2026)
+
+- A identidade persistida deixou de colapsar eventos legítimos do mesmo ativo, Data Ex e tipo quando possuem datas efetivas de pagamento distintas.
+- A persistência estrita agora aceita eventos divergentes da mesma fonte somente quando a identidade econômica persistida também é distinta; divergências na mesma identidade e conflitos entre fontes continuam bloqueantes.
+- A migration substitui a constraint antiga por índice único sobre ativo, Data Ex, tipo e `COALESCE(payment_date, ex_date)`, preservando idempotência para pagamentos ausentes.
+- Tickers fracionários, direitos e recibos passaram a usar uma política compartilhada de inelegibilidade antes de qualquer consulta BRAPI/Yahoo, evitando símbolos inválidos como `ONCO11F.SA`.
+- Regressões cobrem os dois JCPs reais de ABEV3 em `2025-12-19`, a migration, a filtragem de `ONCO11F` e os conflitos materiais já protegidos.
+
 ### Corrigido — semântica da fonte complementar e precisão multifuente de proventos (29/07/2026)
 
 - Datas do histórico da fonte complementar agora são normalizadas como Data Ex, sem serem apresentadas incorretamente como data efetiva de pagamento.

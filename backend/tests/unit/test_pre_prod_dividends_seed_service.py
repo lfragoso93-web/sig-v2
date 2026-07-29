@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -25,12 +25,28 @@ from app.services.pre_prod_dividends_seed_persistence import (
 )
 from app.services.pre_prod_dividends_seed_service import (
     DividendsSeedUnexpectedStageError,
+    load_dividends_seed_assets,
     run_pre_prod_dividends_seed,
 )
 
 RUN_ID = "20260728-180000"
 BRANCH = "stable-15jun"
 COMMIT_SHA = "a" * 40
+
+
+@pytest.mark.asyncio
+async def test_asset_loader_excludes_fractional_tickers_before_providers() -> None:
+    db = AsyncMock()
+    result = Mock()
+    result.all.return_value = [
+        ("ABEV3", "ACAO"),
+        ("ONCO11F", "FII"),
+    ]
+    db.execute.return_value = result
+
+    assets = await load_dividends_seed_assets(db)
+
+    assert assets == (StrictDividendAsset("ABEV3", "ACAO"),)
 
 
 def _counts(asset_dividends: int = 0, dividends: int = 0) -> DividendsSeedCounts:

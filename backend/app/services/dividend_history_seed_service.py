@@ -183,7 +183,7 @@ async def seed_full_dividend_history(
                     "historical_seed": True,
                 },
             )
-            .on_conflict_do_nothing(constraint="uq_asset_dividend_asset_exdate_type")
+            .on_conflict_do_nothing()
         )
         result = await db.execute(stmt)
         if result.rowcount and result.rowcount > 0:

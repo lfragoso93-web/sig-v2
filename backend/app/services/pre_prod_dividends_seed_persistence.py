@@ -90,6 +90,23 @@ def _event_values(event, source: str) -> dict:
     }
 
 
+def _storage_identity(
+    *,
+    asset_id: int,
+    ex_date,
+    dividend_type: DividendType,
+    values: dict,
+) -> tuple:
+    """Espelha a identidade econômica persistida pelo índice único."""
+
+    return (
+        asset_id,
+        ex_date,
+        dividend_type,
+        values["payment_date"] or ex_date,
+    )
+
+
 def _source_sort_key(source_collection) -> tuple[int, str]:
     source = source_collection.source.strip().lower()
     return (_SOURCE_PRECEDENCE.get(source, len(_SOURCE_PRECEDENCE)), source)
@@ -216,15 +233,25 @@ async def persist_asset_dividends_strict(
     existing_result = await db.execute(
         select(AssetDividend).where(AssetDividend.asset_id.in_(asset_ids))
     )
-    existing = {
-        (row.asset_id, row.ex_date, row.dividend_type): row
-        for row in existing_result.scalars().all()
-    }
+    existing = {}
+    for row in existing_result.scalars().all():
+        row_values = {"payment_date": row.payment_date}
+        existing[
+            _storage_identity(
+                asset_id=row.asset_id,
+                ex_date=row.ex_date,
+                dividend_type=row.dividend_type,
+                values=row_values,
+            )
+        ] = row
 
     created = 0
     updated = 0
     unchanged = 0
-    seen: dict[tuple[int, object, DividendType], tuple[str, dict]] = {}
+    seen: dict[
+        tuple[int, object, DividendType],
+        list[tuple[str, dict]],
+    ] = {}
 
     for collection in collections:
         asset = assets[(collection.ticker, collection.asset_type)]
@@ -232,32 +259,88 @@ async def persist_asset_dividends_strict(
             source = source_collection.source.strip().lower()
             for event in source_collection.normalized_rows:
                 dividend_type = normalize_dividend_type(event.dividend_type)
-                key = (asset.id, event.ex_date, dividend_type)
+                base_key = (asset.id, event.ex_date, dividend_type)
                 values = _event_values(event, source)
 
-                prior = seen.get(key)
-                if prior is not None:
-                    prior_source, prior_values = prior
-                    conflicts = _conflicting_event_fields(prior_values, values)
-                    if conflicts:
-                        raise DividendsSeedPersistenceError(
-                            "evento global conflitante entre fontes: "
-                            f"{collection.ticker}/{event.ex_date}/"
-                            f"{dividend_type.value} ({prior_source}, {source}); "
-                            "valores divergentes: "
-                            + _render_conflicting_event_values(
-                                fields=conflicts,
-                                left_source=prior_source,
-                                left=prior_values,
-                                right_source=source,
-                                right=values,
-                            )
-                        )
+                prior_events = seen.get(base_key, [])
+                equivalent = next(
+                    (
+                        prior
+                        for prior in prior_events
+                        if not _conflicting_event_fields(prior[1], values)
+                    ),
+                    None,
+                )
+                if equivalent is not None:
                     unchanged += 1
                     continue
-                seen[key] = (source, values)
 
-                row = existing.get(key)
+                cross_source_prior = next(
+                    (prior for prior in prior_events if prior[0] != source),
+                    None,
+                )
+                if cross_source_prior is not None:
+                    prior_source, prior_values = cross_source_prior
+                    conflicts = _conflicting_event_fields(prior_values, values)
+                    raise DividendsSeedPersistenceError(
+                        "evento global conflitante entre fontes: "
+                        f"{collection.ticker}/{event.ex_date}/"
+                        f"{dividend_type.value} ({prior_source}, {source}); "
+                        "valores divergentes: "
+                        + _render_conflicting_event_values(
+                            fields=conflicts,
+                            left_source=prior_source,
+                            left=prior_values,
+                            right_source=source,
+                            right=values,
+                        )
+                    )
+
+                same_identity_prior = next(
+                    (
+                        prior
+                        for prior in prior_events
+                        if _storage_identity(
+                            asset_id=asset.id,
+                            ex_date=event.ex_date,
+                            dividend_type=dividend_type,
+                            values=prior[1],
+                        )
+                        == _storage_identity(
+                            asset_id=asset.id,
+                            ex_date=event.ex_date,
+                            dividend_type=dividend_type,
+                            values=values,
+                        )
+                    ),
+                    None,
+                )
+                if same_identity_prior is not None:
+                    prior_source, prior_values = same_identity_prior
+                    conflicts = _conflicting_event_fields(prior_values, values)
+                    raise DividendsSeedPersistenceError(
+                        "evento global conflitante na mesma fonte: "
+                        f"{collection.ticker}/{event.ex_date}/"
+                        f"{dividend_type.value} ({source}); "
+                        "valores divergentes: "
+                        + _render_conflicting_event_values(
+                            fields=conflicts,
+                            left_source=prior_source,
+                            left=prior_values,
+                            right_source=source,
+                            right=values,
+                        )
+                    )
+
+                prior_events.append((source, values))
+                seen[base_key] = prior_events
+                storage_key = _storage_identity(
+                    asset_id=asset.id,
+                    ex_date=event.ex_date,
+                    dividend_type=dividend_type,
+                    values=values,
+                )
+                row = existing.get(storage_key)
                 if row is None:
                     row = AssetDividend(
                         asset_id=asset.id,
@@ -266,7 +349,7 @@ async def persist_asset_dividends_strict(
                         **values,
                     )
                     db.add(row)
-                    existing[key] = row
+                    existing[storage_key] = row
                     created += 1
                     continue
 

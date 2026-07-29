@@ -226,12 +226,14 @@ async def inspect_dividends_seed_state(
             AssetDividend.asset_id,
             AssetDividend.ex_date,
             AssetDividend.dividend_type,
+            func.coalesce(AssetDividend.payment_date, AssetDividend.ex_date),
             func.count(AssetDividend.id).label("rows"),
         )
         .group_by(
             AssetDividend.asset_id,
             AssetDividend.ex_date,
             AssetDividend.dividend_type,
+            func.coalesce(AssetDividend.payment_date, AssetDividend.ex_date),
         )
         .having(func.count(AssetDividend.id) > 1),
     )

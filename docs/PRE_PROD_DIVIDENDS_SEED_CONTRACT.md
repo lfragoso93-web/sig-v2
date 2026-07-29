@@ -218,7 +218,9 @@ O relatório deve validar:
 
 - zero referências órfãs entre `dividends` e `asset_dividends`;
 - zero referências órfãs para ativo e carteira;
-- duplicidades pela chave global atualmente persistida;
+- duplicidades pela identidade econômica global persistida: ativo, Data Ex,
+  tipo e pagamento efetivo, usando a Data Ex somente quando o pagamento for
+  desconhecido;
 - duplicidades por `portfolio_id + asset_dividend_id`;
 - eventos com Data Ex ausente;
 - Data Com ou pagamento ausentes;
@@ -228,10 +230,10 @@ O relatório deve validar:
 - eventos não monetários fora dos agregados financeiros;
 - nenhuma escrita detectada fora das tabelas autorizadas.
 
-A unicidade atual de evento global e a ausência de constraint persistida na
-materialização devem permanecer riscos explícitos até decisão respaldada por
-dados reais e migration própria. Este estágio não deve introduzir migration
-silenciosamente.
+A unicidade global deve permitir eventos legítimos do mesmo ativo, Data Ex e
+tipo quando o pagamento efetivo for distinto. Divergências de valor dentro da
+mesma identidade continuam bloqueantes. A materialização permanece única por
+`portfolio_id + asset_dividend_id`.
 
 ## Moeda e câmbio
 
@@ -305,7 +307,6 @@ controlada deve ser produzida.
 
 ## Fora de escopo
 
-- migration de identidade do evento;
 - remoção física imediata de campos legados;
 - conversão cambial;
 - evolução completa de provedores internacionais;

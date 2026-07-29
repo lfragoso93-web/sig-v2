@@ -226,3 +226,64 @@ async def test_declared_precision_below_six_decimals_remains_blocking() -> None:
         await persist_asset_dividends_strict(db=db, collections=(collection,))
 
     db.flush.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_abev3_same_ex_date_jcps_from_brapi_remain_distinct() -> None:
+    asset = SimpleNamespace(id=12, ticker="ABEV3", asset_type="ACAO")
+    db = SimpleNamespace(
+        scalar=AsyncMock(return_value=True),
+        execute=AsyncMock(side_effect=[_result([asset]), _result([])]),
+        add=Mock(),
+        flush=AsyncMock(),
+        commit=AsyncMock(),
+        rollback=AsyncMock(),
+    )
+    events = (
+        ParsedDividendEvent(
+            record_date=date(2025, 12, 18),
+            ex_date=date(2025, 12, 19),
+            payment_date=date(2026, 12, 31),
+            approved_on=None,
+            value_per_unit=0.269,
+            dividend_type="JCP",
+            raw_payload={"paymentDate": "2026-12-31", "rate": 0.269},
+        ),
+        ParsedDividendEvent(
+            record_date=date(2025, 12, 18),
+            ex_date=date(2025, 12, 19),
+            payment_date=date(2026, 4, 6),
+            approved_on=None,
+            value_per_unit=0.075,
+            dividend_type="JCP",
+            raw_payload={"paymentDate": "2026-04-06", "rate": 0.075},
+        ),
+    )
+    collection = StrictDividendAssetCollection(
+        ticker="ABEV3",
+        asset_type="ACAO",
+        sources=(
+            StrictDividendSourceCollection(
+                source="brapi",
+                raw_rows=2,
+                normalized_rows=events,
+                rejected_rows=0,
+                empty_reason=None,
+            ),
+        ),
+    )
+
+    result = await persist_asset_dividends_strict(db=db, collections=(collection,))
+
+    assert result.created == 2
+    assert result.updated == 0
+    assert db.add.call_count == 2
+    created = [item.args[0] for item in db.add.call_args_list]
+    assert {item.payment_date for item in created} == {
+        date(2026, 4, 6),
+        date(2026, 12, 31),
+    }
+    assert {item.value_per_unit for item in created} == {
+        Decimal("0.075"),
+        Decimal("0.269"),
+    }

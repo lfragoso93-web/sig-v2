@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 from dataclasses import dataclass, field
 
 from sqlalchemy import select
@@ -17,7 +16,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset, AssetType
 from app.models.transaction import Transaction
-from app.services.dividend_backfill_service import run_backfill, materialize_asset_dividends
+from app.services.dividend_backfill_service import (
+    materialize_asset_dividends,
+    run_backfill,
+)
+from app.services.dividend_ticker_policy import is_event_ticker
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +31,6 @@ NATIONAL_EVENT_TYPES = {
     AssetType.BDR.value,
 }
 
-_MAIN_EQUITY_RE = re.compile(r"^[A-Z0-9]{4,6}(3|4|5|6|11|31|32|33|34|35)$")
 SYNC_CONCURRENCY = 10
 SYNC_BATCH_DELAY = 0.5
 MATERIALIZE_TICKER_BATCH_SIZE = 50
@@ -44,17 +46,6 @@ class ProventosDailySyncResult:
     historical_events: int = 0
     portfolios_invalidated: int = 0
     errors: list[str] = field(default_factory=list)
-
-
-def _is_event_ticker(ticker: str) -> bool:
-    t = ticker.upper()
-    if t.endswith("F"):
-        return False
-    if t[-1:] in {"B", "D", "R"}:
-        return False
-    if t[-2:] in {"97", "98", "99"}:
-        return False
-    return bool(_MAIN_EQUITY_RE.match(t))
 
 
 def _chunks(values: list[str], size: int) -> list[list[str]]:
@@ -121,7 +112,7 @@ async def load_proventos_sync_pairs(
     eligible_pairs = [
         (ticker, asset_type)
         for ticker, asset_type in unique_pairs
-        if _is_event_ticker(ticker)
+        if is_event_ticker(ticker)
     ]
     return eligible_pairs, len(unique_pairs) - len(eligible_pairs)
 

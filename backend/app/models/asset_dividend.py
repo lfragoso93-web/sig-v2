@@ -2,17 +2,29 @@
 AssetDividend — proventos declarados por ativo (fonte da verdade global).
 Independente de carteira.
 """
+from datetime import date as DateType
+from decimal import Decimal
+from typing import TYPE_CHECKING, Any
+
 from sqlalchemy import (
-    Integer, Numeric, Date, String, ForeignKey, Text, JSON,
-    UniqueConstraint, Enum as SAEnum,
+    JSON,
+    Date,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    text,
+)
+from sqlalchemy import (
+    Enum as SAEnum,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.core.database import Base
 from app.models.dividend import DividendType
-from decimal import Decimal
-from datetime import date as DateType
-from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from app.models.asset import Asset
@@ -38,9 +50,13 @@ class AssetDividend(Base):
     """
     __tablename__ = "asset_dividends"
     __table_args__ = (
-        UniqueConstraint(
-            "asset_id", "ex_date", "dividend_type",
-            name="uq_asset_dividend_asset_exdate_type"
+        Index(
+            "uq_asset_dividend_economic_identity",
+            "asset_id",
+            "ex_date",
+            "dividend_type",
+            text("COALESCE(payment_date, ex_date)"),
+            unique=True,
         ),
     )
 

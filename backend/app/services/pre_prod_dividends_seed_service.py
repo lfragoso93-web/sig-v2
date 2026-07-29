@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset
+from app.services.dividend_ticker_policy import is_event_ticker
 from app.services.pre_prod_dividends_seed_collector import (
     STRICT_DIVIDENDS_ELIGIBLE_TYPES,
     StrictDividendAsset,
@@ -81,6 +82,7 @@ async def load_dividends_seed_assets(
     return tuple(
         StrictDividendAsset(ticker=ticker, asset_type=asset_type)
         for ticker, asset_type in rows
+        if is_event_ticker(ticker)
     )
 
 
