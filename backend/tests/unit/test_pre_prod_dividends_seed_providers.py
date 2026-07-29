@@ -7,7 +7,6 @@ import pytest
 import yfinance as yf
 from pandas.errors import Pandas4Warning
 from yfinance.exceptions import YFTickerMissingError
-
 from app.services.pre_prod_dividends_seed_collector import StrictDividendCollectionError
 from app.services.pre_prod_dividends_seed_providers import (
     StrictBrapiDividendProvider,
