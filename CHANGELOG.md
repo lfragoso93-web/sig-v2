@@ -9,7 +9,7 @@ Formato baseado em Keep a Changelog.
 
 - O adaptador Yahoo passou a declarar que seu histórico representa o total
   monetário agregado por Data Ex, sem classificação entre JCP e dividendo.
-- Quando a BRAPI fornece dois ou mais componentes de tipos distintos na mesma
+- Quando a fonte principal fornece dois ou mais componentes de tipos distintos na mesma
   Data Ex, o agregado complementar deixa de competir com identidades individuais;
   os eventos tipados e a proveniência da fonte principal são preservados.
 - Ausência da declaração, apenas um tipo ou Data Ex distinta continuam

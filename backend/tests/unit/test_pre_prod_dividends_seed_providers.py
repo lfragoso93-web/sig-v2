@@ -133,6 +133,7 @@ async def test_yahoo_adapter_uses_national_symbol_and_normalizes_rows() -> None:
         "rate": 0.75,
         "type": "DIVIDENDO",
         "eventCategory": "cash",
+        "eventSemantics": "aggregate_cash_by_ex_date",
         "canonicalComparison": {
             "value_per_unit": {"mode": "truncate", "scale": 2},
         },
