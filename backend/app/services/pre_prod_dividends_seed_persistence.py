@@ -23,6 +23,7 @@ from app.services.pre_prod_dividends_seed_collector import (
 
 _DIVIDENDS_SEED_LOCK_KEY = 7_317_202_607_28
 _NUMERIC_EQUIVALENCE_TOLERANCE = Decimal("0.00000001")
+_ABSORBED_COMPONENT_COVERAGE_TOLERANCE = Decimal("0.00001")
 _MIN_DECLARED_COMPLEMENTARY_SCALE = 6
 _ESTIMATED_PAYMENT_REMARK = "csv:payment_date_estimated"
 _AGGREGATE_CASH_BY_EX_DATE = "aggregate_cash_by_ex_date"
@@ -261,12 +262,7 @@ def _is_declared_absorbed_component_coverage(
             continue
         if (
             abs(component_value - candidate_value)
-            <= _NUMERIC_EQUIVALENCE_TOLERANCE
-            or _declared_precision_equivalent(
-                field="value_per_unit",
-                left=component,
-                right=values,
-            )
+            <= _ABSORBED_COMPONENT_COVERAGE_TOLERANCE
         ):
             return True
     return False
