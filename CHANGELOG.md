@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — evidência de conflitos multifuente de proventos (28/07/2026)
+
+- Diagnósticos bloqueantes agora registram, por campo, os valores normalizados de cada fonte sem expor payload bruto.
+- A política de equivalência, a tolerância numérica, a identidade global e o rollback integral permanecem inalterados.
+- Regressões exigem a renderização determinística de datas e valores divergentes; a execução real da Issue #226 continua pendente.
+
 ### Corrigido — reconciliação multifuente de proventos (28/07/2026)
 
 - A persistência passou a comparar somente atributos econômicos canônicos presentes em ambas as fontes, sem tratar proveniência e payload bruto distintos como conflito.

@@ -186,7 +186,10 @@ async def test_rejects_conflicting_sources_for_same_global_identity() -> None:
 
     with pytest.raises(
         DividendsSeedPersistenceError,
-        match=r"campos divergentes: value_per_unit",
+        match=(
+            r"valores divergentes: value_per_unit "
+            r"\(brapi=1\.25, yfinance_history=1\.3\)"
+        ),
     ):
         await persist_asset_dividends_strict(db=db, collections=(combined,))
 
@@ -261,7 +264,10 @@ async def test_rejects_conflicting_dates_and_reports_exact_field() -> None:
 
     with pytest.raises(
         DividendsSeedPersistenceError,
-        match=r"campos divergentes: payment_date",
+        match=(
+            r"valores divergentes: payment_date "
+            r"\(brapi=2026-08-10, yfinance_history=2026-08-11\)"
+        ),
     ):
         await persist_asset_dividends_strict(db=db, collections=(combined,))
 

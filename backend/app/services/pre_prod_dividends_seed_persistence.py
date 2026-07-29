@@ -102,6 +102,22 @@ def _conflicting_event_fields(left: dict, right: dict) -> tuple[str, ...]:
     return tuple(conflicts)
 
 
+def _render_conflicting_event_values(
+    *,
+    fields: tuple[str, ...],
+    left_source: str,
+    left: dict,
+    right_source: str,
+    right: dict,
+) -> str:
+    """Renderiza somente valores normalizados dos campos em conflito."""
+
+    return "; ".join(
+        f"{field} ({left_source}={left[field]}, {right_source}={right[field]})"
+        for field in fields
+    )
+
+
 async def persist_asset_dividends_strict(
     *,
     db: AsyncSession,
@@ -168,7 +184,14 @@ async def persist_asset_dividends_strict(
                             "evento global conflitante entre fontes: "
                             f"{collection.ticker}/{event.ex_date}/"
                             f"{dividend_type.value} ({prior_source}, {source}); "
-                            f"campos divergentes: {', '.join(conflicts)}"
+                            "valores divergentes: "
+                            + _render_conflicting_event_values(
+                                fields=conflicts,
+                                left_source=prior_source,
+                                left=prior_values,
+                                right_source=source,
+                                right=values,
+                            )
                         )
                     unchanged += 1
                     continue
