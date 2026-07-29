@@ -5,6 +5,18 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — agregados complementares multietipo de proventos (29/07/2026)
+
+- O adaptador Yahoo passou a declarar que seu histórico representa o total
+  monetário agregado por Data Ex, sem classificação entre JCP e dividendo.
+- Quando a BRAPI fornece dois ou mais componentes de tipos distintos na mesma
+  Data Ex, o agregado complementar deixa de competir com identidades individuais;
+  os eventos tipados e a proveniência da fonte principal são preservados.
+- Ausência da declaração, apenas um tipo ou Data Ex distinta continuam
+  bloqueantes, sem tolerância numérica e sem exceção por ticker.
+- Adicionada regressão para ABEV3 em 15/01/2014, incluindo ordem invertida das
+  fontes e contraprova de conflito com um único tipo.
+
 ### Corrigido — reconciliação de parcelas estimadas de proventos (29/07/2026)
 
 - Eventos de uma mesma fonte, Data Ex e tipo passaram a reconhecer um total canônico acompanhado por duas ou mais parcelas marcadas como pagamento estimado somente quando a soma é equivalente na precisão canônica.

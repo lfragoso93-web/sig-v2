@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from app.models.dividend import DividendType
 from app.services.dividend_backfill_service import (
     ParsedDividendEvent,
     _parse_raw_dividend,
@@ -76,6 +77,7 @@ async def test_yahoo_history_date_is_normalized_as_ex_date_not_payment_date() ->
 
     assert result.rows[0]["exDate"] == "2019-04-26"
     assert "paymentDate" not in result.rows[0]
+    assert result.rows[0]["eventSemantics"] == "aggregate_cash_by_ex_date"
     parsed = _parse_raw_dividend(result.rows[0])
     assert parsed is not None
     assert parsed.ex_date == date(2019, 4, 26)
@@ -123,6 +125,114 @@ async def test_aalr3_reconciles_declared_yahoo_truncation_deterministically(
     assert created.value_per_unit == Decimal("0.08453883")
     db.commit.assert_not_awaited()
     db.rollback.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reverse", [False, True])
+async def test_abev3_yahoo_aggregate_preserves_brapi_events_by_type(
+    reverse: bool,
+) -> None:
+    asset = SimpleNamespace(id=12, ticker="ABEV3", asset_type="ACAO")
+    db = SimpleNamespace(
+        scalar=AsyncMock(return_value=True),
+        execute=AsyncMock(side_effect=[_result([asset]), _result([])]),
+        add=Mock(),
+        flush=AsyncMock(),
+        commit=AsyncMock(),
+        rollback=AsyncMock(),
+    )
+    brapi = StrictDividendSourceCollection(
+        source="brapi",
+        raw_rows=2,
+        normalized_rows=(
+            ParsedDividendEvent(
+                record_date=date(2014, 1, 14),
+                ex_date=date(2014, 1, 15),
+                payment_date=date(2014, 1, 13),
+                approved_on=date(2014, 1, 6),
+                value_per_unit=0.154,
+                dividend_type="JCP",
+                raw_payload={"rate": 0.154},
+            ),
+            ParsedDividendEvent(
+                record_date=date(2014, 1, 14),
+                ex_date=date(2014, 1, 15),
+                payment_date=date(2014, 1, 13),
+                approved_on=date(2014, 1, 6),
+                value_per_unit=0.1,
+                dividend_type="DIVIDENDO",
+                raw_payload={"rate": 0.1},
+            ),
+        ),
+        rejected_rows=0,
+        empty_reason=None,
+    )
+    yahoo = _source(
+        "yfinance_history",
+        value=0.253977,
+        payment_date=None,
+        ex_date=date(2014, 1, 15),
+        raw_payload={
+            "rate": 0.253977,
+            "eventSemantics": "aggregate_cash_by_ex_date",
+            "canonicalComparison": {
+                "value_per_unit": {"mode": "truncate", "scale": 6}
+            },
+        },
+    )
+    sources = (yahoo, brapi) if reverse else (brapi, yahoo)
+    collection = StrictDividendAssetCollection(
+        ticker="ABEV3",
+        asset_type="ACAO",
+        sources=sources,
+    )
+
+    result = await persist_asset_dividends_strict(db=db, collections=(collection,))
+
+    assert result.created == 2
+    assert result.unchanged == 1
+    assert db.add.call_count == 2
+    created = [call.args[0] for call in db.add.call_args_list]
+    assert {row.dividend_type for row in created} == {
+        DividendType.DIVIDENDO,
+        DividendType.JCP,
+    }
+    assert {row.source for row in created} == {"brapi"}
+
+
+@pytest.mark.asyncio
+async def test_aggregate_marker_does_not_hide_single_type_conflict() -> None:
+    brapi = _source(
+        "brapi",
+        value=0.1,
+        payment_date=date(2014, 1, 13),
+        ex_date=date(2014, 1, 15),
+        raw_payload={"rate": 0.1},
+    )
+    yahoo = _source(
+        "yfinance_history",
+        value=0.253977,
+        payment_date=None,
+        ex_date=date(2014, 1, 15),
+        raw_payload={
+            "rate": 0.253977,
+            "eventSemantics": "aggregate_cash_by_ex_date",
+        },
+    )
+    collection = StrictDividendAssetCollection(
+        ticker="AALR3",
+        asset_type="ACAO",
+        sources=(brapi, yahoo),
+    )
+    db = _db()
+
+    with pytest.raises(
+        DividendsSeedPersistenceError,
+        match="evento global conflitante entre fontes",
+    ):
+        await persist_asset_dividends_strict(db=db, collections=(collection,))
+
+    db.flush.assert_not_awaited()
 
 
 @pytest.mark.asyncio

@@ -242,6 +242,12 @@ precisão canônica. A data provisória de pagamento das parcelas não participa
 dessa comparação; o total preserva sua data efetiva. Soma divergente, ausência da
 marca, total ambíguo ou parcela isolada continuam bloqueantes.
 
+Uma fonte complementar que declare explicitamente semântica agregada por Data Ex
+não compete com uma identidade individual quando a fonte principal publicar dois
+ou mais componentes de tipos distintos nessa data. Os componentes tipados da
+fonte principal permanecem canônicos e separados. Sem declaração explícita, com
+apenas um tipo ou com Data Ex distinta, a divergência permanece bloqueante.
+
 ## Moeda e câmbio
 
 A moeda do evento deve ser declarada quando o provedor a informar. Ausência de

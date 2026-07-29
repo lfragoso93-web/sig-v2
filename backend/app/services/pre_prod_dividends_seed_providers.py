@@ -152,6 +152,7 @@ class StrictYahooDividendProvider:
                 "rate": amount,
                 "type": "DIVIDENDO",
                 "eventCategory": "cash",
+                "eventSemantics": "aggregate_cash_by_ex_date",
                 "canonicalComparison": {
                     "value_per_unit": {
                         "mode": "truncate",

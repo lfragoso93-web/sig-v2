@@ -25,6 +25,7 @@ _DIVIDENDS_SEED_LOCK_KEY = 7_317_202_607_28
 _NUMERIC_EQUIVALENCE_TOLERANCE = Decimal("0.00000001")
 _MIN_DECLARED_COMPLEMENTARY_SCALE = 6
 _ESTIMATED_PAYMENT_REMARK = "csv:payment_date_estimated"
+_AGGREGATE_CASH_BY_EX_DATE = "aggregate_cash_by_ex_date"
 _SOURCE_PRECEDENCE = {
     "brapi": 0,
     "yfinance_history": 1,
@@ -233,6 +234,41 @@ def _collapse_estimated_payment_components(events: tuple) -> tuple[tuple, int]:
     return tuple(retained), collapsed
 
 
+def _is_declared_cross_type_aggregate(
+    *,
+    event,
+    source: str,
+    asset_id: int,
+    seen: dict[tuple[int, object, DividendType], list[tuple[str, dict]]],
+) -> bool:
+    """Identifica total complementar sem tipo diante de eventos desagregados.
+
+    O histórico do Yahoo expõe uma única soma monetária por Data Ex e não
+    distingue JCP de dividendo. Essa linha não pode competir com uma identidade
+    individual quando a fonte principal já publicou os componentes por tipo.
+    """
+
+    payload = event.raw_payload
+    if (
+        not isinstance(payload, dict)
+        or payload.get("eventSemantics") != _AGGREGATE_CASH_BY_EX_DATE
+    ):
+        return False
+
+    component_types: set[DividendType] = set()
+    component_count = 0
+    for (prior_asset_id, prior_ex_date, prior_type), prior_events in seen.items():
+        if prior_asset_id != asset_id or prior_ex_date != event.ex_date:
+            continue
+        matching = [prior for prior in prior_events if prior[0] != source]
+        if not matching:
+            continue
+        component_types.add(prior_type)
+        component_count += len(matching)
+
+    return component_count >= 2 and len(component_types) >= 2
+
+
 async def persist_asset_dividends_strict(
     *,
     db: AsyncSession,
@@ -301,6 +337,14 @@ async def persist_asset_dividends_strict(
             unchanged += collapsed
             for event in source_events:
                 dividend_type = normalize_dividend_type(event.dividend_type)
+                if _is_declared_cross_type_aggregate(
+                    event=event,
+                    source=source,
+                    asset_id=asset.id,
+                    seen=seen,
+                ):
+                    unchanged += 1
+                    continue
                 base_key = (asset.id, event.ex_date, dividend_type)
                 values = _event_values(event, source)
 
