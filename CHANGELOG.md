@@ -5,6 +5,15 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — tolerância de cobertura de componente absorvido (29/07/2026)
+
+- A correspondência entre uma linha complementar agregada e um componente estimado
+  absorvido passou a usar tolerância monetária exclusiva de `0,00001` por cota.
+- A tolerância canônica geral permanece em oito casas decimais e não foi ampliada;
+  divergências próximas fora dessa janela, como `0,05998` diante de `0,06`,
+  continuam bloqueantes.
+- Corrigida a ordenação de imports da regressão e adicionada contraprova de fronteira.
+
 
 ### Corrigido — cobertura parcial de estimativas absorvidas (29/07/2026)
 
