@@ -69,8 +69,9 @@ possuir o ativo hoje não cria direito retroativo.
 
 | Porta | Responsabilidade atual | Classificação | Destino |
 |---|---|---|---|
-| `POST/DELETE /portfolios/{id}/dividends` e `dividend_service.py` | CRUD manual diretamente em `dividends` | Legado ativo | Separar ajuste manual de evento canônico; desativar somente após API substituta |
-| `POST /portfolios/{id}/dividends/sync` | Dispara sincronização/materialização por carteira | Incompatível ativo | Remover após confirmar o contrato público e adicionar regressão de rota |
+| `POST/DELETE /portfolios/{id}/dividends` | CRUD manual diretamente em `dividends` | Removido | Escrita pública desativada; ajuste manual futuro deve atuar no evento canônico |
+| `POST /portfolios/{id}/dividends/sync` | Disparava sincronização/materialização por carteira | Removido | Rota desativada e protegida por regressão de contrato |
+| `GET /portfolios/{id}/dividends` e `dividend_service.py` | Inspeção do legado materializado | Somente leitura | Preservar temporariamente para auditoria até a contração física |
 | `proventos_daily_sync_service.py` | Coleta eventos e materializa direitos em lotes | Misto | Preservar coleta global; retirar a etapa de materialização |
 | `dividend_backfill_service.py` | Backfill global e `materialize_asset_dividends` | Misto central | Separar coleta de cálculo; nenhum consumidor novo deve chamar a materialização |
 | `asset_market_pipeline_service.py` | Encadeia backfill e materialização | Misto | Manter eventos globais; tornar materialização indisponível por padrão e depois removê-la |

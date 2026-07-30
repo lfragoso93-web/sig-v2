@@ -55,11 +55,20 @@ def test_openapi_schema_does_not_expose_provider_names() -> None:
     _assert_no_provider_terms(schema)
 
 
-def test_legacy_portfolio_dividends_sync_route_is_not_exposed() -> None:
-    paths = {
-        route.path
+def test_legacy_portfolio_dividend_write_routes_are_not_exposed() -> None:
+    routes = {
+        (route.path, method)
         for route in app.routes
-        if hasattr(route, "path")
+        if hasattr(route, "path") and hasattr(route, "methods")
+        for method in route.methods
     }
 
-    assert "/api/v1/sync/proventos/{portfolio_id}" not in paths
+    base_path = "/api/v1/portfolios/{portfolio_id}/dividends"
+    assert (base_path, "GET") in routes
+    assert (base_path, "POST") not in routes
+    assert (f"{base_path}/{{dividend_id}}", "DELETE") not in routes
+    assert (f"{base_path}/sync", "POST") not in routes
+    assert not any(
+        path == "/api/v1/sync/proventos/{portfolio_id}"
+        for path, _method in routes
+    )

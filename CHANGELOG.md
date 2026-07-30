@@ -5,6 +5,16 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — portas públicas de escrita no legado de Proventos (30/07/2026)
+
+- Removidos `POST` e `DELETE` do CRUD manual e o `POST /sync` sob
+  `/api/v1/portfolios/{portfolio_id}/dividends`; essas rotas gravavam ou
+  materializavam diretamente a tabela legada `dividends`.
+- O `GET` legado foi preservado temporariamente como porta somente leitura para
+  auditoria e inspeção.
+- Uma regressão de contrato impede a reexposição das três mutações; nenhum
+  schema, dado, migration ou pipeline operacional foi alterado.
+
 ### Alterado — IRPF e Metas com direitos canônicos (30/07/2026)
 
 - IRPF e Metas de Proventos deixaram de consultar `dividends` e passaram a
