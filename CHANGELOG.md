@@ -5,6 +5,16 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — backfill de Proventos exclusivamente global (30/07/2026)
+
+- `backfill_dividends` deixou de receber `portfolio_id`, consultar transações e
+  criar ou atualizar linhas de `Dividend`.
+- O fluxo de mutações de transações continua disparando a coleta do ticker, mas
+  agora persiste exclusivamente eventos canônicos em `asset_dividends`.
+- O helper órfão `backfill_all_tickers`, sem callers na aplicação, foi removido.
+- Testes e regressão AST protegem a assinatura global e impedem dependências de
+  `Transaction` ou `Dividend` dentro da função de coleta.
+
 ### Removido — reconciliador órfão de direitos por carteira (30/07/2026)
 
 - `reconcile_portfolio_dividend_rights` foi removido após a confirmação de zero

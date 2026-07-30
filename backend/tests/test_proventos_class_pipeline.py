@@ -60,7 +60,7 @@ async def test_global_collection_does_not_require_portfolio_position(
         new_callable=AsyncMock,
         return_value=raw_events,
     ):
-        await backfill_dividends(db, None, ticker, asset_type)
+        await backfill_dividends(db, ticker, asset_type)
 
     event = (
         await db.execute(
@@ -137,13 +137,17 @@ async def test_materialization_is_linked_and_idempotent_for_every_class(
     )
 
     rights = (
-        await db.execute(
-            select(Dividend).where(
-                Dividend.portfolio_id == portfolio.id,
-                Dividend.asset_dividend_id == event.id,
+        (
+            await db.execute(
+                select(Dividend).where(
+                    Dividend.portfolio_id == portfolio.id,
+                    Dividend.asset_dividend_id == event.id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     assert len(rights) == 1
     assert rights[0].ticker == ticker

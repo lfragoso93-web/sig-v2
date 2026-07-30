@@ -7,10 +7,13 @@ from pathlib import Path
 
 
 ROUTER_PATH = (
+    Path(__file__).resolve().parents[1] / "app" / "routers" / "transactions.py"
+)
+BACKFILL_SERVICE_PATH = (
     Path(__file__).resolve().parents[1]
     / "app"
-    / "routers"
-    / "transactions.py"
+    / "services"
+    / "dividend_backfill_service.py"
 )
 
 
@@ -46,3 +49,22 @@ def test_transaction_mutations_preserve_global_collection_and_invalidations() ->
     assert "run_onboarding" in source
     assert "_run_snapshot_backfill" in source
     assert "invalidate_portfolio_cache" in source
+
+
+def test_backfill_collection_does_not_materialize_portfolio_rights() -> None:
+    source = BACKFILL_SERVICE_PATH.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    backfill = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.AsyncFunctionDef) and node.name == "backfill_dividends"
+    )
+    argument_names = {argument.arg for argument in backfill.args.args}
+    referenced_names = {
+        node.id for node in ast.walk(backfill) if isinstance(node, ast.Name)
+    }
+
+    assert argument_names == {"db", "ticker", "asset_type"}
+    assert "portfolio_id" not in referenced_names
+    assert "Transaction" not in referenced_names
+    assert "Dividend" not in referenced_names

@@ -106,9 +106,7 @@ async def test_materializes_expected_gross_and_net_values(
     )
 
     right = (
-        await db.execute(
-            select(Dividend).where(Dividend.asset_dividend_id == event.id)
-        )
+        await db.execute(select(Dividend).where(Dividend.asset_dividend_id == event.id))
     ).scalar_one()
 
     assert changed == 1
@@ -160,7 +158,7 @@ async def test_collects_non_monetary_event_without_financial_materialization(
         new_callable=AsyncMock,
         return_value=raw_events,
     ):
-        await backfill_dividends(db, portfolio.id, ticker, "ACAO")
+        await backfill_dividends(db, ticker, "ACAO")
 
     event = (
         await db.execute(
