@@ -5,6 +5,19 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — listagem de Proventos projetada sob consulta (30/07/2026)
+
+- `GET /{portfolio_id}/dividends` deixou de consultar a tabela legada
+  `dividends`; os direitos agora são projetados de `asset_dividends`, `assets`
+  e do histórico de `transactions`.
+- A posição elegível usa `record_date`, com fallback explícito para `ex_date`;
+  compras posteriores não criam direitos retroativos e vendas anteriores
+  reduzem a quantidade elegível.
+- O contrato público foi preservado, incluindo `total_received` bruto como
+  quantidade elegível multiplicada por `value_per_unit`.
+- O serviço é estritamente read-only e não executa `commit`, `flush` ou
+  `delete`.
+
 ### Removido — materialização de Proventos nas mutações de transações (30/07/2026)
 
 - Criar, editar ou excluir uma transação não reconcilia mais direitos persistidos
