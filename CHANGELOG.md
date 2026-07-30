@@ -5,6 +5,15 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Adicionado — adaptador read-only de direitos de Proventos (30/07/2026)
+
+- Eventos globais e histórico completo de transações agora podem ser convertidos nos tipos do núcleo canônico sem persistência por carteira.
+- O vínculo temporário entre transações e catálogo usa `(ticker, asset_type)`, evitando colisões entre classes enquanto `transactions` não possui `asset_id`.
+- O adaptador preserva ativos já vendidos, exige moeda explícita e mantém eventos sem Data Com como não materializáveis.
+- Regressões cobrem cálculo derivado, isolamento por classe, carteira sem eventos, Data Com ausente e moeda inválida.
+- Nenhum endpoint, schema, dado, seed ou pipeline operacional foi alterado.
+
+
 ### Adicionado — núcleo canônico de direitos de Proventos (30/07/2026)
 
 - Criado cálculo puro de direitos a partir do evento global e da posição histórica, sem persistência por carteira.

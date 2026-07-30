@@ -129,6 +129,13 @@ Este núcleo ainda não está conectado a endpoints ou consultas ORM. Essa
 integração será feita consumidor por consumidor, começando pela API de
 Proventos, depois de um adaptador read-only carregar eventos e movimentos.
 
+O adaptador read-only `canonical_dividend_entitlement_reader.py` já conecta
+`asset_dividends` e `assets` ao histórico completo de `transactions`, usando
+o par `(ticker, asset_type)` enquanto as transações não possuem `asset_id`.
+Ele não consulta `dividends`, não grava projeções e não altera endpoints. A
+moeda vem explicitamente do ativo; cadastro sem moeda é rejeitado.
+
+
 ### Bloco 4 — migração de consumidores
 
 - Migrar um consumidor por commit pequeno.
