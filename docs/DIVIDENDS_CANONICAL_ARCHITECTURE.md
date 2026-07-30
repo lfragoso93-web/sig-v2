@@ -73,7 +73,7 @@ possuir o ativo hoje não cria direito retroativo.
 | `POST /portfolios/{id}/dividends/sync` | Disparava sincronização/materialização por carteira | Removido | Rota desativada e protegida por regressão de contrato |
 | `GET /portfolios/{id}/dividends` e `dividend_service.py` | Projeção de direitos por carteira | Canônico | Read-only sobre `asset_dividends`, `assets` e `transactions`, sem acesso à tabela legada |
 | `proventos_daily_sync_service.py` | Coleta eventos globais e invalida consumidores | Canônico | Materialização e campo de resultado legado retirados |
-| `dividend_backfill_service.py` | Coleta global e materializador legado explicitamente separado | Contraído | `backfill_dividends` grava somente `asset_dividends`, sem `portfolio_id` nem leitura de transações; `materialize_asset_dividends` permanece isolado e sem caller na aplicação |
+| `dividend_backfill_service.py` | Coleta global de eventos | Canônico | O materializador legado foi removido; o módulo grava somente `asset_dividends`, sem `portfolio_id`, `Transaction` ou `Dividend` |
 | `asset_market_pipeline_service.py` | Coleta eventos globais por ativo | Canônico | Materialização, argumento e resultado legados retirados |
 | `asset_seed_service.py` e `asset_onboarding_service.py` | Chamam o pipeline sem solicitar materialização | Canônico | Argumento e métricas legadas removidos dos callers de aplicação |
 | Batch e CLIs de mercado | Coletam eventos globais sem opção de materialização | Canônico | Interface contraída e protegida por regressão |
@@ -88,8 +88,8 @@ possuir o ativo hoje não cria direito retroativo.
 | `proventos_legacy_link_service.py` | Dry-run de vínculos legados | Somente auditoria | Não promove nem materializa; remover ao contrair `dividends` |
 
 Nenhuma dessas portas pode ser removida isoladamente antes de seu consumidor ou
-substituto estar coberto. Durante a migração, é proibido criar novas chamadas a
-`materialize_asset_dividends`, acoplar coleta global a carteiras ou reintroduzir
+substituto estar coberto. Durante a migração, é proibido reintroduzir
+`materialize_asset_dividends`, acoplar coleta global a carteiras ou adicionar
 reconciliação ou CRUD de `Dividend`.
 
 #### Consumidores de leitura

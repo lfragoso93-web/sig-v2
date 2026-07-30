@@ -68,3 +68,17 @@ def test_backfill_collection_does_not_materialize_portfolio_rights() -> None:
     assert "portfolio_id" not in referenced_names
     assert "Transaction" not in referenced_names
     assert "Dividend" not in referenced_names
+
+
+def test_legacy_materializer_is_not_available() -> None:
+    source = BACKFILL_SERVICE_PATH.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    function_names = {
+        node.name
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+
+    assert "materialize_asset_dividends" not in function_names
+    assert "app.models.transaction" not in source
+    assert "DividendStatus" not in source

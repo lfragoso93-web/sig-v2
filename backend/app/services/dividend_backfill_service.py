@@ -11,12 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.integrations.brapi import BRAPI_BASE, _auth_headers
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
-from app.models.dividend import Dividend, DividendStatus, DividendType
-from app.models.transaction import Transaction
-from app.services.dividend_entitlement_service import (
-    calculate_net_quantity,
-    calculate_net_value,
-)
+from app.models.dividend import DividendType
 from app.services.dividend_type_service import normalize_dividend_type
 
 logger = logging.getLogger(__name__)
@@ -24,13 +19,6 @@ logger = logging.getLogger(__name__)
 SKIP_TYPES = {"CRIPTO", "TESOURO_DIRETO", "RENDA_FIXA"}
 INTL_TYPES = {"STOCK", "ETF_INTERNACIONAL"}
 FII_TYPES = {"FII"}
-CASH_DIVIDEND_TYPES = {
-    DividendType.DIVIDENDO,
-    DividendType.JCP,
-    DividendType.RENDIMENTO,
-    DividendType.AMORTIZACAO,
-    DividendType.OUTROS,
-}
 
 
 @dataclass
@@ -106,32 +94,6 @@ def _dividend_type_from_value(value) -> DividendType:
         return DividendType(raw)
     except ValueError:
         return DividendType.OUTROS
-
-
-def _apply_dividend_legacy_fields(
-    div: Dividend,
-    ex_date: date,
-    payment_date: date | None,
-    quantity: float,
-    value_per_unit: float,
-) -> None:
-    div.ex_date = ex_date
-    div.payment_date = payment_date
-    div.date_ex = ex_date
-    div.date_pagamento = payment_date or ex_date
-    div.quantity_on_date = quantity
-    div.value_per_share = value_per_unit
-
-
-def _legacy_dividend_fields(
-    ex_date: date, payment_date: date | None, quantity: float, value_per_unit: float
-) -> dict[str, Any]:
-    return {
-        "date_ex": ex_date,
-        "date_pagamento": payment_date or ex_date,
-        "quantity_on_date": quantity,
-        "value_per_share": value_per_unit,
-    }
 
 
 def _as_list(value: Any) -> list[Any]:
@@ -369,10 +331,6 @@ def _parse_raw_dividend(raw: dict) -> Optional[ParsedDividendEvent]:
         return None
 
 
-def _is_cash_event(dividend_type: DividendType, value: float) -> bool:
-    return dividend_type in CASH_DIVIDEND_TYPES and value > 0
-
-
 async def backfill_dividends(
     db: AsyncSession,
     ticker: str,
@@ -502,127 +460,6 @@ async def backfill_dividends(
 
     await db.commit()
     logger.info("[Backfill] concluido sync global de eventos para %s", ticker)
-
-
-async def materialize_asset_dividends(
-    db: AsyncSession,
-    tickers: Optional[list[str]] = None,
-    portfolio_id: Optional[int] = None,
-    commit: bool = True,
-) -> int:
-    ticker_filter = [t.upper() for t in (tickers or []) if t]
-    asset_stmt = select(Asset, AssetDividend).join(
-        AssetDividend, AssetDividend.asset_id == Asset.id
-    )
-    if ticker_filter:
-        asset_stmt = asset_stmt.where(Asset.ticker.in_(ticker_filter))
-
-    asset_rows = (await db.execute(asset_stmt)).all()
-    if not asset_rows:
-        return 0
-
-    event_tickers = sorted({asset.ticker for asset, _ in asset_rows})
-    tx_stmt = select(
-        Transaction.portfolio_id,
-        Transaction.ticker,
-        Transaction.date,
-        Transaction.operation,
-        Transaction.quantity,
-    ).where(Transaction.ticker.in_(event_tickers))
-    if portfolio_id is not None:
-        tx_stmt = tx_stmt.where(Transaction.portfolio_id == portfolio_id)
-
-    tx_rows = (await db.execute(tx_stmt)).all()
-    if not tx_rows:
-        return 0
-
-    txs_by_key: dict[tuple[int, str], list[tuple]] = {}
-    portfolio_ids: set[int] = set()
-    for pid, ticker, tx_date, op, qty in tx_rows:
-        portfolio_ids.add(pid)
-        txs_by_key.setdefault((pid, ticker), []).append((tx_date, op, qty))
-
-    asset_dividend_ids = [ad.id for _, ad in asset_rows if ad.id is not None]
-    existing_divs: dict[tuple[int, int], Dividend] = {}
-    if asset_dividend_ids and portfolio_ids:
-        existing_rows = await db.execute(
-            select(Dividend).where(
-                Dividend.portfolio_id.in_(portfolio_ids),
-                Dividend.asset_dividend_id.in_(asset_dividend_ids),
-            )
-        )
-        existing_divs = {
-            (d.portfolio_id, d.asset_dividend_id): d
-            for d in existing_rows.scalars().all()
-        }
-
-    changed = 0
-    today = date.today()
-    for asset, asset_div in asset_rows:
-        if asset_div.id is None:
-            continue
-        dividend_type = _dividend_type_from_value(asset_div.dividend_type)
-        value = float(asset_div.value_per_unit or 0)
-        if not _is_cash_event(dividend_type, value):
-            continue
-        status = (
-            DividendStatus.RECEBIDO
-            if asset_div.payment_date and asset_div.payment_date <= today
-            else DividendStatus.A_RECEBER
-        )
-        entitlement_date = asset_div.record_date or asset_div.ex_date
-
-        for pid in portfolio_ids:
-            txs = txs_by_key.get((pid, asset.ticker), [])
-            if not txs:
-                continue
-            qty = calculate_net_quantity(txs, entitlement_date)
-            if qty <= 0:
-                continue
-
-            total = qty * value
-            net = calculate_net_value(dividend_type, total)
-            div = existing_divs.get((pid, asset_div.id))
-            if div is None:
-                div = Dividend(
-                    portfolio_id=pid,
-                    asset_dividend_id=asset_div.id,
-                    quantity=qty,
-                    total_value=total,
-                    net_value=net,
-                    status=status,
-                    ticker=asset.ticker,
-                    ex_date=asset_div.ex_date,
-                    payment_date=asset_div.payment_date,
-                    value_per_unit=value,
-                    total_received=total,
-                    dividend_type=dividend_type.value,
-                    **_legacy_dividend_fields(
-                        asset_div.ex_date, asset_div.payment_date, qty, value
-                    ),
-                )
-                db.add(div)
-                existing_divs[(pid, asset_div.id)] = div
-                changed += 1
-            else:
-                div.quantity = qty
-                div.total_value = total
-                div.net_value = net
-                div.status = status
-                div.ticker = asset.ticker
-                _apply_dividend_legacy_fields(
-                    div, asset_div.ex_date, asset_div.payment_date, qty, value
-                )
-                div.value_per_unit = value
-                div.total_received = total
-                div.dividend_type = dividend_type.value
-                changed += 1
-
-    if commit:
-        await db.commit()
-    else:
-        await db.flush()
-    return changed
 
 
 async def run_backfill(db: AsyncSession, ticker: str, asset_type) -> None:

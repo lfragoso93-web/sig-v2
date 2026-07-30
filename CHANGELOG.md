@@ -5,6 +5,17 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — materializador legado de direitos por carteira (30/07/2026)
+
+- `materialize_asset_dividends` foi removido após a confirmação de zero callers
+  na aplicação.
+- Helpers e imports exclusivos da escrita em `Dividend` e da leitura de
+  `Transaction` foram retirados de `dividend_backfill_service.py`.
+- Dez cenários de teste que existiam apenas para materialização v1 foram
+  removidos; a coleta global monetária e não monetária permanece coberta.
+- Regressão AST impede a reintrodução do materializador ou de suas dependências
+  ORM no serviço de coleta.
+
 ### Alterado — backfill de Proventos exclusivamente global (30/07/2026)
 
 - `backfill_dividends` deixou de receber `portfolio_id`, consultar transações e
