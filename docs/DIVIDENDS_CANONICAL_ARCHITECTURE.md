@@ -80,7 +80,7 @@ possuir o ativo hoje não cria direito retroativo.
 | `run_proventos_sync.py` | Coleta manual global, inclusive por ticker | Canônico | Materialização final removida; não grava direitos por carteira |
 | `dividend_history_seed_service.py` | Complemento histórico global via Yahoo | Canônico | Materialização retirada; persiste exclusivamente `asset_dividends` |
 | `full_market_rebuild_service.py` | Orquestra a sincronização global de Proventos | Canônico | Resume ativos varridos, sincronizados e falhos; não importa, chama ou contabiliza materialização |
-| `dividend_entitlement_service.py` e mutações de transações | Materializador legado isolado; mutações não o chamam mais | Contraído | Alterações de transações invalidam consumidores derivados, mas não gravam direitos em `dividends` |
+| `dividend_entitlement_service.py` | Cálculos de quantidade e valor líquido compartilhados | Puro | O reconciliador ORM órfão foi removido; o módulo não acessa sessão nem `dividends` |
 | `portfolio_service.py` | Totais e agrupamentos de Proventos no resumo/posições legados | Canônico | Assinaturas preservadas; agregações read-only usam direitos elegíveis, pagos, líquidos e em BRL |
 | Exclusão de carteira | `portfolio_delete_service.delete_portfolio_safely` | Ativo | A implementação órfã em `portfolio_service.py` foi removida; a porta ativa ainda exclui dependências legadas de forma explícita |
 | `pre_prod_dividends_seed_materialization.py` | Materialização estrita dentro do contrato v1 | Suspenso | Excluir do novo contrato; manter apenas enquanto evidência/testes v1 forem necessários |
@@ -89,8 +89,8 @@ possuir o ativo hoje não cria direito retroativo.
 
 Nenhuma dessas portas pode ser removida isoladamente antes de seu consumidor ou
 substituto estar coberto. Durante a migração, é proibido criar novas chamadas a
-`materialize_asset_dividends`, `reconcile_portfolio_dividend_rights` ou ao CRUD
-de `Dividend`.
+`materialize_asset_dividends` nem reintroduzir reconciliação ou CRUD de
+`Dividend`.
 
 #### Consumidores de leitura
 

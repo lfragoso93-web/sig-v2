@@ -5,6 +5,16 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — reconciliador órfão de direitos por carteira (30/07/2026)
+
+- `reconcile_portfolio_dividend_rights` foi removido após a confirmação de zero
+  callers na aplicação.
+- Os dois testes que materializavam e reconciliavam linhas de `Dividend` após
+  mutações foram removidos.
+- `dividend_entitlement_service.py` agora contém somente os cálculos puros
+  `calculate_net_quantity` e `calculate_net_value`, ainda compartilhados.
+- Regressão AST impede a reintrodução de ORM, sessão ou escrita nesse módulo.
+
 ### Removido — exclusão de carteira órfã no serviço legado (30/07/2026)
 
 - `portfolio_service.delete_portfolio` foi removida após a confirmação de que

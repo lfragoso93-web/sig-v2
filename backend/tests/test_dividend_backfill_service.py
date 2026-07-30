@@ -22,7 +22,6 @@ from app.services.dividend_backfill_service import (
 )
 from app.services.dividend_entitlement_service import (
     calculate_net_quantity,
-    reconcile_portfolio_dividend_rights,
 )
 
 
@@ -309,126 +308,6 @@ class TestMaterializeAssetDividends:
         assert len(dividends) == 1
         assert float(dividends[0].quantity) == pytest.approx(80.0)
         assert float(dividends[0].net_value) == pytest.approx(100.0)
-
-
-@pytest.mark.asyncio
-class TestReconcilePortfolioDividendRights:
-    async def test_recalcula_direito_apos_reducao_da_posicao(
-        self,
-        db: AsyncSession,
-        portfolio: Portfolio,
-    ):
-        asset = Asset(ticker="CPLE6", name="CPLE6", asset_type="ACAO", currency="BRL")
-        db.add(asset)
-        await db.flush()
-        await _make_tx(db, portfolio.id, "CPLE6", OperationType.buy, 100, date(2024, 1, 1))
-
-        event = AssetDividend(
-            asset_id=asset.id,
-            record_date=date(2024, 3, 1),
-            ex_date=date(2024, 3, 4),
-            payment_date=date(2024, 3, 15),
-            value_per_unit=Decimal("1.25"),
-            dividend_type=DividendType.DIVIDENDO,
-            source="test",
-        )
-        db.add(event)
-        await db.flush()
-        await materialize_asset_dividends(
-            db,
-            tickers=["CPLE6"],
-            portfolio_id=portfolio.id,
-            commit=False,
-        )
-        await _make_tx(
-            db,
-            portfolio.id,
-            "CPLE6",
-            OperationType.sell,
-            40,
-            date(2024, 2, 1),
-        )
-
-        changed = await reconcile_portfolio_dividend_rights(
-            db,
-            portfolio.id,
-            ["CPLE6"],
-            commit=False,
-        )
-
-        from sqlalchemy import select
-
-        dividend = (
-            await db.execute(
-                select(Dividend).where(
-                    Dividend.portfolio_id == portfolio.id,
-                    Dividend.asset_dividend_id == event.id,
-                )
-            )
-        ).scalar_one()
-
-        assert changed == 1
-        assert float(dividend.quantity) == pytest.approx(60.0)
-        assert float(dividend.total_value) == pytest.approx(75.0)
-        assert float(dividend.net_value) == pytest.approx(75.0)
-
-    async def test_remove_direito_apos_exclusao_da_posicao(
-        self,
-        db: AsyncSession,
-        portfolio: Portfolio,
-    ):
-        asset = Asset(ticker="CMIG4", name="CMIG4", asset_type="ACAO", currency="BRL")
-        db.add(asset)
-        await db.flush()
-        transaction = await _make_tx(
-            db,
-            portfolio.id,
-            "CMIG4",
-            OperationType.buy,
-            100,
-            date(2024, 1, 1),
-        )
-
-        event = AssetDividend(
-            asset_id=asset.id,
-            record_date=date(2024, 3, 1),
-            ex_date=date(2024, 3, 4),
-            payment_date=date(2024, 3, 15),
-            value_per_unit=Decimal("1.00"),
-            dividend_type=DividendType.DIVIDENDO,
-            source="test",
-        )
-        db.add(event)
-        await db.flush()
-        await materialize_asset_dividends(
-            db,
-            tickers=["CMIG4"],
-            portfolio_id=portfolio.id,
-            commit=False,
-        )
-
-        await db.delete(transaction)
-        await db.flush()
-        changed = await reconcile_portfolio_dividend_rights(
-            db,
-            portfolio.id,
-            ["CMIG4"],
-            commit=False,
-        )
-
-        from sqlalchemy import select
-
-        dividends = (
-            await db.execute(
-                select(Dividend).where(
-                    Dividend.portfolio_id == portfolio.id,
-                    Dividend.asset_dividend_id == event.id,
-                )
-            )
-        ).scalars().all()
-
-        assert changed == 1
-        assert dividends == []
 
 
 @pytest.mark.asyncio
