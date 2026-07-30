@@ -5,6 +5,16 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — job FII quebrado e redundante do scheduler legado (30/07/2026)
+
+- O job `sync_fii_dividends` foi removido porque importava tardiamente o módulo
+  inexistente `app.services.dividends_sync_service` e duplicava a coleta global.
+- O seed semanal de ativos já executa, para cada ticker elegível, o pipeline de
+  preços, logo e eventos globais; o scheduler diário ativo mantém a atualização
+  incremental de `asset_dividends`.
+- Regressão AST impede a reintrodução do módulo, da função e do registro do job.
+- Nenhum seed, pipeline, schema, dado ou execução operacional foi realizado.
+
 ### Removido — portas de materialização do scheduler legado (30/07/2026)
 
 - O scheduler legado não importa nem chama mais o backfill por carteira e não

@@ -183,32 +183,6 @@ async def job_seed_assets():
         logger.error("[Scheduler] job_seed_assets: falha geral: %s", e)
 
 
-async def job_sync_fii_dividends():
-    """
-    Sync semanal de dividendos de FIIs via BRAPI /v2/funds/dividends.
-
-    Roda todo sabado as 6h BRT em modo incremental (cursor de 30 dias de overlap).
-    Persiste somente o catálogo global de eventos de FIIs.
-    Falha isolada — nao afeta outros jobs.
-    """
-    logger.info("[Scheduler] job_sync_fii_dividends: iniciando sync de dividendos FII...")
-    try:
-        from app.services.dividends_sync_service import run_fii_dividends_sync
-        async with AsyncSessionLocal() as db:
-            result = await run_fii_dividends_sync(db)
-        logger.info(
-            "[Scheduler] job_sync_fii_dividends: concluido — "
-            "tickers=%s upserted=%s created=%s updated=%s errors=%s",
-            result.get("tickers_processed", 0),
-            result.get("upserted", 0),
-            result.get("created", 0),
-            result.get("updated", 0),
-            result.get("errors", 0),
-        )
-    except Exception as e:
-        logger.error("[Scheduler] job_sync_fii_dividends: falha geral: %s", e)
-
-
 def init_scheduler():
     scheduler.add_job(
         job_update_quotes,
@@ -241,12 +215,5 @@ def init_scheduler():
         id="seed_assets",
         replace_existing=True,
     )
-    # Sync semanal de dividendos de FIIs via BRAPI: sabado 6h BRT
-    scheduler.add_job(
-        job_sync_fii_dividends,
-        CronTrigger(day_of_week="sat", hour=6, minute=0, timezone="America/Sao_Paulo"),
-        id="sync_fii_dividends",
-        replace_existing=True,
-    )
     scheduler.start()
-    logger.info("[Scheduler] 6 jobs registrados e scheduler iniciado.")
+    logger.info("[Scheduler] 5 jobs registrados e scheduler iniciado.")

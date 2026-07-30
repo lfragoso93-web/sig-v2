@@ -56,3 +56,26 @@ def test_legacy_scheduler_does_not_write_materialized_dividends() -> None:
     assert "Dividend" not in imported_names
     assert "job_sync_dividends" not in job_names
     assert "job_update_dividend_status" not in job_names
+
+
+def test_legacy_scheduler_has_no_redundant_fii_dividend_job() -> None:
+    source = SCHEDULER_PATH.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    job_names = {
+        node.name
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    registered_job_ids = {
+        keyword.value.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "add_job"
+        for keyword in node.keywords
+        if keyword.arg == "id" and isinstance(keyword.value, ast.Constant)
+    }
+
+    assert "app.services.dividends_sync_service" not in source
+    assert "job_sync_fii_dividends" not in job_names
+    assert "sync_fii_dividends" not in registered_job_ids
