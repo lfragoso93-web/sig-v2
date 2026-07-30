@@ -5,6 +5,15 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — resultado diário sem compatibilidade de materialização (30/07/2026)
+
+- `ProventosDailySyncResult` e o log final da sincronização diária não expõem
+  mais o campo inerte `materialized=0`.
+- CLI, scheduler e rebuild continuam consumindo as métricas reais de coleta
+  global sem depender da chave removida.
+- Materializador legado, pipeline por ativo, seed pré-prod v1, schema, dados e
+  execução operacional permaneceram inalterados.
+
 ### Alterado — rebuild completo sem métrica legada de materialização (30/07/2026)
 
 - `full_market_rebuild_service.py` preserva a sincronização global de Proventos,
@@ -66,8 +75,8 @@ Formato baseado em Keep a Changelog.
 - A sincronização diária preserva a coleta global em `asset_dividends`, o
   complemento histórico e a invalidação dos consumidores, mas não cria nem
   atualiza direitos por carteira em `dividends`.
-- O campo `materialized` permanece temporariamente no resultado com valor zero
-  para compatibilidade com CLI e rebuilds ainda legados.
+- A compatibilidade temporária `materialized=0` foi removida do resultado em
+  bloco posterior, após a contração dos consumidores.
 - Nenhum endpoint, schema, dado, migration ou execução operacional foi alterado.
 
 ### Removido — portas públicas de escrita no legado de Proventos (30/07/2026)

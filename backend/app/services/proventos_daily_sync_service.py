@@ -37,9 +37,6 @@ class ProventosDailySyncResult:
     assets_synced: int = 0
     assets_failed: int = 0
     assets_skipped: int = 0
-    # Compatibilidade temporaria com consumidores legados do resultado.
-    # A sincronizacao diaria nao materializa direitos por carteira.
-    materialized: int = 0
     historical_events: int = 0
     portfolios_invalidated: int = 0
     errors: list[str] = field(default_factory=list)
@@ -183,13 +180,12 @@ async def run_daily_proventos_sync(
     )
 
     logger.info(
-        "[proventos_daily] concluido: scanned=%s synced=%s failed=%s skipped=%s historical=%s materialized=%s portfolios_invalidated=%s errors=%s",
+        "[proventos_daily] concluido: scanned=%s synced=%s failed=%s skipped=%s historical=%s portfolios_invalidated=%s errors=%s",
         result.assets_scanned,
         result.assets_synced,
         result.assets_failed,
         result.assets_skipped,
         result.historical_events,
-        result.materialized,
         result.portfolios_invalidated,
         len(result.errors),
     )

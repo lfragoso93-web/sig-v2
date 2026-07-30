@@ -1,4 +1,5 @@
 """Cobertura do universo operacional da sincronização diária de Proventos."""
+from dataclasses import asdict
 from datetime import date
 from unittest.mock import AsyncMock
 
@@ -144,7 +145,7 @@ async def test_daily_sync_does_not_materialize_portfolio_dividends(
 
     assert result.assets_synced == 1
     assert result.historical_events == 3
-    assert result.materialized == 0
+    assert "materialized" not in asdict(result)
     assert result.portfolios_invalidated == 2
     sync_events.assert_awaited_once_with(db, "PETR4", "ACAO")
     invalidate.assert_awaited_once_with(db, ["PETR4"])
