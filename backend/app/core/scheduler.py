@@ -9,7 +9,6 @@ scheduler = AsyncIOScheduler(timezone=SCHEDULER_TIMEZONE)
 BRAPI_CHUNK_DELAY = 1.0
 HELD_MARKET_PIPELINE_EVENT_OPTIONS = {
     "sync_events": False,
-    "materialize": False,
 }
 PROVENTOS_SYNC_ONLY_HELD = False
 

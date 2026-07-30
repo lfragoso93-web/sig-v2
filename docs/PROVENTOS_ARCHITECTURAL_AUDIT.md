@@ -15,7 +15,11 @@ Issues #92 e #95.
 
 ## Fronteira operacional de pré-produção
 
-A arquitetura funcional vigente não é uma entrada segura para o rebuild real: scheduler, endpoint em background, backfill pós-transação, asset seed, pipeline de mercado e `full_market_rebuild` oferecem múltiplas portas de escrita, com sessões e commits que não garantem rollback integral do estágio.
+A arquitetura funcional vigente não é uma entrada segura para o rebuild real:
+as portas públicas mutáveis e a materialização do scheduler e do pipeline de
+mercado foram contraídas, mas CLI dedicada, seed histórico, backfill
+pós-transação e `full_market_rebuild` ainda oferecem caminhos de escrita com
+sessões e commits que não garantem rollback integral do estágio.
 
 A Issue #226 isola a evolução operacional no contrato `docs/PRE_PROD_DIVIDENDS_SEED_CONTRACT.md`. O estágio poderá ler somente `assets`, `transactions`, `portfolios`, `asset_dividends` e `dividends` e escrever somente em `asset_dividends` e `dividends`. `dividends_sync_jobs` permanece apenas para inspeção e não participa da coordenação.
 
@@ -63,6 +67,10 @@ A coleta ocorre uma vez em dias úteis, às 18:10, para todos os ativos nacionai
 elegíveis do catálogo. O pipeline noturno processa preços e logos com eventos e
 materialização desativados. `only_held=True` existe apenas como opção operacional
 explícita.
+
+As CLIs e o serviço batch do pipeline de mercado não aceitam mais a opção
+`materialize`; eles coletam somente eventos globais. A CLI dedicada de
+Proventos e o seed histórico permanecem como portas separadas em contração.
 
 ### Leitura, mutação e elegibilidade
 

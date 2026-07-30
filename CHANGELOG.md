@@ -5,6 +5,15 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — opção inerte de materialização no batch/CLI de mercado (30/07/2026)
+
+- As CLIs de pipeline de mercado não expõem mais `--skip-materialize`, e o
+  serviço batch deixou de aceitar ou encaminhar o argumento `materialize`.
+- O pipeline continua coletando eventos globais sem criar direitos por carteira;
+  a CLI dedicada de Proventos e o seed histórico permanecem para blocos
+  separados.
+- Nenhum schema, dado, endpoint ou pipeline operacional foi alterado.
+
 ### Alterado — callers de mercado sem pedido de materialização (30/07/2026)
 
 - Onboarding e backfill de mercado do catálogo de ativos deixaram de enviar

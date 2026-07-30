@@ -14,6 +14,10 @@ from app.services.asset_market_pipeline_service import sync_asset_market_data
     [
         Path("app/services/asset_onboarding_service.py"),
         Path("app/services/asset_seed_service.py"),
+        Path("app/services/market_pipeline_batch_service.py"),
+        Path("app/cli/run_market_pipeline.py"),
+        Path("app/cli/run_market_pipeline_batch.py"),
+        Path("app/core/scheduler.py"),
     ],
 )
 def test_callers_de_aplicacao_nao_solicitam_materializacao(
@@ -22,19 +26,27 @@ def test_callers_de_aplicacao_nao_solicitam_materializacao(
     source_path = Path(__file__).parents[1] / service_path
     tree = ast.parse(source_path.read_text(encoding="utf-8"))
 
-    calls = [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id == "sync_asset_market_data"
-    ]
-
-    assert calls
+    calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)]
     assert all(
         "materialize" not in {keyword.arg for keyword in call.keywords}
         for call in calls
     )
+
+
+@pytest.mark.parametrize(
+    "cli_path",
+    [
+        Path("app/cli/run_market_pipeline.py"),
+        Path("app/cli/run_market_pipeline_batch.py"),
+    ],
+)
+def test_cli_de_mercado_nao_expoe_opcao_de_materializacao(
+    cli_path: Path,
+) -> None:
+    source_path = Path(__file__).parents[1] / cli_path
+    source = source_path.read_text(encoding="utf-8")
+
+    assert "--skip-materialize" not in source
 
 
 @pytest.mark.asyncio

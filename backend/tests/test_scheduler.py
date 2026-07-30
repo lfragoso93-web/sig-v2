@@ -39,7 +39,6 @@ async def test_proventos_scheduler_has_one_weekday_event_job():
 def test_market_pipeline_does_not_collect_or_materialize_events():
     assert HELD_MARKET_PIPELINE_EVENT_OPTIONS == {
         "sync_events": False,
-        "materialize": False,
     }
 
 
