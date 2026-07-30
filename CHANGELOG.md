@@ -5,6 +5,17 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — agregações de carteira usam direitos canônicos (30/07/2026)
+
+- `portfolio_service.py` deixou de consultar `Dividend` para totais gerais,
+  totais por tickers e agrupamentos por ticker.
+- As assinaturas públicas foram preservadas, mas os valores agora representam
+  direitos monetários elegíveis, em BRL, já pagos e líquidos, derivados de
+  `asset_dividends`, `assets` e `transactions`.
+- O filtro temporal usa a data de pagamento e ignora eventos futuros,
+  ambíguos, não monetários ou em outra moeda.
+- Os caminhos read-only não executam mais `rollback` ao tratar falhas.
+
 ### Alterado — listagem de Proventos projetada sob consulta (30/07/2026)
 
 - `GET /{portfolio_id}/dividends` deixou de consultar a tabela legada

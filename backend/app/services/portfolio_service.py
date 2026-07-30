@@ -1,34 +1,43 @@
 import logging
-from datetime import date as DateType, datetime, timezone, timedelta
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, delete, update
-from fastapi import HTTPException
+from datetime import date as DateType
+from datetime import datetime, timedelta, timezone
 
-from app.models.portfolio import Portfolio
-from app.models.transaction import Transaction, OperationType
-from app.models.dividend import Dividend
+from fastapi import HTTPException
+from sqlalchemy import delete, select, update
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.cache import cache_delete, cache_get, cache_set
 from app.models.asset import Asset, AssetType
 from app.models.audit_log import AuditLog
 from app.models.corporate_event import CorporateEvent
 from app.models.fixed_income import FixedIncomeInvestment
 from app.models.goal import Goal
 from app.models.irpf import IRPFReport
+from app.models.portfolio import Portfolio
 from app.models.portfolio_class_target import PortfolioClassTarget
 from app.models.portfolio_position import PortfolioPosition
 from app.models.portfolio_snapshot import PortfolioSnapshot
+from app.models.transaction import OperationType, Transaction
 from app.schemas.portfolio import PortfolioCreate, PortfolioUpdate
-from app.services.quotes_service import get_prices
-from app.services.class_target_service import get_targets_map
-from app.services.fx_service import get_usd_brl_batch, get_usd_brl_today
-from app.core.cache import cache_get, cache_set, cache_delete
 from app.services.audit_log_service import AuditLogService
+from app.services.canonical_dividend_aggregation_service import (
+    aggregate_received_entitlements,
+    load_received_entitlements_by_ticker,
+)
+from app.services.canonical_dividend_entitlement_reader import (
+    load_portfolio_dividend_entitlements,
+)
+from app.services.class_target_service import get_targets_map
 from app.services.fixed_income_valuation_service import (
     RENDA_FIXA_TYPE,
     get_fixed_income_totals,
     get_fixed_income_valuations,
     valuation_to_position_payload,
 )
+from app.services.fx_service import get_usd_brl_batch, get_usd_brl_today
 from app.services.price_history_service import get_prices_at_date_batch
+from app.services.quotes_service import get_prices
 
 logger = logging.getLogger(__name__)
 
@@ -338,26 +347,17 @@ async def _fetch_previous_prices_batch(
 
 
 async def sum_dividends(db: AsyncSession, portfolio_id: int, cutoff: DateType | None = None) -> float:
-    from app.models.asset_dividend import AssetDividend
-
-    q = select(func.sum(Dividend.total_value)).where(Dividend.portfolio_id == portfolio_id)
-    if cutoff is not None:
-        q = (
-            q.outerjoin(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
-            .where(
-                (AssetDividend.ex_date >= cutoff) | (Dividend.asset_dividend_id.is_(None))
+    try:
+        entitlements = await load_portfolio_dividend_entitlements(db, portfolio_id)
+        return float(
+            aggregate_received_entitlements(
+                entitlements,
+                cutoff=cutoff,
+                as_of=datetime.now(timezone.utc).date(),
             )
         )
-    try:
-        result = await db.execute(q)
-        total = result.scalar_one_or_none()
-        return float(total) if total is not None else 0.0
-    except Exception as e:
+    except (SQLAlchemyError, ValueError) as e:
         logger.warning(f"[portfolio_service] sum_dividends falhou: {e} — retornando 0.0")
-        try:
-            await db.rollback()
-        except Exception:
-            pass
         return 0.0
 
 
@@ -368,23 +368,16 @@ async def sum_dividends_for_tickers(
 ) -> float:
     if not tickers:
         return 0.0
-    q = (
-        select(func.sum(Dividend.total_value))
-        .where(
-            Dividend.portfolio_id == portfolio_id,
-            Dividend.ticker.in_(tickers),
-        )
-    )
     try:
-        result = await db.execute(q)
-        total = result.scalar_one_or_none()
-        return float(total) if total is not None else 0.0
-    except Exception as e:
+        totals = await load_received_entitlements_by_ticker(
+            db,
+            portfolio_id,
+            tickers,
+            as_of=datetime.now(timezone.utc).date(),
+        )
+        return float(sum(totals.values()))
+    except (SQLAlchemyError, ValueError) as e:
         logger.warning(f"[portfolio_service] sum_dividends_for_tickers falhou: {e} — retornando 0.0")
-        try:
-            await db.rollback()
-        except Exception:
-            pass
         return 0.0
 
 
@@ -395,23 +388,15 @@ async def sum_dividends_by_ticker(
 ) -> dict[str, float]:
     if not tickers:
         return {}
-    q = (
-        select(Dividend.ticker, func.sum(Dividend.total_value).label("total"))
-        .where(
-            Dividend.portfolio_id == portfolio_id,
-            Dividend.ticker.in_(tickers),
-        )
-        .group_by(Dividend.ticker)
-    )
     try:
-        result = await db.execute(q)
-        return {row.ticker: float(row.total or 0.0) for row in result.all()}
-    except Exception as e:
+        return await load_received_entitlements_by_ticker(
+            db,
+            portfolio_id,
+            tickers,
+            as_of=datetime.now(timezone.utc).date(),
+        )
+    except (SQLAlchemyError, ValueError) as e:
         logger.warning(f"[portfolio_service] sum_dividends_by_ticker falhou: {e} — retornando vazio")
-        try:
-            await db.rollback()
-        except Exception:
-            pass
         return {}
 
 
@@ -480,6 +465,8 @@ async def update_portfolio(db: AsyncSession, portfolio_id: int, user_id: int, da
 
 
 async def delete_portfolio(db: AsyncSession, portfolio_id: int, user_id: int) -> None:
+    from app.models.dividend import Dividend
+
     portfolio = await get_portfolio(db, portfolio_id, user_id)
     old_values = {"name": portfolio.name, "description": portfolio.description}
 
