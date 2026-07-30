@@ -63,10 +63,12 @@ if ($LASTEXITCODE -ne 0 -or $CurrentCommitSha -cne $NormalizedCommitSha) {
     throw 'Current HEAD does not match CommitSha.'
 }
 
-$RuntimeCommitSha = (& docker compose exec -T backend printenv APP_COMMIT_SHA).Trim().ToLowerInvariant()
-if ($LASTEXITCODE -ne 0) {
+$RuntimeCommitOutput = & docker compose exec -T backend printenv APP_COMMIT_SHA
+$RuntimeCommitExitCode = $LASTEXITCODE
+if ($RuntimeCommitExitCode -ne 0) {
     throw 'Unable to read APP_COMMIT_SHA from the backend container.'
 }
+$RuntimeCommitSha = ([string]$RuntimeCommitOutput).Trim().ToLowerInvariant()
 if ($RuntimeCommitSha -cne $NormalizedCommitSha) {
     throw (
         "Backend container commit mismatch: expected " +
