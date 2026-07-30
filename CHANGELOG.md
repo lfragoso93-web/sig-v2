@@ -5,6 +5,14 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Adicionado — núcleo canônico de direitos de Proventos (30/07/2026)
+
+- Criado cálculo puro de direitos a partir do evento global e da posição histórica, sem persistência por carteira.
+- Evento sem Data Com confiável é classificado como ambíguo e não usa Data Ex como fallback, evitando direito indevido para compra realizada na Data Ex.
+- O resultado separa quantidade elegível, bruto, retenção, líquido, moeda e motivo; `OUTROS` e eventos não monetários não contaminam agregados de caixa.
+- Regressões cobrem posição elegível, venda posterior, recompra, ausência de posição, Data Com ausente, JCP e histórico negativo.
+- Nenhum endpoint, schema, dado, seed ou pipeline operacional foi alterado.
+
 ### Removido — sincronização legada de Proventos por carteira (30/07/2026)
 
 - Removida a rota incompatível `POST /api/v1/sync/proventos/{portfolio_id}` e sua integração síncrona legada, que consultavam provedor externo por carteira e gravavam diretamente em `dividends`.

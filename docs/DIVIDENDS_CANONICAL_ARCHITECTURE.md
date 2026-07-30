@@ -114,10 +114,20 @@ definem a arquitetura alvo.
 
 ### Bloco 3 — serviço canônico de direitos
 
-- Implementar cálculo derivado por evento e posição histórica.
-- Definir política temporal auditável para Data Com/Data Ex.
-- Centralizar bruto, imposto, líquido, moeda e tipos monetários.
-- Cobrir carteira sem posição, compra na Data Ex, venda posterior e recompra.
+- Implementado o núcleo puro `canonical_dividend_entitlement.py`, sem acesso a
+  banco, endpoints ou efeitos colaterais.
+- `record_date` confiável é a única data aceita para calcular a posição. Evento
+  sem Data Com permanece ambíguo e não usa Data Ex como fallback.
+- Dividendos, JCP, rendimentos e amortizações são monetários; bonificações,
+  subscrições e `OUTROS` não entram automaticamente em agregados de caixa.
+- O resultado explicita quantidade elegível, bruto, retenção, líquido, moeda e
+  motivo da elegibilidade ou exclusão.
+- As regressões cobrem ausência de posição, venda posterior, recompra, compra na
+  Data Ex sem Data Com, JCP e histórico inválido.
+
+Este núcleo ainda não está conectado a endpoints ou consultas ORM. Essa
+integração será feita consumidor por consumidor, começando pela API de
+Proventos, depois de um adaptador read-only carregar eventos e movimentos.
 
 ### Bloco 4 — migração de consumidores
 
