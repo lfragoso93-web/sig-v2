@@ -21,6 +21,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # ---- runtime stage ----
 FROM python:3.12-slim AS runtime
 
+ARG APP_COMMIT_SHA=unknown
+ENV APP_COMMIT_SHA=$APP_COMMIT_SHA
+LABEL org.opencontainers.image.revision=$APP_COMMIT_SHA
+
 WORKDIR /app
 
 # Atualiza todos os pacotes do SO para garantir patches de seguranca
