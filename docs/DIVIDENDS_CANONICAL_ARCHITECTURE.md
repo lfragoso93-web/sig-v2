@@ -65,6 +65,53 @@ possuir o ativo hoje não cria direito retroativo.
   `brapi_dividends.py` foram removidos por violarem a separação entre coleta
   global e consulta de carteira.
 
+#### Portas de escrita restantes
+
+| Porta | Responsabilidade atual | Classificação | Destino |
+|---|---|---|---|
+| `POST/DELETE /portfolios/{id}/dividends` e `dividend_service.py` | CRUD manual diretamente em `dividends` | Legado ativo | Separar ajuste manual de evento canônico; desativar somente após API substituta |
+| `POST /portfolios/{id}/dividends/sync` | Dispara sincronização/materialização por carteira | Incompatível ativo | Remover após confirmar o contrato público e adicionar regressão de rota |
+| `proventos_daily_sync_service.py` | Coleta eventos e materializa direitos em lotes | Misto | Preservar coleta global; retirar a etapa de materialização |
+| `dividend_backfill_service.py` | Backfill global e `materialize_asset_dividends` | Misto central | Separar coleta de cálculo; nenhum consumidor novo deve chamar a materialização |
+| `asset_market_pipeline_service.py` | Encadeia backfill e materialização | Misto | Manter eventos globais; tornar materialização indisponível por padrão e depois removê-la |
+| `asset_seed_service.py`, `asset_onboarding_service.py` e batch de mercado | Chamam pipeline com `materialize=True` | Escrita indireta | Migrar depois da separação do pipeline |
+| `dividend_history_seed_service.py` e `full_market_rebuild_service.py` | Seed histórico seguido de materialização | Escrita indireta | Novo seed deve gravar exclusivamente `asset_dividends` |
+| `dividend_entitlement_service.py` e mutações de transações | Reconciliam direitos persistidos após mudanças históricas | Legado derivado | Substituir por cálculo sob consulta; alteração de transação não grava provento |
+| `pre_prod_dividends_seed_materialization.py` | Materialização estrita dentro do contrato v1 | Suspenso | Excluir do novo contrato; manter apenas enquanto evidência/testes v1 forem necessários |
+| `scheduler.py` e scheduler diário ativo | Sincronização, materialização e atualização de status | Concorrente | Contrair para coleta global; status deve ser derivado de datas |
+| `proventos_legacy_link_service.py` | Dry-run de vínculos legados | Somente auditoria | Não promove nem materializa; remover ao contrair `dividends` |
+
+Nenhuma dessas portas pode ser removida isoladamente antes de seu consumidor ou
+substituto estar coberto. Durante a migração, é proibido criar novas chamadas a
+`materialize_asset_dividends`, `reconcile_portfolio_dividend_rights` ou ao CRUD
+de `Dividend`.
+
+#### Consumidores de leitura
+
+| Domínio | Serviços principais | Dependência legada | Ordem |
+|---|---|---|---|
+| API/Frontend Proventos | `proventos_service.py`, `dividend_service.py`, router `dividends.py` | Lista, totais, série mensal e detalhes usam `Dividend` | Primeiro consumidor do serviço canônico |
+| Resumo e Patrimônio | `portfolio_summary_service.py`, `portfolio_service.py`, `dividend_aggregation_service.py` | Soma valores persistidos por carteira/ticker | Migrar após paridade da API |
+| Rentabilidade | `rentabilidade_service.py` | Fluxos recebidos alimentam retorno | Migrar com política única de caixa líquido |
+| Snapshots/TWR | `portfolio_snapshot_canonical_twr_service.py`, `portfolio_class_snapshot_service.py` | Ordenam e aplicam direitos persistidos | Migrar antes de reconstruir snapshots |
+| IRPF | `irpf_service.py` | Cruza `Dividend` com `AssetDividend` | Migrar após bruto, imposto e líquido canônicos |
+| Metas | `goals_service.py` | Soma janela de 12 meses | Migrar depois do agregador canônico |
+| Auditoria pré-produção | inspeções, comparador e auditoria do modelo v1 | Conta materializações e divergências | Congelar como v1; substituir no novo contrato |
+
+O modelo e as migrations históricas permanecem intocados neste bloco. Testes que
+instanciam `Dividend` continuam válidos como caracterização do legado, mas não
+definem a arquitetura alvo.
+
+#### Ordem obrigatória de migração
+
+1. Criar o serviço puro de direito por evento e posição histórica.
+2. Migrar a API de Proventos e provar paridade/explicar diferenças.
+3. Migrar Resumo, Patrimônio e o agregador compartilhado.
+4. Migrar Rentabilidade, snapshots/TWR, IRPF e Metas.
+5. Retirar materialização dos pipelines, schedulers e mutações.
+6. Desativar CRUD/sync por carteira e provar zero referências de escrita.
+7. Contrair modelo, relações, testes legados e schema em migration própria.
+
 ### Bloco 3 — serviço canônico de direitos
 
 - Implementar cálculo derivado por evento e posição histórica.
