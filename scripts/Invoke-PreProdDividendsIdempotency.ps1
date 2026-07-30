@@ -63,6 +63,17 @@ if ($LASTEXITCODE -ne 0 -or $CurrentCommitSha -cne $NormalizedCommitSha) {
     throw 'Current HEAD does not match CommitSha.'
 }
 
+$RuntimeCommitSha = (& docker compose exec -T backend printenv APP_COMMIT_SHA).Trim().ToLowerInvariant()
+if ($LASTEXITCODE -ne 0) {
+    throw 'Unable to read APP_COMMIT_SHA from the backend container.'
+}
+if ($RuntimeCommitSha -cne $NormalizedCommitSha) {
+    throw (
+        "Backend container commit mismatch: expected " +
+        "'$NormalizedCommitSha', found '$RuntimeCommitSha'."
+    )
+}
+
 if ([System.IO.Path]::IsPathRooted($ArtifactRoot)) {
     throw 'ArtifactRoot must be a repository-relative path under artifacts.'
 }
