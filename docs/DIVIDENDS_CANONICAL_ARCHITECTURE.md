@@ -78,7 +78,8 @@ possuir o ativo hoje não cria direito retroativo.
 | `asset_seed_service.py` e `asset_onboarding_service.py` | Chamam o pipeline sem solicitar materialização | Canônico | Argumento e métricas legadas removidos dos callers de aplicação |
 | Batch e CLIs de mercado | Coletam eventos globais sem opção de materialização | Canônico | Interface contraída e protegida por regressão |
 | `run_proventos_sync.py` | Coleta manual global, inclusive por ticker | Canônico | Materialização final removida; não grava direitos por carteira |
-| `dividend_history_seed_service.py` e `full_market_rebuild_service.py` | Seed histórico seguido de materialização | Escrita indireta | Novo seed deve gravar exclusivamente `asset_dividends` |
+| `dividend_history_seed_service.py` | Complemento histórico global via Yahoo | Canônico | Materialização retirada; persiste exclusivamente `asset_dividends` |
+| `full_market_rebuild_service.py` | Orquestra a sincronização global de Proventos | Em contração | Remover métricas e compatibilidades legadas em bloco próprio |
 | `dividend_entitlement_service.py` e mutações de transações | Reconciliam direitos persistidos após mudanças históricas | Legado derivado | Substituir por cálculo sob consulta; alteração de transação não grava provento |
 | `pre_prod_dividends_seed_materialization.py` | Materialização estrita dentro do contrato v1 | Suspenso | Excluir do novo contrato; manter apenas enquanto evidência/testes v1 forem necessários |
 | `scheduler.py` legado e scheduler diário ativo | Fluxos de sincronização com responsabilidades distintas | Em contração | Scheduler diário coleta apenas o catálogo global; scheduler legado permanece para bloco posterior |

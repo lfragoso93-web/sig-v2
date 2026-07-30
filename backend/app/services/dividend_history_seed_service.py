@@ -21,7 +21,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
 from app.models.dividend import DividendType
-from app.services.dividend_backfill_service import materialize_asset_dividends
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +129,7 @@ async def seed_full_dividend_history(
     ticker: str,
     asset_type: str,
 ) -> int:
-    """Persiste o histórico anterior à cobertura principal e materializa carteiras.
+    """Persiste o histórico global anterior à cobertura principal.
 
     A escrita é idempotente pela constraint
     ``uq_asset_dividend_asset_exdate_type``. Assim, reexecutar o seed nunca deve
@@ -191,17 +190,11 @@ async def seed_full_dividend_history(
 
     if inserted:
         await db.flush()
-        materialized = await materialize_asset_dividends(
-            db=db,
-            tickers=[ticker],
-            commit=False,
-        )
         await db.commit()
         logger.info(
-            "[dividend_history] %s: %s eventos históricos inseridos, %s direitos materializados",
+            "[dividend_history] %s: %s eventos históricos globais inseridos",
             ticker,
             inserted,
-            materialized,
         )
     else:
         await db.rollback()

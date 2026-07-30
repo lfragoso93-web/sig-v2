@@ -8,7 +8,6 @@ Além do catálogo, o seed executa pipeline idempotente para renda variável nac
   2. histórico completo de preços diário
   3. logo via cotação quando ausente
   4. histórico global de proventos/eventos corporativos
-  5. materialização de carteiras reais
 """
 import asyncio
 import logging

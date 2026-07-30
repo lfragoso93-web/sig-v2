@@ -17,9 +17,9 @@ Issues #92 e #95.
 
 A arquitetura funcional vigente não é uma entrada segura para o rebuild real:
 as portas públicas mutáveis e a materialização do scheduler, do pipeline de
-mercado e da CLI dedicada foram contraídas, mas seed histórico, backfill
-pós-transação e `full_market_rebuild` ainda oferecem caminhos de escrita com
-sessões e commits que não garantem rollback integral do estágio.
+mercado, da CLI dedicada e do seed histórico foram contraídas, mas backfill
+pós-transação e compatibilidades do `full_market_rebuild` ainda oferecem
+caminhos que não garantem rollback integral do estágio.
 
 A Issue #226 isola a evolução operacional no contrato `docs/PRE_PROD_DIVIDENDS_SEED_CONTRACT.md`. O estágio poderá ler somente `assets`, `transactions`, `portfolios`, `asset_dividends` e `dividends` e escrever somente em `asset_dividends` e `dividends`. `dividends_sync_jobs` permanece apenas para inspeção e não participa da coordenação.
 
@@ -70,8 +70,8 @@ explícita.
 
 As CLIs e o serviço batch do pipeline de mercado não aceitam mais a opção
 `materialize`; eles coletam somente eventos globais. A CLI dedicada de
-Proventos também não materializa direitos por carteira. O seed histórico
-permanece como porta separada em contração.
+Proventos e o seed histórico também persistem somente eventos globais, sem
+materializar direitos por carteira.
 
 ### Leitura, mutação e elegibilidade
 

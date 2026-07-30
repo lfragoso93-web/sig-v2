@@ -10,7 +10,6 @@ onboarding, backfill de preços, logo e proventos:
   2. sincronizar histórico de preços;
   3. preencher logo/metadados faltantes;
   4. sincronizar eventos/proventos globais em AssetDividend;
-  5. materializar carteiras reais com posição na Data Com.
 
 O objetivo é que seed, onboarding, cron e comandos manuais chamem a mesma
 porta de entrada, reduzindo divergências de comportamento.

@@ -5,6 +5,16 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — seed histórico de Proventos sem materialização (30/07/2026)
+
+- `dividend_history_seed_service.py` preserva o complemento histórico global
+  via Yahoo e a transação idempotente em `asset_dividends`, mas não cria nem
+  atualiza direitos por carteira em `dividends`.
+- Regressão estrutural impede que o seed volte a importar ou solicitar
+  `materialize_asset_dividends`.
+- Materializador legado, seed pré-prod v1, schema, dados e execução operacional
+  permaneceram inalterados.
+
 ### Alterado — CLI dedicada de Proventos sem materialização (30/07/2026)
 
 - `run_proventos_sync.py` preserva a coleta global manual, inclusive por ticker,
