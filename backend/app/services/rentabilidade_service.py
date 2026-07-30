@@ -14,7 +14,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.portfolio_snapshot import PortfolioSnapshot
@@ -31,6 +31,9 @@ from app.services.fixed_income_valuation_service import (
     get_fixed_income_valuations,
 )
 from app.services.fx_service import get_usd_brl_today
+from app.services.canonical_dividend_aggregation_service import (
+    load_received_entitlement_totals,
+)
 from app.core.cache import cache_get, cache_set, cache_delete
 
 logger = logging.getLogger(__name__)
@@ -106,34 +109,23 @@ async def _snapshot_before_today(
     return result.scalar_one_or_none()
 
 
-async def _proventos_total(
+async def _proventos_totals(
     db: AsyncSession,
     portfolio_id: int,
-    since: Optional[date] = None,
-) -> Decimal:
+    *,
+    as_of: date,
+) -> tuple[float, float]:
+    """Return canonical received dividends for 12 months and all time."""
     try:
-        from app.models.dividend import Dividend, DividendStatus
-
-        value_col = func.coalesce(
-            func.sum(
-                func.coalesce(Dividend.total_value, Dividend.net_value, Decimal("0"))
-            ),
-            Decimal("0"),
+        return await load_received_entitlement_totals(
+            db,
+            portfolio_id,
+            cutoff=as_of - timedelta(days=365),
+            as_of=as_of,
         )
-        q = (
-            select(value_col)
-            .where(
-                Dividend.portfolio_id == portfolio_id,
-                Dividend.status == DividendStatus.RECEBIDO,
-            )
-        )
-        if since:
-            q = q.where(Dividend.payment_date >= since)
-        result = await db.execute(q)
-        return Decimal(str(result.scalar_one() or 0))
     except Exception as e:
         logger.warning("[rentabilidade] erro ao somar proventos: %s", e)
-        return Decimal("0")
+        return 0.0, 0.0
 
 
 def _calc_realized_from_txs(txs: list) -> dict[str, float]:
@@ -276,8 +268,11 @@ async def _kpis_from_realtime(db: AsyncSession, portfolio_id: int) -> dict:
     total_pnl = unrealized_pnl + realized_pnl
 
     today = date.today()
-    proventos_total = float(await _proventos_total(db, portfolio_id))
-    proventos_12m = float(await _proventos_total(db, portfolio_id, since=today - timedelta(days=365)))
+    proventos_12m, proventos_total = await _proventos_totals(
+        db,
+        portfolio_id,
+        as_of=today,
+    )
     retorno_total_pct = (total_pnl / total_invested * 100) if total_invested else 0.0
 
     retorno_mes_pct = 0.0
@@ -354,8 +349,11 @@ async def get_kpis(db: AsyncSession, portfolio_id: int) -> dict:
     snap_12m = await _snapshot_at(db, portfolio_id, today - timedelta(days=365))
     snap_first = await _first_snapshot(db, portfolio_id)
 
-    proventos_total = float(await _proventos_total(db, portfolio_id))
-    proventos_12m = float(await _proventos_total(db, portfolio_id, since=today - timedelta(days=365)))
+    proventos_12m, proventos_total = await _proventos_totals(
+        db,
+        portfolio_id,
+        as_of=today,
+    )
 
     payload = {
         "patrimonio_atual": round(float(snap_today.market_value or 0), 2),

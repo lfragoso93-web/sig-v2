@@ -182,6 +182,22 @@ Os KPIs do Resumo e os grupos de Patrimônio foram migrados para
 Os contratos HTTP e schemas não mudaram. A tabela `dividends` permanece intacta
 para os consumidores seguintes.
 
+#### Rentabilidade
+
+Os KPIs de Rentabilidade passaram a carregar os proventos recebidos pelo
+agregador canônico:
+
+- total histórico e janela de 12 meses são obtidos em uma única carga;
+- somente direitos elegíveis, monetários em BRL e pagos até a data de cálculo
+  entram nos KPIs;
+- a janela de 12 meses usa `payment_date` e o valor líquido do direito;
+- falha do leitor preserva o comportamento seguro anterior, retornando zero e
+  registrando aviso, sem consultar `dividends`;
+- snapshots e cálculo TWR permanecem inalterados para o bloco seguinte.
+
+A tabela e o agregador legados continuam disponíveis exclusivamente para os
+consumidores ainda não migrados.
+
 ### Bloco 5 — contração do legado
 
 - Confirmar zero consumidores e zero portas de escrita.

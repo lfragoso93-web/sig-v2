@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — Rentabilidade com direitos canônicos (30/07/2026)
+
+- Os KPIs de Rentabilidade deixaram de consultar `dividends` e passaram a obter total histórico e janela de 12 meses em uma única carga dos direitos derivados de `asset_dividends` e `transactions`.
+- Somente direitos elegíveis, monetários em BRL, já pagos e com valor líquido entram nos totais; a janela usa `payment_date`.
+- Snapshots e TWR permanecem no fluxo legado para migração posterior; nenhum contrato HTTP, schema, dado ou pipeline operacional foi alterado.
+
 ### Corrigido — caracterizações canônicas da API de Proventos (30/07/2026)
 
 - As caracterizações históricas de `proventos_service` deixaram de simular consultas SQL à tabela legada `dividends` e passaram a injetar direitos derivados do catálogo global.
