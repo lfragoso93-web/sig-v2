@@ -5,6 +5,15 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — scheduler diário sem materialização de Proventos (30/07/2026)
+
+- A sincronização diária preserva a coleta global em `asset_dividends`, o
+  complemento histórico e a invalidação dos consumidores, mas não cria nem
+  atualiza direitos por carteira em `dividends`.
+- O campo `materialized` permanece temporariamente no resultado com valor zero
+  para compatibilidade com CLI e rebuilds ainda legados.
+- Nenhum endpoint, schema, dado, migration ou execução operacional foi alterado.
+
 ### Removido — portas públicas de escrita no legado de Proventos (30/07/2026)
 
 - Removidos `POST` e `DELETE` do CRUD manual e o `POST /sync` sob

@@ -1,5 +1,6 @@
 """Cobertura do universo operacional da sincronização diária de Proventos."""
 from datetime import date
+from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,7 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.asset import Asset
 from app.models.portfolio import Portfolio
 from app.models.transaction import OperationType, Transaction
-from app.services.proventos_daily_sync_service import load_proventos_sync_pairs
+from app.services import proventos_daily_sync_service
+from app.services.proventos_daily_sync_service import (
+    load_proventos_sync_pairs,
+    run_daily_proventos_sync,
+)
 
 
 async def _make_transaction(
@@ -93,3 +98,53 @@ async def test_daily_sync_allows_explicit_held_scope(
         ("MXRF11", "FII"),
     ]
     assert skipped == 1
+
+
+@pytest.mark.asyncio
+async def test_daily_sync_does_not_materialize_portfolio_dividends(
+    db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    db.add(
+        Asset(
+            ticker="PETR4",
+            name="PETR4",
+            asset_type="ACAO",
+            currency="BRL",
+        )
+    )
+    await db.flush()
+
+    sync_events = AsyncMock(return_value=(True, 3))
+    invalidate = AsyncMock(return_value=2)
+
+    class _SessionContext:
+        async def __aenter__(self):
+            return db
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return False
+
+    monkeypatch.setattr(
+        proventos_daily_sync_service,
+        "_sync_asset_events",
+        sync_events,
+    )
+    monkeypatch.setattr(
+        proventos_daily_sync_service,
+        "_invalidate_affected_portfolios",
+        invalidate,
+    )
+    monkeypatch.setattr(
+        "app.core.database.AsyncSessionLocal",
+        _SessionContext,
+    )
+
+    result = await run_daily_proventos_sync(db, concurrency=1)
+
+    assert result.assets_synced == 1
+    assert result.historical_events == 3
+    assert result.materialized == 0
+    assert result.portfolios_invalidated == 2
+    sync_events.assert_awaited_once_with(db, "PETR4", "ACAO")
+    invalidate.assert_awaited_once_with(db, ["PETR4"])
