@@ -25,6 +25,14 @@ class PortfolioDividendEntitlement:
     asset_type: str
     event: DividendEvent
     entitlement: DividendEntitlement
+    approved_on: date | None
+    gross_value_per_unit: Decimal | None
+    factor: Decimal | None
+    complete_factor: Decimal | None
+    isin_code: str | None
+    asset_issued: str | None
+    related_to: str | None
+    remarks: str | None
 
 
 async def load_portfolio_dividend_entitlements(
@@ -94,12 +102,24 @@ async def load_portfolio_dividend_entitlements(
         results.append(
             PortfolioDividendEntitlement(
                 ticker=asset.ticker,
-                asset_type=asset.asset_type,
+                asset_type=_enum_value(asset.asset_type),
                 event=event,
                 entitlement=calculate_dividend_entitlement(
                     event,
                     movements_by_asset.get(key, ()),
                 ),
+                approved_on=asset_dividend.approved_on,
+                gross_value_per_unit=_optional_decimal(
+                    asset_dividend.gross_value_per_unit
+                ),
+                factor=_optional_decimal(asset_dividend.factor),
+                complete_factor=_optional_decimal(
+                    asset_dividend.complete_factor
+                ),
+                isin_code=asset_dividend.isin_code,
+                asset_issued=asset_dividend.asset_issued,
+                related_to=asset_dividend.related_to,
+                remarks=asset_dividend.remarks,
             )
         )
     return results
@@ -108,3 +128,7 @@ async def load_portfolio_dividend_entitlements(
 def _enum_value(value: object) -> str:
     raw = getattr(value, "value", value)
     return str(raw)
+
+
+def _optional_decimal(value: object | None) -> Decimal | None:
+    return None if value is None else Decimal(str(value))

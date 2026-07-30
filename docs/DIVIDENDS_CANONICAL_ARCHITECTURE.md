@@ -142,6 +142,28 @@ moeda vem explicitamente do ativo; cadastro sem moeda é rejeitado.
 - Comparar resultados legados e canônicos com fixtures e PostgreSQL.
 - Não alterar o schema destrutivamente.
 
+#### API de Proventos
+
+A leitura pública de Proventos foi migrada para o adaptador canônico:
+
+- `summary`, listagem, histórico mensal e distribuição consultam somente
+  `asset_dividends`, `assets` e `transactions`;
+- o contrato HTTP e seus schemas permanecem inalterados;
+- `id` na listagem identifica o evento global em `asset_dividends`;
+- quantidade, bruto, retenção e líquido são derivados da posição histórica;
+- `RECEBIDO` e `A_RECEBER` são derivados de `payment_date` em relação à data
+  corrente, sem depender do status materializado;
+- evento monetário sem `record_date` não aparece como direito da carteira;
+- bonificação e subscrição continuam visíveis como eventos não monetários,
+  sem contaminar totais financeiros;
+- filtros, paginação, histórico e distribuição operam sobre o mesmo conjunto
+  canônico, sem leitura ou escrita em `dividends`.
+
+Diferenças em relação ao legado são deliberadas: não há fallback de Data Ex
+para elegibilidade, o status não pode ficar obsoleto e valores materializados
+divergentes são substituídos pelo cálculo reproduzível. A tabela `dividends`
+permanece intacta para os consumidores ainda não migrados.
+
 ### Bloco 5 — contração do legado
 
 - Confirmar zero consumidores e zero portas de escrita.

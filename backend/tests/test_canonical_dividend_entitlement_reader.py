@@ -45,6 +45,14 @@ def event(**overrides):
         "payment_date": date(2026, 1, 20),
         "dividend_type": "DIVIDENDO",
         "value_per_unit": Decimal("1.25"),
+        "approved_on": None,
+        "gross_value_per_unit": None,
+        "factor": None,
+        "complete_factor": None,
+        "isin_code": None,
+        "asset_issued": None,
+        "related_to": None,
+        "remarks": None,
     }
     values.update(overrides)
     return SimpleNamespace(**values)

@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — leitura canônica da API de Proventos (30/07/2026)
+
+- Summary, listagem, histórico mensal e distribuição passaram a derivar direitos de `asset_dividends` e do histórico completo de `transactions`.
+- O contrato HTTP foi preservado; status é derivado da data de pagamento e valores usam quantidade elegível, bruto e líquido do núcleo canônico.
+- Eventos monetários sem Data Com deixam de usar Data Ex como fallback, evitando direitos indevidos.
+- A API não consulta nem grava `dividends`; schema, dados e demais consumidores legados permanecem inalterados.
+
 ### Adicionado — adaptador read-only de direitos de Proventos (30/07/2026)
 
 - Eventos globais e histórico completo de transações agora podem ser convertidos nos tipos do núcleo canônico sem persistência por carteira.
