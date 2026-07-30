@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — caracterizações canônicas da API de Proventos (30/07/2026)
+
+- As caracterizações históricas de `proventos_service` deixaram de simular consultas SQL à tabela legada `dividends` e passaram a injetar direitos derivados do catálogo global.
+- Os cenários preservam a cobertura de resumo, paginação, filtros, histórico mensal e distribuição, incluindo status por data de pagamento e eventos não monetários.
+- As oito falhas residuais da migração da API foram eliminadas sem alterar código de produção, contratos HTTP, schema ou dados.
+
 ### Alterado — Resumo e Patrimônio com direitos canônicos (30/07/2026)
 
 - Os proventos exibidos nos KPIs do Resumo e nos grupos de Patrimônio passaram a ser agregados diretamente de `asset_dividends` e do histórico de `transactions`.
