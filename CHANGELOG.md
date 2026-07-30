@@ -5,6 +5,16 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — materialização de Proventos nas mutações de transações (30/07/2026)
+
+- Criar, editar ou excluir uma transação não reconcilia mais direitos persistidos
+  por carteira na tabela legada `dividends`.
+- O backfill disparado após uma mutação preserva somente a coleta global em
+  `asset_dividends`; onboarding, snapshots e invalidações de cache permanecem.
+- Regressão AST impede a reintrodução do serviço ou helper legado no router.
+- Materializador legado, seed pré-produção v1, schema, dados e execução
+  operacional permaneceram fora deste bloco.
+
 ### Removido — job FII quebrado e redundante do scheduler legado (30/07/2026)
 
 - O job `sync_fii_dividends` foi removido porque importava tardiamente o módulo

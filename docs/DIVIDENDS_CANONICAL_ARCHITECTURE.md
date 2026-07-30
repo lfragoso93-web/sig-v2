@@ -80,7 +80,7 @@ possuir o ativo hoje não cria direito retroativo.
 | `run_proventos_sync.py` | Coleta manual global, inclusive por ticker | Canônico | Materialização final removida; não grava direitos por carteira |
 | `dividend_history_seed_service.py` | Complemento histórico global via Yahoo | Canônico | Materialização retirada; persiste exclusivamente `asset_dividends` |
 | `full_market_rebuild_service.py` | Orquestra a sincronização global de Proventos | Canônico | Resume ativos varridos, sincronizados e falhos; não importa, chama ou contabiliza materialização |
-| `dividend_entitlement_service.py` e mutações de transações | Reconciliam direitos persistidos após mudanças históricas | Legado derivado | Substituir por cálculo sob consulta; alteração de transação não grava provento |
+| `dividend_entitlement_service.py` e mutações de transações | Materializador legado isolado; mutações não o chamam mais | Contraído | Alterações de transações invalidam consumidores derivados, mas não gravam direitos em `dividends` |
 | `pre_prod_dividends_seed_materialization.py` | Materialização estrita dentro do contrato v1 | Suspenso | Excluir do novo contrato; manter apenas enquanto evidência/testes v1 forem necessários |
 | `scheduler.py` legado e scheduler diário ativo | Atualização do catálogo global | Canônico | Scheduler diário preservado; job FII quebrado e redundante removido do legado; o seed de ativos já enriquece tickers elegíveis com eventos globais |
 | `proventos_legacy_link_service.py` | Dry-run de vínculos legados | Somente auditoria | Não promove nem materializa; remover ao contrair `dividends` |

@@ -18,9 +18,6 @@ from app.schemas.transaction import TransactionCreate, TransactionOut, PagedTran
 from app.schemas.asset import AssetCreate
 from app.services.asset_service import get_or_create_asset
 from app.services.dividend_backfill_service import backfill_dividends
-from app.services.dividend_entitlement_service import (
-    reconcile_portfolio_dividend_rights,
-)
 from app.services.asset_onboarding_service import run_onboarding
 from app.services.transaction_service import list_transactions_paginated
 from app.services.rentabilidade_service import flush_rentabilidade_cache
@@ -424,7 +421,6 @@ async def update_transaction(
         await _validate_sell(db, portfolio_id, ticker, payload.quantity, exclude_tx_id=transaction_id)
 
     invalidate_from = min(tx.date, payload.date)
-    previous_ticker = tx.ticker
 
     tx.ticker = ticker
     tx.asset_type = asset_type
@@ -462,12 +458,6 @@ async def update_transaction(
         ticker=ticker,
         asset_type=str(asset_type),
     )
-    if previous_ticker.upper() != ticker:
-        background_tasks.add_task(
-            _run_dividend_reconciliation,
-            portfolio_id=portfolio_id,
-            ticker=previous_ticker,
-        )
     background_tasks.add_task(
         _run_snapshot_backfill,
         portfolio_id=portfolio_id,
@@ -504,17 +494,11 @@ async def delete_transaction(
     if not tx:
         raise HTTPException(status_code=404, detail="Transacao nao encontrada.")
 
-    ticker = tx.ticker
     tx_date = tx.date
 
     await db.delete(tx)
     await db.commit()
 
-    background_tasks.add_task(
-        _run_dividend_reconciliation,
-        portfolio_id=portfolio_id,
-        ticker=ticker,
-    )
     background_tasks.add_task(
         _run_snapshot_backfill,
         portfolio_id=portfolio_id,
@@ -539,32 +523,8 @@ async def _run_backfill(portfolio_id: int, ticker: str, asset_type: str) -> None
                 ticker=ticker,
                 asset_type=asset_type,
             )
-            await reconcile_portfolio_dividend_rights(
-                db=db,
-                portfolio_id=portfolio_id,
-                tickers=[ticker],
-                commit=True,
-            )
     except Exception as exc:
         log.error("[backfill_dividends] erro para %s/%s: %s", ticker, portfolio_id, exc)
-
-
-async def _run_dividend_reconciliation(portfolio_id: int, ticker: str) -> None:
-    try:
-        async with AsyncSessionLocal() as db:
-            await reconcile_portfolio_dividend_rights(
-                db=db,
-                portfolio_id=portfolio_id,
-                tickers=[ticker],
-                commit=True,
-            )
-    except Exception as exc:
-        log.error(
-            "[dividend_reconciliation] erro para %s/%s: %s",
-            ticker,
-            portfolio_id,
-            exc,
-        )
 
 
 async def _run_snapshot_backfill(portfolio_id: int, tx_date: DateType) -> None:
