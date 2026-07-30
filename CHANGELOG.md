@@ -5,6 +5,14 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — identidade verificável do runtime de Proventos (29/07/2026)
+
+- A imagem backend passou a incorporar o SHA de origem em `APP_COMMIT_SHA` e no label OCI `org.opencontainers.image.revision`.
+- O Compose encaminha explicitamente o SHA do build e mantém `unknown` como valor fail-closed quando ele não for informado.
+- O wrapper de idempotência agora compara o SHA autorizado com o SHA do container antes de criar o diretório de evidências ou iniciar o seed.
+- Imagem sem identidade ou container desatualizado abortam com diagnóstico explícito; nenhuma evidência operacional é criada nesses casos.
+- Adicionadas regressões estruturais para o contrato de build e para a ordem do gate operacional.
+
 ### Corrigido — tolerância de cobertura de componente absorvido (29/07/2026)
 
 - A correspondência entre uma linha complementar agregada e um componente estimado
