@@ -82,6 +82,7 @@ possuir o ativo hoje não cria direito retroativo.
 | `full_market_rebuild_service.py` | Orquestra a sincronização global de Proventos | Canônico | Resume ativos varridos, sincronizados e falhos; não importa, chama ou contabiliza materialização |
 | `dividend_entitlement_service.py` e mutações de transações | Materializador legado isolado; mutações não o chamam mais | Contraído | Alterações de transações invalidam consumidores derivados, mas não gravam direitos em `dividends` |
 | `portfolio_service.py` | Totais e agrupamentos de Proventos no resumo/posições legados | Canônico | Assinaturas preservadas; agregações read-only usam direitos elegíveis, pagos, líquidos e em BRL |
+| Exclusão de carteira | `portfolio_delete_service.delete_portfolio_safely` | Ativo | A implementação órfã em `portfolio_service.py` foi removida; a porta ativa ainda exclui dependências legadas de forma explícita |
 | `pre_prod_dividends_seed_materialization.py` | Materialização estrita dentro do contrato v1 | Suspenso | Excluir do novo contrato; manter apenas enquanto evidência/testes v1 forem necessários |
 | `scheduler.py` legado e scheduler diário ativo | Atualização do catálogo global | Canônico | Scheduler diário preservado; job FII quebrado e redundante removido do legado; o seed de ativos já enriquece tickers elegíveis com eventos globais |
 | `proventos_legacy_link_service.py` | Dry-run de vínculos legados | Somente auditoria | Não promove nem materializa; remover ao contrair `dividends` |

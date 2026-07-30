@@ -9,7 +9,6 @@ from app.services.portfolio_service import (
     build_group_performance_metrics,
     calc_raw_positions,
     create_portfolio,
-    delete_portfolio,
     get_portfolio,
     get_portfolio_positions,
     get_portfolio_summary,
@@ -141,40 +140,6 @@ async def test_update_portfolio_success():
     portfolio = await update_portfolio(db, portfolio_id=1, user_id=1, data=data)
     
     assert portfolio.name == "Portfolio Atualizado"
-
-
-@pytest.mark.asyncio
-async def test_delete_portfolio_not_found():
-    db = AsyncMock(spec=AsyncSession)
-    
-    result = MagicMock()
-    result.scalar_one_or_none.return_value = None
-    db.execute.return_value = result
-    
-    with pytest.raises(HTTPException) as exc_info:
-        await delete_portfolio(db, portfolio_id=999, user_id=1)
-    
-    assert exc_info.value.status_code == 404
-
-
-@pytest.mark.asyncio
-async def test_delete_portfolio_success():
-    db = AsyncMock(spec=AsyncSession)
-    
-    mock_portfolio = MagicMock()
-    mock_portfolio.id = 1
-    mock_portfolio.user_id = 1
-    
-    result = MagicMock()
-    result.scalar_one_or_none.return_value = mock_portfolio
-    db.execute.return_value = result
-    
-    db.delete = AsyncMock()
-    db.flush = AsyncMock()
-    
-    await delete_portfolio(db, portfolio_id=1, user_id=1)
-    
-    db.delete.assert_called()
 
 
 @pytest.mark.asyncio

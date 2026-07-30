@@ -3,21 +3,13 @@ from datetime import date as DateType
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
-from sqlalchemy import delete, select, update
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cache import cache_delete, cache_get, cache_set
 from app.models.asset import Asset, AssetType
-from app.models.audit_log import AuditLog
-from app.models.corporate_event import CorporateEvent
-from app.models.fixed_income import FixedIncomeInvestment
-from app.models.goal import Goal
-from app.models.irpf import IRPFReport
 from app.models.portfolio import Portfolio
-from app.models.portfolio_class_target import PortfolioClassTarget
-from app.models.portfolio_position import PortfolioPosition
-from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.transaction import OperationType, Transaction
 from app.schemas.portfolio import PortfolioCreate, PortfolioUpdate
 from app.services.audit_log_service import AuditLogService
@@ -462,48 +454,6 @@ async def update_portfolio(db: AsyncSession, portfolio_id: int, user_id: int, da
     await db.refresh(portfolio)
     await invalidate_portfolio_cache(portfolio_id)
     return portfolio
-
-
-async def delete_portfolio(db: AsyncSession, portfolio_id: int, user_id: int) -> None:
-    from app.models.dividend import Dividend
-
-    portfolio = await get_portfolio(db, portfolio_id, user_id)
-    old_values = {"name": portfolio.name, "description": portfolio.description}
-
-    await AuditLogService.log_action(
-        db=db,
-        user_id=user_id,
-        action="DELETE",
-        resource_type="Portfolio",
-        resource_id=portfolio_id,
-        portfolio_id=portfolio_id,
-        old_values=old_values,
-    )
-    await db.flush()
-
-    await db.execute(
-        update(AuditLog)
-        .where(AuditLog.portfolio_id == portfolio_id)
-        .values(portfolio_id=None)
-    )
-
-    dependent_models = (
-        Dividend,
-        CorporateEvent,
-        FixedIncomeInvestment,
-        Goal,
-        IRPFReport,
-        PortfolioClassTarget,
-        PortfolioPosition,
-        PortfolioSnapshot,
-        Transaction,
-    )
-    for model in dependent_models:
-        await db.execute(delete(model).where(model.portfolio_id == portfolio_id))
-
-    await db.delete(portfolio)
-    await db.commit()
-    await invalidate_portfolio_cache(portfolio_id)
 
 
 async def _non_fixed_income_enriched(db: AsyncSession, portfolio_id: int) -> list[dict]:

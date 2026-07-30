@@ -5,6 +5,16 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — exclusão de carteira órfã no serviço legado (30/07/2026)
+
+- `portfolio_service.delete_portfolio` foi removida após a confirmação de que
+  não possuía caller de aplicação.
+- Imports ORM usados exclusivamente pela implementação morta, inclusive
+  `Dividend`, foram retirados de `portfolio_service.py`.
+- O endpoint `DELETE /portfolios/{portfolio_id}` continua delegando somente a
+  `portfolio_delete_service.delete_portfolio_safely`.
+- Regressão AST impede a reintrodução da função e protege a fronteira ativa.
+
 ### Removido — agregador legado órfão de Proventos (30/07/2026)
 
 - `dividend_aggregation_service.py` foi removido após a confirmação de zero
