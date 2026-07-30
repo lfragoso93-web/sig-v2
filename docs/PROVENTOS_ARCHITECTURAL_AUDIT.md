@@ -16,8 +16,8 @@ Issues #92 e #95.
 ## Fronteira operacional de pré-produção
 
 A arquitetura funcional vigente não é uma entrada segura para o rebuild real:
-as portas públicas mutáveis e a materialização do scheduler e do pipeline de
-mercado foram contraídas, mas CLI dedicada, seed histórico, backfill
+as portas públicas mutáveis e a materialização do scheduler, do pipeline de
+mercado e da CLI dedicada foram contraídas, mas seed histórico, backfill
 pós-transação e `full_market_rebuild` ainda oferecem caminhos de escrita com
 sessões e commits que não garantem rollback integral do estágio.
 
@@ -70,7 +70,8 @@ explícita.
 
 As CLIs e o serviço batch do pipeline de mercado não aceitam mais a opção
 `materialize`; eles coletam somente eventos globais. A CLI dedicada de
-Proventos e o seed histórico permanecem como portas separadas em contração.
+Proventos também não materializa direitos por carteira. O seed histórico
+permanece como porta separada em contração.
 
 ### Leitura, mutação e elegibilidade
 

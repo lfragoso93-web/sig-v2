@@ -5,6 +5,15 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — CLI dedicada de Proventos sem materialização (30/07/2026)
+
+- `run_proventos_sync.py` preserva a coleta global manual, inclusive por ticker,
+  mas não cria nem atualiza direitos por carteira em `dividends`.
+- Regressão estrutural impede que a CLI volte a importar ou solicitar
+  `materialize_asset_dividends`.
+- Seed histórico, materializador legado, schema, dados e execução operacional
+  permaneceram inalterados.
+
 ### Removido — opção inerte de materialização no batch/CLI de mercado (30/07/2026)
 
 - As CLIs de pipeline de mercado não expõem mais `--skip-materialize`, e o
