@@ -31,7 +31,7 @@
 | Seed isolado Tesouro | Identidade, comparador e wrapper implementados; execução real pendente (#208) | 97% |
 | Seed isolado de benchmarks | Execução real e idempotência comprovadas (#216) | 100% |
 | Seed isolado de câmbio | Execução real e idempotência comprovadas (#217) | 100% |
-| Seed isolado de proventos | Implementação e runbook publicados; prova real pendente (#226) | 95% |
+| Seed isolado de proventos | Revisão arquitetural em curso; execução v1 suspensa (#226) | 70% |
 | Rebuild pré-produção | Gates estruturais preparados; execuções reais pendentes | 97% |
 | Eventos corporativos | Fundação pronta | 30% |
 | IRPF | Planejado | 15% |
@@ -92,8 +92,10 @@ Prontidão global estimada para a primeira produção: **91%**. O percentual nã
 
 - Issue dedicada #226 criada e vinculada às Issues #158 e #216.
 - Contrato `pre-prod-dividends-seed.v1` publicado em `docs/PRE_PROD_DIVIDENDS_SEED_CONTRACT.md`.
-- Leitura autorizada: `assets`, `transactions`, `portfolios`, `asset_dividends` e `dividends`.
-- Escrita autorizada: somente `asset_dividends` e `dividends`.
+- Decisão canônica revisada: eventos pertencem exclusivamente ao ativo e `asset_dividends` é a única fonte de verdade.
+- A coleta futura lerá o catálogo de ativos e escreverá somente em `asset_dividends`; carteiras e transações não participam da identidade nem da persistência do evento.
+- Direitos por carteira serão calculados sob consulta a partir de `asset_dividends` e do histórico de posições.
+- `dividends` permanece legado reconstruível até a migração incremental e a prova de paridade dos consumidores.
 - Transação única, advisory lock, rollback integral, fontes explícitas e comparador offline são gates obrigatórios.
 - O estágio permanece isolado de B3, Tesouro, benchmarks, câmbio, importação, posições, snapshots e `full_market_rebuild`.
 - Coletor BRAPI/Yahoo estrito e sequencial, persistência global, materialização por carteira, inspeções de reconciliação e CLI transacional implementados.
@@ -152,7 +154,10 @@ Prontidão global estimada para a primeira produção: **91%**. O percentual nã
 - [x] Contrato inicial `pre-prod-dividends-seed.v1` e fronteiras operacionais publicados.
 - [x] Envelope, inspeções, coleta estrita, persistência global e materialização de proventos implementados.
 - [x] CLI transacional, comparador offline, wrapper PowerShell e runbook de proventos publicados.
-- [x] Executar a suíte integral de proventos no SHA operacional aprovado.
+- [x] Executar a suíte integral da implementação v1 no SHA então aprovado.
+- [x] Suspender a execução v1 e formalizar `asset_dividends` como fonte canônica única.
+- [ ] Migrar consumidores para o cálculo derivado por posição histórica.
+- [ ] Desativar portas de escrita por carteira e remover `dividends` somente após paridade e inventário.
 - [ ] Realizar duas execuções reais controladas e reconciliar as três evidências.
 - [ ] Gerar nova cadeia operacional vinculada ao SHA promovido.
 - [ ] Recalcular e revisar a confirmação composta.
@@ -190,7 +195,7 @@ Prontidão global estimada para a primeira produção: **91%**. O percentual nã
 1. Gerar nova cadeia operacional vinculada ao SHA promovido.
 2. Executar e reconciliar a limpeza real pela Issue #199.
 3. Executar e reconciliar B3 e Tesouro em estágios independentes.
-4. Validar e executar a prova controlada de idempotência do estágio isolado de proventos.
+4. Concluir a migração canônica de Proventos e redesenhar os gates antes de qualquer nova execução controlada.
 5. Executar importação e rebuild em blocos independentes.
 6. Endurecer ou remover o router administrativo de debug antes do go-live.
 7. Remover o serviço legado de rentabilidade (#151).

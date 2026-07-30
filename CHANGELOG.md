@@ -5,6 +5,14 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — arquitetura canônica de Proventos (30/07/2026)
+
+- Formalizado que todo evento de provento pertence ao ativo e que `asset_dividends` será a única fonte canônica global.
+- Direitos financeiros de carteira passam a ser definidos como cálculo derivado do evento global e da posição histórica na data de direito, sem duplicar o evento por carteira.
+- `dividends` foi classificada como legado reconstruível e somente poderá ser removida após migração incremental, inventário e prova de paridade dos consumidores.
+- O contrato e o runbook `pre-prod-dividends-seed.v1` foram suspensos; CLI, comparador e wrapper existentes não autorizam nova execução operacional.
+- README, ROADMAP e o novo desenho de migração foram sincronizados. Nenhum código funcional, banco, seed ou evidência operacional foi alterado.
+
 ### Corrigido — identidade verificável do runtime de Proventos (29/07/2026)
 
 - A imagem backend passou a incorporar o SHA de origem em `APP_COMMIT_SHA` e no label OCI `org.opencontainers.image.revision`.

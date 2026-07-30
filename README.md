@@ -14,6 +14,8 @@ A cadeia operacional `20260724-135540`, vinculada ao merge `4c306c7d755470093e49
 
 A limpeza real, seeds B3/Tesouro, proventos, importação e rebuild ainda não foram executados. Os seeds isolados de benchmarks macroeconômicos e câmbio já foram executados e tiveram idempotência comprovada operacionalmente.
 
+O estágio de Proventos está **suspenso para revisão arquitetural**: `asset_dividends` será a única fonte canônica de eventos por ativo. Direitos de carteira serão calculados a partir do histórico de posições e não serão persistidos como uma segunda fonte de verdade durante a coleta. A tabela `dividends` permanece temporariamente como legado reconstruível até a migração e a validação de paridade de todos os consumidores.
+
 ### Entregas consolidadas
 
 - Valuation canônico por classe de ativo.
@@ -53,8 +55,9 @@ A limpeza real, seeds B3/Tesouro, proventos, importação e rebuild ainda não f
 - Comparador `pre-prod-macro-seed-compare.v1` e persistidor `scripts/compare_pre_prod_macro_seed.ps1` preservam a prova offline em JSON auditável.
 - Seed isolado de câmbio implementado pela Issue #217 com contrato `pre-prod-fx-seed.v1`, inspeção read-only, cliente PTAX estrito, persistência transacional, advisory lock, CLI auditável e runbook dedicado.
 - Execuções `20260728-103750` e `20260728-104238`, no commit `37c1d800be6f21dfc5c91b332a6ebe8748c0ac1c`, comprovaram estado final estável em 6 linhas, zero novas linhas na segunda execução, zero duplicidades, zero pares não suportados e `ok=true`.
-- Seed isolado de proventos implementado pela Issue #226 com contrato `pre-prod-dividends-seed.v1`, coleta por fontes principal e complementar estrita e sequencial, persistência global, materialização por carteira, advisory lock, transação única e inspeções de reconciliação.
-- Comparador offline, CLI e wrapper `scripts/Invoke-PreProdDividendsIdempotency.ps1` publicados com runbook dedicado; suíte específica e integral aprovadas, com duas execuções reais ainda pendentes.
+- Seed isolado de proventos v1 implementado pela Issue #226, porém suspenso após a decisão de manter somente `asset_dividends` como fonte canônica global.
+- A CLI, o comparador e o wrapper v1 permanecem no repositório apenas como implementação histórica; não podem ser executados até a retirada da materialização por carteira e a aprovação dos novos gates.
+- A arquitetura alvo e a migração incremental estão registradas em `docs/DIVIDENDS_CANONICAL_ARCHITECTURE.md`.
 
 ## Arquitetura resumida
 
@@ -113,7 +116,7 @@ As CLIs isoladas de B3, Tesouro, benchmarks, câmbio e proventos não autorizam 
 1. Promover a exposição do `plan_sha256` e gerar uma nova cadeia operacional vinculada ao novo SHA.
 2. Registrar nova confirmação composta e executar a limpeza real somente pela Issue #199.
 3. Executar e reconciliar os seeds isolados de B3 e Tesouro em blocos separados após a limpeza.
-4. Executar a prova controlada de idempotência de proventos pela Issue #226.
+4. Concluir a migração canônica de Proventos da Issue #226 e somente então redesenhar e autorizar uma nova prova de idempotência.
 5. Executar importação e rebuild em blocos independentes.
 6. Endurecer ou remover o router administrativo de debug antes do go-live.
 7. Remover o serviço legado de rentabilidade (#151).

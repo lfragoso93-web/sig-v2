@@ -3,8 +3,31 @@
 > Issue dedicada: #226  
 > Issue-mãe: #158  
 > Gate agregado: #216  
-> Estado: implementação e runbook publicados, sem autorização de execução real
-> Última atualização: 29/07/2026
+> Estado: **SUSPENSO — contrato v1 incompatível com a arquitetura canônica aprovada**
+> Última atualização: 30/07/2026
+
+## Decisão arquitetural superveniente
+
+A partir de 30/07/2026, este contrato v1 permanece somente como registro da
+implementação existente e **não pode ser usado para autorizar execução**.
+
+A arquitetura aprovada determina que:
+
+- todo evento de provento pertence exclusivamente a um ativo;
+- `asset_dividends` é a única fonte canônica global;
+- carteira, posição e transação não participam da coleta nem da identidade do evento;
+- o direito financeiro de uma carteira é calculado a partir do evento global e da
+  posição histórica na data de direito;
+- `dividends` é legado reconstruível, não uma segunda fonte de verdade;
+- nenhuma coleta futura pode materializar direitos por carteira;
+- a remoção física de `dividends` depende de inventário, migração de consumidores
+  e prova de paridade.
+
+As seções v1 abaixo descrevem o estado implementado antes dessa decisão. Qualquer
+regra de leitura, escrita, materialização, métrica ou idempotência envolvendo
+`dividends`, `portfolios` ou `transactions` está suspensa e será substituída
+por um novo contrato após a migração descrita em
+`docs/DIVIDENDS_CANONICAL_ARCHITECTURE.md`.
 
 ## Objetivo
 

@@ -1,5 +1,15 @@
 # Runbook — seed isolado de proventos
 
+> **EXECUÇÃO SUSPENSA**
+>
+> Este runbook descreve a implementação v1 e não autoriza o uso da CLI, do
+> comparador ou do wrapper. A arquitetura aprovada em 30/07/2026 tornou
+> `asset_dividends` a única fonte canônica e retirou a materialização por carteira
+> do pipeline de coleta. Retome operações somente após a migração incremental, a
+> publicação de um novo contrato e uma nova autorização explícita na Issue #226.
+>
+> Consulte `docs/DIVIDENDS_CANONICAL_ARCHITECTURE.md`.
+
 ## Objetivo
 
 Executar exclusivamente a coleta global em `asset_dividends` e a materialização
@@ -13,9 +23,9 @@ endpoints em background ou `full_market_rebuild`.
 
 ## Estado operacional
 
-A CLI, o comparador offline e o wrapper PowerShell estão implementados. A
-presença dessas entradas no repositório **não autoriza execução na
-pré-produção real**.
+A CLI, o comparador offline e o wrapper PowerShell v1 estão implementados, mas
+estão **suspensos**. A presença dessas entradas no repositório não autoriza
+execução em qualquer ambiente operacional.
 
 Antes de cada operação, a Issue #226 deve registrar:
 
