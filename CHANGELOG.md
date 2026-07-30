@@ -5,6 +5,14 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — callers de mercado sem pedido de materialização (30/07/2026)
+
+- Onboarding e backfill de mercado do catálogo de ativos deixaram de enviar
+  `materialize=True` ao pipeline por ativo.
+- Logs e descrição desses callers agora refletem somente preços, logo e eventos
+  globais; batch, CLI e seed histórico permanecem para blocos separados.
+- Nenhum schema, dado, endpoint ou pipeline operacional foi alterado.
+
 ### Alterado — pipeline de mercado sem materialização de Proventos (30/07/2026)
 
 - O pipeline por ativo preserva a coleta global em `asset_dividends`, mas não

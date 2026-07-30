@@ -1,10 +1,40 @@
 """Regressões da contração da materialização no pipeline de mercado."""
+import ast
+from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
 from app.models.asset import AssetType
 from app.services.asset_market_pipeline_service import sync_asset_market_data
+
+
+@pytest.mark.parametrize(
+    "service_path",
+    [
+        Path("app/services/asset_onboarding_service.py"),
+        Path("app/services/asset_seed_service.py"),
+    ],
+)
+def test_callers_de_aplicacao_nao_solicitam_materializacao(
+    service_path: Path,
+) -> None:
+    source_path = Path(__file__).parents[1] / service_path
+    tree = ast.parse(source_path.read_text(encoding="utf-8"))
+
+    calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "sync_asset_market_data"
+    ]
+
+    assert calls
+    assert all(
+        "materialize" not in {keyword.arg for keyword in call.keywords}
+        for call in calls
+    )
 
 
 @pytest.mark.asyncio

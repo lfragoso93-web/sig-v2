@@ -75,7 +75,8 @@ possuir o ativo hoje não cria direito retroativo.
 | `proventos_daily_sync_service.py` | Coleta eventos globais e invalida consumidores | Canônico | Materialização retirada; campo de resultado legado permanece temporariamente em zero |
 | `dividend_backfill_service.py` | Backfill global e `materialize_asset_dividends` | Misto central | Separar coleta de cálculo; nenhum consumidor novo deve chamar a materialização |
 | `asset_market_pipeline_service.py` | Coleta eventos globais por ativo | Canônico | Materialização retirada; argumento e resultado legados permanecem temporariamente compatíveis |
-| `asset_seed_service.py`, `asset_onboarding_service.py` e batch de mercado | Chamam pipeline com `materialize=True` | Compatibilidade sem escrita | Contrair argumento e métricas legadas em bloco posterior |
+| `asset_seed_service.py` e `asset_onboarding_service.py` | Chamam o pipeline sem solicitar materialização | Canônico | Argumento e métricas legadas removidos dos callers de aplicação |
+| Batch e CLI de mercado | Ainda transportam a opção `materialize` | Compatibilidade sem escrita | Contrair interface em bloco próprio |
 | `dividend_history_seed_service.py` e `full_market_rebuild_service.py` | Seed histórico seguido de materialização | Escrita indireta | Novo seed deve gravar exclusivamente `asset_dividends` |
 | `dividend_entitlement_service.py` e mutações de transações | Reconciliam direitos persistidos após mudanças históricas | Legado derivado | Substituir por cálculo sob consulta; alteração de transação não grava provento |
 | `pre_prod_dividends_seed_materialization.py` | Materialização estrita dentro do contrato v1 | Suspenso | Excluir do novo contrato; manter apenas enquanto evidência/testes v1 forem necessários |

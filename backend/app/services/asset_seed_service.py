@@ -112,17 +112,15 @@ async def _backfill_market_data_for_ticker(ticker: str, asset_type: AssetType) -
                 sync_prices=True,
                 sync_logo=True,
                 sync_events=True,
-                materialize=True,
                 commit=True,
             )
             logger.info(
-                "[seed_market] %s (%s): prices=%s logo=%s events=%s materialized=%s",
+                "[seed_market] %s (%s): prices=%s logo=%s events=%s",
                 ticker,
                 asset_type.value,
                 result.prices_inserted,
                 result.logo_updated,
                 result.events_synced,
-                result.materialized,
             )
     except Exception as e:
         logger.error(f"[seed_market] erro em {ticker} ({asset_type.value}): {e}")
