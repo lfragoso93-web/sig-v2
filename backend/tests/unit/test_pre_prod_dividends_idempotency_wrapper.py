@@ -3,9 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 
 SCRIPT_NAME = "Invoke-PreProdDividendsIdempotency.ps1"
-SCRIPT_PATH = (
-    Path(__file__).resolve().parents[3] / "scripts" / SCRIPT_NAME
-)
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+SCRIPT_PATH = REPOSITORY_ROOT / "scripts" / SCRIPT_NAME
+DOCKERFILE_PATH = REPOSITORY_ROOT / "backend" / "Dockerfile"
+COMPOSE_PATH = REPOSITORY_ROOT / "docker-compose.yml"
 
 
 def _script() -> str:
@@ -80,3 +81,30 @@ def test_wrapper_preserves_native_exit_codes_and_safe_execution() -> None:
     assert "sh -lc" not in script
     assert "python -c" not in script
     assert "exit $CompareExitCode" in script
+
+
+def test_backend_image_embeds_declared_commit_identity() -> None:
+    dockerfile = DOCKERFILE_PATH.read_text(encoding="utf-8")
+    compose = COMPOSE_PATH.read_text(encoding="utf-8")
+
+    assert "ARG APP_COMMIT_SHA=unknown" in dockerfile
+    assert "ENV APP_COMMIT_SHA=$APP_COMMIT_SHA" in dockerfile
+    assert "LABEL org.opencontainers.image.revision=$APP_COMMIT_SHA" in dockerfile
+    assert "APP_COMMIT_SHA: ${APP_COMMIT_SHA:-unknown}" in compose
+
+
+def test_wrapper_rejects_stale_runtime_before_creating_evidence() -> None:
+    script = _script()
+
+    runtime_probe = "docker compose exec -T backend printenv APP_COMMIT_SHA"
+    mismatch = "Backend container commit mismatch: expected"
+    evidence_creation = "New-Item -ItemType Directory"
+
+    assert runtime_probe in script
+    assert "Unable to read APP_COMMIT_SHA from the backend container." in script
+    assert mismatch in script
+    assert script.index(runtime_probe) < script.index(evidence_creation)
+    assert script.index(mismatch) < script.index(evidence_creation)
+    assert script.index("$RuntimeCommitExitCode = $LASTEXITCODE") < script.index(
+        "$RuntimeCommitSha = ([string]$RuntimeCommitOutput)"
+    )
