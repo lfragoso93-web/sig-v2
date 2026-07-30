@@ -5,6 +5,17 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — agregador legado órfão de Proventos (30/07/2026)
+
+- `dividend_aggregation_service.py` foi removido após a confirmação de zero
+  callers na aplicação.
+- Os testes que exercitavam exclusivamente consultas e objetos `Dividend`
+  materializados foram substituídos por uma regressão estrutural que impede a
+  reintrodução do módulo ou de imports para ele.
+- Resumo, Patrimônio, Rentabilidade e snapshots continuam usando
+  `canonical_dividend_aggregation_service.py`.
+- Nenhuma porta de escrita, auditoria, schema, migration ou dado foi alterado.
+
 ### Alterado — agregações de carteira usam direitos canônicos (30/07/2026)
 
 - `portfolio_service.py` deixou de consultar `Dividend` para totais gerais,

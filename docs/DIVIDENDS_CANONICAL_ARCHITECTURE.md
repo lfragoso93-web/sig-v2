@@ -181,11 +181,12 @@ Os KPIs do Resumo e os grupos de Patrimônio foram migrados para
   Resumo preserva todo o histórico elegível da carteira;
 - eventos não BRL ficam fora destes KPIs até existir política canônica de
   conversão cambial, evitando somar moedas diferentes;
-- `dividend_aggregation_service.py` permanece legado para Rentabilidade e
-  snapshots e não foi alterado neste bloco.
+- O agregador legado `dividend_aggregation_service.py` foi removido após
+  Rentabilidade, snapshots e os demais consumidores migrarem para o agregador
+  canônico.
 
 Os contratos HTTP e schemas não mudaram. A tabela `dividends` permanece intacta
-para os consumidores seguintes.
+somente para as portas de escrita, auditoria e inspeção ainda não contraídas.
 
 #### Rentabilidade
 
@@ -197,11 +198,11 @@ agregador canônico:
   entram nos KPIs;
 - a janela de 12 meses usa `payment_date` e o valor líquido do direito;
 - falha do leitor preserva o comportamento seguro anterior, retornando zero e
-  registrando aviso, sem consultar `dividends`;
-- snapshots e cálculo TWR permanecem inalterados para o bloco seguinte.
+  registrando aviso, sem consultar `dividends`.
 
-A tabela e o agregador legados continuam disponíveis exclusivamente para os
-consumidores ainda não migrados.
+A tabela legada continua disponível exclusivamente para portas de escrita,
+auditoria e inspeção ainda não contraídas; não há agregador legado compartilhado
+entre consumidores.
 
 #### Snapshots e TWR
 

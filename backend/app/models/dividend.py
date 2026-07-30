@@ -5,7 +5,7 @@ Cada registro representa um provento creditado em uma carteira específica,
 vinculado opcionalmente a um AssetDividend (evento de provento do ativo).
 
 Índices compostos (Sprint 5B):
-  - (portfolio_id, ticker)  — cobre sum_dividends_by_ticker
+  - (portfolio_id, ticker)  — índice legado preservado durante a transição
   - (portfolio_id, status)  — cobre _proventos_total (WHERE status='RECEBIDO')
 
 Campos legados mantidos para compatibilidade com bancos já migrados antes da
