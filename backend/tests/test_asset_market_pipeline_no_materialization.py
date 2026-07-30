@@ -1,5 +1,7 @@
 """Regressões da contração da materialização no pipeline de mercado."""
 import ast
+import inspect
+from dataclasses import asdict
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -110,12 +112,12 @@ async def test_pipeline_sincroniza_eventos_sem_materializar_direitos() -> None:
             sync_prices=False,
             sync_logo=False,
             sync_events=True,
-            materialize=True,
             commit=True,
         )
 
     run_backfill.assert_awaited_once_with(db, "PETR4", AssetType.ACAO)
     assert result.events_synced is True
-    assert result.materialized == 0
-    assert "materialization_disabled" in result.skipped_steps
+    assert "materialize" not in inspect.signature(sync_asset_market_data).parameters
+    assert "materialized" not in asdict(result)
+    assert all("materializ" not in step for step in result.skipped_steps)
     db.commit.assert_awaited_once()

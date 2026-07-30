@@ -51,7 +51,6 @@ class AssetMarketPipelineResult:
     prices_inserted: int = 0
     logo_updated: bool = False
     events_synced: bool = False
-    materialized: int = 0
     skipped_steps: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
@@ -202,7 +201,6 @@ async def sync_asset_market_data(
     sync_prices: bool = True,
     sync_logo: bool = True,
     sync_events: bool = True,
-    materialize: bool = True,
     commit: bool = True,
 ) -> AssetMarketPipelineResult:
     """Executa o pipeline único de mercado para um ativo."""
@@ -243,11 +241,6 @@ async def sync_asset_market_data(
             else:
                 result.skipped_steps.append("events")
 
-            if materialize:
-                result.skipped_steps.append("materialization_disabled")
-            else:
-                result.skipped_steps.append("materialize")
-
         if commit:
             await db.commit()
         else:
@@ -259,7 +252,7 @@ async def sync_asset_market_data(
         raise
 
     logger.info(
-        "[market_pipeline] %s/%s ok: created=%s updated=%s prices=%s logo=%s events=%s materialized=%s skipped=%s",
+        "[market_pipeline] %s/%s ok: created=%s updated=%s prices=%s logo=%s events=%s skipped=%s",
         result.ticker,
         result.asset_type,
         result.asset_created,
@@ -267,7 +260,6 @@ async def sync_asset_market_data(
         result.prices_inserted,
         result.logo_updated,
         result.events_synced,
-        result.materialized,
         result.skipped_steps,
     )
     return result

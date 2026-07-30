@@ -5,6 +5,15 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — contrato inerte de materialização no pipeline por ativo (30/07/2026)
+
+- `sync_asset_market_data` não aceita mais o argumento legado `materialize`.
+- `AssetMarketPipelineResult`, os marcadores de etapas ignoradas e o log final
+  não anunciam mais materialização por carteira.
+- A sincronização de eventos globais em `asset_dividends` permanece inalterada;
+  materializador legado, seed pré-produção v1, schema, dados e execução
+  operacional ficaram fora deste bloco.
+
 ### Removido — resultado diário sem compatibilidade de materialização (30/07/2026)
 
 - `ProventosDailySyncResult` e o log final da sincronização diária não expõem
@@ -64,9 +73,9 @@ Formato baseado em Keep a Changelog.
 
 - O pipeline por ativo preserva a coleta global em `asset_dividends`, mas não
   cria nem atualiza direitos por carteira em `dividends`.
-- O argumento `materialize` e o campo de resultado `materialized` permanecem
-  temporariamente compatíveis; pedidos de materialização são registrados como
-  `materialization_disabled` e o total permanece zero.
+- O argumento `materialize`, o campo de resultado `materialized` e os marcadores
+  artificiais de etapa foram removidos em bloco posterior, após a contração dos
+  callers.
 - Nenhum caller, endpoint, schema, dado, migration ou execução operacional foi
   alterado.
 
