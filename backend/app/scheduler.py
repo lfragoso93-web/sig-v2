@@ -1,22 +1,19 @@
 import logging
-from datetime import date
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
-from sqlalchemy import select, update
+from sqlalchemy import select
 
 from app.core.database import AsyncSessionLocal
 from app.core.cache import cache_set
 from app.integrations.brapi import get_quotes_bulk
 from app.models.asset import Asset, AssetType
-from app.models.dividend import Dividend, DividendStatus
 from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction
 from app.services.corporate_event_service import (
     sync_corporate_events_for_asset, apply_pending_events
 )
-from app.services.dividend_backfill_service import backfill_dividends
 from app.services.quotes_service import update_all_quotes
 from app.services.portfolio_snapshot_service import refresh_today_snapshot
 
@@ -43,26 +40,6 @@ async def _get_active_brapi_assets() -> list[Asset]:
             .distinct()
         )
         return result.scalars().all()
-
-
-async def _get_active_portfolio_tickers() -> list[tuple[int, str, str]]:
-    skip = {AssetType.CRIPTO.value, AssetType.TESOURO_DIRETO.value, AssetType.RENDA_FIXA.value}
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(
-            select(
-                Transaction.portfolio_id,
-                Transaction.ticker,
-                Transaction.asset_type,
-            )
-            .distinct()
-        )
-        rows = result.all()
-
-    return [
-        (r.portfolio_id, r.ticker, r.asset_type)
-        for r in rows
-        if r.asset_type not in skip and r.ticker
-    ]
 
 
 async def _get_active_portfolio_ids() -> list[int]:
@@ -188,59 +165,6 @@ async def job_sync_corporate_events():
     logger.info("[Scheduler] %d novos eventos, %d aplicados nas carteiras.", new_total, applied)
 
 
-async def job_sync_dividends():
-    """Resync semanal de proventos. Falha por (portfolio, ticker) e isolada."""
-    logger.info("[Scheduler] Resync semanal de proventos iniciado...")
-    try:
-        portfolio_tickers = await _get_active_portfolio_tickers()
-    except Exception as e:
-        logger.error("[Scheduler] job_sync_dividends: erro ao listar tickers: %s", e)
-        return
-
-    total_processed = 0
-    errors = 0
-    for portfolio_id, ticker, asset_type in portfolio_tickers:
-        try:
-            async with AsyncSessionLocal() as db:
-                await backfill_dividends(
-                    db=db,
-                    portfolio_id=portfolio_id,
-                    ticker=ticker,
-                    asset_type=asset_type,
-                )
-            total_processed += 1
-        except Exception as e:
-            errors += 1
-            logger.error("[Scheduler] Erro resync proventos %s: %s", ticker, e)
-
-    logger.info(
-        "[Scheduler] Resync semanal concluido: %d ok, %d erros.",
-        total_processed, errors
-    )
-
-
-async def job_update_dividend_status():
-    """Marca proventos cujo payment_date ja passou como RECEBIDO."""
-    today = date.today()
-    logger.info("[Scheduler] Atualizando status de proventos para RECEBIDO...")
-    try:
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(
-                update(Dividend)
-                .where(
-                    Dividend.status == DividendStatus.A_RECEBER,
-                    Dividend.payment_date <= today,
-                    Dividend.payment_date.isnot(None),
-                )
-                .values(status=DividendStatus.RECEBIDO)
-            )
-            await db.commit()
-            updated = result.rowcount
-        logger.info("[Scheduler] %d proventos marcados como RECEBIDO.", updated)
-    except Exception as e:
-        logger.error("[Scheduler] job_update_dividend_status: erro: %s", e)
-
-
 async def job_seed_assets():
     """
     Seed semanal de ativos da B3 via BRAPI /v2/tickers.
@@ -264,7 +188,7 @@ async def job_sync_fii_dividends():
     Sync semanal de dividendos de FIIs via BRAPI /v2/funds/dividends.
 
     Roda todo sabado as 6h BRT em modo incremental (cursor de 30 dias de overlap).
-    Complementar ao job_sync_dividends (domingo 2h) que trata acoes/ETFs/BDRs.
+    Persiste somente o catálogo global de eventos de FIIs.
     Falha isolada — nao afeta outros jobs.
     """
     logger.info("[Scheduler] job_sync_fii_dividends: iniciando sync de dividendos FII...")
@@ -312,18 +236,6 @@ def init_scheduler():
         replace_existing=True,
     )
     scheduler.add_job(
-        job_sync_dividends,
-        CronTrigger(day_of_week="sun", hour=2, minute=0, timezone="America/Sao_Paulo"),
-        id="sync_dividends",
-        replace_existing=True,
-    )
-    scheduler.add_job(
-        job_update_dividend_status,
-        CronTrigger(hour=8, minute=0, timezone="America/Sao_Paulo"),
-        id="update_dividend_status",
-        replace_existing=True,
-    )
-    scheduler.add_job(
         job_seed_assets,
         CronTrigger(day_of_week="mon", hour=3, minute=0, timezone="America/Sao_Paulo"),
         id="seed_assets",
@@ -337,4 +249,4 @@ def init_scheduler():
         replace_existing=True,
     )
     scheduler.start()
-    logger.info("[Scheduler] 8 jobs registrados e scheduler iniciado.")
+    logger.info("[Scheduler] 6 jobs registrados e scheduler iniciado.")

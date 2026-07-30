@@ -5,6 +5,17 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — portas de materialização do scheduler legado (30/07/2026)
+
+- O scheduler legado não importa nem chama mais o backfill por carteira e não
+  atualiza o status persistido em `dividends`.
+- O job de FIIs permanece coletando exclusivamente o catálogo global; preços,
+  logos, eventos corporativos e as demais cadências não foram alterados.
+- Regressão AST impede que o scheduler volte a importar ou chamar o
+  materializador legado.
+- Materializador legado, seed pré-produção v1, schema, dados e execução
+  operacional permanecem fora deste bloco.
+
 ### Removido — contrato inerte de materialização no pipeline por ativo (30/07/2026)
 
 - `sync_asset_market_data` não aceita mais o argumento legado `materialize`.
