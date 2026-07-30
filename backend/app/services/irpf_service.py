@@ -28,8 +28,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.irpf import IRPFReport
 from app.models.transaction import Transaction, OperationType
-from app.models.dividend import Dividend, DividendStatus
-from app.models.asset_dividend import AssetDividend
+from app.services.canonical_dividend_entitlement import EntitlementReason
+from app.services.canonical_dividend_entitlement_reader import (
+    load_portfolio_dividend_entitlements,
+)
 from app.schemas.irpf import (
     BemDireito,
     VendaMensal,
@@ -372,43 +374,43 @@ async def calc_rendimentos(
     portfolio_id: int,
     year: int,
 ) -> tuple[list[RendimentoIsento], list[JCPItem]]:
-    """
-    Retorna (dividendos_isentos, jcp_items) para o ano.
-    Usa tabela Dividend + AssetDividend para busca eficiente.
-    """
+    """Return exempt dividends and JCP from canonical BRL entitlements."""
     start = date(year, 1, 1)
     end = date(year, 12, 31)
-
-    div_result = await db.execute(
-        select(Dividend, AssetDividend)
-        .join(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
-        .where(
-            Dividend.portfolio_id == portfolio_id,
-            Dividend.status == DividendStatus.RECEBIDO,
-            AssetDividend.payment_date >= start,
-            AssetDividend.payment_date <= end,
-        )
+    entitlements = await load_portfolio_dividend_entitlements(
+        db,
+        portfolio_id,
     )
-    rows = div_result.all()
 
     dividendos: dict[str, dict] = {}
     jcp: dict[str, dict] = {}
 
-    for div, asset_div in rows:
-        ticker = asset_div.ticker
-        div_type = str(asset_div.dividend_type or "").upper()
-        valor = float(div.total_value or 0)
+    for item in entitlements:
+        payment_date = item.event.payment_date
+        if (
+            item.entitlement.reason is not EntitlementReason.ELIGIBLE
+            or item.entitlement.currency != "BRL"
+            or payment_date is None
+            or not start <= payment_date <= end
+        ):
+            continue
 
-        if "JCP" in div_type:
-            if ticker not in jcp:
-                jcp[ticker] = {"bruto": 0.0, "count": 0}
-            jcp[ticker]["bruto"] += valor
-            jcp[ticker]["count"] += 1
+        ticker = item.ticker
+        if item.event.event_type.upper() == "JCP":
+            values = jcp.setdefault(
+                ticker,
+                {"bruto": 0.0, "retido": 0.0, "liquido": 0.0},
+            )
+            values["bruto"] += float(item.entitlement.gross_amount)
+            values["retido"] += float(item.entitlement.withholding_tax)
+            values["liquido"] += float(item.entitlement.net_amount)
         else:
-            if ticker not in dividendos:
-                dividendos[ticker] = {"total": 0.0, "count": 0, "asset_type": ""}
-            dividendos[ticker]["total"] += valor
-            dividendos[ticker]["count"] += 1
+            values = dividendos.setdefault(
+                ticker,
+                {"total": 0.0, "count": 0, "asset_type": item.asset_type},
+            )
+            values["total"] += float(item.entitlement.net_amount)
+            values["count"] += 1
 
     div_list = [
         RendimentoIsento(
@@ -424,8 +426,8 @@ async def calc_rendimentos(
         JCPItem(
             ticker=t,
             total_bruto=round(v["bruto"], 2),
-            ir_retido=round(v["bruto"] * 0.15, 2),
-            total_liquido=round(v["bruto"] * 0.85, 2),
+            ir_retido=round(v["retido"], 2),
+            total_liquido=round(v["liquido"], 2),
         )
         for t, v in sorted(jcp.items())
     ]

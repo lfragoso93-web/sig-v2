@@ -15,13 +15,18 @@ Projeção de data:
 from __future__ import annotations
 
 from typing import Optional
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from decimal import Decimal
 from dateutil.relativedelta import relativedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.models.goal import Goal
 from app.schemas.goal import GoalCreate, GoalUpdate
+from app.services.canonical_dividend_entitlement import EntitlementReason
+from app.services.canonical_dividend_entitlement_reader import (
+    load_portfolio_dividend_entitlements,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -92,19 +97,25 @@ async def _get_patrimonio_atual(db: AsyncSession, portfolio_id: int) -> float:
 
 
 async def _get_proventos_mensais(db: AsyncSession, portfolio_id: int) -> float:
-    """Média mensal de proventos dos últimos 12 meses."""
-    from app.models.dividend import Dividend
-    from sqlalchemy import func
-    cutoff = datetime.now(timezone.utc).replace(tzinfo=None)
-    cutoff_12m = cutoff.replace(year=cutoff.year - 1)
-    result = await db.execute(
-        select(func.sum(Dividend.value)).where(
-            Dividend.portfolio_id == portfolio_id,
-            Dividend.payment_date >= cutoff_12m,
-        )
+    """Return average monthly net BRL entitlements paid in the last 12 months."""
+    today = date.today()
+    cutoff_12m = today + relativedelta(months=-12)
+    entitlements = await load_portfolio_dividend_entitlements(
+        db,
+        portfolio_id,
     )
-    total_12m = result.scalar() or 0.0
-    return round(total_12m / 12, 2)
+    total_12m = sum(
+        (
+            item.entitlement.net_amount
+            for item in entitlements
+            if item.entitlement.reason is EntitlementReason.ELIGIBLE
+            and item.entitlement.currency == "BRL"
+            and item.event.payment_date is not None
+            and cutoff_12m <= item.event.payment_date <= today
+        ),
+        Decimal("0"),
+    )
+    return round(float(total_12m / Decimal("12")), 2)
 
 
 async def _get_rentabilidade_atual(db: AsyncSession, portfolio_id: int) -> float:

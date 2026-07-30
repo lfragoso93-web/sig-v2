@@ -5,6 +5,15 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — IRPF e Metas com direitos canônicos (30/07/2026)
+
+- IRPF e Metas de Proventos deixaram de consultar `dividends` e passaram a
+  derivar rendimentos de direitos canônicos elegíveis, monetários em BRL e
+  efetivamente pagos.
+- O relatório de IRPF preserva os valores canônicos bruto, retido e líquido de
+  JCP; a meta de renda mensal usa o líquido dos últimos 12 meses.
+- Nenhum contrato HTTP, schema, dado ou pipeline operacional foi alterado.
+
 ### Alterado — Snapshots e TWR com direitos canônicos (30/07/2026)
 
 - TWR consolidado, TWR por classe e valuation canônico deixaram de consultar `dividends`; os fluxos de caixa agora são derivados de `asset_dividends` e `transactions`.

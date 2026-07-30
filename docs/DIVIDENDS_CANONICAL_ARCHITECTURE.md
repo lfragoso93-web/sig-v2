@@ -216,6 +216,23 @@ diretamente de `asset_dividends` e do histórico de `transactions`:
 Contratos HTTP, schema, dados persistidos e entradas operacionais não foram
 alterados. As execuções de Proventos permanecem suspensas.
 
+#### IRPF e Metas
+
+Os rendimentos do relatório de IRPF e a renda mensal das metas de Proventos
+passaram a usar os direitos canônicos:
+
+- IRPF considera apenas direitos elegíveis, monetários em BRL e pagos dentro do
+  ano-calendário;
+- dividendos e rendimentos usam o valor líquido canônico, enquanto JCP preserva
+  separadamente bruto, retenção e líquido calculados pelo núcleo;
+- Metas calcula a média mensal sobre o valor líquido pago nos últimos 12 meses,
+  sem fallback para eventos futuros, ambíguos ou em outra moeda;
+- nenhum dos dois consumidores consulta ou grava `dividends`.
+
+As referências restantes à tabela legada pertencem a portas de escrita/CRUD,
+auditoria, inspeção e helpers de compatibilidade. A contração desses caminhos
+será feita em blocos separados.
+
 ### Bloco 5 — contração do legado
 
 - Confirmar zero consumidores e zero portas de escrita.

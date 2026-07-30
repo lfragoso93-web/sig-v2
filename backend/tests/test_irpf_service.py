@@ -1,6 +1,7 @@
 import pytest
 from datetime import date
-from unittest.mock import AsyncMock, MagicMock
+from decimal import Decimal
+from unittest.mock import AsyncMock, MagicMock, patch
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.irpf_service import (
@@ -11,7 +12,14 @@ from app.services.irpf_service import (
     generate_irpf_csv,
 )
 from app.models.transaction import OperationType
-from app.models.dividend import DividendStatus
+from app.services.canonical_dividend_entitlement import (
+    DividendEntitlement,
+    DividendEvent,
+    EntitlementReason,
+)
+from app.services.canonical_dividend_entitlement_reader import (
+    PortfolioDividendEntitlement,
+)
 
 
 @pytest.mark.asyncio
@@ -136,15 +144,124 @@ async def test_calc_ganhos_capital_simple_sell():
 @pytest.mark.asyncio
 async def test_calc_rendimentos_no_dividends():
     db = AsyncMock(spec=AsyncSession)
-    
-    result = MagicMock()
-    result.scalars().all.return_value = []
-    db.execute.return_value = result
-    
-    dividendos, jcp = await calc_rendimentos(db, portfolio_id=1, year=2024)
-    
-    assert dividendos == []
-    assert jcp == []
+    with patch(
+        "app.services.irpf_service.load_portfolio_dividend_entitlements",
+        new=AsyncMock(return_value=[]),
+    ):
+        dividendos, jcp = await calc_rendimentos(db, portfolio_id=1, year=2024)
+
+    assert (dividendos, jcp) == ([], [])
+
+
+def _entitlement(
+    *,
+    event_id: int,
+    ticker: str,
+    event_type: str,
+    payment_date: date | None,
+    gross: str,
+    tax: str = "0",
+    currency: str = "BRL",
+    reason: EntitlementReason = EntitlementReason.ELIGIBLE,
+) -> PortfolioDividendEntitlement:
+    gross_amount = Decimal(gross)
+    withholding_tax = Decimal(tax)
+    event = DividendEvent(
+        event_id=event_id,
+        record_date=date(2024, 4, 1),
+        ex_date=date(2024, 4, 2),
+        payment_date=payment_date,
+        event_type=event_type,
+        value_per_unit=Decimal("1"),
+        currency=currency,
+    )
+    right = DividendEntitlement(
+        event_id=event_id,
+        reason=reason,
+        entitlement_date=event.record_date,
+        eligible_quantity=Decimal("100"),
+        gross_amount=gross_amount,
+        withholding_tax=withholding_tax,
+        net_amount=gross_amount - withholding_tax,
+        currency=currency,
+    )
+    return PortfolioDividendEntitlement(
+        ticker=ticker,
+        asset_type="ACAO",
+        event=event,
+        entitlement=right,
+        approved_on=None,
+        gross_value_per_unit=None,
+        factor=None,
+        complete_factor=None,
+        isin_code=None,
+        asset_issued=None,
+        related_to=None,
+        remarks=None,
+    )
+
+
+@pytest.mark.asyncio
+async def test_calc_rendimentos_uses_canonical_net_values():
+    db = AsyncMock(spec=AsyncSession)
+    rights = [
+        _entitlement(
+            event_id=1,
+            ticker="VALE3",
+            event_type="DIVIDENDO",
+            payment_date=date(2024, 5, 10),
+            gross="100",
+        ),
+        _entitlement(
+            event_id=2,
+            ticker="PETR4",
+            event_type="JCP",
+            payment_date=date(2024, 6, 10),
+            gross="200",
+            tax="30",
+        ),
+    ]
+    with patch(
+        "app.services.irpf_service.load_portfolio_dividend_entitlements",
+        new=AsyncMock(return_value=rights),
+    ):
+        dividendos, jcp = await calc_rendimentos(db, 1, 2024)
+
+    assert dividendos[0].ticker == "VALE3"
+    assert dividendos[0].total_recebido == 100
+    assert dividendos[0].asset_type == "ACAO"
+    assert jcp[0].total_bruto == 200
+    assert jcp[0].ir_retido == 30
+    assert jcp[0].total_liquido == 170
+
+
+@pytest.mark.asyncio
+async def test_calc_rendimentos_excludes_non_brl_and_unpaid_rights():
+    db = AsyncMock(spec=AsyncSession)
+    rights = [
+        _entitlement(
+            event_id=1,
+            ticker="AAPL",
+            event_type="DIVIDENDO",
+            payment_date=date(2024, 5, 10),
+            gross="100",
+            currency="USD",
+        ),
+        _entitlement(
+            event_id=2,
+            ticker="VALE3",
+            event_type="DIVIDENDO",
+            payment_date=None,
+            gross="100",
+        ),
+    ]
+    with patch(
+        "app.services.irpf_service.load_portfolio_dividend_entitlements",
+        new=AsyncMock(return_value=rights),
+    ):
+        dividendos, jcp = await calc_rendimentos(db, 1, 2024)
+
+    assert (dividendos, jcp) == ([], [])
 
 
 @pytest.mark.asyncio
