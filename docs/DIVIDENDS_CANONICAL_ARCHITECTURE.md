@@ -61,6 +61,9 @@ possuir o ativo hoje não cria direito retroativo.
 - Classificar cada consumidor por Proventos, Resumo, Patrimônio,
   Rentabilidade, snapshots, IRPF e APIs.
 - Desativar rotas e integrações legadas incompatíveis sem remover dados.
+- `POST /api/v1/sync/proventos/{portfolio_id}` e a integração
+  `brapi_dividends.py` foram removidos por violarem a separação entre coleta
+  global e consulta de carteira.
 
 ### Bloco 3 — serviço canônico de direitos
 

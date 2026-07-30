@@ -53,3 +53,13 @@ def test_openapi_schema_does_not_expose_provider_names() -> None:
 
     assert isinstance(schema, dict)
     _assert_no_provider_terms(schema)
+
+
+def test_legacy_portfolio_dividends_sync_route_is_not_exposed() -> None:
+    paths = {
+        route.path
+        for route in app.routes
+        if hasattr(route, "path")
+    }
+
+    assert "/api/v1/sync/proventos/{portfolio_id}" not in paths

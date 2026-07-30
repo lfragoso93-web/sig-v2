@@ -5,6 +5,11 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — sincronização legada de Proventos por carteira (30/07/2026)
+
+- Removida a rota incompatível `POST /api/v1/sync/proventos/{portfolio_id}` e sua integração síncrona legada, que consultavam provedor externo por carteira e gravavam diretamente em `dividends`.
+- Adicionado teste de contrato para impedir a reexposição dessa porta de escrita; nenhum schema ou dado foi removido.
+
 ### Alterado — arquitetura canônica de Proventos (30/07/2026)
 
 - Formalizado que todo evento de provento pertence ao ativo e que `asset_dividends` será a única fonte canônica global.
