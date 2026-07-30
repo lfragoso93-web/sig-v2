@@ -4,10 +4,8 @@ from types import SimpleNamespace
 from typing import cast
 
 from app.models.asset import AssetType
-from app.models.dividend import Dividend, DividendStatus
 from app.models.transaction import OperationType, Transaction
 from app.services.portfolio_snapshot_twr_service import (
-    build_dividend_totals,
     build_open_quote_requirements,
     calculate_transaction_components,
 )
@@ -36,28 +34,6 @@ def _tx(
             asset_type=asset_type,
             fx_rate=None,
             notes=notes,
-        ),
-    )
-
-
-def _dividend(
-    *,
-    payment_date: date | None,
-    value: float,
-    status: DividendStatus = DividendStatus.RECEBIDO,
-    dividend_type: str = "DIVIDENDO",
-    legacy_payment_date: date | None = None,
-) -> Dividend:
-    return cast(
-        Dividend,
-        SimpleNamespace(
-            status=status,
-            dividend_type=dividend_type,
-            payment_date=payment_date,
-            date_pagamento=legacy_payment_date,
-            net_value=Decimal(str(value)),
-            total_received=None,
-            total_value=None,
         ),
     )
 
@@ -228,27 +204,3 @@ def test_future_transactions_do_not_enter_quote_requirements() -> None:
     )
 
     assert requirements == []
-
-
-def test_dividends_use_payment_date_and_ignore_non_cash_events() -> None:
-    first_date = date(2026, 1, 10)
-    second_date = date(2026, 2, 10)
-
-    by_day, accumulated = build_dividend_totals(
-        [
-            _dividend(payment_date=first_date, value=10),
-            _dividend(payment_date=None, legacy_payment_date=first_date, value=5),
-            _dividend(payment_date=second_date, value=20, dividend_type="JCP"),
-            _dividend(payment_date=second_date, value=999, dividend_type="BONIFICACAO"),
-            _dividend(
-                payment_date=second_date,
-                value=999,
-                status=DividendStatus.CANCELADO,
-            ),
-        ]
-    )
-
-    assert by_day[first_date] == Decimal("15.00")
-    assert by_day[second_date] == Decimal("20.00")
-    assert accumulated[first_date] == Decimal("15.00")
-    assert accumulated[second_date] == Decimal("35.00")

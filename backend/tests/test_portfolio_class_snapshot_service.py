@@ -3,7 +3,14 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 from app.models.asset import AssetType
-from app.models.dividend import DividendStatus
+from app.services.canonical_dividend_entitlement import (
+    DividendEntitlement,
+    DividendEvent,
+    EntitlementReason,
+)
+from app.services.canonical_dividend_entitlement_reader import (
+    PortfolioDividendEntitlement,
+)
 from app.services.portfolio_class_reconciliation_service import _check
 from app.services.portfolio_class_snapshot_read_service import class_snapshot_payload
 from app.services.portfolio_class_snapshot_service import (
@@ -43,46 +50,65 @@ def test_non_business_dates_move_to_next_close() -> None:
 
 
 def test_received_dividends_are_grouped_by_class_and_effective_close() -> None:
-    dividends = [
-        SimpleNamespace(
-            ticker="ABCD3",
-            status=DividendStatus.RECEBIDO,
-            dividend_type="DIVIDENDO",
-            payment_date=date(2026, 7, 18),
-            date_pagamento=None,
-            net_value=Decimal("12.34"),
-            total_received=None,
-            total_value=Decimal("13.00"),
-        ),
-        SimpleNamespace(
-            ticker="FUND11",
-            status=DividendStatus.RECEBIDO,
-            dividend_type="RENDIMENTO",
-            payment_date=date(2026, 7, 20),
-            date_pagamento=None,
-            net_value=Decimal("5.00"),
-            total_received=None,
-            total_value=Decimal("5.00"),
-        ),
-        SimpleNamespace(
-            ticker="ABCD3",
-            status="A_RECEBER",
-            dividend_type="DIVIDENDO",
-            payment_date=date(2026, 7, 20),
-            date_pagamento=None,
-            net_value=Decimal("99.00"),
-            total_received=None,
-            total_value=Decimal("99.00"),
+    entitlements = [
+        _entitlement("ABCD3", "ACAO", date(2026, 7, 18), "12.34"),
+        _entitlement("FUND11", "FII", date(2026, 7, 20), "5.00"),
+        _entitlement(
+            "ABCD3",
+            "ACAO",
+            date(2026, 7, 20),
+            "99.00",
+            reason=EntitlementReason.NO_POSITION,
         ),
     ]
 
-    grouped = _group_received_dividends(
-        dividends,
-        {"ABCD3": AssetType.ACAO, "FUND11": AssetType.FII},
-    )
+    grouped = _group_received_dividends(entitlements)
 
     assert grouped[(AssetType.ACAO, date(2026, 7, 20))] == Decimal("12.34")
     assert grouped[(AssetType.FII, date(2026, 7, 20))] == Decimal("5.00")
+
+
+def _entitlement(
+    ticker: str,
+    asset_type: str,
+    payment_date: date,
+    amount: str,
+    *,
+    reason: EntitlementReason = EntitlementReason.ELIGIBLE,
+) -> PortfolioDividendEntitlement:
+    event = DividendEvent(
+        event_id=1,
+        record_date=date(2026, 7, 1),
+        ex_date=date(2026, 7, 2),
+        payment_date=payment_date,
+        event_type="DIVIDENDO",
+        value_per_unit=Decimal("1"),
+        currency="BRL",
+    )
+    right = DividendEntitlement(
+        event_id=1,
+        reason=reason,
+        entitlement_date=event.record_date,
+        eligible_quantity=Decimal("1"),
+        gross_amount=Decimal(amount),
+        withholding_tax=Decimal("0"),
+        net_amount=Decimal(amount),
+        currency="BRL",
+    )
+    return PortfolioDividendEntitlement(
+        ticker=ticker,
+        asset_type=asset_type,
+        event=event,
+        entitlement=right,
+        approved_on=None,
+        gross_value_per_unit=None,
+        factor=None,
+        complete_factor=None,
+        isin_code=None,
+        asset_issued=None,
+        related_to=None,
+        remarks=None,
+    )
 
 
 def test_class_snapshot_payload_exposes_quality_and_twr() -> None:

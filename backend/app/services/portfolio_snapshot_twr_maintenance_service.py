@@ -12,7 +12,12 @@ from app.models.portfolio import Portfolio
 from app.models.portfolio_class_snapshot import PortfolioClassSnapshot
 from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.transaction import Transaction
-from app.services.dividend_aggregation_service import sum_received_dividends
+from app.services.canonical_dividend_aggregation_service import (
+    aggregate_received_entitlements,
+)
+from app.services.canonical_dividend_entitlement_reader import (
+    load_portfolio_dividend_entitlements,
+)
 from app.services.portfolio_class_snapshot_service import (
     SUPPORTED_CLASS_TWR_TYPES,
     rebuild_class_snapshots,
@@ -93,8 +98,9 @@ async def _portfolio_needs_twr_rebuild(db: AsyncSession, portfolio_id: int) -> b
     if latest is None:
         return True
 
-    canonical_dividends = Decimal(
-        str(await sum_received_dividends(db, portfolio_id, as_of=latest.snapshot_date))
+    canonical_dividends = aggregate_received_entitlements(
+        await load_portfolio_dividend_entitlements(db, portfolio_id),
+        as_of=latest.snapshot_date,
     )
     snapshot_dividends = _decimal(latest.dividends_accumulated)
     if abs(snapshot_dividends - canonical_dividends) > _MONEY_TOLERANCE:

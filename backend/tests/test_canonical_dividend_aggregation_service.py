@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from app.services.canonical_dividend_aggregation_service import (
     aggregate_received_entitlements,
+    group_received_entitlements_by_day,
 )
 from app.services.canonical_dividend_entitlement import (
     DividendEntitlement,
@@ -19,6 +20,7 @@ def _item(
     *,
     payment_date: date | None,
     net_amount: str,
+    asset_type: str = "ACAO",
     reason: EntitlementReason = EntitlementReason.ELIGIBLE,
     currency: str = "BRL",
 ) -> PortfolioDividendEntitlement:
@@ -43,7 +45,7 @@ def _item(
     )
     return PortfolioDividendEntitlement(
         ticker=ticker,
-        asset_type="ACAO",
+        asset_type=asset_type,
         event=event,
         entitlement=entitlement,
         approved_on=None,
@@ -109,3 +111,38 @@ def test_aggregate_filters_tickers_without_mixing_assets() -> None:
     )
 
     assert total == Decimal("10.13")
+
+
+def test_snapshot_projection_moves_weekend_payment_and_accumulates() -> None:
+    items = [
+        _item("PETR4", payment_date=date(2026, 7, 18), net_amount="10.125"),
+        _item("VALE3", payment_date=date(2026, 7, 20), net_amount="20"),
+        _item(
+            "AAPL",
+            payment_date=date(2026, 7, 20),
+            net_amount="30",
+            currency="USD",
+        ),
+    ]
+
+    by_day, accumulated = group_received_entitlements_by_day(items)
+
+    assert by_day == {date(2026, 7, 20): Decimal("30.13")}
+    assert accumulated == {date(2026, 7, 20): Decimal("30.13")}
+
+
+def test_snapshot_projection_filters_asset_type() -> None:
+    stock = _item("PETR4", payment_date=date(2026, 7, 20), net_amount="10")
+    fii = _item(
+        "FUND11",
+        payment_date=date(2026, 7, 20),
+        net_amount="5",
+        asset_type="FII",
+    )
+
+    by_day, _ = group_received_entitlements_by_day(
+        [stock, fii],
+        asset_types=("FII",),
+    )
+
+    assert by_day == {date(2026, 7, 20): Decimal("5.00")}

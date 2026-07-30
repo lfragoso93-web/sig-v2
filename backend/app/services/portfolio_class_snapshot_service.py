@@ -14,18 +14,19 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Iterable
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import AssetType
-from app.models.dividend import Dividend
 from app.models.portfolio_class_snapshot import PortfolioClassSnapshot
 from app.models.transaction import OperationType, Transaction
-from app.services.dividend_aggregation_service import (
-    is_received_cash_dividend,
-    received_dividend_date,
-    received_dividend_value,
+from app.services.canonical_dividend_aggregation_service import (
+    group_received_entitlements_by_day,
+)
+from app.services.canonical_dividend_entitlement_reader import (
+    PortfolioDividendEntitlement,
+    load_portfolio_dividend_entitlements,
 )
 from app.services.fx_service import get_usd_brl_at_date
 from app.services.price_history_service import get_prices_at_date_batch
@@ -115,21 +116,20 @@ def class_twr_availability(asset_types: Iterable[AssetType]) -> list[dict]:
 
 
 def _group_received_dividends(
-    dividends: Iterable[Dividend],
-    ticker_types: dict[str, AssetType],
+    entitlements: Iterable[PortfolioDividendEntitlement],
 ) -> dict[tuple[AssetType, date], Decimal]:
-    totals: dict[tuple[AssetType, date], Decimal] = defaultdict(lambda: _ZERO)
-    for dividend in dividends:
-        if not is_received_cash_dividend(dividend):
-            continue
-        ticker = str(dividend.ticker or "").upper()
-        asset_type = ticker_types.get(ticker)
-        payment_date = received_dividend_date(dividend)
-        if asset_type not in SUPPORTED_CLASS_TWR_TYPES or payment_date is None:
-            continue
-        effective_date = _next_business_date(payment_date)
-        totals[(asset_type, effective_date)] += received_dividend_value(dividend)
-    return {key: value.quantize(_MONEY) for key, value in totals.items()}
+    totals: dict[tuple[AssetType, date], Decimal] = {}
+    items = list(entitlements)
+    for asset_type in SUPPORTED_CLASS_TWR_TYPES:
+        by_day, _ = group_received_entitlements_by_day(
+            items,
+            asset_types=(asset_type.value,),
+        )
+        totals.update(
+            ((asset_type, payment_date), value)
+            for payment_date, value in by_day.items()
+        )
+    return totals
 
 
 def _operation_brl(transaction: Transaction) -> tuple[Decimal, Decimal, Decimal]:
@@ -183,14 +183,11 @@ async def rebuild_class_snapshots(
     if not transactions:
         return 0
 
-    asset_types_by_ticker: dict[str, AssetType] = {}
     portfolio_types: set[AssetType] = set()
     for transaction in transactions:
         parsed = _asset_type(transaction.asset_type)
         if parsed is None:
             continue
-        ticker = str(transaction.ticker).upper()
-        asset_types_by_ticker[ticker] = parsed
         portfolio_types.add(parsed)
 
     supported_transactions = [
@@ -208,14 +205,8 @@ async def rebuild_class_snapshots(
             days_back,
         )
 
-    dividend_result = await db.execute(
-        select(Dividend)
-        .where(Dividend.portfolio_id == portfolio_id)
-        .order_by(func.coalesce(Dividend.payment_date, Dividend.date_pagamento), Dividend.id)
-    )
     dividends_by_class_day = _group_received_dividends(
-        dividend_result.scalars().all(),
-        asset_types_by_ticker,
+        await load_portfolio_dividend_entitlements(db, portfolio_id),
     )
 
     start = _next_business_date(supported_transactions[0].date)

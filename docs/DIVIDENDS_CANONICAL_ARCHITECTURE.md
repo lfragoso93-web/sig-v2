@@ -198,6 +198,24 @@ agregador canônico:
 A tabela e o agregador legados continuam disponíveis exclusivamente para os
 consumidores ainda não migrados.
 
+#### Snapshots e TWR
+
+Os rebuilds consolidado, canônico e por classe passaram a carregar direitos
+diretamente de `asset_dividends` e do histórico de `transactions`:
+
+- somente direitos elegíveis, monetários em BRL e com pagamento conhecido
+  participam do fluxo de caixa;
+- pagamentos em dias não úteis são reconhecidos no primeiro fechamento útil
+  subsequente;
+- o acumulado e o valor diário usam a mesma projeção temporal;
+- o gate automático de manutenção compara o snapshot com a mesma fonte
+  canônica, evitando reconstruções cíclicas;
+- `dividends` permanece intacta para consumidores ainda não migrados, mas não
+  participa mais de snapshots ou TWR.
+
+Contratos HTTP, schema, dados persistidos e entradas operacionais não foram
+alterados. As execuções de Proventos permanecem suspensas.
+
 ### Bloco 5 — contração do legado
 
 - Confirmar zero consumidores e zero portas de escrita.
