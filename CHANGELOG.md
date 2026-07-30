@@ -5,6 +5,16 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — pipeline de mercado sem materialização de Proventos (30/07/2026)
+
+- O pipeline por ativo preserva a coleta global em `asset_dividends`, mas não
+  cria nem atualiza direitos por carteira em `dividends`.
+- O argumento `materialize` e o campo de resultado `materialized` permanecem
+  temporariamente compatíveis; pedidos de materialização são registrados como
+  `materialization_disabled` e o total permanece zero.
+- Nenhum caller, endpoint, schema, dado, migration ou execução operacional foi
+  alterado.
+
 ### Alterado — scheduler diário sem materialização de Proventos (30/07/2026)
 
 - A sincronização diária preserva a coleta global em `asset_dividends`, o

@@ -31,7 +31,7 @@ from app.core.asset_types import INTL_TYPES, NO_QUOTE_TYPES
 from app.integrations.brapi import fetch_fii_historical_v2, fetch_price_history_full, fetch_stocks_historical_v2
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
-from app.services.dividend_backfill_service import materialize_asset_dividends, run_backfill
+from app.services.dividend_backfill_service import run_backfill
 from app.services.logo_service import fetch_logo_url
 from app.services.price_history_service import persist_daily_prices
 
@@ -244,10 +244,10 @@ async def sync_asset_market_data(
             else:
                 result.skipped_steps.append("events")
 
-            if materialize and at in _EVENT_TYPES:
-                result.materialized = await materialize_asset_dividends(db=db, tickers=[t], commit=False)
-            elif materialize:
-                result.skipped_steps.append("materialize_not_supported_for_type")
+            if materialize:
+                result.skipped_steps.append("materialization_disabled")
+            else:
+                result.skipped_steps.append("materialize")
 
         if commit:
             await db.commit()
