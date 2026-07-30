@@ -5,6 +5,16 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — rebuild completo sem métrica legada de materialização (30/07/2026)
+
+- `full_market_rebuild_service.py` preserva a sincronização global de Proventos,
+  mas o resumo operacional agora informa ativos varridos, sincronizados e
+  falhos, sem anunciar direitos materializados.
+- Regressão estrutural impede que o rebuild importe, chame ou volte a
+  contabilizar materialização por carteira.
+- Materializador legado, seed pré-prod v1, schema, dados e execução operacional
+  permaneceram inalterados.
+
 ### Alterado — seed histórico de Proventos sem materialização (30/07/2026)
 
 - `dividend_history_seed_service.py` preserva o complemento histórico global
