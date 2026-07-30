@@ -14,7 +14,9 @@ from datetime import date
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.dividend_aggregation_service import sum_received_dividends_by_ticker
+from app.services.canonical_dividend_aggregation_service import (
+    load_received_entitlements_by_ticker,
+)
 from app.services.portfolio_service import get_portfolio_positions
 
 
@@ -55,7 +57,7 @@ async def get_canonical_portfolio_positions(
         for position in group.get("positions", [])
         if position.get("ticker")
     ]
-    dividends_by_ticker = await sum_received_dividends_by_ticker(
+    dividends_by_ticker = await load_received_entitlements_by_ticker(
         db,
         portfolio_id,
         tickers,

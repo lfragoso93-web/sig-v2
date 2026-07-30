@@ -18,7 +18,9 @@ from app.core.cache import cache_get, cache_set
 from app.models.asset import Asset
 from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.schemas.portfolio_summary import PortfolioSummaryResponse
-from app.services.dividend_aggregation_service import sum_received_dividends
+from app.services.canonical_dividend_aggregation_service import (
+    load_received_entitlement_totals,
+)
 from app.services.fixed_income_valuation_service import get_fixed_income_totals
 from app.services.fx_service import get_usd_brl_today
 from app.services.portfolio_reconciliation_service import reconcile_snapshot_summary
@@ -159,14 +161,12 @@ async def _get_intraday_valuation(db: AsyncSession, portfolio_id: int) -> dict:
 async def _get_received_dividend_totals(db: AsyncSession, portfolio_id: int) -> tuple[float, float]:
     today = date.today()
     cutoff_12m = (datetime.now(timezone.utc) - timedelta(days=365)).date()
-    total_12m = await sum_received_dividends(
+    return await load_received_entitlement_totals(
         db,
         portfolio_id,
         cutoff=cutoff_12m,
         as_of=today,
     )
-    total = await sum_received_dividends(db, portfolio_id, as_of=today)
-    return total_12m, total
 
 
 def _quality_metadata(valuation: dict) -> dict:

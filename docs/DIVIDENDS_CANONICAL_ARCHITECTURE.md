@@ -91,7 +91,7 @@ de `Dividend`.
 | Domínio | Serviços principais | Dependência legada | Ordem |
 |---|---|---|---|
 | API/Frontend Proventos | `proventos_service.py`, `dividend_service.py`, router `dividends.py` | Lista, totais, série mensal e detalhes usam `Dividend` | Primeiro consumidor do serviço canônico |
-| Resumo e Patrimônio | `portfolio_summary_service.py`, `portfolio_service.py`, `dividend_aggregation_service.py` | Soma valores persistidos por carteira/ticker | Migrar após paridade da API |
+| Resumo e Patrimônio | `portfolio_summary_service.py`, `canonical_positions_service.py`, `canonical_dividend_aggregation_service.py` | Direitos canônicos read-only | Migrado após a API |
 | Rentabilidade | `rentabilidade_service.py` | Fluxos recebidos alimentam retorno | Migrar com política única de caixa líquido |
 | Snapshots/TWR | `portfolio_snapshot_canonical_twr_service.py`, `portfolio_class_snapshot_service.py` | Ordenam e aplicam direitos persistidos | Migrar antes de reconstruir snapshots |
 | IRPF | `irpf_service.py` | Cruza `Dividend` com `AssetDividend` | Migrar após bruto, imposto e líquido canônicos |
@@ -163,6 +163,24 @@ Diferenças em relação ao legado são deliberadas: não há fallback de Data E
 para elegibilidade, o status não pode ficar obsoleto e valores materializados
 divergentes são substituídos pelo cálculo reproduzível. A tabela `dividends`
 permanece intacta para os consumidores ainda não migrados.
+
+#### Resumo e Patrimônio
+
+Os KPIs do Resumo e os grupos de Patrimônio foram migrados para
+`canonical_dividend_aggregation_service.py`:
+
+- o agregador carrega os direitos canônicos uma vez por projeção;
+- somente direitos elegíveis e já pagos entram nos totais;
+- janelas usam `payment_date`, inclusive o acumulado de 12 meses;
+- Patrimônio limita o agrupamento aos tickers das posições abertas, enquanto
+  Resumo preserva todo o histórico elegível da carteira;
+- eventos não BRL ficam fora destes KPIs até existir política canônica de
+  conversão cambial, evitando somar moedas diferentes;
+- `dividend_aggregation_service.py` permanece legado para Rentabilidade e
+  snapshots e não foi alterado neste bloco.
+
+Os contratos HTTP e schemas não mudaram. A tabela `dividends` permanece intacta
+para os consumidores seguintes.
 
 ### Bloco 5 — contração do legado
 

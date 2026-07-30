@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — Resumo e Patrimônio com direitos canônicos (30/07/2026)
+
+- Os proventos exibidos nos KPIs do Resumo e nos grupos de Patrimônio passaram a ser agregados diretamente de `asset_dividends` e do histórico de `transactions`.
+- Somente direitos elegíveis, monetários, em BRL e com pagamento ocorrido entram nos totais; a competência permanece sendo a data de pagamento.
+- O agregador legado de `dividends` foi preservado para Rentabilidade e snapshots, que serão migrados em blocos posteriores.
+- Contratos HTTP, schemas, banco e rotinas operacionais permaneceram inalterados.
+
 ### Alterado — leitura canônica da API de Proventos (30/07/2026)
 
 - Summary, listagem, histórico mensal e distribuição passaram a derivar direitos de `asset_dividends` e do histórico completo de `transactions`.

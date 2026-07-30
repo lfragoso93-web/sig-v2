@@ -54,7 +54,7 @@ async def test_positions_remove_legacy_return_and_use_received_dividends():
             new=AsyncMock(return_value=legacy),
         ),
         patch(
-            "app.services.canonical_positions_service.sum_received_dividends_by_ticker",
+            "app.services.canonical_positions_service.load_received_entitlements_by_ticker",
             new=AsyncMock(return_value={"PETR4": 200, "VALE3": 150}),
         ),
     ):
