@@ -91,14 +91,16 @@ Prontidão global estimada para a primeira produção: **91%**. O percentual nã
 ### Proventos — estágio isolado
 
 - Issue dedicada #226 criada e vinculada às Issues #158 e #216.
-- Contrato `pre-prod-dividends-seed.v1` publicado em `docs/PRE_PROD_DIVIDENDS_SEED_CONTRACT.md`.
+- Contrato canônico `pre-prod-dividends-seed.v2` publicado em `docs/PRE_PROD_DIVIDENDS_SEED_CONTRACT.md`.
 - Decisão canônica revisada: eventos pertencem exclusivamente ao ativo e `asset_dividends` é a única fonte de verdade.
 - A coleta futura lerá o catálogo de ativos e escreverá somente em `asset_dividends`; carteiras e transações não participam da identidade nem da persistência do evento.
 - Direitos por carteira serão calculados sob consulta a partir de `asset_dividends` e do histórico de posições.
-- `dividends` permanece legado reconstruível até a migração incremental e a prova de paridade dos consumidores.
+- Consumidores, portas de escrita e modelos ORM de `dividends` foram removidos;
+  a contração física está preparada e aguarda a janela controlada da #158.
 - Transação única, advisory lock, rollback integral, fontes explícitas e comparador offline são gates obrigatórios.
 - O estágio permanece isolado de B3, Tesouro, benchmarks, câmbio, importação, posições, snapshots e `full_market_rebuild`.
-- Coletor BRAPI/Yahoo estrito e sequencial, persistência global, materialização por carteira, inspeções de reconciliação e CLI transacional implementados.
+- Coletor BRAPI/Yahoo estrito e sequencial, persistência global exclusiva em
+  `asset_dividends`, inspeções canônicas e CLI transacional implementados.
 - Comparador offline e wrapper `scripts/Invoke-PreProdDividendsIdempotency.ps1` preservam as três evidências sem acesso a banco ou rede durante a comparação.
 - `docs/pre-prod-dividends-seed-runbook.md` define pré-condições, comando oficial, critérios de sucesso/aborto e registro das evidências.
 - Suíte específica e integral aprovadas no SHA operacional; duas execuções reais controladas permanecem pendentes.
@@ -151,13 +153,15 @@ Prontidão global estimada para a primeira produção: **91%**. O percentual nã
 - [x] Idempotência cambial comprovada em segunda execução no mesmo SHA e intervalo.
 - [x] Issue #217 encerrada após evidência real.
 - [x] Issue #226 criada para o seed isolado de proventos.
-- [x] Contrato inicial `pre-prod-dividends-seed.v1` e fronteiras operacionais publicados.
-- [x] Envelope, inspeções, coleta estrita, persistência global e materialização de proventos implementados.
+- [x] Contrato canônico `pre-prod-dividends-seed.v2` e fronteiras operacionais publicados.
+- [x] Envelope, inspeções, coleta estrita e persistência global exclusiva implementados.
 - [x] CLI transacional, comparador offline, wrapper PowerShell e runbook de proventos publicados.
 - [x] Executar a suíte integral da implementação v1 no SHA então aprovado.
 - [x] Suspender a execução v1 e formalizar `asset_dividends` como fonte canônica única.
-- [ ] Migrar consumidores para o cálculo derivado por posição histórica.
-- [ ] Desativar portas de escrita por carteira e remover `dividends` somente após paridade e inventário.
+- [x] Migrar consumidores para o cálculo derivado por posição histórica.
+- [x] Desativar portas de escrita por carteira e remover os modelos ORM legados.
+- [x] Preparar migration física protegida para `dividends` e
+  `dividends_sync_jobs`, sem executá-la.
 - [ ] Realizar duas execuções reais controladas e reconciliar as três evidências.
 - [ ] Gerar nova cadeia operacional vinculada ao SHA promovido.
 - [ ] Recalcular e revisar a confirmação composta.

@@ -186,7 +186,7 @@ Etapas:
 3. sincronizar lacunas;
 4. atualizar Tesouro;
 5. atualizar benchmarks;
-6. sincronizar e materializar proventos;
+6. sincronizar o catálogo global de proventos;
 7. reconstruir snapshots;
 8. gerar auditoria final.
 
@@ -213,7 +213,7 @@ Validar no frontend:
 | Sinal | Interpretação |
 |---|---|
 | `NumericValueOutOfRangeError` | preço anômalo passou pela validação |
-| `number of query arguments cannot exceed 32767` | lote de materialização excessivo |
+| `number of query arguments cannot exceed 32767` | lote de persistência excessivo |
 | `QueuePool limit reached` | sessões longas ou concorrência excessiva |
 | muitos `startDate=1900-01-01` | estado de cobertura não persistido corretamente |
 | muitos fallbacks lentos | provedor incompatível ainda sendo consultado |

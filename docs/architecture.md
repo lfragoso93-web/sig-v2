@@ -80,7 +80,7 @@ commit
 | `rate_history` | Séries macroeconômicas persistidas |
 | `asset_price_coverage_service` | Auditoria de cobertura por ativo |
 | `asset_price_gap_sync_service` | Preenchimento de lacunas históricas |
-| `dividend_*` | Eventos globais, elegibilidade e materialização por carteira |
+| `dividend_*` | Eventos globais e elegibilidade calculada sob demanda |
 | `treasury_price_history_service` | Histórico oficial dedicado do Tesouro Direto |
 | valuation por classe | Patrimônio, custo e resultado atual por regra financeira específica |
 | `portfolio_snapshot_twr_service` | Snapshots DB-only e cadeia TWR das classes suportadas |
@@ -93,8 +93,8 @@ O pipeline canônico separa:
 1. descoberta do evento global;
 2. persistência e normalização;
 3. elegibilidade da carteira na data de corte;
-4. materialização do direito;
-5. reconhecimento financeiro pela data de pagamento.
+4. projeção do direito sob demanda;
+5. reconhecimento financeiro derivado pela data de pagamento.
 
 Eventos não monetários permanecem rastreáveis, mas não entram nos agregados quando `is_cash=false`.
 
@@ -152,7 +152,7 @@ sincronizar catálogo e preços
         ↓
 atualizar Tesouro e benchmarks
         ↓
-sincronizar e materializar proventos
+sincronizar eventos globais de proventos
         ↓
 reconstruir snapshots
         ↓

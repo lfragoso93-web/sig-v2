@@ -90,8 +90,9 @@ O sincronizador FII paralelo, o cliente batch e a configuração exclusiva foram
 removidos. Uma auditoria posterior encontrou duas rotas administrativas
 residuais que ainda importavam o serviço removido; elas foram eliminadas no
 commit `fcc7bb34c22eb3a06673d68d2043c7818dfd94d1`. Não havia consumidor no
-frontend. O modelo e a migration históricos de `dividends_sync_jobs` permanecem
-apenas para a contração física controlada na Issue #158, sem leitura de runtime.
+frontend. O modelo ORM de `dividends_sync_jobs` foi removido; a migration
+histórica e a migration de contração física permanecem autocontidas, sem leitura
+de runtime. A execução física continua reservada à Issue #158.
 
 ### Modelo legado e rastreabilidade
 

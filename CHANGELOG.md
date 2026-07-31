@@ -5,6 +5,17 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — documentação viva alinhada ao contrato canônico v2 (31/07/2026)
+
+- README, ROADMAP e documentos gerais de arquitetura, dados canônicos e
+  operação deixaram de apresentar o seed v1 e a materialização por carteira
+  como estado atual.
+- O fluxo documentado agora persiste somente eventos em `asset_dividends` e
+  calcula direitos sob demanda; a contração física permanece explicitamente
+  pendente da janela controlada da Issue #158.
+- Regressão documental protege as fronteiras v2 e impede o retorno das
+  afirmações operacionais obsoletas.
+
 ### Removido — modelos ORM das tabelas legadas de Proventos (31/07/2026)
 
 - `Dividend` e `DividendsSyncJob` foram removidos do runtime e de
@@ -420,7 +431,8 @@ Formato baseado em Keep a Changelog.
 - Linhas sem semântica agregada, valores arbitrários e componentes não absorvidos
   continuam bloqueantes.
 - Regressões cobrem ABEV3 em 03/04/2014 nas duas ordens de fonte, preservando o
-  evento BRAPI de `0,13` diante do Yahoo `0,059994`, além da contraprova material.
+  evento principal de `0,13` diante do complementar `0,059994`, além da
+  contraprova material.
 
 ### Corrigido — agregados complementares multietipo de proventos (29/07/2026)
 
