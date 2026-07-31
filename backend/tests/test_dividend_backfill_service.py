@@ -2,26 +2,22 @@
 Testes de integração para dividend_backfill_service.py.
 """
 
-import pytest
 from datetime import date
 from decimal import Decimal
 from unittest.mock import AsyncMock, patch
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
+import pytest
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
 from app.models.dividend import Dividend, DividendType
 from app.models.portfolio import Portfolio
-from app.models.transaction import Transaction, OperationType
+from app.models.transaction import OperationType, Transaction
 from app.services.dividend_backfill_service import (
+    SKIP_TYPES,
     _parse_raw_dividend,
     backfill_dividends,
-    SKIP_TYPES,
 )
-from app.services.dividend_entitlement_service import (
-    calculate_net_quantity,
-)
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def _make_tx(
@@ -135,36 +131,6 @@ class TestParseRawDividend:
     def test_retorna_none_com_data_invalida(self):
         raw = {"paymentDate": "data-invalida", "rate": 1.0, "type": "DIVIDENDO"}
         assert _parse_raw_dividend(raw) is None
-
-
-class TestCalculateNetQuantity:
-    def test_zero_sem_transacoes(self):
-        assert calculate_net_quantity([], date(2024, 1, 1)) == 0.0
-
-    def test_compras_somam(self):
-        txs = [
-            (date(2024, 1, 1), OperationType.buy, 100),
-            (date(2024, 2, 1), OperationType.buy, 50),
-        ]
-        assert calculate_net_quantity(txs, date(2024, 3, 1)) == 150.0
-
-    def test_vendas_subtraem(self):
-        txs = [
-            (date(2024, 1, 1), OperationType.buy, 100),
-            (date(2024, 2, 1), OperationType.sell, 40),
-        ]
-        assert calculate_net_quantity(txs, date(2024, 3, 1)) == 60.0
-
-    def test_nao_conta_transacoes_futuras(self):
-        txs = [
-            (date(2024, 1, 1), OperationType.buy, 100),
-            (date(2024, 6, 1), OperationType.buy, 200),
-        ]
-        assert calculate_net_quantity(txs, date(2024, 3, 1)) == 100.0
-
-    def test_nunca_retorna_negativo(self):
-        txs = [(date(2024, 1, 1), OperationType.sell, 999)]
-        assert calculate_net_quantity(txs, date(2024, 6, 1)) == 0.0
 
 
 @pytest.mark.asyncio

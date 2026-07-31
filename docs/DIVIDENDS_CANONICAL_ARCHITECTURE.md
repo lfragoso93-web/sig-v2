@@ -80,7 +80,7 @@ possuir o ativo hoje não cria direito retroativo.
 | `run_proventos_sync.py` | Coleta manual global, inclusive por ticker | Canônico | Materialização final removida; não grava direitos por carteira |
 | `dividend_history_seed_service.py` | Complemento histórico global via Yahoo | Canônico | Materialização retirada; persiste exclusivamente `asset_dividends` |
 | `full_market_rebuild_service.py` | Orquestra a sincronização global de Proventos | Canônico | Resume ativos varridos, sincronizados e falhos; não importa, chama ou contabiliza materialização |
-| `dividend_entitlement_service.py` | Cálculos de quantidade e valor líquido compartilhados | Puro | O reconciliador ORM órfão foi removido; o módulo não acessa sessão nem `dividends` |
+| `dividend_entitlement_service.py` | Helpers legados de quantidade e valor líquido | Removido | O módulo ficou sem callers após a retirada dos materializadores; regressão estrutural impede sua reintrodução |
 | `portfolio_service.py` | Totais e agrupamentos de Proventos no resumo/posições legados | Canônico | Assinaturas preservadas; agregações read-only usam direitos elegíveis, pagos, líquidos e em BRL |
 | Exclusão de carteira | `portfolio_delete_service.delete_portfolio_safely` | Ativo | A implementação órfã em `portfolio_service.py` foi removida; a porta ativa ainda exclui dependências legadas de forma explícita |
 | Seed pré-produção | Catálogo global canônico | Canônico | Contrato `pre-prod-dividends-seed.v2`; lê `assets`/`asset_dividends`, escreve somente `asset_dividends` e não contém superfície de materialização |

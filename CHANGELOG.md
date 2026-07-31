@@ -5,6 +5,15 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — helpers órfãos de direitos materializados (31/07/2026)
+
+- `dividend_entitlement_service.py` foi removido após a confirmação de que os
+  dois cálculos puros restantes não possuíam callers na aplicação.
+- Os cinco testes exclusivos de `calculate_net_quantity` foram retirados junto
+  com a superfície morta.
+- Regressão estrutural protege a ausência do arquivo e de imports do módulo
+  legado em todo o pacote `app`.
+
 ### Removido — contrato pré-produção v1 e materialização (30/07/2026)
 
 - O seed foi migrado para `pre-prod-dividends-seed.v2`, com leitura restrita a
