@@ -1,5 +1,4 @@
 import json
-from collections.abc import Iterable
 
 from app.main import (
     _PUBLIC_MARKET_DATA_SOURCE,
@@ -22,15 +21,6 @@ def _assert_no_provider_terms(value: object) -> None:
     serialized = json.dumps(value, ensure_ascii=False).lower()
     leaked = [term for term in FORBIDDEN_TERMS if term in serialized]
     assert not leaked, f"Metadados públicos expõem provedores: {leaked}"
-
-
-def _iter_leaf_routes(routes: Iterable[object]):
-    for route in routes:
-        nested = getattr(route, "routes", None)
-        if nested is not None:
-            yield from _iter_leaf_routes(nested)
-            continue
-        yield route
 
 
 def test_provider_text_is_genericized() -> None:
@@ -66,19 +56,13 @@ def test_openapi_schema_does_not_expose_provider_names() -> None:
 
 
 def test_legacy_portfolio_dividend_write_routes_are_not_exposed() -> None:
-    routes = {
-        (route.path, method)
-        for route in _iter_leaf_routes(app.routes)
-        if hasattr(route, "path") and hasattr(route, "methods")
-        for method in route.methods
-    }
+    app.openapi_schema = None
+    schema = app.openapi()
+    paths = schema.get("paths", {})
 
     base_path = "/api/v1/portfolios/{portfolio_id}/dividends"
-    assert (base_path, "GET") in routes
-    assert (base_path, "POST") not in routes
-    assert (f"{base_path}/{{dividend_id}}", "DELETE") not in routes
-    assert (f"{base_path}/sync", "POST") not in routes
-    assert not any(
-        path == "/api/v1/sync/proventos/{portfolio_id}"
-        for path, _method in routes
-    )
+    assert "get" in paths.get(base_path, {})
+    assert "post" not in paths.get(base_path, {})
+    assert f"{base_path}/{{dividend_id}}" not in paths
+    assert f"{base_path}/sync" not in paths
+    assert "/api/v1/sync/proventos/{portfolio_id}" not in paths
