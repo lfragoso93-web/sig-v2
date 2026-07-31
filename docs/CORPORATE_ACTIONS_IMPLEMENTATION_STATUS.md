@@ -57,6 +57,19 @@ A estratégia original da Issue #129, centrada em HG Brasil, foi superada pela d
 - métodos internos duplicados de compra e venda foram removidos do caminho ativo de snapshots;
 - nenhuma linha persistida de snapshot foi reconstruída automaticamente neste bloco.
 
+### Integração com snapshots por classe
+
+- criado `class_snapshot_position_projection.py` como adaptador puro sobre o projetor canônico;
+- `portfolio_class_snapshot_service` deixou de manter estado próprio de compra, venda, custo e realizado;
+- eventos corporativos globais são carregados uma única vez por reconstrução e aplicados por ticker;
+- transações continuam isoladas pelo `portfolio_id` solicitado;
+- cada dia útil projeta quantidade, custo e resultado realizado até a data do snapshot;
+- agregação por classe usa somente posições projetadas e não altera valuation, dividendos ou TWR;
+- fluxos externos continuam derivados apenas das transações do próprio dia;
+- duas carteiras com o mesmo ativo permanecem isoladas pelas transações fornecidas ao adaptador;
+- eventos posteriores à data do snapshot não afetam a série histórica;
+- a classe duplicada `ClassPositionState` foi removida do caminho ativo.
+
 ### Proventos relacionados a eventos
 
 - dividendos históricos complementares são normalizados considerando splits e grupamentos posteriores explicitamente publicados;
@@ -67,7 +80,7 @@ A estratégia original da Issue #129, centrada em HG Brasil, foi superada pela d
 
 ### Propagação aos consumidores canônicos
 
-Resumo, Patrimônio, posições atuais e snapshots consolidados já recebem quantidade e custo projetados. Ainda é necessário inventariar e migrar leitores paralelos de snapshots por classe, performance, rentabilidade e IRPF para garantir que nenhum deles reconstrua posição somente a partir de transações.
+Resumo, Patrimônio, posições atuais, snapshots consolidados e snapshots por classe já recebem quantidade e custo projetados. Ainda é necessário inventariar e migrar leitores paralelos usados por performance, rentabilidade e IRPF para garantir que nenhum deles reconstrua posição somente a partir de transações.
 
 ### Scheduler
 
@@ -92,7 +105,7 @@ A identidade por fonte é determinística, mas ainda falta um estado canônico e
 
 ## Sequência técnica aprovada
 
-1. Inventariar e migrar leitores paralelos de posição usados por snapshots por classe, performance, rentabilidade e IRPF.
+1. Inventariar e migrar leitores paralelos de posição usados por performance, rentabilidade e IRPF.
 2. Implementar reconciliação explícita entre fontes e estados de conflito/revisão.
 3. Construir carga histórica auditável e provar idempotência.
 4. Consolidar o scheduler corporativo oficial.
