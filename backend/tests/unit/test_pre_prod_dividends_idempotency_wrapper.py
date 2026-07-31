@@ -2,11 +2,46 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 SCRIPT_NAME = "Invoke-PreProdDividendsIdempotency.ps1"
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-SCRIPT_PATH = REPOSITORY_ROOT / "scripts" / SCRIPT_NAME
-DOCKERFILE_PATH = REPOSITORY_ROOT / "backend" / "Dockerfile"
-COMPOSE_PATH = REPOSITORY_ROOT / "docker-compose.yml"
+
+
+def _find_repository_root() -> Path | None:
+    test_path = Path(__file__).resolve()
+    for ancestor in (test_path.parent, *test_path.parents):
+        script = ancestor / "scripts" / SCRIPT_NAME
+        dockerfile = ancestor / "backend" / "Dockerfile"
+        compose = ancestor / "docker-compose.yml"
+        if script.is_file() and dockerfile.is_file() and compose.is_file():
+            return ancestor
+    return None
+
+
+REPOSITORY_ROOT = _find_repository_root()
+pytestmark = pytest.mark.skipif(
+    REPOSITORY_ROOT is None,
+    reason=(
+        "wrappers e artefatos de raiz não estão incluídos nesta imagem backend; "
+        "execute esta suíte no checkout completo do repositório"
+    ),
+)
+
+SCRIPT_PATH = (
+    REPOSITORY_ROOT / "scripts" / SCRIPT_NAME
+    if REPOSITORY_ROOT is not None
+    else Path("/nonexistent")
+)
+DOCKERFILE_PATH = (
+    REPOSITORY_ROOT / "backend" / "Dockerfile"
+    if REPOSITORY_ROOT is not None
+    else Path("/nonexistent")
+)
+COMPOSE_PATH = (
+    REPOSITORY_ROOT / "docker-compose.yml"
+    if REPOSITORY_ROOT is not None
+    else Path("/nonexistent")
+)
 
 
 def _script() -> str:
