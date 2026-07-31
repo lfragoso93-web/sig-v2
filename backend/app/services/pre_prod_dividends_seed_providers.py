@@ -24,7 +24,8 @@ from app.services.pre_prod_dividends_seed_collector import (
     StrictDividendProviderResult,
 )
 
-YahooHistoryFetcher = Callable[[str], Awaitable[list[tuple[date, float]]]]
+YahooHistoryRow = tuple[date, float] | tuple[date, float, dict[str, Any]]
+YahooHistoryFetcher = Callable[[str], Awaitable[list[YahooHistoryRow]]]
 
 
 def _decimal_scale(value: float) -> int:
@@ -146,8 +147,11 @@ class StrictYahooDividendProvider:
                 f"{ticker}/yfinance_history: provedor indisponível"
             ) from exc
 
-        rows = tuple(
-            {
+        rows = []
+        for history_row in history:
+            event_date, amount = history_row[:2]
+            adjustment = history_row[2] if len(history_row) == 3 else None
+            row = {
                 "exDate": event_date.isoformat(),
                 "rate": amount,
                 "type": "DIVIDENDO",
@@ -160,9 +164,11 @@ class StrictYahooDividendProvider:
                     }
                 },
             }
-            for event_date, amount in history
-        )
-        if not rows:
+            if adjustment is not None:
+                row["corporateActionAdjustment"] = adjustment
+            rows.append(row)
+        normalized_rows = tuple(rows)
+        if not normalized_rows:
             return StrictDividendProviderResult(
                 source="yfinance_history",
                 rows=(),
@@ -170,14 +176,14 @@ class StrictYahooDividendProvider:
             )
         return StrictDividendProviderResult(
             source="yfinance_history",
-            rows=rows,
+            rows=normalized_rows,
         )
 
 
-async def fetch_yahoo_dividend_history(symbol: str) -> list[tuple[date, float]]:
+async def fetch_yahoo_dividend_history(symbol: str) -> list[YahooHistoryRow]:
     """Consulta padrão do Yahoo; exceções são preservadas para o adaptador."""
 
-    def _sync() -> list[tuple[date, float]]:
+    def _sync() -> list[YahooHistoryRow]:
         import yfinance as yf
 
         with warnings.catch_warnings():
@@ -186,6 +192,9 @@ async def fetch_yahoo_dividend_history(symbol: str) -> list[tuple[date, float]]:
                 message=r".*Timestamp\.utcnow is deprecated.*",
                 category=Pandas4Warning,
             )
+            # Ações vêm primeiro: a consulta longa pode preencher o cache interno
+            # do yfinance com uma série que omite splits antigos.
+            actions = yf.Ticker(symbol).actions.copy(deep=True)
             history = yf.Ticker(symbol).history(
                 start="1970-01-01",
                 end=(datetime.now(UTC).date() + timedelta(days=1)).isoformat(),
@@ -196,7 +205,20 @@ async def fetch_yahoo_dividend_history(symbol: str) -> list[tuple[date, float]]:
         if history.empty or "Dividends" not in history.columns:
             return []
 
-        rows: list[tuple[date, float]] = []
+        split_events: list[tuple[date, Decimal]] = []
+        if not actions.empty and "Stock Splits" in actions.columns:
+            for timestamp, value in actions["Stock Splits"].items():
+                factor = Decimal(str(float(value or 0)))
+                if factor <= 0:
+                    continue
+                split_date = (
+                    timestamp.date()
+                    if hasattr(timestamp, "date")
+                    else date.fromisoformat(str(timestamp)[:10])
+                )
+                split_events.append((split_date, factor))
+
+        rows: list[YahooHistoryRow] = []
         for timestamp, value in history["Dividends"].items():
             amount = float(value or 0)
             if amount <= 0:
@@ -206,7 +228,25 @@ async def fetch_yahoo_dividend_history(symbol: str) -> list[tuple[date, float]]:
                 if hasattr(timestamp, "date")
                 else date.fromisoformat(str(timestamp)[:10])
             )
-            rows.append((event_date, amount))
+            cumulative_factor = Decimal(1)
+            for split_date, factor in split_events:
+                if split_date > event_date:
+                    cumulative_factor *= factor
+
+            if cumulative_factor == 1:
+                rows.append((event_date, amount))
+                continue
+
+            normalized_amount = Decimal(str(amount)) * cumulative_factor
+            rows.append((
+                event_date,
+                float(normalized_amount),
+                {
+                    "mode": "undo_subsequent_splits",
+                    "providerValue": str(amount),
+                    "cumulativeFactor": str(cumulative_factor),
+                },
+            ))
         return rows
 
     return await asyncio.to_thread(_sync)

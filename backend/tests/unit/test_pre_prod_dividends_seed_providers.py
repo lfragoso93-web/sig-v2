@@ -194,6 +194,10 @@ async def test_yahoo_fetcher_suppresses_only_timestamp_utcnow_warning(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class FakeTicker:
+        @property
+        def actions(self):
+            return pd.DataFrame()
+
         def history(self, **kwargs):
             warnings.warn(
                 "Timestamp.utcnow is deprecated and will be removed",
@@ -217,3 +221,96 @@ async def test_yahoo_fetcher_suppresses_only_timestamp_utcnow_warning(
         not issubclass(item.category, Pandas4Warning)
         for item in captured
     )
+
+
+@pytest.mark.asyncio
+async def test_yahoo_fetcher_undoes_only_subsequent_stock_splits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeTicker:
+        @property
+        def actions(self):
+            index = pd.to_datetime([
+                "2021-01-01",
+                "2022-03-28",
+                "2024-05-14",
+                "2025-01-01",
+            ], utc=True)
+            return pd.DataFrame(
+                {
+                    "Dividends": [0.10, 0.41404, 0.0, 0.25],
+                    "Stock Splits": [2.0, 0.0, 0.05, 0.0],
+                },
+                index=index,
+            )
+
+        def history(self, **kwargs):
+            index = pd.to_datetime([
+                "2021-01-01",
+                "2022-03-28",
+                "2024-05-14",
+                "2025-01-01",
+            ], utc=True)
+            return pd.DataFrame(
+                {
+                    "Dividends": [0.10, 0.41404, 0.0, 0.25],
+                    "Stock Splits": [0.0, 0.0, 0.0, 0.0],
+                },
+                index=index,
+            )
+
+    monkeypatch.setattr(yf, "Ticker", lambda symbol: FakeTicker())
+
+    result = await fetch_yahoo_dividend_history("AERI3.SA")
+
+    assert result == [
+        (
+            date(2021, 1, 1),
+            0.005,
+            {
+                "mode": "undo_subsequent_splits",
+                "providerValue": "0.1",
+                "cumulativeFactor": "0.05",
+            },
+        ),
+        (
+            date(2022, 3, 28),
+            0.020702,
+            {
+                "mode": "undo_subsequent_splits",
+                "providerValue": "0.41404",
+                "cumulativeFactor": "0.05",
+            },
+        ),
+        (date(2025, 1, 1), 0.25),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_yahoo_adapter_preserves_split_adjustment_evidence() -> None:
+    async def fetcher(symbol: str):
+        return [(
+            date(2022, 3, 28),
+            0.020702,
+            {
+                "mode": "undo_subsequent_splits",
+                "providerValue": "0.41404",
+                "cumulativeFactor": "0.05",
+            },
+        )]
+
+    result = await StrictYahooDividendProvider(history_fetcher=fetcher)(
+        "AERI3",
+        "ACAO",
+    )
+
+    assert result.rows[0]["rate"] == 0.020702
+    assert result.rows[0]["corporateActionAdjustment"] == {
+        "mode": "undo_subsequent_splits",
+        "providerValue": "0.41404",
+        "cumulativeFactor": "0.05",
+    }
+    assert result.rows[0]["canonicalComparison"]["value_per_unit"] == {
+        "mode": "truncate",
+        "scale": 6,
+    }

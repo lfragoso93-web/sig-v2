@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — dividendos históricos ajustados por eventos societários (31/07/2026)
+
+- O adaptador complementar do Yahoo passou a desfazer, por evento, somente os fatores de split/grupamento explicitamente publicados após a Data Ex.
+- A normalização preserva no payload auditável o valor apresentado pelo provedor e o fator acumulado aplicado, sem relaxar a reconciliação econômica estrita.
+- Adicionada regressão para o caso real de AERI3: dividendo ajustado de `0.41404`, grupamento posterior `0.05` e valor histórico normalizado `0.020702`.
+- A carga integral não foi repetida neste bloco corretivo; uma nova execução controlada continua sujeita ao gate operacional e ao SHA publicado.
+
 ### Alterado — documentação viva alinhada ao contrato canônico v2 (31/07/2026)
 
 - README, ROADMAP e documentos gerais de arquitetura, dados canônicos e

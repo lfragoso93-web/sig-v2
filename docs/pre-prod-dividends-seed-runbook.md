@@ -213,6 +213,12 @@ operacional. Não edite as evidências para fazê-las convergir.
 
 ## Critérios de aborto
 
+Dividendos históricos da fonte complementar podem estar ajustados por splits ou
+grupamentos posteriores. O adaptador desfaz apenas fatores positivos publicados
+explicitamente na série `Stock Splits`, registra o valor original do provedor e
+o fator acumulado no payload normalizado e então aplica a reconciliação estrita.
+Ausência do evento societário ou divergência remanescente continua bloqueante.
+
 Interrompa e registre na Issue #226 quando:
 
 - branch, SHA, confirmação ou janela divergirem;

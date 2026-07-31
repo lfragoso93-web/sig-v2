@@ -126,6 +126,58 @@ async def test_aalr3_reconciles_declared_yahoo_truncation_deterministically(
 
 
 @pytest.mark.asyncio
+async def test_aeri3_reconciles_yahoo_value_after_declared_reverse_split() -> None:
+    asset = SimpleNamespace(id=12, ticker="AERI3", asset_type="ACAO")
+    db = SimpleNamespace(
+        scalar=AsyncMock(return_value=True),
+        execute=AsyncMock(side_effect=[_result([asset]), _result([])]),
+        add=Mock(),
+        flush=AsyncMock(),
+        commit=AsyncMock(),
+        rollback=AsyncMock(),
+    )
+    brapi = _source(
+        "brapi",
+        value=0.020702356,
+        payment_date=date(2022, 5, 12),
+        ex_date=date(2022, 3, 28),
+        raw_payload={"rate": 0.020702356},
+    )
+    yahoo = _source(
+        "yfinance_history",
+        value=0.020702,
+        payment_date=None,
+        ex_date=date(2022, 3, 28),
+        raw_payload={
+            "rate": 0.020702,
+            "corporateActionAdjustment": {
+                "mode": "undo_subsequent_splits",
+                "providerValue": "0.41404",
+                "cumulativeFactor": "0.05",
+            },
+            "canonicalComparison": {
+                "value_per_unit": {"mode": "truncate", "scale": 6},
+            },
+        },
+    )
+    collection = StrictDividendAssetCollection(
+        ticker="AERI3",
+        asset_type="ACAO",
+        sources=(brapi, yahoo),
+    )
+
+    result = await persist_asset_dividends_strict(db=db, collections=(collection,))
+
+    assert result.created == 1
+    assert result.unchanged == 1
+    created = db.add.call_args.args[0]
+    assert created.source == "brapi"
+    assert created.value_per_unit == Decimal("0.020702356")
+    db.commit.assert_not_awaited()
+    db.rollback.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("reverse", [False, True])
 async def test_abev3_yahoo_aggregate_preserves_brapi_events_by_type(
     reverse: bool,

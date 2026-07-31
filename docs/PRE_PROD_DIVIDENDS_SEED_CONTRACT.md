@@ -55,6 +55,9 @@ contrato v2.
 ## Coleta e persistência
 
 - BRAPI é a fonte principal e Yahoo histórico é complementar;
+- valores históricos do Yahoo são revertidos à escala da Data Ex somente por
+  fatores positivos de split/grupamento publicados após o evento; valor do
+  provedor e fator acumulado permanecem no payload normalizado;
 - respostas vazias exigem classificação explícita;
 - somente eventos dentro da janela são persistidos;
 - a identidade econômica usa ativo, Data Ex, tipo e pagamento efetivo;
