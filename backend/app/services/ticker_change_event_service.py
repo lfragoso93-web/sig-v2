@@ -9,11 +9,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset
 from app.models.asset_alias import AssetAlias
-from app.models.corporate_event import CorporateEvent, CorporateEventStatus, CorporateEventType
+from app.models.corporate_event import (
+    CorporateEvent,
+    CorporateEventStatus,
+    CorporateEventType,
+)
 from app.services.ticker_resolution_service import ResolvedTicker
 
 
-def _event_key(portfolio_id: int, old_ticker: str, new_ticker: str, effective_date: date) -> str:
+def _event_key(
+    portfolio_id: int, old_ticker: str, new_ticker: str, effective_date: date
+) -> str:
     return f"ticker-change:{portfolio_id}:{old_ticker}:{new_ticker}:{effective_date.isoformat()}"
 
 
@@ -53,13 +59,15 @@ async def register_ticker_change(
     )
     alias = alias_result.scalar_one_or_none()
     if alias is None:
-        db.add(AssetAlias(
-            asset_id=current_asset.id,
-            alias_ticker=resolution.requested_ticker,
-            asset_type=str(old_asset.asset_type),
-            effective_from=resolution.effective_date,
-            source_provider="market_data_provider",
-        ))
+        db.add(
+            AssetAlias(
+                asset_id=current_asset.id,
+                alias_ticker=resolution.requested_ticker,
+                asset_type=str(old_asset.asset_type),
+                effective_from=resolution.effective_date,
+                source_provider="market_data_provider",
+            )
+        )
         await db.flush()
 
     event_key = _event_key(
@@ -77,19 +85,36 @@ async def register_ticker_change(
 
     event = CorporateEvent(
         asset_id=old_asset.id,
+        destination_asset_id=current_asset.id,
         portfolio_id=portfolio_id,
         ticker=resolution.requested_ticker,
+        destination_ticker=resolution.current_ticker,
         event_type=CorporateEventType.TICKER_CHANGE,
         status=CorporateEventStatus.PENDENTE,
+        reconciliation_status="UNRECONCILED",
+        requires_review=True,
+        review_reason="fluxo legado de renome ainda vinculado a carteira",
+        source_provider="brapi_resolve",
+        source_event_id=event_key,
+        effective_date=resolution.effective_date,
+        quantity_factor=Decimal(1),
+        currency=str(old_asset.currency or "BRL"),
         event_date=resolution.effective_date,
-        ratio=Decimal("1"),
+        ratio=Decimal(1),
         description=f"Ticker alterado para {resolution.current_ticker}",
         brapi_event_id=event_key,
-        raw_data=json.dumps({
+        raw_metadata={
             "old_ticker": resolution.requested_ticker,
             "new_ticker": resolution.current_ticker,
             "effective_date": resolution.effective_date.isoformat(),
-        }),
+        },
+        raw_data=json.dumps(
+            {
+                "old_ticker": resolution.requested_ticker,
+                "new_ticker": resolution.current_ticker,
+                "effective_date": resolution.effective_date.isoformat(),
+            }
+        ),
     )
     db.add(event)
     await db.flush()

@@ -1,18 +1,16 @@
 """Pure calculation of portfolio entitlements from global dividend events."""
+
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from enum import Enum
-from typing import Iterable
 
-
-ZERO = Decimal("0")
+ZERO = Decimal(0)
 JCP_NET_FACTOR = Decimal("0.85")
-CASH_EVENT_TYPES = frozenset(
-    {"DIVIDENDO", "JCP", "RENDIMENTO", "AMORTIZACAO"}
-)
+CASH_EVENT_TYPES = frozenset({"DIVIDENDO", "JCP", "RENDIMENTO", "AMORTIZACAO"})
 
 
 class EntitlementReason(str, Enum):
@@ -27,6 +25,13 @@ class PositionMovement:
     transaction_date: date
     operation: str
     quantity: Decimal
+
+
+@dataclass(frozen=True, slots=True)
+class QuantityFactorMovement:
+    effective_date: date
+    quantity_factor: Decimal
+    event_id: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,12 +64,24 @@ class DividendEntitlement:
 def historical_position(
     movements: Iterable[PositionMovement],
     reference_date: date,
+    quantity_actions: Iterable[QuantityFactorMovement] = (),
 ) -> Decimal:
     """Return the position at end of ``reference_date`` without hiding oversells."""
     position = ZERO
-    for movement in sorted(movements, key=lambda item: item.transaction_date):
-        if movement.transaction_date > reference_date:
+    timeline = [(movement.transaction_date, 1, movement) for movement in movements] + [
+        (action.effective_date, 0, action) for action in quantity_actions
+    ]
+    for movement_date, _priority, movement in sorted(
+        timeline, key=lambda item: (item[0], item[1])
+    ):
+        if movement_date > reference_date:
             break
+        if isinstance(movement, QuantityFactorMovement):
+            factor = Decimal(movement.quantity_factor)
+            if not factor.is_finite() or factor <= ZERO:
+                raise ValueError("quantity factor must be positive")
+            position *= factor
+            continue
         quantity = Decimal(movement.quantity)
         if quantity <= ZERO:
             raise ValueError("movement quantity must be positive")
@@ -83,6 +100,7 @@ def historical_position(
 def calculate_dividend_entitlement(
     event: DividendEvent,
     movements: Iterable[PositionMovement],
+    quantity_actions: Iterable[QuantityFactorMovement] = (),
 ) -> DividendEntitlement:
     """Calculate one entitlement without database access or side effects.
 
@@ -109,18 +127,14 @@ def calculate_dividend_entitlement(
             currency,
         )
 
-    quantity = historical_position(movements, event.record_date)
+    quantity = historical_position(movements, event.record_date, quantity_actions)
     if quantity == ZERO:
         return _empty_entitlement(
             event, EntitlementReason.NO_POSITION, event.record_date, currency
         )
 
     gross_amount = quantity * value_per_unit
-    net_amount = (
-        gross_amount * JCP_NET_FACTOR
-        if event_type == "JCP"
-        else gross_amount
-    )
+    net_amount = gross_amount * JCP_NET_FACTOR if event_type == "JCP" else gross_amount
     return DividendEntitlement(
         event_id=event.event_id,
         reason=EntitlementReason.ELIGIBLE,

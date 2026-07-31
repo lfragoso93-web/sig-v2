@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import warnings
@@ -23,6 +24,7 @@ from app.models.corporate_event import (
 )
 from app.services.corporate_action_engine import (
     NormalizedCorporateAction,
+    deduplicate_equivalent_corporate_actions,
     normalize_brapi_corporate_actions,
     normalize_yahoo_splits,
 )
@@ -39,15 +41,25 @@ class CorporateActionCollectionError(RuntimeError):
     """Falha bloqueante na coleta do catálogo corporativo."""
 
 
-async def fetch_brapi_corporate_actions_payload(ticker: str) -> dict[str, Any]:
+async def fetch_brapi_corporate_actions_payload(
+    ticker: str,
+    *,
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> dict[str, Any]:
     """Consulta a rota Pro tipada de dividendos e eventos de ações."""
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
+            params = {"symbols": ticker.upper()}
+            if date_from is not None:
+                params["startDate"] = date_from.isoformat()
+            if date_to is not None:
+                params["endDate"] = date_to.isoformat()
             response = await client.get(
                 f"{BRAPI_BASE}/v2/stocks/dividends",
                 headers=_auth_headers(),
-                params={"symbols": ticker.upper()},
+                params=params,
             )
     except httpx.HTTPError as exc:
         raise CorporateActionCollectionError(
@@ -126,12 +138,33 @@ def _serialized_action(action: NormalizedCorporateAction) -> str:
     )
 
 
+def _payload_hash(payload: dict[str, Any]) -> str:
+    serialized = json.dumps(
+        payload, sort_keys=True, ensure_ascii=True, separators=(",", ":")
+    )
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def _economic_identity_hash(action: NormalizedCorporateAction) -> str:
+    identity = {
+        "ticker": action.ticker,
+        "event_type": action.kind.value,
+        "effective_date": action.event_date.isoformat(),
+        "quantity_factor": str(action.quantity_factor),
+        "asset_issued": action.raw_payload.get("assetIssued"),
+        "isin_code": action.raw_payload.get("isinCode"),
+    }
+    return _payload_hash(identity)
+
+
 async def sync_corporate_events_for_asset(
     db: AsyncSession,
     asset: Asset,
     *,
     brapi_fetcher: BrapiPayloadFetcher | None = None,
     yahoo_fetcher: YahooSplitsFetcher | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
 ) -> list[CorporateEvent]:
     """Coleta fontes explícitas e persiste somente eventos globais idempotentes."""
 
@@ -148,9 +181,17 @@ async def sync_corporate_events_for_asset(
     yahoo_fetcher = yahoo_fetcher or fetch_yahoo_splits
     brapi_payload = await brapi_fetcher(ticker)
     yahoo_rows = await yahoo_fetcher(_yf_symbol(ticker, asset_type))
-    actions = (
-        *normalize_brapi_corporate_actions(ticker, brapi_payload),
-        *normalize_yahoo_splits(ticker, yahoo_rows),
+    actions = deduplicate_equivalent_corporate_actions(
+        (
+            *normalize_brapi_corporate_actions(ticker, brapi_payload),
+            *normalize_yahoo_splits(ticker, yahoo_rows),
+        )
+    )
+    actions = tuple(
+        action
+        for action in actions
+        if (date_from is None or action.event_date >= date_from)
+        and (date_to is None or action.event_date <= date_to)
     )
     if not actions:
         return []
@@ -164,14 +205,32 @@ async def sync_corporate_events_for_asset(
     existing_ids = set(existing_result.scalars().all())
 
     created: list[CorporateEvent] = []
-    for action in sorted(actions, key=lambda item: (item.event_date, item.source_event_id)):
+    for action in sorted(
+        actions, key=lambda item: (item.event_date, item.source_event_id)
+    ):
         if action.source_event_id in existing_ids:
             continue
         event = CorporateEvent(
             asset_id=asset.id,
             ticker=ticker,
             event_type=action.kind.value,
-            status=CorporateEventStatus.PENDENTE.value,
+            status=CorporateEventStatus.DISCOVERED.value,
+            reconciliation_status="UNRECONCILED",
+            requires_review=True,
+            review_reason="evento coletado e ainda nao reconciliado",
+            source_provider=action.source,
+            source_event_id=action.source_event_id,
+            source_payload_hash=_payload_hash(action.raw_payload),
+            economic_identity_hash=_economic_identity_hash(action),
+            effective_date=action.event_date,
+            record_date=action.event_date,
+            approved_on=None,
+            quantity_factor=action.quantity_factor,
+            subscription_price=action.subscription_price,
+            currency="BRL",
+            isin_code=action.raw_payload.get("isinCode"),
+            destination_isin_code=action.raw_payload.get("assetIssued"),
+            raw_metadata=action.raw_payload,
             event_date=action.event_date,
             ratio=action.quantity_factor,
             description=(

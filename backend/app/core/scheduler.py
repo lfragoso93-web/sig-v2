@@ -1,6 +1,10 @@
 import logging
+from datetime import date, timedelta
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -11,6 +15,33 @@ HELD_MARKET_PIPELINE_EVENT_OPTIONS = {
     "sync_events": False,
 }
 PROVENTOS_SYNC_ONLY_HELD = False
+CORPORATE_EVENTS_SCHEDULER_ENABLED = settings.CORPORATE_EVENTS_SCHEDULER_ENABLED
+CORPORATE_EVENTS_INCREMENTAL_LOOKBACK_DAYS = (
+    settings.CORPORATE_EVENTS_INCREMENTAL_LOOKBACK_DAYS
+)
+
+
+async def run_scheduled_corporate_event_sync():
+    """Executa somente após habilitação operacional posterior à migration."""
+    if not CORPORATE_EVENTS_SCHEDULER_ENABLED:
+        logger.info("[scheduler] Catálogo corporativo incremental desabilitado")
+        return None
+
+    from app.core.database import AsyncSessionLocal
+    from app.services.corporate_event_incremental_sync_service import (
+        run_incremental_corporate_event_sync,
+    )
+
+    date_to = date.today()
+    date_from = date_to - timedelta(days=CORPORATE_EVENTS_INCREMENTAL_LOOKBACK_DAYS)
+    async with AsyncSessionLocal() as db:
+        result = await run_incremental_corporate_event_sync(
+            db,
+            date_from=date_from,
+            date_to=date_to,
+        )
+    logger.info("[scheduler] Catálogo corporativo incremental: %s", result.to_dict())
+    return result
 
 
 def _cron_trigger(**kwargs) -> CronTrigger:
@@ -48,7 +79,9 @@ def start_scheduler() -> None:
     async def update_quotes_intraday():
         from app.core.database import AsyncSessionLocal
         from app.models.asset import AssetType
-        from app.services.quote_cache_invalidation_service import refresh_quotes_and_invalidate
+        from app.services.quote_cache_invalidation_service import (
+            refresh_quotes_and_invalidate,
+        )
 
         asset_types = [
             AssetType.ACAO,
@@ -61,40 +94,66 @@ def start_scheduler() -> None:
         ]
         async with AsyncSessionLocal() as db:
             try:
-                updated, invalidated = await refresh_quotes_and_invalidate(db, asset_types)
+                updated, invalidated = await refresh_quotes_and_invalidate(
+                    db, asset_types
+                )
                 logger.info(
                     "[scheduler] Intraday: %s preços, %s carteiras invalidadas",
                     updated,
                     invalidated,
                 )
             except Exception as e:
-                logger.error("[scheduler] Erro ao atualizar cotações intradiárias: %s", e)
+                logger.error(
+                    "[scheduler] Erro ao atualizar cotações intradiárias: %s", e
+                )
 
-    @scheduler.scheduled_job(_cron_trigger(day_of_week="mon-fri", hour=7, minute=5), id="update_treasury_catalog", name="Atualizar catálogo BRAPI — Tesouro Direto")
+    @scheduler.scheduled_job(
+        _cron_trigger(day_of_week="mon-fri", hour=7, minute=5),
+        id="update_treasury_catalog",
+        name="Atualizar catálogo BRAPI — Tesouro Direto",
+    )
     async def update_treasury_catalog():
         from app.core.database import AsyncSessionLocal
         from app.services.treasury_catalog_service import seed_treasury_assets
+
         async with AsyncSessionLocal() as db:
             try:
                 await seed_treasury_assets(db)
             except Exception as e:
-                logger.error("[scheduler] Erro ao atualizar catálogo Tesouro Direto: %s", e)
+                logger.error(
+                    "[scheduler] Erro ao atualizar catálogo Tesouro Direto: %s", e
+                )
 
-    @scheduler.scheduled_job(_cron_trigger(day_of_week="mon-fri", hour=7, minute=8), id="update_treasury_history", name="Atualizar histórico BRAPI — Tesouro Direto")
+    @scheduler.scheduled_job(
+        _cron_trigger(day_of_week="mon-fri", hour=7, minute=8),
+        id="update_treasury_history",
+        name="Atualizar histórico BRAPI — Tesouro Direto",
+    )
     async def update_treasury_history():
         from app.core.database import AsyncSessionLocal
-        from app.services.treasury_price_history_service import import_treasury_price_history, update_treasury_latest_prices
+        from app.services.treasury_price_history_service import (
+            import_treasury_price_history,
+            update_treasury_latest_prices,
+        )
+
         async with AsyncSessionLocal() as db:
             try:
                 await import_treasury_price_history(db, only_missing=True)
                 await update_treasury_latest_prices(db)
             except Exception as e:
-                logger.error("[scheduler] Erro ao atualizar histórico Tesouro Direto: %s", e)
+                logger.error(
+                    "[scheduler] Erro ao atualizar histórico Tesouro Direto: %s", e
+                )
 
-    @scheduler.scheduled_job(_cron_trigger(day_of_week="mon-fri", hour=7, minute=10), id="update_benchmark_rates", name="Atualizar benchmarks SGS/BCB — CDI/SELIC/IPCA/IGPM")
+    @scheduler.scheduled_job(
+        _cron_trigger(day_of_week="mon-fri", hour=7, minute=10),
+        id="update_benchmark_rates",
+        name="Atualizar benchmarks SGS/BCB — CDI/SELIC/IPCA/IGPM",
+    )
     async def update_benchmark_rates():
         from app.core.database import AsyncSessionLocal
         from app.services.benchmark_rate_service import import_missing_benchmark_history
+
         async with AsyncSessionLocal() as db:
             try:
                 await import_missing_benchmark_history(db)
@@ -111,6 +170,7 @@ def start_scheduler() -> None:
     async def sync_daily_proventos():
         from app.core.database import AsyncSessionLocal
         from app.services.proventos_daily_sync_service import run_daily_proventos_sync
+
         async with AsyncSessionLocal() as db:
             try:
                 result = await run_daily_proventos_sync(
@@ -121,11 +181,31 @@ def start_scheduler() -> None:
             except Exception as e:
                 logger.error("[scheduler] Erro ao sincronizar proventos diários: %s", e)
 
-    @scheduler.scheduled_job(_cron_trigger(day_of_week="mon-fri", hour=20, minute=20), id="sync_market_pipeline_held_assets", name="Pipeline incremental — ativos em carteira", max_instances=1, coalesce=True)
+    @scheduler.scheduled_job(
+        _cron_trigger(day_of_week="mon-fri", hour=18, minute=35),
+        id="sync_corporate_events_incremental",
+        name="Sincronizar catálogo corporativo canônico (18:35)",
+        max_instances=1,
+        coalesce=True,
+    )
+    async def sync_corporate_events_incremental():
+        try:
+            await run_scheduled_corporate_event_sync()
+        except Exception as e:
+            logger.error("[scheduler] Erro no catálogo corporativo incremental: %s", e)
+
+    @scheduler.scheduled_job(
+        _cron_trigger(day_of_week="mon-fri", hour=20, minute=20),
+        id="sync_market_pipeline_held_assets",
+        name="Pipeline incremental — ativos em carteira",
+        max_instances=1,
+        coalesce=True,
+    )
     async def sync_market_pipeline_held_assets():
         from app.core.database import AsyncSessionLocal
         from app.models.asset import AssetType
         from app.services.market_pipeline_batch_service import run_market_pipeline_batch
+
         async with AsyncSessionLocal() as db:
             try:
                 result = await run_market_pipeline_batch(
@@ -144,29 +224,57 @@ def start_scheduler() -> None:
                     sync_logo=True,
                     **HELD_MARKET_PIPELINE_EVENT_OPTIONS,
                 )
-                logger.info("[scheduler] Pipeline incremental da carteira atualizado: %s", result)
+                logger.info(
+                    "[scheduler] Pipeline incremental da carteira atualizado: %s",
+                    result,
+                )
             except Exception as e:
-                logger.error("[scheduler] Erro no pipeline incremental da carteira: %s", e)
+                logger.error(
+                    "[scheduler] Erro no pipeline incremental da carteira: %s", e
+                )
 
-    @scheduler.scheduled_job(_cron_trigger(day_of_week="mon-fri", hour=20, minute=45), id="global_asset_price_gap_maintenance", name="Auditar e preencher lacunas globais de preços", max_instances=1, coalesce=True)
+    @scheduler.scheduled_job(
+        _cron_trigger(day_of_week="mon-fri", hour=20, minute=45),
+        id="global_asset_price_gap_maintenance",
+        name="Auditar e preencher lacunas globais de preços",
+        max_instances=1,
+        coalesce=True,
+    )
     async def global_asset_price_gap_maintenance():
-        from app.services.asset_price_global_backfill_service import run_global_asset_price_backfill
+        from app.services.asset_price_global_backfill_service import (
+            run_global_asset_price_backfill,
+        )
+
         try:
             result = await run_global_asset_price_backfill()
             logger.info("[scheduler] Cobertura global de preços atualizada: %s", result)
         except Exception as e:
             logger.error("[scheduler] Erro na cobertura global de preços: %s", e)
 
-    @scheduler.scheduled_job(_cron_trigger(day_of_week="mon-fri", hour=21, minute=0), id="portfolio_snapshot_auto_maintenance", name="Manutencao automatica de snapshots patrimoniais e TWR", max_instances=1, coalesce=True)
+    @scheduler.scheduled_job(
+        _cron_trigger(day_of_week="mon-fri", hour=21, minute=0),
+        id="portfolio_snapshot_auto_maintenance",
+        name="Manutencao automatica de snapshots patrimoniais e TWR",
+        max_instances=1,
+        coalesce=True,
+    )
     async def portfolio_snapshot_auto_maintenance():
         from app.core.database import AsyncSessionLocal
-        from app.services.portfolio_snapshot_twr_maintenance_service import maintain_twr_snapshots_for_active_portfolios
+        from app.services.portfolio_snapshot_twr_maintenance_service import (
+            maintain_twr_snapshots_for_active_portfolios,
+        )
+
         async with AsyncSessionLocal() as db:
             try:
                 result = await maintain_twr_snapshots_for_active_portfolios(db)
-                logger.info("[scheduler] Snapshots patrimoniais/TWR atualizados: %s", result)
+                logger.info(
+                    "[scheduler] Snapshots patrimoniais/TWR atualizados: %s", result
+                )
             except Exception as e:
                 logger.error("[scheduler] Erro na manutencao de snapshots TWR: %s", e)
 
     scheduler.start()
-    logger.info("Scheduler iniciado — cotações intraday a cada 90 min + Tesouro Direto + benchmarks + proventos diário + pipeline sem eventos + cobertura global de preços + snapshots TWR")
+    logger.info(
+        "Scheduler iniciado — cotações intraday + Tesouro Direto + benchmarks "
+        "+ proventos + catálogo corporativo controlado + preços + snapshots TWR"
+    )

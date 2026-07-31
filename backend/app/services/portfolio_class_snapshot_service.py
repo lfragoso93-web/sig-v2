@@ -5,6 +5,7 @@ Somente classes cuja precificação histórica é integralmente sustentada por
 dedicados (Tesouro e Renda Fixa) são declaradas indisponíveis, em vez de receber
 uma fórmula aproximada ou retorno simples.
 """
+
 from __future__ import annotations
 
 import logging
@@ -28,9 +29,16 @@ from app.services.canonical_dividend_entitlement_reader import (
     PortfolioDividendEntitlement,
     load_portfolio_dividend_entitlements,
 )
+from app.services.corporate_position_projection_service import (
+    consume_quantity_actions,
+    load_eligible_quantity_actions,
+)
 from app.services.fx_service import get_usd_brl_at_date
 from app.services.price_history_service import get_prices_at_date_batch
-from app.services.twr_service import append_compounded_return_pct, calculate_daily_twr_pct
+from app.services.twr_service import (
+    append_compounded_return_pct,
+    calculate_daily_twr_pct,
+)
 
 logger = logging.getLogger(__name__)
 _ZERO = Decimal("0")
@@ -90,6 +98,12 @@ class ClassPositionState:
         self.quantity = max(_ZERO, self.quantity - sold)
         self.cost = max(_ZERO, self.cost - sold * average_cost)
 
+    def apply_quantity_factor(self, factor: Decimal) -> None:
+        """Altera apenas a quantidade; evento corporativo não é fluxo externo."""
+        if not factor.is_finite() or factor <= _ZERO:
+            raise ValueError("quantity factor must be positive")
+        self.quantity *= factor
+
 
 @dataclass
 class ClassReturnState:
@@ -106,8 +120,12 @@ def class_twr_availability(asset_types: Iterable[AssetType]) -> list[dict]:
             {
                 "asset_type": asset_type.value,
                 "available": supported,
-                "status": "available" if supported else "dedicated_history_not_available",
-                "reason": None if supported else (
+                "status": "available"
+                if supported
+                else "dedicated_history_not_available",
+                "reason": None
+                if supported
+                else (
                     "A classe exige valuation histórico dedicado; nenhuma estimativa é exibida."
                 ),
             }
@@ -225,10 +243,25 @@ async def rebuild_class_snapshots(
     count = 0
     cursor = start
     today = date.today()
+    actions_by_ticker = await load_eligible_quantity_actions(
+        db,
+        tickers=[str(transaction.ticker) for transaction in supported_transactions],
+        through_date=today,
+    )
+    action_cursors: dict[str, int] = {}
 
     while cursor <= today:
         if cursor.weekday() < 5:
             external_flows: dict[AssetType, Decimal] = defaultdict(lambda: _ZERO)
+            for ticker, state in position_states.items():
+                projected, action_cursor, _ = consume_quantity_actions(
+                    actions_by_ticker.get(ticker, ()),
+                    cursor=action_cursors.get(ticker, 0),
+                    through_date=cursor,
+                    quantity=state.quantity,
+                )
+                state.quantity = projected
+                action_cursors[ticker] = action_cursor
             for transaction in transactions_by_day.get(cursor, []):
                 parsed = _asset_type(transaction.asset_type)
                 if parsed not in SUPPORTED_CLASS_TWR_TYPES:
@@ -238,6 +271,14 @@ async def rebuild_class_snapshots(
                     ticker,
                     ClassPositionState(parsed, is_usd=parsed in _USD_TYPES),
                 )
+                projected, action_cursor, _ = consume_quantity_actions(
+                    actions_by_ticker.get(ticker, ()),
+                    cursor=action_cursors.get(ticker, 0),
+                    through_date=cursor,
+                    quantity=state.quantity,
+                )
+                state.quantity = projected
+                action_cursors[ticker] = action_cursor
                 quantity, price_brl, fees_brl = _operation_brl(transaction)
                 if transaction.operation == OperationType.buy:
                     state.buy(quantity, price_brl, fees_brl)
@@ -246,7 +287,9 @@ async def rebuild_class_snapshots(
                     state.sell(quantity, price_brl, fees_brl)
                     external_flows[parsed] -= quantity * price_brl - fees_brl
 
-            open_by_class: dict[AssetType, list[tuple[str, ClassPositionState]]] = defaultdict(list)
+            open_by_class: dict[AssetType, list[tuple[str, ClassPositionState]]] = (
+                defaultdict(list)
+            )
             realized_by_class: dict[AssetType, Decimal] = defaultdict(lambda: _ZERO)
             for ticker, state in position_states.items():
                 realized_by_class[state.asset_type] += state.realized_pnl
@@ -266,7 +309,9 @@ async def rebuild_class_snapshots(
                 )
                 fx_rate = Decimal("1")
                 if asset_type in _USD_TYPES and requirements:
-                    fx_rate = _decimal(await get_usd_brl_at_date(db, cursor.isoformat()))
+                    fx_rate = _decimal(
+                        await get_usd_brl_at_date(db, cursor.isoformat())
+                    )
 
                 market_value = _ZERO
                 cost_basis = _ZERO
@@ -310,14 +355,20 @@ async def rebuild_class_snapshots(
                         "cost_basis": cost_basis.quantize(_MONEY),
                         "realized_pnl": realized_by_class[asset_type].quantize(_MONEY),
                         "unrealized_pnl": unrealized_pnl.quantize(_MONEY),
-                        "net_external_flow": external_flows[asset_type].quantize(_MONEY),
+                        "net_external_flow": external_flows[asset_type].quantize(
+                            _MONEY
+                        ),
                         "dividends_day": dividends_day.quantize(_MONEY),
-                        "dividends_accumulated": class_state.dividends_accumulated.quantize(_MONEY),
+                        "dividends_accumulated": class_state.dividends_accumulated.quantize(
+                            _MONEY
+                        ),
                         "daily_return_pct": daily_return,
                         "accumulated_return_pct": class_state.accumulated_return_pct,
                         "has_partial_prices": has_partial_prices,
                         "return_is_estimated": True,
-                        "valuation_status": "partial_prices" if has_partial_prices else "complete",
+                        "valuation_status": "partial_prices"
+                        if has_partial_prices
+                        else "complete",
                     },
                 )
                 class_state.previous_value = market_value

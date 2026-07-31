@@ -3,6 +3,87 @@
 Todas as mudanças relevantes do projeto são documentadas aqui.
 Formato baseado em Keep a Changelog.
 
+### Adicionado — auditoria BRAPI Pro e catálogo corporativo independente de provedor (31/07/2026)
+
+- O cliente BRAPI v2 passou a suportar catálogo, resolução, renomes e cobertura
+  por capacidade, com DTOs e erros internos tipados.
+- Uma auditoria somente leitura validou o contrato Pro de 2000 até hoje e
+  preservou relatório sanitizado sem tokens ou segredos.
+- A BRAPI confirmou `DESDOBRAMENTO` e `GRUPAMENTO` explícitos em
+  `stockDividends`; o motor agora os distingue de bonificação pelo `label`.
+- Eventos idênticos entre BRAPI e Yahoo são deduplicados com precedência da
+  BRAPI; rótulos desconhecidos são bloqueantes.
+- `corporate_events` recebeu um modelo canônico de fonte, identidade econômica,
+  datas, ativo de destino, reconciliação, revisão e metadados, mantendo colunas
+  legadas somente durante a migração compatível.
+- A reconciliação persistente passou a escolher uma única representação
+  canônica quando fontes independentes concordam e a bloquear como `CONFLICT`
+  grupos com fatores ou termos divergentes.
+- Evidências equivalentes continuam preservadas e apontam para o evento
+  canônico; fonte única e subscrição permanecem obrigatoriamente em revisão.
+- A carga histórica corporativa ganhou CLI dedicada, dry-run por padrão,
+  advisory lock transacional, savepoint por ativo, rollback integral em falhas
+  e relatório de estado antes/depois e reconciliação.
+- A aplicação real exige frase de autorização explícita e permanece bloqueada
+  até a migration canônica ser executada em janela controlada.
+- As posições atuais e as posições históricas usadas por valuation e snapshots
+  passaram a intercalar compras, vendas e eventos corporativos canônicos em
+  ordem cronológica, preservando o custo total após mudanças de quantidade.
+- A seleção automática aceita somente eventos globais `MATCHED`, `VALIDATED`,
+  canônicos e sem revisão pendente; conflitos, subscrições e fontes únicas são
+  excluídos da projeção.
+- O cálculo derivado de direitos de proventos passou a aplicar esses eventos em
+  ordem cronológica antes da data de direito, corrigindo a quantidade elegível.
+- Bens e Direitos do IRPF passou a aplicar os mesmos eventos até 31/12,
+  preservando custo total e recalculando custo médio após mudanças de
+  quantidade.
+- O P&L realizado da página de Rentabilidade passou a ajustar a quantidade e o
+  custo médio antes de vendas posteriores a eventos corporativos elegíveis.
+- A cadeia histórica TWR por classe aplica eventos de quantidade sem registrá-los
+  como fluxo externo, preservando a separação entre retorno e aportes/resgates.
+- O adaptador legado de performance deixou de reconstruir posições em paralelo e
+  passou a consumir `calc_raw_positions`, preservando seu contrato de resposta
+  com quantidade e base de custo canônicas.
+- O scheduler único recebeu coleta corporativa incremental às 18:35 em dias
+  úteis, protegida por feature flag desligada por padrão, advisory lock
+  compartilhado, janela móvel, savepoint por ativo e relatório observável.
+- O job incremental apenas cataloga e reconcilia eventos globais; a carga
+  histórica e a materialização de direitos por carteira permanecem excluídas.
+- Adicionada fila administrativa de eventos corporativos, restrita a SuperAdmin,
+  com filtros, paginação e decisões explícitas de aprovação ou rejeição.
+- Aprovações humanas usam `MANUALLY_VALIDATED`, exigem justificativa e revisor,
+  geram `AuditLog` e não são sobrescritas pela reconciliação automática.
+- Ao resolver um conflito, a evidência escolhida torna-se canônica e as
+  concorrentes do mesmo grupo são rejeitadas na mesma transação.
+- O Painel Admin ganhou a seção visual de revisão corporativa com busca por
+  ticker, filtros de reconciliação, paginação, feedback de estados e modal de
+  decisão com justificativa obrigatória e alerta específico para conflitos.
+
+- A fila administrativa agora permite comparar todas as evidências do grupo,
+  destaca divergências nos campos econômicos e expõe o payload bruto de cada
+  provedor antes da decisão humana.
+- Eventos complexos passaram a ter classificação explícita de efeito econômico
+  e validação de termos obrigatórios; aprovações incompletas são bloqueadas.
+- Subscrições agora preservam o preço coletado da BRAPI como termo canônico,
+  mantendo o exercício e qualquer alteração de posição estritamente manuais.
+- O catálogo de ativos ganhou identidade ISIN opcional e o revisor resolve o
+  ativo de destino localmente por ID, ticker e/ou ISIN, bloqueando ausência,
+  ambiguidade e conflito sem criar ativos implicitamente.
+- Trocas, incorporações, fusões, conversões e cisões ganharam um plano de
+  projeção somente leitura que calcula quantidades e caixa, mas permanece não
+  executável sem alocação de custo e tratamento fiscal explícitos.
+- O catálogo corporativo ganhou termos canônicos para percentual de custo no
+  destino, passo de quantidade, preço de liquidação da fração e classificação
+  revisada do caixa.
+- A prévia administrativa calcula rateio de custo, fração liquidada e caixa sem
+  persistir posições; o plano só fica economicamente completo quando todos os
+  termos explícitos são válidos.
+- O Painel Admin ganhou simulador econômico read-only com quantidade e custo de
+  entrada, exibindo saldos projetados, rateio, fração, caixa e bloqueios.
+- Criado contrato de intenção de execução com chave idempotente determinística e
+  gates de revisão, completude e feature flag desligada por padrão; mesmo no
+  estado `READY`, a intenção permanece `writable=false`.
+
 ## [Unreleased] — branch `stable-15jun`
 
 ### Adicionado — motor canônico de eventos corporativos (31/07/2026)

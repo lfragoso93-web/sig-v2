@@ -12,24 +12,63 @@ Isolamento:
   - cache_set noop
   - get_prices mockado (batch, igual ao servico real)
 """
+
 from __future__ import annotations
 
-import pytest
 from datetime import date, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.models.asset import Asset, AssetType, AssetCurrency
+import pytest
+from app.models.asset import Asset, AssetCurrency, AssetType
 from app.models.portfolio import Portfolio
 from app.models.portfolio_snapshot import PortfolioSnapshot
-from app.models.transaction import Transaction, OperationType
-
+from app.models.transaction import OperationType, Transaction
+from app.services.corporate_position_projection_service import EligibleQuantityAction
+from app.services.rentabilidade_service import _calc_realized_from_txs
+from sqlalchemy.ext.asyncio import AsyncSession
 
 # ---------------------------------------------------------------------------
 # Helpers de fixtures
 # ---------------------------------------------------------------------------
+
+
+def test_realized_pnl_applies_split_before_sale() -> None:
+    transactions = [
+        SimpleNamespace(
+            ticker="PETR4",
+            asset_type="ACAO",
+            operation=OperationType.buy,
+            quantity=100,
+            price=10,
+            fees=0,
+            currency="BRL",
+            date=date(2024, 1, 2),
+        ),
+        SimpleNamespace(
+            ticker="PETR4",
+            asset_type="ACAO",
+            operation=OperationType.sell,
+            quantity=100,
+            price=8,
+            fees=0,
+            currency="BRL",
+            date=date(2024, 3, 2),
+        ),
+    ]
+    split = EligibleQuantityAction(
+        event_id=42,
+        ticker="PETR4",
+        effective_date=date(2024, 2, 1),
+        event_type="DESDOBRAMENTO",
+        quantity_factor=Decimal("2"),
+    )
+
+    result = _calc_realized_from_txs(transactions, {"PETR4": (split,)})
+
+    assert result["PETR4"] == 300.0
+
 
 async def _make_asset(
     db: AsyncSession,
@@ -142,8 +181,12 @@ def _make_prices_mock(prices: dict[str, float]):
     get_prices recebe lista de {ticker, asset_type} e retorna {ticker: preco}.
     Apenas tickers presentes no dict prices serao incluidos no resultado.
     """
+
     async def _mock(items, db=None):
-        return {i["ticker"]: prices[i["ticker"]] for i in items if i["ticker"] in prices}
+        return {
+            i["ticker"]: prices[i["ticker"]] for i in items if i["ticker"] in prices
+        }
+
     return _mock
 
 
@@ -151,9 +194,9 @@ def _make_prices_mock(prices: dict[str, float]):
 # get_kpis
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 class TestCanonicalDividends:
-
     async def test_carrega_totais_recebidos_uma_vez(self):
         from app.services.rentabilidade_service import _proventos_totals
 
@@ -162,8 +205,7 @@ class TestCanonicalDividends:
         loader = AsyncMock(return_value=(125.50, 800.75))
 
         with patch(
-            "app.services.rentabilidade_service."
-            "load_received_entitlement_totals",
+            "app.services.rentabilidade_service.load_received_entitlement_totals",
             loader,
         ):
             result = await _proventos_totals(db, 17, as_of=as_of)
@@ -181,8 +223,7 @@ class TestCanonicalDividends:
 
         loader = AsyncMock(side_effect=RuntimeError("reader unavailable"))
         with patch(
-            "app.services.rentabilidade_service."
-            "load_received_entitlement_totals",
+            "app.services.rentabilidade_service.load_received_entitlement_totals",
             loader,
         ):
             result = await _proventos_totals(
@@ -196,8 +237,9 @@ class TestCanonicalDividends:
 
 @pytest.mark.asyncio
 class TestGetKpis:
-
-    async def test_sem_snapshot_retorna_zeros(self, db: AsyncSession, portfolio: Portfolio):
+    async def test_sem_snapshot_retorna_zeros(
+        self, db: AsyncSession, portfolio: Portfolio
+    ):
         from app.services.rentabilidade_service import get_kpis
 
         with _PATCH_CACHE_GET, _PATCH_CACHE_SET:
@@ -207,12 +249,16 @@ class TestGetKpis:
         assert result["retorno_total_pct"] == 0.0
         assert result["snapshot_date"] is None
 
-    async def test_snapshot_hoje_retorna_valores(self, db: AsyncSession, portfolio: Portfolio):
+    async def test_snapshot_hoje_retorna_valores(
+        self, db: AsyncSession, portfolio: Portfolio
+    ):
         from app.services.rentabilidade_service import get_kpis
 
         today = date.today()
         await _make_snapshot(
-            db, portfolio, today,
+            db,
+            portfolio,
+            today,
             market_value=12000.0,
             invested_total=10000.0,
             unrealized_pnl=2000.0,
@@ -229,7 +275,9 @@ class TestGetKpis:
         assert result["retorno_total_pct"] == pytest.approx(20.0)
         assert result["snapshot_date"] == str(today)
 
-    async def test_retorno_mes_usa_snapshot_30d(self, db: AsyncSession, portfolio: Portfolio):
+    async def test_retorno_mes_usa_snapshot_30d(
+        self, db: AsyncSession, portfolio: Portfolio
+    ):
         """
         _ret_between(snap_end, snap_start) usa Modified Dietz simplificado:
           gain = (unrealized_pnl_end - unrealized_pnl_start) + (realized_pnl_end - realized_pnl_start)
@@ -248,7 +296,9 @@ class TestGetKpis:
 
         # snap 30d atras: sem ganho ainda (unrealized=0)
         await _make_snapshot(
-            db, portfolio, snap_30d,
+            db,
+            portfolio,
+            snap_30d,
             market_value=9000.0,
             cost_basis=9000.0,
             unrealized_pnl=0.0,
@@ -258,7 +308,9 @@ class TestGetKpis:
         )
         # snap hoje: ganhou 1000 de unrealized
         await _make_snapshot(
-            db, portfolio, today,
+            db,
+            portfolio,
+            today,
             market_value=10000.0,
             cost_basis=9000.0,
             unrealized_pnl=1000.0,
@@ -273,7 +325,9 @@ class TestGetKpis:
         # gain=1000, base=9000 -> 11.1111%
         assert result["retorno_mes_pct"] == pytest.approx(11.1111, rel=1e-3)
 
-    async def test_retorno_mes_sem_snap_30d_usa_fallback(self, db: AsyncSession, portfolio: Portfolio):
+    async def test_retorno_mes_sem_snap_30d_usa_fallback(
+        self, db: AsyncSession, portfolio: Portfolio
+    ):
         """
         Sem snap_30d, _ret_between(snap_hoje, None) usa:
           gain = unrealized_pnl + realized_pnl do snap_hoje
@@ -287,7 +341,9 @@ class TestGetKpis:
 
         today = date.today()
         await _make_snapshot(
-            db, portfolio, today,
+            db,
+            portfolio,
+            today,
             market_value=9900.0,
             cost_basis=9000.0,
             unrealized_pnl=900.0,
@@ -303,7 +359,9 @@ class TestGetKpis:
         # gain=900, base=9000 -> 10.0%
         assert result["retorno_mes_pct"] == pytest.approx(10.0)
 
-    async def test_campos_obrigatorios_presentes(self, db: AsyncSession, portfolio: Portfolio):
+    async def test_campos_obrigatorios_presentes(
+        self, db: AsyncSession, portfolio: Portfolio
+    ):
         from app.services.rentabilidade_service import get_kpis
 
         today = date.today()
@@ -313,10 +371,18 @@ class TestGetKpis:
             result = await get_kpis(db, portfolio.id)
 
         campos = [
-            "patrimonio_atual", "custo_total", "total_aportado",
-            "ganho_nao_realizado", "ganho_realizado", "total_pnl",
-            "retorno_total_pct", "retorno_mes_pct", "retorno_12m_pct",
-            "retorno_desde_inicio_pct", "proventos_total", "proventos_12m",
+            "patrimonio_atual",
+            "custo_total",
+            "total_aportado",
+            "ganho_nao_realizado",
+            "ganho_realizado",
+            "total_pnl",
+            "retorno_total_pct",
+            "retorno_mes_pct",
+            "retorno_12m_pct",
+            "retorno_desde_inicio_pct",
+            "proventos_total",
+            "proventos_12m",
             "snapshot_date",
         ]
         for campo in campos:
@@ -327,9 +393,9 @@ class TestGetKpis:
 # get_rentabilidade_por_ativo
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 class TestGetRentabilidadePorAtivo:
-
     async def test_sem_posicoes_retorna_lista_vazia(
         self, db: AsyncSession, portfolio: Portfolio
     ):
@@ -349,8 +415,11 @@ class TestGetRentabilidadePorAtivo:
         await _make_buy(db, portfolio, "PETR4", quantity=100.0, price=20.0)
 
         prices_mock = _make_prices_mock({"PETR4": 25.0})
-        with _PATCH_CACHE_GET, _PATCH_CACHE_SET, \
-             patch("app.services.rentabilidade_service.get_prices", prices_mock):
+        with (
+            _PATCH_CACHE_GET,
+            _PATCH_CACHE_SET,
+            patch("app.services.rentabilidade_service.get_prices", prices_mock),
+        ):
             result = await get_rentabilidade_por_ativo(db, portfolio.id)
 
         assert len(result) == 1
@@ -358,11 +427,11 @@ class TestGetRentabilidadePorAtivo:
         assert r["ticker"] == "PETR4"
         assert r["is_open"] is True
         assert r["quantity"] == pytest.approx(100.0)
-        assert r["current_value"] == pytest.approx(2500.0)   # 100 * 25
-        assert r["unrealized_pnl"] == pytest.approx(500.0)   # 2500 - 2000
+        assert r["current_value"] == pytest.approx(2500.0)  # 100 * 25
+        assert r["unrealized_pnl"] == pytest.approx(500.0)  # 2500 - 2000
         assert r["realized_pnl"] == pytest.approx(0.0)
         assert r["total_pnl"] == pytest.approx(500.0)
-        assert r["unrealized_pct"] == pytest.approx(25.0)    # 500/2000*100
+        assert r["unrealized_pct"] == pytest.approx(25.0)  # 500/2000*100
 
     async def test_posicao_aberta_sem_cotacao_usa_preco_medio(
         self, db: AsyncSession, portfolio: Portfolio
@@ -374,8 +443,11 @@ class TestGetRentabilidadePorAtivo:
 
         # get_prices retorna dict vazio -> sem cotacao
         prices_mock = _make_prices_mock({})
-        with _PATCH_CACHE_GET, _PATCH_CACHE_SET, \
-             patch("app.services.rentabilidade_service.get_prices", prices_mock):
+        with (
+            _PATCH_CACHE_GET,
+            _PATCH_CACHE_SET,
+            patch("app.services.rentabilidade_service.get_prices", prices_mock),
+        ):
             result = await get_rentabilidade_por_ativo(db, portfolio.id)
 
         assert len(result) == 1
@@ -395,8 +467,11 @@ class TestGetRentabilidadePorAtivo:
         await _make_sell(db, portfolio, "MGLU3", quantity=100.0, price=5.0)
 
         prices_mock = _make_prices_mock({})
-        with _PATCH_CACHE_GET, _PATCH_CACHE_SET, \
-             patch("app.services.rentabilidade_service.get_prices", prices_mock):
+        with (
+            _PATCH_CACHE_GET,
+            _PATCH_CACHE_SET,
+            patch("app.services.rentabilidade_service.get_prices", prices_mock),
+        ):
             result = await get_rentabilidade_por_ativo(db, portfolio.id)
 
         assert len(result) == 1
@@ -418,8 +493,11 @@ class TestGetRentabilidadePorAtivo:
         await _make_sell(db, portfolio, "BOVA11", quantity=10.0, price=10.0)
 
         prices_mock = _make_prices_mock({})
-        with _PATCH_CACHE_GET, _PATCH_CACHE_SET, \
-             patch("app.services.rentabilidade_service.get_prices", prices_mock):
+        with (
+            _PATCH_CACHE_GET,
+            _PATCH_CACHE_SET,
+            patch("app.services.rentabilidade_service.get_prices", prices_mock),
+        ):
             result = await get_rentabilidade_por_ativo(db, portfolio.id)
 
         # qty=0 e realized=0 -> deve ser ignorado
@@ -433,12 +511,19 @@ class TestGetRentabilidadePorAtivo:
         await _make_asset(db, "PETR4", AssetType.ACAO)
         await _make_asset(db, "HGLG11", AssetType.FII)
 
-        await _make_buy(db, portfolio, "PETR4",  quantity=100.0, price=20.0, asset_type="ACAO")
-        await _make_buy(db, portfolio, "HGLG11", quantity=10.0,  price=50.0, asset_type="FII")
+        await _make_buy(
+            db, portfolio, "PETR4", quantity=100.0, price=20.0, asset_type="ACAO"
+        )
+        await _make_buy(
+            db, portfolio, "HGLG11", quantity=10.0, price=50.0, asset_type="FII"
+        )
 
         prices_mock = _make_prices_mock({"PETR4": 30.0, "HGLG11": 120.0})
-        with _PATCH_CACHE_GET, _PATCH_CACHE_SET, \
-             patch("app.services.rentabilidade_service.get_prices", prices_mock):
+        with (
+            _PATCH_CACHE_GET,
+            _PATCH_CACHE_SET,
+            patch("app.services.rentabilidade_service.get_prices", prices_mock),
+        ):
             result = await get_rentabilidade_por_ativo(db, portfolio.id)
 
         assert len(result) == 2
@@ -451,9 +536,9 @@ class TestGetRentabilidadePorAtivo:
 # get_rentabilidade_por_classe
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 class TestGetRentabilidadePorClasse:
-
     async def test_sem_posicoes_retorna_lista_vazia(
         self, db: AsyncSession, portfolio: Portfolio
     ):
@@ -464,22 +549,29 @@ class TestGetRentabilidadePorClasse:
 
         assert result == []
 
-    async def test_agrupa_por_tipo(
-        self, db: AsyncSession, portfolio: Portfolio
-    ):
+    async def test_agrupa_por_tipo(self, db: AsyncSession, portfolio: Portfolio):
         from app.services.rentabilidade_service import get_rentabilidade_por_classe
 
-        await _make_asset(db, "PETR4",  AssetType.ACAO)
-        await _make_asset(db, "VALE3",  AssetType.ACAO)
+        await _make_asset(db, "PETR4", AssetType.ACAO)
+        await _make_asset(db, "VALE3", AssetType.ACAO)
         await _make_asset(db, "HGLG11", AssetType.FII)
 
-        await _make_buy(db, portfolio, "PETR4",  quantity=100.0, price=20.0, asset_type="ACAO")
-        await _make_buy(db, portfolio, "VALE3",  quantity=50.0,  price=20.0, asset_type="ACAO")
-        await _make_buy(db, portfolio, "HGLG11", quantity=10.0,  price=50.0, asset_type="FII")
+        await _make_buy(
+            db, portfolio, "PETR4", quantity=100.0, price=20.0, asset_type="ACAO"
+        )
+        await _make_buy(
+            db, portfolio, "VALE3", quantity=50.0, price=20.0, asset_type="ACAO"
+        )
+        await _make_buy(
+            db, portfolio, "HGLG11", quantity=10.0, price=50.0, asset_type="FII"
+        )
 
         prices_mock = _make_prices_mock({"PETR4": 25.0, "VALE3": 22.0, "HGLG11": 60.0})
-        with _PATCH_CACHE_GET, _PATCH_CACHE_SET, \
-             patch("app.services.rentabilidade_service.get_prices", prices_mock):
+        with (
+            _PATCH_CACHE_GET,
+            _PATCH_CACHE_SET,
+            patch("app.services.rentabilidade_service.get_prices", prices_mock),
+        ):
             result = await get_rentabilidade_por_classe(db, portfolio.id)
 
         tipos = {r["asset_type"]: r for r in result}
@@ -494,20 +586,25 @@ class TestGetRentabilidadePorClasse:
         assert tipos["FII"]["current_value"] == pytest.approx(600.0)
         assert tipos["FII"]["count"] == 1
 
-    async def test_alocacao_pct_soma_100(
-        self, db: AsyncSession, portfolio: Portfolio
-    ):
+    async def test_alocacao_pct_soma_100(self, db: AsyncSession, portfolio: Portfolio):
         from app.services.rentabilidade_service import get_rentabilidade_por_classe
 
-        await _make_asset(db, "PETR4",  AssetType.ACAO)
+        await _make_asset(db, "PETR4", AssetType.ACAO)
         await _make_asset(db, "HGLG11", AssetType.FII)
 
-        await _make_buy(db, portfolio, "PETR4",  quantity=100.0, price=20.0, asset_type="ACAO")
-        await _make_buy(db, portfolio, "HGLG11", quantity=10.0,  price=60.0, asset_type="FII")
+        await _make_buy(
+            db, portfolio, "PETR4", quantity=100.0, price=20.0, asset_type="ACAO"
+        )
+        await _make_buy(
+            db, portfolio, "HGLG11", quantity=10.0, price=60.0, asset_type="FII"
+        )
 
         prices_mock = _make_prices_mock({"PETR4": 20.0, "HGLG11": 60.0})
-        with _PATCH_CACHE_GET, _PATCH_CACHE_SET, \
-             patch("app.services.rentabilidade_service.get_prices", prices_mock):
+        with (
+            _PATCH_CACHE_GET,
+            _PATCH_CACHE_SET,
+            patch("app.services.rentabilidade_service.get_prices", prices_mock),
+        ):
             result = await get_rentabilidade_por_classe(db, portfolio.id)
 
         total_alocacao = sum(r["alocacao_pct"] for r in result)
@@ -519,18 +616,29 @@ class TestGetRentabilidadePorClasse:
         from app.services.rentabilidade_service import get_rentabilidade_por_classe
 
         await _make_asset(db, "PETR4", AssetType.ACAO)
-        await _make_buy(db, portfolio, "PETR4", quantity=10.0, price=20.0, asset_type="ACAO")
+        await _make_buy(
+            db, portfolio, "PETR4", quantity=10.0, price=20.0, asset_type="ACAO"
+        )
 
         prices_mock = _make_prices_mock({"PETR4": 25.0})
-        with _PATCH_CACHE_GET, _PATCH_CACHE_SET, \
-             patch("app.services.rentabilidade_service.get_prices", prices_mock):
+        with (
+            _PATCH_CACHE_GET,
+            _PATCH_CACHE_SET,
+            patch("app.services.rentabilidade_service.get_prices", prices_mock),
+        ):
             result = await get_rentabilidade_por_classe(db, portfolio.id)
 
         assert len(result) == 1
         campos = [
-            "asset_type", "total_invested", "current_value",
-            "unrealized_pnl", "realized_pnl", "total_pnl",
-            "total_pnl_pct", "alocacao_pct", "count",
+            "asset_type",
+            "total_invested",
+            "current_value",
+            "unrealized_pnl",
+            "realized_pnl",
+            "total_pnl",
+            "total_pnl_pct",
+            "alocacao_pct",
+            "count",
         ]
         for campo in campos:
             assert campo in result[0], f"Campo ausente: {campo}"

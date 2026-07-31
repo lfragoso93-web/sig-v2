@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import unicodedata
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from enum import StrEnum
-from typing import Any, Iterable
+from typing import Any
 
 
 class CorporateActionKind(StrEnum):
@@ -30,6 +32,7 @@ class NormalizedCorporateAction:
     event_date: date
     kind: CorporateActionKind
     quantity_factor: Decimal
+    subscription_price: Decimal | None
     raw_payload: dict[str, Any]
 
     @property
@@ -69,6 +72,31 @@ def _positive_decimal(value: object, *, field: str) -> Decimal:
     if not parsed.is_finite() or parsed <= 0:
         raise CorporateActionNormalizationError(f"{field} deve ser positivo")
     return parsed
+
+
+def _normalized_label(value: object) -> str:
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    without_accents = "".join(
+        character for character in text if not unicodedata.combining(character)
+    )
+    return " ".join(
+        without_accents.strip().upper().replace("_", " ").replace("-", " ").split()
+    )
+
+
+def _stock_dividend_kind(raw: dict[str, Any]) -> CorporateActionKind:
+    """Classifica pelo rotulo explicito confirmado no contrato BRAPI Pro."""
+
+    label = _normalized_label(raw.get("label") or raw.get("eventType"))
+    if "DESDOBRAMENTO" in label or label == "SPLIT":
+        return CorporateActionKind.SPLIT
+    if "GRUPAMENTO" in label or label in {"REVERSE SPLIT", "REVERSESPLIT"}:
+        return CorporateActionKind.REVERSE_SPLIT
+    if "BONIFICACAO" in label or "BONUS" in label:
+        return CorporateActionKind.STOCK_BONUS
+    raise CorporateActionNormalizationError(
+        f"stockDividends.label desconhecido: {label or 'ausente'}"
+    )
 
 
 def _event_id(
@@ -126,28 +154,39 @@ def normalize_brapi_corporate_actions(
         if not isinstance(data, dict):
             continue
 
-        categories = (
-            ("stockDividends", CorporateActionKind.STOCK_BONUS),
-            ("subscriptions", CorporateActionKind.SUBSCRIPTION),
-        )
-        for key, kind in categories:
+        for key in ("stockDividends", "subscriptions"):
             rows = data.get(key) or []
             if not isinstance(rows, list):
                 raise CorporateActionNormalizationError(f"{key} deve ser lista")
             for raw in rows:
                 if not isinstance(raw, dict):
-                    raise CorporateActionNormalizationError(f"{key} contém item inválido")
+                    raise CorporateActionNormalizationError(
+                        f"{key} contém item inválido"
+                    )
+                kind = (
+                    _stock_dividend_kind(raw)
+                    if key == "stockDividends"
+                    else CorporateActionKind.SUBSCRIPTION
+                )
                 event_date = _parse_date(
                     raw.get("lastDatePrior") or raw.get("exDate"),
                     field=f"{key}.lastDatePrior",
                 )
-                if kind == CorporateActionKind.STOCK_BONUS:
+                if kind != CorporateActionKind.SUBSCRIPTION:
                     quantity_factor = _positive_decimal(
                         raw.get("factor"), field=f"{key}.factor"
                     )
                 else:
                     # Subscrição cria um direito, não quantidade automática.
                     quantity_factor = Decimal(1)
+                subscription_price = None
+                if (
+                    kind == CorporateActionKind.SUBSCRIPTION
+                    and raw.get("rate") is not None
+                ):
+                    subscription_price = _positive_decimal(
+                        raw.get("rate"), field=f"{key}.rate"
+                    )
                 raw_payload = dict(raw)
                 source_event_id = _event_id(
                     source="brapi",
@@ -157,17 +196,22 @@ def normalize_brapi_corporate_actions(
                     quantity_factor=quantity_factor,
                     payload=raw_payload,
                 )
-                actions.append(NormalizedCorporateAction(
-                    source="brapi",
-                    source_event_id=source_event_id,
-                    ticker=ticker,
-                    event_date=event_date,
-                    kind=kind,
-                    quantity_factor=quantity_factor,
-                    raw_payload=raw_payload,
-                ))
+                actions.append(
+                    NormalizedCorporateAction(
+                        source="brapi",
+                        source_event_id=source_event_id,
+                        ticker=ticker,
+                        event_date=event_date,
+                        kind=kind,
+                        quantity_factor=quantity_factor,
+                        subscription_price=subscription_price,
+                        raw_payload=raw_payload,
+                    )
+                )
 
-    return tuple(sorted(actions, key=lambda item: (item.event_date, item.source_event_id)))
+    return tuple(
+        sorted(actions, key=lambda item: (item.event_date, item.source_event_id))
+    )
 
 
 def normalize_yahoo_splits(
@@ -199,16 +243,57 @@ def normalize_yahoo_splits(
             quantity_factor=factor,
             payload=raw_payload,
         )
-        actions.append(NormalizedCorporateAction(
-            source="yahoo",
-            source_event_id=source_event_id,
-            ticker=ticker,
-            event_date=event_date,
-            kind=kind,
-            quantity_factor=factor,
-            raw_payload=raw_payload,
-        ))
-    return tuple(sorted(actions, key=lambda item: (item.event_date, item.source_event_id)))
+        actions.append(
+            NormalizedCorporateAction(
+                source="yahoo",
+                source_event_id=source_event_id,
+                ticker=ticker,
+                event_date=event_date,
+                kind=kind,
+                quantity_factor=factor,
+                subscription_price=None,
+                raw_payload=raw_payload,
+            )
+        )
+    return tuple(
+        sorted(actions, key=lambda item: (item.event_date, item.source_event_id))
+    )
+
+
+def deduplicate_equivalent_corporate_actions(
+    actions: Iterable[NormalizedCorporateAction],
+) -> tuple[NormalizedCorporateAction, ...]:
+    """Remove equivalencias exatas entre fontes, priorizando a BRAPI."""
+
+    source_priority = {"brapi": 0, "yahoo": 1}
+    ordered = sorted(
+        actions,
+        key=lambda item: (
+            item.event_date,
+            item.ticker,
+            item.kind.value,
+            item.quantity_factor,
+            source_priority.get(item.source, 99),
+            item.source_event_id,
+        ),
+    )
+    by_economic_identity: dict[
+        tuple[str, date, CorporateActionKind, Decimal], NormalizedCorporateAction
+    ] = {}
+    for action in ordered:
+        identity = (
+            action.ticker,
+            action.event_date,
+            action.kind,
+            action.quantity_factor,
+        )
+        by_economic_identity.setdefault(identity, action)
+    return tuple(
+        sorted(
+            by_economic_identity.values(),
+            key=lambda item: (item.event_date, item.source_event_id),
+        )
+    )
 
 
 def project_corporate_actions(

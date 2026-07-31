@@ -1,13 +1,14 @@
 from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from app.services.canonical_dividend_entitlement import EntitlementReason
 from app.services.canonical_dividend_entitlement_reader import (
     load_portfolio_dividend_entitlements,
 )
+from app.services.corporate_position_projection_service import EligibleQuantityAction
 
 
 class Result:
@@ -73,11 +74,11 @@ def transaction(**overrides):
 
 @pytest.mark.asyncio
 async def test_loads_global_event_and_derives_historical_right_read_only():
-    db = Session([(event(), asset())], [transaction()])
+    db = Session([(event(), asset())], [transaction()], [])
 
     results = await load_portfolio_dividend_entitlements(db, 3)
 
-    assert db.calls == 2
+    assert db.calls == 3
     assert len(results) == 1
     assert results[0].ticker == "ABCD3"
     assert results[0].entitlement.eligible_quantity == Decimal("10")
@@ -92,6 +93,7 @@ async def test_uses_ticker_and_asset_type_to_separate_movements():
             transaction(asset_type="FII", quantity=99),
             transaction(asset_type="ACAO", quantity=4),
         ],
+        [],
     )
 
     results = await load_portfolio_dividend_entitlements(db, 3)
@@ -112,19 +114,52 @@ async def test_keeps_event_without_record_date_non_materializable():
     db = Session(
         [(event(record_date=None), asset())],
         [transaction(date=date(2026, 1, 12))],
+        [],
     )
 
     results = await load_portfolio_dividend_entitlements(db, 3)
 
-    assert (
-        results[0].entitlement.reason
-        is EntitlementReason.AMBIGUOUS_ENTITLEMENT_DATE
+    assert results[0].entitlement.reason is EntitlementReason.AMBIGUOUS_ENTITLEMENT_DATE
+
+
+@pytest.mark.asyncio
+async def test_does_not_load_actions_when_event_has_no_entitlement_date():
+    db = Session(
+        [(event(record_date=None, ex_date=None), asset())],
+        [transaction()],
     )
+
+    results = await load_portfolio_dividend_entitlements(db, 3)
+
+    assert db.calls == 2
+    assert results[0].entitlement.reason is EntitlementReason.AMBIGUOUS_ENTITLEMENT_DATE
 
 
 @pytest.mark.asyncio
 async def test_rejects_asset_without_explicit_currency():
-    db = Session([(event(), asset(currency=None))], [transaction()])
+    db = Session([(event(), asset(currency=None))], [transaction()], [])
 
     with pytest.raises(ValueError, match="has no currency"):
         await load_portfolio_dividend_entitlements(db, 3)
+
+
+@pytest.mark.asyncio
+async def test_applies_reconciled_split_before_dividend_record_date():
+    db = Session([(event(), asset())], [transaction()])
+    split = EligibleQuantityAction(
+        event_id=99,
+        ticker="ABCD3",
+        effective_date=date(2026, 1, 7),
+        event_type="DESDOBRAMENTO",
+        quantity_factor=Decimal("2"),
+    )
+
+    with patch(
+        "app.services.canonical_dividend_entitlement_reader."
+        "load_eligible_quantity_actions",
+        new=AsyncMock(return_value={"ABCD3": (split,)}),
+    ):
+        results = await load_portfolio_dividend_entitlements(db, 3)
+
+    assert results[0].entitlement.eligible_quantity == Decimal("20")
+    assert results[0].entitlement.net_amount == Decimal("25.00")

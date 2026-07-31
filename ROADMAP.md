@@ -113,6 +113,46 @@ Prontidão global estimada para a primeira produção: **91%**. O percentual nã
 - Backfills idempotentes.
 - Cobertura parcial e retorno estimado explícitos.
 
+## Atualização BRAPI Pro e eventos corporativos — 31/07/2026
+
+- Cliente v2 com catálogo, resolução, renomes, coverage e erros tipados concluído.
+- Auditoria real do plano Pro executada para a janela 2000–hoje, sem escrita no banco.
+- Desdobramento e grupamento confirmados em `stockDividends` e normalizados pelo `label`.
+- BRAPI definida como fonte primária; equivalências exatas do Yahoo são deduplicadas.
+- Catálogo `corporate_events` em migração compatível para identidade e proveniência
+  independentes de provedor, ativo de destino, datas completas e revisão.
+- Reconciliação persistente e carga histórica controlada implementadas; aplicação
+  real permanece condicionada à migration, backup e janela autorizada.
+- Projeção canônica integrada à carteira, snapshots, direitos de proventos e
+  Bens e Direitos do IRPF, sempre com gate `MATCHED` + `VALIDATED`.
+- P&L realizado por ativo e snapshots TWR por classe integrados ao mesmo gate;
+  eventos corporativos não são tratados como fluxos externos.
+- Adaptador legado de performance migrado para a posição canônica, sem alterar o
+  contrato público de resposta.
+- Scheduler incremental e observabilidade implementados com feature flag segura;
+  ativação depende da migration e dos gates do runbook.
+- API de revisão administrativa implementada com SuperAdmin, justificativa,
+  resolução de conflitos e trilha de auditoria imutável para ciclos automáticos.
+- Interface administrativa integrada ao Painel Admin com filtros, paginação,
+  confirmação de decisão e atualização da fila/auditoria.
+- Comparação detalhada de evidências concluída, com campos econômicos lado a
+  lado, divergências destacadas e payload bruto por provedor.
+- Modelagem econômica de eventos complexos concluída para subscrição, mudança
+  de ticker, conversão, incorporação, fusão, cisão, amortização e deslistagem,
+  com termos obrigatórios e bloqueio de aprovação incompleta.
+- Resolução segura do ativo de destino concluída por identidade local de ID,
+  ticker e ISIN, com bloqueio de conflito, ausência e ambiguidade.
+- Plano não executável de troca/cisão concluído para quantidades e componentes
+  em dinheiro, sem alterar posições ou inventar alocação de custo.
+- Alocação explícita de base de custo, liquidação de frações e classificação do
+  caixa concluídas no contrato canônico e no plano somente leitura.
+- Endpoint SuperAdmin de prévia econômica concluído, sem escrita em posições.
+- Simulador econômico visual concluído no Painel Admin, exclusivamente read-only.
+- Contrato idempotente da futura execução concluído com gates ordenados e feature
+  flag `CORPORATE_COMPLEX_EVENTS_EXECUTION_ENABLED=false`.
+- Próximo gate: ledger transacional de execução e dry-run persistente, sem ativar
+  escrita em posições até validação operacional dedicada.
+
 ## Em desenvolvimento
 
 ### Pré-produção — Issues #158, #199, #208, #216 e #226

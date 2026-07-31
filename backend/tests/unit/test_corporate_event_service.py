@@ -5,7 +5,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-
 from app.services.corporate_event_service import sync_corporate_events_for_asset
 
 
@@ -37,16 +36,21 @@ async def test_sync_persists_global_brapi_and_yahoo_events() -> None:
     async def brapi_fetcher(ticker: str):
         assert ticker == "AERI3"
         return {
-            "results": [{
-                "symbol": "AERI3",
-                "data": {
-                    "stockDividends": [{
-                        "factor": 1.05,
-                        "lastDatePrior": "2023-03-01",
-                    }],
-                    "subscriptions": [],
-                },
-            }],
+            "results": [
+                {
+                    "symbol": "AERI3",
+                    "data": {
+                        "stockDividends": [
+                            {
+                                "factor": 1.05,
+                                "label": "BONIFICACAO",
+                                "lastDatePrior": "2023-03-01",
+                            }
+                        ],
+                        "subscriptions": [],
+                    },
+                }
+            ],
         }
 
     async def yahoo_fetcher(symbol: str):
@@ -67,6 +71,14 @@ async def test_sync_persists_global_brapi_and_yahoo_events() -> None:
     assert all(event.ticker == "AERI3" for event in created)
     assert all(event.portfolio_id is None for event in created)
     assert all(event.brapi_event_id for event in created)
+    assert all(event.source_provider in {"brapi", "yahoo"} for event in created)
+    assert all(event.source_event_id for event in created)
+    assert all(event.source_payload_hash for event in created)
+    assert all(event.economic_identity_hash for event in created)
+    assert all(event.effective_date == event.event_date for event in created)
+    assert all(event.quantity_factor == event.ratio for event in created)
+    assert all(event.requires_review is True for event in created)
+    assert all(event.reconciliation_status == "UNRECONCILED" for event in created)
     assert {json.loads(event.raw_data)["source"] for event in created} == {
         "brapi",
         "yahoo",
@@ -78,15 +90,20 @@ async def test_sync_persists_global_brapi_and_yahoo_events() -> None:
 @pytest.mark.asyncio
 async def test_sync_is_idempotent_by_canonical_source_event_id() -> None:
     payload = {
-        "results": [{
-            "symbol": "AERI3",
-            "data": {
-                "stockDividends": [{
-                    "factor": 1.05,
-                    "lastDatePrior": "2023-03-01",
-                }],
-            },
-        }],
+        "results": [
+            {
+                "symbol": "AERI3",
+                "data": {
+                    "stockDividends": [
+                        {
+                            "factor": 1.05,
+                            "label": "BONIFICACAO",
+                            "lastDatePrior": "2023-03-01",
+                        }
+                    ],
+                },
+            }
+        ],
     }
 
     async def brapi_fetcher(ticker: str):
@@ -115,6 +132,78 @@ async def test_sync_is_idempotent_by_canonical_source_event_id() -> None:
     assert second == []
     second_db.add.assert_not_called()
     second_db.flush.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_sync_persists_subscription_price_without_applying_quantity() -> None:
+    async def brapi_fetcher(_ticker: str):
+        return {
+            "results": [
+                {
+                    "symbol": "AERI3",
+                    "data": {
+                        "subscriptions": [
+                            {
+                                "lastDatePrior": "2026-01-10",
+                                "rate": "9.50",
+                                "assetIssued": "BRAERIACNOR4",
+                            }
+                        ]
+                    },
+                }
+            ]
+        }
+
+    async def yahoo_fetcher(_symbol: str):
+        return []
+
+    created = await sync_corporate_events_for_asset(
+        _db(),
+        _asset(),
+        brapi_fetcher=brapi_fetcher,
+        yahoo_fetcher=yahoo_fetcher,
+    )
+
+    assert len(created) == 1
+    assert created[0].event_type == "SUBSCRICAO"
+    assert created[0].quantity_factor == Decimal(1)
+    assert created[0].subscription_price == Decimal("9.50")
+
+
+@pytest.mark.asyncio
+async def test_sync_prefers_brapi_when_yahoo_has_equivalent_split() -> None:
+    async def brapi_fetcher(_ticker: str):
+        return {
+            "results": [
+                {
+                    "symbol": "AERI3",
+                    "data": {
+                        "stockDividends": [
+                            {
+                                "factor": 2,
+                                "label": "DESDOBRAMENTO",
+                                "lastDatePrior": "2024-05-14",
+                            }
+                        ],
+                    },
+                }
+            ],
+        }
+
+    async def yahoo_fetcher(_symbol: str):
+        return [(date(2024, 5, 14), 2)]
+
+    db = _db()
+    created = await sync_corporate_events_for_asset(
+        db,
+        _asset(),
+        brapi_fetcher=brapi_fetcher,
+        yahoo_fetcher=yahoo_fetcher,
+    )
+
+    assert len(created) == 1
+    assert created[0].event_type == "DESDOBRAMENTO"
+    assert json.loads(created[0].raw_data)["source"] == "brapi"
 
 
 @pytest.mark.asyncio

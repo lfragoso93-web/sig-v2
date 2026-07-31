@@ -150,7 +150,11 @@ async def test_calc_raw_positions_no_transactions():
     result.scalars().all.return_value = []
     db.execute.return_value = result
     
-    positions = await calc_raw_positions(db, portfolio_id=1)
+    with patch(
+        "app.services.portfolio_service.load_eligible_quantity_actions",
+        new=AsyncMock(return_value={}),
+    ):
+        positions = await calc_raw_positions(db, portfolio_id=1)
     
     assert positions == []
 
@@ -174,7 +178,11 @@ async def test_calc_raw_positions_single_buy():
     result.scalars().all.return_value = [mock_tx]
     db.execute.return_value = result
     
-    positions = await calc_raw_positions(db, portfolio_id=1)
+    with patch(
+        "app.services.portfolio_service.load_eligible_quantity_actions",
+        new=AsyncMock(return_value={}),
+    ):
+        positions = await calc_raw_positions(db, portfolio_id=1)
     
     assert len(positions) == 1
     assert positions[0]["ticker"] == "VALE3"
@@ -211,8 +219,12 @@ async def test_calc_raw_positions_buy_and_sell():
     result.scalars().all.return_value = [mock_buy, mock_sell]
     db.execute.return_value = result
     
-    positions = await calc_raw_positions(db, portfolio_id=1)
-    
+    with patch(
+        "app.services.portfolio_service.load_eligible_quantity_actions",
+        new=AsyncMock(return_value={}),
+    ):
+        positions = await calc_raw_positions(db, portfolio_id=1)
+
     assert len(positions) == 1
     assert positions[0]["ticker"] == "PETR4"
     assert positions[0]["quantity"] == 150.0

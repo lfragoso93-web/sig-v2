@@ -1,4 +1,5 @@
 """Read-only ORM adapter for canonical portfolio dividend entitlements."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -15,7 +16,11 @@ from app.services.canonical_dividend_entitlement import (
     DividendEntitlement,
     DividendEvent,
     PositionMovement,
+    QuantityFactorMovement,
     calculate_dividend_entitlement,
+)
+from app.services.corporate_position_projection_service import (
+    load_eligible_quantity_actions,
 )
 
 
@@ -73,6 +78,21 @@ async def load_portfolio_dividend_entitlements(
     )
     transactions = (await db.execute(movements_stmt)).scalars().all()
 
+    entitlement_dates = [
+        row.record_date or row.ex_date
+        for row, _asset in event_rows
+        if row.record_date or row.ex_date
+    ]
+    actions_by_ticker = (
+        await load_eligible_quantity_actions(
+            db,
+            tickers=[asset.ticker for _event, asset in event_rows],
+            through_date=max(entitlement_dates),
+        )
+        if entitlement_dates
+        else {}
+    )
+
     movements_by_asset: dict[tuple[str, str], list[PositionMovement]] = {}
     for transaction in transactions:
         key = (transaction.ticker, transaction.asset_type)
@@ -107,15 +127,21 @@ async def load_portfolio_dividend_entitlements(
                 entitlement=calculate_dividend_entitlement(
                     event,
                     movements_by_asset.get(key, ()),
+                    tuple(
+                        QuantityFactorMovement(
+                            effective_date=action.effective_date,
+                            quantity_factor=action.quantity_factor,
+                            event_id=action.event_id,
+                        )
+                        for action in actions_by_ticker.get(asset.ticker.upper(), ())
+                    ),
                 ),
                 approved_on=asset_dividend.approved_on,
                 gross_value_per_unit=_optional_decimal(
                     asset_dividend.gross_value_per_unit
                 ),
                 factor=_optional_decimal(asset_dividend.factor),
-                complete_factor=_optional_decimal(
-                    asset_dividend.complete_factor
-                ),
+                complete_factor=_optional_decimal(asset_dividend.complete_factor),
                 isin_code=asset_dividend.isin_code,
                 asset_issued=asset_dividend.asset_issued,
                 related_to=asset_dividend.related_to,

@@ -1,8 +1,18 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Numeric, UniqueConstraint
-from sqlalchemy.orm import relationship
-from app.core.database import Base
 import datetime
 import enum
+
+from sqlalchemy import (
+    Column,
+    DateTime,
+    Float,
+    Integer,
+    Numeric,
+    String,
+    UniqueConstraint,
+)
+from sqlalchemy.orm import relationship
+
+from app.core.database import Base
 
 
 class AssetType(str, enum.Enum):
@@ -41,6 +51,7 @@ class Asset(Base):
     last_price_updated_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     brapi_ticker = Column(String, nullable=True)
+    isin_code = Column(String(32), nullable=True, index=True)
     sector = Column(String, nullable=True)
     sub_sector = Column(String, nullable=True)
     float_description = Column(Float, nullable=True)

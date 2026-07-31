@@ -2,7 +2,6 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-
 from app.services.canonical_dividend_entitlement import (
     DividendEvent,
     EntitlementReason,

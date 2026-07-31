@@ -1,7 +1,7 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import field_validator, model_validator
 from typing import Optional
 
+from pydantic import field_validator, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _DEFAULT_ADMIN_PASSWORD = "Admin@" + "1234!"
 _DEFAULT_SECRET_KEY = "change-me-" + "in-production"
@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     BRAPI_BASE_URL: str = "https://brapi.dev/api"
     BRAPI_RATE_LIMIT: float = 2.0
     BRAPI_RATE_BURST: int = 5
+    CORPORATE_EVENTS_SCHEDULER_ENABLED: bool = False
+    CORPORATE_COMPLEX_EVENTS_EXECUTION_ENABLED: bool = False
+    CORPORATE_EVENTS_INCREMENTAL_LOOKBACK_DAYS: int = 45
     ALPHA_VANTAGE_API_KEY: Optional[str] = None
 
     LOGIN_RATE_LIMIT: str = "10/minute"
@@ -88,7 +91,9 @@ class Settings(BaseSettings):
             if v == _DEFAULT_SECRET_KEY:
                 raise ValueError("SECRET_KEY deve ser alterada em producao")
             if len(v) < 32:
-                raise ValueError("SECRET_KEY deve ter no minimo 32 caracteres em producao")
+                raise ValueError(
+                    "SECRET_KEY deve ter no minimo 32 caracteres em producao"
+                )
         return v
 
     @field_validator("SUPERADMIN_PASSWORD")
@@ -99,7 +104,9 @@ class Settings(BaseSettings):
             if v == _DEFAULT_ADMIN_PASSWORD:
                 raise ValueError("SUPERADMIN_PASSWORD deve ser alterada em producao")
             if len(v) < 10:
-                raise ValueError("SUPERADMIN_PASSWORD deve ter no minimo 10 caracteres em producao")
+                raise ValueError(
+                    "SUPERADMIN_PASSWORD deve ter no minimo 10 caracteres em producao"
+                )
         return v
 
 

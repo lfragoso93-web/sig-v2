@@ -5,23 +5,61 @@ from app.core.deps import get_current_user
 from app.core.security import hash_password
 from app.models.user import User, UserRole
 from app.schemas.user import (
-    UserCreate, UserListResponse, UserResponse,
-    UserAdminUpdate, UserRoleUpdate, AdminResetPasswordRequest,
+    UserCreate,
+    UserListResponse,
+    UserResponse,
+    UserAdminUpdate,
+    UserRoleUpdate,
+    AdminResetPasswordRequest,
 )
 from app.schemas.auth import MessageResponse
-from app.schemas.config import SystemConfigResponse, SystemConfigUpdate, SystemConfigBulkUpdate
+from app.schemas.config import (
+    SystemConfigResponse,
+    SystemConfigUpdate,
+    SystemConfigBulkUpdate,
+)
 from app.schemas.pagination import PaginatedResponse
 from app.services.user_service import (
-    create_user, list_users, get_user_by_id,
-    admin_update_user, delete_user, count_users, count_active_superadmins
+    create_user,
+    list_users,
+    get_user_by_id,
+    admin_update_user,
+    delete_user,
+    count_users,
+    count_active_superadmins,
 )
-from app.services.config_service import get_all_configs, update_config, bulk_update_configs
+from app.services.config_service import (
+    get_all_configs,
+    update_config,
+    bulk_update_configs,
+)
 from app.services import backup_service
 from app.schemas.audit_log import (
-    PaginatedAuditLogs, AuditLogDetailResponse, AuditStatsResponse,
-    UserAuditStatsResponse, AuditLogCleanupResponse
+    PaginatedAuditLogs,
+    AuditLogDetailResponse,
+    AuditStatsResponse,
+    UserAuditStatsResponse,
+    AuditLogCleanupResponse,
 )
 from app.services.audit_log_service import AuditLogService
+from app.schemas.corporate_event_review import (
+    CorporateExchangeProjectionRequest,
+    CorporateExchangeProjectionResponse,
+    CorporateEventEvidenceGroup,
+    CorporateEventReviewItem,
+    CorporateEventReviewPage,
+    CorporateEventReviewRequest,
+)
+from app.services.corporate_event_review_service import (
+    CorporateEventAlreadyReviewedError,
+    CorporateEventReviewConflictError,
+    CorporateEventReviewNotFoundError,
+    CorporateEventTermsIncompleteError,
+    get_corporate_event_evidence_group,
+    list_corporate_events_for_review,
+    preview_corporate_exchange_projection,
+    review_corporate_event,
+)
 from datetime import datetime
 import logging
 import traceback
@@ -42,7 +80,107 @@ def require_superadmin(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
+@router.get(
+    "/corporate-events/review",
+    response_model=CorporateEventReviewPage,
+)
+async def admin_list_corporate_event_reviews(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    ticker: str | None = Query(None),
+    reconciliation_status: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_superadmin),
+):
+    """Lista somente eventos globais que ainda exigem decisão humana."""
+    items, total = await list_corporate_events_for_review(
+        db,
+        page=page,
+        page_size=page_size,
+        ticker=ticker,
+        reconciliation_status=reconciliation_status,
+    )
+    return CorporateEventReviewPage(
+        items=[CorporateEventReviewItem.model_validate(item) for item in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.post(
+    "/corporate-events/{event_id}/review",
+    response_model=CorporateEventReviewItem,
+)
+async def admin_review_corporate_event(
+    event_id: int,
+    data: CorporateEventReviewRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_superadmin),
+):
+    """Valida ou rejeita um evento com justificativa e trilha de auditoria."""
+    try:
+        event = await review_corporate_event(
+            db,
+            event_id=event_id,
+            decision=data.decision,
+            note=data.note,
+            reviewer_user_id=current_user.id,
+        )
+    except CorporateEventReviewNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Evento não encontrado") from exc
+    except (
+        CorporateEventAlreadyReviewedError,
+        CorporateEventReviewConflictError,
+        CorporateEventTermsIncompleteError,
+    ) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return CorporateEventReviewItem.model_validate(event)
+
+
+@router.get(
+    "/corporate-events/{event_id}/evidence",
+    response_model=CorporateEventEvidenceGroup,
+)
+async def admin_get_corporate_event_evidence(
+    event_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_superadmin),
+):
+    """Compara campos econômicos e payloads das evidências do mesmo grupo."""
+    try:
+        return await get_corporate_event_evidence_group(db, event_id=event_id)
+    except CorporateEventReviewNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Evento não encontrado") from exc
+
+
 # ── Gestão de Usuários ────────────────────────────────────────────────────────────────────────────────
+
+
+@router.post(
+    "/corporate-events/{event_id}/projection-plan",
+    response_model=CorporateExchangeProjectionResponse,
+)
+async def admin_preview_corporate_exchange_projection(
+    event_id: int,
+    data: CorporateExchangeProjectionRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_superadmin),
+):
+    """Simula troca/cisão sem persistir posição, custo ou caixa."""
+    try:
+        plan = await preview_corporate_exchange_projection(
+            db,
+            event_id=event_id,
+            source_quantity=data.source_quantity,
+            total_cost=data.total_cost,
+        )
+    except CorporateEventReviewNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Evento não encontrado") from exc
+    except (CorporateEventTermsIncompleteError, ValueError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return CorporateExchangeProjectionResponse(**plan.__dict__)
+
 
 @router.get("/users", response_model=PaginatedResponse[UserListResponse])
 async def admin_list_users(
@@ -95,7 +233,9 @@ async def admin_update_user_endpoint(
 ):
     """Edita qualquer campo do usuário incluindo role e status."""
     if user_id == current_user.id and data.role and data.role != UserRole.superadmin:
-        raise HTTPException(status_code=400, detail="Você não pode remover seu próprio SuperAdmin")
+        raise HTTPException(
+            status_code=400, detail="Você não pode remover seu próprio SuperAdmin"
+        )
     return await admin_update_user(db, user_id, data)
 
 
@@ -108,7 +248,9 @@ async def admin_update_user_role_endpoint(
 ):
     """Altera apenas o perfil do usuario."""
     if user_id == current_user.id and data.role != UserRole.superadmin:
-        raise HTTPException(status_code=400, detail="Voce nao pode remover seu proprio SuperAdmin")
+        raise HTTPException(
+            status_code=400, detail="Voce nao pode remover seu proprio SuperAdmin"
+        )
     return await admin_update_user(db, user_id, UserAdminUpdate(role=data.role))
 
 
@@ -120,7 +262,9 @@ async def admin_delete_user(
 ):
     """Remove usuário permanentemente (cascade deleta carteiras e dados)."""
     if user_id == current_user.id:
-        raise HTTPException(status_code=400, detail="Você não pode excluir sua própria conta")
+        raise HTTPException(
+            status_code=400, detail="Você não pode excluir sua própria conta"
+        )
     await delete_user(db, user_id)
     return MessageResponse(message="Usuário excluído com sucesso")
 
@@ -133,12 +277,20 @@ async def admin_toggle_user_active(
 ):
     """Ativa ou desativa um usuário."""
     if user_id == current_user.id:
-        raise HTTPException(status_code=400, detail="Você não pode desativar sua própria conta")
+        raise HTTPException(
+            status_code=400, detail="Você não pode desativar sua própria conta"
+        )
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
-    if user.role == UserRole.superadmin and user.is_active and await count_active_superadmins(db) <= 1:
-        raise HTTPException(status_code=400, detail="Nao e possivel remover o ultimo SuperAdmin ativo")
+    if (
+        user.role == UserRole.superadmin
+        and user.is_active
+        and await count_active_superadmins(db) <= 1
+    ):
+        raise HTTPException(
+            status_code=400, detail="Nao e possivel remover o ultimo SuperAdmin ativo"
+        )
     user.is_active = not user.is_active
     await db.flush()
     await db.refresh(user)
@@ -168,6 +320,7 @@ async def admin_reset_password(
 
 # ── Estatísticas do sistema ───────────────────────────────────────────────────────────────────────────────
 
+
 @router.get("/stats")
 async def admin_stats(
     db: AsyncSession = Depends(get_db),
@@ -183,6 +336,7 @@ async def admin_stats(
 
 
 # ── Configurações do sistema ──────────────────────────────────────────────────────────────────────────────
+
 
 @router.get("/config", response_model=list[SystemConfigResponse])
 async def admin_list_configs(
@@ -216,17 +370,22 @@ async def admin_bulk_update_config(
 
 # ── Seed de Ativos (BRAPI) ──────────────────────────────────────────────────────────────────────────────
 
+
 async def _run_asset_seed_bg() -> None:
     """Wrapper para rodar o seed em BackgroundTask com sua propria sessao."""
     logger.info("[seed_bg] ========== INICIANDO SEED DE ATIVOS ==========")
     try:
         from app.core.database import AsyncSessionLocal
         from app.services.asset_seed_service import run_asset_seed
+
         async with AsyncSessionLocal() as db:
             result = await run_asset_seed(db)
             logger.info(
                 "[seed_bg] ========== SEED CONCLUIDO: created=%s updated=%s skipped=%s errors=%s ==========",
-                result.created, result.updated, result.skipped, result.errors,
+                result.created,
+                result.updated,
+                result.skipped,
+                result.errors,
             )
     except Exception as e:
         logger.error(
@@ -258,6 +417,7 @@ async def admin_seed_assets(
 
 # ── Backfill de Preços Históricos ────────────────────────────────────────────────────────────────────
 
+
 @router.get("/prices/backfill/status")
 async def admin_backfill_status(
     _: User = Depends(require_superadmin),
@@ -269,6 +429,7 @@ async def admin_backfill_status(
     data do registro mais antigo e mais recente.
     """
     from app.services.price_history_backfill_service import get_backfill_status
+
     return await get_backfill_status()
 
 
@@ -277,11 +438,11 @@ async def _run_price_backfill_bg(force: bool = False) -> None:
     logger.info("[backfill_bg] iniciando backfill de precos (force=%s)", force)
     try:
         from app.services.price_history_backfill_service import run_initial_backfill
+
         await run_initial_backfill(force=force)
     except Exception as e:
         logger.error(
-            "[backfill_bg] backfill de precos falhou: %s\n%s",
-            e, traceback.format_exc()
+            "[backfill_bg] backfill de precos falhou: %s\n%s", e, traceback.format_exc()
         )
 
 
@@ -292,8 +453,7 @@ async def _run_price_backfill_bg(force: bool = False) -> None:
 async def admin_trigger_price_backfill(
     background_tasks: BackgroundTasks,
     force: bool = Query(
-        False,
-        description="Se true, reprocessa mesmo os ativos que já têm histórico"
+        False, description="Se true, reprocessa mesmo os ativos que já têm histórico"
     ),
     _: User = Depends(require_superadmin),
 ):
@@ -316,6 +476,7 @@ async def admin_trigger_price_backfill(
 
 # ── Backfill de Snapshots de Patrimônio ────────────────────────────────────────────────────────────
 
+
 async def _run_snapshot_backfill_bg(portfolio_id: int | None, force: bool) -> None:
     """
     Roda o backfill de snapshots em background com sessão própria.
@@ -325,7 +486,8 @@ async def _run_snapshot_backfill_bg(portfolio_id: int | None, force: bool) -> No
     """
     logger.info(
         "[snapshot_backfill_bg] iniciando backfill portfolio_id=%s force=%s",
-        portfolio_id or 'ALL', force,
+        portfolio_id or "ALL",
+        force,
     )
     try:
         from app.core.database import AsyncSessionLocal
@@ -362,30 +524,36 @@ async def _run_snapshot_backfill_bg(portfolio_id: int | None, force: bool) -> No
                         )
                         logger.info(
                             "[snapshot_backfill_bg] portfolio=%s: %d snapshots deletados (force)",
-                            pid, deleted,
+                            pid,
+                            deleted,
                         )
 
                     count = await backfill_snapshots(db, pid)
                     total_snapshots += count
                     logger.info(
                         "[snapshot_backfill_bg] portfolio=%s: %d snapshots gerados",
-                        pid, count,
+                        pid,
+                        count,
                     )
                 except Exception as e:
                     errors += 1
                     logger.error(
                         "[snapshot_backfill_bg] portfolio=%s falhou: %s\n%s",
-                        pid, e, traceback.format_exc(),
+                        pid,
+                        e,
+                        traceback.format_exc(),
                     )
 
             logger.info(
                 "[snapshot_backfill_bg] CONCLUIDO: %d snapshots gerados, %d erros",
-                total_snapshots, errors,
+                total_snapshots,
+                errors,
             )
     except Exception as e:
         logger.error(
             "[snapshot_backfill_bg] FALHA GERAL: %s\n%s",
-            e, traceback.format_exc(),
+            e,
+            traceback.format_exc(),
         )
 
 
@@ -461,6 +629,7 @@ async def admin_snapshot_backfill_one(
 
 # ── Backup & Restore de Banco de Dados ────────────────────────────────────────────────
 
+
 async def _run_database_backup_bg(db_url: str) -> None:
     """Wrapper para criar backup do banco em BackgroundTask."""
     logger.info("[backup_bg] ========== INICIANDO BACKUP DO BANCO ==========")
@@ -469,7 +638,8 @@ async def _run_database_backup_bg(db_url: str) -> None:
         if result["success"]:
             logger.info(
                 "[backup_bg] ========== BACKUP CONCLUIDO: backup_id=%s size_mb=%.2f ==========",
-                result["backup_id"], result["size_mb"],
+                result["backup_id"],
+                result["size_mb"],
             )
         else:
             logger.error(
@@ -479,7 +649,8 @@ async def _run_database_backup_bg(db_url: str) -> None:
     except Exception as e:
         logger.error(
             "[backup_bg] ========== BACKUP FALHOU: %s\n%s ==========",
-            e, traceback.format_exc(),
+            e,
+            traceback.format_exc(),
         )
 
 
@@ -500,12 +671,11 @@ async def admin_create_database_backup(
     """
     db_url = os.getenv("DATABASE_URL")
     if not db_url:
-        raise HTTPException(
-            status_code=500,
-            detail="DATABASE_URL não configurado"
-        )
+        raise HTTPException(status_code=500, detail="DATABASE_URL não configurado")
 
-    logger.info("[backup] Requisição de backup recebida — adicionando task ao background")
+    logger.info(
+        "[backup] Requisição de backup recebida — adicionando task ao background"
+    )
     background_tasks.add_task(_run_database_backup_bg, db_url)
 
     return {
@@ -537,7 +707,9 @@ async def admin_list_database_backups(
     summary="Restaurar banco de dados a partir de um backup",
 )
 async def admin_restore_database(
-    backup_filename: str = Query(..., description="Nome do arquivo de backup (ex: backup_20240101_120000.sql.gz)"),
+    backup_filename: str = Query(
+        ..., description="Nome do arquivo de backup (ex: backup_20240101_120000.sql.gz)"
+    ),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     _: User = Depends(require_superadmin),
 ):
@@ -553,10 +725,7 @@ async def admin_restore_database(
     """
     db_url = os.getenv("DATABASE_URL")
     if not db_url:
-        raise HTTPException(
-            status_code=500,
-            detail="DATABASE_URL não configurado"
-        )
+        raise HTTPException(status_code=500, detail="DATABASE_URL não configurado")
 
     backups = await backup_service.list_backups()
     valid_files = [b["filename"] for b in backups["backups"]]
@@ -564,14 +733,16 @@ async def admin_restore_database(
     if backup_filename not in valid_files:
         raise HTTPException(
             status_code=404,
-            detail=f"Backup não encontrado. Backups disponíveis: {valid_files}"
+            detail=f"Backup não encontrado. Backups disponíveis: {valid_files}",
         )
 
     logger.warning(
         "[restore] Requisição de restore recebida para: %s — adicionando task ao background",
-        backup_filename
+        backup_filename,
     )
-    background_tasks.add_task(backup_service.restore_database_backup, db_url, backup_filename)
+    background_tasks.add_task(
+        backup_service.restore_database_backup, db_url, backup_filename
+    )
 
     return {
         "message": f"Restauração iniciada em background a partir de {backup_filename}. Acompanhe pelo log do servidor.",
@@ -600,10 +771,7 @@ async def admin_delete_database_backup(
     result = await backup_service.delete_backup(backup_filename)
 
     if not result["success"]:
-        raise HTTPException(
-            status_code=404,
-            detail=result["error"]
-        )
+        raise HTTPException(status_code=404, detail=result["error"])
 
     return {
         "message": f"Backup {backup_filename} deletado com sucesso",
@@ -612,6 +780,7 @@ async def admin_delete_database_backup(
 
 
 # ── Logs de Auditoria ────────────────────────────────────────────────────────────────────────────────
+
 
 @router.get("/audit-logs", response_model=PaginatedAuditLogs)
 async def admin_list_audit_logs(
@@ -648,15 +817,19 @@ async def admin_list_audit_logs(
 
     if date_from:
         try:
-            date_from_dt = datetime.fromisoformat(date_from.replace('Z', '+00:00'))
+            date_from_dt = datetime.fromisoformat(date_from.replace("Z", "+00:00"))
         except ValueError:
-            raise HTTPException(status_code=400, detail="date_from inválido. Use ISO format")
+            raise HTTPException(
+                status_code=400, detail="date_from inválido. Use ISO format"
+            )
 
     if date_to:
         try:
-            date_to_dt = datetime.fromisoformat(date_to.replace('Z', '+00:00'))
+            date_to_dt = datetime.fromisoformat(date_to.replace("Z", "+00:00"))
         except ValueError:
-            raise HTTPException(status_code=400, detail="date_to inválido. Use ISO format")
+            raise HTTPException(
+                status_code=400, detail="date_to inválido. Use ISO format"
+            )
 
     logs, total = await AuditLogService.get_audit_logs(
         db,

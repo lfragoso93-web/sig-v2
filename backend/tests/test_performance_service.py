@@ -1,9 +1,8 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from sqlalchemy.ext.asyncio import AsyncSession
 
+import pytest
 from app.services.performance_service import get_portfolio_performance
-
+from sqlalchemy.ext.asyncio import AsyncSession
 
 CANONICAL_ZERO = {
     "total_invested": 0.0,
@@ -17,12 +16,16 @@ CANONICAL_ZERO = {
 async def test_get_portfolio_performance_no_transactions():
     db = AsyncMock(spec=AsyncSession)
 
-    with patch('app.services.performance_service.get_canonical_portfolio_summary') as mock_summary:
+    with (
+        patch(
+            "app.services.performance_service.calc_raw_positions",
+            new=AsyncMock(return_value=[]),
+        ),
+        patch(
+            "app.services.performance_service.get_canonical_portfolio_summary"
+        ) as mock_summary,
+    ):
         mock_summary.return_value = CANONICAL_ZERO
-
-        fetch_result = MagicMock()
-        fetch_result.scalars().all.return_value = []
-        db.execute.return_value = fetch_result
 
         result = await get_portfolio_performance(db, portfolio_id=1, user_id=1)
 
@@ -57,17 +60,30 @@ async def test_get_portfolio_performance_single_stock_uses_canonical_totals():
         "total_gain_pct": 15.7143,
     }
 
-    with patch('app.services.performance_service.get_current_price') as mock_get_price, \
-         patch('app.services.performance_service.get_canonical_portfolio_summary') as mock_summary:
+    raw_positions = [
+        {
+            "ticker": "VALE3",
+            "asset_type": "STOCK",
+            "quantity": 100.0,
+            "total_invested": 5010.0,
+        }
+    ]
+    with (
+        patch(
+            "app.services.performance_service.calc_raw_positions",
+            new=AsyncMock(return_value=raw_positions),
+        ),
+        patch("app.services.performance_service.get_current_price") as mock_get_price,
+        patch(
+            "app.services.performance_service.get_canonical_portfolio_summary"
+        ) as mock_summary,
+    ):
         mock_get_price.return_value = 60.0
         mock_summary.return_value = canonical
 
-        tx_result = MagicMock()
-        tx_result.scalars().all.return_value = [mock_transaction]
-
         asset_result = MagicMock()
         asset_result.scalar_one_or_none.return_value = mock_asset
-        db.execute.side_effect = [tx_result, asset_result]
+        db.execute.return_value = asset_result
 
         result = await get_portfolio_performance(db, portfolio_id=1, user_id=1)
 
@@ -104,17 +120,30 @@ async def test_get_portfolio_performance_buy_and_sell():
     mock_asset.name = "Petrobras"
     mock_asset.ticker = "PETR4"
 
-    with patch('app.services.performance_service.get_current_price') as mock_get_price, \
-         patch('app.services.performance_service.get_canonical_portfolio_summary') as mock_summary:
+    raw_positions = [
+        {
+            "ticker": "PETR4",
+            "asset_type": "STOCK",
+            "quantity": 150.0,
+            "total_invested": 4515.0,
+        }
+    ]
+    with (
+        patch(
+            "app.services.performance_service.calc_raw_positions",
+            new=AsyncMock(return_value=raw_positions),
+        ),
+        patch("app.services.performance_service.get_current_price") as mock_get_price,
+        patch(
+            "app.services.performance_service.get_canonical_portfolio_summary"
+        ) as mock_summary,
+    ):
         mock_get_price.return_value = 40.0
         mock_summary.return_value = CANONICAL_ZERO
 
-        tx_result = MagicMock()
-        tx_result.scalars().all.return_value = [mock_buy, mock_sell]
-
         asset_result = MagicMock()
         asset_result.scalar_one_or_none.return_value = mock_asset
-        db.execute.side_effect = [tx_result, asset_result]
+        db.execute.return_value = asset_result
 
         result = await get_portfolio_performance(db, portfolio_id=1, user_id=1)
 
@@ -137,17 +166,30 @@ async def test_get_portfolio_performance_zero_current_price():
     mock_asset = MagicMock()
     mock_asset.name = "Test Asset"
 
-    with patch('app.services.performance_service.get_current_price') as mock_get_price, \
-         patch('app.services.performance_service.get_canonical_portfolio_summary') as mock_summary:
+    raw_positions = [
+        {
+            "ticker": "TEST1",
+            "asset_type": "STOCK",
+            "quantity": 100.0,
+            "total_invested": 5000.0,
+        }
+    ]
+    with (
+        patch(
+            "app.services.performance_service.calc_raw_positions",
+            new=AsyncMock(return_value=raw_positions),
+        ),
+        patch("app.services.performance_service.get_current_price") as mock_get_price,
+        patch(
+            "app.services.performance_service.get_canonical_portfolio_summary"
+        ) as mock_summary,
+    ):
         mock_get_price.return_value = None
         mock_summary.return_value = CANONICAL_ZERO
 
-        tx_result = MagicMock()
-        tx_result.scalars().all.return_value = [mock_transaction]
-
         asset_result = MagicMock()
         asset_result.scalar_one_or_none.return_value = mock_asset
-        db.execute.side_effect = [tx_result, asset_result]
+        db.execute.return_value = asset_result
 
         result = await get_portfolio_performance(db, portfolio_id=1, user_id=1)
 
@@ -188,19 +230,38 @@ async def test_get_portfolio_performance_multiple_stocks():
         "total_gain_pct": 18.1818,
     }
 
-    with patch('app.services.performance_service.get_current_price') as mock_get_price, \
-         patch('app.services.performance_service.get_canonical_portfolio_summary') as mock_summary:
+    raw_positions = [
+        {
+            "ticker": "VALE3",
+            "asset_type": "STOCK",
+            "quantity": 100.0,
+            "total_invested": 5000.0,
+        },
+        {
+            "ticker": "PETR4",
+            "asset_type": "STOCK",
+            "quantity": 200.0,
+            "total_invested": 6000.0,
+        },
+    ]
+    with (
+        patch(
+            "app.services.performance_service.calc_raw_positions",
+            new=AsyncMock(return_value=raw_positions),
+        ),
+        patch("app.services.performance_service.get_current_price") as mock_get_price,
+        patch(
+            "app.services.performance_service.get_canonical_portfolio_summary"
+        ) as mock_summary,
+    ):
         mock_get_price.side_effect = [60.0, 35.0]
         mock_summary.return_value = canonical
-
-        tx_result = MagicMock()
-        tx_result.scalars().all.return_value = [mock_tx1, mock_tx2]
 
         asset_result1 = MagicMock()
         asset_result1.scalar_one_or_none.return_value = mock_asset1
         asset_result2 = MagicMock()
         asset_result2.scalar_one_or_none.return_value = mock_asset2
-        db.execute.side_effect = [tx_result, asset_result1, asset_result2]
+        db.execute.side_effect = [asset_result1, asset_result2]
 
         result = await get_portfolio_performance(db, portfolio_id=1, user_id=1)
 
@@ -209,3 +270,41 @@ async def test_get_portfolio_performance_multiple_stocks():
         assert result["total_current_value"] == 13000.0
         assert result["total_gain"] == 2000.0
         assert result["total_gain_pct"] == 18.1818
+
+
+@pytest.mark.asyncio
+async def test_legacy_performance_preserves_projected_split_position():
+    db = AsyncMock(spec=AsyncSession)
+    raw_positions = [
+        {
+            "ticker": "PETR4",
+            "asset_type": "ACAO",
+            "quantity": 200.0,
+            "total_invested": 1000.0,
+        }
+    ]
+    asset_result = MagicMock()
+    asset_result.scalar_one_or_none.return_value = None
+    db.execute.return_value = asset_result
+
+    with (
+        patch(
+            "app.services.performance_service.calc_raw_positions",
+            new=AsyncMock(return_value=raw_positions),
+        ) as positions_reader,
+        patch(
+            "app.services.performance_service.get_current_price",
+            new=AsyncMock(return_value=8.0),
+        ),
+        patch(
+            "app.services.performance_service.get_canonical_portfolio_summary",
+            new=AsyncMock(return_value=CANONICAL_ZERO),
+        ),
+    ):
+        result = await get_portfolio_performance(db, portfolio_id=1, user_id=1)
+
+    positions_reader.assert_awaited_once_with(db, 1)
+    assert result["positions"][0]["quantity"] == 200.0
+    assert result["positions"][0]["invested"] == 1000.0
+    assert result["positions"][0]["current_value"] == 1600.0
+    assert result["positions"][0]["gain"] == 600.0

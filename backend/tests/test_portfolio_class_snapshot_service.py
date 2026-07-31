@@ -31,6 +31,17 @@ def test_position_state_preserves_cost_and_realized_result() -> None:
     assert state.realized_pnl == Decimal("18.20")
 
 
+def test_position_state_applies_split_without_cost_or_external_flow() -> None:
+    state = ClassPositionState(AssetType.ACAO)
+    state.buy(Decimal("100"), Decimal("10"), Decimal("0"))
+
+    state.apply_quantity_factor(Decimal("2"))
+
+    assert state.quantity == Decimal("200")
+    assert state.cost == Decimal("1000")
+    assert state.cost / state.quantity == Decimal("5")
+
+
 def test_availability_refuses_dedicated_history_estimates() -> None:
     rows = class_twr_availability(
         [AssetType.ACAO, AssetType.FII, AssetType.TESOURO_DIRETO, AssetType.RENDA_FIXA]
@@ -40,7 +51,10 @@ def test_availability_refuses_dedicated_history_estimates() -> None:
     assert by_type[AssetType.ACAO.value]["available"] is True
     assert by_type[AssetType.FII.value]["status"] == "available"
     assert by_type[AssetType.TESOURO_DIRETO.value]["available"] is False
-    assert by_type[AssetType.RENDA_FIXA.value]["status"] == "dedicated_history_not_available"
+    assert (
+        by_type[AssetType.RENDA_FIXA.value]["status"]
+        == "dedicated_history_not_available"
+    )
 
 
 def test_non_business_dates_move_to_next_close() -> None:
