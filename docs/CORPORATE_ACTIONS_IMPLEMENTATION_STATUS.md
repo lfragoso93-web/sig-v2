@@ -33,6 +33,19 @@ A estratégia original da Issue #129, centrada em HG Brasil, foi superada pela d
 - savepoint por ativo;
 - remoção do fluxo legado que aplicava eventos diretamente nas carteiras e criava transações técnicas incompatíveis.
 
+### Integração com posições
+
+- criado projetor cronológico puro em `position_timeline_projection.py`;
+- compras, vendas e eventos corporativos são intercalados por data;
+- split, grupamento e bonificação transformam somente a quantidade vigente;
+- venda posterior usa a quantidade já transformada e reduz o custo proporcionalmente;
+- posição zerada antes do evento não recebe transformação;
+- recompra posterior não recebe evento retroativo;
+- subscrição permanece direito sem aumento automático da quantidade;
+- `calc_raw_positions` passou a carregar somente eventos globais de `corporate_events` por adaptador read-only;
+- custo total em BRL e custo original em USD continuam preservados;
+- nenhuma transação, linha de evento, migration ou schema é alterado durante a projeção.
+
 ### Proventos relacionados a eventos
 
 - dividendos históricos complementares são normalizados considerando splits e grupamentos posteriores explicitamente publicados;
@@ -41,9 +54,9 @@ A estratégia original da Issue #129, centrada em HG Brasil, foi superada pela d
 
 ## Parcialmente implementado
 
-### Integração com posições
+### Propagação aos consumidores canônicos
 
-O motor puro existe, porém os leitores gerais de posição ainda precisam consumir a linha temporal conjunta de transações e eventos. Enquanto essa integração não estiver concluída, alguns consumidores podem continuar calculando quantidade e preço médio somente pelas transações.
+Resumo, Patrimônio e posições que consomem `calc_raw_positions` já recebem a quantidade projetada. Ainda é necessário inventariar os leitores paralelos de valuation, snapshots, rentabilidade e IRPF para garantir que nenhum deles reconstrua posição somente a partir de transações.
 
 ### Scheduler
 
@@ -68,22 +81,20 @@ A identidade por fonte é determinística, mas ainda falta um estado canônico e
 
 ## Sequência técnica aprovada
 
-1. Integrar eventos corporativos aos leitores canônicos de posição, preservando ordem cronológica e custo.
-2. Propagar a projeção para valuation, patrimônio, rentabilidade e snapshots.
-3. Implementar reconciliação explícita entre fontes e estados de conflito/revisão.
-4. Construir carga histórica auditável e provar idempotência.
-5. Consolidar o scheduler corporativo oficial.
-6. Unificar o cliente BRAPI v2 e consultar cobertura antes das coletas.
-7. Evoluir para renomes, conversões e eventos complexos.
-8. Adicionar administração, simulação e auditoria operacional.
+1. Inventariar e migrar leitores paralelos de posição usados por valuation, rentabilidade, snapshots e IRPF.
+2. Implementar reconciliação explícita entre fontes e estados de conflito/revisão.
+3. Construir carga histórica auditável e provar idempotência.
+4. Consolidar o scheduler corporativo oficial.
+5. Unificar o cliente BRAPI v2 e consultar cobertura antes das coletas.
+6. Evoluir para renomes, conversões e eventos complexos.
+7. Adicionar administração, simulação e auditoria operacional.
 
-## Critérios do próximo bloco
+## Invariantes vigentes
 
-- compras, vendas e eventos devem ser processados em uma única linha temporal;
-- split, grupamento e bonificação alteram quantidade sem alterar custo total;
-- subscrição não altera quantidade sem exercício explícito;
-- venda posterior utiliza a quantidade já transformada;
-- posição zerada antes do evento não recebe transformação;
-- recompra posterior não recebe evento retroativo;
 - nenhuma transação histórica é criada ou modificada;
-- testes devem cobrir eventos intercalados, reexecução e preservação de custo.
+- apenas eventos globais com `portfolio_id IS NULL` entram na projeção;
+- tipos desconhecidos não são inferidos silenciosamente;
+- custo total é preservado em eventos gratuitos;
+- subscrição não altera posição sem exercício explícito;
+- eventos anteriores a uma recompra não afetam o novo ciclo da posição;
+- o adaptador de posição é exclusivamente read-only.
