@@ -16,9 +16,6 @@ from app.services.pre_prod_dividends_seed_contract import (
     DividendsSeedCoverage,
     DividendsSeedIntegrity,
 )
-from app.services.pre_prod_dividends_seed_materialization import (
-    DividendsSeedMaterializationResult,
-)
 from app.services.pre_prod_dividends_seed_persistence import (
     DividendsSeedPersistenceError,
     DividendsSeedPersistenceResult,
@@ -102,23 +99,13 @@ async def test_runs_single_transaction_and_restricts_window() -> None:
             ),
         ]
     )
-    asset_loader = AsyncMock(
-        return_value=(StrictDividendAsset("PETR4", "ACAO"),)
-    )
+    asset_loader = AsyncMock(return_value=(StrictDividendAsset("PETR4", "ACAO"),))
     collector = AsyncMock(return_value=_collection())
     persistence = AsyncMock(
         return_value=DividendsSeedPersistenceResult(
             created=2,
             updated=0,
             unchanged=0,
-        )
-    )
-    materialization = AsyncMock(
-        return_value=DividendsSeedMaterializationResult(
-            created=1,
-            updated=0,
-            unchanged=0,
-            skipped_non_cash=0,
         )
     )
     grouping_runner = AsyncMock(
@@ -148,7 +135,6 @@ async def test_runs_single_transaction_and_restricts_window() -> None:
         inspection_runner=inspections,
         grouping_runner=grouping_runner,
         persistence_runner=persistence,
-        materialization_runner=materialization,
     )
 
     restricted = persistence.await_args.kwargs["collections"]
@@ -157,6 +143,7 @@ async def test_runs_single_transaction_and_restricts_window() -> None:
     assert result.collection == {"assets": 1, "normalized_rows": 2}
     assert result.sources[0]["raw_rows"] == 3
     assert result.groupings[0]["ticker"] == "PETR4"
+    assert result.materialization["disabled"] is True
     db.commit.assert_awaited_once()
     db.rollback.assert_not_awaited()
 
@@ -192,14 +179,6 @@ async def test_rolls_back_when_post_inspection_has_findings() -> None:
                 created=0,
                 updated=0,
                 unchanged=0,
-            )
-        ),
-        materialization_runner=AsyncMock(
-            return_value=DividendsSeedMaterializationResult(
-                created=0,
-                updated=0,
-                unchanged=0,
-                skipped_non_cash=0,
             )
         ),
     )
@@ -248,9 +227,7 @@ async def test_rolls_back_on_blocking_multisource_conflict() -> None:
     inspections = AsyncMock(
         return_value=(_counts(), DividendsSeedCoverage(), DividendsSeedIntegrity())
     )
-    conflict = DividendsSeedPersistenceError(
-        "evento global conflitante entre fontes"
-    )
+    conflict = DividendsSeedPersistenceError("evento global conflitante entre fontes")
 
     with pytest.raises(DividendsSeedPersistenceError) as exc_info:
         await run_pre_prod_dividends_seed(

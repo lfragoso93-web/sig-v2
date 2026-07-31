@@ -109,10 +109,7 @@ def test_result_serializes_minimum_canonical_envelope() -> None:
         "branch": DIVIDENDS_SEED_BRANCH,
         "commit_sha": _VALID_SHA,
     }
-    assert payload["authorized_tables"]["write"] == (
-        "asset_dividends",
-        "dividends",
-    )
+    assert payload["authorized_tables"]["write"] == ("asset_dividends",)
     assert payload["transaction"]["final_state"] == "committed"
     for section in (
         "window",
@@ -135,17 +132,22 @@ def test_result_ok_rejects_blocking_integrity_finding() -> None:
     with pytest.raises(DividendsSeedContractError, match="integridade"):
         _result(
             integrity=DividendsSeedIntegrity(
-                duplicate_materializations=1,
+                duplicate_global_events=1,
             )
         )
 
 
-def test_coverage_rejects_more_materialized_rights_than_eligible() -> None:
-    with pytest.raises(DividendsSeedContractError, match="excedem"):
-        DividendsSeedCoverage(
-            eligible_materializations=1,
-            materialized_eligible_rights=2,
+def test_legacy_materialization_findings_are_audit_only() -> None:
+    result = _result(
+        integrity=DividendsSeedIntegrity(
+            duplicate_materializations=1,
+            missing_materializations=2,
+            materializations_without_entitlement=3,
         )
+    )
+
+    assert result.ok is True
+    assert result.integrity.blocking_findings == 0
 
 
 def test_result_ok_requires_committed_transaction() -> None:

@@ -72,7 +72,6 @@ async def test_inspection_maps_state_and_never_writes() -> None:
         3,  # orphan_dividend_portfolios
         4,  # missing_ex_dates
         5,  # negative_global_values
-        6,  # negative_materialized_values
     ]
 
     coverage_result = Mock()
@@ -146,7 +145,7 @@ async def test_inspection_maps_state_and_never_writes() -> None:
     assert integrity.orphan_dividend_events == 2
     assert integrity.orphan_dividend_portfolios == 3
     assert integrity.missing_ex_dates == 4
-    assert integrity.negative_monetary_values == 11
+    assert integrity.negative_monetary_values == 5
     assert integrity.missing_materializations == 1
     assert integrity.materializations_without_entitlement == 1
 
@@ -160,7 +159,7 @@ async def test_inspection_maps_state_and_never_writes() -> None:
 @pytest.mark.asyncio
 async def test_inspection_handles_empty_tables_without_writes() -> None:
     db = _db_stub()
-    db.scalar.side_effect = [0] * 13
+    db.scalar.side_effect = [0] * 12
 
     coverage_result = Mock()
     coverage_result.one.return_value = SimpleNamespace(

@@ -1,4 +1,5 @@
 """Inspeção read-only do estado persistido de proventos."""
+
 from __future__ import annotations
 
 from sqlalchemy import func, or_, select
@@ -192,10 +193,7 @@ async def inspect_dividends_seed_state(
     )
     coverage_row = coverage_result.one()
     portfolios_with_dividends = int(
-        await db.scalar(
-            select(func.count(func.distinct(Dividend.portfolio_id)))
-        )
-        or 0
+        await db.scalar(select(func.count(func.distinct(Dividend.portfolio_id)))) or 0
     )
     (
         eligible_materializations,
@@ -210,9 +208,7 @@ async def inspect_dividends_seed_state(
             else None
         ),
         last_ex_date=(
-            coverage_row.last_ex_date.isoformat()
-            if coverage_row.last_ex_date
-            else None
+            coverage_row.last_ex_date.isoformat() if coverage_row.last_ex_date else None
         ),
         assets_with_events=int(coverage_row.assets_with_events or 0),
         portfolios_with_dividends=portfolios_with_dividends,
@@ -284,9 +280,7 @@ async def inspect_dividends_seed_state(
     )
     missing_ex_dates = int(
         await db.scalar(
-            select(func.count(AssetDividend.id)).where(
-                AssetDividend.ex_date.is_(None)
-            )
+            select(func.count(AssetDividend.id)).where(AssetDividend.ex_date.is_(None))
         )
         or 0
     )
@@ -301,20 +295,6 @@ async def inspect_dividends_seed_state(
         )
         or 0
     )
-    negative_materialized_values = int(
-        await db.scalar(
-            select(func.count(Dividend.id)).where(
-                or_(
-                    Dividend.value_per_unit < 0,
-                    Dividend.total_value < 0,
-                    Dividend.net_value < 0,
-                    Dividend.total_received < 0,
-                )
-            )
-        )
-        or 0
-    )
-
     integrity = DividendsSeedIntegrity(
         duplicate_global_events=duplicate_global_events,
         duplicate_materializations=duplicate_materializations,
@@ -322,12 +302,8 @@ async def inspect_dividends_seed_state(
         orphan_dividend_events=orphan_dividend_events,
         orphan_dividend_portfolios=orphan_dividend_portfolios,
         missing_ex_dates=missing_ex_dates,
-        negative_monetary_values=(
-            negative_global_values + negative_materialized_values
-        ),
+        negative_monetary_values=negative_global_values,
         missing_materializations=missing_materializations,
-        materializations_without_entitlement=(
-            materializations_without_entitlement
-        ),
+        materializations_without_entitlement=(materializations_without_entitlement),
     )
     return counts, coverage, integrity

@@ -18,9 +18,6 @@ from app.services.pre_prod_dividends_seed_contract import (
     DividendsSeedContractError,
     validate_dividends_seed_identity,
 )
-from app.services.pre_prod_dividends_seed_materialization import (
-    DividendsSeedMaterializationError,
-)
 from app.services.pre_prod_dividends_seed_persistence import (
     DividendsSeedAlreadyRunningError,
     DividendsSeedPersistenceError,
@@ -56,8 +53,8 @@ def _sqlstate(exc: BaseException) -> str | None:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Reconstrói somente o catálogo global e os direitos por carteira "
-            "de proventos em uma transação auditável"
+            "Reconstrói somente o catálogo global de proventos em uma "
+            "transação auditável"
         )
     )
     parser.add_argument("--run-id", required=True, help="Identidade YYYYMMDD-HHMMSS")
@@ -117,16 +114,13 @@ async def _main() -> int:
         DividendsSeedContractError,
         StrictDividendCollectionError,
         DividendsSeedPersistenceError,
-        DividendsSeedMaterializationError,
         ValueError,
     ) as exc:
         print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
         return EXIT_OPERATIONAL_FAILURE
     except Exception as exc:  # noqa: BLE001
         stage = (
-            exc.stage
-            if isinstance(exc, DividendsSeedUnexpectedStageError)
-            else "cli"
+            exc.stage if isinstance(exc, DividendsSeedUnexpectedStageError) else "cli"
         )
         root_cause = exc.__cause__ or exc
         print(

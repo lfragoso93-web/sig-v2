@@ -29,10 +29,6 @@ from app.services.pre_prod_dividends_seed_inspection import (
     inspect_dividends_seed_groupings,
     inspect_dividends_seed_state,
 )
-from app.services.pre_prod_dividends_seed_materialization import (
-    DividendsSeedMaterializationError,
-    materialize_portfolio_dividends_strict,
-)
 from app.services.pre_prod_dividends_seed_persistence import (
     DividendsSeedPersistenceError,
     persist_asset_dividends_strict,
@@ -43,7 +39,6 @@ CollectionRunner = Callable[..., Awaitable[tuple[StrictDividendAssetCollection, 
 InspectionRunner = Callable[[AsyncSession], Awaitable[Any]]
 GroupingRunner = Callable[[AsyncSession], Awaitable[tuple[dict, ...]]]
 PersistenceRunner = Callable[..., Awaitable[Any]]
-MaterializationRunner = Callable[..., Awaitable[Any]]
 
 
 class DividendsSeedUnexpectedStageError(RuntimeError):
@@ -60,7 +55,6 @@ async def _run_stage(stage: str, operation: Awaitable[Any]) -> Any:
     except (
         StrictDividendCollectionError,
         DividendsSeedPersistenceError,
-        DividendsSeedMaterializationError,
     ):
         raise
     except Exception as exc:
@@ -124,8 +118,7 @@ def _source_summary(
             summary["normalized_rows"] += len(source.normalized_rows)
             summary["empty"] += int(source.empty_reason is not None)
     return tuple(
-        {"source": source, **summary}
-        for source, summary in sorted(summaries.items())
+        {"source": source, **summary} for source, summary in sorted(summaries.items())
     )
 
 
@@ -143,9 +136,6 @@ async def run_pre_prod_dividends_seed(
     inspection_runner: InspectionRunner = inspect_dividends_seed_state,
     grouping_runner: GroupingRunner = inspect_dividends_seed_groupings,
     persistence_runner: PersistenceRunner = persist_asset_dividends_strict,
-    materialization_runner: MaterializationRunner = (
-        materialize_portfolio_dividends_strict
-    ),
 ) -> PreProdDividendsSeedResult:
     """Executa o estágio inteiro em uma única transação controlada."""
 
@@ -171,10 +161,6 @@ async def run_pre_prod_dividends_seed(
         persistence = await _run_stage(
             "global_persistence",
             persistence_runner(db=db, collections=restricted),
-        )
-        materialization = await _run_stage(
-            "portfolio_materialization",
-            materialization_runner(db=db, as_of=end_date),
         )
         after, coverage, integrity = await _run_stage(
             "final_inspection",
@@ -226,6 +212,12 @@ async def run_pre_prod_dividends_seed(
             "normalized_rows": sum(item.normalized_rows for item in restricted),
         },
         global_persistence=asdict(persistence),
-        materialization=asdict(materialization),
+        materialization={
+            "created": 0,
+            "updated": 0,
+            "unchanged": 0,
+            "skipped_non_cash": 0,
+            "disabled": True,
+        },
         errors=errors,
     )

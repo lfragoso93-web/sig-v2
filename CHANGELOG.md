@@ -5,6 +5,19 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — seed pré-produção sem materialização ativa (30/07/2026)
+
+- `run_pre_prod_dividends_seed` deixou de executar a etapa
+  `portfolio_materialization` e não aceita mais `materialization_runner`.
+- A CLI e o orquestrador não importam o módulo v1 de materialização.
+- A fronteira de escrita do contrato permite somente `asset_dividends`.
+- Métricas legadas de `dividends` permanecem disponíveis para auditoria, mas não
+  bloqueiam commit do catálogo global; valores negativos canônicos continuam
+  bloqueantes.
+- A seção v1 `materialization` é preservada no envelope como desativada e com
+  zero escritas, mantendo compatibilidade temporária com o comparador.
+- Regressão AST protege a ausência de materialização e a fronteira canônica.
+
 ### Removido — materializador legado de direitos por carteira (30/07/2026)
 
 - `materialize_asset_dividends` foi removido após a confirmação de zero callers

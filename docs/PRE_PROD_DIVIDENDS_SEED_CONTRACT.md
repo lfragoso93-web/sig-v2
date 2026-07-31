@@ -29,6 +29,21 @@ regra de leitura, escrita, materialização, métrica ou idempotência envolvend
 por um novo contrato após a migração descrita em
 `docs/DIVIDENDS_CANONICAL_ARCHITECTURE.md`.
 
+### Contração operacional aplicada em 30/07/2026
+
+Enquanto o envelope v1 permanece carregável para comparação de evidências, sua
+execução foi contraída para o catálogo global:
+
+- `run_pre_prod_dividends_seed` e a CLI não chamam nem importam materialização;
+- a única tabela autorizada para escrita é `asset_dividends`;
+- a seção `materialization` permanece temporariamente no JSON com contagens
+  zeradas e `disabled=true`;
+- métricas históricas de `dividends` são somente auditoria e não bloqueiam o
+  commit; somente achados de integridade do catálogo global são bloqueantes.
+
+O módulo e os testes da implementação v1 de materialização não são uma porta
+operacional e serão removidos junto com a substituição definitiva do envelope.
+
 ## Objetivo
 
 Definir a fronteira operacional, o envelope de evidência e os critérios de segurança
