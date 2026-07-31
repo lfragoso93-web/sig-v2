@@ -4,8 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-
-from app.models.dividend import DividendType
+from app.models.dividend_enums import DividendType
 from app.services.dividend_backfill_service import (
     ParsedDividendEvent,
     _parse_raw_dividend,
@@ -103,9 +102,7 @@ async def test_aalr3_reconciles_declared_yahoo_truncation_deterministically(
         raw_payload={
             "exDate": "2019-04-26",
             "rate": 0.084538,
-            "canonicalComparison": {
-                "value_per_unit": {"mode": "truncate", "scale": 6}
-            },
+            "canonicalComparison": {"value_per_unit": {"mode": "truncate", "scale": 6}},
         },
     )
     sources = (yahoo, brapi) if reverse else (brapi, yahoo)
@@ -176,9 +173,7 @@ async def test_abev3_yahoo_aggregate_preserves_brapi_events_by_type(
         raw_payload={
             "rate": 0.253977,
             "eventSemantics": "aggregate_cash_by_ex_date",
-            "canonicalComparison": {
-                "value_per_unit": {"mode": "truncate", "scale": 6}
-            },
+            "canonicalComparison": {"value_per_unit": {"mode": "truncate", "scale": 6}},
         },
     )
     sources = (yahoo, brapi) if reverse else (brapi, yahoo)
@@ -250,9 +245,7 @@ async def test_precision_contract_does_not_hide_material_value_conflict() -> Non
         payment_date=None,
         raw_payload={
             "rate": 0.084538,
-            "canonicalComparison": {
-                "value_per_unit": {"mode": "truncate", "scale": 6}
-            },
+            "canonicalComparison": {"value_per_unit": {"mode": "truncate", "scale": 6}},
         },
     )
     collection = StrictDividendAssetCollection(
@@ -288,9 +281,7 @@ async def test_distinct_ex_dates_remain_distinct_events() -> None:
         ex_date=date(2019, 4, 29),
         raw_payload={
             "rate": 0.084538,
-            "canonicalComparison": {
-                "value_per_unit": {"mode": "truncate", "scale": 6}
-            },
+            "canonicalComparison": {"value_per_unit": {"mode": "truncate", "scale": 6}},
         },
     )
     collection = StrictDividendAssetCollection(
@@ -320,9 +311,7 @@ async def test_declared_precision_below_six_decimals_remains_blocking() -> None:
         payment_date=None,
         raw_payload={
             "rate": 1.2,
-            "canonicalComparison": {
-                "value_per_unit": {"mode": "truncate", "scale": 1}
-            },
+            "canonicalComparison": {"value_per_unit": {"mode": "truncate", "scale": 1}},
         },
     )
     collection = StrictDividendAssetCollection(
@@ -615,9 +604,7 @@ async def test_abev3_partial_yahoo_component_preserves_brapi_total(
         raw_payload={
             "rate": 0.059994,
             "eventSemantics": "aggregate_cash_by_ex_date",
-            "canonicalComparison": {
-                "value_per_unit": {"mode": "truncate", "scale": 6}
-            },
+            "canonicalComparison": {"value_per_unit": {"mode": "truncate", "scale": 6}},
         },
     )
     sources = (yahoo, brapi) if reverse else (brapi, yahoo)
@@ -683,9 +670,7 @@ async def test_absorbed_component_policy_keeps_arbitrary_value_blocking(
         raw_payload={
             "rate": 0.05,
             "eventSemantics": "aggregate_cash_by_ex_date",
-            "canonicalComparison": {
-                "value_per_unit": {"mode": "truncate", "scale": 6}
-            },
+            "canonicalComparison": {"value_per_unit": {"mode": "truncate", "scale": 6}},
         },
     )
     collection = StrictDividendAssetCollection(

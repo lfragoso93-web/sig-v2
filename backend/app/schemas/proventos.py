@@ -1,11 +1,12 @@
 """Contratos públicos da API de Proventos."""
+
 from __future__ import annotations
 
 from datetime import date
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.dividend import DividendStatus, DividendType
+from app.models.dividend_enums import DividendStatus, DividendType
 
 
 class ProventosSummaryResponse(BaseModel):

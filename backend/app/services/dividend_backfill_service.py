@@ -2,7 +2,7 @@ import logging
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 from sqlalchemy import select
@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.integrations.brapi import BRAPI_BASE, _auth_headers
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
-from app.models.dividend import DividendType
+from app.models.dividend_enums import DividendType
 from app.services.dividend_type_service import normalize_dividend_type
 
 logger = logging.getLogger(__name__)
@@ -251,7 +251,7 @@ async def _fetch_dividends_yf(ticker: str) -> list[dict]:
         return []
 
 
-def _parse_raw_dividend(raw: dict) -> Optional[ParsedDividendEvent]:
+def _parse_raw_dividend(raw: dict) -> ParsedDividendEvent | None:
     try:
         category = raw.get("eventCategory")
         record_date = _parse_date(

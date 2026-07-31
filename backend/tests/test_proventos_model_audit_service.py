@@ -6,7 +6,8 @@ from decimal import Decimal
 import pytest
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
-from app.models.dividend import Dividend, DividendStatus, DividendType
+from app.models.dividend import Dividend
+from app.models.dividend_enums import DividendStatus, DividendType
 from app.models.portfolio import Portfolio
 from app.services.proventos_model_audit_service import audit_proventos_model
 from sqlalchemy.ext.asyncio import AsyncSession

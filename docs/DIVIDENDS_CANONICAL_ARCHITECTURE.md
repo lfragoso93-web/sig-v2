@@ -87,6 +87,7 @@ possuir o ativo hoje não cria direito retroativo.
 | `scheduler.py` legado e scheduler diário ativo | Atualização do catálogo global | Canônico | Scheduler diário preservado; job FII quebrado e redundante removido do legado; o seed de ativos já enriquece tickers elegíveis com eventos globais |
 | `proventos_legacy_link_service.py` e sua CLI | Dry-run de vínculos de direitos materializados | Removido | A evidência histórica já registrava zero direitos sem vínculo; o cálculo sob demanda tornou o backfill incompatível com a arquitetura alvo |
 | `proventos_model_audit_service.py` | Inventário físico read-only | Transição | Conta somente eventos canônicos e linhas em `dividends`; `dividends_sync_jobs` não possui mais leitura de runtime |
+| `dividend_enums.py` | Tipos e status públicos de Proventos | Canônico | Não importa SQLAlchemy nem o ORM `Dividend`; serviços, schemas, rotas e o catálogo global dependem somente deste módulo neutro |
 
 Nenhuma dessas portas pode ser removida isoladamente antes de seu consumidor ou
 substituto estar coberto. Durante a migração, é proibido reintroduzir

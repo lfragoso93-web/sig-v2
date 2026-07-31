@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
-from app.models.dividend import DividendType
+from app.models.dividend_enums import DividendType
 from app.services.dividend_type_service import normalize_dividend_type
 from app.services.pre_prod_dividends_seed_collector import (
     StrictDividendAssetCollection,
@@ -155,7 +155,9 @@ def _declared_precision_equivalent(
         left_value = left[field]
         right_value = right[field]
         quantum = Decimal(1).scaleb(-scale)
-        return left_value.quantize(quantum, rounding=ROUND_DOWN) == right_value.quantize(
+        return left_value.quantize(
+            quantum, rounding=ROUND_DOWN
+        ) == right_value.quantize(
             quantum,
             rounding=ROUND_DOWN,
         )

@@ -1,11 +1,12 @@
 """Integration tests for canonical on-demand portfolio dividend totals."""
+
 from datetime import date
 from decimal import Decimal
 
 import pytest
 from app.models.asset import Asset, AssetCurrency, AssetType
 from app.models.asset_dividend import AssetDividend
-from app.models.dividend import DividendType
+from app.models.dividend_enums import DividendType
 from app.models.portfolio import Portfolio
 from app.models.transaction import OperationType, Transaction
 from app.models.user import User
@@ -13,6 +14,7 @@ from app.services.portfolio_service import sum_dividends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # -- fixtures de apoio --------------------------------------------------------
+
 
 async def _make_asset(db: AsyncSession, ticker: str = "PETR4") -> Asset:
     asset = Asset(
@@ -73,14 +75,18 @@ async def _make_transaction(
 
 # -- testes -------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 class TestSumDividends:
-
-    async def test_sem_proventos_retorna_zero(self, db: AsyncSession, portfolio: Portfolio):
+    async def test_sem_proventos_retorna_zero(
+        self, db: AsyncSession, portfolio: Portfolio
+    ):
         total = await sum_dividends(db, portfolio.id)
         assert total == 0.0
 
-    async def test_soma_direitos_canonicos(self, db: AsyncSession, portfolio: Portfolio):
+    async def test_soma_direitos_canonicos(
+        self, db: AsyncSession, portfolio: Portfolio
+    ):
         asset = await _make_asset(db, "PETR4")
         await _make_asset_dividend(db, asset, date(2024, 3, 1), value=1.0)
 
@@ -108,8 +114,12 @@ class TestSumDividends:
         from app.schemas.portfolio import PortfolioCreate
         from app.services.portfolio_service import create_portfolio
 
-        p1 = await create_portfolio(db, user.id, PortfolioCreate(name="P1", description=""))
-        p2 = await create_portfolio(db, user.id, PortfolioCreate(name="P2", description=""))
+        p1 = await create_portfolio(
+            db, user.id, PortfolioCreate(name="P1", description="")
+        )
+        p2 = await create_portfolio(
+            db, user.id, PortfolioCreate(name="P2", description="")
+        )
 
         asset = await _make_asset(db, "BBDC4")
         await _make_asset_dividend(db, asset, date(2024, 1, 1))

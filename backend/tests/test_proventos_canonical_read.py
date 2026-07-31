@@ -2,8 +2,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
-
-from app.models.dividend import DividendStatus, DividendType
+from app.models.dividend_enums import DividendStatus, DividendType
 from app.services.canonical_dividend_entitlement import (
     DividendEntitlement,
     DividendEvent,
@@ -102,8 +101,7 @@ def canonical_items(monkeypatch):
         return items
 
     monkeypatch.setattr(
-        "app.services.proventos_service."
-        "load_portfolio_dividend_entitlements",
+        "app.services.proventos_service.load_portfolio_dividend_entitlements",
         load,
     )
     return items
@@ -149,12 +147,8 @@ async def test_filters_derive_status_from_payment_date(canonical_items):
 async def test_history_and_distribution_share_canonical_net_amounts(
     canonical_items,
 ):
-    history = await get_monthly_history(
-        object(), 1, status=DividendStatus.RECEBIDO
-    )
-    distribution = await get_distribution(
-        object(), 1, status=DividendStatus.RECEBIDO
-    )
+    history = await get_monthly_history(object(), 1, status=DividendStatus.RECEBIDO)
+    distribution = await get_distribution(object(), 1, status=DividendStatus.RECEBIDO)
 
     assert history[0]["total"] == 12.5
     assert distribution == [
@@ -171,10 +165,7 @@ def test_public_read_service_does_not_depend_on_legacy_dividend_model():
     from pathlib import Path
 
     source = (
-        Path(__file__).parents[1]
-        / "app"
-        / "services"
-        / "proventos_service.py"
+        Path(__file__).parents[1] / "app" / "services" / "proventos_service.py"
     ).read_text(encoding="utf-8")
 
     assert "app.models.dividend import Dividend," not in source

@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-from app.models.dividend import DividendType
+from app.models.dividend_enums import DividendType
 from app.services.pre_prod_dividends_seed_inspection import (
     inspect_dividends_seed_groupings,
     inspect_dividends_seed_state,

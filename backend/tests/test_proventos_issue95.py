@@ -3,12 +3,10 @@ from decimal import Decimal
 from unittest.mock import AsyncMock
 
 import pytest
-from pydantic import ValidationError
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
-from app.models.dividend import Dividend, DividendStatus, DividendType
+from app.models.dividend import Dividend
+from app.models.dividend_enums import DividendStatus, DividendType
 from app.models.portfolio import Portfolio
 from app.models.transaction import OperationType, Transaction
 from app.schemas.proventos import (
@@ -17,7 +15,14 @@ from app.schemas.proventos import (
     ProventosMonthlyHistoryResponse,
     ProventosSummaryResponse,
 )
-from app.services.proventos_service import get_distribution, get_monthly_history, get_summary, list_items
+from app.services.proventos_service import (
+    get_distribution,
+    get_monthly_history,
+    get_summary,
+    list_items,
+)
+from pydantic import ValidationError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def make_asset(db: AsyncSession, ticker: str, asset_type: str = "ACAO") -> Asset:
@@ -27,16 +32,20 @@ async def make_asset(db: AsyncSession, ticker: str, asset_type: str = "ACAO") ->
     return asset
 
 
-async def make_tx(db: AsyncSession, portfolio_id: int, ticker: str, tx_date: date) -> None:
-    db.add(Transaction(
-        portfolio_id=portfolio_id,
-        ticker=ticker,
-        operation=OperationType.buy,
-        quantity=100,
-        date=tx_date,
-        price=Decimal("10.00"),
-        asset_type="ACAO",
-    ))
+async def make_tx(
+    db: AsyncSession, portfolio_id: int, ticker: str, tx_date: date
+) -> None:
+    db.add(
+        Transaction(
+            portfolio_id=portfolio_id,
+            ticker=ticker,
+            operation=OperationType.buy,
+            quantity=100,
+            date=tx_date,
+            price=Decimal("10.00"),
+            asset_type="ACAO",
+        )
+    )
     await db.flush()
 
 
@@ -71,14 +80,16 @@ async def make_dividend(
     net: str,
     status: DividendStatus = DividendStatus.RECEBIDO,
 ) -> None:
-    db.add(Dividend(
-        portfolio_id=portfolio_id,
-        asset_dividend_id=event.id,
-        quantity=Decimal("100"),
-        total_value=Decimal(total),
-        net_value=Decimal(net),
-        status=status,
-    ))
+    db.add(
+        Dividend(
+            portfolio_id=portfolio_id,
+            asset_dividend_id=event.id,
+            quantity=Decimal(100),
+            total_value=Decimal(total),
+            net_value=Decimal(net),
+            status=status,
+        )
+    )
     await db.flush()
 
 
@@ -87,13 +98,32 @@ async def test_issue95_summary_cash_vs_non_cash(db: AsyncSession, portfolio: Por
     asset = await make_asset(db, "PETR4")
     await make_tx(db, portfolio.id, "PETR4", date(2024, 1, 1))
 
-    cash = await make_event(db, asset, date(2024, 3, 1), date(2024, 3, 4), date.today(), DividendType.JCP)
+    cash = await make_event(
+        db, asset, date(2024, 3, 1), date(2024, 3, 4), date.today(), DividendType.JCP
+    )
     await make_dividend(db, portfolio.id, cash, "100.00", "85.00")
 
-    future = await make_event(db, asset, date(2024, 4, 1), date(2024, 4, 2), date.today(), DividendType.DIVIDENDO)
-    await make_dividend(db, portfolio.id, future, "50.00", "50.00", DividendStatus.A_RECEBER)
+    future = await make_event(
+        db,
+        asset,
+        date(2024, 4, 1),
+        date(2024, 4, 2),
+        date.today(),
+        DividendType.DIVIDENDO,
+    )
+    await make_dividend(
+        db, portfolio.id, future, "50.00", "50.00", DividendStatus.A_RECEBER
+    )
 
-    non_cash = await make_event(db, asset, date(2024, 5, 1), date(2024, 5, 2), date.today(), DividendType.BONIFICACAO, "0.00")
+    non_cash = await make_event(
+        db,
+        asset,
+        date(2024, 5, 1),
+        date(2024, 5, 2),
+        date.today(),
+        DividendType.BONIFICACAO,
+        "0.00",
+    )
     await make_dividend(db, portfolio.id, non_cash, "999.00", "999.00")
 
     summary = await get_summary(db, portfolio.id)
@@ -105,14 +135,25 @@ async def test_issue95_summary_cash_vs_non_cash(db: AsyncSession, portfolio: Por
 
 
 @pytest.mark.asyncio
-async def test_issue95_list_uses_record_date_before_ex_date(db: AsyncSession, portfolio: Portfolio):
+async def test_issue95_list_uses_record_date_before_ex_date(
+    db: AsyncSession, portfolio: Portfolio
+):
     asset = await make_asset(db, "BBAS3")
     await make_tx(db, portfolio.id, "BBAS3", date(2024, 1, 3))
 
-    no_rights = await make_event(db, asset, date(2024, 1, 1), date(2024, 1, 4), date(2024, 1, 20), DividendType.DIVIDENDO)
+    no_rights = await make_event(
+        db,
+        asset,
+        date(2024, 1, 1),
+        date(2024, 1, 4),
+        date(2024, 1, 20),
+        DividendType.DIVIDENDO,
+    )
     await make_dividend(db, portfolio.id, no_rights, "100.00", "100.00")
 
-    fallback = await make_event(db, asset, None, date(2024, 1, 5), date(2024, 1, 25), DividendType.DIVIDENDO)
+    fallback = await make_event(
+        db, asset, None, date(2024, 1, 5), date(2024, 1, 25), DividendType.DIVIDENDO
+    )
     await make_dividend(db, portfolio.id, fallback, "100.00", "100.00")
 
     result = await list_items(db, portfolio.id)
@@ -122,14 +163,31 @@ async def test_issue95_list_uses_record_date_before_ex_date(db: AsyncSession, po
 
 
 @pytest.mark.asyncio
-async def test_issue95_history_and_distribution_ignore_non_cash(db: AsyncSession, portfolio: Portfolio):
+async def test_issue95_history_and_distribution_ignore_non_cash(
+    db: AsyncSession, portfolio: Portfolio
+):
     asset = await make_asset(db, "MXRF11", "FII")
     await make_tx(db, portfolio.id, "MXRF11", date(2024, 1, 1))
 
-    cash = await make_event(db, asset, date(2024, 6, 1), date(2024, 6, 3), date.today(), DividendType.RENDIMENTO)
+    cash = await make_event(
+        db,
+        asset,
+        date(2024, 6, 1),
+        date(2024, 6, 3),
+        date.today(),
+        DividendType.RENDIMENTO,
+    )
     await make_dividend(db, portfolio.id, cash, "120.00", "120.00")
 
-    non_cash = await make_event(db, asset, date(2024, 6, 5), date(2024, 6, 6), date.today(), DividendType.SUBSCRICAO, "0.00")
+    non_cash = await make_event(
+        db,
+        asset,
+        date(2024, 6, 5),
+        date(2024, 6, 6),
+        date.today(),
+        DividendType.SUBSCRICAO,
+        "0.00",
+    )
     await make_dividend(db, portfolio.id, non_cash, "500.00", "500.00")
 
     history = await get_monthly_history(db, portfolio.id)
@@ -162,7 +220,9 @@ async def test_issue131_monthly_history_breaks_total_down_by_asset_class(
             date(2026, 3, 1),
             date(2026, 3, 2),
             payment_date,
-            DividendType.RENDIMENTO if asset.asset_type == "FII" else DividendType.DIVIDENDO,
+            DividendType.RENDIMENTO
+            if asset.asset_type == "FII"
+            else DividendType.DIVIDENDO,
         )
         await make_dividend(db, portfolio.id, event, value, value)
 
@@ -177,7 +237,9 @@ async def test_issue131_monthly_history_breaks_total_down_by_asset_class(
     ]
     assert march["total"] == pytest.approx(151.45)
     assert history[0]["months"][2] == pytest.approx(march["total"])
-    assert sum(item["value"] for item in march["by_asset_class"]) == pytest.approx(march["total"])
+    assert sum(item["value"] for item in march["by_asset_class"]) == pytest.approx(
+        march["total"]
+    )
 
 
 @pytest.mark.asyncio
@@ -226,12 +288,13 @@ async def test_issue131_monthly_breakdown_respects_filters_and_portfolio_isolati
     )
 
     assert history[0]["total"] == pytest.approx(60.0)
-    assert history[0]["month_details"] == [{
-        "month": 4,
-        "total": 60.0,
-        "by_asset_class": [{"asset_type": "FII", "label": "FIIs", "value": 60.0}],
-    }]
-
+    assert history[0]["month_details"] == [
+        {
+            "month": 4,
+            "total": 60.0,
+            "by_asset_class": [{"asset_type": "FII", "label": "FIIs", "value": 60.0}],
+        }
+    ]
 
 
 @pytest.mark.asyncio
@@ -364,7 +427,6 @@ async def test_issue165_distribution_uses_the_same_filters_as_summary(
     assert sum(row["total"] for row in distribution) == pytest.approx(60.0)
 
 
-
 @pytest.mark.asyncio
 async def test_issue165_strict_response_contracts_validate_service_payloads(
     db: AsyncSession,
@@ -395,11 +457,12 @@ async def test_issue165_strict_response_contracts_validate_service_payloads(
     ProventosDistributionResponse.model_validate(distribution[0])
 
     with pytest.raises(ValidationError):
-        ProventosSummaryResponse.model_validate({
-            **summary,
-            "campo_inesperado": True,
-        })
-
+        ProventosSummaryResponse.model_validate(
+            {
+                **summary,
+                "campo_inesperado": True,
+            }
+        )
 
 
 @pytest.mark.asyncio

@@ -9,7 +9,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
-from app.models.dividend import Dividend, DividendType
+from app.models.dividend import Dividend
+from app.models.dividend_enums import DividendType
 from app.models.portfolio import Portfolio
 from app.models.transaction import OperationType, Transaction
 from app.services.dividend_backfill_service import (

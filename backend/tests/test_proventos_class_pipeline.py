@@ -4,14 +4,13 @@ from datetime import date
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
-from app.models.dividend import Dividend, DividendType
+from app.models.dividend import Dividend
+from app.models.dividend_enums import DividendType
 from app.services.dividend_backfill_service import backfill_dividends
-
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 NATIONAL_DIVIDEND_CLASSES = [
     pytest.param("PETR4", "ACAO", "Dividendos", DividendType.DIVIDENDO, id="acao"),

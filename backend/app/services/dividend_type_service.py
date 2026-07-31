@@ -2,7 +2,7 @@
 
 import unicodedata
 
-from app.models.dividend import DividendType
+from app.models.dividend_enums import DividendType
 
 CASH_DIVIDEND_TYPES = frozenset(
     {
@@ -20,9 +20,7 @@ def _normalized_label(value: str | None) -> str:
         return ""
     decomposed = unicodedata.normalize("NFKD", str(value))
     without_accents = "".join(
-        character
-        for character in decomposed
-        if not unicodedata.combining(character)
+        character for character in decomposed if not unicodedata.combining(character)
     )
     clean = without_accents.upper().strip()
     return " ".join(clean.replace("_", " ").replace("-", " ").split())

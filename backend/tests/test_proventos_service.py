@@ -2,8 +2,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
-
-from app.models.dividend import DividendStatus
+from app.models.dividend_enums import DividendStatus
 from app.services.canonical_dividend_entitlement import (
     DividendEntitlement,
     DividendEvent,
@@ -74,8 +73,7 @@ def install_items(monkeypatch, items):
         return items
 
     monkeypatch.setattr(
-        "app.services.proventos_service."
-        "load_portfolio_dividend_entitlements",
+        "app.services.proventos_service.load_portfolio_dividend_entitlements",
         load,
     )
 
@@ -161,9 +159,7 @@ async def test_list_items_with_data(monkeypatch):
         ],
     )
 
-    result = await list_items(
-        object(), portfolio_id=1, page=1, page_size=1
-    )
+    result = await list_items(object(), portfolio_id=1, page=1, page_size=1)
 
     assert result["total"] == 2
     assert len(result["items"]) == 1

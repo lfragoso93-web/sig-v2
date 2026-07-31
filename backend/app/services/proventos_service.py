@@ -1,15 +1,16 @@
 """Canonical read-only projections for the public Proventos API."""
+
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import date
-from decimal import Decimal, ROUND_HALF_UP
-from typing import Iterable, Optional
+from decimal import ROUND_HALF_UP, Decimal
 
 from dateutil.relativedelta import relativedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.asset_types import asset_type_label
-from app.models.dividend import DividendStatus, DividendType
+from app.models.dividend_enums import DividendStatus, DividendType
 from app.services.canonical_dividend_entitlement import EntitlementReason
 from app.services.canonical_dividend_entitlement_reader import (
     PortfolioDividendEntitlement,
@@ -42,18 +43,15 @@ def _matches(
     item: PortfolioDividendEntitlement,
     *,
     today: date,
-    status: Optional[DividendStatus],
-    year: Optional[int],
-    asset_type: Optional[str],
-    dividend_type: Optional[DividendType],
+    status: DividendStatus | None,
+    year: int | None,
+    asset_type: str | None,
+    dividend_type: DividendType | None,
 ) -> bool:
     return (
         (status is None or _payment_status(item, today=today) is status)
         and (year is None or _event_year(item) == year)
-        and (
-            asset_type is None
-            or item.asset_type.upper() == asset_type.upper()
-        )
+        and (asset_type is None or item.asset_type.upper() == asset_type.upper())
         and (
             dividend_type is None
             or item.event.event_type.upper() == dividend_type.value.upper()
@@ -65,10 +63,10 @@ async def _load_filtered(
     db: AsyncSession,
     portfolio_id: int,
     *,
-    status: Optional[DividendStatus] = None,
-    year: Optional[int] = None,
-    asset_type: Optional[str] = None,
-    dividend_type: Optional[DividendType] = None,
+    status: DividendStatus | None = None,
+    year: int | None = None,
+    asset_type: str | None = None,
+    dividend_type: DividendType | None = None,
 ) -> tuple[list[PortfolioDividendEntitlement], date]:
     today = date.today()
     items = await load_portfolio_dividend_entitlements(db, portfolio_id)
@@ -93,19 +91,17 @@ def _eligible_cash(
     items: Iterable[PortfolioDividendEntitlement],
 ) -> list[PortfolioDividendEntitlement]:
     return [
-        item
-        for item in items
-        if item.entitlement.reason is EntitlementReason.ELIGIBLE
+        item for item in items if item.entitlement.reason is EntitlementReason.ELIGIBLE
     ]
 
 
 async def get_summary(
     db: AsyncSession,
     portfolio_id: int,
-    status: Optional[DividendStatus] = None,
-    year: Optional[int] = None,
-    asset_type: Optional[str] = None,
-    dividend_type: Optional[DividendType] = None,
+    status: DividendStatus | None = None,
+    year: int | None = None,
+    asset_type: str | None = None,
+    dividend_type: DividendType | None = None,
 ) -> dict:
     items, today = await _load_filtered(
         db,
@@ -130,25 +126,18 @@ async def get_summary(
     received_12m = [
         item
         for item in received
-        if item.event.payment_date is not None
-        and item.event.payment_date >= start_12m
+        if item.event.payment_date is not None and item.event.payment_date >= start_12m
     ]
 
-    total_recebido = sum(
-        (item.entitlement.net_amount for item in received), Decimal("0")
-    )
+    total_recebido = sum((item.entitlement.net_amount for item in received), Decimal(0))
     bruto_recebido = sum(
-        (item.entitlement.gross_amount for item in received), Decimal("0")
+        (item.entitlement.gross_amount for item in received), Decimal(0)
     )
-    total_pendente = sum(
-        (item.entitlement.net_amount for item in pending), Decimal("0")
-    )
+    total_pendente = sum((item.entitlement.net_amount for item in pending), Decimal(0))
     bruto_pendente = sum(
-        (item.entitlement.gross_amount for item in pending), Decimal("0")
+        (item.entitlement.gross_amount for item in pending), Decimal(0)
     )
-    total_12m = sum(
-        (item.entitlement.net_amount for item in received_12m), Decimal("0")
-    )
+    total_12m = sum((item.entitlement.net_amount for item in received_12m), Decimal(0))
     return {
         "total_recebido": float(total_recebido),
         "total_liquido_recebido": float(total_recebido),
@@ -168,10 +157,10 @@ async def get_summary(
 async def list_items(
     db: AsyncSession,
     portfolio_id: int,
-    status: Optional[DividendStatus] = None,
-    year: Optional[int] = None,
-    asset_type: Optional[str] = None,
-    dividend_type: Optional[DividendType] = None,
+    status: DividendStatus | None = None,
+    year: int | None = None,
+    asset_type: str | None = None,
+    dividend_type: DividendType | None = None,
     page: int = 1,
     page_size: int = 50,
 ) -> dict:
@@ -210,8 +199,7 @@ async def list_items(
                 "asset_type": item.asset_type,
                 "dividend_type": _enum_text(item.event.event_type),
                 "is_cash": (
-                    item.entitlement.reason
-                    is not EntitlementReason.NON_CASH_EVENT
+                    item.entitlement.reason is not EntitlementReason.NON_CASH_EVENT
                 ),
                 "status": _payment_status(item, today=today),
                 "record_date": item.event.record_date,
@@ -220,9 +208,7 @@ async def list_items(
                 "approved_on": item.approved_on,
                 "quantity": float(item.entitlement.eligible_quantity),
                 "value_per_unit": float(item.event.value_per_unit),
-                "gross_value_per_unit": _optional_float(
-                    item.gross_value_per_unit
-                ),
+                "gross_value_per_unit": _optional_float(item.gross_value_per_unit),
                 "factor": _optional_float(item.factor),
                 "complete_factor": _optional_float(item.complete_factor),
                 "total_value": float(item.entitlement.gross_amount),
@@ -240,10 +226,10 @@ async def list_items(
 async def get_monthly_history(
     db: AsyncSession,
     portfolio_id: int,
-    status: Optional[DividendStatus] = None,
-    year: Optional[int] = None,
-    asset_type: Optional[str] = None,
-    dividend_type: Optional[DividendType] = None,
+    status: DividendStatus | None = None,
+    year: int | None = None,
+    asset_type: str | None = None,
+    dividend_type: DividendType | None = None,
 ) -> list[dict]:
     items, _ = await _load_filtered(
         db,
@@ -265,7 +251,7 @@ async def get_monthly_history(
             payment_date.month, {}
         )
         class_values[item.asset_type] = (
-            class_values.get(item.asset_type, Decimal("0")) + value
+            class_values.get(item.asset_type, Decimal(0)) + value
         )
     return _monthly_payload(data)
 
@@ -296,9 +282,7 @@ def _monthly_payload(
             )
             total = round(sum(item["value"] for item in by_class), 2)
             months.append(total)
-            details.append(
-                {"month": month, "total": total, "by_asset_class": by_class}
-            )
+            details.append({"month": month, "total": total, "by_asset_class": by_class})
         populated = [value for value in months if value is not None]
         total = round(sum(populated), 2)
         result.append(
@@ -317,10 +301,10 @@ async def get_distribution(
     db: AsyncSession,
     portfolio_id: int,
     months: int = 12,
-    status: Optional[DividendStatus] = None,
-    year: Optional[int] = None,
-    asset_type: Optional[str] = None,
-    dividend_type: Optional[DividendType] = None,
+    status: DividendStatus | None = None,
+    year: int | None = None,
+    asset_type: str | None = None,
+    dividend_type: DividendType | None = None,
 ) -> list[dict]:
     items, today = await _load_filtered(
         db,
@@ -337,8 +321,8 @@ async def get_distribution(
         if payment_date is None or (year is None and payment_date < start):
             continue
         key = (item.ticker, item.asset_type)
-        totals[key] = totals.get(key, Decimal("0")) + item.entitlement.net_amount
-    grand_total = sum(totals.values(), Decimal("0"))
+        totals[key] = totals.get(key, Decimal(0)) + item.entitlement.net_amount
+    grand_total = sum(totals.values(), Decimal(0))
     if grand_total <= 0:
         return []
     return [

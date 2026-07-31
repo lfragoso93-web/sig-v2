@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-from app.models.dividend import DividendType
+from app.models.dividend_enums import DividendType
 from app.models.transaction import OperationType
 from app.schemas.dividend import DividendRead
 from app.services.dividend_service import (

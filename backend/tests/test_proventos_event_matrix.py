@@ -5,12 +5,10 @@ from decimal import Decimal
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
-from app.models.dividend import Dividend, DividendStatus, DividendType
+from app.models.dividend import Dividend
+from app.models.dividend_enums import DividendStatus, DividendType
 from app.models.portfolio import Portfolio
 from app.models.transaction import OperationType, Transaction
 from app.services.dividend_backfill_service import backfill_dividends
@@ -20,7 +18,8 @@ from app.services.proventos_service import (
     get_summary,
     list_items,
 )
-
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 NON_MONETARY_EVENTS = [
     pytest.param(
@@ -59,8 +58,8 @@ async def test_collects_non_monetary_event_without_financial_materialization(
             ticker=ticker,
             asset_type="ACAO",
             operation=OperationType.buy,
-            quantity=Decimal("10"),
-            price=Decimal("100"),
+            quantity=Decimal(10),
+            price=Decimal(100),
             date=date(2026, 1, 2),
         )
     )
@@ -120,8 +119,8 @@ async def test_non_monetary_legacy_rows_do_not_contaminate_financial_aggregates(
             ticker=ticker,
             asset_type="ACAO",
             operation=OperationType.buy,
-            quantity=Decimal("10"),
-            price=Decimal("100"),
+            quantity=Decimal(10),
+            price=Decimal(100),
             date=today - timedelta(days=120),
         )
     )
@@ -135,7 +134,7 @@ async def test_non_monetary_legacy_rows_do_not_contaminate_financial_aggregates(
             record_date=today - timedelta(days=30 - offset),
             ex_date=today - timedelta(days=29 - offset),
             payment_date=today - timedelta(days=5),
-            value_per_unit=Decimal("0"),
+            value_per_unit=Decimal(0),
             dividend_type=event_type,
             source="legacy-test",
         )
@@ -145,9 +144,9 @@ async def test_non_monetary_legacy_rows_do_not_contaminate_financial_aggregates(
             Dividend(
                 portfolio_id=portfolio.id,
                 asset_dividend_id=event.id,
-                quantity=Decimal("10"),
-                total_value=Decimal("999"),
-                net_value=Decimal("999"),
+                quantity=Decimal(10),
+                total_value=Decimal(999),
+                net_value=Decimal(999),
                 status=DividendStatus.RECEBIDO,
             )
         )

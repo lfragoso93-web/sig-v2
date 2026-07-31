@@ -2,6 +2,7 @@
 AssetDividend — proventos declarados por ativo (fonte da verdade global).
 Independente de carteira.
 """
+
 from datetime import date as DateType
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
@@ -24,7 +25,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
-from app.models.dividend import DividendType
+from app.models.dividend_enums import DividendType
 
 if TYPE_CHECKING:
     from app.models.asset import Asset
@@ -48,6 +49,7 @@ class AssetDividend(Base):
       - dinheiro: dividendos, JCP, rendimentos, amortizações
       - corporativos: bonificações e subscrições, preservando fator e payload bruto
     """
+
     __tablename__ = "asset_dividends"
     __table_args__ = (
         Index(
@@ -69,7 +71,9 @@ class AssetDividend(Base):
         index=True,
     )
 
-    record_date: Mapped[DateType | None] = mapped_column(Date, nullable=True, index=True)
+    record_date: Mapped[DateType | None] = mapped_column(
+        Date, nullable=True, index=True
+    )
     ex_date: Mapped[DateType] = mapped_column(Date, nullable=False, index=True)
     payment_date: Mapped[DateType | None] = mapped_column(Date, nullable=True)
     approved_on: Mapped[DateType | None] = mapped_column(Date, nullable=True)
@@ -81,15 +85,21 @@ class AssetDividend(Base):
     )
 
     value_per_unit: Mapped[Decimal] = mapped_column(Numeric(18, 8), nullable=False)
-    gross_value_per_unit: Mapped[Decimal | None] = mapped_column(Numeric(18, 8), nullable=True)
+    gross_value_per_unit: Mapped[Decimal | None] = mapped_column(
+        Numeric(18, 8), nullable=True
+    )
     factor: Mapped[Decimal | None] = mapped_column(Numeric(24, 12), nullable=True)
-    complete_factor: Mapped[Decimal | None] = mapped_column(Numeric(24, 12), nullable=True)
+    complete_factor: Mapped[Decimal | None] = mapped_column(
+        Numeric(24, 12), nullable=True
+    )
 
     isin_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
     asset_issued: Mapped[str | None] = mapped_column(String(32), nullable=True)
     related_to: Mapped[str | None] = mapped_column(String(80), nullable=True)
     remarks: Mapped[str | None] = mapped_column(Text, nullable=True)
-    raw_payload: Mapped[dict[str, Any] | None] = mapped_column(_RAW_PAYLOAD_TYPE, nullable=True)
+    raw_payload: Mapped[dict[str, Any] | None] = mapped_column(
+        _RAW_PAYLOAD_TYPE, nullable=True
+    )
 
     source: Mapped[str] = mapped_column(String(30), nullable=False, default="brapi")
 

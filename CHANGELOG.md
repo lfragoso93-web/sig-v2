@@ -5,6 +5,15 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — enums de Proventos independentes do ORM legado (31/07/2026)
+
+- `DividendType` e `DividendStatus` foram movidos para
+  `app.models.dividend_enums`, módulo puro sem SQLAlchemy.
+- Modelo global, serviços, schemas e rotas passaram a importar os enums pelo
+  módulo neutro; `dividend.py` apenas os reexporta para compatibilidade.
+- Regressões estruturais impedem dependência ORM no novo módulo e novos imports
+  dos enums a partir do arquivo legado.
+
 ### Removido — leitura de runtime de `dividends_sync_jobs` (31/07/2026)
 
 - O seed pré-produção v2 não declara mais fronteira `inspect_only`, não consulta

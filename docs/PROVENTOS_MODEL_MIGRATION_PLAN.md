@@ -59,6 +59,10 @@ legados continuam adiados para a contração controlada do schema.
 
 ## Mapeamento de campos
 
+`DividendType` e `DividendStatus` vivem em `app.models.dividend_enums`, sem
+dependência de SQLAlchemy. O ORM legado apenas importa esses objetos para mapear
+a coluna existente e preservar compatibilidade durante a contração.
+
 | Canônico em `dividends` | Legado temporário | Regra de transição |
 | --- | --- | --- |
 | `ex_date` | `date_ex` | comparar e preencher somente após resolver divergências |

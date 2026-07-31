@@ -13,30 +13,15 @@ normalização do módulo de proventos. `date_ex`, `date_pagamento`,
 `quantity_on_date` e `value_per_share` ficam sincronizados até a limpeza
 definitiva do legado.
 """
-import enum
 
 from sqlalchemy import Date, ForeignKey, Index, Integer, Numeric, String
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.models.dividend_enums import DividendStatus, DividendType
 
-
-class DividendType(str, enum.Enum):
-    DIVIDENDO = "DIVIDENDO"
-    JCP = "JCP"
-    RENDIMENTO = "RENDIMENTO"
-    AMORTIZACAO = "AMORTIZACAO"
-    BONIFICACAO = "BONIFICACAO"
-    SUBSCRICAO = "SUBSCRICAO"
-    OUTROS = "OUTROS"
-
-
-class DividendStatus(str, enum.Enum):
-    RECEBIDO = "RECEBIDO"
-    PENDENTE = "PENDENTE"
-    CANCELADO = "CANCELADO"
-    A_RECEBER = "A_RECEBER"
+__all__ = ["Dividend", "DividendStatus", "DividendType"]
 
 
 class Dividend(Base):
@@ -75,15 +60,23 @@ class Dividend(Base):
     ticker: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     ex_date: Mapped[Date | None] = mapped_column(Date, nullable=True)
     payment_date: Mapped[Date | None] = mapped_column(Date, nullable=True)
-    value_per_unit: Mapped[Numeric | None] = mapped_column(Numeric(20, 8), nullable=True)
-    total_received: Mapped[Numeric | None] = mapped_column(Numeric(20, 8), nullable=True)
+    value_per_unit: Mapped[Numeric | None] = mapped_column(
+        Numeric(20, 8), nullable=True
+    )
+    total_received: Mapped[Numeric | None] = mapped_column(
+        Numeric(20, 8), nullable=True
+    )
     dividend_type: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # ── Campos legados ainda existentes/normalizados por migration ─────────
     date_ex: Mapped[Date | None] = mapped_column(Date, nullable=True)
     date_pagamento: Mapped[Date | None] = mapped_column(Date, nullable=True)
-    quantity_on_date: Mapped[Numeric | None] = mapped_column(Numeric(20, 8), nullable=True)
-    value_per_share: Mapped[Numeric | None] = mapped_column(Numeric(20, 8), nullable=True)
+    quantity_on_date: Mapped[Numeric | None] = mapped_column(
+        Numeric(20, 8), nullable=True
+    )
+    value_per_share: Mapped[Numeric | None] = mapped_column(
+        Numeric(20, 8), nullable=True
+    )
 
     # ── Relacionamentos ────────────────────────────────────────────────────
     portfolio = relationship("Portfolio", back_populates="dividends")
