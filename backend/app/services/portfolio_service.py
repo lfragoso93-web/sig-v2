@@ -1,6 +1,7 @@
 import logging
 from datetime import date as DateType
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -21,6 +22,9 @@ from app.services.canonical_dividend_entitlement_reader import (
     load_portfolio_dividend_entitlements,
 )
 from app.services.class_target_service import get_targets_map
+from app.services.corporate_action_position_reader import (
+    load_global_corporate_actions_by_ticker,
+)
 from app.services.fixed_income_valuation_service import (
     RENDA_FIXA_TYPE,
     get_fixed_income_totals,
@@ -28,6 +32,11 @@ from app.services.fixed_income_valuation_service import (
     valuation_to_position_payload,
 )
 from app.services.fx_service import get_usd_brl_batch, get_usd_brl_today
+from app.services.position_timeline_projection import (
+    PositionMovement,
+    PositionMovementKind,
+    project_position_timeline,
+)
 from app.services.price_history_service import get_prices_at_date_batch
 from app.services.quotes_service import get_prices
 
@@ -125,9 +134,11 @@ async def calc_raw_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
     result = await db.execute(
         select(Transaction)
         .where(Transaction.portfolio_id == portfolio_id)
-        .order_by(Transaction.date)
+        .order_by(Transaction.date, Transaction.id)
     )
     transactions = list(result.scalars().all())
+    if not transactions:
+        return []
 
     usd_dates_needed: list[str] = []
     for tx in transactions:
@@ -147,72 +158,76 @@ async def calc_raw_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
     if usd_dates_needed:
         fx_map = await get_usd_brl_batch(db, usd_dates_needed)
 
-    state: dict[str, dict] = {}
+    tickers = sorted({str(tx.ticker).strip().upper() for tx in transactions})
+    actions_by_ticker = await load_global_corporate_actions_by_ticker(db, tickers)
 
+    movements_by_ticker: dict[str, list[PositionMovement]] = {}
+    metadata_by_ticker: dict[str, dict] = {}
     for tx in transactions:
-        ticker = str(tx.ticker).upper()
-        qty = float(tx.quantity or 0)
-        price = float(tx.price or 0)
-        fees = float(tx.fees or 0)
-        op = tx.operation
+        ticker = str(tx.ticker).strip().upper()
         asset_type = _asset_type_str(tx.asset_type)
-
         is_usd = (
             (getattr(tx, "currency", "BRL") or "BRL").upper() == "USD"
             or asset_type in _USD_ASSET_TYPES
         )
 
-        fx_rate = 1.0
+        fx_rate = Decimal(1)
+        saved_rate = getattr(tx, "fx_rate", None)
         if is_usd:
-            saved_rate = getattr(tx, "fx_rate", None)
-            if saved_rate is not None and float(saved_rate or 0) > 0:
-                fx_rate = float(saved_rate)
+            if saved_rate is not None and Decimal(str(saved_rate or 0)) > 0:
+                fx_rate = Decimal(str(saved_rate))
             elif tx.date:
-                fx_rate = fx_map.get(tx.date.isoformat(), 1.0)
+                fx_rate = Decimal(str(fx_map.get(tx.date.isoformat(), 1.0)))
 
-        price_brl = price * fx_rate
-        fees_brl = fees * fx_rate
+        quantity = Decimal(str(tx.quantity or 0))
+        price = Decimal(str(tx.price or 0))
+        fees = Decimal(str(tx.fees or 0))
+        movement_kind = (
+            PositionMovementKind.BUY if _is_buy(tx.operation) else PositionMovementKind.SELL
+        )
+        movements_by_ticker.setdefault(ticker, []).append(
+            PositionMovement(
+                movement_date=tx.date,
+                kind=movement_kind,
+                quantity=quantity,
+                unit_price=price * fx_rate,
+                fees=fees * fx_rate,
+                total_cost_original_currency=(
+                    quantity * price + fees
+                    if is_usd and movement_kind == PositionMovementKind.BUY
+                    else Decimal(0)
+                ),
+            )
+        )
+        metadata_by_ticker.setdefault(
+            ticker,
+            {"asset_type": asset_type, "is_usd": is_usd},
+        )
 
-        if ticker not in state:
-            state[ticker] = {
-                "quantity": 0.0,
-                "total_cost": 0.0,
-                "total_cost_usd": 0.0,
-                "asset_type": asset_type,
-                "is_usd": is_usd,
-            }
-
-        s = state[ticker]
-
-        if _is_buy(op):
-            s["total_cost"] += qty * price_brl + fees_brl
-            s["quantity"] += qty
-            if is_usd:
-                s["total_cost_usd"] += qty * price + fees
-        elif _is_sell(op):
-            if s["quantity"] > 0:
-                ratio = min(qty, s["quantity"]) / s["quantity"]
-                s["total_cost"] -= s["total_cost"] * ratio
-                s["total_cost_usd"] -= s["total_cost_usd"] * ratio
-                s["quantity"] = max(0.0, s["quantity"] - qty)
-
-    positions = []
-    for ticker, s in state.items():
-        qty = s["quantity"]
-        if qty <= 1e-9:
+    positions: list[dict] = []
+    for ticker in sorted(movements_by_ticker):
+        projection = project_position_timeline(
+            movements=movements_by_ticker[ticker],
+            actions=actions_by_ticker.get(ticker, ()),
+        )
+        if projection.quantity <= Decimal("0.000000001"):
             continue
-        avg_brl = s["total_cost"] / qty if qty else 0.0
-        avg_usd = s["total_cost_usd"] / qty if qty and s["is_usd"] else None
-        at = s["asset_type"]
+
+        metadata = metadata_by_ticker[ticker]
+        asset_type = metadata["asset_type"]
+        avg_usd = projection.average_price_original_currency
         positions.append({
             "ticker": ticker,
-            "asset_type": at,
-            "asset_label": _TYPE_LABEL.get(at, at.replace("_", " ").title()),
-            "quantity": qty,
-            "avg_price": round(avg_brl, 8),
-            "avg_price_usd": round(avg_usd, 8) if avg_usd is not None else None,
-            "total_invested": round(s["total_cost"], 8),
-            "is_usd": s["is_usd"],
+            "asset_type": asset_type,
+            "asset_label": _TYPE_LABEL.get(
+                asset_type,
+                asset_type.replace("_", " ").title(),
+            ),
+            "quantity": float(projection.quantity),
+            "avg_price": round(float(projection.average_price), 8),
+            "avg_price_usd": round(float(avg_usd), 8) if avg_usd is not None else None,
+            "total_invested": round(float(projection.total_cost), 8),
+            "is_usd": metadata["is_usd"],
         })
 
     return positions
