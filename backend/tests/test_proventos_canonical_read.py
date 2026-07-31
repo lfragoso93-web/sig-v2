@@ -1,8 +1,16 @@
 from datetime import date, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 from app.models.dividend_enums import DividendStatus, DividendType
+from app.schemas.proventos import (
+    ProventosDistributionResponse,
+    ProventosListResponse,
+    ProventosMonthlyHistoryResponse,
+    ProventosSummaryResponse,
+)
 from app.services.canonical_dividend_entitlement import (
     DividendEntitlement,
     DividendEvent,
@@ -17,6 +25,7 @@ from app.services.proventos_service import (
     get_summary,
     list_items,
 )
+from pydantic import ValidationError
 
 
 def entitlement(
@@ -170,3 +179,39 @@ def test_public_read_service_does_not_depend_on_legacy_dividend_model():
 
     assert "app.models.dividend import Dividend," not in source
     assert ".select_from(Dividend)" not in source
+
+
+@pytest.mark.asyncio
+async def test_canonical_payloads_satisfy_strict_public_schemas(canonical_items):
+    summary = await get_summary(object(), 1)
+    items = await list_items(object(), 1)
+    history = await get_monthly_history(object(), 1)
+    distribution = await get_distribution(object(), 1)
+
+    ProventosSummaryResponse.model_validate(summary)
+    ProventosListResponse.model_validate(items)
+    ProventosMonthlyHistoryResponse.model_validate(history[0])
+    ProventosDistributionResponse.model_validate(distribution[0])
+
+    with pytest.raises(ValidationError):
+        ProventosSummaryResponse.model_validate({**summary, "campo_inesperado": True})
+
+
+@pytest.mark.asyncio
+async def test_canonical_read_services_do_not_mutate_session(canonical_items):
+    db = SimpleNamespace(
+        commit=AsyncMock(),
+        new=[],
+        dirty=[],
+        deleted=[],
+    )
+
+    await get_summary(db, 1)
+    await list_items(db, 1)
+    await get_monthly_history(db, 1)
+    await get_distribution(db, 1)
+
+    db.commit.assert_not_awaited()
+    assert db.new == []
+    assert db.dirty == []
+    assert db.deleted == []

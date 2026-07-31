@@ -1,12 +1,13 @@
-from sqlalchemy import String, Text, ForeignKey, Boolean
+from typing import TYPE_CHECKING
+
+from sqlalchemy import Boolean, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.core.database import Base
 from app.models.base import TimestampMixin
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.models.corporate_event import CorporateEvent
-    from app.models.dividend import Dividend
     from app.models.fixed_income import FixedIncomeInvestment
     from app.models.goals import Goal
     from app.models.irpf import IRPFReport
@@ -36,11 +37,10 @@ class Portfolio(Base, TimestampMixin):
     positions: Mapped[list["PortfolioPosition"]] = relationship(
         "PortfolioPosition", back_populates="portfolio", cascade="all, delete-orphan"
     )
-    dividends: Mapped[list["Dividend"]] = relationship(
-        "Dividend", back_populates="portfolio", cascade="all, delete-orphan"
-    )
     fixed_income: Mapped[list["FixedIncomeInvestment"]] = relationship(
-        "FixedIncomeInvestment", back_populates="portfolio", cascade="all, delete-orphan"
+        "FixedIncomeInvestment",
+        back_populates="portfolio",
+        cascade="all, delete-orphan",
     )
     goals: Mapped[list["Goal"]] = relationship(
         "Goal", back_populates="portfolio", cascade="all, delete-orphan"
@@ -49,7 +49,9 @@ class Portfolio(Base, TimestampMixin):
         "PortfolioSnapshot", back_populates="portfolio", cascade="all, delete-orphan"
     )
     class_snapshots: Mapped[list["PortfolioClassSnapshot"]] = relationship(
-        "PortfolioClassSnapshot", back_populates="portfolio", cascade="all, delete-orphan"
+        "PortfolioClassSnapshot",
+        back_populates="portfolio",
+        cascade="all, delete-orphan",
     )
     irpf_reports: Mapped[list["IRPFReport"]] = relationship(
         "IRPFReport", back_populates="portfolio", cascade="all, delete-orphan"

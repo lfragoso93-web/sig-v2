@@ -29,7 +29,6 @@ from app.models.dividend_enums import DividendType
 
 if TYPE_CHECKING:
     from app.models.asset import Asset
-    from app.models.dividend import Dividend
 
 _RAW_PAYLOAD_TYPE = JSON().with_variant(JSONB, "postgresql")
 
@@ -104,9 +103,6 @@ class AssetDividend(Base):
     source: Mapped[str] = mapped_column(String(30), nullable=False, default="brapi")
 
     asset: Mapped["Asset"] = relationship("Asset", back_populates="asset_dividends")
-    portfolio_dividends: Mapped[list["Dividend"]] = relationship(
-        "Dividend", back_populates="asset_dividend", cascade="all, delete-orphan"
-    )
 
     def __repr__(self) -> str:
         return (

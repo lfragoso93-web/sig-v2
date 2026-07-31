@@ -63,6 +63,10 @@ legados continuam adiados para a contração controlada do schema.
 dependência de SQLAlchemy. O ORM legado apenas importa esses objetos para mapear
 a coluna existente e preservar compatibilidade durante a contração.
 
+Os relacionamentos `Portfolio.dividends`, `AssetDividend.portfolio_dividends`,
+`Dividend.portfolio` e `Dividend.asset_dividend` foram removidos após prova de
+zero consumidores. As colunas e FKs permanecem até a migration de contração.
+
 | Canônico em `dividends` | Legado temporário | Regra de transição |
 | --- | --- | --- |
 | `ex_date` | `date_ex` | comparar e preencher somente após resolver divergências |

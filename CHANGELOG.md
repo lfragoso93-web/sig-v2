@@ -5,6 +5,16 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — relacionamentos ORM de direitos materializados (31/07/2026)
+
+- Foram removidos `Portfolio.dividends`, `AssetDividend.portfolio_dividends`,
+  `Dividend.portfolio` e `Dividend.asset_dividend`, todos sem consumidores.
+- O arquivo histórico `test_proventos_issue95.py`, baseado em linhas
+  materializadas e já incompatível com a leitura canônica, foi substituído por
+  cobertura estrutural da ausência dos relacionamentos.
+- Os contratos ainda exclusivos de schema estrito e leitura sem mutação foram
+  portados para a suíte canônica de direitos calculados sob demanda.
+
 ### Alterado — enums de Proventos independentes do ORM legado (31/07/2026)
 
 - `DividendType` e `DividendStatus` foram movidos para

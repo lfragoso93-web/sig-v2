@@ -16,7 +16,7 @@ definitiva do legado.
 
 from sqlalchemy import Date, ForeignKey, Index, Integer, Numeric, String
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
 from app.models.dividend_enums import DividendStatus, DividendType
@@ -77,7 +77,3 @@ class Dividend(Base):
     value_per_share: Mapped[Numeric | None] = mapped_column(
         Numeric(20, 8), nullable=True
     )
-
-    # ── Relacionamentos ────────────────────────────────────────────────────
-    portfolio = relationship("Portfolio", back_populates="dividends")
-    asset_dividend = relationship("AssetDividend", back_populates="portfolio_dividends")
