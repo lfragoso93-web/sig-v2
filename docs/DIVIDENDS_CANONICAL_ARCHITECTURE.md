@@ -89,6 +89,7 @@ possuir o ativo hoje não cria direito retroativo.
 | `proventos_model_audit_service.py` e sua CLI | Inventário específico do legado | Removido | Substituído pelo inventário genérico read-only, baseado em reflexão e rollback; nenhum serviço de runtime importa `Dividend` para auditoria |
 | `dividend_enums.py` | Tipos e status públicos de Proventos | Canônico | Não importa SQLAlchemy nem o ORM `Dividend`; serviços, schemas, rotas e o catálogo global dependem somente deste módulo neutro |
 | Relacionamentos ORM de `Dividend` | Navegação e cascata por `Portfolio`/`AssetDividend` | Removido | Zero consumidores; exclusão física continua governada por FKs e pelo serviço explícito de remoção de carteira |
+| `dividend.py` e `dividends_sync_job.py` | Mapeamento ORM das tabelas legadas | Removido | Nenhum consumidor de runtime; migrations históricas e a contração física são autocontidas |
 
 Nenhuma dessas portas pode ser removida isoladamente antes de seu consumidor ou
 substituto estar coberto. Durante a migração, é proibido reintroduzir
@@ -248,6 +249,8 @@ será feita em blocos separados.
 - Zero consumidores e zero portas de escrita foram confirmados.
 - A migration separada `20260731_drop_legacy_divs` foi preparada para remover
   `dividends` e `dividends_sync_jobs`, mas não foi executada em banco algum.
+- Os modelos `Dividend` e `DividendsSyncJob` e seus exports foram removidos do
+  runtime; as tabelas legadas não integram mais `Base.metadata`.
 - Antes de qualquer `DROP`, a migration exige contagem zero nas duas tabelas;
   backup, inventário e limpeza continuam obrigatórios na janela controlada.
 - A contração é irreversível por downgrade: em caso de retorno, deve-se

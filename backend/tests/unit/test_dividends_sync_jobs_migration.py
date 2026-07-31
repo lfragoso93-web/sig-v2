@@ -6,8 +6,6 @@ from pathlib import Path
 from types import ModuleType
 from unittest.mock import Mock, patch
 
-from app.models.dividends_sync_job import DividendsSyncJob
-
 MIGRATION_PATH = (
     Path(__file__).resolve().parents[2]
     / "alembic"
@@ -42,13 +40,28 @@ def test_upgrade_materializes_the_complete_orm_table() -> None:
 
     table_name, *elements = create_table.call_args.args
     migration_columns = {
-        element.name
-        for element in elements
-        if hasattr(element, "type")
+        element.name for element in elements if hasattr(element, "type")
     }
 
-    assert table_name == DividendsSyncJob.__tablename__
-    assert migration_columns == set(DividendsSyncJob.__table__.columns.keys())
+    assert table_name == "dividends_sync_jobs"
+    assert migration_columns == {
+        "id",
+        "job_name",
+        "status",
+        "started_at",
+        "finished_at",
+        "last_success_at",
+        "last_cursor_date",
+        "last_run_assets_processed",
+        "last_run_events_created",
+        "last_run_events_updated",
+        "last_run_errors",
+        "locked_by",
+        "locked_at",
+        "error_message",
+        "created_at",
+        "updated_at",
+    }
     create_index.assert_called_once_with(
         "ix_dividends_sync_jobs_job_name",
         "dividends_sync_jobs",

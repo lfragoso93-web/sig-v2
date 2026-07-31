@@ -7,8 +7,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
-from app.models.dividend import Dividend
-from app.models.dividend_enums import DividendStatus, DividendType
+from app.models.dividend_enums import DividendType
 from app.models.portfolio import Portfolio
 from app.models.transaction import OperationType, Transaction
 from app.services.dividend_backfill_service import backfill_dividends
@@ -89,21 +88,18 @@ async def test_collects_non_monetary_event_without_financial_materialization(
             .where(Asset.ticker == ticker)
         )
     ).scalar_one()
-    rights = (await db.execute(select(Dividend))).scalars().all()
-
     assert event.dividend_type == event_type
     assert event.value_per_unit == Decimal("0E-8")
     assert event.factor == Decimal("0.100000000000")
     assert event.complete_factor == Decimal("1.100000000000")
-    assert rights == []
 
 
 @pytest.mark.asyncio
-async def test_non_monetary_legacy_rows_do_not_contaminate_financial_aggregates(
+async def test_non_monetary_events_do_not_contaminate_financial_aggregates(
     db: AsyncSession,
     portfolio: Portfolio,
 ):
-    today = date.today()
+    today = date(2026, 7, 31)
     ticker = "EVN11"
     asset = Asset(
         ticker=ticker,
@@ -140,16 +136,6 @@ async def test_non_monetary_legacy_rows_do_not_contaminate_financial_aggregates(
         )
         db.add(event)
         await db.flush()
-        db.add(
-            Dividend(
-                portfolio_id=portfolio.id,
-                asset_dividend_id=event.id,
-                quantity=Decimal(10),
-                total_value=Decimal(999),
-                net_value=Decimal(999),
-                status=DividendStatus.RECEBIDO,
-            )
-        )
     await db.flush()
 
     summary = await get_summary(db, portfolio.id)

@@ -56,8 +56,8 @@ legados continuam adiados para a contração controlada do schema.
 ## Mapeamento de campos
 
 `DividendType` e `DividendStatus` vivem em `app.models.dividend_enums`, sem
-dependência de SQLAlchemy. O ORM legado apenas importa esses objetos para mapear
-a coluna existente e preservar compatibilidade durante a contração.
+dependência de SQLAlchemy. Os modelos ORM legados foram removidos; serviços,
+schemas, rotas e o catálogo global importam os enums somente do módulo neutro.
 
 Os relacionamentos `Portfolio.dividends`, `AssetDividend.portfolio_dividends`,
 `Dividend.portfolio` e `Dividend.asset_dividend` foram removidos após prova de
@@ -111,8 +111,8 @@ Somente durante a janela da #158, com backup e dry-run aprovados:
   primeiro `DROP` e remove ambas as tabelas;
 - tratar a migration como irreversível: eventual retorno exige restauração do
   backup aprovado, não um downgrade que recrie estruturas vazias;
-- remover os modelos e o código de compatibilidade físico remanescente em bloco
-  posterior, depois da execução controlada.
+- manter os modelos ORM legados ausentes do runtime e remover qualquer código
+  de compatibilidade físico remanescente depois da execução controlada.
 
 A migration está apenas versionada e testada. Sua presença no branch não
 autoriza execução automática, manual ou durante deploy fora da janela da #158.

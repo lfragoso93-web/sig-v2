@@ -1,16 +1,12 @@
-import pytest
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.pool import StaticPool
-
 from app.models.portfolio import Portfolio
-from app.models.transaction import Transaction, OperationType  # noqa: F401
 from app.models.portfolio_position import PortfolioPosition  # noqa: F401
+from app.models.transaction import OperationType, Transaction  # noqa: F401
 
 # Import Base de todos os modelos para criar as tabelas no SQLite de teste
 from app.models.user import User
-from app.models.asset import Asset
-from app.models.dividend import Dividend
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import StaticPool
 
 DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
@@ -28,7 +24,7 @@ async def db():
     )
 
     # Importa todos os modelos para garantir que Base.metadata os conhece
-    from app.core.database import Base  # noqa: F401 — registra metadata
+    from app.core.database import Base
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -46,7 +42,9 @@ async def db():
 
 @pytest_asyncio.fixture
 async def user(db: AsyncSession) -> User:
-    u = User(name="Teste", email="teste@sig.com", hashed_password="hash", is_active=True)
+    u = User(
+        name="Teste", email="teste@sig.com", hashed_password="hash", is_active=True
+    )
     db.add(u)
     await db.flush()
     await db.refresh(u)

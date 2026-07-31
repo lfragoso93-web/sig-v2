@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
-from app.models.dividend import Dividend
 from app.models.dividend_enums import DividendType
 from app.services.dividend_backfill_service import backfill_dividends
 from sqlalchemy import select
@@ -62,11 +61,8 @@ async def test_global_collection_does_not_require_portfolio_position(
             .where(Asset.ticker == ticker, Asset.asset_type == asset_type)
         )
     ).scalar_one()
-    rights = (await db.execute(select(Dividend))).scalars().all()
-
     assert event.record_date == date(2026, 1, 9)
     assert event.ex_date == date(2026, 1, 12)
     assert event.payment_date == date(2026, 1, 30)
     assert event.dividend_type == expected_type
     assert float(event.value_per_unit) == pytest.approx(1.25)
-    assert rights == []

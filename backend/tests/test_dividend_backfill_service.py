@@ -9,7 +9,6 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
-from app.models.dividend import Dividend
 from app.models.dividend_enums import DividendType
 from app.models.portfolio import Portfolio
 from app.models.transaction import OperationType, Transaction
@@ -18,6 +17,7 @@ from app.services.dividend_backfill_service import (
     _parse_raw_dividend,
     backfill_dividends,
 )
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -170,8 +170,6 @@ class TestBackfillDividends:
         ):
             await backfill_dividends(db, "PETR4", "ACAO")
 
-        from sqlalchemy import select
-
         ad_result = await db.execute(
             select(AssetDividend)
             .join(Asset, AssetDividend.asset_id == Asset.id)
@@ -183,12 +181,6 @@ class TestBackfillDividends:
         assert ads[0].ex_date == date(2024, 3, 4)
         assert ads[0].dividend_type == DividendType.DIVIDENDO
         assert float(ads[0].value_per_unit) == pytest.approx(1.50)
-
-        div_result = await db.execute(
-            select(Dividend).where(Dividend.portfolio_id == portfolio.id)
-        )
-        divs = div_result.scalars().all()
-        assert divs == []
 
     async def test_jcp_coleta_evento_sem_materializar_carteira(
         self, db: AsyncSession, portfolio: Portfolio
@@ -213,8 +205,6 @@ class TestBackfillDividends:
         ):
             await backfill_dividends(db, "ITUB4", "ACAO")
 
-        from sqlalchemy import select
-
         event = (
             await db.execute(
                 select(AssetDividend)
@@ -222,9 +212,7 @@ class TestBackfillDividends:
                 .where(Asset.ticker == "ITUB4")
             )
         ).scalar_one()
-        divs = (await db.execute(select(Dividend))).scalars().all()
         assert event.dividend_type == DividendType.JCP
-        assert divs == []
 
     async def test_sem_posicao_na_data_com_nao_cria_dividend(
         self, db: AsyncSession, portfolio: Portfolio
@@ -249,15 +237,11 @@ class TestBackfillDividends:
         ):
             await backfill_dividends(db, "ABEV3", "ACAO")
 
-        from sqlalchemy import select
-
-        divs = (
-            (
-                await db.execute(
-                    select(Dividend).where(Dividend.portfolio_id == portfolio.id)
-                )
+        event = (
+            await db.execute(
+                select(AssetDividend)
+                .join(Asset, AssetDividend.asset_id == Asset.id)
+                .where(Asset.ticker == "ABEV3")
             )
-            .scalars()
-            .all()
-        )
-        assert len(divs) == 0
+        ).scalar_one()
+        assert event.ex_date == date(2024, 6, 3)

@@ -36,10 +36,14 @@ def test_parent_models_do_not_expose_materialized_dividend_collections() -> None
     )
 
 
-def test_legacy_dividend_model_has_no_navigation_relationships() -> None:
-    attributes = _class_attributes(MODELS_ROOT / "dividend.py", "Dividend")
+def test_legacy_dividend_orm_models_are_absent() -> None:
+    assert not (MODELS_ROOT / "dividend.py").exists()
+    assert not (MODELS_ROOT / "dividends_sync_job.py").exists()
 
-    assert {"portfolio", "asset_dividend"}.isdisjoint(attributes)
-    source = (MODELS_ROOT / "dividend.py").read_text(encoding="utf-8")
-    assert "relationship(" not in source
-    assert "back_populates" not in source
+
+def test_legacy_dividend_tables_are_absent_from_runtime_metadata() -> None:
+    import app.models  # noqa: F401
+    from app.core.database import Base
+
+    assert "dividends" not in Base.metadata.tables
+    assert "dividends_sync_jobs" not in Base.metadata.tables

@@ -5,6 +5,16 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — modelos ORM das tabelas legadas de Proventos (31/07/2026)
+
+- `Dividend` e `DividendsSyncJob` foram removidos do runtime e de
+  `app.models.__init__`; `Base.metadata` não registra mais `dividends` nem
+  `dividends_sync_jobs`.
+- Testes que consultavam a tabela legada apenas para provar ausência de escrita
+  passaram a validar diretamente os eventos globais em `asset_dividends`.
+- A migration histórica de criação do sync job ficou autocontida e a migration
+  de contração continua usando SQL físico, sem depender dos modelos removidos.
+
 ### Adicionado — contração física protegida do legado de Proventos (31/07/2026)
 
 - A migration `20260731_drop_legacy_divs` foi preparada para remover
