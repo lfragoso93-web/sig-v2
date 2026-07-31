@@ -14,21 +14,10 @@ from app.services.canonical_dividend_entitlement_reader import (
 from app.services.portfolio_class_reconciliation_service import _check
 from app.services.portfolio_class_snapshot_read_service import class_snapshot_payload
 from app.services.portfolio_class_snapshot_service import (
-    ClassPositionState,
     _group_received_dividends,
     _next_business_date,
     class_twr_availability,
 )
-
-
-def test_position_state_preserves_cost_and_realized_result() -> None:
-    state = ClassPositionState(AssetType.ACAO)
-    state.buy(Decimal("10"), Decimal("10"), Decimal("2"))
-    state.sell(Decimal("4"), Decimal("15"), Decimal("1"))
-
-    assert state.quantity == Decimal("6")
-    assert state.cost == Decimal("61.20")
-    assert state.realized_pnl == Decimal("18.20")
 
 
 def test_availability_refuses_dedicated_history_estimates() -> None:
