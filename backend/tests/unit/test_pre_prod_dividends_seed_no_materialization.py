@@ -45,3 +45,24 @@ def test_seed_write_boundary_is_canonical_only() -> None:
     )
 
     assert ast.literal_eval(assignment.value) == ("asset_dividends",)
+
+
+def test_v2_contract_and_inspection_have_no_legacy_materialization_surface() -> None:
+    contract_source = CONTRACT_PATH.read_text(encoding="utf-8")
+    inspection_source = (
+        SERVICES_PATH / "pre_prod_dividends_seed_inspection.py"
+    ).read_text(encoding="utf-8")
+    inspection_tree = ast.parse(inspection_source)
+    imported_modules = {
+        node.module
+        for node in ast.walk(inspection_tree)
+        if isinstance(node, ast.ImportFrom) and node.module
+    }
+
+    assert 'DIVIDENDS_SEED_SCHEMA_VERSION = "pre-prod-dividends-seed.v2"' in (
+        contract_source
+    )
+    assert "materialization:" not in contract_source
+    assert "app.models.dividend" not in imported_modules
+    assert "app.models.transaction" not in imported_modules
+    assert not (SERVICES_PATH / "pre_prod_dividends_seed_materialization.py").exists()

@@ -1,20 +1,17 @@
 # Runbook — seed isolado de proventos
 
-> **EXECUÇÃO SUSPENSA**
+> **EXECUÇÃO CONDICIONADA**
 >
-> Este runbook descreve a implementação v1 e não autoriza o uso da CLI, do
-> comparador ou do wrapper. A arquitetura aprovada em 30/07/2026 tornou
-> `asset_dividends` a única fonte canônica e retirou a materialização por carteira
-> do pipeline de coleta. Retome operações somente após a migração incremental, a
-> publicação de um novo contrato e uma nova autorização explícita na Issue #226.
+> Este runbook descreve a implementação canônica v2. A presença da CLI, do
+> comparador e do wrapper não autoriza execução: cada operação ainda exige
+> autorização explícita na Issue #226.
 >
 > Consulte `docs/DIVIDENDS_CANONICAL_ARCHITECTURE.md`.
 
 ## Objetivo
 
-Executar exclusivamente a coleta global em `asset_dividends` e a materialização
-por carteira em `dividends`, usando o contrato
-`pre-prod-dividends-seed.v1`, uma única transação e prova offline de
+Executar exclusivamente a coleta global em `asset_dividends`, usando o contrato
+`pre-prod-dividends-seed.v2`, uma única transação e prova offline de
 idempotência.
 
 Este estágio pertence à Issue #226 e não executa B3/COTAHIST, Tesouro Direto,
@@ -23,9 +20,9 @@ endpoints em background ou `full_market_rebuild`.
 
 ## Estado operacional
 
-A CLI, o comparador offline e o wrapper PowerShell v1 estão implementados, mas
-estão **suspensos**. A presença dessas entradas no repositório não autoriza
-execução em qualquer ambiente operacional.
+A CLI, o comparador offline e o wrapper PowerShell estão implementados. A
+presença dessas entradas no repositório não autoriza execução em qualquer
+ambiente operacional.
 
 Antes de cada operação, a Issue #226 deve registrar:
 
@@ -41,18 +38,14 @@ Antes de cada operação, a Issue #226 deve registrar:
 Leitura:
 
 - `assets`;
-- `transactions`;
-- `portfolios`;
 - `asset_dividends`;
-- `dividends`.
 
 Escrita:
 
 - `asset_dividends`;
-- `dividends`.
 
 `dividends_sync_jobs` permanece somente para inspeção. Qualquer escrita fora
-das duas tabelas autorizadas ou disparo de outro estágio exige aborto.
+da tabela autorizada ou disparo de outro estágio exige aborto.
 
 ## Garantias da entrada oficial
 
@@ -64,14 +57,13 @@ O fluxo executa, sequencialmente:
 4. coleta BRAPI como fonte principal e Yahoo como fonte complementar;
 5. filtra e normaliza os eventos dentro da janela;
 6. persiste o catálogo global;
-7. materializa direitos por carteira;
-8. executa `flush` e a inspeção final;
-9. confirma uma única transação somente quando a reconciliação é válida;
-10. executa rollback integral diante de erro ou divergência;
-11. publica a evidência do contrato sem expor credenciais.
+7. executa `flush` e a inspeção final;
+8. confirma uma única transação somente quando a reconciliação é válida;
+9. executa rollback integral diante de erro ou divergência;
+10. publica a evidência do contrato sem expor credenciais.
 
-Os serviços internos não executam `commit` ou `rollback`. Eventos não
-monetários permanecem no catálogo global e não são materializados como direito
+Os serviços internos não executam `commit` ou `rollback`. Eventos monetários e
+não monetários permanecem no catálogo global.
 financeiro.
 
 ## Pré-requisitos
@@ -165,7 +157,7 @@ Não informe caminho absoluto nem `ArtifactRoot` fora de `artifacts`.
 
 ## Contratos e códigos de saída
 
-Cada execução produz `pre-prod-dividends-seed.v1`.
+Cada execução produz `pre-prod-dividends-seed.v2`.
 
 | Código | Significado |
 |---:|---|
@@ -186,20 +178,18 @@ O comparador produz `pre-prod-dividends-seed-idempotency.v1`.
 
 As duas evidências devem apresentar:
 
-- `schema_version=pre-prod-dividends-seed.v1`;
+- `schema_version=pre-prod-dividends-seed.v2`;
 - branch `stable-15jun`, SHA e janela iguais aos aprovados;
 - `run_id` distintos;
 - fontes principal e complementar explicitamente registradas;
 - `ok=true`;
 - transação final confirmada;
 - zero erros bloqueantes;
-- zero duplicidades globais e por carteira;
+- zero duplicidades globais;
 - zero referências órfãs;
-- zero direitos materializados sem elegibilidade;
-- zero direitos elegíveis ausentes;
 - zero valores inválidos;
 - cobertura e agrupamentos determinísticos;
-- nenhuma escrita fora de `asset_dividends` e `dividends`.
+- nenhuma escrita fora de `asset_dividends`.
 
 Resposta vazia legítima deve possuir justificativa explícita. Falha de
 transporte, autenticação, HTTP, JSON ou indisponibilidade de provedor não pode
@@ -234,12 +224,11 @@ Interrompa e registre na Issue #226 quando:
 - ativo coletado não existir no catálogo autorizado;
 - ocorrer colisão conflitante entre fontes;
 - aparecer duplicidade, órfão ou direito sem elegibilidade;
-- um direito elegível deixar de ser materializado;
 - qualquer execução retornar código diferente de `0`;
 - o comparador retornar código diferente de `0`;
 - qualquer arquivo de evidência estiver ausente, truncado ou inválido.
 
-Não corrija manualmente `asset_dividends` ou `dividends` durante a mesma janela.
+Não corrija manualmente `asset_dividends` durante a mesma janela.
 O fluxo executa rollback integral quando a divergência ocorre antes do commit.
 Após qualquer falha, preserve as evidências existentes, interrompa processos
 concorrentes e abra um bloco corretivo separado.
@@ -255,7 +244,7 @@ Na Issue #226, registre:
 - caminhos e SHA-256 de `first.json`, `second.json` e `idempotency.json`;
 - exit codes das duas execuções e do comparador;
 - contagens `before` e `after`;
-- criados, atualizados e inalterados no catálogo e na materialização;
+- criados, atualizados e inalterados no catálogo;
 - fontes, cobertura e agrupamentos;
 - confirmação de zero duplicidades, órfãos e violações de elegibilidade;
 - conclusão objetiva sobre idempotência.

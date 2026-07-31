@@ -56,7 +56,7 @@ async def test_cli_prints_contract_on_success(monkeypatch, capsys):
     result = SimpleNamespace(
         ok=True,
         to_dict=lambda: {
-            "schema_version": "pre-prod-dividends-seed.v1",
+            "schema_version": "pre-prod-dividends-seed.v2",
             "run_id": RUN_ID,
             "ok": True,
         },
@@ -66,7 +66,7 @@ async def test_cli_prints_contract_on_success(monkeypatch, capsys):
 
     assert await cli._main() == cli.EXIT_OK
     payload = json.loads(capsys.readouterr().out)
-    assert payload["schema_version"] == "pre-prod-dividends-seed.v1"
+    assert payload["schema_version"] == "pre-prod-dividends-seed.v2"
     assert payload["ok"] is True
     assert runner.await_args.kwargs["start_date"].isoformat() == "2026-01-01"
     assert runner.await_args.kwargs["end_date"].isoformat() == "2026-12-31"
@@ -100,9 +100,7 @@ async def test_cli_validates_identity_before_opening_resources(monkeypatch, caps
 
 
 @pytest.mark.asyncio
-async def test_cli_rejects_invalid_window_before_opening_resources(
-    monkeypatch, capsys
-):
+async def test_cli_rejects_invalid_window_before_opening_resources(monkeypatch, capsys):
     session_factory = AsyncMock()
     monkeypatch.setattr(cli, "AsyncSessionLocal", session_factory)
     monkeypatch.setattr(

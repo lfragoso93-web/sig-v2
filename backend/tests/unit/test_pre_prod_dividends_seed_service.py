@@ -46,8 +46,8 @@ async def test_asset_loader_excludes_fractional_tickers_before_providers() -> No
     assert assets == (StrictDividendAsset("ABEV3", "ACAO"),)
 
 
-def _counts(asset_dividends: int = 0, dividends: int = 0) -> DividendsSeedCounts:
-    return DividendsSeedCounts(1, 1, 1, asset_dividends, dividends, 0)
+def _counts(asset_dividends: int = 0) -> DividendsSeedCounts:
+    return DividendsSeedCounts(1, asset_dividends, 0)
 
 
 def _event(ex_date: date) -> ParsedDividendEvent:
@@ -90,7 +90,7 @@ async def test_runs_single_transaction_and_restricts_window() -> None:
         side_effect=[
             (_counts(), DividendsSeedCoverage(), DividendsSeedIntegrity()),
             (
-                _counts(2, 1),
+                _counts(2),
                 DividendsSeedCoverage(
                     first_ex_date="2026-01-01",
                     last_ex_date="2026-12-31",
@@ -117,7 +117,6 @@ async def test_runs_single_transaction_and_restricts_window() -> None:
                 "year": 2026,
                 "ticker": "PETR4",
                 "global_events": 2,
-                "materialized_rights": 1,
             },
         )
     )
@@ -143,7 +142,7 @@ async def test_runs_single_transaction_and_restricts_window() -> None:
     assert result.collection == {"assets": 1, "normalized_rows": 2}
     assert result.sources[0]["raw_rows"] == 3
     assert result.groupings[0]["ticker"] == "PETR4"
-    assert result.materialization["disabled"] is True
+    assert "materialization" not in result.to_dict()
     db.commit.assert_awaited_once()
     db.rollback.assert_not_awaited()
 

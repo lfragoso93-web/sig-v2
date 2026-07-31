@@ -5,6 +5,19 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — contrato pré-produção v1 e materialização (30/07/2026)
+
+- O seed foi migrado para `pre-prod-dividends-seed.v2`, com leitura restrita a
+  `assets`/`asset_dividends` e escrita exclusiva em `asset_dividends`.
+- Contagens, cobertura, integridade, agrupamentos e evidências não expõem mais
+  carteiras, transações, `dividends` ou materialização.
+- O comparador rejeita evidências v1 e verifica escritas físicas somente na
+  persistência global.
+- `pre_prod_dividends_seed_materialization.py` e seus sete testes v1 foram
+  removidos.
+- Contrato, runbooks, auditoria e regressões estruturais foram atualizados para
+  a fronteira canônica v2.
+
 ### Alterado — seed pré-produção sem materialização ativa (30/07/2026)
 
 - `run_pre_prod_dividends_seed` deixou de executar a etapa

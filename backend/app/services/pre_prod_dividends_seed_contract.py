@@ -9,14 +9,11 @@ from __future__ import annotations
 import re
 from dataclasses import asdict, dataclass, field
 
-DIVIDENDS_SEED_SCHEMA_VERSION = "pre-prod-dividends-seed.v1"
+DIVIDENDS_SEED_SCHEMA_VERSION = "pre-prod-dividends-seed.v2"
 DIVIDENDS_SEED_BRANCH = "stable-15jun"
 DIVIDENDS_SEED_READ_TABLES = (
     "assets",
-    "transactions",
-    "portfolios",
     "asset_dividends",
-    "dividends",
 )
 DIVIDENDS_SEED_WRITE_TABLES = ("asset_dividends",)
 DIVIDENDS_SEED_INSPECTION_TABLES = ("dividends_sync_jobs",)
@@ -78,10 +75,7 @@ class DividendsSeedTableBoundary:
 @dataclass(frozen=True)
 class DividendsSeedCounts:
     assets: int
-    transactions: int
-    portfolios: int
     asset_dividends: int
-    dividends: int
     sync_jobs: int
 
     def __post_init__(self) -> None:
@@ -93,14 +87,9 @@ class DividendsSeedCounts:
 @dataclass(frozen=True)
 class DividendsSeedIntegrity:
     duplicate_global_events: int = 0
-    duplicate_materializations: int = 0
     orphan_asset_dividends: int = 0
-    orphan_dividend_events: int = 0
-    orphan_dividend_portfolios: int = 0
     missing_ex_dates: int = 0
     negative_monetary_values: int = 0
-    missing_materializations: int = 0
-    materializations_without_entitlement: int = 0
 
     def __post_init__(self) -> None:
         for name, value in asdict(self).items():
@@ -109,12 +98,7 @@ class DividendsSeedIntegrity:
 
     @property
     def blocking_findings(self) -> int:
-        return (
-            self.duplicate_global_events
-            + self.orphan_asset_dividends
-            + self.missing_ex_dates
-            + self.negative_monetary_values
-        )
+        return sum(asdict(self).values())
 
 
 @dataclass(frozen=True)
@@ -122,26 +106,11 @@ class DividendsSeedCoverage:
     first_ex_date: str | None = None
     last_ex_date: str | None = None
     assets_with_events: int = 0
-    portfolios_with_dividends: int = 0
-    eligible_materializations: int = 0
-    materialized_eligible_rights: int = 0
 
     def __post_init__(self) -> None:
-        if any(
-            value < 0
-            for value in (
-                self.assets_with_events,
-                self.portfolios_with_dividends,
-                self.eligible_materializations,
-                self.materialized_eligible_rights,
-            )
-        ):
+        if any(value < 0 for value in (self.assets_with_events,)):
             raise DividendsSeedContractError(
                 "contagens de cobertura não podem ser negativas"
-            )
-        if self.materialized_eligible_rights > self.eligible_materializations:
-            raise DividendsSeedContractError(
-                "direitos materializados elegíveis excedem a cobertura esperada"
             )
         if bool(self.first_ex_date) != bool(self.last_ex_date):
             raise DividendsSeedContractError(
@@ -193,7 +162,6 @@ class PreProdDividendsSeedResult:
     sources: tuple[dict, ...] = ()
     collection: dict = field(default_factory=dict)
     global_persistence: dict = field(default_factory=dict)
-    materialization: dict = field(default_factory=dict)
     errors: tuple[str, ...] = ()
     authorized_tables: DividendsSeedTableBoundary = field(
         default_factory=DividendsSeedTableBoundary

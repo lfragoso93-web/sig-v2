@@ -16,7 +16,7 @@ from app.services.pre_prod_dividends_seed_contract import (
 
 
 def _payload(run_id: str, *, created: int = 0) -> dict:
-    counts = DividendsSeedCounts(10, 20, 2, 30, 12, 1)
+    counts = DividendsSeedCounts(10, 30, 1)
     return PreProdDividendsSeedResult(
         run_id=run_id,
         branch="stable-15jun",
@@ -33,7 +33,6 @@ def _payload(run_id: str, *, created: int = 0) -> dict:
         sources=(),
         collection={"assets": 0, "normalized_rows": 0},
         global_persistence={"created": created, "updated": 0, "unchanged": 0},
-        materialization={"created": 0, "updated": 0, "unchanged": 0},
     ).to_dict()
 
 

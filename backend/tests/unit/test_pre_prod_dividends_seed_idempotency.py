@@ -15,14 +15,11 @@ from app.services.pre_prod_dividends_seed_idempotency import (
     compare_dividends_seed_runs,
 )
 
-COUNTS = DividendsSeedCounts(10, 20, 2, 30, 12, 1)
+COUNTS = DividendsSeedCounts(10, 30, 1)
 COVERAGE = DividendsSeedCoverage(
     first_ex_date="2020-01-02",
     last_ex_date="2026-07-28",
     assets_with_events=8,
-    portfolios_with_dividends=2,
-    eligible_materializations=12,
-    materialized_eligible_rights=12,
 )
 GROUPINGS = (
     {
@@ -32,7 +29,6 @@ GROUPINGS = (
         "year": 2026,
         "ticker": "PETR4",
         "global_events": 2,
-        "materialized_rights": 3,
     },
 )
 SOURCES = (
@@ -68,7 +64,6 @@ def _run(
         sources=SOURCES,
         collection={"assets": 1, "normalized_rows": 2},
         global_persistence={"created": created, "updated": 0, "unchanged": 2},
-        materialization={"created": 0, "updated": 0, "unchanged": 3},
     )
 
 
@@ -82,10 +77,7 @@ def test_accepts_stable_consecutive_runs() -> None:
     assert result.errors == ()
     assert result.stable_groupings is True
     assert result.zero_physical_writes_on_second_run is True
-    assert (
-        result.schema_version
-        == DIVIDENDS_SEED_IDEMPOTENCY_SCHEMA_VERSION
-    )
+    assert result.schema_version == DIVIDENDS_SEED_IDEMPOTENCY_SCHEMA_VERSION
 
 
 def test_rejects_second_run_with_physical_writes() -> None:
@@ -116,7 +108,7 @@ def test_rejects_changed_groupings_and_sources() -> None:
 
 
 def test_rejects_contract_and_baseline_divergence() -> None:
-    changed = DividendsSeedCounts(10, 20, 2, 31, 12, 1)
+    changed = DividendsSeedCounts(10, 31, 1)
     second = replace(
         _run("20260728-180200", before=changed),
         commit_sha="b" * 40,

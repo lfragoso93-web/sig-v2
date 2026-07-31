@@ -21,10 +21,7 @@ _VALID_SHA = "a" * 40
 def _counts() -> DividendsSeedCounts:
     return DividendsSeedCounts(
         assets=10,
-        transactions=20,
-        portfolios=2,
         asset_dividends=30,
-        dividends=12,
         sync_jobs=1,
     )
 
@@ -46,7 +43,6 @@ def _result(**overrides) -> PreProdDividendsSeedResult:
             first_ex_date="2020-01-02",
             last_ex_date="2026-07-28",
             assets_with_events=8,
-            portfolios_with_dividends=2,
         ),
         "integrity": DividendsSeedIntegrity(),
         "transaction": DividendsSeedTransaction(
@@ -117,7 +113,6 @@ def test_result_serializes_minimum_canonical_envelope() -> None:
         "before",
         "collection",
         "global_persistence",
-        "materialization",
         "after",
         "coverage",
         "groupings",
@@ -137,17 +132,9 @@ def test_result_ok_rejects_blocking_integrity_finding() -> None:
         )
 
 
-def test_legacy_materialization_findings_are_audit_only() -> None:
-    result = _result(
-        integrity=DividendsSeedIntegrity(
-            duplicate_materializations=1,
-            missing_materializations=2,
-            materializations_without_entitlement=3,
-        )
-    )
-
-    assert result.ok is True
-    assert result.integrity.blocking_findings == 0
+def test_v1_schema_is_rejected_explicitly() -> None:
+    with pytest.raises(DividendsSeedContractError, match="schema_version"):
+        _result(schema_version="pre-prod-dividends-seed.v1")
 
 
 def test_result_ok_requires_committed_transaction() -> None:

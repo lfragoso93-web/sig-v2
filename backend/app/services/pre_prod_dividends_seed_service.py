@@ -212,12 +212,5 @@ async def run_pre_prod_dividends_seed(
             "normalized_rows": sum(item.normalized_rows for item in restricted),
         },
         global_persistence=asdict(persistence),
-        materialization={
-            "created": 0,
-            "updated": 0,
-            "unchanged": 0,
-            "skipped_non_cash": 0,
-            "disabled": True,
-        },
         errors=errors,
     )

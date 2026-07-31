@@ -83,7 +83,7 @@ possuir o ativo hoje não cria direito retroativo.
 | `dividend_entitlement_service.py` | Cálculos de quantidade e valor líquido compartilhados | Puro | O reconciliador ORM órfão foi removido; o módulo não acessa sessão nem `dividends` |
 | `portfolio_service.py` | Totais e agrupamentos de Proventos no resumo/posições legados | Canônico | Assinaturas preservadas; agregações read-only usam direitos elegíveis, pagos, líquidos e em BRL |
 | Exclusão de carteira | `portfolio_delete_service.delete_portfolio_safely` | Ativo | A implementação órfã em `portfolio_service.py` foi removida; a porta ativa ainda exclui dependências legadas de forma explícita |
-| Seed pré-produção e `pre_prod_dividends_seed_materialization.py` | Catálogo global ativo; implementação de materialização preservada somente como evidência v1 | Contraído | Orquestrador e CLI gravam apenas `asset_dividends`; métricas legadas são audit-only e a seção `materialization` informa `disabled=true` |
+| Seed pré-produção | Catálogo global canônico | Canônico | Contrato `pre-prod-dividends-seed.v2`; lê `assets`/`asset_dividends`, escreve somente `asset_dividends` e não contém superfície de materialização |
 | `scheduler.py` legado e scheduler diário ativo | Atualização do catálogo global | Canônico | Scheduler diário preservado; job FII quebrado e redundante removido do legado; o seed de ativos já enriquece tickers elegíveis com eventos globais |
 | `proventos_legacy_link_service.py` | Dry-run de vínculos legados | Somente auditoria | Não promove nem materializa; remover ao contrair `dividends` |
 

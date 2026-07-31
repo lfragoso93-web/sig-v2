@@ -41,7 +41,7 @@ A execução real ainda não ocorreu. A cadeia `20260724-100752` foi invalidada 
 - Uma falha interrompe a sequência; etapas posteriores não podem mascarar erro anterior.
 - Seeds, coleta, importação e rebuild não podem ocorrer durante a transação de limpeza.
 - Cada seed posterior usa contrato, lock, transação, evidência e reconciliação próprios.
-- O seed de proventos segue `pre-prod-dividends-seed.v1`: leitura limitada a `assets`, `transactions`, `portfolios`, `asset_dividends` e `dividends`; escrita limitada a `asset_dividends` e `dividends`.
+- O seed de proventos segue `pre-prod-dividends-seed.v2`: leitura limitada a `assets` e `asset_dividends`; escrita limitada a `asset_dividends`.
 - Nenhum artefato pode ser editado manualmente ou sobrescrito.
 
 ## Política oficial de classificação
@@ -316,7 +316,7 @@ Ordem:
 3. Tesouro oficial;
 4. benchmarks;
 5. câmbio;
-6. eventos e proventos pelo contrato `pre-prod-dividends-seed.v1`;
+6. eventos e proventos pelo contrato `pre-prod-dividends-seed.v2`;
 7. importação da carteira;
 8. posições e custos médios;
 9. snapshots consolidados e por classe;

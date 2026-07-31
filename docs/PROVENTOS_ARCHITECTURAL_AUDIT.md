@@ -2,7 +2,7 @@
 
 > Issue funcional de controle: [#165](https://github.com/lfragoso93-web/sig-v2/issues/165)  
 > Seed isolado de pré-produção: [#226](https://github.com/lfragoso93-web/sig-v2/issues/226)  
-> Contrato operacional: `pre-prod-dividends-seed.v1`  
+> Contrato operacional: `pre-prod-dividends-seed.v2`
 >
 > Estado funcional auditado: 19/07/2026, após a conclusão técnica e documental da Fase 2.  
 > Fronteira operacional atualizada: 28/07/2026.
@@ -21,9 +21,9 @@ mercado, da CLI dedicada, do seed histórico e do `full_market_rebuild` foram
 contraídas, mas o backfill pós-transação ainda oferece caminhos que não
 garantem rollback integral do estágio.
 
-A Issue #226 isola a evolução operacional no contrato `docs/PRE_PROD_DIVIDENDS_SEED_CONTRACT.md`. O estágio poderá ler somente `assets`, `transactions`, `portfolios`, `asset_dividends` e `dividends` e escrever somente em `asset_dividends` e `dividends`. `dividends_sync_jobs` permanece apenas para inspeção e não participa da coordenação.
+A Issue #226 isola a evolução operacional no contrato `docs/PRE_PROD_DIVIDENDS_SEED_CONTRACT.md`. O estágio v2 lê somente `assets` e `asset_dividends`, escreve somente em `asset_dividends` e mantém `dividends_sync_jobs` apenas para inspeção.
 
-A implementação deve introduzir uma única entrada, advisory lock dedicado, uma transação de trabalho, fontes explícitas sem fallback silencioso, métricas separadas para persistência global e materialização e comparador offline de duas execuções. Migration de unicidade, conversão cambial, mudanças no frontend, posições e snapshots ficam fora do escopo.
+A implementação usa uma única entrada, advisory lock dedicado, uma transação de trabalho, fontes explícitas sem fallback silencioso, métricas da persistência global e comparador offline de duas execuções. Migration de unicidade, conversão cambial, mudanças no frontend, posições e snapshots ficam fora do escopo.
 
 ## Arquitetura vigente
 
@@ -194,4 +194,4 @@ impacto observado deve ser registrado nas Issues #165 e #159.
 
 ## Próximo bloco recomendado
 
-Implementar, pela Issue #226, os testes do envelope `pre-prod-dividends-seed.v1` e a inspeção read-only das tabelas autorizadas. O bloco não deve coletar de provedores, persistir eventos, criar migration ou executar qualquer escrita em pré-produção.
+O envelope inicial `pre-prod-dividends-seed.v1` foi substituído pelo contrato canônico v2 na Issue #226.

@@ -1,4 +1,5 @@
 """Comparação pura de evidências consecutivas do seed de proventos."""
+
 from __future__ import annotations
 
 import json
@@ -18,9 +19,7 @@ from app.services.pre_prod_dividends_seed_contract import (
     PreProdDividendsSeedResult,
 )
 
-DIVIDENDS_SEED_IDEMPOTENCY_SCHEMA_VERSION = (
-    "pre-prod-dividends-seed-idempotency.v1"
-)
+DIVIDENDS_SEED_IDEMPOTENCY_SCHEMA_VERSION = "pre-prod-dividends-seed-idempotency.v1"
 
 
 @dataclass(frozen=True)
@@ -93,12 +92,8 @@ def load_dividends_seed_evidence(
         window=DividendsSeedWindow(**_mapping(payload["window"], "window")),
         before=DividendsSeedCounts(**_mapping(payload["before"], "before")),
         after=DividendsSeedCounts(**_mapping(payload["after"], "after")),
-        coverage=DividendsSeedCoverage(
-            **_mapping(payload["coverage"], "coverage")
-        ),
-        integrity=DividendsSeedIntegrity(
-            **_mapping(payload["integrity"], "integrity")
-        ),
+        coverage=DividendsSeedCoverage(**_mapping(payload["coverage"], "coverage")),
+        integrity=DividendsSeedIntegrity(**_mapping(payload["integrity"], "integrity")),
         transaction=DividendsSeedTransaction(
             **_mapping(payload["transaction"], "transaction")
         ),
@@ -107,9 +102,6 @@ def load_dividends_seed_evidence(
         collection=dict(_mapping(payload["collection"], "collection")),
         global_persistence=dict(
             _mapping(payload["global_persistence"], "global_persistence")
-        ),
-        materialization=dict(
-            _mapping(payload["materialization"], "materialization")
         ),
         errors=tuple(str(item) for item in payload.get("errors") or ()),
         authorized_tables=DividendsSeedTableBoundary(
@@ -124,8 +116,7 @@ def load_dividends_seed_evidence(
 def _zero_writes(result: PreProdDividendsSeedResult) -> bool:
     try:
         return all(
-            int(section.get(field, -1)) == 0
-            for section in (result.global_persistence, result.materialization)
+            int(result.global_persistence.get(field, -1)) == 0
             for field in ("created", "updated")
         )
     except (TypeError, ValueError):
@@ -158,8 +149,7 @@ def compare_dividends_seed_runs(
     stable_coverage = second.coverage == first.coverage
     stable_groupings = second.groupings == first.groupings
     stable_sources = (
-        second.sources == first.sources
-        and second.collection == first.collection
+        second.sources == first.sources and second.collection == first.collection
     )
     zero_writes = _zero_writes(second)
     zero_integrity = (
