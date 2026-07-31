@@ -34,6 +34,7 @@ class PositionTimelineProjection:
     quantity: Decimal
     total_cost: Decimal
     total_cost_original_currency: Decimal
+    realized_pnl: Decimal
     applied_event_ids: tuple[str, ...]
     subscription_event_ids: tuple[str, ...]
 
@@ -67,6 +68,7 @@ def project_position_timeline(
     quantity = Decimal(0)
     total_cost = Decimal(0)
     total_cost_original_currency = Decimal(0)
+    realized_pnl = Decimal(0)
     applied: list[str] = []
     subscriptions: list[str] = []
 
@@ -91,6 +93,8 @@ def project_position_timeline(
 
             if item.kind == PositionMovementKind.SELL and quantity > 0:
                 sold = min(item.quantity, quantity)
+                average_price = total_cost / quantity
+                realized_pnl += sold * (item.unit_price - average_price)
                 ratio = sold / quantity
                 total_cost -= total_cost * ratio
                 total_cost_original_currency -= total_cost_original_currency * ratio
@@ -114,6 +118,7 @@ def project_position_timeline(
         quantity=quantity,
         total_cost=total_cost,
         total_cost_original_currency=total_cost_original_currency,
+        realized_pnl=realized_pnl,
         applied_event_ids=tuple(applied),
         subscription_event_ids=tuple(subscriptions),
     )
