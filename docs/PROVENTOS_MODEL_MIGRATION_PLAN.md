@@ -1,16 +1,19 @@
 # Plano de migração do modelo de Proventos
 
-Status: inventário e preparação concluídos na Issue #165. A contração física do schema permanece coordenada com o rebuild controlado da Issue #158.
+Status: migração funcional concluída para direitos calculados sob demanda. A
+contração física do schema legado permanece coordenada com o rebuild controlado
+da Issue #158.
 
 ## Objetivo
 
 Consolidar três responsabilidades sem perda de histórico:
 
 1. `asset_dividends`: catálogo global de eventos de todos os ativos do banco;
-2. `dividends`: direito materializado e rastreável de uma carteira;
+2. direito por carteira: projeção calculada a partir de eventos e posição histórica;
 3. reconhecimento financeiro: data e valor efetivamente recebidos, sem misturar eventos não monetários.
 
-A coleta global não depende de posição em carteira. A elegibilidade é aplicada apenas na materialização de `dividends`.
+A coleta global não depende de posição em carteira. A elegibilidade é calculada
+somente na leitura e não materializa linhas em `dividends`.
 
 ## Inventário obrigatório
 
@@ -18,7 +21,6 @@ Antes de cada etapa de migração, executar no backend:
 
 ```bash
 python -m app.cli.audit_proventos_model
-python -m app.cli.dry_run_proventos_legacy_links --summary-only
 ```
 
 O comando é somente leitura e retorna JSON com:
@@ -32,25 +34,10 @@ O comando é somente leitura e retorna JSON com:
 
 As contagens de eventos e direitos são informativas. As demais precisam ser explicadas ou zeradas antes da contração.
 
-O segundo comando simula o vínculo dos direitos sem evento. Remover
-`--summary-only` inclui cada decisão e os IDs dos eventos candidatos. Ele não
-possui opção de aplicação e não executa `UPDATE`, `flush` ou `commit`.
-
-Resultados possíveis do dry-run:
-
-| Status | Significado |
-| --- | --- |
-| `matched` | existe um único candidato estrito e não há colisão na carteira |
-| `no_candidate` | nenhum evento global possui a mesma identidade |
-| `ambiguous` | mais de um evento global atende aos critérios |
-| `legacy_divergence` | campos canônicos e legados do direito divergem |
-| `invalid_identity` | faltam dados obrigatórios ou o tipo não é normalizável com segurança |
-| `duplicate_right` | a carteira já possui ou passaria a possuir dois direitos para o evento |
-
 ### Evidência do ambiente de desenvolvimento — 19/07/2026
 
-O dry-run foi executado pelo Docker Compose após rebuild da `stable-15jun` e
-retornou:
+O antigo dry-run de vínculos foi executado pelo Docker Compose após rebuild da
+`stable-15jun` e retornou:
 
 ```json
 {
@@ -64,10 +51,11 @@ retornou:
 }
 ```
 
-Conclusão: não há direitos históricos sem `asset_dividend_id` nessa base e,
-portanto, nenhum backfill deve ser aplicado. A rotina permanece exclusivamente
-read-only para auditoria antes da #158. A nulabilidade e a remoção dos campos
-legados continuam adiadas para a contração controlada do schema.
+Conclusão: não havia direitos históricos sem `asset_dividend_id` nessa base e
+nenhum backfill deveria ser aplicado. Depois da migração dos consumidores para
+direitos calculados sob demanda, a rotina e sua CLI foram removidas. A auditoria
+geral read-only permanece disponível antes da #158; nulabilidade e campos
+legados continuam adiados para a contração controlada do schema.
 
 ## Mapeamento de campos
 
@@ -89,20 +77,15 @@ legados continuam adiadas para a contração controlada do schema.
 - adicionar apenas estruturas necessárias à rastreabilidade comprovada;
 - não trocar a unicidade de `asset_dividends` sem casos reais por provedor.
 
-### 2. Backfill
+### 2. Reconstruir
 
-- ligar direitos históricos a eventos globais com critérios determinísticos;
-- registrar ambiguidades para decisão manual/rebuild;
-- sincronizar pares canônico/legado apenas quando a origem estiver comprovada.
-
-O dry-run atual exige ticker, data ex, tipo e valor por unidade iguais. Quando
-direito e evento possuem data de pagamento, ela também precisa coincidir. O
-vínculo só poderá ser aplicado futuramente aos registros classificados como
-`matched`, após revisão do relatório real.
+- reconstruir direitos a partir de `asset_dividends` e transações históricas;
+- comparar resultados com o legado somente como evidência de migração;
+- não vincular, reconciliar ou recriar linhas em `dividends`.
 
 ### 3. Validar
 
-- executar o inventário antes e depois do backfill;
+- executar o inventário antes e depois da reconstrução controlada;
 - validar ações, FIIs, ETFs e BDRs separadamente;
 - comprovar idempotência e isolamento por carteira;
 - comparar os totais anteriores e posteriores por competência e tipo.

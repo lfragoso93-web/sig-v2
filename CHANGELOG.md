@@ -5,6 +5,17 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — dry-run obsoleto de vínculos materializados (31/07/2026)
+
+- `proventos_legacy_link_service.py` e a CLI
+  `dry_run_proventos_legacy_links.py` foram removidos: ambos preparavam um
+  backfill de `Dividend.asset_dividend_id` que não faz parte do modelo canônico
+  de direitos calculados sob demanda.
+- Os quatro cenários exclusivos do linker foram substituídos por regressão
+  estrutural contra o retorno dos arquivos ou de seus imports.
+- `proventos_model_audit_service.py` e sua CLI read-only permanecem disponíveis
+  para medir resíduos antes da contração física do schema legado.
+
 ### Removido — helpers órfãos de direitos materializados (31/07/2026)
 
 - `dividend_entitlement_service.py` foi removido após a confirmação de que os

@@ -85,7 +85,7 @@ possuir o ativo hoje não cria direito retroativo.
 | Exclusão de carteira | `portfolio_delete_service.delete_portfolio_safely` | Ativo | A implementação órfã em `portfolio_service.py` foi removida; a porta ativa ainda exclui dependências legadas de forma explícita |
 | Seed pré-produção | Catálogo global canônico | Canônico | Contrato `pre-prod-dividends-seed.v2`; lê `assets`/`asset_dividends`, escreve somente `asset_dividends` e não contém superfície de materialização |
 | `scheduler.py` legado e scheduler diário ativo | Atualização do catálogo global | Canônico | Scheduler diário preservado; job FII quebrado e redundante removido do legado; o seed de ativos já enriquece tickers elegíveis com eventos globais |
-| `proventos_legacy_link_service.py` | Dry-run de vínculos legados | Somente auditoria | Não promove nem materializa; remover ao contrair `dividends` |
+| `proventos_legacy_link_service.py` e sua CLI | Dry-run de vínculos de direitos materializados | Removido | A evidência histórica já registrava zero direitos sem vínculo; o cálculo sob demanda tornou o backfill incompatível com a arquitetura alvo |
 
 Nenhuma dessas portas pode ser removida isoladamente antes de seu consumidor ou
 substituto estar coberto. Durante a migração, é proibido reintroduzir
