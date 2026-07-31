@@ -7,7 +7,6 @@ import pytest
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
 from app.models.dividend import Dividend, DividendStatus, DividendType
-from app.models.dividends_sync_job import DividendsSyncJob
 from app.models.portfolio import Portfolio
 from app.services.proventos_model_audit_service import audit_proventos_model
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,8 +45,7 @@ async def test_audit_counts_only_physical_residues_without_mutating_rows(
         dividend_type=DividendType.DIVIDENDO.value,
         status=DividendStatus.RECEBIDO,
     )
-    job = DividendsSyncJob(job_name="fii_dividends_bootstrap")
-    db.add_all([event, right, job])
+    db.add_all([event, right])
     await db.flush()
 
     report = await audit_proventos_model(db)
@@ -55,6 +53,5 @@ async def test_audit_counts_only_physical_residues_without_mutating_rows(
     assert report.to_dict() == {
         "asset_events": 1,
         "legacy_dividend_rows": 1,
-        "legacy_sync_job_rows": 1,
     }
     assert not db.dirty

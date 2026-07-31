@@ -38,10 +38,8 @@ Issue #226.
 |---|---|
 | `asset_dividends` | criar ou atualizar eventos globais normalizados |
 
-### Somente inspeção
-
-`dividends_sync_jobs` pode ser contabilizada, mas não alterada. Nenhuma outra
-tabela é autorizada para leitura ou escrita pelo contrato v2.
+Nenhuma outra tabela é autorizada para leitura, inspeção ou escrita pelo
+contrato v2.
 
 ## Garantias operacionais
 
@@ -79,8 +77,7 @@ tabela é autorizada para leitura ou escrita pelo contrato v2.
   "sources": [],
   "authorized_tables": {
     "read": ["assets", "asset_dividends"],
-    "write": ["asset_dividends"],
-    "inspect_only": ["dividends_sync_jobs"]
+    "write": ["asset_dividends"]
   },
   "before": {},
   "collection": {},
@@ -102,7 +99,7 @@ pelo carregador v2.
 
 O relatório contém:
 
-- contagens de `assets`, `asset_dividends` e `dividends_sync_jobs`;
+- contagens de `assets` e `asset_dividends`;
 - cobertura temporal mínima e máxima;
 - ativos com eventos;
 - agrupamentos por classe, tipo, fonte, ano e ticker;

@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset_dividend import AssetDividend
 from app.models.dividend import Dividend
-from app.models.dividends_sync_job import DividendsSyncJob
 
 
 @dataclass(frozen=True)
@@ -17,7 +16,6 @@ class ProventosModelAudit:
 
     asset_events: int
     legacy_dividend_rows: int
-    legacy_sync_job_rows: int
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -33,5 +31,4 @@ async def audit_proventos_model(db: AsyncSession) -> ProventosModelAudit:
     return ProventosModelAudit(
         asset_events=await _count(db, AssetDividend),
         legacy_dividend_rows=await _count(db, Dividend),
-        legacy_sync_job_rows=await _count(db, DividendsSyncJob),
     )

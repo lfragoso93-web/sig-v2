@@ -22,7 +22,6 @@ def _counts() -> DividendsSeedCounts:
     return DividendsSeedCounts(
         assets=10,
         asset_dividends=30,
-        sync_jobs=1,
     )
 
 
@@ -91,7 +90,7 @@ def test_table_boundary_is_exact_and_immutable() -> None:
 
     assert boundary.read == DIVIDENDS_SEED_READ_TABLES
     assert boundary.write == DIVIDENDS_SEED_WRITE_TABLES
-    assert boundary.inspect_only == ("dividends_sync_jobs",)
+    assert not hasattr(boundary, "inspect_only")
 
     with pytest.raises(DividendsSeedContractError, match="escrita"):
         DividendsSeedTableBoundary(write=("dividends", "transactions"))

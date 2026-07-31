@@ -21,7 +21,7 @@ mercado, da CLI dedicada, do seed histórico e do `full_market_rebuild` foram
 contraídas, mas o backfill pós-transação ainda oferece caminhos que não
 garantem rollback integral do estágio.
 
-A Issue #226 isola a evolução operacional no contrato `docs/PRE_PROD_DIVIDENDS_SEED_CONTRACT.md`. O estágio v2 lê somente `assets` e `asset_dividends`, escreve somente em `asset_dividends` e mantém `dividends_sync_jobs` apenas para inspeção.
+A Issue #226 isola a evolução operacional no contrato `docs/PRE_PROD_DIVIDENDS_SEED_CONTRACT.md`. O estágio v2 lê somente `assets` e `asset_dividends` e escreve somente em `asset_dividends`; a inspeção de `dividends_sync_jobs` foi retirada.
 
 A implementação usa uma única entrada, advisory lock dedicado, uma transação de trabalho, fontes explícitas sem fallback silencioso, métricas da persistência global e comparador offline de duas execuções. Migration de unicidade, conversão cambial, mudanças no frontend, posições e snapshots ficam fora do escopo.
 
@@ -90,8 +90,8 @@ O sincronizador FII paralelo, o cliente batch e a configuração exclusiva foram
 removidos. Uma auditoria posterior encontrou duas rotas administrativas
 residuais que ainda importavam o serviço removido; elas foram eliminadas no
 commit `fcc7bb34c22eb3a06673d68d2043c7818dfd94d1`. Não havia consumidor no
-frontend. `dividends_sync_jobs` permanece apenas para contração controlada na
-Issue #158.
+frontend. O modelo e a migration históricos de `dividends_sync_jobs` permanecem
+apenas para a contração física controlada na Issue #158, sem leitura de runtime.
 
 ### Modelo legado e rastreabilidade
 

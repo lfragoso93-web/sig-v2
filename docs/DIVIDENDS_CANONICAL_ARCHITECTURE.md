@@ -86,7 +86,7 @@ possuir o ativo hoje não cria direito retroativo.
 | Seed pré-produção | Catálogo global canônico | Canônico | Contrato `pre-prod-dividends-seed.v2`; lê `assets`/`asset_dividends`, escreve somente `asset_dividends` e não contém superfície de materialização |
 | `scheduler.py` legado e scheduler diário ativo | Atualização do catálogo global | Canônico | Scheduler diário preservado; job FII quebrado e redundante removido do legado; o seed de ativos já enriquece tickers elegíveis com eventos globais |
 | `proventos_legacy_link_service.py` e sua CLI | Dry-run de vínculos de direitos materializados | Removido | A evidência histórica já registrava zero direitos sem vínculo; o cálculo sob demanda tornou o backfill incompatível com a arquitetura alvo |
-| `proventos_model_audit_service.py` | Inventário físico read-only | Transição | Conta somente eventos canônicos e linhas nas tabelas legadas `dividends`/`dividends_sync_jobs`; métricas de qualidade de materialização foram removidas |
+| `proventos_model_audit_service.py` | Inventário físico read-only | Transição | Conta somente eventos canônicos e linhas em `dividends`; `dividends_sync_jobs` não possui mais leitura de runtime |
 
 Nenhuma dessas portas pode ser removida isoladamente antes de seu consumidor ou
 substituto estar coberto. Durante a migração, é proibido reintroduzir

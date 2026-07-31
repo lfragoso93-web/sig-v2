@@ -16,7 +16,6 @@ DIVIDENDS_SEED_READ_TABLES = (
     "asset_dividends",
 )
 DIVIDENDS_SEED_WRITE_TABLES = ("asset_dividends",)
-DIVIDENDS_SEED_INSPECTION_TABLES = ("dividends_sync_jobs",)
 _RUN_ID_PATTERN = re.compile(r"^\d{8}-\d{6}$")
 _COMMIT_SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 
@@ -59,24 +58,18 @@ class DividendsSeedWindow:
 class DividendsSeedTableBoundary:
     read: tuple[str, ...] = DIVIDENDS_SEED_READ_TABLES
     write: tuple[str, ...] = DIVIDENDS_SEED_WRITE_TABLES
-    inspect_only: tuple[str, ...] = DIVIDENDS_SEED_INSPECTION_TABLES
 
     def __post_init__(self) -> None:
         if self.read != DIVIDENDS_SEED_READ_TABLES:
             raise DividendsSeedContractError("fronteira de leitura diverge do contrato")
         if self.write != DIVIDENDS_SEED_WRITE_TABLES:
             raise DividendsSeedContractError("fronteira de escrita diverge do contrato")
-        if self.inspect_only != DIVIDENDS_SEED_INSPECTION_TABLES:
-            raise DividendsSeedContractError(
-                "fronteira de inspeção diverge do contrato"
-            )
 
 
 @dataclass(frozen=True)
 class DividendsSeedCounts:
     assets: int
     asset_dividends: int
-    sync_jobs: int
 
     def __post_init__(self) -> None:
         for name, value in asdict(self).items():

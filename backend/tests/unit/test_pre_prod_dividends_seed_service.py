@@ -4,7 +4,6 @@ from datetime import date
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-
 from app.services.dividend_backfill_service import ParsedDividendEvent
 from app.services.pre_prod_dividends_seed_collector import (
     StrictDividendAsset,
@@ -47,7 +46,7 @@ async def test_asset_loader_excludes_fractional_tickers_before_providers() -> No
 
 
 def _counts(asset_dividends: int = 0) -> DividendsSeedCounts:
-    return DividendsSeedCounts(1, asset_dividends, 0)
+    return DividendsSeedCounts(1, asset_dividends)
 
 
 def _event(ex_date: date) -> ParsedDividendEvent:

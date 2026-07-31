@@ -107,7 +107,6 @@ def load_dividends_seed_evidence(
         authorized_tables=DividendsSeedTableBoundary(
             read=tuple(boundary["read"]),
             write=tuple(boundary["write"]),
-            inspect_only=tuple(boundary["inspect_only"]),
         ),
         schema_version=str(payload["schema_version"]),
     )

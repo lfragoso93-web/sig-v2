@@ -5,6 +5,16 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — leitura de runtime de `dividends_sync_jobs` (31/07/2026)
+
+- O seed pré-produção v2 não declara mais fronteira `inspect_only`, não consulta
+  `DividendsSyncJob` e não expõe `sync_jobs` nas contagens do envelope.
+- A auditoria física deixou de importar o modelo ou publicar
+  `legacy_sync_job_rows`; permanecem apenas eventos canônicos e linhas legadas
+  de `dividends`.
+- Modelo, migration e classificação no inventário geral foram preservados como
+  artefatos históricos até a contração física controlada.
+
 ### Alterado — auditoria restrita a resíduos físicos (31/07/2026)
 
 - `proventos_model_audit_service.py` deixou de calcular vínculos, duplicidades e

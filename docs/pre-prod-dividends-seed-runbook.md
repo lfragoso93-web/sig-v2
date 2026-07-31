@@ -44,8 +44,8 @@ Escrita:
 
 - `asset_dividends`;
 
-`dividends_sync_jobs` permanece somente para inspeção. Qualquer escrita fora
-da tabela autorizada ou disparo de outro estágio exige aborto.
+Qualquer leitura ou escrita fora das tabelas autorizadas, ou disparo de outro
+estágio, exige aborto.
 
 ## Garantias da entrada oficial
 

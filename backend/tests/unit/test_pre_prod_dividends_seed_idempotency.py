@@ -15,7 +15,7 @@ from app.services.pre_prod_dividends_seed_idempotency import (
     compare_dividends_seed_runs,
 )
 
-COUNTS = DividendsSeedCounts(10, 30, 1)
+COUNTS = DividendsSeedCounts(10, 30)
 COVERAGE = DividendsSeedCoverage(
     first_ex_date="2020-01-02",
     last_ex_date="2026-07-28",
@@ -108,7 +108,7 @@ def test_rejects_changed_groupings_and_sources() -> None:
 
 
 def test_rejects_contract_and_baseline_divergence() -> None:
-    changed = DividendsSeedCounts(10, 31, 1)
+    changed = DividendsSeedCounts(10, 31)
     second = replace(
         _run("20260728-180200", before=changed),
         commit_sha="b" * 40,

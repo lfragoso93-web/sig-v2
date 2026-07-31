@@ -29,9 +29,8 @@ O comando é somente leitura e retorna JSON com:
 | --- | --- |
 | `asset_events` | confirma o volume preservado no catálogo canônico |
 | `legacy_dividend_rows` | quantifica linhas de `dividends` que serão descartadas/reconstruídas |
-| `legacy_sync_job_rows` | estado residual do antigo sincronizador exclusivo de FIIs |
 
-As três contagens são informativas para backup, reconstrução e remoção física.
+As duas contagens são informativas para backup, reconstrução e remoção física.
 Métricas de vínculo, duplicidade e divergência de materializações foram retiradas:
 elas avaliavam uma representação que não será promovida ao modelo canônico.
 

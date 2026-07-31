@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
-from app.models.dividends_sync_job import DividendsSyncJob
 from app.services.pre_prod_dividends_seed_contract import (
     DividendsSeedCounts,
     DividendsSeedCoverage,
@@ -73,7 +72,6 @@ async def inspect_dividends_seed_state(
     counts = DividendsSeedCounts(
         assets=await _count_rows(db, Asset),
         asset_dividends=await _count_rows(db, AssetDividend),
-        sync_jobs=await _count_rows(db, DividendsSyncJob),
     )
 
     coverage_result = await db.execute(

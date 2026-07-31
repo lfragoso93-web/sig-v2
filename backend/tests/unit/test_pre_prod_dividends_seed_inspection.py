@@ -56,7 +56,6 @@ async def test_inspection_maps_state_and_never_writes() -> None:
     db.scalar.side_effect = [
         12,  # assets
         20,  # asset_dividends
-        1,  # sync_jobs
         1,  # orphan_asset_dividends
         4,  # missing_ex_dates
         5,  # negative_global_values
@@ -81,7 +80,7 @@ async def test_inspection_maps_state_and_never_writes() -> None:
 
     assert counts.assets == 12
     assert counts.asset_dividends == 20
-    assert counts.sync_jobs == 1
+    assert not hasattr(counts, "sync_jobs")
     assert coverage.first_ex_date == "2020-01-02"
     assert coverage.last_ex_date == "2026-07-28"
     assert coverage.assets_with_events == 9
@@ -100,7 +99,7 @@ async def test_inspection_maps_state_and_never_writes() -> None:
 @pytest.mark.asyncio
 async def test_inspection_handles_empty_tables_without_writes() -> None:
     db = _db_stub()
-    db.scalar.side_effect = [0] * 6
+    db.scalar.side_effect = [0] * 5
 
     coverage_result = Mock()
     coverage_result.one.return_value = SimpleNamespace(
