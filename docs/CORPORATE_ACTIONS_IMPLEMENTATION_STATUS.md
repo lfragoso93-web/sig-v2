@@ -18,7 +18,7 @@ A estratégia original da Issue #129, centrada em HG Brasil, foi superada pela d
 - motor independente de provedor em `corporate_action_engine.py`;
 - tipos canônicos para desdobramento, grupamento, bonificação e subscrição;
 - identidade determinística por fonte e conteúdo econômico;
-- projeção pura de quantidade, custo total e preço médio;
+- projeção pura de quantidade, custo total, preço médio e resultado realizado;
 - preservação do custo total em eventos gratuitos;
 - subscrição registrada como direito, sem aumento automático da posição;
 - transações originais preservadas.
@@ -38,13 +38,24 @@ A estratégia original da Issue #129, centrada em HG Brasil, foi superada pela d
 - criado projetor cronológico puro em `position_timeline_projection.py`;
 - compras, vendas e eventos corporativos são intercalados por data;
 - split, grupamento e bonificação transformam somente a quantidade vigente;
-- venda posterior usa a quantidade já transformada e reduz o custo proporcionalmente;
+- venda posterior usa a quantidade já transformada, reduz custo proporcionalmente e calcula resultado realizado pelo preço médio vigente;
 - posição zerada antes do evento não recebe transformação;
 - recompra posterior não recebe evento retroativo;
 - subscrição permanece direito sem aumento automático da quantidade;
 - `calc_raw_positions` passou a carregar somente eventos globais de `corporate_events` por adaptador read-only;
 - custo total em BRL e custo original em USD continuam preservados;
 - nenhuma transação, linha de evento, migration ou schema é alterado durante a projeção.
+
+### Integração com snapshots
+
+- `portfolio_snapshot_service._build_positions_at` deixou de reconstruir posição com regra própria;
+- o serviço carrega somente transações da carteira solicitada até `target_date`;
+- eventos corporativos são carregados do catálogo global e aplicados pela mesma linha temporal canônica;
+- quantidade, custo e resultado realizado do snapshot passam a usar o projetor compartilhado;
+- duas carteiras com o mesmo ativo permanecem isoladas pelas transações fornecidas ao adaptador;
+- eventos posteriores à data do snapshot não são aplicados;
+- métodos internos duplicados de compra e venda foram removidos do caminho ativo de snapshots;
+- nenhuma linha persistida de snapshot foi reconstruída automaticamente neste bloco.
 
 ### Proventos relacionados a eventos
 
@@ -56,7 +67,7 @@ A estratégia original da Issue #129, centrada em HG Brasil, foi superada pela d
 
 ### Propagação aos consumidores canônicos
 
-Resumo, Patrimônio e posições que consomem `calc_raw_positions` já recebem a quantidade projetada. Ainda é necessário inventariar os leitores paralelos de valuation, snapshots, rentabilidade e IRPF para garantir que nenhum deles reconstrua posição somente a partir de transações.
+Resumo, Patrimônio, posições atuais e snapshots consolidados já recebem quantidade e custo projetados. Ainda é necessário inventariar e migrar leitores paralelos de snapshots por classe, performance, rentabilidade e IRPF para garantir que nenhum deles reconstrua posição somente a partir de transações.
 
 ### Scheduler
 
@@ -81,7 +92,7 @@ A identidade por fonte é determinística, mas ainda falta um estado canônico e
 
 ## Sequência técnica aprovada
 
-1. Inventariar e migrar leitores paralelos de posição usados por valuation, rentabilidade, snapshots e IRPF.
+1. Inventariar e migrar leitores paralelos de posição usados por snapshots por classe, performance, rentabilidade e IRPF.
 2. Implementar reconciliação explícita entre fontes e estados de conflito/revisão.
 3. Construir carga histórica auditável e provar idempotência.
 4. Consolidar o scheduler corporativo oficial.
@@ -97,4 +108,5 @@ A identidade por fonte é determinística, mas ainda falta um estado canônico e
 - custo total é preservado em eventos gratuitos;
 - subscrição não altera posição sem exercício explícito;
 - eventos anteriores a uma recompra não afetam o novo ciclo da posição;
-- o adaptador de posição é exclusivamente read-only.
+- snapshots são projeções por `portfolio_id` e data, nunca dados globais;
+- adaptadores de posição e snapshot são exclusivamente read-only.
