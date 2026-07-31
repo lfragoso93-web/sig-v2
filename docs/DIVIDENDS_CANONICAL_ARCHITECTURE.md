@@ -245,10 +245,15 @@ será feita em blocos separados.
 
 ### Bloco 5 — contração do legado
 
-- Confirmar zero consumidores e zero portas de escrita.
-- Preservar/exportar evidência necessária.
-- Remover `dividends` somente por migration separada e reversível.
-- Atualizar contratos, documentação e Issues relacionadas.
+- Zero consumidores e zero portas de escrita foram confirmados.
+- A migration separada `20260731_drop_legacy_divs` foi preparada para remover
+  `dividends` e `dividends_sync_jobs`, mas não foi executada em banco algum.
+- Antes de qualquer `DROP`, a migration exige contagem zero nas duas tabelas;
+  backup, inventário e limpeza continuam obrigatórios na janela controlada.
+- A contração é irreversível por downgrade: em caso de retorno, deve-se
+  restaurar o backup aprovado, pois recriar tabelas vazias não restaura dados.
+- Contratos, documentação e a Issue #226 devem registrar separadamente a
+  preparação do artefato e uma futura execução controlada.
 
 ### Bloco 6 — novo seed isolado
 

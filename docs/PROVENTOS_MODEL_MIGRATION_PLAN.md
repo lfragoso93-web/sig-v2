@@ -1,8 +1,9 @@
 # Plano de migração do modelo de Proventos
 
 Status: migração funcional concluída para direitos calculados sob demanda. A
-contração física do schema legado permanece coordenada com o rebuild controlado
-da Issue #158.
+contração física foi preparada na migration `20260731_drop_legacy_divs`, sem
+execução em banco, e permanece coordenada com o rebuild controlado da Issue
+#158.
 
 ## Objetivo
 
@@ -103,10 +104,18 @@ zero consumidores. As colunas e FKs permanecem até a migration de contração.
 
 Somente durante a janela da #158, com backup e dry-run aprovados:
 
-- remover os quatro campos legados já substituídos;
-- remover `total_received` quando todos os consumidores usarem bruto/líquido explícitos;
-- remover `dividends_sync_jobs` e seu modelo depois de confirmar inventário e histórico necessários;
-- remover índices e código de compatibilidade sem consumidores.
+- executar o inventário genérico e preservar sua evidência;
+- confirmar e documentar contagem zero em `dividends` e
+  `dividends_sync_jobs` depois da limpeza aprovada;
+- executar `20260731_drop_legacy_divs`, que verifica as duas contagens antes do
+  primeiro `DROP` e remove ambas as tabelas;
+- tratar a migration como irreversível: eventual retorno exige restauração do
+  backup aprovado, não um downgrade que recrie estruturas vazias;
+- remover os modelos e o código de compatibilidade físico remanescente em bloco
+  posterior, depois da execução controlada.
+
+A migration está apenas versionada e testada. Sua presença no branch não
+autoriza execução automática, manual ou durante deploy fora da janela da #158.
 
 ## Critérios de bloqueio
 

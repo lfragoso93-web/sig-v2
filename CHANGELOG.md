@@ -5,6 +5,17 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Adicionado — contração física protegida do legado de Proventos (31/07/2026)
+
+- A migration `20260731_drop_legacy_divs` foi preparada para remover
+  `dividends` e `dividends_sync_jobs` somente depois de confirmar que ambas as
+  tabelas estão vazias.
+- A verificação ocorre para as duas tabelas antes do primeiro `DROP`, impedindo
+  contração parcial quando ainda houver dados legados.
+- O downgrade exige restauração do backup aprovado, pois recriar estruturas
+  vazias não recuperaria dados descartados. A migration foi versionada e
+  testada, mas não foi executada em nenhum banco neste bloco.
+
 ### Removido — inventário específico do modelo legado (31/07/2026)
 
 - `proventos_model_audit_service.py`, sua CLI e o teste exclusivo foram
