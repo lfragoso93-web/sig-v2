@@ -15,6 +15,9 @@ Formato baseado em Keep a Changelog.
   pendente da janela controlada da Issue #158.
 - Regressão documental protege as fronteiras v2 e impede o retorno das
   afirmações operacionais obsoletas.
+- O runbook mestre e os gates agregados #158/#216 foram sincronizados: a
+  implementação v2 está concluída e somente duas execuções reais controladas e
+  a contração física condicionada permanecem pendentes.
 
 ### Removido — modelos ORM das tabelas legadas de Proventos (31/07/2026)
 

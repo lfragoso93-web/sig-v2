@@ -377,7 +377,14 @@ Uma segunda execução, sem novos dados externos ou transações, deve:
 - Issue #188 / PR #191: exportação concluída.
 - Issue #195 / PR #194: plano concluído.
 - Issue #196 / PR #198: executor e ensaio isolado concluídos.
-- Issue #199: autorização e execução real em andamento.
-- Cadeia `20260724-100752`: validada, mas não reutilizável após mudança do SHA.
-- Issue #226: contrato inicial do seed isolado de proventos publicado; implementação e execução real pendentes.
-- Próximo gate operacional de proventos: implementar envelope e inspeção read-only antes de qualquer persistência.
+- Issue #199: limpeza real concluída e reconciliada.
+- Cadeia `20260724-145110`: limpeza confirmada no commit operacional
+  `43886774608b816f921c9a76406a261b320cb514`.
+- Issue #226: contrato canônico `pre-prod-dividends-seed.v2`, implementação,
+  comparador, wrapper e migração funcional concluídos; duas execuções reais
+  controladas permanecem pendentes.
+- Migration `20260731_drop_legacy_divs`: preparada e testada, sem execução; a
+  contração física depende da janela da #158, backup aprovado, inventário e
+  contagem zero em `dividends` e `dividends_sync_jobs`.
+- Próximo gate operacional de proventos: autorizar explicitamente e executar as
+  duas rodadas v2 no mesmo SHA e janela, preservando as três evidências.
