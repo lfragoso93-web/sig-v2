@@ -5,6 +5,14 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Adicionado — motor canônico de eventos corporativos (31/07/2026)
+
+- Criado motor puro e independente de provedor para splits, grupamentos, bonificações e subscrições, com uma única convenção de fator multiplicativo.
+- A projeção preserva custo total, recalcula preço médio e mantém subscrições como direitos sem aumento automático de quantidade.
+- A coleta global passou a normalizar `stockDividends` e `subscriptions` da BRAPI Pro e fatores explícitos de `Stock Splits` do Yahoo, com identidade determinística e payload auditável.
+- O scheduler agora apenas cataloga eventos globais em savepoints por ativo; a aplicação legada que mutava posições e criava transações incompatíveis foi removida.
+- Adicionadas regressões para idempotência, AERI3, bonificação, subscrição, split, grupamento e preservação de custo.
+
 ### Corrigido — dividendos históricos ajustados por eventos societários (31/07/2026)
 
 - O adaptador complementar do Yahoo passou a desfazer, por evento, somente os fatores de split/grupamento explicitamente publicados após a Data Ex.

@@ -127,7 +127,10 @@ O sistema tenta serviços sem consultar previamente se o ativo possui histórico
 
 ### 10. Bonificações e subscrições
 
-O parser de proventos preserva um campo textual de tipo, mas ainda não separa formalmente eventos em dinheiro de eventos que alteram quantidade ou geram direitos.
+O catálogo global separa formalmente `stockDividends` como bonificações com
+fator total e `subscriptions` como direitos que não alteram quantidade
+automaticamente. O payload do provedor e uma identidade determinística são
+preservados em `corporate_events`.
 
 ## Decisão de arquitetura
 
@@ -161,7 +164,7 @@ Os payloads do fornecedor não devem chegar diretamente a routers ou frontend.
 4. integrar resolução à importação CSV e criação manual;
 5. implementar cobertura por ativo;
 6. migrar cotações e histórico;
-7. separar proventos em dinheiro de bonificações e subscrições;
+7. separar proventos em dinheiro de bonificações e subscrições — concluído;
 8. enriquecer FIIs;
 9. enriquecer ações;
 10. melhorar câmbio e macroeconomia.

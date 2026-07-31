@@ -7,13 +7,11 @@ from sqlalchemy import select
 
 from app.core.database import AsyncSessionLocal
 from app.core.cache import cache_set
-from app.integrations.brapi import get_quotes_bulk
+from app.integrations.brapi import fetch_quotes_with_meta
 from app.models.asset import Asset, AssetType
 from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction
-from app.services.corporate_event_service import (
-    sync_corporate_events_for_asset, apply_pending_events
-)
+from app.services.corporate_event_service import sync_corporate_events_for_asset
 from app.services.quotes_service import update_all_quotes
 from app.services.portfolio_snapshot_service import refresh_today_snapshot
 
@@ -67,17 +65,15 @@ async def job_update_quotes():
 
     tickers = [a.brapi_ticker or a.ticker for a in assets]
     try:
-        quotes = await get_quotes_bulk(tickers)
+        quotes = await fetch_quotes_with_meta(tickers)
     except Exception as e:
         logger.error("[Scheduler] job_update_quotes: erro BRAPI bulk: %s", e)
         return
 
     ok = 0
     errors = 0
-    for quote in quotes:
-        ticker = quote.get("symbol", "")
-        if not ticker:
-            continue
+    for ticker, metadata in quotes.items():
+        quote = {"symbol": ticker, **metadata}
         try:
             await cache_set(f"quote:{ticker}", quote, ttl=360)
             ok += 1
@@ -151,18 +147,18 @@ async def job_sync_corporate_events():
         new_total = 0
         for asset in assets:
             try:
-                new_events = await sync_corporate_events_for_asset(db, asset)
+                async with db.begin_nested():
+                    new_events = await sync_corporate_events_for_asset(db, asset)
                 new_total += len(new_events)
             except Exception as e:
                 logger.error("[Scheduler] Erro sync corporate %s: %s", asset.ticker, e)
         try:
-            applied = await apply_pending_events(db)
             await db.commit()
         except Exception as e:
-            logger.error("[Scheduler] Erro apply_pending_events: %s", e)
-            applied = 0
+            await db.rollback()
+            logger.error("[Scheduler] Erro ao confirmar catálogo corporativo: %s", e)
 
-    logger.info("[Scheduler] %d novos eventos, %d aplicados nas carteiras.", new_total, applied)
+    logger.info("[Scheduler] %d novos eventos globais catalogados.", new_total)
 
 
 async def job_seed_assets():
