@@ -20,19 +20,14 @@ somente na leitura e não materializa linhas em `dividends`.
 Antes de cada etapa de migração, executar no backend:
 
 ```bash
-python -m app.cli.audit_proventos_model
+python -m app.cli.pre_prod_inventory
 ```
 
-O comando é somente leitura e retorna JSON com:
-
-| Métrica | Uso na contração |
-| --- | --- |
-| `asset_events` | confirma o volume preservado no catálogo canônico |
-| `legacy_dividend_rows` | quantifica linhas de `dividends` que serão descartadas/reconstruídas |
-
-As duas contagens são informativas para backup, reconstrução e remoção física.
-Métricas de vínculo, duplicidade e divergência de materializações foram retiradas:
-elas avaliavam uma representação que não será promovida ao modelo canônico.
+O inventário genérico é somente leitura, contabiliza por reflexão todas as
+tabelas existentes e encerra a sessão com rollback. As linhas de `dividends` e
+`dividends_sync_jobs` aparecem como `rebuildable`; `asset_dividends` permanece o
+catálogo global canônico. O antigo inventário específico de Proventos foi
+removido para que nenhum serviço de runtime importe `Dividend`.
 
 ### Evidência do ambiente de desenvolvimento — 19/07/2026
 

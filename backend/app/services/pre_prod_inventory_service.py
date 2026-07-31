@@ -4,11 +4,12 @@ O serviço executa somente consultas ``SELECT`` e sempre encerra a sessão com
 rollback. Ele não importa nem reutiliza serviços de rebuild para impedir efeitos
 colaterais durante o dry-run.
 """
+
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
-import re
 from typing import Any
 
 from sqlalchemy import text
@@ -86,7 +87,7 @@ TABLE_POLICIES: dict[str, tuple[str, str]] = {
     ),
     "asset_dividends": (
         "rebuildable",
-        "Direitos materializados podem ser recalculados a partir de eventos e transações preservadas.",
+        "Catálogo global de eventos pode ser novamente coletado e normalizado.",
     ),
     "asset_prices": (
         "rebuildable",
@@ -98,7 +99,7 @@ TABLE_POLICIES: dict[str, tuple[str, str]] = {
     ),
     "dividends": (
         "rebuildable",
-        "Eventos globais de proventos podem ser novamente coletados e normalizados.",
+        "Direitos legados serão descartados e reconstruídos sob demanda a partir de eventos e transações.",
     ),
     "dividends_sync_jobs": (
         "rebuildable",
@@ -353,7 +354,9 @@ async def build_pre_prod_inventory(
         totals = {
             "tables": len(tables),
             "rows": sum(item.row_count for item in tables),
-            "preserved_tables": sum(item.classification == "preserved" for item in tables),
+            "preserved_tables": sum(
+                item.classification == "preserved" for item in tables
+            ),
             "export_tables": sum(
                 item.classification == "export_before_cleanup" for item in tables
             ),

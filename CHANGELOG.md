@@ -5,6 +5,15 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — inventário específico do modelo legado (31/07/2026)
+
+- `proventos_model_audit_service.py`, sua CLI e o teste exclusivo foram
+  removidos após o inventário genérico de pré-produção assumir a contagem física
+  por reflexão e rollback.
+- Regressão estrutural impede o retorno dos dois módulos e de seus imports.
+- As políticas do inventário foram corrigidas: `asset_dividends` é o catálogo
+  global; `dividends` contém direitos legados descartáveis e reconstruíveis.
+
 ### Removido — relacionamentos ORM de direitos materializados (31/07/2026)
 
 - Foram removidos `Portfolio.dividends`, `AssetDividend.portfolio_dividends`,
@@ -41,8 +50,8 @@ Formato baseado em Keep a Changelog.
 - O contrato read-only agora expõe somente `asset_events`,
   `legacy_dividend_rows` e `legacy_sync_job_rows`, contagens necessárias para
   backup, reconstrução e remoção física das estruturas legadas.
-- A CLI foi preservada como inventário de transição, sem escrita ou promoção de
-  linhas em `dividends`.
+- Esse contrato intermediário foi posteriormente substituído pelo inventário
+  genérico de pré-produção.
 
 ### Removido — dry-run obsoleto de vínculos materializados (31/07/2026)
 
@@ -52,8 +61,8 @@ Formato baseado em Keep a Changelog.
   de direitos calculados sob demanda.
 - Os quatro cenários exclusivos do linker foram substituídos por regressão
   estrutural contra o retorno dos arquivos ou de seus imports.
-- `proventos_model_audit_service.py` e sua CLI read-only permanecem disponíveis
-  para medir resíduos antes da contração física do schema legado.
+- O inventário específico read-only foi posteriormente substituído pelo
+  inventário genérico de pré-produção.
 
 ### Removido — helpers órfãos de direitos materializados (31/07/2026)
 
