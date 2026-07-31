@@ -25,14 +25,15 @@ python -m app.cli.audit_proventos_model
 
 O comando é somente leitura e retorna JSON com:
 
-| Métrica | Risco identificado |
+| Métrica | Uso na contração |
 | --- | --- |
-| `unlinked_portfolio_rights` | direitos sem rastreabilidade para um evento global |
-| `duplicate_materialization_groups` | mais de um direito para a mesma carteira e evento |
-| `*_mismatches` | divergência entre campos canônicos e legados |
+| `asset_events` | confirma o volume preservado no catálogo canônico |
+| `legacy_dividend_rows` | quantifica linhas de `dividends` que serão descartadas/reconstruídas |
 | `legacy_sync_job_rows` | estado residual do antigo sincronizador exclusivo de FIIs |
 
-As contagens de eventos e direitos são informativas. As demais precisam ser explicadas ou zeradas antes da contração.
+As três contagens são informativas para backup, reconstrução e remoção física.
+Métricas de vínculo, duplicidade e divergência de materializações foram retiradas:
+elas avaliavam uma representação que não será promovida ao modelo canônico.
 
 ### Evidência do ambiente de desenvolvimento — 19/07/2026
 

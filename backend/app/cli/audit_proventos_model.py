@@ -1,4 +1,4 @@
-"""Imprime o inventário pré-migração do modelo de proventos em JSON."""
+"""Imprime o inventário físico do modelo de proventos em JSON."""
 
 import asyncio
 import json

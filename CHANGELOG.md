@@ -5,6 +5,16 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — auditoria restrita a resíduos físicos (31/07/2026)
+
+- `proventos_model_audit_service.py` deixou de calcular vínculos, duplicidades e
+  divergências entre campos de direitos materializados.
+- O contrato read-only agora expõe somente `asset_events`,
+  `legacy_dividend_rows` e `legacy_sync_job_rows`, contagens necessárias para
+  backup, reconstrução e remoção física das estruturas legadas.
+- A CLI foi preservada como inventário de transição, sem escrita ou promoção de
+  linhas em `dividends`.
+
 ### Removido — dry-run obsoleto de vínculos materializados (31/07/2026)
 
 - `proventos_legacy_link_service.py` e a CLI
