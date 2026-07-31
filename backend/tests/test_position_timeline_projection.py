@@ -38,47 +38,54 @@ def _buy(day: int, quantity: str, price: str) -> PositionMovement:
     )
 
 
-def _sell(day: int, quantity: str) -> PositionMovement:
+def _sell(day: int, quantity: str, price: str = "0") -> PositionMovement:
     return PositionMovement(
         movement_date=date(2026, 1, day),
         kind=PositionMovementKind.SELL,
         quantity=Decimal(quantity),
-        unit_price=Decimal(0),
+        unit_price=Decimal(price),
     )
 
 
 def test_split_before_sale_uses_transformed_quantity_and_preserves_cost():
     result = project_position_timeline(
-        movements=[_buy(1, "100", "10"), _sell(3, "50")],
+        movements=[_buy(1, "100", "10"), _sell(3, "50", "8")],
         actions=[_action("split", date(2026, 1, 2), CorporateActionKind.SPLIT, "2")],
     )
 
     assert result.quantity == Decimal("150")
     assert result.total_cost == Decimal("750")
     assert result.average_price == Decimal("5")
+    assert result.realized_pnl == Decimal("150")
     assert result.applied_event_ids == ("split",)
 
 
 def test_event_does_not_apply_to_position_closed_before_event():
     result = project_position_timeline(
-        movements=[_buy(1, "100", "10"), _sell(2, "100")],
+        movements=[_buy(1, "100", "10"), _sell(2, "100", "12")],
         actions=[_action("split", date(2026, 1, 3), CorporateActionKind.SPLIT, "2")],
     )
 
     assert result.quantity == 0
     assert result.total_cost == 0
+    assert result.realized_pnl == Decimal("200")
     assert result.applied_event_ids == ()
 
 
 def test_repurchase_after_event_is_not_transformed_retroactively():
     result = project_position_timeline(
-        movements=[_buy(1, "100", "10"), _sell(2, "100"), _buy(4, "30", "20")],
+        movements=[
+            _buy(1, "100", "10"),
+            _sell(2, "100", "12"),
+            _buy(4, "30", "20"),
+        ],
         actions=[_action("split", date(2026, 1, 3), CorporateActionKind.SPLIT, "2")],
     )
 
     assert result.quantity == Decimal("30")
     assert result.total_cost == Decimal("600")
     assert result.average_price == Decimal("20")
+    assert result.realized_pnl == Decimal("200")
     assert result.applied_event_ids == ()
 
 
@@ -93,6 +100,7 @@ def test_bonus_and_reverse_split_are_applied_in_chronological_order():
 
     assert result.quantity == Decimal("55.0")
     assert result.total_cost == Decimal("1000")
+    assert result.realized_pnl == 0
     assert result.applied_event_ids == ("bonus", "reverse")
 
 
@@ -111,4 +119,5 @@ def test_subscription_is_recorded_without_changing_quantity():
 
     assert result.quantity == Decimal("100")
     assert result.total_cost == Decimal("1000")
+    assert result.realized_pnl == 0
     assert result.subscription_event_ids == ("subscription",)
