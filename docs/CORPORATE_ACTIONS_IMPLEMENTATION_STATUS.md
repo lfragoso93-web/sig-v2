@@ -71,6 +71,15 @@ A estratégia original da Issue #129, centrada em HG Brasil, foi superada pela d
 - eventos posteriores à data do snapshot não afetam a série histórica;
 - a classe duplicada `ClassPositionState` foi removida do caminho ativo.
 
+### Integração com performance legada
+
+- `performance_service` deixou de reconstruir posições diretamente a partir de transações;
+- a lista detalhada do endpoint legado passa a consumir `calc_raw_positions`;
+- quantidade, custo investido e continuidade pós-evento seguem o mesmo projetor canônico usado por Resumo e Patrimônio;
+- os totais consolidados continuam vindo de `get_canonical_portfolio_summary`;
+- o formato público do endpoint permanece inalterado;
+- fallback de cotação continua usando o preço médio derivado do custo projetado.
+
 ### Proventos relacionados a eventos
 
 - dividendos históricos complementares são normalizados considerando splits e grupamentos posteriores explicitamente publicados;
@@ -81,7 +90,7 @@ A estratégia original da Issue #129, centrada em HG Brasil, foi superada pela d
 
 ### Propagação aos consumidores canônicos
 
-Resumo, Patrimônio, posições atuais, snapshots consolidados e snapshots por classe já recebem quantidade e custo projetados. Ainda é necessário inventariar e migrar leitores paralelos usados por performance, rentabilidade e IRPF para garantir que nenhum deles reconstrua posição somente a partir de transações.
+Resumo, Patrimônio, posições atuais, snapshots consolidados, snapshots por classe e performance legada já recebem quantidade e custo projetados. Ainda é necessário inventariar e migrar leitores paralelos usados por rentabilidade e IRPF para garantir que nenhum deles reconstrua posição somente a partir de transações.
 
 ### Scheduler
 
@@ -106,7 +115,7 @@ A identidade por fonte é determinística, mas ainda falta um estado canônico e
 
 ## Sequência técnica aprovada
 
-1. Inventariar e migrar leitores paralelos de posição usados por performance, rentabilidade e IRPF.
+1. Inventariar e migrar leitores paralelos de posição usados por rentabilidade e IRPF.
 2. Implementar reconciliação explícita entre fontes e estados de conflito/revisão.
 3. Construir carga histórica auditável e provar idempotência.
 4. Consolidar o scheduler corporativo oficial.
@@ -124,4 +133,5 @@ A identidade por fonte é determinística, mas ainda falta um estado canônico e
 - subscrição não altera posição sem exercício explícito;
 - eventos anteriores a uma recompra não afetam o novo ciclo da posição;
 - snapshots são projeções por `portfolio_id` e data, nunca dados globais;
+- performance legada consome posições projetadas, mas mantém os totais no resumo canônico;
 - adaptadores de posição e snapshot são exclusivamente read-only.
