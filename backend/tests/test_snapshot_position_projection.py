@@ -7,7 +7,10 @@ from app.services.corporate_action_engine import (
     CorporateActionKind,
     NormalizedCorporateAction,
 )
-from app.services.snapshot_position_projection import project_snapshot_positions
+from app.services.snapshot_position_projection import (
+    project_snapshot_positions,
+    project_transaction_timelines,
+)
 
 
 def _tx(
@@ -25,7 +28,7 @@ def _tx(
         operation=operation,
         quantity=Decimal(quantity),
         price=Decimal(price),
-        fees=Decimal("0"),
+        fees=Decimal(0),
         date=date(2026, 1, day),
         currency="BRL",
         fx_rate=None,
@@ -76,10 +79,10 @@ def test_snapshot_projection_uses_only_transactions_supplied_for_portfolio():
         target_date=date(2026, 1, 3),
     )
 
-    assert first["TEST3"][0].quantity == Decimal("200")
-    assert first["TEST3"][0].total_cost == Decimal("1000")
-    assert second["TEST3"][0].quantity == Decimal("60")
-    assert second["TEST3"][0].total_cost == Decimal("600")
+    assert first["TEST3"][0].quantity == Decimal(200)
+    assert first["TEST3"][0].total_cost == Decimal(1000)
+    assert second["TEST3"][0].quantity == Decimal(60)
+    assert second["TEST3"][0].total_cost == Decimal(600)
 
 
 def test_snapshot_projection_respects_target_date():
@@ -98,8 +101,8 @@ def test_snapshot_projection_respects_target_date():
     )
 
     projection = result["TEST3"][0]
-    assert projection.quantity == Decimal("100")
-    assert projection.total_cost == Decimal("1000")
+    assert projection.quantity == Decimal(100)
+    assert projection.total_cost == Decimal(1000)
     assert projection.applied_event_ids == ()
 
 
@@ -126,6 +129,42 @@ def test_snapshot_projection_preserves_realized_pnl_after_split():
     )
 
     projection = result["TEST3"][0]
-    assert projection.quantity == Decimal("150")
-    assert projection.total_cost == Decimal("750")
-    assert projection.realized_pnl == Decimal("150")
+    assert projection.quantity == Decimal(150)
+    assert projection.total_cost == Decimal(750)
+    assert projection.realized_pnl == Decimal(150)
+
+
+def test_transaction_timelines_keep_realized_pnl_for_closed_position():
+    transactions = [
+        _tx(
+            portfolio_id=1,
+            day=1,
+            operation=OperationType.buy,
+            quantity="10",
+            price="10",
+        ),
+        _tx(
+            portfolio_id=1,
+            day=2,
+            operation=OperationType.sell,
+            quantity="10",
+            price="15",
+        ),
+    ]
+
+    timelines = project_transaction_timelines(
+        transactions=transactions,
+        actions_by_ticker={},
+        target_date=date(2026, 1, 3),
+    )
+    snapshots = project_snapshot_positions(
+        transactions=transactions,
+        actions_by_ticker={},
+        target_date=date(2026, 1, 3),
+    )
+
+    projection = timelines["TEST3"][0]
+    assert projection.quantity == 0
+    assert projection.total_cost == 0
+    assert projection.realized_pnl == Decimal(50)
+    assert "TEST3" not in snapshots
