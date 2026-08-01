@@ -2,7 +2,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from app.models.transaction import OperationType
 from app.services.rentabilidade_service import (
     _kpis_from_realtime,
