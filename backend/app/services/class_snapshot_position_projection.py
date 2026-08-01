@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Iterable, Mapping, Sequence
 
 from app.models.asset import AssetType
 from app.models.transaction import Transaction
-from app.services.corporate_action_position_reader import CorporateActionPosition
+from app.services.corporate_action_engine import NormalizedCorporateAction
 from app.services.snapshot_position_projection import project_snapshot_positions
 
-_ZERO = Decimal("0")
+_ZERO = Decimal(0)
 
 
 @dataclass(frozen=True)
@@ -25,7 +25,7 @@ class ClassProjectedPosition:
 
 def project_class_positions_at(
     transactions: Iterable[Transaction],
-    actions_by_ticker: Mapping[str, Sequence[CorporateActionPosition]],
+    actions_by_ticker: Mapping[str, Sequence[NormalizedCorporateAction]],
     *,
     target_date: date,
 ) -> dict[str, ClassProjectedPosition]:
@@ -35,36 +35,34 @@ def project_class_positions_at(
         if transaction.date <= target_date
     ]
     projected = project_snapshot_positions(
-        transactions_list,
-        actions_by_ticker,
+        transactions=transactions_list,
+        actions_by_ticker={
+            ticker: tuple(actions)
+            for ticker, actions in actions_by_ticker.items()
+        },
         target_date=target_date,
     )
 
-    asset_types: dict[str, AssetType] = {}
-    for transaction in transactions_list:
-        ticker = str(transaction.ticker).upper()
-        raw = getattr(transaction.asset_type, "value", transaction.asset_type)
+    positions: dict[str, ClassProjectedPosition] = {}
+    for ticker, (position, raw_asset_type, _is_usd) in projected.items():
         try:
-            asset_types[ticker] = AssetType(str(raw).upper())
+            asset_type = AssetType(str(raw_asset_type).upper())
         except (TypeError, ValueError):
             continue
-
-    return {
-        ticker: ClassProjectedPosition(
+        if (
+            position.quantity <= _ZERO
+            and position.cost_brl <= _ZERO
+            and position.realized_pnl == _ZERO
+        ):
+            continue
+        positions[ticker] = ClassProjectedPosition(
             ticker=ticker,
-            asset_type=asset_types[ticker],
+            asset_type=asset_type,
             quantity=position.quantity,
             cost=position.cost_brl,
             realized_pnl=position.realized_pnl,
         )
-        for ticker, position in projected.items()
-        if ticker in asset_types
-        and (
-            position.quantity > _ZERO
-            or position.cost_brl > _ZERO
-            or position.realized_pnl != _ZERO
-        )
-    }
+    return positions
 
 
 def aggregate_class_positions(
