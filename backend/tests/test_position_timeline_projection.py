@@ -38,12 +38,18 @@ def _buy(day: int, quantity: str, price: str) -> PositionMovement:
     )
 
 
-def _sell(day: int, quantity: str, price: str = "0") -> PositionMovement:
+def _sell(
+    day: int,
+    quantity: str,
+    price: str = "0",
+    fees: str = "0",
+) -> PositionMovement:
     return PositionMovement(
         movement_date=date(2026, 1, day),
         kind=PositionMovementKind.SELL,
         quantity=Decimal(quantity),
         unit_price=Decimal(price),
+        fees=Decimal(fees),
     )
 
 
@@ -58,6 +64,17 @@ def test_split_before_sale_uses_transformed_quantity_and_preserves_cost():
     assert result.average_price == Decimal("5")
     assert result.realized_pnl == Decimal("150")
     assert result.applied_event_ids == ("split",)
+
+
+def test_sale_fees_reduce_realized_pnl():
+    result = project_position_timeline(
+        movements=[_buy(1, "10", "10"), _sell(2, "4", "15", fees="1")],
+        actions=[],
+    )
+
+    assert result.quantity == Decimal("6")
+    assert result.total_cost == Decimal("60")
+    assert result.realized_pnl == Decimal("19")
 
 
 def test_event_does_not_apply_to_position_closed_before_event():
