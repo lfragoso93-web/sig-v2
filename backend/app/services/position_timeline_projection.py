@@ -94,7 +94,7 @@ def project_position_timeline(
             if item.kind == PositionMovementKind.SELL and quantity > 0:
                 sold = min(item.quantity, quantity)
                 average_price = total_cost / quantity
-                realized_pnl += sold * (item.unit_price - average_price)
+                realized_pnl += sold * (item.unit_price - average_price) - item.fees
                 ratio = sold / quantity
                 total_cost -= total_cost * ratio
                 total_cost_original_currency -= total_cost_original_currency * ratio
