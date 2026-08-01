@@ -80,6 +80,14 @@ A estratégia original da Issue #129, centrada em HG Brasil, foi superada pela d
 - o formato público do endpoint permanece inalterado;
 - fallback de cotação continua usando o preço médio derivado do custo projetado.
 
+### Preparação da rentabilidade realizada
+
+- `snapshot_position_projection.py` passou a expor `project_transaction_timelines`;
+- o helper reutiliza a conversão canônica de transações para movimentos;
+- linhas temporais encerradas permanecem disponíveis com `realized_pnl` acumulado;
+- `project_snapshot_positions` mantém o comportamento anterior e continua retornando somente posições abertas;
+- a separação permite migrar Rentabilidade e IRPF sem duplicar regras de quantidade, custo, câmbio ou taxas.
+
 ### Proventos relacionados a eventos
 
 - dividendos históricos complementares são normalizados considerando splits e grupamentos posteriores explicitamente publicados;
@@ -90,7 +98,7 @@ A estratégia original da Issue #129, centrada em HG Brasil, foi superada pela d
 
 ### Propagação aos consumidores canônicos
 
-Resumo, Patrimônio, posições atuais, snapshots consolidados, snapshots por classe e performance legada já recebem quantidade e custo projetados. Ainda é necessário inventariar e migrar leitores paralelos usados por rentabilidade e IRPF para garantir que nenhum deles reconstrua posição somente a partir de transações.
+Resumo, Patrimônio, posições atuais, snapshots consolidados, snapshots por classe e performance legada já recebem quantidade e custo projetados. O contrato necessário para resultado realizado de posições abertas e encerradas já está disponível; ainda é necessário conectar os leitores paralelos de Rentabilidade e IRPF.
 
 ### Scheduler
 
@@ -115,13 +123,14 @@ A identidade por fonte é determinística, mas ainda falta um estado canônico e
 
 ## Sequência técnica aprovada
 
-1. Inventariar e migrar leitores paralelos de posição usados por rentabilidade e IRPF.
-2. Implementar reconciliação explícita entre fontes e estados de conflito/revisão.
-3. Construir carga histórica auditável e provar idempotência.
-4. Consolidar o scheduler corporativo oficial.
-5. Unificar o cliente BRAPI v2 e consultar cobertura antes das coletas.
-6. Evoluir para renomes, conversões e eventos complexos.
-7. Adicionar administração, simulação e auditoria operacional.
+1. Conectar o resultado realizado de Rentabilidade ao helper canônico de linhas temporais.
+2. Migrar o leitor paralelo de IRPF.
+3. Implementar reconciliação explícita entre fontes e estados de conflito/revisão.
+4. Construir carga histórica auditável e provar idempotência.
+5. Consolidar o scheduler corporativo oficial.
+6. Unificar o cliente BRAPI v2 e consultar cobertura antes das coletas.
+7. Evoluir para renomes, conversões e eventos complexos.
+8. Adicionar administração, simulação e auditoria operacional.
 
 ## Invariantes vigentes
 
@@ -134,4 +143,5 @@ A identidade por fonte é determinística, mas ainda falta um estado canônico e
 - eventos anteriores a uma recompra não afetam o novo ciclo da posição;
 - snapshots são projeções por `portfolio_id` e data, nunca dados globais;
 - performance legada consome posições projetadas, mas mantém os totais no resumo canônico;
+- posições encerradas não entram em snapshots, mas seu realizado permanece disponível aos consumidores analíticos;
 - adaptadores de posição e snapshot são exclusivamente read-only.
