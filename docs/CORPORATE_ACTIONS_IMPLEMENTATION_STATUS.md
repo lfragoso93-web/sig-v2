@@ -1,6 +1,6 @@
 # Estado de implementação — Eventos Corporativos
 
-> Atualizado em 31/07/2026  
+> Atualizado em 01/08/2026  
 > Branch: `stable-15jun`  
 > Issue principal: #129  
 > Integrações relacionadas: #127, #130 e #226
@@ -80,13 +80,15 @@ A estratégia original da Issue #129, centrada em HG Brasil, foi superada pela d
 - o formato público do endpoint permanece inalterado;
 - fallback de cotação continua usando o preço médio derivado do custo projetado.
 
-### Preparação da rentabilidade realizada
+### Integração com rentabilidade realizada
 
-- `snapshot_position_projection.py` passou a expor `project_transaction_timelines`;
-- o helper reutiliza a conversão canônica de transações para movimentos;
-- linhas temporais encerradas permanecem disponíveis com `realized_pnl` acumulado;
-- `project_snapshot_positions` mantém o comportamento anterior e continua retornando somente posições abertas;
-- a separação permite migrar Rentabilidade e IRPF sem duplicar regras de quantidade, custo, câmbio ou taxas.
+- `snapshot_position_projection.py` expõe `project_transaction_timelines` para posições abertas e encerradas;
+- `realized_pnl_projection_reader.py` carrega transações da carteira e eventos corporativos globais;
+- `rentabilidade_service` deixou de reconstruir quantidade, custo médio e resultado realizado por conta própria;
+- KPIs em tempo real e rentabilidade por ativo passam a consumir `load_realized_pnl_by_ticker`;
+- posições encerradas continuam disponíveis nos relatórios analíticos com realizado acumulado;
+- Renda Fixa permanece fora do cálculo baseado em cotas e continua no serviço dedicado;
+- taxas de venda, câmbio salvo e eventos corporativos seguem o mesmo projetor canônico.
 
 ### Proventos relacionados a eventos
 
@@ -98,7 +100,7 @@ A estratégia original da Issue #129, centrada em HG Brasil, foi superada pela d
 
 ### Propagação aos consumidores canônicos
 
-Resumo, Patrimônio, posições atuais, snapshots consolidados, snapshots por classe e performance legada já recebem quantidade e custo projetados. O contrato necessário para resultado realizado de posições abertas e encerradas já está disponível; ainda é necessário conectar os leitores paralelos de Rentabilidade e IRPF.
+Resumo, Patrimônio, posições atuais, snapshots consolidados, snapshots por classe, performance legada e resultado realizado de Rentabilidade já consomem projeções canônicas. Ainda é necessário revisar os cálculos históricos auxiliares de Rentabilidade e migrar o leitor paralelo de IRPF.
 
 ### Scheduler
 
@@ -123,7 +125,7 @@ A identidade por fonte é determinística, mas ainda falta um estado canônico e
 
 ## Sequência técnica aprovada
 
-1. Conectar o resultado realizado de Rentabilidade ao helper canônico de linhas temporais.
+1. Validar a integração do realizado de Rentabilidade e revisar os cálculos históricos auxiliares ainda baseados apenas em transações.
 2. Migrar o leitor paralelo de IRPF.
 3. Implementar reconciliação explícita entre fontes e estados de conflito/revisão.
 4. Construir carga histórica auditável e provar idempotência.
@@ -144,4 +146,5 @@ A identidade por fonte é determinística, mas ainda falta um estado canônico e
 - snapshots são projeções por `portfolio_id` e data, nunca dados globais;
 - performance legada consome posições projetadas, mas mantém os totais no resumo canônico;
 - posições encerradas não entram em snapshots, mas seu realizado permanece disponível aos consumidores analíticos;
+- Rentabilidade não mantém mais motor próprio de resultado realizado;
 - adaptadores de posição e snapshot são exclusivamente read-only.
