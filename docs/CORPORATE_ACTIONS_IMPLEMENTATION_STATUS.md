@@ -19,6 +19,7 @@ A estratégia original da Issue #129, centrada em HG Brasil, foi superada pela d
 - tipos canônicos para desdobramento, grupamento, bonificação e subscrição;
 - identidade determinística por fonte e conteúdo econômico;
 - projeção pura de quantidade, custo total, preço médio e resultado realizado;
+- taxas de venda são descontadas do resultado realizado no projetor canônico;
 - preservação do custo total em eventos gratuitos;
 - subscrição registrada como direito, sem aumento automático da posição;
 - transações originais preservadas.
@@ -38,7 +39,7 @@ A estratégia original da Issue #129, centrada em HG Brasil, foi superada pela d
 - criado projetor cronológico puro em `position_timeline_projection.py`;
 - compras, vendas e eventos corporativos são intercalados por data;
 - split, grupamento e bonificação transformam somente a quantidade vigente;
-- venda posterior usa a quantidade já transformada, reduz custo proporcionalmente e calcula resultado realizado pelo preço médio vigente;
+- venda posterior usa a quantidade já transformada, reduz custo proporcionalmente e calcula resultado realizado pelo preço médio vigente, líquido das taxas da venda;
 - posição zerada antes do evento não recebe transformação;
 - recompra posterior não recebe evento retroativo;
 - subscrição permanece direito sem aumento automático da quantidade;
@@ -119,6 +120,7 @@ A identidade por fonte é determinística, mas ainda falta um estado canônico e
 - apenas eventos globais com `portfolio_id IS NULL` entram na projeção;
 - tipos desconhecidos não são inferidos silenciosamente;
 - custo total é preservado em eventos gratuitos;
+- taxas de venda reduzem o resultado realizado, sem alterar o custo remanescente além da baixa proporcional;
 - subscrição não altera posição sem exercício explícito;
 - eventos anteriores a uma recompra não afetam o novo ciclo da posição;
 - snapshots são projeções por `portfolio_id` e data, nunca dados globais;
