@@ -2,7 +2,6 @@ from datetime import date
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from app.services.rentabilidade_service import (
     _latest_snapshot,
     flush_rentabilidade_cache,
