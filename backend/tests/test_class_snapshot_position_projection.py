@@ -8,7 +8,10 @@ from app.services.class_snapshot_position_projection import (
     aggregate_class_positions,
     project_class_positions_at,
 )
-from app.services.corporate_action_position_reader import CorporateActionPosition
+from app.services.corporate_action_engine import (
+    CorporateActionKind,
+    NormalizedCorporateAction,
+)
 
 
 def _transaction(
@@ -33,7 +36,26 @@ def _transaction(
         quantity=Decimal(quantity),
         price=Decimal(price),
         fees=Decimal(fees),
-        fx_rate=Decimal("1"),
+        fx_rate=Decimal(1),
+    )
+
+
+def _action(
+    *,
+    source_event_id: str,
+    ticker: str,
+    event_date: date,
+    kind: CorporateActionKind,
+    quantity_factor: str,
+) -> NormalizedCorporateAction:
+    return NormalizedCorporateAction(
+        source="test",
+        source_event_id=source_event_id,
+        ticker=ticker,
+        event_date=event_date,
+        kind=kind,
+        quantity_factor=Decimal(quantity_factor),
+        raw_payload={},
     )
 
 
@@ -52,12 +74,12 @@ def test_projection_applies_global_split_to_portfolio_transactions_only() -> Non
     ]
     actions = {
         "ABCD3": [
-            CorporateActionPosition(
-                event_id=1,
+            _action(
+                source_event_id="split-1",
                 ticker="ABCD3",
                 event_date=date(2026, 2, 1),
-                event_type="SPLIT",
-                ratio=Decimal("2"),
+                kind=CorporateActionKind.SPLIT,
+                quantity_factor="2",
             )
         ]
     }
@@ -68,8 +90,8 @@ def test_projection_applies_global_split_to_portfolio_transactions_only() -> Non
         target_date=date(2026, 2, 2),
     )
 
-    assert projected["ABCD3"].quantity == Decimal("20")
-    assert projected["ABCD3"].cost == Decimal("200")
+    assert projected["ABCD3"].quantity == Decimal(20)
+    assert projected["ABCD3"].cost == Decimal(200)
 
 
 def test_projection_respects_target_date_and_portfolio_isolation() -> None:
@@ -99,12 +121,12 @@ def test_projection_respects_target_date_and_portfolio_isolation() -> None:
     ]
     actions = {
         "FUND11": [
-            CorporateActionPosition(
-                event_id=1,
+            _action(
+                source_event_id="bonus-1",
                 ticker="FUND11",
                 event_date=date(2026, 3, 1),
-                event_type="BONUS",
-                ratio=Decimal("1.10"),
+                kind=CorporateActionKind.BONUS,
+                quantity_factor="1.10",
             )
         ]
     }
@@ -125,7 +147,7 @@ def test_projection_respects_target_date_and_portfolio_isolation() -> None:
         target_date=date(2026, 3, 2),
     )
 
-    assert before["FUND11"].quantity == Decimal("5")
+    assert before["FUND11"].quantity == Decimal(5)
     assert after_one["FUND11"].quantity == Decimal("5.50")
     assert after_two["FUND11"].quantity == Decimal("9.90")
 
@@ -174,4 +196,4 @@ def test_aggregation_separates_open_positions_and_realized_by_class() -> None:
 
     assert [item.ticker for item in open_by_class[AssetType.ACAO]] == ["ABCD3"]
     assert [item.ticker for item in open_by_class[AssetType.FII]] == ["FUND11"]
-    assert realized_by_class[AssetType.ACAO] == Decimal("19")
+    assert realized_by_class[AssetType.ACAO] == Decimal(19)
