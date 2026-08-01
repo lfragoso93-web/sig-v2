@@ -4,7 +4,6 @@ import pytest
 from app.services.performance_service import get_portfolio_performance
 from sqlalchemy.ext.asyncio import AsyncSession
 
-
 CANONICAL_ZERO = {
     "total_invested": 0.0,
     "current_value": 0.0,
