@@ -1,11 +1,11 @@
-"""Adaptação read-only de transações de carteira para snapshots históricos."""
+"""Adaptação read-only de transações de carteira para projeções históricas."""
 
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import date
 from decimal import Decimal
-from typing import Iterable
 
 from app.models.transaction import OperationType, Transaction
 from app.services.corporate_action_engine import NormalizedCorporateAction
@@ -29,7 +29,7 @@ def _movement_from_transaction(tx: Transaction) -> PositionMovement:
         str(getattr(tx, "currency", "BRL") or "BRL").upper() == "USD"
         or asset_type in _USD_ASSET_TYPES
     )
-    fx_rate = Decimal("1")
+    fx_rate = Decimal(1)
     saved_rate = getattr(tx, "fx_rate", None)
     if is_usd and saved_rate is not None and Decimal(str(saved_rate)) > 0:
         fx_rate = Decimal(str(saved_rate))
@@ -55,13 +55,13 @@ def _movement_from_transaction(tx: Transaction) -> PositionMovement:
     )
 
 
-def project_snapshot_positions(
+def project_transaction_timelines(
     *,
     transactions: Iterable[Transaction],
-    actions_by_ticker: dict[str, tuple[NormalizedCorporateAction, ...]],
+    actions_by_ticker: Mapping[str, Sequence[NormalizedCorporateAction]],
     target_date: date,
 ) -> dict[str, tuple[PositionTimelineProjection, str, bool]]:
-    """Projeta posições históricas isoladas por carteira e data."""
+    """Projeta todas as linhas temporais, inclusive posições já encerradas."""
 
     movements_by_ticker: dict[str, list[PositionMovement]] = defaultdict(list)
     metadata: dict[str, tuple[str, bool]] = {}
@@ -83,9 +83,27 @@ def project_snapshot_positions(
             actions=actions_by_ticker.get(ticker, ()),
             through_date=target_date,
         )
-        if result.quantity <= 0:
-            continue
         asset_type, is_usd = metadata[ticker]
         projected[ticker] = (result, asset_type, is_usd)
 
     return projected
+
+
+def project_snapshot_positions(
+    *,
+    transactions: Iterable[Transaction],
+    actions_by_ticker: Mapping[str, Sequence[NormalizedCorporateAction]],
+    target_date: date,
+) -> dict[str, tuple[PositionTimelineProjection, str, bool]]:
+    """Projeta somente posições históricas abertas da carteira na data."""
+
+    projected = project_transaction_timelines(
+        transactions=transactions,
+        actions_by_ticker=actions_by_ticker,
+        target_date=target_date,
+    )
+    return {
+        ticker: item
+        for ticker, item in projected.items()
+        if item[0].quantity > 0
+    }
