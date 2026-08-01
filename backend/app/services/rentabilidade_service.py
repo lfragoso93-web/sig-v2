@@ -12,7 +12,6 @@ from __future__ import annotations
 import logging
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,6 +35,7 @@ from app.services.portfolio_service import (
 )
 from app.services.quotes_service import get_prices
 from app.services.realized_pnl_projection_reader import load_realized_pnl_by_ticker
+from app.services.rentabilidade_runtime_policy import utc_today
 
 logger = logging.getLogger(__name__)
 
@@ -58,15 +58,20 @@ async def flush_rentabilidade_cache(portfolio_id: int) -> None:
     for suffix in ("kpis", "ativos", "classes"):
         try:
             await cache_delete(_key(portfolio_id, suffix))
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001 - cache invalidation is best effort
+            logger.warning(
+                "[rentabilidade] falha ao invalidar cache %s/%s: %s",
+                portfolio_id,
+                suffix,
+                exc,
+            )
 
 
 async def _snapshot_at(
     db: AsyncSession,
     portfolio_id: int,
     target: date,
-) -> Optional[PortfolioSnapshot]:
+) -> PortfolioSnapshot | None:
     result = await db.execute(
         select(PortfolioSnapshot)
         .where(
@@ -79,11 +84,17 @@ async def _snapshot_at(
     return result.scalar_one_or_none()
 
 
-async def _latest_snapshot(db: AsyncSession, portfolio_id: int) -> Optional[PortfolioSnapshot]:
-    return await _snapshot_at(db, portfolio_id, date.today())
+async def _latest_snapshot(
+    db: AsyncSession,
+    portfolio_id: int,
+) -> PortfolioSnapshot | None:
+    return await _snapshot_at(db, portfolio_id, utc_today())
 
 
-async def _first_snapshot(db: AsyncSession, portfolio_id: int) -> Optional[PortfolioSnapshot]:
+async def _first_snapshot(
+    db: AsyncSession,
+    portfolio_id: int,
+) -> PortfolioSnapshot | None:
     result = await db.execute(
         select(PortfolioSnapshot)
         .where(PortfolioSnapshot.portfolio_id == portfolio_id)
@@ -97,7 +108,7 @@ async def _snapshot_before_today(
     db: AsyncSession,
     portfolio_id: int,
     snap_today: PortfolioSnapshot,
-) -> Optional[PortfolioSnapshot]:
+) -> PortfolioSnapshot | None:
     result = await db.execute(
         select(PortfolioSnapshot)
         .where(
@@ -124,8 +135,8 @@ async def _proventos_totals(
             cutoff=as_of - timedelta(days=365),
             as_of=as_of,
         )
-    except Exception as e:
-        logger.warning("[rentabilidade] erro ao somar proventos: %s", e)
+    except Exception as exc:  # noqa: BLE001 - provider fallback preserves availability
+        logger.warning("[rentabilidade] erro ao somar proventos: %s", exc)
         return 0.0, 0.0
 
 
@@ -195,8 +206,8 @@ async def _positions_enriched_without_rf(db: AsyncSession, portfolio_id: int) ->
     ]
     try:
         prices = await get_prices(price_items, db) if price_items else {}
-    except Exception as e:
-        logger.error("[rentabilidade] erro ao buscar precos: %s", e)
+    except Exception as exc:  # noqa: BLE001 - quote fallback preserves availability
+        logger.error("[rentabilidade] erro ao buscar precos: %s", exc)
         prices = {}
     return enrich_with_prices(positions_raw, prices, fx_today=fx_today)
 
@@ -222,7 +233,7 @@ async def _kpis_from_realtime(db: AsyncSession, portfolio_id: int) -> dict:
     realized_pnl = sum(realized_map.values())
     total_pnl = unrealized_pnl + realized_pnl
 
-    today = date.today()
+    today = utc_today()
     proventos_12m, proventos_total = await _proventos_totals(
         db,
         portfolio_id,
@@ -245,8 +256,8 @@ async def _kpis_from_realtime(db: AsyncSession, portfolio_id: int) -> dict:
                 (current_value - custo_inicio_mes) / custo_inicio_mes * 100,
                 4,
             )
-    except Exception as e:
-        logger.warning("[rentabilidade] fallback retorno_mes_pct falhou: %s", e)
+    except Exception as exc:  # noqa: BLE001 - legacy fallback must remain non-blocking
+        logger.warning("[rentabilidade] fallback retorno_mes_pct falhou: %s", exc)
 
     try:
         inicio_12m = today - timedelta(days=365)
@@ -256,8 +267,8 @@ async def _kpis_from_realtime(db: AsyncSession, portfolio_id: int) -> dict:
                 (current_value - custo_inicio_12m) / custo_inicio_12m * 100,
                 4,
             )
-    except Exception as e:
-        logger.warning("[rentabilidade] fallback retorno_12m_pct falhou: %s", e)
+    except Exception as exc:  # noqa: BLE001 - legacy fallback must remain non-blocking
+        logger.warning("[rentabilidade] fallback retorno_12m_pct falhou: %s", exc)
 
     return {
         "patrimonio_atual": round(current_value, 2),
@@ -279,7 +290,7 @@ async def _kpis_from_realtime(db: AsyncSession, portfolio_id: int) -> dict:
 
 def _ret_between(
     snap_end: PortfolioSnapshot,
-    snap_start: Optional[PortfolioSnapshot],
+    snap_start: PortfolioSnapshot | None,
 ) -> float:
     if snap_start is None:
         base = snap_end.invested_total
@@ -304,7 +315,7 @@ async def get_kpis(db: AsyncSession, portfolio_id: int) -> dict:
     if cached:
         return cached
 
-    today = date.today()
+    today = utc_today()
     snap_today = await _latest_snapshot(db, portfolio_id)
 
     if snap_today is None:
