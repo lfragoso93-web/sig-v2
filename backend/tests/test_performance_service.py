@@ -1,8 +1,9 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from app.services.performance_service import get_portfolio_performance
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.services.performance_service import get_portfolio_performance
 
 
 CANONICAL_ZERO = {
