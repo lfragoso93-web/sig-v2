@@ -125,7 +125,7 @@ def test_projection_respects_target_date_and_portfolio_isolation() -> None:
                 source_event_id="bonus-1",
                 ticker="FUND11",
                 event_date=date(2026, 3, 1),
-                kind=CorporateActionKind.BONUS,
+                kind=CorporateActionKind.STOCK_BONUS,
                 quantity_factor="1.10",
             )
         ]
