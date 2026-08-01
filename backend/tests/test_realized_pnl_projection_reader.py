@@ -4,7 +4,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from app.models.transaction import OperationType
 from app.services.corporate_action_engine import (
     CorporateActionKind,
