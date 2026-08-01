@@ -51,7 +51,7 @@ def project_class_positions_at(
             continue
         if (
             position.quantity <= _ZERO
-            and position.cost_brl <= _ZERO
+            and position.total_cost <= _ZERO
             and position.realized_pnl == _ZERO
         ):
             continue
@@ -59,7 +59,7 @@ def project_class_positions_at(
             ticker=ticker,
             asset_type=asset_type,
             quantity=position.quantity,
-            cost=position.cost_brl,
+            cost=position.total_cost,
             realized_pnl=position.realized_pnl,
         )
     return positions
