@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from typing import Iterable
 
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -37,10 +37,13 @@ from app.services.corporate_action_position_reader import (
 )
 from app.services.fx_service import get_usd_brl_at_date
 from app.services.price_history_service import get_prices_at_date_batch
-from app.services.twr_service import append_compounded_return_pct, calculate_daily_twr_pct
+from app.services.twr_service import (
+    append_compounded_return_pct,
+    calculate_daily_twr_pct,
+)
 
 logger = logging.getLogger(__name__)
-_ZERO = Decimal("0")
+_ZERO = Decimal(0)
 _MONEY = Decimal("0.01")
 
 SUPPORTED_CLASS_TWR_TYPES = {
@@ -215,7 +218,7 @@ async def rebuild_class_snapshots(
     return_states: dict[AssetType, ClassReturnState] = defaultdict(ClassReturnState)
     count = 0
     cursor = start
-    today = date.today()
+    today = datetime.now(UTC).date()
 
     while cursor <= today:
         if cursor.weekday() < 5:
@@ -253,7 +256,7 @@ async def rebuild_class_snapshots(
                     if requirements
                     else {}
                 )
-                fx_rate = Decimal("1")
+                fx_rate = Decimal(1)
                 if asset_type in _USD_TYPES and requirements:
                     fx_rate = _decimal(await get_usd_brl_at_date(db, cursor.isoformat()))
 
