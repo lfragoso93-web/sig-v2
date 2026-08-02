@@ -3,7 +3,6 @@ from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.transaction import OperationType
 from app.services.canonical_dividend_entitlement import (
@@ -20,6 +19,7 @@ from app.services.irpf_service import (
     generate_irpf_csv,
     generate_irpf_pdf,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
@@ -98,14 +98,14 @@ def _entitlement(
         ex_date=date(2024, 4, 2),
         payment_date=payment_date,
         event_type=event_type,
-        value_per_unit=Decimal("1"),
+        value_per_unit=Decimal(1),
         currency=currency,
     )
     right = DividendEntitlement(
         event_id=event_id,
         reason=reason,
         entitlement_date=event.record_date,
-        eligible_quantity=Decimal("100"),
+        eligible_quantity=Decimal(100),
         gross_amount=gross_amount,
         withholding_tax=withholding_tax,
         net_amount=gross_amount - withholding_tax,
