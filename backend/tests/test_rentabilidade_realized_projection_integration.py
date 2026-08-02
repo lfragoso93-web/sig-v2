@@ -33,7 +33,7 @@ async def test_realtime_kpis_use_canonical_realized_reader():
             new=AsyncMock(return_value=(0.0, 0.0)),
         ),
         patch(
-            "app.services.rentabilidade_service._calc_invested_up_to",
+            "app.services.rentabilidade_service._load_net_contributed_up_to",
             new=AsyncMock(return_value=0.0),
         ),
     ):
