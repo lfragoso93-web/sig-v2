@@ -53,13 +53,15 @@ async def register_ticker_change(
     )
     alias = alias_result.scalar_one_or_none()
     if alias is None:
-        db.add(AssetAlias(
-            asset_id=current_asset.id,
-            alias_ticker=resolution.requested_ticker,
-            asset_type=str(old_asset.asset_type),
-            effective_from=resolution.effective_date,
-            source_provider="market_data_provider",
-        ))
+        db.add(
+            AssetAlias(
+                asset_id=current_asset.id,
+                alias_ticker=resolution.requested_ticker,
+                asset_type=str(old_asset.asset_type),
+                effective_from=resolution.effective_date,
+                source_provider="market_data_provider",
+            )
+        )
         await db.flush()
 
     event_key = _event_key(
@@ -82,14 +84,24 @@ async def register_ticker_change(
         event_type=CorporateEventType.TICKER_CHANGE,
         status=CorporateEventStatus.PENDENTE,
         event_date=resolution.effective_date,
-        ratio=Decimal("1"),
+        ratio=Decimal(1),
         description=f"Ticker alterado para {resolution.current_ticker}",
         brapi_event_id=event_key,
-        raw_data=json.dumps({
-            "old_ticker": resolution.requested_ticker,
-            "new_ticker": resolution.current_ticker,
-            "effective_date": resolution.effective_date.isoformat(),
-        }),
+        raw_data=json.dumps(
+            {
+                "old_ticker": resolution.requested_ticker,
+                "new_ticker": resolution.current_ticker,
+                "effective_date": resolution.effective_date.isoformat(),
+            }
+        ),
+        reconciliation_status="UNRECONCILED",
+        requires_review=True,
+        source_provider="ticker_resolution",
+        source_event_id=event_key,
+        is_canonical=True,
+        effective_date=resolution.effective_date,
+        quantity_factor=Decimal(1),
+        currency="BRL",
     )
     db.add(event)
     await db.flush()
