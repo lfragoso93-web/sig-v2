@@ -45,7 +45,7 @@ Até o encerramento da Issue #227:
 5. Consultar Issues relacionadas ao bloco atual.
 6. Consultar todas as PRs abertas, inclusive Dependabot.
 7. Conferir README, ROADMAP, CHANGELOG e `docs/architecture.md`.
-8. Confirmar último resultado de pytest, Ruff e compileall registrado.
+8. Confirmar último resultado de pytest, Ruff, frontend e compileall registrado.
 9. Não repetir perguntas já respondidas no histórico ou nas Issues.
 10. Continuar do próximo bloco objetivo registrado na #227.
 
@@ -63,9 +63,12 @@ Cada checkpoint deve registrar:
 - recomendação objetiva do próximo bloco;
 - HEAD remoto esperado.
 
-## Estado atual do plano
+## Estado atual do plano — 02/08/2026
 
-- Última suíte validada antes desta remoção: `1096 passed`, `22 skipped`.
+### Backend
+
+- Suíte completa: `1097 passed`, `22 skipped`, zero warnings.
+- Ruff: aprovado no escopo alterado.
 - `compileall`: aprovado.
 - Reader histórico canônico disponível em `historical_position_projection_reader.py`.
 - Endpoint `GET /{portfolio_id}/irpf/{year}/bens` usa `irpf_bens_direitos_service.py`.
@@ -77,18 +80,38 @@ Cada checkpoint deve registrar:
 - Testes arquiteturais proíbem imports e redefinição do leitor legado de Bens e Direitos.
 - `calc_ganhos_capital` permanece semanticamente inalterado até a caracterização fiscal dedicada.
 - Renda Fixa continua preservada por adaptação isolada até existir leitor histórico dedicado da classe.
+- `backup_service.py` usa UTC aware em timestamps operacionais.
+- Defaults ORM `DateTime(timezone=False)` usam UTC naive explícito por `utc_now_naive()`.
+- Issue #192 concluída após eliminação dos warnings `datetime.utcnow()`.
+
+### Frontend
+
+- Typecheck: aprovado.
+- Lint: aprovado com zero warnings.
+- Suíte completa: `23 passed`, `86 tests passed`.
+- Build de produção: aprovado.
+- IRPF e Metas são rotas canônicas do contexto da carteira:
+  - `/carteira/irpf`;
+  - `/carteira/metas`.
+- `/irpf` e `/metas` permanecem apenas como redirects legados com `replace`.
+- Sidebar usa somente as rotas canônicas.
+- Testes estruturais protegem a hierarquia de navegação.
+- Issue #228 concluída.
+
+### Operação
+
 - Boot de sincronização de mercado permanece desabilitado por padrão.
+- Seeds, rebuilds e cargas reais permanecem suspensos pelo gate #227.
 - Issue-mãe: #227.
 - Issues funcionais imediatas: #151 e #56.
 
 ## Próximo bloco objetivo
 
-1. Validar Ruff dos serviços extraídos e testes alterados.
-2. Executar `compileall`, suíte IRPF relacionada e suíte completa.
-3. Corrigir apenas regressões introduzidas por este corte.
-4. Sincronizar README, ROADMAP, CHANGELOG e `docs/architecture.md`.
-5. Avaliar a PR estrutural para `main`.
-6. Depois iniciar a caracterização de ganhos mensais sem alterar regras fiscais antes dos testes.
+1. Sincronizar README, ROADMAP, CHANGELOG e `docs/architecture.md` com este checkpoint.
+2. Atualizar #56, #151 e #227 com o estado consolidado.
+3. Comparar `main...stable-15jun` e revisar o diff estrutural.
+4. Abrir PR de `stable-15jun` para `main` após a documentação viva estar sincronizada.
+5. Depois iniciar a caracterização de ganhos mensais sem alterar regras fiscais antes dos testes.
 
 ## Prompt mínimo para nova conversa
 
