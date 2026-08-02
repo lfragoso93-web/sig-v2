@@ -4,7 +4,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from app.models.transaction import OperationType
 from app.services.irpf_bens_direitos_service import calc_bens_direitos
 from app.services.position_timeline_projection import PositionTimelineProjection
