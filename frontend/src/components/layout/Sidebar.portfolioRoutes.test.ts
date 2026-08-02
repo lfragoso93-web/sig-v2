@@ -1,9 +1,12 @@
 import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import { resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-const sidebarPath = fileURLToPath(new URL('./Sidebar.tsx', import.meta.url))
+const sidebarPath = resolve(
+  process.cwd(),
+  'src/components/layout/Sidebar.tsx',
+)
 const sidebarSource = readFileSync(sidebarPath, 'utf8')
 
 describe('Sidebar portfolio route hierarchy', () => {
