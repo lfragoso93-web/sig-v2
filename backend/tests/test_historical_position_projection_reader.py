@@ -4,7 +4,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from app.models.transaction import OperationType
 from app.services.historical_position_projection_reader import (
     load_open_positions_as_of,
