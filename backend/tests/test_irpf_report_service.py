@@ -2,10 +2,9 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.schemas.irpf import BemDireito
 from app.services.irpf_report_service import generate_irpf_report
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
