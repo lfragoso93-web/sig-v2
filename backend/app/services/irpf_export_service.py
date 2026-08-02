@@ -1,9 +1,13 @@
 """Exportadores PDF e CSV do relatório de IRPF."""
 
-from datetime import date
+from datetime import UTC, datetime
 from io import BytesIO
 
 from app.schemas.irpf import IRPFReportOut
+
+
+def _today_label() -> str:
+    return datetime.now(UTC).date().strftime("%d/%m/%Y")
 
 
 def generate_irpf_pdf(report: IRPFReportOut) -> bytes:
@@ -89,8 +93,7 @@ def generate_irpf_pdf(report: IRPFReportOut) -> bytes:
     story = [
         Paragraph(f"Relatorio IRPF {report.ano}", title_style),
         Paragraph(
-            f"Carteira ID: {report.portfolio_id} | Gerado em: "
-            f"{date.today().strftime('%d/%m/%Y')}",
+            f"Carteira ID: {report.portfolio_id} | Gerado em: {_today_label()}",
             normal,
         ),
         Spacer(1, 0.4 * cm),
@@ -218,7 +221,7 @@ def generate_irpf_csv(report: IRPFReportOut) -> str:
     summary = report.resumo
     writer.writerow(["RELATÓRIO IRPF", report.ano])
     writer.writerow(["Carteira ID", report.portfolio_id])
-    writer.writerow(["Gerado em", date.today().strftime("%d/%m/%Y")])
+    writer.writerow(["Gerado em", _today_label()])
     writer.writerow([])
     writer.writerow(["RESUMO ANUAL"])
     writer.writerow(["Descricao", "Valor"])
