@@ -1,5 +1,5 @@
 """
-Router IRPF — endpoints finos que delegam toda logica ao irpf_service.
+Router IRPF — endpoints finos que delegam toda logica aos serviços de IRPF.
 
 Endpoints:
   GET  /{portfolio_id}/irpf/anos          — anos com transacoes disponiveis
@@ -9,29 +9,27 @@ Endpoints:
   GET  /{portfolio_id}/irpf/{year}/ganhos — so ganhos de capital mensais
   GET  /{portfolio_id}/irpf/{year}/rendimentos — so proventos (dividendos + JCP)
 """
+import json
+from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
+from sqlalchemy import extract, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, extract
-from typing import List
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.models.user import User
 from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction
-from app.schemas.irpf import (
-    IRPFReportOut,
-    BemDireito,
-    GanhoCapitalMensal,
-)
+from app.models.user import User
+from app.schemas.irpf import BemDireito, GanhoCapitalMensal, IRPFReportOut
+from app.services.irpf_bens_direitos_service import calc_bens_direitos
 from app.services.irpf_service import (
-    generate_irpf_report,
-    calc_bens_direitos,
     calc_ganhos_capital,
     calc_rendimentos,
-    generate_irpf_pdf,
     generate_irpf_csv,
+    generate_irpf_pdf,
+    generate_irpf_report,
 )
 
 router = APIRouter(tags=["irpf"])
@@ -44,10 +42,10 @@ async def _get_portfolio(portfolio_id: int, user: User, db: AsyncSession) -> Por
             Portfolio.user_id == user.id,
         )
     )
-    p = result.scalar_one_or_none()
-    if not p:
+    portfolio = result.scalar_one_or_none()
+    if not portfolio:
         raise HTTPException(status_code=404, detail="Carteira nao encontrada.")
-    return p
+    return portfolio
 
 
 @router.get("/{portfolio_id}/irpf/anos", response_model=List[int])
@@ -56,10 +54,7 @@ async def list_anos(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Retorna lista de anos com transacoes na carteira.
-    Usado pelo dropdown de selecao de ano na pagina IRPF.
-    """
+    """Retorna os anos com transações disponíveis na carteira."""
     await _get_portfolio(portfolio_id, current_user, db)
     result = await db.execute(
         select(extract("year", Transaction.date).label("year"))
@@ -78,15 +73,12 @@ async def get_irpf_report(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Retorna relatorio IRPF completo para o ano.
-    Se refresh=True ou nao houver relatorio salvo, recalcula e persiste.
-    """
+    """Retorna o relatório IRPF completo para o ano."""
     await _get_portfolio(portfolio_id, current_user, db)
 
     if not refresh:
         from app.models.irpf import IRPFReport
-        import json
+
         existing = await db.execute(
             select(IRPFReport).where(
                 IRPFReport.portfolio_id == portfolio_id,
@@ -108,19 +100,18 @@ async def download_irpf_pdf(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Gera e retorna o relatorio IRPF em PDF para download.
-    Content-Type: application/pdf
-    Content-Disposition: attachment; filename="irpf_{year}_{portfolio_id}.pdf"
-    """
+    """Gera e retorna o relatório IRPF em PDF."""
     await _get_portfolio(portfolio_id, current_user, db)
-    report = await generate_irpf_report(db, portfolio_id, year) if refresh else \
-        await get_irpf_report(portfolio_id, year, False, db, current_user)
+    report = (
+        await generate_irpf_report(db, portfolio_id, year)
+        if refresh
+        else await get_irpf_report(portfolio_id, year, False, db, current_user)
+    )
 
     try:
         pdf_bytes = generate_irpf_pdf(report)
-    except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     return Response(
         content=pdf_bytes,
@@ -139,19 +130,17 @@ async def download_irpf_csv(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Gera e retorna o relatorio IRPF em CSV para download.
-    Content-Type: text/csv
-    Content-Disposition: attachment; filename="irpf_{year}_{portfolio_id}.csv"
-    """
+    """Gera e retorna o relatório IRPF em CSV."""
     await _get_portfolio(portfolio_id, current_user, db)
-    report = await generate_irpf_report(db, portfolio_id, year) if refresh else \
-        await get_irpf_report(portfolio_id, year, False, db, current_user)
-
+    report = (
+        await generate_irpf_report(db, portfolio_id, year)
+        if refresh
+        else await get_irpf_report(portfolio_id, year, False, db, current_user)
+    )
     csv_content = generate_irpf_csv(report)
 
     return Response(
-        content=csv_content.encode('utf-8'),
+        content=csv_content.encode("utf-8"),
         media_type="text/csv",
         headers={
             "Content-Disposition": f'attachment; filename="irpf_{year}_{portfolio_id}.csv"'
@@ -166,7 +155,7 @@ async def get_bens_direitos(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Retorna apenas a lista de Bens e Direitos em 31/12 do ano."""
+    """Retorna Bens e Direitos projetados canonicamente em 31/12."""
     await _get_portfolio(portfolio_id, current_user, db)
     return await calc_bens_direitos(db, portfolio_id, year)
 
@@ -190,7 +179,7 @@ async def get_rendimentos(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Retorna proventos do ano separados em dividendos isentos e JCP."""
+    """Retorna dividendos e JCP do ano."""
     await _get_portfolio(portfolio_id, current_user, db)
     dividendos, jcp = await calc_rendimentos(db, portfolio_id, year)
     return {"dividendos": dividendos, "jcp": jcp}
