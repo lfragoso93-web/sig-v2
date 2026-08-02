@@ -12,10 +12,7 @@ from app.services.corporate_action_position_reader import (
     load_global_corporate_actions_by_ticker,
 )
 from app.services.portfolio_service import normalize_type
-from app.services.snapshot_position_projection import (
-    project_snapshot_positions,
-    project_transaction_timelines,
-)
+from app.services.snapshot_position_projection import project_transaction_timelines
 
 _RENDA_FIXA_TYPE = "RENDA_FIXA"
 
