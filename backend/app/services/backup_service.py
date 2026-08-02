@@ -118,8 +118,8 @@ async def create_database_backup(
             }
         )
         logger.info("[backup] Backup completed: %s (%.2f MB)", backup_id, size_mb)
-    except Exception as exc:  # noqa: BLE001 - boundary operacional retorna contrato estruturado
-        logger.error("[backup] Backup failed: %s", exc, exc_info=True)
+    except Exception as exc:
+        logger.exception("[backup] Backup failed: %s", exc)
         result["error"] = str(exc)
 
     return result
@@ -149,9 +149,11 @@ async def restore_database_backup(
 
         temp_sql_file = BACKUPS_DIR / f"restore_temp_{_utc_now().timestamp()}.sql"
         try:
-            with gzip.open(backup_path, "rb") as input_file:
-                with temp_sql_file.open("wb") as output_file:
-                    shutil.copyfileobj(input_file, output_file)
+            with gzip.open(backup_path, "rb") as input_file, open(
+                temp_sql_file,
+                "wb",
+            ) as output_file:
+                shutil.copyfileobj(input_file, output_file)
         except Exception as exc:  # noqa: BLE001 - erro convertido no contrato de restore
             result["error"] = f"Failed to decompress backup: {exc}"
             logger.error("[restore] Decompression failed: %s", exc)
@@ -198,8 +200,8 @@ async def restore_database_backup(
             }
         )
         logger.info("[restore] Restore completed successfully")
-    except Exception as exc:  # noqa: BLE001 - boundary operacional retorna contrato estruturado
-        logger.error("[restore] Restore failed: %s", exc, exc_info=True)
+    except Exception as exc:
+        logger.exception("[restore] Restore failed: %s", exc)
         result["error"] = str(exc)
 
     return result
@@ -246,8 +248,8 @@ async def list_backups() -> dict[str, Any]:
                 "success": True,
             }
         )
-    except Exception as exc:  # noqa: BLE001 - boundary operacional retorna contrato estruturado
-        logger.error("[backups_list] Error listing backups: %s", exc, exc_info=True)
+    except Exception as exc:
+        logger.exception("[backups_list] Error listing backups: %s", exc)
         result["error"] = str(exc)
 
     return result
@@ -278,8 +280,8 @@ async def delete_backup(backup_filename: str) -> dict[str, Any]:
             }
         )
         logger.info("[backup_delete] Backup deleted: %s", backup_filename)
-    except Exception as exc:  # noqa: BLE001 - boundary operacional retorna contrato estruturado
-        logger.error("[backup_delete] Error deleting backup: %s", exc, exc_info=True)
+    except Exception as exc:
+        logger.exception("[backup_delete] Error deleting backup: %s", exc)
         result["error"] = str(exc)
 
     return result
