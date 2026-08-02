@@ -42,4 +42,4 @@ Checkpoint de 02/08/2026:
 - ESLint: aprovado com zero warnings;
 - build Vite de produção: aprovado.
 
-Issue relacionada: #228.
+Issue #228 concluída.
