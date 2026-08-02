@@ -71,7 +71,7 @@ async def test_calc_ganhos_capital_simple_sell():
 async def test_calc_rendimentos_no_dividends():
     db = AsyncMock(spec=AsyncSession)
     with patch(
-        "app.services.irpf_service.load_portfolio_dividend_entitlements",
+        "app.services.irpf_tax_service.load_portfolio_dividend_entitlements",
         new=AsyncMock(return_value=[]),
     ):
         dividendos, jcp = await calc_rendimentos(db, portfolio_id=1, year=2024)
@@ -148,7 +148,7 @@ async def test_calc_rendimentos_uses_canonical_net_values():
         ),
     ]
     with patch(
-        "app.services.irpf_service.load_portfolio_dividend_entitlements",
+        "app.services.irpf_tax_service.load_portfolio_dividend_entitlements",
         new=AsyncMock(return_value=rights),
     ):
         dividendos, jcp = await calc_rendimentos(db, 1, 2024)
@@ -182,7 +182,7 @@ async def test_calc_rendimentos_excludes_non_brl_and_unpaid_rights():
         ),
     ]
     with patch(
-        "app.services.irpf_service.load_portfolio_dividend_entitlements",
+        "app.services.irpf_tax_service.load_portfolio_dividend_entitlements",
         new=AsyncMock(return_value=rights),
     ):
         dividendos, jcp = await calc_rendimentos(db, 1, 2024)
@@ -261,7 +261,7 @@ async def test_generate_irpf_csv_valid():
 
 @pytest.mark.asyncio
 async def test_detect_day_trades():
-    from app.services.irpf_service import _detect_day_trades
+    from app.services.irpf_tax_service import _detect_day_trades
 
     mock_buy = MagicMock()
     mock_buy.date = date(2024, 1, 15)
