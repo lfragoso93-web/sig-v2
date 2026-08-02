@@ -65,15 +65,17 @@ Cada checkpoint deve registrar:
 
 ## Estado atual do plano
 
-- Última suíte validada: `1095 passed`, `22 skipped`, `52 warnings`.
+- Última suíte validada antes desta remoção: `1096 passed`, `22 skipped`.
 - `compileall`: aprovado.
 - Reader histórico canônico disponível em `historical_position_projection_reader.py`.
 - Endpoint `GET /{portfolio_id}/irpf/{year}/bens` usa `irpf_bens_direitos_service.py`.
-- O relatório completo usa `irpf_report_service.py`, que compõe Bens e Direitos canônicos com ganhos e rendimentos fiscais ainda existentes.
-- O router IRPF usa dependências `Annotated` e tipagem moderna.
-- Teste arquitetural `test_no_legacy_irpf_bens_consumers.py` impede novos consumidores do símbolo legado.
-- `calc_ganhos_capital` permanece intacto até a caracterização fiscal dedicada.
-- A função antiga `calc_bens_direitos` ainda existe fisicamente em `irpf_service.py`, sem consumidores de produção, aguardando remoção isolada após o gate desta etapa.
+- Relatório completo usa `irpf_report_service.py`.
+- `calc_bens_direitos` e o orquestrador antigo foram removidos de `irpf_service.py`.
+- Regras fiscais mensais foram extraídas para `irpf_tax_service.py`.
+- Exportações PDF/CSV foram extraídas para `irpf_export_service.py`.
+- `irpf_service.py` permanece apenas como fachada temporária de compatibilidade.
+- Testes arquiteturais proíbem imports e redefinição do leitor legado de Bens e Direitos.
+- `calc_ganhos_capital` permanece semanticamente inalterado até a caracterização fiscal dedicada.
 - Renda Fixa continua preservada por adaptação isolada até existir leitor histórico dedicado da classe.
 - Boot de sincronização de mercado permanece desabilitado por padrão.
 - Issue-mãe: #227.
@@ -81,13 +83,12 @@ Cada checkpoint deve registrar:
 
 ## Próximo bloco objetivo
 
-1. Validar Ruff dos testes ajustados e o teste arquitetural de consumidores.
-2. Remover fisicamente `calc_bens_direitos` de `irpf_service.py` em commit isolado.
-3. Remover imports, constantes e o orquestrador legado que ficarem sem consumidores, sem tocar em `calc_ganhos_capital`.
-4. Adicionar teste arquitetural proibindo a redefinição do símbolo removido.
-5. Sincronizar README, ROADMAP, CHANGELOG e `docs/architecture.md` ao fechar o corte estrutural.
-6. Avaliar PR de promoção para `main` após a suíte completa.
-7. Depois iniciar a caracterização de ganhos mensais, sem alterar regras fiscais antes dos testes.
+1. Validar Ruff dos serviços extraídos e testes alterados.
+2. Executar `compileall`, suíte IRPF relacionada e suíte completa.
+3. Corrigir apenas regressões introduzidas por este corte.
+4. Sincronizar README, ROADMAP, CHANGELOG e `docs/architecture.md`.
+5. Avaliar a PR estrutural para `main`.
+6. Depois iniciar a caracterização de ganhos mensais sem alterar regras fiscais antes dos testes.
 
 ## Prompt mínimo para nova conversa
 
