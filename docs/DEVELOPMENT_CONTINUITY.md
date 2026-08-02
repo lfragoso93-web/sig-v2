@@ -65,25 +65,27 @@ Cada checkpoint deve registrar:
 
 ## Estado atual do plano
 
-- Suíte validada antes do primeiro consumidor: `1090 passed`, `22 skipped`.
+- Última suíte validada: `1093 passed`, `22 skipped`.
 - `compileall`: aprovado.
-- Ruff do Bloco 1A: aprovado.
-- Boot de sincronização de mercado: desabilitado por padrão por `ENABLE_BOOT_MARKET_SYNC=false`.
 - Reader histórico canônico disponível em `historical_position_projection_reader.py`.
-- Primeiro consumidor migrado: endpoint `GET /{portfolio_id}/irpf/{year}/bens`.
-- Serviço canônico: `irpf_bens_direitos_service.py`.
-- O relatório IRPF completo e `calc_ganhos_capital` ainda permanecem no serviço legado.
+- Endpoint `GET /{portfolio_id}/irpf/{year}/bens` usa `irpf_bens_direitos_service.py`.
+- O relatório completo passa a usar `irpf_report_service.py`, que compõe Bens e Direitos canônicos com ganhos e rendimentos ainda fiscais/legados.
+- O router IRPF usa dependências `Annotated` e tipagem moderna.
+- `calc_ganhos_capital` permanece intacto até a caracterização fiscal dedicada.
+- A função antiga `calc_bens_direitos` ainda existe em `irpf_service.py`, mas não deve receber novos consumidores.
 - Renda Fixa continua preservada por adaptação isolada até existir leitor histórico dedicado da classe.
+- Boot de sincronização de mercado permanece desabilitado por padrão.
 - Issue-mãe: #227.
 - Issues funcionais imediatas: #151 e #56.
 
 ## Próximo bloco objetivo
 
-1. Validar o serviço e o endpoint canônico de Bens e Direitos.
-2. Fazer o orquestrador do relatório completo consumir o novo serviço.
-3. Remover o primeiro cálculo morto de Bens e Direitos de `irpf_service.py`.
-4. Manter ganhos mensais intactos até a caracterização fiscal dedicada.
+1. Validar `irpf_report_service.py`, router modernizado e suíte completa.
+2. Confirmar que nenhum consumidor de produção importa `calc_bens_direitos` do serviço legado.
+3. Remover a função morta de `irpf_service.py` em commit isolado.
+4. Adicionar teste arquitetural proibindo sua reintrodução.
 5. Sincronizar README, ROADMAP, CHANGELOG e `docs/architecture.md` ao fechar o corte estrutural.
+6. Depois iniciar a caracterização de ganhos mensais, sem alterar regras fiscais antes dos testes.
 
 ## Prompt mínimo para nova conversa
 
