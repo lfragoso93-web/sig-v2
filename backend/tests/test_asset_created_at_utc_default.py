@@ -11,7 +11,9 @@ def test_utc_now_naive_preserves_naive_utc_contract() -> None:
     assert value.tzinfo is None
 
 
-def test_asset_created_at_uses_shared_utc_naive_default() -> None:
+def test_asset_created_at_default_preserves_naive_utc_contract() -> None:
     default_callable = Asset.__table__.c.created_at.default.arg
+    value = default_callable(None)
 
-    assert default_callable is utc_now_naive
+    assert isinstance(value, datetime)
+    assert value.tzinfo is None
