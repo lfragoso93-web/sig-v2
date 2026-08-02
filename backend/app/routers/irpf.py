@@ -1,16 +1,9 @@
 """
-Router IRPF — endpoints finos que delegam toda logica aos serviços de IRPF.
-
-Endpoints:
-  GET  /{portfolio_id}/irpf/anos          — anos com transacoes disponiveis
-  GET  /{portfolio_id}/irpf/{year}        — relatorio IRPF completo (JSON)
-  GET  /{portfolio_id}/irpf/{year}/pdf    — download do relatorio em PDF
-  GET  /{portfolio_id}/irpf/{year}/bens   — so bens e direitos
-  GET  /{portfolio_id}/irpf/{year}/ganhos — so ganhos de capital mensais
-  GET  /{portfolio_id}/irpf/{year}/rendimentos — so proventos (dividendos + JCP)
+Router IRPF — endpoints finos que delegam toda logica aos servicos de IRPF.
 """
+
 import json
-from typing import List
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
@@ -19,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.models.irpf import IRPFReport
 from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction
 from app.models.user import User
@@ -34,8 +28,15 @@ from app.services.irpf_service import (
 
 router = APIRouter(tags=["irpf"])
 
+DbSession = Annotated[AsyncSession, Depends(get_db)]
+CurrentUser = Annotated[User, Depends(get_current_user)]
 
-async def _get_portfolio(portfolio_id: int, user: User, db: AsyncSession) -> Portfolio:
+
+async def _get_portfolio(
+    portfolio_id: int,
+    user: User,
+    db: AsyncSession,
+) -> Portfolio:
     result = await db.execute(
         select(Portfolio).where(
             Portfolio.id == portfolio_id,
@@ -48,13 +49,13 @@ async def _get_portfolio(portfolio_id: int, user: User, db: AsyncSession) -> Por
     return portfolio
 
 
-@router.get("/{portfolio_id}/irpf/anos", response_model=List[int])
+@router.get("/{portfolio_id}/irpf/anos", response_model=list[int])
 async def list_anos(
     portfolio_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
-    """Retorna os anos com transações disponíveis na carteira."""
+    """Retorna os anos com transacoes disponiveis na carteira."""
     await _get_portfolio(portfolio_id, current_user, db)
     result = await db.execute(
         select(extract("year", Transaction.date).label("year"))
@@ -69,16 +70,14 @@ async def list_anos(
 async def get_irpf_report(
     portfolio_id: int,
     year: int,
+    db: DbSession,
+    current_user: CurrentUser,
     refresh: bool = False,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ):
-    """Retorna o relatório IRPF completo para o ano."""
+    """Retorna o relatorio IRPF completo para o ano."""
     await _get_portfolio(portfolio_id, current_user, db)
 
     if not refresh:
-        from app.models.irpf import IRPFReport
-
         existing = await db.execute(
             select(IRPFReport).where(
                 IRPFReport.portfolio_id == portfolio_id,
@@ -96,16 +95,16 @@ async def get_irpf_report(
 async def download_irpf_pdf(
     portfolio_id: int,
     year: int,
+    db: DbSession,
+    current_user: CurrentUser,
     refresh: bool = False,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ):
-    """Gera e retorna o relatório IRPF em PDF."""
+    """Gera e retorna o relatorio IRPF em PDF."""
     await _get_portfolio(portfolio_id, current_user, db)
     report = (
         await generate_irpf_report(db, portfolio_id, year)
         if refresh
-        else await get_irpf_report(portfolio_id, year, False, db, current_user)
+        else await get_irpf_report(portfolio_id, year, db, current_user, False)
     )
 
     try:
@@ -126,16 +125,16 @@ async def download_irpf_pdf(
 async def download_irpf_csv(
     portfolio_id: int,
     year: int,
+    db: DbSession,
+    current_user: CurrentUser,
     refresh: bool = False,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ):
-    """Gera e retorna o relatório IRPF em CSV."""
+    """Gera e retorna o relatorio IRPF em CSV."""
     await _get_portfolio(portfolio_id, current_user, db)
     report = (
         await generate_irpf_report(db, portfolio_id, year)
         if refresh
-        else await get_irpf_report(portfolio_id, year, False, db, current_user)
+        else await get_irpf_report(portfolio_id, year, db, current_user, False)
     )
     csv_content = generate_irpf_csv(report)
 
@@ -148,24 +147,27 @@ async def download_irpf_csv(
     )
 
 
-@router.get("/{portfolio_id}/irpf/{year}/bens", response_model=List[BemDireito])
+@router.get("/{portfolio_id}/irpf/{year}/bens", response_model=list[BemDireito])
 async def get_bens_direitos(
     portfolio_id: int,
     year: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Retorna Bens e Direitos projetados canonicamente em 31/12."""
     await _get_portfolio(portfolio_id, current_user, db)
     return await calc_bens_direitos(db, portfolio_id, year)
 
 
-@router.get("/{portfolio_id}/irpf/{year}/ganhos", response_model=List[GanhoCapitalMensal])
+@router.get(
+    "/{portfolio_id}/irpf/{year}/ganhos",
+    response_model=list[GanhoCapitalMensal],
+)
 async def get_ganhos_capital(
     portfolio_id: int,
     year: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Retorna ganhos de capital mensais com detalhamento por venda."""
     await _get_portfolio(portfolio_id, current_user, db)
@@ -176,8 +178,8 @@ async def get_ganhos_capital(
 async def get_rendimentos(
     portfolio_id: int,
     year: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Retorna dividendos e JCP do ano."""
     await _get_portfolio(portfolio_id, current_user, db)
