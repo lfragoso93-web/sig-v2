@@ -180,7 +180,13 @@ async def _boot_sequence() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     start_scheduler()
-    asyncio.create_task(_boot_sequence())
+    if settings.ENABLE_BOOT_MARKET_SYNC:
+        asyncio.create_task(_boot_sequence())
+    else:
+        logger.info(
+            "[Boot] sincronizacao automatica de mercado desabilitada "
+            "(ENABLE_BOOT_MARKET_SYNC=false)"
+        )
     yield
     await engine.dispose()
 
@@ -241,7 +247,7 @@ def custom_openapi() -> dict[str, Any]:
     schema.setdefault("components", {}).setdefault("securitySchemes", {})
     schema["components"]["securitySchemes"]["HTTPBearer"] = {
         "type": "http",
-        "scheme": "bearer",
+        "scheme": "http",
         "bearerFormat": "JWT",
         "description": "Cole aqui o access_token obtido em POST /api/v1/auth/login",
     }
