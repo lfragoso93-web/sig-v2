@@ -27,18 +27,27 @@ Já foram migrados para leitores canônicos:
 - capital líquido aportado;
 - agregação de proventos.
 
-### `irpf_service.py`
+### IRPF — estado atual
 
-Ainda reconstrói diretamente:
+Concluído:
 
-- posição em 31 de dezembro;
-- custo médio ponderado;
-- baixa proporcional do custo em vendas;
-- resultado realizado por operação;
-- conversão cambial por transação;
-- agrupamento mensal de ganhos.
+- reader histórico canônico por data de corte;
+- Bens e Direitos via `irpf_bens_direitos_service.py`;
+- relatório completo via `irpf_report_service.py`;
+- regras fiscais extraídas para `irpf_tax_service.py`;
+- exportações PDF/CSV extraídas para `irpf_export_service.py`;
+- remoção física de `calc_bens_direitos` e do orquestrador duplicado;
+- testes arquiteturais contra reintrodução do leitor legado;
+- rotas frontend canônicas em `/carteira/irpf`.
 
-As regras fiscais devem permanecer, mas a reconstrução contábil deve ser removida.
+Pendente:
+
+- caracterizar e migrar ganhos de capital mensais;
+- Day Trade versus Swing Trade;
+- isenção mensal;
+- compensação de prejuízos;
+- retenções;
+- ausência cambial explícita, sem fallback silencioso.
 
 ## Arquitetura alvo
 
@@ -64,12 +73,16 @@ IRPF: classificação fiscal, isenções, alíquotas e compensações
 5. Cobrir moeda estrangeira com taxa persistida.
 6. Provar equivalência entre resultados atuais e projetores canônicos nos cenários suportados.
 
+**Estado:** concluído para Bens e Direitos.
+
 ### Bloco B — leitor canônico histórico
 
 1. Extrair ou ampliar um leitor único de posição/custo `as_of`.
 2. Integrar eventos corporativos já canônicos sem alterar transações históricas.
 3. Expor resultado por ticker e, quando necessário, por operação.
 4. Proibir chamadas externas durante a projeção.
+
+**Estado:** reader histórico disponível; extensão por operação ainda poderá ser necessária para ganhos mensais.
 
 ### Bloco C — migração de Rentabilidade
 
@@ -79,10 +92,12 @@ IRPF: classificação fiscal, isenções, alíquotas e compensações
 4. Consolidar invalidação de cache.
 5. Preservar contratos públicos.
 
+**Estado:** em andamento na Issue #151.
+
 ### Bloco D — migração do IRPF
 
-1. Migrar Bens e Direitos para posição/custo na data de corte.
-2. Migrar ganho realizado para o leitor canônico.
+1. Migrar Bens e Direitos para posição/custo na data de corte — concluído.
+2. Migrar ganho realizado para o leitor canônico — pendente.
 3. Manter no IRPF apenas:
    - Day Trade versus Swing Trade;
    - classificação por classe;
@@ -99,6 +114,15 @@ IRPF: classificação fiscal, isenções, alíquotas e compensações
 3. Adicionar regressões arquiteturais contra imports e cálculos paralelos.
 4. Sincronizar README, ROADMAP, CHANGELOG e arquitetura.
 
+## Validação consolidada
+
+Checkpoint de 02/08/2026:
+
+- backend: `1097 passed`, `22 skipped`, zero warnings;
+- Ruff e `compileall`: aprovados;
+- frontend: `23` arquivos de teste e `86` testes aprovados;
+- typecheck, lint e build: aprovados.
+
 ## Critérios de aceite
 
 - uma única projeção de posição e custo por data;
@@ -109,12 +133,11 @@ IRPF: classificação fiscal, isenções, alíquotas e compensações
 - ausência cambial não vira taxa `1.0` silenciosamente;
 - suíte completa, Ruff do escopo e `compileall` aprovados;
 - #151 encerrada somente após remoção física do serviço legado;
-- #56 permanece aberta para a camada de produto, mas o backend fiscal fica canônico.
+- #56 permanece aberta para a camada de produto e para a migração fiscal mensal.
 
 ## Fora deste macrobloco
 
-- interface final do IRPF;
-- exportações avançadas;
+- interface final avançada do IRPF;
 - novas regras tributárias sem requisito validado;
 - TWR de Tesouro e Renda Fixa (#149);
 - histórico IBOV (#150);
