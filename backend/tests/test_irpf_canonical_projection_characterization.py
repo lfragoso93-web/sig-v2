@@ -59,8 +59,8 @@ def test_irpf_cutoff_projection_preserves_partial_sale_cost_basis() -> None:
     )
     position, asset_type, is_usd = projected["PETR4"]
 
-    assert position.quantity == Decimal("150")
-    assert position.total_cost == Decimal("4515")
+    assert position.quantity == Decimal(150)
+    assert position.total_cost == Decimal(4515)
     assert position.average_price == Decimal("30.1")
     assert asset_type == "ACAO"
     assert is_usd is False
@@ -91,8 +91,8 @@ def test_irpf_cutoff_projection_excludes_transactions_after_year_end() -> None:
     )
     position, _, _ = projected["VALE3"]
 
-    assert position.quantity == Decimal("10")
-    assert position.total_cost == Decimal("500")
+    assert position.quantity == Decimal(10)
+    assert position.total_cost == Decimal(500)
 
 
 def test_irpf_cutoff_projection_resets_cost_after_full_exit_and_repurchase() -> None:
@@ -128,8 +128,8 @@ def test_irpf_cutoff_projection_resets_cost_after_full_exit_and_repurchase() -> 
     )
     position, _, _ = projected["ABCD3"]
 
-    assert position.quantity == Decimal("40")
-    assert position.total_cost == Decimal("804")
+    assert position.quantity == Decimal(40)
+    assert position.total_cost == Decimal(804)
     assert position.average_price == Decimal("20.1")
 
 
@@ -159,6 +159,6 @@ def test_irpf_realized_projection_keeps_closed_tickers() -> None:
     )
     position, _, _ = projected["VALE3"]
 
-    assert position.quantity == Decimal("0")
-    assert position.total_cost == Decimal("0")
-    assert position.realized_pnl == Decimal("990")
+    assert position.quantity == Decimal(0)
+    assert position.total_cost == Decimal(0)
+    assert position.realized_pnl == Decimal(990)
