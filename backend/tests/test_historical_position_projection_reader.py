@@ -4,7 +4,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.transaction import OperationType
 from app.services.historical_position_projection_reader import (
@@ -12,6 +11,7 @@ from app.services.historical_position_projection_reader import (
     load_position_timelines_as_of,
     load_realized_pnl_as_of,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def _tx(
@@ -64,7 +64,7 @@ async def test_load_position_timelines_as_of_uses_cutoff_and_actions() -> None:
             target_date=date(2024, 12, 31),
         )
 
-    assert projected["PETR4"][0].quantity == Decimal("100")
+    assert projected["PETR4"][0].quantity == Decimal(100)
     load_actions.assert_awaited_once_with(db, ["PETR4"])
 
 
