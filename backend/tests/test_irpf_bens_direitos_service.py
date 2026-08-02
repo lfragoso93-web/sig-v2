@@ -4,11 +4,11 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.transaction import OperationType
 from app.services.irpf_bens_direitos_service import calc_bens_direitos
 from app.services.position_timeline_projection import PositionTimelineProjection
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def _projection(*, quantity: str, total_cost: str) -> PositionTimelineProjection:
