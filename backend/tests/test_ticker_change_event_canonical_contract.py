@@ -3,7 +3,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-
 from app.models.asset import Asset
 from app.models.corporate_event import CorporateEvent
 from app.services.ticker_change_event_service import register_ticker_change
