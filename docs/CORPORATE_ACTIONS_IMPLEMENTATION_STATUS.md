@@ -90,6 +90,16 @@ A estratégia original da Issue #129, centrada em HG Brasil, foi superada pela d
 - Renda Fixa permanece fora do cálculo baseado em cotas e continua no serviço dedicado;
 - taxas de venda, câmbio salvo e eventos corporativos seguem o mesmo projetor canônico.
 
+### Integração com fluxo líquido histórico de Rentabilidade
+
+- `rentabilidade_cash_flow.py` define o cálculo puro de caixa líquido aportado em BRL;
+- compras aumentam o aporte por valor bruto mais taxas;
+- vendas reduzem o aporte somente pelo valor líquido recebido, preservando as taxas de venda;
+- operações em USD usam o câmbio salvo na própria transação para valor e taxas;
+- eventos gratuitos não entram no fluxo porque não movimentam caixa;
+- `_load_net_contributed_up_to` substitui o cálculo inline e explicita que a base histórica não é custo econômico da posição;
+- fallbacks mensal e de 12 meses consomem o mesmo leitor sem alterar payloads públicos ou o caminho de snapshots/TWR.
+
 ### Proventos relacionados a eventos
 
 - dividendos históricos complementares são normalizados considerando splits e grupamentos posteriores explicitamente publicados;
@@ -100,7 +110,7 @@ A estratégia original da Issue #129, centrada em HG Brasil, foi superada pela d
 
 ### Propagação aos consumidores canônicos
 
-Resumo, Patrimônio, posições atuais, snapshots consolidados, snapshots por classe, performance legada e resultado realizado de Rentabilidade já consomem projeções canônicas. Ainda é necessário revisar os cálculos históricos auxiliares de Rentabilidade e migrar o leitor paralelo de IRPF.
+Resumo, Patrimônio, posições atuais, snapshots consolidados, snapshots por classe, performance legada, resultado realizado e fluxo líquido histórico de Rentabilidade já consomem componentes compartilhados. Ainda é necessário migrar o leitor paralelo de IRPF e revisar se os fallbacks percentuais históricos devem permanecer como compatibilidade ou ser substituídos exclusivamente por snapshots/TWR.
 
 ### Scheduler
 
@@ -125,7 +135,7 @@ A identidade por fonte é determinística, mas ainda falta um estado canônico e
 
 ## Sequência técnica aprovada
 
-1. Validar a integração do realizado de Rentabilidade e revisar os cálculos históricos auxiliares ainda baseados apenas em transações.
+1. Validar a integração do fluxo líquido histórico de Rentabilidade e confirmar a compatibilidade dos retornos mensal e de 12 meses.
 2. Migrar o leitor paralelo de IRPF.
 3. Implementar reconciliação explícita entre fontes e estados de conflito/revisão.
 4. Construir carga histórica auditável e provar idempotência.
@@ -147,4 +157,6 @@ A identidade por fonte é determinística, mas ainda falta um estado canônico e
 - performance legada consome posições projetadas, mas mantém os totais no resumo canônico;
 - posições encerradas não entram em snapshots, mas seu realizado permanece disponível aos consumidores analíticos;
 - Rentabilidade não mantém mais motor próprio de resultado realizado;
+- fluxo líquido aportado é um contrato de caixa e não deve ser alterado por split, grupamento ou bonificação;
+- vendas reduzem o fluxo pelo valor líquido de taxas, inclusive quando convertidas pelo câmbio salvo;
 - adaptadores de posição e snapshot são exclusivamente read-only.
