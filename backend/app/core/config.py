@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     ASYNC_DATABASE_URL: str = "postgresql+asyncpg://sgi:sgi@db:5432/sgi"
     APP_DEBUG: bool = False
     ENVIRONMENT: str = "development"
+    ENABLE_BOOT_MARKET_SYNC: bool = False
 
     SECRET_KEY: str = _DEFAULT_SECRET_KEY
     ALGORITHM: str = "HS256"
