@@ -63,14 +63,27 @@ Cada checkpoint deve registrar:
 - recomendação objetiva do próximo bloco;
 - HEAD remoto esperado.
 
-## Estado inicial deste plano
+## Estado atual do plano
 
-- Suíte conhecida: `1083 passed`, `22 skipped`.
+- Suíte validada antes do primeiro consumidor: `1090 passed`, `22 skipped`.
 - `compileall`: aprovado.
+- Ruff do Bloco 1A: aprovado.
 - Boot de sincronização de mercado: desabilitado por padrão por `ENABLE_BOOT_MARKET_SYNC=false`.
-- Primeiro macrobloco: inventariar e remover os cálculos paralelos de Rentabilidade e IRPF.
+- Reader histórico canônico disponível em `historical_position_projection_reader.py`.
+- Primeiro consumidor migrado: endpoint `GET /{portfolio_id}/irpf/{year}/bens`.
+- Serviço canônico: `irpf_bens_direitos_service.py`.
+- O relatório IRPF completo e `calc_ganhos_capital` ainda permanecem no serviço legado.
+- Renda Fixa continua preservada por adaptação isolada até existir leitor histórico dedicado da classe.
 - Issue-mãe: #227.
 - Issues funcionais imediatas: #151 e #56.
+
+## Próximo bloco objetivo
+
+1. Validar o serviço e o endpoint canônico de Bens e Direitos.
+2. Fazer o orquestrador do relatório completo consumir o novo serviço.
+3. Remover o primeiro cálculo morto de Bens e Direitos de `irpf_service.py`.
+4. Manter ganhos mensais intactos até a caracterização fiscal dedicada.
+5. Sincronizar README, ROADMAP, CHANGELOG e `docs/architecture.md` ao fechar o corte estrutural.
 
 ## Prompt mínimo para nova conversa
 
