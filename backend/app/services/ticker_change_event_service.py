@@ -9,7 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset
 from app.models.asset_alias import AssetAlias
-from app.models.corporate_event import CorporateEvent, CorporateEventStatus, CorporateEventType
+from app.models.corporate_event import (
+    CorporateEvent,
+    CorporateEventStatus,
+    CorporateEventType,
+)
 from app.services.ticker_resolution_service import ResolvedTicker
 
 
