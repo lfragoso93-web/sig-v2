@@ -3,7 +3,6 @@ from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from app.models.transaction import OperationType
 from app.services.canonical_dividend_entitlement import (
     DividendEntitlement,
