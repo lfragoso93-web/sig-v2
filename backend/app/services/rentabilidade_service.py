@@ -35,6 +35,7 @@ from app.services.portfolio_service import (
 )
 from app.services.quotes_service import get_prices
 from app.services.realized_pnl_projection_reader import load_realized_pnl_by_ticker
+from app.services.rentabilidade_cash_flow import calculate_net_contributed
 from app.services.rentabilidade_runtime_policy import utc_today
 
 logger = logging.getLogger(__name__)
@@ -157,7 +158,12 @@ async def _load_transactions_by_ticker(
     return by_ticker, txs
 
 
-async def _calc_invested_up_to(db: AsyncSession, portfolio_id: int, up_to: date) -> float:
+async def _load_net_contributed_up_to(
+    db: AsyncSession,
+    portfolio_id: int,
+    up_to: date,
+) -> float:
+    """Return net contributed cash through ``up_to`` in BRL."""
     result = await db.execute(
         select(Transaction)
         .where(
@@ -166,30 +172,14 @@ async def _calc_invested_up_to(db: AsyncSession, portfolio_id: int, up_to: date)
         )
         .order_by(Transaction.date.asc(), Transaction.id.asc())
     )
-    txs = result.scalars().all()
-
-    total = 0.0
-    for tx in txs:
-        qty = float(tx.quantity or 0)
-        price = float(tx.price or 0)
-        fees = float(tx.fees or 0)
-        op = tx.operation
-        asset_type = normalize_type(tx.asset_type)
-        is_usd = (
-            (getattr(tx, "currency", "BRL") or "BRL").upper() == "USD"
-            or asset_type in _USD_ASSET_TYPES
-        )
-        fx_rate = 1.0
-        if is_usd:
-            saved = getattr(tx, "fx_rate", None)
-            if saved is not None and float(saved or 0) > 0:
-                fx_rate = float(saved)
-        value = qty * price * fx_rate + (fees * fx_rate if op == OperationType.buy else 0)
-        if op == OperationType.buy:
-            total += value
-        elif op == OperationType.sell:
-            total -= qty * price * fx_rate
-    return total
+    transactions = result.scalars().all()
+    return calculate_net_contributed(
+        transactions,
+        buy_operation=OperationType.buy,
+        sell_operation=OperationType.sell,
+        usd_asset_types=_USD_ASSET_TYPES,
+        normalize_asset_type=normalize_type,
+    )
 
 
 async def _positions_enriched_without_rf(db: AsyncSession, portfolio_id: int) -> list[dict]:
@@ -246,14 +236,16 @@ async def _kpis_from_realtime(db: AsyncSession, portfolio_id: int) -> dict:
     try:
         primeiro_dia_mes = today.replace(day=1)
         ultimo_dia_mes_anterior = primeiro_dia_mes - timedelta(days=1)
-        custo_inicio_mes = await _calc_invested_up_to(
+        aporte_liquido_inicio_mes = await _load_net_contributed_up_to(
             db,
             portfolio_id,
             ultimo_dia_mes_anterior,
         )
-        if custo_inicio_mes > 0:
+        if aporte_liquido_inicio_mes > 0:
             retorno_mes_pct = round(
-                (current_value - custo_inicio_mes) / custo_inicio_mes * 100,
+                (current_value - aporte_liquido_inicio_mes)
+                / aporte_liquido_inicio_mes
+                * 100,
                 4,
             )
     except Exception as exc:  # noqa: BLE001 - legacy fallback must remain non-blocking
@@ -261,10 +253,16 @@ async def _kpis_from_realtime(db: AsyncSession, portfolio_id: int) -> dict:
 
     try:
         inicio_12m = today - timedelta(days=365)
-        custo_inicio_12m = await _calc_invested_up_to(db, portfolio_id, inicio_12m)
-        if custo_inicio_12m > 0:
+        aporte_liquido_inicio_12m = await _load_net_contributed_up_to(
+            db,
+            portfolio_id,
+            inicio_12m,
+        )
+        if aporte_liquido_inicio_12m > 0:
             retorno_12m_pct = round(
-                (current_value - custo_inicio_12m) / custo_inicio_12m * 100,
+                (current_value - aporte_liquido_inicio_12m)
+                / aporte_liquido_inicio_12m
+                * 100,
                 4,
             )
     except Exception as exc:  # noqa: BLE001 - legacy fallback must remain non-blocking
@@ -435,25 +433,27 @@ async def get_rentabilidade_por_ativo(
             }
         )
 
-    for idx, v in enumerate(await get_fixed_income_valuations(db, portfolio_id)):
+    for idx, valuation in enumerate(
+        await get_fixed_income_valuations(db, portfolio_id)
+    ):
         result.append(
             {
-                "ticker": v.key.name,
-                "name": v.key.name,
+                "ticker": valuation.key.name,
+                "name": valuation.key.name,
                 "asset_type": RENDA_FIXA_TYPE,
-                "quantity": float(v.applications_count),
-                "avg_price": float(v.invested_amount),
-                "current_price": float(v.current_value),
-                "total_invested": float(v.invested_amount),
-                "current_value": float(v.current_value),
-                "unrealized_pnl": float(v.income_amount),
-                "unrealized_pct": float(v.income_pct),
+                "quantity": float(valuation.applications_count),
+                "avg_price": float(valuation.invested_amount),
+                "current_price": float(valuation.current_value),
+                "total_invested": float(valuation.invested_amount),
+                "current_value": float(valuation.current_value),
+                "unrealized_pnl": float(valuation.income_amount),
+                "unrealized_pct": float(valuation.income_pct),
                 "realized_pnl": 0.0,
-                "total_pnl": float(v.income_amount),
-                "total_pct": float(v.income_pct),
-                "total_pnl_pct": float(v.income_pct),
+                "total_pnl": float(valuation.income_amount),
+                "total_pct": float(valuation.income_pct),
+                "total_pnl_pct": float(valuation.income_pct),
                 "is_open": True,
-                "applications_count": v.applications_count,
+                "applications_count": valuation.applications_count,
                 "sort_index": idx,
             }
         )
@@ -497,7 +497,7 @@ async def get_rentabilidade_por_ativo(
             }
         )
 
-    result.sort(key=lambda x: (not x["is_open"], -abs(x["total_pnl"])))
+    result.sort(key=lambda item: (not item["is_open"], -abs(item["total_pnl"])))
     await cache_set(cache_key, result, ttl=_CACHE_TTL)
     return result
 
@@ -514,64 +514,64 @@ async def get_rentabilidade_por_classe(
     ativos = await get_rentabilidade_por_ativo(db, portfolio_id)
     agg: dict[str, dict] = {}
     for item in ativos:
-        at = str(item.get("asset_type") or "OUTROS").upper()
-        if at not in agg:
-            agg[at] = {
-                "asset_type": at,
+        asset_type = str(item.get("asset_type") or "OUTROS").upper()
+        if asset_type not in agg:
+            agg[asset_type] = {
+                "asset_type": asset_type,
                 "total_invested": 0.0,
                 "current_value": 0.0,
                 "unrealized_pnl": 0.0,
                 "realized_pnl": 0.0,
                 "count": 0,
             }
-        agg[at]["total_invested"] += item["total_invested"]
-        agg[at]["current_value"] += item["current_value"]
-        agg[at]["unrealized_pnl"] += item["unrealized_pnl"]
-        agg[at]["realized_pnl"] += item["realized_pnl"]
-        agg[at]["count"] += 1
+        agg[asset_type]["total_invested"] += item["total_invested"]
+        agg[asset_type]["current_value"] += item["current_value"]
+        agg[asset_type]["unrealized_pnl"] += item["unrealized_pnl"]
+        agg[asset_type]["realized_pnl"] += item["realized_pnl"]
+        agg[asset_type]["count"] += 1
 
-    total_portfolio = sum(v["current_value"] for v in agg.values())
+    total_portfolio = sum(value["current_value"] for value in agg.values())
     result: list[dict] = []
-    for at, v in agg.items():
-        total_pnl = v["unrealized_pnl"] + v["realized_pnl"]
+    for asset_type, value in agg.items():
+        total_pnl = value["unrealized_pnl"] + value["realized_pnl"]
         unrealized_pct = (
             _safe_pct(
-                Decimal(str(v["unrealized_pnl"])),
-                Decimal(str(v["total_invested"])),
+                Decimal(str(value["unrealized_pnl"])),
+                Decimal(str(value["total_invested"])),
             )
-            if v["total_invested"]
+            if value["total_invested"]
             else 0.0
         )
         total_pct = (
             _safe_pct(
                 Decimal(str(total_pnl)),
-                Decimal(str(v["total_invested"])),
+                Decimal(str(value["total_invested"])),
             )
-            if v["total_invested"]
+            if value["total_invested"]
             else 0.0
         )
         allocation_pct = (
-            round(v["current_value"] / total_portfolio * 100, 4)
+            round(value["current_value"] / total_portfolio * 100, 4)
             if total_portfolio
             else 0.0
         )
         result.append(
             {
-                "asset_type": at,
-                "total_invested": round(v["total_invested"], 2),
-                "current_value": round(v["current_value"], 2),
-                "unrealized_pnl": round(v["unrealized_pnl"], 2),
+                "asset_type": asset_type,
+                "total_invested": round(value["total_invested"], 2),
+                "current_value": round(value["current_value"], 2),
+                "unrealized_pnl": round(value["unrealized_pnl"], 2),
                 "unrealized_pct": unrealized_pct,
-                "realized_pnl": round(v["realized_pnl"], 2),
+                "realized_pnl": round(value["realized_pnl"], 2),
                 "total_pnl": round(total_pnl, 2),
                 "total_pct": total_pct,
                 "total_pnl_pct": total_pct,
                 "allocation_pct": allocation_pct,
                 "alocacao_pct": allocation_pct,
-                "count": v["count"],
+                "count": value["count"],
             }
         )
 
-    result.sort(key=lambda x: -x["current_value"])
+    result.sort(key=lambda item: -item["current_value"])
     await cache_set(cache_key, result, ttl=_CACHE_TTL)
     return result
