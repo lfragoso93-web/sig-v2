@@ -3,7 +3,6 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from app.services.backup_service import _utc_now, list_backups
 
 
