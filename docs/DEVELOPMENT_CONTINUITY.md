@@ -33,7 +33,7 @@ Até o encerramento da Issue #227:
 3. Eventos corporativos — #129 e partes da #130.
 4. IBOV e TWR — #150 e #149.
 5. Ingestão, seeds e rebuild determinísticos — #158, #216 e #226.
-6. Qualidade estrutural e timestamps UTC — #192.
+6. Qualidade estrutural e timestamps UTC — #192 concluída.
 7. Certificação integral antes da primeira carga real.
 
 ## Checklist de início de conversa
