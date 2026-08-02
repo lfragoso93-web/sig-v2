@@ -247,7 +247,7 @@ def custom_openapi() -> dict[str, Any]:
     schema.setdefault("components", {}).setdefault("securitySchemes", {})
     schema["components"]["securitySchemes"]["HTTPBearer"] = {
         "type": "http",
-        "scheme": "http",
+        "scheme": "bearer",
         "bearerFormat": "JWT",
         "description": "Cole aqui o access_token obtido em POST /api/v1/auth/login",
     }
