@@ -1,6 +1,6 @@
 # Operação — SGI v2
 
-> Última atualização: 22/07/2026
+> Última atualização: 01/08/2026
 
 Este guia descreve os comandos de manutenção, validação e diagnóstico do SGI v2.
 
@@ -16,6 +16,24 @@ Logs do backend:
 ```bash
 docker compose logs -f backend
 ```
+
+### Sincronização de mercado no boot
+
+A recriação do container não executa mais seed, backfill de preços, atualização do Tesouro ou importação de benchmarks por padrão. O bootstrap externo ficou opt-in para evitar consumo desnecessário das APIs durante builds e testes locais.
+
+Comportamento padrão:
+
+```env
+ENABLE_BOOT_MARKET_SYNC=false
+```
+
+Para uma inicialização deliberada com sincronização automática:
+
+```env
+ENABLE_BOOT_MARKET_SYNC=true
+```
+
+Essa flag controla somente a sequência automática iniciada pelo `lifespan` do backend. As CLIs operacionais, o `full_market_rebuild` manual e os jobs do scheduler permanecem independentes e devem ser executados apenas quando necessários.
 
 ## Regras operacionais
 
