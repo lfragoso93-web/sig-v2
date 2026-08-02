@@ -15,8 +15,8 @@ const NAV_ITEMS = [
   { to: '/carteira/rentabilidade',  icon: TrendingUp,      label: 'Rentabilidade' },
   { to: '/carteira/transacoes',     icon: ArrowLeftRight,  label: 'Transações'    },
   { to: '/carteira/proventos',      icon: Landmark,        label: 'Proventos'     },
-  { to: '/metas',                   icon: Target,          label: 'Metas'         },
-  { to: '/irpf',                    icon: FileText,        label: 'IRPF'          },
+  { to: '/carteira/metas',          icon: Target,          label: 'Metas'         },
+  { to: '/carteira/irpf',           icon: FileText,        label: 'IRPF'          },
   { to: '/carteira/configuracoes',  icon: Settings,        label: 'Configurações' },
 ]
 
