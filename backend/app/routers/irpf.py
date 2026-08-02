@@ -18,12 +18,12 @@ from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.irpf import BemDireito, GanhoCapitalMensal, IRPFReportOut
 from app.services.irpf_bens_direitos_service import calc_bens_direitos
+from app.services.irpf_report_service import generate_irpf_report
 from app.services.irpf_service import (
     calc_ganhos_capital,
     calc_rendimentos,
     generate_irpf_csv,
     generate_irpf_pdf,
-    generate_irpf_report,
 )
 
 router = APIRouter(tags=["irpf"])
