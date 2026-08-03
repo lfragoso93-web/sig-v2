@@ -1,12 +1,10 @@
 # Arquitetura — SGI v2
 
-> Última atualização: 22/07/2026
-
-Este documento descreve a arquitetura atual do SGI v2 após a consolidação do modelo **DB-first**, dos contratos financeiros canônicos e dos controles de reconstrução pré-produção.
+> Última atualização: 02/08/2026
 
 ## Objetivo
 
-O sistema calcula patrimônio, resultado, proventos e rentabilidade com base em dados persistidos, versionados e auditáveis. Provedores externos preenchem o banco por jobs ou comandos operacionais; páginas, KPIs e snapshots não devem consultar provedores durante o cálculo financeiro.
+O SGI v2 calcula patrimônio, posição, custo, resultado, proventos e rentabilidade a partir de dados persistidos e contratos canônicos. Provedores externos pertencem a adapters, sincronizadores, jobs ou CLIs operacionais; páginas, KPIs e relatórios não consultam provedores durante o cálculo financeiro.
 
 ## Fluxo financeiro principal
 
@@ -15,169 +13,159 @@ CSV / lançamentos manuais
         ↓
 transactions + fixed_income_investments + corporate_events
         ↓
-catálogo canônico de ativos
+projeções canônicas de posição, custo e realizações
         ↓
-COTAHIST B3 | Tesouro oficial | séries macro | provedores normalizados
-        ↓
-asset_prices + rate_history + proventos canônicos
+assets + asset_prices + rate_history + asset_dividends
         ↓
 valuation dedicado por classe
         ↓
 PortfolioSnapshot + PortfolioClassSnapshot
         ↓
-summary.v2 + rentabilidade.v2 + posições canônicas
+summary.v2 + rentabilidade.v2 + leitores históricos
         ↓
-Resumo / Patrimônio / Rentabilidade / Proventos / demais módulos
+Resumo / Patrimônio / Rentabilidade / Proventos / Metas / IRPF
 ```
 
 ## Princípios obrigatórios
 
 ### DB-first
 
-Serviços financeiros leem dados persistidos. Chamadas externas pertencem a sincronizadores, jobs, adapters ou comandos de manutenção.
+Serviços financeiros leem dados persistidos. Chamadas externas não participam do cálculo de posição, custo, resultado ou elegibilidade.
 
-### Contrato financeiro único
+### Contratos financeiros únicos
 
-`summary.v2` e `rentabilidade.v2` são as fontes oficiais de leitura financeira. O frontend valida esses contratos e não recompõe patrimônio, resultado ou rentabilidade localmente.
+`summary.v2` e `rentabilidade.v2` são as fontes públicas de leitura consolidada. Posição histórica, custo e resultado realizado são fornecidos por projetores compartilhados, não por reconstruções locais em cada módulo.
+
+### Separação contábil e fiscal
+
+A projeção contábil calcula posição, custo e realização. O IRPF acrescenta apenas semântica fiscal: Day Trade, Swing Trade, isenções, alíquotas, compensações, retenções e apresentação.
 
 ### Separação temporal
 
-- valuation intradiário representa o estado atual da carteira;
-- snapshots representam performance fechada em uma data;
-- consolidado e classes só são reconciliados quando compartilham a mesma `snapshot_date`;
-- ausência de TWR é representada por `null`, nunca por retorno simples.
+- valuation intradiário representa o estado atual;
+- snapshots representam performance fechada;
+- leituras históricas usam data de corte explícita;
+- ausência de TWR é `null`, nunca retorno simples disfarçado.
 
 ### Idempotência
 
-Reexecutar seed, sincronização, materialização ou rebuild deve produzir o mesmo estado lógico sem duplicar preços, proventos, posições ou snapshots.
+Seeds, sincronizações e rebuilds devem produzir o mesmo estado lógico sem duplicar preços, eventos, posições ou snapshots.
 
 ### Qualidade explícita
 
-Cobertura parcial, preços ausentes, retornos estimados, fonte e data de referência devem aparecer nos contratos. Ausência ou falha não pode ser convertida silenciosamente em zero.
+Cobertura parcial, preços ausentes, retornos estimados, fonte e data de referência permanecem visíveis. Ausência ou falha não vira zero silenciosamente.
 
-### Conexões curtas
+### Tempo UTC explícito
 
-Chamadas HTTP não mantêm transações PostgreSQL abertas:
+- serviços operacionais usam UTC timezone-aware;
+- colunas `DateTime(timezone=False)` usam UTC naive por helper explícito;
+- `datetime.utcnow()` não é permitido no runtime.
+
+## Projeções canônicas
+
+### Posição e custo
+
+`position_timeline_projection.py` é o núcleo cronológico puro. Readers de banco carregam transações e eventos e aplicam a data de corte.
 
 ```text
-ler estado mínimo
-fechar sessão
-consultar provedor
-abrir sessão curta
-persistir em lote
-commit
+transactions + corporate_events
+        ↓
+position_timeline_projection
+        ↓
+historical_position_projection_reader
+        ↓
+posições abertas + custo + timelines
 ```
 
-## Módulos centrais
+### Resultado realizado
 
-| Módulo | Responsabilidade |
+`realized_pnl_projection_reader.py` expõe realizações derivadas da mesma projeção cronológica. Rentabilidade e IRPF devem reconciliar sobre o mesmo conjunto de operações.
+
+### Snapshots
+
+`snapshot_position_projection.py` e `class_snapshot_position_projection.py` alimentam os snapshots sem reconstruções paralelas de posição.
+
+## IRPF
+
+A arquitetura atual separa responsabilidades:
+
+| Serviço | Responsabilidade |
 |---|---|
-| `transactions` | Fonte contábil das operações do usuário |
-| `fixed_income_investments` | Aplicações e regras específicas de Renda Fixa |
-| `corporate_events` | Fundação dos eventos que afetam identidade, quantidade e custo |
-| `assets` | Catálogo canônico, aliases e metadados |
-| `asset_prices` | Histórico diário persistido de preços |
-| `rate_history` | Séries macroeconômicas persistidas |
-| `asset_price_coverage_service` | Auditoria de cobertura por ativo |
-| `asset_price_gap_sync_service` | Preenchimento de lacunas históricas |
-| `dividend_*` | Eventos globais e elegibilidade calculada sob demanda |
-| `treasury_price_history_service` | Histórico oficial dedicado do Tesouro Direto |
-| valuation por classe | Patrimônio, custo e resultado atual por regra financeira específica |
-| `portfolio_snapshot_twr_service` | Snapshots DB-only e cadeia TWR das classes suportadas |
-| `full_market_rebuild_service` | Rebuild operacional de dados de mercado e snapshots |
+| `irpf_bens_direitos_service.py` | posição e custo em 31/12 via leitor histórico |
+| `irpf_tax_service.py` | regras fiscais mensais ainda em caracterização |
+| `irpf_report_service.py` | composição e persistência do relatório |
+| `irpf_export_service.py` | PDF e CSV |
+| `irpf_service.py` | fachada temporária de compatibilidade |
+
+A implementação antiga de Bens e Direitos e o orquestrador duplicado foram removidos. O próximo corte deve caracterizar ganhos de capital mensais antes de migrar regras fiscais.
+
+## Rentabilidade
+
+Resultado realizado, capital líquido aportado e proventos já usam leitores compartilhados. Consumidores remanescentes de posição, custo, patrimônio e PnL não realizado devem ser migrados antes da remoção física da fachada legada (#151).
 
 ## Proventos
 
-O pipeline canônico separa:
-
-1. descoberta do evento global;
-2. persistência e normalização;
-3. elegibilidade da carteira na data de corte;
-4. projeção do direito sob demanda;
-5. reconhecimento financeiro derivado pela data de pagamento.
-
-Eventos não monetários permanecem rastreáveis, mas não entram nos agregados quando `is_cash=false`.
-
-## Pré-produção e reconstrução
-
-A reconstrução completa é diferente do `full_market_rebuild`. Ela protege dados de negócio antes de limpar dados reconstruíveis.
+Eventos pertencem ao ativo e são persistidos exclusivamente em `asset_dividends`.
 
 ```text
-pre-prod-inventory.v2
+provedores normalizados
         ↓
-pre-prod-backup.v3 + restore isolado
+asset_dividends
         ↓
-pre-prod-cleanup-impact.v2
+histórico de posições na data de corte
         ↓
-pre-prod-export.v1
+direito calculado sob demanda
         ↓
-limpeza controlada ainda pendente
-        ↓
-seeds canônicos
-        ↓
-reimportação da carteira
-        ↓
-rebuild de posições e snapshots
-        ↓
-reconciliação financeira final
+reconhecimento financeiro por data de pagamento
 ```
 
-### Classificação atual
+Não existe materialização ativa de direitos por carteira. As tabelas físicas legadas aguardam contração controlada na janela da #158.
 
-- 11 tabelas preservadas;
-- 3 tabelas exportadas antes da limpeza;
-- 10 tabelas reconstruíveis;
-- nenhuma tabela não classificada;
-- nenhum achado bloqueante na validação real.
+## Eventos corporativos
 
-As tabelas exportáveis são `transactions`, `fixed_income_investments` e `corporate_events`.
+O motor canônico trata splits, grupamentos, bonificações e subscrições independentemente do fornecedor. Eventos preservam identidade, quantidade e custo conforme suas regras; adapters apenas normalizam payloads externos.
 
-### Garantias já consolidadas
+## Navegação de carteira
 
-- inventário e exportação somente leitura;
-- backup e inventário no mesmo snapshot `REPEATABLE READ READ ONLY`;
-- checksum SHA-256;
-- restore apenas em banco vazio e isolado;
-- gate de foreign keys e ciclos;
-- artefatos versionados e sem sobrescrita;
-- normalização de `ordinal_position` na projeção CSV;
-- zero escritas na origem durante inventário, backup, impacto e exportação.
-
-## Scheduler diário
-
-A dependência lógica deve ser preservada:
+Módulos dependentes da carteira selecionada ficam sob `/carteira`:
 
 ```text
-sincronizar catálogo e preços
-        ↓
-atualizar Tesouro e benchmarks
-        ↓
-sincronizar eventos globais de proventos
-        ↓
-reconstruir snapshots
-        ↓
-servir KPIs canônicos
+/carteira
+├── patrimonio
+├── rentabilidade
+├── transacoes
+├── proventos
+├── metas
+├── irpf
+└── configuracoes
 ```
 
-## Tipos de ativos
+`/metas` e `/irpf` são aliases temporários com redirect `replace` para compatibilidade.
 
-| Classe | Tratamento |
-|---|---|
-| Ações, ETFs nacionais e BDRs | Histórico em `asset_prices`, prioritariamente B3 COTAHIST |
-| FIIs | Histórico persistido e coleta específica de proventos |
-| Stocks e ETFs internacionais | Adapter internacional com fallback controlado |
-| Cripto | Histórico persistido; roteamento definitivo ainda pendente |
-| Tesouro Direto | Catálogo, preços e valuation dedicados |
-| Renda Fixa | Motor de accrual/indexador, sem cotação genérica |
+## Scheduler, seeds e rebuild
 
-## Pendências arquiteturais conhecidas
+O boot não executa sincronização de mercado por padrão. Seeds, sincronizações externas e rebuilds são explicitamente opt-in.
 
-1. Implementar a limpeza executável e concluir o rebuild pré-produção (#158).
-2. Remover o serviço legado de rentabilidade e caches obsoletos (#151).
-3. Materializar o histórico persistido do IBOV (#150).
-4. Implementar TWR diário dedicado, separando Tesouro e Renda Fixa (#149).
-5. Consolidar o motor de eventos corporativos independente do fornecedor (#129).
-6. Evoluir adapters brapi v2 sem expor payloads de fornecedor ao domínio (#130).
-7. Consolidar provider registry por capacidade antes da configuração dinâmica (#127).
-8. Migrar timestamps UTC legados para objetos timezone-aware (#192).
-9. Evoluir locks em memória para locks distribuídos antes de múltiplas réplicas.
+Até o encerramento da Issue #227:
+
+- não importar carteiras reais;
+- não criar usuários reais;
+- usar bancos descartáveis e fixtures;
+- não retomar a certificação da #158;
+- não executar automaticamente migrations físicas de contração.
+
+## Qualidade validada
+
+- Backend: `1097 passed`, `22 skipped`, zero warnings.
+- Ruff e `compileall`: aprovados.
+- Frontend: 86 testes, typecheck, lint e build aprovados.
+
+## Pendências arquiteturais
+
+1. Caracterizar e migrar ganhos de capital mensais do IRPF (#56).
+2. Concluir consumidores de Rentabilidade e remover legado (#151).
+3. Consolidar eventos corporativos e adapters (#129, #130 e #127).
+4. Materializar histórico persistido do IBOV (#150).
+5. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
+6. Retomar Proventos, importação e rebuild somente após os gates #158, #216, #226 e #227.
+7. Evoluir locks em memória para locks distribuídos antes de múltiplas réplicas.
