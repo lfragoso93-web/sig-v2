@@ -43,6 +43,7 @@ O SGI v2 está em consolidação arquitetural antes de receber carteiras e usuá
 - Bens e Direitos do IRPF consome posição histórica na data de corte.
 - Regras fiscais, relatório e exportação do IRPF estão separados por responsabilidade.
 - Proventos pertencem ao ativo e são persistidos em `asset_dividends`; direitos de carteira são derivados sob demanda.
+- O contrato operacional vigente de seed de Proventos é `pre-prod-dividends-seed.v2`, com escrita exclusiva em `asset_dividends` e sem materialização por carteira.
 - Serviços operacionais usam UTC aware; defaults ORM `timezone=False` usam UTC naive explícito.
 
 ### Navegação por carteira
@@ -100,7 +101,7 @@ Rotas canônicas:
 
 Somente após os gates anteriores:
 
-- [ ] Executar duas rodadas reais do seed de Proventos v2 (#226).
+- [ ] Executar duas rodadas reais do contrato `pre-prod-dividends-seed.v2` (#226).
 - [ ] Reconciliar #158 e #216.
 - [ ] Importar CSV real.
 - [ ] Reconstruir posições e snapshots.
