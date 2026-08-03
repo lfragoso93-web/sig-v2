@@ -98,12 +98,21 @@ IRPF: classificação fiscal, isenções, alíquotas e compensações
 
 ### Bloco D — migração do IRPF
 
+O desenho da integração por realização está detalhado em
+`IRPF_CANONICAL_REALIZED_INTEGRATION_DESIGN.md`.
+
 1. Migrar Bens e Direitos para posição/custo na data de corte — concluído.
 2. Inventariar consumidores, reconstruções paralelas e regras fiscais —
    concluído, sem alteração de comportamento.
 3. Caracterizar ganhos mensais, Day Trade/Swing Trade, isenção, prejuízos,
-   retenções, custos, classes, eventos e câmbio — pendente.
-4. Migrar ganho realizado para o leitor canônico — pendente.
+   retenções, custos, classes, eventos e câmbio — baseline de posição, custo,
+   resultado mensal, detecção Day Trade, operações intercaladas, sobra Swing e
+   isolamento por ticker e fronteiras atuais da isenção concluídos; casamento
+   quantitativo intradiário, correção/compensação de prejuízos, segregação das
+   bases por classe, integração canônica de eventos e câmbio, remoção do
+   fallback cambial `1.0` e implementação de retenções pendentes.
+4. Baixa canônica detalhada e reader por período — concluídos; migração da
+   origem contábil de `calc_ganhos_capital` pendente.
 5. Manter no IRPF apenas:
    - Day Trade versus Swing Trade;
    - classificação por classe;

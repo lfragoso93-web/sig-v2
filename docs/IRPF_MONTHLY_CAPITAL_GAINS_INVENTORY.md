@@ -1,6 +1,6 @@
 # Inventário de ganhos de capital mensais do IRPF
 
-> Data: 02/08/2026
+> Data: 03/08/2026
 >
 > Issue: #56
 >
@@ -94,6 +94,86 @@ Os itens abaixo descrevem o código vigente, não regras fiscais validadas:
 | Eventos | split, grupamento, bonificação, troca de ticker e subscrição exercida |
 | Câmbio | taxa persistida, taxa ausente e proibição de chamada externa/fallback 1.0 |
 | Retenções | IRRF por categoria e reflexo no valor a recolher |
+
+## Checkpoint de caracterização
+
+Os testes de baseline agora cobrem compra e venda, venda parcial, múltiplas
+compras, custo médio ponderado, taxas, zeragem, recompra, meses distintos,
+lucro, prejuízo e arredondamento. O primeiro recorte de Day Trade também ficou
+congelado sem corrigir a regra vigente:
+
+- compra e venda integral no mesmo dia;
+- múltiplas vendas no mesmo dia e agregação mensal do resultado Day Trade;
+- taxas de compra incorporadas ao custo médio e taxas de venda deduzidas do
+  resultado;
+- venda parcialmente coberta por posição anterior e por compra intradiária.
+
+O último cenário comprova a limitação já inventariada: a venda inteira é
+classificada como Day Trade pelo par `(data, ticker)`, sem casamento de
+quantidades e sem parcela Swing Trade. A eventual correção depende de completar
+a caracterização fiscal e de validar a regra desejada; este checkpoint não
+altera comportamento de produção.
+
+O segundo recorte de Day Trade/Swing Trade acrescenta:
+
+- saldo de uma compra intradiária vendido no dia seguinte como Swing Trade;
+- coexistência das duas categorias no mesmo mês e soma das respectivas bases;
+- compras e vendas intercaladas usando o custo médio contábil corrente;
+- isolamento da detecção por ticker, inclusive quando os ativos são negociados
+  na mesma data;
+- coexistência de prejuízo Day Trade e lucro Swing Trade sem compensação entre
+  categorias no comportamento vigente.
+
+Os testes fiscais mais específicos foram isolados em
+`test_irpf_day_trade_characterization.py` e importam o serviço responsável
+diretamente. A suíte de compatibilidade continua exercitando a fachada pública
+temporária em `test_irpf_service.py`.
+
+O primeiro recorte de isenção e prejuízos congela ainda:
+
+- vendas de ações abaixo e exatamente no limite mensal de R$ 20 mil;
+- tributação integral do lucro quando o total vendido supera o limite;
+- agregação do limite entre tickers de ações no mesmo mês;
+- ausência de isenção para ETFs e FIIs no comportamento vigente;
+- ausência de transporte do prejuízo Swing para um mês posterior lucrativo.
+
+O último item confirma uma divergência relevante já visível na implementação:
+o prejuízo é limitado a zero antes de alimentar o acumulador e, portanto, não é
+compensado no mês seguinte. Os testes registram essa saída como baseline, não
+como regra fiscal aprovada. A correção somente poderá ocorrer após validação da
+regra esperada e deverá ser uma mudança deliberada de comportamento.
+
+Os helpers de transações e sessão simulada usados pelos recortes fiscais foram
+centralizados em `irpf_characterization_helpers.py`, evitando que cada matriz
+de caracterização mantenha sua própria infraestrutura de teste.
+
+O segundo recorte de isenção, perdas e retenções registra também:
+
+- ausência de transporte do prejuízo Day Trade para um mês posterior;
+- BDR incluído no mesmo grupo de isenção mensal de ações pelo código vigente;
+- retenções zeradas tanto no consolidado mensal quanto em cada venda;
+- mistura de ação isenta e ETF tributável na mesma base Swing Trade.
+
+Nesse último cenário, o total vendido da ação é subtraído do lucro combinado
+das duas classes. Assim, a venda de ação isenta pode zerar também a base do ETF,
+embora a venda do ETF permaneça marcada como não isenta. Essa agregação cruzada
+é uma divergência crítica a corrigir depois da validação fiscal: classes com
+tratamento distinto não devem compartilhar uma dedução indiferenciada.
+
+O recorte de bordas contábeis e câmbio confirma por testes que:
+
+- venda acima da posição usa o custo médio disponível para toda a quantidade e
+  não produz erro explícito;
+- operações internacionais convertem cada compra e venda pela data da própria
+  transação antes de calcular custo e resultado;
+- ausência da cotação USD/BRL ainda vira silenciosamente taxa `1.0`;
+- ganhos de capital consultam somente transações e não carregam eventos
+  corporativos na fronteira atual.
+
+Os três últimos pontos impedem considerar a reconstrução local DB-first. A
+migração deverá receber câmbio persistido e realizações já ajustadas por eventos
+dos projetores compartilhados; o domínio fiscal não deve buscar cotação nem
+reaplicar eventos por conta própria.
 
 ## Ordem segura de migração
 

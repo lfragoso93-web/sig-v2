@@ -27,6 +27,31 @@ class PositionMovement:
     unit_price: Decimal
     fees: Decimal = Decimal(0)
     total_cost_original_currency: Decimal = Decimal(0)
+    transaction_id: int | str | None = None
+    ticker: str = ""
+    asset_type: str = ""
+    currency: str = "BRL"
+    unit_price_original_currency: Decimal | None = None
+
+
+@dataclass(frozen=True)
+class CanonicalRealizedDisposal:
+    """Baixa financeira auditável, sem classificação ou regra fiscal."""
+
+    transaction_id: int | str | None
+    ticker: str
+    asset_type: str
+    disposal_date: date
+    quantity_requested: Decimal
+    quantity_disposed: Decimal
+    unit_proceeds_brl: Decimal
+    gross_proceeds_brl: Decimal
+    cost_basis_brl: Decimal
+    fees_brl: Decimal
+    realized_pnl_brl: Decimal
+    currency: str
+    gross_proceeds_original_currency: Decimal | None
+    applied_event_ids: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -37,6 +62,7 @@ class PositionTimelineProjection:
     realized_pnl: Decimal
     applied_event_ids: tuple[str, ...]
     subscription_event_ids: tuple[str, ...]
+    realized_disposals: tuple[CanonicalRealizedDisposal, ...] = ()
 
     @property
     def average_price(self) -> Decimal:
@@ -71,6 +97,7 @@ def project_position_timeline(
     realized_pnl = Decimal(0)
     applied: list[str] = []
     subscriptions: list[str] = []
+    disposals: list[CanonicalRealizedDisposal] = []
 
     timeline: list[tuple[date, int, str, object]] = []
     for index, movement in enumerate(movements):
@@ -94,7 +121,33 @@ def project_position_timeline(
             if item.kind == PositionMovementKind.SELL and quantity > 0:
                 sold = min(item.quantity, quantity)
                 average_price = total_cost / quantity
-                realized_pnl += sold * (item.unit_price - average_price) - item.fees
+                cost_basis = sold * average_price
+                gross_proceeds = sold * item.unit_price
+                disposal_pnl = gross_proceeds - cost_basis - item.fees
+                realized_pnl += disposal_pnl
+                original_proceeds = (
+                    sold * item.unit_price_original_currency
+                    if item.unit_price_original_currency is not None
+                    else None
+                )
+                disposals.append(
+                    CanonicalRealizedDisposal(
+                        transaction_id=item.transaction_id,
+                        ticker=item.ticker,
+                        asset_type=item.asset_type,
+                        disposal_date=item.movement_date,
+                        quantity_requested=item.quantity,
+                        quantity_disposed=sold,
+                        unit_proceeds_brl=item.unit_price,
+                        gross_proceeds_brl=gross_proceeds,
+                        cost_basis_brl=cost_basis,
+                        fees_brl=item.fees,
+                        realized_pnl_brl=disposal_pnl,
+                        currency=item.currency,
+                        gross_proceeds_original_currency=original_proceeds,
+                        applied_event_ids=tuple(applied),
+                    )
+                )
                 ratio = sold / quantity
                 total_cost -= total_cost * ratio
                 total_cost_original_currency -= total_cost_original_currency * ratio
@@ -121,4 +174,5 @@ def project_position_timeline(
         realized_pnl=realized_pnl,
         applied_event_ids=tuple(applied),
         subscription_event_ids=tuple(subscriptions),
+        realized_disposals=tuple(disposals),
     )
