@@ -75,12 +75,12 @@ jobs:
           fi
 
       - name: Upload pytest failure log
-        if: failure()
+        if: failure() && hashFiles('backend/pytest.log') != ''
         uses: actions/upload-artifact@v7
         with:
           name: pytest-failure-log
           path: backend/pytest.log
-          if-no-files-found: error
+          if-no-files-found: ignore
           retention-days: 3
 
   frontend-quality:
