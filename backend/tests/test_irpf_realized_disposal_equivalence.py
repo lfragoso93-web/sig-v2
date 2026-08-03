@@ -14,6 +14,7 @@ import pytest
 from app.models.transaction import OperationType
 from app.services.irpf_tax_service import calc_ganhos_capital
 from app.services.snapshot_position_projection import project_transaction_timelines
+
 from tests.irpf_characterization_helpers import db_with_transactions, transaction
 
 
@@ -93,7 +94,7 @@ def _canonical_disposals(transactions: list) -> tuple:
                     transaction_id=2,
                 ),
             ],
-            Decimal("20"),
+            Decimal(20),
         ),
         (
             [
@@ -130,7 +131,7 @@ def _canonical_disposals(transactions: list) -> tuple:
                     transaction_id=2,
                 ),
             ],
-            Decimal("20"),
+            Decimal(20),
         ),
         (
             [
@@ -182,7 +183,7 @@ def _canonical_disposals(transactions: list) -> tuple:
                     transaction_id=3,
                 ),
             ],
-            Decimal("30"),
+            Decimal(30),
         ),
         (
             [
@@ -249,7 +250,7 @@ def _canonical_disposals(transactions: list) -> tuple:
                     transaction_id=4,
                 ),
             ],
-            Decimal("25"),
+            Decimal(25),
         ),
         (
             [
@@ -290,7 +291,7 @@ def _canonical_disposals(transactions: list) -> tuple:
                     transaction_id=2,
                 ),
             ],
-            Decimal("15"),
+            Decimal(15),
         ),
     ],
 )
@@ -363,9 +364,9 @@ async def test_sale_above_position_exposes_the_expected_migration_difference() -
     )[0]
     disposal = _canonical_disposals(canonical_transactions)[0]
 
-    assert Decimal(str(legacy_month.lucro_swing_trade)) == Decimal("150")
-    assert disposal.quantity_requested == Decimal("15")
-    assert disposal.quantity_disposed == Decimal("10")
-    assert disposal.realized_pnl_brl == Decimal("100")
+    assert Decimal(str(legacy_month.lucro_swing_trade)) == Decimal(150)
+    assert disposal.quantity_requested == Decimal(15)
+    assert disposal.quantity_disposed == Decimal(10)
+    assert disposal.realized_pnl_brl == Decimal(100)
 
     assert Decimal(str(legacy_month.lucro_swing_trade)) != disposal.realized_pnl_brl
