@@ -32,7 +32,7 @@ Novos links internos, menus, breadcrumbs e testes não devem apontar para os ali
 - Favoritos e links antigos continuam funcionando temporariamente.
 - Testes estruturais impedem o retorno de links internos para `/metas` e `/irpf`.
 
-## Validação
+## Validação final
 
 Checkpoint de 02/08/2026:
 
@@ -42,4 +42,4 @@ Checkpoint de 02/08/2026:
 - ESLint: aprovado com zero warnings;
 - build Vite de produção: aprovado.
 
-Issue #228 concluída.
+Issue #228 concluída. Qualquer novo módulo dependente da carteira deve seguir esta hierarquia.
