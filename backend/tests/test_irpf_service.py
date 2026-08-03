@@ -3,6 +3,8 @@ from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models.transaction import OperationType
 from app.services.canonical_dividend_entitlement import (
     DividendEntitlement,
@@ -18,7 +20,6 @@ from app.services.irpf_service import (
     generate_irpf_csv,
     generate_irpf_pdf,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def _transaction(
