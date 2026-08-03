@@ -187,7 +187,7 @@ async def list_items(
         reverse=True,
     )
     start = (page - 1) * page_size
-    page_items = visible[start : start + page_size]
+    page_items = visible[start:start + page_size]
     return {
         "total": len(visible),
         "page": page,
