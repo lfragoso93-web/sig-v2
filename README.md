@@ -55,7 +55,8 @@ Princípios: DB-first, fonte oficial primeiro, idempotência, ausência não con
 ## Estado operacional
 
 - Seeds de benchmarks e câmbio: executados e reconciliados.
-- Seed canônico de Proventos v2: implementação concluída; duas execuções reais controladas ainda pendentes.
+- Seed canônico de Proventos usa o contrato `pre-prod-dividends-seed.v2`: implementação concluída; duas execuções reais controladas ainda pendentes.
+- O contrato v2 persiste somente eventos globais em `asset_dividends`; direitos de carteira são calculados sob demanda.
 - Contração física das tabelas legadas de Proventos: preparada, mas não executada.
 - Importação CSV real, posições e snapshots: suspensos até o encerramento da #227.
 - O boot não executa sincronização de mercado por padrão.
