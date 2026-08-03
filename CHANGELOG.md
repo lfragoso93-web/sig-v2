@@ -5,6 +5,26 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Adicionado — caracterização de ganhos mensais do IRPF (03/08/2026)
+
+- Ampliado o baseline fiscal de Day Trade para compra e venda no mesmo dia,
+  múltiplas vendas, custos operacionais e agregação mensal.
+- Congelado em teste, sem correção de regra, o comportamento que classifica a
+  venda inteira como Day Trade quando há posição anterior e casamento
+  intradiário apenas parcial.
+- O inventário e o plano de migração registram os cenários já cobertos e os
+  gates restantes antes da integração com os projetores canônicos.
+- A caracterização fiscal específica foi separada da suíte da fachada e agora
+  cobre saldo Swing no dia seguinte, operações intercaladas, isolamento por
+  ticker e coexistência mensal de resultados Day Trade e Swing Trade.
+- A matriz passou a cobrir as fronteiras de R$ 20 mil da isenção mensal,
+  agregação entre tickers, classes não isentas e a ausência vigente de
+  transporte de prejuízo Swing; helpers compartilhados eliminam duplicação na
+  infraestrutura desses testes.
+- Foram congelados ainda a ausência de transporte de prejuízo Day Trade, o BDR
+  no grupo atual de isenção, retenções zeradas e a agregação cruzada que pode
+  reduzir indevidamente a base de uma classe tributável com vendas isentas.
+
 ### Adicionado — motor canônico de eventos corporativos (31/07/2026)
 
 - Criado motor puro e independente de provedor para splits, grupamentos, bonificações e subscrições, com uma única convenção de fator multiplicativo.
