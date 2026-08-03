@@ -13,6 +13,7 @@ import pytest
 from app.models.transaction import OperationType
 from app.services.irpf_tax_service import calc_ganhos_capital
 from app.services.snapshot_position_projection import project_transaction_timelines
+
 from tests.irpf_characterization_helpers import db_with_transactions, transaction
 
 
