@@ -5,11 +5,16 @@ import logging
 from datetime import date, timedelta
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.dividend import Dividend
 from app.models.transaction import Transaction
+from app.services.canonical_dividend_aggregation_service import (
+    group_received_entitlements_by_day,
+)
+from app.services.canonical_dividend_entitlement_reader import (
+    load_portfolio_dividend_entitlements,
+)
 from app.services.portfolio_canonical_valuation_service import (
     calculate_canonical_portfolio_totals,
 )
@@ -17,7 +22,6 @@ from app.services.portfolio_snapshot_twr_service import (
     _accumulated_dividends_at,
     _decimal,
     _upsert_enriched_snapshot,
-    build_dividend_totals,
     calculate_transaction_components,
 )
 from app.services.silent_price_coverage_service import has_partial_prices_silent
@@ -52,16 +56,8 @@ async def backfill_canonical_snapshots_with_returns(
     if not transactions:
         return 0
 
-    dividend_result = await db.execute(
-        select(Dividend)
-        .where(Dividend.portfolio_id == portfolio_id)
-        .order_by(
-            func.coalesce(Dividend.payment_date, Dividend.date_pagamento).asc(),
-            Dividend.id.asc(),
-        )
-    )
-    dividends_day_map, dividends_accumulated_map = build_dividend_totals(
-        dividend_result.scalars().all()
+    dividends_day_map, dividends_accumulated_map = group_received_entitlements_by_day(
+        await load_portfolio_dividend_entitlements(db, portfolio_id)
     )
 
     start = transactions[0].date

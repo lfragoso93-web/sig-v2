@@ -1,6 +1,6 @@
 # Dados canônicos e KPIs
 
-> Última atualização: 14/07/2026
+> Última atualização: 31/07/2026
 
 Este documento define a camada canônica usada para alimentar Resumo, Patrimônio, Rentabilidade e Dashboard.
 
@@ -29,7 +29,7 @@ Telas
 | `transactions` | Compras, vendas, taxas, moeda e câmbio informado |
 | `assets` | Tipo, ticker, símbolo de provedor e metadados |
 | `asset_prices` | Histórico de preços por ativo |
-| `dividends` | Proventos materializados por carteira |
+| `asset_dividends` | Catálogo global de eventos; direitos são calculados sob demanda |
 | `portfolio_snapshots` | Evolução patrimonial e TWR |
 | benchmarks | CDI, Selic, IPCA, IGP-M, câmbio e demais índices |
 
@@ -66,16 +66,17 @@ O retorno acumulado desde o início deve usar `accumulated_return_pct` do snapsh
 
 ## Proventos
 
-Proventos devem ser materializados por carteira antes dos snapshots.
-
-A materialização considera:
+Direitos de Proventos são derivados sob demanda a partir dos eventos globais e
+da posição histórica. O cálculo considera:
 
 - posição elegível na data correta;
 - quantidade detida;
 - valor por unidade;
 - data de pagamento;
 - tipo do provento;
-- status recebido.
+- status derivado da data de pagamento.
+
+Nenhuma coleta ou leitura materializa direitos em `dividends`.
 
 Eventos não monetários não entram no total financeiro recebido.
 

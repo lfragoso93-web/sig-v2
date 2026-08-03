@@ -1,48 +1,130 @@
-import pytest
 from datetime import date, timedelta
-from unittest.mock import AsyncMock, MagicMock
-from dateutil.relativedelta import relativedelta
-from sqlalchemy.ext.asyncio import AsyncSession
+from decimal import Decimal
 
+import pytest
+from app.models.dividend_enums import DividendStatus
+from app.services.canonical_dividend_entitlement import (
+    DividendEntitlement,
+    DividendEvent,
+    EntitlementReason,
+)
+from app.services.canonical_dividend_entitlement_reader import (
+    PortfolioDividendEntitlement,
+)
 from app.services.proventos_service import (
+    get_distribution,
+    get_monthly_history,
     get_summary,
     list_items,
-    get_monthly_history,
-    get_distribution,
 )
-from app.models.dividend import DividendStatus
+
+
+def canonical_item(
+    *,
+    event_id: int = 1,
+    ticker: str = "VALE3",
+    asset_type: str = "STOCK",
+    event_type: str = "DIVIDENDO",
+    payment_date: date | None = None,
+    gross: str = "250",
+    net: str = "250",
+    quantity: str = "100",
+    reason: EntitlementReason = EntitlementReason.ELIGIBLE,
+) -> PortfolioDividendEntitlement:
+    today = date.today()
+    payment_date = payment_date or today - timedelta(days=5)
+    event = DividendEvent(
+        event_id=event_id,
+        record_date=today - timedelta(days=30),
+        ex_date=today - timedelta(days=29),
+        payment_date=payment_date,
+        event_type=event_type,
+        value_per_unit=Decimal(gross) / Decimal(quantity),
+        currency="BRL",
+    )
+    entitlement = DividendEntitlement(
+        event_id=event_id,
+        reason=reason,
+        entitlement_date=event.record_date,
+        eligible_quantity=Decimal(quantity),
+        gross_amount=Decimal(gross),
+        withholding_tax=Decimal(gross) - Decimal(net),
+        net_amount=Decimal(net),
+        currency="BRL",
+    )
+    return PortfolioDividendEntitlement(
+        ticker=ticker,
+        asset_type=asset_type,
+        event=event,
+        entitlement=entitlement,
+        approved_on=None,
+        gross_value_per_unit=None,
+        factor=None,
+        complete_factor=None,
+        isin_code=None,
+        asset_issued=None,
+        related_to=None,
+        remarks=None,
+    )
+
+
+def install_items(monkeypatch, items):
+    async def load(*_args, **_kwargs):
+        return items
+
+    monkeypatch.setattr(
+        "app.services.proventos_service.load_portfolio_dividend_entitlements",
+        load,
+    )
 
 
 @pytest.mark.asyncio
-async def test_get_summary_no_dividends():
-    db = AsyncMock(spec=AsyncSession)
+async def test_get_summary_no_dividends(monkeypatch):
+    install_items(monkeypatch, [])
 
-    execute_result = MagicMock()
-    execute_result.scalar_one.side_effect = [None, None, None, None, None, 0]
-    db.execute.return_value = execute_result
+    result = await get_summary(object(), portfolio_id=1)
 
-    result = await get_summary(db, portfolio_id=1)
-
-    assert result["total_recebido"] == 0.0
-    assert result["total_liquido_recebido"] == 0.0
-    assert result["total_bruto_recebido"] == 0.0
-    assert result["total_a_receber"] == 0.0
-    assert result["total_liquido_a_receber"] == 0.0
-    assert result["total_bruto_a_receber"] == 0.0
-    assert result["total_12m"] == 0.0
-    assert result["media_mensal_12m"] == 0.0
-    assert result["eventos_nao_cash"] == 0
+    assert result == {
+        "total_recebido": 0.0,
+        "total_liquido_recebido": 0.0,
+        "total_bruto_recebido": 0.0,
+        "total_a_receber": 0.0,
+        "total_liquido_a_receber": 0.0,
+        "total_bruto_a_receber": 0.0,
+        "total_12m": 0.0,
+        "media_mensal_12m": 0.0,
+        "eventos_nao_cash": 0,
+    }
 
 
 @pytest.mark.asyncio
-async def test_get_summary_with_dividends():
-    db = AsyncMock(spec=AsyncSession)
+async def test_get_summary_with_dividends(monkeypatch):
+    items = [
+        canonical_item(event_id=1, gross="1600", net="1500"),
+        canonical_item(
+            event_id=2,
+            payment_date=date.today() + timedelta(days=5),
+            gross="550",
+            net="500",
+        ),
+        canonical_item(
+            event_id=3,
+            event_type="BONIFICACAO",
+            gross="0",
+            net="0",
+            reason=EntitlementReason.NON_CASH_EVENT,
+        ),
+        canonical_item(
+            event_id=4,
+            event_type="SUBSCRICAO",
+            gross="0",
+            net="0",
+            reason=EntitlementReason.NON_CASH_EVENT,
+        ),
+    ]
+    install_items(monkeypatch, items)
 
-    execute_result = MagicMock()
-    execute_result.scalar_one.side_effect = [1500.0, 1600.0, 500.0, 550.0, 800.0, 2]
-    db.execute.return_value = execute_result
-
-    result = await get_summary(db, portfolio_id=1)
+    result = await get_summary(object(), portfolio_id=1)
 
     assert result["total_recebido"] == 1500.0
     assert result["total_liquido_recebido"] == 1500.0
@@ -50,24 +132,16 @@ async def test_get_summary_with_dividends():
     assert result["total_a_receber"] == 500.0
     assert result["total_liquido_a_receber"] == 500.0
     assert result["total_bruto_a_receber"] == 550.0
-    assert result["total_12m"] == 800.0
-    assert result["media_mensal_12m"] == round(800.0 / 12, 2)
+    assert result["total_12m"] == 1500.0
+    assert result["media_mensal_12m"] == 125.0
     assert result["eventos_nao_cash"] == 2
 
 
 @pytest.mark.asyncio
-async def test_list_items_empty():
-    db = AsyncMock(spec=AsyncSession)
+async def test_list_items_empty(monkeypatch):
+    install_items(monkeypatch, [])
 
-    count_result = MagicMock()
-    count_result.scalar_one.return_value = 0
-
-    fetch_result = MagicMock()
-    fetch_result.fetchall.return_value = []
-
-    db.execute.side_effect = [count_result, fetch_result]
-
-    result = await list_items(db, portfolio_id=1)
+    result = await list_items(object(), portfolio_id=1)
 
     assert result["total"] == 0
     assert result["page"] == 1
@@ -76,202 +150,145 @@ async def test_list_items_empty():
 
 
 @pytest.mark.asyncio
-async def test_list_items_with_data():
-    db = AsyncMock(spec=AsyncSession)
+async def test_list_items_with_data(monkeypatch):
+    install_items(
+        monkeypatch,
+        [
+            canonical_item(event_id=1),
+            canonical_item(event_id=2, ticker="PETR4", gross="75", net="75"),
+        ],
+    )
 
-    count_result = MagicMock()
-    count_result.scalar_one.return_value = 2
-
-    mock_row = MagicMock()
-    mock_row.id = 1
-    mock_row.ticker = "VALE3"
-    mock_row.asset_type = "STOCK"
-    mock_row.dividend_type = "Dividendo"
-    mock_row.record_date = date(2024, 1, 10)
-    mock_row.ex_date = date(2024, 1, 15)
-    mock_row.payment_date = date(2024, 1, 20)
-    mock_row.approved_on = None
-    mock_row.value_per_unit = 2.5
-    mock_row.gross_value_per_unit = None
-    mock_row.factor = None
-    mock_row.complete_factor = None
-    mock_row.isin_code = None
-    mock_row.asset_issued = None
-    mock_row.related_to = None
-    mock_row.remarks = None
-    mock_row.quantity = 100.0
-    mock_row.total_value = 250.0
-    mock_row.net_value = 250.0
-    mock_row.status = DividendStatus.RECEBIDO
-
-    fetch_result = MagicMock()
-    fetch_result.fetchall.return_value = [mock_row]
-
-    db.execute.side_effect = [count_result, fetch_result]
-
-    result = await list_items(db, portfolio_id=1, page=1, page_size=50)
+    result = await list_items(object(), portfolio_id=1, page=1, page_size=1)
 
     assert result["total"] == 2
     assert len(result["items"]) == 1
-    assert result["items"][0]["ticker"] == "VALE3"
-    assert result["items"][0]["net_value"] == 250.0
+    assert result["items"][0]["ticker"] == "PETR4"
+    assert result["items"][0]["net_value"] == 75.0
 
 
 @pytest.mark.asyncio
-async def test_list_items_with_filters():
-    db = AsyncMock(spec=AsyncSession)
+async def test_list_items_with_filters(monkeypatch):
+    install_items(
+        monkeypatch,
+        [
+            canonical_item(event_id=1),
+            canonical_item(
+                event_id=2,
+                ticker="PETR4",
+                payment_date=date.today() + timedelta(days=5),
+                gross="75",
+                net="75",
+            ),
+        ],
+    )
 
-    count_result = MagicMock()
-    count_result.scalar_one.return_value = 1
-
-    mock_row = MagicMock()
-    mock_row.id = 1
-    mock_row.ticker = "PETR4"
-    mock_row.asset_type = "STOCK"
-    mock_row.dividend_type = "Dividendo"
-    mock_row.record_date = date(2024, 6, 10)
-    mock_row.ex_date = date(2024, 6, 15)
-    mock_row.payment_date = date(2024, 6, 20)
-    mock_row.approved_on = None
-    mock_row.value_per_unit = 1.5
-    mock_row.gross_value_per_unit = None
-    mock_row.factor = None
-    mock_row.complete_factor = None
-    mock_row.isin_code = None
-    mock_row.asset_issued = None
-    mock_row.related_to = None
-    mock_row.remarks = None
-    mock_row.quantity = 50.0
-    mock_row.total_value = 75.0
-    mock_row.net_value = 75.0
-    mock_row.status = DividendStatus.A_RECEBER
-
-    fetch_result = MagicMock()
-    fetch_result.fetchall.return_value = [mock_row]
-
-    db.execute.side_effect = [count_result, fetch_result]
-
-    result = await list_items(db, portfolio_id=1, status=DividendStatus.A_RECEBER, page=1, page_size=50)
+    result = await list_items(
+        object(),
+        portfolio_id=1,
+        status=DividendStatus.A_RECEBER,
+        page=1,
+        page_size=50,
+    )
 
     assert result["total"] == 1
-    assert len(result["items"]) == 1
     assert result["items"][0]["ticker"] == "PETR4"
-    assert result["items"][0]["status"] == DividendStatus.A_RECEBER
+    assert result["items"][0]["status"] is DividendStatus.A_RECEBER
 
 
 @pytest.mark.asyncio
-async def test_get_monthly_history_empty():
-    db = AsyncMock(spec=AsyncSession)
+async def test_get_monthly_history_empty(monkeypatch):
+    install_items(monkeypatch, [])
 
-    execute_result = MagicMock()
-    execute_result.fetchall.return_value = []
-    db.execute.return_value = execute_result
-
-    result = await get_monthly_history(db, portfolio_id=1)
-
-    assert result == []
+    assert await get_monthly_history(object(), portfolio_id=1) == []
 
 
 @pytest.mark.asyncio
-async def test_get_monthly_history_with_data():
-    db = AsyncMock(spec=AsyncSession)
+async def test_get_monthly_history_with_data(monkeypatch):
+    item = canonical_item(net="1500", gross="1500")
+    install_items(monkeypatch, [item])
 
-    mock_row = MagicMock()
-    mock_row.year = 2024
-    mock_row.month = 6
-    mock_row.total = 1500.0
+    result = await get_monthly_history(object(), portfolio_id=1)
 
-    execute_result = MagicMock()
-    execute_result.fetchall.return_value = [mock_row]
-    db.execute.return_value = execute_result
-
-    result = await get_monthly_history(db, portfolio_id=1)
-
-    assert len(result) == 1
-    assert result[0]["year"] == 2024
-    assert result[0]["months"][5] == 1500.0
+    payment_date = item.event.payment_date
+    assert payment_date is not None
+    assert result[0]["year"] == payment_date.year
+    assert result[0]["months"][payment_date.month - 1] == 1500.0
     assert result[0]["total"] == 1500.0
     assert result[0]["media"] == 1500.0
 
 
 @pytest.mark.asyncio
-async def test_get_monthly_history_multiple_years():
-    db = AsyncMock(spec=AsyncSession)
+async def test_get_monthly_history_multiple_years(monkeypatch):
+    today = date.today()
+    install_items(
+        monkeypatch,
+        [
+            canonical_item(
+                event_id=1,
+                payment_date=date(today.year, 6, 15),
+                gross="1000",
+                net="1000",
+            ),
+            canonical_item(
+                event_id=2,
+                payment_date=date(today.year - 1, 12, 15),
+                gross="500",
+                net="500",
+            ),
+        ],
+    )
 
-    row1 = MagicMock()
-    row1.year = 2024
-    row1.month = 6
-    row1.total = 1000.0
+    result = await get_monthly_history(object(), portfolio_id=1)
 
-    row2 = MagicMock()
-    row2.year = 2023
-    row2.month = 12
-    row2.total = 500.0
-
-    execute_result = MagicMock()
-    execute_result.fetchall.return_value = [row2, row1]
-    db.execute.return_value = execute_result
-
-    result = await get_monthly_history(db, portfolio_id=1)
-
-    assert len(result) == 2
-    assert result[0]["year"] == 2024
-    assert result[1]["year"] == 2023
-
-
-@pytest.mark.asyncio
-async def test_get_distribution_empty():
-    db = AsyncMock(spec=AsyncSession)
-
-    execute_result = MagicMock()
-    execute_result.fetchall.return_value = []
-    db.execute.return_value = execute_result
-
-    result = await get_distribution(db, portfolio_id=1)
-
-    assert result == []
+    assert [entry["year"] for entry in result] == [
+        today.year,
+        today.year - 1,
+    ]
 
 
 @pytest.mark.asyncio
-async def test_get_distribution_single_asset():
-    db = AsyncMock(spec=AsyncSession)
+async def test_get_distribution_empty(monkeypatch):
+    install_items(monkeypatch, [])
 
-    mock_row = MagicMock()
-    mock_row.ticker = "VALE3"
-    mock_row.asset_type = "STOCK"
-    mock_row.total = 1000.0
-
-    execute_result = MagicMock()
-    execute_result.fetchall.return_value = [mock_row]
-    db.execute.return_value = execute_result
-
-    result = await get_distribution(db, portfolio_id=1)
-
-    assert len(result) == 1
-    assert result[0]["ticker"] == "VALE3"
-    assert result[0]["total"] == 1000.0
-    assert result[0]["percentage"] == 100.0
+    assert await get_distribution(object(), portfolio_id=1) == []
 
 
 @pytest.mark.asyncio
-async def test_get_distribution_multiple_assets():
-    db = AsyncMock(spec=AsyncSession)
+async def test_get_distribution_single_asset(monkeypatch):
+    install_items(
+        monkeypatch,
+        [canonical_item(gross="1000", net="1000")],
+    )
 
-    row1 = MagicMock()
-    row1.ticker = "VALE3"
-    row1.asset_type = "STOCK"
-    row1.total = 1000.0
+    result = await get_distribution(object(), portfolio_id=1)
 
-    row2 = MagicMock()
-    row2.ticker = "PETR4"
-    row2.asset_type = "STOCK"
-    row2.total = 500.0
+    assert result == [
+        {
+            "ticker": "VALE3",
+            "asset_type": "STOCK",
+            "total": 1000.0,
+            "percentage": 100.0,
+        }
+    ]
 
-    execute_result = MagicMock()
-    execute_result.fetchall.return_value = [row1, row2]
-    db.execute.return_value = execute_result
 
-    result = await get_distribution(db, portfolio_id=1)
+@pytest.mark.asyncio
+async def test_get_distribution_multiple_assets(monkeypatch):
+    install_items(
+        monkeypatch,
+        [
+            canonical_item(gross="1000", net="1000"),
+            canonical_item(
+                event_id=2,
+                ticker="PETR4",
+                gross="500",
+                net="500",
+            ),
+        ],
+    )
+
+    result = await get_distribution(object(), portfolio_id=1)
 
     assert len(result) == 2
     assert result[0]["percentage"] == round(1000.0 / 1500.0 * 100, 2)
@@ -279,19 +296,18 @@ async def test_get_distribution_multiple_assets():
 
 
 @pytest.mark.asyncio
-async def test_get_distribution_different_months():
-    db = AsyncMock(spec=AsyncSession)
+async def test_get_distribution_different_months(monkeypatch):
+    install_items(
+        monkeypatch,
+        [
+            canonical_item(
+                payment_date=date.today() - timedelta(days=30),
+                gross="1000",
+                net="1000",
+            )
+        ],
+    )
 
-    mock_row = MagicMock()
-    mock_row.ticker = "VALE3"
-    mock_row.asset_type = "STOCK"
-    mock_row.total = 1000.0
+    result = await get_distribution(object(), portfolio_id=1, months=6)
 
-    execute_result = MagicMock()
-    execute_result.fetchall.return_value = [mock_row]
-    db.execute.return_value = execute_result
-
-    result = await get_distribution(db, portfolio_id=1, months=6)
-
-    assert len(result) == 1
     assert result[0]["total"] == 1000.0

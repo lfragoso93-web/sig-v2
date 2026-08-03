@@ -2,58 +2,79 @@
 
 ## Objetivo
 
-Manter posições, custo médio, patrimônio e rentabilidade corretos após renomes, splits, grupamentos, bonificações, incorporações e conversões, sem alterar transações históricas.
+Manter quantidade, custo médio, patrimônio e rentabilidade corretos após
+renomes, splits, grupamentos, bonificações e subscrições, sem alterar operações
+históricas nem usar posições materializadas como fonte contábil.
 
-## Estado atual
+## Arquitetura canônica
 
-A primeira entrega implementa renomes simples de ticker na proporção 1:1.
+O fluxo é dividido em três responsabilidades:
 
-Fluxo atual:
+1. provedores externos produzem eventos globais normalizados;
+2. `corporate_events` preserva o catálogo global e a evidência do provedor;
+3. o motor puro projeta quantidade e custo para uma data, a partir das
+   operações originais e dos eventos globais aplicáveis.
 
-1. O provedor resolve o ticker antigo para o ticker atual.
-2. O SGI registra um alias histórico.
-3. É criado um evento `TICKER_CHANGE` vinculado à carteira.
-4. O saldo imediatamente anterior à data efetiva é calculado.
-5. Se houver saldo, o sistema cria uma saída técnica do ticker antigo e uma entrada técnica do ticker atual pelo mesmo custo médio.
-6. O evento é marcado como aplicado.
+Eventos globais não pertencem a uma carteira. `portfolio_id` permanece nulo
+nesses registros. Direitos e efeitos por carteira são calculados sob demanda.
 
-## Regras
+## Fontes
 
-- Compras e vendas originais permanecem imutáveis.
-- Venda total antes do renome não gera conversão.
-- Venda parcial converte somente o saldo remanescente.
-- Quantidade, custo total e preço médio são preservados.
-- Operações posteriores à data efetiva devem usar o ticker atual.
+- BRAPI v2 `/stocks/dividends`: bonificações (`stockDividends`) e direitos de
+  subscrição (`subscriptions`);
+- Yahoo `actions`: splits e grupamentos publicados como fatores de quantidade;
+- resolução de ticker existente: renomes simples 1:1, mantidos em fluxo
+  separado enquanto a identidade global de ativos é consolidada.
 
-## Idempotência
+A rota BRAPI de dividendos não declara splits/grupamentos no contrato OpenAPI
+atual. Esses eventos não são inferidos a partir de preços ou proventos; entram
+por uma fonte que publique explicitamente o fator.
 
-A chave lógica do evento considera carteira, ticker antigo, ticker atual e data efetiva.
+## Convenção de fator
 
-As operações técnicas usam um marcador ligado ao ID do evento, impedindo dupla aplicação em reprocessamentos.
+Todo evento automático usa `quantity_factor`:
 
-## Auditoria
+```text
+quantidade_depois = quantidade_antes × quantity_factor
+```
 
-Cada evento deve preservar:
+Exemplos:
 
-- ticker antigo e atual;
-- data efetiva;
-- fonte do dado;
-- carteira afetada;
-- status;
-- instante de aplicação;
-- payload original normalizado.
+- split 2 para 1: `2`;
+- grupamento 1 para 20: `0.05`;
+- bonificação de 2% publicada como fator total: `1.02`.
+
+O custo total é preservado e o preço médio é derivado novamente. Subscrições
+criam direitos, mas nunca aumentam quantidade automaticamente.
+
+## Idempotência e auditoria
+
+A identidade do evento inclui fonte, ticker, tipo, data, fator e identificadores
+publicados. O hash determinístico é persistido na chave técnica existente
+`brapi_event_id`, inclusive para fontes diferentes da BRAPI por compatibilidade
+de schema.
+
+Cada `raw_data` preserva:
+
+- fonte e identificador canônico;
+- ticker, data, tipo e fator normalizados;
+- payload original do provedor.
+
+## Segurança operacional
+
+O scheduler apenas coleta e confirma o catálogo global. A aplicação automática
+legada foi removida porque mutava `portfolio_positions` e tentava inserir
+colunas incompatíveis em `transactions`. Nenhum evento é marcado como aplicado
+globalmente e nenhuma operação técnica é criada pela coleta.
+
+Cada ativo é processado em savepoint próprio. Uma falha de provedor ou
+normalização não confirma um evento parcial daquele ativo e não invalida os
+demais ativos já coletados na execução.
 
 ## Próximos blocos
 
-- Spike com HG Brasil.
-- Splits e grupamentos.
-- Bonificações e subscrições.
-- Incorporações, fusões e conversões com proporção.
-- Simulação antes da aplicação.
-- Confirmação manual para eventos complexos.
-- Rollback e reprocessamento controlado.
-- Tela administrativa e auditoria operacional.
-
-## Princípio arquitetural
-
-O motor interno deve permanecer independente do provedor. Fontes externas alimentam eventos normalizados; o cálculo patrimonial e a aplicação das regras continuam sob responsabilidade do SGI.
+- integrar a projeção pura aos leitores canônicos de posição e rentabilidade;
+- reconciliar eventos equivalentes publicados por mais de uma fonte;
+- incorporar fusões, conversões e incorporações com troca de ativo;
+- criar inspeção, simulação e execução controlada do catálogo global;
+- adicionar tela administrativa e revisão manual para eventos complexos.

@@ -1,6 +1,6 @@
 # Operação — SGI v2
 
-> Última atualização: 22/07/2026
+> Última atualização: 01/08/2026
 
 Este guia descreve os comandos de manutenção, validação e diagnóstico do SGI v2.
 
@@ -16,6 +16,24 @@ Logs do backend:
 ```bash
 docker compose logs -f backend
 ```
+
+### Sincronização de mercado no boot
+
+A recriação do container não executa mais seed, backfill de preços, atualização do Tesouro ou importação de benchmarks por padrão. O bootstrap externo ficou opt-in para evitar consumo desnecessário das APIs durante builds e testes locais.
+
+Comportamento padrão:
+
+```env
+ENABLE_BOOT_MARKET_SYNC=false
+```
+
+Para uma inicialização deliberada com sincronização automática:
+
+```env
+ENABLE_BOOT_MARKET_SYNC=true
+```
+
+Essa flag controla somente a sequência automática iniciada pelo `lifespan` do backend. As CLIs operacionais, o `full_market_rebuild` manual e os jobs do scheduler permanecem independentes e devem ser executados apenas quando necessários.
 
 ## Regras operacionais
 
@@ -186,7 +204,7 @@ Etapas:
 3. sincronizar lacunas;
 4. atualizar Tesouro;
 5. atualizar benchmarks;
-6. sincronizar e materializar proventos;
+6. sincronizar o catálogo global de proventos;
 7. reconstruir snapshots;
 8. gerar auditoria final.
 
@@ -213,7 +231,7 @@ Validar no frontend:
 | Sinal | Interpretação |
 |---|---|
 | `NumericValueOutOfRangeError` | preço anômalo passou pela validação |
-| `number of query arguments cannot exceed 32767` | lote de materialização excessivo |
+| `number of query arguments cannot exceed 32767` | lote de persistência excessivo |
 | `QueuePool limit reached` | sessões longas ou concorrência excessiva |
 | muitos `startDate=1900-01-01` | estado de cobertura não persistido corretamente |
 | muitos fallbacks lentos | provedor incompatível ainda sendo consultado |

@@ -1,65 +1,61 @@
 """
-Router IRPF — endpoints finos que delegam toda logica ao irpf_service.
-
-Endpoints:
-  GET  /{portfolio_id}/irpf/anos          — anos com transacoes disponiveis
-  GET  /{portfolio_id}/irpf/{year}        — relatorio IRPF completo (JSON)
-  GET  /{portfolio_id}/irpf/{year}/pdf    — download do relatorio em PDF
-  GET  /{portfolio_id}/irpf/{year}/bens   — so bens e direitos
-  GET  /{portfolio_id}/irpf/{year}/ganhos — so ganhos de capital mensais
-  GET  /{portfolio_id}/irpf/{year}/rendimentos — so proventos (dividendos + JCP)
+Router IRPF — endpoints finos que delegam toda logica aos servicos de IRPF.
 """
+
+import json
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
+from sqlalchemy import extract, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, extract
-from typing import List
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.models.user import User
+from app.models.irpf import IRPFReport
 from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction
-from app.schemas.irpf import (
-    IRPFReportOut,
-    BemDireito,
-    GanhoCapitalMensal,
-)
+from app.models.user import User
+from app.schemas.irpf import BemDireito, GanhoCapitalMensal, IRPFReportOut
+from app.services.irpf_bens_direitos_service import calc_bens_direitos
+from app.services.irpf_report_service import generate_irpf_report
 from app.services.irpf_service import (
-    generate_irpf_report,
-    calc_bens_direitos,
     calc_ganhos_capital,
     calc_rendimentos,
-    generate_irpf_pdf,
     generate_irpf_csv,
+    generate_irpf_pdf,
 )
 
 router = APIRouter(tags=["irpf"])
 
+DbSession = Annotated[AsyncSession, Depends(get_db)]
+CurrentUser = Annotated[User, Depends(get_current_user)]
 
-async def _get_portfolio(portfolio_id: int, user: User, db: AsyncSession) -> Portfolio:
+
+async def _get_portfolio(
+    portfolio_id: int,
+    user: User,
+    db: AsyncSession,
+) -> Portfolio:
     result = await db.execute(
         select(Portfolio).where(
             Portfolio.id == portfolio_id,
             Portfolio.user_id == user.id,
         )
     )
-    p = result.scalar_one_or_none()
-    if not p:
+    portfolio = result.scalar_one_or_none()
+    if not portfolio:
         raise HTTPException(status_code=404, detail="Carteira nao encontrada.")
-    return p
+    return portfolio
 
 
-@router.get("/{portfolio_id}/irpf/anos", response_model=List[int])
+@router.get("/{portfolio_id}/irpf/anos", response_model=list[int])
 async def list_anos(
     portfolio_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
-    """
-    Retorna lista de anos com transacoes na carteira.
-    Usado pelo dropdown de selecao de ano na pagina IRPF.
-    """
+    """Retorna os anos com transacoes disponiveis na carteira."""
     await _get_portfolio(portfolio_id, current_user, db)
     result = await db.execute(
         select(extract("year", Transaction.date).label("year"))
@@ -74,19 +70,14 @@ async def list_anos(
 async def get_irpf_report(
     portfolio_id: int,
     year: int,
+    db: DbSession,
+    current_user: CurrentUser,
     refresh: bool = False,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ):
-    """
-    Retorna relatorio IRPF completo para o ano.
-    Se refresh=True ou nao houver relatorio salvo, recalcula e persiste.
-    """
+    """Retorna o relatorio IRPF completo para o ano."""
     await _get_portfolio(portfolio_id, current_user, db)
 
     if not refresh:
-        from app.models.irpf import IRPFReport
-        import json
         existing = await db.execute(
             select(IRPFReport).where(
                 IRPFReport.portfolio_id == portfolio_id,
@@ -104,23 +95,22 @@ async def get_irpf_report(
 async def download_irpf_pdf(
     portfolio_id: int,
     year: int,
+    db: DbSession,
+    current_user: CurrentUser,
     refresh: bool = False,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ):
-    """
-    Gera e retorna o relatorio IRPF em PDF para download.
-    Content-Type: application/pdf
-    Content-Disposition: attachment; filename="irpf_{year}_{portfolio_id}.pdf"
-    """
+    """Gera e retorna o relatorio IRPF em PDF."""
     await _get_portfolio(portfolio_id, current_user, db)
-    report = await generate_irpf_report(db, portfolio_id, year) if refresh else \
-        await get_irpf_report(portfolio_id, year, False, db, current_user)
+    report = (
+        await generate_irpf_report(db, portfolio_id, year)
+        if refresh
+        else await get_irpf_report(portfolio_id, year, db, current_user, False)
+    )
 
     try:
         pdf_bytes = generate_irpf_pdf(report)
-    except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     return Response(
         content=pdf_bytes,
@@ -135,23 +125,21 @@ async def download_irpf_pdf(
 async def download_irpf_csv(
     portfolio_id: int,
     year: int,
+    db: DbSession,
+    current_user: CurrentUser,
     refresh: bool = False,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ):
-    """
-    Gera e retorna o relatorio IRPF em CSV para download.
-    Content-Type: text/csv
-    Content-Disposition: attachment; filename="irpf_{year}_{portfolio_id}.csv"
-    """
+    """Gera e retorna o relatorio IRPF em CSV."""
     await _get_portfolio(portfolio_id, current_user, db)
-    report = await generate_irpf_report(db, portfolio_id, year) if refresh else \
-        await get_irpf_report(portfolio_id, year, False, db, current_user)
-
+    report = (
+        await generate_irpf_report(db, portfolio_id, year)
+        if refresh
+        else await get_irpf_report(portfolio_id, year, db, current_user, False)
+    )
     csv_content = generate_irpf_csv(report)
 
     return Response(
-        content=csv_content.encode('utf-8'),
+        content=csv_content.encode("utf-8"),
         media_type="text/csv",
         headers={
             "Content-Disposition": f'attachment; filename="irpf_{year}_{portfolio_id}.csv"'
@@ -159,24 +147,27 @@ async def download_irpf_csv(
     )
 
 
-@router.get("/{portfolio_id}/irpf/{year}/bens", response_model=List[BemDireito])
+@router.get("/{portfolio_id}/irpf/{year}/bens", response_model=list[BemDireito])
 async def get_bens_direitos(
     portfolio_id: int,
     year: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
-    """Retorna apenas a lista de Bens e Direitos em 31/12 do ano."""
+    """Retorna Bens e Direitos projetados canonicamente em 31/12."""
     await _get_portfolio(portfolio_id, current_user, db)
     return await calc_bens_direitos(db, portfolio_id, year)
 
 
-@router.get("/{portfolio_id}/irpf/{year}/ganhos", response_model=List[GanhoCapitalMensal])
+@router.get(
+    "/{portfolio_id}/irpf/{year}/ganhos",
+    response_model=list[GanhoCapitalMensal],
+)
 async def get_ganhos_capital(
     portfolio_id: int,
     year: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
     """Retorna ganhos de capital mensais com detalhamento por venda."""
     await _get_portfolio(portfolio_id, current_user, db)
@@ -187,10 +178,10 @@ async def get_ganhos_capital(
 async def get_rendimentos(
     portfolio_id: int,
     year: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: DbSession,
+    current_user: CurrentUser,
 ):
-    """Retorna proventos do ano separados em dividendos isentos e JCP."""
+    """Retorna dividendos e JCP do ano."""
     await _get_portfolio(portfolio_id, current_user, db)
     dividendos, jcp = await calc_rendimentos(db, portfolio_id, year)
     return {"dividendos": dividendos, "jcp": jcp}

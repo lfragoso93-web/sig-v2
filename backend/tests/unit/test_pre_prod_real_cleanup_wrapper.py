@@ -2,12 +2,33 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-WRAPPER = REPOSITORY_ROOT / "scripts" / "Invoke-PreProdRealCleanup.ps1"
+
+SCRIPT_NAME = "Invoke-PreProdRealCleanup.ps1"
+
+
+def _find_wrapper() -> Path | None:
+    test_path = Path(__file__).resolve()
+    for ancestor in (test_path.parent, *test_path.parents):
+        candidate = ancestor / "scripts" / SCRIPT_NAME
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+WRAPPER = _find_wrapper()
+pytestmark = pytest.mark.skipif(
+    WRAPPER is None,
+    reason=(
+        "wrapper PowerShell não está incluído nesta imagem backend; "
+        "execute esta suíte no checkout completo do repositório"
+    ),
+)
 
 
 def _wrapper_source() -> str:
+    assert WRAPPER is not None
     return WRAPPER.read_text(encoding="utf-8")
 
 

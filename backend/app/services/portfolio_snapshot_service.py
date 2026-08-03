@@ -45,15 +45,19 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import select, func, case, text, delete
+from sqlalchemy import case, delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset, AssetType
 from app.models.portfolio import Portfolio
 from app.models.portfolio_snapshot import PortfolioSnapshot
-from app.models.transaction import Transaction, OperationType
+from app.models.transaction import OperationType, Transaction
+from app.services.corporate_action_position_reader import (
+    load_global_corporate_actions_by_ticker,
+)
 from app.services.price_history_service import persist_daily_prices
+from app.services.snapshot_position_projection import project_snapshot_positions
 
 logger = logging.getLogger(__name__)
 
@@ -63,17 +67,23 @@ _USD_ASSET_TYPES = {"STOCK", "ETF_INTERNACIONAL"}
 
 class _TickerState:
     """Acumula custo sempre em BRL (independente da moeda original)."""
+
     __slots__ = ("ticker", "asset_type", "qty", "cost", "realized_pnl", "is_usd")
 
     def __init__(self, ticker: str, asset_type: str, is_usd: bool = False):
         self.ticker = ticker
         self.asset_type = asset_type
         self.qty = Decimal("0")
-        self.cost = Decimal("0")          # sempre em BRL
+        self.cost = Decimal("0")  # sempre em BRL
         self.realized_pnl = Decimal("0")  # sempre em BRL
         self.is_usd = is_usd
 
-    def buy(self, qty: Decimal, price_brl: Decimal, fees_brl: Decimal = Decimal("0")) -> None:
+    def buy(
+        self,
+        qty: Decimal,
+        price_brl: Decimal,
+        fees_brl: Decimal = Decimal("0"),
+    ) -> None:
         """price_brl e fees_brl ja devem estar convertidos para BRL."""
         self.qty += qty
         self.cost += qty * price_brl + fees_brl
@@ -114,7 +124,9 @@ async def invalidate_snapshots_from(
         await db.commit()
     logger.info(
         "[snapshot] invalidate portfolio=%s from=%s — %s snapshots removidos",
-        portfolio_id, from_date, deleted,
+        portfolio_id,
+        from_date,
+        deleted,
     )
     return deleted
 
@@ -132,40 +144,29 @@ async def _build_positions_at(
         )
         .order_by(Transaction.date.asc(), Transaction.id.asc())
     )
-    txs = result.scalars().all()
+    transactions = list(result.scalars().all())
+    if not transactions:
+        return {}
+
+    actions_by_ticker = await load_global_corporate_actions_by_ticker(
+        db,
+        [str(tx.ticker) for tx in transactions],
+    )
+    projections = project_snapshot_positions(
+        transactions=transactions,
+        actions_by_ticker=actions_by_ticker,
+        target_date=target_date,
+    )
 
     states: dict[str, _TickerState] = {}
-    for tx in txs:
-        key = tx.ticker.upper()
+    for ticker, (projection, asset_type, is_usd) in projections.items():
+        state = _TickerState(ticker, asset_type, is_usd=is_usd)
+        state.qty = projection.quantity
+        state.cost = projection.total_cost
+        state.realized_pnl = projection.realized_pnl
+        states[ticker] = state
 
-        asset_type_raw = (
-            tx.asset_type.value if hasattr(tx.asset_type, "value") else str(tx.asset_type or "")
-        ).upper()
-        is_usd = (
-            (getattr(tx, "currency", "BRL") or "BRL").upper() == "USD"
-            or asset_type_raw in _USD_ASSET_TYPES
-        )
-
-        fx_rate = Decimal("1")
-        if is_usd:
-            saved = getattr(tx, "fx_rate", None)
-            if saved is not None and float(saved or 0) > 0:
-                fx_rate = Decimal(str(saved))
-
-        if key not in states:
-            states[key] = _TickerState(key, tx.asset_type, is_usd=is_usd)
-        s = states[key]
-
-        qty = Decimal(str(tx.quantity))
-        price_brl = Decimal(str(tx.price)) * fx_rate
-        fees_brl = Decimal(str(tx.fees or 0)) * fx_rate
-
-        if tx.operation == OperationType.buy:
-            s.buy(qty, price_brl, fees_brl)
-        elif tx.operation == OperationType.sell:
-            s.sell(qty, price_brl)
-
-    return {k: v for k, v in states.items() if v.qty > 0}
+    return states
 
 
 async def _calc_totals(
@@ -190,14 +191,9 @@ async def _calc_totals(
     cost_basis = Decimal("0")
     realized_pnl = Decimal("0")
 
-    # ------------------------------------------------------------------
-    # [Q1 FIX] Busca asset_type de todos os tickers em uma unica query
-    # antes de entrar no loop, eliminando o N+1 que existia antes.
-    # ------------------------------------------------------------------
     tickers_list = list(positions.keys())
     asset_rows = await db.execute(
-        select(Asset.ticker, Asset.asset_type)
-        .where(Asset.ticker.in_(tickers_list))
+        select(Asset.ticker, Asset.asset_type).where(Asset.ticker.in_(tickers_list))
     )
     asset_type_map: dict[str, AssetType] = {
         r.ticker: r.asset_type for r in asset_rows.all()
@@ -208,17 +204,16 @@ async def _calc_totals(
     if has_usd:
         try:
             from app.services.fx_service import get_usd_brl_for_date
+
             fx_snapshot = await get_usd_brl_for_date(db, target_date)
         except Exception:
             try:
                 from app.services.fx_service import get_usd_brl_today
+
                 fx_snapshot = await get_usd_brl_today(db)
             except Exception:
                 fx_snapshot = 1.0
 
-    # ------------------------------------------------------------------
-    # FIX N+1: Carrega todos os preços de uma vez usando batch
-    # ------------------------------------------------------------------
     from app.services.price_history_service import get_prices_at_date_batch
 
     tickers_with_types = []
@@ -231,7 +226,6 @@ async def _calc_totals(
                 asset_type = AssetType.ACAO
         tickers_with_types.append((ticker, asset_type))
 
-    # Carrega todos os preços em uma única operação
     prices_map = await get_prices_at_date_batch(db, tickers_with_types, date_str)
 
     for ticker, state in positions.items():
@@ -240,7 +234,8 @@ async def _calc_totals(
             close = float(state.avg_price)
             logger.warning(
                 "[snapshot] sem cotacao para %s em %s - usando avg_price como proxy",
-                ticker, date_str,
+                ticker,
+                date_str,
             )
 
         close_brl = close
@@ -281,13 +276,7 @@ async def _calc_totals(
 
     unrealized_pnl = market_value - cost_basis
     total_pnl = realized_pnl + unrealized_pnl
-    # NOTA: total_pnl NAO inclui proventos. Ver docstring do modulo.
 
-    # -------------------------------------------------------------------------
-    # return_pct: retorno de preco sobre capital empregado.
-    # ATENCAO: este valor e "retorno de preco". Para retorno total com
-    # proventos ver documentacao do modulo acima.
-    # -------------------------------------------------------------------------
     realized_positive = max(realized_pnl, Decimal("0"))
     return_base = cost_basis + realized_positive
     if return_base > 0:
@@ -353,7 +342,8 @@ async def _prefetch_price_history(
 
     logger.info(
         "[snapshot] pre-fetch FORCADO de historico para %d tickers (days_back=%d)",
-        len(tickers), days_back,
+        len(tickers),
+        days_back,
     )
     for row in tickers:
         ticker = row.ticker.upper()
@@ -363,9 +353,17 @@ async def _prefetch_price_history(
             asset_type = AssetType.ACAO
         logger.info(
             "[snapshot] pre-fetch %s (%s) days_back=%d",
-            ticker, asset_type.value, days_back,
+            ticker,
+            asset_type.value,
+            days_back,
         )
-        await persist_daily_prices(db, ticker, asset_type, days_back=days_back, force=True)
+        await persist_daily_prices(
+            db,
+            ticker,
+            asset_type,
+            days_back=days_back,
+            force=True,
+        )
 
 
 async def calc_snapshot_at_date(
@@ -385,7 +383,10 @@ async def calc_snapshot_at_date(
         await db.commit()
     logger.info(
         "[snapshot] portfolio=%s date=%s market_value=%s return_pct=%s%%",
-        portfolio_id, target_date, totals["market_value"], totals["return_pct"],
+        portfolio_id,
+        target_date,
+        totals["market_value"],
+        totals["return_pct"],
     )
     return totals
 
@@ -396,8 +397,9 @@ async def backfill_snapshots(
     days_back: Optional[int] = None,
 ) -> int:
     first_tx = await db.execute(
-        select(func.min(Transaction.date))
-        .where(Transaction.portfolio_id == portfolio_id)
+        select(func.min(Transaction.date)).where(
+            Transaction.portfolio_id == portfolio_id
+        )
     )
     first_date = first_tx.scalar_one_or_none()
     if first_date is None:
@@ -410,8 +412,7 @@ async def backfill_snapshots(
     total_days = (date.today() - start).days + 1
 
     existing = await db.execute(
-        select(PortfolioSnapshot.snapshot_date)
-        .where(
+        select(PortfolioSnapshot.snapshot_date).where(
             PortfolioSnapshot.portfolio_id == portfolio_id,
             PortfolioSnapshot.snapshot_date >= start,
             PortfolioSnapshot.snapshot_date < date.today(),
@@ -437,7 +438,9 @@ async def backfill_snapshots(
     await db.commit()
     logger.info(
         "[snapshot] backfill portfolio=%s: %s snapshots processados (start=%s)",
-        portfolio_id, count, start,
+        portfolio_id,
+        count,
+        start,
     )
     return count
 
@@ -447,7 +450,11 @@ async def refresh_today_snapshot(
     portfolio_id: int,
 ) -> dict:
     return await calc_snapshot_at_date(
-        db, portfolio_id, date.today(), commit=True, prefetch=True
+        db,
+        portfolio_id,
+        date.today(),
+        commit=True,
+        prefetch=True,
     )
 
 
@@ -475,8 +482,7 @@ async def snapshot_backfill_needed(
         return False
 
     result = await db.execute(
-        select(func.count(func.distinct(PortfolioSnapshot.snapshot_date)))
-        .where(
+        select(func.count(func.distinct(PortfolioSnapshot.snapshot_date))).where(
             PortfolioSnapshot.portfolio_id == portfolio_id,
             PortfolioSnapshot.snapshot_date >= first_date,
             PortfolioSnapshot.snapshot_date <= today,
@@ -520,7 +526,6 @@ async def backfill_missing_snapshots_for_active_portfolios(
             )
 
     return {
-        "portfolios": len(portfolio_ids),
         "processed": processed,
         "skipped": skipped,
         "errors": errors,
@@ -528,185 +533,13 @@ async def backfill_missing_snapshots_for_active_portfolios(
     }
 
 
-async def get_daily_evolution(
+async def _first_transaction_date(
     db: AsyncSession,
     portfolio_id: int,
-    days: int = 365,
-) -> list[dict]:
-    since = date.today() - timedelta(days=days)
+) -> date | None:
     result = await db.execute(
-        select(PortfolioSnapshot)
-        .where(
-            PortfolioSnapshot.portfolio_id == portfolio_id,
-            PortfolioSnapshot.snapshot_date >= since,
+        select(func.min(Transaction.date)).where(
+            Transaction.portfolio_id == portfolio_id
         )
-        .order_by(PortfolioSnapshot.snapshot_date.asc())
-    )
-    rows = result.scalars().all()
-    if not rows:
-        return await _get_fallback_daily_evolution(db, portfolio_id, days)
-
-    return [
-        _snapshot_to_payload(r)
-        for r in rows
-    ]
-
-
-async def get_monthly_evolution(
-    db: AsyncSession,
-    portfolio_id: int,
-    months: int = 24,
-) -> list[dict]:
-    since = date.today() - timedelta(days=months * 31)
-    sub = (
-        select(
-            func.date_trunc("month", PortfolioSnapshot.snapshot_date).label("month"),
-            func.max(PortfolioSnapshot.snapshot_date).label("last_date"),
-        )
-        .where(
-            PortfolioSnapshot.portfolio_id == portfolio_id,
-            PortfolioSnapshot.snapshot_date >= since,
-        )
-        .group_by(text("1"))
-        .subquery()
-    )
-
-    result = await db.execute(
-        select(PortfolioSnapshot)
-        .join(sub, PortfolioSnapshot.snapshot_date == sub.c.last_date)
-        .where(PortfolioSnapshot.portfolio_id == portfolio_id)
-        .order_by(PortfolioSnapshot.snapshot_date.asc())
-    )
-    rows = result.scalars().all()
-    if not rows:
-        return await _get_fallback_monthly_evolution(db, portfolio_id, months)
-
-    return [
-        _snapshot_to_payload(r, include_monthly_aliases=True)
-        for r in rows
-    ]
-
-
-def _snapshot_to_payload(
-    snapshot: PortfolioSnapshot,
-    include_monthly_aliases: bool = False,
-) -> dict:
-    payload = {
-        "date": snapshot.snapshot_date.strftime("%Y-%m-%d"),
-        "market_value": float(snapshot.market_value),
-        "cost_basis": float(snapshot.cost_basis),
-        "invested_total": float(snapshot.invested_total),
-        "unrealized_pnl": float(snapshot.unrealized_pnl),
-        "realized_pnl": float(snapshot.realized_pnl),
-        "total_pnl": float(snapshot.total_pnl),
-        "return_pct": float(snapshot.return_pct),
-    }
-    if include_monthly_aliases:
-        payload.update({
-            "value": payload["market_value"],
-            "invested": payload["invested_total"],
-            "period": snapshot.snapshot_date.strftime("%Y-%m"),
-        })
-    return payload
-
-
-def _totals_to_payload(
-    target_date: date,
-    totals: dict,
-    include_monthly_aliases: bool = False,
-) -> dict:
-    payload = {
-        "date": target_date.strftime("%Y-%m-%d"),
-        "market_value": float(totals["market_value"]),
-        "cost_basis": float(totals["cost_basis"]),
-        "invested_total": float(totals["invested_total"]),
-        "unrealized_pnl": float(totals["unrealized_pnl"]),
-        "realized_pnl": float(totals["realized_pnl"]),
-        "total_pnl": float(totals["total_pnl"]),
-        "return_pct": float(totals["return_pct"]),
-    }
-    if include_monthly_aliases:
-        payload.update({
-            "value": payload["market_value"],
-            "invested": payload["invested_total"],
-            "period": target_date.strftime("%Y-%m"),
-        })
-    return payload
-
-
-async def _first_transaction_date(db: AsyncSession, portfolio_id: int) -> date | None:
-    result = await db.execute(
-        select(func.min(Transaction.date))
-        .where(Transaction.portfolio_id == portfolio_id)
     )
     return result.scalar_one_or_none()
-
-
-def _month_end(year: int, month: int) -> date:
-    if month == 12:
-        return date(year + 1, 1, 1) - timedelta(days=1)
-    return date(year, month + 1, 1) - timedelta(days=1)
-
-
-def _month_end_dates(start: date, end: date) -> list[date]:
-    cursor = date(start.year, start.month, 1)
-    dates: list[date] = []
-    while cursor <= end:
-        dates.append(min(_month_end(cursor.year, cursor.month), end))
-        if cursor.month == 12:
-            cursor = date(cursor.year + 1, 1, 1)
-        else:
-            cursor = date(cursor.year, cursor.month + 1, 1)
-    return dates
-
-
-async def _get_fallback_monthly_evolution(
-    db: AsyncSession,
-    portfolio_id: int,
-    months: int,
-) -> list[dict]:
-    first_date = await _first_transaction_date(db, portfolio_id)
-    if first_date is None:
-        return []
-
-    today = date.today()
-    start = max(first_date, today - timedelta(days=months * 31))
-    points: list[dict] = []
-
-    for target in _month_end_dates(start, today):
-        totals = await _calc_totals(db, portfolio_id, target)
-        if totals["market_value"] > 0 or totals["invested_total"] > 0:
-            points.append(_totals_to_payload(target, totals, include_monthly_aliases=True))
-
-    return points
-
-
-async def _get_fallback_daily_evolution(
-    db: AsyncSession,
-    portfolio_id: int,
-    days: int,
-) -> list[dict]:
-    first_date = await _first_transaction_date(db, portfolio_id)
-    if first_date is None:
-        return []
-
-    today = date.today()
-    start = max(first_date, today - timedelta(days=days))
-    # Sem snapshots, evita uma consulta pesada gerando uma serie esparsa:
-    # semanal para janelas curtas e mensal para janelas longas.
-    step_days = 7 if days <= 180 else 31
-    dates: list[date] = []
-    cursor = start
-    while cursor <= today:
-        dates.append(cursor)
-        cursor += timedelta(days=step_days)
-    if not dates or dates[-1] != today:
-        dates.append(today)
-
-    points: list[dict] = []
-    for target in dates:
-        totals = await _calc_totals(db, portfolio_id, target)
-        if totals["market_value"] > 0 or totals["invested_total"] > 0:
-            points.append(_totals_to_payload(target, totals))
-
-    return points

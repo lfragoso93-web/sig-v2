@@ -1,24 +1,23 @@
-import pytest
 from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
-from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import HTTPException
 
-from app.services.portfolio_service import (
-    list_portfolios,
-    create_portfolio,
-    get_portfolio,
-    update_portfolio,
-    delete_portfolio,
-    get_portfolio_summary,
-    get_portfolio_positions,
-    calc_raw_positions,
-    sum_dividends,
-    build_group_performance_metrics,
-    build_asset_distribution_items,
-)
+import pytest
 from app.models.transaction import OperationType
 from app.schemas.portfolio import PortfolioCreate, PortfolioUpdate
+from app.services.portfolio_service import (
+    build_asset_distribution_items,
+    build_group_performance_metrics,
+    calc_raw_positions,
+    create_portfolio,
+    get_portfolio,
+    get_portfolio_positions,
+    get_portfolio_summary,
+    list_portfolios,
+    sum_dividends,
+    update_portfolio,
+)
+from fastapi import HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
@@ -144,40 +143,6 @@ async def test_update_portfolio_success():
 
 
 @pytest.mark.asyncio
-async def test_delete_portfolio_not_found():
-    db = AsyncMock(spec=AsyncSession)
-    
-    result = MagicMock()
-    result.scalar_one_or_none.return_value = None
-    db.execute.return_value = result
-    
-    with pytest.raises(HTTPException) as exc_info:
-        await delete_portfolio(db, portfolio_id=999, user_id=1)
-    
-    assert exc_info.value.status_code == 404
-
-
-@pytest.mark.asyncio
-async def test_delete_portfolio_success():
-    db = AsyncMock(spec=AsyncSession)
-    
-    mock_portfolio = MagicMock()
-    mock_portfolio.id = 1
-    mock_portfolio.user_id = 1
-    
-    result = MagicMock()
-    result.scalar_one_or_none.return_value = mock_portfolio
-    db.execute.return_value = result
-    
-    db.delete = AsyncMock()
-    db.flush = AsyncMock()
-    
-    await delete_portfolio(db, portfolio_id=1, user_id=1)
-    
-    db.delete.assert_called()
-
-
-@pytest.mark.asyncio
 async def test_calc_raw_positions_no_transactions():
     db = AsyncMock(spec=AsyncSession)
     
@@ -256,12 +221,12 @@ async def test_calc_raw_positions_buy_and_sell():
 @pytest.mark.asyncio
 async def test_sum_dividends_zero():
     db = AsyncMock(spec=AsyncSession)
-    
-    result = MagicMock()
-    result.scalar_one_or_none.return_value = 0.0
-    db.execute.return_value = result
-    
-    total = await sum_dividends(db, portfolio_id=1)
+
+    with patch(
+        "app.services.portfolio_service.load_portfolio_dividend_entitlements",
+        new=AsyncMock(return_value=[]),
+    ):
+        total = await sum_dividends(db, portfolio_id=1)
     
     assert total == 0.0
 
@@ -269,12 +234,18 @@ async def test_sum_dividends_zero():
 @pytest.mark.asyncio
 async def test_sum_dividends_with_cutoff():
     db = AsyncMock(spec=AsyncSession)
-    
-    result = MagicMock()
-    result.scalar_one_or_none.return_value = 1500.0
-    db.execute.return_value = result
-    
-    total = await sum_dividends(db, portfolio_id=1, cutoff=date(2024, 1, 1))
+
+    with (
+        patch(
+            "app.services.portfolio_service.load_portfolio_dividend_entitlements",
+            new=AsyncMock(return_value=[object()]),
+        ),
+        patch(
+            "app.services.portfolio_service.aggregate_received_entitlements",
+            return_value=1500.0,
+        ),
+    ):
+        total = await sum_dividends(db, portfolio_id=1, cutoff=date(2024, 1, 1))
     
     assert total == 1500.0
 

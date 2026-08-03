@@ -53,3 +53,16 @@ def test_openapi_schema_does_not_expose_provider_names() -> None:
 
     assert isinstance(schema, dict)
     _assert_no_provider_terms(schema)
+
+
+def test_legacy_portfolio_dividend_write_routes_are_not_exposed() -> None:
+    app.openapi_schema = None
+    schema = app.openapi()
+    paths = schema.get("paths", {})
+
+    base_path = "/api/v1/portfolios/{portfolio_id}/dividends"
+    assert "get" in paths.get(base_path, {})
+    assert "post" not in paths.get(base_path, {})
+    assert f"{base_path}/{{dividend_id}}" not in paths
+    assert f"{base_path}/sync" not in paths
+    assert "/api/v1/sync/proventos/{portfolio_id}" not in paths

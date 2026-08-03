@@ -7,7 +7,6 @@ agora delega para o pipeline único de mercado por ativo, que centraliza:
   - histórico de preços;
   - logo/metadados faltantes;
   - eventos/proventos globais;
-  - materialização para carteiras reais.
 """
 import logging
 
@@ -47,16 +46,14 @@ async def run_onboarding(ticker: str, asset_type: str) -> None:
                 sync_prices=True,
                 sync_logo=True,
                 sync_events=True,
-                materialize=True,
                 commit=True,
             )
             logger.info(
-                "[onboarding] %s concluído: prices=%s logo=%s events=%s materialized=%s",
+                "[onboarding] %s concluído: prices=%s logo=%s events=%s",
                 ticker_norm,
                 result.prices_inserted,
                 result.logo_updated,
                 result.events_synced,
-                result.materialized,
             )
         except Exception as e:
             logger.error("[onboarding] %s: falha no pipeline único: %s", ticker_norm, e)

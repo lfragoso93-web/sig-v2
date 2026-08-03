@@ -17,16 +17,21 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Iterable
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.asset_types import DEDICATED_PRICE_TYPES, NO_QUOTE_TYPES
 from app.models.asset import AssetType
-from app.models.dividend import Dividend, DividendStatus
 from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.transaction import OperationType, Transaction
 from app.services.portfolio_snapshot_service import _calc_totals
+from app.services.canonical_dividend_aggregation_service import (
+    group_received_entitlements_by_day,
+)
+from app.services.canonical_dividend_entitlement_reader import (
+    load_portfolio_dividend_entitlements,
+)
 from app.services.price_history_service import get_prices_at_date_batch
 from app.services.twr_service import (
     append_compounded_return_pct,
@@ -38,7 +43,6 @@ logger = logging.getLogger(__name__)
 _ZERO = Decimal("0")
 _MONEY = Decimal("0.01")
 _TECHNICAL_EVENT_PREFIX = "Evento corporativo - troca de ticker"
-_NON_CASH_DIVIDEND_TYPES = {"BONIFICACAO", "SUBSCRICAO"}
 _NON_MARKET_VALUATION_TYPES = NO_QUOTE_TYPES | DEDICATED_PRICE_TYPES
 
 
@@ -146,40 +150,6 @@ def calculate_transaction_components(
     return realized_pnl.quantize(_MONEY), net_external_flow.quantize(_MONEY)
 
 
-def _dividend_value(dividend: Dividend) -> Decimal:
-    for field in ("net_value", "total_received", "total_value"):
-        value = getattr(dividend, field, None)
-        if value is not None:
-            return _decimal(value)
-    return _ZERO
-
-
-def build_dividend_totals(
-    dividends: Iterable[Dividend],
-) -> tuple[dict[date, Decimal], dict[date, Decimal]]:
-    by_day: dict[date, Decimal] = defaultdict(lambda: _ZERO)
-
-    for dividend in dividends:
-        status = getattr(dividend.status, "value", dividend.status)
-        if str(status).upper() != DividendStatus.RECEBIDO.value:
-            continue
-        dividend_type = str(dividend.dividend_type or "").upper()
-        if dividend_type in _NON_CASH_DIVIDEND_TYPES:
-            continue
-        payment_date = dividend.payment_date or dividend.date_pagamento
-        if payment_date is None:
-            continue
-        by_day[payment_date] += _dividend_value(dividend)
-
-    accumulated: dict[date, Decimal] = {}
-    running = _ZERO
-    for payment_date in sorted(by_day):
-        by_day[payment_date] = by_day[payment_date].quantize(_MONEY)
-        running += by_day[payment_date]
-        accumulated[payment_date] = running.quantize(_MONEY)
-    return dict(by_day), accumulated
-
-
 def _accumulated_dividends_at(
     accumulated_by_payment_date: dict[date, Decimal],
     target_date: date,
@@ -244,16 +214,8 @@ async def backfill_snapshots_with_returns(
     if not transactions:
         return 0
 
-    dividend_result = await db.execute(
-        select(Dividend)
-        .where(Dividend.portfolio_id == portfolio_id)
-        .order_by(
-            func.coalesce(Dividend.payment_date, Dividend.date_pagamento).asc(),
-            Dividend.id.asc(),
-        )
-    )
-    dividends_day_map, dividends_accumulated_map = build_dividend_totals(
-        dividend_result.scalars().all()
+    dividends_day_map, dividends_accumulated_map = group_received_entitlements_by_day(
+        await load_portfolio_dividend_entitlements(db, portfolio_id)
     )
 
     start = transactions[0].date

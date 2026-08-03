@@ -1,8 +1,7 @@
 """Matriz de normalização dos tipos canônicos de Proventos."""
 
 import pytest
-
-from app.models.dividend import DividendType
+from app.models.dividend_enums import DividendType
 from app.services.dividend_type_service import normalize_dividend_type
 
 
@@ -18,8 +17,12 @@ from app.services.dividend_type_service import normalize_dividend_type
         ),
         pytest.param("Rendimentos", "cash", DividendType.RENDIMENTO, id="rendimento"),
         pytest.param("Amortização", "cash", DividendType.AMORTIZACAO, id="amortizacao"),
-        pytest.param("Bonificação", "stock", DividendType.BONIFICACAO, id="bonificacao"),
-        pytest.param("Subscrição", "subscription", DividendType.SUBSCRICAO, id="subscricao"),
+        pytest.param(
+            "Bonificação", "stock", DividendType.BONIFICACAO, id="bonificacao"
+        ),
+        pytest.param(
+            "Subscrição", "subscription", DividendType.SUBSCRICAO, id="subscricao"
+        ),
     ],
 )
 def test_normalizes_provider_labels_to_canonical_types(

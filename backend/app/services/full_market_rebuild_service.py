@@ -264,9 +264,9 @@ def _log_operational_summary(summary: FullMarketRebuildResult) -> None:
                 prices.get("audited", 0), prices.get("requested", 0), prices.get("inserted", 0))
     logger.info("treasury_official=%s treasury_history_imported=%s treasury_latest=%s",
                 history.get("official_symbols", 0), history.get("imported", 0), treasury.get("latest_prices", 0))
-    logger.info("proventos_scanned=%s proventos_materialized=%s proventos_failed=%s",
+    logger.info("proventos_scanned=%s proventos_synced=%s proventos_failed=%s",
                 proventos.get("assets_scanned", proventos.get("scanned", 0)),
-                proventos.get("materialized", 0),
+                proventos.get("assets_synced", proventos.get("synced", 0)),
                 proventos.get("assets_failed", proventos.get("failed", 0)))
     logger.info("snapshots=%s portfolios=%s coverage_needs_sync=%s",
                 snapshots.get("snapshots", 0), snapshots.get("processed", 0), coverage.get("needs_sync", 0))

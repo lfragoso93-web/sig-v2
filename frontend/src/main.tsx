@@ -11,6 +11,7 @@ import '@/styles/entry-fixes.css'
 import AppLayout  from '@/components/layout/AppLayout'
 import AuthLayout from '@/components/layout/AuthLayout'
 import ProtectedRoute, { OnboardingRoute } from '@/router/ProtectedRoute'
+import { LEGACY_PORTFOLIO_ROUTE_REDIRECTS } from '@/router/portfolioRoutes'
 
 // Pages auth
 import LoginPage    from '@/pages/auth/LoginPage'
@@ -100,6 +101,7 @@ const router = createBrowserRouter([
           { path: 'rentabilidade', element: <RentabilidadePage /> },
           { path: 'transacoes',    element: <Transacoes /> },
           { path: 'proventos',     element: <ProventosPage /> },
+          { path: 'metas',         element: <MetasPage /> },
           { path: 'irpf',          element: <IRPFPage /> },
           { path: 'configuracoes', element: <Configuracoes /> },
           {
@@ -115,17 +117,15 @@ const router = createBrowserRouter([
         ],
       },
 
-      // Rotas protegidas fora de /carteira (partilham o AppLayout)
+      // Compatibilidade com URLs antigas fora do contexto da carteira.
       {
-        element: <ProtectedRoute><AppLayout /></ProtectedRoute>,
-        children: [
-          { path: '/metas', element: <MetasPage /> },
-          { path: '/irpf',  element: <IRPFPage /> },
-        ],
+        path: '/metas',
+        element: <Navigate to={LEGACY_PORTFOLIO_ROUTE_REDIRECTS['/metas']} replace />,
       },
-
-      // Atalho legado: /carteira/irpf → /irpf
-      { path: '/carteira/irpf', element: <Navigate to="/irpf" replace /> },
+      {
+        path: '/irpf',
+        element: <Navigate to={LEGACY_PORTFOLIO_ROUTE_REDIRECTS['/irpf']} replace />,
+      },
 
       // Catch-all
       { path: '*', element: <Navigate to="/" replace /> },

@@ -2,14 +2,12 @@
 Sincronizacao diaria de eventos/proventos de renda variavel nacional.
 
 O servico coleta eventos globais, atualiza AssetDividend de forma idempotente,
-complementa historico, materializa os eventos nas carteiras elegiveis e invalida
-os consumidores financeiros afetados.
+complementa historico e invalida os consumidores financeiros afetados.
 """
 from __future__ import annotations
 
 import asyncio
 import logging
-import re
 from dataclasses import dataclass, field
 
 from sqlalchemy import select
@@ -17,7 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset, AssetType
 from app.models.transaction import Transaction
-from app.services.dividend_backfill_service import run_backfill, materialize_asset_dividends
+from app.services.dividend_backfill_service import run_backfill
+from app.services.dividend_ticker_policy import is_event_ticker
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +27,8 @@ NATIONAL_EVENT_TYPES = {
     AssetType.BDR.value,
 }
 
-_MAIN_EQUITY_RE = re.compile(r"^[A-Z0-9]{4,6}(3|4|5|6|11|31|32|33|34|35)$")
 SYNC_CONCURRENCY = 10
 SYNC_BATCH_DELAY = 0.5
-MATERIALIZE_TICKER_BATCH_SIZE = 50
 
 
 @dataclass
@@ -40,25 +37,9 @@ class ProventosDailySyncResult:
     assets_synced: int = 0
     assets_failed: int = 0
     assets_skipped: int = 0
-    materialized: int = 0
     historical_events: int = 0
     portfolios_invalidated: int = 0
     errors: list[str] = field(default_factory=list)
-
-
-def _is_event_ticker(ticker: str) -> bool:
-    t = ticker.upper()
-    if t.endswith("F"):
-        return False
-    if t[-1:] in {"B", "D", "R"}:
-        return False
-    if t[-2:] in {"97", "98", "99"}:
-        return False
-    return bool(_MAIN_EQUITY_RE.match(t))
-
-
-def _chunks(values: list[str], size: int) -> list[list[str]]:
-    return [values[index:index + size] for index in range(0, len(values), size)]
 
 
 async def _sync_asset_events(db: AsyncSession, ticker: str, asset_type: str) -> tuple[bool, int]:
@@ -121,7 +102,7 @@ async def load_proventos_sync_pairs(
     eligible_pairs = [
         (ticker, asset_type)
         for ticker, asset_type in unique_pairs
-        if _is_event_ticker(ticker)
+        if is_event_ticker(ticker)
     ]
     return eligible_pairs, len(unique_pairs) - len(eligible_pairs)
 
@@ -133,7 +114,7 @@ async def run_daily_proventos_sync(
     *,
     only_held: bool = False,
 ) -> ProventosDailySyncResult:
-    """Coleta o catálogo global e materializa apenas carteiras elegíveis."""
+    """Coleta o catálogo global sem materializar direitos por carteira."""
     result = ProventosDailySyncResult()
 
     pairs, skipped = await load_proventos_sync_pairs(
@@ -192,38 +173,19 @@ async def run_daily_proventos_sync(
         if i + concurrency < len(pairs):
             await asyncio.sleep(SYNC_BATCH_DELAY)
 
-    materialize_tickers = [ticker for ticker, _ in pairs]
-    for ticker_batch in _chunks(materialize_tickers, MATERIALIZE_TICKER_BATCH_SIZE):
-        try:
-            result.materialized += await materialize_asset_dividends(
-                db=db,
-                tickers=ticker_batch,
-                commit=True,
-            )
-        except Exception as exc:
-            await db.rollback()
-            label = f"{ticker_batch[0]}..{ticker_batch[-1]}"
-            logger.error(
-                "[proventos_daily] falha na materializacao do lote %s (%s tickers): %s",
-                label,
-                len(ticker_batch),
-                exc,
-            )
-            result.errors.append(f"materialize[{label}]: {exc}")
-
+    synced_tickers = [ticker for ticker, _ in pairs]
     result.portfolios_invalidated = await _invalidate_affected_portfolios(
         db,
-        materialize_tickers,
+        synced_tickers,
     )
 
     logger.info(
-        "[proventos_daily] concluido: scanned=%s synced=%s failed=%s skipped=%s historical=%s materialized=%s portfolios_invalidated=%s errors=%s",
+        "[proventos_daily] concluido: scanned=%s synced=%s failed=%s skipped=%s historical=%s portfolios_invalidated=%s errors=%s",
         result.assets_scanned,
         result.assets_synced,
         result.assets_failed,
         result.assets_skipped,
         result.historical_events,
-        result.materialized,
         result.portfolios_invalidated,
         len(result.errors),
     )

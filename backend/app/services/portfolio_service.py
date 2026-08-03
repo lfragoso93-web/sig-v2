@@ -1,34 +1,44 @@
 import logging
-from datetime import date as DateType, datetime, timezone, timedelta
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, delete, update
-from fastapi import HTTPException
+from datetime import date as DateType
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 
-from app.models.portfolio import Portfolio
-from app.models.transaction import Transaction, OperationType
-from app.models.dividend import Dividend
+from fastapi import HTTPException
+from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.cache import cache_delete, cache_get, cache_set
 from app.models.asset import Asset, AssetType
-from app.models.audit_log import AuditLog
-from app.models.corporate_event import CorporateEvent
-from app.models.fixed_income import FixedIncomeInvestment
-from app.models.goal import Goal
-from app.models.irpf import IRPFReport
-from app.models.portfolio_class_target import PortfolioClassTarget
-from app.models.portfolio_position import PortfolioPosition
-from app.models.portfolio_snapshot import PortfolioSnapshot
+from app.models.portfolio import Portfolio
+from app.models.transaction import OperationType, Transaction
 from app.schemas.portfolio import PortfolioCreate, PortfolioUpdate
-from app.services.quotes_service import get_prices
-from app.services.class_target_service import get_targets_map
-from app.services.fx_service import get_usd_brl_batch, get_usd_brl_today
-from app.core.cache import cache_get, cache_set, cache_delete
 from app.services.audit_log_service import AuditLogService
+from app.services.canonical_dividend_aggregation_service import (
+    aggregate_received_entitlements,
+    load_received_entitlements_by_ticker,
+)
+from app.services.canonical_dividend_entitlement_reader import (
+    load_portfolio_dividend_entitlements,
+)
+from app.services.class_target_service import get_targets_map
+from app.services.corporate_action_position_reader import (
+    load_global_corporate_actions_by_ticker,
+)
 from app.services.fixed_income_valuation_service import (
     RENDA_FIXA_TYPE,
     get_fixed_income_totals,
     get_fixed_income_valuations,
     valuation_to_position_payload,
 )
+from app.services.fx_service import get_usd_brl_batch, get_usd_brl_today
+from app.services.position_timeline_projection import (
+    PositionMovement,
+    PositionMovementKind,
+    project_position_timeline,
+)
 from app.services.price_history_service import get_prices_at_date_batch
+from app.services.quotes_service import get_prices
 
 logger = logging.getLogger(__name__)
 
@@ -124,9 +134,11 @@ async def calc_raw_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
     result = await db.execute(
         select(Transaction)
         .where(Transaction.portfolio_id == portfolio_id)
-        .order_by(Transaction.date)
+        .order_by(Transaction.date, Transaction.id)
     )
     transactions = list(result.scalars().all())
+    if not transactions:
+        return []
 
     usd_dates_needed: list[str] = []
     for tx in transactions:
@@ -146,72 +158,76 @@ async def calc_raw_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
     if usd_dates_needed:
         fx_map = await get_usd_brl_batch(db, usd_dates_needed)
 
-    state: dict[str, dict] = {}
+    tickers = sorted({str(tx.ticker).strip().upper() for tx in transactions})
+    actions_by_ticker = await load_global_corporate_actions_by_ticker(db, tickers)
 
+    movements_by_ticker: dict[str, list[PositionMovement]] = {}
+    metadata_by_ticker: dict[str, dict] = {}
     for tx in transactions:
-        ticker = str(tx.ticker).upper()
-        qty = float(tx.quantity or 0)
-        price = float(tx.price or 0)
-        fees = float(tx.fees or 0)
-        op = tx.operation
+        ticker = str(tx.ticker).strip().upper()
         asset_type = _asset_type_str(tx.asset_type)
-
         is_usd = (
             (getattr(tx, "currency", "BRL") or "BRL").upper() == "USD"
             or asset_type in _USD_ASSET_TYPES
         )
 
-        fx_rate = 1.0
+        fx_rate = Decimal(1)
+        saved_rate = getattr(tx, "fx_rate", None)
         if is_usd:
-            saved_rate = getattr(tx, "fx_rate", None)
-            if saved_rate is not None and float(saved_rate or 0) > 0:
-                fx_rate = float(saved_rate)
+            if saved_rate is not None and Decimal(str(saved_rate or 0)) > 0:
+                fx_rate = Decimal(str(saved_rate))
             elif tx.date:
-                fx_rate = fx_map.get(tx.date.isoformat(), 1.0)
+                fx_rate = Decimal(str(fx_map.get(tx.date.isoformat(), 1.0)))
 
-        price_brl = price * fx_rate
-        fees_brl = fees * fx_rate
+        quantity = Decimal(str(tx.quantity or 0))
+        price = Decimal(str(tx.price or 0))
+        fees = Decimal(str(tx.fees or 0))
+        movement_kind = (
+            PositionMovementKind.BUY if _is_buy(tx.operation) else PositionMovementKind.SELL
+        )
+        movements_by_ticker.setdefault(ticker, []).append(
+            PositionMovement(
+                movement_date=tx.date,
+                kind=movement_kind,
+                quantity=quantity,
+                unit_price=price * fx_rate,
+                fees=fees * fx_rate,
+                total_cost_original_currency=(
+                    quantity * price + fees
+                    if is_usd and movement_kind == PositionMovementKind.BUY
+                    else Decimal(0)
+                ),
+            )
+        )
+        metadata_by_ticker.setdefault(
+            ticker,
+            {"asset_type": asset_type, "is_usd": is_usd},
+        )
 
-        if ticker not in state:
-            state[ticker] = {
-                "quantity": 0.0,
-                "total_cost": 0.0,
-                "total_cost_usd": 0.0,
-                "asset_type": asset_type,
-                "is_usd": is_usd,
-            }
-
-        s = state[ticker]
-
-        if _is_buy(op):
-            s["total_cost"] += qty * price_brl + fees_brl
-            s["quantity"] += qty
-            if is_usd:
-                s["total_cost_usd"] += qty * price + fees
-        elif _is_sell(op):
-            if s["quantity"] > 0:
-                ratio = min(qty, s["quantity"]) / s["quantity"]
-                s["total_cost"] -= s["total_cost"] * ratio
-                s["total_cost_usd"] -= s["total_cost_usd"] * ratio
-                s["quantity"] = max(0.0, s["quantity"] - qty)
-
-    positions = []
-    for ticker, s in state.items():
-        qty = s["quantity"]
-        if qty <= 1e-9:
+    positions: list[dict] = []
+    for ticker in sorted(movements_by_ticker):
+        projection = project_position_timeline(
+            movements=movements_by_ticker[ticker],
+            actions=actions_by_ticker.get(ticker, ()),
+        )
+        if projection.quantity <= Decimal("0.000000001"):
             continue
-        avg_brl = s["total_cost"] / qty if qty else 0.0
-        avg_usd = s["total_cost_usd"] / qty if qty and s["is_usd"] else None
-        at = s["asset_type"]
+
+        metadata = metadata_by_ticker[ticker]
+        asset_type = metadata["asset_type"]
+        avg_usd = projection.average_price_original_currency
         positions.append({
             "ticker": ticker,
-            "asset_type": at,
-            "asset_label": _TYPE_LABEL.get(at, at.replace("_", " ").title()),
-            "quantity": qty,
-            "avg_price": round(avg_brl, 8),
-            "avg_price_usd": round(avg_usd, 8) if avg_usd is not None else None,
-            "total_invested": round(s["total_cost"], 8),
-            "is_usd": s["is_usd"],
+            "asset_type": asset_type,
+            "asset_label": _TYPE_LABEL.get(
+                asset_type,
+                asset_type.replace("_", " ").title(),
+            ),
+            "quantity": float(projection.quantity),
+            "avg_price": round(float(projection.average_price), 8),
+            "avg_price_usd": round(float(avg_usd), 8) if avg_usd is not None else None,
+            "total_invested": round(float(projection.total_cost), 8),
+            "is_usd": metadata["is_usd"],
         })
 
     return positions
@@ -338,26 +354,17 @@ async def _fetch_previous_prices_batch(
 
 
 async def sum_dividends(db: AsyncSession, portfolio_id: int, cutoff: DateType | None = None) -> float:
-    from app.models.asset_dividend import AssetDividend
-
-    q = select(func.sum(Dividend.total_value)).where(Dividend.portfolio_id == portfolio_id)
-    if cutoff is not None:
-        q = (
-            q.outerjoin(AssetDividend, Dividend.asset_dividend_id == AssetDividend.id)
-            .where(
-                (AssetDividend.ex_date >= cutoff) | (Dividend.asset_dividend_id.is_(None))
+    try:
+        entitlements = await load_portfolio_dividend_entitlements(db, portfolio_id)
+        return float(
+            aggregate_received_entitlements(
+                entitlements,
+                cutoff=cutoff,
+                as_of=datetime.now(timezone.utc).date(),
             )
         )
-    try:
-        result = await db.execute(q)
-        total = result.scalar_one_or_none()
-        return float(total) if total is not None else 0.0
-    except Exception as e:
+    except (SQLAlchemyError, ValueError) as e:
         logger.warning(f"[portfolio_service] sum_dividends falhou: {e} — retornando 0.0")
-        try:
-            await db.rollback()
-        except Exception:
-            pass
         return 0.0
 
 
@@ -368,23 +375,16 @@ async def sum_dividends_for_tickers(
 ) -> float:
     if not tickers:
         return 0.0
-    q = (
-        select(func.sum(Dividend.total_value))
-        .where(
-            Dividend.portfolio_id == portfolio_id,
-            Dividend.ticker.in_(tickers),
-        )
-    )
     try:
-        result = await db.execute(q)
-        total = result.scalar_one_or_none()
-        return float(total) if total is not None else 0.0
-    except Exception as e:
+        totals = await load_received_entitlements_by_ticker(
+            db,
+            portfolio_id,
+            tickers,
+            as_of=datetime.now(timezone.utc).date(),
+        )
+        return float(sum(totals.values()))
+    except (SQLAlchemyError, ValueError) as e:
         logger.warning(f"[portfolio_service] sum_dividends_for_tickers falhou: {e} — retornando 0.0")
-        try:
-            await db.rollback()
-        except Exception:
-            pass
         return 0.0
 
 
@@ -395,23 +395,15 @@ async def sum_dividends_by_ticker(
 ) -> dict[str, float]:
     if not tickers:
         return {}
-    q = (
-        select(Dividend.ticker, func.sum(Dividend.total_value).label("total"))
-        .where(
-            Dividend.portfolio_id == portfolio_id,
-            Dividend.ticker.in_(tickers),
-        )
-        .group_by(Dividend.ticker)
-    )
     try:
-        result = await db.execute(q)
-        return {row.ticker: float(row.total or 0.0) for row in result.all()}
-    except Exception as e:
+        return await load_received_entitlements_by_ticker(
+            db,
+            portfolio_id,
+            tickers,
+            as_of=datetime.now(timezone.utc).date(),
+        )
+    except (SQLAlchemyError, ValueError) as e:
         logger.warning(f"[portfolio_service] sum_dividends_by_ticker falhou: {e} — retornando vazio")
-        try:
-            await db.rollback()
-        except Exception:
-            pass
         return {}
 
 
@@ -477,46 +469,6 @@ async def update_portfolio(db: AsyncSession, portfolio_id: int, user_id: int, da
     await db.refresh(portfolio)
     await invalidate_portfolio_cache(portfolio_id)
     return portfolio
-
-
-async def delete_portfolio(db: AsyncSession, portfolio_id: int, user_id: int) -> None:
-    portfolio = await get_portfolio(db, portfolio_id, user_id)
-    old_values = {"name": portfolio.name, "description": portfolio.description}
-
-    await AuditLogService.log_action(
-        db=db,
-        user_id=user_id,
-        action="DELETE",
-        resource_type="Portfolio",
-        resource_id=portfolio_id,
-        portfolio_id=portfolio_id,
-        old_values=old_values,
-    )
-    await db.flush()
-
-    await db.execute(
-        update(AuditLog)
-        .where(AuditLog.portfolio_id == portfolio_id)
-        .values(portfolio_id=None)
-    )
-
-    dependent_models = (
-        Dividend,
-        CorporateEvent,
-        FixedIncomeInvestment,
-        Goal,
-        IRPFReport,
-        PortfolioClassTarget,
-        PortfolioPosition,
-        PortfolioSnapshot,
-        Transaction,
-    )
-    for model in dependent_models:
-        await db.execute(delete(model).where(model.portfolio_id == portfolio_id))
-
-    await db.delete(portfolio)
-    await db.commit()
-    await invalidate_portfolio_cache(portfolio_id)
 
 
 async def _non_fixed_income_enriched(db: AsyncSession, portfolio_id: int) -> list[dict]:

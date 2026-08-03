@@ -10,7 +10,6 @@ onboarding, backfill de preços, logo e proventos:
   2. sincronizar histórico de preços;
   3. preencher logo/metadados faltantes;
   4. sincronizar eventos/proventos globais em AssetDividend;
-  5. materializar carteiras reais com posição na Data Com.
 
 O objetivo é que seed, onboarding, cron e comandos manuais chamem a mesma
 porta de entrada, reduzindo divergências de comportamento.
@@ -31,7 +30,7 @@ from app.core.asset_types import INTL_TYPES, NO_QUOTE_TYPES
 from app.integrations.brapi import fetch_fii_historical_v2, fetch_price_history_full, fetch_stocks_historical_v2
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
-from app.services.dividend_backfill_service import materialize_asset_dividends, run_backfill
+from app.services.dividend_backfill_service import run_backfill
 from app.services.logo_service import fetch_logo_url
 from app.services.price_history_service import persist_daily_prices
 
@@ -52,7 +51,6 @@ class AssetMarketPipelineResult:
     prices_inserted: int = 0
     logo_updated: bool = False
     events_synced: bool = False
-    materialized: int = 0
     skipped_steps: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
@@ -203,7 +201,6 @@ async def sync_asset_market_data(
     sync_prices: bool = True,
     sync_logo: bool = True,
     sync_events: bool = True,
-    materialize: bool = True,
     commit: bool = True,
 ) -> AssetMarketPipelineResult:
     """Executa o pipeline único de mercado para um ativo."""
@@ -244,11 +241,6 @@ async def sync_asset_market_data(
             else:
                 result.skipped_steps.append("events")
 
-            if materialize and at in _EVENT_TYPES:
-                result.materialized = await materialize_asset_dividends(db=db, tickers=[t], commit=False)
-            elif materialize:
-                result.skipped_steps.append("materialize_not_supported_for_type")
-
         if commit:
             await db.commit()
         else:
@@ -260,7 +252,7 @@ async def sync_asset_market_data(
         raise
 
     logger.info(
-        "[market_pipeline] %s/%s ok: created=%s updated=%s prices=%s logo=%s events=%s materialized=%s skipped=%s",
+        "[market_pipeline] %s/%s ok: created=%s updated=%s prices=%s logo=%s events=%s skipped=%s",
         result.ticker,
         result.asset_type,
         result.asset_created,
@@ -268,7 +260,6 @@ async def sync_asset_market_data(
         result.prices_inserted,
         result.logo_updated,
         result.events_synced,
-        result.materialized,
         result.skipped_steps,
     )
     return result

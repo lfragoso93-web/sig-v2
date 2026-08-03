@@ -1,153 +1,191 @@
+"""Coleta e persistência do catálogo global de eventos corporativos."""
+
+from __future__ import annotations
+
+import asyncio
 import json
 import logging
+import warnings
+from collections.abc import Awaitable, Callable
 from datetime import date
-from decimal import Decimal, ROUND_HALF_UP
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Any
+
+import httpx
+from pandas.errors import Pandas4Warning
 from sqlalchemy import select
-from app.models.corporate_event import CorporateEvent, CorporateEventType, CorporateEventStatus
-from app.models.portfolio_position import PortfolioPosition
-from app.models.transaction import Transaction, TransactionType
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.integrations.brapi import BRAPI_BASE, _auth_headers
 from app.models.asset import Asset
-from app.integrations.brapi import get_dividends_and_events
+from app.models.corporate_event import (
+    CorporateEvent,
+    CorporateEventStatus,
+)
+from app.services.corporate_action_engine import (
+    NormalizedCorporateAction,
+    normalize_brapi_corporate_actions,
+    normalize_yahoo_splits,
+)
+from app.services.dividend_history_seed_service import _yf_symbol
 
 logger = logging.getLogger(__name__)
 
+BrapiPayloadFetcher = Callable[[str], Awaitable[dict[str, Any]]]
+YahooSplitsFetcher = Callable[[str], Awaitable[list[tuple[date, float]]]]
+_SUPPORTED_ASSET_TYPES = {"ACAO", "BDR", "ETF_NACIONAL"}
 
-def _parse_brapi_event_id(event: dict, ticker: str) -> str:
-    return f"{ticker}_{event.get('type', '')}_{event.get('exDividendDate', '')}_{event.get('rate', '')}"
+
+class CorporateActionCollectionError(RuntimeError):
+    """Falha bloqueante na coleta do catálogo corporativo."""
 
 
-def _infer_event_type(event_type: str, ratio: float) -> CorporateEventType:
-    if event_type == "SPLIT":
-        return CorporateEventType.DESDOBRAMENTO if ratio > 1 else CorporateEventType.GRUPAMENTO
-    return CorporateEventType.BONIFICACAO
+async def fetch_brapi_corporate_actions_payload(ticker: str) -> dict[str, Any]:
+    """Consulta a rota Pro tipada de dividendos e eventos de ações."""
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(
+                f"{BRAPI_BASE}/v2/stocks/dividends",
+                headers=_auth_headers(),
+                params={"symbols": ticker.upper()},
+            )
+    except httpx.HTTPError as exc:
+        raise CorporateActionCollectionError(
+            f"{ticker}/brapi: falha de transporte"
+        ) from exc
+
+    if response.status_code in {400, 404}:
+        return {"results": []}
+    if response.status_code in {401, 403}:
+        raise CorporateActionCollectionError(
+            f"{ticker}/brapi: autorização recusada ({response.status_code})"
+        )
+    try:
+        response.raise_for_status()
+        payload = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise CorporateActionCollectionError(
+            f"{ticker}/brapi: resposta inválida"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise CorporateActionCollectionError(f"{ticker}/brapi: payload inválido")
+    return payload
+
+
+async def fetch_yahoo_splits(symbol: str) -> list[tuple[date, float]]:
+    """Consulta somente os fatores de split/grupamento publicados pelo Yahoo."""
+
+    def _sync() -> list[tuple[date, float]]:
+        import yfinance as yf
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r".*Timestamp\.utcnow is deprecated.*",
+                category=Pandas4Warning,
+            )
+            actions = yf.Ticker(symbol).actions.copy(deep=True)
+        if actions.empty or "Stock Splits" not in actions.columns:
+            return []
+
+        rows: list[tuple[date, float]] = []
+        for timestamp, value in actions["Stock Splits"].items():
+            factor = float(value or 0)
+            if factor <= 0:
+                continue
+            event_date = (
+                timestamp.date()
+                if hasattr(timestamp, "date")
+                else date.fromisoformat(str(timestamp)[:10])
+            )
+            rows.append((event_date, factor))
+        return rows
+
+    try:
+        return await asyncio.to_thread(_sync)
+    except Exception as exc:
+        raise CorporateActionCollectionError(
+            f"{symbol}/yahoo: provedor indisponível"
+        ) from exc
+
+
+def _serialized_action(action: NormalizedCorporateAction) -> str:
+    return json.dumps(
+        {
+            "source": action.source,
+            "source_event_id": action.source_event_id,
+            "ticker": action.ticker,
+            "event_date": action.event_date.isoformat(),
+            "event_type": action.kind.value,
+            "quantity_factor": str(action.quantity_factor),
+            "provider_payload": action.raw_payload,
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
 
 
 async def sync_corporate_events_for_asset(
-    db: AsyncSession, asset: Asset
+    db: AsyncSession,
+    asset: Asset,
+    *,
+    brapi_fetcher: BrapiPayloadFetcher | None = None,
+    yahoo_fetcher: YahooSplitsFetcher | None = None,
 ) -> list[CorporateEvent]:
-    ticker = asset.brapi_ticker or asset.ticker
-    events = await get_dividends_and_events(ticker)
-    new_events = []
+    """Coleta fontes explícitas e persiste somente eventos globais idempotentes."""
 
-    for raw in events:
-        event_type_str = raw.get("type", "")
-        if event_type_str not in ("SPLIT", "BONUS"):
+    raw_asset_type = asset.asset_type
+    asset_type = str(getattr(raw_asset_type, "value", raw_asset_type)).upper()
+    if asset_type not in _SUPPORTED_ASSET_TYPES:
+        return []
+
+    ticker = str(asset.brapi_ticker or asset.ticker).strip().upper()
+    if not ticker:
+        raise CorporateActionCollectionError("ativo sem ticker corporativo")
+
+    brapi_fetcher = brapi_fetcher or fetch_brapi_corporate_actions_payload
+    yahoo_fetcher = yahoo_fetcher or fetch_yahoo_splits
+    brapi_payload = await brapi_fetcher(ticker)
+    yahoo_rows = await yahoo_fetcher(_yf_symbol(ticker, asset_type))
+    actions = (
+        *normalize_brapi_corporate_actions(ticker, brapi_payload),
+        *normalize_yahoo_splits(ticker, yahoo_rows),
+    )
+    if not actions:
+        return []
+
+    ids = [action.source_event_id for action in actions]
+    existing_result = await db.execute(
+        select(CorporateEvent.brapi_event_id).where(
+            CorporateEvent.brapi_event_id.in_(ids)
+        )
+    )
+    existing_ids = set(existing_result.scalars().all())
+
+    created: list[CorporateEvent] = []
+    for action in sorted(actions, key=lambda item: (item.event_date, item.source_event_id)):
+        if action.source_event_id in existing_ids:
             continue
-        rate = float(raw.get("rate", 0) or 0)
-        if rate <= 0:
-            continue
-
-        brapi_id = _parse_brapi_event_id(raw, ticker)
-        existing = (await db.execute(
-            select(CorporateEvent).where(CorporateEvent.brapi_event_id == brapi_id)
-        )).scalar_one_or_none()
-        if existing:
-            continue
-
-        ex_date_str = raw.get("exDividendDate")
-        try:
-            ex_date = date.fromisoformat(ex_date_str[:10]) if ex_date_str else date.today()
-        except Exception:
-            ex_date = date.today()
-
         event = CorporateEvent(
             asset_id=asset.id,
-            event_type=_infer_event_type(event_type_str, rate),
-            status=CorporateEventStatus.PENDENTE,
-            event_date=ex_date,
-            ratio=Decimal(str(rate)),
-            brapi_event_id=brapi_id,
-            raw_data=json.dumps(raw),
+            ticker=ticker,
+            event_type=action.kind.value,
+            status=CorporateEventStatus.PENDENTE.value,
+            event_date=action.event_date,
+            ratio=action.quantity_factor,
+            description=(
+                f"{action.kind.value} global coletado de {action.source} "
+                f"(fator {action.quantity_factor})"
+            ),
+            brapi_event_id=action.source_event_id,
+            raw_data=_serialized_action(action),
+            portfolio_id=None,
         )
         db.add(event)
-        new_events.append(event)
-        logger.info(f"[CorporateEvent] Novo: {ticker} {event.event_type} {ex_date} ratio={rate}")
+        created.append(event)
+        existing_ids.add(action.source_event_id)
 
-    await db.flush()
-    return new_events
-
-
-async def apply_pending_events(db: AsyncSession) -> int:
-    from datetime import datetime
-    today = date.today()
-    pending = (await db.execute(
-        select(CorporateEvent).where(
-            CorporateEvent.status == CorporateEventStatus.PENDENTE,
-            CorporateEvent.event_date <= today,
-        )
-    )).scalars().all()
-
-    applied_count = 0
-    for event in pending:
-        positions = (await db.execute(
-            select(PortfolioPosition).where(
-                PortfolioPosition.asset_id == event.asset_id,
-                PortfolioPosition.quantity > 0,
-            )
-        )).scalars().all()
-
-        for position in positions:
-            try:
-                await _apply_event_to_position(db, event, position)
-            except Exception as e:
-                logger.error(f"[CorporateEvent] Erro evento {event.id} posicao {position.id}: {e}")
-
-        event.status = CorporateEventStatus.APLICADO
-        event.applied_at = datetime.utcnow()
-        applied_count += 1
-        logger.info(f"[CorporateEvent] Evento {event.id} aplicado em {len(positions)} posicoes")
-
-    await db.flush()
-    return applied_count
-
-
-async def _apply_event_to_position(
-    db: AsyncSession,
-    event: CorporateEvent,
-    position: PortfolioPosition,
-) -> None:
-    qty = position.quantity
-    avg = position.average_price
-    ratio = event.ratio
-
-    if event.event_type == CorporateEventType.DESDOBRAMENTO:
-        position.quantity = (qty * ratio).quantize(Decimal("0.00000001"), rounding=ROUND_HALF_UP)
-        position.average_price = (avg / ratio).quantize(Decimal("0.00000001"), rounding=ROUND_HALF_UP)
-        tx_qty = position.quantity - qty
-        tx_price = ratio
-        tx_type = TransactionType.DESDOBRAMENTO
-
-    elif event.event_type == CorporateEventType.GRUPAMENTO:
-        position.quantity = (qty / ratio).quantize(Decimal("0.00000001"), rounding=ROUND_HALF_UP)
-        position.average_price = (avg * ratio).quantize(Decimal("0.00000001"), rounding=ROUND_HALF_UP)
-        tx_qty = qty - position.quantity
-        tx_price = ratio
-        tx_type = TransactionType.GRUPAMENTO
-
-    elif event.event_type == CorporateEventType.BONIFICACAO:
-        bonus_qty = (qty * ratio).quantize(Decimal("0.00000001"), rounding=ROUND_HALF_UP)
-        total_qty = qty + bonus_qty
-        position.average_price = (qty * avg / total_qty).quantize(
-            Decimal("0.00000001"), rounding=ROUND_HALF_UP
-        )
-        position.quantity = total_qty
-        tx_qty = bonus_qty
-        tx_price = Decimal("0")
-        tx_type = TransactionType.BONIFICACAO
-    else:
-        return
-
-    db.add(Transaction(
-        portfolio_id=position.portfolio_id,
-        asset_id=event.asset_id,
-        transaction_type=tx_type,
-        date=event.event_date,
-        quantity=tx_qty,
-        unit_price=tx_price,
-        total_cost=Decimal("0"),
-        fees=Decimal("0"),
-        notes=f"Aplicado automaticamente - Evento #{event.id} via BRAPI PRO",
-        is_day_trade=False,
-    ))
-    await db.flush()
+    if created:
+        await db.flush()
+    return created

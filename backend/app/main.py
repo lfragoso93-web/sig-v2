@@ -22,7 +22,7 @@ from app.middleware import SecurityHeadersMiddleware
 from app.routers import (
     auth, portfolios, transactions, dividends, positions,
     users, proventos, performance, admin,
-    assets, sync, fx, goals, irpf,
+    assets, fx, goals, irpf,
     analysis, fixed_income, quotes, treasury,
 )
 from app.routers import debug
@@ -180,7 +180,13 @@ async def _boot_sequence() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     start_scheduler()
-    asyncio.create_task(_boot_sequence())
+    if settings.ENABLE_BOOT_MARKET_SYNC:
+        asyncio.create_task(_boot_sequence())
+    else:
+        logger.info(
+            "[Boot] sincronizacao automatica de mercado desabilitada "
+            "(ENABLE_BOOT_MARKET_SYNC=false)"
+        )
     yield
     await engine.dispose()
 
@@ -292,7 +298,6 @@ app.include_router(fx.router,              prefix=f"{PREFIX}/fx",           tags
 app.include_router(quotes.router,          prefix=f"{PREFIX}/quotes",       tags=["quotes"])
 app.include_router(prices.router,          prefix=f"{PREFIX}/prices",       tags=["prices"])
 
-app.include_router(sync.router,            prefix=f"{PREFIX}/sync",         tags=["sync"])
 app.include_router(irpf.router,            prefix=f"{PREFIX}/irpf",         tags=["irpf"])
 app.include_router(analysis.router,        prefix=f"{PREFIX}/analysis",     tags=["analysis"])
 app.include_router(fixed_income.router,    prefix=f"{PREFIX}/fixed-income", tags=["fixed_income"])

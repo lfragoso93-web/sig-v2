@@ -1,13 +1,15 @@
 """Testes para goals_service — gerenciamento de metas financeiras."""
 import pytest
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from decimal import Decimal
 from dateutil.relativedelta import relativedelta
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.goals_service import (
     _calc_projection,
     _enrich,
+    _get_proventos_mensais,
     _resolve_current_value,
     list_goals,
     get_goal,
@@ -17,6 +19,14 @@ from app.services.goals_service import (
 )
 from app.models.goal import Goal
 from app.schemas.goal import GoalCreate, GoalUpdate
+from app.services.canonical_dividend_entitlement import (
+    DividendEntitlement,
+    DividendEvent,
+    EntitlementReason,
+)
+from app.services.canonical_dividend_entitlement_reader import (
+    PortfolioDividendEntitlement,
+)
 
 
 class TestCalcProjection:
@@ -136,6 +146,68 @@ class TestResolveCurrentValue:
         value = await _resolve_current_value(db, 1, "LIVRE", 1000.0)
         
         assert value == 1000.0
+
+
+@pytest.mark.asyncio
+async def test_get_proventos_mensais_uses_paid_canonical_net_brl():
+    today = date.today()
+
+    def right(
+        event_id: int,
+        net: str,
+        *,
+        currency: str = "BRL",
+        payment_date: date | None = today,
+    ) -> PortfolioDividendEntitlement:
+        event = DividendEvent(
+            event_id=event_id,
+            record_date=today,
+            ex_date=today,
+            payment_date=payment_date,
+            event_type="DIVIDENDO",
+            value_per_unit=Decimal("1"),
+            currency=currency,
+        )
+        entitlement = DividendEntitlement(
+            event_id=event_id,
+            reason=EntitlementReason.ELIGIBLE,
+            entitlement_date=today,
+            eligible_quantity=Decimal("1"),
+            gross_amount=Decimal(net),
+            withholding_tax=Decimal("0"),
+            net_amount=Decimal(net),
+            currency=currency,
+        )
+        return PortfolioDividendEntitlement(
+            ticker="TEST3",
+            asset_type="ACAO",
+            event=event,
+            entitlement=entitlement,
+            approved_on=None,
+            gross_value_per_unit=None,
+            factor=None,
+            complete_factor=None,
+            isin_code=None,
+            asset_issued=None,
+            related_to=None,
+            remarks=None,
+        )
+
+    rights = [
+        right(1, "120"),
+        right(2, "120", currency="USD"),
+        right(3, "120", payment_date=None),
+    ]
+    with patch(
+        "app.services.goals_service.load_portfolio_dividend_entitlements",
+        new=AsyncMock(return_value=rights),
+    ):
+        monthly = await _get_proventos_mensais(
+            AsyncMock(spec=AsyncSession),
+            portfolio_id=1,
+        )
+
+    assert monthly == 10.0
 
 
 @pytest.mark.asyncio

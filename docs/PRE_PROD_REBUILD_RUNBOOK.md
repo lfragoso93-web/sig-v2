@@ -4,7 +4,8 @@
 > Backup e restauração isolada: #183  
 > Executor e ensaio isolado: #196  
 > Limpeza real controlada: #199  
-> Última atualização: 24/07/2026
+> Seed isolado de proventos: #226  
+> Última atualização: 28/07/2026
 
 ## Objetivo
 
@@ -39,6 +40,8 @@ A execução real ainda não ocorreu. A cadeia `20260724-100752` foi invalidada 
 - Cada etapa deve produzir contagens, checksums, duração, estado final e ativos não resolvidos.
 - Uma falha interrompe a sequência; etapas posteriores não podem mascarar erro anterior.
 - Seeds, coleta, importação e rebuild não podem ocorrer durante a transação de limpeza.
+- Cada seed posterior usa contrato, lock, transação, evidência e reconciliação próprios.
+- O seed de proventos segue `pre-prod-dividends-seed.v2`: leitura limitada a `assets` e `asset_dividends`; escrita limitada a `asset_dividends`.
 - Nenhum artefato pode ser editado manualmente ou sobrescrito.
 
 ## Política oficial de classificação
@@ -311,12 +314,15 @@ Ordem:
 1. catálogo e aliases;
 2. B3 COTAHIST;
 3. Tesouro oficial;
-4. benchmarks e câmbio;
-5. eventos e proventos;
-6. importação da carteira;
-7. posições e custos médios;
-8. snapshots consolidados e por classe;
-9. auditoria final.
+4. benchmarks;
+5. câmbio;
+6. eventos e proventos pelo contrato `pre-prod-dividends-seed.v2`;
+7. importação da carteira;
+8. posições e custos médios;
+9. snapshots consolidados e por classe;
+10. auditoria final;
+
+O estágio de proventos não pode reutilizar scheduler, endpoint em background, backfill pós-transação, asset seed, pipeline de mercado ou `full_market_rebuild`. Sua implementação deve obedecer à Issue #226 e ao contrato `docs/PRE_PROD_DIVIDENDS_SEED_CONTRACT.md`, com advisory lock dedicado, transação única, rollback integral, fontes explícitas e duas execuções controladas comparadas offline.
 
 O primeiro estágio possui entrada dedicada e não dispara os demais:
 
@@ -371,6 +377,14 @@ Uma segunda execução, sem novos dados externos ou transações, deve:
 - Issue #188 / PR #191: exportação concluída.
 - Issue #195 / PR #194: plano concluído.
 - Issue #196 / PR #198: executor e ensaio isolado concluídos.
-- Issue #199: autorização e execução real em andamento.
-- Cadeia `20260724-100752`: validada, mas não reutilizável após mudança do SHA.
-- Próximo gate: promover o perfil real, gerar nova cadeia e registrar nova autorização composta.
+- Issue #199: limpeza real concluída e reconciliada.
+- Cadeia `20260724-145110`: limpeza confirmada no commit operacional
+  `43886774608b816f921c9a76406a261b320cb514`.
+- Issue #226: contrato canônico `pre-prod-dividends-seed.v2`, implementação,
+  comparador, wrapper e migração funcional concluídos; duas execuções reais
+  controladas permanecem pendentes.
+- Migration `20260731_drop_legacy_divs`: preparada e testada, sem execução; a
+  contração física depende da janela da #158, backup aprovado, inventário e
+  contagem zero em `dividends` e `dividends_sync_jobs`.
+- Próximo gate operacional de proventos: autorizar explicitamente e executar as
+  duas rodadas v2 no mesmo SHA e janela, preservando as três evidências.

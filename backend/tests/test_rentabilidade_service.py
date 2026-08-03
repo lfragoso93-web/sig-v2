@@ -25,7 +25,6 @@ from app.models.asset import Asset, AssetType, AssetCurrency
 from app.models.portfolio import Portfolio
 from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.transaction import Transaction, OperationType
-from app.models.user import User
 
 
 # ---------------------------------------------------------------------------
@@ -151,6 +150,49 @@ def _make_prices_mock(prices: dict[str, float]):
 # ---------------------------------------------------------------------------
 # get_kpis
 # ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+class TestCanonicalDividends:
+
+    async def test_carrega_totais_recebidos_uma_vez(self):
+        from app.services.rentabilidade_service import _proventos_totals
+
+        as_of = date(2026, 7, 30)
+        db = object()
+        loader = AsyncMock(return_value=(125.50, 800.75))
+
+        with patch(
+            "app.services.rentabilidade_service."
+            "load_received_entitlement_totals",
+            loader,
+        ):
+            result = await _proventos_totals(db, 17, as_of=as_of)
+
+        assert result == (125.50, 800.75)
+        loader.assert_awaited_once_with(
+            db,
+            17,
+            cutoff=as_of - timedelta(days=365),
+            as_of=as_of,
+        )
+
+    async def test_falha_do_leitor_retorna_zeros(self):
+        from app.services.rentabilidade_service import _proventos_totals
+
+        loader = AsyncMock(side_effect=RuntimeError("reader unavailable"))
+        with patch(
+            "app.services.rentabilidade_service."
+            "load_received_entitlement_totals",
+            loader,
+        ):
+            result = await _proventos_totals(
+                object(),
+                17,
+                as_of=date(2026, 7, 30),
+            )
+
+        assert result == (0.0, 0.0)
+
 
 @pytest.mark.asyncio
 class TestGetKpis:

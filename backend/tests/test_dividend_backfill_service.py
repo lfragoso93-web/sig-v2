@@ -1,29 +1,24 @@
 """
 Testes de integração para dividend_backfill_service.py.
 """
-import pytest
+
 from datetime import date
 from decimal import Decimal
 from unittest.mock import AsyncMock, patch
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
+import pytest
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
-from app.models.dividend import Dividend, DividendStatus, DividendType
+from app.models.dividend_enums import DividendType
 from app.models.portfolio import Portfolio
-from app.models.transaction import Transaction, OperationType
+from app.models.transaction import OperationType, Transaction
 from app.services.dividend_backfill_service import (
+    SKIP_TYPES,
     _parse_raw_dividend,
     backfill_dividends,
-    backfill_all_tickers,
-    materialize_asset_dividends,
-    SKIP_TYPES,
 )
-from app.services.dividend_entitlement_service import (
-    calculate_net_quantity,
-    reconcile_portfolio_dividend_rights,
-)
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def _make_tx(
@@ -139,50 +134,47 @@ class TestParseRawDividend:
         assert _parse_raw_dividend(raw) is None
 
 
-class TestCalculateNetQuantity:
-    def test_zero_sem_transacoes(self):
-        assert calculate_net_quantity([], date(2024, 1, 1)) == 0.0
-
-    def test_compras_somam(self):
-        txs = [(date(2024, 1, 1), OperationType.buy, 100), (date(2024, 2, 1), OperationType.buy, 50)]
-        assert calculate_net_quantity(txs, date(2024, 3, 1)) == 150.0
-
-    def test_vendas_subtraem(self):
-        txs = [(date(2024, 1, 1), OperationType.buy, 100), (date(2024, 2, 1), OperationType.sell, 40)]
-        assert calculate_net_quantity(txs, date(2024, 3, 1)) == 60.0
-
-    def test_nao_conta_transacoes_futuras(self):
-        txs = [(date(2024, 1, 1), OperationType.buy, 100), (date(2024, 6, 1), OperationType.buy, 200)]
-        assert calculate_net_quantity(txs, date(2024, 3, 1)) == 100.0
-
-    def test_nunca_retorna_negativo(self):
-        txs = [(date(2024, 1, 1), OperationType.sell, 999)]
-        assert calculate_net_quantity(txs, date(2024, 6, 1)) == 0.0
-
-
 @pytest.mark.asyncio
 class TestBackfillDividends:
-    async def test_skip_types_nao_chamam_api(self, db: AsyncSession, portfolio: Portfolio):
+    async def test_skip_types_nao_chamam_api(
+        self, db: AsyncSession, portfolio: Portfolio
+    ):
         for skip_type in SKIP_TYPES:
-            with patch("app.services.dividend_backfill_service._fetch_dividends_brapi", new_callable=AsyncMock) as mock_brapi:
-                await backfill_dividends(db, portfolio.id, "BTC", skip_type)
+            with patch(
+                "app.services.dividend_backfill_service._fetch_dividends_brapi",
+                new_callable=AsyncMock,
+            ) as mock_brapi:
+                await backfill_dividends(db, "BTC", skip_type)
                 mock_brapi.assert_not_called()
 
-    async def test_cria_asset_dividend_e_dividend_com_record_date(self, db: AsyncSession, portfolio: Portfolio):
-        await _make_tx(db, portfolio.id, "PETR4", OperationType.buy, 100, date(2023, 1, 1))
-        raw_dividends = [{
-            "lastDatePrior": "2024-03-01",
-            "paymentDate": "2024-03-15",
-            "rate": 1.50,
-            "label": "Dividendos",
-            "eventCategory": "cash",
-        }]
+    async def test_cria_somente_asset_dividend_com_record_date(
+        self, db: AsyncSession, portfolio: Portfolio
+    ):
+        await _make_tx(
+            db, portfolio.id, "PETR4", OperationType.buy, 100, date(2023, 1, 1)
+        )
+        raw_dividends = [
+            {
+                "lastDatePrior": "2024-03-01",
+                "paymentDate": "2024-03-15",
+                "rate": 1.50,
+                "label": "Dividendos",
+                "eventCategory": "cash",
+            }
+        ]
 
-        with patch("app.services.dividend_backfill_service._fetch_dividends_brapi", new_callable=AsyncMock, return_value=raw_dividends):
-            await backfill_dividends(db, portfolio.id, "PETR4", "ACAO")
+        with patch(
+            "app.services.dividend_backfill_service._fetch_dividends_brapi",
+            new_callable=AsyncMock,
+            return_value=raw_dividends,
+        ):
+            await backfill_dividends(db, "PETR4", "ACAO")
 
-        from sqlalchemy import select
-        ad_result = await db.execute(select(AssetDividend).join(Asset, AssetDividend.asset_id == Asset.id).where(Asset.ticker == "PETR4"))
+        ad_result = await db.execute(
+            select(AssetDividend)
+            .join(Asset, AssetDividend.asset_id == Asset.id)
+            .where(Asset.ticker == "PETR4")
+        )
         ads = ad_result.scalars().all()
         assert len(ads) == 1
         assert ads[0].record_date == date(2024, 3, 1)
@@ -190,258 +182,66 @@ class TestBackfillDividends:
         assert ads[0].dividend_type == DividendType.DIVIDENDO
         assert float(ads[0].value_per_unit) == pytest.approx(1.50)
 
-        div_result = await db.execute(select(Dividend).where(Dividend.portfolio_id == portfolio.id))
-        divs = div_result.scalars().all()
-        assert len(divs) == 1
-        assert float(divs[0].total_value) == pytest.approx(150.0)
-
-    async def test_jcp_aplica_desconto_15_porcento(self, db: AsyncSession, portfolio: Portfolio):
-        await _make_tx(db, portfolio.id, "ITUB4", OperationType.buy, 200, date(2023, 1, 1))
-        raw_dividends = [{
-            "lastDatePrior": "2024-04-01",
-            "paymentDate": "2024-04-15",
-            "rate": 1.00,
-            "label": "JCP",
-            "eventCategory": "cash",
-        }]
-
-        with patch("app.services.dividend_backfill_service._fetch_dividends_brapi", new_callable=AsyncMock, return_value=raw_dividends):
-            await backfill_dividends(db, portfolio.id, "ITUB4", "ACAO")
-
-        from sqlalchemy import select
-        div = (await db.execute(select(Dividend).where(Dividend.portfolio_id == portfolio.id))).scalars().first()
-        assert div is not None
-        assert float(div.total_value) == pytest.approx(200.0)
-        assert float(div.net_value) == pytest.approx(170.0)
-
-    async def test_sem_posicao_na_data_com_nao_cria_dividend(self, db: AsyncSession, portfolio: Portfolio):
-        await _make_tx(db, portfolio.id, "ABEV3", OperationType.buy, 100, date(2025, 1, 1))
-        raw_dividends = [{
-            "lastDatePrior": "2024-06-01",
-            "paymentDate": "2024-06-15",
-            "rate": 0.50,
-            "label": "Dividendos",
-            "eventCategory": "cash",
-        }]
-
-        with patch("app.services.dividend_backfill_service._fetch_dividends_brapi", new_callable=AsyncMock, return_value=raw_dividends):
-            await backfill_dividends(db, portfolio.id, "ABEV3", "ACAO")
-
-        from sqlalchemy import select
-        divs = (await db.execute(select(Dividend).where(Dividend.portfolio_id == portfolio.id))).scalars().all()
-        assert len(divs) == 0
-
-
-@pytest.mark.asyncio
-class TestMaterializeAssetDividends:
-    async def test_materializa_usando_data_com(self, db: AsyncSession, portfolio: Portfolio):
-        asset = Asset(ticker="BBAS3", name="BBAS3", asset_type="ACAO", currency="BRL")
-        db.add(asset)
-        await db.flush()
-        await _make_tx(db, portfolio.id, "BBAS3", OperationType.buy, 100, date(2024, 1, 1))
-        await _make_tx(db, portfolio.id, "BBAS3", OperationType.sell, 100, date(2024, 3, 2))
-        ad = AssetDividend(
-            asset_id=asset.id,
-            record_date=date(2024, 3, 1),
-            ex_date=date(2024, 3, 4),
-            payment_date=date(2024, 3, 15),
-            value_per_unit=Decimal("1.00"),
-            dividend_type=DividendType.DIVIDENDO,
-            source="test",
-        )
-        db.add(ad)
-        await db.flush()
-
-        changed = await materialize_asset_dividends(db, tickers=["BBAS3"], portfolio_id=portfolio.id, commit=False)
-        assert changed == 1
-
-        from sqlalchemy import select
-        div = (await db.execute(select(Dividend).where(Dividend.portfolio_id == portfolio.id))).scalars().first()
-        assert div is not None
-        assert float(div.total_value) == pytest.approx(100.0)
-
-    async def test_materializacao_repetida_nao_duplica_direito(
-        self,
-        db: AsyncSession,
-        portfolio: Portfolio,
+    async def test_jcp_coleta_evento_sem_materializar_carteira(
+        self, db: AsyncSession, portfolio: Portfolio
     ):
-        asset = Asset(ticker="EGIE3", name="EGIE3", asset_type="ACAO", currency="BRL")
-        db.add(asset)
-        await db.flush()
-        await _make_tx(db, portfolio.id, "EGIE3", OperationType.buy, 80, date(2024, 1, 1))
-
-        event = AssetDividend(
-            asset_id=asset.id,
-            record_date=date(2024, 3, 1),
-            ex_date=date(2024, 3, 4),
-            payment_date=date(2024, 3, 15),
-            value_per_unit=Decimal("1.25"),
-            dividend_type=DividendType.DIVIDENDO,
-            source="test",
-        )
-        db.add(event)
-        await db.flush()
-
-        await materialize_asset_dividends(
-            db,
-            tickers=["EGIE3"],
-            portfolio_id=portfolio.id,
-            commit=False,
-        )
-        await materialize_asset_dividends(
-            db,
-            tickers=["EGIE3"],
-            portfolio_id=portfolio.id,
-            commit=False,
-        )
-
-        from sqlalchemy import select
-
-        dividends = (
-            await db.execute(
-                select(Dividend).where(
-                    Dividend.portfolio_id == portfolio.id,
-                    Dividend.asset_dividend_id == event.id,
-                )
-            )
-        ).scalars().all()
-
-        assert len(dividends) == 1
-        assert float(dividends[0].quantity) == pytest.approx(80.0)
-        assert float(dividends[0].net_value) == pytest.approx(100.0)
-
-
-@pytest.mark.asyncio
-class TestReconcilePortfolioDividendRights:
-    async def test_recalcula_direito_apos_reducao_da_posicao(
-        self,
-        db: AsyncSession,
-        portfolio: Portfolio,
-    ):
-        asset = Asset(ticker="CPLE6", name="CPLE6", asset_type="ACAO", currency="BRL")
-        db.add(asset)
-        await db.flush()
-        await _make_tx(db, portfolio.id, "CPLE6", OperationType.buy, 100, date(2024, 1, 1))
-
-        event = AssetDividend(
-            asset_id=asset.id,
-            record_date=date(2024, 3, 1),
-            ex_date=date(2024, 3, 4),
-            payment_date=date(2024, 3, 15),
-            value_per_unit=Decimal("1.25"),
-            dividend_type=DividendType.DIVIDENDO,
-            source="test",
-        )
-        db.add(event)
-        await db.flush()
-        await materialize_asset_dividends(
-            db,
-            tickers=["CPLE6"],
-            portfolio_id=portfolio.id,
-            commit=False,
-        )
         await _make_tx(
-            db,
-            portfolio.id,
-            "CPLE6",
-            OperationType.sell,
-            40,
-            date(2024, 2, 1),
+            db, portfolio.id, "ITUB4", OperationType.buy, 200, date(2023, 1, 1)
         )
+        raw_dividends = [
+            {
+                "lastDatePrior": "2024-04-01",
+                "paymentDate": "2024-04-15",
+                "rate": 1.00,
+                "label": "JCP",
+                "eventCategory": "cash",
+            }
+        ]
 
-        changed = await reconcile_portfolio_dividend_rights(
-            db,
-            portfolio.id,
-            ["CPLE6"],
-            commit=False,
-        )
+        with patch(
+            "app.services.dividend_backfill_service._fetch_dividends_brapi",
+            new_callable=AsyncMock,
+            return_value=raw_dividends,
+        ):
+            await backfill_dividends(db, "ITUB4", "ACAO")
 
-        from sqlalchemy import select
-
-        dividend = (
+        event = (
             await db.execute(
-                select(Dividend).where(
-                    Dividend.portfolio_id == portfolio.id,
-                    Dividend.asset_dividend_id == event.id,
-                )
+                select(AssetDividend)
+                .join(Asset, AssetDividend.asset_id == Asset.id)
+                .where(Asset.ticker == "ITUB4")
             )
         ).scalar_one()
+        assert event.dividend_type == DividendType.JCP
 
-        assert changed == 1
-        assert float(dividend.quantity) == pytest.approx(60.0)
-        assert float(dividend.total_value) == pytest.approx(75.0)
-        assert float(dividend.net_value) == pytest.approx(75.0)
-
-    async def test_remove_direito_apos_exclusao_da_posicao(
-        self,
-        db: AsyncSession,
-        portfolio: Portfolio,
+    async def test_sem_posicao_na_data_com_nao_cria_dividend(
+        self, db: AsyncSession, portfolio: Portfolio
     ):
-        asset = Asset(ticker="CMIG4", name="CMIG4", asset_type="ACAO", currency="BRL")
-        db.add(asset)
-        await db.flush()
-        transaction = await _make_tx(
-            db,
-            portfolio.id,
-            "CMIG4",
-            OperationType.buy,
-            100,
-            date(2024, 1, 1),
+        await _make_tx(
+            db, portfolio.id, "ABEV3", OperationType.buy, 100, date(2025, 1, 1)
         )
+        raw_dividends = [
+            {
+                "lastDatePrior": "2024-06-01",
+                "paymentDate": "2024-06-15",
+                "rate": 0.50,
+                "label": "Dividendos",
+                "eventCategory": "cash",
+            }
+        ]
 
-        event = AssetDividend(
-            asset_id=asset.id,
-            record_date=date(2024, 3, 1),
-            ex_date=date(2024, 3, 4),
-            payment_date=date(2024, 3, 15),
-            value_per_unit=Decimal("1.00"),
-            dividend_type=DividendType.DIVIDENDO,
-            source="test",
-        )
-        db.add(event)
-        await db.flush()
-        await materialize_asset_dividends(
-            db,
-            tickers=["CMIG4"],
-            portfolio_id=portfolio.id,
-            commit=False,
-        )
+        with patch(
+            "app.services.dividend_backfill_service._fetch_dividends_brapi",
+            new_callable=AsyncMock,
+            return_value=raw_dividends,
+        ):
+            await backfill_dividends(db, "ABEV3", "ACAO")
 
-        await db.delete(transaction)
-        await db.flush()
-        changed = await reconcile_portfolio_dividend_rights(
-            db,
-            portfolio.id,
-            ["CMIG4"],
-            commit=False,
-        )
-
-        from sqlalchemy import select
-
-        dividends = (
+        event = (
             await db.execute(
-                select(Dividend).where(
-                    Dividend.portfolio_id == portfolio.id,
-                    Dividend.asset_dividend_id == event.id,
-                )
+                select(AssetDividend)
+                .join(Asset, AssetDividend.asset_id == Asset.id)
+                .where(Asset.ticker == "ABEV3")
             )
-        ).scalars().all()
-
-        assert changed == 1
-        assert dividends == []
-
-
-@pytest.mark.asyncio
-class TestBackfillAllTickers:
-    async def test_filtra_skip_types(self, db: AsyncSession, portfolio: Portfolio):
-        tickers = [("PETR4", "ACAO"), ("BTC", "CRIPTO"), ("TNLP11", "TESOURO_DIRETO")]
-        processed = []
-
-        async def fake_backfill(db, portfolio_id, ticker, asset_type):
-            processed.append(ticker)
-
-        with patch("app.services.dividend_backfill_service.backfill_dividends", side_effect=fake_backfill):
-            result = await backfill_all_tickers(db, portfolio.id, tickers)
-
-        assert result == ["PETR4"]
-        assert processed == ["PETR4"]
+        ).scalar_one()
+        assert event.ex_date == date(2024, 6, 3)

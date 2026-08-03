@@ -22,7 +22,7 @@ from sqlalchemy import select
 
 from app.core.database import AsyncSessionLocal
 from app.models.asset import Asset
-from app.services.dividend_backfill_service import run_backfill, materialize_asset_dividends
+from app.services.dividend_backfill_service import run_backfill
 from app.services.proventos_daily_sync_service import run_daily_proventos_sync, NATIONAL_EVENT_TYPES
 
 logging.basicConfig(
@@ -83,9 +83,6 @@ async def _run_tickers(tickers: list[str], concurrency: int) -> int:
                 failed += 1
                 logger.error("FALHA: %s", ticker)
 
-    async with AsyncSessionLocal() as db:
-        materialized = await materialize_asset_dividends(db=db, tickers=tickers, commit=True)
-    logger.info("Materialização final: %s vínculo(s) criado(s)/atualizado(s)", materialized)
     logger.info("Concluído: synced=%s failed=%s", synced, failed)
     return 0 if failed == 0 else 1
 

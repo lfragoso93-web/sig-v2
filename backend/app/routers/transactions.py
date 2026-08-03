@@ -18,9 +18,6 @@ from app.schemas.transaction import TransactionCreate, TransactionOut, PagedTran
 from app.schemas.asset import AssetCreate
 from app.services.asset_service import get_or_create_asset
 from app.services.dividend_backfill_service import backfill_dividends
-from app.services.dividend_entitlement_service import (
-    reconcile_portfolio_dividend_rights,
-)
 from app.services.asset_onboarding_service import run_onboarding
 from app.services.transaction_service import list_transactions_paginated
 from app.services.rentabilidade_service import flush_rentabilidade_cache
@@ -35,19 +32,19 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 
 _RF_INDEXER_MAP: dict[str, IndexerType] = {
-    "CDI":       IndexerType.CDI,
-    "IPCA":      IndexerType.IPCA_PLUS,
-    "IPCA+":     IndexerType.IPCA_PLUS,
-    "SELIC":     IndexerType.SELIC,
+    "CDI": IndexerType.CDI,
+    "IPCA": IndexerType.IPCA_PLUS,
+    "IPCA+": IndexerType.IPCA_PLUS,
+    "SELIC": IndexerType.SELIC,
     "Prefixado": IndexerType.PREFIXADO,
-    "IGP-M":     IndexerType.IGPM_PLUS,
-    "Outro":     IndexerType.CDI,
+    "IGP-M": IndexerType.IGPM_PLUS,
+    "Outro": IndexerType.CDI,
 }
 
 _TD_INDEXER_MAP: dict[str, IndexerType] = {
-    "IPCA+":     IndexerType.IPCA_PLUS,
+    "IPCA+": IndexerType.IPCA_PLUS,
     "Prefixado": IndexerType.PREFIXADO,
-    "SELIC":     IndexerType.SELIC,
+    "SELIC": IndexerType.SELIC,
 }
 
 _RF_FI_TYPE = FixedIncomeType.OUTROS
@@ -69,6 +66,7 @@ def _parse_indexer_td(value: Optional[str]) -> Optional[IndexerType]:
 # ---------------------------------------------------------------------------
 # Parser de notes
 # ---------------------------------------------------------------------------
+
 
 def _parse_rf_meta_from_notes(notes: Optional[str]) -> dict:
     result: dict = {
@@ -98,6 +96,7 @@ def _parse_rf_meta_from_notes(notes: Optional[str]) -> dict:
     if m:
         try:
             from datetime import date
+
             result["maturity"] = date.fromisoformat(m.group(1))
         except ValueError:
             pass
@@ -116,6 +115,7 @@ def _parse_rf_meta_from_notes(notes: Optional[str]) -> dict:
 # ---------------------------------------------------------------------------
 # Upsert fixed_income_investments — sessao isolada + invalida cache
 # ---------------------------------------------------------------------------
+
 
 async def _upsert_fixed_income_isolated(
     portfolio_id: int,
@@ -143,7 +143,9 @@ async def _upsert_fixed_income_isolated(
             if indexer is None:
                 log.warning(
                     "[upsert_fi] indexador nao reconhecido '%s' para %s/%s — registro omitido",
-                    meta["indexer_str"], at, ticker,
+                    meta["indexer_str"],
+                    at,
+                    ticker,
                 )
                 return
 
@@ -180,7 +182,11 @@ async def _upsert_fixed_income_isolated(
                 db.add(fi)
                 log.info(
                     "[upsert_fi] CRIADO %s | portfolio=%s | indexer=%s | rate=%s | invested=%.2f",
-                    ticker, portfolio_id, indexer, rate_decimal, invested_amount,
+                    ticker,
+                    portfolio_id,
+                    indexer,
+                    rate_decimal,
+                    invested_amount,
                 )
             else:
                 fi.indexer = indexer
@@ -192,25 +198,35 @@ async def _upsert_fixed_income_isolated(
                     fi.institution = institution
                 log.info(
                     "[upsert_fi] ATUALIZADO %s | portfolio=%s | indexer=%s | rate=%s | invested=%.2f",
-                    ticker, portfolio_id, indexer, rate_decimal, invested_amount,
+                    ticker,
+                    portfolio_id,
+                    indexer,
+                    rate_decimal,
+                    invested_amount,
                 )
 
             await db.commit()
 
         # Invalida cache APOS o commit para garantir dados frescos
         await flush_rentabilidade_cache(portfolio_id)
-        log.info("[upsert_fi] cache de rentabilidade invalidado para portfolio=%s", portfolio_id)
+        log.info(
+            "[upsert_fi] cache de rentabilidade invalidado para portfolio=%s",
+            portfolio_id,
+        )
 
     except Exception as exc:
         log.error(
             "[upsert_fi] ERRO ao salvar fixed_income_investments para %s/%s: %s",
-            ticker, portfolio_id, exc,
+            ticker,
+            portfolio_id,
+            exc,
         )
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _to_operation(value: str) -> OperationType:
     try:
@@ -282,6 +298,7 @@ async def _validate_sell(
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @router.get("/{portfolio_id}/transactions", response_model=PagedTransactions)
 async def list_transactions(
@@ -358,14 +375,22 @@ async def create_transaction(
             invested = float(payload.quantity) * float(payload.price)
             background_tasks.add_task(
                 _upsert_fixed_income_isolated,
-                portfolio_id, ticker, payload.date, invested, payload.notes,
+                portfolio_id,
+                ticker,
+                payload.date,
+                invested,
+                payload.notes,
                 "RENDA_FIXA",
             )
         elif asset_type == "TESOURO_DIRETO":
             invested = float(payload.quantity) * float(payload.price)
             background_tasks.add_task(
                 _upsert_fixed_income_isolated,
-                portfolio_id, ticker, payload.date, invested, payload.notes,
+                portfolio_id,
+                ticker,
+                payload.date,
+                invested,
+                payload.notes,
                 "TESOURO_DIRETO",
             )
 
@@ -421,10 +446,11 @@ async def update_transaction(
     operation = _to_operation(payload.operation)
 
     if operation == OperationType.sell:
-        await _validate_sell(db, portfolio_id, ticker, payload.quantity, exclude_tx_id=transaction_id)
+        await _validate_sell(
+            db, portfolio_id, ticker, payload.quantity, exclude_tx_id=transaction_id
+        )
 
     invalidate_from = min(tx.date, payload.date)
-    previous_ticker = tx.ticker
 
     tx.ticker = ticker
     tx.asset_type = asset_type
@@ -444,14 +470,22 @@ async def update_transaction(
             invested = float(payload.quantity) * float(payload.price)
             background_tasks.add_task(
                 _upsert_fixed_income_isolated,
-                portfolio_id, ticker, payload.date, invested, payload.notes,
+                portfolio_id,
+                ticker,
+                payload.date,
+                invested,
+                payload.notes,
                 "RENDA_FIXA",
             )
         elif asset_type == "TESOURO_DIRETO":
             invested = float(payload.quantity) * float(payload.price)
             background_tasks.add_task(
                 _upsert_fixed_income_isolated,
-                portfolio_id, ticker, payload.date, invested, payload.notes,
+                portfolio_id,
+                ticker,
+                payload.date,
+                invested,
+                payload.notes,
                 "TESOURO_DIRETO",
             )
 
@@ -462,12 +496,6 @@ async def update_transaction(
         ticker=ticker,
         asset_type=str(asset_type),
     )
-    if previous_ticker.upper() != ticker:
-        background_tasks.add_task(
-            _run_dividend_reconciliation,
-            portfolio_id=portfolio_id,
-            ticker=previous_ticker,
-        )
     background_tasks.add_task(
         _run_snapshot_backfill,
         portfolio_id=portfolio_id,
@@ -504,17 +532,11 @@ async def delete_transaction(
     if not tx:
         raise HTTPException(status_code=404, detail="Transacao nao encontrada.")
 
-    ticker = tx.ticker
     tx_date = tx.date
 
     await db.delete(tx)
     await db.commit()
 
-    background_tasks.add_task(
-        _run_dividend_reconciliation,
-        portfolio_id=portfolio_id,
-        ticker=ticker,
-    )
     background_tasks.add_task(
         _run_snapshot_backfill,
         portfolio_id=portfolio_id,
@@ -530,41 +552,17 @@ async def delete_transaction(
 # Background tasks
 # ---------------------------------------------------------------------------
 
+
 async def _run_backfill(portfolio_id: int, ticker: str, asset_type: str) -> None:
     try:
         async with AsyncSessionLocal() as db:
             await backfill_dividends(
                 db=db,
-                portfolio_id=portfolio_id,
                 ticker=ticker,
                 asset_type=asset_type,
             )
-            await reconcile_portfolio_dividend_rights(
-                db=db,
-                portfolio_id=portfolio_id,
-                tickers=[ticker],
-                commit=True,
-            )
     except Exception as exc:
         log.error("[backfill_dividends] erro para %s/%s: %s", ticker, portfolio_id, exc)
-
-
-async def _run_dividend_reconciliation(portfolio_id: int, ticker: str) -> None:
-    try:
-        async with AsyncSessionLocal() as db:
-            await reconcile_portfolio_dividend_rights(
-                db=db,
-                portfolio_id=portfolio_id,
-                tickers=[ticker],
-                commit=True,
-            )
-    except Exception as exc:
-        log.error(
-            "[dividend_reconciliation] erro para %s/%s: %s",
-            ticker,
-            portfolio_id,
-            exc,
-        )
 
 
 async def _run_snapshot_backfill(portfolio_id: int, tx_date: DateType) -> None:
@@ -573,16 +571,20 @@ async def _run_snapshot_backfill(portfolio_id: int, tx_date: DateType) -> None:
             invalidate_snapshots_from,
             backfill_snapshots,
         )
+
         async with AsyncSessionLocal() as db:
             deleted = await invalidate_snapshots_from(db, portfolio_id, tx_date)
             log.info(
                 "[snapshot_backfill] portfolio=%s invalida a partir de %s (%s removidos)",
-                portfolio_id, tx_date, deleted,
+                portfolio_id,
+                tx_date,
+                deleted,
             )
             count = await backfill_snapshots(db=db, portfolio_id=portfolio_id)
             log.info(
                 "[snapshot_backfill] portfolio=%s — %s snapshots recalculados",
-                portfolio_id, count,
+                portfolio_id,
+                count,
             )
     except Exception as exc:
         log.error("[snapshot_backfill] erro para portfolio %s: %s", portfolio_id, exc)

@@ -1,14 +1,29 @@
 # Auditoria arquitetural — Proventos
 
-> Issue de controle: [#165](https://github.com/lfragoso93-web/sig-v2/issues/165)
+> Issue funcional de controle: [#165](https://github.com/lfragoso93-web/sig-v2/issues/165)  
+> Seed isolado de pré-produção: [#226](https://github.com/lfragoso93-web/sig-v2/issues/226)  
+> Contrato operacional: `pre-prod-dividends-seed.v2`
 >
-> Estado auditado: 19/07/2026, após a conclusão técnica e documental da Fase 2.
+> Estado funcional auditado: 19/07/2026, após a conclusão técnica e documental da Fase 2.  
+> Fronteira operacional atualizada: 28/07/2026.
 
 ## Objetivo
 
 Manter o fluxo de Proventos DB-first, rastreável e coerente entre catálogo
 global, direito da carteira, API e frontend, preservando as entregas válidas das
 Issues #92 e #95.
+
+## Fronteira operacional de pré-produção
+
+A arquitetura funcional vigente não é uma entrada segura para o rebuild real:
+as portas públicas mutáveis e a materialização do scheduler, do pipeline de
+mercado, da CLI dedicada, do seed histórico e do `full_market_rebuild` foram
+contraídas, mas o backfill pós-transação ainda oferece caminhos que não
+garantem rollback integral do estágio.
+
+A Issue #226 isola a evolução operacional no contrato `docs/PRE_PROD_DIVIDENDS_SEED_CONTRACT.md`. O estágio v2 lê somente `assets` e `asset_dividends` e escreve somente em `asset_dividends`; a inspeção de `dividends_sync_jobs` foi retirada.
+
+A implementação usa uma única entrada, advisory lock dedicado, uma transação de trabalho, fontes explícitas sem fallback silencioso, métricas da persistência global e comparador offline de duas execuções. Migration de unicidade, conversão cambial, mudanças no frontend, posições e snapshots ficam fora do escopo.
 
 ## Arquitetura vigente
 
@@ -53,6 +68,15 @@ elegíveis do catálogo. O pipeline noturno processa preços e logos com eventos
 materialização desativados. `only_held=True` existe apenas como opção operacional
 explícita.
 
+As CLIs e o serviço batch do pipeline de mercado não aceitam mais a opção
+`materialize`; eles coletam somente eventos globais. A CLI dedicada de
+Proventos e o seed histórico também persistem somente eventos globais, sem
+materializar direitos por carteira.
+
+O `full_market_rebuild` preserva a etapa de sincronização global, mas seu
+resumo operacional contabiliza somente ativos varridos, sincronizados e falhos.
+Ele não importa, chama ou anuncia materialização de direitos por carteira.
+
 ### Leitura, mutação e elegibilidade
 
 Leituras executam somente autorização e agregação. Mutações de transações
@@ -66,8 +90,9 @@ O sincronizador FII paralelo, o cliente batch e a configuração exclusiva foram
 removidos. Uma auditoria posterior encontrou duas rotas administrativas
 residuais que ainda importavam o serviço removido; elas foram eliminadas no
 commit `fcc7bb34c22eb3a06673d68d2043c7818dfd94d1`. Não havia consumidor no
-frontend. `dividends_sync_jobs` permanece apenas para contração controlada na
-Issue #158.
+frontend. O modelo ORM de `dividends_sync_jobs` foi removido; a migration
+histórica e a migration de contração física permanecem autocontidas, sem leitura
+de runtime. A execução física continua reservada à Issue #158.
 
 ### Modelo legado e rastreabilidade
 
@@ -170,6 +195,4 @@ impacto observado deve ser registrado nas Issues #165 e #159.
 
 ## Próximo bloco recomendado
 
-Concluir a promoção da Fase 2 para a `main`. Após o merge, iniciar a Fase 3
-pela Issue #148, reconciliando gráficos históricos e por classe com snapshots e
-valuation canônico.
+O envelope inicial `pre-prod-dividends-seed.v1` foi substituído pelo contrato canônico v2 na Issue #226.

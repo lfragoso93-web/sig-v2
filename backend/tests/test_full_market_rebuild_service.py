@@ -1,8 +1,17 @@
 import asyncio
+import ast
+from pathlib import Path
 
 from app.services.full_market_rebuild_service import (
     FullMarketRebuildResult,
     _run_step,
+)
+
+SERVICE_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "app"
+    / "services"
+    / "full_market_rebuild_service.py"
 )
 
 
@@ -79,3 +88,17 @@ def test_summary_to_dict_is_json_ready() -> None:
     assert payload["ok"] is True
     assert payload["duration_seconds"] == 60.0
     assert payload["steps"][0]["result"][0]["ticker"] == "PETR4"
+
+
+def test_full_market_rebuild_has_no_dividend_materialization_contract() -> None:
+    source = SERVICE_PATH.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+
+    assert "proventos_materialized" not in source
+    assert "materialize_asset_dividends" not in source
+    assert "reconcile_portfolio_dividend_rights" not in source
+    assert not any(
+        isinstance(node, ast.Constant)
+        and node.value == "materialized"
+        for node in ast.walk(tree)
+    )
