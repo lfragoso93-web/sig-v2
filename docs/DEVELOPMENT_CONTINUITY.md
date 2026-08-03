@@ -88,7 +88,7 @@ Cada checkpoint deve registrar:
 
 - Typecheck: aprovado.
 - Lint: aprovado com zero warnings.
-- Suíte completa: `23 passed`, `86 tests passed`.
+- Suíte completa: `23 test files passed`, `86 tests passed`.
 - Build de produção: aprovado.
 - IRPF e Metas são rotas canônicas do contexto da carteira:
   - `/carteira/irpf`;
