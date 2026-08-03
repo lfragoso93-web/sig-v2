@@ -4,7 +4,6 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-
 from app.services.irpf_realized_disposal_tax_adapter import (
     adapt_realized_disposal,
     adapt_realized_disposals,
