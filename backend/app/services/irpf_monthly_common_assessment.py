@@ -8,7 +8,7 @@ calcula Day Trade, não aplica retenções e não substitui o runtime legado.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 
 from app.services.irpf_realized_disposal_tax_adapter import FiscalMonthlyGroup
 from app.services.irpf_tax_policy import TaxAssessmentGroup
