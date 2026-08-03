@@ -45,14 +45,14 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import select, func, case, text, delete
+from sqlalchemy import case, delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset, AssetType
 from app.models.portfolio import Portfolio
 from app.models.portfolio_snapshot import PortfolioSnapshot
-from app.models.transaction import Transaction, OperationType
+from app.models.transaction import OperationType, Transaction
 from app.services.corporate_action_position_reader import (
     load_global_corporate_actions_by_ticker,
 )
@@ -67,17 +67,23 @@ _USD_ASSET_TYPES = {"STOCK", "ETF_INTERNACIONAL"}
 
 class _TickerState:
     """Acumula custo sempre em BRL (independente da moeda original)."""
+
     __slots__ = ("ticker", "asset_type", "qty", "cost", "realized_pnl", "is_usd")
 
     def __init__(self, ticker: str, asset_type: str, is_usd: bool = False):
         self.ticker = ticker
         self.asset_type = asset_type
         self.qty = Decimal("0")
-        self.cost = Decimal("0")          # sempre em BRL
+        self.cost = Decimal("0")  # sempre em BRL
         self.realized_pnl = Decimal("0")  # sempre em BRL
         self.is_usd = is_usd
 
-    def buy(self, qty: Decimal, price_brl: Decimal, fees_brl: Decimal = Decimal("0")) -> None:
+    def buy(
+        self,
+        qty: Decimal,
+        price_brl: Decimal,
+        fees_brl: Decimal = Decimal("0"),
+    ) -> None:
         """price_brl e fees_brl ja devem estar convertidos para BRL."""
         self.qty += qty
         self.cost += qty * price_brl + fees_brl
@@ -118,7 +124,9 @@ async def invalidate_snapshots_from(
         await db.commit()
     logger.info(
         "[snapshot] invalidate portfolio=%s from=%s — %s snapshots removidos",
-        portfolio_id, from_date, deleted,
+        portfolio_id,
+        from_date,
+        deleted,
     )
     return deleted
 
@@ -183,14 +191,9 @@ async def _calc_totals(
     cost_basis = Decimal("0")
     realized_pnl = Decimal("0")
 
-    # ------------------------------------------------------------------
-    # [Q1 FIX] Busca asset_type de todos os tickers em uma unica query
-    # antes de entrar no loop, eliminando o N+1 que existia antes.
-    # ------------------------------------------------------------------
     tickers_list = list(positions.keys())
     asset_rows = await db.execute(
-        select(Asset.ticker, Asset.asset_type)
-        .where(Asset.ticker.in_(tickers_list))
+        select(Asset.ticker, Asset.asset_type).where(Asset.ticker.in_(tickers_list))
     )
     asset_type_map: dict[str, AssetType] = {
         r.ticker: r.asset_type for r in asset_rows.all()
@@ -201,17 +204,16 @@ async def _calc_totals(
     if has_usd:
         try:
             from app.services.fx_service import get_usd_brl_for_date
+
             fx_snapshot = await get_usd_brl_for_date(db, target_date)
         except Exception:
             try:
                 from app.services.fx_service import get_usd_brl_today
+
                 fx_snapshot = await get_usd_brl_today(db)
             except Exception:
                 fx_snapshot = 1.0
 
-    # ------------------------------------------------------------------
-    # FIX N+1: Carrega todos os preços de uma vez usando batch
-    # ------------------------------------------------------------------
     from app.services.price_history_service import get_prices_at_date_batch
 
     tickers_with_types = []
@@ -224,7 +226,6 @@ async def _calc_totals(
                 asset_type = AssetType.ACAO
         tickers_with_types.append((ticker, asset_type))
 
-    # Carrega todos os preços em uma única operação
     prices_map = await get_prices_at_date_batch(db, tickers_with_types, date_str)
 
     for ticker, state in positions.items():
@@ -233,7 +234,8 @@ async def _calc_totals(
             close = float(state.avg_price)
             logger.warning(
                 "[snapshot] sem cotacao para %s em %s - usando avg_price como proxy",
-                ticker, date_str,
+                ticker,
+                date_str,
             )
 
         close_brl = close
@@ -274,13 +276,7 @@ async def _calc_totals(
 
     unrealized_pnl = market_value - cost_basis
     total_pnl = realized_pnl + unrealized_pnl
-    # NOTA: total_pnl NAO inclui proventos. Ver docstring do modulo.
 
-    # -------------------------------------------------------------------------
-    # return_pct: retorno de preco sobre capital empregado.
-    # ATENCAO: este valor e "retorno de preco". Para retorno total com
-    # proventos ver documentacao do modulo acima.
-    # -------------------------------------------------------------------------
     realized_positive = max(realized_pnl, Decimal("0"))
     return_base = cost_basis + realized_positive
     if return_base > 0:
@@ -346,7 +342,8 @@ async def _prefetch_price_history(
 
     logger.info(
         "[snapshot] pre-fetch FORCADO de historico para %d tickers (days_back=%d)",
-        len(tickers), days_back,
+        len(tickers),
+        days_back,
     )
     for row in tickers:
         ticker = row.ticker.upper()
@@ -356,9 +353,17 @@ async def _prefetch_price_history(
             asset_type = AssetType.ACAO
         logger.info(
             "[snapshot] pre-fetch %s (%s) days_back=%d",
-            ticker, asset_type.value, days_back,
+            ticker,
+            asset_type.value,
+            days_back,
         )
-        await persist_daily_prices(db, ticker, asset_type, days_back=days_back, force=True)
+        await persist_daily_prices(
+            db,
+            ticker,
+            asset_type,
+            days_back=days_back,
+            force=True,
+        )
 
 
 async def calc_snapshot_at_date(
@@ -378,7 +383,10 @@ async def calc_snapshot_at_date(
         await db.commit()
     logger.info(
         "[snapshot] portfolio=%s date=%s market_value=%s return_pct=%s%%",
-        portfolio_id, target_date, totals["market_value"], totals["return_pct"],
+        portfolio_id,
+        target_date,
+        totals["market_value"],
+        totals["return_pct"],
     )
     return totals
 
@@ -389,8 +397,9 @@ async def backfill_snapshots(
     days_back: Optional[int] = None,
 ) -> int:
     first_tx = await db.execute(
-        select(func.min(Transaction.date))
-        .where(Transaction.portfolio_id == portfolio_id)
+        select(func.min(Transaction.date)).where(
+            Transaction.portfolio_id == portfolio_id
+        )
     )
     first_date = first_tx.scalar_one_or_none()
     if first_date is None:
@@ -403,8 +412,7 @@ async def backfill_snapshots(
     total_days = (date.today() - start).days + 1
 
     existing = await db.execute(
-        select(PortfolioSnapshot.snapshot_date)
-        .where(
+        select(PortfolioSnapshot.snapshot_date).where(
             PortfolioSnapshot.portfolio_id == portfolio_id,
             PortfolioSnapshot.snapshot_date >= start,
             PortfolioSnapshot.snapshot_date < date.today(),
@@ -430,7 +438,9 @@ async def backfill_snapshots(
     await db.commit()
     logger.info(
         "[snapshot] backfill portfolio=%s: %s snapshots processados (start=%s)",
-        portfolio_id, count, start,
+        portfolio_id,
+        count,
+        start,
     )
     return count
 
@@ -440,7 +450,11 @@ async def refresh_today_snapshot(
     portfolio_id: int,
 ) -> dict:
     return await calc_snapshot_at_date(
-        db, portfolio_id, date.today(), commit=True, prefetch=True
+        db,
+        portfolio_id,
+        date.today(),
+        commit=True,
+        prefetch=True,
     )
 
 
@@ -468,8 +482,7 @@ async def snapshot_backfill_needed(
         return False
 
     result = await db.execute(
-        select(func.count(func.distinct(PortfolioSnapshot.snapshot_date)))
-        .where(
+        select(func.count(func.distinct(PortfolioSnapshot.snapshot_date))).where(
             PortfolioSnapshot.portfolio_id == portfolio_id,
             PortfolioSnapshot.snapshot_date >= first_date,
             PortfolioSnapshot.snapshot_date <= today,
@@ -525,7 +538,8 @@ async def _first_transaction_date(
     portfolio_id: int,
 ) -> date | None:
     result = await db.execute(
-        select(func.min(Transaction.date))
-        .where(Transaction.portfolio_id == portfolio_id)
+        select(func.min(Transaction.date)).where(
+            Transaction.portfolio_id == portfolio_id
+        )
     )
     return result.scalar_one_or_none()
