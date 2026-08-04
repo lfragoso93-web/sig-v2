@@ -115,6 +115,23 @@ baixas e na camada de política fiscal.
 Nenhum desses módulos é chamado por `calc_ganhos_capital` ou por endpoint de
 produção.
 
+## Comparador específico de Day Trade
+
+O módulo `irpf_day_trade_legacy_comparison.py` compara, competência a competência,
+a projeção quantitativa com uma visão mensal do comportamento legado. O contrato
+read-only expõe quantidade casada, resultado intradiário e deltas explícitos.
+
+Classificações disponíveis:
+
+- `match`;
+- `legacy_missing_month`;
+- `canonical_missing_month`;
+- `day_trade_quantity`;
+- `day_trade_result`.
+
+As classificações podem coexistir na mesma competência. O comparador não altera
+o runtime, não persiste resultados e ainda não é chamado pelas CLIs existentes.
+
 ## Escopo da página IRPF
 
 A página IRPF usa a carteira selecionada no store global como parte das chaves
@@ -145,15 +162,15 @@ validando `portfolio_id` junto com o usuário autenticado.
 9. O frontend nunca compartilha cache IRPF entre carteiras porque `portfolioId`
    permanece nas chaves de consulta.
 10. A troca de carteira reconcilia ano e estado visual antes de seguir o fluxo.
-11. O matcher, o adaptador e a projeção mensal de Day Trade permanecem isolados
-    de consumidores de produção até existir comparação e gate de migração.
+11. O matcher, o adaptador, a projeção mensal e o comparador de Day Trade
+    permanecem isolados de consumidores de produção até existir gate próprio.
 12. Excedentes não casados não recebem custo Swing dentro do matcher; essa
     responsabilidade permanece no projetor canônico de baixas.
 
 ## Próximos passos
 
-1. validar Ruff e testes do adaptador e da projeção mensal;
-2. comparar quantitativamente a projeção Day Trade com o comportamento legado;
-3. integrar os excedentes ao projetor canônico de baixas Swing;
-4. classificar divergências específicas de Day Trade no comparador;
-5. executar a CLI em lote contra uma base com vendas reais.
+1. validar Ruff e testes do comparador específico de Day Trade;
+2. construir a visão mensal legada a partir de `calc_ganhos_capital`;
+3. integrar o comparador específico a uma CLI read-only;
+4. integrar os excedentes ao projetor canônico de baixas Swing;
+5. executar comparação operacional contra uma base com vendas reais.
