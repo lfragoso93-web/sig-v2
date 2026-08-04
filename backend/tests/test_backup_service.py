@@ -147,7 +147,7 @@ class TestRestoreDatabaseBackup:
     @patch("app.services.backup_service.Path.exists")
     async def test_restore_backup_file_not_found(self, mock_exists, mock_mkdir):
         db_url = "postgresql://user:password@localhost/testdb"
-        backup_filename = "nonexistent.sql.gz"
+        backup_filename = "backup_20990101_000000.sql.gz"
 
         mock_exists.return_value = False
 
@@ -155,6 +155,15 @@ class TestRestoreDatabaseBackup:
 
         assert result["success"] is False
         assert "not found" in result["error"].lower()
+
+    @patch("app.services.backup_service.Path.mkdir")
+    async def test_restore_rejects_invalid_filename(self, mock_mkdir):
+        db_url = "postgresql://user:password@localhost/testdb"
+
+        result = await restore_database_backup(db_url, "../outside.sql.gz")
+
+        assert result["success"] is False
+        assert result["error"] == "Invalid backup filename"
 
     @patch("app.services.backup_service.Path.mkdir")
     @patch("app.services.backup_service.Path.exists")
@@ -254,7 +263,7 @@ class TestDeleteBackup:
     @patch("app.services.backup_service.Path.mkdir")
     @patch("app.services.backup_service.Path.exists")
     async def test_delete_backup_file_not_found(self, mock_exists, mock_mkdir):
-        backup_filename = "nonexistent.sql.gz"
+        backup_filename = "backup_20990101_000000.sql.gz"
 
         mock_exists.return_value = False
 
@@ -262,6 +271,13 @@ class TestDeleteBackup:
 
         assert result["success"] is False
         assert "not found" in result["error"].lower()
+
+    @patch("app.services.backup_service.Path.mkdir")
+    async def test_delete_rejects_invalid_filename(self, mock_mkdir):
+        result = await delete_backup("../../outside.sql.gz")
+
+        assert result["success"] is False
+        assert result["error"] == "Invalid backup filename"
 
     @patch("app.services.backup_service.Path.mkdir")
     @patch("app.services.backup_service.Path.exists")
