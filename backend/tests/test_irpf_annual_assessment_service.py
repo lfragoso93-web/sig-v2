@@ -3,7 +3,6 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from app.services.irpf_annual_assessment_service import (
     build_irpf_annual_assessment,
 )
@@ -21,7 +20,7 @@ async def test_service_builds_versioned_contract_from_integrated_assessment() ->
             new=AsyncMock(return_value=integrated),
         ) as assess,
         patch(
-            "app.services.irpf_annual_assessment_service.map_annual_integrated_assessment",
+            "app.services.irpf_annual_assessment_service.build_irpf_annual_assessment_contract",
             return_value=contract,
         ) as map_contract,
     ):
