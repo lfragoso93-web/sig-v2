@@ -1,10 +1,10 @@
 """Testes dos envelopes públicos canônicos de Bens e Rendimentos."""
 
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from app.routers.irpf import (
     get_canonical_irpf_assets,
     get_canonical_irpf_income,
@@ -45,7 +45,7 @@ async def test_canonical_assets_endpoint_returns_versioned_envelope() -> None:
     authorize.assert_awaited_once_with(7, user, db)
     calculate.assert_awaited_once_with(db, 7, 2024)
     assert result.schema_version == "irpf-assets-assessment.v1"
-    assert result.total_cost_brl == 123.40
+    assert result.total_cost_brl == Decimal("123.40")
     assert result.items == items
 
 
@@ -85,9 +85,9 @@ async def test_canonical_income_endpoint_returns_versioned_envelope() -> None:
     authorize.assert_awaited_once_with(7, user, db)
     calculate.assert_awaited_once_with(db, 7, 2024)
     assert result.schema_version == "irpf-income-assessment.v1"
-    assert result.total_dividends_brl == 80.25
-    assert result.total_jcp_gross_brl == 100
-    assert result.total_jcp_withholding_brl == 15
-    assert result.total_jcp_net_brl == 85
+    assert result.total_dividends_brl == Decimal("80.25")
+    assert result.total_jcp_gross_brl == Decimal("100.00")
+    assert result.total_jcp_withholding_brl == Decimal("15.00")
+    assert result.total_jcp_net_brl == Decimal("85.00")
     assert result.dividends == dividends
     assert result.jcp == jcp
