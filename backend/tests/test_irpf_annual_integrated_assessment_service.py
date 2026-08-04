@@ -3,9 +3,10 @@
 from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from app.services.irpf_annual_integrated_assessment_service import (
     assess_annual_integrated_operations,
 )
@@ -17,10 +18,12 @@ from app.services.position_timeline_projection import CanonicalRealizedDisposal
 @pytest.mark.asyncio
 async def test_integrated_assessment_orchestrates_day_trade_and_swing_once() -> None:
     session = AsyncMock()
-    session.execute.return_value.scalars.return_value.all.return_value = [
+    query_result = MagicMock()
+    query_result.scalars.return_value.all.return_value = [
         SimpleNamespace(id=1),
         SimpleNamespace(id=2),
     ]
+    session.execute.return_value = query_result
     operations = (SimpleNamespace(),)
     match = DayTradeMatch(
         ticker="BOVA11",
