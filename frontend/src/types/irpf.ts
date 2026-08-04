@@ -114,3 +114,23 @@ export interface IRPFCanonicalAnnualAssessment {
   closing_day_trade_withholding_balance_brl: string
   closing_day_trade_loss_carryforward_brl: string
 }
+
+export interface IRPFCanonicalAssetsAssessment {
+  schema_version: 'irpf-assets-assessment.v1'
+  portfolio_id: number
+  year: number
+  items: BemDireito[]
+  total_cost_brl: string
+}
+
+export interface IRPFCanonicalIncomeAssessment {
+  schema_version: 'irpf-income-assessment.v1'
+  portfolio_id: number
+  year: number
+  dividends: RendimentoIsento[]
+  jcp: JCPItem[]
+  total_dividends_brl: string
+  total_jcp_gross_brl: string
+  total_jcp_withholding_brl: string
+  total_jcp_net_brl: string
+}
