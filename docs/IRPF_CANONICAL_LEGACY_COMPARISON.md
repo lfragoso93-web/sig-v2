@@ -75,6 +75,22 @@ retorna `0`.
 As duas CLIs encerram a sessão com rollback explícito. Elas não alteram tabelas,
 não persistem saldos fiscais e não substituem consumidores de produção.
 
+## Escopo da página IRPF
+
+A página IRPF usa a carteira selecionada no store global como parte das chaves
+do React Query e das URLs de relatório, PDF e CSV. Ao trocar de carteira:
+
+1. os anos disponíveis são consultados para a nova carteira;
+2. o ano atual é preservado apenas se existir no novo conjunto;
+3. caso contrário, o primeiro ano disponível é selecionado;
+4. carteiras sem anos usam o ano-base padrão;
+5. a aba retorna para `Resumo` e o sinal de recálculo é limpo.
+
+A reconciliação é implementada pela função pura `reconcileIRPFYear` e protegida
+por testes unitários e por um contrato estático de escopo frontend. Essa camada
+não substitui a autorização do backend: todos os endpoints IRPF continuam
+validando `portfolio_id` junto com o usuário autenticado.
+
 ## Invariantes arquiteturais
 
 1. O comparador é read-only.
@@ -86,10 +102,13 @@ não persistem saldos fiscais e não substituem consumidores de produção.
 7. Os contratos JSON são versionados e adequados para evidência operacional.
 8. A descoberta em lote considera vendas registradas, não presume que todo alvo
    produzirá uma baixa canônica válida.
+9. O frontend nunca compartilha cache IRPF entre carteiras porque `portfolioId`
+   permanece nas chaves de consulta.
+10. A troca de carteira reconcilia ano e estado visual antes de seguir o fluxo.
 
 ## Próximos passos
 
-1. executar a CLI em lote contra a base real;
+1. executar a CLI em lote contra uma base com vendas reais;
 2. revisar alvos com vendas mas `months_compared=0`;
 3. corrigir causas `unknown` antes da migração;
 4. consolidar critérios objetivos para substituir o consumidor legado.
