@@ -94,6 +94,15 @@ async def test_integrated_assessment_orchestrates_day_trade_and_swing_once() -> 
     assert result.closing_common_withholding_balance_brl == Decimal("0.00")
     assert result.total_tax_due_brl == Decimal("3.50")
     assert result.total_net_tax_due_brl == Decimal("3.40")
+    assert result.total_payment_due_brl == Decimal("0.00")
+    assert result.closing_accumulated_tax_brl == Decimal("3.40")
+    assert result.minimum_payment_monthly[0].minimum_payment_threshold_brl == Decimal(
+        "10.00"
+    )
+    assert result.minimum_payment_monthly[0].payment_due_brl == Decimal("0.00")
+    assert result.minimum_payment_monthly[0].closing_accumulated_tax_brl == Decimal(
+        "3.40"
+    )
     assert result.day_trade_monthly[0].tax_rate == Decimal("0.20")
     assert result.swing.monthly[0].realized_pnl_brl == Decimal("10.00")
     assert result.common_withholding_monthly[0].current_withholding_brl == Decimal(
