@@ -1,0 +1,122 @@
+{
+  "schema_version": "irpf-synthetic-acceptance.v1",
+  "common_scenarios": [
+    {
+      "name": "stock_monthly_exemption_at_limit",
+      "asset_type": "ACAO",
+      "months": [
+        {
+          "competence": "2024-01",
+          "gross_proceeds_brl": "20000.00",
+          "realized_pnl_brl": "1000.00",
+          "expected_taxable_base_brl": "0.00",
+          "expected_tax_due_brl": "0.00",
+          "expected_closing_loss_brl": "0.00",
+          "expected_exemption": true
+        }
+      ]
+    },
+    {
+      "name": "stock_above_exemption_limit",
+      "asset_type": "ACAO",
+      "months": [
+        {
+          "competence": "2024-01",
+          "gross_proceeds_brl": "20000.01",
+          "realized_pnl_brl": "1000.00",
+          "expected_taxable_base_brl": "1000.00",
+          "expected_tax_due_brl": "150.00",
+          "expected_closing_loss_brl": "0.00",
+          "expected_exemption": false
+        }
+      ]
+    },
+    {
+      "name": "bdr_has_no_stock_exemption",
+      "asset_type": "BDR",
+      "months": [
+        {
+          "competence": "2024-02",
+          "gross_proceeds_brl": "1000.00",
+          "realized_pnl_brl": "100.00",
+          "expected_taxable_base_brl": "100.00",
+          "expected_tax_due_brl": "15.00",
+          "expected_closing_loss_brl": "0.00",
+          "expected_exemption": false
+        }
+      ]
+    },
+    {
+      "name": "fii_uses_twenty_percent_rate",
+      "asset_type": "FII",
+      "months": [
+        {
+          "competence": "2024-03",
+          "gross_proceeds_brl": "1000.00",
+          "realized_pnl_brl": "100.00",
+          "expected_taxable_base_brl": "100.00",
+          "expected_tax_due_brl": "20.00",
+          "expected_closing_loss_brl": "0.00",
+          "expected_exemption": false
+        }
+      ]
+    },
+    {
+      "name": "etf_loss_carryforward_is_consumed_chronologically",
+      "asset_type": "ETF",
+      "months": [
+        {
+          "competence": "2024-01",
+          "gross_proceeds_brl": "1000.00",
+          "realized_pnl_brl": "-100.00",
+          "expected_taxable_base_brl": "0.00",
+          "expected_tax_due_brl": "0.00",
+          "expected_closing_loss_brl": "100.00",
+          "expected_exemption": false
+        },
+        {
+          "competence": "2024-02",
+          "gross_proceeds_brl": "2000.00",
+          "realized_pnl_brl": "250.00",
+          "expected_taxable_base_brl": "150.00",
+          "expected_tax_due_brl": "22.50",
+          "expected_closing_loss_brl": "0.00",
+          "expected_exemption": false
+        }
+      ]
+    }
+  ],
+  "day_trade_scenarios": [
+    {
+      "name": "day_trade_positive_result_uses_twenty_percent_rate",
+      "months": [
+        {
+          "competence": "2024-04",
+          "realized_pnl_brl": "100.00",
+          "expected_taxable_base_brl": "100.00",
+          "expected_tax_due_brl": "20.00",
+          "expected_closing_loss_brl": "0.00"
+        }
+      ]
+    },
+    {
+      "name": "day_trade_loss_is_compensated_only_in_day_trade_bucket",
+      "months": [
+        {
+          "competence": "2024-01",
+          "realized_pnl_brl": "-100.00",
+          "expected_taxable_base_brl": "0.00",
+          "expected_tax_due_brl": "0.00",
+          "expected_closing_loss_brl": "100.00"
+        },
+        {
+          "competence": "2024-02",
+          "realized_pnl_brl": "250.00",
+          "expected_taxable_base_brl": "150.00",
+          "expected_tax_due_brl": "30.00",
+          "expected_closing_loss_brl": "0.00"
+        }
+      ]
+    }
+  ]
+}
