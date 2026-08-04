@@ -12,7 +12,11 @@ import {
   BadgePercent,
 } from 'lucide-react'
 import { useAppStore } from '@/store/appStore'
-import { useIRPFAnos, useIRPFReport } from '@/hooks/useIRPF'
+import {
+  useIRPFAnos,
+  useIRPFCanonicalAnnualAssessment,
+  useIRPFReport,
+} from '@/hooks/useIRPF'
 import { formatBRL } from '@/utils/format'
 import { reconcileIRPFYear } from '@/utils/irpfYearSelection'
 import KpiCard from '@/components/ui/KpiCard'
@@ -337,6 +341,10 @@ export default function IRPFPage() {
   }, [portfolioId, anos, fallbackYear])
 
   const { data: report, isLoading: loadingReport } = useIRPFReport(portfolioId, selectedYear, refreshKey)
+  const {
+    data: canonicalAssessment,
+    isLoading: loadingCanonicalAssessment,
+  } = useIRPFCanonicalAnnualAssessment(portfolioId, selectedYear)
 
   const handleDownloadPDF = useCallback(async () => {
     if (!portfolioId || !selectedYear) return
@@ -388,7 +396,12 @@ export default function IRPFPage() {
     )
   }
 
-  const r = report?.resumo
+  const canonicalGrossTax = Number(canonicalAssessment?.total_gross_tax_due_brl ?? 0)
+  const canonicalWithholding = Number(canonicalAssessment?.total_withholding_brl ?? 0)
+  const canonicalPaymentDue = Number(canonicalAssessment?.total_payment_due_brl ?? 0)
+  const canonicalDayTradeLoss = Number(
+    canonicalAssessment?.closing_day_trade_loss_carryforward_brl ?? 0,
+  )
 
   return (
     <div className="page-container">
@@ -427,10 +440,10 @@ export default function IRPFPage() {
               border: '1px solid var(--color-border)',
               color: 'var(--color-text)',
             }}
-            title="Recalcular relatório"
+            title="Recalcular dados complementares do relatório legado"
           >
             <RefreshCw size={13} />
-            Recalcular
+            Recalcular complementos
           </button>
 
           <button
@@ -466,31 +479,31 @@ export default function IRPFPage() {
       </div>
 
       <div className="kpi-grid">
-        {loadingReport ? (
+        {loadingCanonicalAssessment ? (
           [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
-        ) : r ? (
+        ) : canonicalAssessment ? (
           <>
             <KpiCard
-              label="Bens e Direitos (31/12)"
-              value={formatBRL(r.total_bens_direitos)}
+              label="Imposto Bruto Canônico"
+              value={formatBRL(canonicalGrossTax)}
               subLabel={`Ano-base ${selectedYear}`}
             />
             <KpiCard
-              label="IR a Recolher"
-              value={formatBRL(r.ir_a_recolher_total)}
-              valueColor={r.ir_a_recolher_total > 0 ? 'text-[var(--color-error)]' : 'text-[var(--color-success)]'}
-              subLabel="Swing + Day Trade - Fonte"
+              label="IRRF Compensado"
+              value={formatBRL(canonicalWithholding)}
+              subLabel="Swing + Day Trade"
             />
             <KpiCard
-              label="Dividendos Isentos"
-              value={formatBRL(r.total_dividendos_isentos)}
-              subLabel="Rendimentos isentos no ano"
+              label="DARF Liberada"
+              value={formatBRL(canonicalPaymentDue)}
+              valueColor={canonicalPaymentDue > 0 ? 'text-[var(--color-error)]' : 'text-[var(--color-success)]'}
+              subLabel="Após IRRF e mínimo de R$ 10"
             />
             <KpiCard
-              label="Prejuízo Acumulado"
-              value={formatBRL(Math.abs(r.prejuizo_acumulado))}
-              valueColor={r.prejuizo_acumulado < 0 ? 'text-[var(--color-error)]' : 'text-[var(--color-text-muted)]'}
-              subLabel="A compensar em meses futuros"
+              label="Prejuízo Day Trade"
+              value={formatBRL(canonicalDayTradeLoss)}
+              valueColor={canonicalDayTradeLoss > 0 ? 'text-[var(--color-error)]' : 'text-[var(--color-text-muted)]'}
+              subLabel="Saldo canônico a compensar"
             />
           </>
         ) : null}
@@ -526,14 +539,18 @@ export default function IRPFPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div>
                 <h2 className="text-sm font-semibold mb-3">Bens e Direitos</h2>
-                <BensDireitosTable data={report?.bens_direitos ?? []} />
+                {loadingReport ? <SkeletonCard /> : <BensDireitosTable data={report?.bens_direitos ?? []} />}
               </div>
               <div>
                 <h2 className="text-sm font-semibold mb-3">Rendimentos</h2>
-                <RendimentosTable
-                  dividendos={report?.rendimentos_isentos ?? []}
-                  jcp={report?.jcp ?? []}
-                />
+                {loadingReport ? (
+                  <SkeletonCard />
+                ) : (
+                  <RendimentosTable
+                    dividendos={report?.rendimentos_isentos ?? []}
+                    jcp={report?.jcp ?? []}
+                  />
+                )}
               </div>
             </div>
           )}
