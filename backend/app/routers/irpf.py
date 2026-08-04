@@ -16,7 +16,13 @@ from app.models.irpf import IRPFReport
 from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction
 from app.models.user import User
-from app.schemas.irpf import BemDireito, GanhoCapitalMensal, IRPFReportOut
+from app.schemas.irpf import (
+    BemDireito,
+    GanhoCapitalMensal,
+    IRPFReportOut,
+    IrpfAnnualAssessmentOut,
+)
+from app.services.irpf_annual_assessment_service import build_irpf_annual_assessment
 from app.services.irpf_bens_direitos_service import calc_bens_direitos
 from app.services.irpf_report_service import generate_irpf_report
 from app.services.irpf_service import (
@@ -89,6 +95,22 @@ async def get_irpf_report(
             return IRPFReportOut.model_validate(json.loads(row.data))
 
     return await generate_irpf_report(db, portfolio_id, year)
+
+
+@router.get(
+    "/{portfolio_id}/irpf/{year}/canonical",
+    response_model=IrpfAnnualAssessmentOut,
+)
+async def get_canonical_irpf_assessment(
+    portfolio_id: int,
+    year: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Retorna a apuracao anual canonica read-only da carteira autorizada."""
+    await _get_portfolio(portfolio_id, current_user, db)
+    contract = await build_irpf_annual_assessment(db, portfolio_id, year)
+    return IrpfAnnualAssessmentOut.model_validate(contract.to_dict())
 
 
 @router.get("/{portfolio_id}/irpf/{year}/pdf")
