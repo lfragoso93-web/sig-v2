@@ -28,13 +28,10 @@ from app.schemas.irpf import (
 )
 from app.services.irpf_annual_assessment_service import build_irpf_annual_assessment
 from app.services.irpf_bens_direitos_service import calc_bens_direitos
+from app.services.irpf_canonical_export_service import build_irpf_canonical_export
+from app.services.irpf_export_service import generate_irpf_csv, generate_irpf_pdf
 from app.services.irpf_report_service import generate_irpf_report
-from app.services.irpf_service import (
-    calc_ganhos_capital,
-    calc_rendimentos,
-    generate_irpf_csv,
-    generate_irpf_pdf,
-)
+from app.services.irpf_tax_service import calc_ganhos_capital, calc_rendimentos
 
 router = APIRouter(tags=["irpf"])
 
@@ -202,15 +199,10 @@ async def download_irpf_pdf(
     year: int,
     db: DbSession,
     current_user: CurrentUser,
-    refresh: bool = False,
 ):
-    """Gera e retorna o relatorio IRPF em PDF."""
+    """Gera e retorna o relatorio IRPF canônico em PDF."""
     await _get_portfolio(portfolio_id, current_user, db)
-    report = (
-        await generate_irpf_report(db, portfolio_id, year)
-        if refresh
-        else await get_irpf_report(portfolio_id, year, db, current_user, False)
-    )
+    report = await build_irpf_canonical_export(db, portfolio_id, year)
 
     try:
         pdf_bytes = generate_irpf_pdf(report)
@@ -232,15 +224,10 @@ async def download_irpf_csv(
     year: int,
     db: DbSession,
     current_user: CurrentUser,
-    refresh: bool = False,
 ):
-    """Gera e retorna o relatorio IRPF em CSV."""
+    """Gera e retorna o relatorio IRPF canônico em CSV."""
     await _get_portfolio(portfolio_id, current_user, db)
-    report = (
-        await generate_irpf_report(db, portfolio_id, year)
-        if refresh
-        else await get_irpf_report(portfolio_id, year, db, current_user, False)
-    )
+    report = await build_irpf_canonical_export(db, portfolio_id, year)
     csv_content = generate_irpf_csv(report)
 
     return Response(
