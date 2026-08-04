@@ -3,6 +3,7 @@ Router IRPF — endpoints finos que delegam toda logica aos servicos de IRPF.
 """
 
 import json
+from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -20,6 +21,8 @@ from app.schemas.irpf import (
     BemDireito,
     GanhoCapitalMensal,
     IrpfAnnualAssessmentOut,
+    IrpfAssetsAssessmentOut,
+    IrpfIncomeAssessmentOut,
     IRPFReportOut,
 )
 from app.services.irpf_annual_assessment_service import build_irpf_annual_assessment
@@ -111,6 +114,59 @@ async def get_canonical_irpf_assessment(
     await _get_portfolio(portfolio_id, current_user, db)
     contract = await build_irpf_annual_assessment(db, portfolio_id, year)
     return IrpfAnnualAssessmentOut.model_validate(contract.to_dict())
+
+
+@router.get(
+    "/{portfolio_id}/irpf/{year}/canonical/assets",
+    response_model=IrpfAssetsAssessmentOut,
+)
+async def get_canonical_irpf_assets(
+    portfolio_id: int,
+    year: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Retorna Bens e Direitos canônicos em envelope público versionado."""
+    await _get_portfolio(portfolio_id, current_user, db)
+    items = await calc_bens_direitos(db, portfolio_id, year)
+    total_cost = sum(Decimal(str(item.custo_total)) for item in items)
+    return IrpfAssetsAssessmentOut(
+        schema_version="irpf-assets-assessment.v1",
+        portfolio_id=portfolio_id,
+        year=year,
+        items=items,
+        total_cost_brl=total_cost,
+    )
+
+
+@router.get(
+    "/{portfolio_id}/irpf/{year}/canonical/income",
+    response_model=IrpfIncomeAssessmentOut,
+)
+async def get_canonical_irpf_income(
+    portfolio_id: int,
+    year: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Retorna dividendos e JCP canônicos em envelope público versionado."""
+    await _get_portfolio(portfolio_id, current_user, db)
+    dividends, jcp = await calc_rendimentos(db, portfolio_id, year)
+    return IrpfIncomeAssessmentOut(
+        schema_version="irpf-income-assessment.v1",
+        portfolio_id=portfolio_id,
+        year=year,
+        dividends=dividends,
+        jcp=jcp,
+        total_dividends_brl=sum(
+            Decimal(str(item.total_recebido)) for item in dividends
+        ),
+        total_jcp_gross_brl=sum(Decimal(str(item.total_bruto)) for item in jcp),
+        total_jcp_withholding_brl=sum(
+            Decimal(str(item.ir_retido)) for item in jcp
+        ),
+        total_jcp_net_brl=sum(Decimal(str(item.total_liquido)) for item in jcp),
+    )
 
 
 @router.get("/{portfolio_id}/irpf/{year}/pdf")
