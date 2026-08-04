@@ -2,8 +2,8 @@
 
 ## Objetivo
 
-Este documento descreve o módulo read-only `irpf_withholding_policy.py`, criado
-na Issue #56 para separar a retenção na fonte da apuração mensal do imposto.
+Este documento descreve os módulos read-only de IRRF criados na Issue #56 para
+separar retenção, compensação e imposto líquido da apuração mensal bruta.
 
 ## Regras implementadas
 
@@ -20,19 +20,41 @@ na Issue #56 para separar a retenção na fonte da apuração mensal do imposto.
 - prejuízo ou resultado zero não gera retenção;
 - arredondamento: centavos com `ROUND_HALF_UP`.
 
+## Compensação mensal
+
+O módulo `irpf_withholding_compensation.py` recebe imposto bruto, IRRF do mês e
+saldo anterior do mesmo bucket. Ele devolve:
+
+- IRRF usado na competência;
+- saldo final de IRRF;
+- imposto líquido após retenção.
+
+Os buckets `common` e `day_trade` são preservados explicitamente e nunca se
+compensam entre si.
+
+## Integração anual read-only
+
+`irpf_annual_integrated_assessment_service.py` passou a:
+
+1. calcular IRRF comum a partir das vendas brutas do excedente Swing;
+2. calcular IRRF Day Trade a partir do resultado mensal positivo;
+3. transportar saldo de IRRF apenas dentro do mesmo bucket;
+4. expor imposto bruto e líquido anual por modalidade;
+5. expor saldos finais segregados de IRRF;
+6. manter a apuração paralela sem persistência e sem troca de runtime.
+
 ## Fronteira arquitetural
 
-O módulo calcula somente a retenção bruta esperada. Ele não:
+Ainda não fazem parte deste corte:
 
-- deduz IRRF do imposto mensal devido;
-- transporta saldo de IRRF entre competências;
-- aplica DARF mínima;
-- persiste valores;
-- altera `calc_ganhos_capital`;
-- altera endpoints, schemas ou frontend.
+- DARF mínima e acumulação de imposto abaixo do limite;
+- persistência de saldos fiscais;
+- alteração de `calc_ganhos_capital`;
+- alteração de endpoints, schemas ou frontend;
+- geração de guia de pagamento.
 
-A compensação do IRRF deverá consumir explicitamente a apuração mensal canônica
-em um bloco próprio, sem misturar retenção, prejuízos e DARF em uma única função.
+A retenção não altera prejuízos fiscais: compensação de prejuízo e compensação de
+IRRF permanecem etapas independentes do pipeline.
 
 ## Fontes normativas
 
@@ -48,4 +70,8 @@ A política segue a orientação publicada pela Receita Federal para renda vari�
 - base e alíquota de Day Trade;
 - ausência de retenção em prejuízo Day Trade;
 - arredondamento determinístico;
-- rejeição de valor de venda negativo.
+- rejeição de valores negativos;
+- compensação total e parcial do imposto;
+- transporte de saldo de IRRF;
+- preservação dos buckets comum e Day Trade;
+- integração anual de imposto bruto, líquido e saldos finais.
