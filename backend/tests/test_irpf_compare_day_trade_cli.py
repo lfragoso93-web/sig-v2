@@ -5,7 +5,6 @@ from decimal import Decimal
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from app.cli.irpf_compare_day_trade import _main, comparison_to_dict
 from app.services.irpf_day_trade_comparison_service import DayTradeAnnualComparison
 from app.services.irpf_day_trade_legacy_comparison import (
