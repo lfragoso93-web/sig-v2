@@ -8,11 +8,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
+import sys
 from dataclasses import asdict
 from decimal import Decimal
 from enum import Enum
-import json
-import sys
 
 from app.core.database import AsyncSessionLocal
 from app.services.irpf_legacy_comparison_service import (
