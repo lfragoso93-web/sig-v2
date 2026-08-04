@@ -5,7 +5,6 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
-
 from app.services.irpf_annual_common_assessment_service import (
     assess_annual_common_operations,
     build_annual_common_assessment,
@@ -31,8 +30,8 @@ def _compensation(
         group=group,
         realized_pnl_brl=Decimal(realized),
         exemption_applied=False,
-        opening_loss_carryforward_brl=Decimal("0"),
-        loss_used_brl=Decimal("0"),
+        opening_loss_carryforward_brl=Decimal(0),
+        loss_used_brl=Decimal(0),
         closing_loss_carryforward_brl=Decimal(closing_loss),
         taxable_base_brl=Decimal(taxable),
         tax_rate=Decimal("0.15"),
@@ -56,12 +55,12 @@ def _disposal(
         ticker=ticker,
         asset_type=asset_type,
         disposal_date=disposal_date,
-        quantity_requested=Decimal("10"),
-        quantity_disposed=Decimal("10"),
-        unit_proceeds_brl=gross_value / Decimal("10"),
+        quantity_requested=Decimal(10),
+        quantity_disposed=Decimal(10),
+        unit_proceeds_brl=gross_value / Decimal(10),
         gross_proceeds_brl=gross_value,
         cost_basis_brl=cost_value,
-        fees_brl=Decimal("0"),
+        fees_brl=Decimal(0),
         realized_pnl_brl=gross_value - cost_value,
         currency="BRL",
         gross_proceeds_original_currency=None,
@@ -108,12 +107,12 @@ def test_build_annual_assessment_consolidates_totals_and_closing_losses() -> Non
         "2024-02",
         "2024-03",
     ]
-    assert result.total_realized_pnl_brl == Decimal("-100")
-    assert result.total_taxable_base_brl == Decimal("500")
-    assert result.total_tax_due_brl == Decimal("75")
+    assert result.total_realized_pnl_brl == Decimal(-100)
+    assert result.total_taxable_base_brl == Decimal(500)
+    assert result.total_tax_due_brl == Decimal(75)
     assert result.closing_loss_carryforward_by_group == {
-        TaxAssessmentGroup.BDR: Decimal("0"),
-        TaxAssessmentGroup.STOCKS: Decimal("600"),
+        TaxAssessmentGroup.BDR: Decimal(0),
+        TaxAssessmentGroup.STOCKS: Decimal(600),
     }
 
 
@@ -214,7 +213,7 @@ async def test_annual_service_returns_empty_assessment_for_empty_portfolio(
     )
 
     assert result.monthly == ()
-    assert result.total_realized_pnl_brl == Decimal("0")
-    assert result.total_taxable_base_brl == Decimal("0")
-    assert result.total_tax_due_brl == Decimal("0")
+    assert result.total_realized_pnl_brl == Decimal(0)
+    assert result.total_taxable_base_brl == Decimal(0)
+    assert result.total_tax_due_brl == Decimal(0)
     assert result.closing_loss_carryforward_by_group == {}
