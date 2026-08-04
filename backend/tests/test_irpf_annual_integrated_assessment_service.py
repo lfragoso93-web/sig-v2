@@ -6,7 +6,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from app.services.irpf_annual_integrated_assessment_service import (
     assess_annual_integrated_operations,
 )
