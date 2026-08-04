@@ -1,10 +1,13 @@
 /**
- * Hook para buscar dados do módulo IRPF.
- * Expõe: useIRPFAnos, useIRPFReport
+ * Hooks para buscar dados do módulo IRPF.
+ * Expõe contratos legados e a apuração anual canônica versionada.
  */
 import { useQuery } from '@tanstack/react-query'
 import api from '@/services/api'
-import type { IRPFReportOut } from '@/types/irpf'
+import type {
+  IRPFCanonicalAnnualAssessment,
+  IRPFReportOut,
+} from '@/types/irpf'
 
 export interface IRPFReportView
   extends Omit<IRPFReportOut, 'ganhos_mensais' | 'dividendos'> {
@@ -46,6 +49,23 @@ export function useIRPFReport(
         { params: { refresh } },
       )
       return toIRPFReportView(res.data)
+    },
+    enabled: !!portfolioId && !!year,
+    staleTime: 1000 * 60 * 5,
+  })
+}
+
+export function useIRPFCanonicalAnnualAssessment(
+  portfolioId: number | null,
+  year: number | null,
+) {
+  return useQuery<IRPFCanonicalAnnualAssessment>({
+    queryKey: ['irpf-canonical-annual-assessment', portfolioId, year],
+    queryFn: async () => {
+      const res = await api.get<IRPFCanonicalAnnualAssessment>(
+        `/portfolios/${portfolioId}/irpf/${year}/canonical`,
+      )
+      return res.data
     },
     enabled: !!portfolioId && !!year,
     staleTime: 1000 * 60 * 5,
