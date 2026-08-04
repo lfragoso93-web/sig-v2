@@ -2,7 +2,8 @@
 
 Este serviço compõe contratos canônicos existentes sem alterar o runtime legado.
 Ele carrega transações e baixas uma única vez, separa quantitativamente Day Trade,
-filtra as baixas Swing e reaproveita política, isenção, compensação e IRRF.
+filtra as baixas Swing e reaproveita política, isenção, compensação, IRRF e
+acumulação mínima de DARF.
 """
 
 from __future__ import annotations
@@ -27,6 +28,11 @@ from app.services.irpf_day_trade_monthly_assessment import (
 )
 from app.services.irpf_day_trade_monthly_projection import project_day_trades_by_month
 from app.services.irpf_day_trade_transaction_adapter import adapt_ordered_transactions
+from app.services.irpf_minimum_payment_accumulation import (
+    FiscalMinimumPaymentAssessment,
+    assess_minimum_payments,
+)
+from app.services.irpf_minimum_payment_policy import MINIMUM_DARF_PAYMENT_BRL
 from app.services.irpf_monthly_common_assessment import assess_common_monthly_groups
 from app.services.irpf_realized_disposal_tax_adapter import (
     adapt_realized_disposals,
@@ -59,6 +65,7 @@ class FiscalAnnualIntegratedAssessment:
     day_trade_withholding_monthly: tuple[
         FiscalMonthlyWithholdingCompensation, ...
     ]
+    minimum_payment_monthly: tuple[FiscalMinimumPaymentAssessment, ...]
     total_day_trade_result_brl: Decimal
     total_day_trade_taxable_base_brl: Decimal
     total_day_trade_tax_due_brl: Decimal
@@ -72,6 +79,8 @@ class FiscalAnnualIntegratedAssessment:
     closing_common_withholding_balance_brl: Decimal
     total_tax_due_brl: Decimal
     total_net_tax_due_brl: Decimal
+    total_payment_due_brl: Decimal
+    closing_accumulated_tax_brl: Decimal
 
 
 def _annual_bounds(year: int) -> tuple[date, date]:
@@ -132,6 +141,19 @@ def _compensate_day_trade_withholding(
     return tuple(result)
 
 
+def _assess_minimum_darf_payments(
+    common_monthly: tuple[FiscalMonthlyWithholdingCompensation, ...],
+    day_trade_monthly: tuple[FiscalMonthlyWithholdingCompensation, ...],
+) -> tuple[FiscalMinimumPaymentAssessment, ...]:
+    net_tax_by_month: dict[str, Decimal] = defaultdict(Decimal)
+    for assessment in (*common_monthly, *day_trade_monthly):
+        net_tax_by_month[assessment.competence_month] += assessment.net_tax_due_brl
+    return assess_minimum_payments(
+        monthly_net_tax_due=tuple(net_tax_by_month.items()),
+        minimum_payment_threshold_brl=MINIMUM_DARF_PAYMENT_BRL,
+    )
+
+
 async def assess_annual_integrated_operations(
     db: AsyncSession,
     portfolio_id: int,
@@ -183,6 +205,10 @@ async def assess_annual_integrated_operations(
     day_trade_withholding_monthly = _compensate_day_trade_withholding(
         day_trade_monthly
     )
+    minimum_payment_monthly = _assess_minimum_darf_payments(
+        common_withholding_monthly,
+        day_trade_withholding_monthly,
+    )
 
     total_day_trade_result = sum(
         (item.realized_pnl_brl for item in day_trade_monthly),
@@ -219,6 +245,15 @@ async def assess_annual_integrated_operations(
         if common_withholding_monthly
         else Decimal(0)
     )
+    total_payment_due = sum(
+        (item.payment_due_brl for item in minimum_payment_monthly),
+        start=Decimal(0),
+    )
+    closing_accumulated_tax = (
+        minimum_payment_monthly[-1].closing_accumulated_tax_brl
+        if minimum_payment_monthly
+        else Decimal(0)
+    )
 
     return FiscalAnnualIntegratedAssessment(
         portfolio_id=portfolio_id,
@@ -229,6 +264,7 @@ async def assess_annual_integrated_operations(
         swing=swing,
         common_withholding_monthly=common_withholding_monthly,
         day_trade_withholding_monthly=day_trade_withholding_monthly,
+        minimum_payment_monthly=minimum_payment_monthly,
         total_day_trade_result_brl=total_day_trade_result,
         total_day_trade_taxable_base_brl=total_day_trade_taxable_base,
         total_day_trade_tax_due_brl=total_day_trade_tax_due,
@@ -244,4 +280,6 @@ async def assess_annual_integrated_operations(
         total_net_tax_due_brl=(
             total_day_trade_net_tax_due + total_swing_net_tax_due
         ),
+        total_payment_due_brl=total_payment_due,
+        closing_accumulated_tax_brl=closing_accumulated_tax,
     )
