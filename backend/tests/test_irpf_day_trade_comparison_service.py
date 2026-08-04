@@ -5,7 +5,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from app.services.irpf_day_trade_comparison_service import (
     build_legacy_day_trade_months,
     compare_annual_day_trade_with_legacy,
