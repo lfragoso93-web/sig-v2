@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-
 ROUTER_PATH = Path("app/routers/irpf.py")
 
 
