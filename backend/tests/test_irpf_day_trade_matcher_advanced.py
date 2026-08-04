@@ -4,7 +4,6 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-
 from app.services.irpf_day_trade_matcher import (
     FiscalOperation,
     FiscalTradeOperation,
