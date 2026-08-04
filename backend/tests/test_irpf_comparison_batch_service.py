@@ -4,7 +4,6 @@ from datetime import date
 from types import SimpleNamespace
 
 import pytest
-
 from app.services.irpf_comparison_batch_service import (
     FiscalComparisonTarget,
     build_batch_report,
