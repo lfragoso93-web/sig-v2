@@ -4,7 +4,6 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
-
 from app.services.irpf_annual_common_assessment_service import (
     FiscalAnnualCommonAssessment,
 )
