@@ -45,6 +45,30 @@ O serviço `irpf_integrated_comparison_service.py` executa cada caminho uma úni
 vez e devolve a visão comparativa anual. O fluxo permanece read-only, não
 persiste resultados e não substitui consumidores de produção.
 
+## CLI integrada
+
+A comparação completa pode ser executada dentro do container backend:
+
+```bash
+python -m app.cli.irpf_compare_integrated --portfolio-id 1 --year 2024
+```
+
+Contrato de saída:
+`irpf-integrated-canonical-legacy-comparison.v1`.
+
+O JSON contém:
+
+- carteira e ano-calendário;
+- indicador global de divergência;
+- meses comparados, equivalentes e divergentes;
+- contagem agregada por classificação;
+- valores canônicos e legados de Swing e Day Trade em cada competência;
+- classificações aplicadas em cada mês.
+
+Com `--fail-on-divergence`, a CLI retorna exit code `2` quando houver qualquer
+competência divergente. Falhas operacionais retornam `1`; execução válida
+retorna `0`. A sessão é encerrada com rollback explícito.
+
 ## CLI individual de operações comuns
 
 ```bash
@@ -169,7 +193,7 @@ disponíveis e o estado visual retorna ao resumo.
 
 ## Invariantes arquiteturais
 
-1. Todos os comparadores são read-only.
+1. Todos os comparadores e CLIs são read-only.
 2. Nenhum endpoint ou schema público é alterado neste estágio.
 3. O motor canônico continua consumindo `CanonicalRealizedDisposal`.
 4. O legado permanece inalterado durante a coleta de evidências.
@@ -178,13 +202,14 @@ disponíveis e o estado visual retorna ao resumo.
 7. Prejuízos Day Trade nunca compensam operações comuns.
 8. A projeção Swing não reimplementa custo médio nem posição.
 9. Cada caminho integrado e legado é executado uma única vez por comparação.
-10. IRRF e DARF mínima permanecem gates separados.
+10. As CLIs encerram suas sessões com rollback explícito.
+11. Os contratos JSON são versionados e adequados para evidência operacional.
+12. IRRF e DARF mínima permanecem gates separados.
 
 ## Próximos passos
 
-1. validar Ruff e testes do comparador integrado;
-2. expor uma CLI JSON versionada para a comparação integrada;
-3. executar a comparação em dados reais e inventariar divergências;
-4. ampliar classificações com custos, FX e arredondamento;
-5. incorporar IRRF e DARF mínima em blocos próprios;
-6. definir o gate objetivo de substituição do runtime legado.
+1. validar Ruff e testes da CLI integrada;
+2. executar a CLI em dados reais e inventariar divergências;
+3. ampliar classificações com custos, FX e arredondamento;
+4. incorporar IRRF e DARF mínima em blocos próprios;
+5. definir o gate objetivo de substituição do runtime legado.
