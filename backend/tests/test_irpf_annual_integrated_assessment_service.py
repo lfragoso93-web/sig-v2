@@ -84,13 +84,24 @@ async def test_integrated_assessment_orchestrates_day_trade_and_swing_once() -> 
     assert result.total_day_trade_result_brl == Decimal("10.00")
     assert result.total_day_trade_taxable_base_brl == Decimal("10.00")
     assert result.total_day_trade_tax_due_brl == Decimal("2.00")
+    assert result.total_day_trade_net_tax_due_brl == Decimal("1.90")
     assert result.closing_day_trade_loss_carryforward_brl == Decimal("0.00")
+    assert result.closing_day_trade_withholding_balance_brl == Decimal("0.00")
     assert result.total_swing_realized_pnl_brl == Decimal(10)
     assert result.total_swing_taxable_base_brl == Decimal(10)
     assert result.total_swing_tax_due_brl == Decimal("1.50")
+    assert result.total_swing_net_tax_due_brl == Decimal("1.49")
+    assert result.closing_common_withholding_balance_brl == Decimal("0.00")
     assert result.total_tax_due_brl == Decimal("3.50")
+    assert result.total_net_tax_due_brl == Decimal("3.39")
     assert result.day_trade_monthly[0].tax_rate == Decimal("0.20")
     assert result.swing.monthly[0].realized_pnl_brl == Decimal("10.00")
+    assert result.common_withholding_monthly[0].current_withholding_brl == Decimal(
+        "0.01"
+    )
+    assert result.day_trade_withholding_monthly[0].current_withholding_brl == Decimal(
+        "0.10"
+    )
 
 
 @pytest.mark.asyncio
