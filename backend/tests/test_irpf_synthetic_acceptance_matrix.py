@@ -8,7 +8,6 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-
 from app.services.irpf_common_loss_carryforward import compensate_common_losses
 from app.services.irpf_day_trade_monthly_assessment import assess_day_trade_months
 from app.services.irpf_day_trade_monthly_projection import DayTradeMonthlyProjection
