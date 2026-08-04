@@ -7,11 +7,11 @@ vendida no mesmo pregão. O excedente permanece disponível para Swing Trade.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from enum import StrEnum
-from typing import Iterable
 
 
 class FiscalOperation(StrEnum):
