@@ -1,6 +1,6 @@
 # Roadmap modular — SGI v2
 
-> Última atualização: 02/08/2026
+> Última atualização: 04/08/2026
 
 ## Direção atual
 
@@ -18,8 +18,7 @@ O SGI v2 está em consolidação arquitetural antes de receber carteiras e usuá
 | Snapshots e valuation por classe | Consolidado | 100% |
 | Resumo e Patrimônio | Consolidado | 100% |
 | Rentabilidade | Migração canônica em andamento | 96% |
-| IRPF — Bens e Direitos | Canônico | 100% |
-| IRPF — ganhos mensais | Caracterização pendente | 45% |
+| IRPF | Implementação funcional canônica concluída; validação real pendente | 98% |
 | Metas | Estável e vinculada à carteira | 100% |
 | Rotas de carteira | Consolidadas | 100% |
 | UTC e warnings | Concluído pela #192 | 100% |
@@ -30,9 +29,9 @@ O SGI v2 está em consolidação arquitetural antes de receber carteiras e usuá
 
 ## Qualidade validada
 
-- Backend: `1097 passed`, `22 skipped`, zero warnings.
-- Ruff e `compileall`: aprovados.
-- Frontend: 23 arquivos de teste, 86 testes, typecheck, lint e build aprovados.
+- Backend: `1265 passed`, `22 skipped` na suíte completa mais recente.
+- Ruff e `compileall`: aprovados nos gates do IRPF.
+- Frontend: 26 arquivos de teste, 93 testes, typecheck, lint e build aprovados.
 
 ## Consolidado
 
@@ -40,8 +39,10 @@ O SGI v2 está em consolidação arquitetural antes de receber carteiras e usuá
 
 - Contratos `summary.v2` e `rentabilidade.v2` permanecem as fontes públicas canônicas.
 - Projeções compartilhadas calculam posição, custo e resultado realizado.
-- Bens e Direitos do IRPF consome posição histórica na data de corte.
-- Regras fiscais, relatório e exportação do IRPF estão separados por responsabilidade.
+- O IRPF usa contratos públicos versionados para apuração anual, Bens e Direitos, Rendimentos e Ganhos de Capital.
+- Day Trade, Swing Trade, isenção mensal, compensação de prejuízos, IRRF e DARF mínima estão integrados ao motor canônico.
+- PDF e CSV são gerados diretamente por `IrpfCanonicalExport`, sem leitura do relatório persistido legado.
+- A `IRPFPage.tsx` usa somente hooks canônicos; `IRPFReportOut` permanece apenas na fachada Python histórica e no endpoint completo de compatibilidade externa.
 - Proventos pertencem ao ativo e são persistidos em `asset_dividends`; direitos de carteira são derivados sob demanda.
 - O contrato operacional vigente de seed de Proventos é `pre-prod-dividends-seed.v2`, com escrita exclusiva em `asset_dividends` e sem materialização por carteira.
 - Serviços operacionais usam UTC aware; defaults ORM `timezone=False` usam UTC naive explícito.
@@ -65,20 +66,21 @@ Rotas canônicas:
 
 ### 1. Promoção estrutural
 
-- [x] Backend verde e sem warnings.
+- [x] Backend verde e sem regressões conhecidas.
 - [x] Frontend verde e com build aprovado.
 - [x] IRPF e Metas sob `/carteira`.
-- [x] Issues #192 e #228 encerradas.
-- [x] README e documentação de continuidade atualizados.
-- [ ] Sincronizar documentação restante e abrir PR para `main`.
+- [x] README, ROADMAP, CHANGELOG e documentação técnica sincronizados para o IRPF canônico.
+- [ ] Abrir e validar a PR `stable-15jun` → `main`.
 
-### 2. Ganhos de capital do IRPF
+### 2. IRPF
 
-- [ ] Caracterizar Day Trade e Swing Trade.
-- [ ] Caracterizar isenção mensal e prejuízos acumulados.
-- [ ] Caracterizar segregação mensal e retenções.
-- [ ] Migrar reconstrução contábil para leitores canônicos.
-- [ ] Preservar somente semântica fiscal no módulo IRPF.
+- [x] Caracterizar Day Trade e Swing Trade.
+- [x] Caracterizar isenção mensal e prejuízos acumulados.
+- [x] Caracterizar segregação mensal, retenções e DARF mínima.
+- [x] Integrar reconstrução contábil com leitores/projeções canônicos.
+- [x] Publicar contratos versionados e migrar frontend/exportações.
+- [ ] Validar PDF, CSV e apuração com carteira real representativa quando houver dados homologados.
+- [ ] Avaliar remoção física do endpoint completo legado após auditoria externa de consumidores.
 
 ### 3. Rentabilidade
 
@@ -110,8 +112,8 @@ Somente após os gates anteriores:
 ## Próximas prioridades
 
 1. Abrir e validar a PR estrutural `stable-15jun` → `main`.
-2. Caracterizar ganhos de capital mensais do IRPF.
-3. Concluir a migração da Rentabilidade e remover legado (#151).
-4. Consolidar eventos corporativos e adapters.
-5. Implementar IBOV persistido e TWR dedicado.
-6. Retomar pré-produção somente após a certificação da #227.
+2. Concluir a migração da Rentabilidade e remover legado (#151).
+3. Consolidar eventos corporativos e adapters.
+4. Implementar IBOV persistido e TWR dedicado.
+5. Retomar pré-produção somente após a certificação da #227.
+6. Validar o IRPF em carteira real quando houver dados representativos.

@@ -52,6 +52,11 @@ def _movement_from_transaction(tx: Transaction) -> PositionMovement:
             if is_usd and tx.operation == OperationType.buy
             else Decimal(0)
         ),
+        transaction_id=getattr(tx, "id", None),
+        ticker=str(tx.ticker).strip().upper(),
+        asset_type=asset_type,
+        currency=str(getattr(tx, "currency", "BRL") or "BRL").upper(),
+        unit_price_original_currency=price if is_usd else None,
     )
 
 

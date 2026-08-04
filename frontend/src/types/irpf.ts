@@ -86,3 +86,61 @@ export interface IRPFReportOut {
   jcp: JCPItem[]
   resumo: IRPFResumo
 }
+
+export interface IRPFCanonicalMonthlyAssessment {
+  competence_month: string
+  swing_gross_tax_due_brl: string
+  swing_withholding_brl: string
+  swing_net_tax_due_brl: string
+  day_trade_gross_tax_due_brl: string
+  day_trade_withholding_brl: string
+  day_trade_net_tax_due_brl: string
+  total_net_tax_due_brl: string
+  payment_due_brl: string
+  closing_accumulated_tax_brl: string
+}
+
+export interface IRPFCanonicalAnnualAssessment {
+  schema_version: 'irpf-annual-assessment.v1'
+  portfolio_id: number
+  year: number
+  monthly: IRPFCanonicalMonthlyAssessment[]
+  total_gross_tax_due_brl: string
+  total_withholding_brl: string
+  total_net_tax_due_brl: string
+  total_payment_due_brl: string
+  closing_accumulated_tax_brl: string
+  closing_common_withholding_balance_brl: string
+  closing_day_trade_withholding_balance_brl: string
+  closing_day_trade_loss_carryforward_brl: string
+}
+
+export interface IRPFCanonicalAssetsAssessment {
+  schema_version: 'irpf-assets-assessment.v1'
+  portfolio_id: number
+  year: number
+  items: BemDireito[]
+  total_cost_brl: string
+}
+
+export interface IRPFCanonicalCapitalGainsAssessment {
+  schema_version: 'irpf-capital-gains-assessment.v1'
+  portfolio_id: number
+  year: number
+  months: GanhoCapitalMensal[]
+  total_sales_brl: string
+  total_gross_profit_brl: string
+  total_tax_due_brl: string
+}
+
+export interface IRPFCanonicalIncomeAssessment {
+  schema_version: 'irpf-income-assessment.v1'
+  portfolio_id: number
+  year: number
+  dividends: RendimentoIsento[]
+  jcp: JCPItem[]
+  total_dividends_brl: string
+  total_jcp_gross_brl: string
+  total_jcp_withholding_brl: string
+  total_jcp_net_brl: string
+}

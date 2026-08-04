@@ -3,6 +3,8 @@ from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models.transaction import OperationType
 from app.services.canonical_dividend_entitlement import (
     DividendEntitlement,
@@ -18,15 +20,48 @@ from app.services.irpf_service import (
     generate_irpf_csv,
     generate_irpf_pdf,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
+
+
+def _transaction(
+    *,
+    ticker: str = "VALE3",
+    operation: OperationType,
+    quantity: float,
+    price: float,
+    tx_date: date,
+    asset_type: str = "STOCK",
+    fees: float = 0.0,
+) -> MagicMock:
+    tx = MagicMock()
+    tx.ticker = ticker
+    tx.operation = operation
+    tx.asset_type = asset_type
+    tx.quantity = quantity
+    tx.price = price
+    tx.date = tx_date
+    tx.currency = "BRL"
+    tx.fees = fees
+    return tx
+
+
+def _db_with_transactions(
+    *,
+    current_year: list[MagicMock],
+    previous_years: list[MagicMock] | None = None,
+) -> AsyncMock:
+    current_result = MagicMock()
+    current_result.scalars().all.return_value = current_year
+    previous_result = MagicMock()
+    previous_result.scalars().all.return_value = previous_years or []
+
+    db = AsyncMock(spec=AsyncSession)
+    db.execute.side_effect = [current_result, previous_result]
+    return db
 
 
 @pytest.mark.asyncio
 async def test_calc_ganhos_capital_no_transactions():
-    db = AsyncMock(spec=AsyncSession)
-    result = MagicMock()
-    result.scalars().all.return_value = []
-    db.execute.return_value = result
+    db = _db_with_transactions(current_year=[])
 
     ganhos = await calc_ganhos_capital(db, portfolio_id=1, year=2024)
 
@@ -34,36 +69,362 @@ async def test_calc_ganhos_capital_no_transactions():
 
 
 @pytest.mark.asyncio
-async def test_calc_ganhos_capital_simple_sell():
-    db = AsyncMock(spec=AsyncSession)
-
-    mock_buy = MagicMock()
-    mock_buy.ticker = "VALE3"
-    mock_buy.operation = OperationType.buy
-    mock_buy.asset_type = "STOCK"
-    mock_buy.quantity = 100.0
-    mock_buy.price = 50.0
-    mock_buy.date = date(2024, 1, 15)
-    mock_buy.currency = "BRL"
-    mock_buy.fees = 0.0
-
-    mock_sell = MagicMock()
-    mock_sell.ticker = "VALE3"
-    mock_sell.operation = OperationType.sell
-    mock_sell.asset_type = "STOCK"
-    mock_sell.quantity = 100.0
-    mock_sell.price = 60.0
-    mock_sell.date = date(2024, 6, 15)
-    mock_sell.currency = "BRL"
-    mock_sell.fees = 0.0
-
-    result = MagicMock()
-    result.scalars().all.return_value = [mock_buy, mock_sell]
-    db.execute.return_value = result
+async def test_calc_ganhos_capital_simple_stock_sale_preserves_current_exemption():
+    db = _db_with_transactions(
+        current_year=[
+            _transaction(
+                operation=OperationType.buy,
+                quantity=100,
+                price=50,
+                tx_date=date(2024, 1, 15),
+            ),
+            _transaction(
+                operation=OperationType.sell,
+                quantity=100,
+                price=60,
+                tx_date=date(2024, 6, 15),
+            ),
+        ]
+    )
 
     ganhos = await calc_ganhos_capital(db, portfolio_id=1, year=2024)
 
-    assert len(ganhos) > 0
+    assert len(ganhos) == 1
+    month = ganhos[0]
+    assert month.mes == "2024-06"
+    assert month.total_vendas == 6_000
+    assert month.total_custo == 5_000
+    assert month.lucro_bruto == 1_000
+    assert month.isencao_aplicada == 6_000
+    assert month.base_calculo == 0
+    assert month.ir_a_recolher == 0
+    assert month.vendas[0].is_isento is True
+
+
+@pytest.mark.asyncio
+async def test_calc_ganhos_capital_partial_sale_keeps_weighted_average_cost():
+    db = _db_with_transactions(
+        current_year=[
+            _transaction(
+                operation=OperationType.sell,
+                quantity=40,
+                price=15,
+                fees=20,
+                tx_date=date(2024, 2, 10),
+                asset_type="ETF",
+            ),
+            _transaction(
+                operation=OperationType.sell,
+                quantity=60,
+                price=20,
+                tx_date=date(2024, 3, 10),
+                asset_type="ETF",
+            ),
+        ],
+        previous_years=[
+            _transaction(
+                operation=OperationType.buy,
+                quantity=100,
+                price=10,
+                fees=100,
+                tx_date=date(2023, 12, 1),
+                asset_type="ETF",
+            )
+        ],
+    )
+
+    ganhos = await calc_ganhos_capital(db, portfolio_id=1, year=2024)
+
+    assert [month.mes for month in ganhos] == ["2024-02", "2024-03"]
+    assert ganhos[0].total_custo == 440
+    assert ganhos[0].lucro_bruto == 140
+    assert ganhos[0].ir_devido_swing == 21
+    assert ganhos[1].total_custo == 660
+    assert ganhos[1].lucro_bruto == 540
+    assert ganhos[1].ir_devido_swing == 81
+
+
+@pytest.mark.asyncio
+async def test_calc_ganhos_capital_multiple_buys_use_weighted_average():
+    db = _db_with_transactions(
+        current_year=[
+            _transaction(
+                operation=OperationType.buy,
+                quantity=10,
+                price=10,
+                tx_date=date(2024, 1, 2),
+                asset_type="ETF",
+            ),
+            _transaction(
+                operation=OperationType.buy,
+                quantity=30,
+                price=20,
+                tx_date=date(2024, 1, 3),
+                asset_type="ETF",
+            ),
+            _transaction(
+                operation=OperationType.sell,
+                quantity=20,
+                price=25,
+                tx_date=date(2024, 4, 1),
+                asset_type="ETF",
+            ),
+        ]
+    )
+
+    month = (await calc_ganhos_capital(db, 1, 2024))[0]
+
+    assert month.vendas[0].custo_aquisicao == 17.5
+    assert month.total_custo == 350
+    assert month.lucro_bruto == 150
+
+
+@pytest.mark.asyncio
+async def test_calc_ganhos_capital_zero_position_then_repurchase_resets_cost():
+    db = _db_with_transactions(
+        current_year=[
+            _transaction(
+                operation=OperationType.buy,
+                quantity=10,
+                price=10,
+                tx_date=date(2024, 1, 2),
+                asset_type="ETF",
+            ),
+            _transaction(
+                operation=OperationType.sell,
+                quantity=10,
+                price=12,
+                tx_date=date(2024, 2, 2),
+                asset_type="ETF",
+            ),
+            _transaction(
+                operation=OperationType.buy,
+                quantity=5,
+                price=30,
+                tx_date=date(2024, 3, 2),
+                asset_type="ETF",
+            ),
+            _transaction(
+                operation=OperationType.sell,
+                quantity=5,
+                price=32,
+                tx_date=date(2024, 4, 2),
+                asset_type="ETF",
+            ),
+        ]
+    )
+
+    ganhos = await calc_ganhos_capital(db, 1, 2024)
+
+    assert ganhos[0].vendas[0].custo_aquisicao == 10
+    assert ganhos[1].vendas[0].custo_aquisicao == 30
+
+
+@pytest.mark.asyncio
+async def test_calc_ganhos_capital_separates_months_and_rounds_values():
+    db = _db_with_transactions(
+        current_year=[
+            _transaction(
+                ticker="BOVA11",
+                operation=OperationType.buy,
+                quantity=3,
+                price=10.005,
+                fees=0.015,
+                tx_date=date(2024, 1, 2),
+                asset_type="ETF",
+            ),
+            _transaction(
+                ticker="BOVA11",
+                operation=OperationType.sell,
+                quantity=1,
+                price=11.019,
+                fees=0.004,
+                tx_date=date(2024, 5, 2),
+                asset_type="ETF",
+            ),
+            _transaction(
+                ticker="BOVA11",
+                operation=OperationType.sell,
+                quantity=1,
+                price=9.001,
+                fees=0.006,
+                tx_date=date(2024, 6, 2),
+                asset_type="ETF",
+            ),
+        ]
+    )
+
+    ganhos = await calc_ganhos_capital(db, 1, 2024)
+
+    assert [month.mes for month in ganhos] == ["2024-05", "2024-06"]
+    assert ganhos[0].vendas[0].preco_venda == 11.02
+    assert ganhos[0].vendas[0].custo_aquisicao == 10.01
+    assert ganhos[0].vendas[0].lucro_bruto == 1.01
+    assert ganhos[1].vendas[0].preco_venda == 9.0
+    assert ganhos[1].vendas[0].lucro_bruto == -1.02
+
+
+@pytest.mark.asyncio
+async def test_calc_ganhos_capital_preserves_current_uncompensated_monthly_loss():
+    db = _db_with_transactions(
+        current_year=[
+            _transaction(
+                operation=OperationType.buy,
+                quantity=10,
+                price=20,
+                tx_date=date(2024, 1, 2),
+                asset_type="ETF",
+            ),
+            _transaction(
+                operation=OperationType.sell,
+                quantity=10,
+                price=10,
+                tx_date=date(2024, 2, 2),
+                asset_type="ETF",
+            ),
+            _transaction(
+                operation=OperationType.buy,
+                quantity=10,
+                price=10,
+                tx_date=date(2024, 3, 2),
+                asset_type="ETF",
+            ),
+            _transaction(
+                operation=OperationType.sell,
+                quantity=10,
+                price=20,
+                tx_date=date(2024, 4, 2),
+                asset_type="ETF",
+            ),
+        ]
+    )
+
+    ganhos = await calc_ganhos_capital(db, 1, 2024)
+
+    assert ganhos[0].lucro_bruto == -100
+    assert ganhos[0].base_calculo == 0
+    assert ganhos[1].lucro_bruto == 100
+    assert ganhos[1].base_calculo == 100
+    assert ganhos[1].ir_devido_swing == 15
+
+
+@pytest.mark.asyncio
+async def test_calc_ganhos_capital_classifies_same_day_buy_and_sale_as_day_trade():
+    db = _db_with_transactions(
+        current_year=[
+            _transaction(
+                operation=OperationType.buy,
+                quantity=10,
+                price=10,
+                fees=2,
+                tx_date=date(2024, 5, 2),
+                asset_type="ETF",
+            ),
+            _transaction(
+                operation=OperationType.sell,
+                quantity=10,
+                price=15,
+                fees=3,
+                tx_date=date(2024, 5, 2),
+                asset_type="ETF",
+            ),
+        ]
+    )
+
+    month = (await calc_ganhos_capital(db, 1, 2024))[0]
+
+    assert month.vendas[0].is_day_trade is True
+    assert month.lucro_day_trade == 45
+    assert month.lucro_swing_trade == 0
+    assert month.base_calculo == 45
+    assert month.ir_devido_day_trade == 9
+    assert month.ir_devido_swing == 0
+
+
+@pytest.mark.asyncio
+async def test_calc_ganhos_capital_aggregates_multiple_same_day_sales_as_day_trade():
+    db = _db_with_transactions(
+        current_year=[
+            _transaction(
+                operation=OperationType.buy,
+                quantity=10,
+                price=10,
+                fees=2,
+                tx_date=date(2024, 6, 3),
+                asset_type="ETF",
+            ),
+            _transaction(
+                operation=OperationType.sell,
+                quantity=4,
+                price=15,
+                fees=1,
+                tx_date=date(2024, 6, 3),
+                asset_type="ETF",
+            ),
+            _transaction(
+                operation=OperationType.sell,
+                quantity=6,
+                price=20,
+                fees=3,
+                tx_date=date(2024, 6, 3),
+                asset_type="ETF",
+            ),
+        ]
+    )
+
+    month = (await calc_ganhos_capital(db, 1, 2024))[0]
+
+    assert [sale.is_day_trade for sale in month.vendas] == [True, True]
+    assert [sale.lucro_bruto for sale in month.vendas] == [18.2, 55.8]
+    assert month.lucro_day_trade == 74
+    assert month.lucro_swing_trade == 0
+    assert month.ir_devido_day_trade == 14.8
+
+
+@pytest.mark.asyncio
+async def test_calc_ganhos_capital_preserves_coarse_day_trade_allocation():
+    """Documenta que a regra vigente marca a venda inteira como Day Trade.
+
+    Mesmo havendo posição anterior e compra intradiária menor que a venda, o
+    comportamento atual não separa as parcelas Day Trade e Swing Trade.
+    """
+
+    db = _db_with_transactions(
+        previous_years=[
+            _transaction(
+                operation=OperationType.buy,
+                quantity=100,
+                price=10,
+                tx_date=date(2023, 12, 1),
+                asset_type="ETF",
+            )
+        ],
+        current_year=[
+            _transaction(
+                operation=OperationType.buy,
+                quantity=20,
+                price=12,
+                tx_date=date(2024, 7, 4),
+                asset_type="ETF",
+            ),
+            _transaction(
+                operation=OperationType.sell,
+                quantity=30,
+                price=15,
+                tx_date=date(2024, 7, 4),
+                asset_type="ETF",
+            ),
+        ],
+    )
+
+    month = (await calc_ganhos_capital(db, 1, 2024))[0]
+
+    assert month.vendas[0].is_day_trade is True
+    assert month.vendas[0].quantidade == 30
+    assert month.vendas[0].custo_aquisicao == 10.33
+    assert month.lucro_day_trade == 140
+    assert month.lucro_swing_trade == 0
+    assert month.ir_devido_day_trade == 28
 
 
 @pytest.mark.asyncio

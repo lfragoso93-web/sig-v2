@@ -4,15 +4,15 @@ Plataforma pessoal para acompanhamento, consolidação e análise de investiment
 
 A branch de desenvolvimento é `stable-15jun`. A promoção para `main` ocorre exclusivamente por Pull Request após validação integral e sincronização da documentação viva.
 
-## Status atual — 02/08/2026
+## Status atual — 04/08/2026
 
 O SGI v2 está em **consolidação arquitetural antes da primeira carga real de carteiras e usuários**. O gate vigente é a Issue #227: seeds, sincronizações externas, importação real e rebuild operacional permanecem opt-in e suspensos até a certificação do núcleo financeiro.
 
 ### Qualidade validada
 
-- Backend: `1097 passed`, `22 skipped`, zero warnings.
-- Ruff e `compileall`: aprovados.
-- Frontend: 23 arquivos de teste e 86 testes aprovados.
+- Backend: `1265 passed`, `22 skipped` na suíte completa mais recente.
+- Ruff e `compileall`: aprovados nos gates do módulo IRPF.
+- Frontend: 26 arquivos de teste e 93 testes aprovados.
 - Typecheck, ESLint e build de produção: aprovados.
 
 ### Entregas consolidadas
@@ -22,8 +22,11 @@ O SGI v2 está em **consolidação arquitetural antes da primeira carga real de 
 - Histórico B3/COTAHIST, Tesouro oficial, benchmarks e câmbio persistidos.
 - Proventos globais em `asset_dividends`, com direitos de carteira calculados sob demanda.
 - Motor canônico de eventos corporativos e projeção histórica de posição, custo e resultado realizado.
-- Bens e Direitos do IRPF consumindo a projeção histórica canônica.
-- IRPF separado em serviços de posição, regras fiscais, relatório e exportação.
+- IRPF anual canônico com Day Trade, Swing Trade, isenção mensal, prejuízos, IRRF e DARF mínima.
+- Contratos públicos versionados de apuração anual, Bens e Direitos, Rendimentos e Ganhos de Capital.
+- IRPF frontend integralmente canônico, sem carregamento de `IRPFReportOut`.
+- Exportações PDF e CSV compostas diretamente por `IrpfCanonicalExport`.
+- Endpoint completo legado do IRPF preservado apenas para compatibilidade externa, sem uso pela interface ou exportações.
 - Backup/restore e defaults ORM modernizados para UTC sem warnings de `datetime.utcnow()`.
 - IRPF e Metas sob o contexto canônico da carteira:
   - `/carteira/irpf`;
@@ -64,12 +67,12 @@ Princípios: DB-first, fonte oficial primeiro, idempotência, ausência não con
 
 ## Próximas prioridades
 
-1. Promover este macrobloco estrutural para a `main` por PR.
-2. Caracterizar ganhos de capital mensais antes de alterar regras fiscais do IRPF.
-3. Concluir consumidores remanescentes e remover a fachada legada de Rentabilidade (#151).
-4. Consolidar eventos corporativos e adapters por capacidade (#129, #130 e #127).
-5. Implementar IBOV persistido e TWR dedicado (#150 e #149).
-6. Retomar seeds, importação e rebuild somente após os gates arquiteturais (#158, #216, #226 e #227).
+1. Promover o módulo IRPF canônico e o macrobloco estrutural para a `main` por PR.
+2. Concluir consumidores remanescentes e remover a fachada legada de Rentabilidade (#151).
+3. Consolidar eventos corporativos e adapters por capacidade (#129, #130 e #127).
+4. Implementar IBOV persistido e TWR dedicado (#150 e #149).
+5. Retomar seeds, importação e rebuild somente após os gates arquiteturais (#158, #216, #226 e #227).
+6. Validar o IRPF em carteira real com operações representativas quando houver dados homologados.
 
 ## Comandos principais
 
@@ -104,6 +107,7 @@ npm run build
 - `docs/architecture.md` — arquitetura DB-first e fronteiras dos módulos.
 - `docs/DEVELOPMENT_CONTINUITY.md` — checkpoint obrigatório para retomada.
 - `docs/RENTABILIDADE_IRPF_CANONICAL_MIGRATION_PLAN.md` — plano do núcleo financeiro.
+- `docs/IRPF_CANONICAL_FRONTEND_INTEGRATION.md` — contratos e fronteiras atuais do frontend e das exportações.
 - `docs/portfolio-route-hierarchy.md` — hierarquia das rotas vinculadas à carteira.
 - `docs/DIVIDENDS_CANONICAL_ARCHITECTURE.md` — arquitetura canônica de Proventos.
 - `docs/PRE_PROD_REBUILD_RUNBOOK.md` — gates operacionais de pré-produção.

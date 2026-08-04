@@ -75,6 +75,38 @@ def test_sale_fees_reduce_realized_pnl():
     assert result.quantity == Decimal(6)
     assert result.total_cost == Decimal(60)
     assert result.realized_pnl == Decimal(19)
+    assert len(result.realized_disposals) == 1
+    disposal = result.realized_disposals[0]
+    assert disposal.quantity_requested == Decimal(4)
+    assert disposal.quantity_disposed == Decimal(4)
+    assert disposal.gross_proceeds_brl == Decimal(60)
+    assert disposal.cost_basis_brl == Decimal(40)
+    assert disposal.fees_brl == Decimal(1)
+    assert disposal.realized_pnl_brl == Decimal(19)
+
+
+def test_sale_above_position_records_requested_and_effective_quantities():
+    result = project_position_timeline(
+        movements=[_buy(1, "10", "10"), _sell(2, "15", "20", fees="1")],
+        actions=[],
+    )
+
+    disposal = result.realized_disposals[0]
+    assert disposal.quantity_requested == Decimal(15)
+    assert disposal.quantity_disposed == Decimal(10)
+    assert disposal.cost_basis_brl == Decimal(100)
+    assert disposal.gross_proceeds_brl == Decimal(200)
+    assert disposal.realized_pnl_brl == Decimal(99)
+    assert result.realized_pnl == disposal.realized_pnl_brl
+
+
+def test_disposal_preserves_events_applied_before_sale():
+    result = project_position_timeline(
+        movements=[_buy(1, "100", "10"), _sell(3, "50", "8")],
+        actions=[_action("split", date(2026, 1, 2), CorporateActionKind.SPLIT, "2")],
+    )
+
+    assert result.realized_disposals[0].applied_event_ids == ("split",)
 
 
 def test_event_does_not_apply_to_position_closed_before_event():
