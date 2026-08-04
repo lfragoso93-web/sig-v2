@@ -85,6 +85,16 @@ class GanhoCapitalMensal(BaseModel):
     vendas:                list[VendaMensal] = []
 
 
+class IrpfCapitalGainsAssessmentOut(BaseModel):
+    schema_version: str
+    portfolio_id: int
+    year: int
+    months: list[GanhoCapitalMensal]
+    total_sales_brl: Decimal
+    total_gross_profit_brl: Decimal
+    total_tax_due_brl: Decimal
+
+
 # ---------------------------------------------------------------------------
 # Rendimentos
 # ---------------------------------------------------------------------------
