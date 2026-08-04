@@ -1,17 +1,17 @@
-"""Exportadores PDF e CSV do relatório de IRPF."""
+"""Exportadores PDF e CSV do IRPF canônico."""
 
 from datetime import UTC, datetime
 from io import BytesIO
 
-from app.schemas.irpf import IRPFReportOut
+from app.services.irpf_canonical_export_service import IrpfCanonicalExport
 
 
 def _today_label() -> str:
     return datetime.now(UTC).date().strftime("%d/%m/%Y")
 
 
-def generate_irpf_pdf(report: IRPFReportOut) -> bytes:
-    """Gera PDF do relatório IRPF e retorna os bytes do arquivo."""
+def generate_irpf_pdf(report: IrpfCanonicalExport) -> bytes:
+    """Gera PDF do relatório IRPF canônico e retorna os bytes do arquivo."""
 
     try:
         from reportlab.lib import colors
@@ -91,35 +91,32 @@ def generate_irpf_pdf(report: IRPFReportOut) -> bytes:
         )
 
     story = [
-        Paragraph(f"Relatorio IRPF {report.ano}", title_style),
+        Paragraph(f"Relatorio IRPF {report.year}", title_style),
         Paragraph(
             f"Carteira ID: {report.portfolio_id} | Gerado em: {_today_label()}",
             normal,
         ),
         Spacer(1, 0.4 * cm),
-        Paragraph("Resumo Anual", heading_style),
-    ]
-    summary = report.resumo
-    story.append(
+        Paragraph("Resumo Anual Canônico", heading_style),
         table(
             [
                 ["Descricao", "Valor"],
-                ["Total Bens e Direitos (31/12)", brl(summary.total_bens_direitos)],
-                ["Total Vendas no Ano", brl(summary.total_vendas_ano)],
-                ["Lucro Tributavel Swing Trade", brl(summary.lucro_tributavel_swing)],
-                ["Lucro Tributavel Day Trade", brl(summary.lucro_tributavel_day_trade)],
-                ["IR Swing Trade Devido", brl(summary.ir_swing_trade_devido)],
-                ["IR Day Trade Devido", brl(summary.ir_day_trade_devido)],
-                ["IR Retido na Fonte", brl(summary.ir_retido_fonte_total)],
-                ["IR a Recolher", brl(summary.ir_a_recolher_total)],
-                ["Total Dividendos Isentos", brl(summary.total_dividendos_isentos)],
-                ["Total JCP Bruto", brl(summary.total_jcp_bruto)],
-                ["IR Retido JCP (15%)", brl(summary.total_jcp_ir_retido)],
-                ["Prejuizo Acumulado", brl(summary.prejuizo_acumulado)],
+                ["Total Bens e Direitos (31/12)", brl(report.total_bens_direitos_brl)],
+                ["Total Vendas no Ano", brl(report.total_vendas_ano_brl)],
+                ["Imposto Bruto", brl(report.total_gross_tax_due_brl)],
+                ["IRRF Compensado", brl(report.total_withholding_brl)],
+                ["DARF Liberada", brl(report.total_payment_due_brl)],
+                ["Total Dividendos Isentos", brl(report.total_dividendos_brl)],
+                ["Total JCP Bruto", brl(report.total_jcp_bruto_brl)],
+                ["IR Retido JCP (15%)", brl(report.total_jcp_ir_retido_brl)],
+                [
+                    "Prejuizo Day Trade a Compensar",
+                    brl(report.closing_day_trade_loss_carryforward_brl),
+                ],
             ],
             column_widths=[11 * cm, 5 * cm],
-        )
-    )
+        ),
+    ]
     story.extend([PageBreak(), Paragraph("Bens e Direitos (posicao em 31/12)", heading_style)])
     if report.bens_direitos:
         rows = [["Codigo", "Ticker", "Tipo", "Qtd", "Custo Medio", "Custo Total"]]
@@ -201,8 +198,8 @@ def generate_irpf_pdf(report: IRPFReportOut) -> bytes:
     return buffer.getvalue()
 
 
-def generate_irpf_csv(report: IRPFReportOut) -> str:
-    """Gera CSV com separador ponto-e-vírgula para Excel em locale PT-BR."""
+def generate_irpf_csv(report: IrpfCanonicalExport) -> str:
+    """Gera CSV canônico com separador ponto-e-vírgula para locale PT-BR."""
 
     import csv
     from io import StringIO
@@ -218,25 +215,26 @@ def generate_irpf_csv(report: IRPFReportOut) -> str:
             .replace("X", ".")
         )
 
-    summary = report.resumo
-    writer.writerow(["RELATÓRIO IRPF", report.ano])
+    writer.writerow(["RELATÓRIO IRPF", report.year])
     writer.writerow(["Carteira ID", report.portfolio_id])
     writer.writerow(["Gerado em", _today_label()])
     writer.writerow([])
-    writer.writerow(["RESUMO ANUAL"])
+    writer.writerow(["RESUMO ANUAL CANÔNICO"])
     writer.writerow(["Descricao", "Valor"])
-    writer.writerow(["Total Bens e Direitos (31/12)", brl(summary.total_bens_direitos)])
-    writer.writerow(["Total Vendas no Ano", brl(summary.total_vendas_ano)])
-    writer.writerow(["Lucro Tributavel Swing Trade", brl(summary.lucro_tributavel_swing)])
-    writer.writerow(["Lucro Tributavel Day Trade", brl(summary.lucro_tributavel_day_trade)])
-    writer.writerow(["IR Swing Trade Devido", brl(summary.ir_swing_trade_devido)])
-    writer.writerow(["IR Day Trade Devido", brl(summary.ir_day_trade_devido)])
-    writer.writerow(["IR Retido na Fonte", brl(summary.ir_retido_fonte_total)])
-    writer.writerow(["IR a Recolher", brl(summary.ir_a_recolher_total)])
-    writer.writerow(["Total Dividendos Isentos", brl(summary.total_dividendos_isentos)])
-    writer.writerow(["Total JCP Bruto", brl(summary.total_jcp_bruto)])
-    writer.writerow(["IR Retido JCP (15%)", brl(summary.total_jcp_ir_retido)])
-    writer.writerow(["Prejuizo Acumulado", brl(summary.prejuizo_acumulado)])
+    writer.writerow(["Total Bens e Direitos (31/12)", brl(report.total_bens_direitos_brl)])
+    writer.writerow(["Total Vendas no Ano", brl(report.total_vendas_ano_brl)])
+    writer.writerow(["Imposto Bruto", brl(report.total_gross_tax_due_brl)])
+    writer.writerow(["IRRF Compensado", brl(report.total_withholding_brl)])
+    writer.writerow(["DARF Liberada", brl(report.total_payment_due_brl)])
+    writer.writerow(["Total Dividendos Isentos", brl(report.total_dividendos_brl)])
+    writer.writerow(["Total JCP Bruto", brl(report.total_jcp_bruto_brl)])
+    writer.writerow(["IR Retido JCP (15%)", brl(report.total_jcp_ir_retido_brl)])
+    writer.writerow(
+        [
+            "Prejuizo Day Trade a Compensar",
+            brl(report.closing_day_trade_loss_carryforward_brl),
+        ]
+    )
     writer.writerow([])
 
     writer.writerow(["BENS E DIREITOS (posicao em 31/12)"])
@@ -264,17 +262,7 @@ def generate_irpf_csv(report: IRPFReportOut) -> str:
             ]
         )
     if report.bens_direitos:
-        writer.writerow(
-            [
-                "TOTAL",
-                "",
-                "",
-                "",
-                "",
-                brl(sum(item.custo_total for item in report.bens_direitos)),
-                "",
-            ]
-        )
+        writer.writerow(["TOTAL", "", "", "", "", brl(report.total_bens_direitos_brl), ""])
     writer.writerow([])
 
     writer.writerow(["GANHOS DE CAPITAL MENSAIS"])
@@ -340,9 +328,7 @@ def generate_irpf_csv(report: IRPFReportOut) -> str:
             [item.ticker, item.asset_type, brl(item.total_recebido), str(item.quantidade_pgtos)]
         )
     if report.dividendos:
-        writer.writerow(
-            ["TOTAL", "", brl(sum(item.total_recebido for item in report.dividendos)), ""]
-        )
+        writer.writerow(["TOTAL", "", brl(report.total_dividendos_brl), ""])
     writer.writerow([])
 
     writer.writerow(["JCP - JUROS SOBRE CAPITAL PROPRIO"])
@@ -360,8 +346,8 @@ def generate_irpf_csv(report: IRPFReportOut) -> str:
         writer.writerow(
             [
                 "TOTAL",
-                brl(sum(item.total_bruto for item in report.jcp)),
-                brl(sum(item.ir_retido for item in report.jcp)),
+                brl(report.total_jcp_bruto_brl),
+                brl(report.total_jcp_ir_retido_brl),
                 brl(sum(item.total_liquido for item in report.jcp)),
             ]
         )
