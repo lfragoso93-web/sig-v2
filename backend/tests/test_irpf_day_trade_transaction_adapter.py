@@ -5,7 +5,6 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
-
 from app.models.transaction import OperationType
 from app.services.irpf_day_trade_matcher import FiscalOperation
 from app.services.irpf_day_trade_transaction_adapter import (
