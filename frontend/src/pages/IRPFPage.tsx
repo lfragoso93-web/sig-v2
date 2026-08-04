@@ -16,6 +16,7 @@ import {
   useIRPFAnos,
   useIRPFCanonicalAnnualAssessment,
   useIRPFCanonicalAssetsAssessment,
+  useIRPFCanonicalCapitalGainsAssessment,
   useIRPFCanonicalIncomeAssessment,
   useIRPFReport,
 } from '@/hooks/useIRPF'
@@ -352,6 +353,10 @@ export default function IRPFPage() {
     isLoading: loadingCanonicalAssets,
   } = useIRPFCanonicalAssetsAssessment(portfolioId, selectedYear)
   const {
+    data: canonicalCapitalGains,
+    isLoading: loadingCanonicalCapitalGains,
+  } = useIRPFCanonicalCapitalGainsAssessment(portfolioId, selectedYear)
+  const {
     data: canonicalIncome,
     isLoading: loadingCanonicalIncome,
   } = useIRPFCanonicalIncomeAssessment(portfolioId, selectedYear)
@@ -413,6 +418,7 @@ export default function IRPFPage() {
     canonicalAssessment?.closing_day_trade_loss_carryforward_brl ?? 0,
   )
   const bensDireitos = canonicalAssets?.items ?? []
+  const ganhosCapital = canonicalCapitalGains?.months ?? []
   const dividendos = canonicalIncome?.dividends ?? []
   const jcp = canonicalIncome?.jcp ?? []
 
@@ -453,10 +459,10 @@ export default function IRPFPage() {
               border: '1px solid var(--color-border)',
               color: 'var(--color-text)',
             }}
-            title="Recalcular ganhos e exportações do relatório legado"
+            title="Recalcular exportações do relatório legado"
           >
             <RefreshCw size={13} />
-            Recalcular ganhos/exportações
+            Recalcular exportações
           </button>
 
           <button
@@ -566,7 +572,11 @@ export default function IRPFPage() {
           )}
 
           {activeTab === 'bens' && <BensDireitosTable data={bensDireitos} />}
-          {activeTab === 'ganhos' && <GanhosCapitalTable data={report?.ganhos_capital ?? []} />}
+          {activeTab === 'ganhos' && (
+            loadingCanonicalCapitalGains
+              ? <SkeletonCard />
+              : <GanhosCapitalTable data={ganhosCapital} />
+          )}
           {activeTab === 'rendimentos' && (
             <RendimentosTable dividendos={dividendos} jcp={[]} />
           )}
