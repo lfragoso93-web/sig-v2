@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.irpf_annual_assessment_contract import IrpfAnnualAssessmentContract
 from app.services.irpf_annual_assessment_contract_mapper import (
-    map_annual_integrated_assessment,
+    build_irpf_annual_assessment_contract,
 )
 from app.services.irpf_annual_integrated_assessment_service import (
     assess_annual_integrated_operations,
@@ -25,4 +25,4 @@ async def build_irpf_annual_assessment(
         portfolio_id,
         year,
     )
-    return map_annual_integrated_assessment(assessment)
+    return build_irpf_annual_assessment_contract(assessment)
