@@ -1,11 +1,13 @@
 /**
  * Hooks para buscar dados do módulo IRPF.
- * Expõe contratos legados e a apuração anual canônica versionada.
+ * Expõe contratos legados e contratos canônicos versionados.
  */
 import { useQuery } from '@tanstack/react-query'
 import api from '@/services/api'
 import type {
   IRPFCanonicalAnnualAssessment,
+  IRPFCanonicalAssetsAssessment,
+  IRPFCanonicalIncomeAssessment,
   IRPFReportOut,
 } from '@/types/irpf'
 
@@ -64,6 +66,40 @@ export function useIRPFCanonicalAnnualAssessment(
     queryFn: async () => {
       const res = await api.get<IRPFCanonicalAnnualAssessment>(
         `/portfolios/${portfolioId}/irpf/${year}/canonical`,
+      )
+      return res.data
+    },
+    enabled: !!portfolioId && !!year,
+    staleTime: 1000 * 60 * 5,
+  })
+}
+
+export function useIRPFCanonicalAssetsAssessment(
+  portfolioId: number | null,
+  year: number | null,
+) {
+  return useQuery<IRPFCanonicalAssetsAssessment>({
+    queryKey: ['irpf-canonical-assets-assessment', portfolioId, year],
+    queryFn: async () => {
+      const res = await api.get<IRPFCanonicalAssetsAssessment>(
+        `/portfolios/${portfolioId}/irpf/${year}/canonical/assets`,
+      )
+      return res.data
+    },
+    enabled: !!portfolioId && !!year,
+    staleTime: 1000 * 60 * 5,
+  })
+}
+
+export function useIRPFCanonicalIncomeAssessment(
+  portfolioId: number | null,
+  year: number | null,
+) {
+  return useQuery<IRPFCanonicalIncomeAssessment>({
+    queryKey: ['irpf-canonical-income-assessment', portfolioId, year],
+    queryFn: async () => {
+      const res = await api.get<IRPFCanonicalIncomeAssessment>(
+        `/portfolios/${portfolioId}/irpf/${year}/canonical/income`,
       )
       return res.data
     },
