@@ -30,7 +30,9 @@ from app.services.irpf_realized_disposal_tax_adapter import (
     adapt_realized_disposals,
     group_common_entries_by_month,
 )
-from app.services.irpf_swing_remainder_projection import project_swing_remainders
+from app.services.irpf_swing_remainder_projection import (
+    project_swing_remainder_disposals,
+)
 from app.services.realized_pnl_projection_reader import load_realized_disposals
 
 
@@ -86,7 +88,7 @@ async def assess_annual_integrated_operations(
         start_date=start_date,
         end_date=end_date,
     )
-    swing_disposals = project_swing_remainders(disposals, matches)
+    swing_disposals = project_swing_remainder_disposals(disposals, matches)
     swing_entries = adapt_realized_disposals(swing_disposals)
     swing_groups = group_common_entries_by_month(swing_entries)
     swing_assessments = assess_common_monthly_groups(swing_groups)
