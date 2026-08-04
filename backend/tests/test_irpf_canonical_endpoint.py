@@ -4,9 +4,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi import HTTPException
-
 from app.routers.irpf import get_canonical_irpf_assessment
+from fastapi import HTTPException
 
 
 @pytest.mark.asyncio
@@ -67,9 +66,9 @@ async def test_canonical_endpoint_does_not_build_for_unauthorized_portfolio() ->
             "app.routers.irpf.build_irpf_annual_assessment",
             new=AsyncMock(),
         ) as build,
+        pytest.raises(HTTPException) as exc_info,
     ):
-        with pytest.raises(HTTPException) as exc_info:
-            await get_canonical_irpf_assessment(7, 2024, db, user)
+        await get_canonical_irpf_assessment(7, 2024, db, user)
 
     assert exc_info.value.status_code == 404
     build.assert_not_awaited()
@@ -89,8 +88,8 @@ async def test_canonical_endpoint_propagates_invalid_year_without_legacy_fallbac
             "app.routers.irpf.build_irpf_annual_assessment",
             new=AsyncMock(side_effect=ValueError("ano fiscal inválido")),
         ) as build,
+        pytest.raises(ValueError, match="ano fiscal inválido"),
     ):
-        with pytest.raises(ValueError, match="ano fiscal inválido"):
-            await get_canonical_irpf_assessment(7, 1899, db, user)
+        await get_canonical_irpf_assessment(7, 1899, db, user)
 
     build.assert_awaited_once_with(db, 7, 1899)
