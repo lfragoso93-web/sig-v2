@@ -15,6 +15,8 @@ import { useAppStore } from '@/store/appStore'
 import {
   useIRPFAnos,
   useIRPFCanonicalAnnualAssessment,
+  useIRPFCanonicalAssetsAssessment,
+  useIRPFCanonicalIncomeAssessment,
   useIRPFReport,
 } from '@/hooks/useIRPF'
 import { formatBRL } from '@/utils/format'
@@ -340,11 +342,19 @@ export default function IRPFPage() {
     setRefreshKey(false)
   }, [portfolioId, anos, fallbackYear])
 
-  const { data: report, isLoading: loadingReport } = useIRPFReport(portfolioId, selectedYear, refreshKey)
+  const { data: report } = useIRPFReport(portfolioId, selectedYear, refreshKey)
   const {
     data: canonicalAssessment,
     isLoading: loadingCanonicalAssessment,
   } = useIRPFCanonicalAnnualAssessment(portfolioId, selectedYear)
+  const {
+    data: canonicalAssets,
+    isLoading: loadingCanonicalAssets,
+  } = useIRPFCanonicalAssetsAssessment(portfolioId, selectedYear)
+  const {
+    data: canonicalIncome,
+    isLoading: loadingCanonicalIncome,
+  } = useIRPFCanonicalIncomeAssessment(portfolioId, selectedYear)
 
   const handleDownloadPDF = useCallback(async () => {
     if (!portfolioId || !selectedYear) return
@@ -402,6 +412,9 @@ export default function IRPFPage() {
   const canonicalDayTradeLoss = Number(
     canonicalAssessment?.closing_day_trade_loss_carryforward_brl ?? 0,
   )
+  const bensDireitos = canonicalAssets?.items ?? []
+  const dividendos = canonicalIncome?.dividends ?? []
+  const jcp = canonicalIncome?.jcp ?? []
 
   return (
     <div className="page-container">
@@ -440,10 +453,10 @@ export default function IRPFPage() {
               border: '1px solid var(--color-border)',
               color: 'var(--color-text)',
             }}
-            title="Recalcular dados complementares do relatório legado"
+            title="Recalcular ganhos e exportações do relatório legado"
           >
             <RefreshCw size={13} />
-            Recalcular complementos
+            Recalcular ganhos/exportações
           </button>
 
           <button
@@ -539,35 +552,26 @@ export default function IRPFPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div>
                 <h2 className="text-sm font-semibold mb-3">Bens e Direitos</h2>
-                {loadingReport ? <SkeletonCard /> : <BensDireitosTable data={report?.bens_direitos ?? []} />}
+                {loadingCanonicalAssets ? <SkeletonCard /> : <BensDireitosTable data={bensDireitos} />}
               </div>
               <div>
                 <h2 className="text-sm font-semibold mb-3">Rendimentos</h2>
-                {loadingReport ? (
+                {loadingCanonicalIncome ? (
                   <SkeletonCard />
                 ) : (
-                  <RendimentosTable
-                    dividendos={report?.rendimentos_isentos ?? []}
-                    jcp={report?.jcp ?? []}
-                  />
+                  <RendimentosTable dividendos={dividendos} jcp={jcp} />
                 )}
               </div>
             </div>
           )}
 
-          {activeTab === 'bens' && <BensDireitosTable data={report?.bens_direitos ?? []} />}
+          {activeTab === 'bens' && <BensDireitosTable data={bensDireitos} />}
           {activeTab === 'ganhos' && <GanhosCapitalTable data={report?.ganhos_capital ?? []} />}
           {activeTab === 'rendimentos' && (
-            <RendimentosTable
-              dividendos={report?.rendimentos_isentos ?? []}
-              jcp={[]}
-            />
+            <RendimentosTable dividendos={dividendos} jcp={[]} />
           )}
           {activeTab === 'jcp' && (
-            <RendimentosTable
-              dividendos={[]}
-              jcp={report?.jcp ?? []}
-            />
+            <RendimentosTable dividendos={[]} jcp={jcp} />
           )}
         </div>
       </div>
