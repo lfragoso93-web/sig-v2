@@ -2,11 +2,12 @@
 
 Este serviço compõe contratos canônicos existentes sem alterar o runtime legado.
 Ele carrega transações e baixas uma única vez, separa quantitativamente Day Trade,
-filtra as baixas Swing e reaproveita política, isenção e compensação já canônicas.
+filtra as baixas Swing e reaproveita política, isenção, compensação e IRRF.
 """
 
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -34,6 +35,15 @@ from app.services.irpf_realized_disposal_tax_adapter import (
 from app.services.irpf_swing_remainder_projection import (
     project_swing_remainder_disposals,
 )
+from app.services.irpf_withholding_compensation import (
+    FiscalMonthlyWithholdingCompensation,
+    compensate_withholding,
+)
+from app.services.irpf_withholding_policy import (
+    WithholdingOperationKind,
+    assess_common_withholding,
+    assess_day_trade_withholding,
+)
 from app.services.realized_pnl_projection_reader import load_realized_disposals
 
 
@@ -45,20 +55,81 @@ class FiscalAnnualIntegratedAssessment:
     end_date: date
     day_trade_monthly: tuple[FiscalDayTradeMonthlyAssessment, ...]
     swing: FiscalAnnualCommonAssessment
+    common_withholding_monthly: tuple[FiscalMonthlyWithholdingCompensation, ...]
+    day_trade_withholding_monthly: tuple[
+        FiscalMonthlyWithholdingCompensation, ...
+    ]
     total_day_trade_result_brl: Decimal
     total_day_trade_taxable_base_brl: Decimal
     total_day_trade_tax_due_brl: Decimal
+    total_day_trade_net_tax_due_brl: Decimal
     closing_day_trade_loss_carryforward_brl: Decimal
+    closing_day_trade_withholding_balance_brl: Decimal
     total_swing_realized_pnl_brl: Decimal
     total_swing_taxable_base_brl: Decimal
     total_swing_tax_due_brl: Decimal
+    total_swing_net_tax_due_brl: Decimal
+    closing_common_withholding_balance_brl: Decimal
     total_tax_due_brl: Decimal
+    total_net_tax_due_brl: Decimal
 
 
 def _annual_bounds(year: int) -> tuple[date, date]:
     if year < 1900 or year > 9999:
         raise ValueError("ano fiscal inválido")
     return date(year, 1, 1), date(year, 12, 31)
+
+
+def _compensate_common_withholding(
+    swing_groups: tuple,
+    swing_monthly: tuple,
+) -> tuple[FiscalMonthlyWithholdingCompensation, ...]:
+    gross_sales_by_month: dict[str, Decimal] = defaultdict(Decimal)
+    tax_due_by_month: dict[str, Decimal] = defaultdict(Decimal)
+    for group in swing_groups:
+        gross_sales_by_month[group.competence_month] += group.gross_proceeds_brl
+    for assessment in swing_monthly:
+        tax_due_by_month[assessment.competence_month] += assessment.tax_due_brl
+
+    balance = Decimal(0)
+    result: list[FiscalMonthlyWithholdingCompensation] = []
+    for month in sorted(set(gross_sales_by_month) | set(tax_due_by_month)):
+        withholding = assess_common_withholding(
+            competence_month=month,
+            gross_sales_brl=gross_sales_by_month[month],
+        )
+        compensation = compensate_withholding(
+            competence_month=month,
+            operation_kind=WithholdingOperationKind.COMMON,
+            gross_tax_due_brl=tax_due_by_month[month],
+            current_withholding_brl=withholding.withholding_tax_brl,
+            opening_withholding_balance_brl=balance,
+        )
+        balance = compensation.closing_withholding_balance_brl
+        result.append(compensation)
+    return tuple(result)
+
+
+def _compensate_day_trade_withholding(
+    day_trade_monthly: tuple[FiscalDayTradeMonthlyAssessment, ...],
+) -> tuple[FiscalMonthlyWithholdingCompensation, ...]:
+    balance = Decimal(0)
+    result: list[FiscalMonthlyWithholdingCompensation] = []
+    for assessment in day_trade_monthly:
+        withholding = assess_day_trade_withholding(
+            competence_month=assessment.competence_month,
+            net_day_trade_result_brl=assessment.realized_pnl_brl,
+        )
+        compensation = compensate_withholding(
+            competence_month=assessment.competence_month,
+            operation_kind=WithholdingOperationKind.DAY_TRADE,
+            gross_tax_due_brl=assessment.tax_due_brl,
+            current_withholding_brl=withholding.withholding_tax_brl,
+            opening_withholding_balance_brl=balance,
+        )
+        balance = compensation.closing_withholding_balance_brl
+        result.append(compensation)
+    return tuple(result)
 
 
 async def assess_annual_integrated_operations(
@@ -105,6 +176,14 @@ async def assess_annual_integrated_operations(
         monthly=swing_compensated,
     )
 
+    common_withholding_monthly = _compensate_common_withholding(
+        swing_groups,
+        swing.monthly,
+    )
+    day_trade_withholding_monthly = _compensate_day_trade_withholding(
+        day_trade_monthly
+    )
+
     total_day_trade_result = sum(
         (item.realized_pnl_brl for item in day_trade_monthly),
         start=Decimal(0),
@@ -117,9 +196,27 @@ async def assess_annual_integrated_operations(
         (item.tax_due_brl for item in day_trade_monthly),
         start=Decimal(0),
     )
+    total_day_trade_net_tax_due = sum(
+        (item.net_tax_due_brl for item in day_trade_withholding_monthly),
+        start=Decimal(0),
+    )
     closing_day_trade_loss = (
         day_trade_monthly[-1].closing_loss_carryforward_brl
         if day_trade_monthly
+        else Decimal(0)
+    )
+    closing_day_trade_withholding = (
+        day_trade_withholding_monthly[-1].closing_withholding_balance_brl
+        if day_trade_withholding_monthly
+        else Decimal(0)
+    )
+    total_swing_net_tax_due = sum(
+        (item.net_tax_due_brl for item in common_withholding_monthly),
+        start=Decimal(0),
+    )
+    closing_common_withholding = (
+        common_withholding_monthly[-1].closing_withholding_balance_brl
+        if common_withholding_monthly
         else Decimal(0)
     )
 
@@ -130,12 +227,21 @@ async def assess_annual_integrated_operations(
         end_date=end_date,
         day_trade_monthly=day_trade_monthly,
         swing=swing,
+        common_withholding_monthly=common_withholding_monthly,
+        day_trade_withholding_monthly=day_trade_withholding_monthly,
         total_day_trade_result_brl=total_day_trade_result,
         total_day_trade_taxable_base_brl=total_day_trade_taxable_base,
         total_day_trade_tax_due_brl=total_day_trade_tax_due,
+        total_day_trade_net_tax_due_brl=total_day_trade_net_tax_due,
         closing_day_trade_loss_carryforward_brl=closing_day_trade_loss,
+        closing_day_trade_withholding_balance_brl=closing_day_trade_withholding,
         total_swing_realized_pnl_brl=swing.total_realized_pnl_brl,
         total_swing_taxable_base_brl=swing.total_taxable_base_brl,
         total_swing_tax_due_brl=swing.total_tax_due_brl,
+        total_swing_net_tax_due_brl=total_swing_net_tax_due,
+        closing_common_withholding_balance_brl=closing_common_withholding,
         total_tax_due_brl=total_day_trade_tax_due + swing.total_tax_due_brl,
+        total_net_tax_due_brl=(
+            total_day_trade_net_tax_due + total_swing_net_tax_due
+        ),
     )
