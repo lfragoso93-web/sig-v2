@@ -1,14 +1,31 @@
-# Acumulação configurável de pagamento mínimo do IRPF
+# Acumulação normativa de pagamento mínimo do IRPF
 
 ## Objetivo
 
-Este documento descreve o módulo read-only
-`irpf_minimum_payment_accumulation.py`, criado na Issue #56 para separar a
-acumulação de imposto líquido da apuração de resultado, prejuízos e IRRF.
+Este documento descreve os módulos read-only
+`irpf_minimum_payment_policy.py` e `irpf_minimum_payment_accumulation.py`,
+criados na Issue #56 para separar a regra de pagamento mínimo da apuração de
+resultado, prejuízos e IRRF.
 
-## Contrato atual
+## Regra normativa confirmada
 
-O módulo recebe explicitamente:
+O limite mínimo para utilização de DARF é de R$ 10,00. Quando o imposto apurado
+em uma competência for inferior a esse valor, o montante deve ser adicionado ao
+imposto de mesmo código de receita das competências subsequentes até que o total
+atinja ou supere R$ 10,00. O pagamento ocorre no prazo da competência em que o
+limite foi alcançado.
+
+Para renda variável, o ReVar aplica o mesmo comportamento ao imposto mensal.
+
+A constante canônica é:
+
+```python
+MINIMUM_DARF_PAYMENT_BRL = Decimal("10.00")
+```
+
+## Contrato de acumulação
+
+O módulo recebe:
 
 - competência mensal;
 - imposto líquido da competência;
@@ -18,29 +35,40 @@ O módulo recebe explicitamente:
 O comportamento é:
 
 1. arredondar valores monetários em centavos com `ROUND_HALF_UP`;
-2. somar imposto líquido do mês ao saldo acumulado;
-3. manter o saldo quando o total estiver abaixo do limite configurado;
+2. somar o imposto líquido do mês ao saldo acumulado;
+3. manter o saldo quando o total estiver abaixo de R$ 10,00;
 4. expor o total como pagamento devido quando atingir ou superar o limite;
 5. zerar o saldo acumulado após o pagamento devido;
 6. ordenar competências cronologicamente na avaliação em lote.
 
-## Decisão arquitetural
+## Integração anual canônica
 
-O valor normativo do limite não está fixado no módulo. Ele é um parâmetro
-obrigatório para impedir que uma regra fiscal não verificada seja incorporada
-silenciosamente ao runtime.
+`irpf_annual_integrated_assessment_service.py` agrega, por competência, o imposto
+líquido de operações comuns e Day Trade após compensação de IRRF. Essa soma é
+avaliada contra o limite mínimo porque o recolhimento pertence ao mesmo código
+de receita da renda variável.
 
-Enquanto o limite oficial e seu tratamento operacional não forem validados em
-fonte normativa vigente, este módulo não deve ser conectado a endpoints,
-relatórios ou persistência.
+A visão anual expõe:
+
+- `minimum_payment_monthly`;
+- `total_payment_due_brl`;
+- `closing_accumulated_tax_brl`.
+
+O saldo acumulado permanece explícito para continuidade futura. Ainda não há
+persistência automática entre anos.
+
+## Fontes normativas
+
+- Lei nº 9.430/1996, art. 68 e § 1º;
+- Instrução Normativa RFB nº 2.164/2023, art. 3º, § 2º;
+- Manual do ReVar da Receita Federal.
 
 ## Fora do escopo deste corte
 
-- valor padrão do limite mínimo;
-- integração à apuração anual;
-- geração ou emissão de DARF;
+- geração ou emissão efetiva de DARF;
 - vencimento e calendário útil;
 - juros e multa;
+- registro de pagamentos realizados;
 - persistência de saldo entre anos;
 - alteração de `calc_ganhos_capital`;
 - alteração de endpoints, schemas ou frontend.
@@ -52,4 +80,5 @@ relatórios ou persistência.
 - valor acima do limite gera pagamento integral;
 - saldo é transportado cronologicamente;
 - saldo é zerado após pagamento;
+- integração anual expõe saldo e pagamento devido;
 - valores e limites inválidos são rejeitados.
