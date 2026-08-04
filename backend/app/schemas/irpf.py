@@ -80,3 +80,130 @@ class GanhoCapitalMensal(BaseModel):
     base_calculo:          float    # lucro tributavel apos isencoes
     aliquota_swing:        float    # 0.15 acoes/FIIs, 0.20 ETFs/intl
     aliquota_day_trade:    float    # 0.20
+    ir_devido_swing:       float
+    ir_devido_day_trade:   float
+    ir_retido_fonte:       float
+    ir_a_recolher:         float    # ir_devido - ir_retido
+    vendas:                list[VendaMensal] = []
+
+
+class IrpfCapitalGainsAssessmentOut(BaseModel):
+    schema_version: str
+    portfolio_id: int
+    year: int
+    months: list[GanhoCapitalMensal]
+    total_sales_brl: Decimal
+    total_gross_profit_brl: Decimal
+    total_tax_due_brl: Decimal
+
+
+# ---------------------------------------------------------------------------
+# Rendimentos
+# ---------------------------------------------------------------------------
+
+
+class RendimentoIsento(BaseModel):
+    """
+    Dividendo recebido no ano (isento de IR para pessoa fisica BR).
+    """
+    ticker:            str
+    asset_type:        str
+    total_recebido:    float
+    quantidade_pgtos:  int
+
+
+class JCPItem(BaseModel):
+    """
+    Juros sobre Capital Proprio: tributado 15% na fonte.
+    """
+    ticker:         str
+    total_bruto:    float
+    ir_retido:      float   # 15% do bruto
+    total_liquido:  float
+
+
+class IrpfIncomeAssessmentOut(BaseModel):
+    schema_version: str
+    portfolio_id: int
+    year: int
+    dividends: list[RendimentoIsento]
+    jcp: list[JCPItem]
+    total_dividends_brl: Decimal
+    total_jcp_gross_brl: Decimal
+    total_jcp_withholding_brl: Decimal
+    total_jcp_net_brl: Decimal
+
+
+# ---------------------------------------------------------------------------
+# Resumo
+# ---------------------------------------------------------------------------
+
+
+class IRPFResumo(BaseModel):
+    """
+    Totais anuais consolidados para o quadro-resumo da declaracao.
+    """
+    ano:                           int
+    total_bens_direitos:           float   # custo total dos ativos em 31/12
+    total_vendas_ano:              float
+    lucro_tributavel_swing:        float
+    lucro_tributavel_day_trade:    float
+    ir_swing_trade_devido:         float
+    ir_day_trade_devido:           float
+    ir_retido_fonte_total:         float
+    ir_a_recolher_total:           float   # saldo a pagar
+    total_dividendos_isentos:      float
+    total_jcp_bruto:               float
+    total_jcp_ir_retido:           float
+    prejuizo_acumulado:            float   # prejuizo a compensar em meses futuros
+
+
+# ---------------------------------------------------------------------------
+# Envelope de resposta
+# ---------------------------------------------------------------------------
+
+
+class IRPFReportOut(BaseModel):
+    """
+    Resposta completa do endpoint GET /{portfolio_id}/irpf/{year}.
+    """
+    portfolio_id:    int
+    ano:             int
+    bens_direitos:   list[BemDireito] = []
+    ganhos_mensais:  list[GanhoCapitalMensal] = []
+    dividendos:      list[RendimentoIsento] = []
+    jcp:              list[JCPItem] = []
+    resumo:           IRPFResumo
+
+
+# ---------------------------------------------------------------------------
+# Apuracao anual canonica
+# ---------------------------------------------------------------------------
+
+
+class IrpfMonthlyAssessmentOut(BaseModel):
+    competence_month: str
+    swing_gross_tax_due_brl: Decimal
+    swing_withholding_brl: Decimal
+    swing_net_tax_due_brl: Decimal
+    day_trade_gross_tax_due_brl: Decimal
+    day_trade_withholding_brl: Decimal
+    day_trade_net_tax_due_brl: Decimal
+    total_net_tax_due_brl: Decimal
+    payment_due_brl: Decimal
+    closing_accumulated_tax_brl: Decimal
+
+
+class IrpfAnnualAssessmentOut(BaseModel):
+    schema_version: str
+    portfolio_id: int
+    year: int
+    monthly: list[IrpfMonthlyAssessmentOut]
+    total_gross_tax_due_brl: Decimal
+    total_withholding_brl: Decimal
+    total_net_tax_due_brl: Decimal
+    total_payment_due_brl: Decimal
+    closing_accumulated_tax_brl: Decimal
+    closing_common_withholding_balance_brl: Decimal
+    closing_day_trade_withholding_balance_brl: Decimal
+    closing_day_trade_loss_carryforward_brl: Decimal
