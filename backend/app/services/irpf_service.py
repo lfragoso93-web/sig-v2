@@ -9,10 +9,8 @@ from decimal import Decimal
 
 from app.schemas.irpf import IRPFReportOut
 from app.services.irpf_canonical_export_service import IrpfCanonicalExport
-from app.services.irpf_export_service import (
-    generate_irpf_csv as generate_canonical_irpf_csv,
-    generate_irpf_pdf as generate_canonical_irpf_pdf,
-)
+from app.services.irpf_export_service import generate_irpf_csv as generate_canonical_irpf_csv
+from app.services.irpf_export_service import generate_irpf_pdf as generate_canonical_irpf_pdf
 from app.services.irpf_tax_service import calc_ganhos_capital, calc_rendimentos
 
 
