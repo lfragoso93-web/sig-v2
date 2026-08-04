@@ -16,7 +16,8 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip==26.2 \
+    && pip install --no-cache-dir -r requirements.txt
 
 # ---- runtime stage ----
 FROM python:3.12-slim AS runtime
@@ -45,6 +46,18 @@ COPY --from=postgres-client /usr/lib/postgresql/16/bin/psql /usr/local/bin/psql
 
 COPY --from=deps /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=deps /usr/local/bin /usr/local/bin
+
+# A imagem de runtime nao instala pacotes Python. Remover instaladores evita
+# manter ferramentas de build e seus CVEs disponiveis em producao.
+RUN rm -rf \
+        /usr/local/lib/python3.12/site-packages/pip \
+        /usr/local/lib/python3.12/site-packages/pip-*.dist-info \
+        /usr/local/lib/python3.12/site-packages/setuptools \
+        /usr/local/lib/python3.12/site-packages/setuptools-*.dist-info \
+        /usr/local/bin/pip \
+        /usr/local/bin/pip3 \
+        /usr/local/bin/pip3.12
+
 COPY . .
 
 # Normaliza line endings e garante permissao de execucao

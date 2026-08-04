@@ -1,24 +1,30 @@
-# CVEs sem fix disponivel upstream ou falsos positivos — revisado em 2026-06-22
-# Remover entradas quando patches forem publicados ou falsos positivos forem corrigidos no Trivy
+# Excecoes temporarias do Trivy — revisado em 2026-08-04
+# Issue de governanca: #238
+# Responsavel: manutencao SGI v2
+# Regra: remover imediatamente quando houver patch aplicavel ou quando a
+# justificativa de nao explorabilidade deixar de ser valida.
 
-# setuptools (build-time only, nao exposto em runtime)
+# setuptools — apenas build-time; nao presente como superficie de runtime.
+# Revisar quando a imagem base ou toolchain de build for atualizada.
 CVE-2022-40897
 
-# pip (build-time runner, nao exposto em runtime)
+# pip — apenas runner/build-time; nao exposto pela aplicacao em runtime.
+# Revisar quando a imagem base ou toolchain de build for atualizada.
 CVE-2023-5752
 
-# yfinance -> frozendict (sem fix upstream)
+# yfinance -> frozendict — sem fix upstream conhecido na revisao de 2026-08-04.
+# Risco residual: dependencia transitiva; reavaliar explorabilidade e remover
+# quando yfinance/frozendict publicar versao corrigida.
 CVE-2024-6345
 
-# bcrypt false-positive no Trivy (versao 4.x nao e vulneravel)
+# bcrypt 5.0.0 — falso positivo conhecido do Trivy para o pacote instalado.
+# A aplicacao usa bcrypt==5.0.0; revisar quando bcrypt ou a base do Trivy mudar.
 CVE-2024-26130
 
-# nginx 1.28.x: falsos positivos do Trivy para CVEs que afetam apenas 1.30.0-1.30.2 e 1.31.1
-# As CVEs abaixo envolvem codepaths de proxy_http_version 2 / grpc_pass /
-# ngx_http_proxy que nao existem ou nao sao vulneraveis na branch 1.28.x estavel.
-# Ref oficial: https://nginx.org/en/security_advisories.html
-# Ref analise: https://byteiota.com/cve-2026-42530-cve-2026-42055-patch-nginx-now/
-# Revisitar em: 2026-09-01 ou quando nginx 1.28.x receber backport oficial do Alpine
+# nginx 1.28.x — falsos positivos do Trivy para CVEs associados a versoes e
+# codepaths nao aplicaveis a branch estavel utilizada pela imagem frontend.
+# Referencia oficial: https://nginx.org/en/security_advisories.html
+# Revisar em 2026-09-01 ou antes, caso haja backport oficial do Alpine/nginx.
 CVE-2026-42055
 CVE-2026-9256
 CVE-2026-49975

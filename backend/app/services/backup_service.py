@@ -6,6 +6,7 @@ import asyncio
 import gzip
 import logging
 import os
+import re
 import shutil
 from datetime import UTC, datetime
 from pathlib import Path
@@ -15,6 +16,7 @@ from urllib.parse import urlparse
 logger = logging.getLogger(__name__)
 
 BACKUPS_DIR = Path("/tmp/db_backups")
+_BACKUP_FILENAME_RE = re.compile(r"^backup_[0-9]{8}_[0-9]{6}\.sql\.gz$")
 
 
 class BackupError(Exception):
@@ -31,6 +33,15 @@ def _utc_now() -> datetime:
 
 def _ensure_backups_dir() -> None:
     BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _resolve_backup_path(backup_filename: str) -> Path:
+    """Retorna o caminho de um backup com nome estritamente permitido."""
+
+    if not _BACKUP_FILENAME_RE.fullmatch(backup_filename):
+        raise ValueError("Invalid backup filename")
+
+    return BACKUPS_DIR / backup_filename
 
 
 def _decompress_backup(backup_path: Path, temp_sql_file: Path) -> None:
@@ -151,7 +162,7 @@ async def restore_database_backup(
 
     try:
         _ensure_backups_dir()
-        backup_path = BACKUPS_DIR / backup_filename
+        backup_path = _resolve_backup_path(backup_filename)
         if not backup_path.exists():
             result["error"] = f"Backup file not found: {backup_filename}"
             logger.error("[restore] Backup file not found: %s", backup_path)
@@ -210,6 +221,9 @@ async def restore_database_backup(
             }
         )
         logger.info("[restore] Restore completed successfully")
+    except ValueError:
+        logger.warning("[restore] Rejected invalid backup filename")
+        result["error"] = "Invalid backup filename"
     except Exception as exc:
         logger.exception("[restore] Restore failed")
         result["error"] = str(exc)
@@ -276,7 +290,7 @@ async def delete_backup(backup_filename: str) -> dict[str, Any]:
 
     try:
         _ensure_backups_dir()
-        backup_path = BACKUPS_DIR / backup_filename
+        backup_path = _resolve_backup_path(backup_filename)
         if not backup_path.exists():
             result["error"] = f"Backup file not found: {backup_filename}"
             logger.warning("[backup_delete] File not found: %s", backup_path)
@@ -290,6 +304,9 @@ async def delete_backup(backup_filename: str) -> dict[str, Any]:
             }
         )
         logger.info("[backup_delete] Backup deleted: %s", backup_filename)
+    except ValueError:
+        logger.warning("[backup_delete] Rejected invalid backup filename")
+        result["error"] = "Invalid backup filename"
     except Exception as exc:
         logger.exception("[backup_delete] Error deleting backup")
         result["error"] = str(exc)

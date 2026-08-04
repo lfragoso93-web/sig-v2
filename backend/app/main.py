@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import traceback
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -211,24 +210,12 @@ app.add_middleware(SlowAPIMiddleware)
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    tb = traceback.format_exc()
-    logger.error(
-        "Unhandled exception on %s %s: %s\n%s",
+    logger.exception(
+        "Unhandled exception on %s %s",
         request.method,
-        request.url,
-        exc,
-        tb,
+        request.url.path,
+        exc_info=exc,
     )
-    if settings.APP_DEBUG:
-        return JSONResponse(
-            status_code=500,
-            content={
-                "detail": _sanitize_provider_text(str(exc)),
-                "type": type(exc).__name__,
-                "traceback": _sanitize_provider_text(tb),
-                "path": str(request.url),
-            },
-        )
     return JSONResponse(
         status_code=500,
         content={"detail": "Erro interno no servidor. Contate o suporte."},
