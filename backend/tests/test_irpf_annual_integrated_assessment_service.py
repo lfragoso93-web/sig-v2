@@ -81,10 +81,15 @@ async def test_integrated_assessment_orchestrates_day_trade_and_swing_once() -> 
     adapt.assert_called_once()
     project_day_trade.assert_called_once_with(operations)
     load_disposals.assert_awaited_once()
-    assert result.total_day_trade_result_brl == Decimal(10)
+    assert result.total_day_trade_result_brl == Decimal("10.00")
+    assert result.total_day_trade_taxable_base_brl == Decimal("10.00")
+    assert result.total_day_trade_tax_due_brl == Decimal("2.00")
+    assert result.closing_day_trade_loss_carryforward_brl == Decimal("0.00")
     assert result.total_swing_realized_pnl_brl == Decimal(10)
     assert result.total_swing_taxable_base_brl == Decimal(10)
     assert result.total_swing_tax_due_brl == Decimal("1.50")
+    assert result.total_tax_due_brl == Decimal("3.50")
+    assert result.day_trade_monthly[0].tax_rate == Decimal("0.20")
     assert result.swing.monthly[0].realized_pnl_brl == Decimal("10.00")
 
 
