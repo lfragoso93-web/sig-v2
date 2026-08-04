@@ -4,7 +4,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from app.services.irpf_integrated_comparison_service import (
     compare_annual_integrated_with_legacy,
 )
