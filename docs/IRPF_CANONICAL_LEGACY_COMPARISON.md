@@ -166,6 +166,24 @@ Baixas sem `transaction_id` são preservadas porque não existe vínculo seguro 
 o matcher. Essa visão continua read-only e ainda não substitui o pipeline anual
 de operações comuns.
 
+## Apuração anual integrada read-only
+
+O serviço `irpf_annual_integrated_assessment_service.py` compõe os contratos
+anteriores em um único fluxo anual paralelo:
+
+1. carrega transações da carteira e ano uma única vez;
+2. adapta e projeta o Day Trade quantitativo;
+3. carrega baixas canônicas realizadas uma única vez;
+4. remove dessas baixas a parcela intradiária já casada;
+5. reaproveita adaptador fiscal, agrupamento mensal, política, isenção e
+   compensação de prejuízos já existentes para o excedente Swing;
+6. consolida totais anuais de resultado Day Trade e de PnL, base e imposto Swing.
+
+O serviço não recalcula custo médio, não persiste resultados e não altera o
+runtime de `calc_ganhos_capital`. O resultado Day Trade já é segregado e
+consolidado financeiramente, mas a política de imposto Day Trade ainda não foi
+aplicada ao total anual integrado neste corte.
+
 ## Escopo da página IRPF
 
 A página IRPF usa a carteira selecionada no store global como parte das chaves
@@ -204,11 +222,13 @@ validando `portfolio_id` junto com o usuário autenticado.
     fonte de verdade do novo motor.
 14. A projeção de excedentes Swing reduz baixas canônicas por proporção e não
     reimplementa custo médio nem posição.
+15. A apuração anual integrada reutiliza os módulos canônicos de política,
+    isenção e prejuízos e não cria um segundo motor fiscal Swing.
 
 ## Próximos passos
 
-1. validar Ruff e testes da projeção de excedentes Swing;
-2. compor uma apuração anual read-only usando apenas os excedentes Swing;
-3. comparar essa apuração com o legado por competência;
+1. validar Ruff e testes da apuração anual integrada;
+2. aplicar política e compensação próprias de Day Trade no fluxo integrado;
+3. comparar a apuração anual integrada com o legado por competência;
 4. ampliar a classificação de divergências com custos, FX e arredondamento;
 5. definir o gate objetivo de substituição do runtime legado.
