@@ -33,6 +33,20 @@ def _ensure_backups_dir() -> None:
     BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def _resolve_backup_path(backup_filename: str) -> Path:
+    """Resolve um nome de backup sem permitir saída de ``BACKUPS_DIR``."""
+
+    if not backup_filename or Path(backup_filename).name != backup_filename:
+        raise ValueError("Invalid backup filename")
+
+    backups_dir = BACKUPS_DIR.resolve()
+    backup_path = (backups_dir / backup_filename).resolve()
+    if backup_path.parent != backups_dir:
+        raise ValueError("Invalid backup filename")
+
+    return backup_path
+
+
 def _decompress_backup(backup_path: Path, temp_sql_file: Path) -> None:
     """Descompacta o backup fora do event loop."""
 
@@ -151,7 +165,7 @@ async def restore_database_backup(
 
     try:
         _ensure_backups_dir()
-        backup_path = BACKUPS_DIR / backup_filename
+        backup_path = _resolve_backup_path(backup_filename)
         if not backup_path.exists():
             result["error"] = f"Backup file not found: {backup_filename}"
             logger.error("[restore] Backup file not found: %s", backup_path)
@@ -210,6 +224,9 @@ async def restore_database_backup(
             }
         )
         logger.info("[restore] Restore completed successfully")
+    except ValueError:
+        logger.warning("[restore] Rejected invalid backup filename")
+        result["error"] = "Invalid backup filename"
     except Exception as exc:
         logger.exception("[restore] Restore failed")
         result["error"] = str(exc)
@@ -276,7 +293,7 @@ async def delete_backup(backup_filename: str) -> dict[str, Any]:
 
     try:
         _ensure_backups_dir()
-        backup_path = BACKUPS_DIR / backup_filename
+        backup_path = _resolve_backup_path(backup_filename)
         if not backup_path.exists():
             result["error"] = f"Backup file not found: {backup_filename}"
             logger.warning("[backup_delete] File not found: %s", backup_path)
@@ -290,6 +307,9 @@ async def delete_backup(backup_filename: str) -> dict[str, Any]:
             }
         )
         logger.info("[backup_delete] Backup deleted: %s", backup_filename)
+    except ValueError:
+        logger.warning("[backup_delete] Rejected invalid backup filename")
+        result["error"] = "Invalid backup filename"
     except Exception as exc:
         logger.exception("[backup_delete] Error deleting backup")
         result["error"] = str(exc)
