@@ -8,7 +8,7 @@ Cobre:
   - JCP (tributavel na fonte)
   - Resumo anual consolidado
   - Envelope de resposta IRPFReportOut
-  - Contrato canonico anual versionado
+  - Contratos canonicos publicos versionados
 """
 from decimal import Decimal
 
@@ -34,6 +34,14 @@ class BemDireito(BaseModel):
     moeda:           str = "BRL"
     cnpj_fundo:      str | None = None
     country:         str | None = None
+
+
+class IrpfAssetsAssessmentOut(BaseModel):
+    schema_version: str
+    portfolio_id: int
+    year: int
+    items: list[BemDireito]
+    total_cost_brl: Decimal
 
 
 # ---------------------------------------------------------------------------
@@ -99,6 +107,18 @@ class JCPItem(BaseModel):
     total_bruto:    float
     ir_retido:      float   # 15% do bruto
     total_liquido:  float
+
+
+class IrpfIncomeAssessmentOut(BaseModel):
+    schema_version: str
+    portfolio_id: int
+    year: int
+    dividends: list[RendimentoIsento]
+    jcp: list[JCPItem]
+    total_dividends_brl: Decimal
+    total_jcp_gross_brl: Decimal
+    total_jcp_withholding_brl: Decimal
+    total_jcp_net_brl: Decimal
 
 
 # ---------------------------------------------------------------------------
