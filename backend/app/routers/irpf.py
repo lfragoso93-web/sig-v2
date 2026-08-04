@@ -19,8 +19,8 @@ from app.models.user import User
 from app.schemas.irpf import (
     BemDireito,
     GanhoCapitalMensal,
-    IRPFReportOut,
     IrpfAnnualAssessmentOut,
+    IRPFReportOut,
 )
 from app.services.irpf_annual_assessment_service import build_irpf_annual_assessment
 from app.services.irpf_bens_direitos_service import calc_bens_direitos
