@@ -11,7 +11,6 @@ Cobre:
   - Contrato canonico anual versionado
 """
 from decimal import Decimal
-from typing import Optional
 
 from pydantic import BaseModel
 
@@ -34,8 +33,8 @@ class BemDireito(BaseModel):
     custo_medio:     float         # preco medio de aquisicao em BRL
     custo_total:     float         # quantidade * custo_medio
     moeda:           str = "BRL"
-    cnpj_fundo:      Optional[str] = None
-    country:         Optional[str] = None
+    cnpj_fundo:      str | None = None
+    country:         str | None = None
 
 
 # ---------------------------------------------------------------------------
