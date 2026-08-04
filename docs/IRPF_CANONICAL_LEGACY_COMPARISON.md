@@ -149,6 +149,23 @@ Com `--fail-on-divergence`, a CLI retorna exit code `2` quando houver qualquer
 competência divergente. Erros operacionais retornam `1` e execução válida
 retorna `0`. A sessão é encerrada com rollback explícito.
 
+## Projeção de excedentes Swing
+
+O módulo `irpf_swing_remainder_projection.py` recebe baixas financeiras
+canônicas e os matches Day Trade já identificados. Ele não recalcula posição,
+custo médio ou PnL. Em vez disso:
+
+1. agrega por `sell_transaction_id` a quantidade intradiária casada;
+2. remove baixas consumidas integralmente pelo Day Trade;
+3. preserva baixas sem parcela intradiária;
+4. reduz proporcionalmente baixas parcialmente intradiárias;
+5. rateia proventos, custo, taxas, PnL e valor na moeda original;
+6. preserva ticker, classe, data, preço unitário e eventos corporativos aplicados.
+
+Baixas sem `transaction_id` são preservadas porque não existe vínculo seguro com
+o matcher. Essa visão continua read-only e ainda não substitui o pipeline anual
+de operações comuns.
+
 ## Escopo da página IRPF
 
 A página IRPF usa a carteira selecionada no store global como parte das chaves
@@ -185,11 +202,13 @@ validando `portfolio_id` junto com o usuário autenticado.
     responsabilidade permanece no projetor canônico de baixas.
 13. A visão legada de Day Trade é derivada somente para comparação e não se torna
     fonte de verdade do novo motor.
+14. A projeção de excedentes Swing reduz baixas canônicas por proporção e não
+    reimplementa custo médio nem posição.
 
 ## Próximos passos
 
-1. validar Ruff e testes do serviço e da CLI específica de Day Trade;
-2. executar a CLI contra uma carteira/ano com operações intradiárias reais;
-3. integrar os excedentes ao projetor canônico de baixas Swing;
+1. validar Ruff e testes da projeção de excedentes Swing;
+2. compor uma apuração anual read-only usando apenas os excedentes Swing;
+3. comparar essa apuração com o legado por competência;
 4. ampliar a classificação de divergências com custos, FX e arredondamento;
 5. definir o gate objetivo de substituição do runtime legado.
