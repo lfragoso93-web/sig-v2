@@ -35,6 +35,30 @@ Para cada competência mensal são comparados:
 
 As classificações podem coexistir na mesma competência.
 
+## CLI operacional
+
+A comparação pode ser executada dentro do container backend sem criar endpoint
+público:
+
+```bash
+python -m app.cli.irpf_compare_legacy --portfolio-id 1 --year 2024
+```
+
+O comando imprime um documento JSON com o contrato:
+
+- `schema_version`: `irpf-canonical-legacy-comparison.v1`;
+- identificação da carteira e ano fiscal;
+- indicador `has_divergences`;
+- totais de meses comparados, equivalentes e divergentes;
+- comparação mensal detalhada e classificações conhecidas.
+
+Para uso em automação, `--fail-on-divergence` retorna exit code `2` quando o
+relatório contém divergências. Falhas operacionais ou argumentos inválidos
+retornam exit code `1`; execução válida sem essa condição retorna `0`.
+
+A sessão de banco é encerrada com rollback explícito. A CLI não grava artefatos,
+não altera tabelas e não persiste saldos fiscais.
+
 ## Invariantes arquiteturais
 
 1. O comparador é read-only.
@@ -43,10 +67,11 @@ As classificações podem coexistir na mesma competência.
 4. O legado permanece inalterado durante a coleta de evidências.
 5. Divergências entre classes não são ocultadas por consolidação anual.
 6. A substituição do runtime só deve ocorrer após análise das divergências reais.
+7. O JSON da CLI é versionado e adequado para evidência operacional.
 
 ## Próximos passos
 
-1. executar a comparação contra carteiras reais controladas;
+1. executar a CLI contra carteiras reais controladas;
 2. consolidar divergências por causa, mês e classe;
 3. corrigir causas não explicadas antes da migração;
 4. somente então planejar a troca gradual do consumidor de produção.
