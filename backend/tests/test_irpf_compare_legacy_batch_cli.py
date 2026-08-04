@@ -5,7 +5,6 @@ from datetime import date
 from types import SimpleNamespace
 
 import pytest
-
 from app.cli.irpf_compare_legacy_batch import _main, batch_report_to_dict
 from app.services.irpf_comparison_batch_service import (
     FiscalComparisonBatchReport,
