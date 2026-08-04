@@ -31,23 +31,37 @@ Dividendos e JCP usam exclusivamente o contrato `irpf-income-assessment.v1`.
 
 O detalhamento mensal e por venda de Ganhos de Capital usa exclusivamente o contrato `irpf-capital-gains-assessment.v1`.
 
-## Fronteira híbrida temporária
+## Exportações canônicas
 
-A página ainda carrega o relatório legado somente para habilitar e alimentar:
+Os endpoints PDF e CSV compõem seus dados diretamente a partir dos serviços canônicos read-only:
 
-- arquivos PDF;
-- arquivos CSV.
+- apuração anual;
+- Bens e Direitos;
+- Ganhos de Capital;
+- dividendos e JCP.
 
-Nenhuma visão da interface usa dados do `IRPFReportOut`.
+A composição é feita por `IrpfCanonicalExport` e `build_irpf_canonical_export`.
 
-A fronteira é intencional:
+Os endpoints preservam:
+
+- URLs públicas existentes;
+- nomes de arquivo;
+- MIME types;
+- seções funcionais dos relatórios.
+
+Não há fallback para `IRPFReport`, `IRPFReportOut`, `generate_irpf_report` ou persistência fiscal legada nas exportações.
+
+## Fronteira frontend
+
+A página não carrega mais `useIRPFReport` e não usa o parâmetro legado `refresh`.
+
+A fronteira atual é integralmente canônica:
 
 - `useIRPFCanonicalAnnualAssessment` atende os KPIs fiscais principais;
 - `useIRPFCanonicalAssetsAssessment` atende Bens e Direitos;
 - `useIRPFCanonicalIncomeAssessment` atende Dividendos e JCP;
 - `useIRPFCanonicalCapitalGainsAssessment` atende Ganhos de Capital;
-- `useIRPFReport` atende somente exportações legadas;
-- não existe fallback silencioso dos contratos canônicos para `IRPFReportOut`.
+- PDF e CSV são solicitados diretamente aos endpoints canônicos de exportação.
 
 ## Tipos monetários
 
@@ -55,27 +69,23 @@ Os envelopes canônicos serializam totais decimais como strings. O cliente mant�
 
 Os itens detalhados ainda preservam os tipos numéricos dos schemas existentes para manter compatibilidade enquanto os serviços internos são progressivamente normalizados para `Decimal`.
 
-## Refresh
-
-O botão da página foi renomeado para `Recalcular exportações` porque o parâmetro `refresh` pertence somente ao relatório legado persistido.
-
-Os quatro contratos canônicos são read-only e calculados diretamente pelos endpoints dedicados.
-
-## Política de validação do frontend
+## Política de validação
 
 A integração canônica é validada por:
 
+- Ruff;
 - ESLint sem warnings;
 - `tsc --noEmit`;
 - suíte Vitest comportamental existente;
 - build de produção com Vite;
-- testes backend dos endpoints e serviços canônicos.
+- testes backend dos endpoints, composição e serviços canônicos;
+- suíte backend completa.
 
 Não são mantidos testes que leem o próprio código-fonte para procurar strings de implementação. Essas suítes eram frágeis no ambiente Vitest e não adicionavam cobertura comportamental relevante.
 
 ## Próximos cortes
 
-1. criar exportações PDF/CSV baseadas nos contratos canônicos;
-2. remover o carregamento de `IRPFReportOut` da página;
-3. retirar o motor e a persistência fiscal legados quando não houver consumidores;
-4. concluir a validação operacional com carteira representativa quando houver dados disponíveis.
+1. executar auditoria final de consumidores e artefatos legados;
+2. validar PDF/CSV com carteira representativa quando houver dados disponíveis;
+3. sincronizar README, ROADMAP e CHANGELOG no bloco estrutural final;
+4. abrir a PR de `stable-15jun` para `main`.
