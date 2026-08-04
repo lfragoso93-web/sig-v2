@@ -2,7 +2,6 @@ import { useState, useCallback, useEffect } from 'react'
 import {
   FileText,
   Download,
-  RefreshCw,
   Wallet,
   TrendingUp,
   Landmark,
@@ -18,7 +17,6 @@ import {
   useIRPFCanonicalAssetsAssessment,
   useIRPFCanonicalCapitalGainsAssessment,
   useIRPFCanonicalIncomeAssessment,
-  useIRPFReport,
 } from '@/hooks/useIRPF'
 import { formatBRL } from '@/utils/format'
 import { reconcileIRPFYear } from '@/utils/irpfYearSelection'
@@ -333,17 +331,14 @@ export default function IRPFPage() {
   const [activeTab, setActiveTab] = useState<Tab>('resumo')
   const [downloading, setDownloading] = useState(false)
   const [downloadingCSV, setDownloadingCSV] = useState(false)
-  const [refreshKey, setRefreshKey] = useState(false)
 
   const { data: anos, isLoading: loadingAnos } = useIRPFAnos(portfolioId)
 
   useEffect(() => {
     setSelectedYear(current => reconcileIRPFYear(current, anos, fallbackYear))
     setActiveTab('resumo')
-    setRefreshKey(false)
   }, [portfolioId, anos, fallbackYear])
 
-  const { data: report } = useIRPFReport(portfolioId, selectedYear, refreshKey)
   const {
     data: canonicalAssessment,
     isLoading: loadingCanonicalAssessment,
@@ -452,28 +447,13 @@ export default function IRPFPage() {
 
           <button
             type="button"
-            onClick={() => setRefreshKey(k => !k)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
-            style={{
-              background: 'var(--color-surface-offset)',
-              border: '1px solid var(--color-border)',
-              color: 'var(--color-text)',
-            }}
-            title="Recalcular exportações do relatório legado"
-          >
-            <RefreshCw size={13} />
-            Recalcular exportações
-          </button>
-
-          <button
-            type="button"
             onClick={handleDownloadPDF}
-            disabled={downloading || !report}
+            disabled={downloading}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-colors"
             style={{
               background: downloading ? 'var(--color-surface-dynamic)' : 'var(--color-primary)',
               color: downloading ? 'var(--color-text-muted)' : 'white',
-              opacity: (!report || downloading) ? 0.7 : 1,
+              opacity: downloading ? 0.7 : 1,
             }}
           >
             <Download size={13} />
@@ -483,12 +463,12 @@ export default function IRPFPage() {
           <button
             type="button"
             onClick={handleDownloadCSV}
-            disabled={downloadingCSV || !report}
+            disabled={downloadingCSV}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-colors"
             style={{
               background: downloadingCSV ? 'var(--color-surface-dynamic)' : 'var(--color-primary)',
               color: downloadingCSV ? 'var(--color-text-muted)' : 'white',
-              opacity: (!report || downloadingCSV) ? 0.7 : 1,
+              opacity: downloadingCSV ? 0.7 : 1,
             }}
           >
             <Download size={13} />
