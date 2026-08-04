@@ -22,6 +22,7 @@ from app.schemas.irpf import (
     GanhoCapitalMensal,
     IrpfAnnualAssessmentOut,
     IrpfAssetsAssessmentOut,
+    IrpfCapitalGainsAssessmentOut,
     IrpfIncomeAssessmentOut,
     IRPFReportOut,
 )
@@ -136,6 +137,32 @@ async def get_canonical_irpf_assets(
         year=year,
         items=items,
         total_cost_brl=total_cost,
+    )
+
+
+@router.get(
+    "/{portfolio_id}/irpf/{year}/canonical/capital-gains",
+    response_model=IrpfCapitalGainsAssessmentOut,
+)
+async def get_canonical_irpf_capital_gains(
+    portfolio_id: int,
+    year: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Retorna Ganhos de Capital em envelope público versionado."""
+    await _get_portfolio(portfolio_id, current_user, db)
+    months = await calc_ganhos_capital(db, portfolio_id, year)
+    return IrpfCapitalGainsAssessmentOut(
+        schema_version="irpf-capital-gains-assessment.v1",
+        portfolio_id=portfolio_id,
+        year=year,
+        months=months,
+        total_sales_brl=sum(Decimal(str(item.total_vendas)) for item in months),
+        total_gross_profit_brl=sum(
+            Decimal(str(item.lucro_bruto)) for item in months
+        ),
+        total_tax_due_brl=sum(Decimal(str(item.ir_a_recolher)) for item in months),
     )
 
 
