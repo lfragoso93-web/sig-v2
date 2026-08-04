@@ -25,9 +25,9 @@ describe('IRPFPage portfolio scope contract', () => {
 
   it('mantém carteira e ano nas chaves canônicas do cache de IRPF', () => {
     expect(hookSource).toContain("queryKey: ['irpf-anos', portfolioId]")
-    expect(hookSource).toContain("queryKey: ['irpf-canonical-annual', portfolioId, year]")
-    expect(hookSource).toContain("queryKey: ['irpf-canonical-assets', portfolioId, year]")
-    expect(hookSource).toContain("queryKey: ['irpf-canonical-capital-gains', portfolioId, year]")
-    expect(hookSource).toContain("queryKey: ['irpf-canonical-income', portfolioId, year]")
+    expect(hookSource).toContain("queryKey: ['irpf-canonical-annual-assessment', portfolioId, year]")
+    expect(hookSource).toContain("queryKey: ['irpf-canonical-assets-assessment', portfolioId, year]")
+    expect(hookSource).toContain("queryKey: ['irpf-canonical-capital-gains-assessment', portfolioId, year]")
+    expect(hookSource).toContain("queryKey: ['irpf-canonical-income-assessment', portfolioId, year]")
   })
 })
