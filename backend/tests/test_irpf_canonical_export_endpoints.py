@@ -5,7 +5,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-
 from app.routers.irpf import download_irpf_csv, download_irpf_pdf
 from app.services.irpf_canonical_export_service import IrpfCanonicalExport
 
