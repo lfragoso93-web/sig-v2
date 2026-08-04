@@ -75,6 +75,26 @@ retorna `0`.
 As duas CLIs encerram a sessão com rollback explícito. Elas não alteram tabelas,
 não persistem saldos fiscais e não substituem consumidores de produção.
 
+## Matching quantitativo de Day Trade
+
+O módulo puro `irpf_day_trade_matcher.py` caracteriza a fronteira correta para
+Day Trade antes da migração do consumidor legado. A unidade fiscal intradiária
+é o par data/ticker, mas somente a quantidade efetivamente comprada e vendida no
+mesmo pregão é classificada como Day Trade.
+
+Regras protegidas:
+
+1. compras e vendas são casadas por FIFO dentro de data e ticker;
+2. excedentes permanecem não casados para tratamento posterior como Swing Trade;
+3. múltiplas operações intercaladas podem produzir vários matches;
+4. taxas são rateadas proporcionalmente à quantidade casada;
+5. o resultado bruto de cada match desconta taxas alocadas de compra e venda;
+6. datas e tickers diferentes nunca são cruzados;
+7. entradas inválidas são rejeitadas antes do matching.
+
+Esse matcher ainda não é chamado por `calc_ganhos_capital` nem por endpoint de
+produção. Ele constitui uma fundação isolada para o próximo adaptador fiscal.
+
 ## Escopo da página IRPF
 
 A página IRPF usa a carteira selecionada no store global como parte das chaves
@@ -105,10 +125,13 @@ validando `portfolio_id` junto com o usuário autenticado.
 9. O frontend nunca compartilha cache IRPF entre carteiras porque `portfolioId`
    permanece nas chaves de consulta.
 10. A troca de carteira reconcilia ano e estado visual antes de seguir o fluxo.
+11. O matcher quantitativo de Day Trade permanece puro e sem consumidores de
+    produção até existir adaptador, comparação e gate de migração próprios.
 
 ## Próximos passos
 
-1. executar a CLI em lote contra uma base com vendas reais;
-2. revisar alvos com vendas mas `months_compared=0`;
-3. corrigir causas `unknown` antes da migração;
-4. consolidar critérios objetivos para substituir o consumidor legado.
+1. validar Ruff e testes do matcher quantitativo;
+2. criar adaptador de transações canônicas para `FiscalTradeOperation`;
+3. consolidar matches Day Trade e excedentes Swing Trade por competência;
+4. comparar o novo cálculo com o legado sem substituir o runtime;
+5. executar a CLI em lote contra uma base com vendas reais.
