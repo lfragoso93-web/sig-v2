@@ -5,7 +5,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from app.routers.irpf import get_canonical_irpf_capital_gains
 from app.schemas.irpf import GanhoCapitalMensal
 
@@ -49,7 +48,7 @@ async def test_canonical_capital_gains_endpoint_returns_versioned_envelope() -> 
     authorize.assert_awaited_once_with(7, user, db)
     calculate.assert_awaited_once_with(db, 7, 2024)
     assert result.schema_version == "irpf-capital-gains-assessment.v1"
-    assert result.total_sales_brl == Decimal("1000")
-    assert result.total_gross_profit_brl == Decimal("200")
-    assert result.total_tax_due_brl == Decimal("30")
+    assert result.total_sales_brl == Decimal(1000)
+    assert result.total_gross_profit_brl == Decimal(200)
+    assert result.total_tax_due_brl == Decimal(30)
     assert result.months == months
