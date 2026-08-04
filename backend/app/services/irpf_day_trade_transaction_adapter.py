@@ -6,8 +6,8 @@ transações da carteira para o contrato puro ``FiscalTradeOperation``.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from decimal import Decimal
-from typing import Iterable
 
 from app.models.transaction import OperationType
 from app.services.irpf_day_trade_matcher import (
@@ -33,24 +33,24 @@ def _operation_value(value: object) -> FiscalOperation:
 def transaction_to_fiscal_trade_operation(transaction: object) -> FiscalTradeOperation:
     """Converte uma transação persistida para o contrato puro do matcher."""
 
-    transaction_id = int(getattr(transaction, "id"))
-    ticker = str(getattr(transaction, "ticker"))
-    trade_date = getattr(transaction, "date")
-    quantity = _decimal(getattr(transaction, "quantity"))
+    transaction_id = int(transaction.id)
+    ticker = str(transaction.ticker)
+    trade_date = transaction.date
+    quantity = _decimal(transaction.quantity)
     fees_brl = _decimal(getattr(transaction, "fees", None))
 
     price_brl = getattr(transaction, "price_brl", None)
     unit_price_brl = (
         _decimal(price_brl)
         if price_brl is not None
-        else _decimal(getattr(transaction, "price"))
+        else _decimal(transaction.price)
     )
 
     return FiscalTradeOperation(
         transaction_id=transaction_id,
         ticker=ticker,
         trade_date=trade_date,
-        operation=_operation_value(getattr(transaction, "operation")),
+        operation=_operation_value(transaction.operation),
         quantity=quantity,
         unit_price_brl=unit_price_brl,
         fees_brl=fees_brl,
