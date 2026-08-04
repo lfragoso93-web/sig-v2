@@ -35,29 +35,45 @@ Para cada competência mensal são comparados:
 
 As classificações podem coexistir na mesma competência.
 
-## CLI operacional
-
-A comparação pode ser executada dentro do container backend sem criar endpoint
-público:
+## CLI individual
 
 ```bash
 python -m app.cli.irpf_compare_legacy --portfolio-id 1 --year 2024
 ```
 
-O comando imprime um documento JSON com o contrato:
+Contrato de saída: `irpf-canonical-legacy-comparison.v1`.
 
-- `schema_version`: `irpf-canonical-legacy-comparison.v1`;
-- identificação da carteira e ano fiscal;
-- indicador `has_divergences`;
-- totais de meses comparados, equivalentes e divergentes;
-- comparação mensal detalhada e classificações conhecidas.
+## CLI em lote
 
-Para uso em automação, `--fail-on-divergence` retorna exit code `2` quando o
-relatório contém divergências. Falhas operacionais ou argumentos inválidos
-retornam exit code `1`; execução válida sem essa condição retorna `0`.
+A descoberta operacional localiza automaticamente pares carteira/ano com ao
+menos uma venda registrada e executa o comparador para cada alvo:
 
-A sessão de banco é encerrada com rollback explícito. A CLI não grava artefatos,
-não altera tabelas e não persiste saldos fiscais.
+```bash
+python -m app.cli.irpf_compare_legacy_batch
+```
+
+O intervalo pode ser restringido:
+
+```bash
+python -m app.cli.irpf_compare_legacy_batch --start-year 2022 --end-year 2026
+```
+
+Contrato de saída: `irpf-canonical-legacy-batch-comparison.v1`.
+
+O relatório contém:
+
+- alvos descobertos, contagem e intervalo das vendas;
+- comparações executadas por carteira e ano;
+- meses equivalentes e divergentes;
+- contagem agregada por classificação de divergência;
+- detalhe mensal com grupos fiscais canônicos.
+
+Para automação, `--fail-on-divergence` retorna exit code `2` quando houver
+qualquer mês divergente. Falhas operacionais retornam `1`; execução válida
+retorna `0`.
+
+As duas CLIs encerram a sessão com rollback explícito. Elas não alteram tabelas,
+não persistem saldos fiscais e não substituem consumidores de produção.
 
 ## Invariantes arquiteturais
 
@@ -67,11 +83,13 @@ não altera tabelas e não persiste saldos fiscais.
 4. O legado permanece inalterado durante a coleta de evidências.
 5. Divergências entre classes não são ocultadas por consolidação anual.
 6. A substituição do runtime só deve ocorrer após análise das divergências reais.
-7. O JSON da CLI é versionado e adequado para evidência operacional.
+7. Os contratos JSON são versionados e adequados para evidência operacional.
+8. A descoberta em lote considera vendas registradas, não presume que todo alvo
+   produzirá uma baixa canônica válida.
 
 ## Próximos passos
 
-1. executar a CLI contra carteiras reais controladas;
-2. consolidar divergências por causa, mês e classe;
-3. corrigir causas não explicadas antes da migração;
-4. somente então planejar a troca gradual do consumidor de produção.
+1. executar a CLI em lote contra a base real;
+2. revisar alvos com vendas mas `months_compared=0`;
+3. corrigir causas `unknown` antes da migração;
+4. consolidar critérios objetivos para substituir o consumidor legado.
