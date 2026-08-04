@@ -86,3 +86,31 @@ export interface IRPFReportOut {
   jcp: JCPItem[]
   resumo: IRPFResumo
 }
+
+export interface IRPFCanonicalMonthlyAssessment {
+  competence_month: string
+  swing_gross_tax_due_brl: string
+  swing_withholding_brl: string
+  swing_net_tax_due_brl: string
+  day_trade_gross_tax_due_brl: string
+  day_trade_withholding_brl: string
+  day_trade_net_tax_due_brl: string
+  total_net_tax_due_brl: string
+  payment_due_brl: string
+  closing_accumulated_tax_brl: string
+}
+
+export interface IRPFCanonicalAnnualAssessment {
+  schema_version: 'irpf-annual-assessment.v1'
+  portfolio_id: number
+  year: number
+  monthly: IRPFCanonicalMonthlyAssessment[]
+  total_gross_tax_due_brl: string
+  total_withholding_brl: string
+  total_net_tax_due_brl: string
+  total_payment_due_brl: string
+  closing_accumulated_tax_brl: string
+  closing_common_withholding_balance_brl: string
+  closing_day_trade_withholding_balance_brl: string
+  closing_day_trade_loss_carryforward_brl: string
+}
