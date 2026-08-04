@@ -14,7 +14,6 @@ from decimal import Decimal
 
 from pydantic import BaseModel
 
-
 # ---------------------------------------------------------------------------
 # Bens e Direitos
 # ---------------------------------------------------------------------------
@@ -138,8 +137,8 @@ class IRPFReportOut(BaseModel):
     bens_direitos:   list[BemDireito] = []
     ganhos_mensais:  list[GanhoCapitalMensal] = []
     dividendos:      list[RendimentoIsento] = []
-    jcp:             list[JCPItem] = []
-    resumo:          IRPFResumo
+    jcp:              list[JCPItem] = []
+    resumo:           IRPFResumo
 
 
 # ---------------------------------------------------------------------------
