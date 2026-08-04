@@ -11,8 +11,6 @@ from app.schemas.irpf import IRPFReportOut
 from app.services.irpf_canonical_export_service import IrpfCanonicalExport
 from app.services.irpf_export_service import (
     generate_irpf_csv as generate_canonical_irpf_csv,
-)
-from app.services.irpf_export_service import (
     generate_irpf_pdf as generate_canonical_irpf_pdf,
 )
 from app.services.irpf_tax_service import calc_ganhos_capital, calc_rendimentos
@@ -54,14 +52,22 @@ def _adapt_legacy_export(report: IRPFReportOut) -> IrpfCanonicalExport:
 def generate_irpf_pdf(report: IrpfCanonicalExport | IRPFReportOut) -> bytes:
     """Gera PDF canônico, adaptando somente contratos Python históricos."""
 
-    canonical = _adapt_legacy_export(report) if isinstance(report, IRPFReportOut) else report
+    canonical = (
+        _adapt_legacy_export(report)
+        if isinstance(report, IRPFReportOut)
+        else report
+    )
     return generate_canonical_irpf_pdf(canonical)
 
 
 def generate_irpf_csv(report: IrpfCanonicalExport | IRPFReportOut) -> str:
     """Gera CSV canônico, adaptando somente contratos Python históricos."""
 
-    canonical = _adapt_legacy_export(report) if isinstance(report, IRPFReportOut) else report
+    canonical = (
+        _adapt_legacy_export(report)
+        if isinstance(report, IRPFReportOut)
+        else report
+    )
     return generate_canonical_irpf_csv(canonical)
 
 
