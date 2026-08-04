@@ -5,7 +5,6 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
-
 from app.cli.irpf_compare_legacy import _main, comparison_to_dict
 from app.services.irpf_legacy_comparison_service import (
     FiscalAnnualComparison,
