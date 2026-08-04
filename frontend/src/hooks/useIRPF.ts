@@ -7,6 +7,7 @@ import api from '@/services/api'
 import type {
   IRPFCanonicalAnnualAssessment,
   IRPFCanonicalAssetsAssessment,
+  IRPFCanonicalCapitalGainsAssessment,
   IRPFCanonicalIncomeAssessment,
   IRPFReportOut,
 } from '@/types/irpf'
@@ -83,6 +84,23 @@ export function useIRPFCanonicalAssetsAssessment(
     queryFn: async () => {
       const res = await api.get<IRPFCanonicalAssetsAssessment>(
         `/portfolios/${portfolioId}/irpf/${year}/canonical/assets`,
+      )
+      return res.data
+    },
+    enabled: !!portfolioId && !!year,
+    staleTime: 1000 * 60 * 5,
+  })
+}
+
+export function useIRPFCanonicalCapitalGainsAssessment(
+  portfolioId: number | null,
+  year: number | null,
+) {
+  return useQuery<IRPFCanonicalCapitalGainsAssessment>({
+    queryKey: ['irpf-canonical-capital-gains-assessment', portfolioId, year],
+    queryFn: async () => {
+      const res = await api.get<IRPFCanonicalCapitalGainsAssessment>(
+        `/portfolios/${portfolioId}/irpf/${year}/canonical/capital-gains`,
       )
       return res.data
     },
