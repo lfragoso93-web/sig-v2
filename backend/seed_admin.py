@@ -1,39 +1,28 @@
-"""Script de seed: cria o usuário superadmin padrão se não existir.
+"""Seed idempotente do usuário superadmin inicial."""
 
-Uso:
-    cd backend
-    python seed_admin.py
-
-Variáveis de ambiente necessárias (ou defina no .env):
-    DATABASE_URL  — URL síncrona do PostgreSQL
-    ADMIN_EMAIL   — (opcional) default: admin@agi.com
-    ADMIN_PASSWORD — (opcional) default: Admin@1234
-    ADMIN_NAME     — (opcional) default: Administrador
-"""
 import asyncio
 import os
-from dotenv import load_dotenv
 
-load_dotenv()
+from sqlalchemy import select
 
-ADMIN_EMAIL    = os.getenv("ADMIN_EMAIL",    "admin@agi.com")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "Admin@1234")
-ADMIN_NAME     = os.getenv("ADMIN_NAME",     "Administrador")
+from app.core.database import AsyncSessionLocal
+from app.core.security import hash_password
+from app.models.user import User, UserRole
+
+ADMIN_NAME = os.getenv("ADMIN_NAME", "Administrador")
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@sgi.local")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 
 
-async def seed():
-    # Importações aqui para garantir que o env já foi carregado
-    from app.core.database import AsyncSessionLocal
-    from app.models.user import User, UserRole
-    from app.services.user_service import get_user_by_email
-    from app.core.security import hash_password
-    from sqlalchemy import select
+async def seed() -> None:
+    if not ADMIN_PASSWORD:
+        raise RuntimeError("ADMIN_PASSWORD must be configured before seeding the superadmin")
 
     async with AsyncSessionLocal() as db:
-        existing = await get_user_by_email(db, ADMIN_EMAIL)
+        result = await db.execute(select(User).where(User.email == ADMIN_EMAIL))
+        existing = result.scalar_one_or_none()
         if existing:
             print(f"[seed] Usuário {ADMIN_EMAIL} já existe (id={existing.id}, role={existing.role}).")
-            # Garante que seja superadmin
             if existing.role != UserRole.superadmin:
                 existing.role = UserRole.superadmin
                 await db.commit()
@@ -51,7 +40,7 @@ async def seed():
         await db.commit()
         await db.refresh(user)
         print(f"[seed] Superadmin criado: {ADMIN_EMAIL} (id={user.id})")
-        print(f"[seed] Senha inicial: {ADMIN_PASSWORD}  ← troque após o primeiro login!")
+        print("[seed] Senha inicial configurada por variável de ambiente; altere-a após o primeiro login.")
 
 
 if __name__ == "__main__":
