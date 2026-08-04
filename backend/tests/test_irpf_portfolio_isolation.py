@@ -3,9 +3,8 @@
 from types import SimpleNamespace
 
 import pytest
-from fastapi import HTTPException
-
 from app.routers.irpf import _get_portfolio
+from fastapi import HTTPException
 
 
 class _Result:
