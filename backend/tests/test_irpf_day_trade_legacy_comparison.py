@@ -55,8 +55,8 @@ def test_comparison_classifies_quantity_and_result_differences() -> None:
         DayTradeDivergenceKind.QUANTITY,
         DayTradeDivergenceKind.RESULT,
     )
-    assert comparison.quantity_delta == Decimal("-15")
-    assert comparison.result_delta_brl == Decimal("-30")
+    assert comparison.quantity_delta == Decimal(-15)
+    assert comparison.result_delta_brl == Decimal(-30)
 
 
 def test_comparison_classifies_missing_months() -> None:
