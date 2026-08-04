@@ -2,7 +2,7 @@
 
 ## Estado atual
 
-A `IRPFPage.tsx` consome três contratos públicos versionados:
+A `IRPFPage.tsx` consome quatro contratos públicos versionados:
 
 ```text
 GET /portfolios/{portfolio_id}/irpf/{year}/canonical
@@ -13,6 +13,9 @@ schema_version = irpf-assets-assessment.v1
 
 GET /portfolios/{portfolio_id}/irpf/{year}/canonical/income
 schema_version = irpf-income-assessment.v1
+
+GET /portfolios/{portfolio_id}/irpf/{year}/canonical/capital-gains
+schema_version = irpf-capital-gains-assessment.v1
 ```
 
 Os KPIs fiscais principais usam exclusivamente o contrato anual canônico:
@@ -26,32 +29,37 @@ Bens e Direitos usam exclusivamente o contrato `irpf-assets-assessment.v1`.
 
 Dividendos e JCP usam exclusivamente o contrato `irpf-income-assessment.v1`.
 
+O detalhamento mensal e por venda de Ganhos de Capital usa exclusivamente o contrato `irpf-capital-gains-assessment.v1`.
+
 ## Fronteira híbrida temporária
 
-A página ainda usa o relatório legado apenas para:
+A página ainda carrega o relatório legado somente para habilitar e alimentar:
 
-- detalhamento de Ganhos de Capital;
-- arquivos PDF e CSV.
+- arquivos PDF;
+- arquivos CSV.
+
+Nenhuma visão da interface usa dados do `IRPFReportOut`.
 
 A fronteira é intencional:
 
 - `useIRPFCanonicalAnnualAssessment` atende os KPIs fiscais principais;
 - `useIRPFCanonicalAssetsAssessment` atende Bens e Direitos;
 - `useIRPFCanonicalIncomeAssessment` atende Dividendos e JCP;
-- `useIRPFReport` atende somente Ganhos e exportações legadas;
+- `useIRPFCanonicalCapitalGainsAssessment` atende Ganhos de Capital;
+- `useIRPFReport` atende somente exportações legadas;
 - não existe fallback silencioso dos contratos canônicos para `IRPFReportOut`.
 
 ## Tipos monetários
 
 Os envelopes canônicos serializam totais decimais como strings. O cliente mantém esses campos como `string` nos contratos TypeScript e converte para `number` somente na fronteira de apresentação com `formatBRL`.
 
-Os itens de Bens, Dividendos e JCP ainda preservam os tipos numéricos dos schemas existentes para manter compatibilidade enquanto os serviços internos são progressivamente normalizados para `Decimal`.
+Os itens detalhados ainda preservam os tipos numéricos dos schemas existentes para manter compatibilidade enquanto os serviços internos são progressivamente normalizados para `Decimal`.
 
 ## Refresh
 
-O botão da página foi renomeado para `Recalcular ganhos/exportações` porque o parâmetro `refresh` pertence somente ao relatório legado persistido.
+O botão da página foi renomeado para `Recalcular exportações` porque o parâmetro `refresh` pertence somente ao relatório legado persistido.
 
-Os três contratos canônicos são read-only e calculados diretamente pelos endpoints dedicados.
+Os quatro contratos canônicos são read-only e calculados diretamente pelos endpoints dedicados.
 
 ## Política de validação do frontend
 
@@ -67,8 +75,7 @@ Não são mantidos testes que leem o próprio código-fonte para procurar string
 
 ## Próximos cortes
 
-1. criar contrato canônico para o detalhamento de Ganhos de Capital;
-2. migrar a aba de Ganhos;
-3. criar exportações PDF/CSV baseadas nos contratos canônicos;
-4. remover o consumo de `IRPFReportOut` da página;
-5. retirar o motor e a persistência fiscal legados quando não houver consumidores.
+1. criar exportações PDF/CSV baseadas nos contratos canônicos;
+2. remover o carregamento de `IRPFReportOut` da página;
+3. retirar o motor e a persistência fiscal legados quando não houver consumidores;
+4. concluir a validação operacional com carteira representativa quando houver dados disponíveis.
