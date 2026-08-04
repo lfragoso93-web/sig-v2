@@ -46,6 +46,18 @@ O botão da página foi renomeado para `Recalcular complementos` porque o parâm
 
 A apuração canônica é read-only e calculada diretamente pelo endpoint `/canonical`.
 
+## Política de validação do frontend
+
+A integração canônica é validada por:
+
+- ESLint sem warnings;
+- `tsc --noEmit`;
+- suíte Vitest comportamental existente;
+- build de produção com Vite;
+- testes backend do endpoint, serviço e mapper canônicos.
+
+Não são mantidos testes que leem o próprio código-fonte para procurar strings de implementação. Essas suítes eram frágeis no ambiente Vitest e não adicionavam cobertura comportamental relevante.
+
 ## Próximos cortes
 
 1. adicionar ao contrato canônico os dados necessários para Bens e Direitos e rendimentos, ou criar contratos canônicos dedicados;
