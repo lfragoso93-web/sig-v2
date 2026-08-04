@@ -63,7 +63,7 @@ class FiscalAnnualComparison:
         return any(not item.matches for item in self.monthly)
 
 
-def _money(value: Decimal | float | int) -> Decimal:
+def _money(value: Decimal | float) -> Decimal:
     return Decimal(str(value)).quantize(_CENT, rounding=ROUND_HALF_UP)
 
 
