@@ -6,6 +6,7 @@ import asyncio
 import gzip
 import logging
 import os
+import re
 import shutil
 from datetime import UTC, datetime
 from pathlib import Path
@@ -15,6 +16,7 @@ from urllib.parse import urlparse
 logger = logging.getLogger(__name__)
 
 BACKUPS_DIR = Path("/tmp/db_backups")
+_BACKUP_FILENAME_RE = re.compile(r"^backup_[0-9]{8}_[0-9]{6}\.sql\.gz$")
 
 
 class BackupError(Exception):
@@ -34,17 +36,12 @@ def _ensure_backups_dir() -> None:
 
 
 def _resolve_backup_path(backup_filename: str) -> Path:
-    """Resolve um nome de backup sem permitir saída de ``BACKUPS_DIR``."""
+    """Retorna o caminho de um backup com nome estritamente permitido."""
 
-    if not backup_filename or Path(backup_filename).name != backup_filename:
+    if not _BACKUP_FILENAME_RE.fullmatch(backup_filename):
         raise ValueError("Invalid backup filename")
 
-    backups_dir = BACKUPS_DIR.resolve()
-    backup_path = (backups_dir / backup_filename).resolve()
-    if backup_path.parent != backups_dir:
-        raise ValueError("Invalid backup filename")
-
-    return backup_path
+    return BACKUPS_DIR / backup_filename
 
 
 def _decompress_backup(backup_path: Path, temp_sql_file: Path) -> None:
