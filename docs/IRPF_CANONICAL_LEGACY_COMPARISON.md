@@ -72,7 +72,7 @@ Para automação, `--fail-on-divergence` retorna exit code `2` quando houver
 qualquer mês divergente. Falhas operacionais retornam `1`; execução válida
 retorna `0`.
 
-As duas CLIs encerram a sessão com rollback explícito. Elas não alteram tabelas,
+As CLIs encerram a sessão com rollback explícito. Elas não alteram tabelas,
 não persistem saldos fiscais e não substituem consumidores de produção.
 
 ## Matching quantitativo de Day Trade
@@ -129,8 +129,25 @@ Classificações disponíveis:
 - `day_trade_quantity`;
 - `day_trade_result`.
 
-As classificações podem coexistir na mesma competência. O comparador não altera
-o runtime, não persiste resultados e ainda não é chamado pelas CLIs existentes.
+As classificações podem coexistir na mesma competência.
+
+O serviço `irpf_day_trade_comparison_service.py` carrega as transações da
+carteira e ano, gera a projeção quantitativa, executa `calc_ganhos_capital`
+apenas como referência legada e extrai das vendas marcadas como Day Trade a
+quantidade mensal comparável. O serviço não persiste resultados.
+
+A CLI dedicada pode ser executada dentro do container backend:
+
+```bash
+python -m app.cli.irpf_compare_day_trade --portfolio-id 1 --year 2024
+```
+
+Contrato de saída:
+`irpf-day-trade-canonical-legacy-comparison.v1`.
+
+Com `--fail-on-divergence`, a CLI retorna exit code `2` quando houver qualquer
+competência divergente. Erros operacionais retornam `1` e execução válida
+retorna `0`. A sessão é encerrada com rollback explícito.
 
 ## Escopo da página IRPF
 
@@ -162,15 +179,17 @@ validando `portfolio_id` junto com o usuário autenticado.
 9. O frontend nunca compartilha cache IRPF entre carteiras porque `portfolioId`
    permanece nas chaves de consulta.
 10. A troca de carteira reconcilia ano e estado visual antes de seguir o fluxo.
-11. O matcher, o adaptador, a projeção mensal e o comparador de Day Trade
+11. O matcher, o adaptador, a projeção mensal, o comparador e a CLI de Day Trade
     permanecem isolados de consumidores de produção até existir gate próprio.
 12. Excedentes não casados não recebem custo Swing dentro do matcher; essa
     responsabilidade permanece no projetor canônico de baixas.
+13. A visão legada de Day Trade é derivada somente para comparação e não se torna
+    fonte de verdade do novo motor.
 
 ## Próximos passos
 
-1. validar Ruff e testes do comparador específico de Day Trade;
-2. construir a visão mensal legada a partir de `calc_ganhos_capital`;
-3. integrar o comparador específico a uma CLI read-only;
-4. integrar os excedentes ao projetor canônico de baixas Swing;
-5. executar comparação operacional contra uma base com vendas reais.
+1. validar Ruff e testes do serviço e da CLI específica de Day Trade;
+2. executar a CLI contra uma carteira/ano com operações intradiárias reais;
+3. integrar os excedentes ao projetor canônico de baixas Swing;
+4. ampliar a classificação de divergências com custos, FX e arredondamento;
+5. definir o gate objetivo de substituição do runtime legado.
