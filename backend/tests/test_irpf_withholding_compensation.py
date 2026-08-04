@@ -3,7 +3,6 @@
 from decimal import Decimal
 
 import pytest
-
 from app.services.irpf_withholding_compensation import compensate_withholding
 from app.services.irpf_withholding_policy import WithholdingOperationKind
 
