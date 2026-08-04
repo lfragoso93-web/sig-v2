@@ -8,6 +8,5 @@ def test_irpf_bens_endpoint_uses_canonical_service() -> None:
         "from app.services.irpf_bens_direitos_service import calc_bens_direitos"
         in router
     )
-    assert "calc_bens_direitos," not in router.split(
-        "from app.services.irpf_service import (", 1
-    )[1].split(")", 1)[0]
+    assert "from app.services.irpf_service import calc_bens_direitos" not in router
+    assert "return await calc_bens_direitos(db, portfolio_id, year)" in router
