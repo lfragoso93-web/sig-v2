@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import {
   FileText,
   Download,
@@ -14,6 +14,7 @@ import {
 import { useAppStore } from '@/store/appStore'
 import { useIRPFAnos, useIRPFReport } from '@/hooks/useIRPF'
 import { formatBRL } from '@/utils/format'
+import { reconcileIRPFYear } from '@/utils/irpfYearSelection'
 import KpiCard from '@/components/ui/KpiCard'
 import SkeletonCard from '@/components/ui/SkeletonCard'
 import EmptyState from '@/components/ui/EmptyState'
@@ -26,10 +27,6 @@ import type {
   VendaMensal,
 } from '@/types/irpf'
 import clsx from 'clsx'
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
 
@@ -54,10 +51,6 @@ function Badge({ label, color }: { label: string; color: string }) {
     </span>
   )
 }
-
-// ---------------------------------------------------------------------------
-// Sub-tabelas
-// ---------------------------------------------------------------------------
 
 function BensDireitosTable({ data }: { data: BemDireito[] }) {
   if (!data.length) return <Empty label="Nenhum bem ou direito encontrado." />
@@ -168,7 +161,6 @@ function GanhosCapitalTable({ data }: { data: GanhoCapitalMensal[] }) {
         const temIR = gm.ir_a_recolher > 0
         return (
           <div key={gm.mes} className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--color-divider)' }}>
-            {/* Linha do mês */}
             <button
               type="button"
               onClick={() => toggle(gm.mes)}
@@ -191,10 +183,8 @@ function GanhosCapitalTable({ data }: { data: GanhoCapitalMensal[] }) {
               </span>
             </button>
 
-            {/* Detalhe expandido */}
             {isOpen && (
               <div className="px-4 pb-4">
-                {/* Totais do mês */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 py-3">
                   {[
                     { label: 'IR Swing Trade', value: gm.ir_devido_swing },
@@ -208,7 +198,6 @@ function GanhosCapitalTable({ data }: { data: GanhoCapitalMensal[] }) {
                     </div>
                   ))}
                 </div>
-                {/* Detalhe das vendas */}
                 <VendasDetalhe vendas={gm.vendas} />
               </div>
             )}
@@ -228,7 +217,6 @@ function RendimentosTable({
 }) {
   return (
     <div className="flex flex-col gap-6">
-      {/* Dividendos Isentos */}
       <div>
         <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Dividendos Isentos</h3>
         {dividendos.length === 0 ? (
@@ -274,7 +262,6 @@ function RendimentosTable({
         )}
       </div>
 
-      {/* JCP */}
       <div>
         <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>JCP — Juros sobre Capital Próprio</h3>
         {jcp.length === 0 ? (
@@ -320,10 +307,6 @@ function Empty({ label }: { label: string }) {
   )
 }
 
-// ---------------------------------------------------------------------------
-// Página principal
-// ---------------------------------------------------------------------------
-
 const TABS = [
   { key: 'resumo',       label: 'Resumo',          icon: FileText },
   { key: 'bens',         label: 'Bens e Direitos', icon: Wallet },
@@ -337,14 +320,22 @@ type Tab = typeof TABS[number]['key']
 export default function IRPFPage() {
   const portfolioId = useAppStore(s => s.selectedPortfolioId)
   const currentYear = new Date().getFullYear()
+  const fallbackYear = currentYear - 1
 
-  const [selectedYear, setSelectedYear] = useState<number>(currentYear - 1)
+  const [selectedYear, setSelectedYear] = useState<number>(fallbackYear)
   const [activeTab, setActiveTab] = useState<Tab>('resumo')
   const [downloading, setDownloading] = useState(false)
   const [downloadingCSV, setDownloadingCSV] = useState(false)
   const [refreshKey, setRefreshKey] = useState(false)
 
   const { data: anos, isLoading: loadingAnos } = useIRPFAnos(portfolioId)
+
+  useEffect(() => {
+    setSelectedYear(current => reconcileIRPFYear(current, anos, fallbackYear))
+    setActiveTab('resumo')
+    setRefreshKey(false)
+  }, [portfolioId, anos, fallbackYear])
+
   const { data: report, isLoading: loadingReport } = useIRPFReport(portfolioId, selectedYear, refreshKey)
 
   const handleDownloadPDF = useCallback(async () => {
@@ -401,8 +392,6 @@ export default function IRPFPage() {
 
   return (
     <div className="page-container">
-
-      {/* Cabeçalho */}
       <div className="page-header">
         <div>
           <h1 className="page-title">IRPF</h1>
@@ -410,7 +399,6 @@ export default function IRPFPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Seletor de ano */}
           <div className="relative">
             <select
               value={selectedYear}
@@ -425,12 +413,11 @@ export default function IRPFPage() {
             >
               {anos && anos.length > 0
                 ? anos.map(y => <option key={y} value={y}>{y}</option>)
-                : <option value={currentYear - 1}>{currentYear - 1}</option>}
+                : <option value={fallbackYear}>{fallbackYear}</option>}
             </select>
             <ChevronDown size={13} className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--color-text-muted)' }} />
           </div>
 
-          {/* Recalcular */}
           <button
             type="button"
             onClick={() => setRefreshKey(k => !k)}
@@ -446,7 +433,6 @@ export default function IRPFPage() {
             Recalcular
           </button>
 
-          {/* Download PDF */}
           <button
             type="button"
             onClick={handleDownloadPDF}
@@ -462,7 +448,6 @@ export default function IRPFPage() {
             {downloading ? 'Gerando...' : 'Exportar PDF'}
           </button>
 
-          {/* Download CSV */}
           <button
             type="button"
             onClick={handleDownloadCSV}
@@ -480,7 +465,6 @@ export default function IRPFPage() {
         </div>
       </div>
 
-      {/* KPI Cards — Resumo Rápido */}
       <div className="kpi-grid">
         {loadingReport ? (
           [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
@@ -512,91 +496,61 @@ export default function IRPFPage() {
         ) : null}
       </div>
 
-      {/* Abas */}
       <div className="card overflow-hidden">
-        {/* Tab bar */}
         <div
           className="flex border-b overflow-x-auto"
           style={{ borderColor: 'var(--color-divider)' }}
         >
-          {TABS.map(({ key, label, icon: Icon }) => {
-            const active = activeTab === key
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setActiveTab(key)}
-                className="flex items-center gap-1.5 px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors border-b-2"
-                style={{
-                  borderColor: active ? 'var(--color-primary)' : 'transparent',
-                  color: active ? 'var(--color-primary)' : 'var(--color-text-muted)',
-                }}
-              >
-                <Icon size={13} />
-                {label}
-              </button>
-            )
-          })}
+          {TABS.map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setActiveTab(key)}
+              className={clsx(
+                'flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors',
+                activeTab === key ? 'border-b-2' : '',
+              )}
+              style={{
+                borderColor: activeTab === key ? 'var(--color-primary)' : 'transparent',
+                color: activeTab === key ? 'var(--color-primary)' : 'var(--color-text-muted)',
+              }}
+            >
+              <Icon size={14} />
+              {label}
+            </button>
+          ))}
         </div>
 
-        {/* Conteúdo da aba */}
         <div className="p-4">
-          {loadingReport ? (
-            <div className="flex flex-col gap-2">
-              {[...Array(5)].map((_, i) => <div key={i} className="h-10 rounded skeleton" />)}
+          {activeTab === 'resumo' && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div>
+                <h2 className="text-sm font-semibold mb-3">Bens e Direitos</h2>
+                <BensDireitosTable data={report?.bens_direitos ?? []} />
+              </div>
+              <div>
+                <h2 className="text-sm font-semibold mb-3">Rendimentos</h2>
+                <RendimentosTable
+                  dividendos={report?.rendimentos_isentos ?? []}
+                  jcp={report?.jcp ?? []}
+                />
+              </div>
             </div>
-          ) : !report ? (
-            <Empty label="Nenhum dado encontrado para este ano. Clique em Recalcular." />
-          ) : (
-            <>
-              {activeTab === 'resumo' && r && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {[
-                    { label: 'Total de Vendas no Ano',          value: r.total_vendas_ano },
-                    { label: 'Lucro Tributável Swing Trade',    value: r.lucro_tributavel_swing },
-                    { label: 'Lucro Tributável Day Trade',      value: r.lucro_tributavel_day_trade },
-                    { label: 'IR Swing Trade Devido',           value: r.ir_swing_trade_devido },
-                    { label: 'IR Day Trade Devido',             value: r.ir_day_trade_devido },
-                    { label: 'IR Retido na Fonte',              value: r.ir_retido_fonte_total },
-                    { label: 'IR a Recolher',                   value: r.ir_a_recolher_total, destaque: true },
-                    { label: 'Total Dividendos Isentos',        value: r.total_dividendos_isentos },
-                    { label: 'Total JCP Bruto',                 value: r.total_jcp_bruto },
-                    { label: 'IR Retido JCP (15%)',             value: r.total_jcp_ir_retido },
-                    { label: 'Prejuízo Acumulado',              value: r.prejuizo_acumulado },
-                  ].map(({ label, value, destaque }) => (
-                    <div
-                      key={label}
-                      className="flex justify-between items-center rounded-lg px-4 py-3"
-                      style={{
-                        background: 'var(--color-surface-offset)',
-                        border: destaque ? '1px solid var(--color-primary)40' : '1px solid transparent',
-                      }}
-                    >
-                      <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{label}</span>
-                      <span className={clsx('text-sm font-semibold tabular-nums', signCls(value))}>
-                        {formatBRL(value)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
+          )}
 
-              {activeTab === 'bens' && (
-                <BensDireitosTable data={report.bens_direitos} />
-              )}
-
-              {activeTab === 'ganhos' && (
-                <GanhosCapitalTable data={report.ganhos_mensais} />
-              )}
-
-              {activeTab === 'rendimentos' && (
-                <RendimentosTable dividendos={report.dividendos} jcp={[]} />
-              )}
-
-              {activeTab === 'jcp' && (
-                <RendimentosTable dividendos={[]} jcp={report.jcp} />
-              )}
-            </>
+          {activeTab === 'bens' && <BensDireitosTable data={report?.bens_direitos ?? []} />}
+          {activeTab === 'ganhos' && <GanhosCapitalTable data={report?.ganhos_capital ?? []} />}
+          {activeTab === 'rendimentos' && (
+            <RendimentosTable
+              dividendos={report?.rendimentos_isentos ?? []}
+              jcp={[]}
+            />
+          )}
+          {activeTab === 'jcp' && (
+            <RendimentosTable
+              dividendos={[]}
+              jcp={report?.jcp ?? []}
+            />
           )}
         </div>
       </div>
