@@ -20,10 +20,11 @@ from app.services.irpf_annual_common_assessment_service import (
     build_annual_common_assessment,
 )
 from app.services.irpf_common_loss_carryforward import compensate_common_losses
-from app.services.irpf_day_trade_monthly_projection import (
-    DayTradeMonthlyProjection,
-    project_day_trades_by_month,
+from app.services.irpf_day_trade_monthly_assessment import (
+    FiscalDayTradeMonthlyAssessment,
+    assess_day_trade_months,
 )
+from app.services.irpf_day_trade_monthly_projection import project_day_trades_by_month
 from app.services.irpf_day_trade_transaction_adapter import adapt_ordered_transactions
 from app.services.irpf_monthly_common_assessment import assess_common_monthly_groups
 from app.services.irpf_realized_disposal_tax_adapter import (
@@ -42,12 +43,16 @@ class FiscalAnnualIntegratedAssessment:
     year: int
     start_date: date
     end_date: date
-    day_trade_monthly: tuple[DayTradeMonthlyProjection, ...]
+    day_trade_monthly: tuple[FiscalDayTradeMonthlyAssessment, ...]
     swing: FiscalAnnualCommonAssessment
     total_day_trade_result_brl: Decimal
+    total_day_trade_taxable_base_brl: Decimal
+    total_day_trade_tax_due_brl: Decimal
+    closing_day_trade_loss_carryforward_brl: Decimal
     total_swing_realized_pnl_brl: Decimal
     total_swing_taxable_base_brl: Decimal
     total_swing_tax_due_brl: Decimal
+    total_tax_due_brl: Decimal
 
 
 def _annual_bounds(year: int) -> tuple[date, date]:
@@ -75,10 +80,11 @@ async def assess_annual_integrated_operations(
     )
     transactions = tx_result.scalars().all()
     operations = adapt_ordered_transactions(transactions)
-    day_trade_monthly = project_day_trades_by_month(operations)
+    day_trade_projection = project_day_trades_by_month(operations)
+    day_trade_monthly = assess_day_trade_months(day_trade_projection)
     matches = tuple(
         match
-        for month in day_trade_monthly
+        for month in day_trade_projection
         for match in month.matches
     )
 
@@ -99,6 +105,24 @@ async def assess_annual_integrated_operations(
         monthly=swing_compensated,
     )
 
+    total_day_trade_result = sum(
+        (item.realized_pnl_brl for item in day_trade_monthly),
+        start=Decimal(0),
+    )
+    total_day_trade_taxable_base = sum(
+        (item.taxable_base_brl for item in day_trade_monthly),
+        start=Decimal(0),
+    )
+    total_day_trade_tax_due = sum(
+        (item.tax_due_brl for item in day_trade_monthly),
+        start=Decimal(0),
+    )
+    closing_day_trade_loss = (
+        day_trade_monthly[-1].closing_loss_carryforward_brl
+        if day_trade_monthly
+        else Decimal(0)
+    )
+
     return FiscalAnnualIntegratedAssessment(
         portfolio_id=portfolio_id,
         year=year,
@@ -106,11 +130,12 @@ async def assess_annual_integrated_operations(
         end_date=end_date,
         day_trade_monthly=day_trade_monthly,
         swing=swing,
-        total_day_trade_result_brl=sum(
-            (item.day_trade_result_brl for item in day_trade_monthly),
-            start=Decimal(0),
-        ),
+        total_day_trade_result_brl=total_day_trade_result,
+        total_day_trade_taxable_base_brl=total_day_trade_taxable_base,
+        total_day_trade_tax_due_brl=total_day_trade_tax_due,
+        closing_day_trade_loss_carryforward_brl=closing_day_trade_loss,
         total_swing_realized_pnl_brl=swing.total_realized_pnl_brl,
         total_swing_taxable_base_brl=swing.total_taxable_base_brl,
         total_swing_tax_due_brl=swing.total_tax_due_brl,
+        total_tax_due_brl=total_day_trade_tax_due + swing.total_tax_due_brl,
     )
