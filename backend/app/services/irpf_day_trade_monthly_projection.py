@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Iterable
 
 from app.services.irpf_day_trade_matcher import (
     DayTradeMatch,
