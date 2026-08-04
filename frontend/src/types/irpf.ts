@@ -123,6 +123,16 @@ export interface IRPFCanonicalAssetsAssessment {
   total_cost_brl: string
 }
 
+export interface IRPFCanonicalCapitalGainsAssessment {
+  schema_version: 'irpf-capital-gains-assessment.v1'
+  portfolio_id: number
+  year: number
+  months: GanhoCapitalMensal[]
+  total_sales_brl: string
+  total_gross_profit_brl: string
+  total_tax_due_brl: string
+}
+
 export interface IRPFCanonicalIncomeAssessment {
   schema_version: 'irpf-income-assessment.v1'
   portfolio_id: number
