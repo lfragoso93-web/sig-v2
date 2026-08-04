@@ -115,6 +115,19 @@ baixas e na camada de política fiscal.
 Nenhum desses módulos é chamado por `calc_ganhos_capital` ou por endpoint de
 produção.
 
+## Apuração mensal de Day Trade
+
+O módulo `irpf_day_trade_monthly_assessment.py` consome a projeção quantitativa e
+aplica a política fiscal exclusiva de Day Trade:
+
+1. alíquota fixa de 20%;
+2. arredondamento monetário determinístico em centavos;
+3. prejuízos transportados cronologicamente apenas entre competências Day Trade;
+4. compensação sem cruzamento com Swing Trade, ações, ETF, BDR, FII ou Fiagro;
+5. exposição explícita de saldo inicial, prejuízo usado, saldo final, base e imposto.
+
+O módulo continua read-only e não aplica IRRF nem DARF mínima.
+
 ## Comparador específico de Day Trade
 
 O módulo `irpf_day_trade_legacy_comparison.py` compara, competência a competência,
@@ -173,16 +186,17 @@ anteriores em um único fluxo anual paralelo:
 
 1. carrega transações da carteira e ano uma única vez;
 2. adapta e projeta o Day Trade quantitativo;
-3. carrega baixas canônicas realizadas uma única vez;
-4. remove dessas baixas a parcela intradiária já casada;
-5. reaproveita adaptador fiscal, agrupamento mensal, política, isenção e
+3. aplica a política mensal Day Trade de 20% com compensação segregada;
+4. carrega baixas canônicas realizadas uma única vez;
+5. remove dessas baixas a parcela intradiária já casada;
+6. reaproveita adaptador fiscal, agrupamento mensal, política, isenção e
    compensação de prejuízos já existentes para o excedente Swing;
-6. consolida totais anuais de resultado Day Trade e de PnL, base e imposto Swing.
+7. consolida resultado, base, imposto e prejuízo final de Day Trade;
+8. consolida PnL, base e imposto Swing;
+9. expõe o imposto total combinado da visão paralela.
 
 O serviço não recalcula custo médio, não persiste resultados e não altera o
-runtime de `calc_ganhos_capital`. O resultado Day Trade já é segregado e
-consolidado financeiramente, mas a política de imposto Day Trade ainda não foi
-aplicada ao total anual integrado neste corte.
+runtime de `calc_ganhos_capital`. IRRF e DARF mínima permanecem fora deste corte.
 
 ## Escopo da página IRPF
 
@@ -224,11 +238,12 @@ validando `portfolio_id` junto com o usuário autenticado.
     reimplementa custo médio nem posição.
 15. A apuração anual integrada reutiliza os módulos canônicos de política,
     isenção e prejuízos e não cria um segundo motor fiscal Swing.
+16. Prejuízos Day Trade permanecem segregados e nunca compensam operações comuns.
 
 ## Próximos passos
 
-1. validar Ruff e testes da apuração anual integrada;
-2. aplicar política e compensação próprias de Day Trade no fluxo integrado;
-3. comparar a apuração anual integrada com o legado por competência;
-4. ampliar a classificação de divergências com custos, FX e arredondamento;
+1. validar Ruff e testes da política mensal Day Trade e da apuração integrada;
+2. comparar a apuração anual integrada com o legado por competência;
+3. ampliar a classificação de divergências com custos, FX e arredondamento;
+4. incorporar IRRF e DARF mínima em blocos próprios;
 5. definir o gate objetivo de substituição do runtime legado.
