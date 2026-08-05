@@ -23,7 +23,7 @@ O SGI v2 está em consolidação arquitetural antes de receber carteiras e usuá
 | Rotas de carteira | Consolidadas | 100% |
 | UTC e warnings | Concluído pela #192 | 100% |
 | Pré-produção e rebuild | Suspenso pelo gate #227 | 85% |
-| Eventos corporativos | Motor canônico implementado | 75% |
+| Eventos corporativos | Bootstrap canônico estruturado; certificação pendente | 88% |
 | IBOV persistido | Planejado | 20% |
 | TWR dedicado Tesouro/Renda Fixa | Planejado | 20% |
 
@@ -48,6 +48,16 @@ O SGI v2 está em consolidação arquitetural antes de receber carteiras e usuá
 - Proventos pertencem ao ativo e são persistidos em `asset_dividends`; direitos de carteira são derivados sob demanda.
 - O contrato operacional vigente de seed de Proventos é `pre-prod-dividends-seed.v2`, com escrita exclusiva em `asset_dividends` e sem materialização por carteira.
 - Serviços operacionais usam UTC aware; defaults ORM `timezone=False` usam UTC naive explícito.
+
+### Bootstrap canônico de ativos
+
+- O pipeline neutro possui capacidades independentes para catálogo, preços, Proventos, eventos corporativos e cobertura.
+- Dependências, duplicidades, ordem inválida e ciclos são validados antes da execução.
+- Cada etapa expõe estado `planned`, `executed`, `blocked` ou `failed`.
+- Planejamento e execução aceitam identidade auditável por `run_id`, branch e commit SHA.
+- A CLI `plan_asset_bootstrap` produz envelope versionado read-only, sem importar fixtures de teste, providers, ORM ou sessões de banco.
+- Comparadores offline detectam alterações entre planos de backfill e relatórios do bootstrap.
+- Nenhuma capacidade produtiva de provider ou persistência real foi conectada enquanto a Issue #227 permanecer bloqueante.
 
 ### Navegação por carteira
 
@@ -93,6 +103,11 @@ Rotas canônicas:
 
 ### 4. Eventos corporativos
 
+- [x] Inventariar e classificar o legado em fluxos read-only.
+- [x] Estruturar bootstrap canônico por capacidades neutras.
+- [x] Adicionar planejamento, cobertura, dependências e identidade auditável.
+- [ ] Executar suíte focada e corrigir regressões locais.
+- [ ] Certificar migrations e idempotência sintética.
 - [ ] Consolidar consumidores restantes do motor canônico (#129).
 - [ ] Evoluir adapters sem expor payloads de fornecedor ao domínio (#130).
 - [ ] Consolidar registry por capacidade (#127).
@@ -114,8 +129,9 @@ Somente após os gates anteriores:
 
 ## Próximas prioridades
 
-1. Abrir e validar a PR estrutural `stable-15jun` → `main`.
-2. Consolidar eventos corporativos e adapters.
-3. Implementar IBOV persistido e TWR dedicado.
-4. Retomar pré-produção somente após a certificação da #227.
-5. Validar o IRPF em carteira real quando houver dados representativos.
+1. Executar a suíte focada do bootstrap canônico e corrigir regressões.
+2. Certificar eventos corporativos, migrations e idempotência sintética.
+3. Sincronizar documentação final e abrir a PR estrutural `stable-15jun` → `main`.
+4. Implementar IBOV persistido e TWR dedicado.
+5. Retomar pré-produção somente após a certificação da #227.
+6. Validar o IRPF em carteira real quando houver dados representativos.
