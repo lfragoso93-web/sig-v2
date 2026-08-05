@@ -25,6 +25,29 @@ class FixtureAssetBootstrapCapability:
         return self.result
 
 
+def _fixture_capability(
+    name: AssetBootstrapCapabilityName,
+    *,
+    created: int = 0,
+    updated: int = 0,
+    unchanged: int = 0,
+    warnings: tuple[str, ...] = (),
+    errors: tuple[str, ...] = (),
+) -> FixtureAssetBootstrapCapability:
+    return FixtureAssetBootstrapCapability(
+        name=name,
+        result=AssetBootstrapCapabilityResult(
+            capability=name,
+            ok=not errors,
+            created=created,
+            updated=updated,
+            unchanged=unchanged,
+            warnings=warnings,
+            errors=errors,
+        ),
+    )
+
+
 def catalog_fixture_capability(
     *,
     created: int = 1,
@@ -33,15 +56,47 @@ def catalog_fixture_capability(
     warnings: tuple[str, ...] = (),
     errors: tuple[str, ...] = (),
 ) -> FixtureAssetBootstrapCapability:
-    return FixtureAssetBootstrapCapability(
-        name=AssetBootstrapCapabilityName.CATALOG,
-        result=AssetBootstrapCapabilityResult(
-            capability=AssetBootstrapCapabilityName.CATALOG,
-            ok=not errors,
-            created=created,
-            updated=updated,
-            unchanged=unchanged,
-            warnings=warnings,
-            errors=errors,
-        ),
+    return _fixture_capability(
+        AssetBootstrapCapabilityName.CATALOG,
+        created=created,
+        updated=updated,
+        unchanged=unchanged,
+        warnings=warnings,
+        errors=errors,
+    )
+
+
+def quotes_fixture_capability(
+    *,
+    created: int = 0,
+    updated: int = 0,
+    unchanged: int = 1,
+    warnings: tuple[str, ...] = (),
+    errors: tuple[str, ...] = (),
+) -> FixtureAssetBootstrapCapability:
+    return _fixture_capability(
+        AssetBootstrapCapabilityName.QUOTES,
+        created=created,
+        updated=updated,
+        unchanged=unchanged,
+        warnings=warnings,
+        errors=errors,
+    )
+
+
+def income_events_fixture_capability(
+    *,
+    created: int = 0,
+    updated: int = 0,
+    unchanged: int = 1,
+    warnings: tuple[str, ...] = (),
+    errors: tuple[str, ...] = (),
+) -> FixtureAssetBootstrapCapability:
+    return _fixture_capability(
+        AssetBootstrapCapabilityName.INCOME_EVENTS,
+        created=created,
+        updated=updated,
+        unchanged=unchanged,
+        warnings=warnings,
+        errors=errors,
     )
