@@ -6,8 +6,8 @@ from pathlib import Path
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 APP_ROOT = BACKEND_ROOT / "app"
 LEGACY_MODULE = "app.services.rentabilidade_service"
-ALLOWED_SOURCE = APP_ROOT / "services" / "rentabilidade_service.py"
-EXPECTED_LEGACY_CONSUMERS: set[str] = set()
+LEGACY_SOURCE = APP_ROOT / "services" / "rentabilidade_service.py"
+
 
 def _iter_python_files() -> list[Path]:
     return sorted(APP_ROOT.rglob("*.py"))
@@ -19,23 +19,22 @@ def _imports_legacy_module(path: Path) -> bool:
         if isinstance(node, ast.Import):
             if any(alias.name == LEGACY_MODULE for alias in node.names):
                 return True
-        elif isinstance(node, ast.ImportFrom):
-            if node.module == LEGACY_MODULE:
-                return True
+        elif isinstance(node, ast.ImportFrom) and node.module == LEGACY_MODULE:
+            return True
     return False
 
 
-def test_legacy_rentabilidade_imports_match_migration_baseline() -> None:
+def test_legacy_rentabilidade_service_is_removed() -> None:
     consumers = {
         path.relative_to(BACKEND_ROOT).as_posix()
         for path in _iter_python_files()
-        if path != ALLOWED_SOURCE and _imports_legacy_module(path)
+        if _imports_legacy_module(path)
     }
 
-    assert consumers == EXPECTED_LEGACY_CONSUMERS, (
-        "Os imports do serviço legado de rentabilidade devem corresponder ao "
-        "baseline temporário da Issue #151. Atualize o consumidor e este baseline "
-        "no mesmo bloco. "
-        f"Esperados: {sorted(EXPECTED_LEGACY_CONSUMERS)}; "
-        f"encontrados: {sorted(consumers)}"
+    assert not LEGACY_SOURCE.exists(), (
+        "O serviço legado de rentabilidade deve permanecer removido conforme a Issue #151."
+    )
+    assert not consumers, (
+        "Nenhum módulo de produção pode importar o serviço legado de rentabilidade. "
+        f"Consumidores encontrados: {sorted(consumers)}"
     )
