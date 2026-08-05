@@ -1,44 +1,55 @@
-from fastapi import APIRouter, Depends, status, BackgroundTasks, HTTPException, UploadFile, File
-from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 
-from app.core.database import get_db, AsyncSessionLocal
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    HTTPException,
+    UploadFile,
+    status,
+)
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import AsyncSessionLocal, get_db
 from app.core.deps import get_current_user
 from app.models.user import User
 from app.schemas.portfolio import (
-    PortfolioCreate,
-    PortfolioUpdate,
-    PortfolioResponse,
-    ClassTargetWithCurrent,
     ClassTargetUpsert,
+    ClassTargetWithCurrent,
     CSVImportResponse,
+    PortfolioCreate,
+    PortfolioResponse,
+    PortfolioUpdate,
 )
-from app.schemas.portfolio_positions import PositionGroupResponse
 from app.schemas.portfolio_intraday_reconciliation import IntradayReconciliationResponse
+from app.schemas.portfolio_positions import PositionGroupResponse
 from app.schemas.portfolio_summary import PortfolioSummaryResponse
-from app.services.portfolio_service import (
-    create_portfolio,
-    list_portfolios,
-    get_portfolio,
-    update_portfolio,
-    get_asset_distribution,
-    invalidate_portfolio_cache,
-)
+from app.services import csv_import_service
 from app.services.canonical_positions_service import get_canonical_portfolio_positions
-from app.services.portfolio_intraday_reconciliation_service import get_intraday_reconciliation
-from app.services.portfolio_summary_service import get_canonical_portfolio_summary
-from app.services.portfolio_delete_service import delete_portfolio_safely
-from app.services.portfolio_snapshot_service import backfill_snapshots
 from app.services.class_target_service import (
+    VALID_ASSET_CLASSES,
+    delete_target,
     get_targets_with_current,
     upsert_target,
-    delete_target,
-    VALID_ASSET_CLASSES,
 )
-from app.services.rentabilidade_service import flush_rentabilidade_cache
-from app.services.csv_ticker_resolution import enrich_csv_dry_run_with_ticker_resolution
 from app.services.csv_snapshot_rebuild_service import rebuild_snapshots_after_csv_import
-from app.services import csv_import_service
+from app.services.csv_ticker_resolution import enrich_csv_dry_run_with_ticker_resolution
+from app.services.portfolio_delete_service import delete_portfolio_safely
+from app.services.portfolio_intraday_reconciliation_service import (
+    get_intraday_reconciliation,
+)
+from app.services.portfolio_service import (
+    create_portfolio,
+    get_asset_distribution,
+    get_portfolio,
+    invalidate_portfolio_cache,
+    list_portfolios,
+    update_portfolio,
+)
+from app.services.portfolio_snapshot_service import backfill_snapshots
+from app.services.portfolio_summary_service import get_canonical_portfolio_summary
+from app.services.rentabilidade_cache_service import invalidate_rentabilidade_cache
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["portfolios"])
@@ -107,7 +118,7 @@ def _localize_csv_result(result: dict) -> dict:
 
 async def _refresh_after_csv_import(portfolio_id: int) -> None:
     await invalidate_portfolio_cache(portfolio_id)
-    await flush_rentabilidade_cache(portfolio_id)
+    await invalidate_rentabilidade_cache(portfolio_id)
 
 
 async def _backfill_bg(portfolio_id: int) -> None:

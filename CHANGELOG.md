@@ -5,6 +5,14 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — fachada legada de Rentabilidade (05/08/2026)
+
+- `backend/app/services/rentabilidade_service.py` foi removido após a migração completa de consumidores produtivos para os contratos e serviços canônicos.
+- A invalidação das chaves `rent:*` foi isolada em `rentabilidade_cache_service.py` e permanece best-effort nos fluxos de transação, importação CSV e reconstrução de snapshots.
+- Testes acoplados exclusivamente ao serviço órfão foram removidos; o gate arquitetural agora exige a inexistência física do arquivo e impede novos imports do módulo legado.
+- A suíte backend foi validada duas vezes após a remoção, com `1246 passed` e `22 skipped`, além de `compileall`, Flake8 e build Docker aprovados.
+- Nenhum endpoint, schema, migration ou fórmula financeira canônica foi alterado neste macrobloco.
+
 ### Concluído — módulo IRPF canônico (04/08/2026)
 
 - Consolidada a apuração anual canônica de Day Trade e Swing Trade, incluindo

@@ -10,6 +10,7 @@ Novos módulos não devem criar fórmulas paralelas para estes conceitos.
 3. Proventos são reconhecidos quando efetivamente recebidos, pelo valor líquido.
 4. Ausência de preço deve ser explícita e nunca transformar silenciosamente uma posição em zero.
 5. Divergências são diagnosticadas; valores não são corrigidos silenciosamente.
+6. O módulo legado `rentabilidade_service.py` não faz parte da arquitetura vigente e não pode ser reintroduzido como fachada paralela.
 
 ## Indicadores
 
@@ -44,6 +45,20 @@ Essa diferença não representa erro de reconciliação.
 - `price_coverage_pct`: cobertura por quantidade de ativos precificáveis, não por peso patrimonial.
 - `return_is_estimated=true`: o snapshot possui pelo menos uma premissa estimada.
 - `summary_source=valuation_fallback`: não existe snapshot fechado; a rentabilidade não deve ser tratada como TWR oficial.
+
+## Invalidação de cache
+
+As chaves `rent:*` são invalidadas exclusivamente por
+`backend/app/services/rentabilidade_cache_service.py`.
+
+Consumidores autorizados:
+
+- fluxos de criação e atualização de transações;
+- importação CSV;
+- reconstrução de snapshots após importação.
+
+A invalidação é best-effort: indisponibilidade do cache não pode desfazer uma escrita financeira já confirmada no banco.
+Novos consumidores não devem duplicar prefixos, sufixos ou loops de invalidação.
 
 ## TWR por classe
 
