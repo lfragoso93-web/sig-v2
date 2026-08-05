@@ -23,6 +23,32 @@ class AssetBootstrapStageState(str, Enum):
 
 
 @dataclass(frozen=True)
+class AssetBootstrapExecutionIdentity:
+    run_id: str
+    branch: str
+    commit_sha: str
+
+    def normalized(self) -> "AssetBootstrapExecutionIdentity":
+        run_id = self.run_id.strip()
+        branch = self.branch.strip()
+        commit_sha = self.commit_sha.strip().lower()
+        if not run_id:
+            raise ValueError("run_id is required")
+        if not branch:
+            raise ValueError("branch is required")
+        if not commit_sha:
+            raise ValueError("commit_sha is required")
+        return AssetBootstrapExecutionIdentity(
+            run_id=run_id,
+            branch=branch,
+            commit_sha=commit_sha,
+        )
+
+    def to_dict(self) -> dict[str, str]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class AssetBootstrapRequest:
     ticker: str
     asset_type: str
@@ -69,15 +95,19 @@ class AssetBootstrapReport:
     ok: bool
     capabilities: tuple[AssetBootstrapCapabilityResult, ...]
     coverage: AssetBootstrapCoverageSummary
+    identity: AssetBootstrapExecutionIdentity | None = None
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "ticker": self.ticker,
             "asset_type": self.asset_type,
             "ok": self.ok,
             "capabilities": [item.to_dict() for item in self.capabilities],
             "coverage": self.coverage.to_dict(),
         }
+        if self.identity is not None:
+            payload["identity"] = self.identity.to_dict()
+        return payload
 
 
 class AssetBootstrapCapability(Protocol):
