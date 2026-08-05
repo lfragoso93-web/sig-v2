@@ -1,6 +1,6 @@
 # Roadmap modular — SGI v2
 
-> Última atualização: 04/08/2026
+> Última atualização: 05/08/2026
 
 ## Direção atual
 
@@ -17,7 +17,7 @@ O SGI v2 está em consolidação arquitetural antes de receber carteiras e usuá
 | Proventos canônicos | Implementação concluída; execução real pendente | 95% |
 | Snapshots e valuation por classe | Consolidado | 100% |
 | Resumo e Patrimônio | Consolidado | 100% |
-| Rentabilidade | Migração canônica em andamento | 96% |
+| Rentabilidade | Consolidação canônica concluída | 100% |
 | IRPF | Implementação funcional canônica concluída; validação real pendente | 98% |
 | Metas | Estável e vinculada à carteira | 100% |
 | Rotas de carteira | Consolidadas | 100% |
@@ -29,8 +29,8 @@ O SGI v2 está em consolidação arquitetural antes de receber carteiras e usuá
 
 ## Qualidade validada
 
-- Backend: `1265 passed`, `22 skipped` na suíte completa mais recente.
-- Ruff e `compileall`: aprovados nos gates do IRPF.
+- Backend: `1246 passed`, `22 skipped` na suíte completa mais recente, executada duas vezes após a remoção física do serviço legado de Rentabilidade.
+- `compileall`, Flake8 e build Docker do backend: aprovados.
 - Frontend: 26 arquivos de teste, 93 testes, typecheck, lint e build aprovados.
 
 ## Consolidado
@@ -39,6 +39,8 @@ O SGI v2 está em consolidação arquitetural antes de receber carteiras e usuá
 
 - Contratos `summary.v2` e `rentabilidade.v2` permanecem as fontes públicas canônicas.
 - Projeções compartilhadas calculam posição, custo e resultado realizado.
+- A fachada `rentabilidade_service.py` foi removida; nenhum consumidor de produção ou teste pode reintroduzir esse módulo sem falhar no gate arquitetural.
+- A invalidação das chaves `rent:*` está isolada em `rentabilidade_cache_service.py` e é consumida pelos fluxos de transação, importação CSV e reconstrução de snapshots.
 - O IRPF usa contratos públicos versionados para apuração anual, Bens e Direitos, Rendimentos e Ganhos de Capital.
 - Day Trade, Swing Trade, isenção mensal, compensação de prejuízos, IRRF e DARF mínima estão integrados ao motor canônico.
 - PDF e CSV são gerados diretamente por `IrpfCanonicalExport`, sem leitura do relatório persistido legado.
@@ -84,9 +86,10 @@ Rotas canônicas:
 
 ### 3. Rentabilidade
 
-- [ ] Migrar consumidores restantes de posição/custo/PnL.
-- [ ] Remover a fachada e caches legados quando ficarem sem uso.
-- [ ] Manter regressões arquiteturais contra cálculos paralelos.
+- [x] Migrar consumidores restantes de posição/custo/PnL.
+- [x] Isolar invalidação de cache em serviço canônico.
+- [x] Remover a fachada e caches legados sem uso.
+- [x] Manter regressões arquiteturais contra cálculos paralelos e reintrodução do módulo.
 
 ### 4. Eventos corporativos
 
@@ -112,8 +115,7 @@ Somente após os gates anteriores:
 ## Próximas prioridades
 
 1. Abrir e validar a PR estrutural `stable-15jun` → `main`.
-2. Concluir a migração da Rentabilidade e remover legado (#151).
-3. Consolidar eventos corporativos e adapters.
-4. Implementar IBOV persistido e TWR dedicado.
-5. Retomar pré-produção somente após a certificação da #227.
-6. Validar o IRPF em carteira real quando houver dados representativos.
+2. Consolidar eventos corporativos e adapters.
+3. Implementar IBOV persistido e TWR dedicado.
+4. Retomar pré-produção somente após a certificação da #227.
+5. Validar o IRPF em carteira real quando houver dados representativos.
