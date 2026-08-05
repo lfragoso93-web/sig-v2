@@ -1,14 +1,20 @@
-"""Calculo canonico de ganho ou prejuizo realizado da carteira."""
+"""Compatibilidade pública para leitura de ganho ou prejuízo realizado.
+
+As funções puras históricas permanecem temporariamente para consumidores e testes
+que fornecem apenas transações em memória. O runtime assíncrono da aplicação usa
+o projetor canônico, que incorpora eventos corporativos globais sem reconstruir
+custo médio em uma trilha paralela.
+"""
 from __future__ import annotations
 
 from datetime import date
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.transaction import OperationType, Transaction
 from app.services.fixed_income_valuation_service import RENDA_FIXA_TYPE
 from app.services.portfolio_service import normalize_type
+from app.services.realized_pnl_projection_reader import load_realized_pnl_by_ticker
 
 _USD_ASSET_TYPES = {"STOCK", "ETF_INTERNACIONAL"}
 
@@ -36,7 +42,7 @@ def _transaction_fx_rate(tx: Transaction) -> float:
 
 
 def calculate_realized_pnl_by_ticker(transactions: list[Transaction]) -> dict[str, float]:
-    """Calcula PnL realizado por ticker usando custo medio movel e taxas liquidas."""
+    """Caracterização legada para listas isoladas, sem acesso ao catálogo global."""
     state: dict[str, dict[str, float]] = {}
     realized: dict[str, float] = {}
     ordered = sorted(
@@ -82,13 +88,13 @@ def calculate_realized_pnl(transactions: list[Transaction]) -> float:
     return round(sum(calculate_realized_pnl_by_ticker(transactions).values()), 2)
 
 
-async def get_realized_pnl_by_ticker(db: AsyncSession, portfolio_id: int) -> dict[str, float]:
-    result = await db.execute(
-        select(Transaction)
-        .where(Transaction.portfolio_id == portfolio_id)
-        .order_by(Transaction.date.asc(), Transaction.id.asc())
-    )
-    return calculate_realized_pnl_by_ticker(list(result.scalars().all()))
+async def get_realized_pnl_by_ticker(
+    db: AsyncSession,
+    portfolio_id: int,
+) -> dict[str, float]:
+    """Lê o resultado realizado pela projeção canônica compartilhada."""
+
+    return await load_realized_pnl_by_ticker(db, portfolio_id)
 
 
 async def get_realized_pnl(db: AsyncSession, portfolio_id: int) -> float:
