@@ -11,6 +11,7 @@ from app.services.asset_bootstrap_contracts import (
     AssetBootstrapCapability,
     AssetBootstrapCapabilityResult,
     AssetBootstrapCoverageSummary,
+    AssetBootstrapExecutionIdentity,
     AssetBootstrapReport,
     AssetBootstrapRequest,
     AssetBootstrapStageState,
@@ -25,6 +26,7 @@ def plan_asset_bootstrap(
     capabilities: Sequence[AssetBootstrapCapability],
     request: AssetBootstrapRequest,
     *,
+    identity: AssetBootstrapExecutionIdentity | None = None,
     dependency_policy: AssetBootstrapDependencyPolicy = (
         DEFAULT_ASSET_BOOTSTRAP_DEPENDENCY_POLICY
     ),
@@ -67,4 +69,5 @@ def plan_asset_bootstrap(
         ok=False,
         capabilities=results,
         coverage=coverage,
+        identity=identity.normalized() if identity is not None else None,
     )
