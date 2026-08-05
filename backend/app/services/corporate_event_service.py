@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import warnings
@@ -126,6 +127,16 @@ def _serialized_action(action: NormalizedCorporateAction) -> str:
     )
 
 
+def _source_payload_hash(action: NormalizedCorporateAction) -> str:
+    payload = json.dumps(
+        action.raw_payload,
+        sort_keys=True,
+        ensure_ascii=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 async def sync_corporate_events_for_asset(
     db: AsyncSession,
     asset: Asset,
@@ -155,10 +166,7 @@ async def sync_corporate_events_for_asset(
     if not actions:
         return []
 
-    identities = [
-        (action.source, action.source_event_id)
-        for action in actions
-    ]
+    identities = [(action.source, action.source_event_id) for action in actions]
     legacy_ids = [action.source_event_id for action in actions]
     existing_result = await db.execute(
         select(
@@ -200,14 +208,19 @@ async def sync_corporate_events_for_asset(
             ticker=ticker,
             event_type=action.kind.value,
             status=CorporateEventStatus.PENDENTE.value,
-            event_date=action.event_date,
-            ratio=action.quantity_factor,
+            effective_date=action.event_date,
+            quantity_factor=action.quantity_factor,
+            source_provider=action.source,
+            source_event_id=action.source_event_id,
+            source_payload_hash=_source_payload_hash(action),
+            raw_metadata=action.raw_payload,
             description=(
                 f"{action.kind.value} global coletado de {action.source} "
                 f"(fator {action.quantity_factor})"
             ),
-            source_provider=action.source,
-            source_event_id=action.source_event_id,
+            # Aliases legados preservados enquanto consumidores são migrados.
+            event_date=action.event_date,
+            ratio=action.quantity_factor,
             brapi_event_id=action.source_event_id,
             raw_data=_serialized_action(action),
             portfolio_id=None,
