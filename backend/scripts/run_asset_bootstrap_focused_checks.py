@@ -5,6 +5,7 @@ from __future__ import annotations
 import subprocess
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -13,36 +14,39 @@ class CheckCommand:
     command: tuple[str, ...]
 
 
-CHECKS = (
-    CheckCommand(
-        label="asset bootstrap tests",
-        command=(
-            sys.executable,
-            "-m",
-            "pytest",
-            "tests/test_asset_bootstrap_architecture_boundary.py",
-            "tests/test_asset_bootstrap_capabilities.py",
-            "tests/test_asset_bootstrap_configuration_validator.py",
-            "tests/test_asset_bootstrap_coordinator.py",
-            "tests/test_asset_bootstrap_dependency_policy.py",
-            "tests/test_asset_bootstrap_full_pipeline.py",
-            "tests/test_asset_bootstrap_identity.py",
-            "tests/test_asset_bootstrap_plan_cli.py",
-            "tests/test_asset_bootstrap_planner.py",
-            "tests/test_asset_bootstrap_report_diff_cli.py",
-            "tests/test_asset_bootstrap_report_diff_service.py",
-            "-q",
+def _asset_bootstrap_test_paths() -> tuple[str, ...]:
+    tests_dir = Path("tests")
+    paths = tuple(
+        str(path)
+        for path in sorted(tests_dir.glob("test_asset_bootstrap*.py"))
+        if path.is_file()
+    )
+    if not paths:
+        raise RuntimeError("no asset bootstrap tests found")
+    return paths
+
+
+def _checks() -> tuple[CheckCommand, ...]:
+    return (
+        CheckCommand(
+            label="asset bootstrap tests",
+            command=(
+                sys.executable,
+                "-m",
+                "pytest",
+                *_asset_bootstrap_test_paths(),
+                "-q",
+            ),
         ),
-    ),
-    CheckCommand(
-        label="compileall",
-        command=(sys.executable, "-m", "compileall", "app", "tests"),
-    ),
-)
+        CheckCommand(
+            label="compileall",
+            command=(sys.executable, "-m", "compileall", "app", "tests"),
+        ),
+    )
 
 
 def main() -> int:
-    for check in CHECKS:
+    for check in _checks():
         print(f"==> {check.label}")
         result = subprocess.run(check.command, check=False)
         if result.returncode != 0:
