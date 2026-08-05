@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from app.services.asset_bootstrap_configuration_validator import (
+    validate_asset_bootstrap_configuration,
+)
 from app.services.asset_bootstrap_contracts import (
     AssetBootstrapCapability,
     AssetBootstrapCapabilityName,
@@ -29,6 +32,10 @@ class AssetBootstrapCoordinator:
             DEFAULT_ASSET_BOOTSTRAP_DEPENDENCY_POLICY
         ),
     ) -> None:
+        validate_asset_bootstrap_configuration(
+            capabilities,
+            dependency_policy=dependency_policy,
+        )
         self._capabilities = tuple(capabilities)
         self._dependency_policy = dependency_policy
 
