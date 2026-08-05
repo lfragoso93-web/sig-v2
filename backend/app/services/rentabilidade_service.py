@@ -16,7 +16,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.cache import cache_delete, cache_get, cache_set
+from app.core.cache import cache_get, cache_set
 from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.transaction import OperationType, Transaction
 from app.services.canonical_dividend_aggregation_service import (
@@ -41,31 +41,18 @@ from app.services.rentabilidade_runtime_policy import utc_today
 logger = logging.getLogger(__name__)
 
 _CACHE_TTL = 300
-_PREFIX = "rent"
+_CACHE_PREFIX = "rent"
 _USD_ASSET_TYPES = {"STOCK", "ETF_INTERNACIONAL"}
 
 
-def _key(portfolio_id: int, suffix: str) -> str:
-    return f"{_PREFIX}:{portfolio_id}:{suffix}"
+def _cache_key(portfolio_id: int, suffix: str) -> str:
+    return f"{_CACHE_PREFIX}:{portfolio_id}:{suffix}"
 
 
 def _safe_pct(gain: Decimal, base: Decimal) -> float:
     if base and base > 0:
         return round(float(gain / base * 100), 4)
     return 0.0
-
-
-async def flush_rentabilidade_cache(portfolio_id: int) -> None:
-    for suffix in ("kpis", "ativos", "classes"):
-        try:
-            await cache_delete(_key(portfolio_id, suffix))
-        except Exception as exc:  # noqa: BLE001 - cache invalidation is best effort
-            logger.warning(
-                "[rentabilidade] falha ao invalidar cache %s/%s: %s",
-                portfolio_id,
-                suffix,
-                exc,
-            )
 
 
 async def _snapshot_at(
@@ -308,7 +295,7 @@ def _ret_between(
 
 
 async def get_kpis(db: AsyncSession, portfolio_id: int) -> dict:
-    cache_key = _key(portfolio_id, "kpis")
+    cache_key = _cache_key(portfolio_id, "kpis")
     cached = await cache_get(cache_key)
     if cached:
         return cached
@@ -373,7 +360,7 @@ async def get_rentabilidade_por_ativo(
     db: AsyncSession,
     portfolio_id: int,
 ) -> list[dict]:
-    cache_key = _key(portfolio_id, "ativos")
+    cache_key = _cache_key(portfolio_id, "ativos")
     cached = await cache_get(cache_key)
     if cached:
         return cached
@@ -506,7 +493,7 @@ async def get_rentabilidade_por_classe(
     db: AsyncSession,
     portfolio_id: int,
 ) -> list[dict]:
-    cache_key = _key(portfolio_id, "classes")
+    cache_key = _cache_key(portfolio_id, "classes")
     cached = await cache_get(cache_key)
     if cached:
         return cached
