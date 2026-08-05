@@ -14,6 +14,7 @@ from app.services.asset_bootstrap_contracts import (
     AssetBootstrapCoverageSummary,
     AssetBootstrapReport,
     AssetBootstrapRequest,
+    AssetBootstrapStageState,
 )
 from app.services.asset_bootstrap_dependency_policy import (
     AssetBootstrapDependencyPolicy,
@@ -64,6 +65,7 @@ class AssetBootstrapCoordinator:
                 result = AssetBootstrapCapabilityResult(
                     capability=capability.name,
                     ok=False,
+                    state=AssetBootstrapStageState.BLOCKED,
                     errors=(
                         "blocked_by_dependency:"
                         + ",".join(item.value for item in failed_dependencies),
@@ -75,6 +77,19 @@ class AssetBootstrapCoordinator:
                     raise ValueError(
                         "capability result name does not match registered capability"
                     )
+                if result.ok and result.state is not AssetBootstrapStageState.EXECUTED:
+                    raise ValueError("successful capability must be marked executed")
+                if not result.ok and result.state is AssetBootstrapStageState.EXECUTED:
+                    result = AssetBootstrapCapabilityResult(
+                        capability=result.capability,
+                        ok=False,
+                        state=AssetBootstrapStageState.FAILED,
+                        created=result.created,
+                        updated=result.updated,
+                        unchanged=result.unchanged,
+                        warnings=result.warnings,
+                        errors=result.errors,
+                    )
 
             results.append(result)
             completed[result.capability] = result
@@ -83,7 +98,14 @@ class AssetBootstrapCoordinator:
             total_capabilities=len(results),
             successful_capabilities=sum(result.ok for result in results),
             failed_capabilities=tuple(
-                result.capability.value for result in results if not result.ok
+                result.capability.value
+                for result in results
+                if result.state is AssetBootstrapStageState.FAILED
+            ),
+            blocked_capabilities=tuple(
+                result.capability.value
+                for result in results
+                if result.state is AssetBootstrapStageState.BLOCKED
             ),
             created=sum(result.created for result in results),
             updated=sum(result.updated for result in results),
@@ -95,7 +117,7 @@ class AssetBootstrapCoordinator:
         return AssetBootstrapReport(
             ticker=ticker,
             asset_type=asset_type,
-            ok=not coverage.failed_capabilities,
+            ok=not coverage.failed_capabilities and not coverage.blocked_capabilities,
             capabilities=tuple(results),
             coverage=coverage,
         )
