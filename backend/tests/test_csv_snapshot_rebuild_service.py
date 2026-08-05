@@ -2,7 +2,6 @@ from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from app.services.csv_snapshot_rebuild_service import (
     rebuild_snapshots_after_csv_import,
 )
@@ -44,9 +43,9 @@ async def test_rebuild_uses_first_transaction_date_and_refreshes_caches():
             new=AsyncMock(),
         ) as invalidate_cache,
         patch(
-            "app.services.csv_snapshot_rebuild_service.flush_rentabilidade_cache",
+            "app.services.csv_snapshot_rebuild_service.invalidate_rentabilidade_cache",
             new=AsyncMock(),
-        ) as flush_cache,
+        ) as invalidate_rentabilidade,
     ):
         await rebuild_snapshots_after_csv_import(7)
 
@@ -58,7 +57,7 @@ async def test_rebuild_uses_first_transaction_date_and_refreshes_caches():
     )
     backfill.assert_awaited_once_with(db, 7)
     invalidate_cache.assert_awaited_once_with(7)
-    flush_cache.assert_awaited_once_with(7)
+    invalidate_rentabilidade.assert_awaited_once_with(7)
 
 
 @pytest.mark.asyncio

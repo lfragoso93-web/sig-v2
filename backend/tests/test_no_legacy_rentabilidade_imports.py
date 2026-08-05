@@ -3,17 +3,11 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 APP_ROOT = BACKEND_ROOT / "app"
 LEGACY_MODULE = "app.services.rentabilidade_service"
 ALLOWED_SOURCE = APP_ROOT / "services" / "rentabilidade_service.py"
-EXPECTED_LEGACY_CONSUMERS = {
-    "app/routers/portfolios.py",
-    "app/routers/transactions.py",
-    "app/services/csv_snapshot_rebuild_service.py",
-}
-
+EXPECTED_LEGACY_CONSUMERS: set[str] = set()
 
 def _iter_python_files() -> list[Path]:
     return sorted(APP_ROOT.rglob("*.py"))

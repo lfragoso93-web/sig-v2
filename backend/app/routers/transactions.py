@@ -1,27 +1,27 @@
+import logging
+import re
 from datetime import date as DateType
 from decimal import Decimal
 from typing import Optional
-import logging
-import re
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db, AsyncSessionLocal
+from app.core.database import AsyncSessionLocal, get_db
 from app.core.deps import get_current_user
-from app.models.user import User
+from app.models.fixed_income import FixedIncomeInvestment, FixedIncomeType, IndexerType
 from app.models.portfolio import Portfolio
-from app.models.transaction import Transaction, OperationType
-from app.models.fixed_income import FixedIncomeInvestment, IndexerType, FixedIncomeType
-from app.schemas.transaction import TransactionCreate, TransactionOut, PagedTransactions
+from app.models.transaction import OperationType, Transaction
+from app.models.user import User
 from app.schemas.asset import AssetCreate
+from app.schemas.transaction import PagedTransactions, TransactionCreate, TransactionOut
+from app.services.asset_onboarding_service import run_onboarding
 from app.services.asset_service import get_or_create_asset
 from app.services.dividend_backfill_service import backfill_dividends
-from app.services.asset_onboarding_service import run_onboarding
-from app.services.transaction_service import list_transactions_paginated
-from app.services.rentabilidade_service import flush_rentabilidade_cache
 from app.services.portfolio_service import invalidate_portfolio_cache
+from app.services.rentabilidade_cache_service import invalidate_rentabilidade_cache
+from app.services.transaction_service import list_transactions_paginated
 
 log = logging.getLogger(__name__)
 
@@ -208,7 +208,7 @@ async def _upsert_fixed_income_isolated(
             await db.commit()
 
         # Invalida cache APOS o commit para garantir dados frescos
-        await flush_rentabilidade_cache(portfolio_id)
+        await invalidate_rentabilidade_cache(portfolio_id)
         log.info(
             "[upsert_fi] cache de rentabilidade invalidado para portfolio=%s",
             portfolio_id,
@@ -568,8 +568,8 @@ async def _run_backfill(portfolio_id: int, ticker: str, asset_type: str) -> None
 async def _run_snapshot_backfill(portfolio_id: int, tx_date: DateType) -> None:
     try:
         from app.services.portfolio_snapshot_service import (
-            invalidate_snapshots_from,
             backfill_snapshots,
+            invalidate_snapshots_from,
         )
 
         async with AsyncSessionLocal() as db:

@@ -17,11 +17,11 @@ Os snapshots capturam o retorno de PRECO puro da carteira, sem proventos.
                diminui com resgates, podendo inflar o percentual).
                Fallback: invested_total quando nao ha posicoes abertas.
 
-RETORNO TOTAL COM PROVENTOS (uso no rentabilidade_service)
+RETORNO TOTAL COM PROVENTOS
 ==========================================================
   Se a UI precisar exibir retorno total incluindo proventos:
     retorno_total_com_prov = (total_pnl + proventos_total) / base * 100
-  Onde proventos_total vem de _proventos_total() no rentabilidade_service.
+  Onde proventos_total vem do agregador canônico de direitos recebidos.
   O campo retorno_total_pct do payload de /kpis NAO inclui proventos;
   os campos proventos_total e proventos_12m sao expostos separadamente
   para que o frontend calcule e exiba o retorno total conforme necessidade.

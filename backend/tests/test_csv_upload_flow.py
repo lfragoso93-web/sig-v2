@@ -2,11 +2,10 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi import BackgroundTasks
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.routers.portfolios import _localize_csv_message, import_portfolio_csv
 from app.services.csv_import_service import import_transactions_csv
+from fastapi import BackgroundTasks
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class FakeUpload:
@@ -137,9 +136,9 @@ async def test_router_refreshes_caches_after_real_import():
         "app.routers.portfolios.invalidate_portfolio_cache",
         new_callable=AsyncMock,
     ) as invalidate, patch(
-        "app.routers.portfolios.flush_rentabilidade_cache",
+        "app.routers.portfolios.invalidate_rentabilidade_cache",
         new_callable=AsyncMock,
-    ) as flush_rentabilidade:
+    ) as invalidate_rentabilidade:
         result = await import_portfolio_csv(
             portfolio_id=5,
             file=FakeUpload(b"csv"),
@@ -151,7 +150,7 @@ async def test_router_refreshes_caches_after_real_import():
 
     get_portfolio.assert_awaited_once_with(db, 5, 11)
     invalidate.assert_awaited_once_with(5)
-    flush_rentabilidade.assert_awaited_once_with(5)
+    invalidate_rentabilidade.assert_awaited_once_with(5)
     assert len(background_tasks.tasks) == 1
     assert background_tasks.tasks[0].args == (5,)
     assert result["imported_count"] == 2
