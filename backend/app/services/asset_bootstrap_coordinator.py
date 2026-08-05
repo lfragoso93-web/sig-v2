@@ -12,6 +12,7 @@ from app.services.asset_bootstrap_contracts import (
     AssetBootstrapCapabilityName,
     AssetBootstrapCapabilityResult,
     AssetBootstrapCoverageSummary,
+    AssetBootstrapExecutionIdentity,
     AssetBootstrapReport,
     AssetBootstrapRequest,
     AssetBootstrapStageState,
@@ -40,7 +41,12 @@ class AssetBootstrapCoordinator:
         self._capabilities = tuple(capabilities)
         self._dependency_policy = dependency_policy
 
-    async def execute(self, request: AssetBootstrapRequest) -> AssetBootstrapReport:
+    async def execute(
+        self,
+        request: AssetBootstrapRequest,
+        *,
+        identity: AssetBootstrapExecutionIdentity | None = None,
+    ) -> AssetBootstrapReport:
         ticker = request.ticker.strip().upper()
         asset_type = request.asset_type.strip().upper()
         if not ticker:
@@ -48,6 +54,7 @@ class AssetBootstrapCoordinator:
         if not asset_type:
             raise ValueError("asset_type is required")
 
+        normalized_identity = identity.normalized() if identity is not None else None
         normalized_request = AssetBootstrapRequest(
             ticker=ticker,
             asset_type=asset_type,
@@ -120,4 +127,5 @@ class AssetBootstrapCoordinator:
             ok=not coverage.failed_capabilities and not coverage.blocked_capabilities,
             capabilities=tuple(results),
             coverage=coverage,
+            identity=normalized_identity,
         )
