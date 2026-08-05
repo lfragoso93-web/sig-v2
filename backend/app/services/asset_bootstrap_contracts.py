@@ -38,11 +38,27 @@ class AssetBootstrapCapabilityResult:
 
 
 @dataclass(frozen=True)
+class AssetBootstrapCoverageSummary:
+    total_capabilities: int
+    successful_capabilities: int
+    failed_capabilities: tuple[str, ...]
+    created: int
+    updated: int
+    unchanged: int
+    warnings: int
+    errors: int
+
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class AssetBootstrapReport:
     ticker: str
     asset_type: str
     ok: bool
     capabilities: tuple[AssetBootstrapCapabilityResult, ...]
+    coverage: AssetBootstrapCoverageSummary
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -50,6 +66,7 @@ class AssetBootstrapReport:
             "asset_type": self.asset_type,
             "ok": self.ok,
             "capabilities": [item.to_dict() for item in self.capabilities],
+            "coverage": self.coverage.to_dict(),
         }
 
 
