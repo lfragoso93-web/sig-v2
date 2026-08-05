@@ -67,7 +67,9 @@ def _quantity_factor(event: CorporateEvent) -> Decimal:
     if value is None:
         value = event.ratio
     if value is None:
-        raise ValueError(f"evento corporativo {event.id!r} sem fator de quantidade")
+        raise ValueError(
+            f"evento corporativo {event.id!r} sem fator de quantidade"
+        )
     return Decimal(str(value))
 
 
@@ -113,7 +115,9 @@ async def load_global_corporate_actions_by_ticker(
     explícita para registros históricos globais marcados como ``legacy``.
     """
 
-    normalized_tickers = sorted({ticker.strip().upper() for ticker in tickers if ticker})
+    normalized_tickers = sorted(
+        {ticker.strip().upper() for ticker in tickers if ticker}
+    )
     if not normalized_tickers:
         return {}
 
@@ -148,6 +152,11 @@ async def load_global_corporate_actions_by_ticker(
         )
 
     return {
-        ticker: tuple(sorted(rows, key=lambda item: (item.event_date, item.source_event_id)))
+        ticker: tuple(
+            sorted(
+                rows,
+                key=lambda item: (item.event_date, item.source_event_id),
+            )
+        )
         for ticker, rows in actions.items()
     }
