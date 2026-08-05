@@ -118,3 +118,15 @@ def corporate_events_fixture_capability(
         warnings=warnings,
         errors=errors,
     )
+
+
+def coverage_fixture_capability(
+    *,
+    warnings: tuple[str, ...] = (),
+    errors: tuple[str, ...] = (),
+) -> FixtureAssetBootstrapCapability:
+    return _fixture_capability(
+        AssetBootstrapCapabilityName.COVERAGE,
+        warnings=warnings,
+        errors=errors,
+    )
