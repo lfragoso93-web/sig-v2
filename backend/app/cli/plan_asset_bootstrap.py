@@ -4,21 +4,27 @@ from __future__ import annotations
 
 import argparse
 import json
+from dataclasses import dataclass
 
 from app.services.asset_bootstrap_contracts import (
     AssetBootstrapCapabilityName,
+    AssetBootstrapCapabilityResult,
     AssetBootstrapExecutionIdentity,
     AssetBootstrapRequest,
 )
 from app.services.asset_bootstrap_plan_envelope import AssetBootstrapPlanEnvelope
 from app.services.asset_bootstrap_planner import plan_asset_bootstrap
-from app.tests.fixtures.asset_bootstrap_capabilities import (
-    FixtureAssetBootstrapCapability,
-)
 
 
-def _planned_capability(name: AssetBootstrapCapabilityName) -> FixtureAssetBootstrapCapability:
-    return FixtureAssetBootstrapCapability.planned(name)
+@dataclass(frozen=True)
+class _PlanningCapability:
+    name: AssetBootstrapCapabilityName
+
+    async def execute(
+        self,
+        request: AssetBootstrapRequest,
+    ) -> AssetBootstrapCapabilityResult:
+        raise RuntimeError("planning capability must never execute")
 
 
 def main() -> int:
@@ -31,7 +37,7 @@ def main() -> int:
     args = parser.parse_args()
 
     capabilities = tuple(
-        _planned_capability(name)
+        _PlanningCapability(name)
         for name in (
             AssetBootstrapCapabilityName.CATALOG,
             AssetBootstrapCapabilityName.QUOTES,
