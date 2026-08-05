@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import date
 from decimal import Decimal
 
@@ -70,6 +72,35 @@ async def test_sync_persists_and_deduplicates_by_canonical_source_identity(
     assert event.brapi_event_id == event.source_event_id
     assert event.portfolio_id is None
 
+    assert event.effective_date == event.event_date == date(2026, 1, 15)
+    assert Decimal(str(event.quantity_factor)) == Decimal(str(event.ratio))
+    assert Decimal(str(event.quantity_factor)) == Decimal("1.10")
+
+    expected_metadata = {
+        "assetIssued": "TEST3",
+        "factor": "1.10",
+        "lastDatePrior": "2026-01-15",
+    }
+    assert event.raw_metadata == expected_metadata
+    expected_payload = json.dumps(
+        expected_metadata,
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    assert event.source_payload_hash == hashlib.sha256(
+        expected_payload.encode("utf-8")
+    ).hexdigest()
+
+    serialized_legacy = json.loads(event.raw_data)
+    assert serialized_legacy["source"] == event.source_provider
+    assert serialized_legacy["source_event_id"] == event.source_event_id
+    assert serialized_legacy["event_date"] == event.effective_date.isoformat()
+    assert Decimal(serialized_legacy["quantity_factor"]) == Decimal(
+        str(event.quantity_factor)
+    )
+    assert serialized_legacy["provider_payload"] == event.raw_metadata
+
     repeated = await sync_corporate_events_for_asset(
         db,
         asset,
@@ -117,6 +148,7 @@ async def test_sync_respects_legacy_identity_during_transition(
     await db.flush()
 
     async def brapi_fetcher(ticker: str) -> dict[str, object]:
+        assert ticker == "TEST3"
         return _brapi_payload()
 
     created = await sync_corporate_events_for_asset(
