@@ -100,3 +100,21 @@ def income_events_fixture_capability(
         warnings=warnings,
         errors=errors,
     )
+
+
+def corporate_events_fixture_capability(
+    *,
+    created: int = 0,
+    updated: int = 0,
+    unchanged: int = 1,
+    warnings: tuple[str, ...] = (),
+    errors: tuple[str, ...] = (),
+) -> FixtureAssetBootstrapCapability:
+    return _fixture_capability(
+        AssetBootstrapCapabilityName.CORPORATE_EVENTS,
+        created=created,
+        updated=updated,
+        unchanged=unchanged,
+        warnings=warnings,
+        errors=errors,
+    )
