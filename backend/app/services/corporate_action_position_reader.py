@@ -17,6 +17,38 @@ from app.services.corporate_action_engine import (
 )
 
 _SUPPORTED_KINDS = {kind.value: kind for kind in CorporateActionKind}
+_MATCHED_RECONCILIATION_STATUS = "MATCHED"
+_IGNORED_EVENT_STATUS = "IGNORADO"
+_LEGACY_SOURCE_PROVIDER = "legacy"
+
+
+def _normalized_text(value: object) -> str:
+    raw = value.value if hasattr(value, "value") else value
+    return str(raw or "").strip()
+
+
+def _is_projection_eligible(event: CorporateEvent) -> bool:
+    """Autoriza somente evidências reconciliadas ou compatibilidade histórica.
+
+    Registros produzidos pelo catálogo novo precisam ser a representação canônica
+    de um grupo reconciliado e não podem exigir revisão. Linhas históricas globais
+    com provedor ``legacy`` permanecem projetáveis durante a contração incremental,
+    exceto quando foram explicitamente ignoradas.
+    """
+
+    if _normalized_text(event.status).upper() == _IGNORED_EVENT_STATUS:
+        return False
+
+    source_provider = _normalized_text(event.source_provider).lower()
+    if source_provider in {"", _LEGACY_SOURCE_PROVIDER}:
+        return True
+
+    return (
+        event.is_canonical is True
+        and _normalized_text(event.reconciliation_status).upper()
+        == _MATCHED_RECONCILIATION_STATUS
+        and event.requires_review is False
+    )
 
 
 def _effective_date(event: CorporateEvent) -> date:
@@ -74,11 +106,11 @@ async def load_global_corporate_actions_by_ticker(
     db: AsyncSession,
     tickers: list[str],
 ) -> dict[str, tuple[NormalizedCorporateAction, ...]]:
-    """Carrega apenas eventos globais compatíveis com o motor puro.
+    """Carrega eventos globais elegíveis para o motor puro.
 
-    Linhas antigas vinculadas a carteira são ignoradas até a contração física do
-    modelo legado. Eventos desconhecidos também ficam fora da projeção em vez de
-    serem inferidos silenciosamente.
+    Linhas vinculadas a carteira, conflitos, evidências não canônicas e eventos
+    pendentes de revisão ficam fora da projeção. A única exceção é a compatibilidade
+    explícita para registros históricos globais marcados como ``legacy``.
     """
 
     normalized_tickers = sorted({ticker.strip().upper() for ticker in tickers if ticker})
@@ -94,6 +126,9 @@ async def load_global_corporate_actions_by_ticker(
 
     actions: dict[str, list[NormalizedCorporateAction]] = {}
     for event in result.scalars().all():
+        if not _is_projection_eligible(event):
+            continue
+
         kind = _SUPPORTED_KINDS.get(str(event.event_type).upper())
         if kind is None:
             continue
