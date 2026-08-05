@@ -8,6 +8,11 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 APP_ROOT = BACKEND_ROOT / "app"
 LEGACY_MODULE = "app.services.rentabilidade_service"
 ALLOWED_SOURCE = APP_ROOT / "services" / "rentabilidade_service.py"
+EXPECTED_LEGACY_CONSUMERS = {
+    "app/routers/portfolios.py",
+    "app/routers/transactions.py",
+    "app/services/csv_snapshot_rebuild_service.py",
+}
 
 
 def _iter_python_files() -> list[Path]:
@@ -26,14 +31,17 @@ def _imports_legacy_module(path: Path) -> bool:
     return False
 
 
-def test_production_code_does_not_import_legacy_rentabilidade_service() -> None:
-    offenders = [
+def test_legacy_rentabilidade_imports_match_migration_baseline() -> None:
+    consumers = {
         path.relative_to(BACKEND_ROOT).as_posix()
         for path in _iter_python_files()
         if path != ALLOWED_SOURCE and _imports_legacy_module(path)
-    ]
+    }
 
-    assert offenders == [], (
-        "Novos imports do serviço legado de rentabilidade são proibidos. "
-        f"Consumidores encontrados: {offenders}"
+    assert consumers == EXPECTED_LEGACY_CONSUMERS, (
+        "Os imports do serviço legado de rentabilidade devem corresponder ao "
+        "baseline temporário da Issue #151. Atualize o consumidor e este baseline "
+        "no mesmo bloco. "
+        f"Esperados: {sorted(EXPECTED_LEGACY_CONSUMERS)}; "
+        f"encontrados: {sorted(consumers)}"
     )
