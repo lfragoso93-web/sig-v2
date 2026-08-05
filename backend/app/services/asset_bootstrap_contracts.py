@@ -15,6 +15,13 @@ class AssetBootstrapCapabilityName(str, Enum):
     COVERAGE = "coverage"
 
 
+class AssetBootstrapStageState(str, Enum):
+    PLANNED = "planned"
+    EXECUTED = "executed"
+    BLOCKED = "blocked"
+    FAILED = "failed"
+
+
 @dataclass(frozen=True)
 class AssetBootstrapRequest:
     ticker: str
@@ -25,6 +32,7 @@ class AssetBootstrapRequest:
 class AssetBootstrapCapabilityResult:
     capability: AssetBootstrapCapabilityName
     ok: bool
+    state: AssetBootstrapStageState = AssetBootstrapStageState.EXECUTED
     created: int = 0
     updated: int = 0
     unchanged: int = 0
@@ -34,6 +42,7 @@ class AssetBootstrapCapabilityResult:
     def to_dict(self) -> dict[str, object]:
         payload = asdict(self)
         payload["capability"] = self.capability.value
+        payload["state"] = self.state.value
         return payload
 
 
@@ -42,6 +51,7 @@ class AssetBootstrapCoverageSummary:
     total_capabilities: int
     successful_capabilities: int
     failed_capabilities: tuple[str, ...]
+    blocked_capabilities: tuple[str, ...]
     created: int
     updated: int
     unchanged: int
