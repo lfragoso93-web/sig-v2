@@ -7,6 +7,7 @@ Este roteiro valida somente contratos, planejamento, comparação offline e exec
 - branch `stable-15jun` sincronizada;
 - working tree limpa;
 - Docker Desktop disponível;
+- ambiente virtual local com o linter canônico disponível, quando o lint for executado fora da CI;
 - Issue #227 ainda tratada como gate bloqueante para operações reais.
 
 ## 1. Sincronizar e confirmar o SHA
@@ -28,19 +29,24 @@ docker compose build backend
 
 ## 3. Executar a suíte focada e compileall
 
+O runner descobre dinamicamente todos os arquivos `tests/test_asset_bootstrap*.py` existentes na imagem.
+
 ```powershell
 docker compose run --rm backend `
   python scripts/run_asset_bootstrap_focused_checks.py
 ```
 
-## 4. Ruff e verificação de diff
+## 4. Lint e verificação de diff
+
+A imagem final do backend não contém `ruff` ou ferramentas de instalação por desenho de segurança. Execute o linter pelo ambiente virtual local ou delegue esse gate à CI.
 
 ```powershell
-docker compose run --rm backend `
-  ruff check app tests scripts
+python -m ruff check backend/app backend/tests backend/scripts
 
 git diff --check
 ```
+
+Se o projeto estiver usando o gate Flake8 canônico no ambiente local, execute o comando equivalente configurado no repositório em vez de instalar ferramentas dentro da imagem final.
 
 ## 5. Gerar dois planos read-only
 
@@ -82,7 +88,7 @@ O comparador pode retornar divergência por causa de `run_id`. A revisão deve c
 
 - suíte focada aprovada;
 - `compileall` aprovado;
-- Ruff aprovado;
+- lint local ou CI aprovado;
 - `git diff --check` aprovado;
 - os cinco estágios aparecem como `planned` na CLI;
 - nenhum provider, banco, seed, migration ou rebuild é chamado;
