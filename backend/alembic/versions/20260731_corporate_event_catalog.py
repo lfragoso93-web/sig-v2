@@ -9,6 +9,13 @@ This revision was applied by a preserved development branch before that branch
 was split into smaller blocks. It remains in the canonical Alembic graph so
 existing databases can be resolved safely. Runtime adoption of the expanded
 catalog continues incrementally in separate commits.
+
+Fresh-install note:
+The preserved branch originally created ``corporate_events`` outside the
+canonical Alembic graph. Fresh databases therefore reached this revision
+without the legacy table. This migration now creates that legacy-compatible
+base only when it is absent, then applies the original catalog expansion.
+Existing databases are unchanged by the bootstrap step.
 """
 
 from collections.abc import Sequence
@@ -23,7 +30,37 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
+def _bootstrap_legacy_corporate_events_if_missing() -> None:
+    inspector = sa.inspect(op.get_bind())
+    if inspector.has_table("corporate_events"):
+        return
+
+    op.create_table(
+        "corporate_events",
+        sa.Column("id", sa.Integer(), primary_key=True, nullable=False),
+        sa.Column("asset_id", sa.Integer(), nullable=False),
+        sa.Column("ticker", sa.String(), nullable=False),
+        sa.Column("event_type", sa.String(), nullable=False),
+        sa.Column("status", sa.String(), nullable=False, server_default="PENDENTE"),
+        sa.Column("event_date", sa.Date(), nullable=False),
+        sa.Column("ratio", sa.Numeric(20, 8), nullable=False),
+        sa.Column("description", sa.String(), nullable=True),
+        sa.Column("brapi_event_id", sa.String(), nullable=True),
+        sa.Column("raw_data", sa.String(), nullable=True),
+        sa.Column("applied_at", sa.DateTime(), nullable=True),
+        sa.Column("portfolio_id", sa.Integer(), nullable=True),
+        sa.ForeignKeyConstraint(["asset_id"], ["assets.id"]),
+        sa.ForeignKeyConstraint(["portfolio_id"], ["portfolios.id"]),
+        sa.UniqueConstraint("brapi_event_id", name="uq_corporate_events_brapi_event_id"),
+    )
+    op.create_index("ix_corporate_events_id", "corporate_events", ["id"])
+    op.create_index("ix_corporate_events_asset_id", "corporate_events", ["asset_id"])
+    op.create_index("ix_corporate_events_ticker", "corporate_events", ["ticker"])
+
+
 def upgrade() -> None:
+    _bootstrap_legacy_corporate_events_if_missing()
+
     metadata_type = sa.JSON().with_variant(
         postgresql.JSONB(astext_type=sa.Text()), "postgresql"
     )
