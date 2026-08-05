@@ -6,6 +6,7 @@ from collections.abc import Sequence
 
 from app.services.asset_bootstrap_contracts import (
     AssetBootstrapCapability,
+    AssetBootstrapCoverageSummary,
     AssetBootstrapReport,
     AssetBootstrapRequest,
 )
@@ -38,9 +39,23 @@ class AssetBootstrapCoordinator:
                 )
             results.append(result)
 
+        coverage = AssetBootstrapCoverageSummary(
+            total_capabilities=len(results),
+            successful_capabilities=sum(result.ok for result in results),
+            failed_capabilities=tuple(
+                result.capability.value for result in results if not result.ok
+            ),
+            created=sum(result.created for result in results),
+            updated=sum(result.updated for result in results),
+            unchanged=sum(result.unchanged for result in results),
+            warnings=sum(len(result.warnings) for result in results),
+            errors=sum(len(result.errors) for result in results),
+        )
+
         return AssetBootstrapReport(
             ticker=ticker,
             asset_type=asset_type,
-            ok=all(result.ok for result in results),
+            ok=not coverage.failed_capabilities,
             capabilities=tuple(results),
+            coverage=coverage,
         )
