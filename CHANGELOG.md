@@ -5,6 +5,15 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Adicionado — bootstrap canônico auditável de ativos (05/08/2026)
+
+- Estruturado o pipeline neutro por capacidades independentes para catálogo, preços, Proventos, eventos corporativos e cobertura.
+- Adicionados estados explícitos por etapa (`planned`, `executed`, `blocked`, `failed`) e validação pré-execução de duplicidades, ordem inválida e ciclos de dependência.
+- Criados planejamento read-only, envelope JSON versionado e comparadores offline de planos e relatórios.
+- Planejamento e execução simulada agora aceitam identidade auditável por `run_id`, branch e commit SHA.
+- A CLI `plan_asset_bootstrap` permanece isolada de fixtures de teste, providers, ORM, sessões e operações de escrita por regressões arquiteturais específicas.
+- Nenhuma capacidade produtiva de provider, persistência, seed ou rebuild foi conectada; o gate operacional da Issue #227 permanece vigente.
+
 ### Removido — fachada legada de Rentabilidade (05/08/2026)
 
 - `backend/app/services/rentabilidade_service.py` foi removido após a migração completa de consumidores produtivos para os contratos e serviços canônicos.
