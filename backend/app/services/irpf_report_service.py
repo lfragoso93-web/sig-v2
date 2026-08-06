@@ -1,13 +1,9 @@
-"""Orquestração do relatório IRPF sobre leitores canônicos e regras fiscais."""
+"""Orquestração read-only do relatório IRPF sobre contratos canônicos."""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.irpf import IRPFReport
 from app.schemas.irpf import IRPFReportOut, IRPFResumo
 from app.services.irpf_bens_direitos_service import calc_bens_direitos
 from app.services.irpf_service import calc_ganhos_capital, calc_rendimentos
@@ -18,7 +14,7 @@ async def generate_irpf_report(
     portfolio_id: int,
     year: int,
 ) -> IRPFReportOut:
-    """Gera e persiste o relatório usando Bens e Direitos canônicos."""
+    """Gera o relatório exclusivamente em memória usando leitores canônicos."""
 
     bens = await calc_bens_direitos(db, portfolio_id, year)
     ganhos = await calc_ganhos_capital(db, portfolio_id, year)
@@ -62,7 +58,7 @@ async def generate_irpf_report(
         prejuizo_acumulado=round(prejuizo, 2),
     )
 
-    report = IRPFReportOut(
+    return IRPFReportOut(
         portfolio_id=portfolio_id,
         ano=year,
         bens_direitos=bens,
@@ -71,27 +67,3 @@ async def generate_irpf_report(
         jcp=jcp,
         resumo=resumo,
     )
-
-    result = await db.execute(
-        select(IRPFReport).where(
-            IRPFReport.portfolio_id == portfolio_id,
-            IRPFReport.year == year,
-        )
-    )
-    persisted = result.scalar_one_or_none()
-    payload = report.model_dump_json()
-
-    if persisted is None:
-        db.add(
-            IRPFReport(
-                portfolio_id=portfolio_id,
-                year=year,
-                data=payload,
-            )
-        )
-    else:
-        persisted.data = payload
-        persisted.created_at = datetime.now(UTC)
-
-    await db.commit()
-    return report
