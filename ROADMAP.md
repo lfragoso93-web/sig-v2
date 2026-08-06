@@ -13,7 +13,7 @@ O SGI v2 está em consolidação arquitetural antes de receber carteiras e usuá
 | Core backend e autenticação | Estável | 100% |
 | Carteiras e transações | Estável | 100% |
 | Dados canônicos e DB-first | Consolidado | 100% |
-| Histórico B3 / Tesouro / benchmarks / câmbio | Consolidado; consumidor atual de USD/BRL ainda não DB-first | 95% |
+| Histórico B3 / Tesouro / benchmarks / câmbio | Consolidado; consumidor USD/BRL agora DB-first | 98% |
 | Proventos canônicos | Implementação concluída; execução real pendente | 95% |
 | Snapshots e valuation por classe | Consolidado | 100% |
 | Resumo e Patrimônio | Consolidado | 100% |
@@ -24,7 +24,7 @@ O SGI v2 está em consolidação arquitetural antes de receber carteiras e usuá
 | UTC e warnings | Concluído pela #192 | 100% |
 | Pré-produção e rebuild | Suspenso pelo gate #227 | 85% |
 | Eventos corporativos | Bootstrap canônico validado parcialmente; consumidores e convergência de schema pendentes | 90% |
-| Convergência Alembic/ORM | Inventário e gates concluídos; correções por domínio pendentes | 25% |
+| Convergência Alembic/ORM | Inventário e gates concluídos; correções por domínio pendentes | 30% |
 | IBOV persistido | Planejado | 20% |
 | TWR dedicado Tesouro/Renda Fixa | Planejado | 20% |
 
@@ -32,7 +32,7 @@ O SGI v2 está em consolidação arquitetural antes de receber carteiras e usuá
 
 - Backend IRPF: `1265 passed`, `22 skipped` na suíte completa promovida pela PR #237.
 - Backend Rentabilidade: `1246 passed`, `22 skipped` em duas execuções completas promovidas pela PR #240.
-- Gates Alembic/ORM: 16 testes focados aprovados no HEAD `bcf2fe66deace7210caccb845d44921f47ff4fa5`.
+- Gates Alembic/ORM e inventários: 20 testes focados aprovados no HEAD `19ffa5f2d915c7abba38cb5c719a52b72d1dece1`.
 - `compileall`, Flake8, Ruff e build Docker: aprovados nos macroblocos promovidos.
 - Frontend: 26 arquivos de teste, 93 testes, typecheck, lint e build aprovados.
 
@@ -62,7 +62,8 @@ O SGI v2 está em consolidação arquitetural antes de receber carteiras e usuá
 ### Câmbio e metas
 
 - A série de câmbio persistida e o seed PTAX estão consolidados.
-- O endpoint `/usd-brl` ainda consulta BRAPI durante request e usa fallback fixo; a migração para leitura DB-first é prioridade imediata.
+- O endpoint `/usd-brl` agora lê exclusivamente a última linha persistida de `fx_rates`, sem chamada a provider durante request e sem fallback fixo.
+- A ausência de cobertura cambial é retornada explicitamente como indisponibilidade.
 - O fluxo atual de metas usa somente `goals` por carteira e KPIs canônicos.
 - `goal_allocations` não possui consumidor runtime comprovado e permanece preservado até fixture sintética e decisão explícita.
 
@@ -115,7 +116,8 @@ Rotas canônicas:
 - [x] Validar `upgrade head`, `current` e reexecução idempotente em PostgreSQL vazio.
 - [x] Criar Issue #241, inventários e gates contra autogenerate monolítico.
 - [x] Classificar `app_config`, `irpf_reports`, `fx_rates`, `goal_allocations` e tabelas fiscais legadas.
-- [ ] Migrar `/usd-brl` para leitor persistido DB-first.
+- [x] Migrar `/usd-brl` para leitor persistido DB-first e remover o fallback fixo.
+- [ ] Tratar `fx_rates` no MetaData/Alembic em bloco isolado.
 - [ ] Tratar modelos sem migration e tabelas migradas fora do ORM por domínio.
 - [ ] Consolidar consumidores restantes do motor canônico (#129).
 - [ ] Evoluir adapters sem expor payloads de fornecedor (#130).
@@ -139,7 +141,7 @@ Somente após os gates anteriores:
 
 ## Próximas prioridades
 
-1. Migrar o endpoint `/usd-brl` para leitura persistida DB-first e remover fallback fixo.
+1. Tratar `fx_rates` no MetaData/Alembic em bloco isolado e preservar o leitor DB-first.
 2. Continuar a convergência Alembic/ORM por contratos isolados na #241.
 3. Consolidar consumidores e campos legados de eventos corporativos na #129.
 4. Sincronizar documentação final e abrir a próxima PR estrutural `stable-15jun` → `main`.
