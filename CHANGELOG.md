@@ -5,6 +5,15 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — modelo órfão `IRPFReport` (06/08/2026)
+
+- Inventariados `IRPFReport`, `irpf_reports`, `irpf_records` e `irpf_losses` em coordenação com as Issues #56 e #241.
+- Confirmado que os endpoints e exports canônicos de IRPF são read-only e não consultam nem persistem `IRPFReport`.
+- `IRPFReport` foi removido do agregador `app.models`, do relacionamento de `Portfolio` e do arquivo `backend/app/models/irpf.py`.
+- O projeto não criará a tabela `irpf_reports` apenas para silenciar o `alembic check`.
+- `irpf_records` e `irpf_losses` permanecem preservadas como schema legado mensal até fixture sintética, inventário de dados e decisão destrutiva explícita.
+- Nenhuma migration, DDL, tabela ou dado foi alterado neste bloco.
+
 ### Removido — modelo duplicado `AppConfig` (06/08/2026)
 
 - Confirmada ausência de consumidores ativos de `AppConfig` e de `app.models.config`.
