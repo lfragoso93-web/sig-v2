@@ -9,7 +9,7 @@ from app.models.base import TimestampMixin
 if TYPE_CHECKING:
     from app.models.corporate_event import CorporateEvent
     from app.models.fixed_income import FixedIncomeInvestment
-    from app.models.goals import Goal
+    from app.models.goal import Goal
     from app.models.irpf import IRPFReport
     from app.models.portfolio_class_snapshot import PortfolioClassSnapshot
     from app.models.portfolio_class_target import PortfolioClassTarget
