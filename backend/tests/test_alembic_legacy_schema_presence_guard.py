@@ -7,6 +7,7 @@ from pathlib import Path
 from app.governance.alembic_metadata_drift_policy import (
     CURRENT_PERSISTED_SCHEMA_OBJECTS,
     DRIFT_POLICY_RULES,
+    FX_CONSUMER_RULES,
     LEGACY_SCHEMA_OBJECTS_REQUIRING_DECISION,
 )
 
@@ -42,6 +43,15 @@ def test_fx_rate_model_preserves_persisted_index_contract() -> None:
     assert 'Index("ix_fx_rates_pair_date", "pair", "rate_date")' in source
     assert 'Index("idx_fx_pair_date_desc", "pair", desc("rate_date"))' in source
     assert 'UniqueConstraint("pair", "rate_date", name="uq_fx_rates_pair_date")' in source
+
+
+def test_fx_rate_metadata_decision_is_frozen() -> None:
+    assert "fx_rate_model_must_remain_registered_in_base_metadata" in FX_CONSUMER_RULES
+    assert "fx_rate_pair_date_uniqueness_is_canonical" in FX_CONSUMER_RULES
+    assert "fx_rate_ascending_and_descending_indexes_are_canonical" in FX_CONSUMER_RULES
+    assert "do_not_create_duplicate_fx_model_or_migration_for_historical_diff" in (
+        FX_CONSUMER_RULES
+    )
 
 
 def test_legacy_schema_objects_are_not_silently_reintroduced_as_current_models() -> None:
