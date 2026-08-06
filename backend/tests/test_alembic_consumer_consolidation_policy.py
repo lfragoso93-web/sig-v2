@@ -13,6 +13,8 @@ _MODELS = Path(__file__).resolve().parents[1] / "app" / "models"
 _MODELS_INIT = _MODELS / "__init__.py"
 _APP_CONFIG_MODEL = _MODELS / "config.py"
 _SYSTEM_CONFIG_MODEL = _MODELS / "system_config.py"
+_IRPF_REPORT_MODEL = _MODELS / "irpf.py"
+_PORTFOLIO_MODEL = _MODELS / "portfolio.py"
 
 
 def test_system_config_is_the_only_current_config_model() -> None:
@@ -33,19 +35,26 @@ def test_system_config_is_the_only_current_config_model() -> None:
     assert '__tablename__ = "system_configs"' in system_config_source
 
 
-def test_irpf_annual_report_cannot_replace_monthly_contracts_implicitly() -> None:
-    assert (
-        "irpf_reports_is_not_an_automatic_replacement_for_monthly_tables"
-        in IRPF_CONSOLIDATION_RULES
-    )
+def test_irpf_report_model_is_removed_without_dropping_monthly_contracts() -> None:
+    assert "irpf_reports_model_must_not_exist" in IRPF_CONSOLIDATION_RULES
+    assert "irpf_reports_table_must_not_be_created" in IRPF_CONSOLIDATION_RULES
     assert "coordinate_irpf_schema_decisions_with_issue_56" in IRPF_CONSOLIDATION_RULES
     assert "preserve_monthly_loss_and_market_granularity_until_migrated" in (
         IRPF_CONSOLIDATION_RULES
     )
 
+    models_source = _MODELS_INIT.read_text(encoding="utf-8")
+    portfolio_source = _PORTFOLIO_MODEL.read_text(encoding="utf-8")
+
+    assert not _IRPF_REPORT_MODEL.exists()
+    assert "from app.models.irpf import IRPFReport" not in models_source
+    assert '"IRPFReport"' not in models_source
+    assert "IRPFReport" not in portfolio_source
+    assert "irpf_reports" not in portfolio_source
+
 
 def test_portfolio_type_checking_uses_the_real_goal_module() -> None:
-    source = (_MODELS / "portfolio.py").read_text(encoding="utf-8")
+    source = _PORTFOLIO_MODEL.read_text(encoding="utf-8")
 
     assert "from app.models.goal import Goal" in source
     assert "from app.models.goals import Goal" not in source
