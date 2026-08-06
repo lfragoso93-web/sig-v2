@@ -12,7 +12,7 @@ from app.services.asset_bootstrap_report_diff_service import (
 
 
 def _load_report(path: Path) -> dict[str, object]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload = json.loads(path.read_text(encoding="utf-8-sig"))
     if not isinstance(payload, dict):
         raise ValueError("report payload must be an object")
 
