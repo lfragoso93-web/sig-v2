@@ -67,7 +67,9 @@ FX_CONSUMER_RULES = (
 GOAL_CONSUMER_RULES = (
     "goals_is_current_portfolio_scoped_contract",
     "goal_allocations_has_no_runtime_consumer_evidence",
+    "goal_allocations_is_not_exposed_by_current_goal_router_or_service",
     "goal_allocations_requires_data_fixture_before_removal",
+    "goal_allocations_requires_row_count_and_fk_inventory_before_removal",
     "do_not_reintroduce_goal_allocations_orm_only_for_alembic_check",
 )
 
