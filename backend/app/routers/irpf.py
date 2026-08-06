@@ -2,7 +2,6 @@
 Router IRPF — endpoints finos que delegam toda logica aos servicos de IRPF.
 """
 
-import json
 from decimal import Decimal
 from typing import Annotated
 
@@ -13,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.models.irpf import IRPFReport
 from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction
 from app.models.user import User
@@ -81,20 +79,9 @@ async def get_irpf_report(
     current_user: CurrentUser,
     refresh: bool = False,
 ):
-    """Retorna o relatorio IRPF completo para o ano."""
+    """Retorna o relatorio IRPF completo, sempre projetado read-only em memoria."""
     await _get_portfolio(portfolio_id, current_user, db)
-
-    if not refresh:
-        existing = await db.execute(
-            select(IRPFReport).where(
-                IRPFReport.portfolio_id == portfolio_id,
-                IRPFReport.year == year,
-            )
-        )
-        row = existing.scalar_one_or_none()
-        if row and row.data:
-            return IRPFReportOut.model_validate(json.loads(row.data))
-
+    _ = refresh  # Compatibilidade do contrato HTTP legado; nao existe cache persistido.
     return await generate_irpf_report(db, portfolio_id, year)
 
 
