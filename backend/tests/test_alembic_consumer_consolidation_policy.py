@@ -60,7 +60,9 @@ def test_irpf_report_model_is_removed_without_dropping_monthly_contracts() -> No
     assert "IRPFReport" not in portfolio_source
     assert "irpf_reports" not in portfolio_source
     assert "app.models.irpf" not in router_source
-    assert "IRPFReport" not in router_source
+    assert "from app.models.irpf import IRPFReport" not in router_source
+    assert "select(IRPFReport)" not in router_source
+    assert "IRPFReportOut" in router_source
     assert "generate_irpf_report" in router_source
     assert "nao existe cache persistido" in router_source
 
