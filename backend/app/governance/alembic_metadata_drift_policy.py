@@ -45,6 +45,15 @@ IRPF_CONSOLIDATION_RULES = (
     "preserve_monthly_loss_and_market_granularity_until_migrated",
 )
 
+IRPF_LEGACY_SCHEMA_RULES = (
+    "irpf_records_and_losses_are_migrated_legacy_contracts",
+    "current_irpf_runtime_must_not_read_or_write_legacy_monthly_tables",
+    "legacy_monthly_tables_require_row_count_and_fk_inventory",
+    "legacy_monthly_tables_require_synthetic_fixture_before_removal",
+    "do_not_reintroduce_legacy_irpf_orm_models_for_alembic_check",
+    "coordinate_destructive_decision_with_issue_56_and_issue_241",
+)
+
 LEGACY_CONTRACT_DECISION_RULES = (
     "fx_rates_is_current_persisted_contract",
     "goal_allocations_preserved_until_goal_consumers_are_inventory_complete",
