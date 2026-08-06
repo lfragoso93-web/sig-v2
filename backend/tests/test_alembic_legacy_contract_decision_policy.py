@@ -8,15 +8,13 @@ from app.governance.alembic_metadata_drift_policy import (
 )
 
 
-def test_fx_rates_and_goal_allocations_remain_explicit_decisions() -> None:
-    assert "fx_rates" in LEGACY_SCHEMA_OBJECTS_REQUIRING_DECISION
+def test_fx_rates_is_current_and_goal_allocations_remains_explicit_decision() -> None:
+    assert "fx_rates" not in LEGACY_SCHEMA_OBJECTS_REQUIRING_DECISION
     assert "goal_allocations" in LEGACY_SCHEMA_OBJECTS_REQUIRING_DECISION
 
 
-def test_legacy_contracts_are_preserved_until_consumer_inventory_is_complete() -> None:
-    assert "fx_rates_preserved_until_fx_consumers_are_inventory_complete" in (
-        LEGACY_CONTRACT_DECISION_RULES
-    )
+def test_current_fx_contract_and_legacy_goal_policy_are_explicit() -> None:
+    assert "fx_rates_is_current_persisted_contract" in LEGACY_CONTRACT_DECISION_RULES
     assert "goal_allocations_preserved_until_goal_consumers_are_inventory_complete" in (
         LEGACY_CONTRACT_DECISION_RULES
     )
