@@ -49,6 +49,21 @@ LEGACY_CONTRACT_DECISION_RULES = (
     "do_not_drop_legacy_tables_without_domain_decision_and_synthetic_fixture",
 )
 
+FX_CONSUMER_RULES = (
+    "fx_rates_is_persisted_contract_not_disposable_orphan",
+    "usd_brl_reads_must_be_db_first",
+    "routers_must_not_call_fx_provider_directly",
+    "missing_persisted_fx_rate_must_be_explicit",
+    "fixed_financial_fallback_rates_are_forbidden",
+)
+
+GOAL_CONSUMER_RULES = (
+    "goals_is_current_portfolio_scoped_contract",
+    "goal_allocations_has_no_runtime_consumer_evidence",
+    "goal_allocations_requires_data_fixture_before_removal",
+    "do_not_reintroduce_goal_allocations_orm_only_for_alembic_check",
+)
+
 LOCAL_TEST_DB_RESET_RULES = (
     "explicit_authorization_required",
     "local_test_database_only",
