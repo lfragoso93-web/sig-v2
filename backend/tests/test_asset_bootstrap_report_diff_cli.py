@@ -36,6 +36,14 @@ def test_loader_accepts_plain_report(tmp_path: Path) -> None:
     assert _load_report(path) == report
 
 
+def test_loader_accepts_utf8_bom_from_powershell(tmp_path: Path) -> None:
+    path = tmp_path / "report-bom.json"
+    report = _report()
+    path.write_text(json.dumps(report), encoding="utf-8-sig")
+
+    assert _load_report(path) == report
+
+
 def test_loader_unwraps_versioned_plan_envelope(tmp_path: Path) -> None:
     path = tmp_path / "plan.json"
     report = _report()
