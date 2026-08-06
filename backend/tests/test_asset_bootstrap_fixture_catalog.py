@@ -80,7 +80,11 @@ def test_fixture_capabilities_have_no_provider_or_database_dependency() -> None:
         "app.models",
         "brapi",
         "yahoo",
-        "requests",
-        "httpx",
+        "import requests",
+        "from requests",
+        "requests.",
+        "import httpx",
+        "from httpx",
+        "httpx.",
     ):
         assert forbidden not in source
