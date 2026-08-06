@@ -7,7 +7,7 @@ Este roteiro valida somente contratos, planejamento, comparação offline e exec
 - branch `stable-15jun` sincronizada;
 - working tree limpa;
 - Docker Desktop disponível;
-- ambiente virtual local com o linter canônico disponível, quando o lint for executado fora da CI;
+- ambiente virtual local ativo;
 - Issue #227 ainda tratada como gate bloqueante para operações reais.
 
 ## 1. Sincronizar e confirmar o SHA
@@ -50,39 +50,59 @@ Se o projeto estiver usando o gate Flake8 canônico no ambiente local, execute o
 
 ## 5. Gerar dois planos read-only
 
+Os artefatos são gravados no host em `backend/artifacts/asset-bootstrap`. Um novo `docker compose run` não enxerga automaticamente arquivos criados no host depois do build, pois o serviço não possui bind mount desse diretório.
+
 ```powershell
 $RunId1 = "asset-bootstrap-plan-1"
 $RunId2 = "asset-bootstrap-plan-2"
 
-New-Item -ItemType Directory -Force artifacts/asset-bootstrap | Out-Null
+New-Item -ItemType Directory -Force backend/artifacts/asset-bootstrap | Out-Null
 
 docker compose run --rm backend `
   python -m app.cli.plan_asset_bootstrap PETR4 ACAO `
     --run-id $RunId1 `
     --branch stable-15jun `
     --commit-sha $CommitSha `
-  | Out-File -Encoding utf8 artifacts/asset-bootstrap/plan-1.json
+  | Out-File -Encoding utf8 backend/artifacts/asset-bootstrap/plan-1.json
 
 docker compose run --rm backend `
   python -m app.cli.plan_asset_bootstrap PETR4 ACAO `
     --run-id $RunId2 `
     --branch stable-15jun `
     --commit-sha $CommitSha `
-  | Out-File -Encoding utf8 artifacts/asset-bootstrap/plan-2.json
+  | Out-File -Encoding utf8 backend/artifacts/asset-bootstrap/plan-2.json
 ```
 
-## 6. Comparar os artefatos offline
+## 6. Comparar os artefatos offline no host
 
-A identidade muda entre os dois planos; as capacidades e contagens devem permanecer estáveis.
+A comparação deve ser executada no host, dentro de `backend`, onde os dois arquivos existem. A identidade muda entre os planos, mas o comparador funcional ignora `run_id`, branch e commit SHA.
 
 ```powershell
-docker compose run --rm backend `
+Push-Location backend
+try {
   python -m app.cli.compare_asset_bootstrap_reports `
     artifacts/asset-bootstrap/plan-1.json `
     artifacts/asset-bootstrap/plan-2.json
+}
+finally {
+  Pop-Location
+}
 ```
 
-O comparador pode retornar divergência por causa de `run_id`. A revisão deve confirmar que não houve alteração em estados, capacidades ou contagens.
+Resultado esperado:
+
+```json
+{
+  "diff": {
+    "equivalent": true,
+    "changed_fields": [],
+    "changed_capabilities": []
+  },
+  "offline": true,
+  "read_only": true,
+  "schema_version": "asset-bootstrap-report-diff.v1"
+}
+```
 
 ## Critérios de aprovação
 
@@ -91,8 +111,8 @@ O comparador pode retornar divergência por causa de `run_id`. A revisão deve c
 - lint local ou CI aprovado;
 - `git diff --check` aprovado;
 - os cinco estágios aparecem como `planned` na CLI;
-- nenhum provider, banco, seed, migration ou rebuild é chamado;
-- diferenças entre planos limitam-se à identidade auditável quando os inputs funcionais são iguais.
+- comparação retorna `equivalent: true`;
+- nenhum provider, banco, seed, migration ou rebuild é chamado.
 
 ## Proibições durante este roteiro
 
