@@ -3,7 +3,6 @@ from app.models.asset_alias import AssetAlias
 from app.models.asset_dividend import AssetDividend
 from app.models.asset_price import AssetPrice
 from app.models.audit_log import AuditAction, AuditLog
-from app.models.config import AppConfig
 from app.models.corporate_event import CorporateEvent
 from app.models.fixed_income import FixedIncomeInvestment
 from app.models.fx_rate import FxRate
@@ -20,7 +19,6 @@ from app.models.transaction import Transaction
 from app.models.user import User
 
 __all__ = [
-    "AppConfig",
     "Asset",
     "AssetAlias",
     "AssetDividend",
