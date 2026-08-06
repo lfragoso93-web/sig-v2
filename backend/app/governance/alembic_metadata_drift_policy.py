@@ -54,6 +54,10 @@ LEGACY_CONTRACT_DECISION_RULES = (
 
 FX_CONSUMER_RULES = (
     "fx_rates_is_persisted_contract_not_disposable_orphan",
+    "fx_rate_model_must_remain_registered_in_base_metadata",
+    "fx_rate_pair_date_uniqueness_is_canonical",
+    "fx_rate_ascending_and_descending_indexes_are_canonical",
+    "do_not_create_duplicate_fx_model_or_migration_for_historical_diff",
     "usd_brl_reads_must_be_db_first",
     "routers_must_not_call_fx_provider_directly",
     "missing_persisted_fx_rate_must_be_explicit",
