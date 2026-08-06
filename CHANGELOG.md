@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — serviço de configurações migrado para `SystemConfig` (06/08/2026)
+
+- `config_service.py` deixou de importar o modelo removido `AppConfig` e passou a operar exclusivamente sobre `SystemConfig`/`system_configs`.
+- Preservados os fluxos de leitura, booleanos, upsert individual, listagem pública e atualização em lote usados pelo painel administrativo.
+- Adicionado gate que proíbe novos consumidores de `app.models.config` e de `AppConfig` no serviço de configurações.
+- Nenhuma migration, tabela ou dado foi alterado; a correção elimina uma falha de import que impedia o backend de iniciar.
+
 ### Corrigido — startup usa somente Alembic como autoridade de schema (06/08/2026)
 
 - Removido do `entrypoint.sh` o bootstrap paralelo que executava `table.create(checkfirst=True)` para tabelas opcionais do ORM.
