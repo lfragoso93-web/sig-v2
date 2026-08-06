@@ -7,7 +7,6 @@ from app.models.corporate_event import CorporateEvent
 from app.models.fixed_income import FixedIncomeInvestment
 from app.models.fx_rate import FxRate
 from app.models.goal import Goal
-from app.models.irpf import IRPFReport
 from app.models.portfolio import Portfolio
 from app.models.portfolio_class_snapshot import PortfolioClassSnapshot
 from app.models.portfolio_class_target import PortfolioClassTarget
@@ -29,7 +28,6 @@ __all__ = [
     "FixedIncomeInvestment",
     "FxRate",
     "Goal",
-    "IRPFReport",
     "Portfolio",
     "PortfolioClassSnapshot",
     "PortfolioClassTarget",
