@@ -10,8 +10,10 @@ from app.governance.alembic_metadata_drift_policy import (
     LEGACY_SCHEMA_OBJECTS_REQUIRING_DECISION,
 )
 
-_MODELS_INIT = Path(__file__).resolve().parents[1] / "app" / "models" / "__init__.py"
-_ENV = Path(__file__).resolve().parents[1] / "alembic" / "env.py"
+_BACKEND_ROOT = Path(__file__).resolve().parents[1]
+_MODELS_INIT = _BACKEND_ROOT / "app" / "models" / "__init__.py"
+_FX_MODEL = _BACKEND_ROOT / "app" / "models" / "fx_rate.py"
+_ENV = _BACKEND_ROOT / "alembic" / "env.py"
 
 
 def test_alembic_uses_the_explicit_models_aggregator() -> None:
@@ -27,6 +29,14 @@ def test_current_persisted_schema_objects_are_registered_in_metadata() -> None:
     assert CURRENT_PERSISTED_SCHEMA_OBJECTS == ("fx_rates",)
     assert "from app.models.fx_rate import FxRate" in source
     assert '"FxRate"' in source
+
+
+def test_fx_rate_model_preserves_persisted_index_contract() -> None:
+    source = _FX_MODEL.read_text(encoding="utf-8")
+
+    assert 'Index("ix_fx_rates_pair_date", "pair", "rate_date")' in source
+    assert 'Index("idx_fx_pair_date_desc", "pair", desc("rate_date"))' in source
+    assert 'UniqueConstraint("pair", "rate_date", name="uq_fx_rates_pair_date")' in source
 
 
 def test_legacy_schema_objects_are_not_silently_reintroduced_as_current_models() -> None:
