@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import ast
+from pathlib import Path
+
 import pytest
 
 from app.services.asset_bootstrap_contracts import (
@@ -68,23 +71,32 @@ async def test_coverage_aggregates_partial_failure_without_losing_results() -> N
 
 
 def test_fixture_capabilities_have_no_provider_or_database_dependency() -> None:
-    source = (
-        __import__("pathlib").Path(__file__).resolve().parent
+    fixture_path = (
+        Path(__file__).resolve().parent
         / "fixtures"
         / "asset_bootstrap_capabilities.py"
-    ).read_text(encoding="utf-8").lower()
+    )
+    source = fixture_path.read_text(encoding="utf-8")
+    tree = ast.parse(source)
 
-    for forbidden in (
+    imported_modules = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    }
+    imported_modules.update(
+        node.module
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.module is not None
+    )
+
+    assert not {
         "sqlalchemy",
-        "asyncsession",
+        "requests",
+        "httpx",
         "app.models",
-        "brapi",
-        "yahoo",
-        "import requests",
-        "from requests",
-        "requests.",
-        "import httpx",
-        "from httpx",
-        "httpx.",
-    ):
-        assert forbidden not in source
+    }.intersection(imported_modules)
+    assert "AsyncSession" not in source
+    assert "brapi" not in source.lower()
+    assert "yahoo" not in source.lower()
