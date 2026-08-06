@@ -1,6 +1,6 @@
 # Roadmap modular — SGI v2
 
-> Última atualização: 05/08/2026
+> Última atualização: 06/08/2026
 
 ## Direção atual
 
@@ -13,24 +13,27 @@ O SGI v2 está em consolidação arquitetural antes de receber carteiras e usuá
 | Core backend e autenticação | Estável | 100% |
 | Carteiras e transações | Estável | 100% |
 | Dados canônicos e DB-first | Consolidado | 100% |
-| Histórico B3 / Tesouro / benchmarks / câmbio | Consolidado | 100% |
+| Histórico B3 / Tesouro / benchmarks / câmbio | Consolidado; consumidor atual de USD/BRL ainda não DB-first | 95% |
 | Proventos canônicos | Implementação concluída; execução real pendente | 95% |
 | Snapshots e valuation por classe | Consolidado | 100% |
 | Resumo e Patrimônio | Consolidado | 100% |
-| Rentabilidade | Consolidação canônica concluída | 100% |
-| IRPF | Implementação funcional canônica concluída; validação real pendente | 98% |
-| Metas | Estável e vinculada à carteira | 100% |
+| Rentabilidade | Consolidação canônica promovida à `main` | 100% |
+| IRPF | Implementação canônica promovida; validação real pendente | 98% |
+| Metas | Contrato `goals` estável; schema legado `goal_allocations` sob decisão | 98% |
 | Rotas de carteira | Consolidadas | 100% |
 | UTC e warnings | Concluído pela #192 | 100% |
 | Pré-produção e rebuild | Suspenso pelo gate #227 | 85% |
-| Eventos corporativos | Bootstrap canônico estruturado; certificação pendente | 88% |
+| Eventos corporativos | Bootstrap canônico validado parcialmente; consumidores e convergência de schema pendentes | 90% |
+| Convergência Alembic/ORM | Inventário e gates concluídos; correções por domínio pendentes | 25% |
 | IBOV persistido | Planejado | 20% |
 | TWR dedicado Tesouro/Renda Fixa | Planejado | 20% |
 
 ## Qualidade validada
 
-- Backend: `1246 passed`, `22 skipped` na suíte completa mais recente, executada duas vezes após a remoção física do serviço legado de Rentabilidade.
-- `compileall`, Flake8 e build Docker do backend: aprovados.
+- Backend IRPF: `1265 passed`, `22 skipped` na suíte completa promovida pela PR #237.
+- Backend Rentabilidade: `1246 passed`, `22 skipped` em duas execuções completas promovidas pela PR #240.
+- Gates Alembic/ORM: 16 testes focados aprovados no HEAD `bcf2fe66deace7210caccb845d44921f47ff4fa5`.
+- `compileall`, Flake8, Ruff e build Docker: aprovados nos macroblocos promovidos.
 - Frontend: 26 arquivos de teste, 93 testes, typecheck, lint e build aprovados.
 
 ## Consolidado
@@ -39,14 +42,10 @@ O SGI v2 está em consolidação arquitetural antes de receber carteiras e usuá
 
 - Contratos `summary.v2` e `rentabilidade.v2` permanecem as fontes públicas canônicas.
 - Projeções compartilhadas calculam posição, custo e resultado realizado.
-- A fachada `rentabilidade_service.py` foi removida; nenhum consumidor de produção ou teste pode reintroduzir esse módulo sem falhar no gate arquitetural.
-- A invalidação das chaves `rent:*` está isolada em `rentabilidade_cache_service.py` e é consumida pelos fluxos de transação, importação CSV e reconstrução de snapshots.
-- O IRPF usa contratos públicos versionados para apuração anual, Bens e Direitos, Rendimentos e Ganhos de Capital.
-- Day Trade, Swing Trade, isenção mensal, compensação de prejuízos, IRRF e DARF mínima estão integrados ao motor canônico.
-- PDF e CSV são gerados diretamente por `IrpfCanonicalExport`, sem leitura do relatório persistido legado.
-- A `IRPFPage.tsx` usa somente hooks canônicos; `IRPFReportOut` permanece apenas na fachada Python histórica e no endpoint completo de compatibilidade externa.
+- A fachada `rentabilidade_service.py` foi removida e promovida à `main` pela PR #240.
+- A invalidação das chaves `rent:*` está isolada em `rentabilidade_cache_service.py`.
+- O IRPF canônico foi promovido à `main` pela PR #237.
 - Proventos pertencem ao ativo e são persistidos em `asset_dividends`; direitos de carteira são derivados sob demanda.
-- O contrato operacional vigente de seed de Proventos é `pre-prod-dividends-seed.v2`, com escrita exclusiva em `asset_dividends` e sem materialização por carteira.
 - Serviços operacionais usam UTC aware; defaults ORM `timezone=False` usam UTC naive explícito.
 
 ### Bootstrap canônico de ativos
@@ -55,9 +54,17 @@ O SGI v2 está em consolidação arquitetural antes de receber carteiras e usuá
 - Dependências, duplicidades, ordem inválida e ciclos são validados antes da execução.
 - Cada etapa expõe estado `planned`, `executed`, `blocked` ou `failed`.
 - Planejamento e execução aceitam identidade auditável por `run_id`, branch e commit SHA.
-- A CLI `plan_asset_bootstrap` produz envelope versionado read-only, sem importar fixtures de teste, providers, ORM ou sessões de banco.
-- Comparadores offline detectam alterações entre planos de backfill e relatórios do bootstrap.
-- Nenhuma capacidade produtiva de provider ou persistência real foi conectada enquanto a Issue #227 permanecer bloqueante.
+- A CLI `plan_asset_bootstrap` produz envelope versionado read-only.
+- Comparadores offline detectam alterações entre planos e relatórios.
+- PostgreSQL vazio alcança o head `20260731_corp_event_catalog` e a reexecução de `upgrade head` é idempotente.
+- `alembic check` permanece bloqueado pela deriva global rastreada na #241.
+
+### Câmbio e metas
+
+- A série de câmbio persistida e o seed PTAX estão consolidados.
+- O endpoint `/usd-brl` ainda consulta BRAPI durante request e usa fallback fixo; a migração para leitura DB-first é prioridade imediata.
+- O fluxo atual de metas usa somente `goals` por carteira e KPIs canônicos.
+- `goal_allocations` não possui consumidor runtime comprovado e permanece preservado até fixture sintética e decisão explícita.
 
 ### Navegação por carteira
 
@@ -78,39 +85,42 @@ Rotas canônicas:
 
 ### 1. Promoção estrutural
 
-- [x] Backend verde e sem regressões conhecidas.
+- [x] Backend verde e sem regressões conhecidas nos macroblocos promovidos.
 - [x] Frontend verde e com build aprovado.
-- [x] IRPF e Metas sob `/carteira`.
-- [x] README, ROADMAP, CHANGELOG e documentação técnica sincronizados para o IRPF canônico.
-- [ ] Abrir e validar a PR `stable-15jun` → `main`.
+- [x] IRPF promovido pela PR #237.
+- [x] Rentabilidade promovida pela PR #240.
+- [x] `main` reintegrada à `stable-15jun` sem divergência após as promoções.
+- [ ] Promover o próximo macrobloco somente após fechar o gate Alembic/ORM e certificar eventos corporativos.
 
 ### 2. IRPF
 
-- [x] Caracterizar Day Trade e Swing Trade.
-- [x] Caracterizar isenção mensal e prejuízos acumulados.
-- [x] Caracterizar segregação mensal, retenções e DARF mínima.
-- [x] Integrar reconstrução contábil com leitores/projeções canônicos.
-- [x] Publicar contratos versionados e migrar frontend/exportações.
+- [x] Motor canônico e contratos versionados.
+- [x] Frontend e exportações migrados.
+- [x] Promoção para `main` concluída.
 - [ ] Validar PDF, CSV e apuração com carteira real representativa quando houver dados homologados.
 - [ ] Avaliar remoção física do endpoint completo legado após auditoria externa de consumidores.
 
 ### 3. Rentabilidade
 
-- [x] Migrar consumidores restantes de posição/custo/PnL.
-- [x] Isolar invalidação de cache em serviço canônico.
-- [x] Remover a fachada e caches legados sem uso.
-- [x] Manter regressões arquiteturais contra cálculos paralelos e reintrodução do módulo.
+- [x] Consumidores migrados.
+- [x] Invalidação de cache isolada.
+- [x] Fachada legada removida.
+- [x] Promoção para `main` concluída.
 
-### 4. Eventos corporativos
+### 4. Eventos corporativos e Alembic
 
-- [x] Inventariar e classificar o legado em fluxos read-only.
+- [x] Inventariar e classificar legado em fluxos read-only.
 - [x] Estruturar bootstrap canônico por capacidades neutras.
 - [x] Adicionar planejamento, cobertura, dependências e identidade auditável.
-- [ ] Executar suíte focada e corrigir regressões locais.
-- [ ] Certificar migrations e idempotência sintética.
+- [x] Validar `upgrade head`, `current` e reexecução idempotente em PostgreSQL vazio.
+- [x] Criar Issue #241, inventários e gates contra autogenerate monolítico.
+- [x] Classificar `app_config`, `irpf_reports`, `fx_rates`, `goal_allocations` e tabelas fiscais legadas.
+- [ ] Migrar `/usd-brl` para leitor persistido DB-first.
+- [ ] Tratar modelos sem migration e tabelas migradas fora do ORM por domínio.
 - [ ] Consolidar consumidores restantes do motor canônico (#129).
-- [ ] Evoluir adapters sem expor payloads de fornecedor ao domínio (#130).
+- [ ] Evoluir adapters sem expor payloads de fornecedor (#130).
 - [ ] Consolidar registry por capacidade (#127).
+- [ ] Obter `alembic check` limpo após convergência controlada.
 
 ### 5. Performance e benchmarks
 
@@ -129,9 +139,10 @@ Somente após os gates anteriores:
 
 ## Próximas prioridades
 
-1. Executar a suíte focada do bootstrap canônico e corrigir regressões.
-2. Certificar eventos corporativos, migrations e idempotência sintética.
-3. Sincronizar documentação final e abrir a PR estrutural `stable-15jun` → `main`.
-4. Implementar IBOV persistido e TWR dedicado.
-5. Retomar pré-produção somente após a certificação da #227.
-6. Validar o IRPF em carteira real quando houver dados representativos.
+1. Migrar o endpoint `/usd-brl` para leitura persistida DB-first e remover fallback fixo.
+2. Continuar a convergência Alembic/ORM por contratos isolados na #241.
+3. Consolidar consumidores e campos legados de eventos corporativos na #129.
+4. Sincronizar documentação final e abrir a próxima PR estrutural `stable-15jun` → `main`.
+5. Implementar IBOV persistido e TWR dedicado.
+6. Retomar pré-produção somente após a certificação da #227.
+7. Validar o IRPF em carteira real quando houver dados representativos.
