@@ -12,7 +12,7 @@ O SGI v2 está em **consolidação arquitetural antes da primeira carga real de 
 
 - Backend: `1265 passed`, `22 skipped` na suíte completa mais recente do macrobloco IRPF.
 - Rentabilidade: `1246 passed`, `22 skipped` em duas execuções completas após remoção do serviço legado.
-- Gates Alembic/ORM: 16 testes focados aprovados no HEAD `bcf2fe66deace7210caccb845d44921f47ff4fa5`.
+- Gates Alembic/ORM e inventários: 20 testes focados aprovados no HEAD `19ffa5f2d915c7abba38cb5c719a52b72d1dece1`.
 - Ruff, Flake8 e `compileall`: aprovados nos macroblocos promovidos.
 - Frontend: 26 arquivos de teste e 93 testes aprovados.
 - Typecheck, ESLint e build de produção: aprovados.
@@ -22,6 +22,7 @@ O SGI v2 está em **consolidação arquitetural antes da primeira carga real de 
 - Arquitetura DB-first e contratos `summary.v2` e `rentabilidade.v2`.
 - Valuation canônico por classe, snapshots patrimoniais e reconciliação financeira.
 - Histórico B3/COTAHIST, Tesouro oficial, benchmarks e câmbio persistidos.
+- Leitura pública USD/BRL servida exclusivamente pelo contrato persistido `fx_rates`, sem provider direto ou fallback fixo em runtime.
 - Proventos globais em `asset_dividends`, com direitos de carteira calculados sob demanda.
 - Motor canônico de eventos corporativos e projeção histórica de posição, custo e resultado realizado.
 - IRPF anual canônico com Day Trade, Swing Trade, isenção mensal, prejuízos, IRRF e DARF mínima.
@@ -69,12 +70,12 @@ Princípios: DB-first, fonte oficial primeiro, idempotência, ausência não con
 - O boot não executa sincronização de mercado por padrão.
 - Rebuilds e seeds externos devem permanecer explicitamente opt-in.
 - `alembic upgrade head` e reexecução idempotente foram aprovados em PostgreSQL vazio; `alembic check` permanece bloqueado pela deriva histórica rastreada na #241.
-- O endpoint `/usd-brl` ainda consulta BRAPI diretamente e usa fallback fixo; esse consumidor deve ser migrado para leitura persistida DB-first antes de considerar `fx_rates` legado removível.
+- O endpoint `/usd-brl` lê a última cotação persistida de `fx_rates` e retorna indisponibilidade explícita quando não existe cobertura.
 
 ## Próximas prioridades
 
-1. Reduzir a deriva Alembic/ORM por domínio, sem autogenerate monolítico (#241).
-2. Migrar o consumidor `/usd-brl` para câmbio persistido DB-first e eliminar fallback financeiro fixo.
+1. Tratar `fx_rates` no MetaData/Alembic em bloco isolado, preservando o contrato persistido e o leitor DB-first (#241).
+2. Reduzir a deriva Alembic/ORM por domínio, sem autogenerate monolítico (#241).
 3. Concluir a certificação e os consumidores remanescentes de eventos corporativos (#129).
 4. Evoluir aliases, cobertura e adapters por capacidade (#130 e #127).
 5. Implementar IBOV persistido e TWR dedicado (#150 e #149).
