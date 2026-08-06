@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Adicionado — fixture sintética transacional para contratos legados (06/08/2026)
+
+- Adicionada fixture PostgreSQL nativa para `irpf_records`, `irpf_losses` e `goal_allocations`, incluindo seus pais `users`, `portfolios` e `goals`.
+- A fixture usa `ON_ERROR_STOP`, valida exatamente uma linha por contrato e termina obrigatoriamente em `ROLLBACK`.
+- Adicionados gates que proíbem `COMMIT`, `DROP TABLE` e `TRUNCATE`, além de proteger o uso de variáveis `psql` e as três asserções de cardinalidade.
+- Nenhuma migration, DDL persistente, tabela ou dado real foi alterado.
+
 ### Protegido — fronteira do schema mensal legado de IRPF (06/08/2026)
 
 - `irpf_records` e `irpf_losses` foram classificados como contratos migrados legados, preservados até evidência de dados e decisão destrutiva explícita.
