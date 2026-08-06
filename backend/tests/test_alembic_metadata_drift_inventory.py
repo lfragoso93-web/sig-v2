@@ -17,7 +17,6 @@ def test_policy_blocks_monolithic_autogenerate() -> None:
 
 def test_policy_tracks_high_risk_schema_objects() -> None:
     assert HIGH_RISK_SCHEMA_OBJECTS == (
-        "irpf_reports",
         "fx_rates",
         "irpf_records",
         "irpf_losses",
