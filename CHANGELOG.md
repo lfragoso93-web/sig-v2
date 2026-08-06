@@ -5,6 +5,14 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — schema mensal legado vazio de IRPF (06/08/2026)
+
+- Adicionadas migrations separadas para `irpf_losses` e `irpf_records`, ambas sem consumidores runtime e vazias na evidência PostgreSQL local.
+- Cada upgrade retorna quando a tabela já não existe e bloqueia a contração caso encontre qualquer linha.
+- Cada downgrade restaura o contrato original, FK para `users.id` com `ON DELETE CASCADE`, defaults e índices históricos.
+- O enum compartilhado `irpfmarket` é preservado e não é removido por nenhuma das duas migrations.
+- A contração foi coordenada pela Issue #242, separada dos contratos financeiros compartilhados da #241.
+
 ### Removido — contrato legado vazio `goal_allocations` (06/08/2026)
 
 - Adicionada migration isolada para remover `goal_allocations`, tabela sem consumidor runtime e vazia na evidência local.
