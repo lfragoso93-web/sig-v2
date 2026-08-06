@@ -10,7 +10,6 @@ if TYPE_CHECKING:
     from app.models.corporate_event import CorporateEvent
     from app.models.fixed_income import FixedIncomeInvestment
     from app.models.goal import Goal
-    from app.models.irpf import IRPFReport
     from app.models.portfolio_class_snapshot import PortfolioClassSnapshot
     from app.models.portfolio_class_target import PortfolioClassTarget
     from app.models.portfolio_position import PortfolioPosition
@@ -52,9 +51,6 @@ class Portfolio(Base, TimestampMixin):
         "PortfolioClassSnapshot",
         back_populates="portfolio",
         cascade="all, delete-orphan",
-    )
-    irpf_reports: Mapped[list["IRPFReport"]] = relationship(
-        "IRPFReport", back_populates="portfolio", cascade="all, delete-orphan"
     )
     corporate_events: Mapped[list["CorporateEvent"]] = relationship(
         "CorporateEvent", back_populates="portfolio", cascade="all, delete-orphan"
