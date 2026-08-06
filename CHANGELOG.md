@@ -5,6 +5,14 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Protegido — fronteira do schema mensal legado de IRPF (06/08/2026)
+
+- `irpf_records` e `irpf_losses` foram classificados como contratos migrados legados, preservados até evidência de dados e decisão destrutiva explícita.
+- Adicionado gate que confirma sua presença na migration inicial e impede consumidores runtime em `app/models`, `app/routers` e `app/services`.
+- Proibida a reintrodução de modelos ORM mensais apenas para silenciar o `alembic check`.
+- Contagem de linhas, inventário de FKs e fixture sintética passam a ser pré-requisitos para eventual remoção.
+- Nenhuma migration, DDL, tabela ou dado foi alterado.
+
 ### Corrigido — contrato `fx_rates` consolidado no MetaData (06/08/2026)
 
 - O inventário de deriva deixou de classificar `fx_rates` como schema ausente do MetaData: `FxRate` já está registrado no agregador `app.models` e participa de `Base.metadata`.
