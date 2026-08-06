@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 HIGH_RISK_SCHEMA_OBJECTS = (
-    "irpf_reports",
     "fx_rates",
     "irpf_records",
     "irpf_losses",
@@ -40,7 +39,8 @@ CONFIG_CONSOLIDATION_RULES = (
 )
 
 IRPF_CONSOLIDATION_RULES = (
-    "irpf_reports_is_not_an_automatic_replacement_for_monthly_tables",
+    "irpf_reports_model_must_not_exist",
+    "irpf_reports_table_must_not_be_created",
     "coordinate_irpf_schema_decisions_with_issue_56",
     "preserve_monthly_loss_and_market_granularity_until_migrated",
 )
