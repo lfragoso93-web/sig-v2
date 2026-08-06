@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — contrato `fx_rates` consolidado no MetaData (06/08/2026)
+
+- O inventário de deriva deixou de classificar `fx_rates` como schema ausente do MetaData: `FxRate` já está registrado no agregador `app.models` e participa de `Base.metadata`.
+- Congelados como canônicos `UNIQUE (pair, rate_date)`, o índice ascendente `ix_fx_rates_pair_date` e o índice descendente `idx_fx_pair_date_desc`.
+- Adicionados gates contra duplicação de modelo ou migration motivada apenas por diff histórico.
+- Nenhuma migration, DDL, tabela ou dado foi alterado.
+
 ### Corrigido — geração legada de IRPF integralmente read-only (06/08/2026)
 
 - `irpf_report_service.py` deixou de importar o modelo removido `IRPFReport` e de consultar, inserir, atualizar ou executar `commit` sobre `irpf_reports`.
@@ -45,3 +52,7 @@ Formato baseado em Keep a Changelog.
 - Nenhuma migration, DDL, tabela ou dado foi alterado neste bloco.
 
 ### Removido — modelo duplicado `AppConfig` (06/08/2026)
+
+- `AppConfig` e `app_config` foram classificados como duplicação histórica de `SystemConfig`/`system_configs`.
+- O modelo duplicado foi removido do agregador `app.models` e do código-fonte.
+- Nenhuma migration, tabela ou dado foi alterado neste bloco.
