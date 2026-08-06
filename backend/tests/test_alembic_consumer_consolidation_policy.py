@@ -9,10 +9,12 @@ from app.governance.alembic_metadata_drift_policy import (
     IRPF_CONSOLIDATION_RULES,
 )
 
-_MODELS = Path(__file__).resolve().parents[1] / "app" / "models"
+_BACKEND_ROOT = Path(__file__).resolve().parents[1]
+_MODELS = _BACKEND_ROOT / "app" / "models"
 _MODELS_INIT = _MODELS / "__init__.py"
 _APP_CONFIG_MODEL = _MODELS / "config.py"
 _SYSTEM_CONFIG_MODEL = _MODELS / "system_config.py"
+_CONFIG_SERVICE = _BACKEND_ROOT / "app" / "services" / "config_service.py"
 _IRPF_REPORT_MODEL = _MODELS / "irpf.py"
 _PORTFOLIO_MODEL = _MODELS / "portfolio.py"
 
@@ -26,6 +28,7 @@ def test_system_config_is_the_only_current_config_model() -> None:
 
     models_source = _MODELS_INIT.read_text(encoding="utf-8")
     system_config_source = _SYSTEM_CONFIG_MODEL.read_text(encoding="utf-8")
+    service_source = _CONFIG_SERVICE.read_text(encoding="utf-8")
 
     assert not _APP_CONFIG_MODEL.exists()
     assert "from app.models.config import AppConfig" not in models_source
@@ -33,6 +36,9 @@ def test_system_config_is_the_only_current_config_model() -> None:
     assert "from app.models.system_config import SystemConfig" in models_source
     assert '"SystemConfig"' in models_source
     assert '__tablename__ = "system_configs"' in system_config_source
+    assert "from app.models.system_config import SystemConfig" in service_source
+    assert "app.models.config" not in service_source
+    assert "AppConfig" not in service_source
 
 
 def test_irpf_report_model_is_removed_without_dropping_monthly_contracts() -> None:
