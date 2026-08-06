@@ -21,7 +21,7 @@ def validate_asset_bootstrap_configuration(
         DEFAULT_ASSET_BOOTSTRAP_DEPENDENCY_POLICY
     ),
 ) -> None:
-    """Rejeita duplicidade, dependência posterior e ciclos antes da execução."""
+    """Rejeita duplicidade, ciclos e dependência posterior antes da execução."""
 
     names = [capability.name for capability in capabilities]
     duplicates = sorted(
@@ -31,17 +31,6 @@ def validate_asset_bootstrap_configuration(
         raise ValueError(
             "duplicate capabilities: " + ",".join(duplicates)
         )
-
-    positions = {name: index for index, name in enumerate(names)}
-    for name in names:
-        for dependency in dependency_policy.required_for(name):
-            if dependency not in positions:
-                continue
-            if positions[dependency] >= positions[name]:
-                raise ValueError(
-                    f"invalid capability order: {dependency.value} must precede "
-                    f"{name.value}"
-                )
 
     visiting: set[AssetBootstrapCapabilityName] = set()
     visited: set[AssetBootstrapCapabilityName] = set()
@@ -59,3 +48,14 @@ def validate_asset_bootstrap_configuration(
 
     for name in AssetBootstrapCapabilityName:
         visit(name)
+
+    positions = {name: index for index, name in enumerate(names)}
+    for name in names:
+        for dependency in dependency_policy.required_for(name):
+            if dependency not in positions:
+                continue
+            if positions[dependency] >= positions[name]:
+                raise ValueError(
+                    f"invalid capability order: {dependency.value} must precede "
+                    f"{name.value}"
+                )
