@@ -4,14 +4,16 @@ Plataforma pessoal para acompanhamento, consolidação e análise de investiment
 
 A branch de desenvolvimento é `stable-15jun`. A promoção para `main` ocorre exclusivamente por Pull Request após validação integral e sincronização da documentação viva.
 
-## Status atual — 04/08/2026
+## Status atual — 06/08/2026
 
 O SGI v2 está em **consolidação arquitetural antes da primeira carga real de carteiras e usuários**. O gate vigente é a Issue #227: seeds, sincronizações externas, importação real e rebuild operacional permanecem opt-in e suspensos até a certificação do núcleo financeiro.
 
 ### Qualidade validada
 
-- Backend: `1265 passed`, `22 skipped` na suíte completa mais recente.
-- Ruff e `compileall`: aprovados nos gates do módulo IRPF.
+- Backend: `1265 passed`, `22 skipped` na suíte completa mais recente do macrobloco IRPF.
+- Rentabilidade: `1246 passed`, `22 skipped` em duas execuções completas após remoção do serviço legado.
+- Gates Alembic/ORM: 16 testes focados aprovados no HEAD `bcf2fe66deace7210caccb845d44921f47ff4fa5`.
+- Ruff, Flake8 e `compileall`: aprovados nos macroblocos promovidos.
 - Frontend: 26 arquivos de teste e 93 testes aprovados.
 - Typecheck, ESLint e build de produção: aprovados.
 
@@ -27,11 +29,13 @@ O SGI v2 está em **consolidação arquitetural antes da primeira carga real de 
 - IRPF frontend integralmente canônico, sem carregamento de `IRPFReportOut`.
 - Exportações PDF e CSV compostas diretamente por `IrpfCanonicalExport`.
 - Endpoint completo legado do IRPF preservado apenas para compatibilidade externa, sem uso pela interface ou exportações.
+- Fachada legada de Rentabilidade removida e invalidação `rent:*` isolada em serviço canônico.
 - Backup/restore e defaults ORM modernizados para UTC sem warnings de `datetime.utcnow()`.
 - IRPF e Metas sob o contexto canônico da carteira:
   - `/carteira/irpf`;
   - `/carteira/metas`.
 - Rotas antigas `/irpf` e `/metas` mantidas temporariamente apenas como redirects.
+- PRs estruturais #237 e #240 já promovidas e mergeadas na `main`.
 
 ## Arquitetura resumida
 
@@ -64,15 +68,18 @@ Princípios: DB-first, fonte oficial primeiro, idempotência, ausência não con
 - Importação CSV real, posições e snapshots: suspensos até o encerramento da #227.
 - O boot não executa sincronização de mercado por padrão.
 - Rebuilds e seeds externos devem permanecer explicitamente opt-in.
+- `alembic upgrade head` e reexecução idempotente foram aprovados em PostgreSQL vazio; `alembic check` permanece bloqueado pela deriva histórica rastreada na #241.
+- O endpoint `/usd-brl` ainda consulta BRAPI diretamente e usa fallback fixo; esse consumidor deve ser migrado para leitura persistida DB-first antes de considerar `fx_rates` legado removível.
 
 ## Próximas prioridades
 
-1. Promover o módulo IRPF canônico e o macrobloco estrutural para a `main` por PR.
-2. Concluir consumidores remanescentes e remover a fachada legada de Rentabilidade (#151).
-3. Consolidar eventos corporativos e adapters por capacidade (#129, #130 e #127).
-4. Implementar IBOV persistido e TWR dedicado (#150 e #149).
-5. Retomar seeds, importação e rebuild somente após os gates arquiteturais (#158, #216, #226 e #227).
-6. Validar o IRPF em carteira real com operações representativas quando houver dados homologados.
+1. Reduzir a deriva Alembic/ORM por domínio, sem autogenerate monolítico (#241).
+2. Migrar o consumidor `/usd-brl` para câmbio persistido DB-first e eliminar fallback financeiro fixo.
+3. Concluir a certificação e os consumidores remanescentes de eventos corporativos (#129).
+4. Evoluir aliases, cobertura e adapters por capacidade (#130 e #127).
+5. Implementar IBOV persistido e TWR dedicado (#150 e #149).
+6. Retomar seeds, importação e rebuild somente após os gates arquiteturais (#158, #216, #226 e #227).
+7. Validar o IRPF em carteira real com operações representativas quando houver dados homologados.
 
 ## Comandos principais
 
@@ -110,4 +117,6 @@ npm run build
 - `docs/IRPF_CANONICAL_FRONTEND_INTEGRATION.md` — contratos e fronteiras atuais do frontend e das exportações.
 - `docs/portfolio-route-hierarchy.md` — hierarquia das rotas vinculadas à carteira.
 - `docs/DIVIDENDS_CANONICAL_ARCHITECTURE.md` — arquitetura canônica de Proventos.
+- `docs/ALEMBIC_METADATA_DRIFT_INVENTORY_2026-08.md` — matriz de deriva Alembic/ORM.
+- `docs/FX_AND_GOAL_CONSUMER_INVENTORY_2026-08.md` — inventário de consumidores de câmbio e metas.
 - `docs/PRE_PROD_REBUILD_RUNBOOK.md` — gates operacionais de pré-produção.
