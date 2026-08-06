@@ -10,17 +10,27 @@ from app.governance.alembic_metadata_drift_policy import (
 )
 
 _MODELS = Path(__file__).resolve().parents[1] / "app" / "models"
+_MODELS_INIT = _MODELS / "__init__.py"
+_APP_CONFIG_MODEL = _MODELS / "config.py"
+_SYSTEM_CONFIG_MODEL = _MODELS / "system_config.py"
 
 
-def test_config_duplicate_requires_consumer_evidence_before_migration() -> None:
+def test_system_config_is_the_only_current_config_model() -> None:
     assert "system_configs_is_current_migrated_contract" in CONFIG_CONSOLIDATION_RULES
-    assert (
-        "app_config_requires_exclusive_consumer_evidence_before_migration"
-        in CONFIG_CONSOLIDATION_RULES
-    )
+    assert "app_config_model_must_not_exist" in CONFIG_CONSOLIDATION_RULES
     assert "prefer_consumer_migration_over_duplicate_table_creation" in (
         CONFIG_CONSOLIDATION_RULES
     )
+
+    models_source = _MODELS_INIT.read_text(encoding="utf-8")
+    system_config_source = _SYSTEM_CONFIG_MODEL.read_text(encoding="utf-8")
+
+    assert not _APP_CONFIG_MODEL.exists()
+    assert "from app.models.config import AppConfig" not in models_source
+    assert '"AppConfig"' not in models_source
+    assert "from app.models.system_config import SystemConfig" in models_source
+    assert '"SystemConfig"' in models_source
+    assert '__tablename__ = "system_configs"' in system_config_source
 
 
 def test_irpf_annual_report_cannot_replace_monthly_contracts_implicitly() -> None:
