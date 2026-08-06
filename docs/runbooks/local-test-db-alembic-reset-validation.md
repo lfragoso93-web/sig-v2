@@ -48,15 +48,17 @@ Aguarde até `db` e `redis` aparecerem como `Healthy`.
 
 ## 4. Primeira execução Alembic
 
+A imagem do backend instala o executável de console `alembic`. O pacote não oferece `python -m alembic`.
+
 ```powershell
 docker compose run --rm backend `
-  python -m alembic upgrade head
+  alembic upgrade head
 
 docker compose run --rm backend `
-  python -m alembic current
+  alembic current
 
 docker compose run --rm backend `
-  python -m alembic check
+  alembic check
 ```
 
 ## 5. Confirmar revisão persistida
@@ -71,13 +73,13 @@ docker compose exec db psql -U sgi -d sgi `
 
 ```powershell
 docker compose run --rm backend `
-  python -m alembic upgrade head
+  alembic upgrade head
 
 docker compose run --rm backend `
-  python -m alembic current
+  alembic current
 
 docker compose run --rm backend `
-  python -m alembic check
+  alembic check
 ```
 
 A segunda execução não deve criar novas migrations, alterar a revisão ou falhar.
