@@ -11,6 +11,7 @@ from app.governance.alembic_metadata_drift_policy import (
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[1]
 _FX_ROUTER = _BACKEND_ROOT / "app" / "routers" / "fx.py"
+_FX_READER = _BACKEND_ROOT / "app" / "services" / "fx_rate_reader.py"
 _FX_INTEGRATION = _BACKEND_ROOT / "app" / "integrations" / "fx_rate.py"
 _GOALS_ROUTER = _BACKEND_ROOT / "app" / "routers" / "goals.py"
 _GOALS_SERVICE = _BACKEND_ROOT / "app" / "services" / "goals_service.py"
@@ -24,13 +25,17 @@ def test_fx_policy_requires_db_first_and_forbids_fixed_fallback() -> None:
     assert "fixed_financial_fallback_rates_are_forbidden" in FX_CONSUMER_RULES
 
 
-def test_current_fx_deviation_remains_visible_until_migrated() -> None:
+def test_fx_runtime_is_db_first_without_legacy_provider_module() -> None:
     router_source = _FX_ROUTER.read_text(encoding="utf-8")
-    integration_source = _FX_INTEGRATION.read_text(encoding="utf-8")
+    reader_source = _FX_READER.read_text(encoding="utf-8")
 
-    assert "get_usd_brl" in router_source
-    assert "FALLBACK_RATE" in integration_source
-    assert "BRAPI" in integration_source
+    assert "load_latest_usd_brl_rate" in router_source
+    assert "Depends(get_db)" in router_source
+    assert "persisted_fx_rates" in router_source
+    assert "FALLBACK_RATE" not in router_source
+    assert "httpx" not in router_source
+    assert "select(FxRate)" in reader_source
+    assert not _FX_INTEGRATION.exists()
 
 
 def test_goal_policy_keeps_goals_canonical_and_goal_allocations_protected() -> None:
