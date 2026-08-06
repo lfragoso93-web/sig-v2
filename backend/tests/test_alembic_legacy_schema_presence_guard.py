@@ -26,9 +26,14 @@ def test_alembic_uses_the_explicit_models_aggregator() -> None:
 def test_current_persisted_schema_objects_are_registered_in_metadata() -> None:
     source = _MODELS_INIT.read_text(encoding="utf-8")
 
-    assert CURRENT_PERSISTED_SCHEMA_OBJECTS == ("fx_rates",)
+    assert CURRENT_PERSISTED_SCHEMA_OBJECTS == (
+        "fx_rates",
+        "system_configs",
+    )
     assert "from app.models.fx_rate import FxRate" in source
     assert '"FxRate"' in source
+    assert "from app.models.system_config import SystemConfig" in source
+    assert '"SystemConfig"' in source
 
 
 def test_fx_rate_model_preserves_persisted_index_contract() -> None:
