@@ -5,6 +5,14 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — startup usa somente Alembic como autoridade de schema (06/08/2026)
+
+- Removido do `entrypoint.sh` o bootstrap paralelo que executava `table.create(checkfirst=True)` para tabelas opcionais do ORM.
+- Eliminado o import obsoleto de `app.models.irpf`, que mantinha o backend em ciclo de restart após a remoção do modelo órfão `IRPFReport`.
+- `CorporateEvent` e `Goal` continuam disponíveis exclusivamente pelas migrations existentes; o entrypoint não cria mais tabelas fora da cadeia Alembic.
+- Adicionado gate arquitetural que proíbe `table.create`, `OPTIONAL_TABLES`, `checkfirst=True` e imports do modelo IRPF removido no startup.
+- Nenhuma migration, tabela ou dado foi alterado neste bloco.
+
 ### Removido — modelo órfão `IRPFReport` (06/08/2026)
 
 - Inventariados `IRPFReport`, `irpf_reports`, `irpf_records` e `irpf_losses` em coordenação com as Issues #56 e #241.
