@@ -17,6 +17,7 @@ _SYSTEM_CONFIG_MODEL = _MODELS / "system_config.py"
 _CONFIG_SERVICE = _BACKEND_ROOT / "app" / "services" / "config_service.py"
 _IRPF_REPORT_MODEL = _MODELS / "irpf.py"
 _PORTFOLIO_MODEL = _MODELS / "portfolio.py"
+_IRPF_ROUTER = _BACKEND_ROOT / "app" / "routers" / "irpf.py"
 
 
 def test_system_config_is_the_only_current_config_model() -> None:
@@ -51,12 +52,17 @@ def test_irpf_report_model_is_removed_without_dropping_monthly_contracts() -> No
 
     models_source = _MODELS_INIT.read_text(encoding="utf-8")
     portfolio_source = _PORTFOLIO_MODEL.read_text(encoding="utf-8")
+    router_source = _IRPF_ROUTER.read_text(encoding="utf-8")
 
     assert not _IRPF_REPORT_MODEL.exists()
     assert "from app.models.irpf import IRPFReport" not in models_source
     assert '"IRPFReport"' not in models_source
     assert "IRPFReport" not in portfolio_source
     assert "irpf_reports" not in portfolio_source
+    assert "app.models.irpf" not in router_source
+    assert "IRPFReport" not in router_source
+    assert "generate_irpf_report" in router_source
+    assert "nao existe cache persistido" in router_source
 
 
 def test_portfolio_type_checking_uses_the_real_goal_module() -> None:
