@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — contrato legado vazio `goal_allocations` (06/08/2026)
+
+- Adicionada migration isolada para remover `goal_allocations`, tabela sem consumidor runtime e vazia na evidência local.
+- O upgrade é bloqueado quando existir qualquer linha, impedindo descarte silencioso de dados.
+- O downgrade restaura tabela, FK `goal_allocations_goal_id_fkey` com `ON DELETE CASCADE` e índice `ix_goal_allocations_id`.
+- `irpf_records` e `irpf_losses` permanecem fora desta contração e continuam preservadas.
+
 ### Adicionado — fixture sintética transacional para contratos legados (06/08/2026)
 
 - Adicionada fixture PostgreSQL nativa para `irpf_records`, `irpf_losses` e `goal_allocations`, incluindo seus pais `users`, `portfolios` e `goals`.
