@@ -11,14 +11,27 @@ from app.services.asset_bootstrap_report_diff_service import (
 )
 
 
+def _load_report(path: Path) -> dict[str, object]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("report payload must be an object")
+
+    nested_report = payload.get("report")
+    if nested_report is None:
+        return payload
+    if not isinstance(nested_report, dict):
+        raise ValueError("report envelope entry must be an object")
+    return nested_report
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("before", type=Path)
     parser.add_argument("after", type=Path)
     args = parser.parse_args()
 
-    before = json.loads(args.before.read_text(encoding="utf-8"))
-    after = json.loads(args.after.read_text(encoding="utf-8"))
+    before = _load_report(args.before)
+    after = _load_report(args.after)
     diff = compare_asset_bootstrap_reports(before, after)
     print(
         json.dumps(
