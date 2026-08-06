@@ -2,35 +2,17 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-_RUNBOOK = (
-    Path(__file__).resolve().parents[2]
-    / "docs"
-    / "runbooks"
-    / "local-test-db-alembic-reset-validation.md"
-)
+from app.governance.alembic_metadata_drift_policy import LOCAL_TEST_DB_RESET_RULES
 
 
-def test_runbook_requires_explicit_local_test_database_scope() -> None:
-    source = _RUNBOOK.read_text(encoding="utf-8").lower()
-
-    assert "autorização explícita" in source
-    assert "banco local de testes" in source
-    assert "docker compose down -v" in source
-    assert "alembic upgrade head" in source
-    assert "alembic current" in source
-    assert "alembic check" in source
-    assert "python -m alembic" not in source
+def test_policy_requires_explicit_local_test_database_scope() -> None:
+    assert "explicit_authorization_required" in LOCAL_TEST_DB_RESET_RULES
+    assert "local_test_database_only" in LOCAL_TEST_DB_RESET_RULES
+    assert "docker_compose_down_v_allowed_only_for_disposable_local_db" in (
+        LOCAL_TEST_DB_RESET_RULES
+    )
+    assert "use_alembic_console_command" in LOCAL_TEST_DB_RESET_RULES
 
 
-def test_runbook_blocks_operational_data_flows() -> None:
-    source = _RUNBOOK.read_text(encoding="utf-8").lower()
-
-    for required_prohibition in (
-        "seed de ativos",
-        "rebuild de mercado",
-        "importação csv real",
-        "pré-produção ou produção",
-    ):
-        assert required_prohibition in source
+def test_policy_blocks_operational_data_flows() -> None:
+    assert "block_seed_rebuild_real_import_and_production" in LOCAL_TEST_DB_RESET_RULES
