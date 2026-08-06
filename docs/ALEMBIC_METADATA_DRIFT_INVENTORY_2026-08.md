@@ -24,20 +24,20 @@ A cadeia de revisions está funcional. O bloqueio é de convergência global ent
 5. Tratar um domínio ou contrato por commit.
 6. Toda mudança destrutiva exige fixture sintética e validação de dados.
 
-## Matriz inicial
+## Matriz atual
 
-| Domínio | Objeto | Sintoma no `alembic check` | Classificação inicial | Issue |
+| Domínio | Objeto | Sintoma original no `alembic check` | Classificação atual | Issue |
 |---|---|---|---|---|
-| Configuração | `app_config` | tabela e índices seriam adicionados | modelo sem migration confirmada | #241 |
-| IRPF | `irpf_reports` | tabela e índice seriam adicionados | modelo sem migration confirmada | #56 / #241 |
-| Câmbio | `fx_rates` | tabela e índices seriam removidos | schema migrado ausente do MetaData ou serviço legado | #241 |
-| IRPF legado | `irpf_records` | tabela e índices seriam removidos | contrato legado a inventariar | #56 / #241 |
-| IRPF legado | `irpf_losses` | tabela e índice seriam removidos | contrato legado a inventariar | #56 / #241 |
-| Metas | `goal_allocations` | tabela e índice seriam removidos | contrato legado a inventariar | #241 |
+| Configuração | `app_config` | tabela e índices seriam adicionados | modelo duplicado removido; consumidores migrados para `system_configs` | #241 |
+| IRPF | `irpf_reports` | tabela e índice seriam adicionados | modelo órfão removido; fachada histórica read-only em memória | #56 / #241 |
+| Câmbio | `fx_rates` | tabela e índices seriam removidos | contrato persistido atual, registrado no MetaData por `FxRate`; índices e unicidade protegidos por gates | #241 |
+| IRPF legado | `irpf_records` | tabela e índices seriam removidos | contrato legado preservado até inventário de dados e decisão destrutiva explícita | #56 / #241 |
+| IRPF legado | `irpf_losses` | tabela e índice seriam removidos | contrato legado preservado até inventário de dados e decisão destrutiva explícita | #56 / #241 |
+| Metas | `goal_allocations` | tabela e índice seriam removidos | contrato legado sem consumidor runtime comprovado; exige fixture antes de remoção | #241 |
 | Ativos | `assets` | tipos, nulabilidade, índices, constraints, comentários e colunas | contrato divergente compartilhado | #129 / #130 / #241 |
 | Proventos | `asset_dividends` | enum e índices divergentes | contrato divergente compartilhado | #226 / #241 |
 | Eventos corporativos | `corporate_events` | JSONB/JSON, índices e unique constraint divergentes | contrato divergente compartilhado | #129 / #241 |
-| Transações | `transactions` | tipos, nulabilidade, índices e colunas divergentes | alto risco financeiro | #56 / #241 |
+| Transações | `transactions` | tipos, nulabilidade, índices e colunas | alto risco financeiro | #56 / #241 |
 | Metas | `goals` | colunas, tipos, FK, índices e colunas removidas | contrato divergente | #241 |
 | Renda fixa | `fixed_income_investments` | comentários, nulabilidade e índice | contrato divergente | #241 |
 | Posições | `portfolio_positions` | nulabilidade e índices | contrato divergente | #241 |
@@ -46,27 +46,25 @@ A cadeia de revisions está funcional. O bloqueio é de convergência global ent
 | Auditoria | `audit_logs` | índices DESC vs ASC e índices ORM extras | provável diferença de representação e naming | #241 |
 | Portfólios | `portfolios` | nulabilidade de timestamps | contrato divergente | #241 |
 | Usuários | `users` | nulabilidade de timestamps | contrato divergente | #241 |
-| Configuração | `system_configs` | nulabilidade de timestamps | contrato divergente | #241 |
+| Configuração | `system_configs` | nulabilidade de timestamps | contrato atual; consumidores consolidados | #241 |
+
+## Decisão consolidada — `fx_rates`
+
+- `fx_rates` não é tabela órfã nem schema legado descartável.
+- O modelo `app.models.fx_rate.FxRate` está carregado pelo agregador `app.models` e, portanto, participa de `Base.metadata` no Alembic.
+- O contrato preserva `UNIQUE (pair, rate_date)`, o índice ascendente `ix_fx_rates_pair_date` e o índice descendente `idx_fx_pair_date_desc`.
+- Não criar nova migration nem reintroduzir outro modelo apenas para silenciar um diff histórico.
+- Qualquer diferença futura deve ser reproduzida em banco vazio atualizado antes de alterar DDL.
 
 ## Ordem segura de investigação
 
-### Grupo A — carregamento e presença de modelos
+### Grupo A — contratos isolados restantes
 
-- revisar `alembic/env.py`;
-- revisar agregador/importação dos modelos;
-- confirmar se `fx_rates`, `irpf_records`, `irpf_losses` e `goal_allocations` estão ausentes por decisão ou importação incompleta;
-- bloquear remoções automáticas enquanto a decisão não estiver registrada.
+1. inventariar dados e consumidores de `irpf_records` / `irpf_losses`;
+2. inventariar dados e consumidores de `goal_allocations`;
+3. decidir preservação, migração ou contração somente com fixture sintética.
 
-### Grupo B — modelos sem migration
-
-Tratar separadamente:
-
-1. `app_config`;
-2. `irpf_reports`.
-
-Antes de criar migration, verificar uso real, duplicação com `system_configs` e contratos canônicos existentes.
-
-### Grupo C — contratos financeiros e compartilhados
+### Grupo B — contratos financeiros e compartilhados
 
 Tratar somente após inventário de consumidores:
 
@@ -77,7 +75,7 @@ Tratar somente após inventário de consumidores:
 - `portfolio_positions`;
 - `portfolio_snapshots`.
 
-### Grupo D — diferenças potencialmente cosméticas
+### Grupo C — diferenças potencialmente cosméticas
 
 - comentários;
 - nomes equivalentes de constraints;
