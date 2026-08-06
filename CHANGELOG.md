@@ -5,6 +5,14 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — modelo duplicado `AppConfig` (06/08/2026)
+
+- Confirmada ausência de consumidores ativos de `AppConfig` e de `app.models.config`.
+- `SystemConfig` permanece como contrato migrado e canônico para configurações do sistema.
+- `AppConfig` foi removido do agregador `app.models` e o arquivo `backend/app/models/config.py` foi eliminado.
+- Gates arquiteturais agora exigem a inexistência física do modelo duplicado e impedem seu retorno ao `MetaData`.
+- Nenhuma migration, DDL, tabela ou dado foi alterado; o objetivo é eliminar uma operação falsa de criação de `app_config` no `alembic check`.
+
 ### Alterado — consumidor USD/BRL migrado para DB-first (06/08/2026)
 
 - Criado `fx_rate_reader.py` para ler a última cotação persistida por par diretamente de `fx_rates`, preservando `Decimal`, data de referência e ausência explícita.
