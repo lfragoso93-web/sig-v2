@@ -1,10 +1,11 @@
-"""Protege tabelas migradas ausentes do agregador ORM contra remoção automática."""
+"""Protege contratos migrados contra remoção ou classificação ORM incorreta."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 from app.governance.alembic_metadata_drift_policy import (
+    CURRENT_PERSISTED_SCHEMA_OBJECTS,
     DRIFT_POLICY_RULES,
     LEGACY_SCHEMA_OBJECTS_REQUIRING_DECISION,
 )
@@ -20,6 +21,14 @@ def test_alembic_uses_the_explicit_models_aggregator() -> None:
     assert "target_metadata = Base.metadata" in source
 
 
+def test_current_persisted_schema_objects_are_registered_in_metadata() -> None:
+    source = _MODELS_INIT.read_text(encoding="utf-8")
+
+    assert CURRENT_PERSISTED_SCHEMA_OBJECTS == ("fx_rates",)
+    assert "from app.models.fx_rate import FxRate" in source
+    assert '"FxRate"' in source
+
+
 def test_legacy_schema_objects_are_not_silently_reintroduced_as_current_models() -> None:
     source = _MODELS_INIT.read_text(encoding="utf-8").lower()
 
@@ -29,7 +38,6 @@ def test_legacy_schema_objects_are_not_silently_reintroduced_as_current_models()
 
 def test_legacy_schema_objects_require_an_explicit_decision_before_removal() -> None:
     assert LEGACY_SCHEMA_OBJECTS_REQUIRING_DECISION == (
-        "fx_rates",
         "irpf_records",
         "irpf_losses",
         "goal_allocations",
