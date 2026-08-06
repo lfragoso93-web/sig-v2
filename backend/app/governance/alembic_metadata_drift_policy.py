@@ -42,6 +42,13 @@ IRPF_CONSOLIDATION_RULES = (
     "preserve_monthly_loss_and_market_granularity_until_migrated",
 )
 
+LEGACY_CONTRACT_DECISION_RULES = (
+    "fx_rates_preserved_until_fx_consumers_are_inventory_complete",
+    "goal_allocations_preserved_until_goal_consumers_are_inventory_complete",
+    "do_not_reintroduce_orm_models_only_to_silence_alembic_check",
+    "do_not_drop_legacy_tables_without_domain_decision_and_synthetic_fixture",
+)
+
 LOCAL_TEST_DB_RESET_RULES = (
     "explicit_authorization_required",
     "local_test_database_only",
