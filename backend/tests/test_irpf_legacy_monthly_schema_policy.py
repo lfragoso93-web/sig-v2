@@ -14,6 +14,9 @@ _RUNTIME_DIRS = (
     _APP_ROOT / "routers",
     _APP_ROOT / "services",
 )
+_AUDIT_ONLY_SERVICE_PREFIXES = (
+    "pre_prod_inventory",
+)
 _LEGACY_TABLES = ("irpf_records", "irpf_losses")
 
 
@@ -30,6 +33,12 @@ def test_current_runtime_has_no_legacy_monthly_table_consumers() -> None:
 
     for directory in _RUNTIME_DIRS:
         for path in sorted(directory.rglob("*.py")):
+            if any(
+                path.stem.startswith(prefix)
+                for prefix in _AUDIT_ONLY_SERVICE_PREFIXES
+            ):
+                continue
+
             source = path.read_text(encoding="utf-8").lower()
             for table in _LEGACY_TABLES:
                 if table in source:
@@ -38,6 +47,20 @@ def test_current_runtime_has_no_legacy_monthly_table_consumers() -> None:
                     )
 
     assert findings == []
+
+
+def test_pre_prod_inventory_may_reference_legacy_tables_for_audit_only() -> None:
+    inventory_files = sorted(
+        (_APP_ROOT / "services").glob("pre_prod_inventory*.py")
+    )
+    inventory_source = "\n".join(
+        path.read_text(encoding="utf-8").lower()
+        for path in inventory_files
+    )
+
+    assert inventory_files
+    for table in _LEGACY_TABLES:
+        assert table in inventory_source
 
 
 def test_legacy_monthly_irpf_decision_requires_data_evidence() -> None:
