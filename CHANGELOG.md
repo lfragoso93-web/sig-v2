@@ -5,6 +5,14 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — varredura global de consumidores removidos no startup (06/08/2026)
+
+- O router legado de IRPF deixou de importar `IRPFReport` e de consultar o modelo órfão removido.
+- O endpoint `/{portfolio_id}/irpf/{year}` preserva o contrato HTTP e o parâmetro `refresh`, mas sempre projeta o relatório read-only em memória por `generate_irpf_report`.
+- Adicionado gate global que percorre todo `backend/app/**/*.py` contra imports de `app.models.irpf`/`IRPFReport` e `app.models.config`/`AppConfig`.
+- Adicionado teste de importação completa de `app.main`, cobrindo todos os routers e serviços carregados no startup antes da próxima execução Docker.
+- Nenhuma migration, tabela ou dado foi alterado.
+
 ### Corrigido — serviço de configurações migrado para `SystemConfig` (06/08/2026)
 
 - `config_service.py` deixou de importar o modelo removido `AppConfig` e passou a operar exclusivamente sobre `SystemConfig`/`system_configs`.
