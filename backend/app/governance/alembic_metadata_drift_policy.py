@@ -16,10 +16,13 @@ HIGH_RISK_SCHEMA_OBJECTS = (
 )
 
 LEGACY_SCHEMA_OBJECTS_REQUIRING_DECISION = (
-    "fx_rates",
     "irpf_records",
     "irpf_losses",
     "goal_allocations",
+)
+
+CURRENT_PERSISTED_SCHEMA_OBJECTS = (
+    "fx_rates",
 )
 
 DRIFT_POLICY_RULES = (
@@ -43,7 +46,7 @@ IRPF_CONSOLIDATION_RULES = (
 )
 
 LEGACY_CONTRACT_DECISION_RULES = (
-    "fx_rates_preserved_until_fx_consumers_are_inventory_complete",
+    "fx_rates_is_current_persisted_contract",
     "goal_allocations_preserved_until_goal_consumers_are_inventory_complete",
     "do_not_reintroduce_orm_models_only_to_silence_alembic_check",
     "do_not_drop_legacy_tables_without_domain_decision_and_synthetic_fixture",
