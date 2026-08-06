@@ -31,9 +31,9 @@ A cadeia de revisions está funcional. O bloqueio é de convergência global ent
 | Configuração | `app_config` | tabela e índices seriam adicionados | modelo duplicado removido; consumidores migrados para `system_configs` | #241 |
 | IRPF | `irpf_reports` | tabela e índice seriam adicionados | modelo órfão removido; fachada histórica read-only em memória | #56 / #241 |
 | Câmbio | `fx_rates` | tabela e índices seriam removidos | contrato persistido atual, registrado no MetaData por `FxRate`; índices e unicidade protegidos por gates | #241 |
-| IRPF legado | `irpf_records` | tabela e índices seriam removidos | tabela vazia na evidência local; FK para `users`; preservada até fixture sintética e decisão explícita | #56 / #241 |
-| IRPF legado | `irpf_losses` | tabela e índice seriam removidos | tabela vazia na evidência local; FK para `users`; preservada até fixture sintética e decisão explícita | #56 / #241 |
-| Metas | `goal_allocations` | tabela e índice seriam removidos | tabela vazia na evidência local; FK para `goals`; preservada até fixture sintética e decisão explícita | #241 |
+| IRPF legado | `irpf_records` | tabela e índices seriam removidos | tabela vazia na evidência local; FK para `users`; preservada até decisão explícita separada | #56 / #241 |
+| IRPF legado | `irpf_losses` | tabela e índice seriam removidos | tabela vazia na evidência local; FK para `users`; preservada até decisão explícita separada | #56 / #241 |
+| Metas | `goal_allocations` | tabela e índice seriam removidos | contração isolada preparada; upgrade bloqueia tabela não vazia e downgrade restaura contrato original | #241 |
 | Ativos | `assets` | tipos, nulabilidade, índices, constraints, comentários e colunas | contrato divergente compartilhado | #129 / #130 / #241 |
 | Proventos | `asset_dividends` | enum e índices divergentes | contrato divergente compartilhado | #226 / #241 |
 | Eventos corporativos | `corporate_events` | JSONB/JSON, índices e unique constraint divergentes | contrato divergente compartilhado | #129 / #241 |
@@ -63,23 +63,32 @@ A cadeia de revisions está funcional. O bloqueio é de convergência global ent
 - O inventário de pré-produção pode mencionar seus nomes exclusivamente para auditoria física; isso não constitui consumo funcional.
 - Um gate percorre `app/models`, `app/routers` e `app/services`, excluindo apenas módulos `pre_prod_inventory*`, para impedir consumidores runtime reais.
 - Não reintroduzir modelos ORM mensais apenas para fazer o `alembic check` convergir.
-- Nenhuma remoção é autorizada antes de fixture sintética e decisão coordenada nas Issues #56 e #241.
+- Nenhuma remoção é autorizada sem decisão coordenada nas Issues #56 e #241.
+
+## Contração isolada — `goal_allocations`
+
+- A aplicação atual não expõe modelo, router, endpoint ou service para allocations por meta.
+- A evidência local confirmou zero linhas e FK `goal_allocations_goal_id_fkey` para `goals.id`.
+- A fixture PostgreSQL inseriu a cadeia sintética completa, validou a FK e encerrou em `ROLLBACK`, mantendo zero persistência.
+- A migration `20260806_drop_goal_allocations` sucede `20260731_corp_event_catalog`.
+- O upgrade retorna sem alteração quando a tabela já não existe e bloqueia a contração se houver qualquer linha.
+- O downgrade recria colunas, PK, FK com `ON DELETE CASCADE` e índice `ix_goal_allocations_id`.
+- `irpf_records` e `irpf_losses` não participam dessa migration.
 
 ### Evidência local coletada em 06/08/2026
 
 - `irpf_records`: 0 linhas; FK `irpf_records_user_id_fkey` de `user_id` para `users.id`.
 - `irpf_losses`: 0 linhas; FK `irpf_losses_user_id_fkey` de `user_id` para `users.id`.
 - `goal_allocations`: 0 linhas; FK `goal_allocations_goal_id_fkey` de `goal_id` para `goals.id`.
-
-A ausência de linhas reduz o risco de contração, mas não substitui a fixture sintética obrigatória nem autoriza remoção automática.
+- Fixture sintética: 6 inserts aprovados, três cardinalidades iguais a 1, `ROLLBACK` confirmado e contagens finais iguais a zero.
 
 ## Ordem segura de investigação
 
 ### Grupo A — contratos isolados restantes
 
-1. criar fixture sintética para `irpf_records`, `irpf_losses` e `goal_allocations`;
-2. validar preservação/contração em banco descartável;
-3. decidir migration destrutiva somente após evidência reproduzível.
+1. validar upgrade/downgrade de `goal_allocations` em banco descartável;
+2. manter `irpf_records` e `irpf_losses` preservadas até decisão coordenada separada;
+3. somente depois avançar aos contratos compartilhados.
 
 ### Grupo B — contratos financeiros e compartilhados
 
