@@ -110,34 +110,17 @@ VALUES (
     50.000
 );
 
-DO $$
-DECLARE
-    record_count integer;
-    loss_count integer;
-    allocation_count integer;
-BEGIN
-    SELECT COUNT(*) INTO record_count
-    FROM irpf_records
-    WHERE user_id = :fixture_user_id;
+-- Cada SELECT falha por divisão por zero se a fixture não produzir exatamente uma linha.
+SELECT 1 / CASE WHEN COUNT(*) = 1 THEN 1 ELSE 0 END
+FROM irpf_records
+WHERE user_id = :fixture_user_id;
 
-    SELECT COUNT(*) INTO loss_count
-    FROM irpf_losses
-    WHERE user_id = :fixture_user_id;
+SELECT 1 / CASE WHEN COUNT(*) = 1 THEN 1 ELSE 0 END
+FROM irpf_losses
+WHERE user_id = :fixture_user_id;
 
-    SELECT COUNT(*) INTO allocation_count
-    FROM goal_allocations
-    WHERE goal_id = :fixture_goal_id;
-
-    IF record_count <> 1 THEN
-        RAISE EXCEPTION 'fixture irpf_records inválida: %', record_count;
-    END IF;
-    IF loss_count <> 1 THEN
-        RAISE EXCEPTION 'fixture irpf_losses inválida: %', loss_count;
-    END IF;
-    IF allocation_count <> 1 THEN
-        RAISE EXCEPTION 'fixture goal_allocations inválida: %', allocation_count;
-    END IF;
-END
-$$;
+SELECT 1 / CASE WHEN COUNT(*) = 1 THEN 1 ELSE 0 END
+FROM goal_allocations
+WHERE goal_id = :fixture_goal_id;
 
 ROLLBACK;
