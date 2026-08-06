@@ -30,6 +30,18 @@ DRIFT_POLICY_RULES = (
     "keep_issue_129_separate_from_issue_241",
 )
 
+CONFIG_CONSOLIDATION_RULES = (
+    "system_configs_is_current_migrated_contract",
+    "app_config_requires_exclusive_consumer_evidence_before_migration",
+    "prefer_consumer_migration_over_duplicate_table_creation",
+)
+
+IRPF_CONSOLIDATION_RULES = (
+    "irpf_reports_is_not_an_automatic_replacement_for_monthly_tables",
+    "coordinate_irpf_schema_decisions_with_issue_56",
+    "preserve_monthly_loss_and_market_granularity_until_migrated",
+)
+
 LOCAL_TEST_DB_RESET_RULES = (
     "explicit_authorization_required",
     "local_test_database_only",
