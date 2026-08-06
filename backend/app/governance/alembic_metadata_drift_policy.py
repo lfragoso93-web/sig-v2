@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 HIGH_RISK_SCHEMA_OBJECTS = (
-    "app_config",
     "irpf_reports",
     "fx_rates",
     "irpf_records",
@@ -23,6 +22,7 @@ LEGACY_SCHEMA_OBJECTS_REQUIRING_DECISION = (
 
 CURRENT_PERSISTED_SCHEMA_OBJECTS = (
     "fx_rates",
+    "system_configs",
 )
 
 DRIFT_POLICY_RULES = (
@@ -35,7 +35,7 @@ DRIFT_POLICY_RULES = (
 
 CONFIG_CONSOLIDATION_RULES = (
     "system_configs_is_current_migrated_contract",
-    "app_config_requires_exclusive_consumer_evidence_before_migration",
+    "app_config_model_must_not_exist",
     "prefer_consumer_migration_over_duplicate_table_creation",
 )
 
