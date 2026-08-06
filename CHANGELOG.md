@@ -5,6 +5,16 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — consumidor USD/BRL migrado para DB-first (06/08/2026)
+
+- Criado `fx_rate_reader.py` para ler a última cotação persistida por par diretamente de `fx_rates`, preservando `Decimal`, data de referência e ausência explícita.
+- O endpoint `/usd-brl` deixou de chamar provider durante request e agora depende de sessão assíncrona do banco.
+- O campo público `rate` e o identificador `pair=USDBRL` foram preservados; `rate_date` e `source=persisted_fx_rates` foram adicionados para rastreabilidade.
+- Quando não existe cobertura persistida, o endpoint retorna indisponibilidade explícita em vez de inventar uma cotação.
+- A integração legada `app.integrations.fx_rate`, incluindo o fallback fixo `5.40`, foi removida.
+- Gates arquiteturais agora exigem leitura DB-first, inexistência do módulo legado e ausência de `httpx`/fallback no router.
+- Nenhum seed, provider, migration ou dado real foi executado neste bloco.
+
 ### Adicionado — inventário e gates da deriva Alembic/ORM (06/08/2026)
 
 - Criada a Issue #241 para tratar separadamente a deriva global entre o schema produzido pelas migrations e o `MetaData` ORM atual.
@@ -13,13 +23,6 @@ Formato baseado em Keep a Changelog.
 - Gates focados passaram a proteger decisões de configuração, IRPF, câmbio e metas dentro da imagem Docker, sem depender da pasta raiz `docs/`.
 - PostgreSQL vazio alcançou `20260731_corp_event_catalog (head)` e a segunda execução de `alembic upgrade head` foi idempotente.
 - `alembic check` permanece bloqueado por dívida estrutural histórica e será reduzido por domínio, um contrato por commit.
-
-### Identificado — consumidor de câmbio fora da arquitetura DB-first (06/08/2026)
-
-- O endpoint `/usd-brl` ainda chama BRAPI diretamente durante request por meio de `app.integrations.fx_rate.get_usd_brl`.
-- A integração usa fallback financeiro fixo `5.40` quando a consulta falha, contrariando a política de ausência explícita e fonte persistida.
-- `fx_rates` foi reclassificada como contrato persistido necessário, não como tabela órfã descartável.
-- A migração do endpoint para leitura persistida DB-first foi definida como prioridade antes de qualquer decisão de remoção ou reintrodução ORM.
 
 ### Classificado — schema legado de metas (06/08/2026)
 
@@ -36,7 +39,7 @@ Formato baseado em Keep a Changelog.
 
 - README e ROADMAP deixaram de tratar a abertura das PRs estruturais como pendente.
 - Registrado que as PRs #237 e #240 já foram mergeadas na `main`.
-- O próximo gate foi atualizado para convergência Alembic/ORM, migração DB-first de câmbio e certificação dos consumidores de eventos corporativos.
+- O próximo gate foi atualizado para convergência Alembic/ORM e certificação dos consumidores de eventos corporativos.
 
 ### Adicionado — bootstrap canônico auditável de ativos (05/08/2026)
 
@@ -74,4 +77,3 @@ Formato baseado em Keep a Changelog.
   skips documentados, além de Ruff, typecheck, ESLint, build e compileall.
 - README, ROADMAP, documentação técnica e Issue #56 foram sincronizados; a única
   pendência funcional restante é a validação com carteira real representativa.
-
