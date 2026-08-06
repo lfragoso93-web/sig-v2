@@ -13,7 +13,7 @@ No HEAD `1e6276334dc27887bbeae3f0b5b69bbffe06d36c`:
 - a segunda execução de `upgrade head` foi idempotente;
 - `alembic check` detectou deriva ampla entre o schema migrado e o `MetaData` ORM.
 
-A cadeia de revisions está funcional. O bloqueio é de convergência global entre migrations e modelos.
+Após a contração validada de `goal_allocations`, o runtime permaneceu saudável e o novo `alembic check` deixou de propor qualquer operação para essa tabela. O diff remanescente confirmou `irpf_losses` e `irpf_records` como os últimos contratos isolados sem consumidores runtime.
 
 ## Regras de tratamento
 
@@ -31,9 +31,9 @@ A cadeia de revisions está funcional. O bloqueio é de convergência global ent
 | Configuração | `app_config` | tabela e índices seriam adicionados | modelo duplicado removido; consumidores migrados para `system_configs` | #241 |
 | IRPF | `irpf_reports` | tabela e índice seriam adicionados | modelo órfão removido; fachada histórica read-only em memória | #56 / #241 |
 | Câmbio | `fx_rates` | tabela e índices seriam removidos | contrato persistido atual, registrado no MetaData por `FxRate`; índices e unicidade protegidos por gates | #241 |
-| IRPF legado | `irpf_records` | tabela e índices seriam removidos | tabela vazia na evidência local; FK para `users`; preservada até decisão explícita separada | #56 / #241 |
-| IRPF legado | `irpf_losses` | tabela e índice seriam removidos | tabela vazia na evidência local; FK para `users`; preservada até decisão explícita separada | #56 / #241 |
-| Metas | `goal_allocations` | tabela e índice seriam removidos | contração isolada preparada; upgrade bloqueia tabela não vazia e downgrade restaura contrato original | #241 |
+| IRPF legado | `irpf_records` | tabela e índices seriam removidos | contração isolada preparada; upgrade bloqueia dados e downgrade restaura contrato completo | #242 / #241 |
+| IRPF legado | `irpf_losses` | tabela e índice seriam removidos | contração isolada preparada; upgrade bloqueia dados e downgrade restaura contrato completo | #242 / #241 |
+| Metas | `goal_allocations` | tabela e índice seriam removidos | contração aplicada e validada; não aparece mais no diff | #241 |
 | Ativos | `assets` | tipos, nulabilidade, índices, constraints, comentários e colunas | contrato divergente compartilhado | #129 / #130 / #241 |
 | Proventos | `asset_dividends` | enum e índices divergentes | contrato divergente compartilhado | #226 / #241 |
 | Eventos corporativos | `corporate_events` | JSONB/JSON, índices e unique constraint divergentes | contrato divergente compartilhado | #129 / #241 |
@@ -56,39 +56,44 @@ A cadeia de revisions está funcional. O bloqueio é de convergência global ent
 - Não criar nova migration nem reintroduzir outro modelo apenas para silenciar um diff histórico.
 - Qualquer diferença futura deve ser reproduzida em banco vazio atualizado antes de alterar DDL.
 
-## Fronteira protegida — `irpf_records` e `irpf_losses`
+## Contração isolada — schema mensal legado de IRPF
 
-- As duas tabelas foram criadas pela migration inicial e representam uma granularidade mensal histórica por usuário e mercado.
-- O IRPF canônico atual é carteira-scoped, read-only e calculado a partir dos leitores financeiros vigentes; não deve voltar a ler nem escrever essas tabelas.
-- O inventário de pré-produção pode mencionar seus nomes exclusivamente para auditoria física; isso não constitui consumo funcional.
-- Um gate percorre `app/models`, `app/routers` e `app/services`, excluindo apenas módulos `pre_prod_inventory*`, para impedir consumidores runtime reais.
-- Não reintroduzir modelos ORM mensais apenas para fazer o `alembic check` convergir.
-- Nenhuma remoção é autorizada sem decisão coordenada nas Issues #56 e #241.
+- `irpf_records` e `irpf_losses` foram criadas pela migration inicial, não possuem modelos ORM atuais nem consumidores runtime em models, routers ou services.
+- A evidência PostgreSQL local confirmou zero linhas e FKs para `users.id` com `ON DELETE CASCADE`.
+- A fixture sintética transacional validou ambas as tabelas e encerrou em `ROLLBACK`, mantendo zero persistência.
+- A Issue #242 coordena duas migrations separadas e reversíveis:
+  1. `20260806_drop_irpf_losses`, sucessora de `20260806_drop_goal_allocations`;
+  2. `20260806_drop_irpf_records`, sucessora de `20260806_drop_irpf_losses`.
+- Cada upgrade retorna se a tabela já não existir e bloqueia caso encontre qualquer linha.
+- Cada downgrade restaura colunas, defaults, PK, FK e índices históricos.
+- O enum compartilhado `irpfmarket` é preservado e nunca removido por essas contrações.
 
 ## Contração isolada — `goal_allocations`
 
 - A aplicação atual não expõe modelo, router, endpoint ou service para allocations por meta.
 - A evidência local confirmou zero linhas e FK `goal_allocations_goal_id_fkey` para `goals.id`.
 - A fixture PostgreSQL inseriu a cadeia sintética completa, validou a FK e encerrou em `ROLLBACK`, mantendo zero persistência.
-- A migration `20260806_drop_goal_allocations` sucede `20260731_corp_event_catalog`.
-- O upgrade retorna sem alteração quando a tabela já não existe e bloqueia a contração se houver qualquer linha.
-- O downgrade recria colunas, PK, FK com `ON DELETE CASCADE` e índice `ix_goal_allocations_id`.
-- `irpf_records` e `irpf_losses` não participam dessa migration.
+- A migration `20260806_drop_goal_allocations` foi validada com upgrade, downgrade e reaplicação.
+- O downgrade restaurou tabela, zero linhas e FK original; o reupgrade removeu novamente a tabela.
+- O backend iniciou saudável no novo head e `goal_allocations` desapareceu do `alembic check`.
 
 ### Evidência local coletada em 06/08/2026
 
 - `irpf_records`: 0 linhas; FK `irpf_records_user_id_fkey` de `user_id` para `users.id`.
 - `irpf_losses`: 0 linhas; FK `irpf_losses_user_id_fkey` de `user_id` para `users.id`.
-- `goal_allocations`: 0 linhas; FK `goal_allocations_goal_id_fkey` de `goal_id` para `goals.id`.
+- `goal_allocations`: 0 linhas antes da contração; FK `goal_allocations_goal_id_fkey` de `goal_id` para `goals.id`.
 - Fixture sintética: 6 inserts aprovados, três cardinalidades iguais a 1, `ROLLBACK` confirmado e contagens finais iguais a zero.
+- `goal_allocations`: ciclo upgrade/downgrade/reupgrade aprovado; tabela ausente no head final.
+- Runtime: backend saudável, `FailingStreak=0`, PostgreSQL e Redis `ok`.
 
 ## Ordem segura de investigação
 
 ### Grupo A — contratos isolados restantes
 
-1. validar upgrade/downgrade de `goal_allocations` em banco descartável;
-2. manter `irpf_records` e `irpf_losses` preservadas até decisão coordenada separada;
-3. somente depois avançar aos contratos compartilhados.
+1. validar upgrade/downgrade/reupgrade de `irpf_losses`;
+2. validar upgrade/downgrade/reupgrade de `irpf_records`;
+3. confirmar que ambas desaparecem do `alembic check`;
+4. validar runtime saudável no novo head.
 
 ### Grupo B — contratos financeiros e compartilhados
 
