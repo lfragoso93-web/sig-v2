@@ -18,9 +18,10 @@ def test_runbook_requires_explicit_local_test_database_scope() -> None:
     assert "autorização explícita" in source
     assert "banco local de testes" in source
     assert "docker compose down -v" in source
-    assert "python -m alembic upgrade head" in source
-    assert "python -m alembic current" in source
-    assert "python -m alembic check" in source
+    assert "alembic upgrade head" in source
+    assert "alembic current" in source
+    assert "alembic check" in source
+    assert "python -m alembic" not in source
 
 
 def test_runbook_blocks_operational_data_flows() -> None:
