@@ -7,135 +7,115 @@
 - Repositório: `lfragoso93-web/sig-v2`.
 - Branch obrigatória: `stable-15jun`.
 - Nunca desenvolver diretamente na `main`.
-- Antes de qualquer alteração, comparar `stable-15jun` com `main`, revisar Issues abertas, PRs abertas e documentação viva.
 - Dividir macroblocos em commits pequenos e rastreáveis.
 - Ao final de cada bloco informar resumo técnico, impacto arquitetural, testes, SHA completo e próximo bloco.
-- Atualizar a Issue correspondente antes e depois da implementação.
 - README, ROADMAP, CHANGELOG e documentação arquitetural devem refletir o estado real.
+- `goals` permanece fora da estabilização corrente e não deve receber migration apenas para limpar Alembic.
 
-## Decisão vigente
+## Gate e Issues vigentes
 
-O SGI v2 está em **auditoria arquitetural pós-convergência e consolidação do bootstrap inicial**.
-
-A Issue #227 é o gate-mãe antes de dados reais. A Issue #247 executa a auditoria atual e a #248 concentra o bootstrap certificado e a fronteira única de providers.
+- #227 — gate-mãe antes de dados reais.
+- #247 — auditoria pós-convergência.
+- #248 — bootstrap certificado e fronteira única de providers.
+- #249 — readiness explícito do bootstrap.
+- #250 — orquestrador global do bootstrap.
 
 ## Regra canônica de providers
 
 Política detalhada: `docs/PROVIDER_ACCESS_POLICY_2026-08.md`.
 
-Antes de criar/importar carteiras reais, o sistema deve executar um bootstrap idempotente e certificável que carregue no banco todo o conjunto necessário: catálogo, metadados, históricos, Proventos, eventos corporativos, Tesouro, benchmarks, câmbio e séries auxiliares.
-
-Depois que o ambiente estiver pronto:
+Antes da primeira carteira real, o banco deve estar carregado e reconciliado por bootstrap certificado. Depois disso:
 
 - requests funcionais e cálculos financeiros são DB-first;
-- providers externos só podem ser consultados de forma recorrente para **preço intraday** e **preço de fechamento diário**;
-- existe uma única exceção adicional: se uma data necessária não tiver cobertura de preço persistida, um resolvedor dedicado pode consultar a janela mínima daquela data, persistir o preço e então refazer a leitura DB-first;
-- `get_price_at_date()` permanece leitor puro e nunca chama provider;
-- busca de ativos, detalhes, posições, Proventos, IRPF, rentabilidade e relatórios não consultam providers diretamente;
-- CRUD de usuário/transações não dispara seed, onboarding ou backfill externo;
-- nenhum valor externo não persistido pode alimentar diretamente cálculo financeiro.
+- provider recorrente somente para preço intraday e fechamento diário;
+- lacuna comprovada de preço em data específica pode consultar apenas a janela mínima necessária, persistir o resultado e então refazer leitura DB-first;
+- `get_price_at_date()` permanece leitor puro;
+- CRUD de usuário/transações não dispara onboarding, seed ou backfill externo;
+- catálogo, metadados, Proventos, eventos, benchmarks e câmbio não são sincronizados por jobs recorrentes.
 
-A aplicação não está pronta para dados reais apenas porque o FastAPI iniciou; o bootstrap precisa estar concluído e validado.
+## Liveness, bootstrap e readiness
 
-## Regra temporária para Metas
+Esses conceitos são distintos:
 
-A Issue #241 está concluída. `goals` permanece como exceção deliberada da convergência Alembic/ORM. Até #246 + #57:
+1. `/health` indica que o processo e suas dependências básicas estão vivos e também expõe o estado do bootstrap.
+2. `system-bootstrap.v1` pode concluir suas etapas atualmente autorizadas e ficar `bootstrap_complete=true`.
+3. Isso **não** libera dados reais enquanto #248 não incorporar e certificar todos os domínios obrigatórios.
+4. `/ready` retorna sucesso somente quando `ready_for_real_data=true`.
 
-- não criar migration para `goals` apenas para limpar `alembic check`;
-- não alterar tipos, colunas, constraints ou enums sem redesenho funcional prévio;
-- não promover o módulo atual como contrato canônico estabilizado.
+Estados do bootstrap em memória: `not_started`, `running`, `ready`, `failed`.
 
-## Ordem vigente
+O campo `certified_for_real_data` permanece `false` no bootstrap parcial atual. Portanto, um `system-bootstrap.v1` verde não é autorização de go-live.
 
-### AGORA
+## Estado certificado localmente — 07/08/2026
 
-1. #247 — continuar auditoria de routers, serviços, endpoints, aliases e integrações.
-2. #248 — consolidar bootstrap certificado, readiness e fronteira única de providers.
-3. Remover consultas externas recorrentes fora de intraday/fechamento e da exceção pontual por data.
-4. Confirmar pendências reais de #129 e somente itens necessários de #130/#127.
-5. Certificar a auditoria com testes, build/import e documentação sincronizada.
+HEAD certificado pelo usuário: `b04dffc2839a824ecf5a50ce2ac6583c03c230f7`.
 
-### DEPOIS
+Validação Docker:
 
-6. #150 — histórico persistido do IBOV.
-7. #149 — TWR dedicado de Tesouro Direto e Renda Fixa.
-
-### BLOQUEADO ATÉ CERTIFICAÇÃO
-
-8. #226 — duas execuções reais controladas de Proventos.
-9. #216 — gate agregado de seeds/bootstrap.
-10. #158 — CSV, posições, snapshots e reconciliação.
-11. primeira criação/importação de carteira real.
-
-### PRÓXIMA GRANDE FASE FUNCIONAL
-
-12. #246 + #57 — Metas + Análise de Carteira.
-
-## Estado atual — 07/08/2026
-
-### Último checkpoint certificado localmente
-
-HEAD certificado: `371b7e5513e3d0350a0529f57051a17f30f4a237`.
-
-Validação executada em Docker:
-
-- rebuild do backend aprovado;
-- suíte dirigida com `performance`, `positions`, `transactions`, `prices` e import estrutural: **11 passed**;
+- build do backend aprovado;
+- suíte dirigida: **18 passed**;
 - `python -m compileall -q app tests`: aprovado;
 - import integral de `app.main`: aprovado;
-- working tree local limpa.
+- working tree reportada limpa.
 
-### Auditoria Etapa 2
+## Estado implementado após esse checkpoint — pendente de validação local
 
-Já corrigido/publicado:
+### #250 — bootstrap global
 
-- `prices` é leitura DB-first e possui gate contra provider/backfill no request;
-- `transactions` não dispara onboarding, preços, logos, eventos ou backfill de Proventos automaticamente após POST/PATCH;
-- `performance` não expõe mais POST público de rebuild de snapshots;
-- `positions` não aceita mais `refresh=true` e não atualiza cotações durante GET financeiro;
-- gates estruturais protegem essas fronteiras;
-- `rentabilidade` foi classificado como superfície GET/DB-first;
-- `quotes` é placeholder redundante candidato a remoção após prova final de consumidores;
-- a política de providers foi formalizada em documento próprio;
-- o scheduler recorrente foi reduzido a preço intraday, fechamento diário de preços/Tesouro e manutenção local de snapshots;
-- catálogo, benchmarks, Proventos, eventos, logos e metadados não são mais sincronizados por jobs recorrentes;
-- `asset_service` deixou de orientar callers a disparar onboarding automático.
+- `_boot_sequence()` procedural removida do `app.main`;
+- entrada única `run_system_bootstrap()`;
+- contrato `system-bootstrap.v1` com relatório por etapa e fail-fast;
+- etapas atuais: catálogo de ativos, catálogo/reconciliação/histórico do Tesouro, histórico global de preços e benchmarks;
+- Proventos, eventos corporativos e câmbio ainda não foram incorporados por dependerem dos respectivos gates.
 
-### Operação
+### #249 — readiness explícito
 
-- CRUD de transações não inicia ingestão externa automática.
-- GETs financeiros auditados permanecem DB-first.
-- o boot atual ainda não implementa integralmente o novo contrato de bootstrap/readiness; isso está rastreado pela #248;
-- criação/importação de carteiras reais permanece bloqueada até bootstrap certificado;
-- Proventos real (#226), gate de seeds/bootstrap (#216) e rebuild (#158) permanecem bloqueados.
+- serviço `system_readiness_service.py` com estado em memória;
+- separação entre `bootstrap_complete` e `ready_for_real_data`;
+- bootstrap parcial nunca certifica dados reais;
+- `/health` preserva função de liveness e inclui snapshot do bootstrap;
+- `/ready` retorna 503 enquanto a certificação operacional estiver incompleta;
+- testes estruturais protegem a fronteira.
 
-## Próximo bloco objetivo
+## Scheduler
 
-1. Validar localmente o novo gate `test_scheduler_provider_boundary.py` junto aos gates anteriores.
-2. Implementar em #248 a porta única de bootstrap e seu relatório estruturado/readiness, reaproveitando serviços idempotentes existentes.
-3. Implementar resolvedor pontual de lacuna histórica sem alterar a pureza de `get_price_at_date()`.
-4. Revisar `assets` para que catálogo/sugestão sejam DB-first, preservando apenas cotação intraday como acesso externo autorizado.
-5. Fechar a prova de consumidores do router placeholder `quotes`.
-6. Revisar `portfolios`, `admin`, `irpf`, `class_targets`, `dividends` e clients frontend restantes.
-7. Não iniciar #246/#57 nem cargas reais antes da certificação estrutural.
+O scheduler recorrente está limitado a:
+
+- preço intraday;
+- fechamento diário de preços, restrito à data corrente;
+- fechamento diário do Tesouro;
+- manutenção local de snapshots/TWR.
+
+Não agenda catálogo, benchmarks, Proventos, eventos, logos ou backfill histórico amplo.
+
+## Ordem objetiva dos próximos blocos
+
+1. Validar localmente #249/#250 e os gates anteriores.
+2. Após validação, fechar #249 e a primeira etapa de #250.
+3. Implementar resolvedor pontual de lacuna histórica de preço sem alterar `get_price_at_date()`.
+4. Converter `assets`/sugestão de catálogo para DB-first e remover consultas externas indevidas.
+5. Incorporar ao bootstrap os domínios restantes apenas quando seus gates forem autorizados e idempotentes.
+6. Concluir #248 e somente então permitir `ready_for_real_data=true`.
+7. Retomar #226 → #216 → #158 depois da certificação estrutural.
+8. Somente depois iniciar #246 + #57 (Metas + Análise).
 
 ## Prompt mínimo para nova conversa
 
 ```text
-@GitHub Continue o desenvolvimento do SGI v2 seguindo integralmente
-`docs/DEVELOPMENT_CONTINUITY.md`.
+@GitHub Continue o SGI v2 seguindo `docs/DEVELOPMENT_CONTINUITY.md`.
 
-Repositório: lfragoso93-web/sig-v2
-Branch obrigatória: stable-15jun
-Issue executora: #247
-Bootstrap/provider policy: #248
+Repo: lfragoso93-web/sig-v2
+Branch: stable-15jun
 Gate-mãe: #227
+Auditoria: #247
+Bootstrap/providers: #248
+Readiness: #249
+Orquestrador: #250
 
-Regra central:
-- antes de carteiras reais, executar bootstrap completo e persistente;
-- em runtime, provider externo somente para preço intraday e fechamento diário;
-- exceção: lacuna de preço em data específica pode consultar janela mínima, persistir e refazer leitura DB-first;
-- todos os demais módulos devem ser DB-first.
-
-Preserve `goals` como exceção deliberada e não crie migration para esse domínio.
+Preserve a regra:
+- bootstrap completo antes de dados reais;
+- runtime externo apenas intraday/fechamento;
+- exceção somente para lacuna de preço em data específica, com persistência antes do uso;
+- demais módulos DB-first;
+- não tocar em `goals` antes de #246/#57.
 ```
