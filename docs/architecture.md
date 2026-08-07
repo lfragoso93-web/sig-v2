@@ -26,7 +26,7 @@ summary.v2 + rentabilidade.v2 + leitores históricos
 Resumo / Patrimônio / Rentabilidade / Proventos / IRPF
 ```
 
-Metas não integra, neste momento, o conjunto de contratos financeiros estabilizados. O domínio será redesenhado em conjunto com Análise de Carteira (#246 + #57).
+Metas e Análise de Carteira não integram, neste momento, o conjunto de contratos funcionais estabilizados. O redesenho será conduzido em conjunto por #246 + #57 somente após a estabilização definitiva da base.
 
 ## Princípios obrigatórios
 
@@ -41,10 +41,10 @@ Serviços financeiros leem dados persistidos. Chamadas externas não participam 
 ### Alembic como autoridade de schema
 
 - O startup não cria tabelas paralelamente ao Alembic.
-- `Base.metadata` deve refletir os contratos estabilizados produzidos pelas migrations.
+- `Base.metadata` deve refletir contratos estabilizados produzidos pelas migrations.
 - Autogenerate monolítico não é mecanismo de correção arquitetural.
-- Divergências devem ser classificadas e tratadas por domínio, com migrations pequenas, defensivas e reversíveis quando DDL for realmente necessário.
-- Módulos incompletos não devem ter seu schema cristalizado apenas para silenciar `alembic check`.
+- Divergências devem ser classificadas e tratadas por domínio.
+- Módulos incompletos não devem ter schema cristalizado apenas para silenciar `alembic check`.
 
 ### Separação contábil e fiscal
 
@@ -132,7 +132,9 @@ Não existe materialização ativa de direitos por carteira. O MetaData represen
 
 ## Eventos corporativos
 
-O motor canônico trata splits, grupamentos, bonificações e subscrições independentemente do fornecedor. Eventos preservam identidade, quantidade, custo, JSONB e constraints de identidade conforme a migration canônica; adapters apenas normalizam payloads externos.
+O motor canônico trata splits, grupamentos, bonificações e subscrições independentemente do fornecedor. Eventos preservam identidade, quantidade, custo, JSONB e constraints conforme a migration canônica; adapters apenas normalizam payloads externos.
+
+A Issue #129 permanece aberta apenas para confirmar, durante a auditoria #247, se ainda existem consumidores ou compatibilidades residuais que precisem de tratamento explícito.
 
 ## Transações
 
@@ -144,15 +146,15 @@ O motor canônico trata splits, grupamentos, bonificações e subscrições inde
 
 ## Metas e Análise de Carteira
 
-O módulo `goals` é uma exceção arquitetural consciente na convergência Alembic/ORM:
+O módulo `goals` é uma exceção arquitetural consciente:
 
 - a tabela histórica está preservada;
-- o ORM, schemas Pydantic e service atuais não formam um contrato funcional coerente;
+- ORM, schemas Pydantic e service atuais não formam contrato funcional coerente;
 - nenhuma migration deve ser criada apenas para limpar o diff remanescente do `alembic check`;
 - o redesenho será conduzido pela #246 em conjunto com #57;
-- a nova arquitetura deve decidir taxonomia, KPIs calculados versus persistidos, relação com `portfolio_class_targets`, histórico e projeções antes de qualquer DDL definitivo.
+- a nova arquitetura deve decidir taxonomia, KPIs calculados versus persistidos, relação com `portfolio_class_targets`, histórico e projeções antes de DDL definitivo.
 
-A rota `/carteira/metas` pode existir como superfície atual, mas não transforma o domínio subjacente em contrato canônico estabilizado.
+A rota `/carteira/metas` pode existir como superfície atual, mas não transforma o domínio subjacente em contrato canônico estabilizado. O router de Análise atualmente não representa implementação funcional completa e será revisto apenas no macroprojeto #246 + #57.
 
 ## Navegação de carteira
 
@@ -169,7 +171,7 @@ Módulos dependentes da carteira selecionada ficam sob `/carteira`:
 └── configuracoes
 ```
 
-`/metas` e `/irpf` permanecem aliases temporários com redirect `replace` para compatibilidade.
+`/metas` e `/irpf` permanecem aliases temporários com redirect `replace` para compatibilidade e serão classificados por consumidor durante a auditoria #247.
 
 ## Scheduler, seeds e rebuild
 
@@ -183,9 +185,22 @@ Até o encerramento da Issue #227:
 - não retomar a certificação da #158 fora dos gates vigentes;
 - não executar automaticamente migrations físicas de contração.
 
+## Governança arquitetural atual
+
+A ordem canônica é:
+
+1. #247 — reconciliar documentação, Issues e PRs;
+2. #247 — auditar routers, serviços, endpoints, aliases, integrações e legado;
+3. confirmar pendências reais de #129 e itens necessários de #130/#127;
+4. #150 e #149 — performance e benchmarks;
+5. #226/#216/#158 — retomada operacional após certificação;
+6. #246 + #57 — macroprojeto Metas + Análise.
+
+Backlog de produto não bloqueador inclui #58, #83, #90 e #97.
+
 ## Qualidade validada
 
-No checkpoint estrutural de 07/08/2026:
+Baseline estrutural de 07/08/2026 no HEAD `17beeb9e6ae70f51d523e273bebda368872f81de`:
 
 - build Docker aprovado;
 - `compileall` aprovado;
@@ -194,13 +209,15 @@ No checkpoint estrutural de 07/08/2026:
 - consumers legados removidos e protegidos por gates;
 - Alembic/ORM convergidos fora de `goals`.
 
+Commits documentais posteriores não alteraram runtime, schema ou contratos financeiros.
+
 ## Pendências arquiteturais
 
-1. Encerrar formalmente a #241 sem alterar `goals`.
-2. Fazer auditoria global de serviços, routers, endpoints, duplicações e legado restante.
-3. Consolidar consumidores remanescentes de eventos corporativos e adapters (#129, #130 e #127), se a auditoria ainda encontrar pendências.
+1. Concluir a etapa documental/governança da #247.
+2. Executar auditoria global de serviços, routers, endpoints, duplicações e legado remanescente (#247).
+3. Confirmar e resolver somente pendências reais de eventos corporativos/provedores (#129/#130/#127).
 4. Materializar histórico persistido do IBOV (#150).
 5. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
-6. Retomar Proventos, importação e rebuild somente após os gates #158, #216, #226 e #227.
-7. Iniciar o macroprojeto Metas + Análise de Carteira (#246 + #57) apenas após a estabilização definitiva da base.
-8. Evoluir locks em memória para locks distribuídos antes de múltiplas réplicas.
+6. Retomar Proventos, importação e rebuild apenas após os gates #226/#216/#158/#227.
+7. Iniciar #246 + #57 somente depois da estabilização e promoção da base.
+8. Evoluir locks em memória para locks distribuídos antes de múltiplas réplicas, quando esse cenário de deploy existir.
