@@ -16,6 +16,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    desc,
     text,
 )
 from sqlalchemy import (
@@ -59,6 +60,12 @@ class AssetDividend(Base):
             text("COALESCE(payment_date, ex_date)"),
             unique=True,
         ),
+        Index(
+            "idx_ad_asset_exdate_desc",
+            "asset_id",
+            desc("ex_date"),
+        ),
+        Index("ix_asset_dividends_approved_on", "approved_on"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
