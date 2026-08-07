@@ -42,14 +42,14 @@ Após as contrações validadas de `goal_allocations`, `irpf_losses` e `irpf_rec
 | Auditoria | `audit_logs` | índices DESC vs ASC e índices simples extras | MetaData alinhado aos índices físicos DESC; índices simples inexistentes removidos do ORM | #241 |
 | Posições | `portfolio_positions` | `idx_pp_portfolio` seria removido e `ix_portfolio_positions_asset_id` adicionado | MetaData alinhado ao índice físico histórico; índice ORM inexistente de `asset_id` removido | #241 |
 | Alocação | `portfolio_class_targets` | `idx_pct_portfolio` seria removido | MetaData passa a descrever o índice físico criado pela migration de performance | #241 |
+| Taxas | `rate_history` | comentários e troca índice único ↔ unique constraint | MetaData alinhado à migration `014`: índice único físico e comentários canônicos | #241 |
+| Renda fixa | `fixed_income_investments` | comentário, timestamps e índice simples ORM | comentário de `daily_liquidity` alinhado; índice ORM inexistente de `portfolio_id` removido; timestamps ainda pendentes | #241 |
+| Snapshots | `portfolio_snapshots` | comentários, nulabilidade e índices simples | MetaData agora preserva os três índices da migration `005` e o índice DESC; comentários/timestamps ainda pendentes | #241 |
 | Ativos | `assets` | tipos, nulabilidade, índices, constraints, comentários e colunas | contrato divergente compartilhado | #129 / #130 / #241 |
 | Proventos | `asset_dividends` | enum e índices divergentes | contrato divergente compartilhado além do PK já alinhado | #226 / #241 |
 | Eventos corporativos | `corporate_events` | JSONB/JSON, índices e unique constraint divergentes | contrato divergente compartilhado | #129 / #241 |
 | Transações | `transactions` | tipos, nulabilidade, índices e colunas | alto risco financeiro | #56 / #241 |
 | Metas | `goals` | colunas, tipos, FK, índices e colunas removidas | contrato divergente | #241 |
-| Renda fixa | `fixed_income_investments` | comentários, nulabilidade e índice | contrato divergente; ainda exige inventário completo da cadeia de migrations | #241 |
-| Snapshots | `portfolio_snapshots` | comentários, nulabilidade e índices simples | contrato divergente além do PK/índice DESC já alinhados | #241 |
-| Taxas | `rate_history` | comentários, índice/constraint | provável diferença de representação | #241 |
 | Portfólios | `portfolios` | nulabilidade de timestamps | contrato divergente | #241 |
 | Usuários | `users` | nulabilidade de timestamps | contrato divergente | #241 |
 | Configuração | `system_configs` | nulabilidade de timestamps | contrato atual; consumidores consolidados | #241 |
@@ -73,19 +73,20 @@ Após as contrações validadas de `goal_allocations`, `irpf_losses` e `irpf_rec
 - Removidos índices ORM redundantes de PK em `asset_aliases`, `asset_dividends`, `audit_logs` e `portfolio_snapshots`.
 - `asset_prices` passou a representar `idx_ap_asset_ts (asset_id, timestamp DESC)`.
 - `audit_logs` passou a representar os índices compostos com `created_at DESC`, sem pedir índices simples extras de `user_id`/`portfolio_id`.
-- `portfolio_snapshots` passou a representar `idx_ps_portfolio_date_desc` com expressão DESC real.
 - `portfolio_positions` preserva `idx_pp_portfolio` e deixou de pedir índice simples inexistente em `asset_id`.
 - `portfolio_class_targets` preserva `idx_pct_portfolio` criado pela migration `0020`.
+- `rate_history` passou a representar `uq_rate_history_indicator_date` como índice único, exatamente como a migration `014`.
+- `fixed_income_investments` deixou de pedir índice simples inexistente de `portfolio_id` e passou a refletir o comentário da migration `015`.
+- `portfolio_snapshots` passou a representar os três índices de consulta da migration `005` e `idx_ps_portfolio_date_desc` com expressão DESC real.
 - Todos esses ajustes alteram somente MetaData/testes/documentação; nenhum DDL ou dado foi modificado.
 
 ## Ordem segura de investigação
 
 ### Grupo A — diferenças de baixo risco restantes
 
-1. validar no novo `alembic check` que `idx_pp_portfolio`, `ix_portfolio_positions_asset_id` e `idx_pct_portfolio` desapareceram do diff;
-2. inventariar integralmente `fixed_income_investments` antes de decidir sobre seu índice ORM;
-3. tratar `rate_history` como possível diferença de representação índice vs unique constraint;
-4. não combinar tipo, nulabilidade e colunas no mesmo bloco.
+1. validar que `rate_history`, `fixed_income_investments.portfolio_id` e os três índices simples de snapshots desapareceram do diff;
+2. tratar nulabilidade de timestamps apenas após decisão explícita sobre `TimestampMixin` versus schema histórico;
+3. não combinar tipo, nulabilidade e colunas no mesmo bloco.
 
 ### Grupo B — contratos financeiros e compartilhados
 
