@@ -45,6 +45,12 @@ def test_resolver_is_read_first_persist_then_read_again() -> None:
     assert "run_global_asset_price_backfill" not in source
 
 
+def test_international_gap_reuses_existing_yfinance_throttle() -> None:
+    source = RESOLVER_PATH.read_text(encoding="utf-8")
+    assert "_run_yf_with_throttle" in source
+    assert "asyncio.to_thread" not in source
+
+
 def test_pure_price_reader_does_not_import_gap_resolver() -> None:
     source = PRICE_HISTORY_PATH.read_text(encoding="utf-8")
     assert "price_date_gap_resolver_service" not in source
