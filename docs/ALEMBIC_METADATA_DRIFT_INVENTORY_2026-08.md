@@ -24,6 +24,7 @@ Após as contrações validadas de `goal_allocations`, `irpf_losses` e `irpf_rec
 5. Tratar um domínio ou contrato por commit.
 6. Toda mudança destrutiva exige fixture sintética e validação de dados.
 7. Não adaptar o ORM a artefatos físicos órfãos de um banco preservado quando a cadeia Alembic canônica comprova outro contrato.
+8. Módulos funcionalmente incompletos não devem ser cristalizados apenas para silenciar o `alembic check`.
 
 ## Matriz atual
 
@@ -49,8 +50,8 @@ Após as contrações validadas de `goal_allocations`, `irpf_losses` e `irpf_rec
 | Ativos | `assets` | nulabilidade, índices, constraints, comentários, tipo de timestamp e colunas físicas omitidas | colunas, índices, unique, currency, comentários e `created_at TIMESTAMPTZ` alinhados ao schema físico | #129 / #130 / #241 |
 | Proventos | `asset_dividends` | enum e índices divergentes | índices alinhados; `dividend_type` preserva `DividendType` em Python com armazenamento `VARCHAR(20)` não nativo | #226 / #241 |
 | Eventos corporativos | `corporate_events` | JSONB/JSON, índices e unique constraint divergentes | JSONB, quatro índices e `uq_corporate_events_source_identity` alinhados à migration canônica | #129 / #241 |
-| Transações | `transactions` | tipos, nulabilidade, índices e colunas | todos os índices migrados refletidos; tipos financeiros, `fees`, `notes` e timestamps continuam pendentes | #56 / #241 |
-| Metas | `goals` | colunas, tipos, FK, índices e colunas removidas | contrato divergente de alto risco ainda não tratado | #241 |
+| Transações | `transactions` | tipos, nulabilidade, índices e colunas | contrato financeiro alinhado ao schema migrado: `NUMERIC`, `TEXT`, `fees NOT NULL`, índices e timestamps físicos preservados | #56 / #241 |
+| Metas | `goals` | colunas, tipos, FK, índices e colunas removidas | exceção arquitetural consciente: módulo incompleto, sem migration nova; redesenho delegado à #246 em conjunto com Análise de Carteira #57 | #246 / #57 / #241 |
 | Portfólios | `portfolios` | nulabilidade de timestamps | endurecido para `NOT NULL` após evidência de zero `NULL` | #241 |
 | Usuários | `users` | nulabilidade de timestamps | endurecido para `NOT NULL` após evidência de zero `NULL` | #241 |
 | Configuração | `system_configs` | nulabilidade de timestamps | endurecido para `NOT NULL` após evidência de zero `NULL` | #241 |
@@ -80,7 +81,7 @@ Após as contrações validadas de `goal_allocations`, `irpf_losses` e `irpf_rec
 - `fixed_income_investments` deixou de pedir índice simples inexistente de `portfolio_id` e reflete o comentário da migration `015`.
 - `portfolio_snapshots` representa os índices das migrations `005`/`021`; comentários históricos coincidem com `005` e campos TWR adicionados por `20260713` não inventam comentários físicos ausentes.
 - `asset_dividends` representa os índices das migrations `021` e `027` e preserva `VARCHAR(20)` como armazenamento de `dividend_type` sem perder `DividendType` no runtime.
-- `transactions` representa `ix_transactions_portfolio_id`, os índices de `0020` e `idx_txn_portfolio_date_asc` de `021`, sem tocar nos tipos financeiros.
+- `transactions` preserva o schema financeiro migrado: `asset_type VARCHAR(30)`, `quantity/price NUMERIC(18,8)`, `fees NUMERIC(18,2) NOT NULL`, `notes TEXT`, timestamps físicos e todos os índices históricos.
 - `corporate_events` representa JSONB, os quatro índices e a unique constraint definidos pela `20260731_corp_event_catalog`.
 - `assets` reflete colunas e índices já existentes, o nome físico `uq_asset_ticker_type`, `currency NOT NULL` e `created_at` com timezone.
 
@@ -106,21 +107,32 @@ As migrations `20260807_users_portfolios_ts_nn`, `20260807_config_fixed_ts_nn` e
 - foram certificadas por upgrade, downgrade isolado e reaplicação;
 - eliminaram essas divergências do `alembic check`.
 
+## Exceção arquitetural consciente — `goals`
+
+A evidência PostgreSQL local confirmou que `goals` está vazia, mas o módulo ainda não possui contrato funcional consolidado. O schema histórico, ORM, schemas Pydantic e service divergem em taxonomia, campos e semântica. Por decisão arquitetural, nenhuma migration de convergência será publicada neste macrobloco apenas para limpar o diff.
+
+O redesenho foi delegado à Issue #246 e deve ser realizado em conjunto com a Issue #57 (Análise de Carteira). Até lá:
+
+- não promover `goals` como contrato canônico;
+- não gerar migration automática para suas divergências;
+- não usar o diff de `goals` como justificativa para converter tipos ou adicionar/remover colunas;
+- preservar a tabela histórica vazia e o código atual como módulo incompleto, sujeito a redesenho.
+
 ## Ordem segura de investigação
 
-### Grupo A — contratos finais de alto risco
+### Grupo A — certificação do macrobloco sem Metas
 
-1. `transactions`: revisar impacto de `NUMERIC`/`TEXT`/timestamps sobre serviços e DTOs antes de alinhar ORM;
-2. `goals`: reconciliar schema histórico e modelo atual, incluindo colunas novas, enum, FK e `is_active`/timestamps;
-3. executar `alembic check` limpo em banco criado do zero;
-4. suíte completa e certificação final.
+1. certificar que o `alembic check` remanescente contém somente divergências de `goals`;
+2. executar suíte estrutural completa e runtime;
+3. repetir `upgrade head` em banco criado do zero;
+4. registrar `goals` como exceção delegada à #246/#57 antes de concluir a #241.
 
 ## Critérios para fechar #241
 
-- todos os itens classificados;
-- nenhum objeto válido aparece como remoção acidental;
-- migrations e modelos convergem por domínio;
-- `alembic check` limpo em banco criado do zero;
-- reexecução idempotente;
+- todos os itens fora de `goals` classificados e convergidos;
+- nenhum objeto válido aparece como remoção acidental fora da exceção documentada;
+- `alembic check` remanescente limitado exclusivamente a `goals` e rastreado pela #246;
+- reexecução idempotente das migrations canônicas;
 - estrutura legada sintética validada;
+- runtime e suíte estrutural verdes;
 - documentação e Issues sincronizadas.
