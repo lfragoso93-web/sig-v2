@@ -58,7 +58,7 @@ class Asset(Base):
         index=True,
         comment="Timestamp da ultima atualizacao de last_price.",
     )
-    created_at = Column(DateTime, default=utc_now_naive)
+    created_at = Column(DateTime(timezone=True), default=utc_now_naive)
     updated_at = Column(DateTime(timezone=True), nullable=True)
     brapi_ticker = Column(String, nullable=True)
     sector = Column(String, nullable=True)
