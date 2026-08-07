@@ -38,6 +38,9 @@ Após as contrações validadas de `goal_allocations`, `irpf_losses` e `irpf_rec
 | Proventos | `asset_dividends.id` | índice `ix_asset_dividends_id` seria adicionado | `index=True` redundante removido da PK ORM; demais índices e enum preservados | #226 / #241 |
 | Auditoria | `audit_logs.id` | índice `ix_audit_logs_id` seria adicionado | `index=True` redundante removido da PK ORM; índices funcionais preservados | #241 |
 | Snapshots | `portfolio_snapshots.id` | índice `ix_portfolio_snapshots_id` seria adicionado | `index=True` redundante removido da PK ORM; contrato funcional preservado | #241 |
+| Preços | `asset_prices` | índice `idx_ap_asset_ts` seria removido | MetaData alinhado ao índice físico `(asset_id, timestamp DESC)` já criado pela migration `0020` | #241 |
+| Auditoria | `audit_logs` | índices DESC vs ASC e índices ORM extras | MetaData alinhado aos índices físicos DESC; removidas somente declarações ORM dos índices simples ausentes | #241 |
+| Snapshots | `idx_ps_portfolio_date_desc` | expressão DESC seria trocada por ASC | MetaData passou a usar `snapshot_date DESC` explicitamente | #241 |
 | Ativos | `assets` | tipos, nulabilidade, índices, constraints, comentários e colunas | contrato divergente compartilhado | #129 / #130 / #241 |
 | Proventos | `asset_dividends` | enum e índices divergentes | contrato divergente compartilhado além do PK já alinhado | #226 / #241 |
 | Eventos corporativos | `corporate_events` | JSONB/JSON, índices e unique constraint divergentes | contrato divergente compartilhado | #129 / #241 |
@@ -45,9 +48,8 @@ Após as contrações validadas de `goal_allocations`, `irpf_losses` e `irpf_rec
 | Metas | `goals` | colunas, tipos, FK, índices e colunas removidas | contrato divergente | #241 |
 | Renda fixa | `fixed_income_investments` | comentários, nulabilidade e índice | contrato divergente | #241 |
 | Posições | `portfolio_positions` | nulabilidade e índices | contrato divergente | #241 |
-| Snapshots | `portfolio_snapshots` | comentários, nulabilidade e índices | contrato divergente além do PK já alinhado | #241 |
+| Snapshots | `portfolio_snapshots` | comentários, nulabilidade e índices | contrato divergente além dos índices já alinhados | #241 |
 | Taxas | `rate_history` | comentários, índice/constraint | provável diferença de representação | #241 |
-| Auditoria | `audit_logs` | índices DESC vs ASC e índices ORM extras | provável diferença de representação e naming além do PK já alinhado | #241 |
 | Portfólios | `portfolios` | nulabilidade de timestamps | contrato divergente | #241 |
 | Usuários | `users` | nulabilidade de timestamps | contrato divergente | #241 |
 | Configuração | `system_configs` | nulabilidade de timestamps | contrato atual; consumidores consolidados | #241 |
@@ -79,12 +81,13 @@ Após as contrações validadas de `goal_allocations`, `irpf_losses` e `irpf_rec
 - O downgrade restaurou tabela, zero linhas e FK original; o reupgrade removeu novamente a tabela.
 - O backend iniciou saudável no novo head e `goal_allocations` desapareceu do `alembic check`.
 
-## Alinhamento cosmético — índices redundantes em chaves primárias
+## Alinhamento cosmético — índices já existentes no schema
 
-- `asset_aliases.id`, `asset_dividends.id`, `audit_logs.id` e `portfolio_snapshots.id` eram declarados no ORM como PK e também com `index=True`.
-- As migrations canônicas não criam os índices B-tree adicionais sobre esses IDs; o PostgreSQL já cria índice para a própria PK.
-- Foram removidos somente os `index=True` redundantes, sem alterar migrations, FKs, enums, índices funcionais ou regras de negócio.
-- Um gate reutilizável protege `asset_dividends`, `audit_logs` e `portfolio_snapshots`; `asset_aliases` mantém gate dedicado que também preserva seus índices funcionais.
+- `asset_aliases.id`, `asset_dividends.id`, `audit_logs.id` e `portfolio_snapshots.id` eram declarados no ORM como PK e também com `index=True`; os índices B-tree extras foram removidos somente do MetaData.
+- `AssetPrice` passou a declarar `idx_ap_asset_ts (asset_id, timestamp DESC)`, já existente desde a migration `0020`.
+- `AuditLog` passou a representar explicitamente `created_at DESC` nos índices compostos e deixou de pedir `ix_audit_logs_user_id`/`ix_audit_logs_portfolio_id`, inexistentes no schema migrado.
+- `PortfolioSnapshot` passou a representar `idx_ps_portfolio_date_desc` com expressão `snapshot_date DESC` em vez de `postgresql_ops` que o autogenerate interpretava como ASC.
+- Nenhuma migration, FK, enum, tabela ou dado foi alterado; gates dedicados protegem esses alinhamentos.
 
 ### Evidência local coletada em 06/08/2026
 
@@ -99,8 +102,8 @@ Após as contrações validadas de `goal_allocations`, `irpf_losses` e `irpf_rec
 
 ### Grupo A — diferenças cosméticas de baixo risco
 
-1. validar no novo `alembic check` que os quatro índices redundantes de PK desapareceram;
-2. revisar índices simples adicionais apenas quando a migration canônica comprovar ownership;
+1. validar no novo `alembic check` que `idx_ap_asset_ts`, os índices DESC de auditoria e `idx_ps_portfolio_date_desc` deixaram de divergir;
+2. revisar índices simples adicionais apenas quando a migration canônica e os consumidores comprovarem ownership;
 3. alinhar representações comprovadamente equivalentes com gate dedicado;
 4. não alterar tipos, nulabilidade ou colunas no mesmo bloco.
 
@@ -119,7 +122,6 @@ Tratar somente após inventário de consumidores:
 
 - comentários;
 - nomes equivalentes de constraints;
-- ordenação explícita de índices;
 - representação `JSON` vs `JSONB` somente após decisão arquitetural;
 - índices ORM automáticos não funcionais.
 
