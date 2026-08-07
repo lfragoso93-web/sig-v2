@@ -16,9 +16,7 @@ from app.models.transaction import OperationType, Transaction
 from app.models.user import User
 from app.schemas.asset import AssetCreate
 from app.schemas.transaction import PagedTransactions, TransactionCreate, TransactionOut
-from app.services.asset_onboarding_service import run_onboarding
 from app.services.asset_service import get_or_create_asset
-from app.services.dividend_backfill_service import backfill_dividends
 from app.services.portfolio_service import invalidate_portfolio_cache
 from app.services.rentabilidade_cache_service import invalidate_rentabilidade_cache
 from app.services.transaction_service import list_transactions_paginated
@@ -207,7 +205,6 @@ async def _upsert_fixed_income_isolated(
 
             await db.commit()
 
-        # Invalida cache APOS o commit para garantir dados frescos
         await invalidate_rentabilidade_cache(portfolio_id)
         log.info(
             "[upsert_fi] cache de rentabilidade invalidado para portfolio=%s",
@@ -369,7 +366,6 @@ async def create_transaction(
     await db.commit()
     await db.refresh(tx)
 
-    # RF/TD: upsert em sessao isolada + invalida cache (via background_tasks)
     if operation == OperationType.buy:
         if asset_type == "RENDA_FIXA":
             invested = float(payload.quantity) * float(payload.price)
@@ -397,13 +393,8 @@ async def create_transaction(
     asset_data = AssetCreate(ticker=ticker, name=ticker, asset_type=asset_type)
     await get_or_create_asset(db, asset_data)
 
-    background_tasks.add_task(run_onboarding, ticker, str(asset_type))
-    background_tasks.add_task(
-        _run_backfill,
-        portfolio_id=portfolio_id,
-        ticker=ticker,
-        asset_type=str(asset_type),
-    )
+    # O CRUD de transacoes deve permanecer deterministico e local. Ingestao de
+    # mercado (precos, logos, eventos e proventos) pertence a pipelines opt-in.
     background_tasks.add_task(
         _run_snapshot_backfill,
         portfolio_id=portfolio_id,
@@ -489,13 +480,6 @@ async def update_transaction(
                 "TESOURO_DIRETO",
             )
 
-    background_tasks.add_task(run_onboarding, ticker, str(asset_type))
-    background_tasks.add_task(
-        _run_backfill,
-        portfolio_id=portfolio_id,
-        ticker=ticker,
-        asset_type=str(asset_type),
-    )
     background_tasks.add_task(
         _run_snapshot_backfill,
         portfolio_id=portfolio_id,
@@ -549,20 +533,8 @@ async def delete_transaction(
 
 
 # ---------------------------------------------------------------------------
-# Background tasks
+# Background tasks locais
 # ---------------------------------------------------------------------------
-
-
-async def _run_backfill(portfolio_id: int, ticker: str, asset_type: str) -> None:
-    try:
-        async with AsyncSessionLocal() as db:
-            await backfill_dividends(
-                db=db,
-                ticker=ticker,
-                asset_type=asset_type,
-            )
-    except Exception as exc:
-        log.error("[backfill_dividends] erro para %s/%s: %s", ticker, portfolio_id, exc)
 
 
 async def _run_snapshot_backfill(portfolio_id: int, tx_date: DateType) -> None:
