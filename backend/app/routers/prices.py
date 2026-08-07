@@ -19,8 +19,10 @@ async def price_history(
     _current_user: User = Depends(get_current_user),
 ):
     """
-    Retorna historico de precos de fechamento do banco.
-    Se os dados estiverem desatualizados, busca automaticamente antes de retornar.
+    Retorna historico de precos de fechamento exclusivamente do banco.
+
+    O request nao consulta provedores externos nem dispara backfill. Ausencia de
+    cobertura persistida e retornada como serie vazia pelo leitor DB-first.
 
     Exemplo: GET /api/v1/prices/PETR4/history?asset_type=ACAO&days=90
     """
