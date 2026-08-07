@@ -15,9 +15,11 @@
 
 ## Decisão vigente
 
-O SGI v2 está em estabilização arquitetural final antes da próxima grande fase funcional.
+O SGI v2 está em **governança e estabilização arquitetural antes da próxima fase funcional**.
 
-Até o encerramento da Issue #227:
+A Issue #227 é o gate-mãe antes de dados reais. A Issue #247 é a executora do trabalho imediato.
+
+Até o encerramento da #227:
 
 - não importar novas carteiras reais sem autorização explícita;
 - não criar novos usuários reais;
@@ -28,37 +30,56 @@ Até o encerramento da Issue #227:
 
 ## Regra arquitetural temporária para Metas
 
-O domínio `goals` é exceção consciente da convergência Alembic/ORM encerrada pela #241.
+A Issue #241 está concluída. `goals` permanece como exceção deliberada da convergência Alembic/ORM.
 
 Até o início do macroprojeto #246 + #57:
 
 - não criar migration para `goals` apenas para limpar `alembic check`;
-- não alterar tipos, colunas, constraints ou enums de `goals` sem o redesenho funcional prévio;
+- não alterar tipos, colunas, constraints ou enums sem redesenho funcional prévio;
 - não promover o módulo atual como contrato canônico estabilizado;
-- preservar a tabela histórica e tratar o diff remanescente como dívida arquitetural rastreada.
+- tratar Metas e Análise como um único macroprojeto futuro.
 
 ## Ordem vigente
 
-1. Encerrar formalmente a #241 e sincronizar documentação final.
-2. Auditar arquitetura global, serviços, routers, endpoints e legado remanescente.
-3. Preparar e abrir PR estrutural `stable-15jun` → `main`.
-4. Consolidar eventuais pendências restantes de eventos corporativos (#129/#130/#127).
-5. IBOV e TWR — #150 e #149.
-6. Ingestão, seeds e rebuild determinísticos — #158, #216 e #226, respeitando #227.
-7. Somente após estabilização definitiva iniciar Metas + Análise de Carteira (#246 + #57).
+### AGORA
+
+1. #247 — reconciliar documentação viva, Issues e PRs.
+2. #247 — auditar arquitetura global, serviços, routers, endpoints, aliases, integrações e legado.
+3. Confirmar pendências reais de #129 e somente os itens necessários de #130/#127.
+
+### DEPOIS
+
+4. #150 — histórico persistido do IBOV.
+5. #149 — TWR dedicado de Tesouro Direto e Renda Fixa.
+
+### BLOQUEADO ATÉ CERTIFICAÇÃO
+
+6. #226 — duas execuções reais controladas de Proventos.
+7. #216 — gate agregado de seeds.
+8. #158 — CSV, posições, snapshots e reconciliação.
+
+### PRÓXIMA GRANDE FASE FUNCIONAL
+
+9. #246 + #57 — Metas + Análise de Carteira.
+
+Backlog não bloqueador: #58, #83, #90, #97 e evoluções amplas de #127/#130 não exigidas por achados da auditoria.
+
+## PRs Dependabot
+
+As PRs Dependabot abertas são fila técnica separada e não alteram a ordem funcional do projeto. Cada uma exige análise de risco, compatibilidade e CI antes de merge.
 
 ## Checklist de início de conversa
 
 1. Ler esta documentação.
-2. Consultar a Issue #227 e os comentários mais recentes quando o bloco tocar operação real.
-3. Confirmar branch e HEAD remoto de `stable-15jun`.
-4. Comparar `main...stable-15jun` e confirmar ausência de divergência para trás.
+2. Confirmar branch e HEAD remoto de `stable-15jun`.
+3. Comparar `main...stable-15jun` e confirmar ausência de divergência para trás.
+4. Ler #247 e #227.
 5. Consultar Issues relacionadas ao bloco atual.
 6. Consultar todas as PRs abertas, inclusive Dependabot.
 7. Conferir README, ROADMAP, CHANGELOG e `docs/architecture.md`.
 8. Confirmar o último resultado de build, testes, Ruff e `compileall` registrado.
 9. Não repetir perguntas já respondidas no histórico ou nas Issues.
-10. Prosseguir do próximo bloco objetivo registrado neste documento e na Issue ativa.
+10. Prosseguir da ordem canônica acima.
 
 ## Formato de checkpoint
 
@@ -74,11 +95,12 @@ Cada checkpoint deve registrar:
 - recomendação objetiva do próximo bloco;
 - HEAD remoto esperado.
 
-## Estado atual do plano — 07/08/2026
+## Estado atual — 07/08/2026
 
 ### Backend e arquitetura
 
-- HEAD estrutural de referência antes da sincronização documental: `17beeb9e6ae70f51d523e273bebda368872f81de`.
+Baseline estrutural de referência: `17beeb9e6ae70f51d523e273bebda368872f81de`.
+
 - Build Docker: aprovado.
 - `compileall`: aprovado.
 - Suíte estrutural final: 15 testes aprovados.
@@ -88,30 +110,31 @@ Cada checkpoint deve registrar:
 - Proventos, Eventos Corporativos, IRPF e Snapshots consolidados.
 - `fx_rates` participa do MetaData e o leitor USD/BRL é exclusivamente DB-first.
 - Alembic endurecido por gates contra autogenerate monolítico e remoções acidentais.
-- `alembic check` remanescente limitado exclusivamente a `goals`.
-- #246 criada para redesenho de Metas em conjunto com #57.
+- #241 encerrada; diff remanescente limitado a `goals` por decisão arquitetural.
+
+Commits posteriores ao baseline nesta etapa foram apenas de governança/documentação e não alteraram runtime ou schema.
 
 ### Frontend
 
 - IRPF permanece integrado aos contratos canônicos.
-- A rota `/carteira/metas` continua existente como superfície atual, mas o domínio subjacente não é considerado contrato canônico estabilizado.
-- `/irpf` e `/metas` permanecem redirects legados temporários.
-- O redesenho futuro de Metas e Análise deve revisar frontend, contratos e navegação como um único macroprojeto.
+- `/carteira/metas` existe como superfície atual, mas o domínio não é considerado estabilizado.
+- `/irpf` e `/metas` permanecem redirects temporários e serão auditados por consumidor na #247.
+- Análise de Carteira não deve ser tratada como backend funcional concluído; o router atual será revisitado apenas em #246 + #57.
 
 ### Operação
 
 - Boot de sincronização de mercado permanece desabilitado por padrão.
-- Seeds, rebuilds e cargas reais permanecem suspensos pelos gates vigentes da #227.
-- `stable-15jun` está à frente de `main` e sem commits para trás no checkpoint de 07/08/2026.
+- Seeds, rebuilds e cargas reais permanecem suspensos pela #227.
+- Proventos real (#226), gate de seeds (#216) e rebuild (#158) permanecem bloqueados.
 
 ## Próximo bloco objetivo
 
-1. Finalizar sincronização de ROADMAP, README, CHANGELOG, arquitetura e esta continuidade.
-2. Atualizar e encerrar formalmente a #241 com a exceção `goals` registrada.
-3. Executar auditoria arquitetural global de serviços, routers, endpoints, duplicações e legado remanescente.
-4. Corrigir achados em blocos pequenos, mantendo Issues e documentação sincronizadas.
-5. Após a auditoria e certificação, abrir a PR estrutural `stable-15jun` → `main`.
-6. Não iniciar #246/#57 antes dessa estabilização.
+1. Concluir a sincronização documental da Etapa 1 da #247.
+2. Atualizar Issues abertas que ainda contenham estado comprovadamente obsoleto.
+3. Registrar no CHANGELOG a reorganização de governança.
+4. Encerrar a Etapa 1 da #247 quando todos os critérios estiverem atendidos.
+5. Só então iniciar a auditoria técnica da Etapa 2.
+6. Não iniciar #246/#57 nem cargas reais antes dessa estabilização.
 
 ## Prompt mínimo para nova conversa
 
@@ -125,8 +148,8 @@ Branch obrigatória: stable-15jun
 Antes de alterar código:
 - confirme o HEAD remoto;
 - compare stable-15jun com main;
-- leia a Issue do bloco atual e #227 quando houver impacto operacional;
-- revise PRs abertas e documentação viva;
-- preserve `goals` como exceção da #241 e não crie migration para esse domínio;
-- recupere o último checkpoint e prossiga do próximo bloco objetivo.
+- leia #247 e #227;
+- revise todas as PRs abertas e a documentação viva;
+- preserve `goals` como exceção deliberada e não crie migration para esse domínio;
+- prossiga da ordem canônica: governança → auditoria → performance → operação → Metas+Análise.
 ```
