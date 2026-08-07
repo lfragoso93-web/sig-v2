@@ -36,7 +36,7 @@ class FixedIncomeInvestment(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     portfolio_id: Mapped[int] = mapped_column(
-        ForeignKey("portfolios.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("portfolios.id", ondelete="CASCADE"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     institution: Mapped[str] = mapped_column(String(150), nullable=False)
@@ -48,7 +48,12 @@ class FixedIncomeInvestment(Base, TimestampMixin):
 
     # Se daily_liquidity=True o título pode ser resgatado a qualquer dia
     # e date_maturity deve ser None (sem carência/vencimento relevante).
-    daily_liquidity: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    daily_liquidity: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        comment="Se TRUE o título pode ser resgatado a qualquer dia (sem vencimento relevante)",
+    )
     date_maturity: Mapped[date | None] = mapped_column(Date, nullable=True)  # None quando daily_liquidity=True
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
