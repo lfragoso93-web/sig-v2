@@ -1,0 +1,163 @@
+"""Bootstrap global do SGI v2.
+
+Este módulo concentra a sequência de bootstrap inicial do ambiente e produz
+um relatório estruturado por etapa. A inclusão de novas etapas deve acontecer
+somente quando o gate operacional correspondente estiver liberado.
+"""
+from __future__ import annotations
+
+import asyncio
+import logging
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+from typing import Awaitable, Callable
+
+from sqlalchemy import func, select
+
+from app.core.database import AsyncSessionLocal
+from app.models.asset import Asset
+
+logger = logging.getLogger(__name__)
+
+BOOTSTRAP_SCHEMA_VERSION = "system-bootstrap.v1"
+
+
+@dataclass(frozen=True)
+class BootstrapStageResult:
+    name: str
+    ok: bool
+    detail: str
+
+
+@dataclass(frozen=True)
+class SystemBootstrapReport:
+    schema_version: str
+    started_at: str
+    finished_at: str
+    ok: bool
+    stages: tuple[BootstrapStageResult, ...]
+
+    def to_dict(self) -> dict:
+        payload = asdict(self)
+        payload["stages"] = [asdict(stage) for stage in self.stages]
+        return payload
+
+
+async def _run_stage(
+    name: str,
+    operation: Callable[[], Awaitable[str]],
+) -> BootstrapStageResult:
+    try:
+        detail = await operation()
+        logger.info("[Bootstrap] %s concluído: %s", name, detail)
+        return BootstrapStageResult(name=name, ok=True, detail=detail)
+    except Exception as exc:
+        logger.exception("[Bootstrap] %s falhou: %s", name, exc)
+        return BootstrapStageResult(name=name, ok=False, detail=str(exc))
+
+
+async def _bootstrap_asset_catalog() -> str:
+    from app.services.asset_seed_service import run_asset_seed
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(func.count()).select_from(Asset))
+        asset_count = result.scalar_one() or 0
+        if asset_count:
+            return f"assets já populado: {asset_count} registros"
+
+        seed = await run_asset_seed(db, run_backfill=False)
+        return (
+            f"created={seed.created} updated={seed.updated} errors={seed.errors}"
+        )
+
+
+async def _bootstrap_treasury_catalog() -> str:
+    from app.services.treasury_catalog_service import seed_treasury_assets
+
+    async with AsyncSessionLocal() as db:
+        result = await seed_treasury_assets(db)
+    return (
+        f"created={result.created} updated={result.updated} "
+        f"skipped={result.skipped} errors={result.errors}"
+    )
+
+
+async def _bootstrap_treasury_reconciliation() -> str:
+    from app.services.treasury_reconciliation_service import (
+        reconcile_treasury_transactions,
+    )
+
+    async with AsyncSessionLocal() as db:
+        result = await reconcile_treasury_transactions(db)
+    return (
+        f"scanned={result.scanned} updated_transactions={result.updated_transactions} "
+        f"created_assets={result.created_assets} unresolved={result.unresolved} "
+        f"errors={result.errors}"
+    )
+
+
+async def _bootstrap_treasury_history() -> str:
+    from app.services.treasury_price_history_service import (
+        import_missing_treasury_price_history,
+        update_treasury_latest_prices,
+    )
+
+    history = await import_missing_treasury_price_history()
+    async with AsyncSessionLocal() as db:
+        snapshot = await update_treasury_latest_prices(db)
+    return f"history={history} latest_prices={len(snapshot)}"
+
+
+async def _bootstrap_asset_price_history() -> str:
+    from app.services.asset_price_global_backfill_service import (
+        run_global_asset_price_backfill,
+    )
+
+    result = await run_global_asset_price_backfill()
+    return str(result)
+
+
+async def _bootstrap_benchmarks() -> str:
+    from app.services.benchmark_rate_service import import_missing_benchmark_history
+
+    async with AsyncSessionLocal() as db:
+        result = await import_missing_benchmark_history(db)
+    return str(result)
+
+
+async def run_system_bootstrap(*, startup_delay_seconds: float = 0.0) -> SystemBootstrapReport:
+    """Executa as etapas de bootstrap atualmente autorizadas.
+
+    Este contrato ainda não inclui Proventos, eventos corporativos ou câmbio:
+    esses domínios permanecem sob gates próprios e serão incorporados à medida
+    que a #248 liberar cada etapa. Até lá, um relatório verde deste v1 não
+    autoriza dados reais por si só.
+    """
+    if startup_delay_seconds > 0:
+        await asyncio.sleep(startup_delay_seconds)
+
+    started = datetime.now(timezone.utc)
+    operations: tuple[tuple[str, Callable[[], Awaitable[str]]], ...] = (
+        ("asset_catalog", _bootstrap_asset_catalog),
+        ("treasury_catalog", _bootstrap_treasury_catalog),
+        ("treasury_reconciliation", _bootstrap_treasury_reconciliation),
+        ("treasury_history", _bootstrap_treasury_history),
+        ("asset_price_history", _bootstrap_asset_price_history),
+        ("benchmarks", _bootstrap_benchmarks),
+    )
+
+    stages: list[BootstrapStageResult] = []
+    for name, operation in operations:
+        result = await _run_stage(name, operation)
+        stages.append(result)
+        if not result.ok:
+            break
+
+    finished = datetime.now(timezone.utc)
+    return SystemBootstrapReport(
+        schema_version=BOOTSTRAP_SCHEMA_VERSION,
+        started_at=started.isoformat(),
+        finished_at=finished.isoformat(),
+        ok=len(stages) == len(operations) and all(stage.ok for stage in stages),
+        stages=tuple(stages),
+    )
