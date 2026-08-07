@@ -1,5 +1,3 @@
-from decimal import Decimal
-
 from sqlalchemy import (
     Boolean,
     Column,
@@ -37,14 +35,23 @@ class Goal(Base):
     name = Column(String(150), nullable=False)
     description = Column(Text, nullable=True)
 
-    target_value: Decimal = Column(Numeric(18, 2), nullable=False)
-    current_value: Decimal = Column(
-        Numeric(18, 2), nullable=False, default=Decimal("0"), server_default=text("0")
+    # Persistência exata em NUMERIC, mantendo floats no runtime do service atual.
+    target_value: float = Column(Numeric(18, 2, asdecimal=False), nullable=False)
+    current_value: float = Column(
+        Numeric(18, 2, asdecimal=False),
+        nullable=False,
+        default=0.0,
+        server_default=text("0"),
     )
-    base_value: Decimal = Column(
-        Numeric(18, 2), nullable=False, default=Decimal("0"), server_default=text("0")
+    base_value: float = Column(
+        Numeric(18, 2, asdecimal=False),
+        nullable=False,
+        default=0.0,
+        server_default=text("0"),
     )
-    monthly_contribution: Decimal | None = Column(Numeric(18, 2), nullable=True)
+    monthly_contribution: float | None = Column(
+        Numeric(18, 2, asdecimal=False), nullable=True
+    )
 
     target_date = Column(DateTime(timezone=True), nullable=True)
     is_active = Column(Boolean, nullable=False, default=True, server_default=text("true"))
