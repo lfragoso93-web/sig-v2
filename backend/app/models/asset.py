@@ -39,16 +39,25 @@ class Asset(Base):
     __tablename__ = "assets"
 
     __table_args__ = (
-        UniqueConstraint("ticker", "asset_type", name="uq_assets_ticker_asset_type"),
+        UniqueConstraint("ticker", "asset_type", name="uq_asset_ticker_type"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
     ticker = Column(String, nullable=False, index=True)
     name = Column(String, nullable=True)
     asset_type = Column(String, nullable=False)
-    currency = Column(String, default="BRL")
-    last_price = Column(Numeric(18, 8), nullable=True)
-    last_price_updated_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    currency = Column(String, default="BRL", nullable=False)
+    last_price = Column(
+        Numeric(18, 8),
+        nullable=True,
+        comment="Ultimo preco conhecido (cache L1). Nunca usar como fallback de PM.",
+    )
+    last_price_updated_at = Column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+        comment="Timestamp da ultima atualizacao de last_price.",
+    )
     created_at = Column(DateTime, default=utc_now_naive)
     updated_at = Column(DateTime(timezone=True), nullable=True)
     brapi_ticker = Column(String, nullable=True)
