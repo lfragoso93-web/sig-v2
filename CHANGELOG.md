@@ -5,13 +5,15 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
-### Corrigido — alinhamento de índices já existentes entre MetaData e Alembic (06/08/2026)
+### Corrigido — alinhamento de índices Alembic/MetaData (06/08/2026)
 
-- Removidos índices ORM redundantes sobre chaves primárias de `asset_aliases`, `asset_dividends`, `audit_logs` e `portfolio_snapshots`.
-- `AssetPrice` passou a declarar o índice físico existente `idx_ap_asset_ts (asset_id, timestamp DESC)` sem criar DDL novo.
-- `AuditLog` deixou de pedir índices simples inexistentes em `user_id` e `portfolio_id` e passou a representar os índices compostos existentes com `created_at DESC`.
-- `PortfolioSnapshot` passou a representar `idx_ps_portfolio_date_desc` com expressão `snapshot_date DESC`, alinhada ao schema migrado.
-- Adicionados gates de MetaData para impedir regressão desses falsos diffs. Nenhuma migration, tabela ou dado foi alterado.
+- `asset_prices` passou a representar no ORM o índice físico `idx_ap_asset_ts (asset_id, timestamp DESC)`.
+- `audit_logs` deixou de pedir índices simples inexistentes em `user_id`/`portfolio_id` e passou a representar os índices compostos com `created_at DESC`.
+- `portfolio_snapshots` passou a representar corretamente `idx_ps_portfolio_date_desc`.
+- `portfolio_positions` passou a preservar `idx_pp_portfolio` e deixou de pedir índice simples inexistente em `asset_id`.
+- `portfolio_class_targets` passou a representar `idx_pct_portfolio`, criado pela migration de performance.
+- Adicionados gates para impedir regressão desses contratos de índice.
+- Nenhuma migration, DDL ou dado foi alterado nestes alinhamentos.
 
 ### Removido — schema mensal legado vazio de IRPF (06/08/2026)
 
