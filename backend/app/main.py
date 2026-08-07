@@ -75,10 +75,15 @@ async def _run_startup_bootstrap() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from app.services.system_readiness_service import mark_bootstrap_disabled
+
     start_scheduler()
     if settings.ENABLE_BOOT_MARKET_SYNC:
         asyncio.create_task(_run_startup_bootstrap())
     else:
+        mark_bootstrap_disabled(
+            detail="bootstrap automático desabilitado (ENABLE_BOOT_MARKET_SYNC=false)"
+        )
         logger.info(
             "[Bootstrap] bootstrap automático desabilitado "
             "(ENABLE_BOOT_MARKET_SYNC=false)"
@@ -192,6 +197,8 @@ if settings.APP_DEBUG or __import__('os').getenv("ADMIN_SECRET"):
 
 @app.get("/health", tags=["health"])
 async def health():
+    from app.services.system_readiness_service import get_bootstrap_readiness
+
     checks: dict[str, str] = {}
     overall_ok = True
 
@@ -220,6 +227,18 @@ async def health():
         "version": "2.0.0",
         "debug": settings.APP_DEBUG,
         "checks": checks,
+        "bootstrap": get_bootstrap_readiness().to_dict(),
     }
     status_code = 200 if overall_ok else 503
+    return JSONResponse(content=payload, status_code=status_code)
+
+
+@app.get("/ready", tags=["health"])
+async def ready():
+    """Indica se o ambiente está certificado para receber dados reais."""
+    from app.services.system_readiness_service import get_bootstrap_readiness
+
+    readiness = get_bootstrap_readiness()
+    payload = readiness.to_dict()
+    status_code = 200 if readiness.ready_for_real_data else 503
     return JSONResponse(content=payload, status_code=status_code)
