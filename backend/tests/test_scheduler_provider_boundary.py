@@ -40,3 +40,11 @@ def test_scheduler_keeps_price_and_local_snapshot_jobs() -> None:
 
     missing = sorted(token for token in required if token not in source)
     assert missing == []
+
+
+def test_daily_close_does_not_trigger_broad_historical_backfill() -> None:
+    source = _scheduler_source()
+
+    assert "today = date.today()" in source
+    assert "required_to=today" in source
+    assert "history_start=today" in source
