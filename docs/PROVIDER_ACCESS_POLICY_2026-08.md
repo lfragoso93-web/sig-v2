@@ -1,7 +1,8 @@
 # Política de acesso a provedores externos — SGI v2
 
 Issue-mãe: #227  
-Issue executora da auditoria: #247
+Issue executora da auditoria: #247  
+Bootstrap e fronteira operacional: #248
 
 ## Regra canônica
 
@@ -73,7 +74,16 @@ Regras obrigatórias:
 9. manter idempotência e constraint de unicidade;
 10. se o provider não resolver a lacuna, preservar ausência/erro explícito em vez de inventar zero ou preço stale de outra data.
 
-`get_price_at_date()` deve permanecer leitor puro. A exceção será implementada por um resolvedor dedicado de lacuna histórica, separado do leitor canônico.
+`get_price_at_date()` permanece leitor puro e nunca chama provider. A exceção está isolada em `price_date_gap_resolver_service.py`, que:
+
+- só consulta provider depois de uma leitura DB-first retornar `None`;
+- limita a janela a `target_date - 5 dias .. target_date`, igual à tolerância temporal do leitor canônico;
+- não cria ativo ausente;
+- não usa `period=max`, backfill global ou `stale_snapshot`;
+- usa histórico dedicado do Tesouro para `TESOURO_DIRETO`;
+- persiste em `asset_prices` antes de refazer `get_price_at_date()`.
+
+O resolvedor deve ser chamado apenas por fluxos que realmente necessitem resolver uma lacuna histórica; ele não é um substituto global para o leitor DB-first.
 
 ## Scheduler
 
