@@ -20,7 +20,7 @@ MIGRATIONS = (
     ),
     (
         "20260807_positions_snapshots_timestamps_not_null.py",
-        "20260807_positions_snapshots_ts_nn",
+        "20260807_pos_snap_ts_nn",
         "20260807_config_fixed_ts_nn",
         ("portfolio_positions", "portfolio_snapshots"),
     ),
@@ -36,6 +36,7 @@ def test_timestamp_hardening_chain_is_small_and_ordered() -> None:
         source = _source(filename)
         assert f'revision: str = "{revision}"' in source
         assert f'down_revision: str = "{down_revision}"' in source
+        assert len(revision) <= 32
         for table in tables:
             assert f'"{table}"' in source
 
