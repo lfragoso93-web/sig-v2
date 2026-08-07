@@ -29,7 +29,7 @@ class AuditLog(Base, TimestampMixin):
         Index("idx_audit_created_at", "created_at"),
     )
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     action: Mapped[str] = mapped_column(String(20), nullable=False)
     resource_type: Mapped[str] = mapped_column(String(50), nullable=False)
