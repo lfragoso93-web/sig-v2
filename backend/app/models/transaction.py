@@ -1,7 +1,20 @@
 from decimal import Decimal
 from typing import Optional
-from sqlalchemy import Column, Integer, String, Float, Numeric, Date, ForeignKey, Enum as SAEnum
+
+from sqlalchemy import (
+    Column,
+    Date,
+    Enum as SAEnum,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    desc,
+)
 from sqlalchemy.orm import relationship
+
 from app.core.database import Base
 import enum
 
@@ -13,9 +26,21 @@ class OperationType(str, enum.Enum):
 
 class Transaction(Base):
     __tablename__ = "transactions"
+    __table_args__ = (
+        Index("idx_txn_portfolio_date", "portfolio_id", desc("date")),
+        Index("idx_txn_portfolio_operation", "portfolio_id", "operation"),
+        Index("idx_txn_ticker_date", "ticker", desc("date")),
+        Index("idx_txn_asset_type", "asset_type"),
+        Index("idx_txn_portfolio_date_asc", "portfolio_id", "date", "id"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
-    portfolio_id = Column(Integer, ForeignKey("portfolios.id", ondelete="CASCADE"), nullable=False)
+    portfolio_id = Column(
+        Integer,
+        ForeignKey("portfolios.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     ticker = Column(String(100), nullable=False, index=True)
     asset_type = Column(String(50), nullable=False)
     operation: Column = Column(
