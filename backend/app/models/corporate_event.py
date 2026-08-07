@@ -7,11 +7,13 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     JSON,
     Numeric,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 
@@ -34,6 +36,27 @@ class CorporateEventStatus(str, enum.Enum):
 
 class CorporateEvent(Base):
     __tablename__ = "corporate_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "source_provider",
+            "source_event_id",
+            name="uq_corporate_events_source_identity",
+        ),
+        Index(
+            "ix_corporate_events_economic_identity",
+            "economic_identity_hash",
+        ),
+        Index(
+            "ix_corporate_events_reconciliation_group",
+            "reconciliation_group_hash",
+        ),
+        Index(
+            "ix_corporate_events_asset_effective",
+            "asset_id",
+            "effective_date",
+        ),
+        Index("ix_corporate_events_event_type", "event_type"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     asset_id = Column(Integer, ForeignKey("assets.id"), nullable=False, index=True)
