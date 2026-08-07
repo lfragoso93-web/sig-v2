@@ -5,6 +5,16 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — convergência adicional Alembic/MetaData (07/08/2026)
+
+- `portfolio_snapshots` passou a refletir exatamente os comentários físicos da migration `005`; os campos TWR adicionados por `20260713` continuam documentados no código sem inventar comentários de coluna ausentes no banco.
+- `asset_dividends` passou a representar `idx_ad_asset_exdate_desc` e `ix_asset_dividends_approved_on`, já existentes pelas migrations `021` e `027`.
+- `transactions` passou a representar `ix_transactions_portfolio_id`, os quatro índices da migration `0020` e `idx_txn_portfolio_date_asc` da migration `021`, sem alterar tipos financeiros.
+- `corporate_events` passou a representar os quatro índices, `uq_corporate_events_source_identity` e `raw_metadata` como JSONB conforme `20260731_corp_event_catalog`.
+- `assets` voltou a refletir `updated_at`, `isin_code`, os índices físicos de ISIN/cache/provider, `currency NOT NULL`, os comentários do cache L1 e o nome canônico `uq_asset_ticker_type`.
+- Adicionados gates de regressão específicos para snapshots, Proventos, transações, eventos corporativos e ativos.
+- Adicionada migration defensiva `20260807_drop_dup_rate_idx` para remover somente o índice único redundante `ix_rate_history_indicator_date_unique` quando o índice canônico `uq_rate_history_indicator_date` estiver presente; nenhuma linha é alterada.
+
 ### Corrigido — alinhamento de índices e metadados Alembic/MetaData (07/08/2026)
 
 - `rate_history` passou a representar `uq_rate_history_indicator_date` como índice único, exatamente como a migration `014`, e recuperou os comentários canônicos de `indicator` e `source`.
