@@ -13,6 +13,7 @@ A partir deste checkpoint, a auditoria usa a seguinte regra como critério obrig
 - antes de carteiras reais, o ambiente executa bootstrap completo e persistente;
 - após o bootstrap, requests funcionais são DB-first;
 - providers externos em runtime só podem ser consultados para **preço intraday** e **preço de fechamento diário**;
+- uma lacuna histórica comprovada pode consultar apenas a janela mínima necessária, persistir o resultado e refazer leitura DB-first;
 - qualquer outro endpoint que consulte provider diretamente é desvio arquitetural até que seja migrado para leitura persistida ou para o bootstrap operacional.
 
 ## Classificação
@@ -44,13 +45,13 @@ A partir deste checkpoint, a auditoria usa a seguinte regra como critério obrig
 - Metadata antiga de sprint removida.
 - O domínio financeiro já existe em outras superfícies; o placeholder não representa ausência do domínio.
 
-### Quotes — PLACEHOLDER REDUNDANTE EM AUDITORIA
+### Quotes — REMOVIDO
 
-- Router: `backend/app/routers/quotes.py`.
-- Prefixo registrado: `/api/v1/quotes`.
-- Retorna `501` e declara que a funcionalidade é coberta por `/api/v1/prices`.
-- Busca indexada não encontrou consumidor da rota.
-- Candidato à remoção física após fechar prova de consumidores/imports, preservando `quotes_service` interno apenas onde compatível com a nova política de preço live.
+- O antigo router `backend/app/routers/quotes.py` retornava somente `501` e declarava que sua funcionalidade era coberta por `/api/v1/prices`.
+- Não havia serviço frontend dedicado nem consumidor encontrado para `/api/v1/quotes`.
+- O router foi desregistrado do `app.main` e removido fisicamente.
+- `quotes_service` interno permanece porque atende a fachada canônica de preço atual/intraday; a remoção foi apenas da superfície HTTP redundante.
+- Gate estrutural impede reintrodução do placeholder.
 
 ### Proventos — CANÔNICO DB-FIRST
 
@@ -100,27 +101,29 @@ A partir deste checkpoint, a auditoria usa a seguinte regra como critério obrig
 - Expõe somente GETs de KPIs, resultados por ativo/classe, benchmarks persistidos e reconciliação.
 - Nenhum provider participa dos requests.
 
-### Assets — ALTA PRIORIDADE / DESVIO PROVIDER PARCIAL
+### Assets — ALINHADO À FRONTEIRA DE PROVIDERS
 
-`backend/app/routers/assets.py` mistura leitura local com chamadas externas. Pela nova regra, a classificação anterior de “descoberta/provider interativa” deixa de ser aceita como fronteira definitiva.
+`backend/app/routers/assets.py` foi migrado para separar catálogo persistido, histórico pontual e preço live.
 
-**Alinhado/DB-first:**
+**DB-first:**
 - `GET /api/v1/assets/`;
 - `GET /api/v1/assets/search`;
-- `POST /api/v1/assets/` somente quando trabalhar com catálogo já persistido.
+- `GET /api/v1/assets/suggest` via catálogo persistido;
+- `GET /api/v1/assets/tesouro/search` via catálogo persistido;
+- `GET /api/v1/assets/{ticker}/detail` para metadados/histórico persistidos;
+- `POST /api/v1/assets/` somente para catálogo já persistido/identidade conhecida.
 
-**Requer revisão imediata:**
-- `GET /api/v1/assets/{ticker}/detail` porque `current_price` ainda usa fachada live;
-- `GET /api/v1/assets/suggest` porque consulta provider para descoberta;
-- `GET /api/v1/assets/tesouro/search` porque consulta provider;
-- `GET /api/v1/assets/tesouro/price` porque consulta provider;
-- `GET /api/v1/assets/quote/{ticker}` porque consulta provider e mistura múltiplas fontes.
+**Histórico com exceção pontual controlada:**
+- `GET /api/v1/assets/tesouro/price?date=...`;
+- `GET /api/v1/assets/quote/{ticker}?date=...`.
 
-Destino esperado:
+Essas superfícies usam o resolvedor pontual: primeiro leem o banco; se faltar cobertura para a data, consultam somente a janela mínima, persistem em `asset_prices` e refazem a leitura DB-first.
 
-- catálogo, sugestões, Tesouro e metadados devem vir do banco alimentado pelo bootstrap;
-- somente preço intraday/fechamento pode permanecer live;
-- qualquer endpoint de preço live deve ter semântica explícita, persistência e não ser usado diretamente por cálculos financeiros.
+**Preço live autorizado:**
+- `GET /api/v1/assets/quote/{ticker}` sem data;
+- `current_price` do detalhe pode usar a fachada canônica de preço atual/intraday.
+
+Imports diretos de BRAPI/yfinance foram removidos do router; gate estrutural protege essa fronteira.
 
 ### Debug — CONDICIONAL/ADMIN SENSÍVEL
 
@@ -134,14 +137,15 @@ Destino esperado:
 - `/metas` e `/irpf` são redirects de compatibilidade explícitos.
 - Não há rota de Análise no frontend protegido.
 - `performanceService.ts` não expõe backfill.
+- `assetService.ts` usa `/assets/` com filtros `q` e `asset_type`, apoiando descoberta pelo catálogo persistido.
 
 ## Prioridades da próxima rodada
 
-1. **P0:** revisar `assets`, `quotes_service`, scheduler e entrypoint para garantir provider recorrente apenas em intraday/fechamento.
-2. **P0:** mapear o bootstrap inicial necessário para catálogo, históricos, Proventos, eventos, Tesouro, benchmarks e câmbio.
-3. **P1:** fechar prova de consumidores do router placeholder `quotes` e removê-lo se seguro.
-4. **P1/P2:** revisar `portfolios`, `admin`, `irpf` e `class_targets` por mutações/aliases redundantes.
-5. **P2:** decidir destino de `dividends` após prova de consumidores externos.
+1. **P0:** inventariar consumidores internos de preço histórico e conectar o resolvedor apenas nos fluxos que realmente precisam resolver lacunas.
+2. **P0:** completar o bootstrap inicial para catálogo, históricos, Proventos, eventos, Tesouro, benchmarks e câmbio sob #248.
+3. **P1/P2:** revisar `portfolios`, `admin`, `irpf` e `class_targets` por mutações/aliases redundantes.
+4. **P2:** decidir destino de `dividends` após prova de consumidores externos.
+5. **P2:** revisar o placeholder dedicado de Renda Fixa e decidir se deve ser removido ou substituído por superfície canônica existente.
 
 ## Regra de remoção
 
