@@ -5,6 +5,15 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — fechamento arquitetural da convergência Alembic/ORM (07/08/2026)
+
+- A Issue #241 passa a considerar concluída a convergência de todos os domínios estabilizados fora de `goals`.
+- `goals` foi formalizado como exceção arquitetural consciente: nenhuma migration será criada apenas para silenciar o `alembic check`.
+- O redesenho de Metas foi delegado à Issue #246 e deverá evoluir em conjunto com Análise de Carteira (#57).
+- README, ROADMAP, arquitetura e checkpoint de continuidade foram sincronizados com essa fronteira.
+- `fx_rates` deixou de constar como pendência estrutural e permanece consolidado como contrato DB-first no MetaData.
+- A auditoria arquitetural global de serviços, routers, endpoints e legado restante passa a ser o próximo macrobloco antes da promoção estrutural para `main`.
+
 ### Corrigido — endurecimento defensivo de timestamps (07/08/2026)
 
 - `users`, `portfolios`, `system_configs`, `fixed_income_investments`, `portfolio_positions` e `portfolio_snapshots` passam a exigir `created_at`/`updated_at NOT NULL` por migrations pequenas e reversíveis.
@@ -17,7 +26,7 @@ Formato baseado em Keep a Changelog.
 
 - `portfolio_snapshots` passou a refletir exatamente os comentários físicos da migration `005`; os campos TWR adicionados por `20260713` continuam documentados no código sem inventar comentários de coluna ausentes no banco.
 - `asset_dividends` passou a representar `idx_ad_asset_exdate_desc` e `ix_asset_dividends_approved_on`, já existentes pelas migrations `021` e `027`.
-- `transactions` passou a representar `ix_transactions_portfolio_id`, os quatro índices da migration `0020` e `idx_txn_portfolio_date_asc` da migration `021`, sem alterar tipos financeiros.
+- `transactions` passou a representar `ix_transactions_portfolio_id`, os quatro índices da migration `0020` e `idx_txn_portfolio_date_asc` da migration `021`, preservando o contrato financeiro migrado.
 - `corporate_events` passou a representar os quatro índices, `uq_corporate_events_source_identity` e `raw_metadata` como JSONB conforme `20260731_corp_event_catalog`.
 - `assets` voltou a refletir `updated_at`, `isin_code`, os índices físicos de ISIN/cache/provider, `currency NOT NULL`, os comentários do cache L1 e o nome canônico `uq_asset_ticker_type`.
 - Adicionados gates de regressão específicos para snapshots, Proventos, transações, eventos corporativos e ativos.
@@ -54,7 +63,7 @@ Formato baseado em Keep a Changelog.
 - Adicionada migration isolada para remover `goal_allocations`, tabela sem consumidor runtime e vazia na evidência local.
 - O upgrade é bloqueado quando existir qualquer linha, impedindo descarte silencioso de dados.
 - O downgrade restaura tabela, FK `goal_allocations_goal_id_fkey` com `ON DELETE CASCADE` e índice `ix_goal_allocations_id`.
-- `irpf_records` e `irpf_losses` permanecem fora desta contração e continuam preservadas.
+- O tratamento de `goal_allocations` não estabiliza o domínio `goals`, que permanece reservado ao redesenho #246/#57.
 
 ### Adicionado — fixture sintética transacional para contratos legados (06/08/2026)
 
@@ -65,15 +74,14 @@ Formato baseado em Keep a Changelog.
 
 ### Protegido — fronteira do schema mensal legado de IRPF (06/08/2026)
 
-- `irpf_records` e `irpf_losses` foram classificados como contratos migrados legados, preservados até evidência de dados e decisão destrutiva explícita.
-- Adicionado gate que confirma sua presença na migration inicial e impede consumidores runtime em `app/models`, `app/routers` e `app/services`.
+- `irpf_records` e `irpf_losses` foram classificados como contratos migrados legados e posteriormente contraídos por migrations defensivas após evidência de ausência de consumidores e dados.
+- Adicionado gate que impede consumidores runtime em `app/models`, `app/routers` e `app/services`.
 - Proibida a reintrodução de modelos ORM mensais apenas para silenciar o `alembic check`.
-- Contagem de linhas, inventário de FKs e fixture sintética passam a ser pré-requisitos para eventual remoção.
-- Nenhuma migration, DDL, tabela ou dado foi alterado.
+- Contagem de linhas, inventário de FKs e fixture sintética foram usados como pré-requisitos para a decisão destrutiva explícita.
 
 ### Corrigido — contrato `fx_rates` consolidado no MetaData (06/08/2026)
 
-- O inventário de deriva deixou de classificar `fx_rates` como schema ausente do MetaData: `FxRate` já está registrado no agregador `app.models` e participa de `Base.metadata`.
+- O inventário de deriva deixou de classificar `fx_rates` como schema ausente do MetaData: `FxRate` está registrado no agregador `app.models` e participa de `Base.metadata`.
 - Congelados como canônicos `UNIQUE (pair, rate_date)`, o índice ascendente `ix_fx_rates_pair_date` e o índice descendente `idx_fx_pair_date_desc`.
 - Adicionados gates contra duplicação de modelo ou migration motivada apenas por diff histórico.
 - Nenhuma migration, DDL, tabela ou dado foi alterado.
@@ -114,8 +122,6 @@ Formato baseado em Keep a Changelog.
 - Confirmado que os endpoints e exports canônicos de IRPF são read-only e não consultam nem persistem `IRPFReport`.
 - `IRPFReport` foi removido do agregador `app.models`, do relacionamento de `Portfolio` e do arquivo `backend/app/models/irpf.py`.
 - O projeto não criará a tabela `irpf_reports` apenas para silenciar o `alembic check`.
-- `irpf_records` e `irpf_losses` permanecem preservadas como schema legado mensal até fixture sintética, inventário de dados e decisão destrutiva explícita.
-- Nenhuma migration, DDL, tabela ou dado foi alterado neste bloco.
 
 ### Removido — modelo duplicado `AppConfig` (06/08/2026)
 
