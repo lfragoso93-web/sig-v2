@@ -6,34 +6,38 @@ A branch de desenvolvimento é `stable-15jun`. A promoção para `main` ocorre e
 
 ## Status atual — 07/08/2026
 
-O SGI v2 está em **estabilização arquitetural final da base antes da próxima grande fase funcional**. O gate operacional da Issue #227 continua impedindo cargas reais não autorizadas. A convergência Alembic ↔ MetaData da Issue #241 está concluída para todos os domínios do escopo, com uma única exceção arquitetural consciente: `goals`.
+O SGI v2 está em **estabilização arquitetural e reorganização de governança antes da próxima fase funcional**.
+
+A Issue #227 é o gate-mãe que bloqueia dados reais até a certificação estrutural. A Issue #247 executa a etapa atual: primeiro reconciliar documentação, Issues e PRs; depois auditar legado, serviços, routers e endpoints.
+
+A convergência Alembic ↔ MetaData da Issue #241 foi concluída para todos os domínios estabilizados. O único diff deliberadamente preservado é `goals`, que não deve receber migration antes do redesenho conjunto de Metas e Análise de Carteira (#246 + #57).
 
 ### Qualidade validada
 
-- Build Docker: aprovado no HEAD `17beeb9e6ae70f51d523e273bebda368872f81de`.
-- `compileall`: aprovado.
+Baseline estrutural registrada no HEAD `17beeb9e6ae70f51d523e273bebda368872f81de`:
+
+- Build Docker aprovado.
+- `compileall` aprovado.
 - Suíte estrutural final: 15 testes aprovados.
-- Import integral de `app.main`: aprovado.
+- Import integral de `app.main` aprovado.
 - Consumers legados removidos e gates de regressão ativos.
 - Alembic/ORM convergidos fora de `goals`.
+
+Os commits documentais posteriores não alteraram runtime, schema ou contratos financeiros.
 
 ### Entregas consolidadas
 
 - Arquitetura DB-first e contratos `summary.v2` e `rentabilidade.v2`.
 - Valuation canônico por classe, snapshots patrimoniais e reconciliação financeira.
 - Histórico B3/COTAHIST, Tesouro oficial, benchmarks e câmbio persistidos.
-- Leitura pública USD/BRL servida exclusivamente por `fx_rates`, com MetaData/ORM alinhados ao schema migrado.
+- Leitura pública USD/BRL exclusivamente por `fx_rates`, alinhado ao MetaData/Alembic.
 - Proventos globais em `asset_dividends`, com direitos de carteira calculados sob demanda.
-- Motor canônico de eventos corporativos e projeção histórica de posição, custo e resultado realizado.
-- IRPF anual canônico com Day Trade, Swing Trade, isenção mensal, prejuízos, IRRF e DARF mínima.
-- Contratos públicos versionados de apuração anual, Bens e Direitos, Rendimentos e Ganhos de Capital.
-- IRPF frontend integralmente canônico, sem persistência ou consumo de `IRPFReport` legado.
-- Exportações PDF e CSV compostas diretamente pelos contratos canônicos.
-- Transactions alinhado ao contrato físico migrado: tipos financeiros, nulabilidade, índices, notas e timestamps.
+- Motor canônico de eventos corporativos e projeção histórica compartilhada de posição, custo e resultado realizado.
+- IRPF anual canônico, frontend e exportações sem persistência de `IRPFReport` legado.
+- Transactions alinhado ao contrato físico migrado.
 - Snapshots, ativos, Proventos, eventos corporativos, Renda Fixa, configurações, usuários e portfólios alinhados à cadeia Alembic.
 - `app_config`, `IRPFReport`, `irpf_records`, `irpf_losses` e `goal_allocations` tratados por decisões explícitas e contrações defensivas quando aplicável.
 - Alembic endurecido com gates contra autogenerate monolítico e remoções acidentais.
-- PRs estruturais #237 e #240 já promovidas e mergeadas na `main`.
 
 ## Arquitetura resumida
 
@@ -55,32 +59,50 @@ summary.v2 / rentabilidade.v2 / leitores históricos
 Resumo / Patrimônio / Rentabilidade / Proventos / IRPF
 ```
 
-Metas não participa, neste momento, do conjunto de contratos canônicos estabilizados. O módulo `goals` será redesenhado em conjunto com Análise de Carteira nas Issues #246 e #57.
+Metas e Análise de Carteira estão fora do conjunto de contratos funcionais estabilizados neste momento. O redesenho será tratado como um único macroprojeto pelas Issues #246 e #57 somente depois da estabilização definitiva da base.
 
 Princípios: DB-first, fonte oficial primeiro, idempotência, ausência não convertida em zero, contratos financeiros únicos e nenhuma chamada a provedor durante cálculos financeiros.
+
+## Ordem canônica de trabalho
+
+### Agora — governança e auditoria estrutural
+
+1. Reconciliar documentação viva e todas as Issues abertas (#247).
+2. Classificar Issues em trabalho atual, bloqueadas/dependentes e backlog.
+3. Revisar PRs Dependabot separadamente do roadmap funcional.
+4. Auditar routers, serviços, endpoints, aliases, integrações e legado remanescente (#247).
+5. Confirmar o estado real de consumidores restantes de eventos corporativos (#129) e itens de provedores relacionados (#130/#127).
+
+### Depois — performance e benchmarks
+
+6. Materializar histórico persistido do IBOV (#150).
+7. Implementar TWR dedicado de Tesouro Direto e Renda Fixa (#149).
+
+### Bloqueado até certificação estrutural
+
+8. Executar as duas rodadas reais controladas de Proventos (#226).
+9. Fechar o gate agregado de seeds (#216).
+10. Retomar rebuild, CSV, posições, snapshots e reconciliação (#158).
+
+### Próxima grande fase funcional
+
+11. Redesenhar Metas + Análise de Carteira como um único macroprojeto (#246 + #57).
+
+Backlog de produto não bloqueador inclui #58, #83, #90, #97 e evoluções amplas de #127/#130 que não sejam necessárias para resolver achados concretos da auditoria atual.
 
 ## Estado operacional
 
 - Seeds de benchmarks e câmbio: executados e reconciliados.
-- Seed canônico de Proventos usa o contrato `pre-prod-dividends-seed.v2`: implementação concluída; duas execuções reais controladas ainda pendentes.
-- O contrato v2 persiste somente eventos globais em `asset_dividends`; direitos de carteira são calculados sob demanda.
-- Contração física das tabelas legadas de Proventos: preparada, mas não executada.
-- Importação CSV real, posições e snapshots: suspensos até o encerramento da #227.
+- Seed canônico de Proventos: implementação concluída no contrato `pre-prod-dividends-seed.v2`; duas execuções reais controladas permanecem bloqueadas pelo gate arquitetural.
+- Contração física das tabelas legadas de Proventos: preparada, não executada.
+- Importação CSV real, posições e snapshots: suspensos pela #227.
 - O boot não executa sincronização de mercado por padrão.
-- Rebuilds e seeds externos devem permanecer explicitamente opt-in.
-- `alembic upgrade head`, reexecução idempotente e convergência dos domínios estabilizados foram aprovados.
+- Rebuilds e seeds externos permanecem explicitamente opt-in.
 - O diff remanescente do `alembic check` está limitado a `goals` e é exceção deliberada rastreada pela #246; nenhuma migration deve ser criada para silenciá-lo antes do redesenho conjunto com #57.
-- O endpoint `/usd-brl` lê a última cotação persistida de `fx_rates` e retorna indisponibilidade explícita quando não existe cobertura.
 
-## Próximas prioridades
+## PRs de dependências
 
-1. Encerrar formalmente a #241 com a exceção `goals` documentada e rastreada pela #246/#57.
-2. Revisar arquitetura, serviços, routers, endpoints e legado remanescente após a estabilização Alembic/ORM.
-3. Consolidar consumidores restantes do motor de eventos corporativos (#129), caso ainda existam após a auditoria global.
-4. Evoluir aliases, cobertura e adapters por capacidade (#130 e #127).
-5. Implementar IBOV persistido e TWR dedicado (#150 e #149).
-6. Retomar seeds, importação e rebuild somente após os gates arquiteturais (#158, #216, #226 e #227).
-7. Somente depois iniciar o macroprojeto conjunto de Metas + Análise de Carteira (#246 + #57).
+PRs Dependabot abertas são tratadas como fila técnica separada da ordem funcional. Devem ser avaliadas individualmente por risco, compatibilidade e CI antes de qualquer merge.
 
 ## Comandos principais
 
@@ -110,14 +132,14 @@ npm run build
 
 ## Documentação viva
 
-- `ROADMAP.md` — prioridades e andamento modular.
+- `ROADMAP.md` — ordem canônica, estado modular e gates.
 - `CHANGELOG.md` — mudanças relevantes.
 - `docs/architecture.md` — arquitetura DB-first e fronteiras dos módulos.
 - `docs/DEVELOPMENT_CONTINUITY.md` — checkpoint obrigatório para retomada.
-- `docs/RENTABILIDADE_IRPF_CANONICAL_MIGRATION_PLAN.md` — plano do núcleo financeiro.
-- `docs/IRPF_CANONICAL_FRONTEND_INTEGRATION.md` — contratos e fronteiras atuais do frontend e das exportações.
+- `docs/RENTABILIDADE_IRPF_CANONICAL_MIGRATION_PLAN.md` — histórico do núcleo financeiro.
+- `docs/IRPF_CANONICAL_FRONTEND_INTEGRATION.md` — contratos do frontend/exportações de IRPF.
 - `docs/portfolio-route-hierarchy.md` — hierarquia das rotas vinculadas à carteira.
 - `docs/DIVIDENDS_CANONICAL_ARCHITECTURE.md` — arquitetura canônica de Proventos.
-- `docs/ALEMBIC_METADATA_DRIFT_INVENTORY_2026-08.md` — matriz de deriva Alembic/ORM e exceção `goals`.
-- `docs/FX_AND_GOAL_CONSUMER_INVENTORY_2026-08.md` — inventário de consumidores de câmbio e metas.
+- `docs/ALEMBIC_METADATA_DRIFT_INVENTORY_2026-08.md` — inventário final da convergência e exceção `goals`.
+- `docs/FX_AND_GOAL_CONSUMER_INVENTORY_2026-08.md` — inventário histórico de câmbio e metas.
 - `docs/PRE_PROD_REBUILD_RUNBOOK.md` — gates operacionais de pré-produção.
