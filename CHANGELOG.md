@@ -5,6 +5,14 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — endurecimento defensivo de timestamps (07/08/2026)
+
+- `users`, `portfolios`, `system_configs`, `fixed_income_investments`, `portfolio_positions` e `portfolio_snapshots` passam a exigir `created_at`/`updated_at NOT NULL` por migrations pequenas e reversíveis.
+- Cada upgrade conta previamente linhas nulas e aborta se encontrar qualquer inconsistência; nenhum backfill silencioso é executado.
+- O primeiro revision ID do terceiro bloco excedia o `VARCHAR(32)` de `alembic_version` e foi detectado pelo gate global antes da certificação; a revisão foi corrigida para `20260807_pos_snap_ts_nn`.
+- O gate específico de timestamps agora também protege explicitamente o limite de 32 caracteres dos revision IDs.
+- Documentação técnica do endurecimento e da correção de integridade foi adicionada em `docs/ALEMBIC_TIMESTAMP_HARDENING_2026-08.md`.
+
 ### Corrigido — convergência adicional Alembic/MetaData (07/08/2026)
 
 - `portfolio_snapshots` passou a refletir exatamente os comentários físicos da migration `005`; os campos TWR adicionados por `20260713` continuam documentados no código sem inventar comentários de coluna ausentes no banco.
@@ -54,63 +62,3 @@ Formato baseado em Keep a Changelog.
 - A fixture usa `ON_ERROR_STOP`, valida exatamente uma linha por contrato e termina obrigatoriamente em `ROLLBACK`.
 - Adicionados gates que proíbem `COMMIT`, `DROP TABLE` e `TRUNCATE`, além de proteger o uso de variáveis `psql` e as três asserções de cardinalidade.
 - Nenhuma migration, DDL persistente, tabela ou dado real foi alterado.
-
-### Protegido — fronteira do schema mensal legado de IRPF (06/08/2026)
-
-- `irpf_records` e `irpf_losses` foram classificados como contratos migrados legados, preservados até evidência de dados e decisão destrutiva explícita.
-- Adicionado gate que confirma sua presença na migration inicial e impede consumidores runtime em `app/models`, `app/routers` e `app/services`.
-- Proibida a reintrodução de modelos ORM mensais apenas para silenciar o `alembic check`.
-- Contagem de linhas, inventário de FKs e fixture sintética passam a ser pré-requisitos para eventual remoção.
-- Nenhuma migration, DDL, tabela ou dado foi alterado.
-
-### Corrigido — contrato `fx_rates` consolidado no MetaData (06/08/2026)
-
-- O inventário de deriva deixou de classificar `fx_rates` como schema ausente do MetaData: `FxRate` já está registrado no agregador `app.models` e participa de `Base.metadata`.
-- Congelados como canônicos `UNIQUE (pair, rate_date)`, o índice ascendente `ix_fx_rates_pair_date` e o índice descendente `idx_fx_pair_date_desc`.
-- Adicionados gates contra duplicação de modelo ou migration motivada apenas por diff histórico.
-- Nenhuma migration, DDL, tabela ou dado foi alterado.
-
-### Corrigido — geração legada de IRPF integralmente read-only (06/08/2026)
-
-- `irpf_report_service.py` deixou de importar o modelo removido `IRPFReport` e de consultar, inserir, atualizar ou executar `commit` sobre `irpf_reports`.
-- `generate_irpf_report` preserva sua assinatura pública e compõe `IRPFReportOut` exclusivamente em memória a partir dos leitores fiscais existentes.
-- O gate de consumidores removidos passou a inspecionar imports por AST, distinguindo corretamente o modelo ORM `IRPFReport` do DTO válido `IRPFReportOut`.
-- Nenhuma migration, tabela ou dado foi alterado.
-
-### Corrigido — varredura global de consumidores removidos no startup (06/08/2026)
-
-- O router legado de IRPF deixou de importar `IRPFReport` e de consultar o modelo órfão removido.
-- O endpoint `/{portfolio_id}/irpf/{year}` preserva o contrato HTTP e o parâmetro `refresh`, mas sempre projeta o relatório read-only em memória por `generate_irpf_report`.
-- Adicionado gate global que percorre todo `backend/app/**/*.py` contra imports de `app.models.irpf`/`IRPFReport` e `app.models.config`/`AppConfig`.
-- Adicionado teste de importação completa de `app.main`, cobrindo todos os routers e serviços carregados no startup antes da próxima execução Docker.
-- Nenhuma migration, tabela ou dado foi alterado.
-
-### Corrigido — serviço de configurações migrado para `SystemConfig` (06/08/2026)
-
-- `config_service.py` deixou de importar o modelo removido `AppConfig` e passou a operar exclusivamente sobre `SystemConfig`/`system_configs`.
-- Preservados os fluxos de leitura, booleanos, upsert individual, listagem pública e atualização em lote usados pelo painel administrativo.
-- Adicionado gate que proíbe novos consumidores de `app.models.config` e de `AppConfig` no serviço de configurações.
-- Nenhuma migration, tabela ou dado foi alterado; a correção elimina uma falha de import que impedia o backend de iniciar.
-
-### Corrigido — startup usa somente Alembic como autoridade de schema (06/08/2026)
-
-- Removido do `entrypoint.sh` o bootstrap paralelo que executava `table.create(checkfirst=True)` para tabelas opcionais do ORM.
-- Eliminado o import obsoleto de `app.models.irpf`, que mantinha o backend em ciclo de restart após a remoção do modelo órfão `IRPFReport`.
-- `CorporateEvent` e `Goal` continuam disponíveis exclusivamente pelas migrations existentes; o entrypoint não cria mais tabelas fora da cadeia Alembic.
-- Adicionado gate arquitetural que proíbe `table.create`, `OPTIONAL_TABLES`, `checkfirst=True` e imports do modelo IRPF removido no startup.
-- Nenhuma migration, tabela ou dado foi alterado neste bloco.
-
-### Removido — modelo órfão `IRPFReport` (06/08/2026)
-
-- Inventariados `IRPFReport`, `irpf_reports`, `irpf_records` e `irpf_losses` em coordenação com as Issues #56 e #241.
-- Confirmado que os endpoints e exports canônicos de IRPF são read-only e não consultam nem persistem `IRPFReport`.
-- `IRPFReport` foi removido do agregador `app.models`, do relacionamento de `Portfolio` e do arquivo `backend/app/models/irpf.py`.
-- O projeto não criará a tabela `irpf_reports` apenas para silenciar o `alembic check`.
-- `irpf_records` e `irpf_losses` permanecem preservadas como schema legado mensal até fixture sintética, inventário de dados e decisão destrutiva explícita.
-- Nenhuma migration, DDL, tabela ou dado foi alterado neste bloco.
-
-### Removido — modelo duplicado `AppConfig` (06/08/2026)
-
-- `AppConfig` e `app_config` foram classificados como duplicação histórica de `SystemConfig`/`system_configs`.
-- O modelo duplicado foi removido do agregador `app.models` e do código-fonte.
-- Nenhuma migration, tabela ou dado foi alterado neste bloco.
