@@ -5,6 +5,15 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — superfícies financeiras read-only e rebuild explícito (07/08/2026)
+
+- Removida a porta HTTP pública `POST /api/v1/performance/{portfolio_id}/evolution/backfill`; os serviços internos de reconstrução permanecem disponíveis apenas para fluxos operacionais explícitos.
+- O router de `performance` ficou exclusivamente read-only e recebeu gate contra reintrodução de POST/backfill/rebuilders.
+- Os GETs de `positions` deixaram de aceitar `refresh=true` e não chamam mais `update_quotes_for_portfolio` durante requests financeiros.
+- `positions` agora é estritamente DB-first e possui gate contra reintrodução de refresh ou dependência de `quotes_service`.
+- A auditoria confirmou `rentabilidade` como superfície GET/DB-first e classificou `quotes` como placeholder redundante ainda pendente de prova final de consumidores.
+- A matriz `docs/ROUTER_ENDPOINT_AUDIT_2026-08.md` foi sincronizada com os achados e decisões deste bloco.
+
 ### Corrigido — fronteira opt-in de sincronização de mercado (07/08/2026)
 
 - O CRUD de `transactions` deixou de disparar automaticamente onboarding de mercado e backfill de Proventos após `POST`/`PATCH`.
