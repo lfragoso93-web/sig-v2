@@ -32,6 +32,13 @@ if TYPE_CHECKING:
     from app.models.asset import Asset
 
 _RAW_PAYLOAD_TYPE = JSON().with_variant(JSONB, "postgresql")
+_DIVIDEND_TYPE_STORAGE = SAEnum(
+    DividendType,
+    values_callable=lambda x: [e.value for e in x],
+    native_enum=False,
+    create_constraint=False,
+    length=20,
+)
 
 
 class AssetDividend(Base):
@@ -85,7 +92,7 @@ class AssetDividend(Base):
     approved_on: Mapped[DateType | None] = mapped_column(Date, nullable=True)
 
     dividend_type: Mapped[DividendType] = mapped_column(
-        SAEnum(DividendType, values_callable=lambda x: [e.value for e in x]),
+        _DIVIDEND_TYPE_STORAGE,
         nullable=False,
         default=DividendType.DIVIDENDO,
     )
