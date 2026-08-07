@@ -4,171 +4,149 @@
 
 ## Direção atual
 
-O SGI v2 está em estabilização arquitetural final antes da próxima grande fase funcional. Até o encerramento da Issue #227, novas cargas reais, seeds externos e rebuilds permanecem opt-in e bloqueados por gates explícitos.
+O SGI v2 está em **reorganização de governança e estabilização arquitetural** antes da próxima fase funcional.
 
-A Issue #241 convergiu Alembic ↔ MetaData para todos os domínios estabilizados. O único diff remanescente é `goals`, tratado deliberadamente fora do escopo porque Metas será redesenhado em conjunto com Análise de Carteira nas Issues #246 e #57.
+A Issue #227 é o gate-mãe que impede dados reais antes da certificação. A Issue #247 é a executora do trabalho atual: primeiro reconciliar documentação, Issues e PRs; depois auditar legado, serviços, routers, endpoints e integrações.
+
+A Issue #241 está concluída. Alembic ↔ MetaData convergiu para todos os domínios estabilizados. `goals` é a única exceção deliberada e pertence ao futuro macroprojeto #246 + #57; não deve receber migration apenas para silenciar `alembic check`.
 
 ## Estado por módulo
 
-| Módulo | Status | Progresso |
-|---|---|---:|
-| Core backend e autenticação | Estável | 100% |
-| Carteiras e transações | Consolidado | 100% |
-| Dados canônicos e DB-first | Consolidado | 100% |
-| Histórico B3 / Tesouro / benchmarks / câmbio | Consolidado | 100% |
-| Proventos canônicos | Implementação concluída; execução real pendente | 95% |
-| Snapshots e valuation por classe | Consolidado | 100% |
-| Resumo e Patrimônio | Consolidado | 100% |
-| Rentabilidade | Consolidação canônica promovida à `main` | 100% |
-| IRPF | Implementação canônica promovida; validação real pendente | 98% |
-| Metas | Redesenho arquitetural pendente com Análise de Carteira | 35% |
-| Análise de Carteira | Planejada; será redesenhada junto com Metas | 20% |
-| Rotas de carteira | Consolidadas | 100% |
-| UTC e warnings | Concluído pela #192 | 100% |
-| Pré-produção e rebuild | Suspenso pelo gate #227 | 85% |
-| Eventos corporativos | Núcleo canônico consolidado; auditoria final de consumidores pendente | 95% |
-| Convergência Alembic/ORM | Concluída fora de `goals`; exceção formalizada | 98% |
-| IBOV persistido | Planejado | 20% |
-| TWR dedicado Tesouro/Renda Fixa | Planejado | 20% |
+| Módulo | Estado atual | Próxima decisão |
+|---|---|---|
+| Core backend e autenticação | Estável | auditoria geral #247 |
+| Carteiras e transações | Consolidado | auditoria de endpoints/serviços #247 |
+| Dados canônicos / DB-first | Consolidado | preservar contratos únicos |
+| B3 / Tesouro / benchmarks / câmbio | Consolidado | IBOV #150 e TWR #149 depois da auditoria |
+| Proventos | Implementação canônica concluída | execução real bloqueada #226/#227 |
+| Snapshots e valuation | Consolidado | TWR dedicado #149 |
+| Resumo e Patrimônio | Consolidado | UX #90 é backlog |
+| Rentabilidade | Consolidada | TWR #149 / IBOV #150 |
+| IRPF | Canônico; validação real futura | manter bloqueado para dados reais |
+| Eventos corporativos | Núcleo canônico consolidado | confirmar legado residual #129 durante #247 |
+| Metas | Não estabilizado | redesenho conjunto #246 + #57 |
+| Análise de Carteira | Não implementada funcionalmente | redesenho conjunto #246 + #57 |
+| Convergência Alembic/ORM | Concluída fora de `goals` | manter gates |
+| Pré-produção/rebuild | Bloqueada | retomar somente após certificação estrutural |
+| IBOV persistido | Planejado | #150 |
+| TWR Tesouro/Renda Fixa | Planejado | #149 |
 
-## Qualidade validada
+Percentuais de progresso foram removidos deste roadmap porque geravam falsa precisão em módulos cuja pendência é arquitetural ou operacional.
 
-- Build Docker aprovado no HEAD `17beeb9e6ae70f51d523e273bebda368872f81de`.
+## Qualidade estrutural registrada
+
+Baseline no HEAD `17beeb9e6ae70f51d523e273bebda368872f81de`:
+
+- Build Docker aprovado.
 - `compileall` aprovado.
-- Suíte estrutural final: 15 testes aprovados.
+- 15 testes estruturais aprovados.
 - `app.main` importado integralmente.
 - Gates contra consumidores legados e deriva Alembic/ORM aprovados.
-- Backend e frontend completos permaneceram verdes nos macroblocos já promovidos.
 
-## Consolidado
+Commits posteriores de governança/documentação não alteram runtime ou banco.
 
-### Núcleo financeiro
+## Ordem canônica de execução
 
-- Contratos `summary.v2` e `rentabilidade.v2` permanecem as fontes públicas canônicas.
-- Projeções compartilhadas calculam posição, custo e resultado realizado.
-- A fachada `rentabilidade_service.py` foi removida e promovida à `main` pela PR #240.
-- A invalidação das chaves `rent:*` está isolada em `rentabilidade_cache_service.py`.
-- O IRPF canônico foi promovido à `main` pela PR #237.
-- Proventos pertencem ao ativo e são persistidos em `asset_dividends`; direitos de carteira são derivados sob demanda.
-- Transactions, snapshots, ativos, Proventos e eventos corporativos refletem o schema físico migrado.
-- Serviços operacionais usam UTC aware; defaults ORM `timezone=False` usam UTC naive explícito.
+### Fase 1 — Governança e documentação — AGORA
 
-### Bootstrap canônico de ativos
+Issue executora: #247. Gate-mãe: #227.
 
-- O pipeline neutro possui capacidades independentes para catálogo, preços, Proventos, eventos corporativos e cobertura.
-- Dependências, duplicidades, ordem inválida e ciclos são validados antes da execução.
-- Cada etapa expõe estado `planned`, `executed`, `blocked` ou `failed`.
-- Planejamento e execução aceitam identidade auditável por `run_id`, branch e commit SHA.
-- A CLI `plan_asset_bootstrap` produz envelope versionado read-only.
-- Comparadores offline detectam alterações entre planos e relatórios.
-- PostgreSQL vazio alcança o head canônico e a reexecução de `upgrade head` é idempotente.
+- [ ] reconciliar README, ROADMAP, CHANGELOG, arquitetura e continuidade;
+- [ ] revisar e classificar todas as Issues abertas;
+- [ ] retirar status, sprints, dependências e próximos passos obsoletos;
+- [ ] manter PRs Dependabot em fila técnica separada;
+- [ ] garantir uma única ordem de execução em toda documentação viva.
 
-### Câmbio
+### Fase 2 — Auditoria arquitetural pós-convergência
 
-- A série persistida `fx_rates` e o seed PTAX estão consolidados.
-- O endpoint `/usd-brl` lê exclusivamente a última linha persistida de `fx_rates`, sem provider durante request e sem fallback fixo.
-- `FxRate` participa de `Base.metadata` e representa as constraints e índices físicos canônicos.
-- A ausência de cobertura cambial é retornada explicitamente como indisponibilidade.
+Issue executora: #247.
 
-### Metas e Análise de Carteira
+- [ ] revisar routers, services, models, integrações, jobs, CLIs, scheduler e entrypoint;
+- [ ] revisar frontend: rotas, redirects, stubs e API clients;
+- [ ] classificar endpoints/aliases de compatibilidade por consumidor comprovado;
+- [ ] eliminar duplicação, legado e APIs redundantes em commits pequenos;
+- [ ] confirmar pendências reais da #129;
+- [ ] acionar #130/#127 somente quando achados concretos exigirem.
 
-- O módulo `goals` não é considerado contrato canônico estabilizado neste momento.
-- Schema histórico, ORM, schemas Pydantic e service divergem em taxonomia e semântica.
-- Nenhuma migration será criada apenas para limpar o `alembic check`.
-- O redesenho funcional e estrutural está rastreado pela #246 e deve evoluir em conjunto com a #57.
-- `goal_allocations` legado já foi tratado separadamente; a futura arquitetura deve evitar duplicação com `portfolio_class_targets`.
+### Fase 3 — Performance e benchmarks
 
-### Navegação por carteira
+- [ ] #150 — histórico persistido do IBOV;
+- [ ] #149 — TWR diário de Tesouro Direto e Renda Fixa;
+- [ ] reconciliar snapshots de classe e consolidado.
 
-Rotas atuais:
+### Fase 4 — Retomada operacional
 
-- `/carteira`;
-- `/carteira/patrimonio`;
-- `/carteira/rentabilidade`;
-- `/carteira/transacoes`;
-- `/carteira/proventos`;
-- `/carteira/metas`;
-- `/carteira/irpf`;
-- `/carteira/configuracoes`.
+Bloqueada pelas fases anteriores e pela #227.
 
-A existência da rota de Metas não implica estabilidade do contrato de domínio; ela permanece sujeita ao redesenho #246/#57. `/metas` e `/irpf` continuam como redirects temporários.
+- [ ] #226 — executar duas rodadas reais controladas de Proventos;
+- [ ] #216 — reconciliar e fechar gate de seeds;
+- [ ] #158 — retomar CSV, posições, snapshots e reconciliação financeira;
+- [ ] somente após certificação, autorizar primeira carga real.
 
-## Blocos em execução
+### Fase 5 — Metas + Análise de Carteira
 
-### 1. Promoção estrutural
+Somente após estabilização e promoção da base:
 
-- [x] Backend verde e sem regressões conhecidas nos macroblocos promovidos.
-- [x] Frontend verde e com build aprovado.
-- [x] IRPF promovido pela PR #237.
-- [x] Rentabilidade promovida pela PR #240.
-- [x] `main` reintegrada à `stable-15jun` sem divergência para trás.
-- [ ] Encerrar formalmente #241 e sincronizar toda a documentação final.
-- [ ] Auditar arquitetura, serviços, endpoints e legado remanescente.
-- [ ] Abrir PR estrutural `stable-15jun` → `main` após a certificação final.
+- [ ] tratar #246 + #57 como um único macroprojeto;
+- [ ] definir domínio antes de migration;
+- [ ] decidir taxonomia de metas e fronteira com `portfolio_class_targets`;
+- [ ] definir valores calculados versus persistidos;
+- [ ] redesenhar schema, ORM, API e frontend de forma coerente.
 
-### 2. IRPF
+## Classificação das Issues abertas
 
-- [x] Motor canônico e contratos versionados.
-- [x] Frontend e exportações migrados.
-- [x] Consumers e persistência `IRPFReport` legados removidos.
-- [x] Promoção para `main` concluída.
-- [ ] Validar PDF, CSV e apuração com carteira real representativa quando houver dados homologados.
-- [ ] Avaliar remoção física do endpoint completo legado após auditoria externa de consumidores.
+### Trabalho atual
 
-### 3. Rentabilidade
+- #227 — gate-mãe de estabilização.
+- #247 — governança + auditoria pós-convergência.
 
-- [x] Consumidores migrados.
-- [x] Invalidação de cache isolada.
-- [x] Fachada legada removida.
-- [x] Promoção para `main` concluída.
+### Bloqueadas / dependentes
 
-### 4. Eventos corporativos e Alembic
+- #129 — confirmar pendências reais durante #247.
+- #150 — após #247.
+- #149 — após #247.
+- #226 — execução real bloqueada.
+- #216 — depende de #226.
+- #158 — depende de #216/#226 e certificação.
+- #246 + #57 — bloqueadas até estabilização da base.
 
-- [x] Inventariar e classificar legado em fluxos read-only.
-- [x] Estruturar bootstrap canônico por capacidades neutras.
-- [x] Adicionar planejamento, cobertura, dependências e identidade auditável.
-- [x] Validar `upgrade head`, `current` e reexecução idempotente em PostgreSQL vazio.
-- [x] Criar Issue #241, inventários e gates contra autogenerate monolítico.
-- [x] Classificar e tratar `app_config`, `irpf_reports`, `fx_rates`, `goal_allocations` e tabelas fiscais legadas.
-- [x] Migrar `/usd-brl` para leitor persistido DB-first e alinhar `fx_rates` no MetaData.
-- [x] Alinhar por domínio ativos, Proventos, eventos corporativos, transactions, Renda Fixa, posições, snapshots, usuários, portfólios e configurações.
-- [x] Formalizar `goals` como exceção arquitetural consciente, delegada à #246/#57.
-- [ ] Fechar #241 após sincronização documental e registro da certificação final.
-- [ ] Auditar consumidores restantes do motor canônico (#129).
-- [ ] Evoluir adapters sem expor payloads de fornecedor (#130).
-- [ ] Consolidar registry por capacidade (#127).
+### Backlog / evolução não bloqueadora
 
-### 5. Performance e benchmarks
+- #58 — Janela Global do Ativo.
+- #83 — Backup/Restore pela interface.
+- #90 — refinamento UX de Patrimônio.
+- #97 — Google OAuth.
+- #127 — provedores configuráveis pelo Superadmin.
+- #130 — evolução ampla BRAPI/enriquecimento, exceto itens necessários para achados da auditoria.
 
-- [ ] Materializar histórico persistido do IBOV (#150).
-- [ ] Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
+## PRs Dependabot
 
-### 6. Retomada operacional
+Fila técnica separada do roadmap funcional. Abertas em 07/08/2026:
 
-Somente após os gates anteriores:
+- #236 — `undici` 7.29.0, com correções de segurança;
+- #235 — `hadolint-action` 3.4.0;
+- #234 — patches React;
+- #231 — build-tools, incluindo TypeScript 7; risco maior e revisão obrigatória;
+- #230 — FastAPI/Uvicorn;
+- #223 — `@hookform/resolvers`.
 
-- [ ] Executar duas rodadas reais do contrato `pre-prod-dividends-seed.v2` (#226).
-- [ ] Reconciliar #158 e #216.
-- [ ] Importar CSV real.
-- [ ] Reconstruir posições e snapshots.
-- [ ] Executar auditoria financeira final.
+Nenhuma deve ser incorporada automaticamente durante a reorganização. Cada PR exige avaliação de risco, CI e compatibilidade.
 
-### 7. Macroprojeto Metas + Análise de Carteira
+## Estado operacional
 
-Somente após a estabilização definitiva da base:
+- Benchmarks e câmbio: seeds executados e reconciliados.
+- Proventos: contrato `pre-prod-dividends-seed.v2` concluído, execução real pendente e bloqueada.
+- Contração física de tabelas legadas de Proventos: preparada, não executada.
+- CSV real, posições e snapshots: suspensos.
+- Boot de sincronização de mercado: desabilitado por padrão.
+- Rebuilds/seeds externos: opt-in.
 
-- [ ] Definir contrato de domínio conjunto (#246 + #57).
-- [ ] Decidir taxonomia de metas e relação com `portfolio_class_targets`.
-- [ ] Definir KPIs calculados versus valores persistidos.
-- [ ] Redesenhar schema/ORM/API/frontend sem preservar dívida apenas por compatibilidade histórica.
-- [ ] Criar migrations pequenas, defensivas e reversíveis apenas após o desenho estar aprovado.
+## Gate para promoção estrutural
 
-## Próximas prioridades
+A próxima PR `stable-15jun` → `main` deve ser preparada apenas quando:
 
-1. Encerrar formalmente #241 sem tocar em `goals`.
-2. Fazer auditoria arquitetural global de legado, serviços e endpoints após a convergência.
-3. Sincronizar documentação final e abrir a PR estrutural `stable-15jun` → `main`.
-4. Consolidar eventuais consumidores restantes de eventos corporativos (#129/#130/#127).
-5. Implementar IBOV persistido e TWR dedicado.
-6. Retomar pré-produção somente após a certificação da #227.
-7. Iniciar #246 + #57 apenas depois da base estabilizada.
+1. a Etapa 1 da #247 estiver documentalmente limpa;
+2. a auditoria arquitetural da Etapa 2 estiver concluída;
+3. achados críticos tiverem decisão explícita;
+4. testes estruturais/runtime estiverem verdes;
+5. documentação e Issues estiverem sincronizadas novamente.
