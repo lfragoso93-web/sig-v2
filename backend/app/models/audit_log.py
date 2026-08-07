@@ -30,11 +30,11 @@ class AuditLog(Base, TimestampMixin):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     action: Mapped[str] = mapped_column(String(20), nullable=False)
     resource_type: Mapped[str] = mapped_column(String(50), nullable=False)
     resource_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    portfolio_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("portfolios.id", ondelete="SET NULL"), nullable=True, index=True)
+    portfolio_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("portfolios.id", ondelete="SET NULL"), nullable=True)
 
     old_values: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     new_values: Mapped[dict | None] = mapped_column(JSON, nullable=True)
