@@ -15,9 +15,9 @@
 
 ## Decisão vigente
 
-O SGI v2 está em **governança e estabilização arquitetural antes da próxima fase funcional**.
+O SGI v2 está em **auditoria arquitetural pós-convergência**.
 
-A Issue #227 é o gate-mãe antes de dados reais. A Issue #247 é a executora do trabalho imediato.
+A Issue #227 é o gate-mãe antes de dados reais. A Issue #247 executa o trabalho imediato.
 
 Até o encerramento da #227:
 
@@ -43,24 +43,25 @@ Até o início do macroprojeto #246 + #57:
 
 ### AGORA
 
-1. #247 — reconciliar documentação viva, Issues e PRs.
-2. #247 — auditar arquitetura global, serviços, routers, endpoints, aliases, integrações e legado.
-3. Confirmar pendências reais de #129 e somente os itens necessários de #130/#127.
+1. #247 — continuar auditoria de routers, serviços, endpoints, aliases e integrações.
+2. Confirmar/remover placeholders e compatibilidades somente com prova de consumidores.
+3. Consolidar achados reais de #129 e somente itens necessários de #130/#127.
+4. Certificar a auditoria com testes estruturais, build/import e documentação sincronizada.
 
 ### DEPOIS
 
-4. #150 — histórico persistido do IBOV.
-5. #149 — TWR dedicado de Tesouro Direto e Renda Fixa.
+5. #150 — histórico persistido do IBOV.
+6. #149 — TWR dedicado de Tesouro Direto e Renda Fixa.
 
 ### BLOQUEADO ATÉ CERTIFICAÇÃO
 
-6. #226 — duas execuções reais controladas de Proventos.
-7. #216 — gate agregado de seeds.
-8. #158 — CSV, posições, snapshots e reconciliação.
+7. #226 — duas execuções reais controladas de Proventos.
+8. #216 — gate agregado de seeds.
+9. #158 — CSV, posições, snapshots e reconciliação.
 
 ### PRÓXIMA GRANDE FASE FUNCIONAL
 
-9. #246 + #57 — Metas + Análise de Carteira.
+10. #246 + #57 — Metas + Análise de Carteira.
 
 Backlog não bloqueador: #58, #83, #90, #97 e evoluções amplas de #127/#130 não exigidas por achados da auditoria.
 
@@ -97,44 +98,57 @@ Cada checkpoint deve registrar:
 
 ## Estado atual — 07/08/2026
 
-### Backend e arquitetura
+### Baseline certificado localmente
 
-Baseline estrutural de referência: `17beeb9e6ae70f51d523e273bebda368872f81de`.
+HEAD certificado antes do ciclo atual: `08414af3a7b570ae9753e83ba5eecf2c17f20e42`.
 
-- Build Docker: aprovado.
-- `compileall`: aprovado.
-- Suíte estrutural final: 15 testes aprovados.
-- `app.main` importado integralmente.
-- Consumers legados de `AppConfig` e `IRPFReport` removidos e protegidos por gates.
-- Transactions alinhado ao contrato físico migrado.
-- Proventos, Eventos Corporativos, IRPF e Snapshots consolidados.
-- `fx_rates` participa do MetaData e o leitor USD/BRL é exclusivamente DB-first.
-- Alembic endurecido por gates contra autogenerate monolítico e remoções acidentais.
-- #241 encerrada; diff remanescente limitado a `goals` por decisão arquitetural.
+Validação executada em Docker:
 
-Commits posteriores ao baseline nesta etapa foram apenas de governança/documentação e não alteraram runtime ou schema.
+- rebuild do backend aprovado;
+- `test_transactions_no_automatic_market_sync.py` + `test_price_history_router_db_first.py` + `test_removed_model_consumers_and_main_import.py`: **7 passed**;
+- `python -m compileall -q app tests`: aprovado;
+- import integral de `app.main`: aprovado;
+- working tree local limpa.
+
+### Auditoria Etapa 2 — alterações posteriores ao baseline
+
+Já corrigido/publicado:
+
+- `prices` é leitura DB-first e possui gate contra provider/backfill no request;
+- `transactions` não dispara onboarding, preços, logos, eventos ou backfill de Proventos automaticamente após POST/PATCH;
+- `performance` não expõe mais POST público de rebuild de snapshots; serviços internos permanecem para operação explícita;
+- `positions` não aceita mais `refresh=true` e não atualiza cotações durante GET financeiro;
+- gates estruturais protegem `prices`, `transactions`, `performance` e `positions`;
+- `rentabilidade` foi classificado como superfície GET/DB-first;
+- `quotes` foi classificado como placeholder redundante candidato a remoção após prova final de consumidores;
+- `assets` permanece superfície mista: leitura local + descoberta/provider interativa; essa fronteira não deve vazar para cálculos financeiros.
+
+Documento de inventário: `docs/ROUTER_ENDPOINT_AUDIT_2026-08.md`.
 
 ### Frontend
 
 - IRPF permanece integrado aos contratos canônicos.
 - `/carteira/metas` existe como superfície atual, mas o domínio não é considerado estabilizado.
-- `/irpf` e `/metas` permanecem redirects temporários e serão auditados por consumidor na #247.
-- Análise de Carteira não deve ser tratada como backend funcional concluído; o router atual será revisitado apenas em #246 + #57.
+- `/irpf` e `/metas` permanecem redirects temporários em auditoria.
+- Análise de Carteira continua bloqueada para #246 + #57.
+- `performanceService.ts` não expõe a antiga porta de backfill; seu contrato histórico ainda precisa ser comparado com as rotas backend antes de decidir se é client órfão.
 
 ### Operação
 
 - Boot de sincronização de mercado permanece desabilitado por padrão.
+- CRUD de transações não inicia mais ingestão externa automática.
+- GETs financeiros de preços/posições auditados permanecem DB-first.
 - Seeds, rebuilds e cargas reais permanecem suspensos pela #227.
 - Proventos real (#226), gate de seeds (#216) e rebuild (#158) permanecem bloqueados.
 
 ## Próximo bloco objetivo
 
-1. Concluir a sincronização documental da Etapa 1 da #247.
-2. Atualizar Issues abertas que ainda contenham estado comprovadamente obsoleto.
-3. Registrar no CHANGELOG a reorganização de governança.
-4. Encerrar a Etapa 1 da #247 quando todos os critérios estiverem atendidos.
-5. Só então iniciar a auditoria técnica da Etapa 2.
-6. Não iniciar #246/#57 nem cargas reais antes dessa estabilização.
+1. Validar localmente os novos gates de `performance` e `positions` junto aos gates anteriores.
+2. Fechar a prova de consumidores do router placeholder `quotes`; remover apenas se ausência estiver comprovada, preservando `quotes_service` interno.
+3. Revisar `assets.detail` e a fronteira entre cotação live e leitura financeira persistida.
+4. Revisar `portfolios`, `admin`, `irpf` e `class_targets` por mutações/aliases redundantes.
+5. Revisar `dividends` e `performanceService.ts` como compatibilidades/client potencialmente órfãos.
+6. Não iniciar #246/#57 nem cargas reais antes da certificação estrutural.
 
 ## Prompt mínimo para nova conversa
 
@@ -144,12 +158,15 @@ Commits posteriores ao baseline nesta etapa foram apenas de governança/document
 
 Repositório: lfragoso93-web/sig-v2
 Branch obrigatória: stable-15jun
+Issue executora: #247
+Gate-mãe: #227
 
 Antes de alterar código:
 - confirme o HEAD remoto;
 - compare stable-15jun com main;
 - leia #247 e #227;
-- revise todas as PRs abertas e a documentação viva;
+- revise PRs abertas e documentação viva;
 - preserve `goals` como exceção deliberada e não crie migration para esse domínio;
-- prossiga da ordem canônica: governança → auditoria → performance → operação → Metas+Análise.
+- mantenha requests financeiros DB-first e operações externas/rebuilds explicitamente opt-in;
+- prossiga do próximo bloco objetivo deste documento.
 ```
