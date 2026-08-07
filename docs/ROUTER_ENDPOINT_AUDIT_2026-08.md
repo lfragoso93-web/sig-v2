@@ -4,7 +4,7 @@ Issue executora: #247
 
 ## Objetivo
 
-Inventariar as superfícies HTTP registradas no `app.main`, classificando cada router por papel arquitetural antes de qualquer remoção ou refatoração. Este documento não autoriza mudança funcional por si só; ele registra a fronteira atual e os candidatos a investigação.
+Inventariar as superfícies HTTP registradas no `app.main`, classificando cada router por papel arquitetural antes de qualquer remoção ou refatoração. Este documento registra a fronteira atual, os achados corrigidos e os candidatos ainda em investigação.
 
 ## Classificação
 
@@ -33,8 +33,16 @@ Inventariar as superfícies HTTP registradas no `app.main`, classificando cada r
 - Prefixo registrado: `/api/v1/fixed-income`.
 - Comportamento atual: `501 Not Implemented`.
 - Metadata antiga de sprint removida.
-- O domínio financeiro de Renda Fixa já possui valuation, contratos e serviços canônicos em outras superfícies; portanto esse placeholder não deve ser interpretado como ausência do domínio.
-- Antes de remover ou substituir o router, confirmar se existe consumidor externo documentado.
+- O domínio financeiro de Renda Fixa já possui valuation, contratos e serviços canônicos em outras superfícies.
+- Antes de remover o router, confirmar ausência de consumidor externo documentado.
+
+### Quotes — PLACEHOLDER REDUNDANTE EM AUDITORIA
+
+- Router: `backend/app/routers/quotes.py`.
+- Prefixo registrado: `/api/v1/quotes`.
+- Retorna `501` e declara que a funcionalidade é coberta por `/api/v1/prices`.
+- Busca indexada não encontrou consumidor da rota.
+- Candidato à remoção física após fechar a prova de consumidores/imports, sem confundir o router placeholder com `quotes_service`, que continua sendo infraestrutura interna de cotações.
 
 ### Proventos — CANÔNICO
 
@@ -62,26 +70,39 @@ Inventariar as superfícies HTTP registradas no `app.main`, classificando cada r
 - A docstring antiga que dizia buscar automaticamente dados desatualizados foi corrigida.
 - Gate estrutural em `test_price_history_router_db_first.py` impede imports de integrações/backfills no router.
 
-### Performance backfill — OPERACIONAL EM AUDITORIA
+### Performance — READ-ONLY APÓS CORREÇÃO
 
 - Router: `backend/app/routers/performance.py`.
-- Endpoint mutável: `POST /api/v1/performance/{portfolio_id}/evolution/backfill`.
-- Reconstrói snapshots consolidados e por classe.
-- Exige autenticação e ownership, mas é uma operação de reconstrução exposta na API comum.
-- Busca indexada não encontrou consumidor explícito pelo endpoint/funções; isso não é evidência suficiente para remoção.
-- Requer decisão específica sob #227: manter, restringir, mover para superfície operacional/admin ou remover após caracterização.
+- O antigo `POST /api/v1/performance/{portfolio_id}/evolution/backfill` permitia reconstrução de snapshots pela API comum de usuário.
+- Nenhum consumidor frontend/repositório foi encontrado para a porta HTTP.
+- A porta HTTP pública foi removida; os serviços internos de backfill/rebuild permanecem disponíveis para fluxos operacionais explícitos.
+- O router agora contém somente GETs de leitura/reconciliação.
+- Gate `test_performance_router_read_only.py` impede reintrodução de `@router.post`, da rota de backfill e de imports dos rebuilders.
 
-### Transactions — ALTA PRIORIDADE DE AUDITORIA
+### Transactions — CRUD CANÔNICO, SYNC EXTERNO DESACOPLADO
 
 - Router: `backend/app/routers/transactions.py`.
-- CRUD de transações é funcional e esperado.
-- Após `POST`/`PATCH`, o router agenda `run_onboarding` e `_run_backfill` como `BackgroundTasks`.
-- `run_onboarding` chama `sync_asset_market_data(full=True, sync_prices=True, sync_logo=True, sync_events=True, commit=True)`.
-- O pipeline consulta providers externos e persiste preços/eventos.
-- `_run_backfill` chama `backfill_dividends`, que também consulta fontes externas.
-- Portanto uma mutação normal de transação pode iniciar sincronização externa automaticamente.
-- Isso entra em tensão com o gate #227, que exige seeds/syncs/rebuilds externos explícitos e opt-in.
-- Não alterar ainda: caracterizar testes, efeitos esperados e separar atualização derivada local (snapshots/cache) de ingestão externa antes da correção.
+- CRUD de transações permanece funcional.
+- O comportamento anterior agendava `run_onboarding` e backfill de Proventos após `POST`/`PATCH`, iniciando providers externos automaticamente.
+- Essa ingestão externa foi removida do CRUD.
+- Permanecem efeitos locais necessários: cadastro básico do ativo, atualização derivada de Renda Fixa/Tesouro quando aplicável, snapshots e invalidação de cache.
+- Gate `test_transactions_no_automatic_market_sync.py` impede reintrodução de onboarding/pipeline/backfill de mercado no router.
+
+### Positions — CANÔNICO DB-FIRST APÓS CORREÇÃO
+
+- Router: `backend/app/routers/positions.py`.
+- Os GETs de posições e resumo aceitavam `refresh=true`, que chamava `update_quotes_for_portfolio` durante o request financeiro.
+- Busca indexada não encontrou consumidor do contrato `refresh`.
+- O parâmetro e a chamada de atualização foram removidos.
+- As superfícies agora leem exclusivamente dados persistidos e delegam cálculo ao `portfolio_service`.
+- Gate `test_positions_router_db_first.py` impede reintrodução do refresh ou de `quotes_service` no router.
+
+### Rentabilidade — CANÔNICO DB-FIRST
+
+- Router: `backend/app/routers/rentabilidade.py`.
+- Expõe somente GETs de KPIs, resultados por ativo/classe, benchmarks persistidos e reconciliação.
+- Benchmarks são lidos exclusivamente do banco.
+- Nenhum endpoint mutável/rebuild foi identificado nesta superfície.
 
 ### Assets — FRONTEIRA MISTA
 
@@ -99,7 +120,7 @@ Inventariar as superfícies HTTP registradas no `app.main`, classificando cada r
 - `GET /api/v1/assets/tesouro/price`;
 - `GET /api/v1/assets/quote/{ticker}`.
 
-Essas superfícies de descoberta podem consultar BRAPI/Yahoo e não devem ser confundidas com contratos financeiros DB-first. A auditoria deve manter essa fronteira explícita e impedir que esses endpoints sejam reutilizados dentro de cálculo financeiro canônico.
+Essas superfícies de descoberta podem consultar provider e não devem ser confundidas com contratos financeiros DB-first. A auditoria deve manter essa fronteira explícita e impedir que sejam reutilizadas dentro de cálculo financeiro canônico.
 
 ### Debug — CONDICIONAL/ADMIN SENSÍVEL
 
@@ -115,14 +136,15 @@ Essas superfícies de descoberta podem consultar BRAPI/Yahoo e não devem ser co
 - `/carteira/metas` existe, mas `goals` permanece fora do escopo funcional até #246/#57.
 - `/metas` e `/irpf` são redirects de compatibilidade explícitos.
 - Não há rota de Análise atualmente registrada no frontend protegido.
+- `performanceService.ts` não expõe backfill; a busca indexada também não encontrou consumidor da rota removida.
 
 ## Prioridades da próxima rodada
 
-1. **P0/P1:** caracterizar e desacoplar ingestão externa automática do CRUD de `transactions`, preservando apenas recomputações locais necessárias.
-2. **P1:** decidir destino do POST de backfill de `performance` após comprovar consumidores/testes.
-3. **P1:** revisar `assets.detail`/fachada de preços para separar claramente cotação live de leitura persistida.
-4. **P2:** continuar inventário de `admin`, `portfolios`, `positions`, `quotes`, `rentabilidade`, `irpf` e `class_targets`.
-5. **P2:** decidir remoção de placeholders/compatibilidades somente após prova de ausência de consumidores.
+1. **P1:** revisar `assets.detail`/fachada de preços e separar cotação live de leitura persistida quando a página for financeira.
+2. **P1:** fechar prova de consumidores do router placeholder `quotes` e, se confirmada, removê-lo sem tocar em `quotes_service`.
+3. **P1/P2:** revisar `portfolios`, `admin`, `irpf` e `class_targets` por mutações/aliases redundantes.
+4. **P2:** decidir destino de `dividends` após prova de consumidores externos.
+5. **P2:** revisar `performanceService.ts`, cuja rota histórica precisa ser comparada com a superfície backend atual antes de decidir remoção do client órfão.
 
 ## Regra de remoção
 
