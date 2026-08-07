@@ -1,8 +1,8 @@
 """Estado em memória do bootstrap/readiness do SGI v2.
 
 O processo HTTP pode estar vivo sem que o ambiente esteja liberado para uso
-real. Este módulo mantém essa distinção explícita durante o ciclo de vida do
-processo.
+real. O estado READY indica que a versão corrente do bootstrap terminou; a
+liberação operacional depende adicionalmente de certificação explícita.
 """
 from __future__ import annotations
 
@@ -26,15 +26,21 @@ class BootstrapReadiness:
     finished_at: str | None = None
     failed_stage: str | None = None
     detail: str | None = None
+    certified_for_real_data: bool = False
 
     @property
-    def ready(self) -> bool:
+    def bootstrap_complete(self) -> bool:
         return self.state is BootstrapReadinessState.READY
+
+    @property
+    def ready_for_real_data(self) -> bool:
+        return self.bootstrap_complete and self.certified_for_real_data
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         payload["state"] = self.state.value
-        payload["ready"] = self.ready
+        payload["bootstrap_complete"] = self.bootstrap_complete
+        payload["ready_for_real_data"] = self.ready_for_real_data
         return payload
 
 
@@ -48,16 +54,22 @@ def mark_bootstrap_running(*, schema_version: str, started_at: str) -> None:
     _readiness.finished_at = None
     _readiness.failed_stage = None
     _readiness.detail = None
+    _readiness.certified_for_real_data = False
 
 
-def mark_bootstrap_finished(report) -> None:
+def mark_bootstrap_finished(report, *, certified_for_real_data: bool = False) -> None:
     _readiness.schema_version = report.schema_version
     _readiness.started_at = report.started_at
     _readiness.finished_at = report.finished_at
+    _readiness.certified_for_real_data = bool(certified_for_real_data and report.ok)
     if report.ok:
         _readiness.state = BootstrapReadinessState.READY
         _readiness.failed_stage = None
-        _readiness.detail = "bootstrap concluído"
+        _readiness.detail = (
+            "bootstrap certificado para dados reais"
+            if _readiness.certified_for_real_data
+            else "bootstrap parcial concluído; certificação operacional pendente"
+        )
         return
 
     _readiness.state = BootstrapReadinessState.FAILED
@@ -69,6 +81,7 @@ def mark_bootstrap_finished(report) -> None:
 def mark_bootstrap_disabled(*, detail: str) -> None:
     _readiness.state = BootstrapReadinessState.NOT_STARTED
     _readiness.detail = detail
+    _readiness.certified_for_real_data = False
 
 
 def get_bootstrap_readiness() -> BootstrapReadiness:
