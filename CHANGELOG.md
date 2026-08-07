@@ -5,6 +5,17 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — reorganização de governança e roadmap (07/08/2026)
+
+- A Issue #227 foi atualizada como gate-mãe de estabilização antes de dados reais.
+- A Issue #247 passou a executar primeiro a reconciliação de documentação, Issues e PRs e, somente depois, a auditoria técnica de legado, serviços, routers e endpoints.
+- As Issues abertas foram classificadas em trabalho atual, bloqueadas/dependentes e backlog para evitar competição de prioridades.
+- README, ROADMAP, arquitetura e continuidade agora usam uma única ordem canônica: governança → auditoria → IBOV/TWR → retomada operacional → Metas + Análise.
+- Percentuais de progresso foram removidos do ROADMAP quando não representavam uma métrica objetiva verificável.
+- A #241 foi removida das pendências: está encerrada, com `goals` preservado como exceção arquitetural deliberada.
+- As PRs Dependabot abertas foram separadas do roadmap funcional e devem ser avaliadas individualmente por risco, compatibilidade e CI.
+- Nenhuma funcionalidade, migration, schema ou runtime foi alterado neste bloco de governança.
+
 ### Alterado — fechamento arquitetural da convergência Alembic/ORM (07/08/2026)
 
 - A Issue #241 passa a considerar concluída a convergência de todos os domínios estabilizados fora de `goals`.
@@ -122,6 +133,8 @@ Formato baseado em Keep a Changelog.
 - Confirmado que os endpoints e exports canônicos de IRPF são read-only e não consultam nem persistem `IRPFReport`.
 - `IRPFReport` foi removido do agregador `app.models`, do relacionamento de `Portfolio` e do arquivo `backend/app/models/irpf.py`.
 - O projeto não criará a tabela `irpf_reports` apenas para silenciar o `alembic check`.
+- `irpf_records` e `irpf_losses` permanecem preservadas como schema legado mensal até fixture sintética, inventário de dados e decisão destrutiva explícita.
+- Nenhuma migration, DDL, tabela ou dado foi alterado neste bloco.
 
 ### Removido — modelo duplicado `AppConfig` (06/08/2026)
 
