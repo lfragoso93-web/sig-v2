@@ -1,61 +1,37 @@
-from sqlalchemy import (
-    Boolean,
-    Column,
-    DateTime,
-    ForeignKey,
-    Index,
-    Integer,
-    Numeric,
-    String,
-    Text,
-    text,
-)
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
-
 from app.core.database import Base
+import datetime
 
 
 class Goal(Base):
     __tablename__ = "goals"
-    __table_args__ = (
-        Index("ix_goals_portfolio_id", "portfolio_id"),
-    )
 
-    id = Column(Integer, primary_key=True, index=True)
-    portfolio_id = Column(
-        Integer,
-        ForeignKey("portfolios.id", ondelete="CASCADE"),
-        nullable=False,
-    )
+    id              = Column(Integer, primary_key=True, index=True)
+    portfolio_id    = Column(Integer, ForeignKey("portfolios.id"), nullable=False)
 
-    # Contrato funcional atual da API/service.
-    # Valores aceitos são validados no schema Pydantic.
-    goal_type = Column(String(30), nullable=False, default="LIVRE")
+    # tipo da meta
+    # PATRIMONIO | PROVENTOS | RENTABILIDADE | LIVRE
+    goal_type       = Column(String, nullable=False, default="LIVRE")
 
-    name = Column(String(150), nullable=False)
-    description = Column(Text, nullable=True)
+    name            = Column(String, nullable=False)
+    description     = Column(String, nullable=True)
 
-    # Persistência exata em NUMERIC, mantendo floats no runtime do service atual.
-    target_value: float = Column(Numeric(18, 2, asdecimal=False), nullable=False)
-    current_value: float = Column(
-        Numeric(18, 2, asdecimal=False),
-        nullable=False,
-        default=0.0,
-        server_default=text("0"),
-    )
-    base_value: float = Column(
-        Numeric(18, 2, asdecimal=False),
-        nullable=False,
-        default=0.0,
-        server_default=text("0"),
-    )
-    monthly_contribution: float | None = Column(
-        Numeric(18, 2, asdecimal=False), nullable=True
-    )
+    # valor alvo informado pelo usuário
+    target_value    = Column(Float, nullable=False)
 
-    target_date = Column(DateTime(timezone=True), nullable=True)
-    is_active = Column(Boolean, nullable=False, default=True, server_default=text("true"))
-    created_at = Column(DateTime(timezone=True), nullable=True, server_default=text("now()"))
-    updated_at = Column(DateTime(timezone=True), nullable=True, server_default=text("now()"))
+    # valor atual (snapshot no momento da criação; atualizado manualmente em LIVRE)
+    current_value   = Column(Float, default=0.0)
+
+    # valor base no momento da criação (usado para calcular progresso relativo)
+    base_value      = Column(Float, default=0.0)
+
+    # aporte mensal projetado pelo usuário (usado para calcular data projetada)
+    monthly_contribution = Column(Float, nullable=True)
+
+    # data alvo (opcional — informada manualmente ou calculada automaticamente)
+    target_date     = Column(DateTime, nullable=True)
+
+    created_at      = Column(DateTime, default=datetime.datetime.utcnow)
 
     portfolio = relationship("Portfolio", back_populates="goals")
