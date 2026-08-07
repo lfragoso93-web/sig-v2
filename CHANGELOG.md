@@ -5,6 +5,14 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — alinhamento de índices e metadados Alembic/MetaData (07/08/2026)
+
+- `rate_history` passou a representar `uq_rate_history_indicator_date` como índice único, exatamente como a migration `014`, e recuperou os comentários canônicos de `indicator` e `source`.
+- `fixed_income_investments` deixou de pedir o índice simples inexistente `ix_fixed_income_investments_portfolio_id` e passou a refletir o comentário canônico de `daily_liquidity` da migration `015`.
+- `portfolio_snapshots` passou a representar os três índices de consulta criados pela migration `005`, além do índice DESC já alinhado anteriormente.
+- Adicionados gates específicos para `rate_history`, Renda Fixa e snapshots.
+- Nenhuma migration, DDL ou dado foi alterado nesses alinhamentos.
+
 ### Corrigido — alinhamento de índices Alembic/MetaData (06/08/2026)
 
 - `asset_prices` passou a representar no ORM o índice físico `idx_ap_asset_ts (asset_id, timestamp DESC)`.
