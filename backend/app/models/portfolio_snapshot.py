@@ -17,7 +17,7 @@ from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Date, ForeignKey, Index, Numeric, UniqueConstraint
+from sqlalchemy import Boolean, Date, ForeignKey, Index, Numeric, UniqueConstraint, desc
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -37,8 +37,7 @@ class PortfolioSnapshot(Base, TimestampMixin):
         Index(
             "idx_ps_portfolio_date_desc",
             "portfolio_id",
-            "snapshot_date",
-            postgresql_ops={"snapshot_date": "DESC"},
+            desc("snapshot_date"),
         ),
     )
 
