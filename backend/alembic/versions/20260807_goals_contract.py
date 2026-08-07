@@ -8,11 +8,22 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 revision: str = "20260807_goals_contract"
 down_revision: str = "20260807_pos_snap_ts_nn"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
+
+_LEGACY_GOAL_TYPE = postgresql.ENUM(
+    "PATRIMONIO_ALVO",
+    "ALOCACAO",
+    "DY_MENSAL",
+    "RENTABILIDADE",
+    "APORTE_MENSAL",
+    name="goaltype",
+    create_type=False,
+)
 
 
 def _assert_goals_empty() -> None:
@@ -30,14 +41,7 @@ def upgrade() -> None:
     op.alter_column(
         "goals",
         "goal_type",
-        existing_type=sa.Enum(
-            "PATRIMONIO_ALVO",
-            "ALOCACAO",
-            "DY_MENSAL",
-            "RENTABILIDADE",
-            "APORTE_MENSAL",
-            name="goaltype",
-        ),
+        existing_type=_LEGACY_GOAL_TYPE,
         type_=sa.String(length=30),
         existing_nullable=False,
         postgresql_using="goal_type::text",
@@ -94,15 +98,7 @@ def downgrade() -> None:
         "goals",
         "goal_type",
         existing_type=sa.String(length=30),
-        type_=sa.Enum(
-            "PATRIMONIO_ALVO",
-            "ALOCACAO",
-            "DY_MENSAL",
-            "RENTABILIDADE",
-            "APORTE_MENSAL",
-            name="goaltype",
-            create_type=False,
-        ),
+        type_=_LEGACY_GOAL_TYPE,
         existing_nullable=False,
         postgresql_using="goal_type::goaltype",
     )
