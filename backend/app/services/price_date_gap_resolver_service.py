@@ -9,7 +9,6 @@ Este é o único caminho de exceção ao runtime DB-first para preço histórico
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
@@ -24,7 +23,7 @@ from app.core.asset_types import INTL_TYPES, NO_QUOTE_TYPES, yf_ticker
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
 from app.services.asset_price_gap_sync_service import normalize_provider_symbol
-from app.services.price_history_service import get_price_at_date
+from app.services.price_history_service import _run_yf_with_throttle, get_price_at_date
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +84,7 @@ async def _fetch_window(
 
     if asset_type in INTL_TYPES or asset_type == AssetType.CRIPTO:
         symbol = yf_ticker(provider_symbol, asset_type)
-        rows = await asyncio.to_thread(_yf_history_sync, symbol, start, end)
+        rows = await _run_yf_with_throttle(_yf_history_sync, symbol, start, end)
         return rows, "yfinance_point_gap"
 
     from app.integrations.brapi import fetch_fii_historical_v2, fetch_stocks_historical_v2
