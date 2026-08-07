@@ -17,7 +17,7 @@ Em 07/08/2026, a evidência PostgreSQL local confirmou zero linhas com timestamp
 
 O contrato canônico passa a preservar a invariável do `TimestampMixin`: timestamps de criação e atualização não podem ser nulos.
 
-Não será feito backfill silencioso. Cada migration conta previamente as linhas incompatíveis e aborta com erro explícito se encontrar qualquer `NULL`.
+Não é feito backfill silencioso. Cada migration conta previamente as linhas incompatíveis e aborta com erro explícito se encontrar qualquer `NULL`.
 
 ## Cadeia de migrations
 
@@ -59,22 +59,24 @@ A revisão foi corrigida para `20260807_pos_snap_ts_nn` (22 caracteres), mantend
 - `nullable=False` no upgrade;
 - `nullable=True` no downgrade.
 
-## Evidência exigida antes da certificação
+## Certificação concluída
 
-- suíte focada verde;
-- `compileall` e `git diff --check` verdes;
-- upgrade de cada revisão;
-- consulta de `information_schema.columns` confirmando `is_nullable = NO`;
-- downgrade de cada bloco e confirmação de `YES` apenas no contrato revertido;
-- reaplicação até `head`;
-- novo `alembic check` sem divergências de nulabilidade nessas seis tabelas;
-- runtime saudável após a reaplicação final.
+A certificação local foi concluída em 07/08/2026:
 
-## Fora de escopo
+- suíte focada: `24 passed`;
+- `compileall`, `git diff --check` e working tree: verdes;
+- banco partiu de `20260807_drop_dup_rate_idx` após o rollback transacional da tentativa com revision ID inválido;
+- `upgrade head` aplicou as três migrations e alcançou `20260807_pos_snap_ts_nn (head)`;
+- `information_schema.columns` confirmou `is_nullable = NO` nos 12 campos;
+- downgrade isolado de `20260807_pos_snap_ts_nn` para `20260807_config_fixed_ts_nn` foi concluído;
+- reaplicação do head foi concluída;
+- o novo `alembic check` deixou de reportar divergências de nulabilidade nas seis tabelas.
 
-Este bloco não altera:
+## Fora de escopo após a certificação
 
-- `assets.created_at`, que ainda possui divergência de timezone/tipo;
+Permanecem fora deste bloco e passam a ser tratados separadamente:
+
+- `assets.created_at`, diferença de timezone já classificada como MetaData-only;
+- `asset_dividends.dividend_type`, cujo armazenamento físico canônico é `VARCHAR(20)`;
 - `goals`, cujo contrato possui diferenças estruturais maiores;
-- `transactions`, cujos timestamps estão ausentes do modelo e fazem parte de um contrato financeiro de alto risco;
-- `asset_dividends.dividend_type`.
+- `transactions`, cujos tipos financeiros e timestamps exigem revisão de consumidores antes de qualquer alinhamento.
