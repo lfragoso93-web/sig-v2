@@ -13,7 +13,7 @@ No HEAD `1e6276334dc27887bbeae3f0b5b69bbffe06d36c`:
 - a segunda execução de `upgrade head` foi idempotente;
 - `alembic check` detectou deriva ampla entre o schema migrado e o `MetaData` ORM.
 
-Após as contrações validadas de `goal_allocations`, `irpf_losses` e `irpf_records`, o runtime permaneceu saudável e o novo `alembic check` deixou de propor operações para esses contratos. Os lotes seguintes removeram progressivamente ruído de índices, comentários, tipos de representação e colunas físicas já migradas, mantendo mudanças destrutivas separadas.
+Após as contrações validadas de `goal_allocations`, `irpf_losses` e `irpf_records`, o runtime permaneceu saudável e o novo `alembic check` deixou de propor operações para esses contratos. Os lotes seguintes removeram progressivamente ruído de índices, comentários, tipos de representação, timestamps e colunas físicas já migradas, mantendo mudanças destrutivas separadas.
 
 ## Regras de tratamento
 
@@ -41,19 +41,19 @@ Após as contrações validadas de `goal_allocations`, `irpf_losses` e `irpf_rec
 | Snapshots | `portfolio_snapshots.id` | índice `ix_portfolio_snapshots_id` seria adicionado | índice redundante de PK removido do ORM | #241 |
 | Preços | `asset_prices` | `idx_ap_asset_ts` seria removido | MetaData alinhado ao índice físico `(asset_id, timestamp DESC)` | #241 |
 | Auditoria | `audit_logs` | índices DESC vs ASC e índices simples extras | MetaData alinhado aos índices físicos DESC; índices simples inexistentes removidos do ORM | #241 |
-| Posições | `portfolio_positions` | `idx_pp_portfolio` seria removido e `ix_portfolio_positions_asset_id` adicionado | índices alinhados; somente nulabilidade dos timestamps permanece | #241 |
+| Posições | `portfolio_positions` | índice e nulabilidade divergentes | índices alinhados e timestamps endurecidos para `NOT NULL` com validação PostgreSQL | #241 |
 | Alocação | `portfolio_class_targets` | `idx_pct_portfolio` seria removido | MetaData passa a descrever o índice físico criado pela migration de performance | #241 |
-| Taxas | `rate_history` | comentários e troca índice único ↔ unique constraint; banco preservado também possui índice duplicado `ix_rate_history_indicator_date_unique` | MetaData alinhado à migration `014`; migration defensiva remove apenas o índice físico duplicado quando o canônico `uq_rate_history_indicator_date` existe | #241 |
-| Renda fixa | `fixed_income_investments` | comentário, timestamps e índice simples ORM | comentário e índice resolvidos; somente nulabilidade dos timestamps permanece | #241 |
-| Snapshots | `portfolio_snapshots` | comentários, nulabilidade e índices | índices e comentários alinhados às migrations `005`/`20260713`; somente nulabilidade dos timestamps permanece | #241 |
-| Ativos | `assets` | nulabilidade, índices, constraints, comentários, tipo de timestamp e colunas físicas omitidas | `updated_at`/`isin_code`, índices, unique `(ticker, asset_type)`, `currency` e comentários de cache alinhados; `created_at` timezone ainda pendente | #129 / #130 / #241 |
-| Proventos | `asset_dividends` | enum e índices divergentes | índices físicos `idx_ad_asset_exdate_desc` e `ix_asset_dividends_approved_on` alinhados; enum `dividend_type` permanece pendente | #226 / #241 |
+| Taxas | `rate_history` | comentários e troca índice único ↔ unique constraint; banco preservado também possuía índice duplicado | MetaData alinhado à migration `014`; índice físico redundante removido por migration defensiva e certificada | #241 |
+| Renda fixa | `fixed_income_investments` | comentário, timestamps e índice simples ORM | comentário/índice alinhados e timestamps endurecidos para `NOT NULL` | #241 |
+| Snapshots | `portfolio_snapshots` | comentários, nulabilidade e índices | índices/comentários alinhados e timestamps endurecidos para `NOT NULL` | #241 |
+| Ativos | `assets` | nulabilidade, índices, constraints, comentários, tipo de timestamp e colunas físicas omitidas | colunas, índices, unique, currency, comentários e `created_at TIMESTAMPTZ` alinhados ao schema físico | #129 / #130 / #241 |
+| Proventos | `asset_dividends` | enum e índices divergentes | índices alinhados; `dividend_type` preserva `DividendType` em Python com armazenamento `VARCHAR(20)` não nativo | #226 / #241 |
 | Eventos corporativos | `corporate_events` | JSONB/JSON, índices e unique constraint divergentes | JSONB, quatro índices e `uq_corporate_events_source_identity` alinhados à migration canônica | #129 / #241 |
 | Transações | `transactions` | tipos, nulabilidade, índices e colunas | todos os índices migrados refletidos; tipos financeiros, `fees`, `notes` e timestamps continuam pendentes | #56 / #241 |
 | Metas | `goals` | colunas, tipos, FK, índices e colunas removidas | contrato divergente de alto risco ainda não tratado | #241 |
-| Portfólios | `portfolios` | nulabilidade de timestamps | pendente decisão de endurecimento físico para `NOT NULL` | #241 |
-| Usuários | `users` | nulabilidade de timestamps | pendente decisão de endurecimento físico para `NOT NULL` | #241 |
-| Configuração | `system_configs` | nulabilidade de timestamps | contrato atual; pendente decisão de endurecimento físico para `NOT NULL` | #241 |
+| Portfólios | `portfolios` | nulabilidade de timestamps | endurecido para `NOT NULL` após evidência de zero `NULL` | #241 |
+| Usuários | `users` | nulabilidade de timestamps | endurecido para `NOT NULL` após evidência de zero `NULL` | #241 |
+| Configuração | `system_configs` | nulabilidade de timestamps | endurecido para `NOT NULL` após evidência de zero `NULL` | #241 |
 
 ## Decisão consolidada — `fx_rates`
 
@@ -79,50 +79,41 @@ Após as contrações validadas de `goal_allocations`, `irpf_losses` e `irpf_rec
 - `rate_history` representa `uq_rate_history_indicator_date` como índice único, exatamente como a migration `014`, e preserva os comentários físicos.
 - `fixed_income_investments` deixou de pedir índice simples inexistente de `portfolio_id` e reflete o comentário da migration `015`.
 - `portfolio_snapshots` representa os índices das migrations `005`/`021`; comentários históricos coincidem com `005` e campos TWR adicionados por `20260713` não inventam comentários físicos ausentes.
-- `asset_dividends` representa os índices das migrations `021` e `027` sem alterar o enum ainda pendente.
+- `asset_dividends` representa os índices das migrations `021` e `027` e preserva `VARCHAR(20)` como armazenamento de `dividend_type` sem perder `DividendType` no runtime.
 - `transactions` representa `ix_transactions_portfolio_id`, os índices de `0020` e `idx_txn_portfolio_date_asc` de `021`, sem tocar nos tipos financeiros.
 - `corporate_events` representa JSONB, os quatro índices e a unique constraint definidos pela `20260731_corp_event_catalog`.
-- `assets` voltou a refletir colunas e índices já existentes (`updated_at`, `isin_code`, cache de preço e provider), além do nome físico `uq_asset_ticker_type` e `currency NOT NULL`.
+- `assets` reflete colunas e índices já existentes, o nome físico `uq_asset_ticker_type`, `currency NOT NULL` e `created_at` com timezone.
 
 ## Limpeza física isolada — `rate_history`
 
-A migration `20260807_drop_dup_rate_idx` trata apenas bancos preservados que possuem o índice órfão `ix_rate_history_indicator_date_unique` além do índice canônico `uq_rate_history_indicator_date`.
+A migration `20260807_drop_dup_rate_idx` tratou bancos preservados que possuíam o índice órfão `ix_rate_history_indicator_date_unique` além do índice canônico `uq_rate_history_indicator_date`.
 
-- upgrade verifica a existência do índice canônico antes de qualquer drop;
-- se o duplicado não existir, o upgrade é idempotente;
-- se o duplicado existir sem o canônico, a migration aborta;
-- downgrade recria somente o índice redundante removido;
-- nenhuma linha de `rate_history` é modificada.
+- upgrade verificou a existência do índice canônico antes do drop;
+- downgrade recriou somente o índice redundante removido;
+- upgrade/downgrade/reaplicação foram certificados localmente;
+- nenhuma linha de `rate_history` foi modificada.
 
-## Próxima decisão estrutural — timestamps
+## Endurecimento certificado — timestamps compartilhados
 
-A migration inicial criou `created_at`/`updated_at` com `DEFAULT now()` porém sem `NOT NULL` em `users`, `portfolios`, `fixed_income_investments`, `portfolio_positions` e `system_configs`; `portfolio_snapshots` seguiu o mesmo padrão na migration `005`. O `TimestampMixin` atual exige `nullable=False`.
+A evidência PostgreSQL confirmou zero linhas nulas em `users`, `portfolios`, `system_configs`, `fixed_income_investments`, `portfolio_positions` e `portfolio_snapshots`.
 
-A decisão recomendada é **não afrouxar o mixin**. Antes de uma migration de endurecimento:
+As migrations `20260807_users_portfolios_ts_nn`, `20260807_config_fixed_ts_nn` e `20260807_pos_snap_ts_nn`:
 
-1. contar linhas com `created_at IS NULL OR updated_at IS NULL` em cada tabela;
-2. bloquear a migration se qualquer linha inválida existir;
-3. aplicar `NOT NULL` em blocos pequenos e reversíveis;
-4. validar downgrade e reaplicação antes de avançar para contratos financeiros.
+- abortam se qualquer timestamp nulo existir;
+- não executam backfill silencioso;
+- tornam `created_at`/`updated_at` `NOT NULL`;
+- possuem downgrade reversível para `nullable=True`;
+- foram certificadas por upgrade, downgrade isolado e reaplicação;
+- eliminaram essas divergências do `alembic check`.
 
 ## Ordem segura de investigação
 
-### Grupo A — próximo bloco
+### Grupo A — contratos finais de alto risco
 
-1. certificar o lote MetaData-only atual;
-2. aplicar e validar `20260807_drop_dup_rate_idx` com upgrade/downgrade/reaplicação;
-3. coletar evidência read-only de nulabilidade dos timestamps;
-4. somente então publicar migrations de endurecimento `NOT NULL`.
-
-### Grupo B — contratos financeiros e compartilhados
-
-Tratar somente após o bloco de timestamps:
-
-- `asset_dividends.dividend_type`;
-- `assets.created_at` timezone;
-- `transactions` tipos/nullable/colunas históricas;
-- `goals`;
-- diferenças remanescentes de contratos financeiros.
+1. `transactions`: revisar impacto de `NUMERIC`/`TEXT`/timestamps sobre serviços e DTOs antes de alinhar ORM;
+2. `goals`: reconciliar schema histórico e modelo atual, incluindo colunas novas, enum, FK e `is_active`/timestamps;
+3. executar `alembic check` limpo em banco criado do zero;
+4. suíte completa e certificação final.
 
 ## Critérios para fechar #241
 
