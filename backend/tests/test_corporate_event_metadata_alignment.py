@@ -1,5 +1,6 @@
 """Gates para o catálogo canônico de corporate_events refletido no MetaData."""
 
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import JSONB
 
 from app.models.corporate_event import CorporateEvent
@@ -37,6 +38,6 @@ def test_corporate_event_metadata_preserves_source_identity_constraint() -> None
 
 def test_corporate_event_raw_metadata_uses_jsonb_on_postgresql() -> None:
     column_type = CorporateEvent.__table__.c.raw_metadata.type
-    postgres_impl = column_type.dialect_impl(__import__("sqlalchemy").dialects.postgresql.dialect())
+    postgres_impl = column_type.dialect_impl(postgresql.dialect())
 
     assert isinstance(postgres_impl, JSONB)
