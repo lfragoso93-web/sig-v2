@@ -34,6 +34,13 @@ class PortfolioSnapshot(Base, TimestampMixin):
             "portfolio_id", "snapshot_date",
             name="uq_snapshot_portfolio_date",
         ),
+        Index("ix_portfolio_snapshots_portfolio_id", "portfolio_id"),
+        Index("ix_portfolio_snapshots_snapshot_date", "snapshot_date"),
+        Index(
+            "ix_portfolio_snapshots_portfolio_date",
+            "portfolio_id",
+            "snapshot_date",
+        ),
         Index(
             "idx_ps_portfolio_date_desc",
             "portfolio_id",
