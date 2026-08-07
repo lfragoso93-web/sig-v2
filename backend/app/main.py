@@ -22,7 +22,7 @@ from app.routers import (
     auth, portfolios, transactions, dividends, positions,
     users, proventos, performance, admin,
     assets, fx, goals, irpf,
-    analysis, fixed_income, quotes, treasury,
+    analysis, fixed_income, treasury,
 )
 from app.routers import debug
 from app.routers import prices
@@ -184,7 +184,6 @@ app.include_router(goals.router,           prefix=f"{PREFIX}/portfolios",   tags
 
 app.include_router(assets.router,          prefix=f"{PREFIX}/assets",       tags=["assets"])
 app.include_router(fx.router,              prefix=f"{PREFIX}/fx",           tags=["fx"])
-app.include_router(quotes.router,          prefix=f"{PREFIX}/quotes",       tags=["quotes"])
 app.include_router(prices.router,          prefix=f"{PREFIX}/prices",       tags=["prices"])
 
 app.include_router(irpf.router,            prefix=f"{PREFIX}/irpf",         tags=["irpf"])
