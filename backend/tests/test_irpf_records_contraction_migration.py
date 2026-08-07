@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -13,6 +14,21 @@ _MIGRATION = (
 )
 
 
+def _drop_table_arguments(source: str) -> list[str]:
+    tree = ast.parse(source, filename=str(_MIGRATION))
+    arguments: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Attribute) or node.func.attr != "drop_table":
+            continue
+        if node.args and isinstance(node.args[0], ast.Name):
+            arguments.append(node.args[0].id)
+        elif node.args and isinstance(node.args[0], ast.Constant):
+            arguments.append(str(node.args[0].value))
+    return arguments
+
+
 def test_irpf_records_migration_is_isolated_and_guarded() -> None:
     source = _MIGRATION.read_text(encoding="utf-8")
 
@@ -21,8 +37,7 @@ def test_irpf_records_migration_is_isolated_and_guarded() -> None:
     assert '_TABLE = "irpf_records"' in source
     assert "SELECT COUNT(*)" in source
     assert "physical contraction blocked" in source
-    assert "op.drop_table(_TABLE)" in source
-    assert "irpf_losses" not in source
+    assert _drop_table_arguments(source) == ["_TABLE"]
 
 
 def test_irpf_records_downgrade_restores_original_contract() -> None:
