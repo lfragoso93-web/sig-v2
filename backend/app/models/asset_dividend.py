@@ -61,7 +61,7 @@ class AssetDividend(Base):
         ),
     )
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
     asset_id: Mapped[int] = mapped_column(
         Integer,
