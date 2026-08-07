@@ -6,11 +6,11 @@ router = APIRouter()
 
 @router.get("/", include_in_schema=False)
 async def fixed_income_not_implemented():
-    """Placeholder — implementado na Sprint 14."""
+    """Placeholder de API; o domínio financeiro já possui serviços canônicos próprios."""
     return JSONResponse(
         status_code=501,
         content={
-            "detail": "Módulo de Renda Fixa ainda não implementado.",
-            "sprint": "Sprint 14",
+            "detail": "Superfície dedicada de Renda Fixa ainda não implementada.",
+            "status": "api_placeholder",
         },
     )
