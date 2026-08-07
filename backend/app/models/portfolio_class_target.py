@@ -1,4 +1,4 @@
-from sqlalchemy import String, ForeignKey, Numeric, UniqueConstraint
+from sqlalchemy import String, ForeignKey, Index, Numeric, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 from app.models.base import TimestampMixin
@@ -17,6 +17,7 @@ class PortfolioClassTarget(Base, TimestampMixin):
     __tablename__ = 'portfolio_class_targets'
     __table_args__ = (
         UniqueConstraint('portfolio_id', 'asset_type', name='uq_portfolio_class_target'),
+        Index('idx_pct_portfolio', 'portfolio_id'),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
