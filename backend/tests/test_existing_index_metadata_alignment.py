@@ -37,11 +37,18 @@ def test_audit_metadata_uses_existing_composite_indexes_without_extra_fk_indexes
         assert "DESC" in str(expression).upper()
 
 
-def test_snapshot_metadata_preserves_existing_desc_index_expression() -> None:
+def test_snapshot_metadata_preserves_existing_query_indexes() -> None:
     indexes = _index_by_name(PortfolioSnapshot)
-    index = indexes["idx_ps_portfolio_date_desc"]
-    expressions = list(index.expressions)
 
+    assert {
+        "ix_portfolio_snapshots_portfolio_id",
+        "ix_portfolio_snapshots_snapshot_date",
+        "ix_portfolio_snapshots_portfolio_date",
+        "idx_ps_portfolio_date_desc",
+    }.issubset(indexes)
+
+    desc_index = indexes["idx_ps_portfolio_date_desc"]
+    expressions = list(desc_index.expressions)
     assert "portfolio_id" in str(expressions[0])
     assert "snapshot_date" in str(expressions[1])
     assert "DESC" in str(expressions[1]).upper()
