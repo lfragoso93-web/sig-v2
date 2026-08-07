@@ -11,8 +11,10 @@ async def get_or_create_asset(
 ) -> tuple[Asset, bool]:
     """
     Retorna (asset, is_new).
-    is_new=True indica que o ativo foi criado agora pela primeira vez.
-    O router deve usar is_new para disparar o BackgroundTask de onboarding.
+
+    A criação básica do catálogo é local. Nenhum caller deve usar `is_new` para
+    disparar onboarding ou ingestão externa automática; catálogo completo,
+    metadados e históricos pertencem ao bootstrap certificado do ambiente.
     """
     result = await db.execute(select(Asset).where(Asset.ticker == data.ticker))
     asset = result.scalar_one_or_none()
