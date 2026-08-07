@@ -66,9 +66,7 @@ async def _bootstrap_asset_catalog() -> str:
             return f"assets já populado: {asset_count} registros"
 
         seed = await run_asset_seed(db, run_backfill=False)
-        return (
-            f"created={seed.created} updated={seed.updated} errors={seed.errors}"
-        )
+        return f"created={seed.created} updated={seed.updated} errors={seed.errors}"
 
 
 async def _bootstrap_treasury_catalog() -> str:
@@ -83,9 +81,7 @@ async def _bootstrap_treasury_catalog() -> str:
 
 
 async def _bootstrap_treasury_reconciliation() -> str:
-    from app.services.treasury_reconciliation_service import (
-        reconcile_treasury_transactions,
-    )
+    from app.services.treasury_reconciliation_service import reconcile_treasury_transactions
 
     async with AsyncSessionLocal() as db:
         result = await reconcile_treasury_transactions(db)
@@ -109,9 +105,7 @@ async def _bootstrap_treasury_history() -> str:
 
 
 async def _bootstrap_asset_price_history() -> str:
-    from app.services.asset_price_global_backfill_service import (
-        run_global_asset_price_backfill,
-    )
+    from app.services.asset_price_global_backfill_service import run_global_asset_price_backfill
 
     result = await run_global_asset_price_backfill()
     return str(result)
@@ -133,10 +127,20 @@ async def run_system_bootstrap(*, startup_delay_seconds: float = 0.0) -> SystemB
     que a #248 liberar cada etapa. Até lá, um relatório verde deste v1 não
     autoriza dados reais por si só.
     """
+    from app.services.system_readiness_service import (
+        mark_bootstrap_finished,
+        mark_bootstrap_running,
+    )
+
     if startup_delay_seconds > 0:
         await asyncio.sleep(startup_delay_seconds)
 
     started = datetime.now(timezone.utc)
+    mark_bootstrap_running(
+        schema_version=BOOTSTRAP_SCHEMA_VERSION,
+        started_at=started.isoformat(),
+    )
+
     operations: tuple[tuple[str, Callable[[], Awaitable[str]]], ...] = (
         ("asset_catalog", _bootstrap_asset_catalog),
         ("treasury_catalog", _bootstrap_treasury_catalog),
@@ -154,10 +158,12 @@ async def run_system_bootstrap(*, startup_delay_seconds: float = 0.0) -> SystemB
             break
 
     finished = datetime.now(timezone.utc)
-    return SystemBootstrapReport(
+    report = SystemBootstrapReport(
         schema_version=BOOTSTRAP_SCHEMA_VERSION,
         started_at=started.isoformat(),
         finished_at=finished.isoformat(),
         ok=len(stages) == len(operations) and all(stage.ok for stage in stages),
         stages=tuple(stages),
     )
+    mark_bootstrap_finished(report, certified_for_real_data=False)
+    return report
