@@ -5,6 +5,15 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — orquestrador global de bootstrap (07/08/2026)
+
+- Criado `system_bootstrap_service.py` como porta única para o bootstrap inicial do ambiente.
+- O contrato `system-bootstrap.v1` produz relatório estruturado por etapa e interrompe a cadeia após falha, evitando que estágios dependentes avancem silenciosamente.
+- A sequência procedural `_boot_sequence()` foi removida de `app.main`; o lifespan agora apenas delega ao orquestrador global quando `ENABLE_BOOT_MARKET_SYNC` está habilitado.
+- O primeiro bloco migra somente etapas já existentes e previamente autorizadas: catálogo de ativos, catálogo/reconciliação/histórico de Tesouro, histórico global de preços e benchmarks.
+- Proventos, eventos corporativos e câmbio permanecem explicitamente fora do `system-bootstrap.v1` até seus gates serem incorporados pela #248; um relatório verde deste primeiro contrato ainda não libera dados reais.
+- Adicionados gates estruturais para impedir reintrodução de lógica de seed/backfill diretamente em `app.main` e inclusão silenciosa de domínios bloqueados no bootstrap.
+
 ### Alterado — política canônica de bootstrap e providers (07/08/2026)
 
 - Definido que o ambiente deve executar um bootstrap inicial idempotente e certificável antes de liberar criação/importação de carteiras reais.
