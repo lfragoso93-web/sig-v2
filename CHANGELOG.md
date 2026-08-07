@@ -5,15 +5,6 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
-### Corrigido — contratos finais de transações e metas (07/08/2026)
-
-- `transactions` passou a refletir integralmente o schema financeiro migrado, preservando `NUMERIC` para quantidade/preço/taxas, `TEXT` para notas, `fees NOT NULL`, timestamps físicos e índices históricos; nenhuma conversão para `FLOAT` ou remoção de coluna foi aplicada.
-- Adicionado gate específico que protege precisão financeira e presença dos timestamps de `transactions`.
-- A evidência PostgreSQL confirmou `goals` com zero linhas antes da mudança estrutural.
-- Adicionada migration defensiva `20260807_goals_contract`, que aborta upgrade e downgrade se houver qualquer meta persistida, converte `goal_type` do enum legado para `VARCHAR(30)`, adiciona `current_value`, `base_value` e `monthly_contribution` como `NUMERIC(18,2)` e promove `target_date` para `TIMESTAMPTZ`.
-- O modelo `Goal` foi alinhado ao contrato funcional atual sem remover `is_active`, `created_at`, `updated_at`, FK `ON DELETE CASCADE` ou `ix_goals_portfolio_id`; `NUMERIC` é mantido no banco com interface `float` no runtime atual.
-- Adicionado gate de Metas para proteger a migration, o limite de 32 caracteres do revision ID, a taxonomia ativa e os campos físicos preservados.
-
 ### Corrigido — endurecimento defensivo de timestamps (07/08/2026)
 
 - `users`, `portfolios`, `system_configs`, `fixed_income_investments`, `portfolio_positions` e `portfolio_snapshots` passam a exigir `created_at`/`updated_at NOT NULL` por migrations pequenas e reversíveis.
