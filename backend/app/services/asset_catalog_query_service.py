@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset, AssetType
@@ -65,7 +65,7 @@ async def suggest_assets_from_catalog(
         stmt = stmt.where(Asset.asset_type.in_(allowed_types))
 
     stmt = stmt.order_by(
-        func.case((func.upper(Asset.ticker) == normalized, 0), else_=1),
+        case((func.upper(Asset.ticker) == normalized, 0), else_=1),
         Asset.ticker,
     ).limit(max(1, min(limit, 50)))
 
