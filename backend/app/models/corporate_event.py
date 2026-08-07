@@ -15,9 +15,12 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
+
+_RAW_METADATA_TYPE = JSON().with_variant(JSONB(astext_type=Text()), "postgresql")
 
 
 class CorporateEventType(str, enum.Enum):
@@ -110,7 +113,7 @@ class CorporateEvent(Base):
     fractional_settlement_price = Column(Numeric(24, 8), nullable=True)
     cash_treatment = Column(String(40), nullable=True)
     currency = Column(String(8), nullable=False, default="BRL")
-    raw_metadata = Column(JSON, nullable=True)
+    raw_metadata = Column(_RAW_METADATA_TYPE, nullable=True)
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,
