@@ -4,14 +4,16 @@ from typing import Optional
 from sqlalchemy import (
     Column,
     Date,
+    DateTime,
     Enum as SAEnum,
-    Float,
     ForeignKey,
     Index,
     Integer,
     Numeric,
     String,
+    Text,
     desc,
+    func,
 )
 from sqlalchemy.orm import relationship
 
@@ -42,19 +44,21 @@ class Transaction(Base):
         index=True,
     )
     ticker = Column(String(100), nullable=False, index=True)
-    asset_type = Column(String(50), nullable=False)
+    asset_type = Column(String(30), nullable=False)
     operation: Column = Column(
         SAEnum(OperationType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
-    quantity = Column(Float, nullable=False)
-    price = Column(Float, nullable=False)
-    fees = Column(Float, default=0.0)
+    quantity = Column(Numeric(18, 8), nullable=False)
+    price = Column(Numeric(18, 8), nullable=False)
+    fees = Column(Numeric(18, 2), nullable=False, default=Decimal("0"))
     date = Column(Date, nullable=False, index=True)
     currency = Column(String(10), default="BRL", nullable=False)
     # Campos da migration 004 — agora expostos no ORM
     fx_rate: Optional[Decimal] = Column(Numeric(18, 8), nullable=True)  # cotacao USD/BRL na data
     price_brl: Optional[Decimal] = Column(Numeric(18, 8), nullable=True)  # preco convertido para BRL
-    notes = Column(String(500), nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=True, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=True, server_default=func.now())
 
     portfolio = relationship("Portfolio", back_populates="transactions")
