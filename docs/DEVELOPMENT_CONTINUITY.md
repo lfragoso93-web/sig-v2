@@ -15,39 +15,50 @@
 
 ## Decisão vigente
 
-O SGI v2 está em consolidação arquitetural antes de receber dados reais.
+O SGI v2 está em estabilização arquitetural final antes da próxima grande fase funcional.
 
 Até o encerramento da Issue #227:
 
-- não importar novas carteiras reais;
+- não importar novas carteiras reais sem autorização explícita;
 - não criar novos usuários reais;
 - tratar dados atuais como desenvolvimento descartável;
 - usar fixtures, factories e bancos descartáveis;
 - manter seeds, sincronizações e rebuilds externos explicitamente opt-in;
-- não retomar a certificação operacional da #158 antes dos gates arquiteturais.
+- não retomar a certificação operacional da #158 fora dos gates vigentes.
+
+## Regra arquitetural temporária para Metas
+
+O domínio `goals` é exceção consciente da convergência Alembic/ORM encerrada pela #241.
+
+Até o início do macroprojeto #246 + #57:
+
+- não criar migration para `goals` apenas para limpar `alembic check`;
+- não alterar tipos, colunas, constraints ou enums de `goals` sem o redesenho funcional prévio;
+- não promover o módulo atual como contrato canônico estabilizado;
+- preservar a tabela histórica e tratar o diff remanescente como dívida arquitetural rastreada.
 
 ## Ordem vigente
 
-1. Baseline, documentação e inventário.
-2. Rentabilidade e IRPF canônicos — #151 e #56.
-3. Eventos corporativos — #129 e partes da #130.
-4. IBOV e TWR — #150 e #149.
-5. Ingestão, seeds e rebuild determinísticos — #158, #216 e #226.
-6. Qualidade estrutural e timestamps UTC — #192 concluída.
-7. Certificação integral antes da primeira carga real.
+1. Encerrar formalmente a #241 e sincronizar documentação final.
+2. Auditar arquitetura global, serviços, routers, endpoints e legado remanescente.
+3. Preparar e abrir PR estrutural `stable-15jun` → `main`.
+4. Consolidar eventuais pendências restantes de eventos corporativos (#129/#130/#127).
+5. IBOV e TWR — #150 e #149.
+6. Ingestão, seeds e rebuild determinísticos — #158, #216 e #226, respeitando #227.
+7. Somente após estabilização definitiva iniciar Metas + Análise de Carteira (#246 + #57).
 
 ## Checklist de início de conversa
 
 1. Ler esta documentação.
-2. Consultar a Issue #227 e seus comentários mais recentes.
+2. Consultar a Issue #227 e os comentários mais recentes quando o bloco tocar operação real.
 3. Confirmar branch e HEAD remoto de `stable-15jun`.
 4. Comparar `main...stable-15jun` e confirmar ausência de divergência para trás.
 5. Consultar Issues relacionadas ao bloco atual.
 6. Consultar todas as PRs abertas, inclusive Dependabot.
 7. Conferir README, ROADMAP, CHANGELOG e `docs/architecture.md`.
-8. Confirmar último resultado de pytest, Ruff, frontend e compileall registrado.
+8. Confirmar o último resultado de build, testes, Ruff e `compileall` registrado.
 9. Não repetir perguntas já respondidas no histórico ou nas Issues.
-10. Continuar do próximo bloco objetivo registrado na #227.
+10. Prosseguir do próximo bloco objetivo registrado neste documento e na Issue ativa.
 
 ## Formato de checkpoint
 
@@ -63,61 +74,50 @@ Cada checkpoint deve registrar:
 - recomendação objetiva do próximo bloco;
 - HEAD remoto esperado.
 
-## Estado atual do plano — 02/08/2026
+## Estado atual do plano — 07/08/2026
 
-### Backend
+### Backend e arquitetura
 
-- Suíte completa: `1097 passed`, `22 skipped`, zero warnings.
-- Ruff: aprovado no escopo alterado.
+- HEAD estrutural de referência antes da sincronização documental: `17beeb9e6ae70f51d523e273bebda368872f81de`.
+- Build Docker: aprovado.
 - `compileall`: aprovado.
-- Reader histórico canônico disponível em `historical_position_projection_reader.py`.
-- Endpoint `GET /{portfolio_id}/irpf/{year}/bens` usa `irpf_bens_direitos_service.py`.
-- Relatório completo usa `irpf_report_service.py`.
-- `calc_bens_direitos` e o orquestrador antigo foram removidos de `irpf_service.py`.
-- Regras fiscais mensais foram extraídas para `irpf_tax_service.py`.
-- Exportações PDF/CSV foram extraídas para `irpf_export_service.py`.
-- `irpf_service.py` permanece apenas como fachada temporária de compatibilidade.
-- Testes arquiteturais proíbem imports e redefinição do leitor legado de Bens e Direitos.
-- `calc_ganhos_capital` permanece semanticamente inalterado até a caracterização fiscal dedicada.
-- Renda Fixa continua preservada por adaptação isolada até existir leitor histórico dedicado da classe.
-- `backup_service.py` usa UTC aware em timestamps operacionais.
-- Defaults ORM `DateTime(timezone=False)` usam UTC naive explícito por `utc_now_naive()`.
-- Issue #192 concluída após eliminação dos warnings `datetime.utcnow()`.
+- Suíte estrutural final: 15 testes aprovados.
+- `app.main` importado integralmente.
+- Consumers legados de `AppConfig` e `IRPFReport` removidos e protegidos por gates.
+- Transactions alinhado ao contrato físico migrado.
+- Proventos, Eventos Corporativos, IRPF e Snapshots consolidados.
+- `fx_rates` participa do MetaData e o leitor USD/BRL é exclusivamente DB-first.
+- Alembic endurecido por gates contra autogenerate monolítico e remoções acidentais.
+- `alembic check` remanescente limitado exclusivamente a `goals`.
+- #246 criada para redesenho de Metas em conjunto com #57.
 
 ### Frontend
 
-- Typecheck: aprovado.
-- Lint: aprovado com zero warnings.
-- Suíte completa: `23 test files passed`, `86 tests passed`.
-- Build de produção: aprovado.
-- IRPF e Metas são rotas canônicas do contexto da carteira:
-  - `/carteira/irpf`;
-  - `/carteira/metas`.
-- `/irpf` e `/metas` permanecem apenas como redirects legados com `replace`.
-- Sidebar usa somente as rotas canônicas.
-- Testes estruturais protegem a hierarquia de navegação.
-- Issue #228 concluída.
+- IRPF permanece integrado aos contratos canônicos.
+- A rota `/carteira/metas` continua existente como superfície atual, mas o domínio subjacente não é considerado contrato canônico estabilizado.
+- `/irpf` e `/metas` permanecem redirects legados temporários.
+- O redesenho futuro de Metas e Análise deve revisar frontend, contratos e navegação como um único macroprojeto.
 
 ### Operação
 
 - Boot de sincronização de mercado permanece desabilitado por padrão.
-- Seeds, rebuilds e cargas reais permanecem suspensos pelo gate #227.
-- Issue-mãe: #227.
-- Issues funcionais imediatas: #151 e #56.
+- Seeds, rebuilds e cargas reais permanecem suspensos pelos gates vigentes da #227.
+- `stable-15jun` está à frente de `main` e sem commits para trás no checkpoint de 07/08/2026.
 
 ## Próximo bloco objetivo
 
-1. Sincronizar README, ROADMAP, CHANGELOG e `docs/architecture.md` com este checkpoint.
-2. Atualizar #56, #151 e #227 com o estado consolidado.
-3. Comparar `main...stable-15jun` e revisar o diff estrutural.
-4. Abrir PR de `stable-15jun` para `main` após a documentação viva estar sincronizada.
-5. Depois iniciar a caracterização de ganhos mensais sem alterar regras fiscais antes dos testes.
+1. Finalizar sincronização de ROADMAP, README, CHANGELOG, arquitetura e esta continuidade.
+2. Atualizar e encerrar formalmente a #241 com a exceção `goals` registrada.
+3. Executar auditoria arquitetural global de serviços, routers, endpoints, duplicações e legado remanescente.
+4. Corrigir achados em blocos pequenos, mantendo Issues e documentação sincronizadas.
+5. Após a auditoria e certificação, abrir a PR estrutural `stable-15jun` → `main`.
+6. Não iniciar #246/#57 antes dessa estabilização.
 
 ## Prompt mínimo para nova conversa
 
 ```text
 @GitHub Continue o desenvolvimento do SGI v2 seguindo integralmente
-`docs/DEVELOPMENT_CONTINUITY.md` e a Issue #227.
+`docs/DEVELOPMENT_CONTINUITY.md`.
 
 Repositório: lfragoso93-web/sig-v2
 Branch obrigatória: stable-15jun
@@ -125,7 +125,8 @@ Branch obrigatória: stable-15jun
 Antes de alterar código:
 - confirme o HEAD remoto;
 - compare stable-15jun com main;
-- leia a #227 e as Issues do bloco atual;
+- leia a Issue do bloco atual e #227 quando houver impacto operacional;
 - revise PRs abertas e documentação viva;
+- preserve `goals` como exceção da #241 e não crie migration para esse domínio;
 - recupere o último checkpoint e prossiga do próximo bloco objetivo.
 ```
