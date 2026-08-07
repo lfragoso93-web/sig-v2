@@ -4,18 +4,18 @@
 
 ## Objetivo
 
-O SGI v2 calcula patrimônio, posição, custo, resultado, proventos, rentabilidade e IRPF a partir de dados persistidos e contratos canônicos. Provedores externos pertencem a adapters, sincronizadores, jobs ou CLIs operacionais; páginas, KPIs e relatórios não consultam provedores durante o cálculo financeiro.
+O SGI v2 calcula patrimônio, posição, custo, resultado, proventos, rentabilidade e IRPF a partir de dados persistidos e contratos canônicos. Provedores externos pertencem ao bootstrap inicial e aos sincronizadores operacionais de preço; páginas, KPIs, relatórios e cálculos financeiros não consultam providers diretamente.
 
 ## Fluxo financeiro principal
 
 ```text
-CSV / lançamentos manuais
+bootstrap inicial certificado
         ↓
-transactions + fixed_income_investments + corporate_events
+assets + asset_prices + rate_history + fx_rates + asset_dividends + corporate_events
+        ↓
+transactions + fixed_income_investments
         ↓
 projeções canônicas de posição, custo e realizações
-        ↓
-assets + asset_prices + rate_history + fx_rates + asset_dividends
         ↓
 valuation dedicado por classe
         ↓
@@ -30,9 +30,28 @@ Metas e Análise de Carteira não integram, neste momento, o conjunto de contrat
 
 ## Princípios obrigatórios
 
-### DB-first
+### Bootstrap-first + DB-first
 
-Serviços financeiros leem dados persistidos. Chamadas externas não participam do cálculo de posição, custo, resultado, elegibilidade ou câmbio durante requests financeiros.
+Antes de existir uso real, o ambiente deve executar um bootstrap idempotente e certificável que carregue no banco todo o conjunto necessário ao funcionamento do sistema:
+
+- catálogo de ativos e metadados;
+- histórico de preços;
+- Proventos globais;
+- eventos corporativos;
+- Tesouro Direto e histórico associado;
+- benchmarks e taxas;
+- câmbio;
+- demais séries auxiliares necessárias aos contratos canônicos.
+
+A aplicação só deve ser considerada pronta para criação/importação de carteiras reais depois da conclusão e validação desse bootstrap.
+
+Após o bootstrap:
+
+- serviços financeiros leem dados persistidos;
+- busca, detalhes, posições, relatórios, IRPF, Proventos e rentabilidade não consultam provider;
+- consultas externas recorrentes ficam restritas a **preço intraday** e **preço oficial/de fechamento do dia**;
+- preços obtidos externamente devem ser persistidos antes de alimentar contratos financeiros;
+- nenhuma mutação comum de usuário dispara seed, onboarding, backfill histórico ou coleta de eventos.
 
 ### Contratos financeiros únicos
 
@@ -52,14 +71,15 @@ A projeção contábil calcula posição, custo e realização. O IRPF acrescent
 
 ### Separação temporal
 
-- valuation intradiário representa o estado atual;
+- preço intraday representa estado corrente e pode vir de sincronizador externo dedicado;
+- preço de fechamento diário é coletado externamente e persistido como referência oficial do dia;
 - snapshots representam performance fechada;
 - leituras históricas usam data de corte explícita;
 - ausência de TWR é `null`, nunca retorno simples disfarçado.
 
 ### Idempotência
 
-Seeds, sincronizações, migrations e rebuilds devem produzir o mesmo estado lógico sem duplicar preços, eventos, posições ou snapshots.
+Bootstrap, seeds, sincronizações, migrations e rebuilds devem produzir o mesmo estado lógico sem duplicar preços, eventos, posições ou snapshots.
 
 ### Qualidade explícita
 
@@ -117,7 +137,7 @@ A fachada legada foi removida. Resultado realizado, capital líquido aportado, p
 Eventos pertencem ao ativo e são persistidos exclusivamente em `asset_dividends`.
 
 ```text
-provedores normalizados
+bootstrap/sincronizador de eventos
         ↓
 asset_dividends
         ↓
@@ -128,21 +148,21 @@ direito calculado sob demanda
 reconhecimento financeiro por data de pagamento
 ```
 
-Não existe materialização ativa de direitos por carteira. O MetaData representa os índices físicos definidos pelas migrations canônicas.
+Não existe materialização ativa de direitos por carteira. Depois do bootstrap, requests de Proventos não consultam provider.
 
 ## Eventos corporativos
 
-O motor canônico trata splits, grupamentos, bonificações e subscrições independentemente do fornecedor. Eventos preservam identidade, quantidade, custo, JSONB e constraints conforme a migration canônica; adapters apenas normalizam payloads externos.
+O motor canônico trata splits, grupamentos, bonificações e subscrições independentemente do fornecedor. Eventos são coletados no bootstrap/sincronização operacional e persistidos antes de qualquer projeção financeira. Adapters apenas normalizam payloads externos.
 
 A Issue #129 permanece aberta apenas para confirmar, durante a auditoria #247, se ainda existem consumidores ou compatibilidades residuais que precisem de tratamento explícito.
 
 ## Transações
 
-`transactions` reflete o contrato financeiro migrado: precisão `NUMERIC`, `fees NOT NULL`, `notes TEXT`, timestamps físicos e todos os índices históricos. Serviços consumidores devem respeitar esse contrato e não criar representações financeiras paralelas.
+`transactions` reflete o contrato financeiro migrado. Criar ou editar transação não dispara coleta externa, onboarding de mercado ou backfill histórico; apenas efeitos locais derivados podem ocorrer.
 
 ## Câmbio
 
-`fx_rates` é persistido e DB-first. O endpoint `/usd-brl` lê exclusivamente a última cobertura persistida; nenhuma chamada externa ou fallback fixo ocorre no request. `FxRate` participa de `Base.metadata` com constraints e índices alinhados às migrations.
+`fx_rates` é persistido e DB-first. Requests financeiros leem somente a cobertura persistida. Atualização cambial pertence ao bootstrap/sincronizadores operacionais, não ao cálculo financeiro.
 
 ## Metas e Análise de Carteira
 
@@ -154,70 +174,63 @@ O módulo `goals` é uma exceção arquitetural consciente:
 - o redesenho será conduzido pela #246 em conjunto com #57;
 - a nova arquitetura deve decidir taxonomia, KPIs calculados versus persistidos, relação com `portfolio_class_targets`, histórico e projeções antes de DDL definitivo.
 
-A rota `/carteira/metas` pode existir como superfície atual, mas não transforma o domínio subjacente em contrato canônico estabilizado. O router de Análise atualmente não representa implementação funcional completa e será revisto apenas no macroprojeto #246 + #57.
-
 ## Navegação de carteira
 
-Módulos dependentes da carteira selecionada ficam sob `/carteira`:
+Módulos dependentes da carteira selecionada ficam sob `/carteira`. Aliases temporários devem ser eliminados somente após comprovação de consumidores durante a #247.
 
-```text
-/carteira
-├── patrimonio
-├── rentabilidade
-├── transacoes
-├── proventos
-├── metas
-├── irpf
-└── configuracoes
-```
+## Bootstrap, scheduler e readiness
 
-`/metas` e `/irpf` permanecem aliases temporários com redirect `replace` para compatibilidade e serão classificados por consumidor durante a auditoria #247.
+A arquitetura alvo distingue três estados:
 
-## Scheduler, seeds e rebuild
+1. **ambiente não inicializado** — schema disponível, mas dados canônicos ainda não certificados;
+2. **bootstrap em execução** — coleta histórica/global idempotente e persistência das séries necessárias;
+3. **runtime pronto** — criação/importação de carteiras liberada e consultas funcionais operando DB-first.
 
-O boot não executa sincronização de mercado por padrão. Seeds, sincronizações externas e rebuilds são explicitamente opt-in.
+O readiness operacional deve refletir essa fronteira. Não basta o processo FastAPI estar de pé: para uso real, o bootstrap precisa estar concluído e validado.
+
+No runtime pronto, o scheduler pode consultar providers apenas para:
+
+- preço intraday;
+- preço de fechamento diário.
+
+Não devem existir sincronizações automáticas recorrentes de catálogo, Proventos, eventos, benchmarks, câmbio ou históricos fora de jobs explicitamente controlados para manutenção/correção.
 
 Até o encerramento da Issue #227:
 
-- não importar carteiras reais sem autorização;
-- não criar usuários reais;
+- não importar carteiras reais;
+- não criar usuários reais de produção;
 - usar bancos descartáveis e fixtures;
-- não retomar a certificação da #158 fora dos gates vigentes;
+- não considerar o ambiente pronto até que o bootstrap canônico seja desenhado, executado e certificado;
 - não executar automaticamente migrations físicas de contração.
 
 ## Governança arquitetural atual
 
 A ordem canônica é:
 
-1. #247 — reconciliar documentação, Issues e PRs;
-2. #247 — auditar routers, serviços, endpoints, aliases, integrações e legado;
+1. #247 — concluir auditoria de superfícies e remover consultas externas indevidas;
+2. desenhar/validar bootstrap inicial completo e readiness;
 3. confirmar pendências reais de #129 e itens necessários de #130/#127;
 4. #150 e #149 — performance e benchmarks;
-5. #226/#216/#158 — retomada operacional após certificação;
+5. #226/#216/#158 — certificação operacional e primeira carga real;
 6. #246 + #57 — macroprojeto Metas + Análise.
-
-Backlog de produto não bloqueador inclui #58, #83, #90 e #97.
 
 ## Qualidade validada
 
-Baseline estrutural de 07/08/2026 no HEAD `17beeb9e6ae70f51d523e273bebda368872f81de`:
+Checkpoint certificado localmente no HEAD `08414af3a7b570ae9753e83ba5eecf2c17f20e42`:
 
 - build Docker aprovado;
+- 7 testes do checkpoint de auditoria aprovados;
 - `compileall` aprovado;
-- suíte estrutural final: 15 testes aprovados;
 - import integral de `app.main` aprovado;
-- consumers legados removidos e protegidos por gates;
-- Alembic/ORM convergidos fora de `goals`.
-
-Commits documentais posteriores não alteraram runtime, schema ou contratos financeiros.
+- working tree limpa.
 
 ## Pendências arquiteturais
 
-1. Concluir a etapa documental/governança da #247.
-2. Executar auditoria global de serviços, routers, endpoints, duplicações e legado remanescente (#247).
-3. Confirmar e resolver somente pendências reais de eventos corporativos/provedores (#129/#130/#127).
-4. Materializar histórico persistido do IBOV (#150).
-5. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
-6. Retomar Proventos, importação e rebuild apenas após os gates #226/#216/#158/#227.
-7. Iniciar #246 + #57 somente depois da estabilização e promoção da base.
-8. Evoluir locks em memória para locks distribuídos antes de múltiplas réplicas, quando esse cenário de deploy existir.
+1. Concluir auditoria global de serviços, routers, endpoints, duplicações e legado remanescente (#247).
+2. Remover providers de todas as superfícies funcionais que não sejam preço intraday/fechamento.
+3. Desenhar e certificar bootstrap inicial completo antes de liberar carteiras reais.
+4. Confirmar e resolver somente pendências reais de eventos corporativos/provedores (#129/#130/#127).
+5. Materializar histórico persistido do IBOV (#150).
+6. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
+7. Retomar Proventos, importação e rebuild apenas após #226/#216/#158/#227.
+8. Iniciar #246 + #57 somente depois da estabilização e promoção da base.
