@@ -5,6 +5,16 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — política canônica de bootstrap e providers (07/08/2026)
+
+- Definido que o ambiente deve executar um bootstrap inicial idempotente e certificável antes de liberar criação/importação de carteiras reais.
+- O bootstrap deve persistir catálogo/metadados de ativos, históricos, Proventos, eventos corporativos, Tesouro, benchmarks, câmbio e demais séries necessárias ao funcionamento do SGI v2.
+- Depois do bootstrap, requests funcionais e cálculos financeiros passam a ser estritamente DB-first.
+- Consultas externas recorrentes em runtime ficam limitadas a preço intraday e preço oficial/de fechamento diário; esses preços devem ser persistidos antes de alimentar contratos financeiros.
+- Busca de ativos, detalhes, posições, relatórios, Proventos, IRPF e rentabilidade não devem consultar providers diretamente.
+- README, ROADMAP, arquitetura e continuidade foram sincronizados com essa fronteira.
+- O desenho atual de `assets`, scheduler e entrypoint deve ser reavaliado na #247 para eliminar chamadas externas que não pertençam à nova regra.
+
 ### Corrigido — superfícies financeiras read-only e rebuild explícito (07/08/2026)
 
 - Removida a porta HTTP pública `POST /api/v1/performance/{portfolio_id}/evolution/backfill`; os serviços internos de reconstrução permanecem disponíveis apenas para fluxos operacionais explícitos.
