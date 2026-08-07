@@ -33,7 +33,7 @@ Não será feito backfill silencioso. Cada migration conta previamente as linhas
    - `fixed_income_investments.created_at`;
    - `fixed_income_investments.updated_at`.
 
-3. `20260807_positions_snapshots_ts_nn`
+3. `20260807_pos_snap_ts_nn`
    - `portfolio_positions.created_at`;
    - `portfolio_positions.updated_at`;
    - `portfolio_snapshots.created_at`;
@@ -41,12 +41,19 @@ Não será feito backfill silencioso. Cada migration conta previamente as linhas
 
 Cada downgrade restaura `nullable=True`, sem remover defaults nem dados.
 
+## Correção de integridade da revisão
+
+A primeira publicação do terceiro bloco usou o revision ID `20260807_positions_snapshots_ts_nn`, com 34 caracteres. O gate global `test_alembic_revision_integrity.py` detectou corretamente que esse valor excedia o `VARCHAR(32)` de `alembic_version`; a execução local de `upgrade head` também abortou ao tentar persistir o revision ID.
+
+A revisão foi corrigida para `20260807_pos_snap_ts_nn` (22 caracteres), mantendo o mesmo arquivo, `down_revision`, DDL e política defensiva. O gate específico de timestamps agora também exige `len(revision) <= 32`.
+
 ## Gates
 
 `test_timestamp_not_null_contraction_migrations.py` protege:
 
 - ordem linear da cadeia;
 - presença das tabelas esperadas em cada bloco;
+- revision IDs com no máximo 32 caracteres;
 - verificação prévia de `NULL`;
 - ausência de `UPDATE`, `DELETE`, `TRUNCATE` ou `DROP TABLE`;
 - `nullable=False` no upgrade;
