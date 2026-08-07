@@ -4,38 +4,35 @@ Plataforma pessoal para acompanhamento, consolidação e análise de investiment
 
 A branch de desenvolvimento é `stable-15jun`. A promoção para `main` ocorre exclusivamente por Pull Request após validação integral e sincronização da documentação viva.
 
-## Status atual — 06/08/2026
+## Status atual — 07/08/2026
 
-O SGI v2 está em **consolidação arquitetural antes da primeira carga real de carteiras e usuários**. O gate vigente é a Issue #227: seeds, sincronizações externas, importação real e rebuild operacional permanecem opt-in e suspensos até a certificação do núcleo financeiro.
+O SGI v2 está em **estabilização arquitetural final da base antes da próxima grande fase funcional**. O gate operacional da Issue #227 continua impedindo cargas reais não autorizadas. A convergência Alembic ↔ MetaData da Issue #241 está concluída para todos os domínios do escopo, com uma única exceção arquitetural consciente: `goals`.
 
 ### Qualidade validada
 
-- Backend: `1265 passed`, `22 skipped` na suíte completa mais recente do macrobloco IRPF.
-- Rentabilidade: `1246 passed`, `22 skipped` em duas execuções completas após remoção do serviço legado.
-- Gates Alembic/ORM e inventários: 20 testes focados aprovados no HEAD `19ffa5f2d915c7abba38cb5c719a52b72d1dece1`.
-- Ruff, Flake8 e `compileall`: aprovados nos macroblocos promovidos.
-- Frontend: 26 arquivos de teste e 93 testes aprovados.
-- Typecheck, ESLint e build de produção: aprovados.
+- Build Docker: aprovado no HEAD `17beeb9e6ae70f51d523e273bebda368872f81de`.
+- `compileall`: aprovado.
+- Suíte estrutural final: 15 testes aprovados.
+- Import integral de `app.main`: aprovado.
+- Consumers legados removidos e gates de regressão ativos.
+- Alembic/ORM convergidos fora de `goals`.
 
 ### Entregas consolidadas
 
 - Arquitetura DB-first e contratos `summary.v2` e `rentabilidade.v2`.
 - Valuation canônico por classe, snapshots patrimoniais e reconciliação financeira.
 - Histórico B3/COTAHIST, Tesouro oficial, benchmarks e câmbio persistidos.
-- Leitura pública USD/BRL servida exclusivamente pelo contrato persistido `fx_rates`, sem provider direto ou fallback fixo em runtime.
+- Leitura pública USD/BRL servida exclusivamente por `fx_rates`, com MetaData/ORM alinhados ao schema migrado.
 - Proventos globais em `asset_dividends`, com direitos de carteira calculados sob demanda.
 - Motor canônico de eventos corporativos e projeção histórica de posição, custo e resultado realizado.
 - IRPF anual canônico com Day Trade, Swing Trade, isenção mensal, prejuízos, IRRF e DARF mínima.
 - Contratos públicos versionados de apuração anual, Bens e Direitos, Rendimentos e Ganhos de Capital.
-- IRPF frontend integralmente canônico, sem carregamento de `IRPFReportOut`.
-- Exportações PDF e CSV compostas diretamente por `IrpfCanonicalExport`.
-- Endpoint completo legado do IRPF preservado apenas para compatibilidade externa, sem uso pela interface ou exportações.
-- Fachada legada de Rentabilidade removida e invalidação `rent:*` isolada em serviço canônico.
-- Backup/restore e defaults ORM modernizados para UTC sem warnings de `datetime.utcnow()`.
-- IRPF e Metas sob o contexto canônico da carteira:
-  - `/carteira/irpf`;
-  - `/carteira/metas`.
-- Rotas antigas `/irpf` e `/metas` mantidas temporariamente apenas como redirects.
+- IRPF frontend integralmente canônico, sem persistência ou consumo de `IRPFReport` legado.
+- Exportações PDF e CSV compostas diretamente pelos contratos canônicos.
+- Transactions alinhado ao contrato físico migrado: tipos financeiros, nulabilidade, índices, notas e timestamps.
+- Snapshots, ativos, Proventos, eventos corporativos, Renda Fixa, configurações, usuários e portfólios alinhados à cadeia Alembic.
+- `app_config`, `IRPFReport`, `irpf_records`, `irpf_losses` e `goal_allocations` tratados por decisões explícitas e contrações defensivas quando aplicável.
+- Alembic endurecido com gates contra autogenerate monolítico e remoções acidentais.
 - PRs estruturais #237 e #240 já promovidas e mergeadas na `main`.
 
 ## Arquitetura resumida
@@ -55,8 +52,10 @@ PortfolioSnapshot + PortfolioClassSnapshot
         ↓
 summary.v2 / rentabilidade.v2 / leitores históricos
         ↓
-Resumo / Patrimônio / Rentabilidade / Proventos / Metas / IRPF
+Resumo / Patrimônio / Rentabilidade / Proventos / IRPF
 ```
+
+Metas não participa, neste momento, do conjunto de contratos canônicos estabilizados. O módulo `goals` será redesenhado em conjunto com Análise de Carteira nas Issues #246 e #57.
 
 Princípios: DB-first, fonte oficial primeiro, idempotência, ausência não convertida em zero, contratos financeiros únicos e nenhuma chamada a provedor durante cálculos financeiros.
 
@@ -69,18 +68,19 @@ Princípios: DB-first, fonte oficial primeiro, idempotência, ausência não con
 - Importação CSV real, posições e snapshots: suspensos até o encerramento da #227.
 - O boot não executa sincronização de mercado por padrão.
 - Rebuilds e seeds externos devem permanecer explicitamente opt-in.
-- `alembic upgrade head` e reexecução idempotente foram aprovados em PostgreSQL vazio; `alembic check` permanece bloqueado pela deriva histórica rastreada na #241.
+- `alembic upgrade head`, reexecução idempotente e convergência dos domínios estabilizados foram aprovados.
+- O diff remanescente do `alembic check` está limitado a `goals` e é exceção deliberada rastreada pela #246; nenhuma migration deve ser criada para silenciá-lo antes do redesenho conjunto com #57.
 - O endpoint `/usd-brl` lê a última cotação persistida de `fx_rates` e retorna indisponibilidade explícita quando não existe cobertura.
 
 ## Próximas prioridades
 
-1. Tratar `fx_rates` no MetaData/Alembic em bloco isolado, preservando o contrato persistido e o leitor DB-first (#241).
-2. Reduzir a deriva Alembic/ORM por domínio, sem autogenerate monolítico (#241).
-3. Concluir a certificação e os consumidores remanescentes de eventos corporativos (#129).
+1. Encerrar formalmente a #241 com a exceção `goals` documentada e rastreada pela #246/#57.
+2. Revisar arquitetura, serviços, routers, endpoints e legado remanescente após a estabilização Alembic/ORM.
+3. Consolidar consumidores restantes do motor de eventos corporativos (#129), caso ainda existam após a auditoria global.
 4. Evoluir aliases, cobertura e adapters por capacidade (#130 e #127).
 5. Implementar IBOV persistido e TWR dedicado (#150 e #149).
 6. Retomar seeds, importação e rebuild somente após os gates arquiteturais (#158, #216, #226 e #227).
-7. Validar o IRPF em carteira real com operações representativas quando houver dados homologados.
+7. Somente depois iniciar o macroprojeto conjunto de Metas + Análise de Carteira (#246 + #57).
 
 ## Comandos principais
 
@@ -118,6 +118,6 @@ npm run build
 - `docs/IRPF_CANONICAL_FRONTEND_INTEGRATION.md` — contratos e fronteiras atuais do frontend e das exportações.
 - `docs/portfolio-route-hierarchy.md` — hierarquia das rotas vinculadas à carteira.
 - `docs/DIVIDENDS_CANONICAL_ARCHITECTURE.md` — arquitetura canônica de Proventos.
-- `docs/ALEMBIC_METADATA_DRIFT_INVENTORY_2026-08.md` — matriz de deriva Alembic/ORM.
+- `docs/ALEMBIC_METADATA_DRIFT_INVENTORY_2026-08.md` — matriz de deriva Alembic/ORM e exceção `goals`.
 - `docs/FX_AND_GOAL_CONSUMER_INVENTORY_2026-08.md` — inventário de consumidores de câmbio e metas.
 - `docs/PRE_PROD_REBUILD_RUNBOOK.md` — gates operacionais de pré-produção.
