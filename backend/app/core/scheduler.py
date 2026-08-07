@@ -1,4 +1,5 @@
 import logging
+from datetime import date
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -87,18 +88,22 @@ def start_scheduler() -> None:
     @scheduler.scheduled_job(
         _cron_trigger(day_of_week="mon-fri", hour=20, minute=45),
         id="persist_daily_close_prices",
-        name="Persistir fechamento diário e preencher lacunas de preços",
+        name="Persistir fechamento diário de preços",
         max_instances=1,
         coalesce=True,
     )
     async def persist_daily_close_prices():
-        """Persiste somente dados de preço; nenhum outro domínio é sincronizado."""
+        """Persiste somente a cobertura de preço da data corrente."""
         from app.services.asset_price_global_backfill_service import (
             run_global_asset_price_backfill,
         )
 
+        today = date.today()
         try:
-            result = await run_global_asset_price_backfill()
+            result = await run_global_asset_price_backfill(
+                required_to=today,
+                history_start=today,
+            )
             logger.info("[scheduler] Fechamento diário de preços atualizado: %s", result)
         except Exception as exc:
             logger.error(
