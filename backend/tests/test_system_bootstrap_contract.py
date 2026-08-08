@@ -17,7 +17,7 @@ def test_system_bootstrap_has_structured_report_and_explicit_stages() -> None:
     source = _source()
 
     required = {
-        'BOOTSTRAP_SCHEMA_VERSION = "system-bootstrap.v2"',
+        'BOOTSTRAP_SCHEMA_VERSION = "system-bootstrap.v3"',
         "class BootstrapStageResult",
         "class SystemBootstrapReport",
         '"asset_catalog"',
@@ -27,7 +27,9 @@ def test_system_bootstrap_has_structured_report_and_explicit_stages() -> None:
         '"asset_price_history"',
         '"benchmarks"',
         '"fx_rates"',
+        '"asset_dividends"',
         "run_system_bootstrap_fx_stage",
+        "run_system_bootstrap_dividends_stage",
         "run_system_bootstrap",
     }
 
@@ -35,7 +37,7 @@ def test_system_bootstrap_has_structured_report_and_explicit_stages() -> None:
     assert missing == []
 
 
-def test_system_bootstrap_does_not_silently_add_still_blocked_domains() -> None:
+def test_system_bootstrap_does_not_bypass_domain_boundaries() -> None:
     source = _source()
 
     forbidden_runtime_imports = {
