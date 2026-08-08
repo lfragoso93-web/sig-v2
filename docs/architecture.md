@@ -147,7 +147,7 @@ A fachada legada foi removida. Resultado realizado, capital líquido aportado, p
 Eventos pertencem ao ativo e são persistidos exclusivamente em `asset_dividends`.
 
 ```text
-system-bootstrap.v3 / seed estrito autorizado
+system-bootstrap.v4 / seed estrito autorizado
         ↓
 asset_dividends
         ↓
@@ -166,7 +166,16 @@ Não existe materialização ativa de direitos por carteira. Depois do bootstrap
 
 O motor canônico trata splits, grupamentos, bonificações e subscrições independentemente do fornecedor. Eventos pertencem ao ativo, são persistidos em `corporate_events` e alimentam projeções históricas sem mutar transações originais.
 
-A Issue #129 permanece aberta para concluir a auditoria residual e governar a integração deste domínio ao bootstrap global. O próximo estágio deve reutilizar `corporate_event_service.py` e os normalizadores existentes, sem criar nova lógica de provider no orquestrador.
+O `system-bootstrap.v4` registra `corporate_events` como estágio explícito por `system_bootstrap_corporate_events_stage.py`. O wrapper:
+
+- exige opt-in `SGI_BOOTSTRAP_ENABLE_CORPORATE_EVENTS=true` antes de abrir sessão ou consultar provider;
+- lê o catálogo persistido e restringe o processamento a `ACAO`, `BDR` e `ETF_NACIONAL`;
+- usa `pg_advisory_xact_lock` durante a transação;
+- delega toda coleta e persistência exclusivamente a `sync_corporate_events_for_asset`;
+- realiza commit somente após sucesso integral e rollback em qualquer falha;
+- não usa `asset_market_pipeline_service` nem `dividend_backfill_service`.
+
+A integração é estrutural: nenhum provider real foi executado durante a implementação. A Issue #129 permanece aberta apenas para auditoria residual de consumidores/aliases/provider boundaries, coordenada com #254/#247.
 
 ## Transações
 
@@ -204,7 +213,7 @@ Módulos dependentes da carteira selecionada ficam sob `/carteira`. Aliases temp
 
 ## Bootstrap, scheduler e readiness
 
-A porta única atual é `run_system_bootstrap()` sob contrato `system-bootstrap.v3`.
+A porta única atual é `run_system_bootstrap()` sob contrato `system-bootstrap.v4`.
 
 A arquitetura distingue três estados:
 
@@ -214,7 +223,7 @@ A arquitetura distingue três estados:
 
 O bootstrap carrega contexto auditável único com `run_id`, branch `stable-15jun` e SHA completo. O disparo administrativo exige esse SHA; startup automático pode recebê-lo por `SGI_BOOTSTRAP_COMMIT_SHA`.
 
-Etapas registradas no v3:
+Etapas registradas no v4:
 
 1. `asset_catalog`;
 2. `treasury_catalog`;
@@ -223,11 +232,10 @@ Etapas registradas no v3:
 5. `asset_price_history`;
 6. `benchmarks`;
 7. `fx_rates`;
-8. `asset_dividends` — explicitamente gated pela #226.
+8. `asset_dividends` — explicitamente gated pela #226;
+9. `corporate_events` — explicitamente gated e transacional pela #254.
 
-Eventos corporativos ainda precisam ser adicionados como estágio explícito antes da certificação integral.
-
-O readiness operacional reflete essa fronteira. Não basta o processo FastAPI estar de pé: para uso real, o bootstrap precisa estar concluído e validado. `ready_for_real_data` permanece `false` durante a consolidação estrutural.
+Todos os domínios externos obrigatórios estão agora representados estruturalmente no orquestrador, mas isso ainda não constitui certificação operacional. O readiness continua falso até validação integrada de cobertura, idempotência, gates e critérios da #248/#227.
 
 No runtime pronto, o scheduler pode consultar providers apenas para:
 
@@ -248,9 +256,9 @@ Até o encerramento da Issue #227:
 
 A ordem canônica é:
 
-1. validar localmente `system-bootstrap.v3` e o gate estrutural de Proventos;
-2. integrar eventos corporativos sob #129 sem duplicar adapters/providers;
-3. concluir #247/#248/#250 e certificar a fronteira provider/bootstrap;
+1. validar localmente `system-bootstrap.v4`, incluindo gates de Proventos e eventos corporativos;
+2. reconciliar cobertura/idempotência e critérios finais de #248/#250/#254;
+3. concluir #247/#129 e certificar a fronteira provider/bootstrap;
 4. #150 e #149 — performance e benchmarks;
 5. #226/#216/#158 — certificação operacional e primeira carga real;
 6. #246 + #57 — macroprojeto Metas + Análise.
@@ -265,14 +273,14 @@ A ordem canônica é:
 - import integral de `app.main` aprovado;
 - HEAD local igual ao esperado.
 
-O `system-bootstrap.v3` com etapa de Proventos foi implementado depois desse checkpoint e ainda precisa de validação local.
+Os blocos de `system-bootstrap.v3/v4` com Proventos e eventos corporativos foram implementados depois desse checkpoint e ainda precisam de validação local integrada.
 
 ## Pendências arquiteturais
 
-1. Validar localmente o `system-bootstrap.v3` e o gate de Proventos.
-2. Incorporar eventos corporativos ao bootstrap global sob #129.
-3. Concluir auditoria global de serviços, routers, endpoints, duplicações e legado remanescente (#247).
-4. Certificar cobertura/idempotência dos domínios obrigatórios e somente então liberar readiness real.
+1. Validar localmente o `system-bootstrap.v4` e os gates de Proventos/eventos corporativos.
+2. Reconciliar cobertura/idempotência dos domínios obrigatórios e critérios finais de #248/#250/#254.
+3. Concluir auditoria global de serviços, routers, endpoints, duplicações e legado remanescente (#247/#129).
+4. Somente após certificação integral permitir readiness real.
 5. Materializar histórico persistido do IBOV (#150).
 6. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
 7. Retomar execução real de Proventos, importação e rebuild apenas sob #226/#216/#158/#227.
