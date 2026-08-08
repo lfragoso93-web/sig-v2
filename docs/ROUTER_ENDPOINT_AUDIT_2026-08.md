@@ -125,15 +125,38 @@ Essas superfícies usam o resolvedor pontual: primeiro leem o banco; se faltar c
 
 Imports diretos de BRAPI/yfinance foram removidos do router; gate estrutural protege essa fronteira.
 
-### Snapshots — DESVIO PROVIDER CARACTERIZADO
+### Snapshots — ALINHADO À EXCEÇÃO PONTUAL
 
-`backend/app/services/portfolio_snapshot_service.py` ainda possui três comportamentos incompatíveis com a política canônica:
+- `portfolio_snapshot_service.py` não executa mais `_prefetch_price_history` nem `persist_daily_prices(... force=True)` durante backfill/refresh de snapshots.
+- O fallback silencioso de preço de mercado para `avg_price` foi removido.
+- A leitura começa em batch DB-first; somente tickers realmente ausentes passam por `snapshot_price_resolution_service.py` e pelo resolvedor pontual de lacuna.
+- Se a cotação continuar ausente após a tentativa limitada/persist-first, o snapshot falha explicitamente e não grava patrimônio contaminado por proxy.
+- Gates estruturais impedem retorno de prefetch amplo, `avg_price` proxy ou outra busca histórica ampla nesse consumidor.
 
-- prefetch histórico amplo via `persist_daily_prices(... force=True)`;
-- `_prefetch_price_history` antes de backfill/refresh;
-- fallback silencioso para `avg_price` quando uma cotação histórica não é encontrada.
+### Portfolios / Class Targets — DUPLICIDADE ELIMINADA
 
-Foi criado `snapshot_price_resolution_service.py` como fronteira de substituição: recebe o mapa DB-first, chama `resolve_price_at_date_gap()` somente para tickers realmente ausentes e falha explicitamente se a cotação continuar indisponível. O consumidor legado ainda não foi alterado neste subbloco; os testes caracterizam o desvio para permitir sua remoção controlada no próximo commit funcional.
+- `portfolios.py` e `class_targets.py` registravam PUT/DELETE concorrentes para `/portfolios/{portfolio_id}/class-targets/{asset_type}` com contratos de resposta diferentes.
+- `class_targets.py` passa a ser a única superfície de list/upsert/delete usada pelo frontend `classTargetsService.ts`.
+- `portfolios.py` preserva apenas o endpoint distinto `targets-with-current`, sem mutações duplicadas.
+- Gate global percorre as rotas FastAPI e falha se qualquer par método+caminho voltar a ser registrado em duplicidade.
+
+### Portfolios / Snapshot Backfill — PORTA PÚBLICA REMOVIDA
+
+- O antigo `POST /api/v1/portfolios/{portfolio_id}/snapshots/backfill` permitia ao usuário comum disparar reconstrução operacional.
+- Não foi encontrado consumidor no frontend/repositório.
+- A porta pública foi removida; serviços internos e a superfície administrativa de manutenção permanecem para auditoria específica.
+- Gate estrutural impede reintrodução do endpoint público.
+
+### Admin — OPERACIONAL EM AUDITORIA
+
+- Gestão de usuários/configuração/auditoria permanece superfície administrativa legítima, protegida por `require_superadmin`.
+- `assets/seed`, `prices/backfill` e rebuilds administrativos ainda expõem portas operacionais próprias.
+- Pela arquitetura #248, essas portas precisam ser reconciliadas com `run_system_bootstrap()` e com a regra de provider único antes de serem classificadas como definitivas; nenhuma foi removida neste bloco.
+
+### IRPF — CANÔNICO + COMPATIBILIDADE
+
+- Endpoints canônicos versionados, PDF/CSV e projeções fiscais permanecem DB-first.
+- O relatório completo legado continua apenas como compatibilidade read-only em memória e não será removido sem prova de consumidores externos.
 
 ### Debug — CONDICIONAL/ADMIN SENSÍVEL
 
@@ -148,13 +171,14 @@ Foi criado `snapshot_price_resolution_service.py` como fronteira de substituiç�
 - Não há rota de Análise no frontend protegido.
 - `performanceService.ts` não expõe backfill.
 - `assetService.ts` usa `/assets/` com filtros `q` e `asset_type`, apoiando descoberta pelo catálogo persistido.
+- `classTargetsService.ts` usa a superfície dedicada `/portfolios/{id}/class-targets` para list/upsert/delete.
 
 ## Prioridades da próxima rodada
 
-1. **P0:** migrar `portfolio_snapshot_service.py` da caracterização atual para `snapshot_price_resolution_service`, removendo prefetch amplo e `avg_price` proxy.
-2. **P0:** continuar o inventário de consumidores internos de preço histórico e conectar o resolvedor somente onde uma lacuna precisa realmente ser reparada.
-3. **P0:** completar o bootstrap inicial para catálogo, históricos, Proventos, eventos, Tesouro, benchmarks e câmbio sob #248.
-4. **P1/P2:** revisar `portfolios`, `admin`, `irpf` e `class_targets` por mutações/aliases redundantes.
+1. **P0:** revisar as portas operacionais de `admin` e convergi-las para a porta única de bootstrap/manutenção definida pela #248.
+2. **P0:** completar o bootstrap inicial para catálogo, históricos, Proventos, eventos, Tesouro, benchmarks e câmbio sob #248.
+3. **P1:** continuar o inventário de consumidores internos de preço histórico e garantir que nenhum outro cálculo faça prefetch amplo ou proxy silencioso.
+4. **P1/P2:** revisar contratos residuais de `portfolios` e IRPF por compatibilidade desnecessária.
 5. **P2:** decidir destino de `dividends` após prova de consumidores externos.
 
 ## Regra de remoção
