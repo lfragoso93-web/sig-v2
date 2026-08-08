@@ -86,7 +86,13 @@ def inspect_database_drift() -> DriftInspection:
         with engine.connect() as connection:
             migration_context = MigrationContext.configure(connection)
             migration_script = produce_migrations(migration_context, Base.metadata)
-            return inspect_upgrade_operations(migration_script.upgrade_ops.ops)
+            upgrade_ops = migration_script.upgrade_ops
+            if upgrade_ops is None:
+                return DriftInspection(
+                    tables=frozenset(),
+                    unknown_operations=("MissingUpgradeOps",),
+                )
+            return inspect_upgrade_operations(upgrade_ops.ops)
     finally:
         engine.dispose()
 
