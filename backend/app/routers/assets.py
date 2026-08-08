@@ -1,4 +1,4 @@
-from datetime import date as date_type, datetime
+from datetime import date as date_type
 import logging
 import math
 import re
