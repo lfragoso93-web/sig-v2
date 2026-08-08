@@ -64,12 +64,13 @@ async def test_unresolved_price_fails_explicitly() -> None:
             )
 
 
-def test_snapshot_legacy_prefetch_and_avg_price_proxy_are_still_tracked() -> None:
-    """Caracteriza o desvio que o proximo commit deve remover do consumidor."""
+def test_snapshot_consumer_has_no_broad_prefetch_or_price_proxy() -> None:
     source = SNAPSHOT_PATH.read_text(encoding="utf-8")
-    assert "_prefetch_price_history" in source
-    assert "persist_daily_prices" in source
-    assert "usando avg_price como proxy" in source
+    assert "_prefetch_price_history" not in source
+    assert "persist_daily_prices" not in source
+    assert "usando avg_price como proxy" not in source
+    assert "state.avg_price" not in source
+    assert "resolve_missing_snapshot_prices" in source
 
 
 def test_resolution_service_has_no_broad_history_fetch() -> None:
