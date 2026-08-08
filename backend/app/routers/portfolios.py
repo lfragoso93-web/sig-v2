@@ -5,7 +5,6 @@ from fastapi import (
     BackgroundTasks,
     Depends,
     File,
-    HTTPException,
     UploadFile,
     status,
 )
@@ -15,7 +14,6 @@ from app.core.database import AsyncSessionLocal, get_db
 from app.core.deps import get_current_user
 from app.models.user import User
 from app.schemas.portfolio import (
-    ClassTargetUpsert,
     ClassTargetWithCurrent,
     CSVImportResponse,
     PortfolioCreate,
@@ -27,12 +25,7 @@ from app.schemas.portfolio_positions import PositionGroupResponse
 from app.schemas.portfolio_summary import PortfolioSummaryResponse
 from app.services import csv_import_service
 from app.services.canonical_positions_service import get_canonical_portfolio_positions
-from app.services.class_target_service import (
-    VALID_ASSET_CLASSES,
-    delete_target,
-    get_targets_with_current,
-    upsert_target,
-)
+from app.services.class_target_service import get_targets_with_current
 from app.services.csv_snapshot_rebuild_service import rebuild_snapshots_after_csv_import
 from app.services.csv_ticker_resolution import enrich_csv_dry_run_with_ticker_resolution
 from app.services.portfolio_delete_service import delete_portfolio_safely
@@ -230,43 +223,6 @@ async def get_portfolio_targets_with_current(
 ):
     current_distribution = await get_asset_distribution(db, portfolio_id, current_user.id)
     return await get_targets_with_current(db, portfolio_id, current_distribution)
-
-
-@router.put(
-    "/{portfolio_id}/class-targets/{asset_type}",
-    response_model=ClassTargetWithCurrent,
-)
-async def upsert_class_target(
-    portfolio_id: int,
-    asset_type: str,
-    data: ClassTargetUpsert,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    await get_portfolio(db, portfolio_id, current_user.id)
-    asset_type_norm = asset_type.upper()
-    if asset_type_norm not in VALID_ASSET_CLASSES:
-        raise HTTPException(status_code=400, detail="Classe de ativo invalida")
-    await upsert_target(db, portfolio_id, asset_type_norm, data.target_pct)
-    current_distribution = await get_asset_distribution(db, portfolio_id, current_user.id)
-    rows = await get_targets_with_current(db, portfolio_id, current_distribution)
-    return next(row for row in rows if row["asset_type"] == asset_type_norm)
-
-
-@router.delete(
-    "/{portfolio_id}/class-targets/{asset_type}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-async def delete_class_target(
-    portfolio_id: int,
-    asset_type: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    await get_portfolio(db, portfolio_id, current_user.id)
-    asset_type_norm = asset_type.upper()
-    await delete_target(db, portfolio_id, asset_type_norm)
-    return None
 
 
 @router.post("/{portfolio_id}/snapshots/backfill", status_code=status.HTTP_202_ACCEPTED)
