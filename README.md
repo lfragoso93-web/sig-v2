@@ -26,7 +26,7 @@ A disponibilização para criação/importação de carteiras reais só ocorre d
 
 ### Bootstrap global atual
 
-O contrato corrente é `system-bootstrap.v3`.
+O contrato corrente é `system-bootstrap.v4`.
 
 Etapas já registradas no orquestrador único:
 
@@ -35,9 +35,10 @@ Etapas já registradas no orquestrador único:
 - histórico global de preços;
 - benchmarks;
 - câmbio USD-BRL por PTAX oficial, reutilizando o seed auditável da #217;
-- Proventos globais em `asset_dividends`, reutilizando `pre-prod-dividends-seed.v2` sob gate explícito da #226.
+- Proventos globais em `asset_dividends`, reutilizando `pre-prod-dividends-seed.v2` sob gate explícito da #226;
+- eventos corporativos globais em `corporate_events`, por wrapper dedicado que lê o catálogo persistido, usa advisory lock transacional e delega exclusivamente a `sync_corporate_events_for_asset`.
 
-Eventos corporativos são o próximo domínio estrutural a incorporar. A etapa de Proventos não executa providers sem opt-in `SGI_BOOTSTRAP_ENABLE_DIVIDENDS=true`; esse opt-in técnico não substitui a autorização operacional exigida pela #226.
+Proventos não executam providers sem opt-in `SGI_BOOTSTRAP_ENABLE_DIVIDENDS=true`; esse opt-in técnico não substitui a autorização operacional exigida pela #226. Eventos corporativos também permanecem fail-closed sem `SGI_BOOTSTRAP_ENABLE_CORPORATE_EVENTS=true`; a integração atual é estrutural e nenhuma carga real foi executada durante sua implementação.
 
 O bootstrap possui identidade auditável compartilhada (`run_id`, `stable-15jun`, SHA completo). O SHA é obrigatório no disparo administrativo e pode ser fornecido por `SGI_BOOTSTRAP_COMMIT_SHA` no startup automático.
 
@@ -53,7 +54,7 @@ O bootstrap possui identidade auditável compartilhada (`run_id`, `stable-15jun`
 - Import integral de `app.main` aprovado.
 - HEAD local igual ao remoto esperado.
 
-As alterações posteriores que registram Proventos no `system-bootstrap.v3` permanecem pendentes de validação local.
+As alterações posteriores que registram Proventos e eventos corporativos no bootstrap permanecem pendentes de validação local integrada.
 
 ### Entregas consolidadas
 
@@ -99,9 +100,9 @@ Princípios: DB-first, fonte oficial primeiro, bootstrap idempotente, ausência 
 
 ### Agora — bootstrap e auditoria estrutural
 
-1. Validar localmente o `system-bootstrap.v3` com o novo gate de Proventos (#248/#250/#226).
-2. Incorporar eventos corporativos globais ao bootstrap reutilizando o motor canônico e preservando a #129.
-3. Continuar auditoria de routers, serviços, endpoints, aliases e integrações (#247).
+1. Validar localmente o `system-bootstrap.v4`, incluindo os gates de Proventos e eventos corporativos (#248/#250/#226/#254).
+2. Reconciliar os critérios finais de cobertura, idempotência e readiness do bootstrap completo.
+3. Continuar auditoria de routers, serviços, endpoints, aliases e integrações (#247/#129).
 4. Eliminar chamadas externas fora da fronteira canônica de bootstrap/preços.
 5. Certificar o bootstrap inicial completo antes da retomada de dados reais.
 
@@ -124,9 +125,9 @@ Princípios: DB-first, fonte oficial primeiro, bootstrap idempotente, ausência 
 ## Estado operacional
 
 - Dados históricos e catálogos existentes continuam sendo persistidos no banco.
-- `system-bootstrap.v3` é a porta única de bootstrap e já registra FX e Proventos sob seus contratos canônicos.
+- `system-bootstrap.v4` é a porta única de bootstrap e já registra FX, Proventos e eventos corporativos sob seus contratos canônicos.
 - Proventos permanecem bloqueados para execução real até autorização da #226.
-- Eventos corporativos ainda precisam ser integrados ao bootstrap global.
+- Eventos corporativos estão estruturalmente integrados, mas permanecem opt-in e ainda pendem de validação local integrada/certificação final.
 - Depois do bootstrap certificado, chamadas externas recorrentes ficam limitadas a preço intraday e fechamento diário.
 - CRUD de transações não dispara ingestão externa automática.
 - Rebuilds permanecem operações explícitas; não pertencem a requests comuns.
