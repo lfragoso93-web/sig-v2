@@ -28,17 +28,17 @@ Demais módulos e requests funcionais devem operar exclusivamente sobre dados pe
 | Core backend e autenticação | Estável | auditoria geral #247 |
 | Carteiras e transações | Consolidado | preservar CRUD sem sync externo |
 | Dados canônicos / DB-first | Consolidado | concluir certificação bootstrap/providers |
-| B3 / Tesouro / benchmarks / câmbio | Persistidos e integrados ao bootstrap até FX | validar cobertura/certificação |
-| Proventos | Registrado no `system-bootstrap.v3` sob gate #226 | validar integração; carga real continua bloqueada |
+| B3 / Tesouro / benchmarks / câmbio | Persistidos e integrados ao bootstrap | validar cobertura/certificação |
+| Proventos | Registrado no `system-bootstrap.v4` sob gate #226 | validar integração; carga real continua bloqueada |
 | Snapshots e valuation | Consolidado | TWR dedicado #149 |
 | Resumo e Patrimônio | Consolidado | manter DB-first |
 | Rentabilidade | Consolidada | TWR #149 / IBOV #150 |
 | IRPF | Canônico | validação real futura |
-| Eventos corporativos | Núcleo canônico consolidado | integrar bootstrap + auditoria residual #129 |
+| Eventos corporativos | Integrados estruturalmente ao `system-bootstrap.v4` | validar wrapper/gate e concluir auditoria residual #129/#254 |
 | Metas | Não estabilizado | redesenho conjunto #246 + #57 |
 | Análise de Carteira | Não implementada funcionalmente | redesenho conjunto #246 + #57 |
 | Convergência Alembic/ORM | Concluída fora de `goals` | manter gates |
-| Bootstrap inicial | `system-bootstrap.v3`; eventos pendentes | certificar integração final |
+| Bootstrap inicial | `system-bootstrap.v4`; todos os domínios externos obrigatórios representados | validação integrada e certificação final |
 | Pré-produção/rebuild | Bloqueada | retomar somente após certificação |
 | IBOV persistido | Planejado | #150 |
 | TWR Tesouro/Renda Fixa | Planejado | #149 |
@@ -53,7 +53,7 @@ Demais módulos e requests funcionais devem operar exclusivamente sobre dados pe
 - `app.main` importado integralmente.
 - HEAD local igual ao esperado.
 
-O bloco posterior que registra Proventos no `system-bootstrap.v3` permanece pendente de validação local.
+Os blocos posteriores que registram Proventos e eventos corporativos no bootstrap permanecem pendentes de validação local integrada.
 
 ## Ordem canônica de execução
 
@@ -75,11 +75,11 @@ Issues executoras: #247/#248/#250. Gate-mãe: #227.
 - [x] carregar históricos de preços necessários;
 - [x] carregar Tesouro, benchmarks e câmbio como etapas explícitas;
 - [x] registrar Proventos globais como etapa explícita sob gate operacional #226;
-- [ ] validar localmente o `system-bootstrap.v3` e seu gate de Proventos;
-- [ ] incorporar eventos corporativos globais;
-- [x] registrar estado/versionamento do bootstrap;
+- [x] incorporar eventos corporativos globais sob wrapper dedicado, gate explícito e advisory lock (#254);
+- [x] registrar estado/versionamento do bootstrap (`system-bootstrap.v4`);
 - [x] impedir readiness para uso real enquanto o bootstrap não estiver certificado;
 - [x] manter runtime externo recorrente limitado a intraday e fechamento diário;
+- [ ] validar localmente o `system-bootstrap.v4` e seus gates de Proventos/eventos;
 - [ ] certificar cobertura e idempotência do bootstrap completo;
 - [ ] somente após certificação permitir `ready_for_real_data=true`.
 
@@ -113,11 +113,12 @@ Somente após estabilização e promoção da base:
 - #227 — gate-mãe de estabilização e readiness.
 - #247 — auditoria pós-convergência e consolidação da fronteira de providers.
 - #248 — bootstrap certificado e fronteira única de providers.
-- #250 — orquestrador global `system-bootstrap.v3`.
+- #250 — orquestrador global `system-bootstrap.v4`.
+- #254 — integração estrutural de eventos corporativos, pendente de validação integrada/documentação final.
 
 ### Bloqueadas / dependentes
 
-- #129 — confirmar pendências reais e integrar eventos corporativos ao bootstrap.
+- #129 — auditoria residual de eventos corporativos após integração ao bootstrap.
 - #150 — após #247/bootstrap.
 - #149 — após #247/bootstrap.
 - #226 — execução real bloqueada; contrato reutilizado estruturalmente pelo bootstrap.
@@ -137,9 +138,9 @@ Somente após estabilização e promoção da base:
 
 - CRUD de transações não inicia ingestão externa automática.
 - GETs financeiros auditados permanecem DB-first.
-- `system-bootstrap.v3` já contém catálogo, históricos, Tesouro, benchmarks, FX e etapa gated de Proventos.
+- `system-bootstrap.v4` contém catálogo, históricos, Tesouro, benchmarks, FX, Proventos e eventos corporativos.
 - Sem `SGI_BOOTSTRAP_ENABLE_DIVIDENDS=true`, Proventos falha fechado antes de consultar provider; a autorização real continua pertencendo à #226.
-- Eventos corporativos são o próximo domínio obrigatório a integrar.
+- Sem `SGI_BOOTSTRAP_ENABLE_CORPORATE_EVENTS=true`, eventos corporativos também falham antes de provider; nenhuma execução real foi realizada no bloco estrutural.
 - Após o bootstrap certificado, somente preço intraday e fechamento diário podem consultar providers de forma recorrente.
 - Rebuilds e correções históricas permanecem operações explícitas e controladas.
 - Dados reais continuam bloqueados pela #227.
