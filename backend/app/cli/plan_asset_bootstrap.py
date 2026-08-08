@@ -17,7 +17,7 @@ from app.services.asset_bootstrap_plan_envelope import AssetBootstrapPlanEnvelop
 from app.services.asset_bootstrap_planner import plan_asset_bootstrap
 
 
-@dataclass(frozen=True)
+@dataclass
 class _PlanningCapability:
     name: AssetBootstrapCapabilityName
 
