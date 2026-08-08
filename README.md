@@ -4,35 +4,56 @@ Plataforma pessoal para acompanhamento, consolidação e análise de investiment
 
 A branch de desenvolvimento é `stable-15jun`. A promoção para `main` ocorre exclusivamente por Pull Request após validação integral e sincronização da documentação viva.
 
-## Status atual — 07/08/2026
+## Status atual — 08/08/2026
 
-O SGI v2 está em **estabilização arquitetural e auditoria antes da próxima fase funcional**.
+O SGI v2 está em **estabilização arquitetural e certificação do bootstrap inicial antes da próxima fase funcional**.
 
-A Issue #227 é o gate-mãe que bloqueia dados reais até a certificação estrutural. A Issue #247 executa a auditoria atual de legado, serviços, routers, endpoints e integrações.
+A Issue #227 é o gate-mãe que bloqueia dados reais até a certificação estrutural. A Issue #247 executa a auditoria de legado, serviços, routers, endpoints e integrações. A #248 coordena a fronteira de providers/readiness e a #250 executa o orquestrador global.
 
 A convergência Alembic ↔ MetaData da Issue #241 foi concluída para todos os domínios estabilizados. O único diff deliberadamente preservado é `goals`, que não deve receber migration antes do redesenho conjunto de Metas e Análise de Carteira (#246 + #57).
 
 ### Regra canônica de dados externos
 
-O SGI v2 passa a adotar uma fronteira explícita entre **bootstrap de dados** e **runtime financeiro**:
+O SGI v2 adota uma fronteira explícita entre **bootstrap de dados** e **runtime financeiro**:
 
 - antes de cadastrar carteiras reais, o ambiente deve executar um bootstrap idempotente que carregue e persista o catálogo e todo o histórico necessário ao funcionamento do sistema;
-- esse bootstrap deve alimentar o banco com ativos/metadados, históricos, Proventos, eventos corporativos, Tesouro, benchmarks, câmbio e demais séries necessárias;
-- depois que o ambiente estiver certificado e operacional, requests funcionais e cálculos financeiros devem consumir somente dados persistidos;
+- esse bootstrap alimenta o banco com ativos/metadados, históricos, Proventos, eventos corporativos, Tesouro, benchmarks, câmbio e demais séries necessárias;
+- depois que o ambiente estiver certificado e operacional, requests funcionais e cálculos financeiros consomem somente dados persistidos;
 - consultas externas recorrentes em runtime ficam restritas a **preço intraday** e **preço oficial/de fechamento do dia**, que devem ser persistidos antes de alimentar os contratos financeiros;
-- busca de ativos, detalhes, relatórios, posições, rentabilidade, IRPF, Proventos e demais módulos não devem consultar provedores externos diretamente.
+- busca de ativos, detalhes, relatórios, posições, rentabilidade, IRPF, Proventos e demais módulos não consultam provedores externos diretamente.
 
 A disponibilização para criação/importação de carteiras reais só ocorre depois que o bootstrap inicial estiver concluído e validado.
 
+### Bootstrap global atual
+
+O contrato corrente é `system-bootstrap.v3`.
+
+Etapas já registradas no orquestrador único:
+
+- catálogo de ativos;
+- catálogo, reconciliação e histórico do Tesouro;
+- histórico global de preços;
+- benchmarks;
+- câmbio USD-BRL por PTAX oficial, reutilizando o seed auditável da #217;
+- Proventos globais em `asset_dividends`, reutilizando `pre-prod-dividends-seed.v2` sob gate explícito da #226.
+
+Eventos corporativos são o próximo domínio estrutural a incorporar. A etapa de Proventos não executa providers sem opt-in `SGI_BOOTSTRAP_ENABLE_DIVIDENDS=true`; esse opt-in técnico não substitui a autorização operacional exigida pela #226.
+
+O bootstrap possui identidade auditável compartilhada (`run_id`, `stable-15jun`, SHA completo). O SHA é obrigatório no disparo administrativo e pode ser fornecido por `SGI_BOOTSTRAP_COMMIT_SHA` no startup automático.
+
+`ready_for_real_data` permanece `false` até todos os domínios obrigatórios e gates de certificação estarem concluídos.
+
 ### Qualidade validada
 
-Baseline certificado localmente no HEAD `08414af3a7b570ae9753e83ba5eecf2c17f20e42`:
+Último checkpoint certificado localmente pelo usuário: HEAD `0e8d96c081a0e788a9edcf69901a134b29b7f696`.
 
 - Build Docker aprovado.
 - `compileall` aprovado.
-- 7 testes do checkpoint de auditoria aprovados.
+- **22/22 testes** do checkpoint de bootstrap/FX/readiness aprovados.
 - Import integral de `app.main` aprovado.
-- Working tree limpa.
+- HEAD local igual ao remoto esperado.
+
+As alterações posteriores que registram Proventos no `system-bootstrap.v3` permanecem pendentes de validação local.
 
 ### Entregas consolidadas
 
@@ -76,34 +97,37 @@ Princípios: DB-first, fonte oficial primeiro, bootstrap idempotente, ausência 
 
 ## Ordem canônica de trabalho
 
-### Agora — auditoria estrutural
+### Agora — bootstrap e auditoria estrutural
 
-1. Continuar auditoria de routers, serviços, endpoints, aliases e integrações (#247).
-2. Eliminar chamadas externas fora da fronteira canônica de bootstrap/preços.
-3. Confirmar o estado real de consumidores restantes de eventos corporativos (#129) e itens de provedores relacionados (#130/#127).
-4. Desenhar e certificar o bootstrap inicial completo antes da retomada de dados reais.
+1. Validar localmente o `system-bootstrap.v3` com o novo gate de Proventos (#248/#250/#226).
+2. Incorporar eventos corporativos globais ao bootstrap reutilizando o motor canônico e preservando a #129.
+3. Continuar auditoria de routers, serviços, endpoints, aliases e integrações (#247).
+4. Eliminar chamadas externas fora da fronteira canônica de bootstrap/preços.
+5. Certificar o bootstrap inicial completo antes da retomada de dados reais.
 
 ### Depois — performance e benchmarks
 
-5. Materializar histórico persistido do IBOV (#150).
-6. Implementar TWR dedicado de Tesouro Direto e Renda Fixa (#149).
+6. Materializar histórico persistido do IBOV (#150).
+7. Implementar TWR dedicado de Tesouro Direto e Renda Fixa (#149).
 
 ### Bloqueado até certificação estrutural e bootstrap
 
-7. Executar as duas rodadas reais controladas de Proventos (#226).
-8. Fechar o gate agregado de seeds/bootstrap (#216).
-9. Retomar rebuild, CSV, posições, snapshots e reconciliação (#158).
-10. Somente então liberar criação/importação de carteiras reais.
+8. Executar as duas rodadas reais controladas de Proventos (#226), somente na janela autorizada.
+9. Fechar o gate agregado de seeds/bootstrap (#216).
+10. Retomar rebuild, CSV, posições, snapshots e reconciliação (#158).
+11. Somente então liberar criação/importação de carteiras reais.
 
 ### Próxima grande fase funcional
 
-11. Redesenhar Metas + Análise de Carteira como um único macroprojeto (#246 + #57).
+12. Redesenhar Metas + Análise de Carteira como um único macroprojeto (#246 + #57).
 
 ## Estado operacional
 
 - Dados históricos e catálogos existentes continuam sendo persistidos no banco.
-- O próximo desenho operacional deve transformar a subida inicial do ambiente em um bootstrap completo, idempotente e certificável antes de liberar uso real.
-- Depois do bootstrap, chamadas externas recorrentes ficam limitadas a preço intraday e fechamento diário.
+- `system-bootstrap.v3` é a porta única de bootstrap e já registra FX e Proventos sob seus contratos canônicos.
+- Proventos permanecem bloqueados para execução real até autorização da #226.
+- Eventos corporativos ainda precisam ser integrados ao bootstrap global.
+- Depois do bootstrap certificado, chamadas externas recorrentes ficam limitadas a preço intraday e fechamento diário.
 - CRUD de transações não dispara ingestão externa automática.
 - Rebuilds permanecem operações explícitas; não pertencem a requests comuns.
 - Importação CSV real, criação de carteiras reais e snapshots de produção continuam suspensos pela #227 até o bootstrap/gates serem certificados.
