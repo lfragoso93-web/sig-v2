@@ -22,7 +22,7 @@ from app.routers import (
     auth, portfolios, transactions, dividends, positions,
     users, proventos, performance, admin,
     assets, fx, goals, irpf,
-    analysis, fixed_income, treasury,
+    analysis, treasury,
 )
 from app.routers import debug
 from app.routers import prices
@@ -188,7 +188,6 @@ app.include_router(prices.router,          prefix=f"{PREFIX}/prices",       tags
 
 app.include_router(irpf.router,            prefix=f"{PREFIX}/irpf",         tags=["irpf"])
 app.include_router(analysis.router,        prefix=f"{PREFIX}/analysis",     tags=["analysis"])
-app.include_router(fixed_income.router,    prefix=f"{PREFIX}/fixed-income", tags=["fixed_income"])
 
 if settings.APP_DEBUG or __import__('os').getenv("ADMIN_SECRET"):
     app.include_router(debug.router, prefix=f"{PREFIX}/debug", tags=["debug"])
