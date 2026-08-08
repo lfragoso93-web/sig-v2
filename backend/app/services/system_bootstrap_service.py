@@ -22,7 +22,7 @@ from app.services.system_bootstrap_execution_context import (
 
 logger = logging.getLogger(__name__)
 
-BOOTSTRAP_SCHEMA_VERSION = "system-bootstrap.v3"
+BOOTSTRAP_SCHEMA_VERSION = "system-bootstrap.v4"
 
 
 @dataclass(frozen=True)
@@ -129,13 +129,15 @@ async def run_system_bootstrap(
 ) -> SystemBootstrapReport:
     """Executa as etapas de bootstrap atualmente integradas.
 
-    O v3 inclui câmbio USD-BRL por PTAX oficial e registra Proventos globais
-    como etapa explícita, reutilizando o contrato ``pre-prod-dividends-seed.v2``.
-    A execução real de Proventos permanece opt-in sob a #226; sem autorização o
-    estágio falha fechado antes de consultar providers. Eventos corporativos
-    permanecem para o bloco seguinte. Um relatório verde ainda não autoriza
-    dados reais por si só.
+    O v4 acrescenta eventos corporativos globais ao fluxo certificado,
+    reutilizando o wrapper dedicado e gated da #254. Proventos e eventos
+    corporativos continuam com autorização operacional explícita e falham
+    fechados antes de providers quando bloqueados. Um relatório verde ainda
+    não autoriza dados reais por si só.
     """
+    from app.services.system_bootstrap_corporate_events_stage import (
+        run_system_bootstrap_corporate_events_stage,
+    )
     from app.services.system_bootstrap_dividends_stage import (
         run_system_bootstrap_dividends_stage,
     )
@@ -167,6 +169,10 @@ async def run_system_bootstrap(
         (
             "asset_dividends",
             lambda: run_system_bootstrap_dividends_stage(context),
+        ),
+        (
+            "corporate_events",
+            lambda: run_system_bootstrap_corporate_events_stage(context),
         ),
     )
 
