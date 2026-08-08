@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from app.main import app
-from tests.route_tree_helpers import route_pairs
+from tests.route_tree_helpers import http_method_path_pairs
 
 
 ADMIN_PATH = (
@@ -14,7 +14,7 @@ ADMIN_PATH = (
 
 def test_admin_legacy_provider_bootstrap_ports_are_removed() -> None:
     source = ADMIN_PATH.read_text(encoding="utf-8")
-    routes = route_pairs(app)
+    routes = set(http_method_path_pairs(app.routes))
 
     assert '"/assets/seed"' not in source
     assert '"/prices/backfill"' not in source
@@ -29,7 +29,7 @@ def test_admin_legacy_provider_bootstrap_ports_are_removed() -> None:
 
 def test_admin_snapshot_maintenance_remains_separate_from_provider_bootstrap() -> None:
     source = ADMIN_PATH.read_text(encoding="utf-8")
-    routes = route_pairs(app)
+    routes = set(http_method_path_pairs(app.routes))
 
     assert '"/snapshots/backfill"' in source
     assert '"/snapshots/backfill/{portfolio_id}"' in source
