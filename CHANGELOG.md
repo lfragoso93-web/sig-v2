@@ -5,6 +5,18 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — bootstrap v4 com eventos corporativos gated (08/08/2026)
+
+- Criado `system_bootstrap_corporate_events_stage.py` como wrapper dedicado para eventos corporativos globais.
+- A execução é fail-closed sem `SGI_BOOTSTRAP_ENABLE_CORPORATE_EVENTS=true`, com gate anterior à abertura de sessão/provider.
+- O estágio lê somente ativos elegíveis persistidos (`ACAO`, `BDR`, `ETF_NACIONAL`), adquire advisory lock transacional e delega exclusivamente a `sync_corporate_events_for_asset`.
+- O serviço canônico continua responsável pela coleta/normalização/persistência e executa apenas `flush`; o wrapper controla commit único e rollback integral do estágio.
+- `asset_market_pipeline_service` e `dividend_backfill_service` não participam do novo caminho; a mistura legada de `events_synced`/Proventos permanece registrada para auditoria separada.
+- Adicionados testes dirigidos de gate, ordem do lock, filtro DB-first, commit, rollback/stop e relatório determinístico.
+- O orquestrador evoluiu para `system-bootstrap.v4` e passou a registrar `corporate_events` após `asset_dividends`, mantendo fail-fast e `certified_for_real_data=false`.
+- Nenhum provider real foi executado durante estes blocos; a integração é estrutural e ainda depende de validação local integrada/certificação final.
+- README, ROADMAP, arquitetura, continuidade e Issues #254/#250/#248/#129 foram sincronizados com o estado v4.
+
 ### Alterado — bootstrap v3, FX certificado e Proventos gated (08/08/2026)
 
 - O checkpoint `0e8d96c081a0e788a9edcf69901a134b29b7f696` foi certificado localmente pelo usuário com build Docker aprovado, 22/22 testes dirigidos, `compileall` e import integral de `app.main` aprovados.
@@ -14,7 +26,7 @@ Formato baseado em Keep a Changelog.
 - O contrato evoluiu para `system-bootstrap.v3` com etapa explícita `asset_dividends`, reutilizando `pre-prod-dividends-seed.v2` e os adapters estritos BRAPI/Yahoo já existentes.
 - Proventos permanecem fail-closed: sem `SGI_BOOTSTRAP_ENABLE_DIVIDENDS=true`, a etapa aborta antes de consultar providers; esse opt-in técnico não substitui a autorização operacional exigida pela #226.
 - O estágio de Proventos escreve exclusivamente em `asset_dividends`, não utiliza `dividend_backfill_service` e não materializa direitos por carteira.
-- `ready_for_real_data` permanece `false`; eventos corporativos são o próximo domínio obrigatório do bootstrap antes da certificação final.
+- `ready_for_real_data` permanece `false`; eventos corporativos eram o próximo domínio obrigatório do bootstrap antes da evolução para v4.
 - README, ROADMAP, arquitetura, continuidade e Issues #248/#250/#226 foram sincronizados com o novo estado.
 
 ### Alterado — readiness, lacuna pontual e catálogo DB-first (07/08/2026)
@@ -34,7 +46,7 @@ Formato baseado em Keep a Changelog.
 - O contrato `system-bootstrap.v1` produz relatório estruturado por etapa e interrompe a cadeia após falha, evitando que estágios dependentes avancem silenciosamente.
 - A sequência procedural `_boot_sequence()` foi removida de `app.main`; o lifespan agora apenas delega ao orquestrador global quando `ENABLE_BOOT_MARKET_SYNC` está habilitado.
 - O primeiro bloco migra somente etapas já existentes e previamente autorizadas: catálogo de ativos, catálogo/reconciliação/histórico de Tesouro, histórico global de preços e benchmarks.
-- Proventos, eventos corporativos e câmbio permanecem explicitamente fora do `system-bootstrap.v1` até seus gates serem incorporados pela #248; um relatório verde deste primeiro contrato ainda não libera dados reais.
+- Proventos, eventos corporativos e câmbio permaneciam explicitamente fora do `system-bootstrap.v1` até seus gates serem incorporados pela #248; um relatório verde deste primeiro contrato ainda não libera dados reais.
 - Adicionados gates estruturais para impedir reintrodução de lógica de seed/backfill diretamente em `app.main` e inclusão silenciosa de domínios bloqueados no bootstrap.
 
 ### Alterado — política canônica de bootstrap e providers (07/08/2026)
@@ -135,10 +147,3 @@ Formato baseado em Keep a Changelog.
 - O upgrade é bloqueado quando existir qualquer linha, impedindo descarte silencioso de dados.
 - O downgrade restaura tabela, FK `goal_allocations_goal_id_fkey` com `ON DELETE CASCADE` e índice `ix_goal_allocations_id`.
 - O tratamento de `goal_allocations` não estabiliza o domínio `goals`, que permanece reservado ao redesenho #246/#57.
-
-### Adicionado — fixture sintética transacional para contratos legados (06/08/2026)
-
-- Adicionada fixture PostgreSQL nativa para `irpf_records`, `irpf_losses` e `goal_allocations`, incluindo seus pais `users`, `portfolios` e `goals`.
-- A fixture usa `ON_ERROR_STOP`, valida exatamente uma linha por contrato e termina obrigatoriamente em `ROLLBACK`.
-- Adicionados gates que proíbem `COMMIT`, `DROP TABLE` e `TRUNCATE`, além de proteger o uso de variáveis `psql` e as três asserções de cardinalidade.
-- Nenhuma migration, DDL persistente, tabela ou dado real foi alterado.
