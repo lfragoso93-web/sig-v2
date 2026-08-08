@@ -10,7 +10,7 @@ from fastapi import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import AsyncSessionLocal, get_db
+from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
 from app.schemas.portfolio import (
@@ -40,7 +40,6 @@ from app.services.portfolio_service import (
     list_portfolios,
     update_portfolio,
 )
-from app.services.portfolio_snapshot_service import backfill_snapshots
 from app.services.portfolio_summary_service import get_canonical_portfolio_summary
 from app.services.rentabilidade_cache_service import invalidate_rentabilidade_cache
 
@@ -112,15 +111,6 @@ def _localize_csv_result(result: dict) -> dict:
 async def _refresh_after_csv_import(portfolio_id: int) -> None:
     await invalidate_portfolio_cache(portfolio_id)
     await invalidate_rentabilidade_cache(portfolio_id)
-
-
-async def _backfill_bg(portfolio_id: int) -> None:
-    try:
-        async with AsyncSessionLocal() as db:
-            count = await backfill_snapshots(db, portfolio_id)
-        logger.info("[snapshot_bg] portfolio=%s backfill concluido: %d snapshots", portfolio_id, count)
-    except Exception as exc:
-        logger.error("[snapshot_bg] portfolio=%s erro: %s", portfolio_id, exc)
 
 
 @router.get("/", response_model=list[PortfolioResponse])
@@ -223,18 +213,6 @@ async def get_portfolio_targets_with_current(
 ):
     current_distribution = await get_asset_distribution(db, portfolio_id, current_user.id)
     return await get_targets_with_current(db, portfolio_id, current_distribution)
-
-
-@router.post("/{portfolio_id}/snapshots/backfill", status_code=status.HTTP_202_ACCEPTED)
-async def backfill_portfolio_snapshots(
-    portfolio_id: int,
-    background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    await get_portfolio(db, portfolio_id, current_user.id)
-    background_tasks.add_task(_backfill_bg, portfolio_id)
-    return {"detail": "Backfill de snapshots iniciado"}
 
 
 @router.post("/{portfolio_id}/import-csv", response_model=CSVImportResponse)
