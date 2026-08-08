@@ -37,13 +37,13 @@ A partir deste checkpoint, a auditoria usa a seguinte regra como critério obrig
 - Metadata antiga de sprint removida.
 - A Issue #57 está bloqueada e será redesenhada junto com Metas (#246).
 
-### Renda Fixa — PLACEHOLDER DE API
+### Renda Fixa — PLACEHOLDER REMOVIDO
 
-- Router: `backend/app/routers/fixed_income.py`.
-- Prefixo registrado: `/api/v1/fixed-income`.
-- Comportamento atual: `501 Not Implemented`.
-- Metadata antiga de sprint removida.
-- O domínio financeiro já existe em outras superfícies; o placeholder não representa ausência do domínio.
+- O antigo router `backend/app/routers/fixed_income.py` retornava apenas `501`.
+- O domínio de Renda Fixa permanece implementado por seus modelos, serviços, projeções e contratos canônicos; o placeholder HTTP não representava funcionalidade real adicional.
+- Não foi encontrado consumidor para `/api/v1/fixed-income` no repositório.
+- O router foi desregistrado do `app.main` e removido fisicamente.
+- Gate estrutural impede reintrodução da superfície 501.
 
 ### Quotes — REMOVIDO
 
@@ -125,6 +125,16 @@ Essas superfícies usam o resolvedor pontual: primeiro leem o banco; se faltar c
 
 Imports diretos de BRAPI/yfinance foram removidos do router; gate estrutural protege essa fronteira.
 
+### Snapshots — DESVIO PROVIDER CARACTERIZADO
+
+`backend/app/services/portfolio_snapshot_service.py` ainda possui três comportamentos incompatíveis com a política canônica:
+
+- prefetch histórico amplo via `persist_daily_prices(... force=True)`;
+- `_prefetch_price_history` antes de backfill/refresh;
+- fallback silencioso para `avg_price` quando uma cotação histórica não é encontrada.
+
+Foi criado `snapshot_price_resolution_service.py` como fronteira de substituição: recebe o mapa DB-first, chama `resolve_price_at_date_gap()` somente para tickers realmente ausentes e falha explicitamente se a cotação continuar indisponível. O consumidor legado ainda não foi alterado neste subbloco; os testes caracterizam o desvio para permitir sua remoção controlada no próximo commit funcional.
+
 ### Debug — CONDICIONAL/ADMIN SENSÍVEL
 
 - Condicionado por `APP_DEBUG` ou `ADMIN_SECRET` no `app.main` e protegido por secret/rate limiting.
@@ -141,11 +151,11 @@ Imports diretos de BRAPI/yfinance foram removidos do router; gate estrutural pro
 
 ## Prioridades da próxima rodada
 
-1. **P0:** inventariar consumidores internos de preço histórico e conectar o resolvedor apenas nos fluxos que realmente precisam resolver lacunas.
-2. **P0:** completar o bootstrap inicial para catálogo, históricos, Proventos, eventos, Tesouro, benchmarks e câmbio sob #248.
-3. **P1/P2:** revisar `portfolios`, `admin`, `irpf` e `class_targets` por mutações/aliases redundantes.
-4. **P2:** decidir destino de `dividends` após prova de consumidores externos.
-5. **P2:** revisar o placeholder dedicado de Renda Fixa e decidir se deve ser removido ou substituído por superfície canônica existente.
+1. **P0:** migrar `portfolio_snapshot_service.py` da caracterização atual para `snapshot_price_resolution_service`, removendo prefetch amplo e `avg_price` proxy.
+2. **P0:** continuar o inventário de consumidores internos de preço histórico e conectar o resolvedor somente onde uma lacuna precisa realmente ser reparada.
+3. **P0:** completar o bootstrap inicial para catálogo, históricos, Proventos, eventos, Tesouro, benchmarks e câmbio sob #248.
+4. **P1/P2:** revisar `portfolios`, `admin`, `irpf` e `class_targets` por mutações/aliases redundantes.
+5. **P2:** decidir destino de `dividends` após prova de consumidores externos.
 
 ## Regra de remoção
 
