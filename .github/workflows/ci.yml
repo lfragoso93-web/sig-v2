@@ -87,7 +87,7 @@ jobs:
         run: |
           alembic upgrade head
           alembic current
-          alembic check
+          python -m app.governance.alembic_drift_gate
 
       - name: Tests (pytest)
         working-directory: backend
