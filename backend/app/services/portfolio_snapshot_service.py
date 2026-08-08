@@ -8,35 +8,24 @@ Os snapshots capturam o retorno de PRECO puro da carteira, sem proventos.
   total_pnl  = realized_pnl + unrealized_pnl
                Lucro/prejuizo de compra e venda e valorizacao de preco.
                NAO inclui dividendos, JCP, rendimentos de RF nem outros
-               proventos recebidos. Estes ficam em app.models.dividend.
+               proventos recebidos.
 
   return_pct = total_pnl / (cost_basis + max(realized_pnl, 0)) * 100
                Percentual de retorno de preco sobre capital empregado.
                Usa cost_basis + realized positivo como denominador para
-               evitar distorcao quando ha muitas vendas (invested_total
-               diminui com resgates, podendo inflar o percentual).
-               Fallback: invested_total quando nao ha posicoes abertas.
-
-RETORNO TOTAL COM PROVENTOS
-==========================================================
-  Se a UI precisar exibir retorno total incluindo proventos:
-    retorno_total_com_prov = (total_pnl + proventos_total) / base * 100
-  Onde proventos_total vem do agregador canônico de direitos recebidos.
-  O campo retorno_total_pct do payload de /kpis NAO inclui proventos;
-  os campos proventos_total e proventos_12m sao expostos separadamente
-  para que o frontend calcule e exiba o retorno total conforme necessidade.
+               evitar distorcao quando ha muitas vendas.
 
 FLUXO DE ATUALIZACAO
 ====================
-  backfill_snapshots  : reconstroi historico completo dia a dia (semanal/sob demanda)
-  refresh_today_snapshot : atualiza o snapshot de hoje (chamado apos cada transacao)
-  invalidate_snapshots_from : remove snapshots a partir de uma data (ex: correcao de transacao)
+  backfill_snapshots       : reconstroi historico dia a dia usando dados persistidos
+  refresh_today_snapshot   : atualiza o snapshot de hoje
+  invalidate_snapshots_from: remove snapshots a partir de uma data
 
-OTIMIZACOES DE QUERY (Bloco 2)
-================================
-  [Q1 CORRIGIDO] _calc_totals: Asset buscado em batch antes do loop de posicoes.
-  Antes: 1 SELECT por ticker (N+1). Depois: 1 SELECT com IN(tickers).
-  Impacto em backfill 1 ano com 20 tickers: 5.000 queries -> 250 queries.
+POLITICA DE PRECO
+=================
+A leitura e DB-first. Quando a cotacao exata estiver ausente, somente o ticker
+faltante pode acionar o resolvedor pontual de lacuna historica, que persiste o
+resultado antes do uso. Nao existe prefetch historico amplo nem proxy de preco.
 """
 from __future__ import annotations
 
@@ -56,17 +45,17 @@ from app.models.transaction import OperationType, Transaction
 from app.services.corporate_action_position_reader import (
     load_global_corporate_actions_by_ticker,
 )
-from app.services.price_history_service import persist_daily_prices
 from app.services.snapshot_position_projection import project_snapshot_positions
+from app.services.snapshot_price_resolution_service import (
+    SnapshotPriceRequirement,
+    resolve_missing_snapshot_prices,
+)
 
 logger = logging.getLogger(__name__)
 
-# Tipos cotados em USD
-_USD_ASSET_TYPES = {"STOCK", "ETF_INTERNACIONAL"}
-
 
 class _TickerState:
-    """Acumula custo sempre em BRL (independente da moeda original)."""
+    """Estado projetado de um ticker em uma data de snapshot."""
 
     __slots__ = ("ticker", "asset_type", "qty", "cost", "realized_pnl", "is_usd")
 
@@ -74,34 +63,9 @@ class _TickerState:
         self.ticker = ticker
         self.asset_type = asset_type
         self.qty = Decimal("0")
-        self.cost = Decimal("0")  # sempre em BRL
-        self.realized_pnl = Decimal("0")  # sempre em BRL
+        self.cost = Decimal("0")
+        self.realized_pnl = Decimal("0")
         self.is_usd = is_usd
-
-    def buy(
-        self,
-        qty: Decimal,
-        price_brl: Decimal,
-        fees_brl: Decimal = Decimal("0"),
-    ) -> None:
-        """price_brl e fees_brl ja devem estar convertidos para BRL."""
-        self.qty += qty
-        self.cost += qty * price_brl + fees_brl
-
-    def sell(self, qty: Decimal, price_brl: Decimal) -> None:
-        """price_brl ja deve estar convertido para BRL."""
-        sold = min(qty, self.qty)
-        if self.qty > 0:
-            avg = self.cost / self.qty
-            self.realized_pnl += sold * (price_brl - avg)
-            self.cost -= sold * avg
-        self.qty -= sold
-        self.qty = max(self.qty, Decimal("0"))
-        self.cost = max(self.cost, Decimal("0"))
-
-    @property
-    def avg_price(self) -> Decimal:
-        return self.cost / self.qty if self.qty > 0 else Decimal("0")
 
 
 def _safe_div(a: Decimal, b: Decimal) -> Decimal:
@@ -216,7 +180,7 @@ async def _calc_totals(
 
     from app.services.price_history_service import get_prices_at_date_batch
 
-    tickers_with_types = []
+    requirements: list[SnapshotPriceRequirement] = []
     for ticker, state in positions.items():
         asset_type = asset_type_map.get(ticker)
         if asset_type is None:
@@ -224,20 +188,27 @@ async def _calc_totals(
                 asset_type = AssetType(state.asset_type)
             except (ValueError, KeyError):
                 asset_type = AssetType.ACAO
-        tickers_with_types.append((ticker, asset_type))
+        requirements.append(
+            SnapshotPriceRequirement(ticker=ticker, asset_type=asset_type)
+        )
 
-    prices_map = await get_prices_at_date_batch(db, tickers_with_types, date_str)
+    tickers_with_types = [
+        (requirement.ticker, requirement.asset_type) for requirement in requirements
+    ]
+    persisted_prices = await get_prices_at_date_batch(
+        db,
+        tickers_with_types,
+        date_str,
+    )
+    prices_map = await resolve_missing_snapshot_prices(
+        db,
+        requirements,
+        date_str,
+        persisted_prices,
+    )
 
     for ticker, state in positions.items():
-        close = prices_map.get(ticker)
-        if close is None:
-            close = float(state.avg_price)
-            logger.warning(
-                "[snapshot] sem cotacao para %s em %s - usando avg_price como proxy",
-                ticker,
-                date_str,
-            )
-
+        close = prices_map[ticker]
         close_brl = close
         if state.is_usd and fx_snapshot:
             close_brl = close * fx_snapshot
@@ -326,46 +297,6 @@ async def _upsert_snapshot(
     await db.execute(stmt)
 
 
-async def _prefetch_price_history(
-    db: AsyncSession,
-    portfolio_id: int,
-    days_back: int,
-) -> None:
-    result = await db.execute(
-        select(Transaction.ticker, Transaction.asset_type)
-        .where(Transaction.portfolio_id == portfolio_id)
-        .distinct()
-    )
-    tickers = result.all()
-    if not tickers:
-        return
-
-    logger.info(
-        "[snapshot] pre-fetch FORCADO de historico para %d tickers (days_back=%d)",
-        len(tickers),
-        days_back,
-    )
-    for row in tickers:
-        ticker = row.ticker.upper()
-        try:
-            asset_type = AssetType(row.asset_type)
-        except ValueError:
-            asset_type = AssetType.ACAO
-        logger.info(
-            "[snapshot] pre-fetch %s (%s) days_back=%d",
-            ticker,
-            asset_type.value,
-            days_back,
-        )
-        await persist_daily_prices(
-            db,
-            ticker,
-            asset_type,
-            days_back=days_back,
-            force=True,
-        )
-
-
 async def calc_snapshot_at_date(
     db: AsyncSession,
     portfolio_id: int,
@@ -373,9 +304,15 @@ async def calc_snapshot_at_date(
     commit: bool = True,
     prefetch: bool = False,
 ) -> dict:
+    """Calcula snapshot usando leitura DB-first e fallback pontual por ticker/data.
+
+    `prefetch` permanece temporariamente na assinatura por compatibilidade interna,
+    mas nao dispara qualquer carga historica ampla.
+    """
     if prefetch:
-        days_back = (date.today() - target_date).days + 6
-        await _prefetch_price_history(db, portfolio_id, days_back)
+        logger.debug(
+            "[snapshot] prefetch legado ignorado; resolucao e pontual por data"
+        )
 
     totals = await _calc_totals(db, portfolio_id, target_date)
     await _upsert_snapshot(db, portfolio_id, target_date, totals)
@@ -409,8 +346,6 @@ async def backfill_snapshots(
     if days_back is not None:
         start = max(start, date.today() - timedelta(days=days_back))
 
-    total_days = (date.today() - start).days + 1
-
     existing = await db.execute(
         select(PortfolioSnapshot.snapshot_date).where(
             PortfolioSnapshot.portfolio_id == portfolio_id,
@@ -419,8 +354,6 @@ async def backfill_snapshots(
         )
     )
     existing_dates = {r.snapshot_date for r in existing.all()}
-
-    await _prefetch_price_history(db, portfolio_id, days_back=total_days)
 
     count = 0
     cursor = start
@@ -454,7 +387,7 @@ async def refresh_today_snapshot(
         portfolio_id,
         date.today(),
         commit=True,
-        prefetch=True,
+        prefetch=False,
     )
 
 
