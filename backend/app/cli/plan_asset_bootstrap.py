@@ -7,6 +7,7 @@ import json
 from dataclasses import dataclass
 
 from app.services.asset_bootstrap_contracts import (
+    AssetBootstrapCapability,
     AssetBootstrapCapabilityName,
     AssetBootstrapCapabilityResult,
     AssetBootstrapExecutionIdentity,
@@ -36,7 +37,7 @@ def main() -> int:
     parser.add_argument("--commit-sha", required=True)
     args = parser.parse_args()
 
-    capabilities = tuple(
+    capabilities: tuple[AssetBootstrapCapability, ...] = tuple(
         _PlanningCapability(name)
         for name in (
             AssetBootstrapCapabilityName.CATALOG,
