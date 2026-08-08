@@ -14,6 +14,8 @@ from app.services.system_readiness_service import (
     reset_bootstrap_readiness_for_tests,
 )
 
+VALID_SHA = "a" * 40
+
 
 @pytest.fixture(autouse=True)
 def _reset_state():
@@ -25,20 +27,20 @@ def _reset_state():
 
 
 def test_reservation_blocks_duplicate_launches() -> None:
-    assert reserve_system_bootstrap_launch() is True
+    assert reserve_system_bootstrap_launch(VALID_SHA) is True
     assert bootstrap_launch_reserved() is True
-    assert reserve_system_bootstrap_launch() is False
+    assert reserve_system_bootstrap_launch(VALID_SHA) is False
 
 
 def test_running_readiness_blocks_new_reservation() -> None:
     readiness = get_bootstrap_readiness()
     readiness.state = BootstrapReadinessState.RUNNING
-    assert reserve_system_bootstrap_launch() is False
+    assert reserve_system_bootstrap_launch(VALID_SHA) is False
 
 
 @pytest.mark.asyncio
-async def test_reserved_runner_releases_reservation() -> None:
-    assert reserve_system_bootstrap_launch() is True
+async def test_reserved_runner_releases_reservation_and_forwards_sha() -> None:
+    assert reserve_system_bootstrap_launch(VALID_SHA) is True
     report = object()
     with patch(
         "app.services.system_bootstrap_trigger_service.run_system_bootstrap",
@@ -47,5 +49,5 @@ async def test_reserved_runner_releases_reservation() -> None:
         result = await run_reserved_system_bootstrap()
 
     assert result is report
-    runner.assert_awaited_once_with()
+    runner.assert_awaited_once_with(commit_sha=VALID_SHA)
     assert bootstrap_launch_reserved() is False
