@@ -1,9 +1,9 @@
 from app.main import app
-from tests.route_tree_helpers import route_pairs
+from tests.route_tree_helpers import http_method_path_pairs
 
 
 def test_admin_has_single_http_surface_for_broad_provider_ingestion() -> None:
-    routes = route_pairs(app)
+    routes = set(http_method_path_pairs(app.routes))
 
     assert ("POST", "/api/v1/admin/bootstrap") in routes
     assert ("GET", "/api/v1/admin/bootstrap/status") in routes
