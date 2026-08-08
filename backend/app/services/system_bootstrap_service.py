@@ -16,10 +16,13 @@ from sqlalchemy import func, select
 
 from app.core.database import AsyncSessionLocal
 from app.models.asset import Asset
+from app.services.system_bootstrap_execution_context import (
+    build_system_bootstrap_execution_context,
+)
 
 logger = logging.getLogger(__name__)
 
-BOOTSTRAP_SCHEMA_VERSION = "system-bootstrap.v1"
+BOOTSTRAP_SCHEMA_VERSION = "system-bootstrap.v2"
 
 
 @dataclass(frozen=True)
@@ -119,18 +122,25 @@ async def _bootstrap_benchmarks() -> str:
     return str(result)
 
 
-async def run_system_bootstrap(*, startup_delay_seconds: float = 0.0) -> SystemBootstrapReport:
+async def run_system_bootstrap(
+    *,
+    commit_sha: str | None = None,
+    startup_delay_seconds: float = 0.0,
+) -> SystemBootstrapReport:
     """Executa as etapas de bootstrap atualmente autorizadas.
 
-    Este contrato ainda não inclui Proventos, eventos corporativos ou câmbio:
-    esses domínios permanecem sob gates próprios e serão incorporados à medida
-    que a #248 liberar cada etapa. Até lá, um relatório verde deste v1 não
-    autoriza dados reais por si só.
+    O v2 inclui câmbio USD-BRL por PTAX oficial usando o contrato auditável já
+    certificado na #217. Proventos e eventos corporativos permanecem sob gates
+    próprios e serão incorporados em blocos separados. Até lá, relatório verde
+    ainda não autoriza dados reais por si só.
     """
+    from app.services.system_bootstrap_fx_stage import run_system_bootstrap_fx_stage
     from app.services.system_readiness_service import (
         mark_bootstrap_finished,
         mark_bootstrap_running,
     )
+
+    context = build_system_bootstrap_execution_context(commit_sha=commit_sha)
 
     if startup_delay_seconds > 0:
         await asyncio.sleep(startup_delay_seconds)
@@ -148,6 +158,7 @@ async def run_system_bootstrap(*, startup_delay_seconds: float = 0.0) -> SystemB
         ("treasury_history", _bootstrap_treasury_history),
         ("asset_price_history", _bootstrap_asset_price_history),
         ("benchmarks", _bootstrap_benchmarks),
+        ("fx_rates", lambda: run_system_bootstrap_fx_stage(context)),
     )
 
     stages: list[BootstrapStageResult] = []
