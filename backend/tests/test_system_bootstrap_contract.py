@@ -17,7 +17,7 @@ def test_system_bootstrap_has_structured_report_and_explicit_stages() -> None:
     source = _source()
 
     required = {
-        'BOOTSTRAP_SCHEMA_VERSION = "system-bootstrap.v3"',
+        'BOOTSTRAP_SCHEMA_VERSION = "system-bootstrap.v4"',
         "class BootstrapStageResult",
         "class SystemBootstrapReport",
         '"asset_catalog"',
@@ -28,8 +28,10 @@ def test_system_bootstrap_has_structured_report_and_explicit_stages() -> None:
         '"benchmarks"',
         '"fx_rates"',
         '"asset_dividends"',
+        '"corporate_events"',
         "run_system_bootstrap_fx_stage",
         "run_system_bootstrap_dividends_stage",
+        "run_system_bootstrap_corporate_events_stage",
         "run_system_bootstrap",
     }
 
