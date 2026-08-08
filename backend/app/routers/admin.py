@@ -214,106 +214,6 @@ async def admin_bulk_update_config(
     return await bulk_update_configs(db, data.configs)
 
 
-# ── Seed de Ativos (BRAPI) ──────────────────────────────────────────────────────────────────────────────
-
-async def _run_asset_seed_bg() -> None:
-    """Wrapper para rodar o seed em BackgroundTask com sua propria sessao."""
-    logger.info("[seed_bg] ========== INICIANDO SEED DE ATIVOS ==========")
-    try:
-        from app.core.database import AsyncSessionLocal
-        from app.services.asset_seed_service import run_asset_seed
-        async with AsyncSessionLocal() as db:
-            result = await run_asset_seed(db)
-            logger.info(
-                "[seed_bg] ========== SEED CONCLUIDO: created=%s updated=%s skipped=%s errors=%s ==========",
-                result.created, result.updated, result.skipped, result.errors,
-            )
-    except Exception as e:
-        logger.error(
-            "[seed_bg] ========== SEED FALHOU: %s\n%s ==========",
-            e,
-            traceback.format_exc(),
-        )
-
-
-@router.post(
-    "/assets/seed",
-    status_code=status.HTTP_202_ACCEPTED,
-)
-async def admin_seed_assets(
-    background_tasks: BackgroundTasks,
-    _: User = Depends(require_superadmin),
-):
-    """
-    Dispara o seed de ativos da B3 em background via BRAPI /v2/tickers.
-    Restrito a SuperAdmins.
-    """
-    logger.info("[seed_bg] requisicao recebida — adicionando task ao background")
-    background_tasks.add_task(_run_asset_seed_bg)
-    return {
-        "message": "Seed de ativos iniciado em background. Acompanhe pelo log do servidor.",
-        "status": "accepted",
-    }
-
-
-# ── Backfill de Preços Históricos ────────────────────────────────────────────────────────────────────
-
-@router.get("/prices/backfill/status")
-async def admin_backfill_status(
-    _: User = Depends(require_superadmin),
-):
-    """
-    Retorna o status atual do backfill de preços históricos.
-
-    Inclui: se está rodando, total de registros, cobertura por ativo,
-    data do registro mais antigo e mais recente.
-    """
-    from app.services.price_history_backfill_service import get_backfill_status
-    return await get_backfill_status()
-
-
-async def _run_price_backfill_bg(force: bool = False) -> None:
-    """Wrapper para rodar o backfill de precos em BackgroundTask."""
-    logger.info("[backfill_bg] iniciando backfill de precos (force=%s)", force)
-    try:
-        from app.services.price_history_backfill_service import run_initial_backfill
-        await run_initial_backfill(force=force)
-    except Exception as e:
-        logger.error(
-            "[backfill_bg] backfill de precos falhou: %s\n%s",
-            e, traceback.format_exc()
-        )
-
-
-@router.post(
-    "/prices/backfill",
-    status_code=status.HTTP_202_ACCEPTED,
-)
-async def admin_trigger_price_backfill(
-    background_tasks: BackgroundTasks,
-    force: bool = Query(
-        False,
-        description="Se true, reprocessa mesmo os ativos que já têm histórico"
-    ),
-    _: User = Depends(require_superadmin),
-):
-    """
-    Dispara o backfill de preços históricos (10 anos) em background.
-
-    Por padrao (force=False) só processa ativos sem histórico.
-    Com force=True reprocessa todos os ativos.
-
-    Use após reset do banco ou quando quiser forcar uma atualização completa.
-    Restrito a SuperAdmins.
-    """
-    background_tasks.add_task(_run_price_backfill_bg, force)
-    return {
-        "message": f"Backfill de preços iniciado em background (force={force}). Acompanhe pelo log.",
-        "status": "accepted",
-        "force": force,
-    }
-
-
 # ── Backfill de Snapshots de Patrimônio ────────────────────────────────────────────────────────────
 
 async def _run_snapshot_backfill_bg(portfolio_id: int | None, force: bool) -> None:
@@ -338,7 +238,6 @@ async def _run_snapshot_backfill_bg(portfolio_id: int | None, force: bool) -> No
         from datetime import date
 
         async with AsyncSessionLocal() as db:
-            # Resolve lista de portfolio_ids a processar
             if portfolio_id is not None:
                 portfolio_ids = [portfolio_id]
             else:
@@ -356,7 +255,6 @@ async def _run_snapshot_backfill_bg(portfolio_id: int | None, force: bool) -> No
             for pid in portfolio_ids:
                 try:
                     if force:
-                        # Apaga todos os snapshots do portfolio para recalculo completo
                         deleted = await invalidate_snapshots_from(
                             db, pid, date.min, commit=True
                         )
