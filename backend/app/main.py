@@ -20,7 +20,7 @@ from app.core.cache import get_redis
 from app.middleware import SecurityHeadersMiddleware
 from app.routers import (
     auth, portfolios, transactions, dividends, positions,
-    users, proventos, performance, admin,
+    users, proventos, performance, admin, admin_bootstrap,
     assets, fx, goals, irpf,
     analysis, treasury,
 )
@@ -170,6 +170,7 @@ PREFIX = "/api/v1"
 app.include_router(auth.router,            prefix=f"{PREFIX}/auth",         tags=["auth"])
 app.include_router(users.router,           prefix=f"{PREFIX}/users",        tags=["users"])
 app.include_router(admin.router,           prefix=f"{PREFIX}/admin",        tags=["admin"])
+app.include_router(admin_bootstrap.router, prefix=f"{PREFIX}/admin",        tags=["admin-bootstrap"])
 
 app.include_router(portfolios.router,      prefix=f"{PREFIX}/portfolios",   tags=["portfolios"])
 app.include_router(transactions.router,    prefix=f"{PREFIX}/portfolios",   tags=["transactions"])
