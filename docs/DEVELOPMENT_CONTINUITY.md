@@ -18,7 +18,9 @@
 - #247 — auditoria pós-convergência.
 - #248 — bootstrap certificado e fronteira única de providers.
 - #249 — readiness explícito do bootstrap — **concluída**.
-- #250 — orquestrador global do bootstrap — primeira etapa implementada; permanece aberta até o bootstrap integral da #248.
+- #250 — orquestrador global do bootstrap — `system-bootstrap.v3`, ainda aberto até integração/certificação integral.
+- #226 — Proventos: contrato reutilizado pelo bootstrap, mas execução real continua bloqueada.
+- #129 — eventos corporativos: próximo domínio estrutural do bootstrap.
 
 ## Regra canônica de providers
 
@@ -33,62 +35,64 @@ Antes da primeira carteira real, o banco deve estar carregado e reconciliado por
 - CRUD de usuário/transações não dispara onboarding, seed ou backfill externo;
 - catálogo, metadados, Proventos, eventos, benchmarks e câmbio não são sincronizados por jobs recorrentes.
 
-No bootstrap inicial, histórico de preços deve buscar a maior cobertura válida/útil disponível nos providers. A janela de cinco dias existe somente para a exceção pontual de runtime e não limita a profundidade do seed inicial.
+No bootstrap inicial, cada domínio busca a maior cobertura válida suportada por sua fonte canônica. Não existe uma data inicial global arbitrária compartilhada entre preços, FX, Proventos e eventos.
 
 ## Liveness, bootstrap e readiness
 
 Esses conceitos são distintos:
 
 1. `/health` indica que o processo e suas dependências básicas estão vivos e também expõe o estado do bootstrap.
-2. `system-bootstrap.v1` pode concluir suas etapas atualmente autorizadas e ficar `bootstrap_complete=true`.
+2. `system-bootstrap.v3` executa as etapas já integradas e produz relatório fail-fast por etapa.
 3. Isso **não** libera dados reais enquanto #248 não incorporar e certificar todos os domínios obrigatórios.
 4. `/ready` retorna sucesso somente quando `ready_for_real_data=true`.
 
 Estados do bootstrap em memória: `not_started`, `running`, `ready`, `failed`.
 
-O campo `certified_for_real_data` permanece `false` no bootstrap parcial atual. Portanto, um `system-bootstrap.v1` verde não é autorização de go-live.
+O campo `certified_for_real_data` permanece `false`. Portanto, mesmo um relatório verde parcial não é autorização de go-live.
 
-## Estado certificado localmente — 07/08/2026
+## Estado certificado localmente — 08/08/2026
 
-HEAD certificado pelo usuário: `113281b7a0153f02007d6d49761be8fef91d77a8`.
+Último HEAD certificado pelo usuário: `0e8d96c081a0e788a9edcf69901a134b29b7f696`.
 
 Validação Docker:
 
 - build do backend aprovado;
-- suíte dirigida: **26 passed**;
+- suíte dirigida: **22 passed**;
 - `python -m compileall -q app tests`: aprovado;
 - import integral de `app.main`: aprovado;
-- working tree reportada limpa.
+- HEAD local igual ao esperado.
+
+Esse checkpoint certifica o `system-bootstrap.v2` com contexto de identidade e etapa FX.
 
 ## Estado implementado após esse checkpoint — pendente de validação local
 
-### #248 — resolvedor pontual de preço
+### #248/#250 — Proventos no `system-bootstrap.v3`
 
-- `price_date_gap_resolver_service.py` implementado;
-- consulta o banco primeiro;
-- se faltar cobertura, limita provider a `target_date - 5 dias .. target_date`;
-- não usa `period=max`, backfill global ou stale snapshot;
-- reutiliza o throttle global de yfinance;
-- persiste em `asset_prices` antes de refazer a leitura DB-first;
-- `get_price_at_date()` continua puro.
+- criado `system_bootstrap_dividends_stage.py`;
+- reutiliza `pre-prod-dividends-seed.v2` e seus adapters estritos BRAPI/Yahoo;
+- janela máxima local do estágio começa em `1970-01-01`, coerente com o limite técnico do histórico Yahoo usado pelo adapter;
+- sem `SGI_BOOTSTRAP_ENABLE_DIVIDENDS=true`, o estágio falha antes de consultar provider;
+- o opt-in técnico não substitui autorização operacional da #226;
+- escrita permanece exclusivamente em `asset_dividends`;
+- nenhum direito por carteira é materializado;
+- `system_bootstrap_service.py` passou a `system-bootstrap.v3` e registra `asset_dividends` após `fx_rates`;
+- o orquestrador continua fail-fast e `ready_for_real_data=false`.
 
-### #248/#247 — catálogo e router de assets
+Commits do bloco:
 
-- `asset_catalog_query_service.py` fornece sugestão e listagem de Tesouro somente a partir de `assets`;
-- `/assets/suggest` e `/assets/tesouro/search` deixaram de consultar providers;
-- pedidos históricos de `/assets/quote/{ticker}` e `/assets/tesouro/price` usam o resolvedor pontual;
-- cotação atual/intraday continua autorizada via `get_current_price`;
-- `assets.py` não importa BRAPI/yfinance diretamente;
-- ativo desconhecido não é descoberto implicitamente por provider no runtime: deve existir no catálogo carregado pelo bootstrap;
-- gates estruturais protegem catálogo DB-first, histórico persist-first e ausência de imports diretos de provider no router.
+- `f3b2259c51fff0db398cd0315f63ec479c7f4c22` — wrapper/gate de Proventos;
+- `0d45ef8fc9cf1107252631face5d1155d3c7a35c` — testes do gate;
+- `89893af623a6837fb0ff2b0481d7d4ad1ec3261a` — registro no bootstrap v3;
+- `ab13e0739a3b0ce5360b54f3b2deac07b543b6e4` — gate estrutural do contrato.
 
-### #250 — bootstrap global
+### #248/#250 — FX certificado no checkpoint anterior
 
-- `_boot_sequence()` procedural removida do `app.main`;
-- entrada única `run_system_bootstrap()`;
-- contrato `system-bootstrap.v1` com relatório por etapa e fail-fast;
-- etapas atuais: catálogo de ativos, catálogo/reconciliação/histórico do Tesouro, histórico global de preços e benchmarks;
-- Proventos, eventos corporativos e câmbio ainda não foram incorporados por dependerem dos respectivos gates.
+- contexto único de execução com `run_id`, branch e SHA completo;
+- `POST /api/v1/admin/bootstrap` exige SHA completo;
+- startup pode usar `SGI_BOOTSTRAP_COMMIT_SHA`;
+- `system_bootstrap_fx_stage.py` reutiliza o seed PTAX transacional da #217;
+- cobertura USD-BRL começa em `1994-07-01` por regra local do domínio;
+- nenhuma data inicial global é imposta aos demais domínios.
 
 ### #249 — readiness explícito
 
@@ -112,13 +116,13 @@ Não agenda catálogo, benchmarks, Proventos, eventos, logos ou backfill histór
 
 ## Ordem objetiva dos próximos blocos
 
-1. Validar localmente catálogo DB-first e nova fronteira do router `assets` junto aos gates anteriores.
-2. Inventariar consumidores internos de preço histórico e integrar o resolvedor somente onde a ausência precisa realmente ser resolvida.
-3. Revisar `quotes.py` placeholder e consumidores frontend antes de removê-lo.
-4. Continuar auditoria de `portfolios`, `admin`, `irpf`, `class_targets` e compatibilidade `dividends`.
-5. Incorporar ao bootstrap os domínios restantes apenas quando seus gates forem autorizados e idempotentes.
-6. Concluir #248 e somente então permitir `ready_for_real_data=true`.
-7. Retomar #226 → #216 → #158 depois da certificação estrutural.
+1. Validar localmente `system-bootstrap.v3`, `system_bootstrap_dividends_stage.py` e os gates relacionados.
+2. Incorporar eventos corporativos globais ao bootstrap reutilizando `corporate_event_service.py`/motor canônico, sob #129 e sem duplicar adapters.
+3. Adicionar gate específico que prove que o bootstrap de eventos não usa aliases/serviços legados nem materializa efeitos em transações.
+4. Reconciliar cobertura final dos domínios obrigatórios da #248/#250.
+5. Manter `ready_for_real_data=false` até certificação integral.
+6. Continuar #247 para achados residuais de routers/services/providers.
+7. Retomar #226 → #216 → #158 somente depois da certificação estrutural e da autorização operacional apropriada.
 8. Somente depois iniciar #246 + #57 (Metas + Análise).
 
 ## Prompt mínimo para nova conversa
@@ -132,11 +136,23 @@ Gate-mãe: #227
 Auditoria: #247
 Bootstrap/providers: #248
 Orquestrador: #250
+Proventos: #226
+Eventos corporativos: #129
+
+Último checkpoint certificado pelo usuário:
+0e8d96c081a0e788a9edcf69901a134b29b7f696
+
+Estado posterior pendente de validação:
+- system-bootstrap.v3;
+- FX integrado;
+- Proventos registrado sob gate SGI_BOOTSTRAP_ENABLE_DIVIDENDS;
+- eventos corporativos são o próximo domínio.
 
 Preserve a regra:
-- bootstrap completo e histórico máximo válido antes de dados reais;
+- bootstrap completo e histórico máximo válido por domínio antes de dados reais;
 - runtime externo apenas intraday/fechamento;
 - exceção somente para lacuna de preço em data específica, com janela mínima e persistência antes do uso;
 - catálogo e demais módulos DB-first;
+- nenhuma execução real de Proventos sem gate/autorização da #226;
 - não tocar em `goals` antes de #246/#57.
 ```
