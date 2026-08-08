@@ -22,7 +22,7 @@ from app.services.system_bootstrap_execution_context import (
 
 logger = logging.getLogger(__name__)
 
-BOOTSTRAP_SCHEMA_VERSION = "system-bootstrap.v2"
+BOOTSTRAP_SCHEMA_VERSION = "system-bootstrap.v3"
 
 
 @dataclass(frozen=True)
@@ -127,13 +127,18 @@ async def run_system_bootstrap(
     commit_sha: str | None = None,
     startup_delay_seconds: float = 0.0,
 ) -> SystemBootstrapReport:
-    """Executa as etapas de bootstrap atualmente autorizadas.
+    """Executa as etapas de bootstrap atualmente integradas.
 
-    O v2 inclui câmbio USD-BRL por PTAX oficial usando o contrato auditável já
-    certificado na #217. Proventos e eventos corporativos permanecem sob gates
-    próprios e serão incorporados em blocos separados. Até lá, relatório verde
-    ainda não autoriza dados reais por si só.
+    O v3 inclui câmbio USD-BRL por PTAX oficial e registra Proventos globais
+    como etapa explícita, reutilizando o contrato ``pre-prod-dividends-seed.v2``.
+    A execução real de Proventos permanece opt-in sob a #226; sem autorização o
+    estágio falha fechado antes de consultar providers. Eventos corporativos
+    permanecem para o bloco seguinte. Um relatório verde ainda não autoriza
+    dados reais por si só.
     """
+    from app.services.system_bootstrap_dividends_stage import (
+        run_system_bootstrap_dividends_stage,
+    )
     from app.services.system_bootstrap_fx_stage import run_system_bootstrap_fx_stage
     from app.services.system_readiness_service import (
         mark_bootstrap_finished,
@@ -159,6 +164,10 @@ async def run_system_bootstrap(
         ("asset_price_history", _bootstrap_asset_price_history),
         ("benchmarks", _bootstrap_benchmarks),
         ("fx_rates", lambda: run_system_bootstrap_fx_stage(context)),
+        (
+            "asset_dividends",
+            lambda: run_system_bootstrap_dividends_stage(context),
+        ),
     )
 
     stages: list[BootstrapStageResult] = []
