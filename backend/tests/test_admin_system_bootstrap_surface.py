@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from app.main import app
+from app.routers import admin_bootstrap
 
 
 ROUTER_PATH = (
@@ -11,14 +12,24 @@ ROUTER_PATH = (
 )
 
 
-def test_admin_bootstrap_routes_are_registered_once() -> None:
-    routes = {
+def _route_pairs(routes) -> set[tuple[str, str]]:
+    return {
         (method, route.path)
-        for route in app.routes
+        for route in routes
         for method in getattr(route, "methods", set())
     }
-    assert ("POST", "/api/v1/admin/bootstrap") in routes
-    assert ("GET", "/api/v1/admin/bootstrap/status") in routes
+
+
+def test_admin_bootstrap_router_defines_expected_routes() -> None:
+    routes = _route_pairs(admin_bootstrap.router.routes)
+    assert ("POST", "/bootstrap") in routes, sorted(routes)
+    assert ("GET", "/bootstrap/status") in routes, sorted(routes)
+
+
+def test_admin_bootstrap_routes_are_registered_once() -> None:
+    routes = _route_pairs(app.routes)
+    assert ("POST", "/api/v1/admin/bootstrap") in routes, sorted(routes)
+    assert ("GET", "/api/v1/admin/bootstrap/status") in routes, sorted(routes)
 
 
 def test_admin_bootstrap_router_delegates_only_to_global_bootstrap_boundary() -> None:
