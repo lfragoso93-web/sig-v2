@@ -1,16 +1,16 @@
-from pathlib import Path
+from app.main import app
+from tests.route_tree_helpers import route_pairs
 
 
-ADMIN_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "app"
-    / "routers"
-    / "admin.py"
-)
+def test_admin_has_single_http_surface_for_broad_provider_ingestion() -> None:
+    routes = route_pairs(app)
 
+    assert ("POST", "/api/v1/admin/bootstrap") in routes
+    assert ("GET", "/api/v1/admin/bootstrap/status") in routes
 
-def test_legacy_admin_provider_ports_remain_explicitly_tracked_until_removal() -> None:
-    source = ADMIN_PATH.read_text(encoding="utf-8")
-    assert '"/assets/seed"' in source
-    assert '"/prices/backfill"' in source
-    assert '"/snapshots/backfill"' in source
+    assert ("POST", "/api/v1/admin/assets/seed") not in routes
+    assert ("POST", "/api/v1/admin/prices/backfill") not in routes
+    assert ("GET", "/api/v1/admin/prices/backfill/status") not in routes
+
+    # Manutenção local/derivada permanece separada do bootstrap de providers.
+    assert ("POST", "/api/v1/admin/snapshots/backfill") in routes
