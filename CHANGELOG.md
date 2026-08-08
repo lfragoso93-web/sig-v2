@@ -5,6 +5,18 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — bootstrap v3, FX certificado e Proventos gated (08/08/2026)
+
+- O checkpoint `0e8d96c081a0e788a9edcf69901a134b29b7f696` foi certificado localmente pelo usuário com build Docker aprovado, 22/22 testes dirigidos, `compileall` e import integral de `app.main` aprovados.
+- O bootstrap passou a exigir identidade auditável compartilhada (`run_id`, branch `stable-15jun` e SHA completo); o disparo administrativo exige o SHA e o startup pode recebê-lo por `SGI_BOOTSTRAP_COMMIT_SHA`.
+- O contrato `system-bootstrap.v2` incorporou câmbio USD-BRL reutilizando o seed transacional PTAX já certificado pela #217, com cobertura própria desde `1994-07-01` e sem fallback BRAPI/AwesomeAPI/fixo.
+- A cobertura temporal deixou de ser um parâmetro global: cada domínio define sua maior janela válida conforme a fonte canônica.
+- O contrato evoluiu para `system-bootstrap.v3` com etapa explícita `asset_dividends`, reutilizando `pre-prod-dividends-seed.v2` e os adapters estritos BRAPI/Yahoo já existentes.
+- Proventos permanecem fail-closed: sem `SGI_BOOTSTRAP_ENABLE_DIVIDENDS=true`, a etapa aborta antes de consultar providers; esse opt-in técnico não substitui a autorização operacional exigida pela #226.
+- O estágio de Proventos escreve exclusivamente em `asset_dividends`, não utiliza `dividend_backfill_service` e não materializa direitos por carteira.
+- `ready_for_real_data` permanece `false`; eventos corporativos são o próximo domínio obrigatório do bootstrap antes da certificação final.
+- README, ROADMAP, arquitetura, continuidade e Issues #248/#250/#226 foram sincronizados com o novo estado.
+
 ### Alterado — readiness, lacuna pontual e catálogo DB-first (07/08/2026)
 
 - O checkpoint `113281b7a0153f02007d6d49761be8fef91d77a8` foi certificado localmente com 26/26 testes, `compileall` e import integral de `app.main` aprovados.
