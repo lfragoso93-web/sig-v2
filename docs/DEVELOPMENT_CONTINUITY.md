@@ -18,9 +18,10 @@
 - #247 — auditoria pós-convergência.
 - #248 — bootstrap certificado e fronteira única de providers.
 - #249 — readiness explícito do bootstrap — **concluída**.
-- #250 — orquestrador global do bootstrap — `system-bootstrap.v3`, ainda aberto até integração/certificação integral.
+- #250 — orquestrador global do bootstrap — `system-bootstrap.v4`, ainda aberto até validação/certificação integral.
+- #254 — integração estrutural de eventos corporativos ao bootstrap — wrapper, testes e integração v4 publicados; validação integrada ainda pendente.
 - #226 — Proventos: contrato reutilizado pelo bootstrap, mas execução real continua bloqueada.
-- #129 — eventos corporativos: próximo domínio estrutural do bootstrap.
+- #129 — eventos corporativos: núcleo consolidado; permanece aberta para auditoria residual de consumidores/aliases/provider boundaries.
 
 ## Regra canônica de providers
 
@@ -42,8 +43,8 @@ No bootstrap inicial, cada domínio busca a maior cobertura válida suportada po
 Esses conceitos são distintos:
 
 1. `/health` indica que o processo e suas dependências básicas estão vivos e também expõe o estado do bootstrap.
-2. `system-bootstrap.v3` executa as etapas já integradas e produz relatório fail-fast por etapa.
-3. Isso **não** libera dados reais enquanto #248 não incorporar e certificar todos os domínios obrigatórios.
+2. `system-bootstrap.v4` executa as etapas integradas e produz relatório fail-fast por etapa.
+3. Todos os domínios externos obrigatórios já estão representados estruturalmente, mas isso **não** libera dados reais enquanto #248/#227 não certificarem cobertura, idempotência e gates.
 4. `/ready` retorna sucesso somente quando `ready_for_real_data=true`.
 
 Estados do bootstrap em memória: `not_started`, `running`, `ready`, `failed`.
@@ -64,7 +65,7 @@ Validação Docker:
 
 Esse checkpoint certifica o `system-bootstrap.v2` com contexto de identidade e etapa FX.
 
-## Estado implementado após esse checkpoint — pendente de validação local
+## Estado implementado após esse checkpoint — pendente de validação local integrada
 
 ### #248/#250 — Proventos no `system-bootstrap.v3`
 
@@ -84,6 +85,27 @@ Commits do bloco:
 - `0d45ef8fc9cf1107252631face5d1155d3c7a35c` — testes do gate;
 - `89893af623a6837fb0ff2b0481d7d4ad1ec3261a` — registro no bootstrap v3;
 - `ab13e0739a3b0ce5360b54f3b2deac07b543b6e4` — gate estrutural do contrato.
+
+### #254/#248/#250 — eventos corporativos no `system-bootstrap.v4`
+
+- criado `system_bootstrap_corporate_events_stage.py`;
+- gate `SGI_BOOTSTRAP_ENABLE_CORPORATE_EVENTS` ocorre antes de sessão/provider;
+- ativos elegíveis são lidos do banco e limitados a `ACAO`, `BDR` e `ETF_NACIONAL`;
+- estágio usa `pg_advisory_xact_lock` e uma transação única;
+- persistência passa exclusivamente por `sync_corporate_events_for_asset`;
+- sucesso executa commit único; qualquer falha provoca rollback e interrompe os ativos seguintes;
+- `asset_market_pipeline_service` e `dividend_backfill_service` não são usados;
+- testes dirigidos cobrem gate, ordem do lock, filtro, commit, rollback/stop e relatório determinístico;
+- `system_bootstrap_service.py` passou a `system-bootstrap.v4` e registra `corporate_events` após `asset_dividends`;
+- `certified_for_real_data` permanece `false`;
+- nenhum provider real foi executado durante esses blocos.
+
+Commits estruturais do bloco:
+
+- `80d8448c489ba61a4de556870e2ba58983358549` — wrapper/gate transacional;
+- `7951f0981a3b650e60b94159e86ed709ad00ef22` — testes do estágio;
+- `26b7db7f8d3d37ec5e47d1baf2415734e45b5332` — integração no bootstrap v4;
+- `79fa4a4d929e24ced70ad86d04049082a0d52d89` — contrato estrutural atualizado.
 
 ### #248/#250 — FX certificado no checkpoint anterior
 
@@ -116,14 +138,13 @@ Não agenda catálogo, benchmarks, Proventos, eventos, logos ou backfill histór
 
 ## Ordem objetiva dos próximos blocos
 
-1. Validar localmente `system-bootstrap.v3`, `system_bootstrap_dividends_stage.py` e os gates relacionados.
-2. Incorporar eventos corporativos globais ao bootstrap reutilizando `corporate_event_service.py`/motor canônico, sob #129 e sem duplicar adapters.
-3. Adicionar gate específico que prove que o bootstrap de eventos não usa aliases/serviços legados nem materializa efeitos em transações.
-4. Reconciliar cobertura final dos domínios obrigatórios da #248/#250.
-5. Manter `ready_for_real_data=false` até certificação integral.
-6. Continuar #247 para achados residuais de routers/services/providers.
-7. Retomar #226 → #216 → #158 somente depois da certificação estrutural e da autorização operacional apropriada.
-8. Somente depois iniciar #246 + #57 (Metas + Análise).
+1. Validar localmente `system-bootstrap.v4`, `system_bootstrap_dividends_stage.py`, `system_bootstrap_corporate_events_stage.py` e os gates relacionados, sem executar providers reais.
+2. Reconciliar cobertura final/idempotência dos domínios obrigatórios da #248/#250/#254.
+3. Manter `ready_for_real_data=false` até certificação integral.
+4. Concluir #247/#129 para achados residuais de routers/services/providers/aliases.
+5. Avaliar fechamento da #254 quando validação integrada e documentação estiverem completas.
+6. Retomar #226 → #216 → #158 somente depois da certificação estrutural e da autorização operacional apropriada.
+7. Somente depois iniciar #246 + #57 (Metas + Análise).
 
 ## Prompt mínimo para nova conversa
 
@@ -136,17 +157,20 @@ Gate-mãe: #227
 Auditoria: #247
 Bootstrap/providers: #248
 Orquestrador: #250
+Eventos no bootstrap: #254
 Proventos: #226
-Eventos corporativos: #129
+Eventos corporativos residuais: #129
 
 Último checkpoint certificado pelo usuário:
 0e8d96c081a0e788a9edcf69901a134b29b7f696
 
-Estado posterior pendente de validação:
-- system-bootstrap.v3;
+Estado posterior pendente de validação integrada:
+- system-bootstrap.v4;
 - FX integrado;
 - Proventos registrado sob gate SGI_BOOTSTRAP_ENABLE_DIVIDENDS;
-- eventos corporativos são o próximo domínio.
+- eventos corporativos registrados sob gate SGI_BOOTSTRAP_ENABLE_CORPORATE_EVENTS;
+- ready_for_real_data continua false;
+- nenhum provider real foi executado durante os blocos estruturais de eventos.
 
 Preserve a regra:
 - bootstrap completo e histórico máximo válido por domínio antes de dados reais;
