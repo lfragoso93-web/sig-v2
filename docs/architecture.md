@@ -1,6 +1,6 @@
 # Arquitetura — SGI v2
 
-> Última atualização: 07/08/2026
+> Última atualização: 08/08/2026
 
 ## Objetivo
 
@@ -52,6 +52,16 @@ Após o bootstrap:
 - consultas externas recorrentes ficam restritas a **preço intraday** e **preço oficial/de fechamento do dia**;
 - preços obtidos externamente devem ser persistidos antes de alimentar contratos financeiros;
 - nenhuma mutação comum de usuário dispara seed, onboarding, backfill histórico ou coleta de eventos.
+
+### Cobertura histórica por domínio
+
+Não existe uma data inicial global arbitrária para o bootstrap. Cada domínio define a maior cobertura válida suportada por sua fonte canônica:
+
+- USD-BRL: `1994-07-01`, início do Real, via PTAX oficial;
+- Proventos: `1970-01-01`, limite técnico atual do histórico Yahoo complementar usado pelo adapter estrito;
+- preços, Tesouro, benchmarks e eventos mantêm suas próprias regras de cobertura.
+
+Essa separação evita que uma limitação de um provider reduza silenciosamente a profundidade dos demais domínios.
 
 ### Contratos financeiros únicos
 
@@ -137,7 +147,7 @@ A fachada legada foi removida. Resultado realizado, capital líquido aportado, p
 Eventos pertencem ao ativo e são persistidos exclusivamente em `asset_dividends`.
 
 ```text
-bootstrap/sincronizador de eventos
+system-bootstrap.v3 / seed estrito autorizado
         ↓
 asset_dividends
         ↓
@@ -148,13 +158,15 @@ direito calculado sob demanda
 reconhecimento financeiro por data de pagamento
 ```
 
+O bootstrap reutiliza `pre-prod-dividends-seed.v2`, com adapters estritos BRAPI + Yahoo e identidade auditável compartilhada. A presença da etapa no orquestrador não autoriza execução real: sem `SGI_BOOTSTRAP_ENABLE_DIVIDENDS=true`, ela falha antes de consultar providers, e a autorização operacional continua pertencendo à #226.
+
 Não existe materialização ativa de direitos por carteira. Depois do bootstrap, requests de Proventos não consultam provider.
 
 ## Eventos corporativos
 
-O motor canônico trata splits, grupamentos, bonificações e subscrições independentemente do fornecedor. Eventos são coletados no bootstrap/sincronização operacional e persistidos antes de qualquer projeção financeira. Adapters apenas normalizam payloads externos.
+O motor canônico trata splits, grupamentos, bonificações e subscrições independentemente do fornecedor. Eventos pertencem ao ativo, são persistidos em `corporate_events` e alimentam projeções históricas sem mutar transações originais.
 
-A Issue #129 permanece aberta apenas para confirmar, durante a auditoria #247, se ainda existem consumidores ou compatibilidades residuais que precisem de tratamento explícito.
+A Issue #129 permanece aberta para concluir a auditoria residual e governar a integração deste domínio ao bootstrap global. O próximo estágio deve reutilizar `corporate_event_service.py` e os normalizadores existentes, sem criar nova lógica de provider no orquestrador.
 
 ## Transações
 
@@ -162,7 +174,19 @@ A Issue #129 permanece aberta apenas para confirmar, durante a auditoria #247, s
 
 ## Câmbio
 
-`fx_rates` é persistido e DB-first. Requests financeiros leem somente a cobertura persistida. Atualização cambial pertence ao bootstrap/sincronizadores operacionais, não ao cálculo financeiro.
+`fx_rates` é persistido e DB-first. Requests financeiros leem somente a cobertura persistida.
+
+O `system-bootstrap.v2+` integra USD-BRL reutilizando o estágio auditável da #217:
+
+- PTAX oficial do BCB;
+- par único `USD-BRL`;
+- cobertura desde `1994-07-01`;
+- advisory lock;
+- inspeção antes/depois;
+- transação controlada;
+- identidade `run_id + stable-15jun + SHA`.
+
+Nenhum fallback BRAPI/AwesomeAPI/fixo participa deste estágio certificado.
 
 ## Metas e Análise de Carteira
 
@@ -180,13 +204,30 @@ Módulos dependentes da carteira selecionada ficam sob `/carteira`. Aliases temp
 
 ## Bootstrap, scheduler e readiness
 
-A arquitetura alvo distingue três estados:
+A porta única atual é `run_system_bootstrap()` sob contrato `system-bootstrap.v3`.
+
+A arquitetura distingue três estados:
 
 1. **ambiente não inicializado** — schema disponível, mas dados canônicos ainda não certificados;
 2. **bootstrap em execução** — coleta histórica/global idempotente e persistência das séries necessárias;
 3. **runtime pronto** — criação/importação de carteiras liberada e consultas funcionais operando DB-first.
 
-O readiness operacional deve refletir essa fronteira. Não basta o processo FastAPI estar de pé: para uso real, o bootstrap precisa estar concluído e validado.
+O bootstrap carrega contexto auditável único com `run_id`, branch `stable-15jun` e SHA completo. O disparo administrativo exige esse SHA; startup automático pode recebê-lo por `SGI_BOOTSTRAP_COMMIT_SHA`.
+
+Etapas registradas no v3:
+
+1. `asset_catalog`;
+2. `treasury_catalog`;
+3. `treasury_reconciliation`;
+4. `treasury_history`;
+5. `asset_price_history`;
+6. `benchmarks`;
+7. `fx_rates`;
+8. `asset_dividends` — explicitamente gated pela #226.
+
+Eventos corporativos ainda precisam ser adicionados como estágio explícito antes da certificação integral.
+
+O readiness operacional reflete essa fronteira. Não basta o processo FastAPI estar de pé: para uso real, o bootstrap precisa estar concluído e validado. `ready_for_real_data` permanece `false` durante a consolidação estrutural.
 
 No runtime pronto, o scheduler pode consultar providers apenas para:
 
@@ -200,37 +241,39 @@ Até o encerramento da Issue #227:
 - não importar carteiras reais;
 - não criar usuários reais de produção;
 - usar bancos descartáveis e fixtures;
-- não considerar o ambiente pronto até que o bootstrap canônico seja desenhado, executado e certificado;
+- não considerar o ambiente pronto até que o bootstrap canônico seja integralmente executado e certificado;
 - não executar automaticamente migrations físicas de contração.
 
 ## Governança arquitetural atual
 
 A ordem canônica é:
 
-1. #247 — concluir auditoria de superfícies e remover consultas externas indevidas;
-2. desenhar/validar bootstrap inicial completo e readiness;
-3. confirmar pendências reais de #129 e itens necessários de #130/#127;
+1. validar localmente `system-bootstrap.v3` e o gate estrutural de Proventos;
+2. integrar eventos corporativos sob #129 sem duplicar adapters/providers;
+3. concluir #247/#248/#250 e certificar a fronteira provider/bootstrap;
 4. #150 e #149 — performance e benchmarks;
 5. #226/#216/#158 — certificação operacional e primeira carga real;
 6. #246 + #57 — macroprojeto Metas + Análise.
 
 ## Qualidade validada
 
-Checkpoint certificado localmente no HEAD `08414af3a7b570ae9753e83ba5eecf2c17f20e42`:
+Último checkpoint certificado localmente pelo usuário no HEAD `0e8d96c081a0e788a9edcf69901a134b29b7f696`:
 
 - build Docker aprovado;
-- 7 testes do checkpoint de auditoria aprovados;
+- 22 testes do checkpoint de bootstrap/FX/readiness aprovados;
 - `compileall` aprovado;
 - import integral de `app.main` aprovado;
-- working tree limpa.
+- HEAD local igual ao esperado.
+
+O `system-bootstrap.v3` com etapa de Proventos foi implementado depois desse checkpoint e ainda precisa de validação local.
 
 ## Pendências arquiteturais
 
-1. Concluir auditoria global de serviços, routers, endpoints, duplicações e legado remanescente (#247).
-2. Remover providers de todas as superfícies funcionais que não sejam preço intraday/fechamento.
-3. Desenhar e certificar bootstrap inicial completo antes de liberar carteiras reais.
-4. Confirmar e resolver somente pendências reais de eventos corporativos/provedores (#129/#130/#127).
+1. Validar localmente o `system-bootstrap.v3` e o gate de Proventos.
+2. Incorporar eventos corporativos ao bootstrap global sob #129.
+3. Concluir auditoria global de serviços, routers, endpoints, duplicações e legado remanescente (#247).
+4. Certificar cobertura/idempotência dos domínios obrigatórios e somente então liberar readiness real.
 5. Materializar histórico persistido do IBOV (#150).
 6. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
-7. Retomar Proventos, importação e rebuild apenas após #226/#216/#158/#227.
+7. Retomar execução real de Proventos, importação e rebuild apenas sob #226/#216/#158/#227.
 8. Iniciar #246 + #57 somente depois da estabilização e promoção da base.
