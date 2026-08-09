@@ -11,7 +11,6 @@ from app.integrations.brapi import fetch_quotes_with_meta
 from app.models.asset import Asset, AssetType
 from app.models.portfolio import Portfolio
 from app.models.transaction import Transaction
-from app.services.corporate_event_service import sync_corporate_events_for_asset
 from app.services.quotes_service import update_all_quotes
 from app.services.portfolio_snapshot_service import refresh_today_snapshot
 
@@ -134,59 +133,14 @@ async def job_update_all_quotes_and_snapshots():
     )
 
 
-async def job_sync_corporate_events():
-    """Sincroniza eventos corporativos. Falha por ativo e isolada."""
-    logger.info("[Scheduler] Sincronizando eventos corporativos...")
-    try:
-        assets = await _get_active_brapi_assets()
-    except Exception as e:
-        logger.error("[Scheduler] job_sync_corporate_events: erro ao listar ativos: %s", e)
-        return
-
-    async with AsyncSessionLocal() as db:
-        new_total = 0
-        for asset in assets:
-            try:
-                async with db.begin_nested():
-                    new_events = await sync_corporate_events_for_asset(db, asset)
-                new_total += len(new_events)
-            except Exception as e:
-                logger.error("[Scheduler] Erro sync corporate %s: %s", asset.ticker, e)
-        try:
-            await db.commit()
-        except Exception as e:
-            await db.rollback()
-            logger.error("[Scheduler] Erro ao confirmar catálogo corporativo: %s", e)
-
-    logger.info("[Scheduler] %d novos eventos globais catalogados.", new_total)
-
-
-async def job_seed_assets():
-    """
-    Seed semanal de ativos da B3 via BRAPI /v2/tickers.
-    Roda toda segunda-feira as 3h para capturar novos IPOs.
-    """
-    logger.info("[Scheduler] Iniciando seed semanal de ativos da B3...")
-    try:
-        from app.services.asset_seed_service import run_asset_seed
-        async with AsyncSessionLocal() as db:
-            result = await run_asset_seed(db)
-        logger.info(
-            "[Scheduler] Seed concluido: %s criados, %s atualizados, %s sem mudanca, %s erros. Por tipo: %s",
-            result.created, result.updated, result.skipped, result.errors, result.by_type,
-        )
-    except Exception as e:
-        logger.error("[Scheduler] job_seed_assets: falha geral: %s", e)
-
-
 def init_scheduler():
+    """Registra somente manutencoes recorrentes permitidas pela politica DB-first."""
     scheduler.add_job(
         job_update_quotes,
         IntervalTrigger(minutes=5),
         id="update_quotes",
         replace_existing=True,
     )
-    # Incremental de precos: todo dia apos fechamento da B3 (18h30 BRT)
     scheduler.add_job(
         job_persist_price_history,
         CronTrigger(hour=18, minute=30, timezone="America/Sao_Paulo"),
@@ -199,17 +153,5 @@ def init_scheduler():
         id="update_all_quotes_and_snapshots",
         replace_existing=True,
     )
-    scheduler.add_job(
-        job_sync_corporate_events,
-        CronTrigger(hour=19, minute=30, timezone="America/Sao_Paulo"),
-        id="sync_corporate_events",
-        replace_existing=True,
-    )
-    scheduler.add_job(
-        job_seed_assets,
-        CronTrigger(day_of_week="mon", hour=3, minute=0, timezone="America/Sao_Paulo"),
-        id="seed_assets",
-        replace_existing=True,
-    )
     scheduler.start()
-    logger.info("[Scheduler] 5 jobs registrados e scheduler iniciado.")
+    logger.info("[Scheduler] 3 jobs permitidos registrados e scheduler iniciado.")
