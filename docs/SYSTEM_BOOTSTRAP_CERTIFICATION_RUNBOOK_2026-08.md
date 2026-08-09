@@ -56,13 +56,16 @@ Política de fonte:
 Aprovação:
 - catálogo oficial persistido com cobertura histórica materialmente superior à oferta corrente quando aplicável;
 - cada `Asset` corresponde a título confirmado por fonte externa real;
-- nenhuma duplicação de identidade por `(ticker, TESOURO_DIRETO)`;
+- nenhuma duplicação física por `(ticker, TESOURO_DIRETO)`;
+- nenhuma duplicação semântica legado/canônico para o mesmo título econômico;
+- aliases históricos persistidos resolvem para o ativo canônico sem consultar provider;
 - símbolos canônicos resolvíveis a partir do catálogo persistido;
 - segunda execução sem novas mutações indevidas;
 - fonte efetivamente usada registrada na evidência operacional.
 
 Bloqueio:
-- se o estágio cair para BRAPI fallback, registrar a ocorrência e não classificar cobertura histórica como certificada sem análise explícita.
+- se o estágio cair para BRAPI fallback, registrar a ocorrência e não classificar cobertura histórica como certificada sem análise explícita;
+- qualquer identidade legada que represente o mesmo título de um ativo canônico bloqueia a certificação até migração segura de dependências e criação de alias.
 
 ### 3. `treasury_reconciliation`
 
@@ -73,6 +76,7 @@ Aprovação:
 - `unresolved=0`, salvo exceção explicitamente analisada e documentada;
 - nenhum ativo canônico fabricado pela reconciliação;
 - nenhum ativo canônico duplicado;
+- aliases históricos resolvem para o ticker canônico;
 - segunda execução sem novas mutações indevidas.
 
 Qualquer `unresolved` relevante ou necessidade de criar título ausente bloqueia a certificação até análise do catálogo.
