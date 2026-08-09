@@ -6,15 +6,23 @@ import logging
 from datetime import date
 
 from app.core.database import AsyncSessionLocal
+from app.models.asset import AssetType
 from app.services.asset_price_coverage_service import AssetPriceCoverage, audit_asset_price_coverage
 from app.services.asset_price_gap_sync_service import AssetGapSyncResult, sync_asset_price_gaps
-from app.services.price_sync_status_reconciler import reconcile_fii_end_unavailable
 
 logger = logging.getLogger(__name__)
 
 MAX_HISTORY_START = date(1900, 1, 1)
 _GLOBAL_SYNC_CONCURRENCY = 4
 _global_backfill_lock = asyncio.Lock()
+
+_DEDICATED_BOOTSTRAP_PRICE_TYPES = {
+    AssetType.ACAO.value,
+    AssetType.FII.value,
+    AssetType.ETF_NACIONAL.value,
+    AssetType.BDR.value,
+    AssetType.TESOURO_DIRETO.value,
+}
 
 
 async def _sync_candidates(
@@ -46,8 +54,8 @@ async def run_global_asset_price_backfill(
             "inserted": 0,
             "errors": 0,
             "skipped": 0,
-            "reconciled_fii_end": 0,
             "missing_assets": 0,
+            "dedicated_provider_assets": 0,
             "assets": [],
         }
 
@@ -61,9 +69,20 @@ async def run_global_asset_price_backfill(
             )
 
         missing_assets = [item for item in coverage if item.asset_id is None]
-        candidates = [item for item in coverage if item.needs_sync and item.asset_id is not None]
+        dedicated_provider_assets = [
+            item
+            for item in coverage
+            if item.asset_id is not None
+            and item.asset_type in _DEDICATED_BOOTSTRAP_PRICE_TYPES
+        ]
+        candidates = [
+            item
+            for item in coverage
+            if item.needs_sync
+            and item.asset_id is not None
+            and item.asset_type not in _DEDICATED_BOOTSTRAP_PRICE_TYPES
+        ]
         results = await _sync_candidates(candidates, concurrency=concurrency)
-        reconciliation = await reconcile_fii_end_unavailable(required_to=required_to)
         payload = {
             "running": False,
             "audited": len(coverage),
@@ -71,8 +90,8 @@ async def run_global_asset_price_backfill(
             "inserted": sum(item.rows_inserted for item in results),
             "errors": sum(1 for item in results if item.error),
             "skipped": sum(1 for item in results if item.skipped),
-            "reconciled_fii_end": reconciliation["changed"],
             "missing_assets": len(missing_assets),
+            "dedicated_provider_assets": len(dedicated_provider_assets),
             "assets": [
                 {
                     "asset_id": item.asset_id,
@@ -95,13 +114,13 @@ async def run_global_asset_price_backfill(
             ],
         }
         logger.info(
-            "[global_price_backfill] audited=%d requested=%d inserted=%d errors=%d missing_assets=%d reconciled_fii_end=%d concurrency=%d",
+            "[global_price_backfill] audited=%d requested=%d inserted=%d errors=%d missing_assets=%d dedicated_provider_assets=%d concurrency=%d",
             payload["audited"],
             payload["requested"],
             payload["inserted"],
             payload["errors"],
             payload["missing_assets"],
-            payload["reconciled_fii_end"],
+            payload["dedicated_provider_assets"],
             concurrency,
         )
         return payload
