@@ -123,8 +123,9 @@ async def test_usd_brl_historical_shortcut_uses_canonical_pair(
     loader = AsyncMock(return_value=expected)
     monkeypatch.setattr("app.services.fx_rate_reader.load_fx_rate_at_or_before", loader)
 
+    db = object()
     target = date(2026, 8, 9)
-    assert await load_usd_brl_rate_at_or_before(object(), target) == expected
+    assert await load_usd_brl_rate_at_or_before(db, target) == expected
     loader.assert_awaited_once_with(
-        object(), pair=USD_BRL_PAIR, target_date=target
+        db, pair=USD_BRL_PAIR, target_date=target
     )
