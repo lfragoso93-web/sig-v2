@@ -34,6 +34,19 @@ Antes de considerar o ambiente pronto para uso real, um bootstrap idempotente e 
 
 O processo HTTP pode estar tecnicamente vivo antes disso, mas o ambiente não deve ser declarado **ready para dados reais** até o bootstrap terminar e seus gates de cobertura passarem.
 
+### Hierarquia de fontes — Tesouro Direto
+
+Para o domínio `TESOURO_DIRETO`, a fonte primária de catálogo e histórico é o **Tesouro Transparente**, usando o conjunto oficial de taxas e preços dos títulos ofertados pelo Tesouro Direto.
+
+Regras:
+
+1. o catálogo canônico é derivado do histórico oficial, preservando títulos que já não estejam na oferta corrente;
+2. a identidade usa a família do título e seu vencimento oficial, conforme normalização canônica do SGI;
+3. a BRAPI é somente fallback operacional quando a fonte oficial não produzir catálogo utilizável;
+4. entradas sintéticas não podem ser persistidas como `Asset` canônico;
+5. resolução de ticker/nome durante requests e reconciliações usa somente o catálogo já persistido;
+6. falha/ausência da fonte oficial deve ser observável; o fallback BRAPI não transforma uma cobertura parcial em certificação de completude histórica.
+
 ## Runtime normal
 
 Após o bootstrap:
