@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.integrations.brapi_treasury import canonical_treasury_symbol_from_text
 from app.integrations.treasury_catalog_provider import fetch_treasury_catalog
 from app.models.asset import Asset, AssetType
+from app.models.asset_alias import AssetAlias
 from app.services.treasury_legacy_identity_service import (
     consolidate_legacy_educa_identities,
 )
@@ -190,6 +191,20 @@ async def resolve_treasury_symbol(db: AsyncSession, raw: str | None) -> Optional
         )
     )
     found = exact.scalars().first()
+    if found:
+        return str(found).lower()
+
+    alias = await db.execute(
+        select(Asset.ticker)
+        .join(AssetAlias, AssetAlias.asset_id == Asset.id)
+        .where(
+            Asset.asset_type == _TREASURY_TYPE,
+            AssetAlias.asset_type == _TREASURY_TYPE,
+            func.lower(AssetAlias.alias_ticker) == lower,
+            func.coalesce(Asset.provider_status, "") != _INACTIVE_STATUS,
+        )
+    )
+    found = alias.scalars().first()
     if found:
         return str(found).lower()
 
