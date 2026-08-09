@@ -47,10 +47,22 @@ def test_system_bootstrap_does_not_bypass_domain_boundaries() -> None:
         "corporate_event_service",
         "dividend_backfill_service",
         "pre_prod_dividends_seed_service",
+        "treasury_price_history_service",
     }
 
     findings = sorted(token for token in forbidden_runtime_imports if token in source)
     assert findings == []
+
+
+def test_treasury_history_stage_uses_official_provider_boundary() -> None:
+    source = _source()
+
+    assert "treasury_official_history_service" in source
+    assert "rebuild_official_treasury_history" in source
+    assert "primary_source" in source
+    assert "fallback_source" in source
+    assert "required_empty_payloads" in source
+    assert "unresolved_assets" in source
 
 
 def test_asset_catalog_stage_reconciles_existing_catalog_without_market_backfill() -> None:
