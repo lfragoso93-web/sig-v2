@@ -15,7 +15,7 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -101,7 +101,10 @@ async def _canonical_assets(
     result = await db.execute(
         select(Asset).where(
             Asset.asset_type == AssetType.TESOURO_DIRETO.value,
-            Asset.provider_status != _INACTIVE_STATUS,
+            or_(
+                Asset.provider_status.is_(None),
+                Asset.provider_status != _INACTIVE_STATUS,
+            ),
         )
     )
     assets = list(result.scalars().all())
