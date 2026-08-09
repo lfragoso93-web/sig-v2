@@ -12,10 +12,6 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
-from sqlalchemy import func, select
-
-from app.core.database import AsyncSessionLocal
-from app.models.asset import Asset
 from app.services.system_bootstrap_execution_context import (
     build_system_bootstrap_execution_context,
 )
@@ -60,19 +56,19 @@ async def _run_stage(
 
 
 async def _bootstrap_asset_catalog() -> str:
+    from app.core.database import AsyncSessionLocal
     from app.services.asset_seed_service import run_asset_seed
 
     async with AsyncSessionLocal() as db:
-        result = await db.execute(select(func.count()).select_from(Asset))
-        asset_count = result.scalar_one() or 0
-        if asset_count:
-            return f"assets já populado: {asset_count} registros"
-
         seed = await run_asset_seed(db, run_backfill=False)
-        return f"created={seed.created} updated={seed.updated} errors={seed.errors}"
+    return (
+        f"created={seed.created} updated={seed.updated} "
+        f"skipped={seed.skipped} errors={seed.errors}"
+    )
 
 
 async def _bootstrap_treasury_catalog() -> str:
+    from app.core.database import AsyncSessionLocal
     from app.services.treasury_catalog_service import seed_treasury_assets
 
     async with AsyncSessionLocal() as db:
@@ -84,6 +80,7 @@ async def _bootstrap_treasury_catalog() -> str:
 
 
 async def _bootstrap_treasury_reconciliation() -> str:
+    from app.core.database import AsyncSessionLocal
     from app.services.treasury_reconciliation_service import reconcile_treasury_transactions
 
     async with AsyncSessionLocal() as db:
@@ -96,6 +93,7 @@ async def _bootstrap_treasury_reconciliation() -> str:
 
 
 async def _bootstrap_treasury_history() -> str:
+    from app.core.database import AsyncSessionLocal
     from app.services.treasury_price_history_service import (
         import_missing_treasury_price_history,
         update_treasury_latest_prices,
@@ -115,6 +113,7 @@ async def _bootstrap_asset_price_history() -> str:
 
 
 async def _bootstrap_benchmarks() -> str:
+    from app.core.database import AsyncSessionLocal
     from app.services.benchmark_rate_service import import_missing_benchmark_history
 
     async with AsyncSessionLocal() as db:
