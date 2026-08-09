@@ -216,13 +216,6 @@ async def resolve_treasury_symbol(db: AsyncSession, raw: str | None) -> Optional
 
     assets = await _treasury_assets(db, active_only=True)
 
-    if canonical:
-        for asset in assets:
-            if str(asset.ticker or "").lower() == canonical.lower():
-                return canonical.lower()
-        logger.info("[treasury_catalog] %r resolvido por regra canônica para %s", value, canonical)
-        return canonical.lower()
-
     raw_norm = normalize_treasury_text(value)
     raw_slug = slug_from_text(value)
     raw_years = set(re.findall(r"20\d{2}", value))
