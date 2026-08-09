@@ -1,9 +1,11 @@
 """
-Servico de benchmarks macroeconomicos para Renda Fixa.
+Servico DB-first de benchmarks macroeconomicos para Renda Fixa.
 
-- Persiste series historicas do SGS/BCB em rate_history.
-- Atualiza incrementalmente via scheduler.
-- Fornece fatores acumulados para valuation de Renda Fixa.
+- Persiste series historicas oficiais do SGS/BCB em ``rate_history`` apenas em
+  fluxos explicitos de bootstrap/backfill.
+- Fornece fatores acumulados e referencias anuais exclusivamente a partir do
+  historico persistido durante requests financeiros.
+- Nao agenda nem dispara consultas externas recorrentes por conta propria.
 """
 from __future__ import annotations
 
@@ -12,7 +14,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Iterable, Optional
 
-from sqlalchemy import select, func, text
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,7 +24,6 @@ from app.models.rate_history import RateHistory
 logger = logging.getLogger(__name__)
 
 DEFAULT_HISTORY_START = date(2010, 1, 1)
-_RATE_HISTORY_UNIQUE_INDEX = "ix_rate_history_indicator_date_unique"
 _DAILY_INCREMENTAL_DAYS = 10
 _MONTHLY_INCREMENTAL_DAYS = 120
 _MONTHLY_INDICATORS = {"IPCA", "IGPM"}
@@ -43,17 +44,7 @@ def _daily_rate_from_annual_pct(annual_pct: Decimal) -> Decimal:
     return Decimal(str(daily * 100))
 
 
-async def ensure_rate_history_unique_index(db: AsyncSession) -> None:
-    await db.execute(
-        text(
-            f"CREATE UNIQUE INDEX IF NOT EXISTS {_RATE_HISTORY_UNIQUE_INDEX} "
-            "ON rate_history (indicator, date)"
-        )
-    )
-
-
 async def _upsert_rate_rows(db: AsyncSession, rows: list[dict]) -> int:
-    await ensure_rate_history_unique_index(db)
     inserted_or_updated = 0
     for row in rows:
         values = {
@@ -120,12 +111,10 @@ async def import_missing_benchmark_history(
 ) -> dict[str, int]:
     """Backfill inicial e atualização incremental por frequência da série.
 
-    ``commit=False`` permite que orquestradores operacionais executem o estágio
-    dentro de uma transação maior, sem alterar o comportamento dos consumidores
-    existentes, que continuam confirmando a sessão por padrão.
+    Este é um fluxo operacional explícito de bootstrap/backfill. ``commit=False``
+    permite que um orquestrador controle a transação sem introduzir consultas a
+    provider em consumidores financeiros comuns.
     """
-    await ensure_rate_history_unique_index(db)
-
     today = end_date or date.today()
     stats: dict[str, int] = {}
 
