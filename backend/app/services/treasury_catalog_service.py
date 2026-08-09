@@ -18,6 +18,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.integrations.brapi_treasury import canonical_treasury_symbol_from_text
 from app.integrations.treasury_catalog_provider import fetch_treasury_catalog
 from app.models.asset import Asset, AssetType
+from app.services.treasury_legacy_identity_service import (
+    consolidate_legacy_educa_identities,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +33,7 @@ class TreasurySeedResult:
     created: int = 0
     updated: int = 0
     skipped: int = 0
+    consolidated: int = 0
     errors: int = 0
 
 
@@ -89,7 +93,7 @@ def _sector(item: dict) -> str:
 
 
 async def seed_treasury_assets(db: AsyncSession, commit: bool = True) -> TreasurySeedResult:
-    """Importa/atualiza apenas títulos confirmados por fonte externa real."""
+    """Importa/atualiza títulos reais e consolida identidades legadas conhecidas."""
     result = TreasurySeedResult()
     try:
         items = await fetch_treasury_catalog()
@@ -144,13 +148,20 @@ async def seed_treasury_assets(db: AsyncSession, commit: bool = True) -> Treasur
             logger.error("[treasury_seed] erro ao salvar %s: %s", symbol, exc)
             result.errors += 1
 
+    await db.flush()
+    consolidation = await consolidate_legacy_educa_identities(db)
+    result.consolidated = consolidation.consolidated
+    result.errors += consolidation.errors
+
     if commit:
         await db.commit()
     logger.info(
-        "[treasury_seed] concluído: %d criados, %d atualizados, %d ignorados, %d erros",
+        "[treasury_seed] concluído: %d criados, %d atualizados, %d ignorados, "
+        "%d consolidados, %d erros",
         result.created,
         result.updated,
         result.skipped,
+        result.consolidated,
         result.errors,
     )
     return result
