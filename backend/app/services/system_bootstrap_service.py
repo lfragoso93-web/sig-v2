@@ -95,15 +95,21 @@ async def _bootstrap_treasury_reconciliation() -> str:
 
 async def _bootstrap_treasury_history() -> str:
     from app.core.database import AsyncSessionLocal
-    from app.services.treasury_price_history_service import (
-        import_missing_treasury_price_history,
-        update_treasury_latest_prices,
+    from app.services.treasury_official_history_service import (
+        rebuild_official_treasury_history,
     )
 
-    history = await import_missing_treasury_price_history()
     async with AsyncSessionLocal() as db:
-        snapshot = await update_treasury_latest_prices(db)
-    return f"history={history} latest_prices={len(snapshot)}"
+        history = await rebuild_official_treasury_history(db, commit=True)
+    return (
+        f"primary_source={history.get('primary_source')} "
+        f"fallback_source={history.get('fallback_source')} "
+        f"imported={history.get('imported', 0)} "
+        f"official_imported={history.get('official_imported', 0)} "
+        f"fallback_imported={history.get('fallback_imported', 0)} "
+        f"required_empty_payloads={history.get('required_empty_payloads', 0)} "
+        f"unresolved_assets={len(history.get('unresolved_assets') or [])}"
+    )
 
 
 async def _bootstrap_asset_price_history() -> str:
