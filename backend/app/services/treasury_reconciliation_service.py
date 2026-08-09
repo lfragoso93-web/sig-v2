@@ -4,10 +4,9 @@ Reconciliação de lançamentos existentes de Tesouro Direto.
 Objetivo:
 - pegar transações antigas cadastradas com nome livre, ex.:
   "TESOURO RENDA+ APOSENTADORIA EXTRA 2060";
-- resolver para o symbol canônico usado pelo SGI/BRAPI, ex.:
-  "tesouro-renda-mais-2060";
+- resolver exclusivamente contra o catálogo canônico já persistido;
 - atualizar transactions.ticker;
-- garantir que o Asset canônico exista em assets.
+- nunca criar ativos durante a reconciliação.
 """
 from __future__ import annotations
 
@@ -18,7 +17,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.asset import Asset, AssetType
+from app.models.asset import AssetType
 from app.models.transaction import Transaction
 from app.services.treasury_catalog_service import resolve_treasury_symbol
 
@@ -41,33 +40,11 @@ def _is_treasury(asset_type: Optional[str]) -> bool:
     return raw in {"tesouro_direto", "tesouro direto", "treasury"}
 
 
-async def _ensure_asset(db: AsyncSession, symbol: str, fallback_name: str | None = None) -> bool:
-    existing = await db.execute(
-        select(Asset).where(
-            Asset.ticker == symbol,
-            Asset.asset_type == _TREASURY_TYPE,
-        )
-    )
-    if existing.scalar_one_or_none():
-        return False
-
-    db.add(
-        Asset(
-            ticker=symbol,
-            name=fallback_name or symbol,
-            asset_type=_TREASURY_TYPE,
-            currency="BRL",
-            sector="Tesouro Direto | fonte=reconciliacao",
-        )
-    )
-    return True
-
-
 async def reconcile_treasury_transactions(
     db: AsyncSession,
     commit: bool = True,
 ) -> TreasuryReconciliationResult:
-    """Normaliza tickers de transações existentes de Tesouro Direto."""
+    """Normaliza tickers usando apenas o catálogo persistido do Tesouro Direto."""
     result = TreasuryReconciliationResult()
 
     query = await db.execute(select(Transaction).order_by(Transaction.id.asc()))
@@ -86,10 +63,7 @@ async def reconcile_treasury_transactions(
                 result.unresolved += 1
                 continue
 
-            if await _ensure_asset(db, symbol, fallback_name=raw_ticker):
-                result.created_assets += 1
-
-            if raw_ticker != symbol:
+            if raw_ticker != symbol or tx.asset_type != _TREASURY_TYPE:
                 logger.info(
                     "[treasury_reconcile] tx=%s: %r -> %s",
                     tx.id,
