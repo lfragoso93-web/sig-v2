@@ -75,7 +75,8 @@ async def _bootstrap_treasury_catalog() -> str:
         result = await seed_treasury_assets(db)
     return (
         f"created={result.created} updated={result.updated} "
-        f"skipped={result.skipped} errors={result.errors}"
+        f"skipped={result.skipped} consolidated={result.consolidated} "
+        f"errors={result.errors}"
     )
 
 
