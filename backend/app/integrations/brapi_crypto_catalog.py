@@ -6,7 +6,6 @@ from typing import Any
 import httpx
 
 from app.core.config import settings
-from app.services.crypto_catalog_normalization import normalize_crypto_catalog_items
 
 logger = logging.getLogger(__name__)
 
@@ -26,11 +25,24 @@ def _extract_items(data: Any) -> list[dict]:
         raw_items = data
     else:
         raw_items = []
-    return normalize_crypto_catalog_items(raw_items)
+
+    if not isinstance(raw_items, list):
+        return []
+
+    normalized: list[dict] = []
+    for item in raw_items:
+        if isinstance(item, dict):
+            normalized.append(item)
+            continue
+        if isinstance(item, str):
+            coin = item.strip().upper()
+            if coin:
+                normalized.append({"coin": coin})
+    return normalized
 
 
 async def fetch_crypto_catalog_all(limit: int = 500) -> list[dict]:
-    """Busca o catálogo BRAPI de cripto e descarta itens não estruturados."""
+    """Busca e normaliza o catálogo BRAPI de cripto para registros estruturados."""
     headers = _auth_headers()
     all_coins: list[dict] = []
     page = 1
@@ -61,7 +73,7 @@ async def fetch_crypto_catalog_all(limit: int = 500) -> list[dict]:
         dropped = raw_count - len(items)
         if dropped:
             logger.warning(
-                "[market_data] crypto catalog page=%d: %d itens não estruturados ignorados",
+                "[market_data] crypto catalog page=%d: %d item(ns) inválido(s) ignorado(s)",
                 page,
                 dropped,
             )
