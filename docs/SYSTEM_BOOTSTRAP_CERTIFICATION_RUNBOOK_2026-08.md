@@ -45,25 +45,37 @@ Rollback/bloqueio:
 
 ### 2. `treasury_catalog`
 
-Objetivo: carregar somente títulos reais suportados do Tesouro Direto.
+Objetivo: carregar o universo histórico real do Tesouro Direto a partir da fonte oficial.
+
+Política de fonte:
+- Tesouro Transparente é a fonte primária do catálogo histórico;
+- BRAPI é somente fallback operacional se a fonte oficial não produzir catálogo utilizável;
+- entradas sintéticas não participam do catálogo persistido;
+- fallback BRAPI não é prova suficiente de completude histórica.
 
 Aprovação:
-- catálogo real persistido;
-- nenhum item sintético indevidamente persistido;
-- segunda execução sem duplicações;
-- símbolos canônicos resolvíveis.
+- catálogo oficial persistido com cobertura histórica materialmente superior à oferta corrente quando aplicável;
+- cada `Asset` corresponde a título confirmado por fonte externa real;
+- nenhuma duplicação de identidade por `(ticker, TESOURO_DIRETO)`;
+- símbolos canônicos resolvíveis a partir do catálogo persistido;
+- segunda execução sem novas mutações indevidas;
+- fonte efetivamente usada registrada na evidência operacional.
+
+Bloqueio:
+- se o estágio cair para BRAPI fallback, registrar a ocorrência e não classificar cobertura histórica como certificada sem análise explícita.
 
 ### 3. `treasury_reconciliation`
 
-Objetivo: reconciliar transações existentes de Tesouro com símbolos canônicos.
+Objetivo: reconciliar transações existentes de Tesouro com símbolos canônicos já presentes no catálogo persistido.
 
 Aprovação:
 - `errors=0`;
 - `unresolved=0`, salvo exceção explicitamente analisada e documentada;
+- nenhum ativo canônico fabricado pela reconciliação;
 - nenhum ativo canônico duplicado;
 - segunda execução sem novas mutações indevidas.
 
-Qualquer `unresolved` relevante bloqueia a certificação até análise.
+Qualquer `unresolved` relevante ou necessidade de criar título ausente bloqueia a certificação até análise do catálogo.
 
 ### 4. `benchmarks`
 
@@ -90,6 +102,11 @@ Aprovação:
 ### 6. `treasury_history`
 
 Objetivo: preencher histórico e snapshot atual do Tesouro Direto.
+
+Política de fonte:
+- Tesouro Transparente permanece fonte primária do histórico oficial;
+- BRAPI pode atuar somente como fallback quando previsto pelo adapter dedicado;
+- divergências de identidade entre catálogo e histórico bloqueiam avanço.
 
 Aprovação:
 - cobertura histórica compatível com os títulos suportados;
