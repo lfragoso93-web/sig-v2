@@ -1,9 +1,8 @@
-"""
-Serviço de catálogo do Tesouro Direto.
+"""Serviço de catálogo do Tesouro Direto.
 
-Fonte de verdade: tabela assets, populada a partir de fontes públicas do Tesouro
-e da BRAPI. Itens sintéticos podem auxiliar a resolução de aliases, mas nunca
-são persistidos como novos ativos.
+Fonte de verdade: tabela assets. O bootstrap popula o catálogo por meio da
+fronteira `treasury_catalog_provider`, que usa Tesouro Transparente como fonte
+primária e BRAPI somente como fallback operacional.
 """
 from __future__ import annotations
 
@@ -16,16 +15,13 @@ from typing import Optional
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.integrations.brapi_treasury import (
-    canonical_treasury_symbol_from_text,
-    fetch_treasury_list,
-)
+from app.integrations.brapi_treasury import canonical_treasury_symbol_from_text
+from app.integrations.treasury_catalog_provider import fetch_treasury_catalog
 from app.models.asset import Asset, AssetType
 
 logger = logging.getLogger(__name__)
 
 _TREASURY_TYPE = AssetType.TESOURO_DIRETO.value
-_SYNTHETIC_SOURCE = "synthetic_treasury_long_term"
 _INACTIVE_STATUS = "NOT_APPLICABLE"
 
 
@@ -71,10 +67,10 @@ def _name(item: dict, symbol: str) -> str:
     bond_type = str(item.get("bondType") or item.get("name") or item.get("title") or "").strip()
     maturity_year = item.get("maturityYear")
     maturity = str(item.get("maturityDate") or item.get("dueDate") or item.get("expiresAt") or "").strip()
-    if bond_type and maturity_year:
-        return f"{bond_type} {maturity_year}"
     if bond_type and maturity:
         return f"{bond_type} {maturity[:10]}"
+    if bond_type and maturity_year:
+        return f"{bond_type} {maturity_year}"
     return bond_type or symbol
 
 
@@ -93,20 +89,16 @@ def _sector(item: dict) -> str:
 
 
 async def seed_treasury_assets(db: AsyncSession, commit: bool = True) -> TreasurySeedResult:
-    """Importa/atualiza apenas títulos confirmados por fontes externas reais."""
+    """Importa/atualiza apenas títulos confirmados por fonte externa real."""
     result = TreasurySeedResult()
     try:
-        items = await fetch_treasury_list()
+        items = await fetch_treasury_catalog()
     except Exception as exc:
         logger.error("[treasury_seed] falha ao buscar catálogo Tesouro: %s", exc)
         result.errors += 1
         return result
 
     for item in items:
-        if str(item.get("source") or "").strip().lower() == _SYNTHETIC_SOURCE:
-            result.skipped += 1
-            continue
-
         symbol = _symbol(item)
         if not symbol:
             result.errors += 1
