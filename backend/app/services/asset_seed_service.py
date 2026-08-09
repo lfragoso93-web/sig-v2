@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset, AssetType
 from app.integrations.brapi import fetch_all_tickers_v2, fetch_crypto_available_all
+from app.services.crypto_catalog_normalization import normalize_crypto_catalog_items
 
 logger = logging.getLogger(__name__)
 
@@ -174,8 +175,12 @@ async def _run_crypto_seed(db: AsyncSession, result: SeedResult) -> None:
     result.seeded_tickers.setdefault(type_label, [])
 
     logger.info("[seed] iniciando seed de criptomoedas via /api/v2/crypto/available")
-    coins = await fetch_crypto_available_all()
-    logger.info(f"[seed] criptomoedas recebidas da BRAPI: {len(coins)}")
+    raw_coins = await fetch_crypto_available_all()
+    coins = normalize_crypto_catalog_items(raw_coins)
+    ignored = len(raw_coins) - len(coins) if isinstance(raw_coins, list) else 0
+    if ignored:
+        logger.warning("[seed] catálogo de cripto ignorou %d item(ns) não estruturado(s)", ignored)
+    logger.info(f"[seed] criptomoedas recebidas da BRAPI: {len(coins)} válidas")
 
     BATCH_SIZE = 200
     batch_ops = 0
