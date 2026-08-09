@@ -51,3 +51,11 @@ def test_system_bootstrap_does_not_bypass_domain_boundaries() -> None:
 
     findings = sorted(token for token in forbidden_runtime_imports if token in source)
     assert findings == []
+
+
+def test_asset_catalog_stage_reconciles_existing_catalog_without_market_backfill() -> None:
+    source = _source()
+
+    assert "seed = await run_asset_seed(db, run_backfill=False)" in source
+    assert "assets já populado" not in source
+    assert "select(func.count()).select_from(Asset)" not in source
