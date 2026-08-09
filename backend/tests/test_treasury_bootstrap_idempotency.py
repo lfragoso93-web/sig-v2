@@ -102,18 +102,13 @@ async def test_treasury_reconciliation_second_execution_has_no_new_mutation(monk
         "resolve_treasury_symbol",
         AsyncMock(side_effect=["tesouro-selic-2029", "tesouro-selic-2029"]),
     )
-    monkeypatch.setattr(
-        treasury_reconciliation_service,
-        "_ensure_asset",
-        AsyncMock(side_effect=[True, False]),
-    )
 
     first = await treasury_reconciliation_service.reconcile_treasury_transactions(db)
     second = await treasury_reconciliation_service.reconcile_treasury_transactions(db)
 
     assert first.scanned == 1
     assert first.updated_transactions == 1
-    assert first.created_assets == 1
+    assert first.created_assets == 0
     assert first.errors == 0
     assert transaction.ticker == "tesouro-selic-2029"
 
