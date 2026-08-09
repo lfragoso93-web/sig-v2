@@ -88,7 +88,7 @@ def build_missing_edge_ranges(coverage: AssetPriceCoverage) -> tuple[MissingPric
 
 def _default_provider(asset_type: AssetType) -> str:
     if asset_type == AssetType.CRIPTO:
-        return "yfinance"
+        return "brapi"
     return "alpha_vantage" if asset_type in INTL_TYPES else "brapi"
 
 
@@ -147,6 +147,31 @@ async def _fetch_yf_max(symbol: str, asset_type: AssetType) -> list[tuple[dateti
     return await _run_yf_with_throttle(_fetch_yf_max_sync, resolved)
 
 
+async def _fetch_crypto_history(ticker: str) -> tuple[list[tuple[datetime, float]], str, str]:
+    from app.integrations.brapi_crypto_history import fetch_brapi_crypto_history
+
+    try:
+        rows = await fetch_brapi_crypto_history(
+            ticker,
+            currency="USD",
+            range_="max",
+            interval="1d",
+        )
+    except Exception as exc:
+        logger.info(
+            "[price_gap_sync] brapi crypto indisponivel ticker=%s; usando yahoo: %s",
+            ticker,
+            exc,
+        )
+        rows = []
+
+    if rows:
+        return rows, "brapi_v2_crypto_max", "brapi"
+
+    fallback = await _fetch_yf_max(ticker, AssetType.CRIPTO)
+    return fallback, "yfinance_crypto_max", "yfinance"
+
+
 def _empty_status(missing_range: MissingPriceRange) -> str:
     if missing_range.reason == "missing_all":
         return "HISTORY_UNAVAILABLE"
@@ -167,9 +192,7 @@ async def _fetch_range(
     effective_provider = _default_provider(asset_type)
 
     if asset_type == AssetType.CRIPTO:
-        rows = await _fetch_yf_max(ticker, asset_type)
-        source = "yfinance_crypto_max"
-        effective_provider = "yfinance"
+        rows, source, effective_provider = await _fetch_crypto_history(ticker)
     elif asset_type in INTL_TYPES:
         if initial_history:
             rows = await _fetch_yf_max(ticker, asset_type)
