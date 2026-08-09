@@ -14,11 +14,16 @@ from app.services.pre_prod_b3_seed_service import (
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Reconstrói somente catálogo B3 e histórico COTAHIST",
+        description="Reconstrói catálogo B3 e histórico COTAHIST",
     )
     parser.add_argument("--start-year", type=int, required=True)
     parser.add_argument("--end-year", type=int, required=True)
     parser.add_argument("--cutoff-date", type=date.fromisoformat, required=True)
+    parser.add_argument(
+        "--history-only",
+        action="store_true",
+        help="Executa somente COTAHIST, sem atualizar o catálogo nacional",
+    )
     return parser
 
 
@@ -29,6 +34,7 @@ async def _main() -> int:
             start_year=args.start_year,
             end_year=args.end_year,
             cutoff_date=args.cutoff_date,
+            include_catalog=not args.history_only,
         )
     except B3SeedAlreadyRunningError as exc:
         print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
