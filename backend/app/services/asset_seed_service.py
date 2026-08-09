@@ -235,6 +235,14 @@ async def run_asset_seed(
             if not ticker:
                 result.errors += 1
                 continue
+            if not _has_history(ticker):
+                result.skipped += 1
+                logger.info(
+                    "[seed] ticker nacional inelegível ignorado: %s (%s)",
+                    ticker,
+                    type_label,
+                )
+                continue
 
             name = (item.get("name") or item.get("longName") or "").strip()
             sector = (item.get("sector") or item.get("segment") or item.get("subSector") or "").strip() or None
