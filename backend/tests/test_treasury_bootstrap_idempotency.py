@@ -40,6 +40,11 @@ async def test_treasury_catalog_second_execution_is_convergent(monkeypatch):
         "fetch_treasury_catalog",
         AsyncMock(return_value=[item]),
     )
+    monkeypatch.setattr(
+        treasury_catalog_service,
+        "consolidate_legacy_educa_identities",
+        AsyncMock(return_value=SimpleNamespace(consolidated=0, errors=0)),
+    )
 
     asset = SimpleNamespace(
         ticker="tesouro-selic-2029",
@@ -50,6 +55,7 @@ async def test_treasury_catalog_second_execution_is_convergent(monkeypatch):
     )
     db = MagicMock()
     db.add = MagicMock()
+    db.flush = AsyncMock()
     db.commit = AsyncMock()
     db.execute = AsyncMock(
         side_effect=[
@@ -63,12 +69,15 @@ async def test_treasury_catalog_second_execution_is_convergent(monkeypatch):
 
     assert first.created == 1
     assert first.updated == 0
+    assert first.consolidated == 0
     assert first.errors == 0
     assert second.created == 0
     assert second.updated == 0
     assert second.skipped == 1
+    assert second.consolidated == 0
     assert second.errors == 0
     assert db.add.call_count == 1
+    assert db.flush.await_count == 2
     assert db.commit.await_count == 2
 
 
