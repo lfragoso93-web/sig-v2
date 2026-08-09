@@ -64,6 +64,45 @@ async def test_stage_excludes_crypto_and_reports_counts(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_history_only_does_not_touch_catalog(monkeypatch):
+    monkeypatch.setattr(service, "AsyncSessionLocal", lambda: _LockSession())
+    monkeypatch.setattr(
+        service,
+        "_counts",
+        AsyncMock(
+            side_effect=[
+                service.B3SeedCounts(assets=2222, prices=0),
+                service.B3SeedCounts(assets=2222, prices=100),
+            ]
+        ),
+    )
+    seed = AsyncMock(return_value=SeedResult())
+    history = AsyncMock(
+        return_value=B3HistoricalMarketRebuildResult(
+            start_year=1986,
+            end_year=2026,
+            rows_inserted=100,
+        )
+    )
+    monkeypatch.setattr(service, "run_asset_seed", seed)
+    monkeypatch.setattr(service, "rebuild_b3_historical_market", history)
+
+    result = await service.run_pre_prod_b3_seed(
+        start_year=1986,
+        end_year=2026,
+        cutoff_date=date(2026, 8, 9),
+        include_catalog=False,
+    )
+
+    seed.assert_not_awaited()
+    assert result.ok is True
+    assert result.catalog == {"skipped": True, "reason": "history_only"}
+    assert result.before.assets == result.after.assets == 2222
+    assert history.await_args.kwargs == {"cutoff_date": date(2026, 8, 9)}
+    assert history.await_args.args == (1986, 2026)
+
+
+@pytest.mark.asyncio
 async def test_stage_refuses_concurrent_execution(monkeypatch):
     monkeypatch.setattr(service, "AsyncSessionLocal", lambda: _LockSession(False))
 
