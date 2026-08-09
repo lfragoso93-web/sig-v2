@@ -1,7 +1,9 @@
 from pathlib import Path
 
 
-SCHEDULER_PATH = Path(__file__).resolve().parents[1] / "app" / "core" / "scheduler.py"
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+SCHEDULER_PATH = BACKEND_ROOT / "app" / "core" / "scheduler.py"
+LEGACY_SCHEDULER_PATH = BACKEND_ROOT / "app" / "scheduler.py"
 
 
 def _scheduler_source() -> str:
@@ -18,6 +20,8 @@ def test_scheduler_only_runs_recurring_price_provider_jobs() -> None:
         "run_daily_proventos_sync",
         "market_pipeline_batch_service",
         "run_market_pipeline_batch",
+        "sync_corporate_events_for_asset",
+        "run_asset_seed",
         "sync_logo=True",
         "sync_events=True",
     }
@@ -48,3 +52,7 @@ def test_daily_close_does_not_trigger_broad_historical_backfill() -> None:
     assert "today = date.today()" in source
     assert "required_to=today" in source
     assert "history_start=today" in source
+
+
+def test_legacy_duplicate_scheduler_does_not_exist() -> None:
+    assert not LEGACY_SCHEDULER_PATH.exists()
