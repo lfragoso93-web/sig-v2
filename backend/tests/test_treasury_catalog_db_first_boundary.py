@@ -11,3 +11,13 @@ def test_treasury_symbol_resolution_does_not_seed_provider_on_demand() -> None:
 
     assert "await seed_treasury_assets(" not in resolver_source
     assert "catálogo persistido" in resolver_source
+
+
+def test_treasury_symbol_resolution_uses_persisted_aliases() -> None:
+    source = Path("app/services/treasury_catalog_service.py").read_text(encoding="utf-8")
+
+    start = source.index("async def resolve_treasury_symbol")
+    resolver_source = source[start:]
+
+    assert "AssetAlias.alias_ticker" in resolver_source
+    assert ".join(AssetAlias" in resolver_source
