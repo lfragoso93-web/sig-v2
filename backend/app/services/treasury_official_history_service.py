@@ -15,7 +15,7 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 _OFFICIAL_SOURCE = "tesouro_transparente"
 _FALLBACK_SOURCE = "brapi_treasury"
-_DEFAULT_YEARS = 10
+_OFFICIAL_HISTORY_START = date(2002, 1, 1)
 _LOOKBACK_DAYS = 10
 _INACTIVE_STATUS = "NOT_APPLICABLE"
 _MATURITY_SUFFIX_PATTERN = re.compile(r"-(\d{2})(\d{2})(\d{4})$")
@@ -93,6 +93,17 @@ async def _persist_history_rows(
         await db.execute(stmt)
         changed += 1
     return changed
+
+
+async def _first_official_saved_date(db: AsyncSession, asset_id: int) -> date | None:
+    result = await db.execute(
+        select(func.min(AssetPrice.timestamp)).where(
+            AssetPrice.asset_id == asset_id,
+            AssetPrice.source == _OFFICIAL_SOURCE,
+        )
+    )
+    first_ts = result.scalar_one_or_none()
+    return first_ts.date() if first_ts else None
 
 
 async def _canonical_assets(
@@ -181,10 +192,15 @@ async def _rebuild_official_treasury_history(
 
     windows: dict[tuple[date, date], list[str]] = defaultdict(list)
     for symbol, asset in assets_by_symbol.items():
-        last_date = await _last_saved_date(db, int(asset.id))
-        start = today - timedelta(days=_DEFAULT_YEARS * 365)
-        if last_date:
+        asset_id = int(asset.id)
+        last_date = await _last_saved_date(db, asset_id)
+        first_official_date = await _first_official_saved_date(db, asset_id)
+        if first_official_date is None or first_official_date >= today - timedelta(days=_LOOKBACK_DAYS):
+            start = _OFFICIAL_HISTORY_START
+        elif last_date:
             start = max(last_date - timedelta(days=2), today - timedelta(days=_LOOKBACK_DAYS))
+        else:
+            start = _OFFICIAL_HISTORY_START
         windows[(start, today)].append(symbol)
 
     stats = {symbol: 0 for symbol in assets_by_symbol}
