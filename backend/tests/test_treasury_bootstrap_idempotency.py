@@ -32,12 +32,12 @@ async def test_treasury_catalog_second_execution_is_convergent(monkeypatch):
         "symbol": "tesouro-selic-2029",
         "name": "Tesouro Selic",
         "maturityYear": 2029,
-        "source": "brapi",
+        "source": "tesouro_transparente_csv",
         "indexer": "SELIC",
     }
     monkeypatch.setattr(
         treasury_catalog_service,
-        "fetch_treasury_list",
+        "fetch_treasury_catalog",
         AsyncMock(return_value=[item]),
     )
 
@@ -45,7 +45,7 @@ async def test_treasury_catalog_second_execution_is_convergent(monkeypatch):
         ticker="tesouro-selic-2029",
         asset_type="TESOURO_DIRETO",
         name="Tesouro Selic 2029",
-        sector="Tesouro Direto | SELIC | fonte=brapi",
+        sector="Tesouro Direto | SELIC | fonte=tesouro_transparente_csv",
         currency="BRL",
     )
     db = MagicMock()
