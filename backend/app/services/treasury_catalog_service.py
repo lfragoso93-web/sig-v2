@@ -173,7 +173,7 @@ async def _treasury_assets(db: AsyncSession, *, active_only: bool = True) -> lis
 
 
 async def resolve_treasury_symbol(db: AsyncSession, raw: str | None) -> Optional[str]:
-    """Resolve texto/ticker para um slug oficial ativo do Tesouro."""
+    """Resolve texto/ticker usando exclusivamente o catálogo persistido do Tesouro."""
     value = (raw or "").strip()
     if not value:
         return None
@@ -215,12 +215,6 @@ async def resolve_treasury_symbol(db: AsyncSession, raw: str | None) -> Optional
         return str(found).lower()
 
     assets = await _treasury_assets(db, active_only=True)
-    if not assets:
-        try:
-            await seed_treasury_assets(db, commit=True)
-            assets = await _treasury_assets(db, active_only=True)
-        except Exception as exc:
-            logger.warning("[treasury_catalog] seed sob demanda falhou: %s", exc)
 
     if canonical:
         for asset in assets:
