@@ -115,60 +115,63 @@ async def consolidate_legacy_educa_identities(
             continue
 
         legacy = await _asset_by_ticker(db, legacy_ticker)
-        try:
-            alias_created = await _ensure_alias(
+        if legacy is None:
+            if await _ensure_alias(
                 db,
                 canonical=canonical,
                 legacy_ticker=legacy_ticker,
-            )
-            if alias_created:
+            ):
                 result.created_aliases += 1
+            result.skipped += 1
+            continue
 
-            if legacy is None:
-                result.skipped += 1
-                continue
+        if await _count_blockers(db, legacy.id):
+            result.errors += 1
+            continue
 
-            if await _count_blockers(db, legacy.id):
+        legacy_prices = list(
+            (
+                await db.execute(
+                    select(AssetPrice).where(AssetPrice.asset_id == legacy.id)
+                )
+            ).scalars().all()
+        )
+        if legacy_prices:
+            timestamps = [row.timestamp for row in legacy_prices]
+            collisions = await db.scalar(
+                select(func.count())
+                .select_from(AssetPrice)
+                .where(
+                    AssetPrice.asset_id == canonical.id,
+                    AssetPrice.timestamp.in_(timestamps),
+                )
+            )
+            if int(collisions or 0) > 0:
                 result.errors += 1
                 continue
 
-            legacy_prices = list(
-                (
-                    await db.execute(
-                        select(AssetPrice).where(AssetPrice.asset_id == legacy.id)
-                    )
-                ).scalars().all()
-            )
-            if legacy_prices:
-                timestamps = [row.timestamp for row in legacy_prices]
-                collisions = await db.scalar(
-                    select(func.count())
-                    .select_from(AssetPrice)
-                    .where(
-                        AssetPrice.asset_id == canonical.id,
-                        AssetPrice.timestamp.in_(timestamps),
-                    )
-                )
-                if int(collisions or 0) > 0:
-                    result.errors += 1
-                    continue
-                for row in legacy_prices:
-                    row.asset_id = canonical.id
-                result.migrated_prices += len(legacy_prices)
+        if await _ensure_alias(
+            db,
+            canonical=canonical,
+            legacy_ticker=legacy_ticker,
+        ):
+            result.created_aliases += 1
 
-            tx_result = await db.execute(
-                update(Transaction)
-                .where(
-                    Transaction.asset_type == _TREASURY_TYPE,
-                    func.lower(Transaction.ticker) == legacy_ticker,
-                )
-                .values(ticker=canonical_ticker)
-            )
-            result.migrated_transactions += int(tx_result.rowcount or 0)
+        for row in legacy_prices:
+            row.asset_id = canonical.id
+        result.migrated_prices += len(legacy_prices)
 
-            await db.delete(legacy)
-            result.consolidated += 1
-        except Exception:
-            result.errors += 1
+        tx_result = await db.execute(
+            update(Transaction)
+            .where(
+                Transaction.asset_type == _TREASURY_TYPE,
+                func.lower(Transaction.ticker) == legacy_ticker,
+            )
+            .values(ticker=canonical_ticker)
+        )
+        result.migrated_transactions += int(tx_result.rowcount or 0)
+
+        await db.delete(legacy)
+        result.consolidated += 1
 
     return result
