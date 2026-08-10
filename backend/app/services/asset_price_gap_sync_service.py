@@ -28,6 +28,7 @@ _asset_locks: dict[int, asyncio.Lock] = {}
 _asset_locks_guard = asyncio.Lock()
 
 MAX_REASONABLE_UNIT_PRICE = 100_000_000.0
+_CRYPTO_MAX_ROWS_SUSPECT_LIMIT = 1000
 _FRACTIONAL_TICKER_RE = re.compile(r"^([A-Z0-9]{4,7})F$")
 _FRACTIONAL_TYPES = {
     AssetType.ACAO,
@@ -238,7 +239,11 @@ async def _fetch_range(
         filtered.append((ts.astimezone(timezone.utc), float(close)))
 
     if filtered and asset_type == AssetType.CRIPTO and initial_history:
-        terminal_status = "HISTORY_START_EXHAUSTED"
+        terminal_status = (
+            "HISTORY_START_TRUNCATED"
+            if source == "brapi_v2_crypto_max" and len(filtered) >= _CRYPTO_MAX_ROWS_SUSPECT_LIMIT
+            else "HISTORY_START_EXHAUSTED"
+        )
     elif not filtered:
         terminal_status = _empty_status(missing_range)
     if rejected:
