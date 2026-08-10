@@ -240,7 +240,7 @@ async def _fetch_range(
         yahoo_symbol = _yahoo_crypto_usd_symbol(ticker)
         usd_rows = await _fetch_yf_max(yahoo_symbol, asset_type)
         rows = await _convert_crypto_usd_rows_to_brl(usd_rows)
-        source = "yfinance_crypto_usd_ptax_brl_start_max"
+        source = "yfinance_crypto_ptax_brl_max"
         effective_provider = "brapi"
     elif asset_type == AssetType.CRIPTO:
         rows, source, effective_provider = await _fetch_crypto_history(ticker)
