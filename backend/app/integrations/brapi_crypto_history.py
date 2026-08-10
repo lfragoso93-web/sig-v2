@@ -3,6 +3,9 @@
 Adapter pequeno e isolado para o endpoint ``/api/v2/crypto``. A BRAPI é a fonte
 primária quando o token/plano disponível permite histórico; o chamador decide o
 fallback quando a fonte estiver indisponível, não autorizada ou retornar vazio.
+
+O contrato canônico do SGI para CRIPTO é BRL. O adapter aceita ``currency`` de
+forma explícita para testes/uso isolado, mas o default acompanha esse contrato.
 """
 from __future__ import annotations
 
@@ -83,7 +86,7 @@ def _parse_history(payload: object) -> list[tuple[datetime, float]]:
 async def fetch_brapi_crypto_history(
     ticker: str,
     *,
-    currency: str = "USD",
+    currency: str = "BRL",
     range_: str = "max",
     interval: str = "1d",
 ) -> list[tuple[datetime, float]]:
