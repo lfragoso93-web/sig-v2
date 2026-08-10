@@ -163,6 +163,7 @@ def test_complement_source_fits_asset_price_schema() -> None:
     source = "yfinance_crypto_ptax_brl_max"
 
     assert source_column.type.length == 30
+    assert len(source) == 28
     assert len(source) <= source_column.type.length
     assert "yfinance" in source
     assert "crypto" in source
