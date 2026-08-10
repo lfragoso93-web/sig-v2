@@ -27,3 +27,12 @@ def test_crypto_history_seed_bounds_concurrency() -> None:
 
     assert "MAX_CONCURRENCY = 4" in source
     assert "min(MAX_CONCURRENCY, max(1, args.concurrency))" in source
+
+
+def test_crypto_history_seed_can_scope_dry_run_and_execution_by_ticker() -> None:
+    source = _source()
+
+    assert 'parser.add_argument("--ticker", action="append", default=None)' in source
+    assert "normalized_tickers" in source
+    assert "item.ticker.upper() in normalized_tickers" in source
+    assert "tickers=normalized_tickers" in source
