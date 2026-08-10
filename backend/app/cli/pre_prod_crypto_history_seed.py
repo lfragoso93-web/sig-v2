@@ -6,8 +6,12 @@ import asyncio
 import json
 from datetime import date
 
+from app.core.database import AsyncSessionLocal
 from app.models.asset import AssetType
+from app.services.asset_price_coverage_service import audit_asset_price_coverage
 from app.services.asset_price_global_backfill_service import run_global_asset_price_backfill
+
+MAX_CONCURRENCY = 4
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -16,13 +20,52 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--required-to", type=date.fromisoformat, default=None)
     parser.add_argument("--concurrency", type=int, default=4)
+    parser.add_argument("--dry-run", action="store_true")
     return parser
 
 
+async def _dry_run(required_to: date | None) -> dict:
+    async with AsyncSessionLocal() as db:
+        coverage = await audit_asset_price_coverage(
+            db,
+            required_to=required_to,
+            full_history=True,
+        )
+
+    crypto = [item for item in coverage if item.asset_type == AssetType.CRIPTO.value]
+    candidates = [item for item in crypto if item.needs_sync and item.asset_id is not None]
+    return {
+        "dry_run": True,
+        "audited": len(crypto),
+        "candidates": len(candidates),
+        "missing_assets": sum(1 for item in crypto if item.asset_id is None),
+        "by_status": {
+            status: sum(1 for item in crypto if item.status.value == status)
+            for status in sorted({item.status.value for item in crypto})
+        },
+        "assets": [
+            {
+                "asset_id": item.asset_id,
+                "ticker": item.ticker,
+                "status": item.status.value,
+                "needs_sync": item.needs_sync,
+                "provider": item.provider,
+                "provider_symbol": item.provider_symbol,
+                "provider_status": item.provider_status,
+            }
+            for item in crypto
+        ],
+    }
+
+
 async def _run(args: argparse.Namespace) -> dict:
+    if args.dry_run:
+        return await _dry_run(args.required_to)
+
+    concurrency = min(MAX_CONCURRENCY, max(1, args.concurrency))
     return await run_global_asset_price_backfill(
         required_to=args.required_to,
-        concurrency=args.concurrency,
+        concurrency=concurrency,
         asset_types={AssetType.CRIPTO.value},
     )
 
