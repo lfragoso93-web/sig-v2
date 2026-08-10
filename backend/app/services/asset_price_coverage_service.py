@@ -142,7 +142,10 @@ def build_missing_ranges(
         "HISTORY_UNAVAILABLE",
         "YAHOO_HISTORY_UNAVAILABLE",
     }
-    start_exhausted = history_unavailable or normalized_provider_status == "HISTORY_START_EXHAUSTED"
+    start_exhausted = history_unavailable or normalized_provider_status in {
+        "HISTORY_START_EXHAUSTED",
+        "HISTORY_START_COMPLEMENT_UNAVAILABLE",
+    }
     end_unavailable = history_unavailable or normalized_provider_status == "HISTORY_END_UNAVAILABLE"
 
     if history_unavailable:
