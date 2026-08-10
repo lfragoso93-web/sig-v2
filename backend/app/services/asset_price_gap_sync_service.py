@@ -291,7 +291,7 @@ async def _fetch_range(
     if filtered and crypto_start_complement:
         terminal_status = "HISTORY_START_EXHAUSTED"
     elif not filtered and crypto_start_complement:
-        terminal_status = "HISTORY_START_TRUNCATED"
+        terminal_status = "HISTORY_START_COMPLEMENT_UNAVAILABLE"
     elif filtered and asset_type == AssetType.CRIPTO and initial_history:
         terminal_status = (
             "HISTORY_START_TRUNCATED"
