@@ -58,8 +58,9 @@ Regras:
 3. o complemento do trecho inicial usa Yahoo em USD somente como fonte complementar, com conversão obrigatória pela PTAX USD-BRL já persistida no banco antes da escrita;
 4. preços complementares usam proveniência explícita e não sobrescrevem timestamps já persistidos pela BRAPI;
 5. complemento vazio ou indisponível recebe `HISTORY_START_COMPLEMENT_UNAVAILABLE`: a lacuna continua observável, mas o bootstrap global não repete automaticamente a mesma consulta em todas as execuções;
-6. `HISTORY_START_EXHAUSTED` só é usado quando existe evidência de complemento histórico utilizável ou quando a própria resposta inicial pode ser classificada como completa pelos gates do adapter;
-7. probes de diagnóstico de provider são superfícies read-only e nunca persistem `Asset`, metadata de provider ou `asset_prices`.
+6. complemento não vazio que não alcança a véspera da primeira data persistida pela BRAPI recebe `HISTORY_START_COMPLEMENT_GAPPED`: a costura histórica permanece explicitamente não certificada e também não entra em retry automático infinito;
+7. `HISTORY_START_EXHAUSTED` só é usado quando existe evidência de complemento histórico utilizável e contínuo até a janela BRAPI, ou quando a própria resposta inicial pode ser classificada como completa pelos gates do adapter;
+8. probes de diagnóstico de provider são superfícies read-only e nunca persistem `Asset`, metadata de provider ou `asset_prices`.
 
 ## Runtime normal
 
