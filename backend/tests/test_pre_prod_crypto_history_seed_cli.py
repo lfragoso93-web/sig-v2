@@ -34,5 +34,6 @@ def test_crypto_history_seed_can_scope_dry_run_and_execution_by_ticker() -> None
 
     assert 'parser.add_argument("--ticker", action="append", default=None)' in source
     assert "normalized_tickers" in source
-    assert "item.ticker.upper() in normalized_tickers" in source
+    assert "item.ticker.upper() in tickers" in source
+    assert "return await _dry_run(args.required_to, normalized_tickers)" in source
     assert "tickers=normalized_tickers" in source
