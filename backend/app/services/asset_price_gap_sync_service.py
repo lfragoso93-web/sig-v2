@@ -37,16 +37,16 @@ _FRACTIONAL_TYPES = {
 }
 _INITIAL_RANGE_REASONS = {"missing_start", "missing_all"}
 _CRYPTO_SYMBOLS = {
-    "BITCOIN": "BTC-USD",
-    "BTC": "BTC-USD",
-    "ETHEREUM": "ETH-USD",
-    "ETH": "ETH-USD",
-    "CARDANO": "ADA-USD",
-    "ADA": "ADA-USD",
-    "SOLANA": "SOL-USD",
-    "SOL": "SOL-USD",
-    "RIPPLE": "XRP-USD",
-    "XRP": "XRP-USD",
+    "BITCOIN": "BTC-BRL",
+    "BTC": "BTC-BRL",
+    "ETHEREUM": "ETH-BRL",
+    "ETH": "ETH-BRL",
+    "CARDANO": "ADA-BRL",
+    "ADA": "ADA-BRL",
+    "SOLANA": "SOL-BRL",
+    "SOL": "SOL-BRL",
+    "RIPPLE": "XRP-BRL",
+    "XRP": "XRP-BRL",
 }
 
 
@@ -97,7 +97,7 @@ def normalize_provider_symbol(ticker: str, asset_type: AssetType) -> str:
     if asset_type == AssetType.CRIPTO:
         return _CRYPTO_SYMBOLS.get(
             normalized,
-            normalized if normalized.endswith("-USD") else f"{normalized}-USD",
+            normalized if normalized.endswith("-BRL") else f"{normalized}-BRL",
         )
     if asset_type in _FRACTIONAL_TYPES:
         match = _FRACTIONAL_TICKER_RE.fullmatch(normalized)
@@ -153,7 +153,7 @@ async def _fetch_crypto_history(ticker: str) -> tuple[list[tuple[datetime, float
     try:
         rows = await fetch_brapi_crypto_history(
             ticker,
-            currency="USD",
+            currency="BRL",
             range_="max",
             interval="1d",
         )
