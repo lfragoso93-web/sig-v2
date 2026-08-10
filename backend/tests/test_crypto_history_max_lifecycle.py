@@ -9,7 +9,7 @@ from app.services.asset_price_gap_sync_service import MissingPriceRange
 
 
 @pytest.mark.asyncio
-async def test_crypto_max_history_marks_start_as_exhausted(monkeypatch) -> None:
+async def test_crypto_max_history_marks_small_complete_result_as_exhausted(monkeypatch) -> None:
     async def fake_fetch_crypto_history(ticker: str):
         assert ticker == "BTC-BRL"
         return (
@@ -38,6 +38,39 @@ async def test_crypto_max_history_marks_start_as_exhausted(monkeypatch) -> None:
     assert source == "brapi_v2_crypto_max"
     assert provider == "brapi"
     assert terminal_status == "HISTORY_START_EXHAUSTED"
+
+
+@pytest.mark.asyncio
+async def test_crypto_max_history_does_not_mark_exact_1000_rows_as_exhausted(monkeypatch) -> None:
+    async def fake_fetch_crypto_history(ticker: str):
+        assert ticker == "BTC-BRL"
+        start = datetime(2023, 11, 15, tzinfo=timezone.utc)
+        return (
+            [(start.replace(day=start.day), float(index + 1)) for index in range(1000)],
+            "brapi_v2_crypto_max",
+            "brapi",
+        )
+
+    monkeypatch.setattr(
+        asset_price_gap_sync_service,
+        "_fetch_crypto_history",
+        fake_fetch_crypto_history,
+    )
+
+    rows, source, terminal_status, provider = await asset_price_gap_sync_service._fetch_range(
+        "BTC-BRL",
+        AssetType.CRIPTO,
+        MissingPriceRange(
+            date_from=date(1900, 1, 1),
+            date_to=date(2026, 8, 10),
+            reason="missing_all",
+        ),
+    )
+
+    assert len(rows) == 1000
+    assert source == "brapi_v2_crypto_max"
+    assert provider == "brapi"
+    assert terminal_status == "HISTORY_START_TRUNCATED"
 
 
 def test_exhausted_crypto_start_does_not_request_initial_history_again() -> None:
