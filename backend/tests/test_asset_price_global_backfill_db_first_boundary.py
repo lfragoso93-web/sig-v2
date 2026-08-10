@@ -25,7 +25,7 @@ def test_global_backfill_does_not_create_catalog_assets() -> None:
 def test_global_backfill_reports_missing_assets_without_syncing_them() -> None:
     source = _source()
 
-    assert "missing_assets = [item for item in coverage if item.asset_id is None]" in source
+    assert "missing_assets = [item for item in scoped_coverage if item.asset_id is None]" in source
     assert "item.needs_sync" in source
     assert "item.asset_id is not None" in source
     assert '"missing_assets": len(missing_assets)' in source
