@@ -12,6 +12,7 @@ from app.services.asset_price_coverage_service import audit_asset_price_coverage
 from app.services.asset_price_global_backfill_service import run_global_asset_price_backfill
 
 MAX_CONCURRENCY = 4
+MAX_TICKERS_PER_RUN = 20
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -75,6 +76,11 @@ async def _run(args: argparse.Namespace) -> dict:
     normalized_tickers = _normalize_tickers(args.ticker)
     if args.dry_run:
         return await _dry_run(args.required_to, normalized_tickers)
+
+    if normalized_tickers is None:
+        raise SystemExit("execucao real exige ao menos um --ticker")
+    if len(normalized_tickers) > MAX_TICKERS_PER_RUN:
+        raise SystemExit("execucao real limitada a 20 tickers")
 
     concurrency = min(MAX_CONCURRENCY, max(1, args.concurrency))
     return await run_global_asset_price_backfill(
