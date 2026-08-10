@@ -35,8 +35,10 @@ def test_reconciliation_requires_strict_canary_evidence() -> None:
         'EXPECTED_ROWS = 1000',
         'EXPECTED_FIRST_DATE = date(2023, 11, 15)',
         'EXPECTED_LAST_DATE = date(2026, 8, 10)',
+        'EXPECTED_PROVIDER_ATTEMPTS = 2',
     ):
         assert token in source
 
     assert "provider_attempts" in source
+    assert "provider_attempts_mismatch" in source
     assert "eligible" in source
