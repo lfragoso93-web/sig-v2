@@ -47,6 +47,20 @@ Regras:
 5. resolução de ticker/nome durante requests e reconciliações usa somente o catálogo já persistido;
 6. falha/ausência da fonte oficial deve ser observável; o fallback BRAPI não transforma uma cobertura parcial em certificação de completude histórica.
 
+### Contrato de fontes — Criptomoedas
+
+Para o domínio `CRIPTO`, a pertença ao catálogo retornado por `/api/v2/crypto/available` é a autoridade operacional de elegibilidade do bootstrap. O SGI não infere que um símbolo é inválido por nome, tamanho ou sufixo; símbolos como tokens agregados ou representações tokenizadas continuam pertencendo ao domínio quando a própria fonte canônica os lista como `coins`.
+
+Regras:
+
+1. a BRAPI é a fonte primária e o contrato persistido do ativo permanece em BRL;
+2. respostas `range=max` com evidência de truncamento são marcadas `HISTORY_START_TRUNCATED`, sem fingir completude histórica;
+3. o complemento do trecho inicial usa Yahoo em USD somente como fonte complementar, com conversão obrigatória pela PTAX USD-BRL já persistida no banco antes da escrita;
+4. preços complementares usam proveniência explícita e não sobrescrevem timestamps já persistidos pela BRAPI;
+5. complemento vazio ou indisponível recebe `HISTORY_START_COMPLEMENT_UNAVAILABLE`: a lacuna continua observável, mas o bootstrap global não repete automaticamente a mesma consulta em todas as execuções;
+6. `HISTORY_START_EXHAUSTED` só é usado quando existe evidência de complemento histórico utilizável ou quando a própria resposta inicial pode ser classificada como completa pelos gates do adapter;
+7. probes de diagnóstico de provider são superfícies read-only e nunca persistem `Asset`, metadata de provider ou `asset_prices`.
+
 ## Runtime normal
 
 Após o bootstrap:
