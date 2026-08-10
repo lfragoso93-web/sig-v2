@@ -237,7 +237,9 @@ async def _fetch_range(
             continue
         filtered.append((ts.astimezone(timezone.utc), float(close)))
 
-    if not filtered:
+    if filtered and asset_type == AssetType.CRIPTO and initial_history:
+        terminal_status = "HISTORY_START_EXHAUSTED"
+    elif not filtered:
         terminal_status = _empty_status(missing_range)
     if rejected:
         logger.warning(
