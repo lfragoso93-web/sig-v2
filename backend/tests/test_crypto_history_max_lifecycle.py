@@ -77,11 +77,11 @@ async def test_crypto_max_history_does_not_mark_exact_1000_rows_as_exhausted(mon
 async def test_truncated_crypto_start_uses_yahoo_usd_ptax_complement_and_keeps_brapi_primary(monkeypatch) -> None:
     usd_rows = [
         (datetime(2014, 9, 17, tzinfo=timezone.utc), 400.0),
-        (datetime(2023, 11, 15, tzinfo=timezone.utc), 35000.0),
+        (datetime(2023, 11, 14, tzinfo=timezone.utc), 35000.0),
     ]
     brl_rows = [
         (datetime(2014, 9, 17, tzinfo=timezone.utc), 960.0),
-        (datetime(2023, 11, 15, tzinfo=timezone.utc), 171500.0),
+        (datetime(2023, 11, 14, tzinfo=timezone.utc), 171500.0),
     ]
 
     async def fake_yahoo_max(symbol: str, asset_type: AssetType):
@@ -109,7 +109,7 @@ async def test_truncated_crypto_start_uses_yahoo_usd_ptax_complement_and_keeps_b
         AssetType.CRIPTO,
         MissingPriceRange(
             date_from=date(1900, 1, 1),
-            date_to=date(2023, 11, 20),
+            date_to=date(2023, 11, 14),
             reason="missing_start",
         ),
         crypto_start_truncated=True,
@@ -119,6 +119,49 @@ async def test_truncated_crypto_start_uses_yahoo_usd_ptax_complement_and_keeps_b
     assert source == "yfinance_crypto_ptax_brl_max"
     assert provider == "brapi"
     assert terminal_status == "HISTORY_START_EXHAUSTED"
+
+
+@pytest.mark.asyncio
+async def test_partial_truncated_crypto_complement_marks_gap(monkeypatch) -> None:
+    usd_rows = [
+        (datetime(2018, 10, 5, tzinfo=timezone.utc), 1.0),
+        (datetime(2023, 6, 9, tzinfo=timezone.utc), 2.0),
+    ]
+    brl_rows = [
+        (datetime(2018, 10, 5, tzinfo=timezone.utc), 4.0),
+        (datetime(2023, 6, 9, tzinfo=timezone.utc), 10.0),
+    ]
+
+    async def fake_yahoo_max(symbol: str, asset_type: AssetType):
+        assert symbol == "ACM-USD"
+        return usd_rows
+
+    async def fake_convert(rows):
+        assert rows == usd_rows
+        return brl_rows
+
+    monkeypatch.setattr(asset_price_gap_sync_service, "_fetch_yf_max", fake_yahoo_max)
+    monkeypatch.setattr(
+        asset_price_gap_sync_service,
+        "_convert_crypto_usd_rows_to_brl",
+        fake_convert,
+    )
+
+    rows, source, terminal_status, provider = await asset_price_gap_sync_service._fetch_range(
+        "ACM-BRL",
+        AssetType.CRIPTO,
+        MissingPriceRange(
+            date_from=date(1900, 1, 1),
+            date_to=date(2023, 11, 14),
+            reason="missing_start",
+        ),
+        crypto_start_truncated=True,
+    )
+
+    assert rows == brl_rows
+    assert source == "yfinance_crypto_ptax_brl_max"
+    assert provider == "brapi"
+    assert terminal_status == "HISTORY_START_COMPLEMENT_GAPPED"
 
 
 @pytest.mark.asyncio
@@ -144,7 +187,7 @@ async def test_empty_truncated_crypto_complement_marks_complement_unavailable(mo
         AssetType.CRIPTO,
         MissingPriceRange(
             date_from=date(1900, 1, 1),
-            date_to=date(2023, 11, 20),
+            date_to=date(2023, 11, 14),
             reason="missing_start",
         ),
         crypto_start_truncated=True,
@@ -187,6 +230,19 @@ def test_unavailable_crypto_complement_does_not_retry_automatically() -> None:
         first_price_date=date(2023, 11, 15),
         last_price_date=date(2026, 8, 10),
         provider_status="HISTORY_START_COMPLEMENT_UNAVAILABLE",
+    )
+
+    assert ranges == ()
+
+
+def test_gapped_crypto_complement_does_not_retry_automatically() -> None:
+    ranges = build_missing_ranges(
+        status=CoverageStatus.PARTIAL_START,
+        required_from=date(1900, 1, 1),
+        required_to=date(2026, 8, 10),
+        first_price_date=date(2018, 10, 5),
+        last_price_date=date(2026, 8, 10),
+        provider_status="HISTORY_START_COMPLEMENT_GAPPED",
     )
 
     assert ranges == ()
