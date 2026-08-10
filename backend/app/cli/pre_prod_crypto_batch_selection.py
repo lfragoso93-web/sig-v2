@@ -11,7 +11,7 @@ from app.core.database import AsyncSessionLocal
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
 
-DEFAULT_LIMIT = 20
+DEFAULT_LIMIT = 50
 MAX_LIMIT = 100
 
 
