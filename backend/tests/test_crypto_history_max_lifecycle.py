@@ -73,6 +73,42 @@ async def test_crypto_max_history_does_not_mark_exact_1000_rows_as_exhausted(mon
     assert terminal_status == "HISTORY_START_TRUNCATED"
 
 
+@pytest.mark.asyncio
+async def test_truncated_crypto_start_uses_yahoo_complement_and_keeps_brapi_primary(monkeypatch) -> None:
+    async def fake_yahoo_max(symbol: str, asset_type: AssetType):
+        assert symbol == "BTC-BRL"
+        assert asset_type == AssetType.CRIPTO
+        return [
+            (datetime(2014, 9, 17, tzinfo=timezone.utc), 1200.0),
+            (datetime(2023, 11, 15, tzinfo=timezone.utc), 130000.0),
+        ]
+
+    async def fail_brapi(_: str):
+        raise AssertionError("BRAPI max must not be retried for truncated missing_start")
+
+    monkeypatch.setattr(asset_price_gap_sync_service, "_fetch_yf_max", fake_yahoo_max)
+    monkeypatch.setattr(asset_price_gap_sync_service, "_fetch_crypto_history", fail_brapi)
+
+    rows, source, terminal_status, provider = await asset_price_gap_sync_service._fetch_range(
+        "BTC-BRL",
+        AssetType.CRIPTO,
+        MissingPriceRange(
+            date_from=date(1900, 1, 1),
+            date_to=date(2023, 11, 20),
+            reason="missing_start",
+        ),
+        crypto_start_truncated=True,
+    )
+
+    assert rows == [
+        (datetime(2014, 9, 17, tzinfo=timezone.utc), 1200.0),
+        (datetime(2023, 11, 15, tzinfo=timezone.utc), 130000.0),
+    ]
+    assert source == "yfinance_crypto_start_max"
+    assert provider == "brapi"
+    assert terminal_status == "HISTORY_START_EXHAUSTED"
+
+
 def test_exhausted_crypto_start_does_not_request_initial_history_again() -> None:
     ranges = build_missing_ranges(
         status=CoverageStatus.PARTIAL_START,
