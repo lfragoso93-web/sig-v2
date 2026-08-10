@@ -116,7 +116,8 @@ async def test_truncated_crypto_start_uses_yahoo_usd_ptax_complement_and_keeps_b
     )
 
     assert rows == brl_rows
-    assert source == "yfinance_crypto_usd_ptax_brl_start_max"
+    assert source == "yfinance_crypto_ptax_brl_max"
+    assert len(source) <= 30
     assert provider == "brapi"
     assert terminal_status == "HISTORY_START_EXHAUSTED"
 
@@ -151,7 +152,8 @@ async def test_empty_truncated_crypto_complement_keeps_truncated_status(monkeypa
     )
 
     assert rows == []
-    assert source == "yfinance_crypto_usd_ptax_brl_start_max"
+    assert source == "yfinance_crypto_ptax_brl_max"
+    assert len(source) <= 30
     assert provider == "brapi"
     assert terminal_status == "HISTORY_START_TRUNCATED"
 
