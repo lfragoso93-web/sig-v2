@@ -6,7 +6,7 @@ import logging
 import math
 import re
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 from sqlalchemy import func
@@ -289,7 +289,12 @@ async def _fetch_range(
         filtered.append((ts.astimezone(timezone.utc), float(close)))
 
     if filtered and crypto_start_complement:
-        terminal_status = "HISTORY_START_EXHAUSTED"
+        seam_complete = max(timestamp.date() for timestamp, _ in filtered) >= missing_range.date_to
+        terminal_status = (
+            "HISTORY_START_EXHAUSTED"
+            if seam_complete
+            else "HISTORY_START_COMPLEMENT_GAPPED"
+        )
     elif not filtered and crypto_start_complement:
         terminal_status = "HISTORY_START_COMPLEMENT_UNAVAILABLE"
     elif filtered and asset_type == AssetType.CRIPTO and initial_history:
@@ -391,11 +396,22 @@ async def sync_asset_price_gaps(coverage: AssetPriceCoverage) -> AssetGapSyncRes
         total_inserted = 0
         errors: list[str] = []
         for missing_range in ranges:
+            effective_range = missing_range
+            if (
+                crypto_start_truncated
+                and missing_range.reason == "missing_start"
+                and coverage.first_price_date is not None
+            ):
+                effective_range = MissingPriceRange(
+                    date_from=missing_range.date_from,
+                    date_to=coverage.first_price_date - timedelta(days=1),
+                    reason=missing_range.reason,
+                )
             try:
                 rows, source, terminal_status, provider = await _fetch_range(
                     provider_symbol,
                     asset_type,
-                    missing_range,
+                    effective_range,
                     crypto_start_truncated=crypto_start_truncated,
                 )
                 total_received += len(rows)
@@ -411,8 +427,8 @@ async def sync_asset_price_gaps(coverage: AssetPriceCoverage) -> AssetGapSyncRes
                 logger.exception(
                     "[price_gap_sync] falha ticker=%s intervalo=%s..%s",
                     coverage.ticker,
-                    missing_range.date_from,
-                    missing_range.date_to,
+                    effective_range.date_from,
+                    effective_range.date_to,
                 )
                 errors.append(str(exc))
 
