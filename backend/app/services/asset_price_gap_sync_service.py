@@ -107,6 +107,12 @@ def normalize_provider_symbol(ticker: str, asset_type: AssetType) -> str:
     return normalized
 
 
+def _yahoo_crypto_usd_symbol(provider_symbol: str) -> str:
+    normalized = str(provider_symbol or "").strip().upper()
+    base = normalized[:-4] if normalized.endswith("-BRL") else normalized.split("-", 1)[0]
+    return f"{base}-USD" if base else normalized
+
+
 def _is_valid_price(value: object) -> bool:
     try:
         numeric = float(value)
@@ -146,6 +152,37 @@ async def _fetch_yf_max(symbol: str, asset_type: AssetType) -> list[tuple[dateti
 
     resolved = symbol if asset_type == AssetType.CRIPTO else yf_ticker(symbol, asset_type)
     return await _run_yf_with_throttle(_fetch_yf_max_sync, resolved)
+
+
+async def _convert_crypto_usd_rows_to_brl(
+    rows: list[tuple[datetime, float]],
+) -> list[tuple[datetime, float]]:
+    if not rows:
+        return []
+
+    from app.services.fx_rate_reader import load_usd_brl_rates_for_dates
+
+    dates = [timestamp.date() for timestamp, _ in rows]
+    async with AsyncSessionLocal() as db:
+        rates = await load_usd_brl_rates_for_dates(db, dates)
+
+    converted: list[tuple[datetime, float]] = []
+    missing_fx = 0
+    for timestamp, close_usd in rows:
+        fixing = rates.get(timestamp.date())
+        if fixing is None:
+            missing_fx += 1
+            continue
+        close_brl = Decimal(str(close_usd)) * fixing.rate
+        converted.append((timestamp, float(close_brl)))
+
+    if missing_fx:
+        logger.warning(
+            "[price_gap_sync] crypto USD sem PTAX persistida: %d de %d linha(s)",
+            missing_fx,
+            len(rows),
+        )
+    return converted
 
 
 async def _fetch_crypto_history(ticker: str) -> tuple[list[tuple[datetime, float]], str, str]:
@@ -193,14 +230,17 @@ async def _fetch_range(
     source = ""
     terminal_status: str | None = None
     effective_provider = _default_provider(asset_type)
-
-    if (
+    crypto_start_complement = (
         asset_type == AssetType.CRIPTO
         and crypto_start_truncated
         and missing_range.reason == "missing_start"
-    ):
-        rows = await _fetch_yf_max(ticker, asset_type)
-        source = "yfinance_crypto_start_max"
+    )
+
+    if crypto_start_complement:
+        yahoo_symbol = _yahoo_crypto_usd_symbol(ticker)
+        usd_rows = await _fetch_yf_max(yahoo_symbol, asset_type)
+        rows = await _convert_crypto_usd_rows_to_brl(usd_rows)
+        source = "yfinance_crypto_usd_ptax_brl_start_max"
         effective_provider = "brapi"
     elif asset_type == AssetType.CRIPTO:
         rows, source, effective_provider = await _fetch_crypto_history(ticker)
@@ -248,13 +288,10 @@ async def _fetch_range(
             continue
         filtered.append((ts.astimezone(timezone.utc), float(close)))
 
-    if (
-        filtered
-        and asset_type == AssetType.CRIPTO
-        and crypto_start_truncated
-        and missing_range.reason == "missing_start"
-    ):
+    if filtered and crypto_start_complement:
         terminal_status = "HISTORY_START_EXHAUSTED"
+    elif not filtered and crypto_start_complement:
+        terminal_status = "HISTORY_START_TRUNCATED"
     elif filtered and asset_type == AssetType.CRIPTO and initial_history:
         terminal_status = (
             "HISTORY_START_TRUNCATED"
