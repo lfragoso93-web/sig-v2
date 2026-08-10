@@ -37,3 +37,13 @@ def test_crypto_history_seed_can_scope_dry_run_and_execution_by_ticker() -> None
     assert "item.ticker.upper() in tickers" in source
     assert "return await _dry_run(args.required_to, normalized_tickers)" in source
     assert "tickers=normalized_tickers" in source
+
+
+def test_crypto_history_real_seed_requires_explicit_bounded_batch() -> None:
+    source = _source()
+
+    assert "MAX_TICKERS_PER_RUN = 20" in source
+    assert "if normalized_tickers is None:" in source
+    assert "execucao real exige ao menos um --ticker" in source
+    assert "if len(normalized_tickers) > MAX_TICKERS_PER_RUN:" in source
+    assert "execucao real limitada a 20 tickers" in source
