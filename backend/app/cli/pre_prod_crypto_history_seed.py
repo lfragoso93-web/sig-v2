@@ -20,11 +20,19 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--required-to", type=date.fromisoformat, default=None)
     parser.add_argument("--concurrency", type=int, default=4)
+    parser.add_argument("--ticker", action="append", default=None)
     parser.add_argument("--dry-run", action="store_true")
     return parser
 
 
-async def _dry_run(required_to: date | None) -> dict:
+def _normalize_tickers(values: list[str] | None) -> set[str] | None:
+    if values is None:
+        return None
+    normalized = {str(value).strip().upper() for value in values if str(value).strip()}
+    return normalized or None
+
+
+async def _dry_run(required_to: date | None, tickers: set[str] | None = None) -> dict:
     async with AsyncSessionLocal() as db:
         coverage = await audit_asset_price_coverage(
             db,
@@ -32,7 +40,12 @@ async def _dry_run(required_to: date | None) -> dict:
             full_history=True,
         )
 
-    crypto = [item for item in coverage if item.asset_type == AssetType.CRIPTO.value]
+    crypto = [
+        item
+        for item in coverage
+        if item.asset_type == AssetType.CRIPTO.value
+        and (tickers is None or item.ticker.upper() in tickers)
+    ]
     candidates = [item for item in crypto if item.needs_sync and item.asset_id is not None]
     return {
         "dry_run": True,
@@ -59,14 +72,16 @@ async def _dry_run(required_to: date | None) -> dict:
 
 
 async def _run(args: argparse.Namespace) -> dict:
+    normalized_tickers = _normalize_tickers(args.ticker)
     if args.dry_run:
-        return await _dry_run(args.required_to)
+        return await _dry_run(args.required_to, normalized_tickers)
 
     concurrency = min(MAX_CONCURRENCY, max(1, args.concurrency))
     return await run_global_asset_price_backfill(
         required_to=args.required_to,
         concurrency=concurrency,
         asset_types={AssetType.CRIPTO.value},
+        tickers=normalized_tickers,
     )
 
 
