@@ -45,10 +45,16 @@ async def run_global_asset_price_backfill(
     history_start: date = MAX_HISTORY_START,
     concurrency: int = _GLOBAL_SYNC_CONCURRENCY,
     asset_types: set[str] | None = None,
+    tickers: set[str] | None = None,
 ) -> dict:
     normalized_asset_types = (
         {str(asset_type).upper() for asset_type in asset_types}
         if asset_types is not None
+        else None
+    )
+    normalized_tickers = (
+        {str(ticker).strip().upper() for ticker in tickers if str(ticker).strip()}
+        if tickers is not None
         else None
     )
     if _global_backfill_lock.locked():
@@ -77,7 +83,8 @@ async def run_global_asset_price_backfill(
         scoped_coverage = [
             item
             for item in coverage
-            if normalized_asset_types is None or item.asset_type in normalized_asset_types
+            if (normalized_asset_types is None or item.asset_type in normalized_asset_types)
+            and (normalized_tickers is None or item.ticker.upper() in normalized_tickers)
         ]
         missing_assets = [item for item in scoped_coverage if item.asset_id is None]
         dedicated_provider_assets = [
