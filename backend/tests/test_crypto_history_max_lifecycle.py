@@ -160,8 +160,14 @@ async def test_empty_truncated_crypto_complement_keeps_truncated_status(monkeypa
 
 def test_complement_source_fits_asset_price_schema() -> None:
     source_column = asset_price_gap_sync_service.AssetPrice.__table__.c.source
+    source = "yfinance_crypto_ptax_brl_max"
+
     assert source_column.type.length == 30
-    assert len("yfinance_crypto_ptax_brl_max") <= source_column.type.length
+    assert len(source) <= source_column.type.length
+    assert "yfinance" in source
+    assert "crypto" in source
+    assert "ptax" in source
+    assert "brl" in source
 
 
 def test_exhausted_crypto_start_does_not_request_initial_history_again() -> None:
