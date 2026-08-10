@@ -117,7 +117,6 @@ async def test_truncated_crypto_start_uses_yahoo_usd_ptax_complement_and_keeps_b
 
     assert rows == brl_rows
     assert source == "yfinance_crypto_ptax_brl_max"
-    assert len(source) <= 30
     assert provider == "brapi"
     assert terminal_status == "HISTORY_START_EXHAUSTED"
 
@@ -153,7 +152,6 @@ async def test_empty_truncated_crypto_complement_keeps_truncated_status(monkeypa
 
     assert rows == []
     assert source == "yfinance_crypto_ptax_brl_max"
-    assert len(source) <= 30
     assert provider == "brapi"
     assert terminal_status == "HISTORY_START_TRUNCATED"
 
@@ -163,13 +161,9 @@ def test_complement_source_fits_asset_price_schema() -> None:
     source = "yfinance_crypto_ptax_brl_max"
 
     assert source_column.type.length == 30
-    # `asset_prices.source` is intentionally VARCHAR(30); provenance tokens must fit it.
     assert len(source) == 28
     assert len(source) <= source_column.type.length
-    assert "yfinance" in source
-    assert "crypto" in source
-    assert "ptax" in source
-    assert "brl" in source
+    assert {"yfinance", "crypto", "ptax", "brl"}.issubset(source.split("_"))
 
 
 def test_exhausted_crypto_start_does_not_request_initial_history_again() -> None:
