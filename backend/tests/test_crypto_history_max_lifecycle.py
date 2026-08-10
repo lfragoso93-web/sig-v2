@@ -122,7 +122,7 @@ async def test_truncated_crypto_start_uses_yahoo_usd_ptax_complement_and_keeps_b
 
 
 @pytest.mark.asyncio
-async def test_empty_truncated_crypto_complement_keeps_truncated_status(monkeypatch) -> None:
+async def test_empty_truncated_crypto_complement_marks_complement_unavailable(monkeypatch) -> None:
     async def fake_yahoo_max(symbol: str, asset_type: AssetType):
         assert symbol == "BTC-USD"
         assert asset_type == AssetType.CRIPTO
@@ -153,7 +153,7 @@ async def test_empty_truncated_crypto_complement_keeps_truncated_status(monkeypa
     assert rows == []
     assert source == "yfinance_crypto_ptax_brl_max"
     assert provider == "brapi"
-    assert terminal_status == "HISTORY_START_TRUNCATED"
+    assert terminal_status == "HISTORY_START_COMPLEMENT_UNAVAILABLE"
 
 
 def test_complement_source_fits_asset_price_schema() -> None:
@@ -174,6 +174,19 @@ def test_exhausted_crypto_start_does_not_request_initial_history_again() -> None
         first_price_date=date(2013, 4, 28),
         last_price_date=date(2026, 8, 10),
         provider_status="HISTORY_START_EXHAUSTED",
+    )
+
+    assert ranges == ()
+
+
+def test_unavailable_crypto_complement_does_not_retry_automatically() -> None:
+    ranges = build_missing_ranges(
+        status=CoverageStatus.PARTIAL_START,
+        required_from=date(1900, 1, 1),
+        required_to=date(2026, 8, 10),
+        first_price_date=date(2023, 11, 15),
+        last_price_date=date(2026, 8, 10),
+        provider_status="HISTORY_START_COMPLEMENT_UNAVAILABLE",
     )
 
     assert ranges == ()
