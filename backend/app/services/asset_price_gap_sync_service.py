@@ -185,6 +185,8 @@ async def _fetch_range(
     ticker: str,
     asset_type: AssetType,
     missing_range: MissingPriceRange,
+    *,
+    crypto_start_truncated: bool = False,
 ) -> tuple[list[tuple[datetime, float]], str, str | None, str]:
     initial_history = missing_range.reason in _INITIAL_RANGE_REASONS
     rows: list[tuple[datetime, float]] = []
@@ -192,7 +194,15 @@ async def _fetch_range(
     terminal_status: str | None = None
     effective_provider = _default_provider(asset_type)
 
-    if asset_type == AssetType.CRIPTO:
+    if (
+        asset_type == AssetType.CRIPTO
+        and crypto_start_truncated
+        and missing_range.reason == "missing_start"
+    ):
+        rows = await _fetch_yf_max(ticker, asset_type)
+        source = "yfinance_crypto_start_max"
+        effective_provider = "brapi"
+    elif asset_type == AssetType.CRIPTO:
         rows, source, effective_provider = await _fetch_crypto_history(ticker)
     elif asset_type in INTL_TYPES:
         if initial_history:
@@ -238,7 +248,14 @@ async def _fetch_range(
             continue
         filtered.append((ts.astimezone(timezone.utc), float(close)))
 
-    if filtered and asset_type == AssetType.CRIPTO and initial_history:
+    if (
+        filtered
+        and asset_type == AssetType.CRIPTO
+        and crypto_start_truncated
+        and missing_range.reason == "missing_start"
+    ):
+        terminal_status = "HISTORY_START_EXHAUSTED"
+    elif filtered and asset_type == AssetType.CRIPTO and initial_history:
         terminal_status = (
             "HISTORY_START_TRUNCATED"
             if source == "brapi_v2_crypto_max" and len(filtered) >= _CRYPTO_MAX_ROWS_SUSPECT_LIMIT
@@ -327,6 +344,10 @@ async def sync_asset_price_gaps(coverage: AssetPriceCoverage) -> AssetGapSyncRes
         )
 
     provider_symbol = normalize_provider_symbol(coverage.ticker, asset_type)
+    crypto_start_truncated = (
+        asset_type == AssetType.CRIPTO
+        and str(coverage.provider_status or "").upper() == "HISTORY_START_TRUNCATED"
+    )
     lock = await _lock_for(coverage.asset_id)
     async with lock:
         total_received = 0
@@ -338,6 +359,7 @@ async def sync_asset_price_gaps(coverage: AssetPriceCoverage) -> AssetGapSyncRes
                     provider_symbol,
                     asset_type,
                     missing_range,
+                    crypto_start_truncated=crypto_start_truncated,
                 )
                 total_received += len(rows)
                 total_inserted += await _persist_result(
