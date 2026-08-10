@@ -16,6 +16,7 @@ EXPECTED_ROWS = 1000
 EXPECTED_FIRST_DATE = date(2023, 11, 15)
 EXPECTED_LAST_DATE = date(2026, 8, 10)
 EXPECTED_SOURCE = "brapi_v2_crypto_max"
+EXPECTED_PROVIDER_ATTEMPTS = 2
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -73,8 +74,8 @@ async def _inspect_asset(db, ticker: str) -> dict:
         reasons.append("provider_symbol_mismatch")
     if str(asset.provider_status or "") != "HISTORY_START_EXHAUSTED":
         reasons.append("provider_status_not_legacy_exhausted")
-    if int(asset.provider_attempts or 0) != 1:
-        reasons.append("provider_attempts_not_one")
+    if int(asset.provider_attempts or 0) != EXPECTED_PROVIDER_ATTEMPTS:
+        reasons.append("provider_attempts_mismatch")
     if int(row_count or 0) != EXPECTED_ROWS:
         reasons.append("row_count_mismatch")
     if first_date != EXPECTED_FIRST_DATE:
@@ -112,6 +113,7 @@ async def _run(args: argparse.Namespace) -> dict:
                     .where(
                         Asset.id == item["asset_id"],
                         Asset.provider_status == "HISTORY_START_EXHAUSTED",
+                        Asset.provider_attempts == EXPECTED_PROVIDER_ATTEMPTS,
                     )
                     .values(provider_status="HISTORY_START_TRUNCATED")
                 )
