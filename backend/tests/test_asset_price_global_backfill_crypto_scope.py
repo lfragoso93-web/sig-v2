@@ -22,6 +22,14 @@ def test_global_backfill_can_scope_candidates_to_crypto() -> None:
     assert "scoped_coverage" in source
 
 
+def test_global_backfill_can_scope_candidates_to_tickers() -> None:
+    source = _source()
+
+    assert "tickers: set[str] | None = None" in source
+    assert "normalized_tickers" in source
+    assert "item.ticker.upper() in normalized_tickers" in source
+
+
 def test_crypto_scope_does_not_reopen_dedicated_price_types() -> None:
     source = _source()
 
