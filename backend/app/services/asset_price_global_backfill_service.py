@@ -44,7 +44,13 @@ async def run_global_asset_price_backfill(
     required_to: date | None = None,
     history_start: date = MAX_HISTORY_START,
     concurrency: int = _GLOBAL_SYNC_CONCURRENCY,
+    asset_types: set[str] | None = None,
 ) -> dict:
+    normalized_asset_types = (
+        {str(asset_type).upper() for asset_type in asset_types}
+        if asset_types is not None
+        else None
+    )
     if _global_backfill_lock.locked():
         logger.info("[global_price_backfill] ja em execucao — ignorando nova chamada")
         return {
@@ -68,16 +74,21 @@ async def run_global_asset_price_backfill(
                 history_start=history_start,
             )
 
-        missing_assets = [item for item in coverage if item.asset_id is None]
-        dedicated_provider_assets = [
+        scoped_coverage = [
             item
             for item in coverage
+            if normalized_asset_types is None or item.asset_type in normalized_asset_types
+        ]
+        missing_assets = [item for item in scoped_coverage if item.asset_id is None]
+        dedicated_provider_assets = [
+            item
+            for item in scoped_coverage
             if item.asset_id is not None
             and item.asset_type in _DEDICATED_BOOTSTRAP_PRICE_TYPES
         ]
         candidates = [
             item
-            for item in coverage
+            for item in scoped_coverage
             if item.needs_sync
             and item.asset_id is not None
             and item.asset_type not in _DEDICATED_BOOTSTRAP_PRICE_TYPES
@@ -85,7 +96,7 @@ async def run_global_asset_price_backfill(
         results = await _sync_candidates(candidates, concurrency=concurrency)
         payload = {
             "running": False,
-            "audited": len(coverage),
+            "audited": len(scoped_coverage),
             "requested": len(results),
             "inserted": sum(item.rows_inserted for item in results),
             "errors": sum(1 for item in results if item.error),
