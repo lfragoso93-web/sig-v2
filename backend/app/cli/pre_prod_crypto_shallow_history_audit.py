@@ -13,6 +13,7 @@ from app.models.asset_price import AssetPrice
 
 SHALLOW_MAX_ROWS = 7
 SHALLOW_MAX_AGE_DAYS = 30
+VERIFIED_SHALLOW_STATUS = "HISTORY_START_SHALLOW_VERIFIED"
 
 
 async def _run(*, required_to: date | None = None) -> dict:
@@ -47,6 +48,10 @@ async def _run(*, required_to: date | None = None) -> dict:
                 .where(Asset.asset_type == AssetType.CRIPTO.value)
                 .where(stats.c.rows <= SHALLOW_MAX_ROWS)
                 .where(func.date(stats.c.first_ts) >= cutoff)
+                .where(
+                    (Asset.provider_status.is_(None))
+                    | (Asset.provider_status != VERIFIED_SHALLOW_STATUS)
+                )
                 .order_by(Asset.ticker)
             )
         ).all()
