@@ -10,7 +10,9 @@ from app.cli import pre_prod_crypto_seam_audit, pre_prod_crypto_shallow_history_
 from app.core.database import AsyncSessionLocal
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
-from app.services.crypto_supported_universe_service import fetch_supported_crypto_tickers
+from app.services.crypto_supported_universe_service import (
+    fetch_supported_crypto_tickers,
+)
 
 BLOCKING_STATUSES = (
     "HISTORY_START_TRUNCATED",
