@@ -5,8 +5,12 @@ import inspect
 import textwrap
 
 import pytest
+from fastapi import HTTPException
 
 from app.routers import transactions
+from app.services.crypto_transaction_eligibility_service import (
+    CryptoTransactionEligibilityError,
+)
 
 
 def _top_level_call_index(function, call_name: str) -> int:
@@ -97,3 +101,26 @@ async def test_non_crypto_transaction_skips_crypto_eligibility(monkeypatch) -> N
     await transactions._validate_crypto_transaction_asset(object(), "PETR4", "ACAO")
 
     assert called is False
+
+
+@pytest.mark.asyncio
+async def test_rejected_crypto_is_exposed_as_unprocessable_entity(monkeypatch) -> None:
+    async def _reject(_db, ticker):
+        raise CryptoTransactionEligibilityError(
+            ticker=ticker,
+            reason="histórico financeiro não certificado",
+            provider_status="HISTORY_START_COMPLEMENT_GAPPED",
+        )
+
+    monkeypatch.setattr(
+        transactions,
+        "require_financially_certified_crypto_asset",
+        _reject,
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await transactions._validate_crypto_transaction_asset(object(), "APT", "CRIPTO")
+
+    assert exc_info.value.status_code == 422
+    assert "APT" in str(exc_info.value.detail)
+    assert "HISTORY_START_COMPLEMENT_GAPPED" in str(exc_info.value.detail)
