@@ -65,7 +65,8 @@ Regras:
 10. `HISTORY_UNAVAILABLE` é terminal somente quando a tentativa inicial não produz nenhuma linha utilizável nem na BRAPI nem no Yahoo USD/PTAX; esse estado não entra em retry automático e permanece observável para auditoria;
 11. resposta inicial BRAPI excessivamente rasa e recente (até 7 linhas, com início nos 30 dias anteriores ao `required_to`) recebe `HISTORY_START_SHALLOW`; esse estado é bloqueante para readiness, não entra em retry automático e exige probe/reconciliação deliberada antes de qualquer complemento;
 12. shallow history existente só é elegível à recuperação quando uma probe Yahoo `max` comprova histórico anterior à primeira data BRAPI persistida (`recoverable_shallow`); recuperação é opt-in, limitada por lote, preserva a linha BRAPI existente e persiste somente Yahoo USD/PTAX anterior à janela BRAPI, mantendo `GAPPED`/`UNAVAILABLE` como findings bloqueantes quando a costura não puder ser certificada;
-13. probes de diagnóstico de provider são superfícies read-only e nunca persistem `Asset`, metadata de provider ou `asset_prices`.
+13. quando essa recuperação comprova costura contínua até a véspera da janela BRAPI, mas o histórico completo disponível continua naturalmente curto (até 7 linhas dentro da janela de 30 dias), o ativo recebe `HISTORY_START_SHALLOW_VERIFIED`; esse status registra shallow legítimo/verificado e não bloqueia readiness nem entra novamente na auditoria de shallow não reconciliado;
+14. probes de diagnóstico de provider são superfícies read-only e nunca persistem `Asset`, metadata de provider ou `asset_prices`.
 
 ## Runtime normal
 
