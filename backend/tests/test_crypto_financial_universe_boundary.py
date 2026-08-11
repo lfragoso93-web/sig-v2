@@ -1,7 +1,10 @@
 from pathlib import Path
 
 from app.models.asset_universe_membership import AssetUniverseMembership
-from app.services.asset_universe_membership_service import CRYPTO_TOP100_UNIVERSE_KEY
+from app.services.asset_universe_membership_service import (
+    CRYPTO_TOP100_UNIVERSE_KEY,
+    CRYPTO_TOP100_UNIVERSE_SOURCE,
+)
 from app.services.crypto_financial_certification_service import (
     FINANCIALLY_CERTIFIED_CRYPTO_STATUSES,
 )
@@ -22,6 +25,9 @@ def test_asset_universe_membership_metadata_contract() -> None:
         "refreshed_at",
     }
     assert CRYPTO_TOP100_UNIVERSE_KEY == "crypto_top100_market_cap"
+    assert CRYPTO_TOP100_UNIVERSE_SOURCE == "coingecko_market_cap_intersect_brapi"
+    assert table.c.source.type.length == 64
+    assert len(CRYPTO_TOP100_UNIVERSE_SOURCE) <= table.c.source.type.length
 
 
 def test_seed_persists_candidate_universe_snapshot() -> None:
