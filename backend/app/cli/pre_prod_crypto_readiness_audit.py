@@ -14,6 +14,7 @@ from app.models.asset_price import AssetPrice
 BLOCKING_STATUSES = (
     "HISTORY_START_TRUNCATED",
     "HISTORY_START_COMPLEMENT_GAPPED",
+    "HISTORY_START_SHALLOW",
 )
 
 
