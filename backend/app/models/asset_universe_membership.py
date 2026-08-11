@@ -42,7 +42,7 @@ class AssetUniverseMembership(Base):
     )
     universe_key = Column(String(64), nullable=False)
     rank = Column(Integer, nullable=True)
-    source = Column(String(32), nullable=False)
+    source = Column(String(64), nullable=False)
     refreshed_at = Column(
         DateTime(timezone=True),
         nullable=False,
