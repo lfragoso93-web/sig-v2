@@ -7,10 +7,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset, AssetType
+from app.models.asset_universe_membership import AssetUniverseMembership
+from app.services.asset_universe_membership_service import CRYPTO_TOP100_UNIVERSE_KEY
+from app.services.crypto_financial_certification_service import (
+    FINANCIALLY_CERTIFIED_CRYPTO_STATUSES,
+)
 
 
 @dataclass(frozen=True)
@@ -40,6 +45,25 @@ def _normalize_filter(asset_type: str | None) -> tuple[str, ...] | None:
     return aliases.get(value, (value,))
 
 
+def _certified_crypto_catalog_predicate():
+    candidate_membership = (
+        select(AssetUniverseMembership.id)
+        .where(AssetUniverseMembership.asset_id == Asset.id)
+        .where(
+            AssetUniverseMembership.universe_key == CRYPTO_TOP100_UNIVERSE_KEY
+        )
+        .exists()
+    )
+    return or_(
+        Asset.asset_type != AssetType.CRIPTO.value,
+        and_(
+            Asset.asset_type == AssetType.CRIPTO.value,
+            Asset.provider_status.in_(FINANCIALLY_CERTIFIED_CRYPTO_STATUSES),
+            candidate_membership,
+        ),
+    )
+
+
 async def suggest_assets_from_catalog(
     db: AsyncSession,
     query: str,
@@ -47,7 +71,7 @@ async def suggest_assets_from_catalog(
     limit: int = 10,
     asset_type: str | None = None,
 ) -> list[AssetCatalogSuggestion]:
-    """Busca ticker/nome exclusivamente no catálogo persistido."""
+    """Busca ticker/nome exclusivamente no catálogo persistido e certificado."""
     normalized = query.strip().upper()
     if not normalized:
         return []
@@ -57,7 +81,8 @@ async def suggest_assets_from_catalog(
         or_(
             func.upper(Asset.ticker).like(like),
             func.upper(func.coalesce(Asset.name, "")).like(like),
-        )
+        ),
+        _certified_crypto_catalog_predicate(),
     )
 
     allowed_types = _normalize_filter(asset_type)
