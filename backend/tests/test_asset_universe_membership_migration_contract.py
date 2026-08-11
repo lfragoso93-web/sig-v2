@@ -11,7 +11,8 @@ MIGRATION = (
 def test_asset_universe_membership_migration_is_chained_and_reversible() -> None:
     source = MIGRATION.read_text(encoding="utf-8")
 
-    assert 'revision: str = "20260811_asset_universe_memberships"' in source
+    assert 'revision: str = "20260811_asset_universe_map"' in source
+    assert len("20260811_asset_universe_map") <= 32
     assert 'down_revision: str = "20260807_pos_snap_ts_nn"' in source
     assert '"asset_universe_memberships"' in source
     assert '"uq_asset_universe_membership_asset_universe"' in source
