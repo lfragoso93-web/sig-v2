@@ -12,6 +12,9 @@ from app.services import asset_price_gap_sync_service
 
 MAX_TICKERS_PER_RECOVERY = 20
 SOURCE = "yfinance_crypto_ptax_brl_max"
+SHALLOW_MAX_ROWS = 7
+SHALLOW_MAX_AGE_DAYS = 30
+VERIFIED_SHALLOW_STATUS = "HISTORY_START_SHALLOW_VERIFIED"
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -23,6 +26,24 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--required-to", default=None)
     parser.add_argument("--apply", action="store_true")
     return parser
+
+
+def _continuous_terminal_status(
+    complement_rows: list[tuple],
+    *,
+    brapi_first: date,
+) -> str:
+    expected_end = brapi_first - timedelta(days=1)
+    actual_end = max(timestamp.date() for timestamp, _ in complement_rows)
+    if actual_end < expected_end:
+        return "HISTORY_START_COMPLEMENT_GAPPED"
+
+    total_rows = len(complement_rows) + 1  # preserva a linha BRAPI existente
+    first_date = min(timestamp.date() for timestamp, _ in complement_rows)
+    shallow_cutoff = brapi_first - timedelta(days=SHALLOW_MAX_AGE_DAYS)
+    if total_rows <= SHALLOW_MAX_ROWS and first_date >= shallow_cutoff:
+        return VERIFIED_SHALLOW_STATUS
+    return "HISTORY_START_EXHAUSTED"
 
 
 async def _recover_one(item: dict, *, apply: bool) -> dict:
@@ -56,12 +77,9 @@ async def _recover_one(item: dict, *, apply: bool) -> dict:
     if not complement_rows:
         terminal_status = "HISTORY_START_COMPLEMENT_UNAVAILABLE"
     else:
-        expected_end = brapi_first - timedelta(days=1)
-        actual_end = max(timestamp.date() for timestamp, _ in complement_rows)
-        terminal_status = (
-            "HISTORY_START_EXHAUSTED"
-            if actual_end >= expected_end
-            else "HISTORY_START_COMPLEMENT_GAPPED"
+        terminal_status = _continuous_terminal_status(
+            complement_rows,
+            brapi_first=brapi_first,
         )
 
     provider_symbol = str(item.get("provider_symbol") or f"{ticker}-BRL")
