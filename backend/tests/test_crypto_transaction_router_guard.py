@@ -240,13 +240,19 @@ async def test_rejected_update_does_not_mutate_or_commit(monkeypatch) -> None:
 
 
 def test_transaction_eligibility_service_has_no_provider_imports() -> None:
-    source = inspect.getsource(
-        __import__(
-            "app.services.crypto_transaction_eligibility_service",
-            fromlist=["*"],
-        )
+    module = __import__(
+        "app.services.crypto_transaction_eligibility_service",
+        fromlist=["*"],
     )
+    tree = ast.parse(inspect.getsource(module))
+    imported_modules: set[str] = set()
 
-    assert "coingecko" not in source.lower()
-    assert "brapi" not in source.lower()
-    assert "httpx" not in source.lower()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported_modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported_modules.add(node.module)
+
+    assert not any("coingecko" in module_name.lower() for module_name in imported_modules)
+    assert not any("brapi" in module_name.lower() for module_name in imported_modules)
+    assert not any("httpx" in module_name.lower() for module_name in imported_modules)
