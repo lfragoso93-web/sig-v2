@@ -64,7 +64,8 @@ Regras:
 9. `HISTORY_START_EXHAUSTED` só é usado quando existe evidência de complemento histórico utilizável e contínuo até a janela BRAPI, quando Yahoo USD/PTAX fornece histórico inicial utilizável após BRAPI vazio, ou quando a própria resposta inicial da BRAPI pode ser classificada como completa pelos gates do adapter;
 10. `HISTORY_UNAVAILABLE` é terminal somente quando a tentativa inicial não produz nenhuma linha utilizável nem na BRAPI nem no Yahoo USD/PTAX; esse estado não entra em retry automático e permanece observável para auditoria;
 11. resposta inicial BRAPI excessivamente rasa e recente (até 7 linhas, com início nos 30 dias anteriores ao `required_to`) recebe `HISTORY_START_SHALLOW`; esse estado é bloqueante para readiness, não entra em retry automático e exige probe/reconciliação deliberada antes de qualquer complemento;
-12. probes de diagnóstico de provider são superfícies read-only e nunca persistem `Asset`, metadata de provider ou `asset_prices`.
+12. shallow history só é classificado como recuperável quando uma probe Yahoo `period=max` demonstra primeira data anterior à primeira data BRAPI persistida; a recuperação é opt-in, limitada a 20 ativos, preserva a linha BRAPI existente e persiste somente complemento Yahoo USD→PTAX→BRL anterior à janela BRAPI;
+13. probes de diagnóstico de provider são superfícies read-only e nunca persistem `Asset`, metadata de provider ou `asset_prices`.
 
 ## Runtime normal
 
