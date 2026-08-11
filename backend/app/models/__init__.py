@@ -2,6 +2,7 @@ from app.models.asset import Asset
 from app.models.asset_alias import AssetAlias
 from app.models.asset_dividend import AssetDividend
 from app.models.asset_price import AssetPrice
+from app.models.asset_universe_membership import AssetUniverseMembership
 from app.models.audit_log import AuditAction, AuditLog
 from app.models.corporate_event import CorporateEvent
 from app.models.fixed_income import FixedIncomeInvestment
@@ -22,6 +23,7 @@ __all__ = [
     "AssetAlias",
     "AssetDividend",
     "AssetPrice",
+    "AssetUniverseMembership",
     "AuditAction",
     "AuditLog",
     "CorporateEvent",
