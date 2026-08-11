@@ -15,7 +15,12 @@ BRAPI_SOURCE = "brapi_v2_crypto_max"
 COMPLEMENT_SOURCE = "yfinance_crypto_ptax_brl_max"
 
 
-async def _run() -> dict:
+async def _run(*, tickers: set[str] | None = None) -> dict:
+    normalized_tickers = (
+        {str(ticker).strip().upper() for ticker in tickers if str(ticker).strip()}
+        if tickers is not None
+        else None
+    )
     stmt = (
         select(
             Asset.id.label("asset_id"),
@@ -32,17 +37,18 @@ async def _run() -> dict:
         .join(AssetPrice, AssetPrice.asset_id == Asset.id)
         .where(Asset.asset_type == AssetType.CRIPTO.value)
         .where(AssetPrice.source.in_((BRAPI_SOURCE, COMPLEMENT_SOURCE)))
-        .group_by(
-            Asset.id,
-            Asset.ticker,
-            Asset.provider,
-            Asset.provider_symbol,
-            Asset.provider_status,
-            Asset.provider_attempts,
-            AssetPrice.source,
-        )
-        .order_by(Asset.ticker.asc(), AssetPrice.source.asc())
     )
+    if normalized_tickers is not None:
+        stmt = stmt.where(func.upper(Asset.ticker).in_(normalized_tickers))
+    stmt = stmt.group_by(
+        Asset.id,
+        Asset.ticker,
+        Asset.provider,
+        Asset.provider_symbol,
+        Asset.provider_status,
+        Asset.provider_attempts,
+        AssetPrice.source,
+    ).order_by(Asset.ticker.asc(), AssetPrice.source.asc())
 
     async with AsyncSessionLocal() as db:
         rows = (await db.execute(stmt)).all()
