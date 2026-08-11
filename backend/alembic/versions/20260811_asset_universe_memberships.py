@@ -1,6 +1,6 @@
 """add persisted asset universe memberships
 
-Revision ID: 20260811_asset_universe_memberships
+Revision ID: 20260811_asset_universe_map
 Revises: 20260807_pos_snap_ts_nn
 """
 
@@ -9,7 +9,7 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "20260811_asset_universe_memberships"
+revision: str = "20260811_asset_universe_map"
 down_revision: str = "20260807_pos_snap_ts_nn"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
