@@ -19,8 +19,9 @@
 - #248 — bootstrap certificado, cobertura CRIPTO e fronteira única de providers.
 - #249 — readiness explícito do bootstrap — **concluída**.
 - #250 — orquestrador global do bootstrap e exceções de provider/lifecycle.
+- #267 — universo CRIPTO suportado limitado às Top 100 por capitalização.
 - #254 — integração estrutural de eventos corporativos ao bootstrap — wrapper, testes e integração v4 publicados; validação integrada ainda pendente.
-- #265 — shallow histories CRIPTO — **concluída em 11/08/2026** com fila rasa zerada.
+- #265 — shallow histories CRIPTO — **concluída em 11/08/2026** com fila rasa zerada no universo amplo auditado.
 - #226 — Proventos: contrato reutilizado pelo bootstrap, mas execução real continua bloqueada.
 - #129 — eventos corporativos: núcleo consolidado; permanece aberta para auditoria residual de consumidores/aliases/provider boundaries.
 
@@ -37,24 +38,25 @@ Antes da primeira carteira real, o banco deve estar carregado e reconciliado por
 - CRUD de usuário/transações não dispara onboarding, seed ou backfill externo;
 - catálogo, metadados, Proventos, eventos, benchmarks e câmbio não são sincronizados por jobs recorrentes.
 
-No bootstrap inicial, cada domínio busca a maior cobertura válida suportada por sua fonte canônica. Não existe uma data inicial global arbitrária compartilhada entre preços, FX, Proventos e eventos.
+## Política CRIPTO Top 100 — #267
 
-## Liveness, bootstrap e readiness
+A existência de um símbolo no catálogo BRAPI não significa suporte operacional automático pelo SGI.
 
-Esses conceitos são distintos:
+Contrato canônico:
 
-1. `/health` indica que o processo e suas dependências básicas estão vivos e também expõe o estado do bootstrap.
-2. `system-bootstrap.v4` executa as etapas integradas e produz relatório fail-fast por etapa.
-3. Todos os domínios externos obrigatórios já estão representados estruturalmente, mas isso **não** libera dados reais enquanto #248/#227 não certificarem cobertura, idempotência e gates.
-4. `/ready` retorna sucesso somente quando `ready_for_real_data=true`.
+1. CoinGecko `/coins/markets` define a relevância por capitalização de mercado;
+2. são considerados no máximo os Top 100 por `market_cap_rank`;
+3. o universo suportado é a interseção desse Top 100 com os símbolos disponíveis no catálogo CRIPTO da BRAPI;
+4. CoinGecko é usado somente no bootstrap para ranking de relevância; BRAPI permanece a integração de disponibilidade/cotações do SGI;
+5. ativos CRIPTO já persistidos fora do universo suportado são preservados e auditáveis, sem alteração artificial de lifecycle;
+6. seed, backfill histórico inicial e readiness CRIPTO devem usar o mesmo universo suportado;
+7. ativos fora desse universo não bloqueiam readiness CRIPTO.
 
-Estados do bootstrap em memória: `not_started`, `running`, `ready`, `failed`.
+Não foi criada migration nem campo novo em `assets` neste bloco. O contrato é derivado dinamicamente durante bootstrap/readiness para evitar persistência estrutural prematura antes da validação operacional.
 
-O campo `certified_for_real_data` permanece `false`. Portanto, mesmo um relatório verde parcial não é autorização de go-live.
+## Checkpoint CRIPTO amplo anterior — 11/08/2026
 
-## Checkpoint CRIPTO — 11/08/2026
-
-BC/BD foram certificados localmente no HEAD `9772b8c2bdb9875d85abc4a72ed0bebea39c222e`.
+BC/BD foram certificados localmente no HEAD `9772b8c2bdb9875d85abc4a72ed0bebea39c222e` sobre o catálogo amplo anterior de 481 ativos.
 
 Validação local:
 
@@ -66,7 +68,7 @@ Validação local:
 - working tree limpa;
 - duplicidades globais em `(asset_id, timestamp)`: 0.
 
-Distribuição do lifecycle CRIPTO:
+Distribuição ampla:
 
 - total: 481 ativos;
 - `HISTORY_START_EXHAUSTED = 369`;
@@ -77,13 +79,7 @@ Distribuição do lifecycle CRIPTO:
 - `shallow_histories = 0`;
 - `blocking_seams = 88`.
 
-Os 88 seams bloqueantes estão reconciliados como 87 ativos `HISTORY_START_COMPLEMENT_GAPPED` mais um seam adicional em `LA`, que permanece `HISTORY_START_SHALLOW_UNAVAILABLE` e possui gap de 23 dias.
-
-### BC — classificação dos 87 `HISTORY_START_COMPLEMENT_GAPPED`
-
-Auditoria DB-only/read-only certificada, sem chamadas a provider, writes ou alteração de lifecycle.
-
-Distribuição por tamanho do gap:
+BC classificou os 87 gaps como:
 
 - `<= 30 dias`: 2 (`GALA = 22`, `WLFI = 27`);
 - `31–90 dias`: 1 (`MIRA = 74`);
@@ -91,80 +87,44 @@ Distribuição por tamanho do gap:
 - `>365 dias`: 71;
 - `unknown`: 0.
 
-O maior gap observado é `COMP`, com 1.667 dias. A predominância de gaps longos impede tratá-los genericamente como tolerância de costura; a causa continua `requires_external_evidence`.
+BD confirmou 14 `HISTORY_START_SHALLOW_UNAVAILABLE` e 1 `HISTORY_UNAVAILABLE` (`XUSD`). O finding mostrou que o catálogo amplo continha ativos sem relevância operacional suficiente e motivou a #267.
 
-### BD — indisponibilidades residuais
+Esses estados permanecem evidência histórica e auditável. Eles não devem ser apagados nem reclassificados apenas para produzir readiness verde.
 
-Auditoria DB-only/read-only certificada para 15 ativos:
+## Implementação estrutural #267 publicada
 
-- 14 `HISTORY_START_SHALLOW_UNAVAILABLE`;
-- 1 `HISTORY_UNAVAILABLE` (`XUSD`);
-- 13 dos 14 shallow indisponíveis possuem exatamente 1 linha em `2026-08-10`;
-- `LA` possui 2 linhas (`2026-07-17` e `2026-08-10`);
-- `XUSD` possui zero linhas persistidas.
+Commits:
 
-CLIs certificadas:
+- `3f7de4d5ad21ed80f5c822f54d620a84139c8082` — adapter CoinGecko de ranking Top 100 por market cap;
+- `6d030ccc79a4350fe317d12521b2496157afac1a` — contrato de universo suportado Top 100 ∩ BRAPI;
+- `58467c7f1377b57752af2204bf0b10767f8d347d` — clareza/import explícito do contrato;
+- `50bbbe92fa70e5473e1710ad147041ea31e5e6db` — seed CRIPTO limitado ao universo suportado;
+- `d8f8d7f6f4ee29a022b97c922b856279f9276259` — gate do boundary do seed;
+- `5cce32e9d2fa374fcba9b861ce9314c24beb698c` — testes unitários da interseção/deduplicação;
+- `e0dc9e86d85a7461e7ccff8477cbdf1a3af702c8` — histórico CRIPTO do bootstrap limitado ao universo suportado;
+- `4597939f687bf3104645a2520028675867e245ac` — readiness CRIPTO limitado ao universo suportado;
+- `5d67b7a3d0ec726ae3c61a404ef2f9177c98475c` — seam audit com escopo opcional de tickers;
+- `fa7d733c8e43c34fee21cf3af8f757fd08e60a52` — shallow audit com escopo opcional de tickers.
 
-- `python -m app.cli.pre_prod_crypto_gap_classification_audit`;
-- `python -m app.cli.pre_prod_crypto_unavailable_history_audit`;
-- `python -m app.cli.pre_prod_crypto_readiness_audit`.
+Nenhum desses blocos:
 
-## Decisão arquitetural após BC/BD
-
-BC e BD estão concluídos como auditorias read-only. Eles **não** autorizam:
-
-- mudar lifecycle;
-- marcar exceções permanentes;
-- converter gaps em estado tolerado por heurística;
-- promover `ready_for_real_data`;
-- abrir uma nova PR estrutural para `main` apenas com base nesses números.
-
-A próxima fase deve buscar evidência externa exclusivamente para classificar causa dos residuais. Prioridade recomendada:
-
-1. investigar os casos curtos (`GALA`, `WLFI`, `MIRA`) porque permitem distinguir mais rapidamente atraso de fonte, symbol mapping ou evento de listagem/migração;
-2. investigar os 15 casos BD (`14 SHALLOW_UNAVAILABLE + XUSD`), incluindo aliases/símbolos do provider;
-3. amostrar grupos de gaps >365 dias por padrão de primeira data BRAPI/última data de complemento antes de qualquer tentativa massiva;
-4. somente depois discutir contrato de readiness como `ready_with_known_exceptions`.
-
-## Estado certificado localmente anterior — 08/08/2026
-
-Checkpoint anterior certificado pelo usuário: `0e8d96c081a0e788a9edcf69901a134b29b7f696`.
-
-- build do backend aprovado;
-- suíte dirigida: **22 passed**;
-- `compileall`: aprovado;
-- import integral de `app.main`: aprovado.
-
-Esse checkpoint certificou o `system-bootstrap.v2` com contexto de identidade e etapa FX. Os trabalhos posteriores evoluíram até o bootstrap v4 e a certificação operacional do histórico CRIPTO descrita acima.
+- apaga ativos CRIPTO antigos;
+- reclassifica `provider_status` para mascarar findings;
+- altera schema/migration;
+- libera `ready_for_real_data`;
+- adiciona provider a requests financeiros.
 
 ## Estado estrutural do bootstrap
 
-### #248/#250 — Proventos no `system-bootstrap.v3`
+`system-bootstrap.v4` continua sendo o orquestrador global. O estágio `asset_price_history` agora resolve o universo CRIPTO suportado e chama o backfill global com `asset_types={CRIPTO}` e `tickers=<universo suportado>`. As demais classes com providers dedicados continuam em seus estágios/contratos próprios já existentes.
 
-- `system_bootstrap_dividends_stage.py` reutiliza `pre-prod-dividends-seed.v2` e adapters estritos BRAPI/Yahoo;
-- sem `SGI_BOOTSTRAP_ENABLE_DIVIDENDS=true`, o estágio falha antes de provider;
-- o opt-in técnico não substitui autorização operacional da #226;
-- escrita permanece exclusivamente em `asset_dividends`;
-- nenhum direito por carteira é materializado;
-- o orquestrador continua fail-fast e `ready_for_real_data=false`.
+Readiness CRIPTO agora reporta:
 
-### #254/#248/#250 — eventos corporativos no `system-bootstrap.v4`
+- `universe_policy = top_100_market_cap_coingecko_intersect_brapi`;
+- `supported_universe_size`;
+- contagens de histórico, duplicidades, statuses bloqueantes, seams e shallow histories somente no universo suportado.
 
-- `system_bootstrap_corporate_events_stage.py` usa gate antes de sessão/provider;
-- lê ativos elegíveis do banco (`ACAO`, `BDR`, `ETF_NACIONAL`);
-- usa advisory lock transacional;
-- persistência passa exclusivamente por `sync_corporate_events_for_asset`;
-- sucesso usa commit único e falha provoca rollback;
-- `asset_market_pipeline_service` e `dividend_backfill_service` não participam;
-- `certified_for_real_data` permanece `false`.
-
-### #249 — readiness explícito
-
-- `system_readiness_service.py` separa `bootstrap_complete` de `ready_for_real_data`;
-- bootstrap parcial nunca certifica dados reais;
-- `/health` mantém função de liveness;
-- `/ready` retorna 503 enquanto a certificação operacional estiver incompleta;
-- Issue #249 encerrada após validação local.
+A certificação operacional dessa nova política ainda está pendente de execução local. `ready_for_real_data` permanece `false`.
 
 ## Scheduler
 
@@ -175,18 +135,19 @@ O scheduler recorrente está limitado a:
 - fechamento diário do Tesouro;
 - manutenção local de snapshots/TWR.
 
-Não agenda catálogo, benchmarks, Proventos, eventos, logos ou backfill histórico amplo.
+Não agenda catálogo, ranking de market cap, benchmarks, Proventos, eventos, logos ou backfill histórico amplo.
 
 ## Ordem objetiva dos próximos blocos
 
-1. Abrir/iniciar investigação read-only de causa dos residuais BC/BD, priorizando `GALA`, `WLFI`, `MIRA` e os 15 indisponíveis.
-2. Verificar aliases, símbolos atuais/históricos e limites reais dos providers antes de qualquer write.
-3. Amostrar os gaps longos para identificar clusters de causa e evitar 71 investigações idênticas caso exista um padrão comum.
-4. Somente com evidência, propor lifecycle/exceções e decidir se o readiness operacional deve distinguir `ready`, `ready_with_known_exceptions` e `blocked`.
-5. Manter `ready_for_real_data=false` enquanto #248/#227 não certificarem o contrato final.
-6. Continuar #247/#129 para achados residuais de routers/services/providers/aliases.
-7. Retomar #226 → #216 → #158 somente depois da certificação estrutural e da autorização operacional apropriada.
-8. Somente depois iniciar #246 + #57 (Metas + Análise).
+1. Validar localmente os testes da #267, `compileall`, Ruff e import de `app.main`.
+2. Executar `fetch_supported_crypto_universe()` em ambiente com rede e registrar quantos dos Top 100 CoinGecko estão disponíveis na BRAPI.
+3. Executar `pre_prod_crypto_readiness_audit` no novo universo e inventariar apenas findings residuais suportados.
+4. Confirmar que ativos fora do universo amplo anterior deixam de bloquear readiness sem alteração de seus registros/lifecycle.
+5. Atualizar #267/#248/#250 com a evidência operacional e, se verde, concluir #267.
+6. Manter `ready_for_real_data=false` até a certificação final da #248/#227.
+7. Continuar #247/#129 para achados residuais de routers/services/providers/aliases.
+8. Retomar #226 → #216 → #158 somente depois da certificação estrutural e da autorização operacional apropriada.
+9. Somente depois iniciar #246 + #57 (Metas + Análise).
 
 ## Prompt mínimo para nova conversa
 
@@ -196,35 +157,15 @@ Não agenda catálogo, benchmarks, Proventos, eventos, logos ou backfill histór
 Repo: lfragoso93-web/sig-v2
 Branch: stable-15jun
 Gate-mãe: #227
-Bootstrap/readiness CRIPTO: #248
-Orquestrador/exceções: #250
-Shallow histories: #265 concluída
+Bootstrap/readiness: #248/#250
+Universo CRIPTO: #267
 
-Último checkpoint BC/BD certificado:
-9772b8c2bdb9875d85abc4a72ed0bebea39c222e
+Decisão atual:
+- suportar somente Top 100 CRIPTO por market cap;
+- ranking CoinGecko;
+- universo = Top 100 CoinGecko ∩ catálogo BRAPI;
+- preservar ativos legados fora do universo sem deixá-los bloquear readiness;
+- `ready_for_real_data=false` até certificação final.
 
-Estado CRIPTO:
-- 481 ativos;
-- 369 EXHAUSTED;
-- 87 COMPLEMENT_GAPPED;
-- 14 SHALLOW_UNAVAILABLE;
-- 10 SHALLOW_VERIFIED;
-- 1 HISTORY_UNAVAILABLE (XUSD);
-- shallow_histories=0;
-- duplicates=0;
-- blocking_seams=88 (87 GAPPED + LA).
-
-BC certificado:
-- <=30d: 2 (GALA 22, WLFI 27);
-- 31-90d: 1 (MIRA 74);
-- 91-365d: 13;
-- >365d: 71;
-- unknown=0.
-
-BD certificado:
-- 14 SHALLOW_UNAVAILABLE;
-- XUSD sem histórico;
-- LA tem 2 linhas e seam de 23 dias.
-
-Próxima ação: investigar causa externa/aliases dos residuais em modo read-only; não alterar lifecycle/readiness sem evidência.
+Próxima ação: validar localmente a implementação #267 e executar readiness nominal sobre o novo universo suportado.
 ```
