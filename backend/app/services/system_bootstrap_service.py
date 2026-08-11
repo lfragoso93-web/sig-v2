@@ -113,9 +113,15 @@ async def _bootstrap_treasury_history() -> str:
 
 
 async def _bootstrap_asset_price_history() -> str:
+    from app.models.asset import AssetType
     from app.services.asset_price_global_backfill_service import run_global_asset_price_backfill
+    from app.services.crypto_supported_universe_service import fetch_supported_crypto_tickers
 
-    result = await run_global_asset_price_backfill()
+    supported_crypto = await fetch_supported_crypto_tickers()
+    result = await run_global_asset_price_backfill(
+        asset_types={AssetType.CRIPTO.value},
+        tickers=supported_crypto,
+    )
     return str(result)
 
 
