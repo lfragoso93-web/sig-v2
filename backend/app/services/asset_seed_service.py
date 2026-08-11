@@ -13,12 +13,15 @@ import asyncio
 import logging
 import re
 from dataclasses import dataclass, field
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.asset import Asset, AssetType
 from app.integrations.brapi import fetch_all_tickers_v2
-from app.services.crypto_supported_universe_service import fetch_supported_crypto_universe
+from app.models.asset import Asset, AssetType
+from app.services.crypto_supported_universe_service import (
+    fetch_supported_crypto_universe,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +125,7 @@ async def _backfill_market_data_for_ticker(ticker: str, asset_type: AssetType) -
                 result.logo_updated,
                 result.events_synced,
             )
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 -- isola falha por ativo no batch operacional
         logger.error(f"[seed_market] erro em {ticker} ({asset_type.value}): {e}")
 
 
@@ -200,7 +203,7 @@ async def _run_crypto_seed(db: AsyncSession, result: SeedResult) -> None:
             if batch_ops >= BATCH_SIZE:
                 await db.commit()
                 batch_ops = 0
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 -- seed deve registrar e seguir o próximo ativo
             result.errors += 1
             logger.error(f"[seed] erro ao upsert cripto {coin}: {e}")
 
@@ -261,7 +264,7 @@ async def run_asset_seed(
                 if batch_ops >= BATCH_SIZE:
                     await db.commit()
                     batch_ops = 0
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 -- seed deve registrar e seguir o próximo ativo
                 result.errors += 1
                 logger.error(f"[seed] erro ao upsert {ticker} ({type_label}): {e}")
 
