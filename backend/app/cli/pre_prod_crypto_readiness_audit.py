@@ -60,6 +60,32 @@ async def _run() -> dict:
         ).all()
         by_blocking_status = {str(status): int(count or 0) for status, count in blocking_rows}
 
+        blocking_asset_rows = (
+            await db.execute(
+                select(
+                    Asset.ticker,
+                    Asset.provider,
+                    Asset.provider_symbol,
+                    Asset.provider_status,
+                    Asset.provider_attempts,
+                )
+                .where(Asset.asset_type == AssetType.CRIPTO.value)
+                .where(func.upper(Asset.ticker).in_(supported_tickers))
+                .where(Asset.provider_status.in_(BLOCKING_STATUSES))
+                .order_by(Asset.provider_status, Asset.ticker)
+            )
+        ).all()
+        blocking_assets = [
+            {
+                "ticker": str(row.ticker),
+                "provider": row.provider,
+                "provider_symbol": row.provider_symbol,
+                "provider_status": row.provider_status,
+                "provider_attempts": int(row.provider_attempts or 0),
+            }
+            for row in blocking_asset_rows
+        ]
+
         duplicate_groups = (
             select(AssetPrice.asset_id, AssetPrice.timestamp)
             .join(Asset, Asset.id == AssetPrice.asset_id)
@@ -96,6 +122,7 @@ async def _run() -> dict:
         "no_history": no_history,
         "duplicates": duplicates,
         "blocking_statuses": by_blocking_status,
+        "blocking_assets": blocking_assets,
         "blocking_seams": int(seam["blocking_gaps"]),
         "shallow_histories": shallow_histories,
         "shallow_history_audit": shallow,
