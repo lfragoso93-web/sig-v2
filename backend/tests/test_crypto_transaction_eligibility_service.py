@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import pytest
-
 from app.models.asset import Asset, AssetType
 from app.services.crypto_transaction_eligibility_service import (
     CryptoTransactionEligibilityError,
