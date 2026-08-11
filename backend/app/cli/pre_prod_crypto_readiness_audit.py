@@ -1,4 +1,4 @@
-"""Audita readiness do histórico CRIPTO sem providers e sem writes."""
+"""Audita readiness do histórico CRIPTO suportado sem providers e sem writes."""
 from __future__ import annotations
 
 import asyncio
@@ -10,6 +10,7 @@ from app.cli import pre_prod_crypto_seam_audit, pre_prod_crypto_shallow_history_
 from app.core.database import AsyncSessionLocal
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
+from app.services.crypto_supported_universe_service import fetch_supported_crypto_tickers
 
 BLOCKING_STATUSES = (
     "HISTORY_START_TRUNCATED",
@@ -20,10 +21,14 @@ BLOCKING_STATUSES = (
 
 
 async def _run() -> dict:
+    supported_tickers = await fetch_supported_crypto_tickers()
+
     async with AsyncSessionLocal() as db:
         total_crypto = int(
             (await db.execute(
-                select(func.count(Asset.id)).where(Asset.asset_type == AssetType.CRIPTO.value)
+                select(func.count(Asset.id))
+                .where(Asset.asset_type == AssetType.CRIPTO.value)
+                .where(func.upper(Asset.ticker).in_(supported_tickers))
             )).scalar_one()
             or 0
         )
@@ -32,6 +37,7 @@ async def _run() -> dict:
             (await db.execute(
                 select(func.count(Asset.id))
                 .where(Asset.asset_type == AssetType.CRIPTO.value)
+                .where(func.upper(Asset.ticker).in_(supported_tickers))
                 .where(
                     ~select(AssetPrice.id)
                     .where(AssetPrice.asset_id == Asset.id)
@@ -45,6 +51,7 @@ async def _run() -> dict:
             await db.execute(
                 select(Asset.provider_status, func.count(Asset.id))
                 .where(Asset.asset_type == AssetType.CRIPTO.value)
+                .where(func.upper(Asset.ticker).in_(supported_tickers))
                 .where(Asset.provider_status.in_(BLOCKING_STATUSES))
                 .group_by(Asset.provider_status)
             )
@@ -55,6 +62,7 @@ async def _run() -> dict:
             select(AssetPrice.asset_id, AssetPrice.timestamp)
             .join(Asset, Asset.id == AssetPrice.asset_id)
             .where(Asset.asset_type == AssetType.CRIPTO.value)
+            .where(func.upper(Asset.ticker).in_(supported_tickers))
             .group_by(AssetPrice.asset_id, AssetPrice.timestamp)
             .having(func.count(AssetPrice.id) > 1)
             .subquery()
@@ -64,12 +72,13 @@ async def _run() -> dict:
             or 0
         )
 
-    seam = await pre_prod_crypto_seam_audit._run()
-    shallow = await pre_prod_crypto_shallow_history_audit._run()
+    seam = await pre_prod_crypto_seam_audit._run(tickers=supported_tickers)
+    shallow = await pre_prod_crypto_shallow_history_audit._run(tickers=supported_tickers)
     blocking_statuses = sum(by_blocking_status.values())
     shallow_histories = int(shallow["shallow_histories"])
     ready = (
-        no_history == 0
+        total_crypto == len(supported_tickers)
+        and no_history == 0
         and duplicates == 0
         and blocking_statuses == 0
         and int(seam["blocking_gaps"]) == 0
@@ -78,6 +87,8 @@ async def _run() -> dict:
 
     return {
         "read_only": True,
+        "universe_policy": "top_100_market_cap_coingecko_intersect_brapi",
+        "supported_universe_size": len(supported_tickers),
         "crypto_price_history_ready": ready,
         "total_crypto_assets": total_crypto,
         "no_history": no_history,
