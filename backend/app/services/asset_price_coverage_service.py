@@ -146,6 +146,7 @@ def build_missing_ranges(
         "HISTORY_START_EXHAUSTED",
         "HISTORY_START_COMPLEMENT_UNAVAILABLE",
         "HISTORY_START_COMPLEMENT_GAPPED",
+        "HISTORY_START_SHALLOW",
     }
     end_unavailable = history_unavailable or normalized_provider_status == "HISTORY_END_UNAVAILABLE"
 
