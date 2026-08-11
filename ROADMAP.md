@@ -1,12 +1,12 @@
 # Roadmap modular — SGI v2
 
-> Última atualização: 08/08/2026
+> Última atualização: 11/08/2026
 
 ## Direção atual
 
 O SGI v2 está em **auditoria arquitetural e certificação do bootstrap inicial** antes da próxima fase funcional.
 
-A Issue #227 é o gate-mãe que impede dados reais antes da certificação. A Issue #247 executa a auditoria atual de legado, serviços, routers, endpoints e integrações. A #248 coordena bootstrap/providers/readiness e a #250 executa o orquestrador global.
+A Issue #227 é o gate-mãe que impede dados reais antes da certificação. A Issue #247 executa a auditoria atual de legado, serviços, routers, endpoints e integrações. A #248 coordena bootstrap/providers/readiness, a #250 executa o orquestrador global e a #267 restringe CRIPTO ao universo Top 100 por capitalização.
 
 A Issue #241 está concluída. Alembic ↔ MetaData convergiu para todos os domínios estabilizados. `goals` é a única exceção deliberada e pertence ao futuro macroprojeto #246 + #57.
 
@@ -14,12 +14,22 @@ A Issue #241 está concluída. Alembic ↔ MetaData convergiu para todos os dom�
 
 Antes de liberar criação/importação de carteiras reais, o sistema deve executar um bootstrap idempotente que carregue e persista todo o conjunto de dados necessário: catálogo, metadados, históricos, Proventos, eventos corporativos, Tesouro, benchmarks, câmbio e séries auxiliares.
 
-Depois do bootstrap, consultas externas recorrentes ficam restritas a:
+Depois do bootstrap, consultas externas recorrentes ficam restritas a preço intraday e preço oficial/de fechamento diário. Demais módulos e requests funcionais devem operar exclusivamente sobre dados persistidos.
 
-- preço intraday;
-- preço oficial/de fechamento diário.
+## Política CRIPTO Top 100
 
-Demais módulos e requests funcionais devem operar exclusivamente sobre dados persistidos.
+O catálogo bruto de criptomoedas deixou de representar o universo operacional do SGI.
+
+Contrato #267:
+
+- ranking canônico de relevância: CoinGecko `/coins/markets`, ordem por `market_cap`;
+- limite: Top 100 por `market_cap_rank`;
+- universo suportado: Top 100 CoinGecko ∩ símbolos disponíveis na BRAPI;
+- CoinGecko participa somente da seleção de universo durante bootstrap; BRAPI continua sendo a integração de disponibilidade/preços do SGI;
+- ativos persistidos fora do universo suportado são preservados, mas não devem bloquear readiness CRIPTO;
+- seed, histórico inicial e readiness usam o mesmo contrato de universo.
+
+A auditoria anterior sobre 481 CRIPTO permanece como evidência histórica, não como obrigação de suporte.
 
 ## Estado por módulo
 
@@ -29,6 +39,7 @@ Demais módulos e requests funcionais devem operar exclusivamente sobre dados pe
 | Carteiras e transações | Consolidado | preservar CRUD sem sync externo |
 | Dados canônicos / DB-first | Consolidado | concluir certificação bootstrap/providers |
 | B3 / Tesouro / benchmarks / câmbio | Persistidos e integrados ao bootstrap | validar cobertura/certificação |
+| CRIPTO | Universo Top 100 por market cap formalizado em #267 | validar ranking/interseção e readiness residual |
 | Proventos | Registrado no `system-bootstrap.v4` sob gate #226 | validar integração; carga real continua bloqueada |
 | Snapshots e valuation | Consolidado | TWR dedicado #149 |
 | Resumo e Patrimônio | Consolidado | manter DB-first |
@@ -43,30 +54,40 @@ Demais módulos e requests funcionais devem operar exclusivamente sobre dados pe
 | IBOV persistido | Planejado | #150 |
 | TWR Tesouro/Renda Fixa | Planejado | #149 |
 
-## Qualidade estrutural registrada
+## Evidência CRIPTO pré-Top 100
 
-Último checkpoint certificado pelo usuário no HEAD `0e8d96c081a0e788a9edcf69901a134b29b7f696`:
+Checkpoint BC/BD certificado em `9772b8c2bdb9875d85abc4a72ed0bebea39c222e`:
 
-- Build Docker aprovado.
-- 22 testes dirigidos de bootstrap/FX/readiness aprovados.
-- `compileall` aprovado.
-- `app.main` importado integralmente.
-- HEAD local igual ao esperado.
+- 481 ativos CRIPTO auditados;
+- 369 `HISTORY_START_EXHAUSTED`;
+- 87 `HISTORY_START_COMPLEMENT_GAPPED`;
+- 14 `HISTORY_START_SHALLOW_UNAVAILABLE`;
+- 10 `HISTORY_START_SHALLOW_VERIFIED`;
+- 1 `HISTORY_UNAVAILABLE` (`XUSD`);
+- zero duplicidades;
+- 88 seams bloqueantes;
+- 71/87 gaps acima de 365 dias.
 
-Os blocos posteriores que registram Proventos e eventos corporativos no bootstrap permanecem pendentes de validação local integrada.
+O finding justificou a separação entre catálogo descoberto e universo suportado.
 
 ## Ordem canônica de execução
 
 ### Fase 1 — Auditoria arquitetural + bootstrap — AGORA
 
-Issues executoras: #247/#248/#250. Gate-mãe: #227.
+Issues executoras: #247/#248/#250/#267. Gate-mãe: #227.
 
+- [x] definir política de universo CRIPTO Top 100 por capitalização;
+- [x] separar ranking de relevância do catálogo BRAPI;
+- [x] limitar seed CRIPTO ao universo suportado;
+- [x] limitar histórico CRIPTO do bootstrap ao universo suportado;
+- [x] limitar readiness CRIPTO ao universo suportado;
+- [ ] validar localmente ranking, interseção, seed, histórico e readiness Top 100;
+- [ ] executar auditoria nominal do universo suportado e inventariar findings residuais;
 - [ ] revisar routers, services, models, integrações, jobs, CLIs, scheduler e entrypoint;
 - [x] remover consultas externas já identificadas de requests funcionais fora de preço intraday/fechamento;
 - [ ] revisar frontend: rotas, redirects, stubs e API clients;
 - [ ] classificar endpoints/aliases de compatibilidade por consumidor comprovado;
 - [ ] eliminar duplicação, legado e APIs redundantes em commits pequenos;
-- [ ] confirmar pendências reais da #129 e acionar #130/#127 somente quando necessário.
 
 ### Fase 2 — Bootstrap inicial e readiness
 
@@ -114,6 +135,7 @@ Somente após estabilização e promoção da base:
 - #247 — auditoria pós-convergência e consolidação da fronteira de providers.
 - #248 — bootstrap certificado e fronteira única de providers.
 - #250 — orquestrador global `system-bootstrap.v4`.
+- #267 — universo CRIPTO Top 100 por capitalização.
 - #254 — integração estrutural de eventos corporativos, pendente de validação integrada/documentação final.
 
 ### Bloqueadas / dependentes
@@ -126,21 +148,15 @@ Somente após estabilização e promoção da base:
 - #158 — depende de #216/#226 e certificação.
 - #246 + #57 — bloqueadas até estabilização da base.
 
-### Backlog / evolução não bloqueadora
-
-- #58 — Janela Global do Ativo.
-- #83 — Backup/Restore pela interface.
-- #90 — refinamento UX de Patrimônio.
-- #97 — Google OAuth.
-- #127/#130 — evolução ampla de provedores além do necessário para os achados da auditoria.
-
 ## Estado operacional
 
 - CRUD de transações não inicia ingestão externa automática.
 - GETs financeiros auditados permanecem DB-first.
 - `system-bootstrap.v4` contém catálogo, históricos, Tesouro, benchmarks, FX, Proventos e eventos corporativos.
+- CRIPTO no bootstrap/readiness é limitado ao Top 100 de market cap disponível na BRAPI.
+- Registros CRIPTO fora desse universo permanecem auditáveis sem bloquear readiness.
 - Sem `SGI_BOOTSTRAP_ENABLE_DIVIDENDS=true`, Proventos falha fechado antes de consultar provider; a autorização real continua pertencendo à #226.
-- Sem `SGI_BOOTSTRAP_ENABLE_CORPORATE_EVENTS=true`, eventos corporativos também falham antes de provider; nenhuma execução real foi realizada no bloco estrutural.
+- Sem `SGI_BOOTSTRAP_ENABLE_CORPORATE_EVENTS=true`, eventos corporativos também falham antes de provider.
 - Após o bootstrap certificado, somente preço intraday e fechamento diário podem consultar providers de forma recorrente.
 - Rebuilds e correções históricas permanecem operações explícitas e controladas.
 - Dados reais continuam bloqueados pela #227.
@@ -152,7 +168,8 @@ A próxima PR `stable-15jun` → `main` deve ser preparada apenas quando:
 1. a auditoria arquitetural da #247 estiver concluída;
 2. a fronteira provider/bootstrap estiver formalizada e protegida por gates;
 3. o bootstrap obrigatório estiver integralmente representado e validado;
-4. o desenho do readiness estiver coerente com #227/#216/#158;
-5. achados críticos tiverem decisão explícita;
-6. testes estruturais/runtime estiverem verdes;
-7. documentação e Issues estiverem sincronizadas novamente.
+4. o universo CRIPTO Top 100 estiver operacionalmente certificado;
+5. o desenho do readiness estiver coerente com #227/#216/#158;
+6. achados críticos tiverem decisão explícita;
+7. testes estruturais/runtime estiverem verdes;
+8. documentação e Issues estiverem sincronizadas novamente.
