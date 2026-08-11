@@ -11,7 +11,7 @@ from app.models.asset import Asset, AssetType
 from app.models.asset_universe_membership import AssetUniverseMembership
 from app.services.asset_universe_membership_service import CRYPTO_TOP100_UNIVERSE_KEY
 from app.services.crypto_financial_certification_service import (
-    FINANCIALLY_CERTIFIED_CRYPTO_STATUSES,
+    is_crypto_financially_certified,
 )
 
 
@@ -34,7 +34,7 @@ async def require_financially_certified_crypto_asset(
     db: AsyncSession,
     ticker: str,
 ) -> Asset:
-    """Retorna o ativo CRIPTO apenas se candidato Top100 e financeiramente certificado.
+    """Retorna CRIPTO apenas se candidata Top100 e financeiramente certificada.
 
     A validação é estritamente DB-first: não consulta CoinGecko, BRAPI ou qualquer
     outro provider durante o request transacional.
@@ -72,7 +72,7 @@ async def require_financially_certified_crypto_asset(
             provider_status=asset.provider_status,
         )
 
-    if asset.provider_status not in FINANCIALLY_CERTIFIED_CRYPTO_STATUSES:
+    if not is_crypto_financially_certified(asset.provider_status):
         raise CryptoTransactionEligibilityError(
             ticker=normalized_ticker,
             reason="histórico financeiro não certificado",
