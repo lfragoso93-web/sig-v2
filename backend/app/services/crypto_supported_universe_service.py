@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 
 from app.integrations.brapi_crypto_catalog import fetch_crypto_catalog_all
@@ -29,7 +30,7 @@ def _brapi_symbols(items: list[dict]) -> set[str]:
 
 async def fetch_supported_crypto_universe(limit: int = TOP_CRYPTO_LIMIT) -> list[SupportedCrypto]:
     """Interseção determinística: Top market cap ∩ catálogo CRIPTO disponível na BRAPI."""
-    ranking, brapi_catalog = await __import__("asyncio").gather(
+    ranking, brapi_catalog = await asyncio.gather(
         fetch_top_crypto_by_market_cap(limit=limit),
         fetch_crypto_catalog_all(),
     )
