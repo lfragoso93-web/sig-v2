@@ -19,6 +19,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.integrations.brapi import fetch_all_tickers_v2
 from app.models.asset import Asset, AssetType
+from app.services.asset_universe_membership_service import (
+    replace_crypto_candidate_memberships,
+)
 from app.services.crypto_supported_universe_service import (
     fetch_supported_crypto_universe,
 )
@@ -209,6 +212,10 @@ async def _run_crypto_seed(db: AsyncSession, result: SeedResult) -> None:
 
     if batch_ops > 0:
         await db.commit()
+
+    memberships = await replace_crypto_candidate_memberships(db, coins)
+    await db.commit()
+    logger.info("[seed] associações CRIPTO Top 100 persistidas: %d", memberships)
 
 
 async def run_asset_seed(
