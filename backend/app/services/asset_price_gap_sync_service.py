@@ -29,6 +29,8 @@ _asset_locks_guard = asyncio.Lock()
 
 MAX_REASONABLE_UNIT_PRICE = 100_000_000.0
 _CRYPTO_MAX_ROWS_SUSPECT_LIMIT = 1000
+_CRYPTO_SHALLOW_MAX_ROWS = 7
+_CRYPTO_SHALLOW_MAX_AGE_DAYS = 30
 _FRACTIONAL_TICKER_RE = re.compile(r"^([A-Z0-9]{4,7})F$")
 _FRACTIONAL_TYPES = {
     AssetType.ACAO,
@@ -220,6 +222,23 @@ def _empty_status(missing_range: MissingPriceRange) -> str:
     return "HISTORY_END_UNAVAILABLE"
 
 
+def _crypto_initial_status(
+    filtered: list[tuple[datetime, float]],
+    *,
+    source: str,
+    required_to: date,
+) -> str:
+    if source != "brapi_v2_crypto_max":
+        return "HISTORY_START_EXHAUSTED"
+    if len(filtered) >= _CRYPTO_MAX_ROWS_SUSPECT_LIMIT:
+        return "HISTORY_START_TRUNCATED"
+    first_date = min(timestamp.date() for timestamp, _ in filtered)
+    shallow_cutoff = required_to - timedelta(days=_CRYPTO_SHALLOW_MAX_AGE_DAYS)
+    if len(filtered) <= _CRYPTO_SHALLOW_MAX_ROWS and first_date >= shallow_cutoff:
+        return "HISTORY_START_SHALLOW"
+    return "HISTORY_START_EXHAUSTED"
+
+
 async def _fetch_range(
     ticker: str,
     asset_type: AssetType,
@@ -300,10 +319,10 @@ async def _fetch_range(
     elif not filtered and crypto_start_complement:
         terminal_status = "HISTORY_START_COMPLEMENT_UNAVAILABLE"
     elif filtered and asset_type == AssetType.CRIPTO and initial_history:
-        terminal_status = (
-            "HISTORY_START_TRUNCATED"
-            if source == "brapi_v2_crypto_max" and len(filtered) >= _CRYPTO_MAX_ROWS_SUSPECT_LIMIT
-            else "HISTORY_START_EXHAUSTED"
+        terminal_status = _crypto_initial_status(
+            filtered,
+            source=source,
+            required_to=missing_range.date_to,
         )
     elif not filtered:
         terminal_status = _empty_status(missing_range)
