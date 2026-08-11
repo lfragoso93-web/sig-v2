@@ -16,10 +16,11 @@
 
 - #227 — gate-mãe antes de dados reais.
 - #247 — auditoria pós-convergência.
-- #248 — bootstrap certificado e fronteira única de providers.
+- #248 — bootstrap certificado, cobertura CRIPTO e fronteira única de providers.
 - #249 — readiness explícito do bootstrap — **concluída**.
-- #250 — orquestrador global do bootstrap — `system-bootstrap.v4`, ainda aberto até validação/certificação integral.
+- #250 — orquestrador global do bootstrap e exceções de provider/lifecycle.
 - #254 — integração estrutural de eventos corporativos ao bootstrap — wrapper, testes e integração v4 publicados; validação integrada ainda pendente.
+- #265 — shallow histories CRIPTO — **concluída em 11/08/2026** com fila rasa zerada.
 - #226 — Proventos: contrato reutilizado pelo bootstrap, mas execução real continua bloqueada.
 - #129 — eventos corporativos: núcleo consolidado; permanece aberta para auditoria residual de consumidores/aliases/provider boundaries.
 
@@ -51,9 +52,40 @@ Estados do bootstrap em memória: `not_started`, `running`, `ready`, `failed`.
 
 O campo `certified_for_real_data` permanece `false`. Portanto, mesmo um relatório verde parcial não é autorização de go-live.
 
-## Estado certificado localmente — 08/08/2026
+## Checkpoint CRIPTO — 11/08/2026
 
-Último HEAD certificado pelo usuário: `0e8d96c081a0e788a9edcf69901a134b29b7f696`.
+HEAD canônico de entrada da triagem BC/BD: `6a33c8edc811965c9eabeba210d489c2f822334d`.
+
+A recuperação massiva de shallow histories terminou e não deve ser reaberta sem regressão concreta:
+
+- total CRIPTO: 481 ativos;
+- `HISTORY_START_EXHAUSTED = 369`;
+- `HISTORY_START_COMPLEMENT_GAPPED = 87`;
+- `HISTORY_START_SHALLOW_UNAVAILABLE = 14`;
+- `HISTORY_START_SHALLOW_VERIFIED = 10`;
+- `HISTORY_UNAVAILABLE = 1` (`XUSD`);
+- `shallow_histories = 0`;
+- duplicidades globais = 0;
+- `blocking_seams = 88`.
+
+Os 88 seams bloqueantes estão reconciliados como 87 ativos `HISTORY_START_COMPLEMENT_GAPPED` mais um seam adicional em `LA`, que permanece `HISTORY_START_SHALLOW_UNAVAILABLE` com gap conhecido de 23 dias.
+
+A próxima fase não é de backfill massivo. BC/BD são auditorias DB-only/read-only:
+
+- **BC** classifica nominalmente os 87 `HISTORY_START_COMPLEMENT_GAPPED` por tamanho do gap e expõe metadados persistidos de provider/costura, sem inferir causa sem evidência externa;
+- **BD** inventaria os 14 `HISTORY_START_SHALLOW_UNAVAILABLE` e o único `HISTORY_UNAVAILABLE`, incluindo cobertura persistida, fontes, tentativas e último erro de provider;
+- nenhum dos dois blocos chama provider, altera lifecycle, escreve preços ou relaxa readiness.
+
+CLIs de auditoria:
+
+- `python -m app.cli.pre_prod_crypto_gap_classification_audit`;
+- `python -m app.cli.pre_prod_crypto_unavailable_history_audit`.
+
+Somente após a execução local e a classificação nominal desses residuais deve ser discutido um contrato como `ready_with_known_exceptions`; não implementar essa mudança antes da evidência BC/BD.
+
+## Estado certificado localmente anterior — 08/08/2026
+
+Último checkpoint anterior certificado pelo usuário: `0e8d96c081a0e788a9edcf69901a134b29b7f696`.
 
 Validação Docker:
 
@@ -63,9 +95,9 @@ Validação Docker:
 - import integral de `app.main`: aprovado;
 - HEAD local igual ao esperado.
 
-Esse checkpoint certifica o `system-bootstrap.v2` com contexto de identidade e etapa FX.
+Esse checkpoint certificou o `system-bootstrap.v2` com contexto de identidade e etapa FX. Os trabalhos posteriores evoluíram até o bootstrap v4 e a certificação operacional do histórico CRIPTO descrita acima.
 
-## Estado implementado após esse checkpoint — pendente de validação local integrada
+## Estado estrutural do bootstrap
 
 ### #248/#250 — Proventos no `system-bootstrap.v3`
 
@@ -107,15 +139,6 @@ Commits estruturais do bloco:
 - `26b7db7f8d3d37ec5e47d1baf2415734e45b5332` — integração no bootstrap v4;
 - `79fa4a4d929e24ced70ad86d04049082a0d52d89` — contrato estrutural atualizado.
 
-### #248/#250 — FX certificado no checkpoint anterior
-
-- contexto único de execução com `run_id`, branch e SHA completo;
-- `POST /api/v1/admin/bootstrap` exige SHA completo;
-- startup pode usar `SGI_BOOTSTRAP_COMMIT_SHA`;
-- `system_bootstrap_fx_stage.py` reutiliza o seed PTAX transacional da #217;
-- cobertura USD-BRL começa em `1994-07-01` por regra local do domínio;
-- nenhuma data inicial global é imposta aos demais domínios.
-
 ### #249 — readiness explícito
 
 - serviço `system_readiness_service.py` com estado em memória;
@@ -138,13 +161,14 @@ Não agenda catálogo, benchmarks, Proventos, eventos, logos ou backfill histór
 
 ## Ordem objetiva dos próximos blocos
 
-1. Validar localmente `system-bootstrap.v4`, `system_bootstrap_dividends_stage.py`, `system_bootstrap_corporate_events_stage.py` e os gates relacionados, sem executar providers reais.
-2. Reconciliar cobertura final/idempotência dos domínios obrigatórios da #248/#250/#254.
-3. Manter `ready_for_real_data=false` até certificação integral.
-4. Concluir #247/#129 para achados residuais de routers/services/providers/aliases.
-5. Avaliar fechamento da #254 quando validação integrada e documentação estiverem completas.
-6. Retomar #226 → #216 → #158 somente depois da certificação estrutural e da autorização operacional apropriada.
-7. Somente depois iniciar #246 + #57 (Metas + Análise).
+1. Executar e certificar localmente BC: auditoria dos 87 `HISTORY_START_COMPLEMENT_GAPPED`.
+2. Executar e certificar localmente BD: auditoria dos 14 `HISTORY_START_SHALLOW_UNAVAILABLE` + `XUSD`.
+3. Classificar as causas reais somente a partir das evidências nominais BC/BD; não usar heurística por ticker.
+4. Decidir, com evidência, se o readiness operacional deve distinguir `ready`, `ready_with_known_exceptions` e `blocked`.
+5. Manter `ready_for_real_data=false` enquanto #248/#227 não certificarem o contrato final.
+6. Continuar #247/#129 para achados residuais de routers/services/providers/aliases.
+7. Retomar #226 → #216 → #158 somente depois da certificação estrutural e da autorização operacional apropriada.
+8. Somente depois iniciar #246 + #57 (Metas + Análise).
 
 ## Prompt mínimo para nova conversa
 
@@ -154,29 +178,23 @@ Não agenda catálogo, benchmarks, Proventos, eventos, logos ou backfill histór
 Repo: lfragoso93-web/sig-v2
 Branch: stable-15jun
 Gate-mãe: #227
-Auditoria: #247
-Bootstrap/providers: #248
-Orquestrador: #250
-Eventos no bootstrap: #254
-Proventos: #226
-Eventos corporativos residuais: #129
+Bootstrap/readiness CRIPTO: #248
+Orquestrador/exceções: #250
+Shallow histories: #265 concluída
 
-Último checkpoint certificado pelo usuário:
-0e8d96c081a0e788a9edcf69901a134b29b7f696
+Checkpoint de entrada BC/BD:
+6a33c8edc811965c9eabeba210d489c2f822334d
 
-Estado posterior pendente de validação integrada:
-- system-bootstrap.v4;
-- FX integrado;
-- Proventos registrado sob gate SGI_BOOTSTRAP_ENABLE_DIVIDENDS;
-- eventos corporativos registrados sob gate SGI_BOOTSTRAP_ENABLE_CORPORATE_EVENTS;
-- ready_for_real_data continua false;
-- nenhum provider real foi executado durante os blocos estruturais de eventos.
+Estado CRIPTO:
+- 481 ativos;
+- 369 EXHAUSTED;
+- 87 COMPLEMENT_GAPPED;
+- 14 SHALLOW_UNAVAILABLE;
+- 10 SHALLOW_VERIFIED;
+- 1 HISTORY_UNAVAILABLE (XUSD);
+- shallow_histories=0;
+- duplicates=0;
+- blocking_seams=88 (87 GAPPED + LA).
 
-Preserve a regra:
-- bootstrap completo e histórico máximo válido por domínio antes de dados reais;
-- runtime externo apenas intraday/fechamento;
-- exceção somente para lacuna de preço em data específica, com janela mínima e persistência antes do uso;
-- catálogo e demais módulos DB-first;
-- nenhuma execução real de Proventos sem gate/autorização da #226;
-- não tocar em `goals` antes de #246/#57.
+Próxima ação: executar BC/BD exclusivamente read-only, classificar evidências e somente depois discutir tratamento das exceções/readiness.
 ```
