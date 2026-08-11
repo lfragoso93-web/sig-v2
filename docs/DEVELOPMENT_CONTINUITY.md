@@ -54,46 +54,86 @@ O campo `certified_for_real_data` permanece `false`. Portanto, mesmo um relatór
 
 ## Checkpoint CRIPTO — 11/08/2026
 
-HEAD canônico de entrada da triagem BC/BD: `6a33c8edc811965c9eabeba210d489c2f822334d`.
+BC/BD foram certificados localmente no HEAD `9772b8c2bdb9875d85abc4a72ed0bebea39c222e`.
 
-A recuperação massiva de shallow histories terminou e não deve ser reaberta sem regressão concreta:
+Validação local:
 
-- total CRIPTO: 481 ativos;
+- build Docker aprovado;
+- testes dirigidos BC/BD: **2 passed**;
+- `python -m compileall -q app tests`: aprovado;
+- import integral de `app.main`: aprovado;
+- `git diff --check`: aprovado;
+- working tree limpa;
+- duplicidades globais em `(asset_id, timestamp)`: 0.
+
+Distribuição do lifecycle CRIPTO:
+
+- total: 481 ativos;
 - `HISTORY_START_EXHAUSTED = 369`;
 - `HISTORY_START_COMPLEMENT_GAPPED = 87`;
 - `HISTORY_START_SHALLOW_UNAVAILABLE = 14`;
 - `HISTORY_START_SHALLOW_VERIFIED = 10`;
 - `HISTORY_UNAVAILABLE = 1` (`XUSD`);
 - `shallow_histories = 0`;
-- duplicidades globais = 0;
 - `blocking_seams = 88`.
 
-Os 88 seams bloqueantes estão reconciliados como 87 ativos `HISTORY_START_COMPLEMENT_GAPPED` mais um seam adicional em `LA`, que permanece `HISTORY_START_SHALLOW_UNAVAILABLE` com gap conhecido de 23 dias.
+Os 88 seams bloqueantes estão reconciliados como 87 ativos `HISTORY_START_COMPLEMENT_GAPPED` mais um seam adicional em `LA`, que permanece `HISTORY_START_SHALLOW_UNAVAILABLE` e possui gap de 23 dias.
 
-A próxima fase não é de backfill massivo. BC/BD são auditorias DB-only/read-only:
+### BC — classificação dos 87 `HISTORY_START_COMPLEMENT_GAPPED`
 
-- **BC** classifica nominalmente os 87 `HISTORY_START_COMPLEMENT_GAPPED` por tamanho do gap e expõe metadados persistidos de provider/costura, sem inferir causa sem evidência externa;
-- **BD** inventaria os 14 `HISTORY_START_SHALLOW_UNAVAILABLE` e o único `HISTORY_UNAVAILABLE`, incluindo cobertura persistida, fontes, tentativas e último erro de provider;
-- nenhum dos dois blocos chama provider, altera lifecycle, escreve preços ou relaxa readiness.
+Auditoria DB-only/read-only certificada, sem chamadas a provider, writes ou alteração de lifecycle.
 
-CLIs de auditoria:
+Distribuição por tamanho do gap:
+
+- `<= 30 dias`: 2 (`GALA = 22`, `WLFI = 27`);
+- `31–90 dias`: 1 (`MIRA = 74`);
+- `91–365 dias`: 13;
+- `>365 dias`: 71;
+- `unknown`: 0.
+
+O maior gap observado é `COMP`, com 1.667 dias. A predominância de gaps longos impede tratá-los genericamente como tolerância de costura; a causa continua `requires_external_evidence`.
+
+### BD — indisponibilidades residuais
+
+Auditoria DB-only/read-only certificada para 15 ativos:
+
+- 14 `HISTORY_START_SHALLOW_UNAVAILABLE`;
+- 1 `HISTORY_UNAVAILABLE` (`XUSD`);
+- 13 dos 14 shallow indisponíveis possuem exatamente 1 linha em `2026-08-10`;
+- `LA` possui 2 linhas (`2026-07-17` e `2026-08-10`);
+- `XUSD` possui zero linhas persistidas.
+
+CLIs certificadas:
 
 - `python -m app.cli.pre_prod_crypto_gap_classification_audit`;
-- `python -m app.cli.pre_prod_crypto_unavailable_history_audit`.
+- `python -m app.cli.pre_prod_crypto_unavailable_history_audit`;
+- `python -m app.cli.pre_prod_crypto_readiness_audit`.
 
-Somente após a execução local e a classificação nominal desses residuais deve ser discutido um contrato como `ready_with_known_exceptions`; não implementar essa mudança antes da evidência BC/BD.
+## Decisão arquitetural após BC/BD
+
+BC e BD estão concluídos como auditorias read-only. Eles **não** autorizam:
+
+- mudar lifecycle;
+- marcar exceções permanentes;
+- converter gaps em estado tolerado por heurística;
+- promover `ready_for_real_data`;
+- abrir uma nova PR estrutural para `main` apenas com base nesses números.
+
+A próxima fase deve buscar evidência externa exclusivamente para classificar causa dos residuais. Prioridade recomendada:
+
+1. investigar os casos curtos (`GALA`, `WLFI`, `MIRA`) porque permitem distinguir mais rapidamente atraso de fonte, symbol mapping ou evento de listagem/migração;
+2. investigar os 15 casos BD (`14 SHALLOW_UNAVAILABLE + XUSD`), incluindo aliases/símbolos do provider;
+3. amostrar grupos de gaps >365 dias por padrão de primeira data BRAPI/última data de complemento antes de qualquer tentativa massiva;
+4. somente depois discutir contrato de readiness como `ready_with_known_exceptions`.
 
 ## Estado certificado localmente anterior — 08/08/2026
 
-Último checkpoint anterior certificado pelo usuário: `0e8d96c081a0e788a9edcf69901a134b29b7f696`.
-
-Validação Docker:
+Checkpoint anterior certificado pelo usuário: `0e8d96c081a0e788a9edcf69901a134b29b7f696`.
 
 - build do backend aprovado;
 - suíte dirigida: **22 passed**;
-- `python -m compileall -q app tests`: aprovado;
-- import integral de `app.main`: aprovado;
-- HEAD local igual ao esperado.
+- `compileall`: aprovado;
+- import integral de `app.main`: aprovado.
 
 Esse checkpoint certificou o `system-bootstrap.v2` com contexto de identidade e etapa FX. Os trabalhos posteriores evoluíram até o bootstrap v4 e a certificação operacional do histórico CRIPTO descrita acima.
 
@@ -101,50 +141,28 @@ Esse checkpoint certificou o `system-bootstrap.v2` com contexto de identidade e 
 
 ### #248/#250 — Proventos no `system-bootstrap.v3`
 
-- criado `system_bootstrap_dividends_stage.py`;
-- reutiliza `pre-prod-dividends-seed.v2` e seus adapters estritos BRAPI/Yahoo;
-- janela máxima local do estágio começa em `1970-01-01`, coerente com o limite técnico do histórico Yahoo usado pelo adapter;
-- sem `SGI_BOOTSTRAP_ENABLE_DIVIDENDS=true`, o estágio falha antes de consultar provider;
+- `system_bootstrap_dividends_stage.py` reutiliza `pre-prod-dividends-seed.v2` e adapters estritos BRAPI/Yahoo;
+- sem `SGI_BOOTSTRAP_ENABLE_DIVIDENDS=true`, o estágio falha antes de provider;
 - o opt-in técnico não substitui autorização operacional da #226;
 - escrita permanece exclusivamente em `asset_dividends`;
 - nenhum direito por carteira é materializado;
-- `system_bootstrap_service.py` passou a `system-bootstrap.v3` e registra `asset_dividends` após `fx_rates`;
 - o orquestrador continua fail-fast e `ready_for_real_data=false`.
-
-Commits do bloco:
-
-- `f3b2259c51fff0db398cd0315f63ec479c7f4c22` — wrapper/gate de Proventos;
-- `0d45ef8fc9cf1107252631face5d1155d3c7a35c` — testes do gate;
-- `89893af623a6837fb0ff2b0481d7d4ad1ec3261a` — registro no bootstrap v3;
-- `ab13e0739a3b0ce5360b54f3b2deac07b543b6e4` — gate estrutural do contrato.
 
 ### #254/#248/#250 — eventos corporativos no `system-bootstrap.v4`
 
-- criado `system_bootstrap_corporate_events_stage.py`;
-- gate `SGI_BOOTSTRAP_ENABLE_CORPORATE_EVENTS` ocorre antes de sessão/provider;
-- ativos elegíveis são lidos do banco e limitados a `ACAO`, `BDR` e `ETF_NACIONAL`;
-- estágio usa `pg_advisory_xact_lock` e uma transação única;
+- `system_bootstrap_corporate_events_stage.py` usa gate antes de sessão/provider;
+- lê ativos elegíveis do banco (`ACAO`, `BDR`, `ETF_NACIONAL`);
+- usa advisory lock transacional;
 - persistência passa exclusivamente por `sync_corporate_events_for_asset`;
-- sucesso executa commit único; qualquer falha provoca rollback e interrompe os ativos seguintes;
-- `asset_market_pipeline_service` e `dividend_backfill_service` não são usados;
-- testes dirigidos cobrem gate, ordem do lock, filtro, commit, rollback/stop e relatório determinístico;
-- `system_bootstrap_service.py` passou a `system-bootstrap.v4` e registra `corporate_events` após `asset_dividends`;
-- `certified_for_real_data` permanece `false`;
-- nenhum provider real foi executado durante esses blocos.
-
-Commits estruturais do bloco:
-
-- `80d8448c489ba61a4de556870e2ba58983358549` — wrapper/gate transacional;
-- `7951f0981a3b650e60b94159e86ed709ad00ef22` — testes do estágio;
-- `26b7db7f8d3d37ec5e47d1baf2415734e45b5332` — integração no bootstrap v4;
-- `79fa4a4d929e24ced70ad86d04049082a0d52d89` — contrato estrutural atualizado.
+- sucesso usa commit único e falha provoca rollback;
+- `asset_market_pipeline_service` e `dividend_backfill_service` não participam;
+- `certified_for_real_data` permanece `false`.
 
 ### #249 — readiness explícito
 
-- serviço `system_readiness_service.py` com estado em memória;
-- separação entre `bootstrap_complete` e `ready_for_real_data`;
+- `system_readiness_service.py` separa `bootstrap_complete` de `ready_for_real_data`;
 - bootstrap parcial nunca certifica dados reais;
-- `/health` preserva função de liveness e inclui snapshot do bootstrap;
+- `/health` mantém função de liveness;
 - `/ready` retorna 503 enquanto a certificação operacional estiver incompleta;
 - Issue #249 encerrada após validação local.
 
@@ -161,10 +179,10 @@ Não agenda catálogo, benchmarks, Proventos, eventos, logos ou backfill histór
 
 ## Ordem objetiva dos próximos blocos
 
-1. Executar e certificar localmente BC: auditoria dos 87 `HISTORY_START_COMPLEMENT_GAPPED`.
-2. Executar e certificar localmente BD: auditoria dos 14 `HISTORY_START_SHALLOW_UNAVAILABLE` + `XUSD`.
-3. Classificar as causas reais somente a partir das evidências nominais BC/BD; não usar heurística por ticker.
-4. Decidir, com evidência, se o readiness operacional deve distinguir `ready`, `ready_with_known_exceptions` e `blocked`.
+1. Abrir/iniciar investigação read-only de causa dos residuais BC/BD, priorizando `GALA`, `WLFI`, `MIRA` e os 15 indisponíveis.
+2. Verificar aliases, símbolos atuais/históricos e limites reais dos providers antes de qualquer write.
+3. Amostrar os gaps longos para identificar clusters de causa e evitar 71 investigações idênticas caso exista um padrão comum.
+4. Somente com evidência, propor lifecycle/exceções e decidir se o readiness operacional deve distinguir `ready`, `ready_with_known_exceptions` e `blocked`.
 5. Manter `ready_for_real_data=false` enquanto #248/#227 não certificarem o contrato final.
 6. Continuar #247/#129 para achados residuais de routers/services/providers/aliases.
 7. Retomar #226 → #216 → #158 somente depois da certificação estrutural e da autorização operacional apropriada.
@@ -182,8 +200,8 @@ Bootstrap/readiness CRIPTO: #248
 Orquestrador/exceções: #250
 Shallow histories: #265 concluída
 
-Checkpoint de entrada BC/BD:
-6a33c8edc811965c9eabeba210d489c2f822334d
+Último checkpoint BC/BD certificado:
+9772b8c2bdb9875d85abc4a72ed0bebea39c222e
 
 Estado CRIPTO:
 - 481 ativos;
@@ -196,5 +214,17 @@ Estado CRIPTO:
 - duplicates=0;
 - blocking_seams=88 (87 GAPPED + LA).
 
-Próxima ação: executar BC/BD exclusivamente read-only, classificar evidências e somente depois discutir tratamento das exceções/readiness.
+BC certificado:
+- <=30d: 2 (GALA 22, WLFI 27);
+- 31-90d: 1 (MIRA 74);
+- 91-365d: 13;
+- >365d: 71;
+- unknown=0.
+
+BD certificado:
+- 14 SHALLOW_UNAVAILABLE;
+- XUSD sem histórico;
+- LA tem 2 linhas e seam de 23 dias.
+
+Próxima ação: investigar causa externa/aliases dos residuais em modo read-only; não alterar lifecycle/readiness sem evidência.
 ```
