@@ -20,7 +20,10 @@ async def _run() -> dict:
         select(
             Asset.id.label("asset_id"),
             Asset.ticker,
+            Asset.provider,
+            Asset.provider_symbol,
             Asset.provider_status,
+            Asset.provider_attempts,
             AssetPrice.source,
             func.count(AssetPrice.id).label("rows"),
             func.min(AssetPrice.timestamp).label("first_ts"),
@@ -29,7 +32,15 @@ async def _run() -> dict:
         .join(AssetPrice, AssetPrice.asset_id == Asset.id)
         .where(Asset.asset_type == AssetType.CRIPTO.value)
         .where(AssetPrice.source.in_((BRAPI_SOURCE, COMPLEMENT_SOURCE)))
-        .group_by(Asset.id, Asset.ticker, Asset.provider_status, AssetPrice.source)
+        .group_by(
+            Asset.id,
+            Asset.ticker,
+            Asset.provider,
+            Asset.provider_symbol,
+            Asset.provider_status,
+            Asset.provider_attempts,
+            AssetPrice.source,
+        )
         .order_by(Asset.ticker.asc(), AssetPrice.source.asc())
     )
 
@@ -43,7 +54,10 @@ async def _run() -> dict:
             {
                 "asset_id": row.asset_id,
                 "ticker": row.ticker,
+                "provider": row.provider,
+                "provider_symbol": row.provider_symbol,
                 "provider_status": row.provider_status,
+                "provider_attempts": int(row.provider_attempts or 0),
                 "sources": {},
             },
         )
