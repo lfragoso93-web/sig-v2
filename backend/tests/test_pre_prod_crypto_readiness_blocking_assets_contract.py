@@ -30,7 +30,13 @@ def test_readiness_exposes_nominal_blocking_assets() -> None:
     }
 
     assert "blocking_assets" in keys
+    assert "persisted_candidate_memberships" in keys
+    assert "financially_certified_universe_size" in keys
+    assert "crypto_financial_universe_ready" in keys
     assert "Asset.provider_status.in_(BLOCKING_STATUSES)" in source
+    assert "FINANCIALLY_CERTIFIED_CRYPTO_STATUSES" in source
+    assert "HISTORY_START_COMPLEMENT_UNAVAILABLE" in source
+    assert "HISTORY_UNAVAILABLE" in source
     assert "Asset.ticker" in source
     assert "Asset.provider_symbol" in source
     assert "Asset.provider_attempts" in source
