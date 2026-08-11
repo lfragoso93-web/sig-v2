@@ -1,5 +1,4 @@
 import pytest
-
 from app.services import crypto_supported_universe_service as service
 
 
