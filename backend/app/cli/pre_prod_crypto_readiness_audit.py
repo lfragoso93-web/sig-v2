@@ -6,7 +6,7 @@ import json
 
 from sqlalchemy import func, select
 
-from app.cli import pre_prod_crypto_seam_audit
+from app.cli import pre_prod_crypto_seam_audit, pre_prod_crypto_shallow_history_audit
 from app.core.database import AsyncSessionLocal
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
@@ -63,12 +63,15 @@ async def _run() -> dict:
         )
 
     seam = await pre_prod_crypto_seam_audit._run()
+    shallow = await pre_prod_crypto_shallow_history_audit._run()
     blocking_statuses = sum(by_blocking_status.values())
+    shallow_histories = int(shallow["shallow_histories"])
     ready = (
         no_history == 0
         and duplicates == 0
         and blocking_statuses == 0
         and int(seam["blocking_gaps"]) == 0
+        and shallow_histories == 0
     )
 
     return {
@@ -79,6 +82,8 @@ async def _run() -> dict:
         "duplicates": duplicates,
         "blocking_statuses": by_blocking_status,
         "blocking_seams": int(seam["blocking_gaps"]),
+        "shallow_histories": shallow_histories,
+        "shallow_history_audit": shallow,
         "seam_audit": seam,
     }
 
