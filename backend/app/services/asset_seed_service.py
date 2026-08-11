@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset, AssetType
 from app.integrations.brapi import fetch_all_tickers_v2
-from app.integrations.brapi_crypto_catalog import fetch_crypto_catalog_all
+from app.services.crypto_supported_universe_service import fetch_supported_crypto_universe
 
 logger = logging.getLogger(__name__)
 
@@ -174,21 +174,18 @@ async def _run_crypto_seed(db: AsyncSession, result: SeedResult) -> None:
     result.new_tickers.setdefault(type_label, [])
     result.seeded_tickers.setdefault(type_label, [])
 
-    logger.info("[seed] iniciando seed de criptomoedas via /api/v2/crypto/available")
-    coins = await fetch_crypto_catalog_all()
-    logger.info(f"[seed] criptomoedas recebidas da BRAPI: {len(coins)} válidas")
+    logger.info("[seed] iniciando seed CRIPTO do universo suportado Top 100 por market cap")
+    coins = await fetch_supported_crypto_universe()
+    logger.info("[seed] universo CRIPTO suportado e disponível na BRAPI: %d", len(coins))
 
     BATCH_SIZE = 200
     batch_ops = 0
     for item in coins:
-        coin = (item.get("coin") or item.get("symbol") or "").strip().upper()
-        if not coin:
-            result.errors += 1
-            continue
-        coin_name = (item.get("coinName") or item.get("name") or item.get("longName") or coin).strip()
+        coin = item.ticker
+        coin_name = item.name
 
         try:
-            status = await _upsert_asset(db, coin, coin_name, AssetType.CRIPTO, None, _extract_logo_url(item))
+            status = await _upsert_asset(db, coin, coin_name, AssetType.CRIPTO, None)
             result.seeded_tickers[type_label].append(coin)
             if status == "created":
                 result.created += 1
