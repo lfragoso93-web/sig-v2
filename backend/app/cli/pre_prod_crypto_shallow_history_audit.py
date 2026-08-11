@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import func, select
 
@@ -20,7 +20,7 @@ NON_RETRY_SHALLOW_STATUSES = (
 
 
 async def _run(*, required_to: date | None = None, tickers: set[str] | None = None) -> dict:
-    target = required_to or date.today()
+    target = required_to or datetime.now(timezone.utc).date()
     cutoff = target - timedelta(days=SHALLOW_MAX_AGE_DAYS)
     normalized_tickers = (
         {str(ticker).strip().upper() for ticker in tickers if str(ticker).strip()}
