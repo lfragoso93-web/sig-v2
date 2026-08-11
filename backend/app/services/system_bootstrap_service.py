@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
-from typing import Awaitable, Callable
 
 from app.services.system_bootstrap_execution_context import (
     build_system_bootstrap_execution_context,
@@ -51,7 +51,7 @@ async def _run_stage(
         logger.info("[Bootstrap] %s concluído: %s", name, detail)
         return BootstrapStageResult(name=name, ok=True, detail=detail)
     except Exception as exc:
-        logger.exception("[Bootstrap] %s falhou: %s", name, exc)
+        logger.exception("[Bootstrap] %s falhou", name)
         return BootstrapStageResult(name=name, ok=False, detail=str(exc))
 
 
@@ -82,7 +82,9 @@ async def _bootstrap_treasury_catalog() -> str:
 
 async def _bootstrap_treasury_reconciliation() -> str:
     from app.core.database import AsyncSessionLocal
-    from app.services.treasury_reconciliation_service import reconcile_treasury_transactions
+    from app.services.treasury_reconciliation_service import (
+        reconcile_treasury_transactions,
+    )
 
     async with AsyncSessionLocal() as db:
         result = await reconcile_treasury_transactions(db)
@@ -114,8 +116,12 @@ async def _bootstrap_treasury_history() -> str:
 
 async def _bootstrap_asset_price_history() -> str:
     from app.models.asset import AssetType
-    from app.services.asset_price_global_backfill_service import run_global_asset_price_backfill
-    from app.services.crypto_supported_universe_service import fetch_supported_crypto_tickers
+    from app.services.asset_price_global_backfill_service import (
+        run_global_asset_price_backfill,
+    )
+    from app.services.crypto_supported_universe_service import (
+        fetch_supported_crypto_tickers,
+    )
 
     supported_crypto = await fetch_supported_crypto_tickers()
     result = await run_global_asset_price_backfill(
