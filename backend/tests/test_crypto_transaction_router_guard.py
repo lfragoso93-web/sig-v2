@@ -3,11 +3,14 @@ from __future__ import annotations
 import ast
 import inspect
 import textwrap
+from datetime import date
 
 import pytest
-from fastapi import HTTPException
+from fastapi import BackgroundTasks, HTTPException
 
+from app.models.transaction import OperationType, Transaction
 from app.routers import transactions
+from app.schemas.transaction import TransactionCreate
 from app.services.crypto_transaction_eligibility_service import (
     CryptoTransactionEligibilityError,
 )
@@ -55,6 +58,57 @@ def _transaction_mutation_index(function) -> int:
         ):
             return index
     raise AssertionError("transaction mutation not found")
+
+
+class _Result:
+    def __init__(self, value) -> None:
+        self.value = value
+
+    def scalar_one_or_none(self):
+        return self.value
+
+
+class _WriteSpySession:
+    def __init__(self, execute_value=None) -> None:
+        self.execute_value = execute_value
+        self.add_called = False
+        self.commit_called = False
+
+    async def execute(self, _statement):
+        return _Result(self.execute_value)
+
+    def add(self, _value) -> None:
+        self.add_called = True
+
+    async def commit(self) -> None:
+        self.commit_called = True
+
+    async def refresh(self, _value) -> None:
+        pass
+
+
+def _payload(ticker: str) -> TransactionCreate:
+    return TransactionCreate(
+        ticker=ticker,
+        asset_type="CRIPTO",
+        operation="buy",
+        quantity=1,
+        price=100,
+        fees=0,
+        date=date(2026, 8, 11),
+        currency="BRL",
+    )
+
+
+async def _allow_portfolio(*_args, **_kwargs):
+    return object()
+
+
+async def _reject_crypto(_db, ticker, _asset_type):
+    raise HTTPException(
+        status_code=422,
+        detail=f"CRIPTO {ticker} não elegível para transações",
+    )
 
 
 def test_create_crypto_guard_runs_before_transaction_construction() -> None:
@@ -124,6 +178,60 @@ async def test_rejected_crypto_is_exposed_as_unprocessable_entity(monkeypatch) -
     assert exc_info.value.status_code == 422
     assert "APT" in str(exc_info.value.detail)
     assert "HISTORY_START_COMPLEMENT_GAPPED" in str(exc_info.value.detail)
+
+
+@pytest.mark.asyncio
+async def test_rejected_create_does_not_add_or_commit(monkeypatch) -> None:
+    db = _WriteSpySession()
+    monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
+    monkeypatch.setattr(transactions, "_validate_crypto_transaction_asset", _reject_crypto)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await transactions.create_transaction(
+            portfolio_id=1,
+            payload=_payload("APT"),
+            background_tasks=BackgroundTasks(),
+            db=db,
+            current_user=object(),
+        )
+
+    assert exc_info.value.status_code == 422
+    assert db.add_called is False
+    assert db.commit_called is False
+
+
+@pytest.mark.asyncio
+async def test_rejected_update_does_not_mutate_or_commit(monkeypatch) -> None:
+    existing = Transaction(
+        id=10,
+        portfolio_id=1,
+        ticker="BTC",
+        asset_type="CRIPTO",
+        operation=OperationType.buy,
+        quantity=1,
+        price=100,
+        fees=0,
+        date=date(2026, 8, 10),
+        currency="BRL",
+    )
+    db = _WriteSpySession(existing)
+    monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
+    monkeypatch.setattr(transactions, "_validate_crypto_transaction_asset", _reject_crypto)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await transactions.update_transaction(
+            portfolio_id=1,
+            transaction_id=10,
+            payload=_payload("APT"),
+            background_tasks=BackgroundTasks(),
+            db=db,
+            current_user=object(),
+        )
+
+    assert exc_info.value.status_code == 422
+    assert existing.ticker == "BTC"
+    assert existing.asset_type == "CRIPTO"
+    assert db.commit_called is False
 
 
 def test_transaction_eligibility_service_has_no_provider_imports() -> None:
