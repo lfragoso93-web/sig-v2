@@ -4,6 +4,8 @@ import ast
 import inspect
 import textwrap
 
+import pytest
+
 from app.routers import transactions
 
 
@@ -24,7 +26,10 @@ def _transaction_assignment_index(function) -> int:
     for index, statement in enumerate(body):
         if not isinstance(statement, ast.Assign):
             continue
-        if not any(isinstance(target, ast.Name) and target.id == "tx" for target in statement.targets):
+        if not any(
+            isinstance(target, ast.Name) and target.id == "tx"
+            for target in statement.targets
+        ):
             continue
         if isinstance(statement.value, ast.Call) and isinstance(statement.value.func, ast.Name):
             if statement.value.func.id == "Transaction":
@@ -73,3 +78,22 @@ def test_crypto_requests_do_not_use_get_or_create_asset_after_commit() -> None:
 
     assert 'if asset_type != "CRIPTO":' in source
     assert "await get_or_create_asset(db, asset_data)" in source
+
+
+@pytest.mark.asyncio
+async def test_non_crypto_transaction_skips_crypto_eligibility(monkeypatch) -> None:
+    called = False
+
+    async def _unexpected_call(_db, _ticker):
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr(
+        transactions,
+        "require_financially_certified_crypto_asset",
+        _unexpected_call,
+    )
+
+    await transactions._validate_crypto_transaction_asset(object(), "PETR4", "ACAO")
+
+    assert called is False
