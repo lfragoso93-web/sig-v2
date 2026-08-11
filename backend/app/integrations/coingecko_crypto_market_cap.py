@@ -46,7 +46,7 @@ async def fetch_top_crypto_by_market_cap(limit: int = TOP_CRYPTO_LIMIT) -> list[
         payload = response.json()
 
     if not isinstance(payload, list):
-        raise RuntimeError("CoinGecko retornou payload inválido para ranking CRIPTO")
+        raise TypeError("CoinGecko retornou payload inválido para ranking CRIPTO")
 
     normalized = [item for raw in payload if (item := _normalize_market_item(raw)) is not None]
     normalized.sort(key=lambda item: (int(item["market_cap_rank"]), str(item["symbol"])))
