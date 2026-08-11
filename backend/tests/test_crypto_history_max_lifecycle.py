@@ -74,6 +74,34 @@ async def test_crypto_max_history_does_not_mark_exact_1000_rows_as_exhausted(mon
 
 
 @pytest.mark.asyncio
+async def test_recent_shallow_crypto_max_history_is_not_exhausted(monkeypatch) -> None:
+    async def fake_fetch_crypto_history(ticker: str):
+        assert ticker == "XRP-BRL"
+        return (
+            [(datetime(2026, 8, 10, tzinfo=timezone.utc), 3.0)],
+            "brapi_v2_crypto_max",
+            "brapi",
+        )
+
+    monkeypatch.setattr(asset_price_gap_sync_service, "_fetch_crypto_history", fake_fetch_crypto_history)
+
+    rows, source, terminal_status, provider = await asset_price_gap_sync_service._fetch_range(
+        "XRP-BRL",
+        AssetType.CRIPTO,
+        MissingPriceRange(
+            date_from=date(1900, 1, 1),
+            date_to=date(2026, 8, 10),
+            reason="missing_all",
+        ),
+    )
+
+    assert len(rows) == 1
+    assert source == "brapi_v2_crypto_max"
+    assert provider == "brapi"
+    assert terminal_status == "HISTORY_START_SHALLOW"
+
+
+@pytest.mark.asyncio
 async def test_truncated_crypto_start_uses_yahoo_usd_ptax_complement_and_keeps_brapi_primary(monkeypatch) -> None:
     usd_rows = [
         (datetime(2014, 9, 17, tzinfo=timezone.utc), 400.0),
@@ -243,6 +271,19 @@ def test_gapped_crypto_complement_does_not_retry_automatically() -> None:
         first_price_date=date(2018, 10, 5),
         last_price_date=date(2026, 8, 10),
         provider_status="HISTORY_START_COMPLEMENT_GAPPED",
+    )
+
+    assert ranges == ()
+
+
+def test_shallow_crypto_start_does_not_retry_automatically() -> None:
+    ranges = build_missing_ranges(
+        status=CoverageStatus.PARTIAL_START,
+        required_from=date(1900, 1, 1),
+        required_to=date(2026, 8, 10),
+        first_price_date=date(2026, 8, 10),
+        last_price_date=date(2026, 8, 10),
+        provider_status="HISTORY_START_SHALLOW",
     )
 
     assert ranges == ()
