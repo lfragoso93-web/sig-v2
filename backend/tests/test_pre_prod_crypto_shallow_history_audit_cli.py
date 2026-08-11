@@ -10,7 +10,8 @@ def test_crypto_shallow_history_audit_is_db_only_and_read_only() -> None:
     assert "SHALLOW_MAX_ROWS" in source
     assert "SHALLOW_MAX_AGE_DAYS" in source
     assert "HISTORY_START_SHALLOW_VERIFIED" in source
-    assert "VERIFIED_SHALLOW_STATUS" in source
+    assert "HISTORY_START_SHALLOW_UNAVAILABLE" in source
+    assert "NON_RETRY_SHALLOW_STATUSES" in source
     assert '"shallow_histories"' in source
     assert "AssetPrice" in source
     assert "fetch_brapi" not in source
