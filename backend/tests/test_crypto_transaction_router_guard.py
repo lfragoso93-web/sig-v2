@@ -124,3 +124,16 @@ async def test_rejected_crypto_is_exposed_as_unprocessable_entity(monkeypatch) -
     assert exc_info.value.status_code == 422
     assert "APT" in str(exc_info.value.detail)
     assert "HISTORY_START_COMPLEMENT_GAPPED" in str(exc_info.value.detail)
+
+
+def test_transaction_eligibility_service_has_no_provider_imports() -> None:
+    source = inspect.getsource(
+        __import__(
+            "app.services.crypto_transaction_eligibility_service",
+            fromlist=["*"],
+        )
+    )
+
+    assert "coingecko" not in source.lower()
+    assert "brapi" not in source.lower()
+    assert "httpx" not in source.lower()
