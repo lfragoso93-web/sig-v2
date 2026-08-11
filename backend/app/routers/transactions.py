@@ -17,6 +17,10 @@ from app.models.user import User
 from app.schemas.asset import AssetCreate
 from app.schemas.transaction import PagedTransactions, TransactionCreate, TransactionOut
 from app.services.asset_service import get_or_create_asset
+from app.services.crypto_transaction_eligibility_service import (
+    CryptoTransactionEligibilityError,
+    require_financially_certified_crypto_asset,
+)
 from app.services.portfolio_service import invalidate_portfolio_cache
 from app.services.rentabilidade_cache_service import invalidate_rentabilidade_cache
 from app.services.transaction_service import list_transactions_paginated
@@ -248,6 +252,20 @@ async def _get_portfolio(portfolio_id: int, user: User, db: AsyncSession) -> Por
     return p
 
 
+async def _validate_crypto_transaction_asset(
+    db: AsyncSession,
+    ticker: str,
+    asset_type: str,
+) -> None:
+    if asset_type != "CRIPTO":
+        return
+
+    try:
+        await require_financially_certified_crypto_asset(db, ticker)
+    except CryptoTransactionEligibilityError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 async def _calc_current_quantity(
     db: AsyncSession,
     portfolio_id: int,
@@ -347,6 +365,8 @@ async def create_transaction(
     asset_type = payload.asset_type
     operation = _to_operation(payload.operation)
 
+    await _validate_crypto_transaction_asset(db, ticker, asset_type)
+
     if operation == OperationType.sell:
         await _validate_sell(db, portfolio_id, ticker, payload.quantity)
 
@@ -390,8 +410,9 @@ async def create_transaction(
                 "TESOURO_DIRETO",
             )
 
-    asset_data = AssetCreate(ticker=ticker, name=ticker, asset_type=asset_type)
-    await get_or_create_asset(db, asset_data)
+    if asset_type != "CRIPTO":
+        asset_data = AssetCreate(ticker=ticker, name=ticker, asset_type=asset_type)
+        await get_or_create_asset(db, asset_data)
 
     # O CRUD de transacoes deve permanecer deterministico e local. Ingestao de
     # mercado (precos, logos, eventos e proventos) pertence a pipelines opt-in.
@@ -435,6 +456,8 @@ async def update_transaction(
     ticker = payload.ticker.strip().upper()
     asset_type = payload.asset_type
     operation = _to_operation(payload.operation)
+
+    await _validate_crypto_transaction_asset(db, ticker, asset_type)
 
     if operation == OperationType.sell:
         await _validate_sell(
