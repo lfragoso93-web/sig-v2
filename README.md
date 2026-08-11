@@ -4,11 +4,11 @@ Plataforma pessoal para acompanhamento, consolidação e análise de investiment
 
 A branch de desenvolvimento é `stable-15jun`. A promoção para `main` ocorre exclusivamente por Pull Request após validação integral e sincronização da documentação viva.
 
-## Status atual — 08/08/2026
+## Status atual — 11/08/2026
 
 O SGI v2 está em **estabilização arquitetural e certificação do bootstrap inicial antes da próxima fase funcional**.
 
-A Issue #227 é o gate-mãe que bloqueia dados reais até a certificação estrutural. A Issue #247 executa a auditoria de legado, serviços, routers, endpoints e integrações. A #248 coordena a fronteira de providers/readiness e a #250 executa o orquestrador global.
+A Issue #227 é o gate-mãe que bloqueia dados reais até a certificação estrutural. A Issue #247 executa a auditoria de legado, serviços, routers, endpoints e integrações. A #248 coordena a fronteira de providers/readiness e a #250 executa o orquestrador global. A #267 formaliza o novo universo CRIPTO suportado.
 
 A convergência Alembic ↔ MetaData da Issue #241 foi concluída para todos os domínios estabilizados. O único diff deliberadamente preservado é `goals`, que não deve receber migration antes do redesenho conjunto de Metas e Análise de Carteira (#246 + #57).
 
@@ -24,58 +24,59 @@ O SGI v2 adota uma fronteira explícita entre **bootstrap de dados** e **runtime
 
 A disponibilização para criação/importação de carteiras reais só ocorre depois que o bootstrap inicial estiver concluído e validado.
 
+### Universo CRIPTO suportado
+
+O catálogo amplo de um provider **não** equivale ao universo operacional do SGI. A partir da #267, CRIPTO segue um contrato explícito de relevância de mercado:
+
+- fonte de ranking: CoinGecko `/coins/markets`, ordenado por capitalização de mercado;
+- limite: Top 100 por `market_cap_rank`;
+- elegibilidade operacional: interseção entre o Top 100 CoinGecko e os símbolos disponíveis no catálogo CRIPTO da BRAPI;
+- BRAPI continua sendo a fonte de disponibilidade/cotação integrada ao SGI; CoinGecko é usado somente para definir o ranking de relevância no bootstrap;
+- ativos CRIPTO persistidos anteriormente fora do universo suportado não são apagados nem têm lifecycle falsificado;
+- seed, bootstrap histórico e readiness CRIPTO consideram somente o universo suportado;
+- ativos fora do universo não devem bloquear a certificação CRIPTO.
+
+A seleção é dinâmica: um ativo pode entrar ou sair do universo em bootstrap futuro conforme o ranking de market cap. `ready_for_real_data` continua `false` até certificação operacional posterior.
+
 ### Bootstrap global atual
 
 O contrato corrente é `system-bootstrap.v4`.
 
 Etapas já registradas no orquestrador único:
 
-- catálogo de ativos;
+- catálogo de ativos, com CRIPTO limitado ao universo Top 100 suportado;
 - catálogo, reconciliação e histórico do Tesouro;
-- histórico global de preços;
+- histórico global de preços, com CRIPTO limitado ao mesmo universo suportado;
 - benchmarks;
 - câmbio USD-BRL por PTAX oficial, reutilizando o seed auditável da #217;
 - Proventos globais em `asset_dividends`, reutilizando `pre-prod-dividends-seed.v2` sob gate explícito da #226;
 - eventos corporativos globais em `corporate_events`, por wrapper dedicado que lê o catálogo persistido, usa advisory lock transacional e delega exclusivamente a `sync_corporate_events_for_asset`.
 
-Proventos não executam providers sem opt-in `SGI_BOOTSTRAP_ENABLE_DIVIDENDS=true`; esse opt-in técnico não substitui a autorização operacional exigida pela #226. Eventos corporativos também permanecem fail-closed sem `SGI_BOOTSTRAP_ENABLE_CORPORATE_EVENTS=true`; a integração atual é estrutural e nenhuma carga real foi executada durante sua implementação.
-
-O bootstrap possui identidade auditável compartilhada (`run_id`, `stable-15jun`, SHA completo). O SHA é obrigatório no disparo administrativo e pode ser fornecido por `SGI_BOOTSTRAP_COMMIT_SHA` no startup automático.
+Proventos não executam providers sem opt-in `SGI_BOOTSTRAP_ENABLE_DIVIDENDS=true`; esse opt-in técnico não substitui a autorização operacional exigida pela #226. Eventos corporativos também permanecem fail-closed sem `SGI_BOOTSTRAP_ENABLE_CORPORATE_EVENTS=true`.
 
 `ready_for_real_data` permanece `false` até todos os domínios obrigatórios e gates de certificação estarem concluídos.
 
-### Qualidade validada
+### Evidência CRIPTO anterior ao corte Top 100
 
-Último checkpoint certificado localmente pelo usuário: HEAD `0e8d96c081a0e788a9edcf69901a134b29b7f696`.
+A auditoria BC/BD no universo amplo de 481 ativos foi certificada em `9772b8c2bdb9875d85abc4a72ed0bebea39c222e`:
 
-- Build Docker aprovado.
-- `compileall` aprovado.
-- **22/22 testes** do checkpoint de bootstrap/FX/readiness aprovados.
-- Import integral de `app.main` aprovado.
-- HEAD local igual ao remoto esperado.
+- 369 `HISTORY_START_EXHAUSTED`;
+- 87 `HISTORY_START_COMPLEMENT_GAPPED`;
+- 14 `HISTORY_START_SHALLOW_UNAVAILABLE`;
+- 10 `HISTORY_START_SHALLOW_VERIFIED`;
+- 1 `HISTORY_UNAVAILABLE` (`XUSD`);
+- zero duplicidades;
+- 88 seams bloqueantes;
+- 71 dos 87 gaps excediam 365 dias.
 
-As alterações posteriores que registram Proventos e eventos corporativos no bootstrap permanecem pendentes de validação local integrada.
-
-### Entregas consolidadas
-
-- Arquitetura DB-first e contratos `summary.v2` e `rentabilidade.v2`.
-- Valuation canônico por classe, snapshots patrimoniais e reconciliação financeira.
-- Histórico B3/COTAHIST, Tesouro oficial, benchmarks e câmbio persistidos.
-- Leitura pública USD/BRL exclusivamente por `fx_rates`, alinhado ao MetaData/Alembic.
-- Proventos globais em `asset_dividends`, com direitos de carteira calculados sob demanda.
-- Motor canônico de eventos corporativos e projeção histórica compartilhada de posição, custo e resultado realizado.
-- IRPF anual canônico, frontend e exportações sem persistência de `IRPFReport` legado.
-- Transactions alinhado ao contrato físico migrado e sem sincronização externa automática no CRUD.
-- GETs financeiros de histórico de preços e posições endurecidos como DB-first.
-- Backfill público de performance removido; rebuilds permanecem operações internas explícitas.
-- Alembic endurecido com gates contra autogenerate monolítico e remoções acidentais.
+Esse diagnóstico motivou a separação entre catálogo descoberto e universo suportado. Esses estados antigos permanecem auditáveis, mas só os ativos que estiverem no universo Top 100 suportado devem participar do novo readiness CRIPTO.
 
 ## Arquitetura resumida
 
 ```text
 bootstrap inicial / sincronizadores operacionais
         ↓
-catálogo + históricos + eventos + taxas persistidos
+catálogo suportado + históricos + eventos + taxas persistidos
         ↓
 transactions + fixed_income_investments + corporate_events
         ↓
@@ -94,37 +95,40 @@ No runtime normal, provedores externos só participam da captura de preço intra
 
 Metas e Análise de Carteira estão fora do conjunto de contratos funcionais estabilizados neste momento. O redesenho será tratado como um único macroprojeto pelas Issues #246 e #57 somente depois da estabilização definitiva da base.
 
-Princípios: DB-first, fonte oficial primeiro, bootstrap idempotente, ausência não convertida em zero, contratos financeiros únicos e nenhuma chamada a provedor durante cálculos financeiros.
+Princípios: DB-first, fonte oficial primeiro, bootstrap idempotente, universo operacional explícito, ausência não convertida em zero, contratos financeiros únicos e nenhuma chamada a provedor durante cálculos financeiros.
 
 ## Ordem canônica de trabalho
 
 ### Agora — bootstrap e auditoria estrutural
 
-1. Validar localmente o `system-bootstrap.v4`, incluindo os gates de Proventos e eventos corporativos (#248/#250/#226/#254).
-2. Reconciliar os critérios finais de cobertura, idempotência e readiness do bootstrap completo.
-3. Continuar auditoria de routers, serviços, endpoints, aliases e integrações (#247/#129).
-4. Eliminar chamadas externas fora da fronteira canônica de bootstrap/preços.
-5. Certificar o bootstrap inicial completo antes da retomada de dados reais.
+1. Validar localmente o contrato Top 100 CRIPTO da #267, incluindo ranking, interseção BRAPI, seed, bootstrap histórico e readiness.
+2. Reexecutar a auditoria/readiness CRIPTO sobre o universo suportado e registrar os findings residuais reais.
+3. Validar localmente o `system-bootstrap.v4`, incluindo os gates de Proventos e eventos corporativos (#248/#250/#226/#254).
+4. Reconciliar os critérios finais de cobertura, idempotência e readiness do bootstrap completo.
+5. Continuar auditoria de routers, serviços, endpoints, aliases e integrações (#247/#129).
+6. Certificar o bootstrap inicial completo antes da retomada de dados reais.
 
 ### Depois — performance e benchmarks
 
-6. Materializar histórico persistido do IBOV (#150).
-7. Implementar TWR dedicado de Tesouro Direto e Renda Fixa (#149).
+7. Materializar histórico persistido do IBOV (#150).
+8. Implementar TWR dedicado de Tesouro Direto e Renda Fixa (#149).
 
 ### Bloqueado até certificação estrutural e bootstrap
 
-8. Executar as duas rodadas reais controladas de Proventos (#226), somente na janela autorizada.
-9. Fechar o gate agregado de seeds/bootstrap (#216).
-10. Retomar rebuild, CSV, posições, snapshots e reconciliação (#158).
-11. Somente então liberar criação/importação de carteiras reais.
+9. Executar as duas rodadas reais controladas de Proventos (#226), somente na janela autorizada.
+10. Fechar o gate agregado de seeds/bootstrap (#216).
+11. Retomar rebuild, CSV, posições, snapshots e reconciliação (#158).
+12. Somente então liberar criação/importação de carteiras reais.
 
 ### Próxima grande fase funcional
 
-12. Redesenhar Metas + Análise de Carteira como um único macroprojeto (#246 + #57).
+13. Redesenhar Metas + Análise de Carteira como um único macroprojeto (#246 + #57).
 
 ## Estado operacional
 
 - Dados históricos e catálogos existentes continuam sendo persistidos no banco.
+- CRIPTO passa a possuir universo operacional Top 100 por market cap, cruzado com disponibilidade BRAPI.
+- Registros CRIPTO legados fora desse universo são preservados para auditoria e não bloqueiam o novo readiness por princípio.
 - `system-bootstrap.v4` é a porta única de bootstrap e já registra FX, Proventos e eventos corporativos sob seus contratos canônicos.
 - Proventos permanecem bloqueados para execução real até autorização da #226.
 - Eventos corporativos estão estruturalmente integrados, mas permanecem opt-in e ainda pendem de validação local integrada/certificação final.
@@ -170,6 +174,7 @@ npm run build
 - `CHANGELOG.md` — mudanças relevantes.
 - `docs/architecture.md` — arquitetura DB-first e fronteiras dos módulos.
 - `docs/DEVELOPMENT_CONTINUITY.md` — checkpoint obrigatório para retomada.
+- `docs/PROVIDER_ACCESS_POLICY_2026-08.md` — política de acesso a providers.
 - `docs/ROUTER_ENDPOINT_AUDIT_2026-08.md` — auditoria corrente das superfícies HTTP.
 - `docs/DIVIDENDS_CANONICAL_ARCHITECTURE.md` — arquitetura canônica de Proventos.
 - `docs/ALEMBIC_METADATA_DRIFT_INVENTORY_2026-08.md` — inventário final da convergência e exceção `goals`.
