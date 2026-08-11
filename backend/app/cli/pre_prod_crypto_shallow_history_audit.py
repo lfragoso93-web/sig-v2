@@ -19,9 +19,14 @@ NON_RETRY_SHALLOW_STATUSES = (
 )
 
 
-async def _run(*, required_to: date | None = None) -> dict:
+async def _run(*, required_to: date | None = None, tickers: set[str] | None = None) -> dict:
     target = required_to or date.today()
     cutoff = target - timedelta(days=SHALLOW_MAX_AGE_DAYS)
+    normalized_tickers = (
+        {str(ticker).strip().upper() for ticker in tickers if str(ticker).strip()}
+        if tickers is not None
+        else None
+    )
 
     async with AsyncSessionLocal() as db:
         stats = (
@@ -35,29 +40,31 @@ async def _run(*, required_to: date | None = None) -> dict:
             .subquery()
         )
 
-        rows = (
-            await db.execute(
-                select(
-                    Asset.id,
-                    Asset.ticker,
-                    Asset.provider,
-                    Asset.provider_symbol,
-                    Asset.provider_status,
-                    stats.c.rows,
-                    stats.c.first_ts,
-                    stats.c.last_ts,
-                )
-                .join(stats, stats.c.asset_id == Asset.id)
-                .where(Asset.asset_type == AssetType.CRIPTO.value)
-                .where(stats.c.rows <= SHALLOW_MAX_ROWS)
-                .where(func.date(stats.c.first_ts) >= cutoff)
-                .where(
-                    (Asset.provider_status.is_(None))
-                    | (~Asset.provider_status.in_(NON_RETRY_SHALLOW_STATUSES))
-                )
-                .order_by(Asset.ticker)
+        stmt = (
+            select(
+                Asset.id,
+                Asset.ticker,
+                Asset.provider,
+                Asset.provider_symbol,
+                Asset.provider_status,
+                stats.c.rows,
+                stats.c.first_ts,
+                stats.c.last_ts,
             )
-        ).all()
+            .join(stats, stats.c.asset_id == Asset.id)
+            .where(Asset.asset_type == AssetType.CRIPTO.value)
+            .where(stats.c.rows <= SHALLOW_MAX_ROWS)
+            .where(func.date(stats.c.first_ts) >= cutoff)
+            .where(
+                (Asset.provider_status.is_(None))
+                | (~Asset.provider_status.in_(NON_RETRY_SHALLOW_STATUSES))
+            )
+        )
+        if normalized_tickers is not None:
+            stmt = stmt.where(func.upper(Asset.ticker).in_(normalized_tickers))
+        stmt = stmt.order_by(Asset.ticker)
+
+        rows = (await db.execute(stmt)).all()
 
     assets = [
         {
