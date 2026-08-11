@@ -15,6 +15,7 @@ SOURCE = "yfinance_crypto_ptax_brl_max"
 SHALLOW_MAX_ROWS = 7
 SHALLOW_MAX_AGE_DAYS = 30
 VERIFIED_SHALLOW_STATUS = "HISTORY_START_SHALLOW_VERIFIED"
+UNAVAILABLE_SHALLOW_STATUS = "HISTORY_START_SHALLOW_UNAVAILABLE"
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -50,6 +51,7 @@ async def _recover_one(item: dict, *, apply: bool) -> dict:
     ticker = str(item["ticker"]).upper()
     brapi_first = date.fromisoformat(str(item["first_date"]))
     yahoo_symbol = asset_price_gap_sync_service._yahoo_crypto_usd_symbol(ticker)
+    provider_symbol = str(item.get("provider_symbol") or f"{ticker}-BRL")
 
     result = {
         "asset_id": int(item["asset_id"]),
@@ -62,7 +64,24 @@ async def _recover_one(item: dict, *, apply: bool) -> dict:
         "rows_inserted": 0,
         "terminal_status": None,
     }
-    if item["recovery_class"] != "recoverable_shallow" or not apply:
+    if not apply:
+        return result
+
+    if item["recovery_class"] != "recoverable_shallow":
+        await asset_price_gap_sync_service._persist_result(
+            int(item["asset_id"]),
+            [],
+            source=SOURCE,
+            provider="brapi",
+            provider_symbol=provider_symbol,
+            terminal_status=UNAVAILABLE_SHALLOW_STATUS,
+        )
+        result.update(
+            {
+                "applied": True,
+                "terminal_status": UNAVAILABLE_SHALLOW_STATUS,
+            }
+        )
         return result
 
     usd_rows = await asset_price_gap_sync_service._fetch_yf_max(yahoo_symbol, AssetType.CRIPTO)
@@ -82,7 +101,6 @@ async def _recover_one(item: dict, *, apply: bool) -> dict:
             brapi_first=brapi_first,
         )
 
-    provider_symbol = str(item.get("provider_symbol") or f"{ticker}-BRL")
     inserted = await asset_price_gap_sync_service._persist_result(
         int(item["asset_id"]),
         complement_rows,
@@ -128,6 +146,7 @@ async def _run(
         1
         for item in results
         if item["terminal_status"] in {
+            "HISTORY_START_SHALLOW_UNAVAILABLE",
             "HISTORY_START_COMPLEMENT_GAPPED",
             "HISTORY_START_COMPLEMENT_UNAVAILABLE",
         }
