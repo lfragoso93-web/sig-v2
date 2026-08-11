@@ -197,7 +197,7 @@ async def _fetch_crypto_history(ticker: str) -> tuple[list[tuple[datetime, float
         )
     except Exception as exc:
         logger.info(
-            "[price_gap_sync] brapi crypto indisponivel ticker=%s; usando yahoo: %s",
+            "[price_gap_sync] brapi crypto indisponivel ticker=%s; usando yahoo USD/PTAX: %s",
             ticker,
             exc,
         )
@@ -206,8 +206,10 @@ async def _fetch_crypto_history(ticker: str) -> tuple[list[tuple[datetime, float
     if rows:
         return rows, "brapi_v2_crypto_max", "brapi"
 
-    fallback = await _fetch_yf_max(ticker, AssetType.CRIPTO)
-    return fallback, "yfinance_crypto_max", "yfinance"
+    yahoo_symbol = _yahoo_crypto_usd_symbol(ticker)
+    usd_rows = await _fetch_yf_max(yahoo_symbol, AssetType.CRIPTO)
+    fallback = await _convert_crypto_usd_rows_to_brl(usd_rows)
+    return fallback, "yfinance_crypto_ptax_brl_max", "yfinance"
 
 
 def _empty_status(missing_range: MissingPriceRange) -> str:
@@ -414,13 +416,20 @@ async def sync_asset_price_gaps(coverage: AssetPriceCoverage) -> AssetGapSyncRes
                     effective_range,
                     crypto_start_truncated=crypto_start_truncated,
                 )
+                persisted_provider_symbol = (
+                    _yahoo_crypto_usd_symbol(provider_symbol)
+                    if asset_type == AssetType.CRIPTO
+                    and provider == "yfinance"
+                    and source == "yfinance_crypto_ptax_brl_max"
+                    else provider_symbol
+                )
                 total_received += len(rows)
                 total_inserted += await _persist_result(
                     coverage.asset_id,
                     rows,
                     source=source,
                     provider=provider,
-                    provider_symbol=provider_symbol,
+                    provider_symbol=persisted_provider_symbol,
                     terminal_status=terminal_status,
                 )
             except Exception as exc:
