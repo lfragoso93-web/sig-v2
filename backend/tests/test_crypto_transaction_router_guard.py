@@ -6,14 +6,13 @@ import textwrap
 from datetime import date
 
 import pytest
-from fastapi import BackgroundTasks, HTTPException
-
 from app.models.transaction import OperationType, Transaction
 from app.routers import transactions
 from app.schemas.transaction import TransactionCreate
 from app.services.crypto_transaction_eligibility_service import (
     CryptoTransactionEligibilityError,
 )
+from fastapi import BackgroundTasks, HTTPException
 
 
 def _top_level_call_index(function, call_name: str) -> int:
@@ -21,9 +20,12 @@ def _top_level_call_index(function, call_name: str) -> int:
     body = tree.body[0].body
     for index, statement in enumerate(body):
         for node in ast.walk(statement):
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-                if node.func.id == call_name:
-                    return index
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == call_name
+            ):
+                return index
     raise AssertionError(f"call not found: {call_name}")
 
 
@@ -38,9 +40,12 @@ def _transaction_assignment_index(function) -> int:
             for target in statement.targets
         ):
             continue
-        if isinstance(statement.value, ast.Call) and isinstance(statement.value.func, ast.Name):
-            if statement.value.func.id == "Transaction":
-                return index
+        if (
+            isinstance(statement.value, ast.Call)
+            and isinstance(statement.value.func, ast.Name)
+            and statement.value.func.id == "Transaction"
+        ):
+            return index
     raise AssertionError("Transaction assignment not found")
 
 
