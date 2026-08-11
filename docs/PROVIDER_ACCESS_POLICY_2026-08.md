@@ -63,7 +63,8 @@ Regras:
 8. complemento não vazio que não alcança a véspera da primeira data persistida pela BRAPI recebe `HISTORY_START_COMPLEMENT_GAPPED`: a costura histórica permanece explicitamente não certificada e também não entra em retry automático infinito;
 9. `HISTORY_START_EXHAUSTED` só é usado quando existe evidência de complemento histórico utilizável e contínuo até a janela BRAPI, quando Yahoo USD/PTAX fornece histórico inicial utilizável após BRAPI vazio, ou quando a própria resposta inicial da BRAPI pode ser classificada como completa pelos gates do adapter;
 10. `HISTORY_UNAVAILABLE` é terminal somente quando a tentativa inicial não produz nenhuma linha utilizável nem na BRAPI nem no Yahoo USD/PTAX; esse estado não entra em retry automático e permanece observável para auditoria;
-11. probes de diagnóstico de provider são superfícies read-only e nunca persistem `Asset`, metadata de provider ou `asset_prices`.
+11. resposta inicial BRAPI excessivamente rasa e recente (até 7 linhas, com início nos 30 dias anteriores ao `required_to`) recebe `HISTORY_START_SHALLOW`; esse estado é bloqueante para readiness, não entra em retry automático e exige probe/reconciliação deliberada antes de qualquer complemento;
+12. probes de diagnóstico de provider são superfícies read-only e nunca persistem `Asset`, metadata de provider ou `asset_prices`.
 
 ## Runtime normal
 
