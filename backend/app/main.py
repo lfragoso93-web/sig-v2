@@ -4,31 +4,42 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse, Response
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from sqlalchemy import text
 
-from app.core.database import engine, AsyncSessionLocal
+from app.core.cache import get_redis
 from app.core.config import settings
+from app.core.database import AsyncSessionLocal, engine
 from app.core.limiter import limiter
 from app.core.scheduler import start_scheduler
-from app.core.cache import get_redis
 from app.middleware import SecurityHeadersMiddleware
 from app.routers import (
-    auth, portfolios, transactions, dividends, positions,
-    users, proventos, performance, admin,
-    assets, fx, goals, irpf,
-    analysis, treasury,
+    admin,
+    analysis,
+    assets,
+    auth,
+    class_targets,
+    debug,
+    dividends,
+    fx,
+    goals,
+    irpf,
+    performance,
+    portfolios,
+    positions,
+    prices,
+    proventos,
+    rentabilidade,
+    transactions,
+    treasury,
+    users,
 )
 from app.routers.admin_bootstrap import router as admin_bootstrap_router
-from app.routers import debug
-from app.routers import prices
-from app.routers import class_targets
-from app.routers import rentabilidade
 
 logger = logging.getLogger(__name__)
 
