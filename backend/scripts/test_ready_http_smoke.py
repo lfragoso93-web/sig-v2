@@ -25,6 +25,13 @@ def _require_status(response: httpx.Response, expected: int, step: str) -> None:
         )
 
 
+def _require_ok(response: httpx.Response, step: str) -> None:
+    if response.status_code < 200 or response.status_code >= 300:
+        raise AssertionError(
+            f"{step}: HTTP {response.status_code}: {response.text[:1000]}"
+        )
+
+
 async def main() -> None:
     suffix = secrets.token_hex(6)
     email = f"test-ready-{suffix}@sig.local"
@@ -121,8 +128,54 @@ async def main() -> None:
             _require_status(transactions, 200, "list transactions")
             assert transactions.json()["total"] == 1
 
+            summary = await client.get(
+                f"/api/v1/portfolios/{portfolio_id}/summary",
+                headers=headers,
+            )
+            _require_status(summary, 200, "summary")
+            assert summary.json()["summary_version"] == "summary.v2"
+
+            positions = await client.get(
+                f"/api/v1/portfolios/{portfolio_id}/positions",
+                headers=headers,
+            )
+            _require_status(positions, 200, "positions")
+            assert isinstance(positions.json(), list)
+
+            rentabilidade_paths = (
+                "kpis",
+                "ativos",
+                "classes",
+                "reconciliation",
+            )
+            for suffix_path in rentabilidade_paths:
+                response = await client.get(
+                    f"/api/v1/portfolios/{portfolio_id}/rentabilidade/{suffix_path}",
+                    headers=headers,
+                )
+                _require_ok(response, f"rentabilidade/{suffix_path}")
+
+            dividends = await client.get(
+                f"/api/v1/portfolios/{portfolio_id}/dividends",
+                headers=headers,
+            )
+            _require_status(dividends, 200, "dividends")
+            assert isinstance(dividends.json(), list)
+
+            year = date.today().year
+            irpf = await client.get(
+                f"/api/v1/irpf/{portfolio_id}/irpf/{year}/canonical",
+                headers=headers,
+            )
+            _require_status(irpf, 200, "IRPF canonical")
+            assert irpf.json()["schema_version"].startswith("irpf-")
+
+            ready = await client.get("/ready")
+            _require_status(ready, 503, "ready_for_real_data gate")
+            assert ready.json()["ready_for_real_data"] is False
+
             print(
-                "TEST-READY-HTTP-SMOKE-PHASE1:PASS "
+                "TEST-READY-HTTP-SMOKE:PASS "
                 f"portfolio_id={portfolio_id} btc_tx_id={btc_tx_id}"
             )
         finally:
