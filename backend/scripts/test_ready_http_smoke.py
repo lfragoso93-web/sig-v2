@@ -34,7 +34,7 @@ def _require_ok(response: httpx.Response, step: str) -> None:
 
 async def main() -> None:
     suffix = secrets.token_hex(6)
-    email = f"test-ready-{suffix}@sig.local"
+    email = f"test-ready-{suffix}@sgi.com"
     password = f"Smoke{suffix}#Aa1"
     headers: dict[str, str] = {}
     portfolio_id: int | None = None
