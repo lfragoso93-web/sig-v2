@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 
 from pydantic import ValidationError
 from sqlalchemy import func, select
@@ -22,7 +22,7 @@ from app.services.canonical_dividend_aggregation_service import (
     load_received_entitlement_totals,
 )
 from app.services.fixed_income_valuation_service import get_fixed_income_totals
-from app.services.fx_service import get_usd_brl_today
+from app.services.persisted_fx_query_service import get_persisted_usd_brl_rate
 from app.services.portfolio_reconciliation_service import reconcile_snapshot_summary
 from app.services.portfolio_service import (
     _MARKET_PRICE_TYPES,
@@ -159,7 +159,7 @@ async def _get_intraday_valuation(db: AsyncSession, portfolio_id: int) -> dict:
 
 
 async def _get_received_dividend_totals(db: AsyncSession, portfolio_id: int) -> tuple[float, float]:
-    today = date.today()
+    today = datetime.now(timezone.utc).date()
     cutoff_12m = (datetime.now(timezone.utc) - timedelta(days=365)).date()
     return await load_received_entitlement_totals(
         db,
@@ -191,6 +191,7 @@ async def _build_summary_from_latest_snapshot(
     valuation = await _get_intraday_valuation(db, portfolio_id)
     dividends_12m, total_dividends = await _get_received_dividend_totals(db, portfolio_id)
     realized_pnl = await get_realized_pnl(db, portfolio_id)
+    today = datetime.now(timezone.utc).date()
 
     summary = build_portfolio_summary(
         PortfolioSummaryInput(
@@ -201,7 +202,7 @@ async def _build_summary_from_latest_snapshot(
             realized_pnl=realized_pnl,
             has_partial_prices=bool(valuation["assets_without_price"]),
             assets_without_price=valuation["assets_without_price"],
-            usd_brl_rate=await get_usd_brl_today(db),
+            usd_brl_rate=await get_persisted_usd_brl_rate(db),
             accumulated_twr_pct=float(snapshot.accumulated_return_pct),
             daily_twr_pct=float(snapshot.daily_return_pct),
         )
@@ -212,7 +213,7 @@ async def _build_summary_from_latest_snapshot(
             "snapshot_id": getattr(snapshot, "id", None),
             "snapshot_date": snapshot.snapshot_date.isoformat(),
             "performance_as_of": snapshot.snapshot_date.isoformat(),
-            "proventos_as_of": date.today().isoformat(),
+            "proventos_as_of": today.isoformat(),
             "proventos_source": "received_cash_dividends",
             "valuation_mode": "intraday",
             "valuation_updated_at": valuation["valuation_updated_at"],
@@ -243,6 +244,7 @@ async def _build_summary_from_valuation_fallback(db: AsyncSession, portfolio_id:
     valuation = await _get_intraday_valuation(db, portfolio_id)
     dividends_12m, total_dividends = await _get_received_dividend_totals(db, portfolio_id)
     realized_pnl = await get_realized_pnl(db, portfolio_id)
+    today = datetime.now(timezone.utc).date()
     summary = build_portfolio_summary(
         PortfolioSummaryInput(
             total_invested=valuation["total_invested"],
@@ -252,7 +254,7 @@ async def _build_summary_from_valuation_fallback(db: AsyncSession, portfolio_id:
             realized_pnl=realized_pnl,
             has_partial_prices=bool(valuation["assets_without_price"]),
             assets_without_price=valuation["assets_without_price"],
-            usd_brl_rate=await get_usd_brl_today(db),
+            usd_brl_rate=await get_persisted_usd_brl_rate(db),
         )
     )
     summary.update(
@@ -261,7 +263,7 @@ async def _build_summary_from_valuation_fallback(db: AsyncSession, portfolio_id:
             "snapshot_id": None,
             "snapshot_date": None,
             "performance_as_of": None,
-            "proventos_as_of": date.today().isoformat(),
+            "proventos_as_of": today.isoformat(),
             "proventos_source": "received_cash_dividends",
             "valuation_mode": "intraday",
             "valuation_updated_at": valuation["valuation_updated_at"],
