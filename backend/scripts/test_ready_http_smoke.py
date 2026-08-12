@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import secrets
-from datetime import date
+from datetime import datetime, timezone
 
 import httpx
 
@@ -76,7 +76,8 @@ async def main() -> None:
             )
             _require_status(get_portfolio, 200, "get portfolio")
 
-            tx_date = date.today().isoformat()
+            now_utc = datetime.now(timezone.utc)
+            tx_date = now_utc.date().isoformat()
             btc = await client.post(
                 f"/api/v1/portfolios/{portfolio_id}/transactions",
                 headers=headers,
@@ -162,7 +163,7 @@ async def main() -> None:
             _require_status(dividends, 200, "dividends")
             assert isinstance(dividends.json(), list)
 
-            year = date.today().year
+            year = now_utc.year
             irpf = await client.get(
                 f"/api/v1/irpf/{portfolio_id}/irpf/{year}/canonical",
                 headers=headers,
