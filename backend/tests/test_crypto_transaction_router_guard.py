@@ -6,7 +6,6 @@ import textwrap
 from datetime import date
 
 import pytest
-from fastapi import BackgroundTasks, HTTPException
 
 from app.models.transaction import OperationType, Transaction
 from app.routers import transactions
@@ -14,6 +13,7 @@ from app.schemas.transaction import TransactionCreate
 from app.services.crypto_transaction_eligibility_service import (
     CryptoTransactionEligibilityError,
 )
+from fastapi import BackgroundTasks, HTTPException
 
 
 def _top_level_call_index(function, call_name: str) -> int:
