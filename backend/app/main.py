@@ -69,9 +69,9 @@ async def _run_startup_bootstrap() -> None:
 
     report = await run_system_bootstrap(startup_delay_seconds=3.0)
     if report.ok:
-        logger.info("[Bootstrap] system-bootstrap.v1 concluído: %s", report.to_dict())
+        logger.info("[Bootstrap] %s concluído: %s", report.schema_version, report.to_dict())
     else:
-        logger.error("[Bootstrap] system-bootstrap.v1 incompleto: %s", report.to_dict())
+        logger.error("[Bootstrap] %s incompleto: %s", report.schema_version, report.to_dict())
 
 
 @asynccontextmanager
