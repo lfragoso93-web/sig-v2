@@ -8,7 +8,7 @@ from datetime import date
 import pytest
 from app.models.transaction import OperationType, Transaction
 from app.routers import transactions
-from app.schemas.transaction import TransactionCreate
+from app.schemas.transaction import TransactionCreate, TransactionUpdate
 from app.services.crypto_transaction_eligibility_service import (
     CryptoTransactionEligibilityError,
 )
@@ -114,6 +114,10 @@ async def _reject_crypto(_db, ticker, _asset_type):
         status_code=422,
         detail=f"CRIPTO {ticker} não elegível para transações",
     )
+
+
+async def _allow_crypto(*_args, **_kwargs):
+    return None
 
 
 def test_create_crypto_guard_runs_before_transaction_construction() -> None:
@@ -227,7 +231,7 @@ async def test_rejected_update_does_not_mutate_or_commit(monkeypatch) -> None:
         await transactions.update_transaction(
             portfolio_id=1,
             transaction_id=10,
-            payload=_payload("APT"),
+            payload=TransactionUpdate(ticker="APT"),
             background_tasks=BackgroundTasks(),
             db=db,
             current_user=object(),
@@ -237,6 +241,75 @@ async def test_rejected_update_does_not_mutate_or_commit(monkeypatch) -> None:
     assert existing.ticker == "BTC"
     assert existing.asset_type == "CRIPTO"
     assert db.commit_called is False
+
+
+@pytest.mark.asyncio
+async def test_partial_update_preserves_omitted_fields(monkeypatch) -> None:
+    existing = Transaction(
+        id=11,
+        portfolio_id=1,
+        ticker="BTC",
+        asset_type="CRIPTO",
+        operation=OperationType.buy,
+        quantity=1,
+        price=100,
+        fees=2,
+        date=date(2026, 8, 10),
+        currency="BRL",
+        notes="original",
+    )
+    db = _WriteSpySession(existing)
+    monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
+    monkeypatch.setattr(transactions, "_validate_crypto_transaction_asset", _allow_crypto)
+
+    result = await transactions.update_transaction(
+        portfolio_id=1,
+        transaction_id=11,
+        payload=TransactionUpdate(price=110),
+        background_tasks=BackgroundTasks(),
+        db=db,
+        current_user=object(),
+    )
+
+    assert result.price == 110
+    assert result.ticker == "BTC"
+    assert result.asset_type == "CRIPTO"
+    assert result.quantity == 1
+    assert result.fees == 2
+    assert result.notes == "original"
+    assert db.commit_called is True
+
+
+@pytest.mark.asyncio
+async def test_partial_update_can_clear_notes(monkeypatch) -> None:
+    existing = Transaction(
+        id=12,
+        portfolio_id=1,
+        ticker="BTC",
+        asset_type="CRIPTO",
+        operation=OperationType.buy,
+        quantity=1,
+        price=100,
+        fees=0,
+        date=date(2026, 8, 10),
+        currency="BRL",
+        notes="original",
+    )
+    db = _WriteSpySession(existing)
+    monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
+    monkeypatch.setattr(transactions, "_validate_crypto_transaction_asset", _allow_crypto)
+
+    result = await transactions.update_transaction(
+        portfolio_id=1,
+        transaction_id=12,
+        payload=TransactionUpdate(notes=None),
+        background_tasks=BackgroundTasks(),
+        db=db,
+        current_user=object(),
+    )
+
+    assert result.notes is None
+    assert db.commit_called is True
 
 
 def test_transaction_eligibility_service_has_no_provider_imports() -> None:
