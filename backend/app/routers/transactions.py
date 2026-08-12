@@ -15,7 +15,12 @@ from app.models.portfolio import Portfolio
 from app.models.transaction import OperationType, Transaction
 from app.models.user import User
 from app.schemas.asset import AssetCreate
-from app.schemas.transaction import PagedTransactions, TransactionCreate, TransactionOut
+from app.schemas.transaction import (
+    PagedTransactions,
+    TransactionCreate,
+    TransactionOut,
+    TransactionUpdate,
+)
 from app.services.asset_service import get_or_create_asset
 from app.services.crypto_transaction_eligibility_service import (
     CryptoTransactionEligibilityError,
@@ -436,7 +441,7 @@ async def create_transaction(
 async def update_transaction(
     portfolio_id: int,
     transaction_id: int,
-    payload: TransactionCreate,
+    payload: TransactionUpdate,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -453,53 +458,67 @@ async def update_transaction(
     if not tx:
         raise HTTPException(status_code=404, detail="Transacao nao encontrada.")
 
-    ticker = payload.ticker.strip().upper()
-    asset_type = payload.asset_type
-    operation = _to_operation(payload.operation)
+    ticker = payload.ticker.strip().upper() if payload.ticker is not None else tx.ticker
+    asset_type = payload.asset_type if payload.asset_type is not None else tx.asset_type
+    operation = (
+        _to_operation(payload.operation)
+        if payload.operation is not None
+        else tx.operation
+    )
+    quantity = payload.quantity if payload.quantity is not None else tx.quantity
+    price = payload.price if payload.price is not None else tx.price
+    fees = payload.fees if payload.fees is not None else tx.fees
+    tx_date = payload.date if payload.date is not None else tx.date
+    currency = payload.currency if payload.currency is not None else tx.currency
+    notes = payload.notes if "notes" in payload.model_fields_set else tx.notes
 
     await _validate_crypto_transaction_asset(db, ticker, asset_type)
 
     if operation == OperationType.sell:
         await _validate_sell(
-            db, portfolio_id, ticker, payload.quantity, exclude_tx_id=transaction_id
+            db,
+            portfolio_id,
+            ticker,
+            quantity,
+            exclude_tx_id=transaction_id,
         )
 
-    invalidate_from = min(tx.date, payload.date)
+    invalidate_from = min(tx.date, tx_date)
 
     tx.ticker = ticker
     tx.asset_type = asset_type
     tx.operation = operation
-    tx.quantity = payload.quantity
-    tx.price = payload.price
-    tx.fees = payload.fees or 0.0
-    tx.date = payload.date
-    tx.currency = payload.currency or "BRL"
-    tx.notes = payload.notes
+    tx.quantity = quantity
+    tx.price = price
+    tx.fees = fees
+    tx.date = tx_date
+    tx.currency = currency
+    tx.notes = notes
 
     await db.commit()
     await db.refresh(tx)
 
     if operation == OperationType.buy:
         if asset_type == "RENDA_FIXA":
-            invested = float(payload.quantity) * float(payload.price)
+            invested = float(quantity) * float(price)
             background_tasks.add_task(
                 _upsert_fixed_income_isolated,
                 portfolio_id,
                 ticker,
-                payload.date,
+                tx_date,
                 invested,
-                payload.notes,
+                notes,
                 "RENDA_FIXA",
             )
         elif asset_type == "TESOURO_DIRETO":
-            invested = float(payload.quantity) * float(payload.price)
+            invested = float(quantity) * float(price)
             background_tasks.add_task(
                 _upsert_fixed_income_isolated,
                 portfolio_id,
                 ticker,
-                payload.date,
+                tx_date,
                 invested,
-                payload.notes,
+                notes,
                 "TESOURO_DIRETO",
             )
 
