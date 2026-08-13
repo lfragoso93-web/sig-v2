@@ -206,24 +206,35 @@ async def main() -> None:
                 notes="smoke venda parcial",
             )
 
+            disposable_tx_id = await _create_transaction(
+                client,
+                headers=headers,
+                portfolio_id=portfolio_id,
+                ticker="SMKDEL3",
+                asset_type="ACAO",
+                quantity=1.0,
+                price=5.0,
+                tx_date=tx_date,
+                notes="smoke delete isolado",
+            )
+
             transactions = await client.get(
                 f"/api/v1/portfolios/{portfolio_id}/transactions",
                 headers=headers,
             )
             _require_status(transactions, 200, "list transactions")
-            expected_total = 2 + len(canonical_transactions)
+            expected_total = 3 + len(canonical_transactions)
             assert transactions.json()["total"] == expected_total
             assert any(
                 item["id"] == sell_tx_id and item["operation"] == "sell"
                 for item in transactions.json()["items"]
             )
 
-            delete_tx_id = created_ids[0]
             delete_response = await client.delete(
-                f"/api/v1/portfolios/{portfolio_id}/transactions/{delete_tx_id}",
+                f"/api/v1/portfolios/{portfolio_id}/transactions/{disposable_tx_id}",
                 headers=headers,
             )
-            _require_status(delete_response, 204, "delete transaction")
+            _require_status(delete_response, 204, "delete isolated transaction")
 
             transactions_after_delete = await client.get(
                 f"/api/v1/portfolios/{portfolio_id}/transactions",
@@ -235,6 +246,10 @@ async def main() -> None:
                 "list transactions after delete",
             )
             assert transactions_after_delete.json()["total"] == expected_total - 1
+            assert any(
+                item["id"] == sell_tx_id and item["operation"] == "sell"
+                for item in transactions_after_delete.json()["items"]
+            )
 
             summary = await client.get(
                 f"/api/v1/portfolios/{portfolio_id}/summary",
@@ -285,7 +300,7 @@ async def main() -> None:
             print(
                 "TEST-READY-HTTP-SMOKE:PASS "
                 f"portfolio_id={portfolio_id} btc_tx_id={btc_tx_id} "
-                f"sell_tx_id={sell_tx_id} canonical_transactions={expected_total - 2}"
+                f"sell_tx_id={sell_tx_id} canonical_transactions={len(canonical_transactions)}"
             )
         finally:
             if headers:
