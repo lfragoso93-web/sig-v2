@@ -54,6 +54,10 @@ Etapas já registradas no orquestrador único:
 
 Proventos não executam providers sem opt-in `SGI_BOOTSTRAP_ENABLE_DIVIDENDS=true`; esse opt-in técnico não substitui a autorização operacional exigida pela #226. Eventos corporativos também permanecem fail-closed sem `SGI_BOOTSTRAP_ENABLE_CORPORATE_EVENTS=true`.
 
+Os direitos de Proventos são calculados sob demanda a partir do catálogo global
+persistido e da posição histórica; nenhuma leitura financeira materializa
+direitos por carteira.
+
 `ready_for_real_data` permanece `false` até todos os domínios obrigatórios e gates de certificação estarem concluídos.
 
 ### Evidência CRIPTO anterior ao corte Top 100

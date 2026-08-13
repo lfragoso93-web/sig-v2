@@ -40,7 +40,7 @@ A auditoria anterior sobre 481 CRIPTO permanece como evidência histórica, não
 | Dados canônicos / DB-first | Consolidado | concluir certificação bootstrap/providers |
 | B3 / Tesouro / benchmarks / câmbio | Persistidos e integrados ao bootstrap | validar cobertura/certificação |
 | CRIPTO | Universo Top 100 por market cap formalizado em #267 | validar ranking/interseção e readiness residual |
-| Proventos | Registrado no `system-bootstrap.v4` sob gate #226 | validar integração; carga real continua bloqueada |
+| Proventos | Contrato `pre-prod-dividends-seed.v2` registrado no `system-bootstrap.v4` sob gate #226 | validar integração; carga real continua bloqueada |
 | Snapshots e valuation | Consolidado | TWR dedicado #149 |
 | Resumo e Patrimônio | Consolidado | manter DB-first |
 | Rentabilidade | Consolidada | TWR #149 / IBOV #150 |
