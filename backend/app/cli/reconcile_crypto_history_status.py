@@ -5,8 +5,9 @@ import argparse
 import asyncio
 import json
 from datetime import date
+from typing import cast
 
-from sqlalchemy import func, select
+from sqlalchemy import CursorResult, func, select, update
 
 from app.core.database import AsyncSessionLocal
 from app.models.asset import Asset, AssetType
@@ -108,8 +109,8 @@ async def _run(args: argparse.Namespace) -> dict:
         updated = 0
         if args.apply:
             for item in eligible:
-                result = await db.execute(
-                    Asset.__table__.update()
+                statement = (
+                    update(Asset)
                     .where(
                         Asset.id == item["asset_id"],
                         Asset.provider_status == "HISTORY_START_EXHAUSTED",
@@ -117,6 +118,7 @@ async def _run(args: argparse.Namespace) -> dict:
                     )
                     .values(provider_status="HISTORY_START_TRUNCATED")
                 )
+                result = cast(CursorResult, await db.execute(statement))
                 updated += int(result.rowcount or 0)
             await db.commit()
 
