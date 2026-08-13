@@ -53,7 +53,7 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _chunks(values: list[str], size: int) -> list[list[str]]:
-    return [values[index : index + size] for index in range(0, len(values), size)]
+    return [values[index:index + size] for index in range(0, len(values), size)]
 
 
 async def _statuses(tickers: list[str]) -> dict[str, str | None]:
