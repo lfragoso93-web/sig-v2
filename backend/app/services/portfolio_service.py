@@ -581,7 +581,6 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
     enriched = await _non_fixed_income_enriched(db, portfolio_id)
     targets_map = await get_targets_map(db, portfolio_id)
     previous_prices, previous_reference_date = await _fetch_previous_prices_batch(db, enriched)
-    fx_today = await get_usd_brl_today(db)
 
     tickers = [e["ticker"] for e in enriched]
     logos = await _fetch_logos_batch(db, tickers)
