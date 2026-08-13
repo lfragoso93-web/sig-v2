@@ -18,9 +18,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset
+from app.services.persisted_current_price_query_service import (
+    get_persisted_current_prices,
+)
 from app.services.portfolio_service import calc_raw_positions
 from app.services.portfolio_summary_service import get_canonical_portfolio_summary
-from app.services.quotes_service import get_current_price
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +34,12 @@ async def get_portfolio_performance(
 ) -> dict:
     """Retorna posicoes legadas com totais vindos do resumo canonico."""
     positions = await calc_raw_positions(db, portfolio_id)
+    priced_tickers = [
+        str(position["ticker"]).strip().upper()
+        for position in positions
+        if float(position.get("quantity") or 0) > 0
+    ]
+    current_prices = await get_persisted_current_prices(db, priced_tickers)
 
     items = []
     for position in positions:
@@ -45,13 +53,9 @@ async def get_portfolio_performance(
             asset_type if isinstance(asset_type, str) else str(asset_type.value)
         )
         invested = float(position.get("total_invested") or 0)
-        current_price = await get_current_price(
-            ticker,
-            asset_type=asset_type_str,
-            db=db,
-        )
+        current_price = current_prices.get(ticker)
 
-        if current_price:
+        if current_price is not None:
             current_value = quantity * current_price
         else:
             average_price = invested / quantity if quantity else 0
@@ -74,6 +78,10 @@ async def get_portfolio_performance(
                 "asset_type": asset_type_str,
                 "quantity": round(quantity, 8),
                 "invested": round(invested, 2),
+                "current_price": (
+                    round(current_price, 4) if current_price is not None else None
+                ),
+                "has_current_price": current_price is not None,
                 "current_value": round(current_value, 2),
                 "gain": round(gain, 2),
                 "gain_pct": round(gain_pct, 4),
