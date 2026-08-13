@@ -28,6 +28,11 @@ BRAPI_DIVIDENDS_CHUNK = 20
 # Regex para extrair o codigo base de um ticker de cripto.
 _CRYPTO_SUFFIX_RE = re.compile(r"[-/](USD|BRL|USDT|USDC|EUR|GBP|BTC)$", re.IGNORECASE)
 
+# Segmentos interpolados no path da BRAPI devem permanecer estritamente locais.
+# Query params passam pelo encoder do httpx e nao usam estes validadores.
+_TICKER_PATH_SEGMENT_RE = re.compile(r"[A-Za-z0-9.-]{1,32}\Z")
+_TREASURY_SLUG_PATH_SEGMENT_RE = re.compile(r"[a-z0-9-]{1,128}\Z")
+
 # Mapa de nomes completos de criptomoedas para seus codigos de mercado.
 _CRYPTO_NAME_MAP: dict[str, str] = {
     "BITCOIN": "BTC",
@@ -169,6 +174,26 @@ _TREASURY_SLUG_RE = re.compile(r"^tesouro-[a-z0-9-]+$")
 _TREASURY_CATALOG_CACHE: dict[str, str] = {}
 _TREASURY_CATALOG_EXPIRES: float = 0.0
 _TREASURY_CATALOG_TTL = 21600.0  # 6 horas
+
+
+def _validate_ticker_path_segment(ticker: str) -> str:
+    """Retorna um ticker seguro para interpolacao em um path da BRAPI."""
+    if not isinstance(ticker, str) or not _TICKER_PATH_SEGMENT_RE.fullmatch(ticker):
+        raise ValueError("invalid BRAPI ticker path segment")
+    if ".." in ticker:
+        raise ValueError("invalid BRAPI ticker path segment")
+    return ticker
+
+
+def _validate_treasury_slug_path_segment(slug: str) -> str:
+    """Retorna um slug de Tesouro seguro para interpolacao em um path da BRAPI."""
+    if not isinstance(slug, str) or not _TREASURY_SLUG_PATH_SEGMENT_RE.fullmatch(slug):
+        raise ValueError("invalid BRAPI treasury slug path segment")
+    return slug
+
+
+def _join_ticker_path_segments(tickers: list[str]) -> str:
+    return ",".join(_validate_ticker_path_segment(ticker) for ticker in tickers)
 
 
 def _slug_from_raw(raw: str) -> str:
@@ -382,8 +407,9 @@ async def _fetch_chunk_with_fallback(
 
     async def _single(ticker: str) -> Optional[float]:
         try:
+            ticker_path = _validate_ticker_path_segment(ticker.upper())
             r = await client.get(
-                f"{BRAPI_BASE}/quote/{ticker.upper()}",
+                f"{BRAPI_BASE}/quote/{ticker_path}",
                 headers=headers,
             )
             if r.status_code == 400:
@@ -400,7 +426,11 @@ async def _fetch_chunk_with_fallback(
             logger.debug("[market_data] _single error para %s: %s", ticker, e)
         return None
 
-    joined = ",".join(chunk)
+    try:
+        joined = _join_ticker_path_segments(chunk)
+    except ValueError:
+        logger.warning("[market_data] fetch_quotes recebeu ticker inseguro")
+        return results
     url = f"{BRAPI_BASE}/quote/{joined}"
     try:
         resp = await client.get(url, headers=headers)
@@ -437,6 +467,12 @@ async def fetch_quotes(tickers: list[str]) -> dict[str, float]:
     if not tickers:
         return {}
 
+    try:
+        _join_ticker_path_segments(tickers)
+    except ValueError:
+        logger.warning("[market_data] fetch_quotes recebeu ticker inseguro")
+        return {}
+
     valid = [t for t in tickers if not _is_cached_invalid(t)]
     skipped = len(tickers) - len(valid)
     if skipped:
@@ -460,6 +496,12 @@ async def fetch_quotes_with_meta(tickers: list[str]) -> dict[str, dict]:
     if not tickers:
         return {}
 
+    try:
+        _join_ticker_path_segments(tickers)
+    except ValueError:
+        logger.warning("[market_data] fetch_quotes_with_meta recebeu ticker inseguro")
+        return {}
+
     valid = [t for t in tickers if not _is_cached_invalid(t)]
     if not valid:
         return {}
@@ -469,7 +511,11 @@ async def fetch_quotes_with_meta(tickers: list[str]) -> dict[str, dict]:
     async with httpx.AsyncClient(timeout=15.0) as client:
         for i in range(0, len(valid), BRAPI_QUOTE_CHUNK):
             chunk = valid[i: i + BRAPI_QUOTE_CHUNK]
-            joined = ",".join(chunk)
+            try:
+                joined = _join_ticker_path_segments(chunk)
+            except ValueError:
+                logger.warning("[market_data] fetch_quotes_with_meta recebeu ticker inseguro")
+                continue
             url = f"{BRAPI_BASE}/quote/{joined}"
             try:
                 resp = await client.get(url, headers=headers)
@@ -820,7 +866,11 @@ async def fetch_price_history(
         return [(dt, c) for dt, c in rows if cutoff_from <= dt <= cutoff_to]
 
     headers = _auth_headers()
-    ticker_upper = ticker.upper()
+    try:
+        ticker_upper = _validate_ticker_path_segment(ticker.upper())
+    except ValueError:
+        logger.warning("[market_data] fetch_price_history recebeu ticker inseguro")
+        return []
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(
@@ -882,7 +932,11 @@ async def fetch_price_history_full(
     ticker: str,
 ) -> list[tuple[datetime, float]]:
     headers = _auth_headers()
-    ticker_upper = ticker.upper()
+    try:
+        ticker_upper = _validate_ticker_path_segment(ticker.upper())
+    except ValueError:
+        logger.warning("[market_data] fetch_price_history_full recebeu ticker inseguro")
+        return []
     url = f"{BRAPI_BASE}/quote/{ticker_upper}?range=max&interval=1d"
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
@@ -1112,6 +1166,7 @@ async def fetch_treasury_prices(tickers: list[str]) -> dict[str, float]:
         for ticker in tickers:
             slug = _normalize_treasury_ticker(ticker, catalog)
             try:
+                slug = _validate_treasury_slug_path_segment(slug)
                 resp = await client.get(
                     f"{BRAPI_BASE}/v2/treasury/{slug}",
                     headers=headers,
@@ -1154,9 +1209,10 @@ async def fetch_asset_info(ticker: str) -> Optional[dict]:
     """Retorna metadados completos de um ticker via BRAPI /quote."""
     headers = _auth_headers()
     try:
+        ticker_path = _validate_ticker_path_segment(ticker.upper())
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(
-                f"{BRAPI_BASE}/quote/{ticker.upper()}",
+                f"{BRAPI_BASE}/quote/{ticker_path}",
                 headers=headers,
             )
             resp.raise_for_status()
@@ -1206,9 +1262,10 @@ async def fetch_treasury_price_by_date(
     """Busca preco historico de um titulo do Tesouro Direto por data."""
     headers = _auth_headers()
     try:
+        slug_path = _validate_treasury_slug_path_segment(slug)
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(
-                f"{BRAPI_BASE}/v2/treasury/{slug}",
+                f"{BRAPI_BASE}/v2/treasury/{slug_path}",
                 headers=headers,
                 params={"date": date_str},
             )
