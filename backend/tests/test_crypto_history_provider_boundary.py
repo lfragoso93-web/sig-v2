@@ -26,5 +26,7 @@ def test_crypto_gap_sync_prefers_brapi_and_keeps_brl_yahoo_fallback() -> None:
     assert '"BTC": "BTC-BRL"' in source
     assert 'normalized.endswith("-BRL")' in source
     assert 'return rows, "brapi_v2_crypto_max", "brapi"' in source
-    assert 'return fallback, "yfinance_crypto_max", "yfinance"' in source
-    assert source.index("fetch_brapi_crypto_history") < source.index("fallback = await _fetch_yf_max")
+    assert 'return fallback, "yfinance_crypto_ptax_brl_max", "yfinance"' in source
+    assert source.index("fetch_brapi_crypto_history") < source.index(
+        "usd_rows = await _fetch_yf_max"
+    )

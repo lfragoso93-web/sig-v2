@@ -20,5 +20,8 @@ def test_rate_history_uses_canonical_unique_index_representation() -> None:
 def test_rate_history_comments_match_canonical_migration() -> None:
     source = MODEL.read_text(encoding="utf-8")
 
-    assert 'comment="Indicador: CDI | IPCA | SELIC"' in source
-    assert 'comment="Fonte: BCB | BRAPI | SEED | MANUAL"' in source
+    assert 'comment="Indicador: CDI | SELIC | IPCA | IGPM"' in source
+    assert (
+        'comment="Fonte da observacao persistida; canonicamente BCB_SGS para benchmarks"'
+        in source
+    )
