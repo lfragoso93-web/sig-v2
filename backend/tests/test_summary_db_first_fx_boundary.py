@@ -4,7 +4,11 @@ import ast
 import inspect
 from pathlib import Path
 
-from app.services import persisted_fx_query_service, portfolio_summary_service
+from app.services import (
+    persisted_fx_query_service,
+    persisted_price_query_service,
+    portfolio_summary_service,
+)
 
 
 SNAPSHOT_SERVICE_PATH = (
@@ -49,6 +53,15 @@ def test_persisted_fx_query_has_no_provider_imports() -> None:
     assert not any("awesome" in module.lower() for module in imported)
 
 
+def test_persisted_price_query_has_no_provider_imports() -> None:
+    imported = _imported_modules(persisted_price_query_service)
+
+    assert not any("brapi" in module.lower() for module in imported)
+    assert not any("yfinance" in module.lower() for module in imported)
+    assert not any("httpx" in module.lower() for module in imported)
+    assert not any("alpha_vantage" in module.lower() for module in imported)
+
+
 def test_snapshot_price_resolution_has_no_provider_boundary() -> None:
     source = SNAPSHOT_PRICE_RESOLUTION_PATH.read_text(encoding="utf-8")
 
@@ -63,10 +76,13 @@ def test_snapshot_price_resolution_has_no_provider_boundary() -> None:
     assert not any(token in source for token in forbidden)
 
 
-def test_snapshot_service_must_not_use_provider_fx() -> None:
+def test_snapshot_service_must_use_persisted_market_readers_only() -> None:
     source = SNAPSHOT_SERVICE_PATH.read_text(encoding="utf-8")
 
     assert "app.services.fx_service" not in source
     assert "get_usd_brl_today" not in source
     assert "get_usd_brl_for_date" not in source
+    assert "app.services.price_history_service" not in source
+    assert "get_prices_at_date_batch" not in source
     assert "get_persisted_usd_brl_rate_for_date" in source
+    assert "get_persisted_prices_at_date_batch" in source
