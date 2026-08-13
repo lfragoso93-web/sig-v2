@@ -117,7 +117,7 @@ async def test_snapshot_summary_validates_full_v2_contract(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         portfolio_summary_service,
-        "get_usd_brl_today",
+        "get_persisted_usd_brl_rate",
         AsyncMock(return_value=5.5),
     )
     monkeypatch.setattr(

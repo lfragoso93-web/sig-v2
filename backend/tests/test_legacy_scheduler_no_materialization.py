@@ -2,7 +2,7 @@ import ast
 from pathlib import Path
 
 
-SCHEDULER_PATH = Path(__file__).parents[1] / "app" / "scheduler.py"
+SCHEDULER_PATH = Path(__file__).parents[1] / "app" / "core" / "scheduler.py"
 
 
 def test_legacy_scheduler_does_not_import_or_call_materialization() -> None:

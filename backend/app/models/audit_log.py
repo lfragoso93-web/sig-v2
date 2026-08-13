@@ -1,5 +1,5 @@
 from enum import Enum
-from sqlalchemy import Integer, String, Text, ForeignKey, Index, JSON
+from sqlalchemy import Integer, String, Text, ForeignKey, Index, JSON, desc
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, TimestampMixin
 from app.models.user import User
@@ -21,20 +21,20 @@ class AuditAction(str, Enum):
 class AuditLog(Base, TimestampMixin):
     __tablename__ = "audit_logs"
     __table_args__ = (
-        Index("idx_audit_user_date", "user_id", "created_at"),
-        Index("idx_audit_resource_date", "resource_type", "created_at"),
-        Index("idx_audit_action_date", "action", "created_at"),
-        Index("idx_audit_portfolio_date", "portfolio_id", "created_at"),
+        Index("idx_audit_user_date", "user_id", desc("created_at")),
+        Index("idx_audit_resource_date", "resource_type", desc("created_at")),
+        Index("idx_audit_action_date", "action", desc("created_at")),
+        Index("idx_audit_portfolio_date", "portfolio_id", desc("created_at")),
         Index("idx_audit_status", "status"),
-        Index("idx_audit_created_at", "created_at"),
+        Index("idx_audit_created_at", desc("created_at")),
     )
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     action: Mapped[str] = mapped_column(String(20), nullable=False)
     resource_type: Mapped[str] = mapped_column(String(50), nullable=False)
     resource_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    portfolio_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("portfolios.id", ondelete="SET NULL"), nullable=True, index=True)
+    portfolio_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("portfolios.id", ondelete="SET NULL"), nullable=True)
 
     old_values: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     new_values: Mapped[dict | None] = mapped_column(JSON, nullable=True)

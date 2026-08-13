@@ -1,8 +1,9 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from app.services.performance_service import get_portfolio_performance
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.services.performance_service import get_portfolio_performance
 
 CANONICAL_ZERO = {
     "total_invested": 0.0,
@@ -53,7 +54,9 @@ async def test_get_portfolio_performance_single_stock_uses_canonical_totals():
 
     with (
         patch("app.services.performance_service.calc_raw_positions") as mock_positions,
-        patch("app.services.performance_service.get_current_price") as mock_get_price,
+        patch(
+            "app.services.performance_service.get_persisted_current_prices"
+        ) as mock_get_prices,
         patch(
             "app.services.performance_service.get_canonical_portfolio_summary"
         ) as mock_summary,
@@ -66,7 +69,7 @@ async def test_get_portfolio_performance_single_stock_uses_canonical_totals():
                 "total_invested": 5010.0,
             }
         ]
-        mock_get_price.return_value = 60.0
+        mock_get_prices.return_value = {"VALE3": 60.0}
         mock_summary.return_value = canonical
 
         asset_result = MagicMock()
@@ -94,7 +97,9 @@ async def test_get_portfolio_performance_uses_projected_quantity_after_split():
 
     with (
         patch("app.services.performance_service.calc_raw_positions") as mock_positions,
-        patch("app.services.performance_service.get_current_price") as mock_get_price,
+        patch(
+            "app.services.performance_service.get_persisted_current_prices"
+        ) as mock_get_prices,
         patch(
             "app.services.performance_service.get_canonical_portfolio_summary"
         ) as mock_summary,
@@ -107,7 +112,7 @@ async def test_get_portfolio_performance_uses_projected_quantity_after_split():
                 "total_invested": 6020.0,
             }
         ]
-        mock_get_price.return_value = 20.0
+        mock_get_prices.return_value = {"PETR4": 20.0}
         mock_summary.return_value = CANONICAL_ZERO
 
         asset_result = MagicMock()
@@ -131,7 +136,9 @@ async def test_get_portfolio_performance_zero_current_price():
 
     with (
         patch("app.services.performance_service.calc_raw_positions") as mock_positions,
-        patch("app.services.performance_service.get_current_price") as mock_get_price,
+        patch(
+            "app.services.performance_service.get_persisted_current_prices"
+        ) as mock_get_prices,
         patch(
             "app.services.performance_service.get_canonical_portfolio_summary"
         ) as mock_summary,
@@ -144,7 +151,7 @@ async def test_get_portfolio_performance_zero_current_price():
                 "total_invested": 5000.0,
             }
         ]
-        mock_get_price.return_value = None
+        mock_get_prices.return_value = {}
         mock_summary.return_value = CANONICAL_ZERO
 
         asset_result = MagicMock()
@@ -176,7 +183,9 @@ async def test_get_portfolio_performance_multiple_stocks():
 
     with (
         patch("app.services.performance_service.calc_raw_positions") as mock_positions,
-        patch("app.services.performance_service.get_current_price") as mock_get_price,
+        patch(
+            "app.services.performance_service.get_persisted_current_prices"
+        ) as mock_get_prices,
         patch(
             "app.services.performance_service.get_canonical_portfolio_summary"
         ) as mock_summary,
@@ -195,7 +204,7 @@ async def test_get_portfolio_performance_multiple_stocks():
                 "total_invested": 6000.0,
             },
         ]
-        mock_get_price.side_effect = [60.0, 35.0]
+        mock_get_prices.return_value = {"VALE3": 60.0, "PETR4": 35.0}
         mock_summary.return_value = canonical
 
         asset_result1 = MagicMock()

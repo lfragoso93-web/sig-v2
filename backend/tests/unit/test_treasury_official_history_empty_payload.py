@@ -31,6 +31,7 @@ async def test_empty_catalog_result_keeps_complete_history_contract(monkeypatch)
         "empty_payloads": 0,
         "required_empty_payloads": 0,
         "expected_empty_payloads": 0,
+        "historical_complete_skipped": 0,
         "required_empty_symbols": [],
         "expected_empty_symbols": [],
         "last_prices_refreshed": 0,

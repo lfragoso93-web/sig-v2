@@ -1,14 +1,16 @@
 import logging
 from datetime import datetime, timezone
-from sqlalchemy.ext.asyncio import AsyncSession
+
 from sqlalchemy import select
-from app.models.config import AppConfig
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.system_config import SystemConfig
 
 logger = logging.getLogger(__name__)
 
 
 async def get_config(db: AsyncSession, key: str) -> str | None:
-    result = await db.execute(select(AppConfig).where(AppConfig.key == key))
+    result = await db.execute(select(SystemConfig).where(SystemConfig.key == key))
     cfg = result.scalar_one_or_none()
     return cfg.value if cfg else None
 
@@ -21,13 +23,13 @@ async def get_bool_config(db: AsyncSession, key: str, default: bool = False) -> 
 
 
 async def set_config(db: AsyncSession, key: str, value: str) -> None:
-    result = await db.execute(select(AppConfig).where(AppConfig.key == key))
+    result = await db.execute(select(SystemConfig).where(SystemConfig.key == key))
     cfg = result.scalar_one_or_none()
     if cfg:
         cfg.value = value
         cfg.updated_at = datetime.now(timezone.utc)
     else:
-        cfg = AppConfig(key=key, value=value)
+        cfg = SystemConfig(key=key, value=value)
         db.add(cfg)
     await db.commit()
 
@@ -35,12 +37,12 @@ async def set_config(db: AsyncSession, key: str, value: str) -> None:
 async def get_all_configs(
     db: AsyncSession,
     public_only: bool = True,
-) -> list[AppConfig]:
-    """Lista todas as configuracoes. Se public_only=True, retorna apenas is_public=True."""
-    query = select(AppConfig)
+) -> list[SystemConfig]:
+    """Lista todas as configurações; opcionalmente somente as públicas."""
+    query = select(SystemConfig)
     if public_only:
-        query = query.where(AppConfig.is_public == True)  # noqa: E712
-    query = query.order_by(AppConfig.key)
+        query = query.where(SystemConfig.is_public == True)  # noqa: E712
+    query = query.order_by(SystemConfig.key)
     result = await db.execute(query)
     return list(result.scalars().all())
 
@@ -49,40 +51,40 @@ async def update_config(
     db: AsyncSession,
     key: str,
     value: str,
-) -> AppConfig:
-    """Upsert de uma configuracao pelo key. Retorna o objeto atualizado."""
-    result = await db.execute(select(AppConfig).where(AppConfig.key == key))
+) -> SystemConfig:
+    """Faz upsert de uma configuração por chave e retorna o registro atualizado."""
+    result = await db.execute(select(SystemConfig).where(SystemConfig.key == key))
     cfg = result.scalar_one_or_none()
     if cfg:
         cfg.value = value
         cfg.updated_at = datetime.now(timezone.utc)
     else:
-        cfg = AppConfig(key=key, value=value)
+        cfg = SystemConfig(key=key, value=value)
         db.add(cfg)
     await db.commit()
     await db.refresh(cfg)
-    logger.info(f"[ConfigService] Config atualizada: {key}={value}")
+    logger.info("[ConfigService] Config atualizada: %s=%s", key, value)
     return cfg
 
 
 async def bulk_update_configs(
     db: AsyncSession,
     configs: dict[str, str],
-) -> list[AppConfig]:
-    """Atualiza multiplas configuracoes em um unico commit."""
-    updated = []
+) -> list[SystemConfig]:
+    """Atualiza múltiplas configurações em um único commit."""
+    updated: list[SystemConfig] = []
     for key, value in configs.items():
-        result = await db.execute(select(AppConfig).where(AppConfig.key == key))
+        result = await db.execute(select(SystemConfig).where(SystemConfig.key == key))
         cfg = result.scalar_one_or_none()
         if cfg:
             cfg.value = value
             cfg.updated_at = datetime.now(timezone.utc)
         else:
-            cfg = AppConfig(key=key, value=value)
+            cfg = SystemConfig(key=key, value=value)
             db.add(cfg)
         updated.append(cfg)
     await db.commit()
     for cfg in updated:
         await db.refresh(cfg)
-    logger.info(f"[ConfigService] Bulk update: {len(updated)} configs atualizadas")
+    logger.info("[ConfigService] Bulk update: %s configs atualizadas", len(updated))
     return updated

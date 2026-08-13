@@ -17,11 +17,6 @@ async def test_import_missing_benchmark_history_preserves_default_commit(monkeyp
     )
     monkeypatch.setattr(
         benchmark_rate_service,
-        "ensure_rate_history_unique_index",
-        AsyncMock(),
-    )
-    monkeypatch.setattr(
-        benchmark_rate_service,
         "import_benchmark_history",
         AsyncMock(return_value={"CDI": 1}),
     )
@@ -46,11 +41,6 @@ async def test_import_missing_benchmark_history_allows_external_transaction(monk
     db = SimpleNamespace(
         execute=AsyncMock(return_value=SimpleNamespace(scalar_one=lambda: 0)),
         commit=AsyncMock(),
-    )
-    monkeypatch.setattr(
-        benchmark_rate_service,
-        "ensure_rate_history_unique_index",
-        AsyncMock(),
     )
     import_history = AsyncMock(return_value={"CDI": 1})
     monkeypatch.setattr(

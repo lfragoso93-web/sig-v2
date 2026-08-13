@@ -104,7 +104,7 @@ async def test_intraday_summary_uses_current_realized_pnl_with_closed_snapshot_t
     )
     monkeypatch.setattr(
         portfolio_summary_service,
-        "get_usd_brl_today",
+        "get_persisted_usd_brl_rate",
         AsyncMock(return_value=5.55),
     )
     monkeypatch.setattr(
@@ -159,7 +159,7 @@ async def test_intraday_summary_does_not_compare_market_value_to_closed_snapshot
         "_get_received_dividend_totals",
         AsyncMock(return_value=(0.0, 0.0)),
     )
-    monkeypatch.setattr(portfolio_summary_service, "get_usd_brl_today", AsyncMock(return_value=1.0))
+    monkeypatch.setattr(portfolio_summary_service, "get_persisted_usd_brl_rate", AsyncMock(return_value=1.0))
     monkeypatch.setattr(
         portfolio_summary_service,
         "get_realized_pnl",

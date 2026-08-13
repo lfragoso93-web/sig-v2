@@ -5,144 +5,49 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
-### Removido — fachada legada de Rentabilidade (05/08/2026)
+### Alterado — universo CRIPTO Top 100 por capitalização (11/08/2026)
 
-- `backend/app/services/rentabilidade_service.py` foi removido após a migração completa de consumidores produtivos para os contratos e serviços canônicos.
-- A invalidação das chaves `rent:*` foi isolada em `rentabilidade_cache_service.py` e permanece best-effort nos fluxos de transação, importação CSV e reconstrução de snapshots.
-- Testes acoplados exclusivamente ao serviço órfão foram removidos; o gate arquitetural agora exige a inexistência física do arquivo e impede novos imports do módulo legado.
-- A suíte backend foi validada duas vezes após a remoção, com `1246 passed` e `22 skipped`, além de `compileall`, Flake8 e build Docker aprovados.
-- Nenhum endpoint, schema, migration ou fórmula financeira canônica foi alterado neste macrobloco.
+- Criada a Issue #267 para separar explicitamente catálogo descoberto, universo CRIPTO suportado e histórico certificado.
+- O universo operacional de CRIPTO passa a ser a interseção entre as Top 100 por `market_cap_rank` do CoinGecko e os símbolos disponíveis no catálogo CRIPTO da BRAPI.
+- CoinGecko é usado somente como fonte de ranking de relevância durante bootstrap/readiness; BRAPI continua sendo a integração de disponibilidade/cotações do SGI.
+- O seed CRIPTO deixou de materializar o catálogo BRAPI amplo e agora cria/atualiza somente o universo suportado.
+- O estágio `asset_price_history` do `system-bootstrap.v4` limita o backfill CRIPTO ao mesmo universo suportado.
+- O readiness CRIPTO passou a contar histórico, duplicidades, statuses bloqueantes, seams e shallow histories somente no universo Top 100 suportado.
+- `pre_prod_crypto_seam_audit` e `pre_prod_crypto_shallow_history_audit` receberam filtro opcional de tickers, preservando o comportamento global padrão das CLIs.
+- Ativos CRIPTO previamente persistidos fora do universo suportado não são apagados, não têm `provider_status` reescrito e permanecem auditáveis, mas não devem bloquear o novo readiness CRIPTO.
+- Adicionados testes do contrato de interseção/deduplicação e gate estrutural do seed.
+- README, ROADMAP e `docs/DEVELOPMENT_CONTINUITY.md` foram sincronizados; `ready_for_real_data` permanece `false` até validação operacional e certificação final da #248/#227.
 
-### Concluído — módulo IRPF canônico (04/08/2026)
+### Alterado — bootstrap v4 com eventos corporativos gated (08/08/2026)
 
-- Consolidada a apuração anual canônica de Day Trade e Swing Trade, incluindo
-  isenção mensal, compensação segregada de prejuízos, IRRF e acumulação de DARF
-  abaixo do mínimo legal.
-- Publicados contratos versionados para apuração anual, Bens e Direitos,
-  Rendimentos e Ganhos de Capital, todos autorizados e isolados por carteira.
-- A `IRPFPage.tsx` passou a consumir exclusivamente hooks canônicos e deixou de
-  carregar `IRPFReportOut`, `refreshKey` e o relatório completo legado.
-- PDF e CSV passaram a ser compostos diretamente por `IrpfCanonicalExport`, sem
-  leitura de `IRPFReport`, persistência fiscal legada ou fallback para
-  `generate_irpf_report`.
-- O endpoint completo legado foi mantido apenas para compatibilidade externa;
-  a fachada Python histórica adapta contratos em memória sem reintroduzir
-  consultas ou persistência nos fluxos públicos canônicos.
-- A cobertura final validou 93 testes frontend e 1265 testes backend, com 22
-  skips documentados, além de Ruff, typecheck, ESLint, build e compileall.
-- README, ROADMAP, documentação técnica e Issue #56 foram sincronizados; a única
-  pendência funcional restante é a validação com carteira real representativa.
+- Criado `system_bootstrap_corporate_events_stage.py` como wrapper dedicado para eventos corporativos globais.
+- A execução é fail-closed sem `SGI_BOOTSTRAP_ENABLE_CORPORATE_EVENTS=true`, com gate anterior à abertura de sessão/provider.
+- O estágio lê somente ativos elegíveis persistidos (`ACAO`, `BDR`, `ETF_NACIONAL`), adquire advisory lock transacional e delega exclusivamente a `sync_corporate_events_for_asset`.
+- O serviço canônico continua responsável pela coleta/normalização/persistência e executa apenas `flush`; o wrapper controla commit único e rollback integral do estágio.
+- `asset_market_pipeline_service` e `dividend_backfill_service` não participam do novo caminho; a mistura legada de `events_synced`/Proventos permanece registrada para auditoria separada.
+- Adicionados testes dirigidos de gate, ordem do lock, filtro DB-first, commit, rollback/stop e relatório determinístico.
+- O orquestrador evoluiu para `system-bootstrap.v4` e passou a registrar `corporate_events` após `asset_dividends`, mantendo fail-fast e `certified_for_real_data=false`.
+- Nenhum provider real foi executado durante estes blocos; a integração é estrutural e ainda depende de validação local integrada/certificação final.
+- README, ROADMAP, arquitetura, continuidade e Issues #254/#250/#248/#129 foram sincronizados com o estado v4.
 
-### Adicionado — caracterização de ganhos mensais do IRPF (03/08/2026)
+### Alterado — bootstrap v3, FX certificado e Proventos gated (08/08/2026)
 
-- Ampliado o baseline fiscal de Day Trade para compra e venda no mesmo dia,
-  múltiplas vendas, custos operacionais e agregação mensal.
-- Congelado em teste, sem correção de regra, o comportamento que classifica a
-  venda inteira como Day Trade quando há posição anterior e casamento
-  intradiário apenas parcial.
-- O inventário e o plano de migração registram os cenários já cobertos e os
-  gates restantes antes da integração com os projetores canônicos.
-- A caracterização fiscal específica foi separada da suíte da fachada e agora
-  cobre saldo Swing no dia seguinte, operações intercaladas, isolamento por
-  ticker e coexistência mensal de resultados Day Trade e Swing Trade.
-- A matriz passou a cobrir as fronteiras de R$ 20 mil da isenção mensal,
-  agregação entre tickers, classes não isentas e a ausência vigente de
-  transporte de prejuízo Swing; helpers compartilhados eliminam duplicação na
-  infraestrutura desses testes.
-- Foram congelados ainda a ausência de transporte de prejuízo Day Trade, o BDR
-  no grupo atual de isenção, retenções zeradas e a agregação cruzada que pode
-  reduzir indevidamente a base de uma classe tributável com vendas isentas.
-- O baseline passou a registrar venda acima da posição, conversão cambial por
-  transação, fallback USD/BRL `1.0` e ausência de eventos corporativos na
-  reconstrução fiscal local, sem alterar o comportamento de produção.
-- Documentado o desenho de integração por baixa realizada: granularidade mínima
-  auditável, matriz de lacunas do reader agregado e separação explícita entre
-  projeção financeira e interpretação fiscal.
-- Implementada a baixa canônica imutável no mesmo passe da projeção de posição,
-  com quantidade solicitada/efetiva, receita, custo, taxas, moeda, identidade e
-  eventos; reader por período e agregação por ticker compartilham essa fonte.
+- O checkpoint `0e8d96c081a0e788a9edcf69901a134b29b7f696` foi certificado localmente pelo usuário com build Docker aprovado, 22/22 testes dirigidos, `compileall` e import integral de `app.main` aprovados.
+- O bootstrap passou a exigir identidade auditável compartilhada (`run_id`, branch `stable-15jun` e SHA completo); o disparo administrativo exige o SHA e o startup pode recebê-lo por `SGI_BOOTSTRAP_COMMIT_SHA`.
+- O contrato `system-bootstrap.v2` incorporou câmbio USD-BRL reutilizando o seed transacional PTAX já certificado pela #217, com cobertura própria desde `1994-07-01` e sem fallback BRAPI/AwesomeAPI/fixo.
+- A cobertura temporal deixou de ser um parâmetro global: cada domínio define sua maior janela válida conforme a fonte canônica.
+- O contrato evoluiu para `system-bootstrap.v3` com etapa explícita `asset_dividends`, reutilizando `pre-prod-dividends-seed.v2` e os adapters estritos BRAPI/Yahoo já existentes.
+- Proventos permanecem fail-closed: sem `SGI_BOOTSTRAP_ENABLE_DIVIDENDS=true`, a etapa aborta antes de consultar providers; esse opt-in técnico não substitui a autorização operacional exigida pela #226.
+- O estágio de Proventos escreve exclusivamente em `asset_dividends`, não utiliza `dividend_backfill_service` e não materializa direitos por carteira.
+- `ready_for_real_data` permanece `false`; eventos corporativos eram o próximo domínio obrigatório do bootstrap antes da evolução para v4.
+- README, ROADMAP, arquitetura, continuidade e Issues #248/#250/#226 foram sincronizados com o novo estado.
 
-### Adicionado — motor canônico de eventos corporativos (31/07/2026)
+### Alterado — readiness, lacuna pontual e catálogo DB-first (07/08/2026)
 
-- Criado motor puro e independente de provedor para splits, grupamentos, bonificações e subscrições, com uma única convenção de fator multiplicativo.
-- A projeção preserva custo total, recalcula preço médio e mantém subscrições como direitos sem aumento automático de quantidade.
-- A coleta global passou a normalizar `stockDividends` e `subscriptions` da BRAPI Pro e fatores explícitos de `Stock Splits` do Yahoo, com identidade determinística e payload auditável.
-- O scheduler agora apenas cataloga eventos globais em savepoints por ativo; a aplicação legada que mutava posições e criava transações incompatíveis foi removida.
-- Adicionadas regressões para idempotência, AERI3, bonificação, subscrição, split, grupamento e preservação de custo.
-
-### Corrigido — dividendos históricos ajustados por eventos societários (31/07/2026)
-
-- O adaptador complementar do Yahoo passou a desfazer, por evento, somente os fatores de split/grupamento explicitamente publicados após a Data Ex.
-- A normalização preserva no payload auditável o valor apresentado pelo provedor e o fator acumulado aplicado, sem relaxar a reconciliação econômica estrita.
-- Adicionada regressão para o caso real de AERI3: dividendo ajustado de `0.41404`, grupamento posterior `0.05` e valor histórico normalizado `0.020702`.
-- A carga integral não foi repetida neste bloco corretivo; uma nova execução controlada continua sujeita ao gate operacional e ao SHA publicado.
-
-### Alterado — documentação viva alinhada ao contrato canônico v2 (31/07/2026)
-
-- README, ROADMAP e documentos gerais de arquitetura, dados canônicos e
-  operação deixaram de apresentar o seed v1 e a materialização por carteira
-  como estado atual.
-- O fluxo documentado agora persiste somente eventos em `asset_dividends` e
-  calcula direitos sob demanda; a contração física permanece explicitamente
-  pendente da janela controlada da Issue #158.
-- Regressão documental protege as fronteiras v2 e impede o retorno das
-  afirmações operacionais obsoletas.
-- O runbook mestre e os gates agregados #158/#216 foram sincronizados: a
-  implementação v2 está concluída e somente duas execuções reais controladas e
-  a contração física condicionada permanecem pendentes.
-
-### Removido — modelos ORM das tabelas legadas de Proventos (31/07/2026)
-
-- `Dividend` e `DividendsSyncJob` foram removidos do runtime e de
-  `app.models.__init__`; `Base.metadata` não registra mais `dividends` nem
-  `dividends_sync_jobs`.
-- Testes que consultavam a tabela legada apenas para provar ausência de escrita
-  passaram a validar diretamente os eventos globais em `asset_dividends`.
-- A migration histórica de criação do sync job ficou autocontida e a migration
-  de contração continua usando SQL físico, sem depender dos modelos removidos.
-
-### Adicionado — contração física protegida do legado de Proventos (31/07/2026)
-
-- A migration `20260731_drop_legacy_divs` foi preparada para remover
-  `dividends` e `dividends_sync_jobs` somente depois de confirmar que ambas as
-  tabelas estão vazias.
-- A verificação ocorre para as duas tabelas antes do primeiro `DROP`, impedindo
-  contração parcial quando ainda houver dados legados.
-- O downgrade exige restauração do backup aprovado, pois recriar estruturas
-  vazias não recuperaria dados descartados. A migration foi versionada e
-  testada, mas não foi executada em nenhum banco neste bloco.
-
-### Removido — inventário específico do modelo legado (31/07/2026)
-
-- `proventos_model_audit_service.py`, sua CLI e o teste exclusivo foram
-  removidos após o inventário genérico de pré-produção assumir a contagem física
-  por reflexão e rollback.
-- Regressão estrutural impede o retorno dos dois módulos e de seus imports.
-- As políticas do inventário foram corrigidas: `asset_dividends` é o catálogo
-  global; `dividends` contém direitos legados descartáveis e reconstruíveis.
-
-### Removido — relacionamentos ORM de direitos materializados (31/07/2026)
-
-- Foram removidos `Portfolio.dividends`, `AssetDividend.portfolio_dividends`,
-  `Dividend.portfolio` e `Dividend.asset_dividend`, todos sem consumidores.
-- O arquivo histórico `test_proventos_issue95.py`, baseado em linhas
-  materializadas e já incompatível com a leitura canônica, foi substituído por
-  cobertura estrutural da ausência dos relacionamentos.
-- Os contratos ainda exclusivos de schema estrito e leitura sem mutação foram
-  portados para a suíte canônica de direitos calculados sob demanda.
-
-### Alterado — enums de Proventos independentes do ORM legado (31/07/2026)
-
-- `DividendType` e `DividendStatus` foram movidos para
-  `app.models.dividend_enums`, módulo puro sem SQLAlchemy.
-- Modelo global, serviços, schemas e rotas passaram a importar os enums pelo
-  módulo neutro; `dividend.py` apenas os reexporta para compatibilidade.
-- Regressões estruturais impedem dependência ORM no novo módulo e novos imports
-  dos enums a partir do arquivo legado.
-
-### Removido — leitura de runtime de `dividends_sync_jobs` (31/07/2026)
-
-- O seed pré-produção v2 não declara mais fronteira `inspect_only`, não consulta
-  `DividendsSyncJob` e não expõe `sync_jobs` nas contagens do envelope.
-- A auditoria física deixou de importar o modelo ou publicar
-  `legacy_sync_job_rows`; permanecem apenas eventos canônicos e linhas legadas
+- O checkpoint `113281b7a0153f02007d6d49761be8fef91d77a8` foi certificado localmente com 26/26 testes, `compileall` e import integral de `app.main` aprovados.
+- A Issue #249 foi concluída: `/health` representa liveness/dependências e `/ready` representa readiness operacional, mantendo `ready_for_real_data=false` enquanto o bootstrap global da #248 não estiver completo e certificado.
+- Criado `price_date_gap_resolver_service.py` como única exceção dedicada para cotação histórica ausente: leitura DB-first inicial, janela externa limitada a `target_date - 5 dias .. target_date`, persistência em `asset_prices` e nova leitura DB-first.
+- `get_price_at_date()` permanece leitor puro e não importa o resolvedor; o fallback pontual não usa `period=max`, backfill global ou `stale_snapshot`.
+- Criado `asset_catalog_query_service.py` para sugestões e busca de Tesouro exclusivamente sobre o catálogo persistido pelo bootstrap.
+- `assets.py` deixou de importar providers diretamente para catálogo e histórico: `/suggest` e `/tesouro/search` são DB-first; histórico em `/quote/{ticker}` e `/tesouro/price` usa o resolvedor pontual; apenas cotação atual/intraday continua passando pela fachada canônica de preços.
+- Ativos desconhecidos não são mais descobertos implicitamente por provider durante requests; precisam existir no catálogo persistido.

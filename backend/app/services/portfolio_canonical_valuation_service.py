@@ -23,6 +23,7 @@ from app.services.fixed_income_valuation_service import (
     _is_buy,
     _is_sell,
 )
+from app.services.fx_rate_reader import load_usd_brl_rate_at_or_before
 from app.services.lifecycle_aware_price_service import get_prices_at_date_with_lifecycle
 from app.services.portfolio_snapshot_service import _build_positions_at
 from app.services.price_history_service import get_price_at_date
@@ -88,15 +89,12 @@ async def _base_totals_without_dedicated_lookup(
 
     fx_snapshot = Decimal("1")
     if any(state.is_usd for state in positions.values()):
-        try:
-            from app.services.fx_service import get_usd_brl_for_date
-            fx_snapshot = Decimal(str(await get_usd_brl_for_date(db, target_date) or 1))
-        except Exception:
-            try:
-                from app.services.fx_service import get_usd_brl_today
-                fx_snapshot = Decimal(str(await get_usd_brl_today(db) or 1))
-            except Exception:
-                fx_snapshot = Decimal("1")
+        persisted_fx = await load_usd_brl_rate_at_or_before(db, target_date)
+        if persisted_fx is None:
+            raise RuntimeError(
+                f"cobertura USD-BRL persistida indisponível em ou antes de {target_date.isoformat()}"
+            )
+        fx_snapshot = persisted_fx.rate
 
     market_value = _ZERO
     cost_basis = _ZERO

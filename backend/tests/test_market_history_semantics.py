@@ -42,8 +42,8 @@ def test_extract_treasury_history_from_nested_items():
 
 
 def test_crypto_provider_symbol_is_yahoo_symbol():
-    assert normalize_provider_symbol("BITCOIN", AssetType.CRIPTO) == "BTC-USD"
-    assert normalize_provider_symbol("CARDANO", AssetType.CRIPTO) == "ADA-USD"
+    assert normalize_provider_symbol("BITCOIN", AssetType.CRIPTO) == "BTC-BRL"
+    assert normalize_provider_symbol("CARDANO", AssetType.CRIPTO) == "ADA-BRL"
 
 
 def test_empty_range_status_distinguishes_edges():

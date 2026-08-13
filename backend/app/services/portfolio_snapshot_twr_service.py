@@ -25,14 +25,16 @@ from app.core.asset_types import DEDICATED_PRICE_TYPES, NO_QUOTE_TYPES
 from app.models.asset import AssetType
 from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.transaction import OperationType, Transaction
-from app.services.portfolio_snapshot_service import _calc_totals
 from app.services.canonical_dividend_aggregation_service import (
     group_received_entitlements_by_day,
 )
 from app.services.canonical_dividend_entitlement_reader import (
     load_portfolio_dividend_entitlements,
 )
-from app.services.price_history_service import get_prices_at_date_batch
+from app.services.persisted_price_query_service import (
+    get_persisted_prices_at_date_batch,
+)
+from app.services.portfolio_snapshot_service import _calc_totals
 from app.services.twr_service import (
     append_compounded_return_pct,
     calculate_daily_twr_pct,
@@ -171,7 +173,11 @@ async def _has_partial_prices(
     if not requirements:
         return False
 
-    prices = await get_prices_at_date_batch(db, requirements, target_date.isoformat())
+    prices = await get_persisted_prices_at_date_batch(
+        db,
+        requirements,
+        target_date.isoformat(),
+    )
     missing = [ticker for ticker, _ in requirements if ticker not in prices]
     if missing:
         logger.warning(

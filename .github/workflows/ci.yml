@@ -37,9 +37,25 @@ concurrency:
 
 jobs:
   backend-quality:
-    name: Backend – lint, type check and tests
+    name: Backend – lint, type check, migrations and tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://sgi:sgi@localhost:5432/sgi_ci
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: sgi_ci
+          POSTGRES_USER: sgi
+          POSTGRES_PASSWORD: sgi
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sgi -d sgi_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v7
 
@@ -65,6 +81,13 @@ jobs:
       - name: Type check (mypy)
         working-directory: backend
         run: mypy app
+
+      - name: Fresh database migration gate
+        working-directory: backend
+        run: |
+          alembic upgrade head
+          alembic current
+          python -m app.governance.alembic_drift_gate
 
       - name: Tests (pytest)
         working-directory: backend
@@ -115,8 +138,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      # PRs grandes/divergentes precisam do commit-base no checkout para que
-      # o range calculado pelo gitleaks-action exista localmente.
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0

@@ -1,4 +1,4 @@
-from sqlalchemy import Numeric, DateTime, ForeignKey, UniqueConstraint, String
+from sqlalchemy import Numeric, DateTime, ForeignKey, UniqueConstraint, String, Index, desc
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 from decimal import Decimal
@@ -16,6 +16,7 @@ class AssetPrice(Base):
     __tablename__ = "asset_prices"
     __table_args__ = (
         UniqueConstraint("asset_id", "timestamp", name="uq_price_asset_timestamp"),
+        Index("idx_ap_asset_ts", "asset_id", desc("timestamp")),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)

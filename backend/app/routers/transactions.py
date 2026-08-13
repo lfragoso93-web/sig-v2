@@ -15,10 +15,17 @@ from app.models.portfolio import Portfolio
 from app.models.transaction import OperationType, Transaction
 from app.models.user import User
 from app.schemas.asset import AssetCreate
-from app.schemas.transaction import PagedTransactions, TransactionCreate, TransactionOut
-from app.services.asset_onboarding_service import run_onboarding
+from app.schemas.transaction import (
+    PagedTransactions,
+    TransactionCreate,
+    TransactionOut,
+    TransactionUpdate,
+)
 from app.services.asset_service import get_or_create_asset
-from app.services.dividend_backfill_service import backfill_dividends
+from app.services.crypto_transaction_eligibility_service import (
+    CryptoTransactionEligibilityError,
+    require_financially_certified_crypto_asset,
+)
 from app.services.portfolio_service import invalidate_portfolio_cache
 from app.services.rentabilidade_cache_service import invalidate_rentabilidade_cache
 from app.services.transaction_service import list_transactions_paginated
@@ -207,7 +214,6 @@ async def _upsert_fixed_income_isolated(
 
             await db.commit()
 
-        # Invalida cache APOS o commit para garantir dados frescos
         await invalidate_rentabilidade_cache(portfolio_id)
         log.info(
             "[upsert_fi] cache de rentabilidade invalidado para portfolio=%s",
@@ -249,6 +255,20 @@ async def _get_portfolio(portfolio_id: int, user: User, db: AsyncSession) -> Por
     if not p:
         raise HTTPException(status_code=404, detail="Carteira nao encontrada.")
     return p
+
+
+async def _validate_crypto_transaction_asset(
+    db: AsyncSession,
+    ticker: str,
+    asset_type: str,
+) -> None:
+    if asset_type != "CRIPTO":
+        return
+
+    try:
+        await require_financially_certified_crypto_asset(db, ticker)
+    except CryptoTransactionEligibilityError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 async def _calc_current_quantity(
@@ -350,6 +370,8 @@ async def create_transaction(
     asset_type = payload.asset_type
     operation = _to_operation(payload.operation)
 
+    await _validate_crypto_transaction_asset(db, ticker, asset_type)
+
     if operation == OperationType.sell:
         await _validate_sell(db, portfolio_id, ticker, payload.quantity)
 
@@ -369,7 +391,6 @@ async def create_transaction(
     await db.commit()
     await db.refresh(tx)
 
-    # RF/TD: upsert em sessao isolada + invalida cache (via background_tasks)
     if operation == OperationType.buy:
         if asset_type == "RENDA_FIXA":
             invested = float(payload.quantity) * float(payload.price)
@@ -394,16 +415,12 @@ async def create_transaction(
                 "TESOURO_DIRETO",
             )
 
-    asset_data = AssetCreate(ticker=ticker, name=ticker, asset_type=asset_type)
-    await get_or_create_asset(db, asset_data)
+    if asset_type != "CRIPTO":
+        asset_data = AssetCreate(ticker=ticker, name=ticker, asset_type=asset_type)
+        await get_or_create_asset(db, asset_data)
 
-    background_tasks.add_task(run_onboarding, ticker, str(asset_type))
-    background_tasks.add_task(
-        _run_backfill,
-        portfolio_id=portfolio_id,
-        ticker=ticker,
-        asset_type=str(asset_type),
-    )
+    # O CRUD de transacoes deve permanecer deterministico e local. Ingestao de
+    # mercado (precos, logos, eventos e proventos) pertence a pipelines opt-in.
     background_tasks.add_task(
         _run_snapshot_backfill,
         portfolio_id=portfolio_id,
@@ -424,7 +441,7 @@ async def create_transaction(
 async def update_transaction(
     portfolio_id: int,
     transaction_id: int,
-    payload: TransactionCreate,
+    payload: TransactionUpdate,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -441,61 +458,70 @@ async def update_transaction(
     if not tx:
         raise HTTPException(status_code=404, detail="Transacao nao encontrada.")
 
-    ticker = payload.ticker.strip().upper()
-    asset_type = payload.asset_type
-    operation = _to_operation(payload.operation)
+    ticker = payload.ticker.strip().upper() if payload.ticker is not None else tx.ticker
+    asset_type = payload.asset_type if payload.asset_type is not None else tx.asset_type
+    operation = (
+        _to_operation(payload.operation)
+        if payload.operation is not None
+        else tx.operation
+    )
+    quantity = payload.quantity if payload.quantity is not None else tx.quantity
+    price = payload.price if payload.price is not None else tx.price
+    fees = payload.fees if payload.fees is not None else tx.fees
+    tx_date = payload.date if payload.date is not None else tx.date
+    currency = payload.currency if payload.currency is not None else tx.currency
+    notes = payload.notes if "notes" in payload.model_fields_set else tx.notes
+
+    await _validate_crypto_transaction_asset(db, ticker, asset_type)
 
     if operation == OperationType.sell:
         await _validate_sell(
-            db, portfolio_id, ticker, payload.quantity, exclude_tx_id=transaction_id
+            db,
+            portfolio_id,
+            ticker,
+            quantity,
+            exclude_tx_id=transaction_id,
         )
 
-    invalidate_from = min(tx.date, payload.date)
+    invalidate_from = min(tx.date, tx_date)
 
     tx.ticker = ticker
     tx.asset_type = asset_type
     tx.operation = operation
-    tx.quantity = payload.quantity
-    tx.price = payload.price
-    tx.fees = payload.fees or 0.0
-    tx.date = payload.date
-    tx.currency = payload.currency or "BRL"
-    tx.notes = payload.notes
+    tx.quantity = quantity
+    tx.price = price
+    tx.fees = fees
+    tx.date = tx_date
+    tx.currency = currency
+    tx.notes = notes
 
     await db.commit()
     await db.refresh(tx)
 
     if operation == OperationType.buy:
         if asset_type == "RENDA_FIXA":
-            invested = float(payload.quantity) * float(payload.price)
+            invested = float(quantity) * float(price)
             background_tasks.add_task(
                 _upsert_fixed_income_isolated,
                 portfolio_id,
                 ticker,
-                payload.date,
+                tx_date,
                 invested,
-                payload.notes,
+                notes,
                 "RENDA_FIXA",
             )
         elif asset_type == "TESOURO_DIRETO":
-            invested = float(payload.quantity) * float(payload.price)
+            invested = float(quantity) * float(price)
             background_tasks.add_task(
                 _upsert_fixed_income_isolated,
                 portfolio_id,
                 ticker,
-                payload.date,
+                tx_date,
                 invested,
-                payload.notes,
+                notes,
                 "TESOURO_DIRETO",
             )
 
-    background_tasks.add_task(run_onboarding, ticker, str(asset_type))
-    background_tasks.add_task(
-        _run_backfill,
-        portfolio_id=portfolio_id,
-        ticker=ticker,
-        asset_type=str(asset_type),
-    )
     background_tasks.add_task(
         _run_snapshot_backfill,
         portfolio_id=portfolio_id,
@@ -549,20 +575,8 @@ async def delete_transaction(
 
 
 # ---------------------------------------------------------------------------
-# Background tasks
+# Background tasks locais
 # ---------------------------------------------------------------------------
-
-
-async def _run_backfill(portfolio_id: int, ticker: str, asset_type: str) -> None:
-    try:
-        async with AsyncSessionLocal() as db:
-            await backfill_dividends(
-                db=db,
-                ticker=ticker,
-                asset_type=asset_type,
-            )
-    except Exception as exc:
-        log.error("[backfill_dividends] erro para %s/%s: %s", ticker, portfolio_id, exc)
 
 
 async def _run_snapshot_backfill(portfolio_id: int, tx_date: DateType) -> None:

@@ -11,9 +11,9 @@ from app.services.asset_price_gap_sync_service import (
 
 
 def test_normaliza_simbolos_de_cripto_para_yahoo():
-    assert normalize_provider_symbol("BITCOIN", AssetType.CRIPTO) == "BTC-USD"
-    assert normalize_provider_symbol("ETHEREUM", AssetType.CRIPTO) == "ETH-USD"
-    assert normalize_provider_symbol("CARDANO", AssetType.CRIPTO) == "ADA-USD"
+    assert normalize_provider_symbol("BITCOIN", AssetType.CRIPTO) == "BTC-BRL"
+    assert normalize_provider_symbol("ETHEREUM", AssetType.CRIPTO) == "ETH-BRL"
+    assert normalize_provider_symbol("CARDANO", AssetType.CRIPTO) == "ADA-BRL"
 
 
 def test_preserva_alias_fracionario_para_simbolo_base():

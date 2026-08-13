@@ -1,11 +1,14 @@
 """
 rate_history.py
 
-Modelo SQLAlchemy para a tabela rate_history.
-Armazena o historico diario de indicadores macroeconomicos:
+Modelo SQLAlchemy para a tabela ``rate_history``.
+Armazena as series macroeconomicas persistidas usadas pelo SGI:
   - CDI  (Certificado de Deposito Interbancario)
-  - IPCA (Indice Nacional de Precos ao Consumidor Amplo)
   - SELIC (taxa basica de juros)
+  - IPCA (Indice Nacional de Precos ao Consumidor Amplo)
+  - IGPM (Indice Geral de Precos - Mercado)
+
+A identidade canonica de uma observacao e ``(indicator, date)``.
 """
 from __future__ import annotations
 
@@ -13,7 +16,7 @@ from datetime import date as DateType, datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Column, DateTime, Index, Integer, Numeric, String, Date, UniqueConstraint
+from sqlalchemy import Column, Date, DateTime, Index, Integer, Numeric, String
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -23,7 +26,7 @@ class RateHistory(Base):
     __tablename__ = "rate_history"
 
     __table_args__ = (
-        UniqueConstraint("indicator", "date", name="uq_rate_history_indicator_date"),
+        Index("uq_rate_history_indicator_date", "indicator", "date", unique=True),
         Index("ix_rate_history_date", "date"),
     )
 
@@ -32,7 +35,7 @@ class RateHistory(Base):
     indicator: str = Column(
         String(10),
         nullable=False,
-        comment="CDI | IPCA | SELIC",
+        comment="Indicador: CDI | SELIC | IPCA | IGPM",
     )
     date: DateType = Column(
         Date,
@@ -63,7 +66,7 @@ class RateHistory(Base):
         String(20),
         nullable=False,
         default="BCB",
-        comment="BCB | BRAPI | SEED | MANUAL",
+        comment="Fonte da observacao persistida; canonicamente BCB_SGS para benchmarks",
     )
     created_at: datetime = Column(
         DateTime(timezone=True),

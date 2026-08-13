@@ -13,11 +13,18 @@ import asyncio
 import logging
 import re
 from dataclasses import dataclass, field
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.integrations.brapi import fetch_all_tickers_v2
 from app.models.asset import Asset, AssetType
-from app.integrations.brapi import fetch_all_tickers_v2, fetch_crypto_available_all
+from app.services.asset_universe_membership_service import (
+    replace_crypto_candidate_memberships,
+)
+from app.services.crypto_supported_universe_service import (
+    fetch_supported_crypto_universe,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +128,7 @@ async def _backfill_market_data_for_ticker(ticker: str, asset_type: AssetType) -
                 result.logo_updated,
                 result.events_synced,
             )
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 -- isola falha por ativo no batch operacional
         logger.error(f"[seed_market] erro em {ticker} ({asset_type.value}): {e}")
 
 
@@ -173,21 +180,18 @@ async def _run_crypto_seed(db: AsyncSession, result: SeedResult) -> None:
     result.new_tickers.setdefault(type_label, [])
     result.seeded_tickers.setdefault(type_label, [])
 
-    logger.info("[seed] iniciando seed de criptomoedas via /api/v2/crypto/available")
-    coins = await fetch_crypto_available_all()
-    logger.info(f"[seed] criptomoedas recebidas da BRAPI: {len(coins)}")
+    logger.info("[seed] iniciando seed CRIPTO do universo suportado Top 100 por market cap")
+    coins = await fetch_supported_crypto_universe()
+    logger.info("[seed] universo CRIPTO suportado e disponível na BRAPI: %d", len(coins))
 
     BATCH_SIZE = 200
     batch_ops = 0
     for item in coins:
-        coin = (item.get("coin") or item.get("symbol") or "").strip().upper()
-        if not coin:
-            result.errors += 1
-            continue
-        coin_name = (item.get("coinName") or item.get("name") or item.get("longName") or coin).strip()
+        coin = item.ticker
+        coin_name = item.name
 
         try:
-            status = await _upsert_asset(db, coin, coin_name, AssetType.CRIPTO, None, _extract_logo_url(item))
+            status = await _upsert_asset(db, coin, coin_name, AssetType.CRIPTO, None)
             result.seeded_tickers[type_label].append(coin)
             if status == "created":
                 result.created += 1
@@ -202,12 +206,16 @@ async def _run_crypto_seed(db: AsyncSession, result: SeedResult) -> None:
             if batch_ops >= BATCH_SIZE:
                 await db.commit()
                 batch_ops = 0
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 -- seed deve registrar e seguir o próximo ativo
             result.errors += 1
             logger.error(f"[seed] erro ao upsert cripto {coin}: {e}")
 
     if batch_ops > 0:
         await db.commit()
+
+    memberships = await replace_crypto_candidate_memberships(db, coins)
+    await db.commit()
+    logger.info("[seed] associações CRIPTO Top 100 persistidas: %d", memberships)
 
 
 async def run_asset_seed(
@@ -234,6 +242,14 @@ async def run_asset_seed(
             if not ticker:
                 result.errors += 1
                 continue
+            if not _has_history(ticker):
+                result.skipped += 1
+                logger.info(
+                    "[seed] ticker nacional inelegível ignorado: %s (%s)",
+                    ticker,
+                    type_label,
+                )
+                continue
 
             name = (item.get("name") or item.get("longName") or "").strip()
             sector = (item.get("sector") or item.get("segment") or item.get("subSector") or "").strip() or None
@@ -255,7 +271,7 @@ async def run_asset_seed(
                 if batch_ops >= BATCH_SIZE:
                     await db.commit()
                     batch_ops = 0
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 -- seed deve registrar e seguir o próximo ativo
                 result.errors += 1
                 logger.error(f"[seed] erro ao upsert {ticker} ({type_label}): {e}")
 

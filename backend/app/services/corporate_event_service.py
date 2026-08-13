@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import warnings
@@ -12,7 +13,7 @@ from typing import Any
 
 import httpx
 from pandas.errors import Pandas4Warning
-from sqlalchemy import select
+from sqlalchemy import or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.integrations.brapi import BRAPI_BASE, _auth_headers
@@ -126,6 +127,16 @@ def _serialized_action(action: NormalizedCorporateAction) -> str:
     )
 
 
+def _source_payload_hash(action: NormalizedCorporateAction) -> str:
+    payload = json.dumps(
+        action.raw_payload,
+        sort_keys=True,
+        ensure_ascii=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 async def sync_corporate_events_for_asset(
     db: AsyncSession,
     asset: Asset,
@@ -155,36 +166,69 @@ async def sync_corporate_events_for_asset(
     if not actions:
         return []
 
-    ids = [action.source_event_id for action in actions]
+    identities = [(action.source, action.source_event_id) for action in actions]
+    legacy_ids = [action.source_event_id for action in actions]
     existing_result = await db.execute(
-        select(CorporateEvent.brapi_event_id).where(
-            CorporateEvent.brapi_event_id.in_(ids)
+        select(
+            CorporateEvent.source_provider,
+            CorporateEvent.source_event_id,
+            CorporateEvent.brapi_event_id,
+        ).where(
+            or_(
+                tuple_(
+                    CorporateEvent.source_provider,
+                    CorporateEvent.source_event_id,
+                ).in_(identities),
+                CorporateEvent.brapi_event_id.in_(legacy_ids),
+            )
         )
     )
-    existing_ids = set(existing_result.scalars().all())
+    existing_rows = existing_result.all()
+    existing_identities = {
+        (source_provider, source_event_id)
+        for source_provider, source_event_id, _ in existing_rows
+        if source_provider and source_event_id
+    }
+    existing_legacy_ids = {
+        brapi_event_id
+        for _, _, brapi_event_id in existing_rows
+        if brapi_event_id
+    }
 
     created: list[CorporateEvent] = []
     for action in sorted(actions, key=lambda item: (item.event_date, item.source_event_id)):
-        if action.source_event_id in existing_ids:
+        identity = (action.source, action.source_event_id)
+        if (
+            identity in existing_identities
+            or action.source_event_id in existing_legacy_ids
+        ):
             continue
         event = CorporateEvent(
             asset_id=asset.id,
             ticker=ticker,
             event_type=action.kind.value,
             status=CorporateEventStatus.PENDENTE.value,
-            event_date=action.event_date,
-            ratio=action.quantity_factor,
+            effective_date=action.event_date,
+            quantity_factor=action.quantity_factor,
+            source_provider=action.source,
+            source_event_id=action.source_event_id,
+            source_payload_hash=_source_payload_hash(action),
+            raw_metadata=action.raw_payload,
             description=(
                 f"{action.kind.value} global coletado de {action.source} "
                 f"(fator {action.quantity_factor})"
             ),
+            # Aliases legados preservados enquanto consumidores são migrados.
+            event_date=action.event_date,
+            ratio=action.quantity_factor,
             brapi_event_id=action.source_event_id,
             raw_data=_serialized_action(action),
             portfolio_id=None,
         )
         db.add(event)
         created.append(event)
-        existing_ids.add(action.source_event_id)
+        existing_identities.add(identity)
+        existing_legacy_ids.add(action.source_event_id)
 
     if created:
         await db.flush()

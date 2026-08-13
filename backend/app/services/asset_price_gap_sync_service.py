@@ -6,7 +6,7 @@ import logging
 import math
 import re
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 from sqlalchemy import func
@@ -28,6 +28,9 @@ _asset_locks: dict[int, asyncio.Lock] = {}
 _asset_locks_guard = asyncio.Lock()
 
 MAX_REASONABLE_UNIT_PRICE = 100_000_000.0
+_CRYPTO_MAX_ROWS_SUSPECT_LIMIT = 1000
+_CRYPTO_SHALLOW_MAX_ROWS = 7
+_CRYPTO_SHALLOW_MAX_AGE_DAYS = 30
 _FRACTIONAL_TICKER_RE = re.compile(r"^([A-Z0-9]{4,7})F$")
 _FRACTIONAL_TYPES = {
     AssetType.ACAO,
@@ -37,16 +40,16 @@ _FRACTIONAL_TYPES = {
 }
 _INITIAL_RANGE_REASONS = {"missing_start", "missing_all"}
 _CRYPTO_SYMBOLS = {
-    "BITCOIN": "BTC-USD",
-    "BTC": "BTC-USD",
-    "ETHEREUM": "ETH-USD",
-    "ETH": "ETH-USD",
-    "CARDANO": "ADA-USD",
-    "ADA": "ADA-USD",
-    "SOLANA": "SOL-USD",
-    "SOL": "SOL-USD",
-    "RIPPLE": "XRP-USD",
-    "XRP": "XRP-USD",
+    "BITCOIN": "BTC-BRL",
+    "BTC": "BTC-BRL",
+    "ETHEREUM": "ETH-BRL",
+    "ETH": "ETH-BRL",
+    "CARDANO": "ADA-BRL",
+    "ADA": "ADA-BRL",
+    "SOLANA": "SOL-BRL",
+    "SOL": "SOL-BRL",
+    "RIPPLE": "XRP-BRL",
+    "XRP": "XRP-BRL",
 }
 
 
@@ -88,7 +91,7 @@ def build_missing_edge_ranges(coverage: AssetPriceCoverage) -> tuple[MissingPric
 
 def _default_provider(asset_type: AssetType) -> str:
     if asset_type == AssetType.CRIPTO:
-        return "yfinance"
+        return "brapi"
     return "alpha_vantage" if asset_type in INTL_TYPES else "brapi"
 
 
@@ -97,13 +100,19 @@ def normalize_provider_symbol(ticker: str, asset_type: AssetType) -> str:
     if asset_type == AssetType.CRIPTO:
         return _CRYPTO_SYMBOLS.get(
             normalized,
-            normalized if normalized.endswith("-USD") else f"{normalized}-USD",
+            normalized if normalized.endswith("-BRL") else f"{normalized}-BRL",
         )
     if asset_type in _FRACTIONAL_TYPES:
         match = _FRACTIONAL_TICKER_RE.fullmatch(normalized)
         if match:
             return match.group(1)
     return normalized
+
+
+def _yahoo_crypto_usd_symbol(provider_symbol: str) -> str:
+    normalized = str(provider_symbol or "").strip().upper()
+    base = normalized[:-4] if normalized.endswith("-BRL") else normalized.split("-", 1)[0]
+    return f"{base}-USD" if base else normalized
 
 
 def _is_valid_price(value: object) -> bool:
@@ -147,6 +156,64 @@ async def _fetch_yf_max(symbol: str, asset_type: AssetType) -> list[tuple[dateti
     return await _run_yf_with_throttle(_fetch_yf_max_sync, resolved)
 
 
+async def _convert_crypto_usd_rows_to_brl(
+    rows: list[tuple[datetime, float]],
+) -> list[tuple[datetime, float]]:
+    if not rows:
+        return []
+
+    from app.services.fx_rate_reader import load_usd_brl_rates_for_dates
+
+    dates = [timestamp.date() for timestamp, _ in rows]
+    async with AsyncSessionLocal() as db:
+        rates = await load_usd_brl_rates_for_dates(db, dates)
+
+    converted: list[tuple[datetime, float]] = []
+    missing_fx = 0
+    for timestamp, close_usd in rows:
+        fixing = rates.get(timestamp.date())
+        if fixing is None:
+            missing_fx += 1
+            continue
+        close_brl = Decimal(str(close_usd)) * fixing.rate
+        converted.append((timestamp, float(close_brl)))
+
+    if missing_fx:
+        logger.warning(
+            "[price_gap_sync] crypto USD sem PTAX persistida: %d de %d linha(s)",
+            missing_fx,
+            len(rows),
+        )
+    return converted
+
+
+async def _fetch_crypto_history(ticker: str) -> tuple[list[tuple[datetime, float]], str, str]:
+    from app.integrations.brapi_crypto_history import fetch_brapi_crypto_history
+
+    try:
+        rows = await fetch_brapi_crypto_history(
+            ticker,
+            currency="BRL",
+            range_="max",
+            interval="1d",
+        )
+    except Exception as exc:
+        logger.info(
+            "[price_gap_sync] brapi crypto indisponivel ticker=%s; usando yahoo USD/PTAX: %s",
+            ticker,
+            exc,
+        )
+        rows = []
+
+    if rows:
+        return rows, "brapi_v2_crypto_max", "brapi"
+
+    yahoo_symbol = _yahoo_crypto_usd_symbol(ticker)
+    usd_rows = await _fetch_yf_max(yahoo_symbol, AssetType.CRIPTO)
+    fallback = await _convert_crypto_usd_rows_to_brl(usd_rows)
+    return fallback, "yfinance_crypto_ptax_brl_max", "yfinance"
+
+
 def _empty_status(missing_range: MissingPriceRange) -> str:
     if missing_range.reason == "missing_all":
         return "HISTORY_UNAVAILABLE"
@@ -155,21 +222,49 @@ def _empty_status(missing_range: MissingPriceRange) -> str:
     return "HISTORY_END_UNAVAILABLE"
 
 
+def _crypto_initial_status(
+    filtered: list[tuple[datetime, float]],
+    *,
+    source: str,
+    required_to: date,
+) -> str:
+    if source != "brapi_v2_crypto_max":
+        return "HISTORY_START_EXHAUSTED"
+    if len(filtered) >= _CRYPTO_MAX_ROWS_SUSPECT_LIMIT:
+        return "HISTORY_START_TRUNCATED"
+    first_date = min(timestamp.date() for timestamp, _ in filtered)
+    shallow_cutoff = required_to - timedelta(days=_CRYPTO_SHALLOW_MAX_AGE_DAYS)
+    if len(filtered) <= _CRYPTO_SHALLOW_MAX_ROWS and first_date >= shallow_cutoff:
+        return "HISTORY_START_SHALLOW"
+    return "HISTORY_START_EXHAUSTED"
+
+
 async def _fetch_range(
     ticker: str,
     asset_type: AssetType,
     missing_range: MissingPriceRange,
+    *,
+    crypto_start_truncated: bool = False,
 ) -> tuple[list[tuple[datetime, float]], str, str | None, str]:
     initial_history = missing_range.reason in _INITIAL_RANGE_REASONS
     rows: list[tuple[datetime, float]] = []
     source = ""
     terminal_status: str | None = None
     effective_provider = _default_provider(asset_type)
+    crypto_start_complement = (
+        asset_type == AssetType.CRIPTO
+        and crypto_start_truncated
+        and missing_range.reason == "missing_start"
+    )
 
-    if asset_type == AssetType.CRIPTO:
-        rows = await _fetch_yf_max(ticker, asset_type)
-        source = "yfinance_crypto_max"
-        effective_provider = "yfinance"
+    if crypto_start_complement:
+        yahoo_symbol = _yahoo_crypto_usd_symbol(ticker)
+        usd_rows = await _fetch_yf_max(yahoo_symbol, asset_type)
+        rows = await _convert_crypto_usd_rows_to_brl(usd_rows)
+        source = "yfinance_crypto_ptax_brl_max"
+        effective_provider = "brapi"
+    elif asset_type == AssetType.CRIPTO:
+        rows, source, effective_provider = await _fetch_crypto_history(ticker)
     elif asset_type in INTL_TYPES:
         if initial_history:
             rows = await _fetch_yf_max(ticker, asset_type)
@@ -214,7 +309,22 @@ async def _fetch_range(
             continue
         filtered.append((ts.astimezone(timezone.utc), float(close)))
 
-    if not filtered:
+    if filtered and crypto_start_complement:
+        seam_complete = max(timestamp.date() for timestamp, _ in filtered) >= missing_range.date_to
+        terminal_status = (
+            "HISTORY_START_EXHAUSTED"
+            if seam_complete
+            else "HISTORY_START_COMPLEMENT_GAPPED"
+        )
+    elif not filtered and crypto_start_complement:
+        terminal_status = "HISTORY_START_COMPLEMENT_UNAVAILABLE"
+    elif filtered and asset_type == AssetType.CRIPTO and initial_history:
+        terminal_status = _crypto_initial_status(
+            filtered,
+            source=source,
+            required_to=missing_range.date_to,
+        )
+    elif not filtered:
         terminal_status = _empty_status(missing_range)
     if rejected:
         logger.warning(
@@ -297,17 +407,40 @@ async def sync_asset_price_gaps(coverage: AssetPriceCoverage) -> AssetGapSyncRes
         )
 
     provider_symbol = normalize_provider_symbol(coverage.ticker, asset_type)
+    crypto_start_truncated = (
+        asset_type == AssetType.CRIPTO
+        and str(coverage.provider_status or "").upper() == "HISTORY_START_TRUNCATED"
+    )
     lock = await _lock_for(coverage.asset_id)
     async with lock:
         total_received = 0
         total_inserted = 0
         errors: list[str] = []
         for missing_range in ranges:
+            effective_range = missing_range
+            if (
+                crypto_start_truncated
+                and missing_range.reason == "missing_start"
+                and coverage.first_price_date is not None
+            ):
+                effective_range = MissingPriceRange(
+                    date_from=missing_range.date_from,
+                    date_to=coverage.first_price_date - timedelta(days=1),
+                    reason=missing_range.reason,
+                )
             try:
                 rows, source, terminal_status, provider = await _fetch_range(
                     provider_symbol,
                     asset_type,
-                    missing_range,
+                    effective_range,
+                    crypto_start_truncated=crypto_start_truncated,
+                )
+                persisted_provider_symbol = (
+                    _yahoo_crypto_usd_symbol(provider_symbol)
+                    if asset_type == AssetType.CRIPTO
+                    and provider == "yfinance"
+                    and source == "yfinance_crypto_ptax_brl_max"
+                    else provider_symbol
                 )
                 total_received += len(rows)
                 total_inserted += await _persist_result(
@@ -315,15 +448,15 @@ async def sync_asset_price_gaps(coverage: AssetPriceCoverage) -> AssetGapSyncRes
                     rows,
                     source=source,
                     provider=provider,
-                    provider_symbol=provider_symbol,
+                    provider_symbol=persisted_provider_symbol,
                     terminal_status=terminal_status,
                 )
             except Exception as exc:
                 logger.exception(
                     "[price_gap_sync] falha ticker=%s intervalo=%s..%s",
                     coverage.ticker,
-                    missing_range.date_from,
-                    missing_range.date_to,
+                    effective_range.date_from,
+                    effective_range.date_to,
                 )
                 errors.append(str(exc))
 

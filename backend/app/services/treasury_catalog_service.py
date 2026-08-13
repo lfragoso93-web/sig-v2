@@ -1,9 +1,8 @@
-"""
-Serviço de catálogo do Tesouro Direto.
+"""Serviço de catálogo do Tesouro Direto.
 
-Fonte de verdade: tabela assets, populada a partir de fontes públicas do Tesouro
-e da BRAPI. Itens sintéticos podem auxiliar a resolução de aliases, mas nunca
-são persistidos como novos ativos.
+Fonte de verdade: tabela assets. O bootstrap popula o catálogo por meio da
+fronteira `treasury_catalog_provider`, que usa Tesouro Transparente como fonte
+primária e BRAPI somente como fallback operacional.
 """
 from __future__ import annotations
 
@@ -16,16 +15,17 @@ from typing import Optional
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.integrations.brapi_treasury import (
-    canonical_treasury_symbol_from_text,
-    fetch_treasury_list,
-)
+from app.integrations.brapi_treasury import canonical_treasury_symbol_from_text
+from app.integrations.treasury_catalog_provider import fetch_treasury_catalog
 from app.models.asset import Asset, AssetType
+from app.models.asset_alias import AssetAlias
+from app.services.treasury_legacy_identity_service import (
+    consolidate_legacy_educa_identities,
+)
 
 logger = logging.getLogger(__name__)
 
 _TREASURY_TYPE = AssetType.TESOURO_DIRETO.value
-_SYNTHETIC_SOURCE = "synthetic_treasury_long_term"
 _INACTIVE_STATUS = "NOT_APPLICABLE"
 
 
@@ -34,6 +34,7 @@ class TreasurySeedResult:
     created: int = 0
     updated: int = 0
     skipped: int = 0
+    consolidated: int = 0
     errors: int = 0
 
 
@@ -71,10 +72,10 @@ def _name(item: dict, symbol: str) -> str:
     bond_type = str(item.get("bondType") or item.get("name") or item.get("title") or "").strip()
     maturity_year = item.get("maturityYear")
     maturity = str(item.get("maturityDate") or item.get("dueDate") or item.get("expiresAt") or "").strip()
-    if bond_type and maturity_year:
-        return f"{bond_type} {maturity_year}"
     if bond_type and maturity:
         return f"{bond_type} {maturity[:10]}"
+    if bond_type and maturity_year:
+        return f"{bond_type} {maturity_year}"
     return bond_type or symbol
 
 
@@ -93,20 +94,16 @@ def _sector(item: dict) -> str:
 
 
 async def seed_treasury_assets(db: AsyncSession, commit: bool = True) -> TreasurySeedResult:
-    """Importa/atualiza apenas títulos confirmados por fontes externas reais."""
+    """Importa/atualiza títulos reais e consolida identidades legadas conhecidas."""
     result = TreasurySeedResult()
     try:
-        items = await fetch_treasury_list()
+        items = await fetch_treasury_catalog()
     except Exception as exc:
         logger.error("[treasury_seed] falha ao buscar catálogo Tesouro: %s", exc)
         result.errors += 1
         return result
 
     for item in items:
-        if str(item.get("source") or "").strip().lower() == _SYNTHETIC_SOURCE:
-            result.skipped += 1
-            continue
-
         symbol = _symbol(item)
         if not symbol:
             result.errors += 1
@@ -152,13 +149,20 @@ async def seed_treasury_assets(db: AsyncSession, commit: bool = True) -> Treasur
             logger.error("[treasury_seed] erro ao salvar %s: %s", symbol, exc)
             result.errors += 1
 
+    await db.flush()
+    consolidation = await consolidate_legacy_educa_identities(db)
+    result.consolidated = consolidation.consolidated
+    result.errors += consolidation.errors
+
     if commit:
         await db.commit()
     logger.info(
-        "[treasury_seed] concluído: %d criados, %d atualizados, %d ignorados, %d erros",
+        "[treasury_seed] concluído: %d criados, %d atualizados, %d ignorados, "
+        "%d consolidados, %d erros",
         result.created,
         result.updated,
         result.skipped,
+        result.consolidated,
         result.errors,
     )
     return result
@@ -173,7 +177,7 @@ async def _treasury_assets(db: AsyncSession, *, active_only: bool = True) -> lis
 
 
 async def resolve_treasury_symbol(db: AsyncSession, raw: str | None) -> Optional[str]:
-    """Resolve texto/ticker para um slug oficial ativo do Tesouro."""
+    """Resolve texto/ticker usando exclusivamente o catálogo persistido do Tesouro."""
     value = (raw or "").strip()
     if not value:
         return None
@@ -187,6 +191,20 @@ async def resolve_treasury_symbol(db: AsyncSession, raw: str | None) -> Optional
         )
     )
     found = exact.scalars().first()
+    if found:
+        return str(found).lower()
+
+    alias = await db.execute(
+        select(Asset.ticker)
+        .join(AssetAlias, AssetAlias.asset_id == Asset.id)
+        .where(
+            Asset.asset_type == _TREASURY_TYPE,
+            AssetAlias.asset_type == _TREASURY_TYPE,
+            func.lower(AssetAlias.alias_ticker) == lower,
+            func.coalesce(Asset.provider_status, "") != _INACTIVE_STATUS,
+        )
+    )
+    found = alias.scalars().first()
     if found:
         return str(found).lower()
 
@@ -215,19 +233,6 @@ async def resolve_treasury_symbol(db: AsyncSession, raw: str | None) -> Optional
         return str(found).lower()
 
     assets = await _treasury_assets(db, active_only=True)
-    if not assets:
-        try:
-            await seed_treasury_assets(db, commit=True)
-            assets = await _treasury_assets(db, active_only=True)
-        except Exception as exc:
-            logger.warning("[treasury_catalog] seed sob demanda falhou: %s", exc)
-
-    if canonical:
-        for asset in assets:
-            if str(asset.ticker or "").lower() == canonical.lower():
-                return canonical.lower()
-        logger.info("[treasury_catalog] %r resolvido por regra canônica para %s", value, canonical)
-        return canonical.lower()
 
     raw_norm = normalize_treasury_text(value)
     raw_slug = slug_from_text(value)

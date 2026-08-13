@@ -1,4 +1,4 @@
-from sqlalchemy import Numeric, ForeignKey, UniqueConstraint
+from sqlalchemy import Numeric, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 from app.models.base import TimestampMixin
@@ -18,6 +18,7 @@ class PortfolioPosition(Base, TimestampMixin):
     __tablename__ = "portfolio_positions"
     __table_args__ = (
         UniqueConstraint("portfolio_id", "asset_id", name="uq_position_portfolio_asset"),
+        Index("idx_pp_portfolio", "portfolio_id"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
@@ -25,7 +26,7 @@ class PortfolioPosition(Base, TimestampMixin):
         ForeignKey("portfolios.id", ondelete="CASCADE"), nullable=False, index=True
     )
     asset_id: Mapped[int] = mapped_column(
-        ForeignKey("assets.id", ondelete="RESTRICT"), nullable=False, index=True
+        ForeignKey("assets.id", ondelete="RESTRICT"), nullable=False
     )
     quantity: Mapped[Decimal] = mapped_column(Numeric(18, 8), nullable=False, default=Decimal("0"))
     average_price: Mapped[Decimal] = mapped_column(Numeric(18, 8), nullable=False, default=Decimal("0"))

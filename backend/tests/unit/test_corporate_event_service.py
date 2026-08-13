@@ -11,7 +11,7 @@ from app.services.corporate_event_service import sync_corporate_events_for_asset
 
 def _result(values):
     result = Mock()
-    result.scalars.return_value.all.return_value = values
+    result.all.return_value = values
     return result
 
 
@@ -104,7 +104,7 @@ async def test_sync_is_idempotent_by_canonical_source_event_id() -> None:
     )
     event_id = first[0].brapi_event_id
 
-    second_db = _db(existing=(event_id,))
+    second_db = _db(existing=(("brapi", event_id, event_id),))
     second = await sync_corporate_events_for_asset(
         second_db,
         _asset(),

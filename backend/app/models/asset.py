@@ -39,27 +39,38 @@ class Asset(Base):
     __tablename__ = "assets"
 
     __table_args__ = (
-        UniqueConstraint("ticker", "asset_type", name="uq_assets_ticker_asset_type"),
+        UniqueConstraint("ticker", "asset_type", name="uq_asset_ticker_type"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
     ticker = Column(String, nullable=False, index=True)
     name = Column(String, nullable=True)
     asset_type = Column(String, nullable=False)
-    currency = Column(String, default="BRL")
-    last_price = Column(Numeric(18, 8), nullable=True)
-    last_price_updated_at = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime, default=utc_now_naive)
+    currency = Column(String, default="BRL", nullable=False)
+    last_price = Column(
+        Numeric(18, 8),
+        nullable=True,
+        comment="Ultimo preco conhecido (cache L1). Nunca usar como fallback de PM.",
+    )
+    last_price_updated_at = Column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+        comment="Timestamp da ultima atualizacao de last_price.",
+    )
+    created_at = Column(DateTime(timezone=True), default=utc_now_naive)
+    updated_at = Column(DateTime(timezone=True), nullable=True)
     brapi_ticker = Column(String, nullable=True)
     sector = Column(String, nullable=True)
     sub_sector = Column(String, nullable=True)
     float_description = Column(Float, nullable=True)
     logo_url = Column(String, nullable=True)
+    isin_code = Column(String(32), nullable=True, index=True)
 
     # Cache persistente do roteamento de mercado.
     provider = Column(String, nullable=True)
     provider_symbol = Column(String, nullable=True)
-    provider_status = Column(String, nullable=True)
+    provider_status = Column(String, nullable=True, index=True)
     provider_last_sync_at = Column(DateTime(timezone=True), nullable=True)
     provider_last_error = Column(String, nullable=True)
     provider_attempts = Column(Integer, nullable=False, default=0)

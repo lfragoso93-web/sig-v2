@@ -67,6 +67,11 @@ async def test_internal_runner_commits_only_once_at_the_end(monkeypatch):
     monkeypatch.setattr(service, "_last_saved_date", AsyncMock(return_value=None))
     monkeypatch.setattr(
         service,
+        "_first_official_saved_date",
+        AsyncMock(return_value=None),
+    )
+    monkeypatch.setattr(
+        service,
         "fetch_official_treasury_history",
         AsyncMock(return_value={asset.ticker: []}),
     )
@@ -89,6 +94,11 @@ async def test_internal_runner_skips_commit_when_disabled(monkeypatch):
         AsyncMock(return_value=({asset.ticker: asset}, {asset.ticker: []}, [])),
     )
     monkeypatch.setattr(service, "_last_saved_date", AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        service,
+        "_first_official_saved_date",
+        AsyncMock(return_value=None),
+    )
     monkeypatch.setattr(
         service,
         "fetch_official_treasury_history",

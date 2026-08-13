@@ -31,19 +31,53 @@ from app.services.fixed_income_valuation_service import (
     get_fixed_income_valuations,
     valuation_to_position_payload,
 )
-from app.services.fx_service import get_usd_brl_batch, get_usd_brl_today
+from app.services.fx_rate_reader import (
+    load_latest_usd_brl_rate,
+    load_usd_brl_rates_for_dates,
+)
+from app.services.persisted_current_price_query_service import (
+    get_persisted_current_prices,
+)
+from app.services.persisted_price_query_service import (
+    get_persisted_prices_at_date_batch,
+)
 from app.services.position_timeline_projection import (
     PositionMovement,
     PositionMovementKind,
     project_position_timeline,
 )
-from app.services.price_history_service import get_prices_at_date_batch
-from app.services.quotes_service import get_prices
 
 logger = logging.getLogger(__name__)
 
 _CACHE_TTL = 120
 _CACHE_PREFIX = "portfolio"
+
+
+async def get_usd_brl_today(db: AsyncSession) -> float:
+    persisted = await load_latest_usd_brl_rate(db)
+    if persisted is None:
+        raise RuntimeError("cotação USD-BRL persistida indisponível")
+    return float(persisted.rate)
+
+
+async def get_usd_brl_batch(db: AsyncSession, dates: list[str]) -> dict[str, float]:
+    parsed_dates: list[DateType] = []
+    for value in dates:
+        try:
+            parsed_dates.append(DateType.fromisoformat(value))
+        except ValueError:
+            continue
+
+    persisted = await load_usd_brl_rates_for_dates(db, parsed_dates)
+    result: dict[str, float] = {}
+    for requested in parsed_dates:
+        row = persisted.get(requested)
+        if row is None:
+            raise RuntimeError(
+                f"cobertura USD-BRL persistida indisponível em ou antes de {requested.isoformat()}"
+            )
+        result[requested.isoformat()] = float(row.rate)
+    return result
 
 
 def _cache_key(portfolio_id: int, suffix: str) -> str:
@@ -177,7 +211,7 @@ async def calc_raw_positions(db: AsyncSession, portfolio_id: int) -> list[dict]:
             if saved_rate is not None and Decimal(str(saved_rate or 0)) > 0:
                 fx_rate = Decimal(str(saved_rate))
             elif tx.date:
-                fx_rate = Decimal(str(fx_map.get(tx.date.isoformat(), 1.0)))
+                fx_rate = Decimal(str(fx_map[tx.date.isoformat()]))
 
         quantity = Decimal(str(tx.quantity or 0))
         price = Decimal(str(tx.price or 0))
@@ -271,15 +305,15 @@ def enrich_with_prices(
 async def _fetch_prices_batch(db: AsyncSession, positions_raw: list[dict]) -> dict[str, float]:
     if not positions_raw:
         return {}
-    price_input = [
-        {"ticker": p["ticker"], "asset_type": p["asset_type"]}
+    tickers = [
+        p["ticker"]
         for p in positions_raw
         if not _is_fixed_income_type(p.get("asset_type"))
     ]
-    if not price_input:
+    if not tickers:
         return {}
     try:
-        return await get_prices(price_input, db)
+        return await get_persisted_current_prices(db, tickers)
     except Exception as e:
         logger.error(f"[portfolio_service] erro ao buscar precos: {e}")
         return {}
@@ -350,7 +384,14 @@ async def _fetch_previous_prices_batch(
     ]
     if not tickers_with_types:
         return {}, previous_date
-    return await get_prices_at_date_batch(db, tickers_with_types, previous_date), previous_date
+    return (
+        await get_persisted_prices_at_date_batch(
+            db,
+            tickers_with_types,
+            previous_date,
+        ),
+        previous_date,
+    )
 
 
 async def sum_dividends(db: AsyncSession, portfolio_id: int, cutoff: DateType | None = None) -> float:
@@ -551,7 +592,6 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
     enriched = await _non_fixed_income_enriched(db, portfolio_id)
     targets_map = await get_targets_map(db, portfolio_id)
     previous_prices, previous_reference_date = await _fetch_previous_prices_batch(db, enriched)
-    fx_today = await get_usd_brl_today(db)
 
     tickers = [e["ticker"] for e in enriched]
     logos = await _fetch_logos_batch(db, tickers)
@@ -611,118 +651,72 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
         rf_total_value = sum(p["current_value"] for p in rf_positions)
         rf_total_invested = sum(p["invested_value"] for p in rf_positions)
         for p in rf_positions:
-            p["allocation_pct"] = round((p["current_value"] / total_current * 100) if total_current else 0, 4)
+            p["allocation_pct"] = round((p["current_value"] / total_current * 100), 4) if total_current else 0
         groups[RENDA_FIXA_TYPE] = {
-            "label": _TYPE_LABEL[RENDA_FIXA_TYPE],
+            "label": _TYPE_LABEL.get(RENDA_FIXA_TYPE, "Renda Fixa"),
             "count": len(rf_positions),
             "total_value": rf_total_value,
             "total_invested": rf_total_invested,
             "positions": rf_positions,
         }
 
-    sorted_groups = sorted(groups.values(), key=lambda g: g["total_value"], reverse=True)
-    for g in sorted_groups:
-        g["total_value"] = round(g["total_value"], 2)
-        g["total_invested"] = round(g["total_invested"], 2)
-
-        if g["positions"] and g["positions"][0].get("asset_type") == RENDA_FIXA_TYPE:
-            inv = g["total_invested"]
-            cur = g["total_value"]
-            metrics = build_group_performance_metrics(cur, inv, None, 0.0)
-            g["daily_variation_value"] = None
-            g["daily_variation_pct"] = None
-            g["variation_pct"] = None
-            g["variation_reference_date"] = None
-            g["proventos_grupo"] = 0.0
-            g["rentabilidade_pct"] = metrics["rentabilidade_pct"]
-            g["target_pct"] = targets_map.get(RENDA_FIXA_TYPE)
-            continue
-
-        quoted_positions = [p for p in g["positions"] if p["current_price_brl"] is not None]
-        proventos_grupo = sum(
-            dividends_by_ticker.get(p["ticker"], 0.0)
-            for p in g["positions"]
-        )
-        g["proventos_grupo"] = round(proventos_grupo, 2)
-        quoted_cur = sum(p["current_value"] for p in quoted_positions)
-        quoted_inv = sum(p["invested_value"] for p in quoted_positions)
-        previous_values: list[float] = []
-        for p in quoted_positions:
-            previous_price = previous_prices.get(p["ticker"])
+    target_by_type = {normalize_type(k): float(v) for k, v in targets_map.items()}
+    result = []
+    for at, g in sorted(groups.items()):
+        target_pct = target_by_type.get(normalize_type(at))
+        current_pct = (g["total_value"] / total_current * 100) if total_current else 0
+        previous_group_value = 0.0
+        previous_has_value = False
+        for position in g["positions"]:
+            ticker = position["ticker"]
+            previous_price = previous_prices.get(ticker)
             if previous_price is None:
-                previous_values = []
-                break
-            price_brl = previous_price * fx_today if p.get("is_usd") else previous_price
-            previous_values.append(p["quantity"] * price_brl)
+                continue
+            previous_has_value = True
+            previous_group_value += float(previous_price) * float(position.get("quantity") or 0)
 
-        previous_value = (
-            sum(previous_values)
-            if quoted_positions and len(previous_values) == len(quoted_positions)
-            else None
-        )
+        proventos_grupo = 0.0
+        if at != RENDA_FIXA_TYPE:
+            group_tickers = [position["ticker"] for position in g["positions"]]
+            proventos_grupo = sum(float(dividends_by_ticker.get(ticker, 0.0)) for ticker in group_tickers)
+
         metrics = build_group_performance_metrics(
-            quoted_cur,
-            quoted_inv,
-            previous_value,
-            proventos_grupo,
+            current_value=g["total_value"],
+            total_invested=g["total_invested"],
+            previous_value=previous_group_value if previous_has_value else None,
+            proventos_grupo=proventos_grupo,
         )
-        g["daily_variation_value"] = metrics["daily_variation_value"]
-        g["daily_variation_pct"] = metrics["daily_variation_pct"]
-        g["variation_pct"] = metrics["daily_variation_pct"]
-        g["variation_reference_date"] = (
-            previous_reference_date
-            if metrics["daily_variation_pct"] is not None
-            else None
-        )
-        g["rentabilidade_pct"] = metrics["rentabilidade_pct"]
+        result.append({
+            "asset_type": at,
+            "label": g["label"],
+            "color": _TYPE_COLOR.get(at, "#6b7280"),
+            "count": g["count"],
+            "total_value": round(g["total_value"], 2),
+            "total_invested": round(g["total_invested"], 2),
+            "current_pct": round(current_pct, 4),
+            "target_pct": target_pct,
+            "deviation_pct": round(current_pct - target_pct, 4) if target_pct is not None else None,
+            "proventos": round(proventos_grupo, 2),
+            "previous_reference_date": previous_reference_date if previous_has_value else None,
+            **metrics,
+            "positions": g["positions"],
+        })
 
-        g["target_pct"] = targets_map.get(g["positions"][0]["asset_type"]) if g["positions"] else None
-
-    await cache_set(cache_key, sorted_groups, ttl=_CACHE_TTL)
-    return sorted_groups
+    await cache_set(cache_key, result, ttl=_CACHE_TTL)
+    return result
 
 
 async def get_asset_distribution(db: AsyncSession, portfolio_id: int, user_id: int) -> list[dict]:
-    await get_portfolio(db, portfolio_id, user_id)
-    enriched = await _non_fixed_income_enriched(db, portfolio_id)
-    rf_totals = await get_fixed_income_totals(db, portfolio_id)
-
-    by_type: dict[str, float] = {}
-    for e in enriched:
-        at = normalize_type(e.get("asset_type")) or "OUTRO"
-        val = e["current_value"] if e["current_value"] is not None else e["total_invested"]
-        if val <= 0:
-            continue
-        by_type[at] = by_type.get(at, 0) + val
-
-    rf_current = float(rf_totals["current_value"])
-    if rf_current > 0:
-        by_type[RENDA_FIXA_TYPE] = by_type.get(RENDA_FIXA_TYPE, 0) + rf_current
-
-    return build_asset_distribution_items(by_type)
-
-
-def build_asset_distribution_items(by_type: dict[str, float]) -> list[dict]:
-    positive_by_type = {
-        asset_type: value
-        for asset_type, value in by_type.items()
-        if value > 0
-    }
-
-    if not positive_by_type:
-        return []
-
-    total = sum(positive_by_type.values())
-    if total <= 0:
-        return []
-
+    groups = await get_portfolio_positions(db, portfolio_id, user_id)
     return [
         {
-            "asset_type": at,
-            "label": _TYPE_LABEL.get(at, at.replace("_", " ").title()),
-            "value": round(v, 2),
-            "percentage": round(v / total * 100, 4) if total else 0,
-            "color": _TYPE_COLOR.get(at, "#6b7280"),
+            "asset_type": group["asset_type"],
+            "label": group["label"],
+            "value": group["total_value"],
+            "percentage": group["current_pct"],
+            "target_percentage": group.get("target_pct"),
+            "deviation_percentage": group.get("deviation_pct"),
+            "color": group.get("color"),
         }
-        for at, v in sorted(positive_by_type.items(), key=lambda x: x[1], reverse=True)
+        for group in groups
     ]

@@ -15,7 +15,7 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,24 +32,32 @@ logger = logging.getLogger(__name__)
 
 _OFFICIAL_SOURCE = "tesouro_transparente"
 _FALLBACK_SOURCE = "brapi_treasury"
-_DEFAULT_YEARS = 10
+_OFFICIAL_HISTORY_START = date(2002, 1, 1)
 _LOOKBACK_DAYS = 10
 _INACTIVE_STATUS = "NOT_APPLICABLE"
 _MATURITY_SUFFIX_PATTERN = re.compile(r"-(\d{2})(\d{2})(\d{4})$")
 _MATURITY_YEAR_PATTERN = re.compile(r"-(\d{4})$")
 
 
-def _maturity_date_from_symbol(symbol: str) -> date | None:
-    """Extrai vencimento de símbolos canônicos sem depender de campos adicionais."""
+def _full_maturity_date_from_symbol(symbol: str) -> date | None:
     normalized = str(symbol or "").strip().lower()
     full_match = _MATURITY_SUFFIX_PATTERN.search(normalized)
-    if full_match:
-        day, month, year = (int(value) for value in full_match.groups())
-        try:
-            return date(year, month, day)
-        except ValueError:
-            return None
+    if not full_match:
+        return None
+    day, month, year = (int(value) for value in full_match.groups())
+    try:
+        return date(year, month, day)
+    except ValueError:
+        return None
 
+
+def _maturity_date_from_symbol(symbol: str) -> date | None:
+    """Extrai vencimento de símbolos canônicos sem depender de campos adicionais."""
+    full_maturity = _full_maturity_date_from_symbol(symbol)
+    if full_maturity is not None:
+        return full_maturity
+
+    normalized = str(symbol or "").strip().lower()
     year_match = _MATURITY_YEAR_PATTERN.search(normalized)
     if year_match:
         return date(int(year_match.group(1)), 12, 31)
@@ -95,13 +103,27 @@ async def _persist_history_rows(
     return changed
 
 
+async def _first_official_saved_date(db: AsyncSession, asset_id: int) -> date | None:
+    result = await db.execute(
+        select(func.min(AssetPrice.timestamp)).where(
+            AssetPrice.asset_id == asset_id,
+            AssetPrice.source == _OFFICIAL_SOURCE,
+        )
+    )
+    first_ts = result.scalar_one_or_none()
+    return first_ts.date() if first_ts else None
+
+
 async def _canonical_assets(
     db: AsyncSession,
 ) -> tuple[dict[str, Asset], dict[str, list[str]], list[str]]:
     result = await db.execute(
         select(Asset).where(
             Asset.asset_type == AssetType.TESOURO_DIRETO.value,
-            Asset.provider_status != _INACTIVE_STATUS,
+            or_(
+                Asset.provider_status.is_(None),
+                Asset.provider_status != _INACTIVE_STATUS,
+            ),
         )
     )
     assets = list(result.scalars().all())
@@ -165,6 +187,7 @@ async def _rebuild_official_treasury_history(
             "empty_payloads": 0,
             "required_empty_payloads": 0,
             "expected_empty_payloads": 0,
+            "historical_complete_skipped": 0,
             "required_empty_symbols": [],
             "expected_empty_symbols": [],
             "last_prices_refreshed": 0,
@@ -177,11 +200,26 @@ async def _rebuild_official_treasury_history(
         }
 
     windows: dict[tuple[date, date], list[str]] = defaultdict(list)
+    historical_complete_symbols: set[str] = set()
     for symbol, asset in assets_by_symbol.items():
-        last_date = await _last_saved_date(db, int(asset.id))
-        start = today - timedelta(days=_DEFAULT_YEARS * 365)
-        if last_date:
+        asset_id = int(asset.id)
+        last_date = await _last_saved_date(db, asset_id)
+        first_official_date = await _first_official_saved_date(db, asset_id)
+        if first_official_date is None or first_official_date >= today - timedelta(days=_LOOKBACK_DAYS):
+            start = _OFFICIAL_HISTORY_START
+        elif last_date:
             start = max(last_date - timedelta(days=2), today - timedelta(days=_LOOKBACK_DAYS))
+        else:
+            start = _OFFICIAL_HISTORY_START
+
+        full_maturity = _full_maturity_date_from_symbol(symbol)
+        if (
+            first_official_date is not None
+            and full_maturity is not None
+            and full_maturity < start
+        ):
+            historical_complete_symbols.add(symbol)
+            continue
         windows[(start, today)].append(symbol)
 
     stats = {symbol: 0 for symbol in assets_by_symbol}
@@ -260,7 +298,7 @@ async def _rebuild_official_treasury_history(
     imported = sum(stats.values())
     alias_groups = sum(1 for aliases in aliases_by_symbol.values() if aliases)
     logger.info(
-        "[treasury_history_official] concluido canonical=%d aliases=%d imported=%d official=%d fallback=%d covered=%d empty=%d required_empty=%d expected_empty=%d refreshed=%d",
+        "[treasury_history_official] concluido canonical=%d aliases=%d imported=%d official=%d fallback=%d covered=%d empty=%d required_empty=%d expected_empty=%d historical_complete_skipped=%d refreshed=%d",
         len(assets_by_symbol),
         alias_groups,
         imported,
@@ -270,6 +308,7 @@ async def _rebuild_official_treasury_history(
         len(empty_symbols),
         len(required_empty_symbols),
         len(expected_empty_symbols),
+        len(historical_complete_symbols),
         last_prices_refreshed,
     )
     return {
@@ -283,6 +322,7 @@ async def _rebuild_official_treasury_history(
         "empty_payloads": len(empty_symbols),
         "required_empty_payloads": len(required_empty_symbols),
         "expected_empty_payloads": len(expected_empty_symbols),
+        "historical_complete_skipped": len(historical_complete_symbols),
         "required_empty_symbols": required_empty_symbols,
         "expected_empty_symbols": expected_empty_symbols,
         "last_prices_refreshed": last_prices_refreshed,

@@ -17,7 +17,7 @@ from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Date, ForeignKey, Index, Numeric, UniqueConstraint
+from sqlalchemy import Boolean, Date, ForeignKey, Index, Numeric, UniqueConstraint, desc
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -34,15 +34,21 @@ class PortfolioSnapshot(Base, TimestampMixin):
             "portfolio_id", "snapshot_date",
             name="uq_snapshot_portfolio_date",
         ),
+        Index("ix_portfolio_snapshots_portfolio_id", "portfolio_id"),
+        Index("ix_portfolio_snapshots_snapshot_date", "snapshot_date"),
+        Index(
+            "ix_portfolio_snapshots_portfolio_date",
+            "portfolio_id",
+            "snapshot_date",
+        ),
         Index(
             "idx_ps_portfolio_date_desc",
             "portfolio_id",
-            "snapshot_date",
-            postgresql_ops={"snapshot_date": "DESC"},
+            desc("snapshot_date"),
         ),
     )
 
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
     portfolio_id: Mapped[int] = mapped_column(
         ForeignKey("portfolios.id", ondelete="CASCADE"),
         nullable=False,
@@ -58,19 +64,19 @@ class PortfolioSnapshot(Base, TimestampMixin):
         Numeric(18, 2),
         nullable=False,
         default=Decimal("0"),
-        comment="Valor total de mercado dos ativos na data.",
+        comment="Valor total de mercado na data (Σ qty × close_price).",
     )
     cost_basis: Mapped[Decimal] = mapped_column(
         Numeric(18, 2),
         nullable=False,
         default=Decimal("0"),
-        comment="Custo total das posições abertas na data.",
+        comment="Custo total das posições abertas (Σ qty × avg_price).",
     )
     invested_total: Mapped[Decimal] = mapped_column(
         Numeric(18, 2),
         nullable=False,
         default=Decimal("0"),
-        comment="Base histórica legada de capital líquido movimentado.",
+        comment="Total aportado líquido acumulado até a data.",
     )
 
     # Resultado
@@ -78,69 +84,63 @@ class PortfolioSnapshot(Base, TimestampMixin):
         Numeric(18, 2),
         nullable=False,
         default=Decimal("0"),
-        comment="Lucro ou prejuízo realizado acumulado até a data.",
+        comment="Lucro/prejuízo realizado acumulado até a data.",
     )
     unrealized_pnl: Mapped[Decimal] = mapped_column(
         Numeric(18, 2),
         nullable=False,
         default=Decimal("0"),
-        comment="Lucro ou prejuízo não realizado das posições abertas.",
+        comment="market_value - cost_basis.",
     )
     total_pnl: Mapped[Decimal] = mapped_column(
         Numeric(18, 2),
         nullable=False,
         default=Decimal("0"),
-        comment="Resultado de capital acumulado, sem proventos.",
+        comment="realized_pnl + unrealized_pnl.",
     )
     return_pct: Mapped[Decimal] = mapped_column(
         Numeric(10, 4),
         nullable=False,
         default=Decimal("0"),
-        comment="Percentual legado de retorno de preço.",
+        comment="total_pnl / invested_total × 100.",
     )
 
-    # Fluxos, proventos e TWR
+    # Fluxos, proventos e TWR. A migration 20260713 adicionou estes campos
+    # sem comentários de coluna; a semântica permanece documentada aqui.
     net_external_flow: Mapped[Decimal] = mapped_column(
         Numeric(18, 2),
         nullable=False,
         default=Decimal("0"),
-        comment="Aportes menos retiradas externas reconhecidos no dia.",
     )
     dividends_day: Mapped[Decimal] = mapped_column(
         Numeric(18, 2),
         nullable=False,
         default=Decimal("0"),
-        comment="Proventos monetários recebidos na data.",
     )
     dividends_accumulated: Mapped[Decimal] = mapped_column(
         Numeric(18, 2),
         nullable=False,
         default=Decimal("0"),
-        comment="Proventos monetários acumulados até a data.",
     )
     daily_return_pct: Mapped[Decimal] = mapped_column(
         Numeric(12, 6),
         nullable=False,
         default=Decimal("0"),
-        comment="Retorno TWR do dia em percentual.",
     )
     accumulated_return_pct: Mapped[Decimal] = mapped_column(
         Numeric(12, 6),
         nullable=False,
         default=Decimal("0"),
-        comment="Retorno TWR composto desde o primeiro lançamento.",
     )
     has_partial_prices: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
         default=False,
-        comment="Indica uso de preço anterior ou proxy por ausência de cotação exata.",
     )
     return_is_estimated: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
         default=True,
-        comment="Indica que os fluxos externos ainda foram inferidos.",
     )
 
     portfolio: Mapped["Portfolio"] = relationship(

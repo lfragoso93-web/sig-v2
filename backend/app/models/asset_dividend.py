@@ -16,6 +16,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    desc,
     text,
 )
 from sqlalchemy import (
@@ -31,6 +32,13 @@ if TYPE_CHECKING:
     from app.models.asset import Asset
 
 _RAW_PAYLOAD_TYPE = JSON().with_variant(JSONB, "postgresql")
+_DIVIDEND_TYPE_STORAGE = SAEnum(
+    DividendType,
+    values_callable=lambda x: [e.value for e in x],
+    native_enum=False,
+    create_constraint=False,
+    length=20,
+)
 
 
 class AssetDividend(Base):
@@ -59,9 +67,15 @@ class AssetDividend(Base):
             text("COALESCE(payment_date, ex_date)"),
             unique=True,
         ),
+        Index(
+            "idx_ad_asset_exdate_desc",
+            "asset_id",
+            desc("ex_date"),
+        ),
+        Index("ix_asset_dividends_approved_on", "approved_on"),
     )
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
     asset_id: Mapped[int] = mapped_column(
         Integer,
@@ -78,7 +92,7 @@ class AssetDividend(Base):
     approved_on: Mapped[DateType | None] = mapped_column(Date, nullable=True)
 
     dividend_type: Mapped[DividendType] = mapped_column(
-        SAEnum(DividendType, values_callable=lambda x: [e.value for e in x]),
+        _DIVIDEND_TYPE_STORAGE,
         nullable=False,
         default=DividendType.DIVIDENDO,
     )

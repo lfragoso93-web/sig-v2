@@ -1,4 +1,4 @@
-"""Orquestra o primeiro estágio isolado do rebuild real: catálogo B3 + COTAHIST."""
+"""Orquestra o estágio isolado B3/COTAHIST com catálogo opcional."""
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
@@ -71,6 +71,7 @@ async def run_pre_prod_b3_seed(
     start_year: int,
     end_year: int,
     cutoff_date: date,
+    include_catalog: bool = True,
 ) -> PreProdB3SeedResult:
     if start_year > end_year:
         raise ValueError("start_year não pode ser posterior a end_year")
@@ -88,12 +89,22 @@ async def run_pre_prod_b3_seed(
             raise B3SeedAlreadyRunningError("estágio B3 já está em execução")
         try:
             before = await _counts()
-            async with AsyncSessionLocal() as db:
-                catalog_result = await run_asset_seed(
-                    db,
-                    run_backfill=False,
-                    include_crypto=False,
-                )
+            if include_catalog:
+                async with AsyncSessionLocal() as db:
+                    catalog_result = await run_asset_seed(
+                        db,
+                        run_backfill=False,
+                        include_crypto=False,
+                    )
+                catalog = asdict(catalog_result)
+                catalog_errors = catalog_result.errors
+            else:
+                catalog = {
+                    "skipped": True,
+                    "reason": "history_only",
+                }
+                catalog_errors = 0
+
             cotahist_result = await rebuild_b3_historical_market(
                 start_year,
                 end_year,
@@ -107,9 +118,8 @@ async def run_pre_prod_b3_seed(
             )
 
     finished = datetime.now(timezone.utc)
-    catalog = asdict(catalog_result)
     cotahist = cotahist_result.to_dict()
-    ok = catalog_result.errors == 0 and cotahist_result.errors == 0
+    ok = catalog_errors == 0 and cotahist_result.errors == 0
     return PreProdB3SeedResult(
         started_at=started.isoformat(),
         finished_at=finished.isoformat(),

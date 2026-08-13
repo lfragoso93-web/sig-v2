@@ -5,7 +5,7 @@ from app.services.portfolio_summary_service import (
     PortfolioSummaryInput,
     build_portfolio_summary,
 )
-from app.services.realized_pnl_service import calculate_realized_pnl
+from app.services.realized_pnl_legacy_characterization import calculate_realized_pnl
 
 
 def _tx(

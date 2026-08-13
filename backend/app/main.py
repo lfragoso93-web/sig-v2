@@ -4,30 +4,42 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse, Response
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from sqlalchemy import text, select, func
+from sqlalchemy import text
 
-from app.core.database import engine, AsyncSessionLocal
+from app.core.cache import get_redis
 from app.core.config import settings
+from app.core.database import AsyncSessionLocal, engine
 from app.core.limiter import limiter
 from app.core.scheduler import start_scheduler
-from app.core.cache import get_redis
 from app.middleware import SecurityHeadersMiddleware
 from app.routers import (
-    auth, portfolios, transactions, dividends, positions,
-    users, proventos, performance, admin,
-    assets, fx, goals, irpf,
-    analysis, fixed_income, quotes, treasury,
+    admin,
+    analysis,
+    assets,
+    auth,
+    class_targets,
+    debug,
+    dividends,
+    fx,
+    goals,
+    irpf,
+    performance,
+    portfolios,
+    positions,
+    prices,
+    proventos,
+    rentabilidade,
+    transactions,
+    treasury,
+    users,
 )
-from app.routers import debug
-from app.routers import prices
-from app.routers import class_targets
-from app.routers import rentabilidade
+from app.routers.admin_bootstrap import router as admin_bootstrap_router
 
 logger = logging.getLogger(__name__)
 
@@ -63,127 +75,29 @@ def _sanitize_public_payload(value: Any) -> Any:
     return value
 
 
-async def _boot_sequence() -> None:
-    """
-    Sequência de inicialização executada em background após o app subir.
+async def _run_startup_bootstrap() -> None:
+    from app.services.system_bootstrap_service import run_system_bootstrap
 
-    Etapa 1 - Seed de ativos B3/cripto.
-    Etapa 1b - Seed/atualização do catálogo de Tesouro Direto.
-    Etapa 1c - Reconciliação de lançamentos antigos de Tesouro Direto.
-    Etapa 1d - Histórico/snapshot de Tesouro Direto.
-    Etapa 2 - Backfill global idempotente de preços, ativo a ativo.
-    Etapa 3 - Backfill/incremental de benchmarks para Renda Fixa.
-    """
-    await asyncio.sleep(3)
-
-    seed_ok = False
-    try:
-        from app.models.asset import Asset
-        from app.services.asset_seed_service import run_asset_seed
-
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(select(func.count()).select_from(Asset))
-            asset_count = result.scalar_one() or 0
-
-        if asset_count == 0:
-            logger.info("[Boot] Etapa 1: tabela assets vazia — iniciando seed de tickers")
-            async with AsyncSessionLocal() as db:
-                seed_result = await run_asset_seed(db, run_backfill=False)
-            logger.info(
-                "[Boot] Etapa 1: seed concluido — %d criados, %d atualizados, %d erros",
-                seed_result.created, seed_result.updated, seed_result.errors,
-            )
-            seed_ok = True
-        else:
-            logger.info("[Boot] Etapa 1: %d assets no banco — seed ignorado", asset_count)
-            seed_ok = True
-
-    except Exception as e:
-        logger.error("[Boot] Etapa 1 (seed de ativos) falhou: %s", e)
-        seed_ok = False
-
-    try:
-        from app.services.treasury_catalog_service import seed_treasury_assets
-
-        logger.info("[Boot] Etapa 1b: atualizando catálogo Tesouro Direto")
-        async with AsyncSessionLocal() as db:
-            treasury_seed = await seed_treasury_assets(db)
-        logger.info(
-            "[Boot] Etapa 1b: Tesouro Direto — %d criados, %d atualizados, %d ignorados, %d erros",
-            treasury_seed.created,
-            treasury_seed.updated,
-            treasury_seed.skipped,
-            treasury_seed.errors,
-        )
-    except Exception as e:
-        logger.error("[Boot] Etapa 1b (seed Tesouro Direto) falhou: %s", e)
-
-    try:
-        from app.services.treasury_reconciliation_service import reconcile_treasury_transactions
-
-        logger.info("[Boot] Etapa 1c: reconciliando lançamentos Tesouro Direto existentes")
-        async with AsyncSessionLocal() as db:
-            reconciliation = await reconcile_treasury_transactions(db)
-        logger.info(
-            "[Boot] Etapa 1c: Tesouro Direto reconciliado — %d lidos, %d transações atualizadas, %d assets criados, %d sem match, %d erros",
-            reconciliation.scanned,
-            reconciliation.updated_transactions,
-            reconciliation.created_assets,
-            reconciliation.unresolved,
-            reconciliation.errors,
-        )
-    except Exception as e:
-        logger.error("[Boot] Etapa 1c (reconciliação Tesouro Direto) falhou: %s", e)
-
-    try:
-        from app.services.treasury_price_history_service import (
-            import_missing_treasury_price_history,
-            update_treasury_latest_prices,
-        )
-
-        logger.info("[Boot] Etapa 1d: verificando histórico Tesouro Direto")
-        treasury_stats = await import_missing_treasury_price_history()
-        logger.info("[Boot] Etapa 1d: histórico Tesouro Direto atualizado: %s", treasury_stats)
-        async with AsyncSessionLocal() as db:
-            snapshot = await update_treasury_latest_prices(db)
-        logger.info("[Boot] Etapa 1d: snapshot Tesouro Direto atualizado: %d títulos", len(snapshot))
-    except Exception as e:
-        logger.error("[Boot] Etapa 1d (histórico Tesouro Direto) falhou: %s", e)
-
-    if not seed_ok:
-        logger.warning("[Boot] Etapa 2 abortada: etapa 1 falhou")
+    report = await run_system_bootstrap(startup_delay_seconds=3.0)
+    if report.ok:
+        logger.info("[Bootstrap] %s concluído: %s", report.schema_version, report.to_dict())
     else:
-        try:
-            from app.services.asset_price_global_backfill_service import (
-                run_global_asset_price_backfill,
-            )
-            logger.info("[Boot] Etapa 2: auditando cobertura individual de precos")
-            stats = await run_global_asset_price_backfill()
-            logger.info("[Boot] Etapa 2: backfill global idempotente concluido: %s", stats)
-        except Exception as e:
-            logger.error("[Boot] Etapa 2 (backfill global de precos) falhou: %s", e)
-
-    try:
-        from app.services.benchmark_rate_service import import_missing_benchmark_history
-
-        logger.info("[Boot] Etapa 3: verificando benchmarks de renda fixa")
-        async with AsyncSessionLocal() as db:
-            stats = await import_missing_benchmark_history(db)
-        logger.info("[Boot] Etapa 3: benchmarks de renda fixa atualizados: %s", stats)
-    except Exception as e:
-        logger.error("[Boot] Etapa 3 (benchmarks de renda fixa) falhou: %s", e)
-
-    logger.info("[Boot] sequencia de inicializacao concluida")
+        logger.error("[Bootstrap] %s incompleto: %s", report.schema_version, report.to_dict())
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from app.services.system_readiness_service import mark_bootstrap_disabled
+
     start_scheduler()
     if settings.ENABLE_BOOT_MARKET_SYNC:
-        asyncio.create_task(_boot_sequence())
+        asyncio.create_task(_run_startup_bootstrap())
     else:
+        mark_bootstrap_disabled(
+            detail="bootstrap automático desabilitado (ENABLE_BOOT_MARKET_SYNC=false)"
+        )
         logger.info(
-            "[Boot] sincronizacao automatica de mercado desabilitada "
+            "[Bootstrap] bootstrap automático desabilitado "
             "(ENABLE_BOOT_MARKET_SYNC=false)"
         )
     yield
@@ -268,6 +182,7 @@ PREFIX = "/api/v1"
 app.include_router(auth.router,            prefix=f"{PREFIX}/auth",         tags=["auth"])
 app.include_router(users.router,           prefix=f"{PREFIX}/users",        tags=["users"])
 app.include_router(admin.router,           prefix=f"{PREFIX}/admin",        tags=["admin"])
+app.include_router(admin_bootstrap_router, prefix=f"{PREFIX}/admin",        tags=["admin-bootstrap"])
 
 app.include_router(portfolios.router,      prefix=f"{PREFIX}/portfolios",   tags=["portfolios"])
 app.include_router(transactions.router,    prefix=f"{PREFIX}/portfolios",   tags=["transactions"])
@@ -282,12 +197,10 @@ app.include_router(goals.router,           prefix=f"{PREFIX}/portfolios",   tags
 
 app.include_router(assets.router,          prefix=f"{PREFIX}/assets",       tags=["assets"])
 app.include_router(fx.router,              prefix=f"{PREFIX}/fx",           tags=["fx"])
-app.include_router(quotes.router,          prefix=f"{PREFIX}/quotes",       tags=["quotes"])
 app.include_router(prices.router,          prefix=f"{PREFIX}/prices",       tags=["prices"])
 
 app.include_router(irpf.router,            prefix=f"{PREFIX}/irpf",         tags=["irpf"])
 app.include_router(analysis.router,        prefix=f"{PREFIX}/analysis",     tags=["analysis"])
-app.include_router(fixed_income.router,    prefix=f"{PREFIX}/fixed-income", tags=["fixed_income"])
 
 if settings.APP_DEBUG or __import__('os').getenv("ADMIN_SECRET"):
     app.include_router(debug.router, prefix=f"{PREFIX}/debug", tags=["debug"])
@@ -295,6 +208,8 @@ if settings.APP_DEBUG or __import__('os').getenv("ADMIN_SECRET"):
 
 @app.get("/health", tags=["health"])
 async def health():
+    from app.services.system_readiness_service import get_bootstrap_readiness
+
     checks: dict[str, str] = {}
     overall_ok = True
 
@@ -323,6 +238,18 @@ async def health():
         "version": "2.0.0",
         "debug": settings.APP_DEBUG,
         "checks": checks,
+        "bootstrap": get_bootstrap_readiness().to_dict(),
     }
     status_code = 200 if overall_ok else 503
+    return JSONResponse(content=payload, status_code=status_code)
+
+
+@app.get("/ready", tags=["health"])
+async def ready():
+    """Indica se o ambiente está certificado para receber dados reais."""
+    from app.services.system_readiness_service import get_bootstrap_readiness
+
+    readiness = get_bootstrap_readiness()
+    payload = readiness.to_dict()
+    status_code = 200 if readiness.ready_for_real_data else 503
     return JSONResponse(content=payload, status_code=status_code)

@@ -12,7 +12,7 @@ from app.services.config_service import (
     update_config,
     bulk_update_configs,
 )
-from app.models.config import AppConfig
+from app.models.system_config import SystemConfig
 
 
 @pytest.mark.asyncio
@@ -21,7 +21,7 @@ class TestGetConfig:
     async def test_get_config_found(self):
         db = AsyncMock(spec=AsyncSession)
         
-        config = MagicMock(spec=AppConfig)
+        config = MagicMock(spec=SystemConfig)
         config.key = "test_key"
         config.value = "test_value"
         
@@ -52,7 +52,7 @@ class TestGetBoolConfig:
         db = AsyncMock(spec=AsyncSession)
         
         for true_val in ["true", "1", "yes"]:
-            config = MagicMock(spec=AppConfig)
+            config = MagicMock(spec=SystemConfig)
             config.value = true_val
             
             execute_result = MagicMock()
@@ -66,7 +66,7 @@ class TestGetBoolConfig:
         db = AsyncMock(spec=AsyncSession)
         
         for false_val in ["false", "0", "no"]:
-            config = MagicMock(spec=AppConfig)
+            config = MagicMock(spec=SystemConfig)
             config.value = false_val
             
             execute_result = MagicMock()
@@ -105,7 +105,7 @@ class TestSetConfig:
     async def test_set_config_existing_key(self):
         db = AsyncMock(spec=AsyncSession)
         
-        config = MagicMock(spec=AppConfig)
+        config = MagicMock(spec=SystemConfig)
         config.key = "test_key"
         config.value = "old_value"
         
@@ -141,11 +141,11 @@ class TestGetAllConfigs:
     async def test_get_all_configs_public_only(self):
         db = AsyncMock(spec=AsyncSession)
         
-        config1 = MagicMock(spec=AppConfig)
+        config1 = MagicMock(spec=SystemConfig)
         config1.key = "key1"
         config1.is_public = True
         
-        config2 = MagicMock(spec=AppConfig)
+        config2 = MagicMock(spec=SystemConfig)
         config2.key = "key2"
         config2.is_public = True
         
@@ -162,11 +162,11 @@ class TestGetAllConfigs:
     async def test_get_all_configs_including_private(self):
         db = AsyncMock(spec=AsyncSession)
         
-        config1 = MagicMock(spec=AppConfig)
+        config1 = MagicMock(spec=SystemConfig)
         config1.key = "public_key"
         config1.is_public = True
         
-        config2 = MagicMock(spec=AppConfig)
+        config2 = MagicMock(spec=SystemConfig)
         config2.key = "private_key"
         config2.is_public = False
         
@@ -187,7 +187,7 @@ class TestUpdateConfig:
     async def test_update_config_existing(self):
         db = AsyncMock(spec=AsyncSession)
         
-        config = MagicMock(spec=AppConfig)
+        config = MagicMock(spec=SystemConfig)
         config.key = "test_key"
         config.value = "old_value"
         config.updated_at = None
@@ -227,11 +227,11 @@ class TestBulkUpdateConfigs:
     async def test_bulk_update_configs(self):
         db = AsyncMock(spec=AsyncSession)
         
-        config1 = MagicMock(spec=AppConfig)
+        config1 = MagicMock(spec=SystemConfig)
         config1.key = "key1"
         config1.value = "old1"
         
-        config2 = MagicMock(spec=AppConfig)
+        config2 = MagicMock(spec=SystemConfig)
         config2.key = "key2"
         config2.value = "old2"
         
@@ -254,7 +254,7 @@ class TestBulkUpdateConfigs:
     async def test_bulk_update_configs_mixed_new_existing(self):
         db = AsyncMock(spec=AsyncSession)
         
-        existing_config = MagicMock(spec=AppConfig)
+        existing_config = MagicMock(spec=SystemConfig)
         existing_config.key = "existing_key"
         
         execute_results = [

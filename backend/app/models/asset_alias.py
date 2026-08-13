@@ -14,7 +14,7 @@ class AssetAlias(Base):
         UniqueConstraint("alias_ticker", "asset_type", name="uq_asset_aliases_ticker_type"),
     )
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     asset_id = Column(Integer, ForeignKey("assets.id", ondelete="CASCADE"), nullable=False, index=True)
     alias_ticker = Column(String, nullable=False, index=True)
     asset_type = Column(String, nullable=False)

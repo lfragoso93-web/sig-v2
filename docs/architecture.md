@@ -1,21 +1,21 @@
 # Arquitetura — SGI v2
 
-> Última atualização: 02/08/2026
+> Última atualização: 08/08/2026
 
 ## Objetivo
 
-O SGI v2 calcula patrimônio, posição, custo, resultado, proventos e rentabilidade a partir de dados persistidos e contratos canônicos. Provedores externos pertencem a adapters, sincronizadores, jobs ou CLIs operacionais; páginas, KPIs e relatórios não consultam provedores durante o cálculo financeiro.
+O SGI v2 calcula patrimônio, posição, custo, resultado, proventos, rentabilidade e IRPF a partir de dados persistidos e contratos canônicos. Provedores externos pertencem ao bootstrap inicial e aos sincronizadores operacionais de preço; páginas, KPIs, relatórios e cálculos financeiros não consultam providers diretamente.
 
 ## Fluxo financeiro principal
 
 ```text
-CSV / lançamentos manuais
+bootstrap inicial certificado
         ↓
-transactions + fixed_income_investments + corporate_events
+assets + asset_prices + rate_history + fx_rates + asset_dividends + corporate_events
+        ↓
+transactions + fixed_income_investments
         ↓
 projeções canônicas de posição, custo e realizações
-        ↓
-assets + asset_prices + rate_history + asset_dividends
         ↓
 valuation dedicado por classe
         ↓
@@ -23,33 +23,73 @@ PortfolioSnapshot + PortfolioClassSnapshot
         ↓
 summary.v2 + rentabilidade.v2 + leitores históricos
         ↓
-Resumo / Patrimônio / Rentabilidade / Proventos / Metas / IRPF
+Resumo / Patrimônio / Rentabilidade / Proventos / IRPF
 ```
+
+Metas e Análise de Carteira não integram, neste momento, o conjunto de contratos funcionais estabilizados. O redesenho será conduzido em conjunto por #246 + #57 somente após a estabilização definitiva da base.
 
 ## Princípios obrigatórios
 
-### DB-first
+### Bootstrap-first + DB-first
 
-Serviços financeiros leem dados persistidos. Chamadas externas não participam do cálculo de posição, custo, resultado ou elegibilidade.
+Antes de existir uso real, o ambiente deve executar um bootstrap idempotente e certificável que carregue no banco todo o conjunto necessário ao funcionamento do sistema:
+
+- catálogo de ativos e metadados;
+- histórico de preços;
+- Proventos globais;
+- eventos corporativos;
+- Tesouro Direto e histórico associado;
+- benchmarks e taxas;
+- câmbio;
+- demais séries auxiliares necessárias aos contratos canônicos.
+
+A aplicação só deve ser considerada pronta para criação/importação de carteiras reais depois da conclusão e validação desse bootstrap.
+
+Após o bootstrap:
+
+- serviços financeiros leem dados persistidos;
+- busca, detalhes, posições, relatórios, IRPF, Proventos e rentabilidade não consultam provider;
+- consultas externas recorrentes ficam restritas a **preço intraday** e **preço oficial/de fechamento do dia**;
+- preços obtidos externamente devem ser persistidos antes de alimentar contratos financeiros;
+- nenhuma mutação comum de usuário dispara seed, onboarding, backfill histórico ou coleta de eventos.
+
+### Cobertura histórica por domínio
+
+Não existe uma data inicial global arbitrária para o bootstrap. Cada domínio define a maior cobertura válida suportada por sua fonte canônica:
+
+- USD-BRL: `1994-07-01`, início do Real, via PTAX oficial;
+- Proventos: `1970-01-01`, limite técnico atual do histórico Yahoo complementar usado pelo adapter estrito;
+- preços, Tesouro, benchmarks e eventos mantêm suas próprias regras de cobertura.
+
+Essa separação evita que uma limitação de um provider reduza silenciosamente a profundidade dos demais domínios.
 
 ### Contratos financeiros únicos
 
 `summary.v2` e `rentabilidade.v2` são as fontes públicas de leitura consolidada. Posição histórica, custo e resultado realizado são fornecidos por projetores compartilhados, não por reconstruções locais em cada módulo.
 
+### Alembic como autoridade de schema
+
+- O startup não cria tabelas paralelamente ao Alembic.
+- `Base.metadata` deve refletir contratos estabilizados produzidos pelas migrations.
+- Autogenerate monolítico não é mecanismo de correção arquitetural.
+- Divergências devem ser classificadas e tratadas por domínio.
+- Módulos incompletos não devem ter schema cristalizado apenas para silenciar `alembic check`.
+
 ### Separação contábil e fiscal
 
-A projeção contábil calcula posição, custo e realização. O IRPF acrescenta apenas semântica fiscal: Day Trade, Swing Trade, isenções, alíquotas, compensações, retenções e apresentação.
+A projeção contábil calcula posição, custo e realização. O IRPF acrescenta semântica fiscal: Day Trade, Swing Trade, isenções, alíquotas, compensações, retenções e apresentação.
 
 ### Separação temporal
 
-- valuation intradiário representa o estado atual;
+- preço intraday representa estado corrente e pode vir de sincronizador externo dedicado;
+- preço de fechamento diário é coletado externamente e persistido como referência oficial do dia;
 - snapshots representam performance fechada;
 - leituras históricas usam data de corte explícita;
 - ausência de TWR é `null`, nunca retorno simples disfarçado.
 
 ### Idempotência
 
-Seeds, sincronizações e rebuilds devem produzir o mesmo estado lógico sem duplicar preços, eventos, posições ou snapshots.
+Bootstrap, seeds, sincronizações, migrations e rebuilds devem produzir o mesmo estado lógico sem duplicar preços, eventos, posições ou snapshots.
 
 ### Qualidade explícita
 
@@ -79,36 +119,35 @@ posições abertas + custo + timelines
 
 ### Resultado realizado
 
-`realized_pnl_projection_reader.py` expõe realizações derivadas da mesma projeção cronológica. Rentabilidade e IRPF devem reconciliar sobre o mesmo conjunto de operações.
+`realized_pnl_projection_reader.py` expõe realizações derivadas da mesma projeção cronológica. Rentabilidade e IRPF reconciliam sobre o mesmo conjunto de operações.
 
 ### Snapshots
 
-`snapshot_position_projection.py` e `class_snapshot_position_projection.py` alimentam os snapshots sem reconstruções paralelas de posição.
+`snapshot_position_projection.py` e `class_snapshot_position_projection.py` alimentam snapshots sem reconstruções paralelas de posição. O MetaData de snapshots representa índices, comentários e timestamps físicos da cadeia Alembic canônica.
 
 ## IRPF
 
-A arquitetura atual separa responsabilidades:
+A arquitetura atual separa responsabilidades e não persiste `IRPFReport` legado:
 
 | Serviço | Responsabilidade |
 |---|---|
 | `irpf_bens_direitos_service.py` | posição e custo em 31/12 via leitor histórico |
-| `irpf_tax_service.py` | regras fiscais mensais ainda em caracterização |
-| `irpf_report_service.py` | composição e persistência do relatório |
-| `irpf_export_service.py` | PDF e CSV |
-| `irpf_service.py` | fachada temporária de compatibilidade |
+| `irpf_tax_service.py` | regras fiscais mensais canônicas |
+| `irpf_report_service.py` | composição read-only do relatório |
+| `irpf_export_service.py` | PDF e CSV a partir dos contratos canônicos |
 
-A implementação antiga de Bens e Direitos e o orquestrador duplicado foram removidos. O próximo corte deve caracterizar ganhos de capital mensais antes de migrar regras fiscais.
+`app.models.irpf`, `IRPFReport`, `irpf_records` e `irpf_losses` não participam do runtime canônico. Consumers removidos são protegidos por gates estruturais.
 
 ## Rentabilidade
 
-Resultado realizado, capital líquido aportado e proventos já usam leitores compartilhados. Consumidores remanescentes de posição, custo, patrimônio e PnL não realizado devem ser migrados antes da remoção física da fachada legada (#151).
+A fachada legada foi removida. Resultado realizado, capital líquido aportado, proventos, posição e patrimônio usam contratos compartilhados; invalidação de cache está isolada no serviço canônico de cache.
 
 ## Proventos
 
 Eventos pertencem ao ativo e são persistidos exclusivamente em `asset_dividends`.
 
 ```text
-provedores normalizados
+system-bootstrap.v4 / seed estrito autorizado
         ↓
 asset_dividends
         ↓
@@ -119,53 +158,130 @@ direito calculado sob demanda
 reconhecimento financeiro por data de pagamento
 ```
 
-Não existe materialização ativa de direitos por carteira. As tabelas físicas legadas aguardam contração controlada na janela da #158.
+O bootstrap reutiliza `pre-prod-dividends-seed.v2`, com adapters estritos BRAPI + Yahoo e identidade auditável compartilhada. A presença da etapa no orquestrador não autoriza execução real: sem `SGI_BOOTSTRAP_ENABLE_DIVIDENDS=true`, ela falha antes de consultar providers, e a autorização operacional continua pertencendo à #226.
+
+Não existe materialização ativa de direitos por carteira. Depois do bootstrap, requests de Proventos não consultam provider.
 
 ## Eventos corporativos
 
-O motor canônico trata splits, grupamentos, bonificações e subscrições independentemente do fornecedor. Eventos preservam identidade, quantidade e custo conforme suas regras; adapters apenas normalizam payloads externos.
+O motor canônico trata splits, grupamentos, bonificações e subscrições independentemente do fornecedor. Eventos pertencem ao ativo, são persistidos em `corporate_events` e alimentam projeções históricas sem mutar transações originais.
+
+O `system-bootstrap.v4` registra `corporate_events` como estágio explícito por `system_bootstrap_corporate_events_stage.py`. O wrapper:
+
+- exige opt-in `SGI_BOOTSTRAP_ENABLE_CORPORATE_EVENTS=true` antes de abrir sessão ou consultar provider;
+- lê o catálogo persistido e restringe o processamento a `ACAO`, `BDR` e `ETF_NACIONAL`;
+- usa `pg_advisory_xact_lock` durante a transação;
+- delega toda coleta e persistência exclusivamente a `sync_corporate_events_for_asset`;
+- realiza commit somente após sucesso integral e rollback em qualquer falha;
+- não usa `asset_market_pipeline_service` nem `dividend_backfill_service`.
+
+A integração é estrutural: nenhum provider real foi executado durante a implementação. A Issue #129 permanece aberta apenas para auditoria residual de consumidores/aliases/provider boundaries, coordenada com #254/#247.
+
+## Transações
+
+`transactions` reflete o contrato financeiro migrado. Criar ou editar transação não dispara coleta externa, onboarding de mercado ou backfill histórico; apenas efeitos locais derivados podem ocorrer.
+
+## Câmbio
+
+`fx_rates` é persistido e DB-first. Requests financeiros leem somente a cobertura persistida.
+
+O `system-bootstrap.v2+` integra USD-BRL reutilizando o estágio auditável da #217:
+
+- PTAX oficial do BCB;
+- par único `USD-BRL`;
+- cobertura desde `1994-07-01`;
+- advisory lock;
+- inspeção antes/depois;
+- transação controlada;
+- identidade `run_id + stable-15jun + SHA`.
+
+Nenhum fallback BRAPI/AwesomeAPI/fixo participa deste estágio certificado.
+
+## Metas e Análise de Carteira
+
+O módulo `goals` é uma exceção arquitetural consciente:
+
+- a tabela histórica está preservada;
+- ORM, schemas Pydantic e service atuais não formam contrato funcional coerente;
+- nenhuma migration deve ser criada apenas para limpar o diff remanescente do `alembic check`;
+- o redesenho será conduzido pela #246 em conjunto com #57;
+- a nova arquitetura deve decidir taxonomia, KPIs calculados versus persistidos, relação com `portfolio_class_targets`, histórico e projeções antes de DDL definitivo.
 
 ## Navegação de carteira
 
-Módulos dependentes da carteira selecionada ficam sob `/carteira`:
+Módulos dependentes da carteira selecionada ficam sob `/carteira`. Aliases temporários devem ser eliminados somente após comprovação de consumidores durante a #247.
 
-```text
-/carteira
-├── patrimonio
-├── rentabilidade
-├── transacoes
-├── proventos
-├── metas
-├── irpf
-└── configuracoes
-```
+## Bootstrap, scheduler e readiness
 
-`/metas` e `/irpf` são aliases temporários com redirect `replace` para compatibilidade.
+A porta única atual é `run_system_bootstrap()` sob contrato `system-bootstrap.v4`.
 
-## Scheduler, seeds e rebuild
+A arquitetura distingue três estados:
 
-O boot não executa sincronização de mercado por padrão. Seeds, sincronizações externas e rebuilds são explicitamente opt-in.
+1. **ambiente não inicializado** — schema disponível, mas dados canônicos ainda não certificados;
+2. **bootstrap em execução** — coleta histórica/global idempotente e persistência das séries necessárias;
+3. **runtime pronto** — criação/importação de carteiras liberada e consultas funcionais operando DB-first.
+
+O bootstrap carrega contexto auditável único com `run_id`, branch `stable-15jun` e SHA completo. O disparo administrativo exige esse SHA; startup automático pode recebê-lo por `SGI_BOOTSTRAP_COMMIT_SHA`.
+
+Etapas registradas no v4:
+
+1. `asset_catalog`;
+2. `treasury_catalog`;
+3. `treasury_reconciliation`;
+4. `treasury_history`;
+5. `asset_price_history`;
+6. `benchmarks`;
+7. `fx_rates`;
+8. `asset_dividends` — explicitamente gated pela #226;
+9. `corporate_events` — explicitamente gated e transacional pela #254.
+
+Todos os domínios externos obrigatórios estão agora representados estruturalmente no orquestrador, mas isso ainda não constitui certificação operacional. O readiness continua falso até validação integrada de cobertura, idempotência, gates e critérios da #248/#227.
+
+No runtime pronto, o scheduler pode consultar providers apenas para:
+
+- preço intraday;
+- preço de fechamento diário.
+
+Não devem existir sincronizações automáticas recorrentes de catálogo, Proventos, eventos, benchmarks, câmbio ou históricos fora de jobs explicitamente controlados para manutenção/correção.
 
 Até o encerramento da Issue #227:
 
 - não importar carteiras reais;
-- não criar usuários reais;
+- não criar usuários reais de produção;
 - usar bancos descartáveis e fixtures;
-- não retomar a certificação da #158;
+- não considerar o ambiente pronto até que o bootstrap canônico seja integralmente executado e certificado;
 - não executar automaticamente migrations físicas de contração.
+
+## Governança arquitetural atual
+
+A ordem canônica é:
+
+1. validar localmente `system-bootstrap.v4`, incluindo gates de Proventos e eventos corporativos;
+2. reconciliar cobertura/idempotência e critérios finais de #248/#250/#254;
+3. concluir #247/#129 e certificar a fronteira provider/bootstrap;
+4. #150 e #149 — performance e benchmarks;
+5. #226/#216/#158 — certificação operacional e primeira carga real;
+6. #246 + #57 — macroprojeto Metas + Análise.
 
 ## Qualidade validada
 
-- Backend: `1097 passed`, `22 skipped`, zero warnings.
-- Ruff e `compileall`: aprovados.
-- Frontend: 86 testes, typecheck, lint e build aprovados.
+Último checkpoint certificado localmente pelo usuário no HEAD `0e8d96c081a0e788a9edcf69901a134b29b7f696`:
+
+- build Docker aprovado;
+- 22 testes do checkpoint de bootstrap/FX/readiness aprovados;
+- `compileall` aprovado;
+- import integral de `app.main` aprovado;
+- HEAD local igual ao esperado.
+
+Os blocos de `system-bootstrap.v3/v4` com Proventos e eventos corporativos foram implementados depois desse checkpoint e ainda precisam de validação local integrada.
 
 ## Pendências arquiteturais
 
-1. Caracterizar e migrar ganhos de capital mensais do IRPF (#56).
-2. Concluir consumidores de Rentabilidade e remover legado (#151).
-3. Consolidar eventos corporativos e adapters (#129, #130 e #127).
-4. Materializar histórico persistido do IBOV (#150).
-5. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
-6. Retomar Proventos, importação e rebuild somente após os gates #158, #216, #226 e #227.
-7. Evoluir locks em memória para locks distribuídos antes de múltiplas réplicas.
+1. Validar localmente o `system-bootstrap.v4` e os gates de Proventos/eventos corporativos.
+2. Reconciliar cobertura/idempotência dos domínios obrigatórios e critérios finais de #248/#250/#254.
+3. Concluir auditoria global de serviços, routers, endpoints, duplicações e legado remanescente (#247/#129).
+4. Somente após certificação integral permitir readiness real.
+5. Materializar histórico persistido do IBOV (#150).
+6. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
+7. Retomar execução real de Proventos, importação e rebuild apenas sob #226/#216/#158/#227.
+8. Iniciar #246 + #57 somente depois da estabilização e promoção da base.

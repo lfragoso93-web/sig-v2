@@ -42,11 +42,11 @@ def test_transaction_mutations_do_not_materialize_dividend_rights() -> None:
     assert "_run_dividend_reconciliation" not in source
 
 
-def test_transaction_mutations_preserve_global_collection_and_invalidations() -> None:
+def test_transaction_mutations_keep_ingestion_opt_in_and_local_invalidations() -> None:
     source = ROUTER_PATH.read_text(encoding="utf-8")
 
-    assert "backfill_dividends" in source
-    assert "run_onboarding" in source
+    assert "backfill_dividends" not in source
+    assert "run_onboarding" not in source
     assert "_run_snapshot_backfill" in source
     assert "invalidate_portfolio_cache" in source
 
