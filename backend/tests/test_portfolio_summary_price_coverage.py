@@ -69,7 +69,7 @@ async def test_summary_reports_complete_and_partial_price_coverage(
     )
     monkeypatch.setattr(
         portfolio_summary_service,
-        "get_usd_brl_today",
+        "get_persisted_usd_brl_rate",
         AsyncMock(return_value=5.4),
     )
 

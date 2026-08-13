@@ -61,7 +61,7 @@ async def test_mixed_portfolio_uses_intraday_valuation_and_closed_twr(monkeypatc
     )
     monkeypatch.setattr(
         portfolio_summary_service,
-        "get_usd_brl_today",
+        "get_persisted_usd_brl_rate",
         AsyncMock(return_value=5.4),
     )
 
