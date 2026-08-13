@@ -42,6 +42,7 @@ async def _create_transaction(
     quantity: float,
     price: float,
     tx_date: str,
+    operation: str = "buy",
     notes: str | None = None,
 ) -> int:
     response = await client.post(
@@ -50,7 +51,7 @@ async def _create_transaction(
         json={
             "ticker": ticker,
             "asset_type": asset_type,
-            "operation": "buy",
+            "operation": operation,
             "quantity": quantity,
             "price": price,
             "fees": 0.0,
@@ -59,7 +60,7 @@ async def _create_transaction(
             "notes": notes,
         },
     )
-    _require_status(response, 201, f"transaction {asset_type}/{ticker}")
+    _require_status(response, 201, f"transaction {operation} {asset_type}/{ticker}")
     return int(response.json()["id"])
 
 
@@ -192,13 +193,30 @@ async def main() -> None:
                     )
                 )
 
+            sell_tx_id = await _create_transaction(
+                client,
+                headers=headers,
+                portfolio_id=portfolio_id,
+                ticker="SMKACAO3",
+                asset_type="ACAO",
+                quantity=1.0,
+                price=12.0,
+                tx_date=tx_date,
+                operation="sell",
+                notes="smoke venda parcial",
+            )
+
             transactions = await client.get(
                 f"/api/v1/portfolios/{portfolio_id}/transactions",
                 headers=headers,
             )
             _require_status(transactions, 200, "list transactions")
-            expected_total = 1 + len(canonical_transactions)
+            expected_total = 2 + len(canonical_transactions)
             assert transactions.json()["total"] == expected_total
+            assert any(
+                item["id"] == sell_tx_id and item["operation"] == "sell"
+                for item in transactions.json()["items"]
+            )
 
             delete_tx_id = created_ids[0]
             delete_response = await client.delete(
@@ -267,7 +285,7 @@ async def main() -> None:
             print(
                 "TEST-READY-HTTP-SMOKE:PASS "
                 f"portfolio_id={portfolio_id} btc_tx_id={btc_tx_id} "
-                f"canonical_transactions={expected_total - 1}"
+                f"sell_tx_id={sell_tx_id} canonical_transactions={expected_total - 2}"
             )
         finally:
             if headers:
