@@ -33,7 +33,7 @@ def _normalize_market_item(item: Any) -> dict | None:
 async def fetch_top_crypto_by_market_cap(limit: int = TOP_CRYPTO_LIMIT) -> list[dict]:
     """Retorna ranking CoinGecko por market cap, limitado ao universo suportado."""
     requested = max(1, min(int(limit), TOP_CRYPTO_LIMIT))
-    params = {
+    params: dict[str, str | int] = {
         "vs_currency": "usd",
         "order": "market_cap_desc",
         "per_page": requested,
