@@ -25,6 +25,21 @@ def _called_names(function: ast.AsyncFunctionDef) -> set[str]:
     return names
 
 
+def _call_order(function: ast.AsyncFunctionDef) -> list[str]:
+    calls: list[tuple[int, int, str]] = []
+    for node in ast.walk(function):
+        if not isinstance(node, ast.Call):
+            continue
+        if isinstance(node.func, ast.Name):
+            name = node.func.id
+        elif isinstance(node.func, ast.Attribute):
+            name = node.func.attr
+        else:
+            continue
+        calls.append((node.lineno, node.col_offset, name))
+    return [name for _, _, name in sorted(calls)]
+
+
 def test_transaction_mutations_schedule_snapshot_and_cache_invalidation() -> None:
     for function_name in (
         "create_transaction",
@@ -40,8 +55,8 @@ def test_transaction_mutations_schedule_snapshot_and_cache_invalidation() -> Non
 
 
 def test_snapshot_backfill_invalidates_before_rebuild() -> None:
-    source = inspect.getsource(transactions._run_snapshot_backfill)
-    invalidation_pos = source.index("invalidate_snapshots_from")
-    backfill_pos = source.index("backfill_snapshots")
+    calls = _call_order(_function("_run_snapshot_backfill"))
 
-    assert invalidation_pos < backfill_pos
+    assert "invalidate_snapshots_from" in calls
+    assert "backfill_snapshots" in calls
+    assert calls.index("invalidate_snapshots_from") < calls.index("backfill_snapshots")
