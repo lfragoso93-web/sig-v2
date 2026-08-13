@@ -1,8 +1,8 @@
-"""Resolucao de precos de snapshot sob a politica DB-first.
+"""Validacao DB-first de precos obrigatorios para snapshots.
 
-O servico recebe o mapa ja lido do banco e somente para tickers ausentes aciona
-o resolvedor pontual de lacuna historica. Nenhum prefetch amplo ou proxy de
-preco e permitido.
+O servico recebe o mapa de precos ja lido do banco e nunca consulta provedores
+nem persiste dados. Pipelines de mercado sao responsaveis por preencher
+``asset_prices`` antes do calculo de snapshots.
 """
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import AssetType
-from app.services.price_date_gap_resolver_service import resolve_price_at_date_gap
 
 
 @dataclass(frozen=True)
@@ -21,7 +20,7 @@ class SnapshotPriceRequirement:
 
 
 class SnapshotPriceUnavailableError(RuntimeError):
-    """Cotacao historica obrigatoria continuou ausente apos fallback pontual."""
+    """Cotacao historica obrigatoria nao esta persistida para o snapshot."""
 
 
 async def resolve_missing_snapshot_prices(
@@ -30,33 +29,25 @@ async def resolve_missing_snapshot_prices(
     target_date: str,
     prices: dict[str, float | None],
 ) -> dict[str, float]:
-    """Completa somente lacunas reais e falha se alguma permanecer sem preco."""
+    """Valida cobertura persistida e falha explicitamente se houver lacunas."""
+    del db
     resolved: dict[str, float] = {
         ticker: float(value)
         for ticker, value in prices.items()
         if value is not None
     }
 
-    missing: list[str] = []
-    for requirement in requirements:
-        if requirement.ticker in resolved:
-            continue
-
-        price = await resolve_price_at_date_gap(
-            db,
-            requirement.ticker,
-            requirement.asset_type,
-            target_date,
-        )
-        if price is None:
-            missing.append(requirement.ticker)
-            continue
-        resolved[requirement.ticker] = float(price)
-
+    missing = sorted(
+        {
+            requirement.ticker
+            for requirement in requirements
+            if requirement.ticker not in resolved
+        }
+    )
     if missing:
-        tickers = ", ".join(sorted(set(missing)))
+        tickers = ", ".join(missing)
         raise SnapshotPriceUnavailableError(
-            f"cotacao historica ausente para snapshot em {target_date}: {tickers}"
+            f"cotacao historica persistida ausente para snapshot em {target_date}: {tickers}"
         )
 
     return resolved
