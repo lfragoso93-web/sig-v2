@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 ROUTER_PATH = Path(__file__).resolve().parents[1] / "app" / "routers" / "assets.py"
 
 
@@ -31,9 +30,12 @@ def test_catalog_endpoints_use_db_first_query_service() -> None:
     assert "db: AsyncSession = Depends(get_db)" in source
 
 
-def test_historical_quote_paths_use_point_gap_resolver() -> None:
+def test_quote_read_paths_use_persisted_price_readers_only() -> None:
     source = _source()
-    assert "resolve_price_at_date_gap" in source
-    assert 'source = "asset_prices"' in source
-    assert 'source = "market_data_provider"' in source
-    assert "get_current_price" in source
+    assert "app.services.price_service" not in source
+    assert "resolve_price_at_date_gap" not in source
+    assert "get_current_price" not in source
+    assert "get_persisted_current_prices" in source
+    assert "get_persisted_prices_at_date_batch" in source
+    assert "get_persisted_price_history" in source
+    assert 'source = "market_data_provider"' not in source
