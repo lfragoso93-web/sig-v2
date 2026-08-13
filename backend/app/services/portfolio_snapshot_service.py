@@ -23,9 +23,9 @@ FLUXO DE ATUALIZACAO
 
 POLITICA DE PRECO
 =================
-A leitura e DB-first. Quando a cotacao exata estiver ausente, somente o ticker
-faltante pode acionar o resolvedor pontual de lacuna historica, que persiste o
-resultado antes do uso. Nao existe prefetch historico amplo nem proxy de preco.
+A leitura e estritamente DB-first. Ausencia de cotacao ou cambio persistido nao
+aciona providers a partir do runtime financeiro; pipelines de mercado sao os
+unicos responsaveis por preencher as tabelas globais antes do consumo.
 """
 from __future__ import annotations
 
@@ -44,6 +44,12 @@ from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.transaction import OperationType, Transaction
 from app.services.corporate_action_position_reader import (
     load_global_corporate_actions_by_ticker,
+)
+from app.services.persisted_fx_query_service import (
+    get_persisted_usd_brl_rate_for_date,
+)
+from app.services.persisted_price_query_service import (
+    get_persisted_prices_at_date_batch,
 )
 from app.services.snapshot_position_projection import project_snapshot_positions
 from app.services.snapshot_price_resolution_service import (
@@ -164,21 +170,8 @@ async def _calc_totals(
     }
 
     fx_snapshot: Optional[float] = None
-    has_usd = any(s.is_usd for s in positions.values())
-    if has_usd:
-        try:
-            from app.services.fx_service import get_usd_brl_for_date
-
-            fx_snapshot = await get_usd_brl_for_date(db, target_date)
-        except Exception:
-            try:
-                from app.services.fx_service import get_usd_brl_today
-
-                fx_snapshot = await get_usd_brl_today(db)
-            except Exception:
-                fx_snapshot = 1.0
-
-    from app.services.price_history_service import get_prices_at_date_batch
+    if any(state.is_usd for state in positions.values()):
+        fx_snapshot = await get_persisted_usd_brl_rate_for_date(db, target_date)
 
     requirements: list[SnapshotPriceRequirement] = []
     for ticker, state in positions.items():
@@ -195,7 +188,7 @@ async def _calc_totals(
     tickers_with_types = [
         (requirement.ticker, requirement.asset_type) for requirement in requirements
     ]
-    persisted_prices = await get_prices_at_date_batch(
+    persisted_prices = await get_persisted_prices_at_date_batch(
         db,
         tickers_with_types,
         date_str,
@@ -304,15 +297,13 @@ async def calc_snapshot_at_date(
     commit: bool = True,
     prefetch: bool = False,
 ) -> dict:
-    """Calcula snapshot usando leitura DB-first e fallback pontual por ticker/data.
+    """Calcula snapshot exclusivamente com dados persistidos.
 
     `prefetch` permanece temporariamente na assinatura por compatibilidade interna,
     mas nao dispara qualquer carga historica ampla.
     """
     if prefetch:
-        logger.debug(
-            "[snapshot] prefetch legado ignorado; resolucao e pontual por data"
-        )
+        logger.debug("[snapshot] prefetch legado ignorado; leitura permanece DB-first")
 
     totals = await _calc_totals(db, portfolio_id, target_date)
     await _upsert_snapshot(db, portfolio_id, target_date, totals)
