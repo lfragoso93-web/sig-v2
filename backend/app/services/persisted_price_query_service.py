@@ -80,3 +80,39 @@ async def get_persisted_prices_at_date_batch(
             )
 
     return prices
+
+
+async def get_persisted_price_history(
+    db: AsyncSession,
+    ticker: str,
+    *,
+    days: int = 365,
+) -> list[dict[str, str | float]]:
+    """Retorna a série persistida no contrato público ``date``/``price``."""
+    normalized = ticker.strip().upper()
+    if not normalized:
+        return []
+
+    asset_result = await db.execute(
+        select(Asset.id).where(Asset.ticker == normalized)
+    )
+    asset_id = asset_result.scalar_one_or_none()
+    if asset_id is None:
+        return []
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    rows_result = await db.execute(
+        select(AssetPrice.timestamp, AssetPrice.close)
+        .where(
+            AssetPrice.asset_id == asset_id,
+            AssetPrice.timestamp >= cutoff,
+        )
+        .order_by(AssetPrice.timestamp.asc())
+    )
+    return [
+        {
+            "date": row.timestamp.date().isoformat(),
+            "price": float(row.close),
+        }
+        for row in rows_result.all()
+    ]

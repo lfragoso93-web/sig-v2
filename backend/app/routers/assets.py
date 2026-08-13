@@ -1,7 +1,7 @@
-from datetime import date as date_type
-import logging
 import math
 import re
+from datetime import date as date_type
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -20,10 +20,14 @@ from app.services.asset_catalog_query_service import (
     suggest_assets_from_catalog,
 )
 from app.services.asset_service import get_or_create_asset, search_assets
-from app.services.price_date_gap_resolver_service import resolve_price_at_date_gap
-from app.services.price_service import get_current_price, get_price_history
+from app.services.persisted_current_price_query_service import (
+    get_persisted_current_prices,
+)
+from app.services.persisted_price_query_service import (
+    get_persisted_price_history,
+    get_persisted_prices_at_date_batch,
+)
 
-logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _CRYPTO_NAME_TO_TICKER: dict[str, str] = {
@@ -104,7 +108,7 @@ class AssetListResponse(BaseModel):
 
 class PricePoint(BaseModel):
     date: str
-    close: float
+    price: float
 
 
 class AssetDetailResponse(BaseModel):
@@ -222,20 +226,11 @@ async def get_asset_detail(
         raise HTTPException(status_code=404, detail=f"Ativo '{ticker.upper()}' nao encontrado no banco.")
 
     asset_type = AssetType(str(asset.asset_type))
-    current_price: Optional[float] = None
-    try:
-        current_price = await get_current_price(
-            ticker=asset.ticker,
-            asset_type=asset_type.value,
-            db=db,
-        )
-    except Exception as exc:
-        logger.warning("[assets] cotacao intraday falhou para %s: %s", asset.ticker, exc)
-
-    history = await get_price_history(
-        db=db,
-        ticker=asset.ticker,
-        asset_type=asset_type,
+    current_prices = await get_persisted_current_prices(db, [asset.ticker])
+    current_price = current_prices.get(str(asset.ticker).strip().upper())
+    history = await get_persisted_price_history(
+        db,
+        asset.ticker,
         days=days,
     )
     return AssetDetailResponse(
@@ -322,21 +317,21 @@ async def get_treasury_price(
     if asset is None:
         raise HTTPException(status_code=404, detail=f"Titulo '{slug}' nao encontrado no catalogo.")
 
-    today = date_type.today().isoformat()
+    today = datetime.now(timezone.utc).date().isoformat()
+    normalized_ticker = str(asset.ticker).strip().upper()
     if date == today:
-        price = await get_current_price(
-            ticker=asset.ticker,
-            asset_type=AssetType.TESOURO_DIRETO.value,
-            db=db,
+        price = (await get_persisted_current_prices(db, [normalized_ticker])).get(
+            normalized_ticker
         )
-        source = "market_data_provider"
+        source = "assets.last_price"
     else:
-        price = await resolve_price_at_date_gap(
-            db,
-            asset.ticker,
-            AssetType.TESOURO_DIRETO,
-            date,
-        )
+        price = (
+            await get_persisted_prices_at_date_batch(
+                db,
+                [(normalized_ticker, AssetType.TESOURO_DIRETO)],
+                date,
+            )
+        ).get(normalized_ticker)
         source = "asset_prices"
 
     return TreasuryPriceResponse(slug=slug, price=price, price_date=date, source=source)
@@ -358,29 +353,29 @@ async def get_ticker_quote(
         )
 
     normalized_type = AssetType(str(asset.asset_type))
-    today = date_type.today().isoformat()
+    normalized_ticker = str(asset.ticker).strip().upper()
+    today = datetime.now(timezone.utc).date().isoformat()
     requested_date = date or today
 
     if requested_date != today:
-        price = await resolve_price_at_date_gap(
-            db,
-            asset.ticker,
-            normalized_type,
-            requested_date,
-        )
+        price = (
+            await get_persisted_prices_at_date_batch(
+                db,
+                [(normalized_ticker, normalized_type)],
+                requested_date,
+            )
+        ).get(normalized_ticker)
         source = "asset_prices"
     else:
-        price = await get_current_price(
-            ticker=asset.ticker,
-            asset_type=normalized_type.value,
-            db=db,
+        price = (await get_persisted_current_prices(db, [normalized_ticker])).get(
+            normalized_ticker
         )
-        source = "market_data_provider"
+        source = "assets.last_price"
 
     if price is None:
         raise HTTPException(
             status_code=404,
-            detail=f"Cotacao nao encontrada para '{asset.ticker}' em {requested_date}.",
+            detail=f"Cotacao persistida nao encontrada para '{asset.ticker}' em {requested_date}.",
         )
 
     return TickerQuoteResponse(
