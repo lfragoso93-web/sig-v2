@@ -29,7 +29,7 @@ async def test_seed_catalogs_all_national_dividend_classes(db: AsyncSession):
             side_effect=fake_fetch,
         ),
         patch(
-            "app.services.asset_seed_service.fetch_crypto_available_all",
+            "app.services.asset_seed_service.fetch_supported_crypto_universe",
             new_callable=AsyncMock,
             return_value=[],
         ),
@@ -63,7 +63,7 @@ async def test_seed_can_exclude_crypto_for_isolated_b3_stage(db: AsyncSession):
             return_value=[],
         ),
         patch(
-            "app.services.asset_seed_service.fetch_crypto_available_all",
+            "app.services.asset_seed_service.fetch_supported_crypto_universe",
             new_callable=AsyncMock,
         ) as crypto,
     ):

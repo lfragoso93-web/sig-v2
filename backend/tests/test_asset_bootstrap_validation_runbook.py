@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 _RUNBOOK = (
     Path(__file__).resolve().parents[2]
     / "docs"
@@ -13,6 +15,8 @@ _RUNBOOK = (
 
 
 def test_runbook_compares_generated_artifacts_on_host() -> None:
+    if not _RUNBOOK.exists():
+        pytest.skip("runbook is outside the backend runtime image")
     source = _RUNBOOK.read_text(encoding="utf-8")
 
     assert "Push-Location backend" in source
@@ -22,6 +26,8 @@ def test_runbook_compares_generated_artifacts_on_host() -> None:
 
 
 def test_runbook_does_not_compare_host_files_in_fresh_container() -> None:
+    if not _RUNBOOK.exists():
+        pytest.skip("runbook is outside the backend runtime image")
     source = _RUNBOOK.read_text(encoding="utf-8")
     comparison_section = source.split("## 6. Comparar os artefatos offline no host", 1)[1]
 

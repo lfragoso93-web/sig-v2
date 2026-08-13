@@ -55,19 +55,16 @@ async def test_global_asset_price_backfill_second_run_skips_when_coverage_is_com
         "AsyncSessionLocal",
         lambda: _SessionContext(db),
     )
-    monkeypatch.setattr(
-        global_prices,
-        "ensure_transaction_assets_in_catalog",
-        AsyncMock(return_value={"created": 0, "invalid": 0}),
+    complete_coverage = SimpleNamespace(
+        asset_id=1,
+        asset_type=AssetType.CRIPTO.value,
+        ticker="BTC",
+        needs_sync=False,
     )
-
-    complete_coverage = SimpleNamespace(needs_sync=False)
     audit = AsyncMock(return_value=[complete_coverage])
     sync_candidates = AsyncMock(return_value=[])
-    reconcile = AsyncMock(return_value={"changed": 0})
     monkeypatch.setattr(global_prices, "audit_asset_price_coverage", audit)
     monkeypatch.setattr(global_prices, "_sync_candidates", sync_candidates)
-    monkeypatch.setattr(global_prices, "reconcile_fii_end_unavailable", reconcile)
 
     first = await global_prices.run_global_asset_price_backfill(
         required_to=date(2026, 8, 8)
