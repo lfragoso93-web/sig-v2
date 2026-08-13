@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
 
@@ -30,6 +30,37 @@ def _require_ok(response: httpx.Response, step: str) -> None:
         raise AssertionError(
             f"{step}: HTTP {response.status_code}: {response.text[:1000]}"
         )
+
+
+async def _create_transaction(
+    client: httpx.AsyncClient,
+    *,
+    headers: dict[str, str],
+    portfolio_id: int,
+    ticker: str,
+    asset_type: str,
+    quantity: float,
+    price: float,
+    tx_date: str,
+    notes: str | None = None,
+) -> int:
+    response = await client.post(
+        f"/api/v1/portfolios/{portfolio_id}/transactions",
+        headers=headers,
+        json={
+            "ticker": ticker,
+            "asset_type": asset_type,
+            "operation": "buy",
+            "quantity": quantity,
+            "price": price,
+            "fees": 0.0,
+            "date": tx_date,
+            "currency": "BRL",
+            "notes": notes,
+        },
+    )
+    _require_status(response, 201, f"transaction {asset_type}/{ticker}")
+    return int(response.json()["id"])
 
 
 async def main() -> None:
@@ -78,23 +109,19 @@ async def main() -> None:
 
             now_utc = datetime.now(timezone.utc)
             tx_date = now_utc.date().isoformat()
-            btc = await client.post(
-                f"/api/v1/portfolios/{portfolio_id}/transactions",
+            maturity = (now_utc.date() + timedelta(days=365)).isoformat()
+
+            btc_tx_id = await _create_transaction(
+                client,
                 headers=headers,
-                json={
-                    "ticker": "BTC",
-                    "asset_type": "CRIPTO",
-                    "operation": "buy",
-                    "quantity": 0.001,
-                    "price": 500000.0,
-                    "fees": 0.0,
-                    "date": tx_date,
-                    "currency": "BRL",
-                    "notes": "smoke test_ready",
-                },
+                portfolio_id=portfolio_id,
+                ticker="BTC",
+                asset_type="CRIPTO",
+                quantity=0.001,
+                price=500000.0,
+                tx_date=tx_date,
+                notes="smoke test_ready",
             )
-            _require_status(btc, 201, "BTC transaction")
-            btc_tx_id = int(btc.json()["id"])
 
             for ticker in ("APT", "PUMP", "TAO", "XUSD"):
                 blocked = await client.post(
@@ -122,12 +149,74 @@ async def main() -> None:
             assert patch.json()["ticker"] == "BTC"
             assert patch.json()["notes"] == "smoke patch parcial"
 
+            canonical_transactions = (
+                ("SMKACAO3", "ACAO", 2.0, 10.0, None),
+                ("SMKFII11", "FII", 1.0, 100.0, None),
+                ("SMKETF11", "ETF_NACIONAL", 1.0, 50.0, None),
+                ("SMKBDR34", "BDR", 1.0, 25.0, None),
+                (
+                    "SMKRF",
+                    "RENDA_FIXA",
+                    1.0,
+                    1000.0,
+                    (
+                        "Indexador: CDI | 110% do CDI | "
+                        f"Vencimento: {maturity} | Emissor: Banco Smoke"
+                    ),
+                ),
+                (
+                    "TESOURO SMOKE",
+                    "TESOURO_DIRETO",
+                    1.0,
+                    1000.0,
+                    (
+                        "Indexador: SELIC | Taxa: 0% | "
+                        f"Vencimento: {maturity} | Emissor: Tesouro Nacional"
+                    ),
+                ),
+            )
+
+            created_ids: list[int] = []
+            for ticker, asset_type, quantity, price, notes in canonical_transactions:
+                created_ids.append(
+                    await _create_transaction(
+                        client,
+                        headers=headers,
+                        portfolio_id=portfolio_id,
+                        ticker=ticker,
+                        asset_type=asset_type,
+                        quantity=quantity,
+                        price=price,
+                        tx_date=tx_date,
+                        notes=notes,
+                    )
+                )
+
             transactions = await client.get(
                 f"/api/v1/portfolios/{portfolio_id}/transactions",
                 headers=headers,
             )
             _require_status(transactions, 200, "list transactions")
-            assert transactions.json()["total"] == 1
+            expected_total = 1 + len(canonical_transactions)
+            assert transactions.json()["total"] == expected_total
+
+            delete_tx_id = created_ids[0]
+            delete_response = await client.delete(
+                f"/api/v1/portfolios/{portfolio_id}/transactions/{delete_tx_id}",
+                headers=headers,
+            )
+            _require_status(delete_response, 204, "delete transaction")
+
+            transactions_after_delete = await client.get(
+                f"/api/v1/portfolios/{portfolio_id}/transactions",
+                headers=headers,
+            )
+            _require_status(
+                transactions_after_delete,
+                200,
+                "list transactions after delete",
+            )
+            assert transactions_after_delete.json()["total"] == expected_total - 1
 
             summary = await client.get(
                 f"/api/v1/portfolios/{portfolio_id}/summary",
@@ -177,7 +266,8 @@ async def main() -> None:
 
             print(
                 "TEST-READY-HTTP-SMOKE:PASS "
-                f"portfolio_id={portfolio_id} btc_tx_id={btc_tx_id}"
+                f"portfolio_id={portfolio_id} btc_tx_id={btc_tx_id} "
+                f"canonical_transactions={expected_total - 1}"
             )
         finally:
             if headers:
