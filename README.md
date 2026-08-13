@@ -30,8 +30,8 @@ O catálogo amplo de um provider **não** equivale ao universo operacional do SG
 
 - fonte de ranking: CoinGecko `/coins/markets`, ordenado por capitalização de mercado;
 - limite: Top 100 por `market_cap_rank`;
-- elegibilidade operacional: interseção entre o Top 100 CoinGecko e os símbolos disponíveis no catálogo CRIPTO da BRAPI;
-- BRAPI continua sendo a fonte de disponibilidade/cotação integrada ao SGI; CoinGecko é usado somente para definir o ranking de relevância no bootstrap;
+- elegibilidade operacional: interseção entre o Top 100 CoinGecko e os símbolos disponíveis no catálogo CRIPTO do provedor de mercado integrado;
+- o provedor de mercado integrado continua sendo a fonte de disponibilidade/cotação do SGI; CoinGecko é usado somente para definir o ranking de relevância no bootstrap;
 - ativos CRIPTO persistidos anteriormente fora do universo suportado não são apagados nem têm lifecycle falsificado;
 - seed, bootstrap histórico e readiness CRIPTO consideram somente o universo suportado;
 - ativos fora do universo não devem bloquear a certificação CRIPTO.
@@ -105,7 +105,7 @@ Princípios: DB-first, fonte oficial primeiro, bootstrap idempotente, universo o
 
 ### Agora — bootstrap e auditoria estrutural
 
-1. Validar localmente o contrato Top 100 CRIPTO da #267, incluindo ranking, interseção BRAPI, seed, bootstrap histórico e readiness.
+1. Validar localmente o contrato Top 100 CRIPTO da #267, incluindo ranking, interseção com o catálogo de mercado, seed, bootstrap histórico e readiness.
 2. Reexecutar a auditoria/readiness CRIPTO sobre o universo suportado e registrar os findings residuais reais.
 3. Validar localmente o `system-bootstrap.v4`, incluindo os gates de Proventos e eventos corporativos (#248/#250/#226/#254).
 4. Reconciliar os critérios finais de cobertura, idempotência e readiness do bootstrap completo.
@@ -131,7 +131,7 @@ Princípios: DB-first, fonte oficial primeiro, bootstrap idempotente, universo o
 ## Estado operacional
 
 - Dados históricos e catálogos existentes continuam sendo persistidos no banco.
-- CRIPTO passa a possuir universo operacional Top 100 por market cap, cruzado com disponibilidade BRAPI.
+- CRIPTO passa a possuir universo operacional Top 100 por market cap, cruzado com disponibilidade no catálogo de mercado integrado.
 - Registros CRIPTO legados fora desse universo são preservados para auditoria e não bloqueiam o novo readiness por princípio.
 - `system-bootstrap.v4` é a porta única de bootstrap e já registra FX, Proventos e eventos corporativos sob seus contratos canônicos.
 - Proventos permanecem bloqueados para execução real até autorização da #226.
