@@ -35,13 +35,17 @@ from app.services.fx_rate_reader import (
     load_latest_usd_brl_rate,
     load_usd_brl_rates_for_dates,
 )
+from app.services.persisted_current_price_query_service import (
+    get_persisted_current_prices,
+)
+from app.services.persisted_price_query_service import (
+    get_persisted_prices_at_date_batch,
+)
 from app.services.position_timeline_projection import (
     PositionMovement,
     PositionMovementKind,
     project_position_timeline,
 )
-from app.services.price_history_service import get_prices_at_date_batch
-from app.services.quotes_service import get_prices
 
 logger = logging.getLogger(__name__)
 
@@ -301,15 +305,15 @@ def enrich_with_prices(
 async def _fetch_prices_batch(db: AsyncSession, positions_raw: list[dict]) -> dict[str, float]:
     if not positions_raw:
         return {}
-    price_input = [
-        {"ticker": p["ticker"], "asset_type": p["asset_type"]}
+    tickers = [
+        p["ticker"]
         for p in positions_raw
         if not _is_fixed_income_type(p.get("asset_type"))
     ]
-    if not price_input:
+    if not tickers:
         return {}
     try:
-        return await get_prices(price_input, db)
+        return await get_persisted_current_prices(db, tickers)
     except Exception as e:
         logger.error(f"[portfolio_service] erro ao buscar precos: {e}")
         return {}
@@ -380,7 +384,14 @@ async def _fetch_previous_prices_batch(
     ]
     if not tickers_with_types:
         return {}, previous_date
-    return await get_prices_at_date_batch(db, tickers_with_types, previous_date), previous_date
+    return (
+        await get_persisted_prices_at_date_batch(
+            db,
+            tickers_with_types,
+            previous_date,
+        ),
+        previous_date,
+    )
 
 
 async def sum_dividends(db: AsyncSession, portfolio_id: int, cutoff: DateType | None = None) -> float:
