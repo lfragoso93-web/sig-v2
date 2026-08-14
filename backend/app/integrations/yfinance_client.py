@@ -6,6 +6,8 @@ from datetime import datetime, date, timedelta
 import yfinance as yf
 import pandas as pd
 
+from app.core.log_safety import sanitize_log_value
+
 logger = logging.getLogger(__name__)
 
 # Lock e intervalo mínimo compartilhados com price_history_service e quotes_service.
@@ -41,7 +43,11 @@ def get_ticker_info(ticker: str) -> dict:
             t = yf.Ticker(ticker)
             return t.info or {}
         except Exception as e:
-            logger.error(f"Erro ao buscar info de {ticker}: {e}")
+            logger.error(
+                "Erro ao buscar info de %s: %s",
+                sanitize_log_value(ticker),
+                sanitize_log_value(e),
+            )
             return {}
     return _throttled_call(_call)
 
@@ -55,7 +61,11 @@ def get_current_price(ticker: str) -> float | None:
                 return None
             return float(hist["Close"].iloc[-1])
         except Exception as e:
-            logger.error(f"Erro ao buscar preco de {ticker}: {e}")
+            logger.error(
+                "Erro ao buscar preco de %s: %s",
+                sanitize_log_value(ticker),
+                sanitize_log_value(e),
+            )
             return None
     return _throttled_call(_call)
 
@@ -102,7 +112,11 @@ def get_price_history(
                     end=datetime.combine(calc_end, datetime.min.time()),
                 )
         except Exception as e:
-            logger.error(f"Erro ao buscar historico de {ticker}: {e}")
+            logger.error(
+                "Erro ao buscar historico de %s: %s",
+                sanitize_log_value(ticker),
+                sanitize_log_value(e),
+            )
             return pd.DataFrame()
 
     return _throttled_call(_call)
@@ -114,6 +128,10 @@ def get_dividends(ticker: str) -> pd.Series:
             t = yf.Ticker(ticker)
             return t.dividends
         except Exception as e:
-            logger.error(f"Erro ao buscar dividendos de {ticker}: {e}")
+            logger.error(
+                "Erro ao buscar dividendos de %s: %s",
+                sanitize_log_value(ticker),
+                sanitize_log_value(e),
+            )
             return pd.Series(dtype=float)
     return _throttled_call(_call)
