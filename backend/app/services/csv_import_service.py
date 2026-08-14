@@ -7,6 +7,7 @@ from app.models.transaction import Transaction, OperationType
 from app.models.asset import Asset, AssetType
 from app.models.portfolio import Portfolio
 from sqlalchemy import select
+from app.core.log_safety import sanitize_log_value
 from app.services.portfolio_service import invalidate_portfolio_cache
 import logging
 
@@ -294,7 +295,7 @@ async def parse_csv_content(
 
     except Exception as e:
         global_errors.append(f"Error parsing CSV: {str(e)}")
-        logger.error(f"CSV parse error: {e}")
+        logger.error("CSV parse error: %s", sanitize_log_value(e))
 
     return rows, global_errors
 
@@ -444,7 +445,11 @@ async def import_csv_transactions(
             result["imported_count"] += 1
 
         except Exception as e:
-            logger.error(f"Error importing row {csv_row.row_num}: {e}")
+            logger.error(
+                "Error importing row %d: %s",
+                csv_row.row_num,
+                sanitize_log_value(e),
+            )
             result["rows"].append({
                 "row_num": csv_row.row_num,
                 "errors": [str(e)],
@@ -458,10 +463,17 @@ async def import_csv_transactions(
             await db.commit()
             result["success"] = True
             await invalidate_portfolio_cache(portfolio_id)
-            logger.info(f"Imported {len(created_transactions)} transactions for portfolio {portfolio_id}")
+            logger.info(
+                "Imported %d transactions for portfolio %d",
+                len(created_transactions),
+                portfolio_id,
+            )
         except Exception as e:
             await db.rollback()
-            logger.error(f"Error committing transactions: {e}")
+            logger.error(
+                "Error committing transactions: %s",
+                sanitize_log_value(e),
+            )
             result["success"] = False
             result["error_count"] += len(created_transactions)
             result["imported_count"] = 0

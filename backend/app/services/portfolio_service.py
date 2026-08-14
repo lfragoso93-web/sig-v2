@@ -9,6 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cache import cache_delete, cache_get, cache_set
+from app.core.log_safety import sanitize_log_value
 from app.models.asset import Asset, AssetType
 from app.models.portfolio import Portfolio
 from app.models.transaction import OperationType, Transaction
@@ -315,7 +316,10 @@ async def _fetch_prices_batch(db: AsyncSession, positions_raw: list[dict]) -> di
     try:
         return await get_persisted_current_prices(db, tickers)
     except Exception as e:
-        logger.error(f"[portfolio_service] erro ao buscar precos: {e}")
+        logger.error(
+            "[portfolio_service] erro ao buscar precos: %s",
+            sanitize_log_value(e),
+        )
         return {}
 
 
@@ -405,7 +409,10 @@ async def sum_dividends(db: AsyncSession, portfolio_id: int, cutoff: DateType | 
             )
         )
     except (SQLAlchemyError, ValueError) as e:
-        logger.warning(f"[portfolio_service] sum_dividends falhou: {e} — retornando 0.0")
+        logger.warning(
+            "[portfolio_service] sum_dividends falhou: %s — retornando 0.0",
+            sanitize_log_value(e),
+        )
         return 0.0
 
 
@@ -425,7 +432,10 @@ async def sum_dividends_for_tickers(
         )
         return float(sum(totals.values()))
     except (SQLAlchemyError, ValueError) as e:
-        logger.warning(f"[portfolio_service] sum_dividends_for_tickers falhou: {e} — retornando 0.0")
+        logger.warning(
+            "[portfolio_service] sum_dividends_for_tickers falhou: %s — retornando 0.0",
+            sanitize_log_value(e),
+        )
         return 0.0
 
 
@@ -444,7 +454,10 @@ async def sum_dividends_by_ticker(
             as_of=datetime.now(timezone.utc).date(),
         )
     except (SQLAlchemyError, ValueError) as e:
-        logger.warning(f"[portfolio_service] sum_dividends_by_ticker falhou: {e} — retornando vazio")
+        logger.warning(
+            "[portfolio_service] sum_dividends_by_ticker falhou: %s — retornando vazio",
+            sanitize_log_value(e),
+        )
         return {}
 
 

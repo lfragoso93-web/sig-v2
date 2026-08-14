@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.log_safety import sanitize_log_value
 from app.integrations.brapi import fetch_all_tickers_v2
 from app.models.asset import Asset, AssetType
 from app.services.asset_universe_membership_service import (
@@ -122,14 +123,19 @@ async def _backfill_market_data_for_ticker(ticker: str, asset_type: AssetType) -
             )
             logger.info(
                 "[seed_market] %s (%s): prices=%s logo=%s events=%s",
-                ticker,
+                sanitize_log_value(ticker),
                 asset_type.value,
                 result.prices_inserted,
                 result.logo_updated,
                 result.events_synced,
             )
     except Exception as e:  # noqa: BLE001 -- isola falha por ativo no batch operacional
-        logger.error(f"[seed_market] erro em {ticker} ({asset_type.value}): {e}")
+        logger.error(
+            "[seed_market] erro em %s (%s): %s",
+            sanitize_log_value(ticker),
+            asset_type.value,
+            sanitize_log_value(e),
+        )
 
 
 async def _run_market_backfill(seeded_tickers: dict[str, list[str]]) -> int:
@@ -150,14 +156,16 @@ async def _run_market_backfill(seeded_tickers: dict[str, list[str]]) -> int:
                 filtered += 1
 
     if filtered:
-        logger.info(f"[seed_market] {filtered} tickers sem pipeline próprio ignorados")
+        logger.info("[seed_market] %d tickers sem pipeline próprio ignorados", filtered)
     if not tasks:
         logger.info("[seed_market] nenhum ativo elegível para pipeline")
         return filtered
 
     logger.info(
-        f"[seed_market] iniciando pipeline único de {len(tasks)} ativos "
-        f"(lotes de {BACKFILL_CONCURRENCY}, delay {BACKFILL_BATCH_DELAY}s)"
+        "[seed_market] iniciando pipeline único de %d ativos (lotes de %d, delay %ss)",
+        len(tasks),
+        BACKFILL_CONCURRENCY,
+        BACKFILL_BATCH_DELAY,
     )
 
     total_done = 0
@@ -166,11 +174,15 @@ async def _run_market_backfill(seeded_tickers: dict[str, list[str]]) -> int:
         await asyncio.gather(*[_backfill_market_data_for_ticker(ticker, at) for ticker, at in batch], return_exceptions=True)
         total_done += len(batch)
         if total_done % 20 == 0:
-            logger.info(f"[seed_market] {total_done}/{len(tasks)} ativos processados")
+            logger.info("[seed_market] %d/%d ativos processados", total_done, len(tasks))
         if i + BACKFILL_CONCURRENCY < len(tasks):
             await asyncio.sleep(BACKFILL_BATCH_DELAY)
 
-    logger.info(f"[seed_market] pipeline único concluído: {total_done} ativos, {filtered} ignorados")
+    logger.info(
+        "[seed_market] pipeline único concluído: %d ativos, %d ignorados",
+        total_done,
+        filtered,
+    )
     return filtered
 
 
@@ -208,7 +220,11 @@ async def _run_crypto_seed(db: AsyncSession, result: SeedResult) -> None:
                 batch_ops = 0
         except Exception as e:  # noqa: BLE001 -- seed deve registrar e seguir o próximo ativo
             result.errors += 1
-            logger.error(f"[seed] erro ao upsert cripto {coin}: {e}")
+            logger.error(
+                "[seed] erro ao upsert cripto %s: %s",
+                sanitize_log_value(coin),
+                sanitize_log_value(e),
+            )
 
     if batch_ops > 0:
         await db.commit()
@@ -233,9 +249,13 @@ async def run_asset_seed(
         result.new_tickers.setdefault(type_label, [])
         result.seeded_tickers.setdefault(type_label, [])
 
-        logger.info(f"[seed] iniciando subtype={brapi_subtype} -> {type_label}")
+        logger.info("[seed] iniciando subtype=%s -> %s", brapi_subtype, type_label)
         items = await fetch_all_tickers_v2(brapi_subtype)
-        logger.info(f"[seed] subtype={brapi_subtype}: {len(items)} ativos recebidos da BRAPI")
+        logger.info(
+            "[seed] subtype=%s: %d ativos recebidos da BRAPI",
+            brapi_subtype,
+            len(items),
+        )
 
         for item in items:
             ticker = (item.get("stock") or item.get("symbol") or item.get("ticker") or "").strip().upper()
@@ -246,7 +266,7 @@ async def run_asset_seed(
                 result.skipped += 1
                 logger.info(
                     "[seed] ticker nacional inelegível ignorado: %s (%s)",
-                    ticker,
+                    sanitize_log_value(ticker),
                     type_label,
                 )
                 continue
@@ -273,7 +293,12 @@ async def run_asset_seed(
                     batch_ops = 0
             except Exception as e:  # noqa: BLE001 -- seed deve registrar e seguir o próximo ativo
                 result.errors += 1
-                logger.error(f"[seed] erro ao upsert {ticker} ({type_label}): {e}")
+                logger.error(
+                    "[seed] erro ao upsert %s (%s): %s",
+                    sanitize_log_value(ticker),
+                    type_label,
+                    sanitize_log_value(e),
+                )
 
     if batch_ops > 0:
         await db.commit()
@@ -282,9 +307,13 @@ async def run_asset_seed(
         await _run_crypto_seed(db, result)
 
     logger.info(
-        f"[seed] catálogo concluído: {result.created} criados, "
-        f"{result.updated} atualizados, {result.skipped} sem mudança, "
-        f"{result.errors} erros | por tipo: {result.by_type}"
+        "[seed] catálogo concluído: %d criados, %d atualizados, "
+        "%d sem mudança, %d erros | por tipo: %s",
+        result.created,
+        result.updated,
+        result.skipped,
+        result.errors,
+        sanitize_log_value(result.by_type),
     )
 
     if run_backfill:
