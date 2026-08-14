@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — onboarding órfão de mercado (14/08/2026)
+
+- Removido `asset_onboarding_service.py` após confirmação de ausência de consumidores em runtime, routers, jobs, CLIs e bootstrap.
+- O serviço declarava execução após criação de ativo/transação, mas o CRUD já proíbe qualquer ingestão externa automática e mantém somente operações locais e DB-first.
+- Adicionado gate de ausência física; pipeline, seed, batch e CLIs foram preservados para uma contração independente da etapa paralela de eventos.
+
 ### Removido — sincronizador diário órfão de Proventos (14/08/2026)
 
 - Removidos `proventos_daily_sync_service.py` e seu teste exclusivo após a confirmação de que nenhum runtime, scheduler, CLI, workflow ou serviço ainda os consumia.

@@ -14,7 +14,6 @@ from app.services.asset_market_pipeline_service import sync_asset_market_data
 @pytest.mark.parametrize(
     "service_path",
     [
-        Path("app/services/asset_onboarding_service.py"),
         Path("app/services/asset_seed_service.py"),
         Path("app/services/dividend_history_seed_service.py"),
         Path("app/services/market_pipeline_batch_service.py"),
@@ -56,6 +55,15 @@ def test_cli_legada_de_proventos_nao_existe() -> None:
     cli_path = Path(__file__).parents[1] / "app/cli/run_proventos_sync.py"
 
     assert not cli_path.exists()
+
+
+def test_asset_onboarding_legado_nao_existe() -> None:
+    service_path = (
+        Path(__file__).parents[1]
+        / "app/services/asset_onboarding_service.py"
+    )
+
+    assert not service_path.exists()
 
 
 def test_seed_historico_nao_importa_materializador() -> None:

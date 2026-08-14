@@ -118,6 +118,14 @@ Terceiro recorte concluído:
 - o gate do scheduler agora também exige a ausência física do módulo;
 - adapters e persistência usados pelo seed certificado não foram alterados.
 
+Quarto recorte concluído:
+
+- removido `asset_onboarding_service.py` após confirmação de zero consumidores;
+- o CRUD de transações continua criando apenas o registro local do ativo,
+  invalidando cache e recalculando snapshots, sem BackgroundTask de provider;
+- pipeline de mercado, seed, batch e CLIs foram preservados para a retirada
+  independente da etapa paralela de eventos no próximo recorte.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - restringir/remover o router de debug conforme ambiente e autenticação;

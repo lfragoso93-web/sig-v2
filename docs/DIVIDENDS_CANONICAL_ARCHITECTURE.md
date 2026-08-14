@@ -75,7 +75,8 @@ possuir o ativo hoje não cria direito retroativo.
 | `proventos_daily_sync_service.py` | Orquestração diária paralela de eventos | Removido | Ficou órfão após a contração do scheduler, da CLI e do full rebuild; gate estrutural impede sua reintrodução |
 | `dividend_backfill_service.py` | Coleta global de eventos | Canônico | O materializador legado foi removido; o módulo grava somente `asset_dividends`, sem `portfolio_id`, `Transaction` ou `Dividend` |
 | `asset_market_pipeline_service.py` | Coleta eventos globais por ativo | Canônico | Materialização, argumento e resultado legados retirados |
-| `asset_seed_service.py` e `asset_onboarding_service.py` | Chamam o pipeline sem solicitar materialização | Canônico | Argumento e métricas legadas removidos dos callers de aplicação |
+| `asset_seed_service.py` | Chama o pipeline sem solicitar materialização | Em auditoria | O seed do bootstrap usa `run_backfill=False`; o backfill manual ainda será separado da porta paralela de eventos |
+| `asset_onboarding_service.py` | Background task de enriquecimento após criação | Removido | Serviço órfão; o CRUD de transações já proibia importação ou agendamento dessa ingestão externa |
 | Batch e CLIs de mercado | Coletam eventos globais sem opção de materialização | Canônico | Interface contraída e protegida por regressão |
 | `run_proventos_sync.py` | Coleta manual global, inclusive por ticker | Removido | CLI órfã duplicava o bootstrap certificado e permitia chamar portas legadas sem seus gates; regressão estrutural impede sua reintrodução |
 | `dividend_history_seed_service.py` | Complemento histórico global via Yahoo | Canônico | Materialização retirada; persiste exclusivamente `asset_dividends` |
