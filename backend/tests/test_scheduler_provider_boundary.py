@@ -4,6 +4,9 @@ from pathlib import Path
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 SCHEDULER_PATH = BACKEND_ROOT / "app" / "core" / "scheduler.py"
 LEGACY_SCHEDULER_PATH = BACKEND_ROOT / "app" / "scheduler.py"
+LEGACY_PROVENTOS_SYNC_PATH = (
+    BACKEND_ROOT / "app" / "services" / "proventos_daily_sync_service.py"
+)
 
 
 def _scheduler_source() -> str:
@@ -56,3 +59,7 @@ def test_daily_close_does_not_trigger_broad_historical_backfill() -> None:
 
 def test_legacy_duplicate_scheduler_does_not_exist() -> None:
     assert not LEGACY_SCHEDULER_PATH.exists()
+
+
+def test_legacy_daily_proventos_sync_does_not_exist() -> None:
+    assert not LEGACY_PROVENTOS_SYNC_PATH.exists()

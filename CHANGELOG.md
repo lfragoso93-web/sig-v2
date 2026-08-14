@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — sincronizador diário órfão de Proventos (14/08/2026)
+
+- Removidos `proventos_daily_sync_service.py` e seu teste exclusivo após a confirmação de que nenhum runtime, scheduler, CLI, workflow ou serviço ainda os consumia.
+- O módulo havia se tornado uma segunda orquestração sem os gates transacionais do seed certificado após a retirada da CLI dedicada e da etapa no full market rebuild.
+- O gate do scheduler passou a exigir também a ausência física do módulo, além de proibir seus antigos imports e chamadas.
+- Adapters, parsers e persistência compartilhados pelo `pre-prod-dividends-seed.v2` foram preservados.
+
 ### Removido — Proventos do full market rebuild (14/08/2026)
 
 - Removida a etapa paralela de Proventos de `full_market_rebuild_service.py`, junto com suas métricas do resumo operacional.

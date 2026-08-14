@@ -109,6 +109,15 @@ Segundo recorte concluído:
 - `proventos_daily_sync_service.py` ficou sem consumidor de produção e deve ser
   avaliado isoladamente no próximo recorte.
 
+Terceiro recorte concluído:
+
+- removidos `proventos_daily_sync_service.py` e seu teste exclusivo após nova
+  confirmação de ausência de consumidores de produção;
+- scheduler, bootstrap e full rebuild permanecem protegidos contra imports da
+  orquestração removida;
+- o gate do scheduler agora também exige a ausência física do módulo;
+- adapters e persistência usados pelo seed certificado não foram alterados.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - restringir/remover o router de debug conforme ambiente e autenticação;

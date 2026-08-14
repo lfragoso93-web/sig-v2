@@ -78,6 +78,10 @@ advisory lock dedicado, transação única, rollback integral nem opt-in explíc
 O domínio deve entrar exclusivamente pelo seed certificado do
 `system-bootstrap.v4`.
 
+O antigo `proventos_daily_sync_service.py` também foi removido após ficar sem
+consumidores de produção. Scheduler, CLI dedicada e full rebuild não podem
+reintroduzir essa orquestração; a regra é protegida por testes estruturais.
+
 ### Leitura, mutação e elegibilidade
 
 Leituras executam somente autorização e agregação. Mutações de transações
