@@ -12,7 +12,6 @@ Por padrão o comando executa o pipeline completo:
   - upsert/garantia de Asset;
   - histórico de preços com full=True;
   - logo quando ausente;
-  - eventos/proventos globais.
 
 Flags permitem desligar etapas específicas para debug.
 """
@@ -82,7 +81,6 @@ async def _run_one(
     full: bool,
     sync_prices: bool,
     sync_logo: bool,
-    sync_events: bool,
 ) -> tuple[str, bool]:
     async with AsyncSessionLocal() as db:
         try:
@@ -93,7 +91,6 @@ async def _run_one(
                 full=full,
                 sync_prices=sync_prices,
                 sync_logo=sync_logo,
-                sync_events=sync_events,
                 commit=True,
             )
             logger.info("OK %s/%s: %s", ticker, asset_type.value, asdict(result))
@@ -110,7 +107,6 @@ async def _run_batches(
     full: bool,
     sync_prices: bool,
     sync_logo: bool,
-    sync_events: bool,
 ) -> int:
     items = list(pairs)
     if not items:
@@ -118,13 +114,12 @@ async def _run_batches(
         return 0
 
     logger.info(
-        "Executando pipeline de mercado para %s ticker(s), concurrency=%s, full=%s, prices=%s, logo=%s, events=%s",
+        "Executando pipeline de mercado para %s ticker(s), concurrency=%s, full=%s, prices=%s, logo=%s",
         len(items),
         concurrency,
         full,
         sync_prices,
         sync_logo,
-        sync_events,
     )
 
     ok_count = 0
@@ -139,7 +134,6 @@ async def _run_batches(
                     full=full,
                     sync_prices=sync_prices,
                     sync_logo=sync_logo,
-                    sync_events=sync_events,
                 )
                 for ticker, asset_type in batch
             ]
@@ -166,7 +160,6 @@ async def _main() -> int:
     parser.add_argument("--incremental", action="store_true", help="Usa full=False para etapa de preços.")
     parser.add_argument("--skip-prices", action="store_true", help="Não sincroniza histórico de preços.")
     parser.add_argument("--skip-logo", action="store_true", help="Não tenta preencher logo.")
-    parser.add_argument("--skip-events", action="store_true", help="Não sincroniza eventos/proventos globais.")
     args = parser.parse_args()
 
     tickers = _parse_csv(args.tickers)
@@ -181,7 +174,6 @@ async def _main() -> int:
         full=not args.incremental,
         sync_prices=not args.skip_prices,
         sync_logo=not args.skip_logo,
-        sync_events=not args.skip_events,
     )
 
 

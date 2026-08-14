@@ -36,7 +36,6 @@ async def _main() -> int:
     parser.add_argument("--incremental", action="store_true")
     parser.add_argument("--skip-prices", action="store_true")
     parser.add_argument("--skip-logo", action="store_true")
-    parser.add_argument("--skip-events", action="store_true")
     args = parser.parse_args()
 
     async with AsyncSessionLocal() as db:
@@ -51,7 +50,6 @@ async def _main() -> int:
             full=not args.incremental,
             sync_prices=not args.skip_prices,
             sync_logo=not args.skip_logo,
-            sync_events=not args.skip_events,
         )
 
     logger.info("Concluído: ok=%s failed=%s", result.ok, result.failed)

@@ -1,7 +1,7 @@
 """
 asset_market_pipeline_service.py
 
-Orquestrador único de dados de mercado por ativo.
+Orquestrador de catálogo e preços de mercado por ativo.
 
 Este serviço centraliza o fluxo que antes estava espalhado entre seed,
 onboarding, backfill de preços, logo e proventos:
@@ -9,10 +9,8 @@ onboarding, backfill de preços, logo e proventos:
   1. garantir Asset básico no banco;
   2. sincronizar histórico de preços;
   3. preencher logo/metadados faltantes;
-  4. sincronizar eventos/proventos globais em AssetDividend;
-
-O objetivo é que seed, onboarding, cron e comandos manuais chamem a mesma
-porta de entrada, reduzindo divergências de comportamento.
+Eventos e Proventos não pertencem a esta porta: entram exclusivamente pelos
+estágios gated do bootstrap global.
 """
 from __future__ import annotations
 
@@ -30,14 +28,12 @@ from app.core.asset_types import INTL_TYPES, NO_QUOTE_TYPES
 from app.integrations.brapi import fetch_fii_historical_v2, fetch_price_history_full, fetch_stocks_historical_v2
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
-from app.services.dividend_backfill_service import run_backfill
 from app.services.logo_service import fetch_logo_url
 from app.services.price_history_service import persist_daily_prices
 
 logger = logging.getLogger(__name__)
 
 _FULL_HISTORY_TYPES = {AssetType.ACAO, AssetType.FII, AssetType.ETF_NACIONAL, AssetType.BDR}
-_EVENT_TYPES = {AssetType.ACAO, AssetType.FII, AssetType.ETF_NACIONAL, AssetType.BDR}
 _PRICE_HISTORY_DAYS_INTL = 365 * 5
 _PRICE_HISTORY_DAYS_FALLBACK_BR = 365 * 80
 
@@ -50,7 +46,6 @@ class AssetMarketPipelineResult:
     asset_updated: bool = False
     prices_inserted: int = 0
     logo_updated: bool = False
-    events_synced: bool = False
     skipped_steps: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
@@ -200,7 +195,6 @@ async def sync_asset_market_data(
     full: bool = True,
     sync_prices: bool = True,
     sync_logo: bool = True,
-    sync_events: bool = True,
     commit: bool = True,
 ) -> AssetMarketPipelineResult:
     """Executa o pipeline único de mercado para um ativo."""
@@ -233,14 +227,6 @@ async def sync_asset_market_data(
             else:
                 result.skipped_steps.append("logo")
 
-            if sync_events and at in _EVENT_TYPES:
-                await run_backfill(db, t, at)
-                result.events_synced = True
-            elif sync_events:
-                result.skipped_steps.append("events_not_supported_for_type")
-            else:
-                result.skipped_steps.append("events")
-
         if commit:
             await db.commit()
         else:
@@ -252,14 +238,13 @@ async def sync_asset_market_data(
         raise
 
     logger.info(
-        "[market_pipeline] %s/%s ok: created=%s updated=%s prices=%s logo=%s events=%s skipped=%s",
+        "[market_pipeline] %s/%s ok: created=%s updated=%s prices=%s logo=%s skipped=%s",
         result.ticker,
         result.asset_type,
         result.asset_created,
         result.asset_updated,
         result.prices_inserted,
         result.logo_updated,
-        result.events_synced,
         result.skipped_steps,
     )
     return result

@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — pipeline de mercado sem eventos paralelos (14/08/2026)
+
+- Removidos `sync_events`, `events_synced` e o import de `dividend_backfill_service` do pipeline de mercado.
+- Asset seed, serviço batch e CLIs de mercado deixaram de expor flags, argumentos, logs ou métricas de eventos/Proventos.
+- O pipeline permanece responsável por catálogo, histórico de preços e logo; eventos globais entram exclusivamente pelos estágios gated do `system-bootstrap.v4`.
+- Adicionada regressão estrutural cobrindo todas as cinco superfícies contra reintrodução da porta paralela.
+
 ### Removido — onboarding órfão de mercado (14/08/2026)
 
 - Removido `asset_onboarding_service.py` após confirmação de ausência de consumidores em runtime, routers, jobs, CLIs e bootstrap.

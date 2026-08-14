@@ -87,7 +87,6 @@ async def _run_one(
     full: bool,
     sync_prices: bool,
     sync_logo: bool,
-    sync_events: bool,
 ) -> tuple[str, bool, str | None]:
     async with AsyncSessionLocal() as item_db:
         try:
@@ -98,7 +97,6 @@ async def _run_one(
                 full=full,
                 sync_prices=sync_prices,
                 sync_logo=sync_logo,
-                sync_events=sync_events,
                 commit=True,
             )
             return ticker, True, None
@@ -119,7 +117,6 @@ async def run_market_pipeline_batch(
     full: bool = False,
     sync_prices: bool = True,
     sync_logo: bool = True,
-    sync_events: bool = True,
 ) -> MarketPipelineBatchResult:
     pairs, skipped = await load_market_pipeline_pairs(
         db,
@@ -158,7 +155,6 @@ async def run_market_pipeline_batch(
                     full=full,
                     sync_prices=sync_prices,
                     sync_logo=sync_logo,
-                    sync_events=sync_events,
                 )
                 for ticker, at in batch
             ]

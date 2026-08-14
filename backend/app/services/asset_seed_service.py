@@ -7,7 +7,8 @@ Além do catálogo, o seed executa pipeline idempotente para renda variável nac
   1. metadados e logo quando disponível no catálogo
   2. histórico completo de preços diário
   3. logo via cotação quando ausente
-  4. histórico global de proventos/eventos corporativos
+
+Eventos e Proventos são carregados somente pelos estágios gated do bootstrap.
 """
 import asyncio
 import logging
@@ -118,16 +119,14 @@ async def _backfill_market_data_for_ticker(ticker: str, asset_type: AssetType) -
                 full=True,
                 sync_prices=True,
                 sync_logo=True,
-                sync_events=True,
                 commit=True,
             )
             logger.info(
-                "[seed_market] %s (%s): prices=%s logo=%s events=%s",
+                "[seed_market] %s (%s): prices=%s logo=%s",
                 sanitize_log_value(ticker),
                 asset_type.value,
                 result.prices_inserted,
                 result.logo_updated,
-                result.events_synced,
             )
     except Exception as e:  # noqa: BLE001 -- isola falha por ativo no batch operacional
         logger.error(

@@ -74,10 +74,10 @@ possuir o ativo hoje não cria direito retroativo.
 | `GET /portfolios/{id}/dividends` e `dividend_service.py` | Projeção de direitos por carteira | Canônico | Read-only sobre `asset_dividends`, `assets` e `transactions`, sem acesso à tabela legada |
 | `proventos_daily_sync_service.py` | Orquestração diária paralela de eventos | Removido | Ficou órfão após a contração do scheduler, da CLI e do full rebuild; gate estrutural impede sua reintrodução |
 | `dividend_backfill_service.py` | Coleta global de eventos | Canônico | O materializador legado foi removido; o módulo grava somente `asset_dividends`, sem `portfolio_id`, `Transaction` ou `Dividend` |
-| `asset_market_pipeline_service.py` | Coleta eventos globais por ativo | Canônico | Materialização, argumento e resultado legados retirados |
+| `asset_market_pipeline_service.py` | Catálogo, histórico de preços e logo por ativo | Confinado | Import, argumento, resultado e execução de eventos removidos; o domínio entra somente pelo bootstrap gated |
 | `asset_seed_service.py` | Chama o pipeline sem solicitar materialização | Em auditoria | O seed do bootstrap usa `run_backfill=False`; o backfill manual ainda será separado da porta paralela de eventos |
 | `asset_onboarding_service.py` | Background task de enriquecimento após criação | Removido | Serviço órfão; o CRUD de transações já proibia importação ou agendamento dessa ingestão externa |
-| Batch e CLIs de mercado | Coletam eventos globais sem opção de materialização | Canônico | Interface contraída e protegida por regressão |
+| Batch e CLIs de mercado | Operações explícitas de preços e logos | Confinado | Não expõem opção, métrica ou import de eventos/Proventos |
 | `run_proventos_sync.py` | Coleta manual global, inclusive por ticker | Removido | CLI órfã duplicava o bootstrap certificado e permitia chamar portas legadas sem seus gates; regressão estrutural impede sua reintrodução |
 | `dividend_history_seed_service.py` | Complemento histórico global via Yahoo | Canônico | Materialização retirada; persiste exclusivamente `asset_dividends` |
 | `full_market_rebuild_service.py` | Rebuild amplo de mercado e snapshots | Confinado | A etapa paralela de Proventos e suas métricas foram removidas; o seed certificado é a única entrada operacional desse domínio |

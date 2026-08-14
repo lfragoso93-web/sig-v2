@@ -126,6 +126,15 @@ Quarto recorte concluído:
 - pipeline de mercado, seed, batch e CLIs foram preservados para a retirada
   independente da etapa paralela de eventos no próximo recorte.
 
+Quinto recorte concluído:
+
+- removidos `sync_events`, `events_synced` e `run_backfill` do pipeline de
+  mercado e de todos os seus callers;
+- seed, batch e CLIs de mercado ficaram limitados a catálogo, preços e logo;
+- eventos e Proventos passam exclusivamente pelos estágios gated do
+  `system-bootstrap.v4`;
+- regressão estrutural protege as cinco superfícies contra reintrodução.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - restringir/remover o router de debug conforme ambiente e autenticação;
