@@ -93,7 +93,7 @@ async def run_pre_prod_b3_seed(
                 async with AsyncSessionLocal() as db:
                     catalog_result = await run_asset_seed(
                         db,
-                        run_backfill=False,
+                        run_market_enrichment=False,
                         include_crypto=False,
                     )
                 catalog = asdict(catalog_result)

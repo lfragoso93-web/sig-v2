@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — contrato explícito de enriquecimento do asset seed (14/08/2026)
+
+- Renomeado `run_backfill` para `run_market_enrichment` no asset seed, refletindo que a opção controla somente histórico de preços e logos.
+- Helper e métrica de resultado também perderam a nomenclatura genérica de backfill; nenhuma semântica de Proventos permanece nessa superfície.
+- `system-bootstrap.v4` e seed B3 continuam chamando o catálogo com enriquecimento amplo desabilitado.
+- Testes e documentação foram sincronizados e o contrato do bootstrap proíbe a reintrodução do nome legado.
+
 ### Alterado — contrato completo de ambiente Docker (14/08/2026)
 
 - Reconstruído `.env.example` a partir das configurações efetivamente consumidas pela aplicação, Docker, frontend e rotinas operacionais.

@@ -59,7 +59,10 @@ async def test_stage_excludes_crypto_and_reports_counts(monkeypatch):
     assert result.ok is True
     assert result.before.prices == 0
     assert result.after.prices == 100
-    assert seed.await_args.kwargs == {"run_backfill": False, "include_crypto": False}
+    assert seed.await_args.kwargs == {
+        "run_market_enrichment": False,
+        "include_crypto": False,
+    }
     assert history.await_args.kwargs["cutoff_date"] == date(2026, 7, 24)
 
 

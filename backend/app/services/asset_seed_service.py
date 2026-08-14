@@ -54,7 +54,7 @@ class SeedResult:
     by_type: dict[str, int] = field(default_factory=dict)
     new_tickers: dict[str, list[str]] = field(default_factory=dict)
     seeded_tickers: dict[str, list[str]] = field(default_factory=dict)
-    skipped_backfill: int = 0
+    skipped_market_enrichment: int = 0
 
 
 def _extract_logo_url(item: dict) -> str | None:
@@ -137,7 +137,7 @@ async def _backfill_market_data_for_ticker(ticker: str, asset_type: AssetType) -
         )
 
 
-async def _run_market_backfill(seeded_tickers: dict[str, list[str]]) -> int:
+async def _run_market_enrichment(seeded_tickers: dict[str, list[str]]) -> int:
     tasks: list[tuple[str, AssetType]] = []
     filtered = 0
 
@@ -235,7 +235,7 @@ async def _run_crypto_seed(db: AsyncSession, result: SeedResult) -> None:
 
 async def run_asset_seed(
     db: AsyncSession,
-    run_backfill: bool = True,
+    run_market_enrichment: bool = True,
     include_crypto: bool = True,
 ) -> SeedResult:
     result = SeedResult()
@@ -315,9 +315,13 @@ async def run_asset_seed(
         sanitize_log_value(result.by_type),
     )
 
-    if run_backfill:
-        result.skipped_backfill = await _run_market_backfill(result.seeded_tickers)
+    if run_market_enrichment:
+        result.skipped_market_enrichment = await _run_market_enrichment(
+            result.seeded_tickers
+        )
     else:
-        logger.info("[seed] run_backfill=False — pipeline de mercado ignorado")
+        logger.info(
+            "[seed] run_market_enrichment=False — preços/logos ignorados"
+        )
 
     return result

@@ -75,7 +75,7 @@ possuir o ativo hoje não cria direito retroativo.
 | `proventos_daily_sync_service.py` | Orquestração diária paralela de eventos | Removido | Ficou órfão após a contração do scheduler, da CLI e do full rebuild; gate estrutural impede sua reintrodução |
 | `dividend_backfill_service.py` | Coleta global de eventos | Canônico | O materializador legado foi removido; o módulo grava somente `asset_dividends`, sem `portfolio_id`, `Transaction` ou `Dividend` |
 | `asset_market_pipeline_service.py` | Catálogo, histórico de preços e logo por ativo | Confinado | Import, argumento, resultado e execução de eventos removidos; o domínio entra somente pelo bootstrap gated |
-| `asset_seed_service.py` | Chama o pipeline sem solicitar materialização | Em auditoria | O seed do bootstrap usa `run_backfill=False`; o backfill manual ainda será separado da porta paralela de eventos |
+| `asset_seed_service.py` | Catálogo e enriquecimento opcional de preços/logos | Confinado | `run_market_enrichment` descreve o contrato real; bootstrap usa `False` e eventos não participam do seed |
 | `asset_onboarding_service.py` | Background task de enriquecimento após criação | Removido | Serviço órfão; o CRUD de transações já proibia importação ou agendamento dessa ingestão externa |
 | Batch e CLIs de mercado | Operações explícitas de preços e logos | Confinado | Não expõem opção, métrica ou import de eventos/Proventos |
 | `run_proventos_sync.py` | Coleta manual global, inclusive por ticker | Removido | CLI órfã duplicava o bootstrap certificado e permitia chamar portas legadas sem seus gates; regressão estrutural impede sua reintrodução |

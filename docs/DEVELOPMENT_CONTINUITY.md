@@ -143,6 +143,14 @@ Configuração operacional sincronizada:
 - Compose encaminha `VITE_API_URL` ao build do frontend;
 - teste estrutural impede nova deriva entre código e exemplo de ambiente.
 
+Sexto recorte concluído:
+
+- `run_backfill` foi renomeado para `run_market_enrichment` no asset seed;
+- helper e métrica passaram a representar explicitamente preços/logos, sem
+  semântica residual de Proventos;
+- bootstrap e seed B3 continuam desabilitando esse enriquecimento amplo;
+- testes protegem o bootstrap contra reintrodução do nome legado.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - restringir/remover o router de debug conforme ambiente e autenticação;

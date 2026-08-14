@@ -88,7 +88,7 @@ async def test_asset_seed_escapes_provider_error_lines(
     ):
         await asset_seed_service.run_asset_seed(
             db,
-            run_backfill=False,
+            run_market_enrichment=False,
             include_crypto=False,
         )
 
