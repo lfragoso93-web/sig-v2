@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, mock_open, patch
 import pytest
 from app.services.backup_service import (
     _parse_db_url,
+    _resolve_backup_path,
     create_database_backup,
     delete_backup,
     list_backups,
@@ -108,10 +109,44 @@ class TestCreateDatabaseBackup:
             mock_stat.return_value = mock_stat_obj
 
             with patch("app.services.backup_service.gzip.open", mock_open()):
-                result = await create_database_backup(db_url, backup_name="my_backup")
+                result = await create_database_backup(
+                    db_url,
+                    backup_name="backup_20240101_120000",
+                )
 
         assert result["success"] is True
-        assert "my_backup" in result["backup_id"]
+        assert result["backup_id"] == "backup_20240101_120000"
+
+    @pytest.mark.parametrize(
+        "backup_name",
+        [
+            "",
+            "custom_backup",
+            "../outside",
+            "backup_20240101_120000/../../outside",
+            "/tmp/outside",
+            "backup_20240101_120000.sql",
+            "backup_20240101_120000?target=outside",
+            "backup_20240101_120000#fragment",
+            "backup_20240101_120000\r\noutside",
+        ],
+    )
+    @patch("app.services.backup_service.Path.mkdir")
+    @patch("app.services.backup_service.asyncio.create_subprocess_exec")
+    async def test_create_backup_rejects_unsafe_or_noncanonical_name(
+        self,
+        mock_subprocess,
+        mock_mkdir,
+        backup_name,
+    ):
+        result = await create_database_backup(
+            "postgresql://user:password@localhost/testdb",
+            backup_name=backup_name,
+        )
+
+        assert result["success"] is False
+        assert result["error"] == "Invalid backup filename"
+        mock_subprocess.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -292,3 +327,15 @@ class TestDeleteBackup:
 
         assert result["success"] is False
         assert result["error"] is not None
+
+
+def test_resolve_backup_path_rejects_symlink_escape(tmp_path):
+    backups_dir = tmp_path / "backups"
+    backups_dir.mkdir()
+    outside = tmp_path / "outside.sql.gz"
+    outside.write_bytes(b"outside")
+    (backups_dir / "backup_20240101_120000.sql.gz").symlink_to(outside)
+
+    with patch("app.services.backup_service.BACKUPS_DIR", backups_dir):
+        with pytest.raises(ValueError, match="Invalid backup filename"):
+            _resolve_backup_path("backup_20240101_120000.sql.gz")

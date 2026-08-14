@@ -36,12 +36,19 @@ def _ensure_backups_dir() -> None:
 
 
 def _resolve_backup_path(backup_filename: str) -> Path:
-    """Retorna o caminho de um backup com nome estritamente permitido."""
+    """Retorna um backup canonico confinado ao diretorio operacional."""
 
-    if not _BACKUP_FILENAME_RE.fullmatch(backup_filename):
+    if not isinstance(backup_filename, str) or not _BACKUP_FILENAME_RE.fullmatch(
+        backup_filename,
+    ):
         raise ValueError("Invalid backup filename")
 
-    return BACKUPS_DIR / backup_filename
+    backups_root = BACKUPS_DIR.resolve()
+    backup_path = (backups_root / backup_filename).resolve()
+    if backup_path.parent != backups_root:
+        raise ValueError("Invalid backup filename")
+
+    return backup_path
 
 
 def _decompress_backup(backup_path: Path, temp_sql_file: Path) -> None:
@@ -90,8 +97,12 @@ async def create_database_backup(
 
     try:
         now = _utc_now()
-        backup_id = backup_name or f"backup_{now.strftime('%Y%m%d_%H%M%S')}"
-        backup_file_gz = BACKUPS_DIR / f"{backup_id}.sql.gz"
+        backup_id = (
+            f"backup_{now.strftime('%Y%m%d_%H%M%S')}"
+            if backup_name is None
+            else backup_name
+        )
+        backup_file_gz = _resolve_backup_path(f"{backup_id}.sql.gz")
         parsed_url = _parse_db_url(db_url)
 
         env = os.environ.copy()
