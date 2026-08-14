@@ -1,12 +1,14 @@
 # Roadmap modular — SGI v2
 
-> Última atualização: 11/08/2026
+> Última atualização: 14/08/2026
 
 ## Direção atual
 
-O SGI v2 está em **auditoria arquitetural e certificação do bootstrap inicial** antes da próxima fase funcional.
+O SGI v2 está em **sanitização arquitetural residual** antes da próxima fase funcional.
 
-A Issue #227 é o gate-mãe que impede dados reais antes da certificação. A Issue #247 executa a auditoria atual de legado, serviços, routers, endpoints e integrações. A #248 coordena bootstrap/providers/readiness, a #250 executa o orquestrador global e a #267 restringe CRIPTO ao universo Top 100 por capitalização.
+A Issue #227 é o gate-mãe que impede dados reais. A #268 certificou `test_ready=true`; a #247 executa a auditoria residual de legado, serviços, routers, endpoints e integrações. A #248/#250 permanecem como gates operacionais do bootstrap e a #267 está concluída.
+
+Baseline atual: PR #271 mergeada em `4ff76c4fe9f1738db9b392b3568fcb35f81185e7`, com `main` e `stable-15jun` alinhadas. A Issue #269 está concluída.
 
 A Issue #241 está concluída. Alembic ↔ MetaData convergiu para todos os domínios estabilizados. `goals` é a única exceção deliberada e pertence ao futuro macroprojeto #246 + #57.
 
@@ -35,21 +37,21 @@ A auditoria anterior sobre 481 CRIPTO permanece como evidência histórica, não
 
 | Módulo | Estado atual | Próxima decisão |
 |---|---|---|
-| Core backend e autenticação | Estável | auditoria geral #247 |
+| Core backend e autenticação | `test_ready` | auditoria residual #247 |
 | Carteiras e transações | Consolidado | preservar CRUD sem sync externo |
 | Dados canônicos / DB-first | Consolidado | concluir certificação bootstrap/providers |
 | B3 / Tesouro / benchmarks / câmbio | Persistidos e integrados ao bootstrap | validar cobertura/certificação |
-| CRIPTO | Universo Top 100 por market cap formalizado em #267 | validar ranking/interseção e readiness residual |
+| CRIPTO | #267 concluída: 55 candidatos, 42 financeiros, 13 blockers | preservar contrato fail-closed |
 | Proventos | Contrato `pre-prod-dividends-seed.v2` registrado no `system-bootstrap.v4` sob gate #226 | validar integração; carga real continua bloqueada |
 | Snapshots e valuation | Consolidado | TWR dedicado #149 |
 | Resumo e Patrimônio | Consolidado | manter DB-first |
 | Rentabilidade | Consolidada | TWR #149 / IBOV #150 |
 | IRPF | Canônico | validação real futura |
-| Eventos corporativos | Integrados estruturalmente ao `system-bootstrap.v4` | validar wrapper/gate e concluir auditoria residual #129/#254 |
+| Eventos corporativos | Integrados/certificados no `system-bootstrap.v4` | concluir auditoria residual #129/#247 |
 | Metas | Não estabilizado | redesenho conjunto #246 + #57 |
 | Análise de Carteira | Não implementada funcionalmente | redesenho conjunto #246 + #57 |
 | Convergência Alembic/ORM | Concluída fora de `goals` | manter gates |
-| Bootstrap inicial | `system-bootstrap.v4`; todos os domínios externos obrigatórios representados | validação integrada e certificação final |
+| Bootstrap inicial | `system-bootstrap.v4`; estrutura e `test_ready` certificados | certificação operacional para dados reais |
 | Pré-produção/rebuild | Bloqueada | retomar somente após certificação |
 | IBOV persistido | Planejado | #150 |
 | TWR Tesouro/Renda Fixa | Planejado | #149 |
@@ -72,17 +74,18 @@ O finding justificou a separação entre catálogo descoberto e universo suporta
 
 ## Ordem canônica de execução
 
-### Fase 1 — Auditoria arquitetural + bootstrap — AGORA
+### Fase 1 — Sanitização arquitetural #247 — AGORA
 
-Issues executoras: #247/#248/#250/#267. Gate-mãe: #227.
+Issue executora: #247. Gate-mãe: #227. #248/#250 acompanham apenas o gate operacional para dados reais.
 
 - [x] definir política de universo CRIPTO Top 100 por capitalização;
 - [x] separar ranking de relevância do catálogo BRAPI;
 - [x] limitar seed CRIPTO ao universo suportado;
 - [x] limitar histórico CRIPTO do bootstrap ao universo suportado;
 - [x] limitar readiness CRIPTO ao universo suportado;
-- [ ] validar localmente ranking, interseção, seed, histórico e readiness Top 100;
-- [ ] executar auditoria nominal do universo suportado e inventariar findings residuais;
+- [x] validar ranking, interseção, seed, histórico e readiness Top 100;
+- [x] executar auditoria nominal do universo suportado e preservar findings residuais;
+- [x] certificar `test_ready=true` com smoke fictício e gate global (#268);
 - [ ] revisar routers, services, models, integrações, jobs, CLIs, scheduler e entrypoint;
 - [x] remover consultas externas já identificadas de requests funcionais fora de preço intraday/fechamento;
 - [ ] revisar frontend: rotas, redirects, stubs e API clients;
@@ -100,8 +103,8 @@ Issues executoras: #247/#248/#250/#267. Gate-mãe: #227.
 - [x] registrar estado/versionamento do bootstrap (`system-bootstrap.v4`);
 - [x] impedir readiness para uso real enquanto o bootstrap não estiver certificado;
 - [x] manter runtime externo recorrente limitado a intraday e fechamento diário;
-- [ ] validar localmente o `system-bootstrap.v4` e seus gates de Proventos/eventos;
-- [ ] certificar cobertura e idempotência do bootstrap completo;
+- [x] validar estruturalmente o `system-bootstrap.v4` e seus gates de Proventos/eventos;
+- [x] certificar cobertura estrutural e idempotência para `test_ready`;
 - [ ] somente após certificação permitir `ready_for_real_data=true`.
 
 ### Fase 3 — Performance e benchmarks
@@ -133,10 +136,7 @@ Somente após estabilização e promoção da base:
 
 - #227 — gate-mãe de estabilização e readiness.
 - #247 — auditoria pós-convergência e consolidação da fronteira de providers.
-- #248 — bootstrap certificado e fronteira única de providers.
-- #250 — orquestrador global `system-bootstrap.v4`.
-- #267 — universo CRIPTO Top 100 por capitalização.
-- #254 — integração estrutural de eventos corporativos, pendente de validação integrada/documentação final.
+- #248/#250 — acompanhamento operacional do bootstrap até dados reais; estrutura concluída.
 
 ### Bloqueadas / dependentes
 
@@ -147,6 +147,16 @@ Somente após estabilização e promoção da base:
 - #216 — gate de seeds/bootstrap.
 - #158 — depende de #216/#226 e certificação.
 - #246 + #57 — bloqueadas até estabilização da base.
+
+### Backlog não bloqueador
+
+- #253 — Central de Bootstrap SuperAdmin.
+- #58 — Janela Global do Ativo.
+- #83 — Backup/Restore: auditar implementação existente antes de decidir fechamento.
+- #90 — refinamento de UX de Patrimônio.
+- #97 — Google OAuth.
+- #127 — requer redesenho para não contrariar a política fail-closed de providers.
+- #130 — manter apenas lacunas concretas de BRAPI/adapters.
 
 ## Estado operacional
 
@@ -160,6 +170,7 @@ Somente após estabilização e promoção da base:
 - Após o bootstrap certificado, somente preço intraday e fechamento diário podem consultar providers de forma recorrente.
 - Rebuilds e correções históricas permanecem operações explícitas e controladas.
 - Dados reais continuam bloqueados pela #227.
+- Dados fictícios/descartáveis estão liberados sob `test_ready=true`.
 
 ## Gate para promoção estrutural
 

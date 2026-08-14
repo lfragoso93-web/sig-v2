@@ -5,6 +5,14 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — baseline pós-segurança e retomada da sanitização (14/08/2026)
+
+- PR #271 mergeada e Issue #269 concluída no baseline `4ff76c4fe9f1738db9b392b3568fcb35f81185e7`, alinhando `main` e `stable-15jun` após as correções de SSRF, path injection, dependências vulneráveis, log injection e hardening da imagem.
+- #268 concluiu o smoke funcional e o gate global no SHA `a8444b545a10aa7d48dd70f08a07e3fa386605d6`, estabelecendo `test_ready=true` apenas para dados fictícios/descartáveis.
+- `ready_for_real_data=false` permanece obrigatório até #226/#216/#158 e decisão formal da #227.
+- Branches obsoletas foram removidas após preservação dos snapshots nas tags `archive/recover-snapshot-b1c8080c` e `archive/corporate-actions-5e110967`; branches Dependabot remanescentes seguem fila técnica separada.
+- A ordem corrente passa a ser #247 (sanitização residual) → #150 → #149 → #226/#216/#158 → #253/#246+#57.
+
 ### Alterado — universo CRIPTO Top 100 por capitalização (11/08/2026)
 
 - Criada a Issue #267 para separar explicitamente catálogo descoberto, universo CRIPTO suportado e histórico certificado.

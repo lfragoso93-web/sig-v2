@@ -1,171 +1,130 @@
 # Continuidade de desenvolvimento — SGI v2
 
-> Documento obrigatório para iniciar ou retomar qualquer conversa de desenvolvimento.
+> Documento obrigatório para iniciar ou retomar qualquer conversa de desenvolvimento. Atualizado em 14/08/2026.
 
 ## Contexto permanente
 
 - Repositório: `lfragoso93-web/sig-v2`.
-- Branch obrigatória: `stable-15jun`.
-- Nunca desenvolver diretamente na `main`.
-- Dividir macroblocos em commits pequenos e rastreáveis.
-- Ao final de cada bloco informar resumo técnico, impacto arquitetural, testes, SHA completo e próximo bloco.
-- README, ROADMAP, CHANGELOG e documentação arquitetural devem refletir o estado real.
-- `goals` permanece fora da estabilização corrente e não deve receber migration apenas para limpar Alembic.
+- Branch obrigatória: `stable-15jun`; nunca desenvolver diretamente na `main`.
+- Confirmar o HEAD remoto e a árvore limpa antes de cada bloco.
+- Dividir macroblocos em commits pequenos, independentes e rastreáveis.
+- Antes de alterar, revisar Issue, arquitetura, contratos canônicos, consumidores e legado.
+- Ao final informar resumo técnico, impacto arquitetural, arquivos, testes, SHA completo, Issue/documentação e próximo bloco.
+- `goals` permanece fora da estabilização corrente e não recebe migration apenas para limpar Alembic.
 
-## Gate e Issues vigentes
+## Baseline confirmado
 
-- #227 — gate-mãe antes de dados reais.
-- #247 — auditoria pós-convergência.
-- #248 — bootstrap certificado, cobertura CRIPTO e fronteira única de providers.
-- #249 — readiness explícito do bootstrap — **concluída**.
-- #250 — orquestrador global do bootstrap e exceções de provider/lifecycle.
-- #267 — universo CRIPTO suportado limitado às Top 100 por capitalização.
-- #254 — integração estrutural de eventos corporativos ao bootstrap — wrapper, testes e integração v4 publicados; validação integrada ainda pendente.
-- #265 — shallow histories CRIPTO — **concluída em 11/08/2026** com fila rasa zerada no universo amplo auditado.
-- #226 — Proventos: contrato reutilizado pelo bootstrap, mas execução real continua bloqueada.
-- #129 — eventos corporativos: núcleo consolidado; permanece aberta para auditoria residual de consumidores/aliases/provider boundaries.
+- `main` = `stable-15jun` em `4ff76c4fe9f1738db9b392b3568fcb35f81185e7`.
+- PR #271 mergeada; Issue #269 concluída.
+- #268 concluída no checkpoint funcional `a8444b545a10aa7d48dd70f08a07e3fa386605d6`.
+- `test_ready=true`: permitido testar somente com dados fictícios/descartáveis.
+- `ready_for_real_data=false`: usuários, carteiras, CSV, seeds e snapshots reais continuam bloqueados.
+- Snapshots de branches removidas preservados em:
+  - `archive/recover-snapshot-b1c8080c`;
+  - `archive/corporate-actions-5e110967`.
+- Branches remanescentes: `main`, `stable-15jun` e cinco branches Dependabot sob triagem separada.
 
-## Regra canônica de providers
+## Evidência do gate `test_ready`
 
-Política detalhada: `docs/PROVIDER_ACCESS_POLICY_2026-08.md`.
+No fechamento da #268:
 
-Antes da primeira carteira real, o banco deve estar carregado e reconciliado por bootstrap certificado. Depois disso:
+- backend completo em Linux/Python 3.12: **1638 passed, 0 failed**;
+- smoke HTTP e cleanup descartável aprovados;
+- classes canônicas, BTC elegível e blockers CRIPTO exercitados;
+- Alembic/drift gate, mypy, flake8, `compileall` e `app.main` aprovados;
+- frontend lint, typecheck, 93 testes e build aprovados;
+- CI aprovou backend, frontend, pip/npm audit, Trivy filesystem, Gitleaks e lint dos Dockerfiles;
+- nenhum provider foi observado nos requests financeiros auditados.
 
-- requests funcionais e cálculos financeiros são DB-first;
-- provider recorrente somente para preço intraday e fechamento diário;
-- lacuna comprovada de preço em data específica pode consultar apenas a janela mínima necessária, persistir o resultado e então refazer leitura DB-first;
-- `get_price_at_date()` permanece leitor puro;
-- CRUD de usuário/transações não dispara onboarding, seed ou backfill externo;
-- catálogo, metadados, Proventos, eventos, benchmarks e câmbio não são sincronizados por jobs recorrentes.
+A #269/#271 acrescentou hardening de SSRF, path injection, dependências, logs e imagem. O PR registrou backend **1.673 passed, 24 skipped**, frontend **93 testes**, `npm audit` sem vulnerabilidades e import/build aprovados.
 
-## Política CRIPTO Top 100 — #267
+## Arquitetura que deve ser preservada
 
-A existência de um símbolo no catálogo BRAPI não significa suporte operacional automático pelo SGI.
+- Runtime financeiro é DB-first; provider não participa de GETs/cálculos financeiros.
+- Providers pertencem a bootstrap, ingestão, sincronização ou reconciliação explicitamente autorizados.
+- Preços externos são persistidos antes do consumo financeiro.
+- Ausência de preço/FX é explícita; não vira zero, preço médio, taxa `1.0` ou fallback silencioso.
+- `summary.v2`, `rentabilidade.v2`, projetores de posição/custo e snapshots são contratos canônicos.
+- Proventos pertencem ao ativo em `asset_dividends`; direitos por carteira são calculados sob demanda.
+- Eventos corporativos pertencem ao ativo em `corporate_events`; transações históricas não são mutadas.
+- Não reintroduzir `AppConfig`, `IRPFReport`, `Dividend/dividends` ou materialização de proventos por carteira.
+- Tesouro/Renda Fixa devem preservar marcação a mercado; evolução de TWR pertence à #149.
 
-Contrato canônico:
+## Trabalho corrente — #247
 
-1. CoinGecko `/coins/markets` define a relevância por capitalização de mercado;
-2. são considerados no máximo os Top 100 por `market_cap_rank`;
-3. o universo suportado é a interseção desse Top 100 com os símbolos disponíveis no catálogo CRIPTO da BRAPI;
-4. CoinGecko é usado somente no bootstrap para ranking de relevância; BRAPI permanece a integração de disponibilidade/cotações do SGI;
-5. ativos CRIPTO já persistidos fora do universo suportado são preservados e auditáveis, sem alteração artificial de lifecycle;
-6. seed, backfill histórico inicial e readiness CRIPTO devem usar o mesmo universo suportado;
-7. ativos fora desse universo não bloqueiam readiness CRIPTO.
+### 247-A — governança e documentação
 
-Não foi criada migration nem campo novo em `assets` neste bloco. O contrato é derivado dinamicamente durante bootstrap/readiness para evitar persistência estrutural prematura antes da validação operacional.
+- sincronizar README, ROADMAP, CHANGELOG, arquitetura e este documento;
+- atualizar #227 para `test_ready=true` e baseline pós-#271;
+- reclassificar Issues abertas e remover dependências/status obsoletos;
+- consolidar #248/#250 no gate operacional da #227 quando o histórico estiver preservado;
+- tratar #129 como residual da #247;
+- auditar #83 contra a implementação existente antes de decidir fechamento;
+- manter PRs/branches Dependabot como fila técnica separada.
 
-## Checkpoint CRIPTO amplo anterior — 11/08/2026
+### 247-B — posições DB-first
 
-BC/BD foram certificados localmente no HEAD `9772b8c2bdb9875d85abc4a72ed0bebea39c222e` sobre o catálogo amplo anterior de 481 ativos.
+- confirmar consumidores de `position_service`;
+- remover `quotes_service.get_current_price` do read path ou excluir o legado se estiver morto;
+- preço ausente deve permanecer explícito, sem fallback por preço médio;
+- testar endpoint, ausência, isolamento de provider e regressão.
 
-Validação local:
+### 247-C — snapshots de classe / FX DB-first
 
-- build Docker aprovado;
-- testes dirigidos BC/BD: **2 passed**;
-- `python -m compileall -q app tests`: aprovado;
-- import integral de `app.main`: aprovado;
-- `git diff --check`: aprovado;
-- working tree limpa;
-- duplicidades globais em `(asset_id, timestamp)`: 0.
+- migrar `portfolio_class_snapshot_service` de `fx_service` para leitor persistido;
+- remover fallback de rede e USD-BRL `1.0`;
+- reconciliar valores com tolerância financeira de R$ 0,01;
+- não alterar TWR/valuation de Tesouro fora da #149.
 
-Distribuição ampla:
+### 247-D — Proventos e eventos
 
-- total: 481 ativos;
-- `HISTORY_START_EXHAUSTED = 369`;
-- `HISTORY_START_COMPLEMENT_GAPPED = 87`;
-- `HISTORY_START_SHALLOW_UNAVAILABLE = 14`;
-- `HISTORY_START_SHALLOW_VERIFIED = 10`;
-- `HISTORY_UNAVAILABLE = 1` (`XUSD`);
-- `shallow_histories = 0`;
-- `blocking_seams = 88`.
+- auditar `proventos_daily_sync_service.py`, `asset_market_pipeline_service.py`, `dividend_backfill_service.py` e `run_proventos_sync.py`;
+- eliminar ou confinar portas paralelas, preservando uma entrada canônica de bootstrap;
+- usar a tag arquivada de corporate actions apenas como evidência para decisões de backlog;
+- testar locks, transação, idempotência e ausência de consumers/imports legados.
 
-BC classificou os 87 gaps como:
+### 247-E — superfícies sensíveis e frontend legado
 
-- `<= 30 dias`: 2 (`GALA = 22`, `WLFI = 27`);
-- `31–90 dias`: 1 (`MIRA = 74`);
-- `91–365 dias`: 13;
-- `>365 dias`: 71;
-- `unknown`: 0.
+- restringir/remover o router de debug conforme ambiente e autenticação;
+- remover `frontend/src/App.tsx` somente após confirmar ausência de imports;
+- revisar placeholder de Análise, aliases, redirects, módulos órfãos e catches amplos;
+- preservar #246 + #57 como macroprojeto bloqueado.
 
-BD confirmou 14 `HISTORY_START_SHALLOW_UNAVAILABLE` e 1 `HISTORY_UNAVAILABLE` (`XUSD`). O finding mostrou que o catálogo amplo continha ativos sem relevância operacional suficiente e motivou a #267.
+### 247-F — gate global
 
-Esses estados permanecem evidência histórica e auditável. Eles não devem ser apagados nem reclassificados apenas para produzir readiness verde.
+- backend: pytest completo, flake8, mypy, compile/import e Alembic/drift;
+- frontend: lint, typecheck, testes e build;
+- segurança: npm/pip audit, Gitleaks e Trivy;
+- smoke HTTP fictício, cleanup e inspeção de provider;
+- concluir #247/#129 e preparar PR `stable-15jun` → `main` somente com tudo verde.
 
-## Implementação estrutural #267 publicada
+## Ordem após a sanitização
 
-Commits:
+1. #150 — histórico persistido do IBOV.
+2. #149 — TWR de Tesouro Direto/Renda Fixa com marcação a mercado persistida.
+3. #226 — duas execuções reais controladas de Proventos, somente com autorização operacional específica.
+4. #216 — fechar gate agregado de seeds/bootstrap.
+5. #158 — CSV, posições, snapshots e reconciliação da primeira base real.
+6. Decidir formalmente `ready_for_real_data=true` na #227.
+7. #253 — Central de Bootstrap SuperAdmin.
+8. #246 + #57 — Metas + Análise como macroprojeto único.
 
-- `3f7de4d5ad21ed80f5c822f54d620a84139c8082` — adapter CoinGecko de ranking Top 100 por market cap;
-- `6d030ccc79a4350fe317d12521b2496157afac1a` — contrato de universo suportado Top 100 ∩ BRAPI;
-- `58467c7f1377b57752af2204bf0b10767f8d347d` — clareza/import explícito do contrato;
-- `50bbbe92fa70e5473e1710ad147041ea31e5e6db` — seed CRIPTO limitado ao universo suportado;
-- `d8f8d7f6f4ee29a022b97c922b856279f9276259` — gate do boundary do seed;
-- `5cce32e9d2fa374fcba9b861ce9314c24beb698c` — testes unitários da interseção/deduplicação;
-- `e0dc9e86d85a7461e7ccff8477cbdf1a3af702c8` — histórico CRIPTO do bootstrap limitado ao universo suportado;
-- `4597939f687bf3104645a2520028675867e245ac` — readiness CRIPTO limitado ao universo suportado;
-- `5d67b7a3d0ec726ae3c61a404ef2f9177c98475c` — seam audit com escopo opcional de tickers;
-- `fa7d733c8e43c34fee21cf3af8f757fd08e60a52` — shallow audit com escopo opcional de tickers.
-
-Nenhum desses blocos:
-
-- apaga ativos CRIPTO antigos;
-- reclassifica `provider_status` para mascarar findings;
-- altera schema/migration;
-- libera `ready_for_real_data`;
-- adiciona provider a requests financeiros.
-
-## Estado estrutural do bootstrap
-
-`system-bootstrap.v4` continua sendo o orquestrador global. O estágio `asset_price_history` agora resolve o universo CRIPTO suportado e chama o backfill global com `asset_types={CRIPTO}` e `tickers=<universo suportado>`. As demais classes com providers dedicados continuam em seus estágios/contratos próprios já existentes.
-
-Readiness CRIPTO agora reporta:
-
-- `universe_policy = top_100_market_cap_coingecko_intersect_brapi`;
-- `supported_universe_size`;
-- contagens de histórico, duplicidades, statuses bloqueantes, seams e shallow histories somente no universo suportado.
-
-A certificação operacional dessa nova política ainda está pendente de execução local. `ready_for_real_data` permanece `false`.
-
-## Scheduler
-
-O scheduler recorrente está limitado a:
-
-- preço intraday;
-- fechamento diário de preços, restrito à data corrente;
-- fechamento diário do Tesouro;
-- manutenção local de snapshots/TWR.
-
-Não agenda catálogo, ranking de market cap, benchmarks, Proventos, eventos, logos ou backfill histórico amplo.
-
-## Ordem objetiva dos próximos blocos
-
-1. Validar localmente os testes da #267, `compileall`, Ruff e import de `app.main`.
-2. Executar `fetch_supported_crypto_universe()` em ambiente com rede e registrar quantos dos Top 100 CoinGecko estão disponíveis na BRAPI.
-3. Executar `pre_prod_crypto_readiness_audit` no novo universo e inventariar apenas findings residuais suportados.
-4. Confirmar que ativos fora do universo amplo anterior deixam de bloquear readiness sem alteração de seus registros/lifecycle.
-5. Atualizar #267/#248/#250 com a evidência operacional e, se verde, concluir #267.
-6. Manter `ready_for_real_data=false` até a certificação final da #248/#227.
-7. Continuar #247/#129 para achados residuais de routers/services/providers/aliases.
-8. Retomar #226 → #216 → #158 somente depois da certificação estrutural e da autorização operacional apropriada.
-9. Somente depois iniciar #246 + #57 (Metas + Análise).
-
-## Prompt mínimo para nova conversa
+## Prompt mínimo para retomada
 
 ```text
-@GitHub Continue o SGI v2 seguindo `docs/DEVELOPMENT_CONTINUITY.md`.
+@GitHub Continue o SGI v2 seguindo docs/DEVELOPMENT_CONTINUITY.md.
 
 Repo: lfragoso93-web/sig-v2
-Branch: stable-15jun
+Branch exclusiva: stable-15jun
+Baseline: 4ff76c4fe9f1738db9b392b3568fcb35f81185e7
 Gate-mãe: #227
-Bootstrap/readiness: #248/#250
-Universo CRIPTO: #267
+Trabalho atual: #247
 
-Decisão atual:
-- suportar somente Top 100 CRIPTO por market cap;
-- ranking CoinGecko;
-- universo = Top 100 CoinGecko ∩ catálogo BRAPI;
-- preservar ativos legados fora do universo sem deixá-los bloquear readiness;
-- `ready_for_real_data=false` até certificação final.
+Estado:
+- test_ready=true;
+- ready_for_real_data=false;
+- preservar DB-first e contratos canônicos;
+- commits pequenos e documentação/Issues vivas.
 
-Próxima ação: validar localmente a implementação #267 e executar readiness nominal sobre o novo universo suportado.
+Próxima ação: continuar do primeiro sub-bloco pendente da #247.
 ```

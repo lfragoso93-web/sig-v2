@@ -175,7 +175,7 @@ O `system-bootstrap.v4` registra `corporate_events` como estágio explícito por
 - realiza commit somente após sucesso integral e rollback em qualquer falha;
 - não usa `asset_market_pipeline_service` nem `dividend_backfill_service`.
 
-A integração é estrutural: nenhum provider real foi executado durante a implementação. A Issue #129 permanece aberta apenas para auditoria residual de consumidores/aliases/provider boundaries, coordenada com #254/#247.
+A integração estrutural e seus gates foram certificados. A Issue #129 permanece aberta apenas para auditoria residual de consumidores/aliases/provider boundaries, coordenada pela #247; a #254 está concluída.
 
 ## Transações
 
@@ -235,7 +235,7 @@ Etapas registradas no v4:
 8. `asset_dividends` — explicitamente gated pela #226;
 9. `corporate_events` — explicitamente gated e transacional pela #254.
 
-Todos os domínios externos obrigatórios estão agora representados estruturalmente no orquestrador, mas isso ainda não constitui certificação operacional. O readiness continua falso até validação integrada de cobertura, idempotência, gates e critérios da #248/#227.
+Todos os domínios externos obrigatórios estão representados no orquestrador. A #268 certificou `test_ready=true` com dados fictícios e gate global verde; o readiness para dados reais continua falso até a evidência operacional de #226/#216/#158 e decisão final da #227.
 
 No runtime pronto, o scheduler pode consultar providers apenas para:
 
@@ -256,32 +256,24 @@ Até o encerramento da Issue #227:
 
 A ordem canônica é:
 
-1. validar localmente `system-bootstrap.v4`, incluindo gates de Proventos e eventos corporativos;
-2. reconciliar cobertura/idempotência e critérios finais de #248/#250/#254;
-3. concluir #247/#129 e certificar a fronteira provider/bootstrap;
-4. #150 e #149 — performance e benchmarks;
-5. #226/#216/#158 — certificação operacional e primeira carga real;
-6. #246 + #57 — macroprojeto Metas + Análise.
+1. concluir #247/#129: sanitização residual e fronteiras DB-first;
+2. #150 e #149 — performance e benchmarks;
+3. #226/#216/#158 — certificação operacional e primeira carga real;
+4. #253 — Central de Bootstrap SuperAdmin;
+5. #246 + #57 — macroprojeto Metas + Análise.
 
 ## Qualidade validada
 
-Último checkpoint certificado localmente pelo usuário no HEAD `0e8d96c081a0e788a9edcf69901a134b29b7f696`:
+O checkpoint da #268 no HEAD `a8444b545a10aa7d48dd70f08a07e3fa386605d6` certificou a suíte backend completa com **1638 passed**, smoke HTTP e cleanup descartável, Alembic/drift gate, mypy, frontend, fronteiras DB-first e ausência de provider nos requests auditados. O CI final executou e aprovou backend, frontend, auditorias de dependências, Trivy filesystem, Gitleaks e lint dos Dockerfiles.
 
-- build Docker aprovado;
-- 22 testes do checkpoint de bootstrap/FX/readiness aprovados;
-- `compileall` aprovado;
-- import integral de `app.main` aprovado;
-- HEAD local igual ao esperado.
-
-Os blocos de `system-bootstrap.v3/v4` com Proventos e eventos corporativos foram implementados depois desse checkpoint e ainda precisam de validação local integrada.
+O baseline promovido após a #269/#271 é `4ff76c4fe9f1738db9b392b3568fcb35f81185e7`. Isso preserva `test_ready=true`, mas não altera `ready_for_real_data=false`.
 
 ## Pendências arquiteturais
 
-1. Validar localmente o `system-bootstrap.v4` e os gates de Proventos/eventos corporativos.
-2. Reconciliar cobertura/idempotência dos domínios obrigatórios e critérios finais de #248/#250/#254.
-3. Concluir auditoria global de serviços, routers, endpoints, duplicações e legado remanescente (#247/#129).
-4. Somente após certificação integral permitir readiness real.
-5. Materializar histórico persistido do IBOV (#150).
-6. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
-7. Retomar execução real de Proventos, importação e rebuild apenas sob #226/#216/#158/#227.
-8. Iniciar #246 + #57 somente depois da estabilização e promoção da base.
+1. Concluir auditoria global de serviços, routers, endpoints, duplicações e legado remanescente (#247/#129).
+2. Remover providers dos read paths residuais de posições e snapshots de classe, com ausência explícita.
+3. Eliminar ou confinar portas paralelas de Proventos/eventos e superfícies sensíveis/legadas.
+4. Materializar histórico persistido do IBOV (#150).
+5. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
+6. Retomar execução real de Proventos, importação e rebuild apenas sob #226/#216/#158/#227.
+7. Iniciar #246 + #57 somente depois da estabilização e promoção da base.

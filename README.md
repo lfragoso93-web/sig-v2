@@ -4,11 +4,13 @@ Plataforma pessoal para acompanhamento, consolidação e análise de investiment
 
 A branch de desenvolvimento é `stable-15jun`. A promoção para `main` ocorre exclusivamente por Pull Request após validação integral e sincronização da documentação viva.
 
-## Status atual — 11/08/2026
+## Status atual — 14/08/2026
 
-O SGI v2 está em **estabilização arquitetural e certificação do bootstrap inicial antes da próxima fase funcional**.
+O SGI v2 está em **sanitização arquitetural residual antes da retomada da próxima fase funcional**.
 
-A Issue #227 é o gate-mãe que bloqueia dados reais até a certificação estrutural. A Issue #247 executa a auditoria de legado, serviços, routers, endpoints e integrações. A #248 coordena a fronteira de providers/readiness e a #250 executa o orquestrador global. A #267 formaliza o novo universo CRIPTO suportado.
+A Issue #227 é o gate-mãe que bloqueia dados reais. A #268 foi concluída e certificou `test_ready=true` para uso controlado com dados fictícios; isso não autoriza dados reais. A Issue #247 executa agora a auditoria residual de legado, serviços, routers, endpoints e integrações. A #248/#250 permanecem como histórico e gate operacional do bootstrap até a certificação para dados reais.
+
+O baseline pós-segurança é o merge `4ff76c4fe9f1738db9b392b3568fcb35f81185e7` (PR #271 / Issue #269), presente em `main` e `stable-15jun`. A limpeza de branches preservou os snapshots históricos nas tags `archive/recover-snapshot-b1c8080c` e `archive/corporate-actions-5e110967`; além das branches principais, restam apenas branches Dependabot sob triagem técnica separada.
 
 A convergência Alembic ↔ MetaData da Issue #241 foi concluída para todos os domínios estabilizados. O único diff deliberadamente preservado é `goals`, que não deve receber migration antes do redesenho conjunto de Metas e Análise de Carteira (#246 + #57).
 
@@ -36,7 +38,7 @@ O catálogo amplo de um provider **não** equivale ao universo operacional do SG
 - seed, bootstrap histórico e readiness CRIPTO consideram somente o universo suportado;
 - ativos fora do universo não devem bloquear a certificação CRIPTO.
 
-A seleção é dinâmica: um ativo pode entrar ou sair do universo em bootstrap futuro conforme o ranking de market cap. `ready_for_real_data` continua `false` até certificação operacional posterior.
+A seleção é dinâmica: um ativo pode entrar ou sair do universo em bootstrap futuro conforme o ranking de market cap. A #267 certificou 55 candidatos, 42 ativos financeiros e 13 blockers preservados. `ready_for_real_data` continua `false` até certificação operacional posterior.
 
 ### Bootstrap global atual
 
@@ -103,30 +105,29 @@ Princípios: DB-first, fonte oficial primeiro, bootstrap idempotente, universo o
 
 ## Ordem canônica de trabalho
 
-### Agora — bootstrap e auditoria estrutural
+### Agora — sanitização arquitetural #247
 
-1. Validar localmente o contrato Top 100 CRIPTO da #267, incluindo ranking, interseção com o catálogo de mercado, seed, bootstrap histórico e readiness.
-2. Reexecutar a auditoria/readiness CRIPTO sobre o universo suportado e registrar os findings residuais reais.
-3. Validar localmente o `system-bootstrap.v4`, incluindo os gates de Proventos e eventos corporativos (#248/#250/#226/#254).
-4. Reconciliar os critérios finais de cobertura, idempotência e readiness do bootstrap completo.
-5. Continuar auditoria de routers, serviços, endpoints, aliases e integrações (#247/#129).
-6. Certificar o bootstrap inicial completo antes da retomada de dados reais.
+1. Reconciliar documentação, Issues e a fila Dependabot com o baseline pós-#268/#271.
+2. Remover chamadas de provider dos read paths residuais de posições e snapshots de classe, preservando ausência explícita e DB-first.
+3. Auditar e eliminar ou confinar portas paralelas de Proventos/eventos corporativos, sem reintroduzir materialização por carteira.
+4. Sanear superfícies sensíveis/legadas do backend e frontend somente após confirmar consumidores.
+5. Executar o gate global completo e concluir a #247.
 
 ### Depois — performance e benchmarks
 
-7. Materializar histórico persistido do IBOV (#150).
-8. Implementar TWR dedicado de Tesouro Direto e Renda Fixa (#149).
+6. Materializar histórico persistido do IBOV (#150).
+7. Implementar TWR dedicado de Tesouro Direto e Renda Fixa (#149).
 
 ### Bloqueado até certificação estrutural e bootstrap
 
-9. Executar as duas rodadas reais controladas de Proventos (#226), somente na janela autorizada.
-10. Fechar o gate agregado de seeds/bootstrap (#216).
-11. Retomar rebuild, CSV, posições, snapshots e reconciliação (#158).
-12. Somente então liberar criação/importação de carteiras reais.
+8. Executar as duas rodadas reais controladas de Proventos (#226), somente mediante autorização operacional específica.
+9. Fechar o gate agregado de seeds/bootstrap (#216).
+10. Retomar rebuild, CSV, posições, snapshots e reconciliação (#158).
+11. Somente então decidir `ready_for_real_data=true`.
 
 ### Próxima grande fase funcional
 
-13. Redesenhar Metas + Análise de Carteira como um único macroprojeto (#246 + #57).
+12. Redesenhar Metas + Análise de Carteira como um único macroprojeto (#246 + #57).
 
 ## Estado operacional
 
@@ -135,11 +136,12 @@ Princípios: DB-first, fonte oficial primeiro, bootstrap idempotente, universo o
 - Registros CRIPTO legados fora desse universo são preservados para auditoria e não bloqueiam o novo readiness por princípio.
 - `system-bootstrap.v4` é a porta única de bootstrap e já registra FX, Proventos e eventos corporativos sob seus contratos canônicos.
 - Proventos permanecem bloqueados para execução real até autorização da #226.
-- Eventos corporativos estão estruturalmente integrados, mas permanecem opt-in e ainda pendem de validação local integrada/certificação final.
+- Eventos corporativos estão estruturalmente integrados e certificados no bootstrap; a #129 permanece apenas para auditoria residual coordenada pela #247.
+- `test_ready=true` foi certificado pela #268 no SHA `a8444b545a10aa7d48dd70f08a07e3fa386605d6`; dados fictícios/descartáveis estão liberados para validação controlada.
 - Depois do bootstrap certificado, chamadas externas recorrentes ficam limitadas a preço intraday e fechamento diário.
 - CRUD de transações não dispara ingestão externa automática.
 - Rebuilds permanecem operações explícitas; não pertencem a requests comuns.
-- Importação CSV real, criação de carteiras reais e snapshots de produção continuam suspensos pela #227 até o bootstrap/gates serem certificados.
+- Importação CSV real, criação de carteiras reais e snapshots de produção continuam suspensos pela #227 até #226/#216/#158 e decisão formal final.
 - O diff remanescente do `alembic check` está limitado a `goals` e é exceção deliberada rastreada pela #246.
 
 ## PRs de dependências
