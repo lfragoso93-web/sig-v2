@@ -70,12 +70,13 @@ explícita.
 
 As CLIs e o serviço batch do pipeline de mercado não aceitam mais a opção
 `materialize`; eles coletam somente eventos globais. A CLI dedicada de
-Proventos e o seed histórico também persistem somente eventos globais, sem
-materializar direitos por carteira.
+Proventos foi removida por duplicar portas sem os gates do bootstrap.
 
-O `full_market_rebuild` preserva a etapa de sincronização global, mas seu
-resumo operacional contabiliza somente ativos varridos, sincronizados e falhos.
-Ele não importa, chama ou anuncia materialização de direitos por carteira.
+O `full_market_rebuild` não sincroniza nem contabiliza Proventos. A etapa
+paralela foi removida porque violava o contrato operacional da #226: não tinha
+advisory lock dedicado, transação única, rollback integral nem opt-in explícito.
+O domínio deve entrar exclusivamente pelo seed certificado do
+`system-bootstrap.v4`.
 
 ### Leitura, mutação e elegibilidade
 

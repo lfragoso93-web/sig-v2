@@ -79,7 +79,7 @@ possuir o ativo hoje não cria direito retroativo.
 | Batch e CLIs de mercado | Coletam eventos globais sem opção de materialização | Canônico | Interface contraída e protegida por regressão |
 | `run_proventos_sync.py` | Coleta manual global, inclusive por ticker | Removido | CLI órfã duplicava o bootstrap certificado e permitia chamar portas legadas sem seus gates; regressão estrutural impede sua reintrodução |
 | `dividend_history_seed_service.py` | Complemento histórico global via Yahoo | Canônico | Materialização retirada; persiste exclusivamente `asset_dividends` |
-| `full_market_rebuild_service.py` | Orquestra a sincronização global de Proventos | Canônico | Resume ativos varridos, sincronizados e falhos; não importa, chama ou contabiliza materialização |
+| `full_market_rebuild_service.py` | Rebuild amplo de mercado e snapshots | Confinado | A etapa paralela de Proventos e suas métricas foram removidas; o seed certificado é a única entrada operacional desse domínio |
 | `dividend_entitlement_service.py` | Helpers legados de quantidade e valor líquido | Removido | O módulo ficou sem callers após a retirada dos materializadores; regressão estrutural impede sua reintrodução |
 | `portfolio_service.py` | Totais e agrupamentos de Proventos no resumo/posições legados | Canônico | Assinaturas preservadas; agregações read-only usam direitos elegíveis, pagos, líquidos e em BRL |
 | Exclusão de carteira | `portfolio_delete_service.delete_portfolio_safely` | Ativo | A implementação órfã em `portfolio_service.py` foi removida; a porta ativa ainda exclui dependências legadas de forma explícita |

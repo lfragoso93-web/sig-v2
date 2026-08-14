@@ -188,12 +188,6 @@ async def _sync_benchmarks() -> dict[str, int]:
         return await import_missing_benchmark_history(db)
 
 
-async def _sync_proventos() -> Any:
-    from app.services.proventos_daily_sync_service import SYNC_CONCURRENCY, run_daily_proventos_sync
-    async with AsyncSessionLocal() as db:
-        return await run_daily_proventos_sync(db, concurrency=SYNC_CONCURRENCY)
-
-
 async def _rebuild_all_twr_snapshots() -> dict[str, int]:
     from app.services.portfolio_snapshot_twr_service import backfill_snapshots_with_returns
 
@@ -251,7 +245,6 @@ def _step_payload(summary: FullMarketRebuildResult, name: str) -> dict[str, Any]
 def _log_operational_summary(summary: FullMarketRebuildResult) -> None:
     prices = _step_payload(summary, "catalog_and_asset_prices")
     treasury = _step_payload(summary, "treasury")
-    proventos = _step_payload(summary, "proventos")
     snapshots = _step_payload(summary, "twr_snapshots")
     coverage = _step_payload(summary, "final_coverage_audit")
     maintenance = _step_payload(summary, "maintenance")
@@ -264,10 +257,6 @@ def _log_operational_summary(summary: FullMarketRebuildResult) -> None:
                 prices.get("audited", 0), prices.get("requested", 0), prices.get("inserted", 0))
     logger.info("treasury_official=%s treasury_history_imported=%s treasury_latest=%s",
                 history.get("official_symbols", 0), history.get("imported", 0), treasury.get("latest_prices", 0))
-    logger.info("proventos_scanned=%s proventos_synced=%s proventos_failed=%s",
-                proventos.get("assets_scanned", proventos.get("scanned", 0)),
-                proventos.get("assets_synced", proventos.get("synced", 0)),
-                proventos.get("assets_failed", proventos.get("failed", 0)))
     logger.info("snapshots=%s portfolios=%s coverage_needs_sync=%s",
                 snapshots.get("snapshots", 0), snapshots.get("processed", 0), coverage.get("needs_sync", 0))
     logger.info("coverage_status=%s", status_counts)
@@ -288,7 +277,6 @@ async def run_full_market_rebuild() -> FullMarketRebuildResult:
     await _run_step(summary, "catalog_and_asset_prices", _sync_global_asset_prices)
     await _run_step(summary, "treasury", _sync_treasury)
     await _run_step(summary, "benchmarks", _sync_benchmarks)
-    await _run_step(summary, "proventos", _sync_proventos)
     await _run_step(summary, "twr_snapshots", _rebuild_all_twr_snapshots)
     await _run_step(summary, "maintenance", _run_maintenance)
     await _run_step(summary, "final_coverage_audit", _final_coverage_audit)

@@ -97,6 +97,9 @@ def test_full_market_rebuild_has_no_dividend_materialization_contract() -> None:
     assert "proventos_materialized" not in source
     assert "materialize_asset_dividends" not in source
     assert "reconcile_portfolio_dividend_rights" not in source
+    assert "proventos_daily_sync_service" not in source
+    assert "run_daily_proventos_sync" not in source
+    assert '"proventos"' not in source
     assert not any(
         isinstance(node, ast.Constant)
         and node.value == "materialized"

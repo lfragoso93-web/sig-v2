@@ -99,6 +99,16 @@ Primeiro recorte concluído:
 - os três serviços restantes continuam em auditoria e não devem ser removidos
   antes da separação entre adapters canônicos e orquestrações legadas.
 
+Segundo recorte concluído:
+
+- removida do `full_market_rebuild_service.py` a etapa paralela de Proventos e
+  suas métricas operacionais;
+- o rebuild não importa nem chama `proventos_daily_sync_service.py`;
+- o contrato da #226 e o `system-bootstrap.v4` permanecem como única entrada
+  operacional certificável para o domínio;
+- `proventos_daily_sync_service.py` ficou sem consumidor de produção e deve ser
+  avaliado isoladamente no próximo recorte.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - restringir/remover o router de debug conforme ambiente e autenticação;

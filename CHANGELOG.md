@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — Proventos do full market rebuild (14/08/2026)
+
+- Removida a etapa paralela de Proventos de `full_market_rebuild_service.py`, junto com suas métricas do resumo operacional.
+- O caminho antigo chamava o sincronizador diário sem advisory lock dedicado, transação única, rollback integral ou opt-in explícito, contrariando o contrato da #226.
+- O `system-bootstrap.v4`, por meio do seed certificado e gated, permanece como única entrada operacional certificável para o domínio.
+- Adicionado gate estrutural garantindo que o full rebuild não volte a importar, chamar ou registrar a etapa de Proventos.
+
 ### Removido — CLI legada de sincronização de Proventos (14/08/2026)
 
 - Removido `run_proventos_sync.py`, sem consumidores, entry point ou automação no projeto.
