@@ -1,6 +1,6 @@
 import importlib
 import logging
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -8,6 +8,7 @@ from app.core.log_safety import sanitize_log_value
 from app.integrations import yfinance_client
 from app.services import (
     asset_seed_service,
+    audit_log_service,
     dividend_backfill_service,
     portfolio_service,
 )
@@ -170,3 +171,27 @@ async def test_csv_parser_escapes_error_lines(
     assert "\r" not in message
     assert "\n" not in message
     assert "csv\\r\\nforged-error" in message
+
+
+@pytest.mark.asyncio
+async def test_audit_log_escapes_database_error_lines(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    db = MagicMock()
+    db.flush = AsyncMock(side_effect=RuntimeError("database\r\nforged-error"))
+
+    with (
+        caplog.at_level(logging.ERROR, logger=audit_log_service.__name__),
+        pytest.raises(RuntimeError, match="forged-error"),
+    ):
+        await audit_log_service.AuditLogService.log_action(
+            db=db,
+            user_id=1,
+            action="CREATE",
+            resource_type="Portfolio",
+        )
+
+    message = caplog.records[-1].getMessage()
+    assert "\r" not in message
+    assert "\n" not in message
+    assert "database\\r\\nforged-error" in message

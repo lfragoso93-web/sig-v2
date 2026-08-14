@@ -7,6 +7,7 @@ from typing import Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, desc
 from sqlalchemy.orm import joinedload
+from app.core.log_safety import sanitize_log_value
 from app.models.audit_log import AuditLog
 from app.schemas.audit_log import (
     AuditStatsResponse, UserAuditStatsResponse, AuditLogCleanupResponse
@@ -57,7 +58,10 @@ class AuditLogService:
         try:
             await db.flush()
         except Exception as e:
-            logger.error(f"Erro ao criar audit log: {str(e)}")
+            logger.error(
+                "Erro ao criar audit log: %s",
+                sanitize_log_value(e),
+            )
             raise
         return audit_log
 
