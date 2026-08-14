@@ -1,3 +1,4 @@
+import importlib
 import logging
 from unittest.mock import AsyncMock, patch
 
@@ -10,6 +11,8 @@ from app.services import (
     dividend_backfill_service,
     portfolio_service,
 )
+
+csv_import_service = importlib.import_module("app.services.csv_import_service")
 
 
 @pytest.mark.parametrize(
@@ -141,3 +144,29 @@ async def test_portfolio_price_query_escapes_error_lines(
     assert "\r" not in message
     assert "\n" not in message
     assert "database\\r\\nforged-error" in message
+
+
+@pytest.mark.asyncio
+async def test_csv_parser_escapes_error_lines(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    with (
+        patch.object(
+            csv_import_service.csv,
+            "DictReader",
+            side_effect=RuntimeError("csv\r\nforged-error"),
+        ),
+        caplog.at_level(logging.ERROR, logger=csv_import_service.__name__),
+    ):
+        rows, errors = await csv_import_service.parse_csv_content(
+            "ticker,asset_type",
+            1,
+            AsyncMock(),
+        )
+
+    assert rows == []
+    assert errors == ["Error parsing CSV: csv\r\nforged-error"]
+    message = caplog.records[-1].getMessage()
+    assert "\r" not in message
+    assert "\n" not in message
+    assert "csv\\r\\nforged-error" in message
