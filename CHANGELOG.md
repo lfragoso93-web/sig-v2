@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — contrato completo de ambiente Docker (14/08/2026)
+
+- Reconstruído `.env.example` a partir das configurações efetivamente consumidas pela aplicação, Docker, frontend e rotinas operacionais.
+- Documentados ambiente, portas, banco, Redis, autenticação, CORS, rate limits, SuperAdmin, providers, bootstrap v4 e operações de pré-produção, sempre com gates perigosos desabilitados por padrão.
+- `docker-compose.yml` passou a encaminhar `VITE_API_URL` como argumento de build do frontend; vazio preserva o proxy Nginx canônico.
+- Adicionado teste de contrato para impedir que novos campos de `Settings` ou variáveis operacionais essenciais deixem de aparecer no exemplo.
+
 ### Alterado — pipeline de mercado sem eventos paralelos (14/08/2026)
 
 - Removidos `sync_events`, `events_synced` e o import de `dividend_backfill_service` do pipeline de mercado.

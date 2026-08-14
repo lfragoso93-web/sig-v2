@@ -135,6 +135,14 @@ Quinto recorte concluído:
   `system-bootstrap.v4`;
 - regressão estrutural protege as cinco superfícies contra reintrodução.
 
+Configuração operacional sincronizada:
+
+- `.env.example` cobre todos os campos de `Settings`, Docker, frontend,
+  bootstrap e operações controladas de pré-produção;
+- gates de bootstrap e router de debug permanecem desabilitados por padrão;
+- Compose encaminha `VITE_API_URL` ao build do frontend;
+- teste estrutural impede nova deriva entre código e exemplo de ambiente.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - restringir/remover o router de debug conforme ambiente e autenticação;
