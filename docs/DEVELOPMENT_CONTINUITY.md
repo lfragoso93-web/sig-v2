@@ -72,10 +72,16 @@ A #269/#271 acrescentou hardening de SSRF, path injection, dependências, logs e
 
 ### 247-C — snapshots de classe / FX DB-first
 
-- migrar `portfolio_class_snapshot_service` de `fx_service` para leitor persistido;
-- remover fallback de rede e USD-BRL `1.0`;
-- reconciliar valores com tolerância financeira de R$ 0,01;
-- não alterar TWR/valuation de Tesouro fora da #149.
+- concluído: `portfolio_class_snapshot_service` usa `fx_rate_reader` DB-only;
+- cobertura USD-BRL é pré-carregada antes de qualquer exclusão/rebuild;
+- ausência persistida falha explicitamente, sem BCB/AwesomeAPI/taxa fixa;
+- valores permanecem em `Decimal` e quantizados em R$ 0,01;
+- TWR/valuation de Tesouro e Renda Fixa não foram alterados.
+
+Commits publicados:
+
+- `6a279206c3975407a7aa7c187e8c9e762a761392` — gate DB-first;
+- `7fe02fee738539d8ec9555b7b727b388a67df215` — implementação e testes comportamentais.
 
 ### 247-D — Proventos e eventos
 

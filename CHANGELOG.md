@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — FX DB-first nos snapshots por classe (14/08/2026)
+
+- `portfolio_class_snapshot_service` deixou de importar `fx_service` e passou a consumir exclusivamente `fx_rates` pelo leitor persistido.
+- A cobertura USD-BRL necessária é pré-carregada antes da exclusão/reconstrução dos snapshots; ausência aborta explicitamente o bloco sem provider ou taxa fixa.
+- Valores cambiais permanecem em `Decimal` e os snapshots monetários continuam quantizados em R$ 0,01.
+- Tesouro Direto e Renda Fixa continuam indisponíveis neste TWR por classe e não tiveram valuation alterado.
+
 ### Removido — serviço órfão de posições com provider (14/08/2026)
 
 - Removido `position_service.py`, sem consumidores de produção e duplicado em relação a `portfolio_service`/`canonical_positions_service`.
