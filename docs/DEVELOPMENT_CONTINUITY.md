@@ -64,10 +64,11 @@ A #269/#271 acrescentou hardening de SSRF, path injection, dependências, logs e
 
 ### 247-B — posições DB-first
 
-- confirmar consumidores de `position_service`;
-- remover `quotes_service.get_current_price` do read path ou excluir o legado se estiver morto;
-- preço ausente deve permanecer explícito, sem fallback por preço médio;
-- testar endpoint, ausência, isolamento de provider e regressão.
+- concluído: `position_service.py` não possuía consumidores de produção;
+- removidos o serviço órfão e seu teste exclusivo;
+- eliminado o caminho `quotes_service.get_current_price` e o fallback silencioso por preço médio;
+- gate estrutural protege a ausência do módulo e de imports futuros;
+- endpoints públicos continuam em `portfolio_service`/`canonical_positions_service`.
 
 ### 247-C — snapshots de classe / FX DB-first
 

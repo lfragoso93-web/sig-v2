@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — serviço órfão de posições com provider (14/08/2026)
+
+- Removido `position_service.py`, sem consumidores de produção e duplicado em relação a `portfolio_service`/`canonical_positions_service`.
+- Eliminado o único caminho desse serviço que chamava `quotes_service.get_current_price` e convertia ausência de cotação em preço médio silencioso.
+- Adicionado gate estrutural para impedir a reintrodução do módulo ou de imports de produção.
+- Endpoints públicos, contratos canônicos e comportamento de Tesouro/Renda Fixa não foram alterados.
+
 ### Alterado — baseline pós-segurança e retomada da sanitização (14/08/2026)
 
 - PR #271 mergeada e Issue #269 concluída no baseline `4ff76c4fe9f1738db9b392b3568fcb35f81185e7`, alinhando `main` e `stable-15jun` após as correções de SSRF, path injection, dependências vulneráveis, log injection e hardening da imagem.
