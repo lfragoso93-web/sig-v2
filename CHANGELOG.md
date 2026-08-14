@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — CLI legada de sincronização de Proventos (14/08/2026)
+
+- Removido `run_proventos_sync.py`, sem consumidores, entry point ou automação no projeto.
+- A CLI permitia chamar diretamente `run_backfill` e `run_daily_proventos_sync`, duplicando o bootstrap certificado e contornando seus gates explícitos.
+- Adicionado gate estrutural para impedir a reintrodução dessa porta manual; os serviços compartilhados permanecem preservados enquanto seus consumidores e adapters canônicos são auditados.
+
 ### Alterado — FX DB-first nos snapshots por classe (14/08/2026)
 
 - `portfolio_class_snapshot_service` deixou de importar `fx_service` e passou a consumir exclusivamente `fx_rates` pelo leitor persistido.

@@ -77,7 +77,7 @@ possuir o ativo hoje não cria direito retroativo.
 | `asset_market_pipeline_service.py` | Coleta eventos globais por ativo | Canônico | Materialização, argumento e resultado legados retirados |
 | `asset_seed_service.py` e `asset_onboarding_service.py` | Chamam o pipeline sem solicitar materialização | Canônico | Argumento e métricas legadas removidos dos callers de aplicação |
 | Batch e CLIs de mercado | Coletam eventos globais sem opção de materialização | Canônico | Interface contraída e protegida por regressão |
-| `run_proventos_sync.py` | Coleta manual global, inclusive por ticker | Canônico | Materialização final removida; não grava direitos por carteira |
+| `run_proventos_sync.py` | Coleta manual global, inclusive por ticker | Removido | CLI órfã duplicava o bootstrap certificado e permitia chamar portas legadas sem seus gates; regressão estrutural impede sua reintrodução |
 | `dividend_history_seed_service.py` | Complemento histórico global via Yahoo | Canônico | Materialização retirada; persiste exclusivamente `asset_dividends` |
 | `full_market_rebuild_service.py` | Orquestra a sincronização global de Proventos | Canônico | Resume ativos varridos, sincronizados e falhos; não importa, chama ou contabiliza materialização |
 | `dividend_entitlement_service.py` | Helpers legados de quantidade e valor líquido | Removido | O módulo ficou sem callers após a retirada dos materializadores; regressão estrutural impede sua reintrodução |

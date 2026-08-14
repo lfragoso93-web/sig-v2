@@ -90,6 +90,15 @@ Commits publicados:
 - usar a tag arquivada de corporate actions apenas como evidência para decisões de backlog;
 - testar locks, transação, idempotência e ausência de consumers/imports legados.
 
+Primeiro recorte concluído:
+
+- `run_proventos_sync.py` não possuía consumidor, entry point ou automação;
+- a CLI foi removida porque expunha `run_backfill` e `run_daily_proventos_sync`
+  fora dos gates do `system-bootstrap.v4`;
+- uma regressão estrutural impede a reintrodução dessa porta manual;
+- os três serviços restantes continuam em auditoria e não devem ser removidos
+  antes da separação entre adapters canônicos e orquestrações legadas.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - restringir/remover o router de debug conforme ambiente e autenticação;
