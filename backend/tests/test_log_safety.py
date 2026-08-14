@@ -1,10 +1,11 @@
 import logging
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from app.core.log_safety import sanitize_log_value
 from app.integrations import yfinance_client
+from app.services import asset_seed_service
 
 
 @pytest.mark.parametrize(
@@ -57,4 +58,33 @@ def test_yfinance_errors_escape_ticker_and_provider_lines(
     assert "\r" not in message
     assert "\n" not in message
     assert "PETR4\\r\\nforged-entry" in message
+    assert "provider\\r\\nforged-error" in message
+
+
+@pytest.mark.asyncio
+async def test_asset_seed_escapes_provider_error_lines(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    async def fetch_items(_subtype: str) -> list[dict[str, str]]:
+        return [{"stock": "PETR4", "name": "Petrobras"}]
+
+    async def fail_upsert(*_args, **_kwargs) -> str:
+        raise RuntimeError("provider\r\nforged-error")
+
+    db = AsyncMock()
+    with (
+        patch.object(asset_seed_service, "_SEED_TYPES", [("stock", asset_seed_service.AssetType.ACAO)]),
+        patch.object(asset_seed_service, "fetch_all_tickers_v2", side_effect=fetch_items),
+        patch.object(asset_seed_service, "_upsert_asset", side_effect=fail_upsert),
+        caplog.at_level(logging.ERROR, logger=asset_seed_service.__name__),
+    ):
+        await asset_seed_service.run_asset_seed(
+            db,
+            run_backfill=False,
+            include_crypto=False,
+        )
+
+    message = caplog.records[-1].getMessage()
+    assert "\r" not in message
+    assert "\n" not in message
     assert "provider\\r\\nforged-error" in message
