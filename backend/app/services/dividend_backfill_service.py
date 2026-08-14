@@ -8,6 +8,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.log_safety import sanitize_log_value
 from app.integrations.brapi import BRAPI_BASE, _auth_headers
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
@@ -190,13 +191,15 @@ async def _fetch_dividends_brapi(ticker: str, asset_type: str = "ACAO") -> list[
             )
             if resp.status_code in (401, 403):
                 logger.warning(
-                    "[Backfill] BRAPI sem autorizacao para %s (%s)", ticker, endpoint
+                    "[Backfill] BRAPI sem autorizacao para %s (%s)",
+                    sanitize_log_value(ticker),
+                    endpoint,
                 )
                 return []
             if resp.status_code in (400, 404):
                 logger.info(
                     "[Backfill] BRAPI sem dividendos/eventos para %s em %s (%s)",
-                    ticker,
+                    sanitize_log_value(ticker),
                     endpoint,
                     resp.status_code,
                 )
@@ -213,11 +216,15 @@ async def _fetch_dividends_brapi(ticker: str, asset_type: str = "ACAO") -> list[
             "[Backfill] BRAPI %s: %s evento(s) bruto(s) para %s",
             endpoint,
             len(rows),
-            ticker,
+            sanitize_log_value(ticker),
         )
         return rows
     except Exception as e:
-        logger.warning(f"[Backfill] BRAPI erro para {ticker}: {e}")
+        logger.warning(
+            "[Backfill] BRAPI erro para %s: %s",
+            sanitize_log_value(ticker),
+            sanitize_log_value(e),
+        )
         return []
 
 
@@ -247,7 +254,11 @@ async def _fetch_dividends_yf(ticker: str) -> list[dict]:
         with ThreadPoolExecutor(max_workers=1) as pool:
             return await loop.run_in_executor(pool, _sync)
     except Exception as e:
-        logger.warning(f"[Backfill] yfinance erro para {ticker}: {e}")
+        logger.warning(
+            "[Backfill] yfinance erro para %s: %s",
+            sanitize_log_value(ticker),
+            sanitize_log_value(e),
+        )
         return []
 
 
@@ -338,10 +349,17 @@ async def backfill_dividends(
 ) -> None:
     """Collect and persist global asset dividend events."""
     if asset_type.upper() in SKIP_TYPES:
-        logger.debug(f"[Backfill] {ticker} ({asset_type}) ignorado (SKIP_TYPES)")
+        logger.debug(
+            "[Backfill] %s (%s) ignorado (SKIP_TYPES)",
+            sanitize_log_value(ticker),
+            sanitize_log_value(asset_type),
+        )
         return
 
-    logger.info("[Backfill] iniciando sync global de eventos para %s", ticker)
+    logger.info(
+        "[Backfill] iniciando sync global de eventos para %s",
+        sanitize_log_value(ticker),
+    )
     ticker = ticker.upper()
     asset_type_norm = asset_type.upper()
 
@@ -352,7 +370,10 @@ async def backfill_dividends(
         else await _fetch_dividends_brapi(ticker, asset_type_norm)
     )
     if not raw_dividends:
-        logger.info(f"[Backfill] nenhum provento encontrado para {ticker}")
+        logger.info(
+            "[Backfill] nenhum provento encontrado para %s",
+            sanitize_log_value(ticker),
+        )
         return
 
     asset_result = await db.execute(
@@ -453,13 +474,19 @@ async def backfill_dividends(
 
         except Exception as e:
             logger.warning(
-                f"[Backfill] erro ao processar provento de {ticker} ex={parsed.ex_date}: {e}"
+                "[Backfill] erro ao processar provento de %s ex=%s: %s",
+                sanitize_log_value(ticker),
+                parsed.ex_date,
+                sanitize_log_value(e),
             )
             await db.rollback()
             raise
 
     await db.commit()
-    logger.info("[Backfill] concluido sync global de eventos para %s", ticker)
+    logger.info(
+        "[Backfill] concluido sync global de eventos para %s",
+        sanitize_log_value(ticker),
+    )
 
 
 async def run_backfill(db: AsyncSession, ticker: str, asset_type) -> None:

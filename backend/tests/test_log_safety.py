@@ -5,7 +5,7 @@ import pytest
 
 from app.core.log_safety import sanitize_log_value
 from app.integrations import yfinance_client
-from app.services import asset_seed_service
+from app.services import asset_seed_service, dividend_backfill_service
 
 
 @pytest.mark.parametrize(
@@ -87,4 +87,28 @@ async def test_asset_seed_escapes_provider_error_lines(
     message = caplog.records[-1].getMessage()
     assert "\r" not in message
     assert "\n" not in message
+    assert "provider\\r\\nforged-error" in message
+
+
+@pytest.mark.asyncio
+async def test_dividend_backfill_escapes_ticker_and_provider_error_lines(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    with (
+        patch.object(
+            dividend_backfill_service.httpx,
+            "AsyncClient",
+            side_effect=RuntimeError("provider\r\nforged-error"),
+        ),
+        caplog.at_level(logging.WARNING, logger=dividend_backfill_service.__name__),
+    ):
+        result = await dividend_backfill_service._fetch_dividends_brapi(
+            "PETR4\r\nforged-entry"
+        )
+
+    assert result == []
+    message = caplog.records[-1].getMessage()
+    assert "\r" not in message
+    assert "\n" not in message
+    assert "PETR4\\r\\nforged-entry" in message
     assert "provider\\r\\nforged-error" in message
