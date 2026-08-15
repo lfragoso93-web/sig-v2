@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getApiErrorMessage } from '../apiError'
+import { getApiErrorMessage, getApiValidationErrorMessage } from '../apiError'
 
 describe('getApiErrorMessage', () => {
   it('returns the API detail from an Axios error', () => {
@@ -20,5 +20,15 @@ describe('getApiErrorMessage', () => {
       isAxiosError: true,
       response: { data: { detail: [{ msg: 'inválido' }] } },
     }, 'Falha padrão')).toBe('Falha padrão')
+  })
+
+  it('joins structured FastAPI validation messages explicitly', () => {
+    const error = {
+      isAxiosError: true,
+      response: { data: { detail: [{ msg: 'ticker inválido' }, { msg: 'data ausente' }] } },
+    }
+    expect(getApiValidationErrorMessage(error, 'Falha padrão')).toBe(
+      'ticker inválido, data ausente',
+    )
   })
 })

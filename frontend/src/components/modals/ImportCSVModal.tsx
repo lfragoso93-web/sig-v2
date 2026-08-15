@@ -2,6 +2,7 @@ import { ChangeEvent, DragEvent, MouseEvent, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { X, Upload, Download, AlertCircle, CheckCircle, AlertTriangle } from 'lucide-react'
 import api from '@/services/api'
+import { getApiValidationErrorMessage } from '@/utils/apiError'
 
 interface Props {
   portfolioId: number
@@ -106,9 +107,8 @@ export default function ImportCSVModal({ portfolioId, onClose, onSuccess }: Prop
         headers: { 'Content-Type': 'multipart/form-data' },
       })
       setResult(response.data)
-    } catch (err: any) {
-      const detail = err?.response?.data?.detail
-      setError('Erro ao validar: ' + (detail || err?.message || 'Erro desconhecido'))
+    } catch (error: unknown) {
+      setError('Erro ao validar: ' + getApiValidationErrorMessage(error, 'Erro desconhecido'))
     } finally {
       setIsLoading(false)
     }
@@ -192,9 +192,8 @@ export default function ImportCSVModal({ portfolioId, onClose, onSuccess }: Prop
         invalidateImportedData()
         onSuccess?.()
       }
-    } catch (err: any) {
-      const detail = err?.response?.data?.detail
-      setError('Erro ao importar: ' + (detail || err?.message || 'Erro desconhecido'))
+    } catch (error: unknown) {
+      setError('Erro ao importar: ' + getApiValidationErrorMessage(error, 'Erro desconhecido'))
     } finally {
       setIsLoading(false)
     }

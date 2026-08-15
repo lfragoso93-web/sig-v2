@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — erros tipados na importação CSV (15/08/2026)
+
+- Validação e importação CSV deixaram de usar `catch any` e acesso inseguro ao payload Axios.
+- Listas de validação FastAPI são convertidas explicitamente pelas mensagens `msg`, sem `[object Object]`.
+- A fronteira compartilhada preserva detalhes textuais, erros nativos e fallback.
+
 ### Alterado — erros Axios tipados no fluxo de Tesouro (15/08/2026)
 
 - Criada fronteira reutilizável para extrair `detail` textual de erros Axios sem `any`.

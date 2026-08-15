@@ -377,6 +377,15 @@ Trigésimo recorte concluído:
 - payloads estruturados não são convertidos implicitamente em texto;
 - testes unitários cobrem os três caminhos da nova fronteira.
 
+Trigésimo primeiro recorte concluído:
+
+- validação e execução da importação CSV trocaram dois `catch any` pela
+  fronteira compartilhada com entrada `unknown`;
+- detalhes estruturados FastAPI são aceitos somente como listas de objetos com
+  `msg` textual e unidos de forma explícita;
+- removido o risco de exibir `[object Object]` ao usuário;
+- teste unitário cobre múltiplas mensagens de validação.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - router de debug removido no décimo terceiro recorte;
