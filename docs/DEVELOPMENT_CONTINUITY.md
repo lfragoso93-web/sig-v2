@@ -284,6 +284,15 @@ Vigésimo recorte concluído:
 - valores de cache nunca são enviados ao log;
 - gate AST impede `pass` nos handlers e protege sanitização/observabilidade.
 
+Vigésimo primeiro recorte concluído:
+
+- a confirmação remota do onboarding deixou de ser capturada silenciosamente;
+- falha no `PATCH /users/me/onboarding` mantém o usuário na tela e apresenta
+  erro recuperável, sem navegar com estado local incoerente;
+- se a carteira já foi criada, a nova tentativa repete somente a confirmação
+  idempotente e não cria uma carteira duplicada;
+- teste estrutural protege persistência, refresh, mensagem e retry seguro.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - router de debug removido no décimo terceiro recorte;

@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — conclusão recuperável do onboarding (15/08/2026)
+
+- O `PATCH /users/me/onboarding` deixou de ter sua falha ignorada; navegação ocorre somente após persistência e atualização do usuário.
+- Falhas mantêm o usuário na tela com mensagem recuperável.
+- Se a carteira já tiver sido criada, o retry repete apenas a confirmação idempotente e não cria carteira duplicada.
+- Adicionado teste estrutural do contrato de persistência, refresh e retry.
+
 ### Alterado — cache Redis fail-open com observabilidade (15/08/2026)
 
 - As cinco capturas amplas da fronteira Redis deixaram de falhar silenciosamente e agora registram operação, chave/padrão sanitizado, tipo e mensagem sanitizada da exceção.
