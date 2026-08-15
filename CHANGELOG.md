@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — cache Redis fail-open com observabilidade (15/08/2026)
+
+- As cinco capturas amplas da fronteira Redis deixaram de falhar silenciosamente e agora registram operação, chave/padrão sanitizado, tipo e mensagem sanitizada da exceção.
+- A política fail-open foi preservada: indisponibilidade do Redis não interrompe requests nem persistência.
+- Valores armazenados não são incluídos nos logs; gate AST protege ausência de `pass` e uso da sanitização.
+
 ### Alterado — invalidação de cache sem captura silenciosa duplicada (15/08/2026)
 
 - Removidos `except Exception: pass` redundantes das invalidações de cache em atualização e exclusão de carteira.

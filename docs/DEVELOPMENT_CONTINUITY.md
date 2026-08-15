@@ -275,6 +275,15 @@ Décimo nono recorte concluído:
 - comportamento de request, persistência e disponibilidade não mudou;
 - gate AST exige duas invalidações e ausência de captura silenciosa local.
 
+Vigésimo recorte concluído:
+
+- a fronteira Redis permanece opcional e fail-open, mas suas cinco capturas
+  amplas deixaram de ser silenciosas;
+- falhas de conexão, leitura, escrita e exclusão registram operação, chave ou
+  padrão sanitizado, tipo e mensagem sanitizada da exceção;
+- valores de cache nunca são enviados ao log;
+- gate AST impede `pass` nos handlers e protege sanitização/observabilidade.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - router de debug removido no décimo terceiro recorte;
