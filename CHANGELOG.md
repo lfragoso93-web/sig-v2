@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — erros explícitos nas consultas auxiliares de ativos (15/08/2026)
+
+- Buscas de ativos/Tesouro e preço histórico de título continuam fail-soft, mas passam a retornar erro explícito além de lista/preço vazio.
+- O modal de transação consolida e exibe a falha provider-neutral, distinguindo indisponibilidade de resultado vazio.
+- Falha no preço de Tesouro orienta preenchimento manual; teste estrutural cobre hooks e consumidor.
+
 ### Corrigido — erro visível na consulta de cotação (15/08/2026)
 
 - `useTickerQuote` deixou de transformar falhas de rede/servidor em ausência silenciosa de erro.

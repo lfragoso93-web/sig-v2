@@ -302,6 +302,15 @@ Vigésimo segundo recorte concluído:
 - mensagem deixou de expor o nome do provider, preservando a abstração pública;
 - removido `any` do catch e adicionado teste estrutural do contrato.
 
+Vigésimo terceiro recorte concluído:
+
+- buscas de ativos/Tesouro e preço histórico de título continuam fail-soft,
+  mas agora retornam erro explícito além de lista/preço vazio;
+- o modal de transação consolida e apresenta uma mensagem provider-neutral;
+- indisponibilidade deixa de ser confundida com “nenhum resultado” e preço de
+  Tesouro pode ser informado manualmente após falha;
+- teste estrutural cobre os três hooks e o consumidor.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - router de debug removido no décimo terceiro recorte;

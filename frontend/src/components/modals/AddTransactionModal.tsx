@@ -212,10 +212,11 @@ export default function AddTransactionModal({ onClose }: Props) {
       : 'Novo Lançamento'
 
   const { quote, loading: quoteLoading, error: quoteError } = useTickerQuote(ticker, !!tab.brapiEnabled && !isEditMode, date)
-  const { items: tdItems, loading: tdLoading }               = useTesouroSearch(ticker, isTesouro && !isEditMode)
-  const { items: rvItems, loading: rvLoading }               = useTickerSuggest(ticker, !!tab.brapiSuggestType && !isEditMode, tab.brapiSuggestType)
-  const { price: tdPrice, loading: tdPriceLoading }          = useTreasuryPrice(activeSlug, date, isTesouro && !!activeSlug && !priceEdited)
+  const { items: tdItems, loading: tdLoading, error: tdSearchError } = useTesouroSearch(ticker, isTesouro && !isEditMode)
+  const { items: rvItems, loading: rvLoading, error: rvSearchError } = useTickerSuggest(ticker, !!tab.brapiSuggestType && !isEditMode, tab.brapiSuggestType)
+  const { price: tdPrice, loading: tdPriceLoading, error: tdPriceError } = useTreasuryPrice(activeSlug, date, isTesouro && !!activeSlug && !priceEdited)
   const anyLoading = quoteLoading || tdLoading || rvLoading || tdPriceLoading
+  const lookupError = quoteError ?? tdSearchError ?? rvSearchError ?? tdPriceError
 
   useEffect(() => {
     if (dailyLiquidity) setMaturity('')
@@ -624,7 +625,7 @@ export default function AddTransactionModal({ onClose }: Props) {
                     )}
                   </div>
                   {assetName  && <p style={{ fontSize: '0.68rem', color: 'var(--color-text-muted)', margin: 0 }}>{assetName}</p>}
-                  {quoteError && !quoteLoading && <p style={{ fontSize: '0.68rem', color: 'var(--color-text-muted)', margin: 0 }}>{quoteError}</p>}
+                  {lookupError && !anyLoading && <p role="alert" style={{ fontSize: '0.68rem', color: 'var(--color-error)', margin: 0 }}>{lookupError}</p>}
                 </Field>
 
                 <Field label="Moeda" style={{ width: 86 }}>
