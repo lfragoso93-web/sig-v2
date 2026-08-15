@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — hierarquia de rotas de Patrimônio (14/08/2026)
+
+- `main.tsx` passou a importar diretamente a página consolidada canônica; removido o re-export intermediário em `pages/patrimonio/PatrimonioPage.tsx`.
+- Subrotas de renda variável, Tesouro e renda fixa deixaram de ser filhas de uma página sem `<Outlet>` e passaram a ser registradas diretamente.
+- `/carteira/patrimonio` preserva a visão consolidada e as três URLs específicas passam a renderizar seus componentes.
+- Gate estrutural cobre o import canônico, a ausência do alias e a hierarquia corrigida.
+
 ### Removido — ação frontend para rota inexistente de Análise (14/08/2026)
 
 - Removida do menu de posições a ação “Análise do Ativo”, que direcionava para `/carteira/analise` sem rota registrada.

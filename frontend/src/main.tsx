@@ -30,7 +30,7 @@ import MetasPage         from '@/pages/MetasPage'
 import WelcomePage       from '@/pages/WelcomePage'
 
 // Patrimônio
-import PatrimonioPage    from '@/pages/patrimonio/PatrimonioPage'
+import PatrimonioPage    from '@/pages/PatrimonioPage'
 import RendaVariavelPage from '@/pages/patrimonio/RendaVariavelPage'
 import TesouroDiretoPage from '@/pages/patrimonio/TesouroDiretoPage'
 import RendaFixaPage     from '@/pages/patrimonio/RendaFixaPage'
@@ -104,16 +104,10 @@ const router = createBrowserRouter([
           { path: 'metas',         element: <MetasPage /> },
           { path: 'irpf',          element: <IRPFPage /> },
           { path: 'configuracoes', element: <Configuracoes /> },
-          {
-            path: 'patrimonio',
-            element: <PatrimonioPage />,
-            children: [
-              { index: true,            element: <Navigate to="renda-variavel" replace /> },
-              { path: 'renda-variavel', element: <RendaVariavelPage /> },
-              { path: 'tesouro',        element: <TesouroDiretoPage /> },
-              { path: 'renda-fixa',     element: <RendaFixaPage /> },
-            ],
-          },
+          { path: 'patrimonio',                element: <PatrimonioPage /> },
+          { path: 'patrimonio/renda-variavel', element: <RendaVariavelPage /> },
+          { path: 'patrimonio/tesouro',        element: <TesouroDiretoPage /> },
+          { path: 'patrimonio/renda-fixa',     element: <RendaFixaPage /> },
         ],
       },
 

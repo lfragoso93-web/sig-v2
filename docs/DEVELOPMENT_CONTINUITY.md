@@ -246,6 +246,16 @@ Décimo sexto recorte concluído:
 - teste do menu exige somente as duas ações funcionais e a ausência do link;
 - nenhuma implementação de Análise foi iniciada; #57 permanece bloqueada.
 
+Décimo sétimo recorte concluído:
+
+- `main.tsx` passou a importar diretamente a visão consolidada canônica de
+  Patrimônio e o re-export intermediário foi removido;
+- as subrotas de renda variável, Tesouro e renda fixa foram registradas como
+  rotas diretas, pois a página consolidada não possui `<Outlet>`;
+- `/carteira/patrimonio` continua exibindo a visão consolidada, enquanto as
+  três URLs específicas agora podem renderizar seus componentes;
+- gate estrutural protege import, ausência do alias e registro das subrotas.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - router de debug removido no décimo terceiro recorte;
