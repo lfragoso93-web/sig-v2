@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — erro visível na consulta de cotação (15/08/2026)
+
+- `useTickerQuote` deixou de transformar falhas de rede/servidor em ausência silenciosa de erro.
+- 404 informa ativo ausente no catálogo; demais falhas apresentam mensagem recuperável já consumida pelo modal de transação.
+- Mensagem pública não expõe o provider e o catch deixou de usar `any`.
+
 ### Corrigido — conclusão recuperável do onboarding (15/08/2026)
 
 - O `PATCH /users/me/onboarding` deixou de ter sua falha ignorada; navegação ocorre somente após persistência e atualização do usuário.

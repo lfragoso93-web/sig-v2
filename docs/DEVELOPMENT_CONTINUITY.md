@@ -293,6 +293,15 @@ Vigésimo primeiro recorte concluído:
   idempotente e não cria uma carteira duplicada;
 - teste estrutural protege persistência, refresh, mensagem e retry seguro.
 
+Vigésimo segundo recorte concluído:
+
+- `useTickerQuote` deixou de converter falhas de rede/servidor em ausência
+  silenciosa de erro;
+- 404 apresenta ativo ausente no catálogo; demais falhas apresentam erro
+  recuperável de consulta, já consumido pelo modal de transação;
+- mensagem deixou de expor o nome do provider, preservando a abstração pública;
+- removido `any` do catch e adicionado teste estrutural do contrato.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - router de debug removido no décimo terceiro recorte;
