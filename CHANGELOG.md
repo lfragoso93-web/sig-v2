@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — conversão cambial fiscal DB-first (15/08/2026)
+
+- O cálculo legado de ganhos de capital deixou de consultar `USDBRL=X` por `price_history_service` com sessão nula.
+- Operações internacionais usam a última USD/BRL persistida até a data da transação, com a sessão do cálculo.
+- Ausência de cobertura deixa de assumir paridade `1.0` e falha explicitamente para não distorcer imposto.
+
 ### Corrigido — falha de preços persistidos não mascarada (15/08/2026)
 
 - A leitura em lote de preços da carteira deixou de converter erro de banco em mapa vazio.

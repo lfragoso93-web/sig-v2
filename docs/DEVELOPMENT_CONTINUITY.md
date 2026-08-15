@@ -348,6 +348,16 @@ Vigésimo sétimo recorte concluído:
 - cobertura parcial legítima continua sendo representada pelo reader DB-first;
 - teste protege a diferença entre falha de consulta e cotação ausente.
 
+Vigésimo oitavo recorte concluído:
+
+- o cálculo fiscal de operações internacionais deixou de chamar
+  `price_history_service` com sessão `None` e ticker artificial `USDBRL=X`;
+- a conversão usa a última USD/BRL persistida até a data da transação, com a
+  sessão canônica do cálculo;
+- ausência cambial deixou de assumir paridade `1.0`, evitando imposto calculado
+  sobre valor financeiro inventado;
+- testes cobrem reader DB-first, sessão/data e propagação de falta de cobertura.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - router de debug removido no décimo terceiro recorte;
