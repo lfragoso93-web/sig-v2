@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — páginas não roteadas de Ativos e Lançamentos (15/08/2026)
+
+- Removidas `AssetsPage` e `LancamentosPage`, sem rota, menu ou consumidor.
+- `LancamentosPage` duplicava a página canônica `Transacoes`, que permanece em `/carteira/transacoes`.
+- Uma futura gestão do catálogo de ativos deverá ser implementada por issue e rota explícitas; gate protege a ausência das páginas invisíveis.
+
 ### Removido — serviços HTTP frontend órfãos (15/08/2026)
 
 - Removidos seis módulos sem consumidores para transações, autenticação, câmbio, metas de classe, performance e metas.

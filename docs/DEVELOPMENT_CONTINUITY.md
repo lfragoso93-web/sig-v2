@@ -415,6 +415,15 @@ Trigésimo quarto recorte concluído:
   que já aplica esse prefixo;
 - gate estrutural protege as ausências e os seis consumidores válidos.
 
+Trigésimo quinto recorte concluído:
+
+- removidas `AssetsPage` e `LancamentosPage`, ambas sem rota, menu ou import;
+- `LancamentosPage` duplicava a página `Transacoes`, preservada como destino
+  canônico de `/carteira/transacoes`;
+- a página invisível de catálogo não foi promovida sem issue e contrato de
+  acesso administrativo;
+- gate estrutural protege as ausências e o roteamento canônico de transações.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - router de debug removido no décimo terceiro recorte;
