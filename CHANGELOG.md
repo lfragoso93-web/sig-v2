@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — composição explícita do full market rebuild (15/08/2026)
+
+- `full_market_rebuild_canonical_service.py` deixou de alterar temporariamente funções internas do orquestrador base por monkey-patching.
+- `full_market_rebuild_service.py` passou a receber explicitamente as operações de Tesouro, snapshots e leitura do resumo, preservando defaults e ordem das etapas.
+- A CLI canônica permanece em `python -m app.cli.full_market_rebuild`; nenhum rebuild, provider ou dado real foi executado durante a refatoração.
+- Adicionado gate estrutural contra a reintrodução de mutação global entre as duas camadas.
+
 ### Removido — exemplo de ambiente paralelo e desatualizado (15/08/2026)
 
 - Removido `backend/.env.example`, que duplicava o contrato canônico da raiz e ainda documentava `DEBUG_RATE_LIMIT`, `ADMIN_SECRET`, router de debug e fallback via yfinance já removidos.
@@ -178,7 +185,7 @@ Formato baseado em Keep a Changelog.
 
 ### Removido — router administrativo de debug (14/08/2026)
 
-- Removida a superfície `/api/v1/debug`, sem consumidores, que permitia listar usuários, redefinir senhas e criar `superadmin` mediante segredo estático paralelo.
+- Removida a superfície `/api/v1/debug`, sem consumidores, que permitia listar usuários, redefinição de senha e criação de `superadmin` mediante segredo estático paralelo.
 - Removidas a montagem condicional no `main.py` e as configurações órfãs `ADMIN_SECRET` e `DEBUG_RATE_LIMIT`.
 - Gestão legítima de usuários permanece em `/api/v1/admin`, protegida por JWT e `require_superadmin`.
 - Adicionado gate de segurança contra a reintrodução do arquivo, rota ou configuração.
