@@ -13,10 +13,10 @@ from pandas.errors import Pandas4Warning
 from yfinance.exceptions import YFTickerMissingError
 
 from app.integrations.brapi import BRAPI_BASE, _auth_headers
-from app.services.dividend_backfill_service import (
-    FII_TYPES,
-    _extract_brapi_events,
-    _iter_brapi_result_entries,
+from app.services.dividend_brapi_payload import (
+    FII_ASSET_TYPES,
+    extract_brapi_events,
+    iter_brapi_result_entries,
 )
 from app.services.dividend_history_seed_service import _yf_symbol
 from app.services.pre_prod_dividends_seed_collector import (
@@ -54,7 +54,7 @@ class StrictBrapiDividendProvider:
         ticker: str,
         asset_type: str,
     ) -> StrictDividendProviderResult:
-        is_fii = asset_type.upper() in FII_TYPES
+        is_fii = asset_type.upper() in FII_ASSET_TYPES
         endpoint = "fii/dividends" if is_fii else "stocks/dividends"
 
         try:
@@ -97,9 +97,9 @@ class StrictBrapiDividendProvider:
             )
 
         rows: list[dict[str, Any]] = []
-        for entry in _iter_brapi_result_entries(payload, ticker):
+        for entry in iter_brapi_result_entries(payload, ticker):
             rows.extend(
-                _extract_brapi_events(
+                extract_brapi_events(
                     entry,
                     default_category="fii" if is_fii else None,
                 )

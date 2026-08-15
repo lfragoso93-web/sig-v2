@@ -1,7 +1,6 @@
 import logging
 from datetime import date
 from decimal import Decimal
-from typing import Any
 
 import httpx
 from sqlalchemy import select
@@ -12,13 +11,17 @@ from app.integrations.brapi import BRAPI_BASE, _auth_headers
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
 from app.models.dividend_enums import DividendType
+from app.services.dividend_brapi_payload import (
+    FII_ASSET_TYPES,
+    extract_brapi_events,
+    iter_brapi_result_entries,
+)
 from app.services.dividend_event_normalizer import parse_dividend_event
 
 logger = logging.getLogger(__name__)
 
 SKIP_TYPES = {"CRIPTO", "TESOURO_DIRETO", "RENDA_FIXA"}
 INTL_TYPES = {"STOCK", "ETF_INTERNACIONAL"}
-FII_TYPES = {"FII"}
 
 
 def _dividend_type_from_value(value) -> DividendType:
@@ -32,90 +35,8 @@ def _dividend_type_from_value(value) -> DividendType:
         return DividendType.OUTROS
 
 
-def _as_list(value: Any) -> list[Any]:
-    if isinstance(value, list):
-        return value
-    if isinstance(value, dict):
-        return [value]
-    return []
-
-
-def _extract_brapi_events(
-    entry: dict, default_category: str | None = None
-) -> list[dict]:
-    data = entry.get("data") if isinstance(entry.get("data"), dict) else entry
-    events: list[dict] = []
-
-    for category, keys in (
-        (
-            default_category or "cash",
-            (
-                "cashDividends",
-                "dividends",
-                "provents",
-                "income",
-                "incomes",
-                "earnings",
-                "results",
-            ),
-        ),
-        ("stock", ("stockDividends", "stock_dividends")),
-        ("subscription", ("subscriptions",)),
-    ):
-        raw_items: list[Any] = []
-        for key in keys:
-            raw_items.extend(_as_list(data.get(key)))
-        for item in raw_items:
-            if isinstance(item, dict):
-                enriched = dict(item)
-                enriched.setdefault("eventCategory", category)
-                events.append(enriched)
-
-    # Alguns retornos de FII vêm como lista direta dentro de data/results, sem
-    # wrapper por ticker nem chave dividends/cashDividends.
-    if not events and any(
-        k in data for k in ("paymentDate", "lastDatePrior", "rate", "value", "amount")
-    ):
-        enriched = dict(data)
-        enriched.setdefault("eventCategory", default_category or "cash")
-        events.append(enriched)
-
-    return events
-
-
-def _iter_brapi_result_entries(data: dict, ticker: str) -> list[dict]:
-    ticker_upper = ticker.upper()
-    entries: list[dict] = []
-
-    for key in ("results", "stocks", "fiis", "dividends", "data"):
-        value = data.get(key)
-        if isinstance(value, list):
-            entries.extend([item for item in value if isinstance(item, dict)])
-        elif isinstance(value, dict):
-            entries.append(value)
-
-    if not entries and isinstance(data, dict):
-        entries.append(data)
-
-    filtered: list[dict] = []
-    for entry in entries:
-        symbol = (
-            entry.get("symbol")
-            or entry.get("ticker")
-            or entry.get("stock")
-            or entry.get("fii")
-            or entry.get("code")
-            or entry.get("asset")
-            or ""
-        ).upper()
-        if symbol and symbol != ticker_upper:
-            continue
-        filtered.append(entry)
-    return filtered
-
-
 async def _fetch_dividends_brapi(ticker: str, asset_type: str = "ACAO") -> list[dict]:
-    is_fii = asset_type.upper() in FII_TYPES
+    is_fii = asset_type.upper() in FII_ASSET_TYPES
     endpoint = "fii/dividends" if is_fii else "stocks/dividends"
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -143,9 +64,9 @@ async def _fetch_dividends_brapi(ticker: str, asset_type: str = "ACAO") -> list[
             data = resp.json()
 
         rows: list[dict] = []
-        for entry in _iter_brapi_result_entries(data, ticker):
+        for entry in iter_brapi_result_entries(data, ticker):
             rows.extend(
-                _extract_brapi_events(entry, default_category="fii" if is_fii else None)
+                extract_brapi_events(entry, default_category="fii" if is_fii else None)
             )
         logger.info(
             "[Backfill] BRAPI %s: %s evento(s) bruto(s) para %s",

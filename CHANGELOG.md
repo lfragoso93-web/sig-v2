@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — parser canônico do payload BRAPI de Proventos (14/08/2026)
+
+- Extraídas para `dividend_brapi_payload.py` a seleção de respostas por ticker e a interpretação das variações de payload de ações e FIIs.
+- O adapter BRAPI do seed certificado deixou de importar `dividend_backfill_service.py`; o serviço legado passou a consumir a mesma fronteira neutra.
+- Endpoints, filtro por ticker, formatos aceitos e categorias de eventos foram preservados.
+- Adicionado gate estrutural contra HTTP, SQLAlchemy e dependência reversa do backfill no novo parser.
+
 ### Alterado — normalizador canônico de eventos de Proventos (14/08/2026)
 
 - Extraídos `ParsedDividendEvent` e a normalização de payloads para `dividend_event_normalizer.py`.

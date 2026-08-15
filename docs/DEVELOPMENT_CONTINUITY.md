@@ -188,6 +188,15 @@ Décimo recorte concluído:
 - gate estrutural proíbe SQLAlchemy, HTTP e dependência reversa no normalizador;
 - regras de datas, tipos, valores e payload bruto foram preservadas.
 
+Décimo primeiro recorte concluído:
+
+- criado `dividend_brapi_payload.py` para interpretar respostas de ações e FIIs;
+- o adapter BRAPI certificado deixou de importar o backfill legado;
+- o serviço legado passou a consumir a mesma fronteira neutra, sem mudança de
+  endpoint, filtro por ticker ou categorização dos eventos;
+- gate estrutural proíbe HTTP, SQLAlchemy e dependência reversa no parser;
+- `backfill_dividends` ficou isolado para decisão de remoção no próximo recorte.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - restringir/remover o router de debug conforme ambiente e autenticação;
