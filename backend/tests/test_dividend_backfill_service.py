@@ -14,9 +14,9 @@ from app.models.portfolio import Portfolio
 from app.models.transaction import OperationType, Transaction
 from app.services.dividend_backfill_service import (
     SKIP_TYPES,
-    _parse_raw_dividend,
     backfill_dividends,
 )
+from app.services.dividend_event_normalizer import parse_dividend_event
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -52,7 +52,7 @@ class TestParseRawDividend:
             "label": "Dividendos",
             "eventCategory": "cash",
         }
-        result = _parse_raw_dividend(raw)
+        result = parse_dividend_event(raw)
         assert result is not None
         assert result.record_date == date(2024, 3, 1)
         assert result.ex_date == date(2024, 3, 4)  # próximo dia útil após sexta-feira
@@ -69,7 +69,7 @@ class TestParseRawDividend:
             "label": "Dividendos",
             "eventCategory": "cash",
         }
-        result = _parse_raw_dividend(raw)
+        result = parse_dividend_event(raw)
         assert result is not None
         assert result.record_date == date(2024, 3, 1)
         assert result.ex_date == date(2024, 3, 4)
@@ -82,7 +82,7 @@ class TestParseRawDividend:
             "label": "Juros Sobre Capital Próprio",
             "eventCategory": "cash",
         }
-        result = _parse_raw_dividend(raw)
+        result = parse_dividend_event(raw)
         assert result is not None
         assert result.dividend_type == "JCP"
 
@@ -95,7 +95,7 @@ class TestParseRawDividend:
             "completeFactor": 1.10,
             "eventCategory": "stock",
         }
-        result = _parse_raw_dividend(raw)
+        result = parse_dividend_event(raw)
         assert result is not None
         assert result.dividend_type == "BONIFICACAO"
         assert result.value_per_unit == 0.0
@@ -110,28 +110,28 @@ class TestParseRawDividend:
             "label": "Subscrição",
             "eventCategory": "subscription",
         }
-        result = _parse_raw_dividend(raw)
+        result = parse_dividend_event(raw)
         assert result is not None
         assert result.dividend_type == "SUBSCRICAO"
 
     def test_parse_formato_yfinance(self):
         raw = {"paymentDate": "2024-04-10", "rate": 0.75, "type": "DIVIDENDO"}
-        result = _parse_raw_dividend(raw)
+        result = parse_dividend_event(raw)
         assert result is not None
         assert result.record_date is None
         assert result.ex_date == date(2024, 4, 10)
         assert result.payment_date == date(2024, 4, 10)
 
     def test_retorna_none_sem_data(self):
-        assert _parse_raw_dividend({"rate": 1.0, "type": "DIVIDENDO"}) is None
+        assert parse_dividend_event({"rate": 1.0, "type": "DIVIDENDO"}) is None
 
     def test_retorna_none_com_valor_zero_para_cash(self):
         raw = {"paymentDate": "2024-01-01", "rate": 0.0, "type": "DIVIDENDO"}
-        assert _parse_raw_dividend(raw) is None
+        assert parse_dividend_event(raw) is None
 
     def test_retorna_none_com_data_invalida(self):
         raw = {"paymentDate": "data-invalida", "rate": 1.0, "type": "DIVIDENDO"}
-        assert _parse_raw_dividend(raw) is None
+        assert parse_dividend_event(raw) is None
 
 
 @pytest.mark.asyncio

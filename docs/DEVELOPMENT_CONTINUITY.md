@@ -178,6 +178,16 @@ Nono recorte concluído:
 - `backfill_dividends` permanece temporariamente para separação em recorte
   próprio, pois ainda possui cobertura legada direta.
 
+Décimo recorte concluído:
+
+- criado `dividend_event_normalizer.py` com `ParsedDividendEvent` e
+  `parse_dividend_event`;
+- collector, persistência e testes do seed certificado deixaram de importar
+  modelo/parser do backfill legado;
+- `dividend_backfill_service.py` passou a consumir o normalizador neutro;
+- gate estrutural proíbe SQLAlchemy, HTTP e dependência reversa no normalizador;
+- regras de datas, tipos, valores e payload bruto foram preservadas.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - restringir/remover o router de debug conforme ambiente e autenticação;

@@ -15,6 +15,12 @@ BACKFILL_SERVICE_PATH = (
     / "services"
     / "dividend_backfill_service.py"
 )
+NORMALIZER_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "app"
+    / "services"
+    / "dividend_event_normalizer.py"
+)
 
 
 def test_transaction_mutations_do_not_materialize_dividend_rights() -> None:
@@ -83,3 +89,19 @@ def test_legacy_materializer_is_not_available() -> None:
     assert "run_backfill" not in function_names
     assert "app.models.transaction" not in source
     assert "DividendStatus" not in source
+
+
+def test_dividend_event_normalizer_is_neutral() -> None:
+    source = NORMALIZER_PATH.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    names = {
+        node.name
+        for node in tree.body
+        if isinstance(node, (ast.ClassDef, ast.FunctionDef))
+    }
+
+    assert "ParsedDividendEvent" in names
+    assert "parse_dividend_event" in names
+    assert "sqlalchemy" not in source
+    assert "httpx" not in source
+    assert "dividend_backfill_service" not in source

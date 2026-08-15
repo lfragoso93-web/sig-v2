@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — normalizador canônico de eventos de Proventos (14/08/2026)
+
+- Extraídos `ParsedDividendEvent` e a normalização de payloads para `dividend_event_normalizer.py`.
+- Collector, persistência e testes do seed certificado deixaram de depender do modelo/parser definido no backfill legado.
+- O normalizador não importa SQLAlchemy, HTTP ou `dividend_backfill_service`; regras de datas, tipos, valores e payload bruto foram preservadas.
+- `dividend_backfill_service.py` passou a consumir a nova fronteira, preparando a separação posterior de fetchers e persistência legados.
+
 ### Removido — wrapper órfão de backfill de Proventos (14/08/2026)
 
 - Removido `run_backfill` de `dividend_backfill_service.py` após confirmação de ausência total de consumidores.
