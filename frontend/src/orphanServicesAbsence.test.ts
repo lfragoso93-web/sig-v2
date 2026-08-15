@@ -12,6 +12,7 @@ const removedServices = [
   'classTargetsService.ts',
   'performanceService.ts',
   'goalsService.ts',
+  'assetService.ts',
 ]
 
 describe('orphan HTTP services', () => {
@@ -24,7 +25,11 @@ describe('orphan HTTP services', () => {
     expect(readFileSync(sourcePath('src/hooks/useTransactions.ts'), 'utf8')).toContain('/transactions')
     expect(readFileSync(sourcePath('src/hooks/useClassTargets.ts'), 'utf8')).toContain('/class-targets/')
     expect(readFileSync(sourcePath('src/hooks/useGoals.ts'), 'utf8')).toContain('/goals')
-    expect(readFileSync(sourcePath('src/hooks/useFxRate.ts'), 'utf8')).toContain("'/fxrate'")
     expect(readFileSync(sourcePath('src/hooks/useEvolution.ts'), 'utf8')).toContain('/performance/')
+  })
+
+  it('keeps hooks orphaned with the asset catalog page absent', () => {
+    expect(existsSync(sourcePath('src/hooks/useAssets.ts'))).toBe(false)
+    expect(existsSync(sourcePath('src/hooks/useFxRate.ts'))).toBe(false)
   })
 })

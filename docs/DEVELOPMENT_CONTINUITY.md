@@ -457,6 +457,15 @@ Trigésimo nono recorte concluído:
   `AuthLayout`;
 - gate estrutural protege a ausência da duplicata e ambas as montagens ativas.
 
+Quadragésimo recorte concluído:
+
+- removidos `useAssets`, `useFxRate`/`useUsdBrl` e `assetService`, que ficaram
+  sem consumidores após a retirada das páginas/serviços paralelos;
+- o gate de serviços órfãos passou a proteger também essas ausências;
+- nova passagem do inventário de imports deixa apenas `test/setup.ts` sem
+  consumidor comum, corretamente configurado como entrada do Vitest;
+- não restam candidatos órfãos conhecidos no runtime frontend por esse gate.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - router de debug removido no décimo terceiro recorte;

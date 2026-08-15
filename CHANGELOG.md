@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — hooks residuais sem consumidores (15/08/2026)
+
+- Removidos `useAssets`, `useFxRate`/`useUsdBrl` e `assetService`, sem consumidores após a limpeza das páginas paralelas.
+- Leituras financeiras ativas continuam pelos readers/hooks específicos e DB-first.
+- O inventário de imports do frontend passou a apontar somente `test/setup.ts`, entrada configurada do Vitest, sem candidatos órfãos de runtime conhecidos.
+
 ### Removido — implementação duplicada do logo (15/08/2026)
 
 - Removido `SigLogo`, SVG sem consumidores que duplicava a marca ativa.
