@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — invalidação de cache sem captura silenciosa duplicada (15/08/2026)
+
+- Removidos `except Exception: pass` redundantes das invalidações de cache em atualização e exclusão de carteira.
+- Os serviços agora delegam diretamente à fronteira Redis fail-open de `cache_delete`, sem alterar disponibilidade ou transações.
+- Gate AST exige as duas chaves canônicas e impede nova captura silenciosa local.
+
 ### Preservado — redirects externos de Metas e IRPF (15/08/2026)
 
 - Auditados `/metas` e `/irpf`: ambos apenas redirecionam com `replace` para as rotas canônicas sob `/carteira`.

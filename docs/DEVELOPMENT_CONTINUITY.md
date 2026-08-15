@@ -266,6 +266,15 @@ Décimo oitavo recorte concluído:
 - remoção futura exige evidência de desuso de URLs externas; #246/#57 não foram
   iniciadas nem alteradas.
 
+Décimo nono recorte concluído:
+
+- removidos dois `except Exception: pass` redundantes das invalidações de cache
+  em atualização e exclusão de carteira;
+- ambas delegam diretamente a `cache_delete`, cuja fronteira Redis já é
+  deliberadamente fail-open;
+- comportamento de request, persistência e disponibilidade não mudou;
+- gate AST exige duas invalidações e ausência de captura silenciosa local.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - router de debug removido no décimo terceiro recorte;
