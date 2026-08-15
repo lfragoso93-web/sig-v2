@@ -358,6 +358,16 @@ Vigésimo oitavo recorte concluído:
   sobre valor financeiro inventado;
 - testes cobrem reader DB-first, sessão/data e propagação de falta de cobertura.
 
+Vigésimo nono recorte concluído:
+
+- as três agregações de proventos em `portfolio_service` deixaram de transformar
+  falha SQL ou dado inválido em `0.0`/mapa vazio;
+- zero permanece válido somente quando a consulta e a agregação canônicas
+  concluem sem direitos recebidos ou quando a entrada de tickers é vazia;
+- falhas do reader são propagadas para impedir patrimônio e relatórios
+  silenciosamente subavaliados;
+- testes cobrem as três funções e proíbem captura local.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - router de debug removido no décimo terceiro recorte;

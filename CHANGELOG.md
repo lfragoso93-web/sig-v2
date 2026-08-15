@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — falhas de proventos não convertidas em zero (15/08/2026)
+
+- As três agregações canônicas de proventos da carteira deixaram de converter erro SQL/dado inválido em `0.0` ou mapa vazio.
+- Falhas do reader agora são propagadas; zero permanece reservado a uma agregação válida sem direitos recebidos.
+- Testes cobrem as três fronteiras e impedem nova captura local.
+
 ### Corrigido — conversão cambial fiscal DB-first (15/08/2026)
 
 - O cálculo legado de ganhos de capital deixou de consultar `USDBRL=X` por `price_history_service` com sessão nula.

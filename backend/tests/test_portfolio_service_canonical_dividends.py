@@ -89,6 +89,27 @@ async def test_empty_ticker_requests_do_not_load_entitlements() -> None:
     loader.assert_not_awaited()
 
 
+@pytest.mark.asyncio
+async def test_dividend_aggregations_propagate_reader_failures() -> None:
+    failure = RuntimeError("canonical dividend reader unavailable")
+    with (
+        patch(
+            "app.services.portfolio_service.load_portfolio_dividend_entitlements",
+            new=AsyncMock(side_effect=failure),
+        ),
+        patch(
+            "app.services.portfolio_service.load_received_entitlements_by_ticker",
+            new=AsyncMock(side_effect=failure),
+        ),
+    ):
+        with pytest.raises(RuntimeError, match="reader unavailable"):
+            await sum_dividends(AsyncMock(), 7)
+        with pytest.raises(RuntimeError, match="reader unavailable"):
+            await sum_dividends_for_tickers(AsyncMock(), 7, ["PETR4"])
+        with pytest.raises(RuntimeError, match="reader unavailable"):
+            await sum_dividends_by_ticker(AsyncMock(), 7, ["PETR4"])
+
+
 def test_portfolio_aggregations_do_not_access_legacy_dividends() -> None:
     source = SERVICE_PATH.read_text(encoding="utf-8")
     tree = ast.parse(source)
@@ -127,3 +148,4 @@ def test_portfolio_aggregations_do_not_access_legacy_dividends() -> None:
         assert "Dividend" not in imported_names
         assert "Dividend" not in aggregation_source
         assert "rollback" not in called_attributes
+        assert not any(isinstance(node, ast.Try) for node in ast.walk(aggregation))

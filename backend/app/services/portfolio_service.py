@@ -5,7 +5,6 @@ from decimal import Decimal
 
 from fastapi import HTTPException
 from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cache import cache_delete, cache_get, cache_set
@@ -389,21 +388,14 @@ async def _fetch_previous_prices_batch(
 
 
 async def sum_dividends(db: AsyncSession, portfolio_id: int, cutoff: DateType | None = None) -> float:
-    try:
-        entitlements = await load_portfolio_dividend_entitlements(db, portfolio_id)
-        return float(
-            aggregate_received_entitlements(
-                entitlements,
-                cutoff=cutoff,
-                as_of=datetime.now(timezone.utc).date(),
-            )
+    entitlements = await load_portfolio_dividend_entitlements(db, portfolio_id)
+    return float(
+        aggregate_received_entitlements(
+            entitlements,
+            cutoff=cutoff,
+            as_of=datetime.now(timezone.utc).date(),
         )
-    except (SQLAlchemyError, ValueError) as e:
-        logger.warning(
-            "[portfolio_service] sum_dividends falhou: %s — retornando 0.0",
-            sanitize_log_value(e),
-        )
-        return 0.0
+    )
 
 
 async def sum_dividends_for_tickers(
@@ -413,20 +405,13 @@ async def sum_dividends_for_tickers(
 ) -> float:
     if not tickers:
         return 0.0
-    try:
-        totals = await load_received_entitlements_by_ticker(
-            db,
-            portfolio_id,
-            tickers,
-            as_of=datetime.now(timezone.utc).date(),
-        )
-        return float(sum(totals.values()))
-    except (SQLAlchemyError, ValueError) as e:
-        logger.warning(
-            "[portfolio_service] sum_dividends_for_tickers falhou: %s — retornando 0.0",
-            sanitize_log_value(e),
-        )
-        return 0.0
+    totals = await load_received_entitlements_by_ticker(
+        db,
+        portfolio_id,
+        tickers,
+        as_of=datetime.now(timezone.utc).date(),
+    )
+    return float(sum(totals.values()))
 
 
 async def sum_dividends_by_ticker(
@@ -436,19 +421,12 @@ async def sum_dividends_by_ticker(
 ) -> dict[str, float]:
     if not tickers:
         return {}
-    try:
-        return await load_received_entitlements_by_ticker(
-            db,
-            portfolio_id,
-            tickers,
-            as_of=datetime.now(timezone.utc).date(),
-        )
-    except (SQLAlchemyError, ValueError) as e:
-        logger.warning(
-            "[portfolio_service] sum_dividends_by_ticker falhou: %s — retornando vazio",
-            sanitize_log_value(e),
-        )
-        return {}
+    return await load_received_entitlements_by_ticker(
+        db,
+        portfolio_id,
+        tickers,
+        as_of=datetime.now(timezone.utc).date(),
+    )
 
 
 async def list_portfolios(db: AsyncSession, user_id: int) -> list[Portfolio]:
