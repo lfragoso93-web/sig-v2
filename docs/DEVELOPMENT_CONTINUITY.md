@@ -218,10 +218,19 @@ Décimo terceiro recorte concluído:
   JWT e `require_superadmin`;
 - gate estrutural impede a reintrodução do arquivo, rota ou configuração.
 
+Décimo quarto recorte concluído:
+
+- removido `frontend/src/App.tsx`, que continha apenas `export {}` e não possuía
+  imports, testes ou participação no build;
+- `frontend/src/main.tsx` permanece a única entrada React, responsável por
+  providers, router e montagem no DOM;
+- gate estrutural exige a ausência do arquivo legado e o contrato mínimo da
+  entrada canônica.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - router de debug removido no décimo terceiro recorte;
-- remover `frontend/src/App.tsx` somente após confirmar ausência de imports;
+- `frontend/src/App.tsx` removido no décimo quarto recorte;
 - revisar placeholder de Análise, aliases, redirects, módulos órfãos e catches amplos;
 - preservar #246 + #57 como macroprojeto bloqueado.
 

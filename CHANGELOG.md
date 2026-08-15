@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — entrada React vazia e duplicada (14/08/2026)
+
+- Removido `frontend/src/App.tsx`, arquivo sem consumidores que continha apenas `export {}`.
+- `frontend/src/main.tsx` permanece como entrada única para providers, roteamento e montagem React.
+- Adicionado gate estrutural contra a restauração do placeholder ou a perda do contrato mínimo da entrada canônica.
+
 ### Removido — router administrativo de debug (14/08/2026)
 
 - Removida a superfície `/api/v1/debug`, sem consumidores, que permitia listar usuários, redefinir senhas e criar `superadmin` mediante segredo estático paralelo.
