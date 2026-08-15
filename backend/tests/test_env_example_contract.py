@@ -7,6 +7,7 @@ from app.core.config import Settings
 ROOT = Path(__file__).resolve().parents[2]
 ENV_EXAMPLE = ROOT / ".env.example"
 COMPOSE = ROOT / "docker-compose.yml"
+BACKEND = ROOT / "backend"
 
 
 def _declared_variables() -> set[str]:
@@ -36,9 +37,6 @@ def test_env_example_covers_operational_and_docker_variables() -> None:
         "BACKEND_PORT",
         "APP_COMMIT_SHA",
         "VITE_API_URL",
-        "ADMIN_EMAIL",
-        "ADMIN_PASSWORD",
-        "ADMIN_NAME",
         "SGI_BOOTSTRAP_COMMIT_SHA",
         "SGI_BOOTSTRAP_ENABLE_DIVIDENDS",
         "SGI_BOOTSTRAP_ENABLE_CORPORATE_EVENTS",
@@ -49,6 +47,17 @@ def test_env_example_covers_operational_and_docker_variables() -> None:
     }
 
     assert required - declared == set()
+
+
+def test_legacy_admin_seed_contract_is_not_distributed() -> None:
+    declared = _declared_variables()
+
+    assert {"ADMIN_EMAIL", "ADMIN_PASSWORD", "ADMIN_NAME"}.isdisjoint(declared)
+    assert not (BACKEND / "seed_admin.py").exists()
+
+
+def test_python_backend_does_not_ship_empty_node_lockfile() -> None:
+    assert not (BACKEND / "package-lock.json").exists()
 
 
 def test_compose_forwards_frontend_api_url_to_build() -> None:
