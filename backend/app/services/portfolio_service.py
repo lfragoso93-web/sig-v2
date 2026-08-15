@@ -310,14 +310,7 @@ async def _fetch_prices_batch(db: AsyncSession, positions_raw: list[dict]) -> di
     ]
     if not tickers:
         return {}
-    try:
-        return await get_persisted_current_prices(db, tickers)
-    except Exception as e:
-        logger.error(
-            "[portfolio_service] erro ao buscar precos: %s",
-            sanitize_log_value(e),
-        )
-        return {}
+    return await get_persisted_current_prices(db, tickers)
 
 
 async def _fetch_logos_batch(db: AsyncSession, tickers: list[str]) -> dict[str, str | None]:

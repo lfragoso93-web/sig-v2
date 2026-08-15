@@ -97,28 +97,18 @@ async def test_asset_seed_escapes_provider_error_lines(
 
 
 @pytest.mark.asyncio
-async def test_portfolio_price_query_escapes_error_lines(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    with (
-        patch.object(
-            portfolio_service,
-            "get_persisted_current_prices",
-            new_callable=AsyncMock,
-            side_effect=RuntimeError("database\r\nforged-error"),
-        ),
-        caplog.at_level(logging.ERROR, logger=portfolio_service.__name__),
+async def test_portfolio_price_query_propagates_database_failure() -> None:
+    with patch.object(
+        portfolio_service,
+        "get_persisted_current_prices",
+        new_callable=AsyncMock,
+        side_effect=RuntimeError("database failure"),
     ):
-        result = await portfolio_service._fetch_prices_batch(
-            AsyncMock(),
-            [{"ticker": "PETR4", "asset_type": "ACAO"}],
-        )
-
-    assert result == {}
-    message = caplog.records[-1].getMessage()
-    assert "\r" not in message
-    assert "\n" not in message
-    assert "database\\r\\nforged-error" in message
+        with pytest.raises(RuntimeError, match="database failure"):
+            await portfolio_service._fetch_prices_batch(
+                AsyncMock(),
+                [{"ticker": "PETR4", "asset_type": "ACAO"}],
+            )
 
 
 @pytest.mark.asyncio

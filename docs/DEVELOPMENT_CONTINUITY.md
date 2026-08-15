@@ -340,6 +340,14 @@ Vigésimo sexto recorte concluído:
   renda fixa efetivamente consumida;
 - gate estrutural impede a restauração do serviço e de seus símbolos públicos.
 
+Vigésimo sétimo recorte concluído:
+
+- `_fetch_prices_batch` deixou de transformar falha do reader/banco em mapa
+  vazio, que era indistinguível de ausência real de preços;
+- erros de infraestrutura agora são propagados até a fronteira HTTP;
+- cobertura parcial legítima continua sendo representada pelo reader DB-first;
+- teste protege a diferença entre falha de consulta e cotação ausente.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - router de debug removido no décimo terceiro recorte;

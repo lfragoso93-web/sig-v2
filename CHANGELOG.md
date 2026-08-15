@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — falha de preços persistidos não mascarada (15/08/2026)
+
+- A leitura em lote de preços da carteira deixou de converter erro de banco em mapa vazio.
+- Falha de infraestrutura agora é propagada; somente ausência real de uma cotação permanece representada como preço indisponível.
+- Teste protege a distinção entre indisponibilidade do banco e cobertura parcial legítima.
+
 ### Removido — calculadora legada e órfã de renda fixa (15/08/2026)
 
 - Removido `rf_calc_service.py`, sem qualquer consumidor de runtime ou teste.
