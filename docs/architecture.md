@@ -1,6 +1,6 @@
 # Arquitetura — SGI v2
 
-> Última atualização: 08/08/2026
+> Última atualização: 15/08/2026
 
 ## Objetivo
 
@@ -271,9 +271,7 @@ O baseline promovido após a #269/#271 é `4ff76c4fe9f1738db9b392b3568fcb35f8118
 ## Pendências arquiteturais
 
 1. Concluir auditoria global de serviços, routers, endpoints, duplicações e legado remanescente (#247/#129).
-2. Remover providers dos read paths residuais de posições e snapshots de classe, com ausência explícita.
-3. Eliminar ou confinar portas paralelas de Proventos/eventos e superfícies sensíveis/legadas.
-4. Materializar histórico persistido do IBOV (#150).
-5. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
-6. Retomar execução real de Proventos, importação e rebuild apenas sob #226/#216/#158/#227.
-7. Iniciar #246 + #57 somente depois da estabilização e promoção da base.
+2. Materializar histórico persistido do IBOV (#150).
+3. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
+4. Retomar execução real de Proventos, importação e rebuild apenas sob #226/#216/#158/#227.
+5. Iniciar #246 + #57 somente depois da estabilização e promoção da base.
