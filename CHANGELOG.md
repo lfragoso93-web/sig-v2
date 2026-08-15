@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — modais paralelos de lançamento (15/08/2026)
+
+- Removidos `ModalNovaTransacao` e `ModalNovoProvento`, sem consumidores no frontend.
+- Removido o hook órfão de criação manual de proventos; leituras canônicas permanecem disponíveis.
+- O lançamento de transações continua no `AddTransactionModal`; proventos permanecem derivados dos eventos canônicos persistidos.
+
 ### Alterado — erros tipados na importação CSV (15/08/2026)
 
 - Validação e importação CSV deixaram de usar `catch any` e acesso inseguro ao payload Axios.

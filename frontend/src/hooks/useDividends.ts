@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import api from '@/services/api'
 
 export interface Dividend {
@@ -46,18 +46,5 @@ export function useDividendSummary(portfolioId: number | null) {
       api.get(`/dividends/${portfolioId}/summary`).then((r) => r.data),
     enabled: !!portfolioId,
     retry: false,
-  })
-}
-
-export function useCreateDividend(portfolioId?: number) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (data: Omit<Dividend, 'id' | 'created_at'>) =>
-      api.post<Dividend>('/dividends', data).then((r) => r.data),
-    onSuccess: (_d, v) => {
-      const pid = portfolioId ?? v.portfolio_id
-      qc.invalidateQueries({ queryKey: KEY(pid) })
-      qc.invalidateQueries({ queryKey: ['dividends-summary', pid] })
-    },
   })
 }

@@ -386,6 +386,16 @@ Trigésimo primeiro recorte concluído:
 - removido o risco de exibir `[object Object]` ao usuário;
 - teste unitário cobre múltiplas mensagens de validação.
 
+Trigésimo segundo recorte concluído:
+
+- removidos `ModalNovaTransacao` e `ModalNovoProvento`, componentes sem qualquer
+  import ou montagem no frontend;
+- removido também `useCreateDividend`, mutação manual consumida exclusivamente
+  pelo modal órfão e incompatível com a projeção canônica asset-first;
+- `AddTransactionModal` permanece como fluxo único de lançamentos e os hooks de
+  leitura de proventos foram preservados;
+- gate estrutural protege arquivos ausentes e módulo de proventos read-only.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - router de debug removido no décimo terceiro recorte;
