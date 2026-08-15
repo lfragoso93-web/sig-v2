@@ -10,6 +10,7 @@ import { useUpdateProfile, useChangePassword, useUpdateAvatar, useDeleteAccount 
 import AdminPanel from '@/components/admin/AdminPanel'
 import PasswordInput from '@/components/ui/PasswordInput'
 import DistribuicaoCarteira from '@/components/configuracoes/DistribuicaoCarteira'
+import { getApiErrorDetail } from '@/utils/apiError'
 
 function SectionCard({ children }: { children: React.ReactNode }) {
   return <section className="card settings-card">{children}</section>
@@ -76,7 +77,7 @@ function ProfileSection() {
   async function handleSave() {
     setFeedback(null)
     try { await updateProfile.mutateAsync({ name, email }); setFeedback({ msg: 'Dados atualizados com sucesso.', isError: false }) }
-    catch (e: any) { const detail = e?.response?.data?.detail; setFeedback({ msg: typeof detail === 'string' ? detail : 'Erro ao atualizar dados.', isError: true }) }
+    catch (error: unknown) { setFeedback({ msg: getApiErrorDetail(error) ?? 'Erro ao atualizar dados.', isError: true }) }
   }
 
   function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -127,7 +128,7 @@ function PasswordSection() {
     if (form.next !== form.confirm) { setFeedback({ msg: 'As senhas não coincidem.', isError: true }); return }
     if (form.next.length < 6) { setFeedback({ msg: 'A nova senha deve ter ao menos 6 caracteres.', isError: true }); return }
     try { await changePassword.mutateAsync({ current_password: form.current, new_password: form.next }); setFeedback({ msg: 'Senha alterada com sucesso.', isError: false }); setForm({ current: '', next: '', confirm: '' }); setTimeout(() => setOpen(false), 1500) }
-    catch (e: any) { const detail = e?.response?.data?.detail; setFeedback({ msg: typeof detail === 'string' ? detail : 'Senha atual incorreta.', isError: true }) }
+    catch (error: unknown) { setFeedback({ msg: getApiErrorDetail(error) ?? 'Senha atual incorreta.', isError: true }) }
   }
 
   return (

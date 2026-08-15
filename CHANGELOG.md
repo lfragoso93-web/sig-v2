@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — erros HTTP restantes sem `any` no frontend (15/08/2026)
+
+- Recuperação de senha, atualização de perfil e troca de senha usam extração tipada de detalhe Axios.
+- Removidos os três últimos `catch any` ativos do frontend sem alterar os fallbacks específicos das telas.
+- A fronteira compartilhada passou a expor separadamente detalhe HTTP textual e mensagem completa.
+
 ### Removido — modais paralelos de lançamento (15/08/2026)
 
 - Removidos `ModalNovaTransacao` e `ModalNovoProvento`, sem consumidores no frontend.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getApiErrorMessage, getApiValidationErrorMessage } from '../apiError'
+import { getApiErrorDetail, getApiErrorMessage, getApiValidationErrorMessage } from '../apiError'
 
 describe('getApiErrorMessage', () => {
   it('returns the API detail from an Axios error', () => {
@@ -8,6 +8,7 @@ describe('getApiErrorMessage', () => {
       response: { data: { detail: 'Carteira indisponível' } },
     }
     expect(getApiErrorMessage(error, 'Falha padrão')).toBe('Carteira indisponível')
+    expect(getApiErrorDetail(error)).toBe('Carteira indisponível')
   })
 
   it('uses a native error message when no API detail exists', () => {
@@ -20,6 +21,7 @@ describe('getApiErrorMessage', () => {
       isAxiosError: true,
       response: { data: { detail: [{ msg: 'inválido' }] } },
     }, 'Falha padrão')).toBe('Falha padrão')
+    expect(getApiErrorDetail({ reason: 'unknown' })).toBeNull()
   })
 
   it('joins structured FastAPI validation messages explicitly', () => {

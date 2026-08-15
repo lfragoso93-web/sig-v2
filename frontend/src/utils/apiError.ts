@@ -4,11 +4,17 @@ interface ApiErrorBody {
   detail?: unknown
 }
 
-export function getApiErrorMessage(error: unknown, fallback: string): string {
+export function getApiErrorDetail(error: unknown): string | null {
   if (axios.isAxiosError<ApiErrorBody>(error)) {
     const detail = error.response?.data?.detail
     if (typeof detail === 'string' && detail.trim()) return detail
   }
+  return null
+}
+
+export function getApiErrorMessage(error: unknown, fallback: string): string {
+  const detail = getApiErrorDetail(error)
+  if (detail) return detail
   if (error instanceof Error && error.message.trim()) return error.message
   return fallback
 }

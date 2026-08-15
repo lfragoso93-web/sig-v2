@@ -396,6 +396,15 @@ Trigésimo segundo recorte concluído:
   leitura de proventos foram preservados;
 - gate estrutural protege arquivos ausentes e módulo de proventos read-only.
 
+Trigésimo terceiro recorte concluído:
+
+- recuperação de senha, atualização de perfil e troca de senha removeram os
+  três últimos `catch any` ativos do frontend;
+- a fronteira Axios passou a expor `getApiErrorDetail(error: unknown)` para
+  preservar os fallbacks específicos dessas telas;
+- nenhum payload desconhecido é navegado ou renderizado sem narrowing;
+- gate global confirma ausência de `catch (...: any)` em `frontend/src`.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - router de debug removido no décimo terceiro recorte;

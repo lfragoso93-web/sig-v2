@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Link } from 'react-router-dom'
 import api from '@/services/api'
+import { getApiErrorDetail } from '@/utils/apiError'
 
 const emailSchema = z.object({
   email: z.string().email('E-mail inválido'),
@@ -69,9 +70,10 @@ export default function EsqueceuSenha() {
     try {
       await api.post('/auth/reset-password', { token: resetToken, new_password: data.new_password })
       setStep('done')
-    } catch (err: any) {
-      const detail = err?.response?.data?.detail
-      resetForm.setError('root', { message: detail || 'Token inválido ou expirado. Solicite um novo link.' })
+    } catch (error: unknown) {
+      resetForm.setError('root', {
+        message: getApiErrorDetail(error) ?? 'Token inválido ou expirado. Solicite um novo link.',
+      })
     }
   }
 
