@@ -227,11 +227,23 @@ Décimo quarto recorte concluído:
 - gate estrutural exige a ausência do arquivo legado e o contrato mínimo da
   entrada canônica.
 
+Décimo quinto recorte concluído:
+
+- removidos placeholders órfãos de Análise e Histórico, stubs antigos de
+  Login/Register, router alternativo e `ProtectedRoute` duplicado;
+- `main.tsx`, `router/ProtectedRoute.tsx` e páginas `auth/*` permanecem como
+  superfícies canônicas;
+- `MetasPage.tsx` foi preservada sem alterações funcionais, sob o bloqueio
+  explícito do macroprojeto #246 + #57;
+- gate estrutural protege a ausência dos seis arquivos e a presença das
+  entradas canônicas.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - router de debug removido no décimo terceiro recorte;
 - `frontend/src/App.tsx` removido no décimo quarto recorte;
-- revisar placeholder de Análise, aliases, redirects, módulos órfãos e catches amplos;
+- placeholders e módulos frontend órfãos removidos; aliases, redirects e catches
+  amplos seguem para recortes próprios;
 - preservar #246 + #57 como macroprojeto bloqueado.
 
 ### 247-F — gate global

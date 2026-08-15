@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — placeholders e entradas paralelas do frontend (14/08/2026)
+
+- Removidos placeholders órfãos de Análise/Histórico, stubs antigos de Login/Register, router alternativo e `ProtectedRoute` duplicado.
+- Preservadas as entradas canônicas em `main.tsx`, `router/ProtectedRoute.tsx` e `pages/auth/*`.
+- `MetasPage.tsx` não foi alterada e permanece bloqueada para o redesenho conjunto #246 + #57.
+- Adicionado gate estrutural cobrindo ausência dos seis arquivos e presença das entradas válidas.
+
 ### Removido — entrada React vazia e duplicada (14/08/2026)
 
 - Removido `frontend/src/App.tsx`, arquivo sem consumidores que continha apenas `export {}`.
