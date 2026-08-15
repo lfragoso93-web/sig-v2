@@ -169,6 +169,15 @@ Oitavo recorte concluído:
 - históricos de preços, Proventos e eventos permanecem nos estágios dedicados
   do `system-bootstrap.v4`.
 
+Nono recorte concluído:
+
+- removido `run_backfill` de `dividend_backfill_service.py`, sem consumidores;
+- gate estrutural impede a reintrodução do wrapper genérico;
+- `ParsedDividendEvent`, parser e fetchers usados pelo seed certificado foram
+  preservados sem alteração;
+- `backfill_dividends` permanece temporariamente para separação em recorte
+  próprio, pois ainda possui cobertura legada direta.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - restringir/remover o router de debug conforme ambiente e autenticação;

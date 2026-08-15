@@ -487,11 +487,3 @@ async def backfill_dividends(
         "[Backfill] concluido sync global de eventos para %s",
         sanitize_log_value(ticker),
     )
-
-
-async def run_backfill(db: AsyncSession, ticker: str, asset_type) -> None:
-    """Sincroniza eventos globais do ativo."""
-    asset_type_str = (
-        asset_type.value if hasattr(asset_type, "value") else str(asset_type)
-    )
-    await backfill_dividends(db, ticker=ticker, asset_type=asset_type_str)

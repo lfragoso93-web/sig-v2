@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — wrapper órfão de backfill de Proventos (14/08/2026)
+
+- Removido `run_backfill` de `dividend_backfill_service.py` após confirmação de ausência total de consumidores.
+- Adicionado gate estrutural contra a reintrodução do wrapper genérico.
+- Tipos, parser e fetchers consumidos pelo seed certificado permaneceram intactos; `backfill_dividends` será separado em recorte posterior.
+
 ### Removido — pipeline órfão e enriquecimento opcional do asset seed (14/08/2026)
 
 - Removido do asset seed o contrato opcional de enriquecimento amplo de preços/logos; o serviço agora persiste somente catálogo e metadados entregues pela fonte.

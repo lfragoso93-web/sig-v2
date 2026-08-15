@@ -80,5 +80,6 @@ def test_legacy_materializer_is_not_available() -> None:
     }
 
     assert "materialize_asset_dividends" not in function_names
+    assert "run_backfill" not in function_names
     assert "app.models.transaction" not in source
     assert "DividendStatus" not in source

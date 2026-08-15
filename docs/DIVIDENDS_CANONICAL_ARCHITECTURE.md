@@ -73,7 +73,7 @@ possuir o ativo hoje não cria direito retroativo.
 | `POST /portfolios/{id}/dividends/sync` | Disparava sincronização/materialização por carteira | Removido | Rota desativada e protegida por regressão de contrato |
 | `GET /portfolios/{id}/dividends` e `dividend_service.py` | Projeção de direitos por carteira | Canônico | Read-only sobre `asset_dividends`, `assets` e `transactions`, sem acesso à tabela legada |
 | `proventos_daily_sync_service.py` | Orquestração diária paralela de eventos | Removido | Ficou órfão após a contração do scheduler, da CLI e do full rebuild; gate estrutural impede sua reintrodução |
-| `dividend_backfill_service.py` | Coleta global de eventos | Canônico | O materializador legado foi removido; o módulo grava somente `asset_dividends`, sem `portfolio_id`, `Transaction` ou `Dividend` |
+| `dividend_backfill_service.py` | Adapter/parser compartilhado e persistência legada | Em decomposição | Wrapper órfão `run_backfill` removido; tipos/parsers usados pelo seed certificado permanecem até separação canônica |
 | `asset_market_pipeline_service.py` | Pipeline paralelo de ativo, preços e logo | Removido | Ficou sem consumidores após a retirada de onboarding, batch, CLIs e enriquecimento opcional do seed |
 | `asset_seed_service.py` | Catálogo e metadados fornecidos pela fonte | Canônico | Não expõe enriquecimento amplo; históricos e eventos pertencem aos estágios dedicados do bootstrap |
 | `asset_onboarding_service.py` | Background task de enriquecimento após criação | Removido | Serviço órfão; o CRUD de transações já proibia importação ou agendamento dessa ingestão externa |
