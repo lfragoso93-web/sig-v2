@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — pipeline órfão e enriquecimento opcional do asset seed (14/08/2026)
+
+- Removido do asset seed o contrato opcional de enriquecimento amplo de preços/logos; o serviço agora persiste somente catálogo e metadados entregues pela fonte.
+- Removido `asset_market_pipeline_service.py` após confirmação de ausência total de consumidores.
+- Bootstrap global, seed B3 e testes foram ajustados para a assinatura simplificada de `run_asset_seed`.
+- Históricos de preços, Proventos e eventos permanecem sob seus estágios dedicados no `system-bootstrap.v4`.
+
 ### Removido — batch e CLIs paralelos de mercado (14/08/2026)
 
 - Removidos `market_pipeline_batch_service.py`, `run_market_pipeline.py` e `run_market_pipeline_batch.py`, sem consumidores de runtime, scheduler, workflow ou runbook.

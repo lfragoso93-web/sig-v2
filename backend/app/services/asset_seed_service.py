@@ -3,14 +3,10 @@ Asset Seed Service.
 
 Popula/atualiza `assets` com todos os ativos listados na B3 via BRAPI v2.
 
-Além do catálogo, o seed executa pipeline idempotente para renda variável nacional:
-  1. metadados e logo quando disponível no catálogo
-  2. histórico completo de preços diário
-  3. logo via cotação quando ausente
-
-Eventos e Proventos são carregados somente pelos estágios gated do bootstrap.
+O seed persiste metadados e logos já entregues pelo catálogo. Históricos,
+eventos e Proventos pertencem exclusivamente aos estágios dedicados e gated
+do bootstrap global.
 """
-import asyncio
 import logging
 import re
 from dataclasses import dataclass, field
@@ -41,10 +37,6 @@ _SEED_TYPES: list[tuple[str, AssetType]] = [
 ]
 
 _NO_HISTORY_SUFFIX_RE = re.compile(r"^[A-Z0-9]{4,6}(3|4|5|6|11|31|32|33|34|35)$")
-BACKFILL_CONCURRENCY = 3
-BACKFILL_BATCH_DELAY = 2.0
-
-
 @dataclass
 class SeedResult:
     created: int = 0
@@ -54,7 +46,6 @@ class SeedResult:
     by_type: dict[str, int] = field(default_factory=dict)
     new_tickers: dict[str, list[str]] = field(default_factory=dict)
     seeded_tickers: dict[str, list[str]] = field(default_factory=dict)
-    skipped_market_enrichment: int = 0
 
 
 def _extract_logo_url(item: dict) -> str | None:
@@ -104,85 +95,6 @@ def _has_history(ticker: str) -> bool:
     if t.endswith("F") or t[-1:] in {"B", "D", "R"} or t[-2:] in {"97", "98", "99"}:
         return False
     return bool(_NO_HISTORY_SUFFIX_RE.match(t))
-
-
-async def _backfill_market_data_for_ticker(ticker: str, asset_type: AssetType) -> None:
-    from app.core.database import AsyncSessionLocal
-    from app.services.asset_market_pipeline_service import sync_asset_market_data
-
-    try:
-        async with AsyncSessionLocal() as db:
-            result = await sync_asset_market_data(
-                db=db,
-                ticker=ticker,
-                asset_type=asset_type,
-                full=True,
-                sync_prices=True,
-                sync_logo=True,
-                commit=True,
-            )
-            logger.info(
-                "[seed_market] %s (%s): prices=%s logo=%s",
-                sanitize_log_value(ticker),
-                asset_type.value,
-                result.prices_inserted,
-                result.logo_updated,
-            )
-    except Exception as e:  # noqa: BLE001 -- isola falha por ativo no batch operacional
-        logger.error(
-            "[seed_market] erro em %s (%s): %s",
-            sanitize_log_value(ticker),
-            asset_type.value,
-            sanitize_log_value(e),
-        )
-
-
-async def _run_market_enrichment(seeded_tickers: dict[str, list[str]]) -> int:
-    tasks: list[tuple[str, AssetType]] = []
-    filtered = 0
-
-    for type_value, tickers in seeded_tickers.items():
-        if type_value == AssetType.CRIPTO.value:
-            continue
-        try:
-            at = AssetType(type_value)
-        except ValueError:
-            continue
-        for t in sorted(set(tickers)):
-            if _has_history(t):
-                tasks.append((t, at))
-            else:
-                filtered += 1
-
-    if filtered:
-        logger.info("[seed_market] %d tickers sem pipeline próprio ignorados", filtered)
-    if not tasks:
-        logger.info("[seed_market] nenhum ativo elegível para pipeline")
-        return filtered
-
-    logger.info(
-        "[seed_market] iniciando pipeline único de %d ativos (lotes de %d, delay %ss)",
-        len(tasks),
-        BACKFILL_CONCURRENCY,
-        BACKFILL_BATCH_DELAY,
-    )
-
-    total_done = 0
-    for i in range(0, len(tasks), BACKFILL_CONCURRENCY):
-        batch = tasks[i:i + BACKFILL_CONCURRENCY]
-        await asyncio.gather(*[_backfill_market_data_for_ticker(ticker, at) for ticker, at in batch], return_exceptions=True)
-        total_done += len(batch)
-        if total_done % 20 == 0:
-            logger.info("[seed_market] %d/%d ativos processados", total_done, len(tasks))
-        if i + BACKFILL_CONCURRENCY < len(tasks):
-            await asyncio.sleep(BACKFILL_BATCH_DELAY)
-
-    logger.info(
-        "[seed_market] pipeline único concluído: %d ativos, %d ignorados",
-        total_done,
-        filtered,
-    )
-    return filtered
 
 
 async def _run_crypto_seed(db: AsyncSession, result: SeedResult) -> None:
@@ -235,7 +147,6 @@ async def _run_crypto_seed(db: AsyncSession, result: SeedResult) -> None:
 
 async def run_asset_seed(
     db: AsyncSession,
-    run_market_enrichment: bool = True,
     include_crypto: bool = True,
 ) -> SeedResult:
     result = SeedResult()
@@ -314,14 +225,5 @@ async def run_asset_seed(
         result.errors,
         sanitize_log_value(result.by_type),
     )
-
-    if run_market_enrichment:
-        result.skipped_market_enrichment = await _run_market_enrichment(
-            result.seeded_tickers
-        )
-    else:
-        logger.info(
-            "[seed] run_market_enrichment=False — preços/logos ignorados"
-        )
 
     return result

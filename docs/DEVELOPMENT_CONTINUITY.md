@@ -160,6 +160,15 @@ Sétimo recorte concluído:
 - `asset_market_pipeline_service.py` foi preservado temporariamente porque o
   enriquecimento opcional do asset seed ainda o referencia.
 
+Oitavo recorte concluído:
+
+- removido o enriquecimento opcional de preços/logos do asset seed;
+- simplificada `run_asset_seed` para catálogo e metadados fornecidos pela fonte;
+- removido `asset_market_pipeline_service.py` após confirmação de zero
+  consumidores remanescentes;
+- históricos de preços, Proventos e eventos permanecem nos estágios dedicados
+  do `system-bootstrap.v4`.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - restringir/remover o router de debug conforme ambiente e autenticação;

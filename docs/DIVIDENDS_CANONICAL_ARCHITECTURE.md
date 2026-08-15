@@ -74,8 +74,8 @@ possuir o ativo hoje não cria direito retroativo.
 | `GET /portfolios/{id}/dividends` e `dividend_service.py` | Projeção de direitos por carteira | Canônico | Read-only sobre `asset_dividends`, `assets` e `transactions`, sem acesso à tabela legada |
 | `proventos_daily_sync_service.py` | Orquestração diária paralela de eventos | Removido | Ficou órfão após a contração do scheduler, da CLI e do full rebuild; gate estrutural impede sua reintrodução |
 | `dividend_backfill_service.py` | Coleta global de eventos | Canônico | O materializador legado foi removido; o módulo grava somente `asset_dividends`, sem `portfolio_id`, `Transaction` ou `Dividend` |
-| `asset_market_pipeline_service.py` | Catálogo, histórico de preços e logo por ativo | Confinado | Import, argumento, resultado e execução de eventos removidos; o domínio entra somente pelo bootstrap gated |
-| `asset_seed_service.py` | Catálogo e enriquecimento opcional de preços/logos | Confinado | `run_market_enrichment` descreve o contrato real; bootstrap usa `False` e eventos não participam do seed |
+| `asset_market_pipeline_service.py` | Pipeline paralelo de ativo, preços e logo | Removido | Ficou sem consumidores após a retirada de onboarding, batch, CLIs e enriquecimento opcional do seed |
+| `asset_seed_service.py` | Catálogo e metadados fornecidos pela fonte | Canônico | Não expõe enriquecimento amplo; históricos e eventos pertencem aos estágios dedicados do bootstrap |
 | `asset_onboarding_service.py` | Background task de enriquecimento após criação | Removido | Serviço órfão; o CRUD de transações já proibia importação ou agendamento dessa ingestão externa |
 | Batch e CLIs de mercado | Backfill manual paralelo de preços e logos | Removido | Sem consumidores, scheduler ou runbook; duplicavam as etapas dedicadas do bootstrap e a manutenção de fechamento |
 | `run_proventos_sync.py` | Coleta manual global, inclusive por ticker | Removido | CLI órfã duplicava o bootstrap certificado e permitia chamar portas legadas sem seus gates; regressão estrutural impede sua reintrodução |

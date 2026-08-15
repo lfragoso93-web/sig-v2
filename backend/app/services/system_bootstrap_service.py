@@ -60,7 +60,7 @@ async def _bootstrap_asset_catalog() -> str:
     from app.services.asset_seed_service import run_asset_seed
 
     async with AsyncSessionLocal() as db:
-        seed = await run_asset_seed(db, run_market_enrichment=False)
+        seed = await run_asset_seed(db)
     return (
         f"created={seed.created} updated={seed.updated} "
         f"skipped={seed.skipped} errors={seed.errors}"

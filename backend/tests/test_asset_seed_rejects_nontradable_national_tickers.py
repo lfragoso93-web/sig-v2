@@ -35,7 +35,6 @@ async def test_seed_rejects_nontradable_brax_before_upsert(monkeypatch) -> None:
 
     result = await asset_seed_service.run_asset_seed(
         FakeDb(),
-        run_market_enrichment=False,
         include_crypto=False,
     )
 
