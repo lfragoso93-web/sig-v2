@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { MoreHorizontal, Plus, List, BarChart2 as AnalyseIcon, ChevronDown, Target, Clock } from 'lucide-react'
+import { MoreHorizontal, Plus, List, ChevronDown, Target, Clock } from 'lucide-react'
 import { formatBRL, formatPercent, fmtMoney } from '@/utils/format'
 import { formatTreasuryName } from '@/utils/treasury'
 import AssetLogo from '@/components/ui/AssetLogo'
@@ -206,15 +206,6 @@ function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
       onClick: () => {
         setOpen(false)
         navigate(`/carteira/transacoes?ticker=${encodeURIComponent(ticker)}`)
-      },
-    },
-    {
-      icon: <AnalyseIcon size={13} />,
-      label: 'Análise do Ativo',
-      badge: 'Em breve',
-      onClick: () => {
-        setOpen(false)
-        navigate(`/carteira/analise?ticker=${encodeURIComponent(ticker)}`)
       },
     },
   ]

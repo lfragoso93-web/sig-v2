@@ -238,6 +238,14 @@ Décimo quinto recorte concluído:
 - gate estrutural protege a ausência dos seis arquivos e a presença das
   entradas canônicas.
 
+Décimo sexto recorte concluído:
+
+- removida do menu de posições a ação “Análise do Ativo”, que navegava para
+  `/carteira/analise` sem existir rota correspondente;
+- ações válidas de adicionar e consultar lançamentos foram preservadas;
+- teste do menu exige somente as duas ações funcionais e a ausência do link;
+- nenhuma implementação de Análise foi iniciada; #57 permanece bloqueada.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - router de debug removido no décimo terceiro recorte;

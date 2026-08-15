@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — ação frontend para rota inexistente de Análise (14/08/2026)
+
+- Removida do menu de posições a ação “Análise do Ativo”, que direcionava para `/carteira/analise` sem rota registrada.
+- Preservadas as ações funcionais de adicionar e consultar lançamentos.
+- O teste do menu passou a exigir duas ações e a ausência do link morto; o módulo de Análise continua bloqueado pela #57.
+
 ### Removido — placeholders e entradas paralelas do frontend (14/08/2026)
 
 - Removidos placeholders órfãos de Análise/Histórico, stubs antigos de Login/Register, router alternativo e `ProtectedRoute` duplicado.
