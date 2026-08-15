@@ -127,17 +127,10 @@ def _log_canonical_valuation(summary) -> None:
 
 async def run_full_market_rebuild():
     """Executa o orquestrador existente com Tesouro v2 e TWR canônico."""
-    original_treasury = base_rebuild._sync_treasury
-    original_snapshots = base_rebuild._rebuild_all_twr_snapshots
-    original_step_payload = base_rebuild._step_payload
-    base_rebuild._sync_treasury = _sync_treasury_v2
-    base_rebuild._rebuild_all_twr_snapshots = _rebuild_all_canonical_twr_snapshots
-    base_rebuild._step_payload = _canonical_step_payload
-    try:
-        result = await base_rebuild.run_full_market_rebuild()
-        _log_canonical_valuation(result)
-        return result
-    finally:
-        base_rebuild._sync_treasury = original_treasury
-        base_rebuild._rebuild_all_twr_snapshots = original_snapshots
-        base_rebuild._step_payload = original_step_payload
+    result = await base_rebuild.run_full_market_rebuild(
+        treasury_operation=_sync_treasury_v2,
+        snapshot_operation=_rebuild_all_canonical_twr_snapshots,
+        step_payload_reader=_canonical_step_payload,
+    )
+    _log_canonical_valuation(result)
+    return result
