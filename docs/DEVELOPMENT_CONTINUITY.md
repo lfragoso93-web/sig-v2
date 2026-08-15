@@ -424,6 +424,15 @@ Trigésimo quinto recorte concluído:
   acesso administrativo;
 - gate estrutural protege as ausências e o roteamento canônico de transações.
 
+Trigésimo sexto recorte concluído:
+
+- removidos `AllocationChart`, `ConcentrationTreemap` e `ModalNovaCarteira`,
+  componentes sem qualquer consumidor;
+- preservados `AssetDonutChart`, `DistribuicaoCarteira` e a criação de carteira
+  na Sidebar como superfícies efetivamente montadas;
+- removidas 340 linhas de visualizações/modais paralelos;
+- gate estrutural protege ausências e equivalentes ativos.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - router de debug removido no décimo terceiro recorte;

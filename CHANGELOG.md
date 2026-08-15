@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — componentes órfãos de dashboard (15/08/2026)
+
+- Removidos gráfico de alocação, treemap de concentração e modal de carteira sem consumidores.
+- Preservados `AssetDonutChart`, distribuição por metas e criação de carteira na Sidebar como superfícies ativas.
+- Gate estrutural impede restauração das duplicatas sem montagem.
+
 ### Removido — páginas não roteadas de Ativos e Lançamentos (15/08/2026)
 
 - Removidas `AssetsPage` e `LancamentosPage`, sem rota, menu ou consumidor.
