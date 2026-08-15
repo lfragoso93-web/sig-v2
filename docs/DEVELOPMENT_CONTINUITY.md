@@ -450,6 +450,13 @@ Trigésimo oitavo recorte concluído:
 - o gate existente de mutações legadas passou a proteger também essa ausência
   e a montagem canônica no `AppLayout`.
 
+Trigésimo nono recorte concluído:
+
+- removido `SigLogo`, segunda implementação SVG da marca sem consumidor;
+- `LogoSGI` permanece como componente único, montado no `Topbar` e no
+  `AuthLayout`;
+- gate estrutural protege a ausência da duplicata e ambas as montagens ativas.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - router de debug removido no décimo terceiro recorte;

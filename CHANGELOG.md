@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — implementação duplicada do logo (15/08/2026)
+
+- Removido `SigLogo`, SVG sem consumidores que duplicava a marca ativa.
+- `LogoSGI` permanece como implementação única, montada no Topbar e no layout de autenticação.
+- Gate estrutural protege a ausência da duplicata e as duas montagens canônicas.
+
 ### Removido — formulário paralelo de transações (15/08/2026)
 
 - Removido `TransactionForm`, componente de 397 linhas sem consumidor.
