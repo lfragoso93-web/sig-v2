@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — formulário paralelo de transações (15/08/2026)
+
+- Removido `TransactionForm`, componente de 397 linhas sem consumidor.
+- `AddTransactionModal` permanece como superfície única, com criação e atualização pelos hooks canônicos.
+- Gate estrutural protege a ausência do formulário paralelo e a montagem global do modal ativo.
+
 ### Removido — visualizações legadas de dividendos (15/08/2026)
 
 - Removidos `DividendChart` e `DividendTable`, sem consumidores e ligados ao contrato antigo de dividendos.

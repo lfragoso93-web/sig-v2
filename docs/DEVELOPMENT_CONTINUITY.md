@@ -441,6 +441,15 @@ Trigésimo sétimo recorte concluído:
   `MeusProventosTable`, todos montados pela página canônica;
 - gate estrutural protege as ausências e os três componentes ativos.
 
+Trigésimo oitavo recorte concluído:
+
+- removido `TransactionForm`, formulário paralelo de 397 linhas sem import ou
+  montagem;
+- `AddTransactionModal` permanece como superfície única de criação/edição, com
+  `useCreateTransaction` e `useUpdateTransaction`;
+- o gate existente de mutações legadas passou a proteger também essa ausência
+  e a montagem canônica no `AppLayout`.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - router de debug removido no décimo terceiro recorte;
