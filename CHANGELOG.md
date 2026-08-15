@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — visualizações legadas de dividendos (15/08/2026)
+
+- Removidos `DividendChart` e `DividendTable`, sem consumidores e ligados ao contrato antigo de dividendos.
+- A página ativa de Proventos preserva donut, histórico mensal e tabela canônica de direitos recebidos.
+- Gate estrutural protege a ausência das visualizações paralelas e os três componentes ativos.
+
 ### Removido — componentes órfãos de dashboard (15/08/2026)
 
 - Removidos gráfico de alocação, treemap de concentração e modal de carteira sem consumidores.

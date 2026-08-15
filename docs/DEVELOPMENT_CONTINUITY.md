@@ -433,6 +433,14 @@ Trigésimo sexto recorte concluído:
 - removidas 340 linhas de visualizações/modais paralelos;
 - gate estrutural protege ausências e equivalentes ativos.
 
+Trigésimo sétimo recorte concluído:
+
+- removidos `DividendChart` e `DividendTable`, sem consumidores e vinculados ao
+  contrato legado `Dividend`;
+- preservados `ProventosDonutChart`, `ProventosHistoricoTable` e
+  `MeusProventosTable`, todos montados pela página canônica;
+- gate estrutural protege as ausências e os três componentes ativos.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - router de debug removido no décimo terceiro recorte;
