@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Corrigido — ausência de câmbio persistido sem taxa inventada (15/08/2026)
+
+- Resumos e snapshots deixaram de substituir ausência de USD/BRL persistido por `5.70`.
+- O reader DB-first agora falha explicitamente com a data efetiva sem cobertura, preservando a busca da última taxa disponível até a data.
+- Testes cobrem ausência de fallback fixo/provider e o erro de cobertura vazia.
+
 ### Removido — serviço cambial legado em tempo de request (15/08/2026)
 
 - `fx_service.py` foi reduzido à persistência transacional usada pelo bootstrap.

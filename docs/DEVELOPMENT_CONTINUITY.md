@@ -321,6 +321,15 @@ Vigésimo quarto recorte concluído:
 - gate estrutural impede a reintrodução de provider, fallback ou API de leitura
   nesse módulo de persistência.
 
+Vigésimo quinto recorte concluído:
+
+- o reader DB-first usado por resumo e snapshot deixou de retornar USD/BRL fixo
+  `5.70` quando `fx_rates` não possui cobertura;
+- ausência persistida agora falha explicitamente e identifica a data efetiva,
+  sem provider, escrita ou valor financeiro inventado;
+- a semântica válida de usar a última taxa persistida até a data foi preservada;
+- testes protegem ausência de fallback e o erro de cobertura vazia.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - router de debug removido no décimo terceiro recorte;

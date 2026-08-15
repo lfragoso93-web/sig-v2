@@ -13,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.fx_rate import FxRate
 
 PAIR_USD_BRL = "USD-BRL"
-PERSISTED_FX_FALLBACK_RATE = 5.70
 
 
 async def get_persisted_usd_brl_rate_for_date(
@@ -34,7 +33,10 @@ async def get_persisted_usd_brl_rate_for_date(
     )
     rate = result.scalar_one_or_none()
     if rate is None:
-        return PERSISTED_FX_FALLBACK_RATE
+        raise RuntimeError(
+            "cobertura USD-BRL persistida indisponível em ou antes de "
+            f"{effective_date.isoformat()}"
+        )
     return float(rate)
 
 
