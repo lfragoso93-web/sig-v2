@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — calculadora legada e órfã de renda fixa (15/08/2026)
+
+- Removido `rf_calc_service.py`, sem qualquer consumidor de runtime ou teste.
+- O módulo duplicava a valuation canônica, abria sessões próprias e podia consultar BRAPI durante cálculo financeiro.
+- `fixed_income_valuation_service.py` permanece como única implementação consumida; gate estrutural protege a ausência do legado.
+
 ### Corrigido — ausência de câmbio persistido sem taxa inventada (15/08/2026)
 
 - Resumos e snapshots deixaram de substituir ausência de USD/BRL persistido por `5.70`.

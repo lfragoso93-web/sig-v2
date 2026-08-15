@@ -330,6 +330,16 @@ Vigésimo quinto recorte concluído:
 - a semântica válida de usar a última taxa persistida até a data foi preservada;
 - testes protegem ausência de fallback e o erro de cobertura vazia.
 
+Vigésimo sexto recorte concluído:
+
+- removido `rf_calc_service.py`, serviço duplicado sem consumidor de runtime,
+  testes, CLI, scheduler ou bootstrap;
+- o legado abria sessões próprias e podia consultar BRAPI durante valuation em
+  request, contrariando a fronteira DB-first;
+- `fixed_income_valuation_service.py` permanece como única implementação de
+  renda fixa efetivamente consumida;
+- gate estrutural impede a restauração do serviço e de seus símbolos públicos.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - router de debug removido no décimo terceiro recorte;
