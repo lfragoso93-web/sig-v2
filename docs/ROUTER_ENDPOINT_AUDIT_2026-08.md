@@ -171,7 +171,9 @@ Imports diretos de BRAPI/yfinance foram removidos do router; gate estrutural pro
 
 - `/carteira/proventos` usa API canônica de Proventos.
 - `/carteira/metas` permanece fora da estabilização até #246/#57.
-- `/metas` e `/irpf` são redirects de compatibilidade explícitos.
+- `/metas` e `/irpf` são redirects de compatibilidade unidirecionais, com
+  `replace`, sem páginas ou cálculos próprios. Permanecem confinados para não
+  quebrar favoritos externos; remoção futura exige evidência de desuso.
 - Não há rota de Análise no frontend protegido.
 - `performanceService.ts` não expõe backfill.
 - `assetService.ts` usa `/assets/` com filtros `q` e `asset_type`, apoiando descoberta pelo catálogo persistido.

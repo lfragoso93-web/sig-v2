@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Preservado — redirects externos de Metas e IRPF (15/08/2026)
+
+- Auditados `/metas` e `/irpf`: ambos apenas redirecionam com `replace` para as rotas canônicas sob `/carteira`.
+- Os caminhos não possuem páginas, loaders, escritas ou cálculos próprios e não são usados pela navegação interna.
+- Compatibilidade foi preservada para favoritos externos; teste estrutural impede que os aliases adquiram lógica funcional.
+
 ### Corrigido — hierarquia de rotas de Patrimônio (14/08/2026)
 
 - `main.tsx` passou a importar diretamente a página consolidada canônica; removido o re-export intermediário em `pages/patrimonio/PatrimonioPage.tsx`.

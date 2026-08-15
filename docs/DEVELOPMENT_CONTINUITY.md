@@ -256,6 +256,16 @@ Décimo sétimo recorte concluído:
   três URLs específicas agora podem renderizar seus componentes;
 - gate estrutural protege import, ausência do alias e registro das subrotas.
 
+Décimo oitavo recorte concluído:
+
+- redirects `/metas` e `/irpf` foram auditados e preservados como compatibilidade
+  unidirecional para `/carteira/metas` e `/carteira/irpf`;
+- ambos usam `Navigate replace`, não possuem página, loader, escrita ou cálculo
+  próprio e não são usados pela navegação interna;
+- teste estrutural protege esse confinamento;
+- remoção futura exige evidência de desuso de URLs externas; #246/#57 não foram
+  iniciadas nem alteradas.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - router de debug removido no décimo terceiro recorte;
