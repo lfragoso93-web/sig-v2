@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — exemplo de ambiente paralelo e desatualizado (15/08/2026)
+
+- Removido `backend/.env.example`, que duplicava o contrato canônico da raiz e ainda documentava `DEBUG_RATE_LIMIT`, `ADMIN_SECRET`, router de debug e fallback via yfinance já removidos.
+- `.env.example` da raiz permanece como fonte única para aplicação, Docker Compose, frontend, bootstrap e operações controladas.
+- Adicionado gate estrutural exigindo a presença do exemplo canônico e a ausência do duplicado no backend.
+
 ### Removido — hooks residuais sem consumidores (15/08/2026)
 
 - Removidos `useAssets`, `useFxRate`/`useUsdBrl` e `assetService`, sem consumidores após a limpeza das páginas paralelas.
@@ -179,157 +185,63 @@ Formato baseado em Keep a Changelog.
 
 ### Removido — backfill legado de Proventos (14/08/2026)
 
-- Removidos `backfill_dividends` e `dividend_backfill_service.py` após confirmação de que nenhum runtime, scheduler, CLI, workflow ou adapter certificado os consumia.
-- Removidos testes exclusivos do fluxo antigo; as nove regras úteis de normalização foram migradas para uma suíte unitária canônica.
-- Preservado o teste DB-first que impede eventos não monetários de contaminarem agregados financeiros.
-- O gate estrutural agora exige a ausência física do serviço; ingestão permanece exclusiva do seed/bootstrap certificado e explicitamente habilitado.
+- Removidos `backfill_dividends` e `dividend_backfill_service.py` após confirmação de ausência de consumidores de runtime.
+- Regras úteis do parser foram preservadas no normalizador canônico e sua suíte unitária.
+- O seed certificado continua usando adapters/normalizadores neutros, sem importar o serviço legado.
 
-### Alterado — parser canônico do payload BRAPI de Proventos (14/08/2026)
+### Alterado — parser BRAPI de Proventos desacoplado (14/08/2026)
 
-- Extraídas para `dividend_brapi_payload.py` a seleção de respostas por ticker e a interpretação das variações de payload de ações e FIIs.
-- O adapter BRAPI do seed certificado deixou de importar `dividend_backfill_service.py`; o serviço legado passou a consumir a mesma fronteira neutra.
-- Endpoints, filtro por ticker, formatos aceitos e categorias de eventos foram preservados.
-- Adicionado gate estrutural contra HTTP, SQLAlchemy e dependência reversa do backfill no novo parser.
+- Criado `dividend_brapi_payload.py` como fronteira neutra para interpretar payloads de ações e FIIs.
+- O adapter certificado e o serviço legado passaram a consumir o mesmo parser sem dependência reversa.
+- Gate estrutural impede HTTP/SQLAlchemy no parser e preserva o adapter como consumidor canônico.
 
-### Alterado — normalizador canônico de eventos de Proventos (14/08/2026)
+### Alterado — normalizador de Proventos desacoplado (14/08/2026)
 
-- Extraídos `ParsedDividendEvent` e a normalização de payloads para `dividend_event_normalizer.py`.
-- Collector, persistência e testes do seed certificado deixaram de depender do modelo/parser definido no backfill legado.
-- O normalizador não importa SQLAlchemy, HTTP ou `dividend_backfill_service`; regras de datas, tipos, valores e payload bruto foram preservadas.
-- `dividend_backfill_service.py` passou a consumir a nova fronteira, preparando a separação posterior de fetchers e persistência legados.
+- Criado `dividend_event_normalizer.py` com `ParsedDividendEvent` e `parse_dividend_event`.
+- Collector/persistência do seed certificado deixaram de importar parser/modelo do backfill legado.
+- Gate estrutural impede I/O e dependência reversa nessa fronteira.
 
-### Removido — wrapper órfão de backfill de Proventos (14/08/2026)
+### Removido — wrapper genérico de backfill de Proventos (14/08/2026)
 
-- Removido `run_backfill` de `dividend_backfill_service.py` após confirmação de ausência total de consumidores.
-- Adicionado gate estrutural contra a reintrodução do wrapper genérico.
-- Tipos, parser e fetchers consumidos pelo seed certificado permaneceram intactos; `backfill_dividends` será separado em recorte posterior.
+- Removido `run_backfill` de `dividend_backfill_service.py`, sem consumidores.
+- Parser/fetchers ainda usados pelo seed certificado foram preservados até sua separação canônica.
 
-### Removido — pipeline órfão e enriquecimento opcional do asset seed (14/08/2026)
+### Removido — pipeline paralelo de mercado do seed (14/08/2026)
 
-- Removido do asset seed o contrato opcional de enriquecimento amplo de preços/logos; o serviço agora persiste somente catálogo e metadados entregues pela fonte.
-- Removido `asset_market_pipeline_service.py` após confirmação de ausência total de consumidores.
-- Bootstrap global, seed B3 e testes foram ajustados para a assinatura simplificada de `run_asset_seed`.
-- Históricos de preços, Proventos e eventos permanecem sob seus estágios dedicados no `system-bootstrap.v4`.
+- Removido o enriquecimento opcional de preços/logos do asset seed e, após zerar consumidores, `asset_market_pipeline_service.py`.
+- Catálogo/metadados permanecem no seed; históricos ficam nos estágios dedicados do `system-bootstrap.v4`.
 
-### Removido — batch e CLIs paralelos de mercado (14/08/2026)
+### Removido — batch/CLIs paralelos de pipeline de mercado (14/08/2026)
 
-- Removidos `market_pipeline_batch_service.py`, `run_market_pipeline.py` e `run_market_pipeline_batch.py`, sem consumidores de runtime, scheduler, workflow ou runbook.
-- As portas manuais duplicavam backfill amplo de preços/logos fora das etapas dedicadas do bootstrap e da manutenção recorrente de fechamento.
-- Removido o teste exclusivo do batch e adicionados gates de ausência física para impedir reintrodução acidental.
-- `asset_market_pipeline_service.py` permanece temporariamente restrito ao enriquecimento opcional do asset seed até a próxima decisão de confinamento.
+- Removidos `market_pipeline_batch_service.py`, `run_market_pipeline.py` e `run_market_pipeline_batch.py` sem consumidores/runbooks.
+- Gates estruturais exigem a ausência das três portas.
 
-### Alterado — contrato explícito de enriquecimento do asset seed (14/08/2026)
+### Alterado — nomenclatura do asset seed sem semântica de Proventos (14/08/2026)
 
-- Renomeado `run_backfill` para `run_market_enrichment` no asset seed, refletindo que a opção controla somente histórico de preços e logos.
-- Helper e métrica de resultado também perderam a nomenclatura genérica de backfill; nenhuma semântica de Proventos permanece nessa superfície.
-- `system-bootstrap.v4` e seed B3 continuam chamando o catálogo com enriquecimento amplo desabilitado.
-- Testes e documentação foram sincronizados e o contrato do bootstrap proíbe a reintrodução do nome legado.
+- `run_backfill` foi renomeado para `run_market_enrichment` antes da retirada posterior do enriquecimento opcional.
+- Bootstrap e seed B3 continuaram protegidos contra o nome legado.
 
-### Alterado — contrato completo de ambiente Docker (14/08/2026)
+### Alterado — contrato de configuração operacional (14/08/2026)
 
-- Reconstruído `.env.example` a partir das configurações efetivamente consumidas pela aplicação, Docker, frontend e rotinas operacionais.
-- Documentados ambiente, portas, banco, Redis, autenticação, CORS, rate limits, SuperAdmin, providers, bootstrap v4 e operações de pré-produção, sempre com gates perigosos desabilitados por padrão.
-- `docker-compose.yml` passou a encaminhar `VITE_API_URL` como argumento de build do frontend; vazio preserva o proxy Nginx canônico.
-- Adicionado teste de contrato para impedir que novos campos de `Settings` ou variáveis operacionais essenciais deixem de aparecer no exemplo.
+- `.env.example` da raiz passou a cobrir settings, Docker, frontend, bootstrap e operações de pré-produção.
+- Compose encaminha `VITE_API_URL` ao build do frontend.
+- Gate estrutural impede deriva entre o exemplo canônico e settings/variáveis operacionais.
 
-### Alterado — pipeline de mercado sem eventos paralelos (14/08/2026)
+### Removido — router de debug (14/08/2026)
 
-- Removidos `sync_events`, `events_synced` e o import de `dividend_backfill_service` do pipeline de mercado.
-- Asset seed, serviço batch e CLIs de mercado deixaram de expor flags, argumentos, logs ou métricas de eventos/Proventos.
-- O pipeline permanece responsável por catálogo, histórico de preços e logo; eventos globais entram exclusivamente pelos estágios gated do `system-bootstrap.v4`.
-- Adicionada regressão estrutural cobrindo todas as cinco superfícies contra reintrodução da porta paralela.
+- Ver seção de segurança acima; remoção consolidada no recorte correspondente da #247.
 
-### Removido — onboarding órfão de mercado (14/08/2026)
+### Removido — portas paralelas de Proventos/eventos (14/08/2026)
 
-- Removido `asset_onboarding_service.py` após confirmação de ausência de consumidores em runtime, routers, jobs, CLIs e bootstrap.
-- O serviço declarava execução após criação de ativo/transação, mas o CRUD já proíbe qualquer ingestão externa automática e mantém somente operações locais e DB-first.
-- Adicionado gate de ausência física; pipeline, seed, batch e CLIs foram preservados para uma contração independente da etapa paralela de eventos.
+- Removidos CLI diário, etapa paralela do full rebuild, serviço diário, onboarding de provider e eventos do pipeline genérico.
+- `system-bootstrap.v4` permanece como entrada operacional certificável, com gates explícitos.
 
-### Removido — sincronizador diário órfão de Proventos (14/08/2026)
+### Corrigido — snapshots de classe/FX DB-first (14/08/2026)
 
-- Removidos `proventos_daily_sync_service.py` e seu teste exclusivo após a confirmação de que nenhum runtime, scheduler, CLI, workflow ou serviço ainda os consumia.
-- O módulo havia se tornado uma segunda orquestração sem os gates transacionais do seed certificado após a retirada da CLI dedicada e da etapa no full market rebuild.
-- O gate do scheduler passou a exigir também a ausência física do módulo, além de proibir seus antigos imports e chamadas.
-- Adapters, parsers e persistência compartilhados pelo `pre-prod-dividends-seed.v2` foram preservados.
+- Snapshot de classe passou a usar `fx_rate_reader` DB-only com cobertura pré-carregada.
+- Ausência persistida falha explicitamente, sem fallback fixo/provider.
 
-### Removido — Proventos do full market rebuild (14/08/2026)
+### Removido — serviço de posições órfão (14/08/2026)
 
-- Removida a etapa paralela de Proventos de `full_market_rebuild_service.py`, junto com suas métricas do resumo operacional.
-- O caminho antigo chamava o sincronizador diário sem advisory lock dedicado, transação única, rollback integral ou opt-in explícito, contrariando o contrato da #226.
-- O `system-bootstrap.v4`, por meio do seed certificado e gated, permanece como única entrada operacional certificável para o domínio.
-- Adicionado gate estrutural garantindo que o full rebuild não volte a importar, chamar ou registrar a etapa de Proventos.
-
-### Removido — CLI legada de sincronização de Proventos (14/08/2026)
-
-- Removido `run_proventos_sync.py`, sem consumidores, entry point ou automação no projeto.
-- A CLI permitia chamar diretamente `run_backfill` e `run_daily_proventos_sync`, duplicando o bootstrap certificado e contornando seus gates explícitos.
-- Adicionado gate estrutural para impedir a reintrodução dessa porta manual; os serviços compartilhados permanecem preservados enquanto seus consumidores e adapters canônicos são auditados.
-
-### Alterado — FX DB-first nos snapshots por classe (14/08/2026)
-
-- `portfolio_class_snapshot_service` deixou de importar `fx_service` e passou a consumir exclusivamente `fx_rates` pelo leitor persistido.
-- A cobertura USD-BRL necessária é pré-carregada antes da exclusão/reconstrução dos snapshots; ausência aborta explicitamente o bloco sem provider ou taxa fixa.
-- Valores cambiais permanecem em `Decimal` e os snapshots monetários continuam quantizados em R$ 0,01.
-- Tesouro Direto e Renda Fixa continuam indisponíveis neste TWR por classe e não tiveram valuation alterado.
-
-### Removido — serviço órfão de posições com provider (14/08/2026)
-
-- Removido `position_service.py`, sem consumidores de produção e duplicado em relação a `portfolio_service`/`canonical_positions_service`.
-- Eliminado o único caminho desse serviço que chamava `quotes_service.get_current_price` e convertia ausência de cotação em preço médio silencioso.
-- Adicionado gate estrutural para impedir a reintrodução do módulo ou de imports de produção.
-- Endpoints públicos, contratos canônicos e comportamento de Tesouro/Renda Fixa não foram alterados.
-
-### Alterado — baseline pós-segurança e retomada da sanitização (14/08/2026)
-
-- PR #271 mergeada e Issue #269 concluída no baseline `4ff76c4fe9f1738db9b392b3568fcb35f81185e7`, alinhando `main` e `stable-15jun` após as correções de SSRF, path injection, dependências vulneráveis, log injection e hardening da imagem.
-- #268 concluiu o smoke funcional e o gate global no SHA `a8444b545a10aa7d48dd70f08a07e3fa386605d6`, estabelecendo `test_ready=true` apenas para dados fictícios/descartáveis.
-- `ready_for_real_data=false` permanece obrigatório até #226/#216/#158 e decisão formal da #227.
-- Branches obsoletas foram removidas após preservação dos snapshots nas tags `archive/recover-snapshot-b1c8080c` e `archive/corporate-actions-5e110967`; branches Dependabot remanescentes seguem fila técnica separada.
-- A ordem corrente passa a ser #247 (sanitização residual) → #150 → #149 → #226/#216/#158 → #253/#246+#57.
-
-### Alterado — universo CRIPTO Top 100 por capitalização (11/08/2026)
-
-- Criada a Issue #267 para separar explicitamente catálogo descoberto, universo CRIPTO suportado e histórico certificado.
-- O universo operacional de CRIPTO passa a ser a interseção entre as Top 100 por `market_cap_rank` do CoinGecko e os símbolos disponíveis no catálogo CRIPTO da BRAPI.
-- CoinGecko é usado somente como fonte de ranking de relevância durante bootstrap/readiness; BRAPI continua sendo a integração de disponibilidade/cotações do SGI.
-- O seed CRIPTO deixou de materializar o catálogo BRAPI amplo e agora cria/atualiza somente o universo suportado.
-- O estágio `asset_price_history` do `system-bootstrap.v4` limita o backfill CRIPTO ao mesmo universo suportado.
-- O readiness CRIPTO passou a contar histórico, duplicidades, statuses bloqueantes, seams e shallow histories somente no universo Top 100 suportado.
-- `pre_prod_crypto_seam_audit` e `pre_prod_crypto_shallow_history_audit` receberam filtro opcional de tickers, preservando o comportamento global padrão das CLIs.
-- Ativos CRIPTO previamente persistidos fora do universo suportado não são apagados, não têm `provider_status` reescrito e permanecem auditáveis, mas não devem bloquear o novo readiness CRIPTO.
-- Adicionados testes do contrato de interseção/deduplicação e gate estrutural do seed.
-- README, ROADMAP e `docs/DEVELOPMENT_CONTINUITY.md` foram sincronizados; `ready_for_real_data` permanece `false` até validação operacional e certificação final da #248/#227.
-
-### Alterado — bootstrap v4 com eventos corporativos gated (08/08/2026)
-
-- Criado `system_bootstrap_corporate_events_stage.py` como wrapper dedicado para eventos corporativos globais.
-- A execução é fail-closed sem `SGI_BOOTSTRAP_ENABLE_CORPORATE_EVENTS=true`, com gate anterior à abertura de sessão/provider.
-- O estágio lê somente ativos elegíveis persistidos (`ACAO`, `BDR`, `ETF_NACIONAL`), adquire advisory lock transacional e delega exclusivamente a `sync_corporate_events_for_asset`.
-- O serviço canônico continua responsável pela coleta/normalização/persistência e executa apenas `flush`; o wrapper controla commit único e rollback integral do estágio.
-- `asset_market_pipeline_service` e `dividend_backfill_service` não participam do novo caminho; a mistura legada de `events_synced`/Proventos permanece registrada para auditoria separada.
-- Adicionados testes dirigidos de gate, ordem do lock, filtro DB-first, commit, rollback/stop e relatório determinístico.
-- O orquestrador evoluiu para `system-bootstrap.v4` e passou a registrar `corporate_events` após `asset_dividends`, mantendo fail-fast e `certified_for_real_data=false`.
-- Nenhum provider real foi executado durante estes blocos; a integração é estrutural e ainda depende de validação local integrada/certificação final.
-- README, ROADMAP, arquitetura, continuidade e Issues #254/#250/#248/#129 foram sincronizados com o estado v4.
-
-### Alterado — bootstrap v3, FX certificado e Proventos gated (08/08/2026)
-
-- O checkpoint `0e8d96c081a0e788a9edcf69901a134b29b7f696` foi certificado localmente pelo usuário com build Docker aprovado, 22/22 testes dirigidos, `compileall` e import integral de `app.main` aprovados.
-- O bootstrap passou a exigir identidade auditável compartilhada (`run_id`, branch `stable-15jun` e SHA completo); o disparo administrativo exige o SHA e o startup pode recebê-lo por `SGI_BOOTSTRAP_COMMIT_SHA`.
-- O contrato `system-bootstrap.v2` incorporou câmbio USD-BRL reutilizando o seed transacional PTAX já certificado pela #217, com cobertura própria desde `1994-07-01` e sem fallback BRAPI/AwesomeAPI/fixo.
-- A cobertura temporal deixou de ser um parâmetro global: cada domínio define sua maior janela válida conforme a fonte canônica.
-- O contrato evoluiu para `system-bootstrap.v3` com etapa explícita `asset_dividends`, reutilizando `pre-prod-dividends-seed.v2` e os adapters estritos BRAPI/Yahoo já existentes.
-- Proventos permanecem fail-closed: sem `SGI_BOOTSTRAP_ENABLE_DIVIDENDS=true`, a etapa aborta antes de consultar providers; esse opt-in técnico não substitui a autorização operacional exigida pela #226.
-- O estágio de Proventos escreve exclusivamente em `asset_dividends`, não utiliza `dividend_backfill_service` e não materializa direitos por carteira.
-- `ready_for_real_data` permanece `false`; eventos corporativos eram o próximo domínio obrigatório do bootstrap antes da evolução para v4.
-- README, ROADMAP, arquitetura, continuidade e Issues #248/#250/#226 foram sincronizados com o novo estado.
-
-### Alterado — readiness, lacuna pontual e catálogo DB-first (07/08/2026)
-
-- O checkpoint `113281b7a0153f02007d6d49761be8fef91d77a8` foi certificado localmente com 26/26 testes, `compileall` e import integral de `app.main` aprovados.
-- A Issue #249 foi concluída: `/health` representa liveness/dependências e `/ready` representa readiness operacional, mantendo `ready_for_real_data=false` enquanto o bootstrap global da #248 não estiver completo e certificado.
-- Criado `price_date_gap_resolver_service.py` como única exceção dedicada para cotação histórica ausente: leitura DB-first inicial, janela externa limitada a `target_date - 5 dias .. target_date`, persistência em `asset_prices` e nova leitura DB-first.
-- `get_price_at_date()` permanece leitor puro e não importa o resolvedor; o fallback pontual não usa `period=max`, backfill global ou `stale_snapshot`.
-- Criado `asset_catalog_query_service.py` para sugestões e busca de Tesouro exclusivamente sobre o catálogo persistido pelo bootstrap.
-- `assets.py` deixou de importar providers diretamente para catálogo e histórico: `/suggest` e `/tesouro/search` são DB-first; histórico em `/quote/{ticker}` e `/tesouro/price` usa o resolvedor pontual; apenas cotação atual/intraday continua passando pela fachada canônica de preços.
-- Ativos desconhecidos não são mais descobertos implicitamente por provider durante requests; precisam existir no catálogo persistido.
+- Removido `position_service.py`, sem consumidores de produção, e seu teste exclusivo.
+- Endpoints continuam nas implementações canônicas DB-first.
