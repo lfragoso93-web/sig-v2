@@ -24,7 +24,6 @@ from app.routers import (
     assets,
     auth,
     class_targets,
-    debug,
     dividends,
     fx,
     goals,
@@ -201,10 +200,6 @@ app.include_router(prices.router,          prefix=f"{PREFIX}/prices",       tags
 
 app.include_router(irpf.router,            prefix=f"{PREFIX}/irpf",         tags=["irpf"])
 app.include_router(analysis.router,        prefix=f"{PREFIX}/analysis",     tags=["analysis"])
-
-if settings.APP_DEBUG or __import__('os').getenv("ADMIN_SECRET"):
-    app.include_router(debug.router, prefix=f"{PREFIX}/debug", tags=["debug"])
-
 
 @app.get("/health", tags=["health"])
 async def health():

@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — router administrativo de debug (14/08/2026)
+
+- Removida a superfície `/api/v1/debug`, sem consumidores, que permitia listar usuários, redefinir senhas e criar `superadmin` mediante segredo estático paralelo.
+- Removidas a montagem condicional no `main.py` e as configurações órfãs `ADMIN_SECRET` e `DEBUG_RATE_LIMIT`.
+- Gestão legítima de usuários permanece em `/api/v1/admin`, protegida por JWT e `require_superadmin`.
+- Adicionado gate de segurança contra a reintrodução do arquivo, rota ou configuração.
+
 ### Removido — backfill legado de Proventos (14/08/2026)
 
 - Removidos `backfill_dividends` e `dividend_backfill_service.py` após confirmação de que nenhum runtime, scheduler, CLI, workflow ou adapter certificado os consumia.

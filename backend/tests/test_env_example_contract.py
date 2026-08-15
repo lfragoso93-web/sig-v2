@@ -39,7 +39,6 @@ def test_env_example_covers_operational_and_docker_variables() -> None:
         "ADMIN_EMAIL",
         "ADMIN_PASSWORD",
         "ADMIN_NAME",
-        "ADMIN_SECRET",
         "SGI_BOOTSTRAP_COMMIT_SHA",
         "SGI_BOOTSTRAP_ENABLE_DIVIDENDS",
         "SGI_BOOTSTRAP_ENABLE_CORPORATE_EVENTS",

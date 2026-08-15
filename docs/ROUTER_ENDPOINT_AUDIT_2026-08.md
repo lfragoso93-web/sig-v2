@@ -158,10 +158,14 @@ Imports diretos de BRAPI/yfinance foram removidos do router; gate estrutural pro
 - Endpoints canônicos versionados, PDF/CSV e projeções fiscais permanecem DB-first.
 - O relatório completo legado continua apenas como compatibilidade read-only em memória e não será removido sem prova de consumidores externos.
 
-### Debug — CONDICIONAL/ADMIN SENSÍVEL
+### Debug — REMOVIDO
 
-- Condicionado por `APP_DEBUG` ou `ADMIN_SECRET` no `app.main` e protegido por secret/rate limiting.
-- Não classificado como legado neste momento.
+- O router permitia listar usuários, redefinir senhas e criar `superadmin` com
+  autenticação paralela baseada somente em `ADMIN_SECRET`.
+- Não havia consumidor no frontend ou runtime; as funções administrativas
+  legítimas já existem sob JWT e `require_superadmin`.
+- Router, montagem condicional, segredo e rate limit exclusivos foram removidos;
+  gate estrutural impede sua reintrodução.
 
 ## Frontend confirmado
 

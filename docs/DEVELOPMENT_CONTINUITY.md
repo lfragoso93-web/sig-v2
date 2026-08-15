@@ -139,7 +139,8 @@ Configuração operacional sincronizada:
 
 - `.env.example` cobre todos os campos de `Settings`, Docker, frontend,
   bootstrap e operações controladas de pré-produção;
-- gates de bootstrap e router de debug permanecem desabilitados por padrão;
+- gates de bootstrap permanecem desabilitados por padrão; o router de debug foi
+  removido no décimo terceiro recorte;
 - Compose encaminha `VITE_API_URL` ao build do frontend;
 - teste estrutural impede nova deriva entre código e exemplo de ambiente.
 
@@ -207,9 +208,19 @@ Décimo segundo recorte concluído:
 - preservado o teste financeiro DB-first de eventos não monetários;
 - gate estrutural passou a exigir a ausência física do serviço removido.
 
+Décimo terceiro recorte concluído:
+
+- removido o router de debug, sem consumidores, que expunha listagem de usuários,
+  redefinição de senha e criação de `superadmin` por segredo estático paralelo;
+- removidas a montagem condicional e as configurações órfãs `ADMIN_SECRET` e
+  `DEBUG_RATE_LIMIT`;
+- operações administrativas legítimas permanecem em `/admin`, protegidas por
+  JWT e `require_superadmin`;
+- gate estrutural impede a reintrodução do arquivo, rota ou configuração.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
-- restringir/remover o router de debug conforme ambiente e autenticação;
+- router de debug removido no décimo terceiro recorte;
 - remover `frontend/src/App.tsx` somente após confirmar ausência de imports;
 - revisar placeholder de Análise, aliases, redirects, módulos órfãos e catches amplos;
 - preservar #246 + #57 como macroprojeto bloqueado.

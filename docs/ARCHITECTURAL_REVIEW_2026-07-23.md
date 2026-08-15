@@ -54,7 +54,7 @@ Entradas (CSV / lançamentos / provedores)
 
 1. A Issue #83 diverge parcialmente da implementação: backup/restore administrativo existe, mas o restore ainda requer revisão de reautenticação, upload e auditoria no `AuditLog`.
 2. O serviço legado de rentabilidade permanece dependência de produção para invalidação de cache em consumidores residuais.
-3. O router administrativo de debug pode criar usuário privilegiado e redefinir senha quando habilitado; deve ser removido ou isolado antes do go-live.
+3. Resolvido em 14/08/2026: o router administrativo de debug e sua autenticação paralela por segredo estático foram removidos.
 
 ### Média prioridade
 
@@ -97,7 +97,7 @@ Entradas (CSV / lançamentos / provedores)
 ## Riscos de produção remanescentes
 
 - limpeza real sem nova autorização operacional: crítico;
-- router administrativo de debug: alto;
+- router administrativo de debug: risco alto eliminado em 14/08/2026;
 - restore administrativo sem reautenticação/auditoria completa: alto;
 - serviço legado de rentabilidade reutilizável: médio-alto;
 - TWR Tesouro/RF e IBOV incompletos: médio, com ausência explícita preservada;
@@ -109,7 +109,7 @@ Entradas (CSV / lançamentos / provedores)
 |---|---|---|
 | P0 | Criar Issue de autorização da limpeza real | Separa ensaio de execução operacional |
 | P0 | Atualizar a Issue #158 e runbook operacional | Mantém o rebuild auditável |
-| P0 | Endurecer/remover debug router | Segurança de go-live |
+| Concluído | Router de debug removido | Segurança de go-live; autenticação administrativa permanece sob JWT + `require_superadmin` |
 | P1 | Concluir backup/restore admin #83 | Restore seguro e auditado |
 | P1 | Remover legado #151 | Elimina fórmulas e cache obsoletos |
 | P1 | Materializar IBOV #150 | Benchmark DB-first |
