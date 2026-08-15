@@ -405,6 +405,16 @@ Trigésimo terceiro recorte concluído:
 - nenhum payload desconhecido é navegado ou renderizado sem narrowing;
 - gate global confirma ausência de `catch (...: any)` em `frontend/src`.
 
+Trigésimo quarto recorte concluído:
+
+- removidos seis serviços HTTP sem consumidores: transações, autenticação,
+  câmbio, metas de classe, performance e metas;
+- os hooks/contextos ativos foram confirmados como entradas canônicas e
+  preservados;
+- removidas junto ao código morto URLs com `/api/v1` duplicado sobre o cliente
+  que já aplica esse prefixo;
+- gate estrutural protege as ausências e os seis consumidores válidos.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - router de debug removido no décimo terceiro recorte;

@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — serviços HTTP frontend órfãos (15/08/2026)
+
+- Removidos seis módulos sem consumidores para transações, autenticação, câmbio, metas de classe, performance e metas.
+- Hooks/contextos canônicos foram preservados e passam a ser as únicas entradas HTTP dessas áreas.
+- Eliminadas também URLs mortas com prefixo `/api/v1` duplicado; gate estrutural protege ausências e entradas válidas.
+
 ### Alterado — erros HTTP restantes sem `any` no frontend (15/08/2026)
 
 - Recuperação de senha, atualização de perfil e troca de senha usam extração tipada de detalhe Axios.
