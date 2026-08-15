@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — backfill legado de Proventos (14/08/2026)
+
+- Removidos `backfill_dividends` e `dividend_backfill_service.py` após confirmação de que nenhum runtime, scheduler, CLI, workflow ou adapter certificado os consumia.
+- Removidos testes exclusivos do fluxo antigo; as nove regras úteis de normalização foram migradas para uma suíte unitária canônica.
+- Preservado o teste DB-first que impede eventos não monetários de contaminarem agregados financeiros.
+- O gate estrutural agora exige a ausência física do serviço; ingestão permanece exclusiva do seed/bootstrap certificado e explicitamente habilitado.
+
 ### Alterado — parser canônico do payload BRAPI de Proventos (14/08/2026)
 
 - Extraídas para `dividend_brapi_payload.py` a seleção de respostas por ticker e a interpretação das variações de payload de ações e FIIs.

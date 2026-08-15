@@ -117,9 +117,9 @@ Estado atual do projeto em 26 Jun 2026. Ponto de partida para a proxima sessao.
 ## Decisoes de arquitetura consolidadas
 
 - **AsyncSession** em todos os servicos e routers do backend
-- **Dois niveis de provento:** `asset_dividends` (global) + `dividends` (carteira)
-- **SKIP_TYPES:** CRIPTO, TESOURO_DIRETO, RENDA_FIXA ignorados no backfill
-- **Calculo de quantity:** posicao liquida na data-ex via `Transaction(portfolio_id, ticker, date <= ex_date)`
+- **Proventos:** `asset_dividends` é o catálogo global; direitos por carteira são projeções somente leitura
+- **Ingestão:** ocorre apenas pelo seed/bootstrap certificado e explicitamente habilitado
+- **Cálculo de quantity:** posição histórica elegível por `Transaction`, priorizando data de direito e usando data-ex como fallback
 - **net_value:** `total_value * 0.85` para JCP; `total_value` para os demais
 - **Prefixo de rotas:** gerenciado pelo `main.py` — nao hardcodar `/api/v1` nos routers
 - **Tipos de ativo:** fonte unica em `asset_types.py`

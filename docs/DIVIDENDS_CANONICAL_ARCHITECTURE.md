@@ -75,7 +75,7 @@ possuir o ativo hoje não cria direito retroativo.
 | `proventos_daily_sync_service.py` | Orquestração diária paralela de eventos | Removido | Ficou órfão após a contração do scheduler, da CLI e do full rebuild; gate estrutural impede sua reintrodução |
 | `dividend_event_normalizer.py` | Modelo e normalização de payloads globais | Canônico | Módulo neutro, sem SQLAlchemy, HTTP ou dependência do backfill legado; usado pelo collector e persistência certificados |
 | `dividend_brapi_payload.py` | Interpretação estrutural do payload BRAPI | Canônico | Módulo puro compartilhado pelo adapter certificado e pelo fetcher temporário, sem HTTP, SQLAlchemy ou dependência reversa do legado |
-| `dividend_backfill_service.py` | Fetchers e persistência legados | Em decomposição | Modelo, parser de eventos e parser BRAPI extraídos; o adapter certificado não depende mais deste módulo |
+| `dividend_backfill_service.py` | Fetchers e persistência legados | Removido | Sem consumidores de runtime; seed certificado, parser BRAPI e normalizador canônico preservam as responsabilidades válidas |
 | `asset_market_pipeline_service.py` | Pipeline paralelo de ativo, preços e logo | Removido | Ficou sem consumidores após a retirada de onboarding, batch, CLIs e enriquecimento opcional do seed |
 | `asset_seed_service.py` | Catálogo e metadados fornecidos pela fonte | Canônico | Não expõe enriquecimento amplo; históricos e eventos pertencem aos estágios dedicados do bootstrap |
 | `asset_onboarding_service.py` | Background task de enriquecimento após criação | Removido | Serviço órfão; o CRUD de transações já proibia importação ou agendamento dessa ingestão externa |

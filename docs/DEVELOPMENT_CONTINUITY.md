@@ -197,6 +197,16 @@ Décimo primeiro recorte concluído:
 - gate estrutural proíbe HTTP, SQLAlchemy e dependência reversa no parser;
 - `backfill_dividends` ficou isolado para decisão de remoção no próximo recorte.
 
+Décimo segundo recorte concluído:
+
+- removidos `backfill_dividends` e `dividend_backfill_service.py` após a
+  confirmação de ausência de consumidores de runtime;
+- removidos os testes exclusivos que legitimavam a porta legada;
+- as nove regras úteis do parser foram migradas para a suíte unitária do
+  normalizador canônico;
+- preservado o teste financeiro DB-first de eventos não monetários;
+- gate estrutural passou a exigir a ausência física do serviço removido.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - restringir/remover o router de debug conforme ambiente e autenticação;
