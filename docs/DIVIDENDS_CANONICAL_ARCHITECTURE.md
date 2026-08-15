@@ -77,7 +77,7 @@ possuir o ativo hoje não cria direito retroativo.
 | `asset_market_pipeline_service.py` | Catálogo, histórico de preços e logo por ativo | Confinado | Import, argumento, resultado e execução de eventos removidos; o domínio entra somente pelo bootstrap gated |
 | `asset_seed_service.py` | Catálogo e enriquecimento opcional de preços/logos | Confinado | `run_market_enrichment` descreve o contrato real; bootstrap usa `False` e eventos não participam do seed |
 | `asset_onboarding_service.py` | Background task de enriquecimento após criação | Removido | Serviço órfão; o CRUD de transações já proibia importação ou agendamento dessa ingestão externa |
-| Batch e CLIs de mercado | Operações explícitas de preços e logos | Confinado | Não expõem opção, métrica ou import de eventos/Proventos |
+| Batch e CLIs de mercado | Backfill manual paralelo de preços e logos | Removido | Sem consumidores, scheduler ou runbook; duplicavam as etapas dedicadas do bootstrap e a manutenção de fechamento |
 | `run_proventos_sync.py` | Coleta manual global, inclusive por ticker | Removido | CLI órfã duplicava o bootstrap certificado e permitia chamar portas legadas sem seus gates; regressão estrutural impede sua reintrodução |
 | `dividend_history_seed_service.py` | Complemento histórico global via Yahoo | Canônico | Materialização retirada; persiste exclusivamente `asset_dividends` |
 | `full_market_rebuild_service.py` | Rebuild amplo de mercado e snapshots | Confinado | A etapa paralela de Proventos e suas métricas foram removidas; o seed certificado é a única entrada operacional desse domínio |

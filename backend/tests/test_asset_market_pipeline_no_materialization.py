@@ -15,9 +15,6 @@ from app.services.asset_market_pipeline_service import sync_asset_market_data
     [
         Path("app/services/asset_seed_service.py"),
         Path("app/services/dividend_history_seed_service.py"),
-        Path("app/services/market_pipeline_batch_service.py"),
-        Path("app/cli/run_market_pipeline.py"),
-        Path("app/cli/run_market_pipeline_batch.py"),
         Path("app/core/scheduler.py"),
     ],
 )
@@ -34,22 +31,6 @@ def test_callers_de_aplicacao_nao_solicitam_materializacao(
     )
 
 
-@pytest.mark.parametrize(
-    "cli_path",
-    [
-        Path("app/cli/run_market_pipeline.py"),
-        Path("app/cli/run_market_pipeline_batch.py"),
-    ],
-)
-def test_cli_de_mercado_nao_expoe_opcao_de_materializacao(
-    cli_path: Path,
-) -> None:
-    source_path = Path(__file__).parents[1] / cli_path
-    source = source_path.read_text(encoding="utf-8")
-
-    assert "--skip-materialize" not in source
-
-
 def test_cli_legada_de_proventos_nao_existe() -> None:
     cli_path = Path(__file__).parents[1] / "app/cli/run_proventos_sync.py"
 
@@ -63,6 +44,18 @@ def test_asset_onboarding_legado_nao_existe() -> None:
     )
 
     assert not service_path.exists()
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        Path("app/services/market_pipeline_batch_service.py"),
+        Path("app/cli/run_market_pipeline.py"),
+        Path("app/cli/run_market_pipeline_batch.py"),
+    ],
+)
+def test_portas_manuais_legadas_de_mercado_nao_existem(path: Path) -> None:
+    assert not (Path(__file__).parents[1] / path).exists()
 
 
 def test_seed_historico_nao_importa_materializador() -> None:
@@ -117,9 +110,6 @@ async def test_pipeline_nao_expoe_nem_sincroniza_eventos() -> None:
     [
         Path("app/services/asset_market_pipeline_service.py"),
         Path("app/services/asset_seed_service.py"),
-        Path("app/services/market_pipeline_batch_service.py"),
-        Path("app/cli/run_market_pipeline.py"),
-        Path("app/cli/run_market_pipeline_batch.py"),
     ],
 )
 def test_pipeline_de_mercado_nao_expoe_porta_de_eventos(path: Path) -> None:

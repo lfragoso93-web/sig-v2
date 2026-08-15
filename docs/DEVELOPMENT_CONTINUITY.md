@@ -151,6 +151,15 @@ Sexto recorte concluído:
 - bootstrap e seed B3 continuam desabilitando esse enriquecimento amplo;
 - testes protegem o bootstrap contra reintrodução do nome legado.
 
+Sétimo recorte concluído:
+
+- removidos `market_pipeline_batch_service.py`, `run_market_pipeline.py` e
+  `run_market_pipeline_batch.py`, sem consumidores de runtime ou runbooks;
+- removido o teste exclusivo que legitimava o batch paralelo;
+- gates estruturais exigem a ausência física das três portas;
+- `asset_market_pipeline_service.py` foi preservado temporariamente porque o
+  enriquecimento opcional do asset seed ainda o referencia.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - restringir/remover o router de debug conforme ambiente e autenticação;

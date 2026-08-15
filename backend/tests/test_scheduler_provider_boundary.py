@@ -7,6 +7,9 @@ LEGACY_SCHEDULER_PATH = BACKEND_ROOT / "app" / "scheduler.py"
 LEGACY_PROVENTOS_SYNC_PATH = (
     BACKEND_ROOT / "app" / "services" / "proventos_daily_sync_service.py"
 )
+LEGACY_MARKET_BATCH_PATH = (
+    BACKEND_ROOT / "app" / "services" / "market_pipeline_batch_service.py"
+)
 
 
 def _scheduler_source() -> str:
@@ -63,3 +66,7 @@ def test_legacy_duplicate_scheduler_does_not_exist() -> None:
 
 def test_legacy_daily_proventos_sync_does_not_exist() -> None:
     assert not LEGACY_PROVENTOS_SYNC_PATH.exists()
+
+
+def test_legacy_market_pipeline_batch_does_not_exist() -> None:
+    assert not LEGACY_MARKET_BATCH_PATH.exists()

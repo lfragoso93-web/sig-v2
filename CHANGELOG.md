@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — batch e CLIs paralelos de mercado (14/08/2026)
+
+- Removidos `market_pipeline_batch_service.py`, `run_market_pipeline.py` e `run_market_pipeline_batch.py`, sem consumidores de runtime, scheduler, workflow ou runbook.
+- As portas manuais duplicavam backfill amplo de preços/logos fora das etapas dedicadas do bootstrap e da manutenção recorrente de fechamento.
+- Removido o teste exclusivo do batch e adicionados gates de ausência física para impedir reintrodução acidental.
+- `asset_market_pipeline_service.py` permanece temporariamente restrito ao enriquecimento opcional do asset seed até a próxima decisão de confinamento.
+
 ### Alterado — contrato explícito de enriquecimento do asset seed (14/08/2026)
 
 - Renomeado `run_backfill` para `run_market_enrichment` no asset seed, refletindo que a opção controla somente histórico de preços e logos.
