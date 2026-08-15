@@ -368,6 +368,15 @@ Vigésimo nono recorte concluído:
   silenciosamente subavaliados;
 - testes cobrem as três funções e proíbem captura local.
 
+Trigésimo recorte concluído:
+
+- criada `getApiErrorMessage`, fronteira tipada para mensagens HTTP sem acesso
+  inseguro a `response.data`;
+- carregamento e exclusão de Tesouro trocaram `catch any` por `unknown` e usam
+  a mesma política de detalhe textual, erro nativo e fallback;
+- payloads estruturados não são convertidos implicitamente em texto;
+- testes unitários cobrem os três caminhos da nova fronteira.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - router de debug removido no décimo terceiro recorte;

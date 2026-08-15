@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useTreasury, TreasuryItem } from '../../hooks/useTreasury'
 import { useAppStore } from '../../store/appStore'
+import { getApiErrorMessage } from '../../utils/apiError'
 
 // ── helpers ────────────────────────────────────────────────────────────────
 const fmtBRL = (v: number | null | undefined) =>
@@ -82,8 +83,8 @@ export default function TesouroDiretoPage() {
     try {
       await remove(deleteItem.id)
       setDeleteItem(null)
-    } catch (e: any) {
-      setActionError(e?.response?.data?.detail || 'Erro ao excluir')
+    } catch (error: unknown) {
+      setActionError(getApiErrorMessage(error, 'Erro ao excluir'))
     }
   }
 

@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — erros Axios tipados no fluxo de Tesouro (15/08/2026)
+
+- Criada fronteira reutilizável para extrair `detail` textual de erros Axios sem `any`.
+- Carregamento e exclusão de Tesouro usam `unknown`, preservando mensagem da API, erro nativo e fallback seguro.
+- Testes unitários cobrem detalhe HTTP, erro nativo e payload desconhecido/estruturado.
+
 ### Corrigido — falhas de proventos não convertidas em zero (15/08/2026)
 
 - As três agregações canônicas de proventos da carteira deixaram de converter erro SQL/dado inválido em `0.0` ou mapa vazio.
