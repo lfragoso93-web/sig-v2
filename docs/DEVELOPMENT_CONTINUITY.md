@@ -311,6 +311,16 @@ Vigésimo terceiro recorte concluído:
   Tesouro pode ser informado manualmente após falha;
 - teste estrutural cobre os três hooks e o consumidor.
 
+Vigésimo quarto recorte concluído:
+
+- `fx_service.py` foi reduzido à única responsabilidade ainda consumida: o
+  UPSERT transacional de USD/BRL usado pelo bootstrap;
+- removidas APIs de leitura órfãs que faziam I/O BCB/AwesomeAPI em request e
+  podiam fabricar taxa fixa `5.70`;
+- consumidores financeiros continuam nos readers DB-first dedicados;
+- gate estrutural impede a reintrodução de provider, fallback ou API de leitura
+  nesse módulo de persistência.
+
 ### 247-E — superfícies sensíveis e frontend legado
 
 - router de debug removido no décimo terceiro recorte;

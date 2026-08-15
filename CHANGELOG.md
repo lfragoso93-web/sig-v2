@@ -5,6 +5,12 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — serviço cambial legado em tempo de request (15/08/2026)
+
+- `fx_service.py` foi reduzido à persistência transacional usada pelo bootstrap.
+- Removidas APIs órfãs de leitura que consultavam BCB/AwesomeAPI em requests e podiam retornar taxa fixa `5.70`.
+- Consumidores financeiros permanecem nos readers DB-first; gate estrutural protege a fronteira sem provider e sem fallback.
+
 ### Corrigido — erros explícitos nas consultas auxiliares de ativos (15/08/2026)
 
 - Buscas de ativos/Tesouro e preço histórico de título continuam fail-soft, mas passam a retornar erro explícito além de lista/preço vazio.
