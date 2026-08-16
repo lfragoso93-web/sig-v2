@@ -2,8 +2,11 @@
 
 from pathlib import Path
 
+import pytest
 
-ROOT = Path(__file__).resolve().parents[2]
+
+BACKEND = Path(__file__).resolve().parents[1]
+ROOT = BACKEND.parent
 FRONTEND_SRC = ROOT / "frontend" / "src"
 REMOVED_PATHS = (
     FRONTEND_SRC / "pages" / "AnalisePage.tsx",
@@ -16,11 +19,18 @@ REMOVED_PATHS = (
 )
 
 
+def _require_frontend_checkout() -> None:
+    if not FRONTEND_SRC.is_dir():
+        pytest.skip("frontend indisponivel na imagem backend isolada")
+
+
 def test_frontend_legacy_surfaces_are_not_available() -> None:
+    _require_frontend_checkout()
     assert [str(path) for path in REMOVED_PATHS if path.exists()] == []
 
 
 def test_canonical_frontend_entries_remain_available() -> None:
+    _require_frontend_checkout()
     required_paths = (
         FRONTEND_SRC / "main.tsx",
         FRONTEND_SRC / "router" / "ProtectedRoute.tsx",
@@ -33,6 +43,7 @@ def test_canonical_frontend_entries_remain_available() -> None:
 
 
 def test_patrimonio_routes_use_the_canonical_page_and_direct_children() -> None:
+    _require_frontend_checkout()
     source = (FRONTEND_SRC / "main.tsx").read_text(encoding="utf-8")
 
     assert "from '@/pages/PatrimonioPage'" in source
