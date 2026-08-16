@@ -118,6 +118,13 @@ interface MenuCoords {
   maxHeight: number
 }
 
+interface AssetMenuItem {
+  icon: React.ReactNode
+  label: string
+  onClick: () => void
+  badge?: string
+}
+
 function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
   const [open, setOpen] = useState(false)
   const [coords, setCoords] = useState<MenuCoords | null>(null)
@@ -191,7 +198,7 @@ function AssetMenu({ ticker, assetLabel, assetType }: AssetMenuProps) {
     setOpen(false)
   }, [location.pathname, location.search])
 
-  const items = [
+  const items: AssetMenuItem[] = [
     {
       icon: <Plus size={13} />,
       label: 'Adicionar Lançamento',
