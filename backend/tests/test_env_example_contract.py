@@ -1,16 +1,28 @@
 """Contrato estrutural do arquivo de configuração distribuído com o projeto."""
 from pathlib import Path
 
+import pytest
+
 from app.core.config import Settings
 
 
-ROOT = Path(__file__).resolve().parents[2]
+BACKEND = Path(__file__).resolve().parents[1]
+ROOT = BACKEND.parent
 ENV_EXAMPLE = ROOT / ".env.example"
 COMPOSE = ROOT / "docker-compose.yml"
-BACKEND = ROOT / "backend"
+
+
+def _require_repository_files() -> None:
+    missing = [path for path in (ENV_EXAMPLE, COMPOSE) if not path.is_file()]
+    if missing:
+        pytest.skip(
+            "contrato do repositorio indisponivel na imagem backend isolada: "
+            + ", ".join(str(path) for path in missing)
+        )
 
 
 def _declared_variables() -> set[str]:
+    _require_repository_files()
     variables: set[str] = set()
     for raw_line in ENV_EXAMPLE.read_text(encoding="utf-8").splitlines():
         line = raw_line.strip()
@@ -49,11 +61,14 @@ def test_env_example_covers_operational_and_docker_variables() -> None:
     assert required - declared == set()
 
 
-def test_legacy_admin_seed_contract_is_not_distributed() -> None:
+def test_legacy_admin_seed_is_not_shipped_by_backend() -> None:
+    assert not (BACKEND / "seed_admin.py").exists()
+
+
+def test_legacy_admin_env_contract_is_not_distributed() -> None:
     declared = _declared_variables()
 
     assert {"ADMIN_EMAIL", "ADMIN_PASSWORD", "ADMIN_NAME"}.isdisjoint(declared)
-    assert not (BACKEND / "seed_admin.py").exists()
 
 
 def test_python_backend_does_not_ship_empty_node_lockfile() -> None:
@@ -61,6 +76,7 @@ def test_python_backend_does_not_ship_empty_node_lockfile() -> None:
 
 
 def test_compose_forwards_frontend_api_url_to_build() -> None:
+    _require_repository_files()
     compose = COMPOSE.read_text(encoding="utf-8")
 
     assert "VITE_API_URL: ${VITE_API_URL:-}" in compose
