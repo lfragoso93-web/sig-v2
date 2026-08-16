@@ -201,6 +201,7 @@ app.include_router(prices.router,          prefix=f"{PREFIX}/prices",       tags
 app.include_router(irpf.router,            prefix=f"{PREFIX}/irpf",         tags=["irpf"])
 app.include_router(analysis.router,        prefix=f"{PREFIX}/analysis",     tags=["analysis"])
 
+
 @app.get("/health", tags=["health"])
 async def health():
     from app.services.system_readiness_service import get_bootstrap_readiness
