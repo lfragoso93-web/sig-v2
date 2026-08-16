@@ -37,6 +37,8 @@ _SEED_TYPES: list[tuple[str, AssetType]] = [
 ]
 
 _NO_HISTORY_SUFFIX_RE = re.compile(r"^[A-Z0-9]{4,6}(3|4|5|6|11|31|32|33|34|35)$")
+
+
 @dataclass
 class SeedResult:
     created: int = 0
