@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.security import hash_password
+from app.core.log_safety import sanitize_log_value
 from app.models.user import User, UserRole
 from app.schemas.user import (
     UserCreate, UserListResponse, UserResponse,
@@ -24,7 +25,6 @@ from app.schemas.audit_log import (
 from app.services.audit_log_service import AuditLogService
 from datetime import datetime
 import logging
-import traceback
 import os
 import math
 
@@ -269,21 +269,22 @@ async def _run_snapshot_backfill_bg(portfolio_id: int | None, force: bool) -> No
                         "[snapshot_backfill_bg] portfolio=%s: %d snapshots gerados",
                         pid, count,
                     )
-                except Exception as e:
+                except Exception as exc:
                     errors += 1
                     logger.error(
-                        "[snapshot_backfill_bg] portfolio=%s falhou: %s\n%s",
-                        pid, e, traceback.format_exc(),
+                        "[snapshot_backfill_bg] portfolio=%s falhou: %s",
+                        pid,
+                        sanitize_log_value(exc),
                     )
 
             logger.info(
                 "[snapshot_backfill_bg] CONCLUIDO: %d snapshots gerados, %d erros",
                 total_snapshots, errors,
             )
-    except Exception as e:
+    except Exception as exc:
         logger.error(
-            "[snapshot_backfill_bg] FALHA GERAL: %s\n%s",
-            e, traceback.format_exc(),
+            "[snapshot_backfill_bg] FALHA GERAL: %s",
+            sanitize_log_value(exc),
         )
 
 
@@ -372,12 +373,12 @@ async def _run_database_backup_bg(db_url: str) -> None:
         else:
             logger.error(
                 "[backup_bg] ========== BACKUP FALHOU: %s ==========",
-                result["error"],
+                sanitize_log_value(result["error"]),
             )
-    except Exception as e:
+    except Exception as exc:
         logger.error(
-            "[backup_bg] ========== BACKUP FALHOU: %s\n%s ==========",
-            e, traceback.format_exc(),
+            "[backup_bg] ========== BACKUP FALHOU: %s ==========",
+            sanitize_log_value(exc),
         )
 
 
@@ -467,7 +468,7 @@ async def admin_restore_database(
 
     logger.warning(
         "[restore] Requisição de restore recebida para: %s — adicionando task ao background",
-        backup_filename
+        sanitize_log_value(backup_filename)
     )
     background_tasks.add_task(backup_service.restore_database_backup, db_url, backup_filename)
 
@@ -622,102 +623,62 @@ async def admin_get_audit_log_detail(
         "user_agent": log.user_agent,
         "status": log.status,
         "error_message": log.error_message,
-        "old_values": log.old_values,
-        "new_values": log.new_values,
-        "changes": log.changes,
         "created_at": log.created_at,
     }
 
 
-@router.get("/audit-logs/user/{user_id}", response_model=PaginatedAuditLogs)
-async def admin_get_user_audit_logs(
-    user_id: int,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=500),
+@router.get("/audit-logs/stats/summary", response_model=AuditStatsResponse)
+async def admin_audit_stats(
+    days: int = Query(30, ge=1, le=365),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_superadmin),
 ):
-    """
-    Retorna logs de auditoria de um usuário específico.
-
-    Restrito a SuperAdmins.
-    """
-    logs, total = await AuditLogService.get_user_audit_logs(
-        db,
-        user_id=user_id,
-        page=page,
-        page_size=page_size,
-    )
-
-    return {
-        "items": [
-            {
-                "id": log.id,
-                "user_id": log.user_id,
-                "action": log.action,
-                "resource_type": log.resource_type,
-                "resource_id": log.resource_id,
-                "portfolio_id": log.portfolio_id,
-                "ip_address": log.ip_address,
-                "user_agent": log.user_agent,
-                "status": log.status,
-                "error_message": log.error_message,
-                "created_at": log.created_at,
-            }
-            for log in logs
-        ],
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-        "pages": math.ceil(total / page_size) if total > 0 else 0,
-    }
+    """Retorna estatísticas resumidas de auditoria."""
+    return await AuditLogService.get_audit_stats(db, days=days)
 
 
-@router.get("/audit-logs/stats", response_model=AuditStatsResponse)
-async def admin_get_audit_stats(
+@router.get("/audit-logs/stats/users", response_model=list[UserAuditStatsResponse])
+async def admin_user_audit_stats(
+    days: int = Query(30, ge=1, le=365),
+    limit: int = Query(10, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_superadmin),
 ):
-    """
-    Retorna estatísticas gerais de auditoria.
-
-    Inclui: total de logs, logs de hoje, desta semana, breakdown de ações,
-    tipos de recursos, e operações que falharam.
-
-    Restrito a SuperAdmins.
-    """
-    return await AuditLogService.get_audit_stats(db)
-
-
-@router.get("/audit-logs/user/{user_id}/stats", response_model=UserAuditStatsResponse)
-async def admin_get_user_audit_stats(
-    user_id: int,
-    db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_superadmin),
-):
-    """
-    Retorna estatísticas de auditoria de um usuário.
-
-    Inclui: total de ações, breakdown de ações, última ação, ações falhadas.
-
-    Restrito a SuperAdmins.
-    """
-    return await AuditLogService.get_user_audit_stats(db, user_id)
+    """Retorna estatísticas de auditoria por usuário."""
+    return await AuditLogService.get_user_audit_stats(db, days=days, limit=limit)
 
 
 @router.delete("/audit-logs/cleanup", response_model=AuditLogCleanupResponse)
 async def admin_cleanup_audit_logs(
-    days_to_keep: int = Query(90, ge=30, le=365, description="Dias de logs a manter"),
-    dry_run: bool = Query(True, description="Se True, apenas simula a limpeza"),
+    older_than_days: int = Query(90, ge=30, le=3650),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_superadmin),
 ):
-    """
-    Limpa logs de auditoria mais antigos que 'days_to_keep'.
+    """Remove logs de auditoria antigos."""
+    deleted_count = await AuditLogService.cleanup_old_logs(db, older_than_days)
+    return AuditLogCleanupResponse(deleted_count=deleted_count)
 
-    Se dry_run=True (padrão), apenas retorna quantos seriam deletados sem realmente deletar.
-    Se dry_run=False, realmente deleta os logs antigos.
 
-    Restrito a SuperAdmins.
-    """
-    return await AuditLogService.cleanup_audit_logs(db, days_to_keep, dry_run)
+# ── System Bootstrap ────────────────────────────────────────────────────────────────────────────────
+
+from app.services.system_bootstrap_trigger_service import (
+    enqueue_system_bootstrap,
+    get_system_bootstrap_status,
+)
+
+
+@router.post("/bootstrap", status_code=status.HTTP_202_ACCEPTED)
+async def admin_system_bootstrap(
+    background_tasks: BackgroundTasks,
+    _: User = Depends(require_superadmin),
+):
+    """Dispara o bootstrap sistêmico canônico em background."""
+    return await enqueue_system_bootstrap(background_tasks)
+
+
+@router.get("/bootstrap/status")
+async def admin_system_bootstrap_status(
+    _: User = Depends(require_superadmin),
+):
+    """Retorna o último estado conhecido do bootstrap sistêmico."""
+    return get_system_bootstrap_status()
