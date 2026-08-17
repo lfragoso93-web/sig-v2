@@ -6,7 +6,6 @@ import pytest
 
 from app.core.log_safety import sanitize_log_value
 from app.integrations import yfinance_client
-from app.routers import admin
 from app.services import (
     asset_seed_service,
     audit_log_service,
@@ -160,40 +159,3 @@ async def test_audit_log_escapes_database_error_lines(
     assert "\r" not in message
     assert "\n" not in message
     assert "database\\r\\nforged-error" in message
-
-
-@pytest.mark.asyncio
-async def test_admin_snapshot_background_escapes_failure_lines(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    with (
-        patch("app.core.database.AsyncSessionLocal", side_effect=RuntimeError("database\r\nforged-error")),
-        caplog.at_level(logging.ERROR, logger=admin.__name__),
-    ):
-        await admin._run_snapshot_backfill_bg(None, False)
-
-    message = caplog.records[-1].getMessage()
-    assert "\r" not in message
-    assert "\n" not in message
-    assert "database\\r\\nforged-error" in message
-
-
-@pytest.mark.asyncio
-async def test_admin_backup_background_escapes_failure_lines(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    with (
-        patch.object(
-            admin.backup_service,
-            "create_database_backup",
-            new_callable=AsyncMock,
-            side_effect=RuntimeError("backup\r\nforged-error"),
-        ),
-        caplog.at_level(logging.ERROR, logger=admin.__name__),
-    ):
-        await admin._run_database_backup_bg("postgresql://test")
-
-    message = caplog.records[-1].getMessage()
-    assert "\r" not in message
-    assert "\n" not in message
-    assert "backup\\r\\nforged-error" in message

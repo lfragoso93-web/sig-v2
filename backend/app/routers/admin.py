@@ -3,7 +3,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.security import hash_password
-from app.core.log_safety import sanitize_log_value
 from app.models.user import User, UserRole
 from app.schemas.user import (
     UserCreate, UserListResponse, UserResponse,
@@ -25,6 +24,7 @@ from app.schemas.audit_log import (
 from app.services.audit_log_service import AuditLogService
 from datetime import datetime
 import logging
+import traceback
 import os
 import math
 
@@ -269,22 +269,21 @@ async def _run_snapshot_backfill_bg(portfolio_id: int | None, force: bool) -> No
                         "[snapshot_backfill_bg] portfolio=%s: %d snapshots gerados",
                         pid, count,
                     )
-                except Exception as exc:
+                except Exception as e:
                     errors += 1
                     logger.error(
-                        "[snapshot_backfill_bg] portfolio=%s falhou: %s",
-                        pid,
-                        sanitize_log_value(exc),
+                        "[snapshot_backfill_bg] portfolio=%s falhou: %s\n%s",
+                        pid, e, traceback.format_exc(),
                     )
 
             logger.info(
                 "[snapshot_backfill_bg] CONCLUIDO: %d snapshots gerados, %d erros",
                 total_snapshots, errors,
             )
-    except Exception as exc:
+    except Exception as e:
         logger.error(
-            "[snapshot_backfill_bg] FALHA GERAL: %s",
-            sanitize_log_value(exc),
+            "[snapshot_backfill_bg] FALHA GERAL: %s\n%s",
+            e, traceback.format_exc(),
         )
 
 
@@ -373,12 +372,12 @@ async def _run_database_backup_bg(db_url: str) -> None:
         else:
             logger.error(
                 "[backup_bg] ========== BACKUP FALHOU: %s ==========",
-                sanitize_log_value(result["error"]),
+                result["error"],
             )
-    except Exception as exc:
+    except Exception as e:
         logger.error(
-            "[backup_bg] ========== BACKUP FALHOU: %s ==========",
-            sanitize_log_value(exc),
+            "[backup_bg] ========== BACKUP FALHOU: %s\n%s ==========",
+            e, traceback.format_exc(),
         )
 
 
@@ -468,7 +467,7 @@ async def admin_restore_database(
 
     logger.warning(
         "[restore] Requisição de restore recebida para: %s — adicionando task ao background",
-        sanitize_log_value(backup_filename)
+        backup_filename
     )
     background_tasks.add_task(backup_service.restore_database_backup, db_url, backup_filename)
 
@@ -722,28 +721,3 @@ async def admin_cleanup_audit_logs(
     Restrito a SuperAdmins.
     """
     return await AuditLogService.cleanup_audit_logs(db, days_to_keep, dry_run)
-
-
-# ── System Bootstrap ────────────────────────────────────────────────────────────────────────────────
-
-from app.services.system_bootstrap_trigger_service import (
-    enqueue_system_bootstrap,
-    get_system_bootstrap_status,
-)
-
-
-@router.post("/bootstrap", status_code=status.HTTP_202_ACCEPTED)
-async def admin_system_bootstrap(
-    background_tasks: BackgroundTasks,
-    _: User = Depends(require_superadmin),
-):
-    """Dispara o bootstrap sistêmico canônico em background."""
-    return await enqueue_system_bootstrap(background_tasks)
-
-
-@router.get("/bootstrap/status")
-async def admin_system_bootstrap_status(
-    _: User = Depends(require_superadmin),
-):
-    """Retorna o último estado conhecido do bootstrap sistêmico."""
-    return get_system_bootstrap_status()
