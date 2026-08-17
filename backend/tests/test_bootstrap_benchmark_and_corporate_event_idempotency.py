@@ -84,7 +84,7 @@ async def test_corporate_event_sync_second_execution_does_not_create_duplicate(m
         side_effect=[
             _CorporateEventsResult([]),
             _CorporateEventsResult(
-                [(expected_action.source, expected_action.source_event_id, None)]
+                [(expected_action.source, expected_action.source_event_id)]
             ),
         ]
     )
