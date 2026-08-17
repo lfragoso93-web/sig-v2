@@ -20,7 +20,6 @@ from app.core.scheduler import start_scheduler
 from app.middleware import SecurityHeadersMiddleware
 from app.routers import (
     admin,
-    analysis,
     assets,
     auth,
     class_targets,
@@ -199,7 +198,6 @@ app.include_router(fx.router,              prefix=f"{PREFIX}/fx",           tags
 app.include_router(prices.router,          prefix=f"{PREFIX}/prices",       tags=["prices"])
 
 app.include_router(irpf.router,            prefix=f"{PREFIX}/irpf",         tags=["irpf"])
-app.include_router(analysis.router,        prefix=f"{PREFIX}/analysis",     tags=["analysis"])
 
 
 @app.get("/health", tags=["health"])
