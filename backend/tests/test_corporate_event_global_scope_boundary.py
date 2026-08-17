@@ -9,8 +9,6 @@ _SERVICES = _BACKEND / "app" / "services"
 _MODEL = _BACKEND / "app" / "models" / "corporate_event.py"
 _ALLOWED_PORTFOLIO_SCOPE_MODULES = {
     "corporate_action_position_reader.py",
-    "corporate_event_legacy_dry_run_service.py",
-    "corporate_event_legacy_inventory_service.py",
     "corporate_event_service.py",
     "ticker_change_event_service.py",
     "ticker_change_processor.py",
@@ -24,9 +22,7 @@ def _source(path: Path) -> str:
 def test_writer_persists_only_global_corporate_events() -> None:
     source = _source(_SERVICES / "corporate_event_service.py")
 
-    assert "portfolio_id=None" in source
-    assert "portfolio_id=asset" not in source
-    assert "portfolio_id=portfolio" not in source
+    assert "portfolio_id=" not in source
 
 
 def test_reader_excludes_legacy_portfolio_scoped_rows() -> None:
