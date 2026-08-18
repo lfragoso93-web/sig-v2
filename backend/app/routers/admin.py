@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.security import hash_password
+from app.core.log_safety import sanitize_log_value
 from app.models.user import User, UserRole
 from app.schemas.user import (
     UserCreate, UserListResponse, UserResponse,
@@ -467,7 +468,7 @@ async def admin_restore_database(
 
     logger.warning(
         "[restore] Requisição de restore recebida para: %s — adicionando task ao background",
-        backup_filename
+        sanitize_log_value(backup_filename)
     )
     background_tasks.add_task(backup_service.restore_database_backup, db_url, backup_filename)
 

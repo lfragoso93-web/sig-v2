@@ -464,9 +464,9 @@ async def import_csv_transactions(
             result["success"] = True
             await invalidate_portfolio_cache(portfolio_id)
             logger.info(
-                "Imported %d transactions for portfolio %d",
+                "Imported %d transactions for portfolio %s",
                 len(created_transactions),
-                portfolio_id,
+                sanitize_log_value(portfolio_id),
             )
         except Exception as e:
             await db.rollback()

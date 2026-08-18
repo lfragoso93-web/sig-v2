@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.log_safety import sanitize_log_value
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
 
@@ -51,7 +52,7 @@ async def get_persisted_prices_at_date_batch(
         for ticker in tickers:
             logger.warning(
                 "[PersistedPrice] asset %s não encontrado no banco",
-                ticker,
+                sanitize_log_value(ticker),
             )
         return {}
 
@@ -75,8 +76,8 @@ async def get_persisted_prices_at_date_batch(
         if ticker not in prices:
             logger.warning(
                 "[PersistedPrice] preço ausente para %s em %s",
-                ticker,
-                target_date,
+                sanitize_log_value(ticker),
+                sanitize_log_value(target_date),
             )
 
     return prices
