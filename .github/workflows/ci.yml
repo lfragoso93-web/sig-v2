@@ -30,6 +30,7 @@ permissions:
   contents: read
   actions: read
   pull-requests: read
+  security-events: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -258,6 +259,24 @@ jobs:
           ignore-unfixed: true
           trivyignores: .trivyignore
           exit-code: "1"
+
+      - name: Trivy image scan – complete SARIF
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: sig-v2-backend:ci-${{ github.sha }}
+          format: sarif
+          output: trivy-backend.sarif
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+          exit-code: "0"
+
+      - name: Publish Trivy image results
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-backend.sarif
 
   build-and-scan-frontend:
     name: Build and scan frontend Docker image
