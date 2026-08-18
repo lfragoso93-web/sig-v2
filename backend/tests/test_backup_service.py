@@ -1,11 +1,15 @@
 """Testes para backup_service — backup e restore de banco de dados."""
 
+from datetime import UTC, datetime
+from pathlib import Path
+
 from unittest.mock import AsyncMock, MagicMock, mock_open, patch
 
 import pytest
 from app.services.backup_service import (
+    _find_existing_backup_path,
+    _new_backup_path,
     _parse_db_url,
-    _resolve_backup_path,
     create_database_backup,
     delete_backup,
     list_backups,
@@ -93,79 +97,24 @@ class TestCreateDatabaseBackup:
         assert "error" in result
         assert result["error"] is not None
 
-    @patch("app.services.backup_service.Path.mkdir")
-    @patch("app.services.backup_service.asyncio.create_subprocess_exec")
-    async def test_create_backup_with_custom_name(self, mock_subprocess, mock_mkdir):
-        db_url = "postgresql://user:password@localhost/testdb"
-
-        mock_process = AsyncMock()
-        mock_process.returncode = 0
-        mock_process.communicate = AsyncMock(return_value=(b"backup data", b""))
-        mock_subprocess.return_value = mock_process
-
-        with patch("app.services.backup_service.Path.stat") as mock_stat:
-            mock_stat_obj = MagicMock()
-            mock_stat_obj.st_size = 512 * 1024
-            mock_stat.return_value = mock_stat_obj
-
-            with patch("app.services.backup_service.gzip.open", mock_open()):
-                result = await create_database_backup(
-                    db_url,
-                    backup_name="backup_20240101_120000",
-                )
-
-        assert result["success"] is True
-        assert result["backup_id"] == "backup_20240101_120000"
-
-    @pytest.mark.parametrize(
-        "backup_name",
-        [
-            "",
-            "custom_backup",
-            "../outside",
-            "backup_20240101_120000/../../outside",
-            "/tmp/outside",
-            "backup_20240101_120000.sql",
-            "backup_20240101_120000?target=outside",
-            "backup_20240101_120000#fragment",
-            "backup_20240101_120000\r\noutside",
-        ],
-    )
-    @patch("app.services.backup_service.Path.mkdir")
-    @patch("app.services.backup_service.asyncio.create_subprocess_exec")
-    async def test_create_backup_rejects_unsafe_or_noncanonical_name(
-        self,
-        mock_subprocess,
-        mock_mkdir,
-        backup_name,
-    ):
-        result = await create_database_backup(
-            "postgresql://user:password@localhost/testdb",
-            backup_name=backup_name,
-        )
-
-        assert result["success"] is False
-        assert result["error"] == "Invalid backup filename"
-        mock_subprocess.assert_not_awaited()
-
 
 @pytest.mark.asyncio
 class TestRestoreDatabaseBackup:
     @patch("app.services.backup_service.Path.mkdir")
-    @patch("app.services.backup_service.Path.exists")
+    @patch("app.services.backup_service._find_existing_backup_path")
     @patch("app.services.backup_service.asyncio.create_subprocess_exec")
     @patch("builtins.open", new_callable=mock_open)
     async def test_restore_backup_success(
         self,
         mock_file,
         mock_subprocess,
-        mock_exists,
+        mock_find_path,
         mock_mkdir,
     ):
         db_url = "postgresql://user:password@localhost/testdb"
         backup_filename = "backup_20240101_120000.sql.gz"
 
-        mock_exists.return_value = True
+        mock_find_path.return_value = Path("/tmp/db_backups") / backup_filename
 
         mock_process = AsyncMock()
         mock_process.returncode = 0
@@ -179,12 +128,12 @@ class TestRestoreDatabaseBackup:
         assert "backup_20240101_120000" in result["backup_id"]
 
     @patch("app.services.backup_service.Path.mkdir")
-    @patch("app.services.backup_service.Path.exists")
-    async def test_restore_backup_file_not_found(self, mock_exists, mock_mkdir):
+    @patch("app.services.backup_service._find_existing_backup_path")
+    async def test_restore_backup_file_not_found(self, mock_find_path, mock_mkdir):
         db_url = "postgresql://user:password@localhost/testdb"
         backup_filename = "backup_20990101_000000.sql.gz"
 
-        mock_exists.return_value = False
+        mock_find_path.return_value = None
 
         result = await restore_database_backup(db_url, backup_filename)
 
@@ -201,20 +150,20 @@ class TestRestoreDatabaseBackup:
         assert result["error"] == "Invalid backup filename"
 
     @patch("app.services.backup_service.Path.mkdir")
-    @patch("app.services.backup_service.Path.exists")
+    @patch("app.services.backup_service._find_existing_backup_path")
     @patch("app.services.backup_service.asyncio.create_subprocess_exec")
     @patch("builtins.open", new_callable=mock_open)
     async def test_restore_backup_psql_fails(
         self,
         mock_file,
         mock_subprocess,
-        mock_exists,
+        mock_find_path,
         mock_mkdir,
     ):
         db_url = "postgresql://user:password@localhost/testdb"
         backup_filename = "backup_20240101_120000.sql.gz"
 
-        mock_exists.return_value = True
+        mock_find_path.return_value = Path("/tmp/db_backups") / backup_filename
 
         mock_process = AsyncMock()
         mock_process.returncode = 1
@@ -283,24 +232,24 @@ class TestListBackups:
 @pytest.mark.asyncio
 class TestDeleteBackup:
     @patch("app.services.backup_service.Path.mkdir")
-    @patch("app.services.backup_service.Path.exists")
-    @patch("app.services.backup_service.Path.unlink")
-    async def test_delete_backup_success(self, mock_unlink, mock_exists, mock_mkdir):
+    @patch("app.services.backup_service._find_existing_backup_path")
+    async def test_delete_backup_success(self, mock_find_path, mock_mkdir):
         backup_filename = "backup_20240101_120000.sql.gz"
-
-        mock_exists.return_value = True
+        backup_path = MagicMock(spec=Path)
+        mock_find_path.return_value = backup_path
 
         result = await delete_backup(backup_filename)
 
         assert result["success"] is True
         assert result["backup_id"] == "backup_20240101_120000"
+        backup_path.unlink.assert_called_once_with()
 
     @patch("app.services.backup_service.Path.mkdir")
-    @patch("app.services.backup_service.Path.exists")
-    async def test_delete_backup_file_not_found(self, mock_exists, mock_mkdir):
+    @patch("app.services.backup_service._find_existing_backup_path")
+    async def test_delete_backup_file_not_found(self, mock_find_path, mock_mkdir):
         backup_filename = "backup_20990101_000000.sql.gz"
 
-        mock_exists.return_value = False
+        mock_find_path.return_value = None
 
         result = await delete_backup(backup_filename)
 
@@ -315,13 +264,12 @@ class TestDeleteBackup:
         assert result["error"] == "Invalid backup filename"
 
     @patch("app.services.backup_service.Path.mkdir")
-    @patch("app.services.backup_service.Path.exists")
-    @patch("app.services.backup_service.Path.unlink")
-    async def test_delete_backup_error(self, mock_unlink, mock_exists, mock_mkdir):
+    @patch("app.services.backup_service._find_existing_backup_path")
+    async def test_delete_backup_error(self, mock_find_path, mock_mkdir):
         backup_filename = "backup_20240101_120000.sql.gz"
-
-        mock_exists.return_value = True
-        mock_unlink.side_effect = Exception("Permission denied")
+        backup_path = MagicMock(spec=Path)
+        backup_path.unlink.side_effect = Exception("Permission denied")
+        mock_find_path.return_value = backup_path
 
         result = await delete_backup(backup_filename)
 
@@ -329,7 +277,43 @@ class TestDeleteBackup:
         assert result["error"] is not None
 
 
-def test_resolve_backup_path_rejects_symlink_escape(tmp_path):
+def test_new_backup_path_uses_server_generated_canonical_name(tmp_path):
+    now = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+
+    with patch("app.services.backup_service.BACKUPS_DIR", tmp_path):
+        assert _new_backup_path(now) == tmp_path / "backup_20240101_120000.sql.gz"
+
+
+def test_find_existing_backup_path_returns_enumerated_file(tmp_path):
+    backup_path = tmp_path / "backup_20240101_120000.sql.gz"
+    backup_path.write_bytes(b"backup")
+
+    with patch("app.services.backup_service.BACKUPS_DIR", tmp_path):
+        assert _find_existing_backup_path(backup_path.name) == backup_path
+
+
+@pytest.mark.parametrize(
+    "backup_filename",
+    [
+        "",
+        "custom_backup.sql.gz",
+        "../backup_20240101_120000.sql.gz",
+        "/tmp/backup_20240101_120000.sql.gz",
+        "backup_20240101_120000.sql.gz?target=outside",
+        "backup_20240101_120000.sql.gz#fragment",
+        "backup_20240101_120000.sql.gz\r\nforged",
+    ],
+)
+def test_find_existing_backup_path_rejects_noncanonical_names(
+    tmp_path,
+    backup_filename,
+):
+    with patch("app.services.backup_service.BACKUPS_DIR", tmp_path):
+        with pytest.raises(ValueError, match="Invalid backup filename"):
+            _find_existing_backup_path(backup_filename)
+
+
+def test_find_existing_backup_path_rejects_symlink_escape(tmp_path):
     backups_dir = tmp_path / "backups"
     backups_dir.mkdir()
     outside = tmp_path / "outside.sql.gz"
@@ -338,4 +322,4 @@ def test_resolve_backup_path_rejects_symlink_escape(tmp_path):
 
     with patch("app.services.backup_service.BACKUPS_DIR", backups_dir):
         with pytest.raises(ValueError, match="Invalid backup filename"):
-            _resolve_backup_path("backup_20240101_120000.sql.gz")
+            _find_existing_backup_path("backup_20240101_120000.sql.gz")

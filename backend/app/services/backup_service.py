@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from app.core.log_safety import sanitize_log_value
+
 logger = logging.getLogger(__name__)
 
 BACKUPS_DIR = Path("/tmp/db_backups")
@@ -35,20 +37,36 @@ def _ensure_backups_dir() -> None:
     BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def _resolve_backup_path(backup_filename: str) -> Path:
-    """Retorna um backup canonico confinado ao diretorio operacional."""
-
+def _validate_backup_filename(backup_filename: str) -> None:
+    """Valida a identidade externa sem usá-la em uma expressão de path."""
     if not isinstance(backup_filename, str) or not _BACKUP_FILENAME_RE.fullmatch(
         backup_filename,
     ):
         raise ValueError("Invalid backup filename")
 
-    backups_root = BACKUPS_DIR.resolve()
-    backup_path = (backups_root / backup_filename).resolve()
-    if backup_path.parent != backups_root:
-        raise ValueError("Invalid backup filename")
 
+def _new_backup_path(now: datetime) -> Path:
+    """Cria o path de saída somente a partir de dados gerados pelo servidor."""
+    backups_root = BACKUPS_DIR.resolve()
+    backup_filename = f"backup_{now.strftime('%Y%m%d_%H%M%S')}.sql.gz"
+    backup_path = backups_root / backup_filename
     return backup_path
+
+
+def _find_existing_backup_path(backup_filename: str) -> Path | None:
+    """Seleciona um backup pelo nome a partir da enumeração do diretório confiável."""
+    _validate_backup_filename(backup_filename)
+    backups_root = BACKUPS_DIR.resolve()
+
+    for candidate in backups_root.iterdir():
+        if candidate.name != backup_filename:
+            continue
+        backup_path = candidate.resolve()
+        if candidate.is_symlink() or backup_path.parent != backups_root:
+            raise ValueError("Invalid backup filename")
+        return backup_path
+
+    return None
 
 
 def _decompress_backup(backup_path: Path, temp_sql_file: Path) -> None:
@@ -80,7 +98,6 @@ def _parse_db_url(db_url: str) -> dict[str, Any]:
 
 async def create_database_backup(
     db_url: str,
-    backup_name: str | None = None,
 ) -> dict[str, Any]:
     """Cria um backup PostgreSQL comprimido com pg_dump."""
 
@@ -97,12 +114,8 @@ async def create_database_backup(
 
     try:
         now = _utc_now()
-        backup_id = (
-            f"backup_{now.strftime('%Y%m%d_%H%M%S')}"
-            if backup_name is None
-            else backup_name
-        )
-        backup_file_gz = _resolve_backup_path(f"{backup_id}.sql.gz")
+        backup_id = f"backup_{now.strftime('%Y%m%d_%H%M%S')}"
+        backup_file_gz = _new_backup_path(now)
         parsed_url = _parse_db_url(db_url)
 
         env = os.environ.copy()
@@ -131,7 +144,10 @@ async def create_database_backup(
         stdout, stderr = await process.communicate()
         if process.returncode != 0:
             error_message = stderr.decode("utf-8", errors="ignore")
-            logger.error("[backup] pg_dump failed: %s", error_message)
+            logger.error(
+                "[backup] pg_dump failed: %s",
+                sanitize_log_value(error_message),
+            )
             result["error"] = f"pg_dump failed: {error_message}"
             return result
 
@@ -173,10 +189,10 @@ async def restore_database_backup(
 
     try:
         _ensure_backups_dir()
-        backup_path = _resolve_backup_path(backup_filename)
-        if not backup_path.exists():
+        backup_path = _find_existing_backup_path(backup_filename)
+        if backup_path is None:
             result["error"] = f"Backup file not found: {backup_filename}"
-            logger.error("[restore] Backup file not found: %s", backup_path)
+            logger.error("[restore] Backup file not found")
             return result
 
         temp_sql_file = BACKUPS_DIR / f"restore_temp_{_utc_now().timestamp()}.sql"
@@ -188,7 +204,10 @@ async def restore_database_backup(
             )
         except Exception as exc:  # noqa: BLE001 - erro convertido no contrato de restore
             result["error"] = f"Failed to decompress backup: {exc}"
-            logger.error("[restore] Decompression failed: %s", exc)
+            logger.error(
+                "[restore] Decompression failed: %s",
+                sanitize_log_value(exc),
+            )
             return result
 
         parsed_url = _parse_db_url(db_url)
@@ -208,7 +227,10 @@ async def restore_database_backup(
             str(temp_sql_file),
         ]
 
-        logger.info("[restore] Starting restore from: %s", backup_filename)
+        logger.info(
+            "[restore] Starting restore from: %s",
+            sanitize_log_value(backup_filename),
+        )
         process = await asyncio.create_subprocess_exec(
             *command,
             stdout=asyncio.subprocess.PIPE,
@@ -220,7 +242,10 @@ async def restore_database_backup(
 
         if process.returncode != 0:
             error_message = stderr.decode("utf-8", errors="ignore")
-            logger.error("[restore] psql failed: %s", error_message)
+            logger.error(
+                "[restore] psql failed: %s",
+                sanitize_log_value(error_message),
+            )
             result["error"] = f"psql failed: {error_message}"
             return result
 
@@ -301,10 +326,10 @@ async def delete_backup(backup_filename: str) -> dict[str, Any]:
 
     try:
         _ensure_backups_dir()
-        backup_path = _resolve_backup_path(backup_filename)
-        if not backup_path.exists():
+        backup_path = _find_existing_backup_path(backup_filename)
+        if backup_path is None:
             result["error"] = f"Backup file not found: {backup_filename}"
-            logger.warning("[backup_delete] File not found: %s", backup_path)
+            logger.warning("[backup_delete] File not found")
             return result
 
         backup_path.unlink()
@@ -314,7 +339,10 @@ async def delete_backup(backup_filename: str) -> dict[str, Any]:
                 "backup_id": backup_filename.replace(".sql.gz", "").replace(".sql", ""),
             }
         )
-        logger.info("[backup_delete] Backup deleted: %s", backup_filename)
+        logger.info(
+            "[backup_delete] Backup deleted: %s",
+            sanitize_log_value(backup_filename),
+        )
     except ValueError:
         logger.warning("[backup_delete] Rejected invalid backup filename")
         result["error"] = "Invalid backup filename"
