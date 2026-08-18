@@ -1,16 +1,23 @@
 # Roadmap modular — SGI v2
 
-> Última atualização: 14/08/2026
+> Última atualização: 18/08/2026
 
 ## Direção atual
 
-O SGI v2 está em **sanitização arquitetural residual** antes da próxima fase funcional.
+O SGI v2 concluiu a sanitização arquitetural da #247 e promoveu esse baseline para `main` pela PR #281. A revisão de segurança recebeu bloco final adicional pela PR #282.
 
-A Issue #227 é o gate-mãe que impede dados reais. A #268 certificou `test_ready=true`; a #247 executa a auditoria residual de legado, serviços, routers, endpoints e integrações. A #248/#250 permanecem como gates operacionais do bootstrap e a #267 está concluída.
+A Issue #227 permanece como gate-mãe para dados reais.
 
-Baseline atual: PR #271 mergeada em `4ff76c4fe9f1738db9b392b3568fcb35f81185e7`, com `main` e `stable-15jun` alinhadas. A Issue #269 está concluída.
+- `test_ready=true`: uso controlado com dados fictícios/descartáveis continua permitido.
+- `ready_for_real_data=false`: dados reais permanecem bloqueados até conclusão explícita dos gates operacionais.
 
-A Issue #241 está concluída. Alembic ↔ MetaData convergiu para todos os domínios estabilizados. `goals` é a única exceção deliberada e pertence ao futuro macroprojeto #246 + #57.
+Baseline atual:
+
+- `stable-15jun`: `f36f02a32fcaf9345f98bb40f9065df7a2488101` antes da sincronização documental desta retomada;
+- `main`: `b45dc435b8f20b218ff1dfbdd9ab1c868817ff3f`;
+- conteúdo funcional pós-#282 equivalente entre as branches; a diferença era somente o merge commit em `main`.
+
+A Issue #241 está concluída. Alembic ↔ MetaData convergiu para todos os domínios estabilizados. `goals` continua sendo a única exceção deliberada e pertence ao futuro macroprojeto #246 + #57.
 
 ## Regra operacional canônica
 
@@ -20,167 +27,128 @@ Depois do bootstrap, consultas externas recorrentes ficam restritas a preço int
 
 ## Política CRIPTO Top 100
 
-O catálogo bruto de criptomoedas deixou de representar o universo operacional do SGI.
+O catálogo bruto de criptomoedas não representa o universo operacional do SGI.
 
 Contrato #267:
 
 - ranking canônico de relevância: CoinGecko `/coins/markets`, ordem por `market_cap`;
 - limite: Top 100 por `market_cap_rank`;
-- universo suportado: Top 100 CoinGecko ∩ símbolos disponíveis na BRAPI;
-- CoinGecko participa somente da seleção de universo durante bootstrap; BRAPI continua sendo a integração de disponibilidade/preços do SGI;
-- ativos persistidos fora do universo suportado são preservados, mas não devem bloquear readiness CRIPTO;
+- universo suportado: Top 100 CoinGecko ∩ símbolos disponíveis no catálogo do provedor de mercado integrado;
+- CoinGecko participa somente da seleção de universo durante bootstrap;
+- ativos persistidos fora do universo suportado são preservados, mas não bloqueiam readiness CRIPTO;
 - seed, histórico inicial e readiness usam o mesmo contrato de universo.
-
-A auditoria anterior sobre 481 CRIPTO permanece como evidência histórica, não como obrigação de suporte.
 
 ## Estado por módulo
 
 | Módulo | Estado atual | Próxima decisão |
 |---|---|---|
-| Core backend e autenticação | `test_ready` | auditoria residual #247 |
+| Core backend e autenticação | `test_ready` | preservar baseline e validar ambiente real |
 | Carteiras e transações | Consolidado | preservar CRUD sem sync externo |
-| Dados canônicos / DB-first | Consolidado | concluir certificação bootstrap/providers |
-| B3 / Tesouro / benchmarks / câmbio | Persistidos e integrados ao bootstrap | validar cobertura/certificação |
-| CRIPTO | #267 concluída: 55 candidatos, 42 financeiros, 13 blockers | preservar contrato fail-closed |
-| Proventos | Contrato `pre-prod-dividends-seed.v2` registrado no `system-bootstrap.v4` sob gate #226 | validar integração; carga real continua bloqueada |
-| Snapshots e valuation | Consolidado | TWR dedicado #149 |
+| Dados canônicos / DB-first | Consolidado | validar certificação operacional |
+| B3 / Tesouro / benchmarks / câmbio | Persistidos e integrados ao bootstrap | validar cobertura no teste controlado |
+| CRIPTO | #267 concluída | preservar contrato fail-closed |
+| Proventos | `pre-prod-dividends-seed.v2` sob gate #226 | revalidar autorização antes de execução real |
+| Snapshots e valuation | Consolidado | TWR dedicado #149 após gate real |
 | Resumo e Patrimônio | Consolidado | manter DB-first |
-| Rentabilidade | Consolidada | TWR #149 / IBOV #150 |
-| IRPF | Canônico | validação real futura |
-| Eventos corporativos | Integrados/certificados no `system-bootstrap.v4` | concluir auditoria residual #129/#247 |
+| Rentabilidade | Consolidada | #150 / #149 após teste real |
+| IRPF | Canônico | validação real futura controlada |
+| Eventos corporativos | Integrados ao `system-bootstrap.v4` | preservar; dívida física isolada em #272 |
 | Metas | Não estabilizado | redesenho conjunto #246 + #57 |
 | Análise de Carteira | Não implementada funcionalmente | redesenho conjunto #246 + #57 |
 | Convergência Alembic/ORM | Concluída fora de `goals` | manter gates |
-| Bootstrap inicial | `system-bootstrap.v4`; estrutura e `test_ready` certificados | certificação operacional para dados reais |
-| Pré-produção/rebuild | Bloqueada | retomar somente após certificação |
-| IBOV persistido | Planejado | #150 |
-| TWR Tesouro/Renda Fixa | Planejado | #149 |
-
-## Evidência CRIPTO pré-Top 100
-
-Checkpoint BC/BD certificado em `9772b8c2bdb9875d85abc4a72ed0bebea39c222e`:
-
-- 481 ativos CRIPTO auditados;
-- 369 `HISTORY_START_EXHAUSTED`;
-- 87 `HISTORY_START_COMPLEMENT_GAPPED`;
-- 14 `HISTORY_START_SHALLOW_UNAVAILABLE`;
-- 10 `HISTORY_START_SHALLOW_VERIFIED`;
-- 1 `HISTORY_UNAVAILABLE` (`XUSD`);
-- zero duplicidades;
-- 88 seams bloqueantes;
-- 71/87 gaps acima de 365 dias.
-
-O finding justificou a separação entre catálogo descoberto e universo suportado.
+| Bootstrap inicial | `system-bootstrap.v4` | auditar blockers para teste real |
+| Pré-produção/rebuild | Bloqueada | retomar somente após gates autorizarem |
+| IBOV persistido | Planejado | #150 após teste real |
+| TWR Tesouro/Renda Fixa | Planejado | #149 após #150 conforme revalidação |
 
 ## Ordem canônica de execução
 
-### Fase 1 — Sanitização arquitetural #247 — AGORA
+### Fase 0 — baseline e segurança — CONCLUÍDA OPERACIONALMENTE
 
-Issue executora: #247. Gate-mãe: #227. #248/#250 acompanham apenas o gate operacional para dados reais.
+- [x] #247 — sanitização arquitetural concluída;
+- [x] PR #281 — promoção estrutural;
+- [x] bloco final da #269 implementado e promovido pela PR #282;
+- [x] CI da PR #282 aprovado;
+- [ ] manter `Security deep scan` e demais scanners como verificação recorrente; não presumir execução sem evidência.
 
-- [x] definir política de universo CRIPTO Top 100 por capitalização;
-- [x] separar ranking de relevância do catálogo BRAPI;
-- [x] limitar seed CRIPTO ao universo suportado;
-- [x] limitar histórico CRIPTO do bootstrap ao universo suportado;
-- [x] limitar readiness CRIPTO ao universo suportado;
-- [x] validar ranking, interseção, seed, histórico e readiness Top 100;
-- [x] executar auditoria nominal do universo suportado e preservar findings residuais;
-- [x] certificar `test_ready=true` com smoke fictício e gate global (#268);
-- [ ] revisar routers, services, models, integrações, jobs, CLIs, scheduler e entrypoint;
-- [x] remover consultas externas já identificadas de requests funcionais fora de preço intraday/fechamento;
-- [ ] revisar frontend: rotas, redirects, stubs e API clients;
-- [ ] classificar endpoints/aliases de compatibilidade por consumidor comprovado;
-- [ ] eliminar duplicação, legado e APIs redundantes em commits pequenos;
+### Fase 1 — Gate para TESTE REAL controlado — AGORA
 
-### Fase 2 — Bootstrap inicial e readiness
+1. revalidar #227, #226, #216 e #158;
+2. identificar blockers formais de dados reais;
+3. não forçar `ready_for_real_data=true`;
+4. não contornar autorização da #226;
+5. resolver blockers em microblocos independentes;
+6. quando autorizado, executar teste real auditável cobrindo infraestrutura, bootstrap, dados, reconciliação, persistência e segurança;
+7. produzir decisão GO / NO-GO.
 
-- [x] consolidar uma porta única, idempotente e auditável de bootstrap;
-- [x] carregar catálogo e metadados de ativos;
-- [x] carregar históricos de preços necessários;
-- [x] carregar Tesouro, benchmarks e câmbio como etapas explícitas;
-- [x] registrar Proventos globais como etapa explícita sob gate operacional #226;
-- [x] incorporar eventos corporativos globais sob wrapper dedicado, gate explícito e advisory lock (#254);
-- [x] registrar estado/versionamento do bootstrap (`system-bootstrap.v4`);
-- [x] impedir readiness para uso real enquanto o bootstrap não estiver certificado;
-- [x] manter runtime externo recorrente limitado a intraday e fechamento diário;
-- [x] validar estruturalmente o `system-bootstrap.v4` e seus gates de Proventos/eventos;
-- [x] certificar cobertura estrutural e idempotência para `test_ready`;
-- [ ] somente após certificação permitir `ready_for_real_data=true`.
-
-### Fase 3 — Performance e benchmarks
+### Fase 2 — Performance e benchmarks
 
 - [ ] #150 — histórico persistido do IBOV;
 - [ ] #149 — TWR diário de Tesouro Direto e Renda Fixa;
 - [ ] reconciliar snapshots de classe e consolidado.
 
-### Fase 4 — Retomada operacional
+### Fase 3 — Cadeia operacional para dados reais
 
-Bloqueada pelas fases anteriores e pela #227.
-
-- [ ] #226 — executar duas rodadas reais controladas de Proventos na janela autorizada;
+- [ ] #226 — duas execuções reais controladas de Proventos, se ainda exigidas após auditoria;
 - [ ] #216 — reconciliar e fechar gate de seeds/bootstrap;
 - [ ] #158 — retomar CSV, posições, snapshots e reconciliação financeira;
-- [ ] somente depois liberar primeira carteira real.
+- [ ] decidir formalmente `ready_for_real_data=true` somente depois dos gates.
+
+### Fase 4 — Dívidas estruturais separadas
+
+- [ ] #272 — contração física dos aliases/colunas legadas de `corporate_events`;
+- [ ] demais dívidas estruturais válidas após auditoria.
 
 ### Fase 5 — Metas + Análise de Carteira
 
-Somente após estabilização e promoção da base:
-
-- [ ] tratar #246 + #57 como um único macroprojeto;
-- [ ] definir domínio antes de migration;
-- [ ] redesenhar schema, ORM, API e frontend de forma coerente.
+- [ ] tratar #246 + #57 como macroprojeto único;
+- [ ] definir domínio e contratos antes de migration;
+- [ ] somente depois redesenhar schema, ORM, API e frontend.
 
 ## Classificação das Issues abertas
 
 ### Trabalho atual
 
-- #227 — gate-mãe de estabilização e readiness.
-- #247 — auditoria pós-convergência e consolidação da fronteira de providers.
-- #248/#250 — acompanhamento operacional do bootstrap até dados reais; estrutura concluída.
+- #227 — gate-mãe de readiness e teste real.
+- #226 — autorização/execução real controlada de Proventos.
+- #216 — gate agregado de seeds/bootstrap.
+- #158 — rebuild pré-produção e reconciliação.
 
-### Bloqueadas / dependentes
+### Próxima fase técnica
 
-- #129 — auditoria residual de eventos corporativos após integração ao bootstrap.
-- #150 — após #247/bootstrap.
-- #149 — após #247/bootstrap.
-- #226 — execução real bloqueada; contrato reutilizado estruturalmente pelo bootstrap.
-- #216 — gate de seeds/bootstrap.
-- #158 — depende de #216/#226 e certificação.
-- #246 + #57 — bloqueadas até estabilização da base.
+- #150 — histórico persistido do IBOV.
+- #149 — TWR Tesouro/Renda Fixa.
+
+### Dívida estrutural isolada
+
+- #272 — contração física de `corporate_events`.
+
+### Bloqueadas / futuras
+
+- #246 + #57 — Metas + Análise.
 
 ### Backlog não bloqueador
 
 - #253 — Central de Bootstrap SuperAdmin.
 - #58 — Janela Global do Ativo.
-- #83 — Backup/Restore: auditar implementação existente antes de decidir fechamento.
-- #90 — refinamento de UX de Patrimônio.
+- #83 — Backup/Restore hardening.
+- #90 — UX de Patrimônio.
 - #97 — Google OAuth.
-- #127 — requer redesenho para não contrariar a política fail-closed de providers.
-- #130 — manter apenas lacunas concretas de BRAPI/adapters.
+- #127 — provedores configuráveis, sujeito à política fail-closed.
+- #130 — evolução BRAPI, somente para lacunas concretas.
 
 ## Estado operacional
 
 - CRUD de transações não inicia ingestão externa automática.
 - GETs financeiros auditados permanecem DB-first.
 - `system-bootstrap.v4` contém catálogo, históricos, Tesouro, benchmarks, FX, Proventos e eventos corporativos.
-- CRIPTO no bootstrap/readiness é limitado ao Top 100 de market cap disponível na BRAPI.
-- Registros CRIPTO fora desse universo permanecem auditáveis sem bloquear readiness.
-- Sem `SGI_BOOTSTRAP_ENABLE_DIVIDENDS=true`, Proventos falha fechado antes de consultar provider; a autorização real continua pertencendo à #226.
+- CRIPTO no bootstrap/readiness é limitado ao universo suportado Top 100.
+- Sem `SGI_BOOTSTRAP_ENABLE_DIVIDENDS=true`, Proventos falha fechado antes de provider; a autorização real continua pertencendo à #226.
 - Sem `SGI_BOOTSTRAP_ENABLE_CORPORATE_EVENTS=true`, eventos corporativos também falham antes de provider.
-- Após o bootstrap certificado, somente preço intraday e fechamento diário podem consultar providers de forma recorrente.
-- Rebuilds e correções históricas permanecem operações explícitas e controladas.
+- Após bootstrap certificado, somente preço intraday e fechamento diário podem consultar providers de forma recorrente.
 - Dados reais continuam bloqueados pela #227.
-- Dados fictícios/descartáveis estão liberados sob `test_ready=true`.
+- Dados fictícios/descartáveis permanecem liberados sob `test_ready=true`.
 
-## Gate para promoção estrutural
+## Gate para próxima promoção estrutural
 
-A próxima PR `stable-15jun` → `main` deve ser preparada apenas quando:
-
-1. a auditoria arquitetural da #247 estiver concluída;
-2. a fronteira provider/bootstrap estiver formalizada e protegida por gates;
-3. o bootstrap obrigatório estiver integralmente representado e validado;
-4. o universo CRIPTO Top 100 estiver operacionalmente certificado;
-5. o desenho do readiness estiver coerente com #227/#216/#158;
-6. achados críticos tiverem decisão explícita;
-7. testes estruturais/runtime estiverem verdes;
-8. documentação e Issues estiverem sincronizadas novamente.
+A próxima PR `stable-15jun` → `main` deve ser preparada apenas quando um novo macrobloco estiver concluído, validado e documentado. Não abrir PR a cada microcommit.
