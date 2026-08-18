@@ -40,6 +40,9 @@ Thumbs.db
 # Docker
 *.override.yml
 
+# Tool-local metadata
+/.abacusai/
+
 # Alembic
 /backend/alembic/versions/*.pyc
 
