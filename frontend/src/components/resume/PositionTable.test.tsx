@@ -98,7 +98,8 @@ describe('PositionTable', () => {
     const menu = screen.getByRole('menu')
     expect(menu.parentElement).toBe(document.body)
     expect(menu.style.position).toBe('fixed')
-    expect(within(menu).getAllByRole('menuitem')).toHaveLength(3)
+    expect(within(menu).getAllByRole('menuitem')).toHaveLength(2)
+    expect(within(menu).queryByText('Análise do Ativo')).toBeNull()
   })
 
   it('explicita custo, resultado de capital e variação diária', () => {

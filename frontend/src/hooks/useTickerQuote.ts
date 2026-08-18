@@ -11,6 +11,10 @@ export interface TickerQuote {
   price_date:  string | null
 }
 
+interface HttpErrorLike {
+  response?: { status?: number }
+}
+
 /**
  * Hook com debounce de 600 ms.
  * Consulta /assets/quote/{ticker}?date=YYYY-MM-DD quando a data nao for hoje.
@@ -38,13 +42,13 @@ export function useTickerQuote(ticker: string, enabled = true, date?: string) {
         const params  = useDate ? `?date=${useDate}` : ''
         const res     = await api.get<TickerQuote>(`/assets/quote/${t}${params}`)
         setQuote(res.data)
-      } catch (e: any) {
+      } catch (error: unknown) {
         setQuote(null)
-        const status = e?.response?.status
+        const status = (error as HttpErrorLike)?.response?.status
         if (status === 404) {
-          setError('Ticker nao encontrado na BRAPI.')
+          setError('Ativo não encontrado no catálogo.')
         } else {
-          setError(null)
+          setError('Não foi possível consultar a cotação. Tente novamente.')
         }
       } finally {
         setLoading(false)

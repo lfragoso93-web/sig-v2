@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from app.models.asset_dividend import AssetDividend
 from app.models.dividend_enums import DividendType
-from app.services.dividend_backfill_service import ParsedDividendEvent
+from app.services.dividend_event_normalizer import ParsedDividendEvent
 from app.services.pre_prod_dividends_seed_collector import (
     StrictDividendAssetCollection,
     StrictDividendSourceCollection,

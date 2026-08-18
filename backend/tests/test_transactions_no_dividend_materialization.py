@@ -9,11 +9,23 @@ from pathlib import Path
 ROUTER_PATH = (
     Path(__file__).resolve().parents[1] / "app" / "routers" / "transactions.py"
 )
-BACKFILL_SERVICE_PATH = (
+REMOVED_BACKFILL_SERVICE_PATH = (
     Path(__file__).resolve().parents[1]
     / "app"
     / "services"
     / "dividend_backfill_service.py"
+)
+NORMALIZER_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "app"
+    / "services"
+    / "dividend_event_normalizer.py"
+)
+BRAPI_PAYLOAD_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "app"
+    / "services"
+    / "dividend_brapi_payload.py"
 )
 
 
@@ -51,34 +63,37 @@ def test_transaction_mutations_keep_ingestion_opt_in_and_local_invalidations() -
     assert "invalidate_portfolio_cache" in source
 
 
-def test_backfill_collection_does_not_materialize_portfolio_rights() -> None:
-    source = BACKFILL_SERVICE_PATH.read_text(encoding="utf-8")
+def test_legacy_dividend_backfill_service_is_not_available() -> None:
+    assert not REMOVED_BACKFILL_SERVICE_PATH.exists()
+
+
+def test_dividend_event_normalizer_is_neutral() -> None:
+    source = NORMALIZER_PATH.read_text(encoding="utf-8")
     tree = ast.parse(source)
-    backfill = next(
-        node
-        for node in tree.body
-        if isinstance(node, ast.AsyncFunctionDef) and node.name == "backfill_dividends"
-    )
-    argument_names = {argument.arg for argument in backfill.args.args}
-    referenced_names = {
-        node.id for node in ast.walk(backfill) if isinstance(node, ast.Name)
-    }
-
-    assert argument_names == {"db", "ticker", "asset_type"}
-    assert "portfolio_id" not in referenced_names
-    assert "Transaction" not in referenced_names
-    assert "Dividend" not in referenced_names
-
-
-def test_legacy_materializer_is_not_available() -> None:
-    source = BACKFILL_SERVICE_PATH.read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    function_names = {
+    names = {
         node.name
         for node in tree.body
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        if isinstance(node, (ast.ClassDef, ast.FunctionDef))
     }
 
-    assert "materialize_asset_dividends" not in function_names
-    assert "app.models.transaction" not in source
-    assert "DividendStatus" not in source
+    assert "ParsedDividendEvent" in names
+    assert "parse_dividend_event" in names
+    assert "sqlalchemy" not in source
+    assert "httpx" not in source
+    assert "dividend_backfill_service" not in source
+
+
+def test_dividend_brapi_payload_parser_is_neutral() -> None:
+    source = BRAPI_PAYLOAD_PATH.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    names = {
+        node.name
+        for node in tree.body
+        if isinstance(node, (ast.ClassDef, ast.FunctionDef))
+    }
+
+    assert "extract_brapi_events" in names
+    assert "iter_brapi_result_entries" in names
+    assert "sqlalchemy" not in source
+    assert "httpx" not in source
+    assert "dividend_backfill_service" not in source

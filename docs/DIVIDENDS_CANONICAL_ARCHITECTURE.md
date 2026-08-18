@@ -72,14 +72,17 @@ possuir o ativo hoje não cria direito retroativo.
 | `POST/DELETE /portfolios/{id}/dividends` | CRUD manual diretamente em `dividends` | Removido | Escrita pública desativada; ajuste manual futuro deve atuar no evento canônico |
 | `POST /portfolios/{id}/dividends/sync` | Disparava sincronização/materialização por carteira | Removido | Rota desativada e protegida por regressão de contrato |
 | `GET /portfolios/{id}/dividends` e `dividend_service.py` | Projeção de direitos por carteira | Canônico | Read-only sobre `asset_dividends`, `assets` e `transactions`, sem acesso à tabela legada |
-| `proventos_daily_sync_service.py` | Coleta eventos globais e invalida consumidores | Canônico | Materialização e campo de resultado legado retirados |
-| `dividend_backfill_service.py` | Coleta global de eventos | Canônico | O materializador legado foi removido; o módulo grava somente `asset_dividends`, sem `portfolio_id`, `Transaction` ou `Dividend` |
-| `asset_market_pipeline_service.py` | Coleta eventos globais por ativo | Canônico | Materialização, argumento e resultado legados retirados |
-| `asset_seed_service.py` e `asset_onboarding_service.py` | Chamam o pipeline sem solicitar materialização | Canônico | Argumento e métricas legadas removidos dos callers de aplicação |
-| Batch e CLIs de mercado | Coletam eventos globais sem opção de materialização | Canônico | Interface contraída e protegida por regressão |
-| `run_proventos_sync.py` | Coleta manual global, inclusive por ticker | Canônico | Materialização final removida; não grava direitos por carteira |
+| `proventos_daily_sync_service.py` | Orquestração diária paralela de eventos | Removido | Ficou órfão após a contração do scheduler, da CLI e do full rebuild; gate estrutural impede sua reintrodução |
+| `dividend_event_normalizer.py` | Modelo e normalização de payloads globais | Canônico | Módulo neutro, sem SQLAlchemy, HTTP ou dependência do backfill legado; usado pelo collector e persistência certificados |
+| `dividend_brapi_payload.py` | Interpretação estrutural do payload BRAPI | Canônico | Módulo puro compartilhado pelo adapter certificado e pelo fetcher temporário, sem HTTP, SQLAlchemy ou dependência reversa do legado |
+| `dividend_backfill_service.py` | Fetchers e persistência legados | Removido | Sem consumidores de runtime; seed certificado, parser BRAPI e normalizador canônico preservam as responsabilidades válidas |
+| `asset_market_pipeline_service.py` | Pipeline paralelo de ativo, preços e logo | Removido | Ficou sem consumidores após a retirada de onboarding, batch, CLIs e enriquecimento opcional do seed |
+| `asset_seed_service.py` | Catálogo e metadados fornecidos pela fonte | Canônico | Não expõe enriquecimento amplo; históricos e eventos pertencem aos estágios dedicados do bootstrap |
+| `asset_onboarding_service.py` | Background task de enriquecimento após criação | Removido | Serviço órfão; o CRUD de transações já proibia importação ou agendamento dessa ingestão externa |
+| Batch e CLIs de mercado | Backfill manual paralelo de preços e logos | Removido | Sem consumidores, scheduler ou runbook; duplicavam as etapas dedicadas do bootstrap e a manutenção de fechamento |
+| `run_proventos_sync.py` | Coleta manual global, inclusive por ticker | Removido | CLI órfã duplicava o bootstrap certificado e permitia chamar portas legadas sem seus gates; regressão estrutural impede sua reintrodução |
 | `dividend_history_seed_service.py` | Complemento histórico global via Yahoo | Canônico | Materialização retirada; persiste exclusivamente `asset_dividends` |
-| `full_market_rebuild_service.py` | Orquestra a sincronização global de Proventos | Canônico | Resume ativos varridos, sincronizados e falhos; não importa, chama ou contabiliza materialização |
+| `full_market_rebuild_service.py` | Rebuild amplo de mercado e snapshots | Confinado | A etapa paralela de Proventos e suas métricas foram removidas; o seed certificado é a única entrada operacional desse domínio |
 | `dividend_entitlement_service.py` | Helpers legados de quantidade e valor líquido | Removido | O módulo ficou sem callers após a retirada dos materializadores; regressão estrutural impede sua reintrodução |
 | `portfolio_service.py` | Totais e agrupamentos de Proventos no resumo/posições legados | Canônico | Assinaturas preservadas; agregações read-only usam direitos elegíveis, pagos, líquidos e em BRL |
 | Exclusão de carteira | `portfolio_delete_service.delete_portfolio_safely` | Ativo | A implementação órfã em `portfolio_service.py` foi removida; a porta ativa ainda exclui dependências legadas de forma explícita |

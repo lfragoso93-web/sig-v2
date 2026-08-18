@@ -31,11 +31,8 @@ def _cache_key(portfolio_id: int, suffix: str) -> str:
 
 
 async def _invalidate_portfolio_cache(portfolio_id: int) -> None:
-    try:
-        await cache_delete(_cache_key(portfolio_id, "summary"))
-        await cache_delete(_cache_key(portfolio_id, "positions"))
-    except Exception:
-        pass
+    await cache_delete(_cache_key(portfolio_id, "summary"))
+    await cache_delete(_cache_key(portfolio_id, "positions"))
 
 
 async def _table_has_column(db: AsyncSession, table_name: str, column_name: str) -> bool:

@@ -68,6 +68,8 @@ def test_treasury_history_stage_uses_official_provider_boundary() -> None:
 def test_asset_catalog_stage_reconciles_existing_catalog_without_market_backfill() -> None:
     source = _source()
 
-    assert "seed = await run_asset_seed(db, run_backfill=False)" in source
+    assert "seed = await run_asset_seed(db)" in source
+    assert "run_backfill" not in source
+    assert "run_market_enrichment" not in source
     assert "assets já populado" not in source
     assert "select(func.count()).select_from(Asset)" not in source

@@ -15,6 +15,9 @@ from app.models.transaction import Transaction
 
 logger = logging.getLogger(__name__)
 
+RebuildOperation = Callable[[], Awaitable[Any]]
+StepPayloadReader = Callable[["FullMarketRebuildResult", str], dict[str, Any]]
+
 
 @dataclass
 class RebuildStepResult:
@@ -114,7 +117,7 @@ def _compact_result(result: Any) -> Any:
 async def _run_step(
     summary: FullMarketRebuildResult,
     name: str,
-    operation: Callable[[], Awaitable[Any]],
+    operation: RebuildOperation,
 ) -> None:
     started = monotonic()
     logger.info("[full_market_rebuild] INICIO etapa=%s", name)
@@ -188,12 +191,6 @@ async def _sync_benchmarks() -> dict[str, int]:
         return await import_missing_benchmark_history(db)
 
 
-async def _sync_proventos() -> Any:
-    from app.services.proventos_daily_sync_service import SYNC_CONCURRENCY, run_daily_proventos_sync
-    async with AsyncSessionLocal() as db:
-        return await run_daily_proventos_sync(db, concurrency=SYNC_CONCURRENCY)
-
-
 async def _rebuild_all_twr_snapshots() -> dict[str, int]:
     from app.services.portfolio_snapshot_twr_service import backfill_snapshots_with_returns
 
@@ -248,13 +245,15 @@ def _step_payload(summary: FullMarketRebuildResult, name: str) -> dict[str, Any]
     return {}
 
 
-def _log_operational_summary(summary: FullMarketRebuildResult) -> None:
-    prices = _step_payload(summary, "catalog_and_asset_prices")
-    treasury = _step_payload(summary, "treasury")
-    proventos = _step_payload(summary, "proventos")
-    snapshots = _step_payload(summary, "twr_snapshots")
-    coverage = _step_payload(summary, "final_coverage_audit")
-    maintenance = _step_payload(summary, "maintenance")
+def _log_operational_summary(
+    summary: FullMarketRebuildResult,
+    step_payload_reader: StepPayloadReader = _step_payload,
+) -> None:
+    prices = step_payload_reader(summary, "catalog_and_asset_prices")
+    treasury = step_payload_reader(summary, "treasury")
+    snapshots = step_payload_reader(summary, "twr_snapshots")
+    coverage = step_payload_reader(summary, "final_coverage_audit")
+    maintenance = step_payload_reader(summary, "maintenance")
 
     status_counts = coverage.get("status_counts") or coverage.get("by_status") or {}
     history = treasury.get("history") or {}
@@ -264,10 +263,6 @@ def _log_operational_summary(summary: FullMarketRebuildResult) -> None:
                 prices.get("audited", 0), prices.get("requested", 0), prices.get("inserted", 0))
     logger.info("treasury_official=%s treasury_history_imported=%s treasury_latest=%s",
                 history.get("official_symbols", 0), history.get("imported", 0), treasury.get("latest_prices", 0))
-    logger.info("proventos_scanned=%s proventos_synced=%s proventos_failed=%s",
-                proventos.get("assets_scanned", proventos.get("scanned", 0)),
-                proventos.get("assets_synced", proventos.get("synced", 0)),
-                proventos.get("assets_failed", proventos.get("failed", 0)))
     logger.info("snapshots=%s portfolios=%s coverage_needs_sync=%s",
                 snapshots.get("snapshots", 0), snapshots.get("processed", 0), coverage.get("needs_sync", 0))
     logger.info("coverage_status=%s", status_counts)
@@ -276,7 +271,12 @@ def _log_operational_summary(summary: FullMarketRebuildResult) -> None:
     logger.info("=" * 72)
 
 
-async def run_full_market_rebuild() -> FullMarketRebuildResult:
+async def run_full_market_rebuild(
+    *,
+    treasury_operation: RebuildOperation = _sync_treasury,
+    snapshot_operation: RebuildOperation = _rebuild_all_twr_snapshots,
+    step_payload_reader: StepPayloadReader = _step_payload,
+) -> FullMarketRebuildResult:
     started_dt = datetime.now(timezone.utc)
     started_clock = monotonic()
     summary = FullMarketRebuildResult(started_at=started_dt.isoformat())
@@ -286,10 +286,9 @@ async def run_full_market_rebuild() -> FullMarketRebuildResult:
     logger.info("=" * 72)
 
     await _run_step(summary, "catalog_and_asset_prices", _sync_global_asset_prices)
-    await _run_step(summary, "treasury", _sync_treasury)
+    await _run_step(summary, "treasury", treasury_operation)
     await _run_step(summary, "benchmarks", _sync_benchmarks)
-    await _run_step(summary, "proventos", _sync_proventos)
-    await _run_step(summary, "twr_snapshots", _rebuild_all_twr_snapshots)
+    await _run_step(summary, "twr_snapshots", snapshot_operation)
     await _run_step(summary, "maintenance", _run_maintenance)
     await _run_step(summary, "final_coverage_audit", _final_coverage_audit)
 
@@ -304,5 +303,5 @@ async def run_full_market_rebuild() -> FullMarketRebuildResult:
         summary.duration_seconds,
     )
     logger.info("=" * 72)
-    _log_operational_summary(summary)
+    _log_operational_summary(summary, step_payload_reader)
     return summary

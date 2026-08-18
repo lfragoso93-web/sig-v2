@@ -18,14 +18,17 @@ export interface TreasuryItem {
 export function useTesouroSearch(q: string, enabled = true) {
   const [items,   setItems]   = useState<TreasuryItem[]>([])
   const [loading, setLoading] = useState(false)
+  const [error,   setError]   = useState<string | null>(null)
 
   useEffect(() => {
     if (!enabled || q.trim().length < 2) {
       setItems([])
+      setError(null)
       return
     }
 
     setLoading(true)
+    setError(null)
     const timer = setTimeout(async () => {
       try {
         const res = await api.get<TreasuryItem[]>(
@@ -34,6 +37,7 @@ export function useTesouroSearch(q: string, enabled = true) {
         setItems(res.data)
       } catch {
         setItems([])
+        setError('Não foi possível consultar os títulos. Tente novamente.')
       } finally {
         setLoading(false)
       }
@@ -42,5 +46,5 @@ export function useTesouroSearch(q: string, enabled = true) {
     return () => clearTimeout(timer)
   }, [q, enabled])
 
-  return { items, loading }
+  return { items, loading, error }
 }

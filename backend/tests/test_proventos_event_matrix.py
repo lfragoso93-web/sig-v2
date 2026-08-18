@@ -2,97 +2,22 @@
 
 from datetime import date, timedelta
 from decimal import Decimal
-from unittest.mock import AsyncMock, patch
 
 import pytest
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models.asset import Asset
 from app.models.asset_dividend import AssetDividend
 from app.models.dividend_enums import DividendType
 from app.models.portfolio import Portfolio
 from app.models.transaction import OperationType, Transaction
-from app.services.dividend_backfill_service import backfill_dividends
 from app.services.proventos_service import (
     get_distribution,
     get_monthly_history,
     get_summary,
     list_items,
 )
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-NON_MONETARY_EVENTS = [
-    pytest.param(
-        "EVBON3",
-        "Bonificação",
-        "stock",
-        DividendType.BONIFICACAO,
-        id="bonificacao",
-    ),
-    pytest.param(
-        "EVSUB3",
-        "Subscrição",
-        "subscription",
-        DividendType.SUBSCRICAO,
-        id="subscricao",
-    ),
-]
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "ticker,label,category,event_type",
-    NON_MONETARY_EVENTS,
-)
-async def test_collects_non_monetary_event_without_financial_materialization(
-    db: AsyncSession,
-    portfolio: Portfolio,
-    ticker: str,
-    label: str,
-    category: str,
-    event_type: DividendType,
-):
-    db.add(
-        Transaction(
-            portfolio_id=portfolio.id,
-            ticker=ticker,
-            asset_type="ACAO",
-            operation=OperationType.buy,
-            quantity=Decimal(10),
-            price=Decimal(100),
-            date=date(2026, 1, 2),
-        )
-    )
-    await db.flush()
-    raw_events = [
-        {
-            "lastDatePrior": "2026-01-09",
-            "approvedOn": "2026-01-05",
-            "label": label,
-            "eventCategory": category,
-            "factor": 0.10,
-            "completeFactor": 1.10,
-        }
-    ]
-
-    with patch(
-        "app.services.dividend_backfill_service._fetch_dividends_brapi",
-        new_callable=AsyncMock,
-        return_value=raw_events,
-    ):
-        await backfill_dividends(db, ticker, "ACAO")
-
-    event = (
-        await db.execute(
-            select(AssetDividend)
-            .join(Asset, AssetDividend.asset_id == Asset.id)
-            .where(Asset.ticker == ticker)
-        )
-    ).scalar_one()
-    assert event.dividend_type == event_type
-    assert event.value_per_unit == Decimal("0E-8")
-    assert event.factor == Decimal("0.100000000000")
-    assert event.complete_factor == Decimal("1.100000000000")
-
 
 @pytest.mark.asyncio
 async def test_non_monetary_events_do_not_contaminate_financial_aggregates(
@@ -132,7 +57,7 @@ async def test_non_monetary_events_do_not_contaminate_financial_aggregates(
             payment_date=today - timedelta(days=5),
             value_per_unit=Decimal(0),
             dividend_type=event_type,
-            source="legacy-test",
+            source="canonical-test",
         )
         db.add(event)
         await db.flush()

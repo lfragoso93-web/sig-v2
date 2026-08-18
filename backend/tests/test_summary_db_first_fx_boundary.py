@@ -3,6 +3,10 @@ from __future__ import annotations
 import ast
 import inspect
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import pytest
 
 from app.services import (
     persisted_fx_query_service,
@@ -51,6 +55,25 @@ def test_persisted_fx_query_has_no_provider_imports() -> None:
     assert not any("brapi" in module.lower() for module in imported)
     assert not any("httpx" in module.lower() for module in imported)
     assert not any("awesome" in module.lower() for module in imported)
+
+
+def test_persisted_fx_query_has_no_fixed_fallback() -> None:
+    source = inspect.getsource(persisted_fx_query_service)
+
+    assert "FALLBACK" not in source
+    assert "5.70" not in source
+
+
+@pytest.mark.asyncio
+async def test_persisted_fx_query_fails_without_coverage() -> None:
+    result = SimpleNamespace(scalar_one_or_none=lambda: None)
+    db = SimpleNamespace(execute=AsyncMock(return_value=result))
+
+    with pytest.raises(RuntimeError, match="cobertura USD-BRL persistida indisponível"):
+        await persisted_fx_query_service.get_persisted_usd_brl_rate_for_date(
+            db,
+            persisted_fx_query_service.DateType(2026, 8, 14),
+        )
 
 
 def test_persisted_price_query_has_no_provider_imports() -> None:

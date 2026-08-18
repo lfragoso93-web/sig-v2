@@ -34,7 +34,7 @@ async def test_seed_catalogs_all_national_dividend_classes(db: AsyncSession):
             return_value=[],
         ),
     ):
-        result = await run_asset_seed(db, run_backfill=False)
+        result = await run_asset_seed(db)
 
     rows = (
         await db.execute(select(Asset.ticker, Asset.asset_type).order_by(Asset.ticker))
@@ -67,6 +67,9 @@ async def test_seed_can_exclude_crypto_for_isolated_b3_stage(db: AsyncSession):
             new_callable=AsyncMock,
         ) as crypto,
     ):
-        await run_asset_seed(db, run_backfill=False, include_crypto=False)
+        await run_asset_seed(
+            db,
+            include_crypto=False,
+        )
 
     crypto.assert_not_awaited()

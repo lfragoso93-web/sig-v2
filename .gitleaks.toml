@@ -1,0 +1,15 @@
+title = "SGI v2 Gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Known non-secret market-data domain identifiers"
+regexTarget = "match"
+regexes = [
+  '''brapi_v2_crypto_max''',
+  '''yfinance_crypto_ptax_brl_max''',
+  '''coingecko_market_cap_intersect_brapi''',
+  '''crypto_top100_market_cap''',
+  '''CRYPTO_TOP100_UNIVERSE_KEY''',
+]

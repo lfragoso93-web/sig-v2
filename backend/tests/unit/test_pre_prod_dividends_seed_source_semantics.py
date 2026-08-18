@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 from app.models.dividend_enums import DividendType
-from app.services.dividend_backfill_service import (
+from app.services.dividend_event_normalizer import (
     ParsedDividendEvent,
-    _parse_raw_dividend,
+    parse_dividend_event,
 )
 from app.services.pre_prod_dividends_seed_collector import (
     StrictDividendAssetCollection,
@@ -78,7 +78,7 @@ async def test_yahoo_history_date_is_normalized_as_ex_date_not_payment_date() ->
     assert result.rows[0]["exDate"] == "2019-04-26"
     assert "paymentDate" not in result.rows[0]
     assert result.rows[0]["eventSemantics"] == "aggregate_cash_by_ex_date"
-    parsed = _parse_raw_dividend(result.rows[0])
+    parsed = parse_dividend_event(result.rows[0])
     assert parsed is not None
     assert parsed.ex_date == date(2019, 4, 26)
     assert parsed.payment_date is None

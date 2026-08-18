@@ -10,9 +10,9 @@ from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from typing import Any
 
-from app.services.dividend_backfill_service import (
+from app.services.dividend_event_normalizer import (
     ParsedDividendEvent,
-    _parse_raw_dividend,
+    parse_dividend_event,
 )
 
 STRICT_DIVIDENDS_ELIGIBLE_TYPES = frozenset(
@@ -126,7 +126,7 @@ async def collect_dividends_strict(
             normalized: list[ParsedDividendEvent] = []
             rejected = 0
             for raw_row in response.rows:
-                parsed = _parse_raw_dividend(raw_row)
+                parsed = parse_dividend_event(raw_row)
                 if parsed is None:
                     rejected += 1
                     continue

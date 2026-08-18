@@ -5,6 +5,301 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — composição explícita do full market rebuild (15/08/2026)
+
+- `full_market_rebuild_canonical_service.py` deixou de alterar temporariamente funções internas do orquestrador base por monkey-patching.
+- `full_market_rebuild_service.py` passou a receber explicitamente as operações de Tesouro, snapshots e leitura do resumo, preservando defaults e ordem das etapas.
+- A CLI canônica permanece em `python -m app.cli.full_market_rebuild`; nenhum rebuild, provider ou dado real foi executado durante a refatoração.
+- Adicionado gate estrutural contra a reintrodução de mutação global entre as duas camadas.
+
+### Removido — exemplo de ambiente paralelo e desatualizado (15/08/2026)
+
+- Removido `backend/.env.example`, que duplicava o contrato canônico da raiz e ainda documentava `DEBUG_RATE_LIMIT`, `ADMIN_SECRET`, router de debug e fallback via yfinance já removidos.
+- `.env.example` da raiz permanece como fonte única para aplicação, Docker Compose, frontend, bootstrap e operações controladas.
+- Adicionado gate estrutural exigindo a presença do exemplo canônico e a ausência do duplicado no backend.
+
+### Removido — hooks residuais sem consumidores (15/08/2026)
+
+- Removidos `useAssets`, `useFxRate`/`useUsdBrl` e `assetService`, sem consumidores após a limpeza das páginas paralelas.
+- Leituras financeiras ativas continuam pelos readers/hooks específicos e DB-first.
+- O inventário de imports do frontend passou a apontar somente `test/setup.ts`, entrada configurada do Vitest, sem candidatos órfãos de runtime conhecidos.
+
+### Removido — implementação duplicada do logo (15/08/2026)
+
+- Removido `SigLogo`, SVG sem consumidores que duplicava a marca ativa.
+- `LogoSGI` permanece como implementação única, montada no Topbar e no layout de autenticação.
+- Gate estrutural protege a ausência da duplicata e as duas montagens canônicas.
+
+### Removido — formulário paralelo de transações (15/08/2026)
+
+- Removido `TransactionForm`, componente de 397 linhas sem consumidor.
+- `AddTransactionModal` permanece como superfície única, com criação e atualização pelos hooks canônicos.
+- Gate estrutural protege a ausência do formulário paralelo e a montagem global do modal ativo.
+
+### Removido — visualizações legadas de dividendos (15/08/2026)
+
+- Removidos `DividendChart` e `DividendTable`, sem consumidores e ligados ao contrato antigo de dividendos.
+- A página ativa de Proventos preserva donut, histórico mensal e tabela canônica de direitos recebidos.
+- Gate estrutural protege a ausência das visualizações paralelas e os três componentes ativos.
+
+### Removido — componentes órfãos de dashboard (15/08/2026)
+
+- Removidos gráfico de alocação, treemap de concentração e modal de carteira sem consumidores.
+- Preservados `AssetDonutChart`, distribuição por metas e criação de carteira na Sidebar como superfícies ativas.
+- Gate estrutural impede restauração das duplicatas sem montagem.
+
+### Removido — páginas não roteadas de Ativos e Lançamentos (15/08/2026)
+
+- Removidas `AssetsPage` e `LancamentosPage`, sem rota, menu ou consumidor.
+- `LancamentosPage` duplicava a página canônica `Transacoes`, que permanece em `/carteira/transacoes`.
+- Uma futura gestão do catálogo de ativos deverá ser implementada por issue e rota explícitas; gate protege a ausência das páginas invisíveis.
+
+### Removido — serviços HTTP frontend órfãos (15/08/2026)
+
+- Removidos seis módulos sem consumidores para transações, autenticação, câmbio, metas de classe, performance e metas.
+- Hooks/contextos canônicos foram preservados e passam a ser as únicas entradas HTTP dessas áreas.
+- Eliminadas também URLs mortas com prefixo `/api/v1` duplicado; gate estrutural protege ausências e entradas válidas.
+
+### Alterado — erros HTTP restantes sem `any` no frontend (15/08/2026)
+
+- Recuperação de senha, atualização de perfil e troca de senha usam extração tipada de detalhe Axios.
+- Removidos os três últimos `catch any` ativos do frontend sem alterar os fallbacks específicos das telas.
+- A fronteira compartilhada passou a expor separadamente detalhe HTTP textual e mensagem completa.
+
+### Removido — modais paralelos de lançamento (15/08/2026)
+
+- Removidos `ModalNovaTransacao` e `ModalNovoProvento`, sem consumidores no frontend.
+- Removido o hook órfão de criação manual de proventos; leituras canônicas permanecem disponíveis.
+- O lançamento de transações continua no `AddTransactionModal`; proventos permanecem derivados dos eventos canônicos persistidos.
+
+### Alterado — erros tipados na importação CSV (15/08/2026)
+
+- Validação e importação CSV deixaram de usar `catch any` e acesso inseguro ao payload Axios.
+- Listas de validação FastAPI são convertidas explicitamente pelas mensagens `msg`, sem `[object Object]`.
+- A fronteira compartilhada preserva detalhes textuais, erros nativos e fallback.
+
+### Alterado — erros Axios tipados no fluxo de Tesouro (15/08/2026)
+
+- Criada fronteira reutilizável para extrair `detail` textual de erros Axios sem `any`.
+- Carregamento e exclusão de Tesouro usam `unknown`, preservando mensagem da API, erro nativo e fallback seguro.
+- Testes unitários cobrem detalhe HTTP, erro nativo e payload desconhecido/estruturado.
+
+### Corrigido — falhas de proventos não convertidas em zero (15/08/2026)
+
+- As três agregações canônicas de proventos da carteira deixaram de converter erro SQL/dado inválido em `0.0` ou mapa vazio.
+- Falhas do reader agora são propagadas; zero permanece reservado a uma agregação válida sem direitos recebidos.
+- Testes cobrem as três fronteiras e impedem nova captura local.
+
+### Corrigido — conversão cambial fiscal DB-first (15/08/2026)
+
+- O cálculo legado de ganhos de capital deixou de consultar `USDBRL=X` por `price_history_service` com sessão nula.
+- Operações internacionais usam a última USD/BRL persistida até a data da transação, com a sessão do cálculo.
+- Ausência de cobertura deixa de assumir paridade `1.0` e falha explicitamente para não distorcer imposto.
+
+### Corrigido — falha de preços persistidos não mascarada (15/08/2026)
+
+- A leitura em lote de preços da carteira deixou de converter erro de banco em mapa vazio.
+- Falha de infraestrutura agora é propagada; somente ausência real de uma cotação permanece representada como preço indisponível.
+- Teste protege a distinção entre indisponibilidade do banco e cobertura parcial legítima.
+
+### Removido — calculadora legada e órfã de renda fixa (15/08/2026)
+
+- Removido `rf_calc_service.py`, sem qualquer consumidor de runtime ou teste.
+- O módulo duplicava a valuation canônica, abria sessões próprias e podia consultar BRAPI durante cálculo financeiro.
+- `fixed_income_valuation_service.py` permanece como única implementação consumida; gate estrutural protege a ausência do legado.
+
+### Corrigido — ausência de câmbio persistido sem taxa inventada (15/08/2026)
+
+- Resumos e snapshots deixaram de substituir ausência de USD/BRL persistido por `5.70`.
+- O reader DB-first agora falha explicitamente com a data efetiva sem cobertura, preservando a busca da última taxa disponível até a data.
+- Testes cobrem ausência de fallback fixo/provider e o erro de cobertura vazia.
+
+### Removido — serviço cambial legado em tempo de request (15/08/2026)
+
+- `fx_service.py` foi reduzido à persistência transacional usada pelo bootstrap.
+- Removidas APIs órfãs de leitura que consultavam BCB/AwesomeAPI em requests e podiam retornar taxa fixa `5.70`.
+- Consumidores financeiros permanecem nos readers DB-first; gate estrutural protege a fronteira sem provider e sem fallback.
+
+### Corrigido — erros explícitos nas consultas auxiliares de ativos (15/08/2026)
+
+- Buscas de ativos/Tesouro e preço histórico de título continuam fail-soft, mas passam a retornar erro explícito além de lista/preço vazio.
+- O modal de transação consolida e exibe a falha provider-neutral, distinguindo indisponibilidade de resultado vazio.
+- Falha no preço de Tesouro orienta preenchimento manual; teste estrutural cobre hooks e consumidor.
+
+### Corrigido — erro visível na consulta de cotação (15/08/2026)
+
+- `useTickerQuote` deixou de transformar falhas de rede/servidor em ausência silenciosa de erro.
+- 404 informa ativo ausente no catálogo; demais falhas apresentam mensagem recuperável já consumida pelo modal de transação.
+- Mensagem pública não expõe o provider e o catch deixou de usar `any`.
+
+### Corrigido — conclusão recuperável do onboarding (15/08/2026)
+
+- O `PATCH /users/me/onboarding` deixou de ter sua falha ignorada; navegação ocorre somente após persistência e atualização do usuário.
+- Falhas mantêm o usuário na tela com mensagem recuperável.
+- Se a carteira já tiver sido criada, o retry repete apenas a confirmação idempotente e não cria carteira duplicada.
+- Adicionado teste estrutural do contrato de persistência, refresh e retry.
+
+### Alterado — cache Redis fail-open com observabilidade (15/08/2026)
+
+- As cinco capturas amplas da fronteira Redis deixaram de falhar silenciosamente e agora registram operação, chave/padrão sanitizado, tipo e mensagem sanitizada da exceção.
+- A política fail-open foi preservada: indisponibilidade do Redis não interrompe requests nem persistência.
+- Valores armazenados não são incluídos nos logs; gate AST protege ausência de `pass` e uso da sanitização.
+
+### Alterado — invalidação de cache sem captura silenciosa duplicada (15/08/2026)
+
+- Removidos `except Exception: pass` redundantes das invalidações de cache em atualização e exclusão de carteira.
+- Os serviços agora delegam diretamente à fronteira Redis fail-open de `cache_delete`, sem alterar disponibilidade ou transações.
+- Gate AST exige as duas chaves canônicas e impede nova captura silenciosa local.
+
+### Preservado — redirects externos de Metas e IRPF (15/08/2026)
+
+- Auditados `/metas` e `/irpf`: ambos apenas redirecionam com `replace` para as rotas canônicas sob `/carteira`.
+- Os caminhos não possuem páginas, loaders, escritas ou cálculos próprios e não são usados pela navegação interna.
+- Compatibilidade foi preservada para favoritos externos; teste estrutural impede que os aliases adquiram lógica funcional.
+
+### Corrigido — hierarquia de rotas de Patrimônio (14/08/2026)
+
+- `main.tsx` passou a importar diretamente a página consolidada canônica; removido o re-export intermediário em `pages/patrimonio/PatrimonioPage.tsx`.
+- Subrotas de renda variável, Tesouro e renda fixa deixaram de ser filhas de uma página sem `<Outlet>` e passaram a ser registradas diretamente.
+- `/carteira/patrimonio` preserva a visão consolidada e as três URLs específicas passam a renderizar seus componentes.
+- Gate estrutural cobre o import canônico, a ausência do alias e a hierarquia corrigida.
+
+### Removido — ação frontend para rota inexistente de Análise (14/08/2026)
+
+- Removida do menu de posições a ação “Análise do Ativo”, que direcionava para `/carteira/analise` sem rota registrada.
+- Preservadas as ações funcionais de adicionar e consultar lançamentos.
+- O teste do menu passou a exigir duas ações e a ausência do link morto; o módulo de Análise continua bloqueado pela #57.
+
+### Removido — placeholders e entradas paralelas do frontend (14/08/2026)
+
+- Removidos placeholders órfãos de Análise/Histórico, stubs antigos de Login/Register, router alternativo e `ProtectedRoute` duplicado.
+- Preservadas as entradas canônicas em `main.tsx`, `router/ProtectedRoute.tsx` e `pages/auth/*`.
+- `MetasPage.tsx` não foi alterada e permanece bloqueada para o redesenho conjunto #246 + #57.
+- Adicionado gate estrutural cobrindo ausência dos seis arquivos e presença das entradas válidas.
+
+### Removido — entrada React vazia e duplicada (14/08/2026)
+
+- Removido `frontend/src/App.tsx`, arquivo sem consumidores que continha apenas `export {}`.
+- `frontend/src/main.tsx` permanece como entrada única para providers, roteamento e montagem React.
+- Adicionado gate estrutural contra a restauração do placeholder ou a perda do contrato mínimo da entrada canônica.
+
+### Removido — router administrativo de debug (14/08/2026)
+
+- Removida a superfície `/api/v1/debug`, sem consumidores, que permitia listar usuários, redefinição de senha e criação de `superadmin` mediante segredo estático paralelo.
+- Removidas a montagem condicional no `main.py` e as configurações órfãs `ADMIN_SECRET` e `DEBUG_RATE_LIMIT`.
+- Gestão legítima de usuários permanece em `/api/v1/admin`, protegida por JWT e `require_superadmin`.
+- Adicionado gate de segurança contra a reintrodução do arquivo, rota ou configuração.
+
+### Removido — backfill legado de Proventos (14/08/2026)
+
+- Removidos `backfill_dividends` e `dividend_backfill_service.py` após confirmação de que nenhum runtime, scheduler, CLI, workflow ou adapter certificado os consumia.
+- Removidos testes exclusivos do fluxo antigo; as nove regras úteis de normalização foram migradas para uma suíte unitária canônica.
+- Preservado o teste DB-first que impede eventos não monetários de contaminarem agregados financeiros.
+- O gate estrutural agora exige a ausência física do serviço; ingestão permanece exclusiva do seed/bootstrap certificado e explicitamente habilitado.
+
+### Alterado — parser canônico do payload BRAPI de Proventos (14/08/2026)
+
+- Extraídas para `dividend_brapi_payload.py` a seleção de respostas por ticker e a interpretação das variações de payload de ações e FIIs.
+- O adapter BRAPI do seed certificado deixou de importar `dividend_backfill_service.py`; o serviço legado passou a consumir a mesma fronteira neutra.
+- Endpoints, filtro por ticker, formatos aceitos e categorias de eventos foram preservados.
+- Adicionado gate estrutural contra HTTP, SQLAlchemy e dependência reversa do backfill no novo parser.
+
+### Alterado — normalizador canônico de eventos de Proventos (14/08/2026)
+
+- Extraídos `ParsedDividendEvent` e a normalização de payloads para `dividend_event_normalizer.py`.
+- Collector, persistência e testes do seed certificado deixaram de depender do modelo/parser definido no backfill legado.
+- O normalizador não importa SQLAlchemy, HTTP ou `dividend_backfill_service`; regras de datas, tipos, valores e payload bruto foram preservadas.
+- `dividend_backfill_service.py` passou a consumir a nova fronteira, preparando a separação posterior de fetchers e persistência legados.
+
+### Removido — wrapper órfão de backfill de Proventos (14/08/2026)
+
+- Removido `run_backfill` de `dividend_backfill_service.py` após confirmação de ausência total de consumidores.
+- Adicionado gate estrutural contra a reintrodução do wrapper genérico.
+- Tipos, parser e fetchers consumidos pelo seed certificado permaneceram intactos; `backfill_dividends` será separado em recorte posterior.
+
+### Removido — pipeline órfão e enriquecimento opcional do asset seed (14/08/2026)
+
+- Removido do asset seed o contrato opcional de enriquecimento amplo de preços/logos; o serviço agora persiste somente catálogo e metadados entregues pela fonte.
+- Removido `asset_market_pipeline_service.py` após confirmação de ausência total de consumidores.
+- Bootstrap global, seed B3 e testes foram ajustados para a assinatura simplificada de `run_asset_seed`.
+- Históricos de preços, Proventos e eventos permanecem sob seus estágios dedicados no `system-bootstrap.v4`.
+
+### Removido — batch e CLIs paralelos de mercado (14/08/2026)
+
+- Removidos `market_pipeline_batch_service.py`, `run_market_pipeline.py` e `run_market_pipeline_batch.py`, sem consumidores de runtime, scheduler, workflow ou runbook.
+- As portas manuais duplicavam backfill amplo de preços/logos fora das etapas dedicadas do bootstrap e da manutenção recorrente de fechamento.
+- Removido o teste exclusivo do batch e adicionados gates de ausência física para impedir reintrodução acidental.
+- `asset_market_pipeline_service.py` permanece temporariamente restrito ao enriquecimento opcional do asset seed até a próxima decisão de confinamento.
+
+### Alterado — contrato explícito de enriquecimento do asset seed (14/08/2026)
+
+- Renomeado `run_backfill` para `run_market_enrichment` no asset seed, refletindo que a opção controla somente histórico de preços e logos.
+- Helper e métrica de resultado também perderam a nomenclatura genérica de backfill; nenhuma semântica de Proventos permanece nessa superfície.
+- `system-bootstrap.v4` e seed B3 continuam chamando o catálogo com enriquecimento amplo desabilitado.
+- Testes e documentação foram sincronizados e o contrato do bootstrap proíbe a reintrodução do nome legado.
+
+### Alterado — contrato completo de ambiente Docker (14/08/2026)
+
+- Reconstruído `.env.example` a partir das configurações efetivamente consumidas pela aplicação, Docker, frontend e rotinas operacionais.
+- Documentados ambiente, portas, banco, Redis, autenticação, CORS, rate limits, SuperAdmin, providers, bootstrap v4 e operações de pré-produção, sempre com gates perigosos desabilitados por padrão.
+- `docker-compose.yml` passou a encaminhar `VITE_API_URL` como argumento de build do frontend; vazio preserva o proxy Nginx canônico.
+- Adicionado teste de contrato para impedir que novos campos de `Settings` ou variáveis operacionais essenciais deixem de aparecer no exemplo.
+
+### Alterado — pipeline de mercado sem eventos paralelos (14/08/2026)
+
+- Removidos `sync_events`, `events_synced` e o import de `dividend_backfill_service` do pipeline de mercado.
+- Asset seed, serviço batch e CLIs de mercado deixaram de expor flags, argumentos, logs ou métricas de eventos/Proventos.
+- O pipeline permanece responsável por catálogo, histórico de preços e logo; eventos globais entram exclusivamente pelos estágios gated do `system-bootstrap.v4`.
+- Adicionada regressão estrutural cobrindo todas as cinco superfícies contra reintrodução da porta paralela.
+
+### Removido — onboarding órfão de mercado (14/08/2026)
+
+- Removido `asset_onboarding_service.py` após confirmação de ausência de consumidores em runtime, routers, jobs, CLIs e bootstrap.
+- O serviço declarava execução após criação de ativo/transação, mas o CRUD já proíbe qualquer ingestão externa automática e mantém somente operações locais e DB-first.
+- Adicionado gate de ausência física; pipeline, seed, batch e CLIs foram preservados para uma contração independente da etapa paralela de eventos.
+
+### Removido — sincronizador diário órfão de Proventos (14/08/2026)
+
+- Removidos `proventos_daily_sync_service.py` e seu teste exclusivo após a confirmação de que nenhum runtime, scheduler, CLI, workflow ou serviço ainda os consumia.
+- O módulo havia se tornado uma segunda orquestração sem os gates transacionais do seed certificado após a retirada da CLI dedicada e da etapa no full market rebuild.
+- O gate do scheduler passou a exigir também a ausência física do módulo, além de proibir seus antigos imports e chamadas.
+- Adapters, parsers e persistência compartilhados pelo `pre-prod-dividends-seed.v2` foram preservados.
+
+### Removido — Proventos do full market rebuild (14/08/2026)
+
+- Removida a etapa paralela de Proventos de `full_market_rebuild_service.py`, junto com suas métricas do resumo operacional.
+- O caminho antigo chamava o sincronizador diário sem advisory lock dedicado, transação única, rollback integral ou opt-in explícito, contrariando o contrato da #226.
+- O `system-bootstrap.v4`, por meio do seed certificado e gated, permanece como única entrada operacional certificável para o domínio.
+- Adicionado gate estrutural garantindo que o full rebuild não volte a importar, chamar ou registrar a etapa de Proventos.
+
+### Removido — CLI legada de sincronização de Proventos (14/08/2026)
+
+- Removido `run_proventos_sync.py`, sem consumidores, entry point ou automação no projeto.
+- A CLI permitia chamar diretamente `run_backfill` e `run_daily_proventos_sync`, duplicando o bootstrap certificado e contornando seus gates explícitos.
+- Adicionado gate estrutural para impedir a reintrodução dessa porta manual; os serviços compartilhados permanecem preservados enquanto seus consumidores e adapters canônicos são auditados.
+
+### Alterado — FX DB-first nos snapshots por classe (14/08/2026)
+
+- `portfolio_class_snapshot_service` deixou de importar `fx_service` e passou a consumir exclusivamente `fx_rates` pelo leitor persistido.
+- A cobertura USD-BRL necessária é pré-carregada antes da exclusão/reconstrução dos snapshots; ausência aborta explicitamente o bloco sem provider ou taxa fixa.
+- Valores cambiais permanecem em `Decimal` e os snapshots monetários continuam quantizados em R$ 0,01.
+- Tesouro Direto e Renda Fixa continuam indisponíveis neste TWR por classe e não tiveram valuation alterado.
+
+### Removido — serviço órfão de posições com provider (14/08/2026)
+
+- Removido `position_service.py`, sem consumidores de produção e duplicado em relação a `portfolio_service`/`canonical_positions_service`.
+- Eliminado o único caminho desse serviço que chamava `quotes_service.get_current_price` e convertia ausência de cotação em preço médio silencioso.
+- Adicionado gate estrutural para impedir a reintrodução do módulo ou de imports de produção.
+- Endpoints públicos, contratos canônicos e comportamento de Tesouro/Renda Fixa não foram alterados.
+
+### Alterado — baseline pós-segurança e retomada da sanitização (14/08/2026)
+
+- PR #271 mergeada e Issue #269 concluída no baseline `4ff76c4fe9f1738db9b392b3568fcb35f81185e7`, alinhando `main` e `stable-15jun` após as correções de SSRF, path injection, dependências vulneráveis, log injection e hardening da imagem.
+- #268 concluiu o smoke funcional e o gate global no SHA `a8444b545a10aa7d48dd70f08a07e3fa386605d6`, estabelecendo `test_ready=true` apenas para dados fictícios/descartáveis.
+- `ready_for_real_data=false` permanece obrigatório até #226/#216/#158 e decisão formal da #227.
+- Branches obsoletas foram removidas após preservação dos snapshots nas tags `archive/recover-snapshot-b1c8080c` e `archive/corporate-actions-5e110967`; branches Dependabot remanescentes seguem fila técnica separada.
+- A ordem corrente passa a ser #247 (sanitização residual) → #150 → #149 → #226/#216/#158 → #253/#246+#57.
+
 ### Alterado — universo CRIPTO Top 100 por capitalização (11/08/2026)
 
 - Criada a Issue #267 para separar explicitamente catálogo descoberto, universo CRIPTO suportado e histórico certificado.

@@ -1,7 +1,9 @@
 from app.core.config import Settings
 
 
-def test_settings_ignores_extra_values_from_shared_env_file(tmp_path):
+def test_settings_ignores_extra_values_from_shared_env_file(tmp_path, monkeypatch):
+    monkeypatch.delenv("APP_DEBUG", raising=False)
+
     env_file = tmp_path / ".env"
     env_file.write_text(
         "\n".join(

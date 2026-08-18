@@ -1,4 +1,3 @@
-import json
 from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
@@ -66,11 +65,12 @@ async def test_sync_persists_global_brapi_and_yahoo_events() -> None:
     assert {event.ratio for event in created} == {Decimal("1.05"), Decimal("0.05")}
     assert all(event.ticker == "AERI3" for event in created)
     assert all(event.portfolio_id is None for event in created)
-    assert all(event.brapi_event_id for event in created)
-    assert {json.loads(event.raw_data)["source"] for event in created} == {
-        "brapi",
-        "yahoo",
-    }
+    assert all(event.source_provider in {"brapi", "yahoo"} for event in created)
+    assert all(event.source_event_id for event in created)
+    assert all(event.source_payload_hash for event in created)
+    assert all(event.raw_metadata is not None for event in created)
+    assert all(event.brapi_event_id is None for event in created)
+    assert all(event.raw_data is None for event in created)
     assert db.add.call_count == 2
     db.flush.assert_awaited_once()
 
@@ -102,9 +102,9 @@ async def test_sync_is_idempotent_by_canonical_source_event_id() -> None:
         brapi_fetcher=brapi_fetcher,
         yahoo_fetcher=yahoo_fetcher,
     )
-    event_id = first[0].brapi_event_id
+    event = first[0]
 
-    second_db = _db(existing=(("brapi", event_id, event_id),))
+    second_db = _db(existing=((event.source_provider, event.source_event_id),))
     second = await sync_corporate_events_for_asset(
         second_db,
         _asset(),

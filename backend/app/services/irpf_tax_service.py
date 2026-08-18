@@ -4,7 +4,6 @@ Este módulo não projeta Bens e Direitos. Posição e custo em 31/12 pertencem 
 serviço canônico ``irpf_bens_direitos_service``.
 """
 
-import logging
 from collections import defaultdict
 from datetime import date
 
@@ -22,8 +21,9 @@ from app.services.canonical_dividend_entitlement import EntitlementReason
 from app.services.canonical_dividend_entitlement_reader import (
     load_portfolio_dividend_entitlements,
 )
-
-logger = logging.getLogger(__name__)
+from app.services.persisted_fx_query_service import (
+    get_persisted_usd_brl_rate_for_date,
+)
 
 ALIQ_SWING = 0.15
 ALIQ_DAY_TRADE = 0.20
@@ -51,25 +51,10 @@ def _detect_day_trades(txs: list) -> set[tuple[date, str]]:
     }
 
 
-async def _get_usd_brl_rate(tx_date: date) -> float:
-    """Obtém USD/BRL na data da transação, preservando o fallback vigente."""
+async def _get_usd_brl_rate(db: AsyncSession, tx_date: date) -> float:
+    """Obtém a última USD/BRL persistida até a data da transação."""
 
-    try:
-        from app.models.asset import AssetType
-        from app.services.price_history_service import get_price_at_date
-
-        rate = await get_price_at_date(
-            None,
-            "USDBRL=X",
-            AssetType.ETF_INTERNACIONAL,
-            str(tx_date),
-        )
-        if rate and rate > 0:
-            return rate
-    except Exception as exc:  # noqa: BLE001 - fallback fiscal legado preservado
-        logger.warning("[IRPF] falha ao buscar USD/BRL em %s: %s", tx_date, exc)
-    logger.warning("[IRPF] usando taxa USD/BRL=1.0 para %s", tx_date)
-    return 1.0
+    return await get_persisted_usd_brl_rate_for_date(db, tx_date)
 
 
 async def calc_ganhos_capital(
@@ -116,7 +101,7 @@ async def calc_ganhos_capital(
         currency = getattr(tx, "currency", "BRL") or "BRL"
         price_brl = tx.price
         if currency != "BRL" and asset_type in _INTL_TYPES:
-            price_brl = tx.price * await _get_usd_brl_rate(tx.date)
+            price_brl = tx.price * await _get_usd_brl_rate(db, tx.date)
         fees = getattr(tx, "fees", 0.0) or 0.0
         cost = price_brl * tx.quantity + fees
         position = average_costs.setdefault(
@@ -143,7 +128,7 @@ async def calc_ganhos_capital(
         currency = getattr(tx, "currency", "BRL") or "BRL"
         price_brl = tx.price
         if currency != "BRL" and asset_type in _INTL_TYPES:
-            price_brl = tx.price * await _get_usd_brl_rate(tx.date)
+            price_brl = tx.price * await _get_usd_brl_rate(db, tx.date)
         fees = getattr(tx, "fees", 0.0) or 0.0
         cost = price_brl * tx.quantity + fees
 

@@ -20,14 +20,17 @@ export function useTickerSuggest(
 ) {
   const [items,   setItems]   = useState<TickerSuggestion[]>([])
   const [loading, setLoading] = useState(false)
+  const [error,   setError]   = useState<string | null>(null)
 
   useEffect(() => {
     if (!enabled || q.trim().length < 2) {
       setItems([])
+      setError(null)
       return
     }
 
     setLoading(true)
+    setError(null)
     const params = new URLSearchParams({
       q:     q.trim(),
       limit: '10',
@@ -40,6 +43,7 @@ export function useTickerSuggest(
         setItems(res.data)
       } catch {
         setItems([])
+        setError('Não foi possível consultar o catálogo de ativos. Tente novamente.')
       } finally {
         setLoading(false)
       }
@@ -48,5 +52,5 @@ export function useTickerSuggest(
     return () => clearTimeout(timer)
   }, [q, enabled, assetType])
 
-  return { items, loading }
+  return { items, loading, error }
 }

@@ -45,7 +45,7 @@ docker-compose exec -T backend python -m pytest tests/ -v
 docker-compose exec -T backend python -m pytest tests/ --cov=app.services
 ```
 
-## Gap 3.5: Complete AnalisePage and MetasPage ✅ VERIFIED
+## Gap 3.5: AnalisePage and MetasPage — superseded
 
 ### Status
 - **MetasPage.tsx**: Fully implemented with complete functionality for managing financial goals (metas)
@@ -54,11 +54,13 @@ docker-compose exec -T backend python -m pytest tests/ --cov=app.services
   - Progress tracking with visual progress bars
   - Automatic value calculation based on portfolio data
   - Support for monthly contribution projections
-- **AnalisePage.tsx**: Correctly implemented as a stub indicating feature is coming in Sprint 13
-  - Analysis module backend (app/routers/analysis.py) also returns 501 Not Implemented
+- **AnalisePage.tsx**: the orphan placeholder was removed; the domain remains
+  planned and blocked by Issues #57 + #246.
 
 ### Conclusion
-Both pages are in the correct state for the current sprint. MetasPage is production-ready with full functionality.
+This historical assessment was superseded by the architecture review. The
+current Metas surface is preserved but is not a canonical production contract
+until #246 + #57 are designed and implemented together.
 
 ## Gap 3.3: Mobile Responsive Layout Fixes ✅ VERIFIED
 
@@ -111,7 +113,7 @@ Create comprehensive architecture documentation including:
 
 ### Completed in Sprint 3
 - ✅ Gap 3.1: Comprehensive test infrastructure (21 test files)
-- ✅ Gap 3.5: Page completion verification (MetasPage complete, AnalisePage correctly stubbed)
+- Superseded: Metas/Análise are governed by #246 + #57
 - ✅ Gap 3.3: Mobile responsive design verification
 
 ### Ready for Implementation

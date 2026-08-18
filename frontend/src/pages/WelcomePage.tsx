@@ -120,6 +120,8 @@ export default function WelcomePage() {
   const [current, setCurrent] = useState(1)
   const [walletName, setWalletName] = useState('')
   const [finishing, setFinishing] = useState(false)
+  const [portfolioCreated, setPortfolioCreated] = useState(false)
+  const [finishError, setFinishError] = useState<string | null>(null)
   const { mutateAsync: createPortfolio } = useCreatePortfolio()
 
   // Sem guard de redirecionamento aqui — o ProtectedRoute já cuida disso.
@@ -129,24 +131,42 @@ export default function WelcomePage() {
   // Isso é feito abaixo apenas como safeguard passive.
 
   const markDone = async () => {
-    try { await api.patch('/users/me/onboarding') } catch { /* silêncioso */ }
+    await api.patch('/users/me/onboarding')
     await refreshUser()
   }
 
   const handleSkip = async () => {
-    await markDone()
-    navigate('/carteira', { replace: true })
+    setFinishing(true)
+    setFinishError(null)
+    try {
+      await markDone()
+      navigate('/carteira', { replace: true })
+    } catch {
+      setFinishError('Não foi possível concluir o onboarding. Tente novamente.')
+      setFinishing(false)
+    }
   }
 
   const handleCreate = async () => {
-    if (!walletName.trim()) return
+    if (!portfolioCreated && !walletName.trim()) return
     setFinishing(true)
+    setFinishError(null)
+    let created = portfolioCreated
     try {
-      await createPortfolio({ name: walletName.trim() })
+      if (!created) {
+        await createPortfolio({ name: walletName.trim() })
+        created = true
+        setPortfolioCreated(true)
+      }
       await markDone()
       launchConfetti()
       setTimeout(() => navigate('/carteira', { replace: true }), 900)
     } catch {
+      setFinishError(
+        created
+          ? 'Carteira criada, mas não foi possível concluir o onboarding. Tente concluir novamente.'
+          : 'Não foi possível criar a carteira. Tente novamente.',
+      )
       setFinishing(false)
     }
   }
@@ -180,6 +200,7 @@ export default function WelcomePage() {
           </div>
           <button
             onClick={handleSkip}
+            disabled={finishing}
             style={{
               fontSize: '.75rem', color: 'var(--color-text-faint)', background: 'none',
               border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '.375rem',
@@ -287,19 +308,21 @@ export default function WelcomePage() {
                     onKeyDown={e => e.key === 'Enter' && handleCreate()}
                     placeholder="Ex: Renda Variável, XP, Longo Prazo…"
                     maxLength={40}
-                    disabled={finishing}
+                    disabled={finishing || portfolioCreated}
                     className="input"
                     style={{ flex: 1 }}
                   />
                   <button
                     onClick={handleCreate}
-                    disabled={!walletName.trim() || finishing}
+                    disabled={(!walletName.trim() && !portfolioCreated) || finishing}
                     className="btn btn-primary"
                     style={{ paddingLeft: '.875rem', paddingRight: '.875rem' }}
                   >
                     {finishing
                       ? <Loader2 size={16} className="animate-spin" />
-                      : <><Plus size={14} /> Criar</>
+                      : portfolioCreated
+                        ? <><Check size={14} /> Concluir</>
+                        : <><Plus size={14} /> Criar</>
                     }
                   </button>
                 </div>
@@ -309,6 +332,12 @@ export default function WelcomePage() {
               </div>
             )}
           </div>
+
+          {finishError && (
+            <p role="alert" style={{ fontSize: '.75rem', color: 'var(--color-error)', marginTop: '1rem' }}>
+              {finishError}
+            </p>
+          )}
 
           {/* Nav */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--color-divider)' }}>

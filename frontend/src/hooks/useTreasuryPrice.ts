@@ -17,14 +17,17 @@ interface TreasuryPriceResponse {
 export function useTreasuryPrice(slug: string, date: string, enabled = true) {
   const [price,   setPrice]   = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
+  const [error,   setError]   = useState<string | null>(null)
 
   useEffect(() => {
     if (!enabled || !slug || !date) {
       setPrice(null)
+      setError(null)
       return
     }
 
     setLoading(true)
+    setError(null)
     const timer = setTimeout(async () => {
       try {
         const res = await api.get<TreasuryPriceResponse>(
@@ -33,6 +36,7 @@ export function useTreasuryPrice(slug: string, date: string, enabled = true) {
         setPrice(res.data.price)
       } catch {
         setPrice(null)
+        setError('Não foi possível consultar o preço do título. Informe-o manualmente.')
       } finally {
         setLoading(false)
       }
@@ -41,5 +45,5 @@ export function useTreasuryPrice(slug: string, date: string, enabled = true) {
     return () => clearTimeout(timer)
   }, [slug, date, enabled])
 
-  return { price, loading }
+  return { price, loading, error }
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import api from '../services/api'
 import { useAppStore } from '../store/appStore'
+import { getApiErrorMessage } from '../utils/apiError'
 
 export interface TreasuryItem {
   id: number
@@ -48,8 +49,8 @@ export function useTreasury() {
         `/portfolios/${portfolioId}/treasury`
       )
       setItems(data)
-    } catch (e: any) {
-      setError(e?.response?.data?.detail || 'Erro ao carregar Tesouro Direto')
+    } catch (error: unknown) {
+      setError(getApiErrorMessage(error, 'Erro ao carregar Tesouro Direto'))
     } finally {
       setLoading(false)
     }

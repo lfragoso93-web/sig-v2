@@ -35,7 +35,7 @@ from app.services.class_snapshot_position_projection import (
 from app.services.corporate_action_position_reader import (
     load_global_corporate_actions_by_ticker,
 )
-from app.services.fx_service import get_usd_brl_at_date
+from app.services.fx_rate_reader import load_usd_brl_rates_for_dates
 from app.services.price_history_service import get_prices_at_date_batch
 from app.services.twr_service import (
     append_compounded_return_pct,
@@ -79,6 +79,38 @@ def _next_business_date(value: date) -> date:
     while result.weekday() >= 5:
         result += timedelta(days=1)
     return result
+
+
+def _business_dates(start: date, end: date) -> list[date]:
+    dates: list[date] = []
+    cursor = start
+    while cursor <= end:
+        if cursor.weekday() < 5:
+            dates.append(cursor)
+        cursor += timedelta(days=1)
+    return dates
+
+
+async def _load_required_usd_brl_rates(
+    db: AsyncSession,
+    start: date,
+    end: date,
+) -> dict[date, Decimal]:
+    """Pré-carrega FX persistido e falha antes de qualquer rebuild parcial."""
+
+    required_dates = _business_dates(start, end)
+    if not required_dates:
+        return {}
+
+    persisted = await load_usd_brl_rates_for_dates(db, required_dates)
+    missing = [target_date for target_date in required_dates if target_date not in persisted]
+    if missing:
+        raise RuntimeError(
+            "cobertura USD-BRL persistida indisponível para snapshots de classe: "
+            f"first_missing={missing[0].isoformat()} missing_dates={len(missing)}"
+        )
+
+    return {target_date: persisted[target_date].rate for target_date in required_dates}
 
 
 @dataclass
@@ -195,6 +227,23 @@ async def rebuild_class_snapshots(
             days_back,
         )
 
+    today = datetime.now(UTC).date()
+    usd_transactions = [
+        transaction
+        for transaction in supported_transactions
+        if _asset_type(transaction.asset_type) in _USD_TYPES
+    ]
+    fx_rates_by_date: dict[date, Decimal] = {}
+    if usd_transactions:
+        first_usd_date = _next_business_date(
+            min(transaction.date for transaction in usd_transactions)
+        )
+        fx_rates_by_date = await _load_required_usd_brl_rates(
+            db,
+            first_usd_date,
+            today,
+        )
+
     dividends_by_class_day = _group_received_dividends(
         await load_portfolio_dividend_entitlements(db, portfolio_id),
     )
@@ -218,8 +267,6 @@ async def rebuild_class_snapshots(
     return_states: dict[AssetType, ClassReturnState] = defaultdict(ClassReturnState)
     count = 0
     cursor = start
-    today = datetime.now(UTC).date()
-
     while cursor <= today:
         if cursor.weekday() < 5:
             external_flows: dict[AssetType, Decimal] = defaultdict(lambda: _ZERO)
@@ -258,7 +305,7 @@ async def rebuild_class_snapshots(
                 )
                 fx_rate = Decimal(1)
                 if asset_type in _USD_TYPES and requirements:
-                    fx_rate = _decimal(await get_usd_brl_at_date(db, cursor.isoformat()))
+                    fx_rate = fx_rates_by_date[cursor]
 
                 market_value = _ZERO
                 cost_basis = _ZERO

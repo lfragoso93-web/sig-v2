@@ -89,8 +89,9 @@ Estado atual do projeto em 26 Jun 2026. Ponto de partida para a proxima sessao.
 - `ProventosHistoricoTable.tsx` usa classes CSS legadas (`text-muted`, `border-light-border`) — a migrar para CSS vars
 - `ProventosDonutChart` precisa de validacao com dados reais de distribuicao
 - `YFRateLimitError` afeta ativos internacionais (IVV, NVDA, INTR, TFLO) — sem solucao ainda
-- `MetasPage.tsx` e `AnalisePage.tsx` sao stubs vazios (< 200 bytes) — backend existe, frontend pendente
-- Nenhum teste automatizado escrito para o frontend ainda
+- `MetasPage.tsx` possui uma superfície ativa, mas seu contrato permanece
+  bloqueado para redesenho conjunto nas Issues #246 + #57
+- Análise não possui rota ativa nem placeholder; não iniciar antes de #247/#227
 
 ---
 
@@ -98,7 +99,7 @@ Estado atual do projeto em 26 Jun 2026. Ponto de partida para a proxima sessao.
 
 | Pagina | Arquivo | Status |
 |---|---|---|
-| Login / Register | `Login.tsx`, `Register.tsx` | ✅ |
+| Login / Register | `pages/auth/LoginPage.tsx`, `pages/auth/RegisterPage.tsx` | ✅ |
 | Landing / Welcome | `Landing.tsx`, `WelcomePage.tsx` | ✅ |
 | Patrimonio | `PatrimonioPage.tsx` | ✅ |
 | Transacoes | `Transacoes.tsx` | ✅ |
@@ -108,18 +109,18 @@ Estado atual do projeto em 26 Jun 2026. Ponto de partida para a proxima sessao.
 | Lancamentos | `LancamentosPage.tsx` | ✅ |
 | Configuracoes | `Configuracoes.tsx` | ✅ |
 | Resumo/Dashboard | `ResumePage.tsx` | 🔧 Parcial |
-| Metas | `MetasPage.tsx` | 🔜 Stub |
-| Analise | `AnalisePage.tsx` | 🔜 Stub |
-| Historico | `HistoricoPage.tsx` | 🔜 Stub |
+| Metas | `MetasPage.tsx` | ⚠️ Superfície preservada; contrato bloqueado pela #246 |
+| Analise | — | ⛔ Planejada e bloqueada pela #57 |
+| Historico | — | Removido; sem contrato ou rota ativa |
 
 ---
 
 ## Decisoes de arquitetura consolidadas
 
 - **AsyncSession** em todos os servicos e routers do backend
-- **Dois niveis de provento:** `asset_dividends` (global) + `dividends` (carteira)
-- **SKIP_TYPES:** CRIPTO, TESOURO_DIRETO, RENDA_FIXA ignorados no backfill
-- **Calculo de quantity:** posicao liquida na data-ex via `Transaction(portfolio_id, ticker, date <= ex_date)`
+- **Proventos:** `asset_dividends` é o catálogo global; direitos por carteira são projeções somente leitura
+- **Ingestão:** ocorre apenas pelo seed/bootstrap certificado e explicitamente habilitado
+- **Cálculo de quantity:** posição histórica elegível por `Transaction`, priorizando data de direito e usando data-ex como fallback
 - **net_value:** `total_value * 0.85` para JCP; `total_value` para os demais
 - **Prefixo de rotas:** gerenciado pelo `main.py` — nao hardcodar `/api/v1` nos routers
 - **Tipos de ativo:** fonte unica em `asset_types.py`

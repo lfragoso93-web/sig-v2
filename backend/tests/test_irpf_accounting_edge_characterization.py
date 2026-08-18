@@ -73,10 +73,11 @@ async def test_international_operations_convert_each_transaction_at_its_date():
     ) as get_rate:
         month = (await calc_ganhos_capital(db, 1, 2024))[0]
 
-    assert [call.args[0] for call in get_rate.await_args_list] == [
+    assert [call.args[1] for call in get_rate.await_args_list] == [
         date(2024, 3, 1),
         date(2024, 4, 1),
     ]
+    assert all(call.args[0] is db for call in get_rate.await_args_list)
     assert month.vendas[0].preco_venda == 72
     assert month.vendas[0].custo_aquisicao == 50
     assert month.total_vendas == 720
@@ -86,16 +87,27 @@ async def test_international_operations_convert_each_transaction_at_its_date():
 
 
 @pytest.mark.asyncio
-async def test_missing_exchange_rate_falls_back_to_one(caplog: pytest.LogCaptureFixture):
+async def test_exchange_rate_uses_persisted_db_first_reader():
+    db = AsyncMock()
     with patch(
-        "app.services.price_history_service.get_price_at_date",
-        new=AsyncMock(return_value=None),
-    ) as get_price:
-        rate = await _get_usd_brl_rate(date(2024, 5, 2))
+        "app.services.irpf_tax_service.get_persisted_usd_brl_rate_for_date",
+        new=AsyncMock(return_value=5.25),
+    ) as get_rate:
+        rate = await _get_usd_brl_rate(db, date(2024, 5, 2))
 
-    assert rate == 1.0
-    get_price.assert_awaited_once()
-    assert "usando taxa USD/BRL=1.0" in caplog.text
+    assert rate == 5.25
+    get_rate.assert_awaited_once_with(db, date(2024, 5, 2))
+
+
+@pytest.mark.asyncio
+async def test_missing_exchange_rate_propagates_persisted_coverage_failure():
+    db = AsyncMock()
+    with patch(
+        "app.services.irpf_tax_service.get_persisted_usd_brl_rate_for_date",
+        new=AsyncMock(side_effect=RuntimeError("cobertura USD-BRL indisponível")),
+    ):
+        with pytest.raises(RuntimeError, match="cobertura USD-BRL indisponível"):
+            await _get_usd_brl_rate(db, date(2024, 5, 2))
 
 
 @pytest.mark.asyncio

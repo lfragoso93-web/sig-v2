@@ -69,9 +69,7 @@ async def test_sync_persists_and_deduplicates_by_canonical_source_identity(
     event = created[0]
     assert event.source_provider == "brapi"
     assert event.source_event_id
-    assert event.brapi_event_id == event.source_event_id
     assert event.portfolio_id is None
-
     assert event.effective_date == event.event_date == date(2026, 1, 15)
     assert Decimal(str(event.quantity_factor)) == Decimal(str(event.ratio))
     assert Decimal(str(event.quantity_factor)) == Decimal("1.10")
@@ -85,21 +83,12 @@ async def test_sync_persists_and_deduplicates_by_canonical_source_identity(
     expected_payload = json.dumps(
         expected_metadata,
         sort_keys=True,
-        ensure_ascii=False,
+        ensure_ascii=True,
         separators=(",", ":"),
     )
     assert event.source_payload_hash == hashlib.sha256(
         expected_payload.encode("utf-8")
     ).hexdigest()
-
-    serialized_legacy = json.loads(event.raw_data)
-    assert serialized_legacy["source"] == event.source_provider
-    assert serialized_legacy["source_event_id"] == event.source_event_id
-    assert serialized_legacy["event_date"] == event.effective_date.isoformat()
-    assert Decimal(serialized_legacy["quantity_factor"]) == Decimal(
-        str(event.quantity_factor)
-    )
-    assert serialized_legacy["provider_payload"] == event.raw_metadata
 
     repeated = await sync_corporate_events_for_asset(
         db,
@@ -112,7 +101,7 @@ async def test_sync_persists_and_deduplicates_by_canonical_source_identity(
 
 
 @pytest.mark.asyncio
-async def test_sync_respects_legacy_identity_during_transition(
+async def test_sync_does_not_use_legacy_brapi_alias_as_canonical_identity(
     db: AsyncSession,
 ) -> None:
     asset = Asset(
@@ -124,10 +113,7 @@ async def test_sync_respects_legacy_identity_during_transition(
     db.add(asset)
     await db.flush()
 
-    normalized = normalize_brapi_corporate_actions("TEST3", _brapi_payload())
-    assert len(normalized) == 1
-    action = normalized[0]
-
+    [action] = normalize_brapi_corporate_actions("TEST3", _brapi_payload())
     db.add(
         CorporateEvent(
             asset_id=asset.id,
@@ -158,4 +144,7 @@ async def test_sync_respects_legacy_identity_during_transition(
         yahoo_fetcher=_empty_yahoo,
     )
 
-    assert created == []
+    assert len(created) == 1
+    assert created[0].source_provider == "brapi"
+    assert created[0].source_event_id == action.source_event_id
+    assert created[0].brapi_event_id is None

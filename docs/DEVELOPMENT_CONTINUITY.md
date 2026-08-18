@@ -1,171 +1,514 @@
 # Continuidade de desenvolvimento — SGI v2
 
-> Documento obrigatório para iniciar ou retomar qualquer conversa de desenvolvimento.
+> Documento obrigatório para iniciar ou retomar qualquer conversa de desenvolvimento. Atualizado em 14/08/2026.
 
 ## Contexto permanente
 
 - Repositório: `lfragoso93-web/sig-v2`.
-- Branch obrigatória: `stable-15jun`.
-- Nunca desenvolver diretamente na `main`.
-- Dividir macroblocos em commits pequenos e rastreáveis.
-- Ao final de cada bloco informar resumo técnico, impacto arquitetural, testes, SHA completo e próximo bloco.
-- README, ROADMAP, CHANGELOG e documentação arquitetural devem refletir o estado real.
-- `goals` permanece fora da estabilização corrente e não deve receber migration apenas para limpar Alembic.
+- Branch obrigatória: `stable-15jun`; nunca desenvolver diretamente na `main`.
+- Confirmar o HEAD remoto e a árvore limpa antes de cada bloco.
+- Dividir macroblocos em commits pequenos, independentes e rastreáveis.
+- Antes de alterar, revisar Issue, arquitetura, contratos canônicos, consumidores e legado.
+- Ao final informar resumo técnico, impacto arquitetural, arquivos, testes, SHA completo, Issue/documentação e próximo bloco.
+- `goals` permanece fora da estabilização corrente e não recebe migration apenas para limpar Alembic.
 
-## Gate e Issues vigentes
+## Baseline confirmado
 
-- #227 — gate-mãe antes de dados reais.
-- #247 — auditoria pós-convergência.
-- #248 — bootstrap certificado, cobertura CRIPTO e fronteira única de providers.
-- #249 — readiness explícito do bootstrap — **concluída**.
-- #250 — orquestrador global do bootstrap e exceções de provider/lifecycle.
-- #267 — universo CRIPTO suportado limitado às Top 100 por capitalização.
-- #254 — integração estrutural de eventos corporativos ao bootstrap — wrapper, testes e integração v4 publicados; validação integrada ainda pendente.
-- #265 — shallow histories CRIPTO — **concluída em 11/08/2026** com fila rasa zerada no universo amplo auditado.
-- #226 — Proventos: contrato reutilizado pelo bootstrap, mas execução real continua bloqueada.
-- #129 — eventos corporativos: núcleo consolidado; permanece aberta para auditoria residual de consumidores/aliases/provider boundaries.
+- `main` = `stable-15jun` em `4ff76c4fe9f1738db9b392b3568fcb35f81185e7`.
+- PR #271 mergeada; Issue #269 concluída.
+- #268 concluída no checkpoint funcional `a8444b545a10aa7d48dd70f08a07e3fa386605d6`.
+- `test_ready=true`: permitido testar somente com dados fictícios/descartáveis.
+- `ready_for_real_data=false`: usuários, carteiras, CSV, seeds e snapshots reais continuam bloqueados.
+- Snapshots de branches removidas preservados em:
+  - `archive/recover-snapshot-b1c8080c`;
+  - `archive/corporate-actions-5e110967`.
+- Branches remanescentes: `main`, `stable-15jun` e cinco branches Dependabot sob triagem separada.
 
-## Regra canônica de providers
+## Evidência do gate `test_ready`
 
-Política detalhada: `docs/PROVIDER_ACCESS_POLICY_2026-08.md`.
+No fechamento da #268:
 
-Antes da primeira carteira real, o banco deve estar carregado e reconciliado por bootstrap certificado. Depois disso:
+- backend completo em Linux/Python 3.12: **1638 passed, 0 failed**;
+- smoke HTTP e cleanup descartável aprovados;
+- classes canônicas, BTC elegível e blockers CRIPTO exercitados;
+- Alembic/drift gate, mypy, flake8, `compileall` e `app.main` aprovados;
+- frontend lint, typecheck, 93 testes e build aprovados;
+- CI aprovou backend, frontend, pip/npm audit, Trivy filesystem, Gitleaks e lint dos Dockerfiles;
+- nenhum provider foi observado nos requests financeiros auditados.
 
-- requests funcionais e cálculos financeiros são DB-first;
-- provider recorrente somente para preço intraday e fechamento diário;
-- lacuna comprovada de preço em data específica pode consultar apenas a janela mínima necessária, persistir o resultado e então refazer leitura DB-first;
-- `get_price_at_date()` permanece leitor puro;
-- CRUD de usuário/transações não dispara onboarding, seed ou backfill externo;
-- catálogo, metadados, Proventos, eventos, benchmarks e câmbio não são sincronizados por jobs recorrentes.
+A #269/#271 acrescentou hardening de SSRF, path injection, dependências, logs e imagem. O PR registrou backend **1.673 passed, 24 skipped**, frontend **93 testes**, `npm audit` sem vulnerabilidades e import/build aprovados.
 
-## Política CRIPTO Top 100 — #267
+## Arquitetura que deve ser preservada
 
-A existência de um símbolo no catálogo BRAPI não significa suporte operacional automático pelo SGI.
+- Runtime financeiro é DB-first; provider não participa de GETs/cálculos financeiros.
+- Providers pertencem a bootstrap, ingestão, sincronização ou reconciliação explicitamente autorizados.
+- Preços externos são persistidos antes do consumo financeiro.
+- Ausência de preço/FX é explícita; não vira zero, preço médio, taxa `1.0` ou fallback silencioso.
+- `summary.v2`, `rentabilidade.v2`, projetores de posição/custo e snapshots são contratos canônicos.
+- Proventos pertencem ao ativo em `asset_dividends`; direitos por carteira são calculados sob demanda.
+- Eventos corporativos pertencem ao ativo em `corporate_events`; transações históricas não são mutadas.
+- Não reintroduzir `AppConfig`, `IRPFReport`, `Dividend/dividends` ou materialização de proventos por carteira.
+- Tesouro/Renda Fixa devem preservar marcação a mercado; evolução de TWR pertence à #149.
 
-Contrato canônico:
+## Trabalho corrente — #247
 
-1. CoinGecko `/coins/markets` define a relevância por capitalização de mercado;
-2. são considerados no máximo os Top 100 por `market_cap_rank`;
-3. o universo suportado é a interseção desse Top 100 com os símbolos disponíveis no catálogo CRIPTO da BRAPI;
-4. CoinGecko é usado somente no bootstrap para ranking de relevância; BRAPI permanece a integração de disponibilidade/cotações do SGI;
-5. ativos CRIPTO já persistidos fora do universo suportado são preservados e auditáveis, sem alteração artificial de lifecycle;
-6. seed, backfill histórico inicial e readiness CRIPTO devem usar o mesmo universo suportado;
-7. ativos fora desse universo não bloqueiam readiness CRIPTO.
+### 247-A — governança e documentação
 
-Não foi criada migration nem campo novo em `assets` neste bloco. O contrato é derivado dinamicamente durante bootstrap/readiness para evitar persistência estrutural prematura antes da validação operacional.
+- sincronizar README, ROADMAP, CHANGELOG, arquitetura e este documento;
+- atualizar #227 para `test_ready=true` e baseline pós-#271;
+- reclassificar Issues abertas e remover dependências/status obsoletos;
+- consolidar #248/#250 no gate operacional da #227 quando o histórico estiver preservado;
+- tratar #129 como residual da #247;
+- auditar #83 contra a implementação existente antes de decidir fechamento;
+- manter PRs/branches Dependabot como fila técnica separada.
 
-## Checkpoint CRIPTO amplo anterior — 11/08/2026
+### 247-B — posições DB-first
 
-BC/BD foram certificados localmente no HEAD `9772b8c2bdb9875d85abc4a72ed0bebea39c222e` sobre o catálogo amplo anterior de 481 ativos.
+- concluído: `position_service.py` não possuía consumidores de produção;
+- removidos o serviço órfão e seu teste exclusivo;
+- eliminado o caminho `quotes_service.get_current_price` e o fallback silencioso por preço médio;
+- gate estrutural protege a ausência do módulo e de imports futuros;
+- endpoints públicos continuam em `portfolio_service`/`canonical_positions_service`.
 
-Validação local:
+### 247-C — snapshots de classe / FX DB-first
 
-- build Docker aprovado;
-- testes dirigidos BC/BD: **2 passed**;
-- `python -m compileall -q app tests`: aprovado;
-- import integral de `app.main`: aprovado;
-- `git diff --check`: aprovado;
-- working tree limpa;
-- duplicidades globais em `(asset_id, timestamp)`: 0.
+- concluído: `portfolio_class_snapshot_service` usa `fx_rate_reader` DB-only;
+- cobertura USD-BRL é pré-carregada antes de qualquer exclusão/rebuild;
+- ausência persistida falha explicitamente, sem BCB/AwesomeAPI/taxa fixa;
+- valores permanecem em `Decimal` e quantizados em R$ 0,01;
+- TWR/valuation de Tesouro e Renda Fixa não foram alterados.
 
-Distribuição ampla:
+Commits publicados:
 
-- total: 481 ativos;
-- `HISTORY_START_EXHAUSTED = 369`;
-- `HISTORY_START_COMPLEMENT_GAPPED = 87`;
-- `HISTORY_START_SHALLOW_UNAVAILABLE = 14`;
-- `HISTORY_START_SHALLOW_VERIFIED = 10`;
-- `HISTORY_UNAVAILABLE = 1` (`XUSD`);
-- `shallow_histories = 0`;
-- `blocking_seams = 88`.
+- `6a279206c3975407a7aa7c187e8c9e762a761392` — gate DB-first;
+- `7fe02fee738539d8ec9555b7b727b388a67df215` — implementação e testes comportamentais.
 
-BC classificou os 87 gaps como:
+### 247-D — Proventos e eventos
 
-- `<= 30 dias`: 2 (`GALA = 22`, `WLFI = 27`);
-- `31–90 dias`: 1 (`MIRA = 74`);
-- `91–365 dias`: 13;
-- `>365 dias`: 71;
-- `unknown`: 0.
+- auditar `proventos_daily_sync_service.py`, `asset_market_pipeline_service.py`, `dividend_backfill_service.py` e `run_proventos_sync.py`;
+- eliminar ou confinar portas paralelas, preservando uma entrada canônica de bootstrap;
+- usar a tag arquivada de corporate actions apenas como evidência para decisões de backlog;
+- testar locks, transação, idempotência e ausência de consumers/imports legados.
 
-BD confirmou 14 `HISTORY_START_SHALLOW_UNAVAILABLE` e 1 `HISTORY_UNAVAILABLE` (`XUSD`). O finding mostrou que o catálogo amplo continha ativos sem relevância operacional suficiente e motivou a #267.
+Primeiro recorte concluído:
 
-Esses estados permanecem evidência histórica e auditável. Eles não devem ser apagados nem reclassificados apenas para produzir readiness verde.
+- `run_proventos_sync.py` não possuía consumidor, entry point ou automação;
+- a CLI foi removida porque expunha `run_backfill` e `run_daily_proventos_sync`
+  fora dos gates do `system-bootstrap.v4`;
+- uma regressão estrutural impede a reintrodução dessa porta manual;
+- os três serviços restantes continuam em auditoria e não devem ser removidos
+  antes da separação entre adapters canônicos e orquestrações legadas.
 
-## Implementação estrutural #267 publicada
+Segundo recorte concluído:
 
-Commits:
+- removida do `full_market_rebuild_service.py` a etapa paralela de Proventos e
+  suas métricas operacionais;
+- o rebuild não importa nem chama `proventos_daily_sync_service.py`;
+- o contrato da #226 e o `system-bootstrap.v4` permanecem como única entrada
+  operacional certificável para o domínio;
+- `proventos_daily_sync_service.py` ficou sem consumidor de produção e deve ser
+  avaliado isoladamente no próximo recorte.
 
-- `3f7de4d5ad21ed80f5c822f54d620a84139c8082` — adapter CoinGecko de ranking Top 100 por market cap;
-- `6d030ccc79a4350fe317d12521b2496157afac1a` — contrato de universo suportado Top 100 ∩ BRAPI;
-- `58467c7f1377b57752af2204bf0b10767f8d347d` — clareza/import explícito do contrato;
-- `50bbbe92fa70e5473e1710ad147041ea31e5e6db` — seed CRIPTO limitado ao universo suportado;
-- `d8f8d7f6f4ee29a022b97c922b856279f9276259` — gate do boundary do seed;
-- `5cce32e9d2fa374fcba9b861ce9314c24beb698c` — testes unitários da interseção/deduplicação;
-- `e0dc9e86d85a7461e7ccff8477cbdf1a3af702c8` — histórico CRIPTO do bootstrap limitado ao universo suportado;
-- `4597939f687bf3104645a2520028675867e245ac` — readiness CRIPTO limitado ao universo suportado;
-- `5d67b7a3d0ec726ae3c61a404ef2f9177c98475c` — seam audit com escopo opcional de tickers;
-- `fa7d733c8e43c34fee21cf3af8f757fd08e60a52` — shallow audit com escopo opcional de tickers.
+Terceiro recorte concluído:
 
-Nenhum desses blocos:
+- removidos `proventos_daily_sync_service.py` e seu teste exclusivo após nova
+  confirmação de ausência de consumidores de produção;
+- scheduler, bootstrap e full rebuild permanecem protegidos contra imports da
+  orquestração removida;
+- o gate do scheduler agora também exige a ausência física do módulo;
+- adapters e persistência usados pelo seed certificado não foram alterados.
 
-- apaga ativos CRIPTO antigos;
-- reclassifica `provider_status` para mascarar findings;
-- altera schema/migration;
-- libera `ready_for_real_data`;
-- adiciona provider a requests financeiros.
+Quarto recorte concluído:
 
-## Estado estrutural do bootstrap
+- removido `asset_onboarding_service.py` após confirmação de zero consumidores;
+- o CRUD de transações continua criando apenas o registro local do ativo,
+  invalidando cache e recalculando snapshots, sem BackgroundTask de provider;
+- pipeline de mercado, seed, batch e CLIs foram preservados para a retirada
+  independente da etapa paralela de eventos no próximo recorte.
 
-`system-bootstrap.v4` continua sendo o orquestrador global. O estágio `asset_price_history` agora resolve o universo CRIPTO suportado e chama o backfill global com `asset_types={CRIPTO}` e `tickers=<universo suportado>`. As demais classes com providers dedicados continuam em seus estágios/contratos próprios já existentes.
+Quinto recorte concluído:
 
-Readiness CRIPTO agora reporta:
+- removidos `sync_events`, `events_synced` e `run_backfill` do pipeline de
+  mercado e de todos os seus callers;
+- seed, batch e CLIs de mercado ficaram limitados a catálogo, preços e logo;
+- eventos e Proventos passam exclusivamente pelos estágios gated do
+  `system-bootstrap.v4`;
+- regressão estrutural protege as cinco superfícies contra reintrodução.
 
-- `universe_policy = top_100_market_cap_coingecko_intersect_brapi`;
-- `supported_universe_size`;
-- contagens de histórico, duplicidades, statuses bloqueantes, seams e shallow histories somente no universo suportado.
+Configuração operacional sincronizada:
 
-A certificação operacional dessa nova política ainda está pendente de execução local. `ready_for_real_data` permanece `false`.
+- `.env.example` cobre todos os campos de `Settings`, Docker, frontend,
+  bootstrap e operações controladas de pré-produção;
+- gates de bootstrap permanecem desabilitados por padrão; o router de debug foi
+  removido no décimo terceiro recorte;
+- Compose encaminha `VITE_API_URL` ao build do frontend;
+- teste estrutural impede nova deriva entre código e exemplo de ambiente.
 
-## Scheduler
+Sexto recorte concluído:
 
-O scheduler recorrente está limitado a:
+- `run_backfill` foi renomeado para `run_market_enrichment` no asset seed;
+- helper e métrica passaram a representar explicitamente preços/logos, sem
+  semântica residual de Proventos;
+- bootstrap e seed B3 continuam desabilitando esse enriquecimento amplo;
+- testes protegem o bootstrap contra reintrodução do nome legado.
 
-- preço intraday;
-- fechamento diário de preços, restrito à data corrente;
-- fechamento diário do Tesouro;
-- manutenção local de snapshots/TWR.
+Sétimo recorte concluído:
 
-Não agenda catálogo, ranking de market cap, benchmarks, Proventos, eventos, logos ou backfill histórico amplo.
+- removidos `market_pipeline_batch_service.py`, `run_market_pipeline.py` e
+  `run_market_pipeline_batch.py`, sem consumidores de runtime ou runbooks;
+- removido o teste exclusivo que legitimava o batch paralelo;
+- gates estruturais exigem a ausência física das três portas;
+- `asset_market_pipeline_service.py` foi preservado temporariamente porque o
+  enriquecimento opcional do asset seed ainda o referencia.
 
-## Ordem objetiva dos próximos blocos
+Oitavo recorte concluído:
 
-1. Validar localmente os testes da #267, `compileall`, Ruff e import de `app.main`.
-2. Executar `fetch_supported_crypto_universe()` em ambiente com rede e registrar quantos dos Top 100 CoinGecko estão disponíveis na BRAPI.
-3. Executar `pre_prod_crypto_readiness_audit` no novo universo e inventariar apenas findings residuais suportados.
-4. Confirmar que ativos fora do universo amplo anterior deixam de bloquear readiness sem alteração de seus registros/lifecycle.
-5. Atualizar #267/#248/#250 com a evidência operacional e, se verde, concluir #267.
-6. Manter `ready_for_real_data=false` até a certificação final da #248/#227.
-7. Continuar #247/#129 para achados residuais de routers/services/providers/aliases.
-8. Retomar #226 → #216 → #158 somente depois da certificação estrutural e da autorização operacional apropriada.
-9. Somente depois iniciar #246 + #57 (Metas + Análise).
+- removido o enriquecimento opcional de preços/logos do asset seed;
+- simplificada `run_asset_seed` para catálogo e metadados fornecidos pela fonte;
+- removido `asset_market_pipeline_service.py` após confirmação de zero
+  consumidores remanescentes;
+- históricos de preços, Proventos e eventos permanecem nos estágios dedicados
+  do `system-bootstrap.v4`.
 
-## Prompt mínimo para nova conversa
+Nono recorte concluído:
+
+- removido `run_backfill` de `dividend_backfill_service.py`, sem consumidores;
+- gate estrutural impede a reintrodução do wrapper genérico;
+- `ParsedDividendEvent`, parser e fetchers usados pelo seed certificado foram
+  preservados sem alteração;
+- `backfill_dividends` permanece temporariamente para separação em recorte
+  próprio, pois ainda possui cobertura legada direta.
+
+Décimo recorte concluído:
+
+- criado `dividend_event_normalizer.py` com `ParsedDividendEvent` e
+  `parse_dividend_event`;
+- collector, persistência e testes do seed certificado deixaram de importar
+  modelo/parser do backfill legado;
+- `dividend_backfill_service.py` passou a consumir o normalizador neutro;
+- gate estrutural proíbe SQLAlchemy, HTTP e dependência reversa no normalizador;
+- regras de datas, tipos, valores e payload bruto foram preservadas.
+
+Décimo primeiro recorte concluído:
+
+- criado `dividend_brapi_payload.py` para interpretar respostas de ações e FIIs;
+- o adapter BRAPI certificado deixou de importar o backfill legado;
+- o serviço legado passou a consumir a mesma fronteira neutra, sem mudança de
+  endpoint, filtro por ticker ou categorização dos eventos;
+- gate estrutural proíbe HTTP, SQLAlchemy e dependência reversa no parser;
+- `backfill_dividends` ficou isolado para decisão de remoção no próximo recorte.
+
+Décimo segundo recorte concluído:
+
+- removidos `backfill_dividends` e `dividend_backfill_service.py` após a
+  confirmação de ausência de consumidores de runtime;
+- removidos os testes exclusivos que legitimavam a porta legada;
+- as nove regras úteis do parser foram migradas para a suíte unitária do
+  normalizador canônico;
+- preservado o teste financeiro DB-first de eventos não monetários;
+- gate estrutural passou a exigir a ausência física do serviço removido.
+
+Décimo terceiro recorte concluído:
+
+- removido o router de debug, sem consumidores, que expunha listagem de usuários,
+  redefinição de senha e criação de `superadmin` por segredo estático paralelo;
+- removidas a montagem condicional e as configurações órfãs `ADMIN_SECRET` e
+  `DEBUG_RATE_LIMIT`;
+- operações administrativas legítimas permanecem em `/admin`, protegidas por
+  JWT e `require_superadmin`;
+- gate estrutural impede a reintrodução do arquivo, rota ou configuração.
+
+Décimo quarto recorte concluído:
+
+- removido `frontend/src/App.tsx`, que continha apenas `export {}` e não possuía
+  imports, testes ou participação no build;
+- `frontend/src/main.tsx` permanece a única entrada React, responsável por
+  providers, router e montagem no DOM;
+- gate estrutural exige a ausência do arquivo legado e o contrato mínimo da
+  entrada canônica.
+
+Décimo quinto recorte concluído:
+
+- removidos placeholders órfãos de Análise e Histórico, stubs antigos de
+  Login/Register, router alternativo e `ProtectedRoute` duplicado;
+- `main.tsx`, `router/ProtectedRoute.tsx` e páginas `auth/*` permanecem como
+  superfícies canônicas;
+- `MetasPage.tsx` foi preservada sem alterações funcionais, sob o bloqueio
+  explícito do macroprojeto #246 + #57;
+- gate estrutural protege a ausência dos seis arquivos e a presença das
+  entradas canônicas.
+
+Décimo sexto recorte concluído:
+
+- removida do menu de posições a ação “Análise do Ativo”, que navegava para
+  `/carteira/analise` sem existir rota correspondente;
+- ações válidas de adicionar e consultar lançamentos foram preservadas;
+- teste do menu exige somente as duas ações funcionais e a ausência do link;
+- nenhuma implementação de Análise foi iniciada; #57 permanece bloqueada.
+
+Décimo sétimo recorte concluído:
+
+- `main.tsx` passou a importar diretamente a visão consolidada canônica de
+  Patrimônio e o re-export intermediário foi removido;
+- as subrotas de renda variável, Tesouro e renda fixa foram registradas como
+  rotas diretas, pois a página consolidada não possui `<Outlet>`;
+- `/carteira/patrimonio` continua exibindo a visão consolidada, enquanto as
+  três URLs específicas agora podem renderizar seus componentes;
+- gate estrutural protege import, ausência do alias e registro das subrotas.
+
+Décimo oitavo recorte concluído:
+
+- redirects `/metas` e `/irpf` foram auditados e preservados como compatibilidade
+  unidirecional para `/carteira/metas` e `/carteira/irpf`;
+- ambos usam `Navigate replace`, não possuem página, loader, escrita ou cálculo
+  próprio e não são usados pela navegação interna;
+- teste estrutural protege esse confinamento;
+- remoção futura exige evidência de desuso de URLs externas; #246/#57 não foram
+  iniciadas nem alteradas.
+
+Décimo nono recorte concluído:
+
+- removidos dois `except Exception: pass` redundantes das invalidações de cache
+  em atualização e exclusão de carteira;
+- ambas delegam diretamente a `cache_delete`, cuja fronteira Redis já é
+  deliberadamente fail-open;
+- comportamento de request, persistência e disponibilidade não mudou;
+- gate AST exige duas invalidações e ausência de captura silenciosa local.
+
+Vigésimo recorte concluído:
+
+- a fronteira Redis permanece opcional e fail-open, mas suas cinco capturas
+  amplas deixaram de ser silenciosas;
+- falhas de conexão, leitura, escrita e exclusão registram operação, chave ou
+  padrão sanitizado, tipo e mensagem sanitizada da exceção;
+- valores de cache nunca são enviados ao log;
+- gate AST impede `pass` nos handlers e protege sanitização/observabilidade.
+
+Vigésimo primeiro recorte concluído:
+
+- a confirmação remota do onboarding deixou de ser capturada silenciosamente;
+- falha no `PATCH /users/me/onboarding` mantém o usuário na tela e apresenta
+  erro recuperável, sem navegar com estado local incoerente;
+- se a carteira já foi criada, a nova tentativa repete somente a confirmação
+  idempotente e não cria uma carteira duplicada;
+- teste estrutural protege persistência, refresh, mensagem e retry seguro.
+
+Vigésimo segundo recorte concluído:
+
+- `useTickerQuote` deixou de converter falhas de rede/servidor em ausência
+  silenciosa de erro;
+- 404 apresenta ativo ausente no catálogo; demais falhas apresentam erro
+  recuperável de consulta, já consumido pelo modal de transação;
+- mensagem deixou de expor o nome do provider, preservando a abstração pública;
+- removido `any` do catch e adicionado teste estrutural do contrato.
+
+Vigésimo terceiro recorte concluído:
+
+- buscas de ativos/Tesouro e preço histórico de título continuam fail-soft,
+  mas agora retornam erro explícito além de lista/preço vazio;
+- o modal de transação consolida e apresenta uma mensagem provider-neutral;
+- indisponibilidade deixa de ser confundida com “nenhum resultado” e preço de
+  Tesouro pode ser informado manualmente após falha;
+- teste estrutural cobre os três hooks e o consumidor.
+
+Vigésimo quarto recorte concluído:
+
+- `fx_service.py` foi reduzido à única responsabilidade ainda consumida: o
+  UPSERT transacional de USD/BRL usado pelo bootstrap;
+- removidas APIs de leitura órfãs que faziam I/O BCB/AwesomeAPI em request e
+  podiam fabricar taxa fixa `5.70`;
+- consumidores financeiros continuam nos readers DB-first dedicados;
+- gate estrutural impede a reintrodução de provider, fallback ou API de leitura
+  nesse módulo de persistência.
+
+Vigésimo quinto recorte concluído:
+
+- o reader DB-first usado por resumo e snapshot deixou de retornar USD/BRL fixo
+  `5.70` quando `fx_rates` não possui cobertura;
+- ausência persistida agora falha explicitamente e identifica a data efetiva,
+  sem provider, escrita ou valor financeiro inventado;
+- a semântica válida de usar a última taxa persistida até a data foi preservada;
+- testes protegem ausência de fallback e o erro de cobertura vazia.
+
+Vigésimo sexto recorte concluído:
+
+- removido `rf_calc_service.py`, serviço duplicado sem consumidor de runtime,
+  testes, CLI, scheduler ou bootstrap;
+- o legado abria sessões próprias e podia consultar BRAPI durante valuation em
+  request, contrariando a fronteira DB-first;
+- `fixed_income_valuation_service.py` permanece como única implementação de
+  renda fixa efetivamente consumida;
+- gate estrutural impede a restauração do serviço e de seus símbolos públicos.
+
+Vigésimo sétimo recorte concluído:
+
+- `_fetch_prices_batch` deixou de transformar falha do reader/banco em mapa
+  vazio, que era indistinguível de ausência real de preços;
+- erros de infraestrutura agora são propagados até a fronteira HTTP;
+- cobertura parcial legítima continua sendo representada pelo reader DB-first;
+- teste protege a diferença entre falha de consulta e cotação ausente.
+
+Vigésimo oitavo recorte concluído:
+
+- o cálculo fiscal de operações internacionais deixou de chamar
+  `price_history_service` com sessão `None` e ticker artificial `USDBRL=X`;
+- a conversão usa a última USD/BRL persistida até a data da transação, com a
+  sessão canônica do cálculo;
+- ausência cambial deixou de assumir paridade `1.0`, evitando imposto calculado
+  sobre valor financeiro inventado;
+- testes cobrem reader DB-first, sessão/data e propagação de falta de cobertura.
+
+Vigésimo nono recorte concluído:
+
+- as três agregações de proventos em `portfolio_service` deixaram de transformar
+  falha SQL ou dado inválido em `0.0`/mapa vazio;
+- zero permanece válido somente quando a consulta e a agregação canônicas
+  concluem sem direitos recebidos ou quando a entrada de tickers é vazia;
+- falhas do reader são propagadas para impedir patrimônio e relatórios
+  silenciosamente subavaliados;
+- testes cobrem as três funções e proíbem captura local.
+
+Trigésimo recorte concluído:
+
+- criada `getApiErrorMessage`, fronteira tipada para mensagens HTTP sem acesso
+  inseguro a `response.data`;
+- carregamento e exclusão de Tesouro trocaram `catch any` por `unknown` e usam
+  a mesma política de detalhe textual, erro nativo e fallback;
+- payloads estruturados não são convertidos implicitamente em texto;
+- testes unitários cobrem os três caminhos da nova fronteira.
+
+Trigésimo primeiro recorte concluído:
+
+- validação e execução da importação CSV trocaram dois `catch any` pela
+  fronteira compartilhada com entrada `unknown`;
+- detalhes estruturados FastAPI são aceitos somente como listas de objetos com
+  `msg` textual e unidos de forma explícita;
+- removido o risco de exibir `[object Object]` ao usuário;
+- teste unitário cobre múltiplas mensagens de validação.
+
+Trigésimo segundo recorte concluído:
+
+- removidos `ModalNovaTransacao` e `ModalNovoProvento`, componentes sem qualquer
+  import ou montagem no frontend;
+- removido também `useCreateDividend`, mutação manual consumida exclusivamente
+  pelo modal órfão e incompatível com a projeção canônica asset-first;
+- `AddTransactionModal` permanece como fluxo único de lançamentos e os hooks de
+  leitura de proventos foram preservados;
+- gate estrutural protege arquivos ausentes e módulo de proventos read-only.
+
+Trigésimo terceiro recorte concluído:
+
+- recuperação de senha, atualização de perfil e troca de senha removeram os
+  três últimos `catch any` ativos do frontend;
+- a fronteira Axios passou a expor `getApiErrorDetail(error: unknown)` para
+  preservar os fallbacks específicos dessas telas;
+- nenhum payload desconhecido é navegado ou renderizado sem narrowing;
+- gate global confirma ausência de `catch (...: any)` em `frontend/src`.
+
+Trigésimo quarto recorte concluído:
+
+- removidos seis serviços HTTP sem consumidores: transações, autenticação,
+  câmbio, metas de classe, performance e metas;
+- os hooks/contextos ativos foram confirmados como entradas canônicas e
+  preservados;
+- removidas junto ao código morto URLs com `/api/v1` duplicado sobre o cliente
+  que já aplica esse prefixo;
+- gate estrutural protege as ausências e os seis consumidores válidos.
+
+Trigésimo quinto recorte concluído:
+
+- removidas `AssetsPage` e `LancamentosPage`, ambas sem rota, menu ou import;
+- `LancamentosPage` duplicava a página `Transacoes`, preservada como destino
+  canônico de `/carteira/transacoes`;
+- a página invisível de catálogo não foi promovida sem issue e contrato de
+  acesso administrativo;
+- gate estrutural protege as ausências e o roteamento canônico de transações.
+
+Trigésimo sexto recorte concluído:
+
+- removidos `AllocationChart`, `ConcentrationTreemap` e `ModalNovaCarteira`,
+  componentes sem qualquer consumidor;
+- preservados `AssetDonutChart`, `DistribuicaoCarteira` e a criação de carteira
+  na Sidebar como superfícies efetivamente montadas;
+- removidas 340 linhas de visualizações/modais paralelos;
+- gate estrutural protege ausências e equivalentes ativos.
+
+Trigésimo sétimo recorte concluído:
+
+- removidos `DividendChart` e `DividendTable`, sem consumidores e vinculados ao
+  contrato legado `Dividend`;
+- preservados `ProventosDonutChart`, `ProventosHistoricoTable` e
+  `MeusProventosTable`, todos montados pela página canônica;
+- gate estrutural protege as ausências e os três componentes ativos.
+
+Trigésimo oitavo recorte concluído:
+
+- removido `TransactionForm`, formulário paralelo de 397 linhas sem import ou
+  montagem;
+- `AddTransactionModal` permanece como superfície única de criação/edição, com
+  `useCreateTransaction` e `useUpdateTransaction`;
+- o gate existente de mutações legadas passou a proteger também essa ausência
+  e a montagem canônica no `AppLayout`.
+
+Trigésimo nono recorte concluído:
+
+- removido `SigLogo`, segunda implementação SVG da marca sem consumidor;
+- `LogoSGI` permanece como componente único, montado no `Topbar` e no
+  `AuthLayout`;
+- gate estrutural protege a ausência da duplicata e ambas as montagens ativas.
+
+Quadragésimo recorte concluído:
+
+- removidos `useAssets`, `useFxRate`/`useUsdBrl` e `assetService`, que ficaram
+  sem consumidores após a retirada das páginas/serviços paralelos;
+- o gate de serviços órfãos passou a proteger também essas ausências;
+- nova passagem do inventário de imports deixa apenas `test/setup.ts` sem
+  consumidor comum, corretamente configurado como entrada do Vitest;
+- não restam candidatos órfãos conhecidos no runtime frontend por esse gate.
+
+### 247-E — superfícies sensíveis e frontend legado
+
+- router de debug removido no décimo terceiro recorte;
+- `frontend/src/App.tsx` removido no décimo quarto recorte;
+- placeholders e módulos frontend órfãos removidos; aliases, redirects e catches
+  amplos seguem para recortes próprios;
+- preservar #246 + #57 como macroprojeto bloqueado.
+
+### 247-F — gate global
+
+- backend: pytest completo, flake8, mypy, compile/import e Alembic/drift;
+- frontend: lint, typecheck, testes e build;
+- segurança: npm/pip audit, Gitleaks e Trivy;
+- smoke HTTP fictício, cleanup e inspeção de provider;
+- concluir #247/#129 e preparar PR `stable-15jun` → `main` somente com tudo verde.
+
+## Ordem após a sanitização
+
+1. #150 — histórico persistido do IBOV.
+2. #149 — TWR de Tesouro Direto/Renda Fixa com marcação a mercado persistida.
+3. #226 — duas execuções reais controladas de Proventos, somente com autorização operacional específica.
+4. #216 — fechar gate agregado de seeds/bootstrap.
+5. #158 — CSV, posições, snapshots e reconciliação da primeira base real.
+6. Decidir formalmente `ready_for_real_data=true` na #227.
+7. #253 — Central de Bootstrap SuperAdmin.
+8. #246 + #57 — Metas + Análise como macroprojeto único.
+
+## Prompt mínimo para retomada
 
 ```text
-@GitHub Continue o SGI v2 seguindo `docs/DEVELOPMENT_CONTINUITY.md`.
+@GitHub Continue o SGI v2 seguindo docs/DEVELOPMENT_CONTINUITY.md.
 
 Repo: lfragoso93-web/sig-v2
-Branch: stable-15jun
+Branch exclusiva: stable-15jun
+Baseline: 4ff76c4fe9f1738db9b392b3568fcb35f81185e7
 Gate-mãe: #227
-Bootstrap/readiness: #248/#250
-Universo CRIPTO: #267
+Trabalho atual: #247
 
-Decisão atual:
-- suportar somente Top 100 CRIPTO por market cap;
-- ranking CoinGecko;
-- universo = Top 100 CoinGecko ∩ catálogo BRAPI;
-- preservar ativos legados fora do universo sem deixá-los bloquear readiness;
-- `ready_for_real_data=false` até certificação final.
+Estado:
+- test_ready=true;
+- ready_for_real_data=false;
+- preservar DB-first e contratos canônicos;
+- commits pequenos e documentação/Issues vivas.
 
-Próxima ação: validar localmente a implementação #267 e executar readiness nominal sobre o novo universo suportado.
+Próxima ação: continuar do primeiro sub-bloco pendente da #247.
 ```

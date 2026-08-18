@@ -4,7 +4,7 @@ from datetime import date
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-from app.services.dividend_backfill_service import ParsedDividendEvent
+from app.services.dividend_event_normalizer import ParsedDividendEvent
 from app.services.pre_prod_dividends_seed_collector import (
     StrictDividendAsset,
     StrictDividendAssetCollection,

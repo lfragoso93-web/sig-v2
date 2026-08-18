@@ -158,16 +158,22 @@ Imports diretos de BRAPI/yfinance foram removidos do router; gate estrutural pro
 - Endpoints canônicos versionados, PDF/CSV e projeções fiscais permanecem DB-first.
 - O relatório completo legado continua apenas como compatibilidade read-only em memória e não será removido sem prova de consumidores externos.
 
-### Debug — CONDICIONAL/ADMIN SENSÍVEL
+### Debug — REMOVIDO
 
-- Condicionado por `APP_DEBUG` ou `ADMIN_SECRET` no `app.main` e protegido por secret/rate limiting.
-- Não classificado como legado neste momento.
+- O router permitia listar usuários, redefinir senhas e criar `superadmin` com
+  autenticação paralela baseada somente em `ADMIN_SECRET`.
+- Não havia consumidor no frontend ou runtime; as funções administrativas
+  legítimas já existem sob JWT e `require_superadmin`.
+- Router, montagem condicional, segredo e rate limit exclusivos foram removidos;
+  gate estrutural impede sua reintrodução.
 
 ## Frontend confirmado
 
 - `/carteira/proventos` usa API canônica de Proventos.
 - `/carteira/metas` permanece fora da estabilização até #246/#57.
-- `/metas` e `/irpf` são redirects de compatibilidade explícitos.
+- `/metas` e `/irpf` são redirects de compatibilidade unidirecionais, com
+  `replace`, sem páginas ou cálculos próprios. Permanecem confinados para não
+  quebrar favoritos externos; remoção futura exige evidência de desuso.
 - Não há rota de Análise no frontend protegido.
 - `performanceService.ts` não expõe backfill.
 - `assetService.ts` usa `/assets/` com filtros `q` e `asset_type`, apoiando descoberta pelo catálogo persistido.
