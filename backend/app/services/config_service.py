@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.log_safety import sanitize_log_value
 from app.models.system_config import SystemConfig
 
 logger = logging.getLogger(__name__)
@@ -63,7 +64,11 @@ async def update_config(
         db.add(cfg)
     await db.commit()
     await db.refresh(cfg)
-    logger.info("[ConfigService] Config atualizada: %s=%s", key, value)
+    logger.info(
+        "[ConfigService] Config atualizada: %s=%s",
+        sanitize_log_value(key),
+        sanitize_log_value(value),
+    )
     return cfg
 
 

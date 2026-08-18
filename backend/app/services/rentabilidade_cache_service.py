@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 
 from app.core.cache import cache_delete
+from app.core.log_safety import sanitize_log_value
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ async def invalidate_rentabilidade_cache(portfolio_id: int) -> None:
         except Exception as exc:  # noqa: BLE001 - invalidation remains best effort
             logger.warning(
                 "[rentabilidade-cache] falha ao invalidar cache %s/%s: %s",
-                portfolio_id,
-                suffix,
-                exc,
+                sanitize_log_value(portfolio_id),
+                sanitize_log_value(suffix),
+                sanitize_log_value(exc),
             )

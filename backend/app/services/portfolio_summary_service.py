@@ -15,6 +15,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cache import cache_get, cache_set
+from app.core.log_safety import sanitize_log_value
 from app.models.asset import Asset
 from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.schemas.portfolio_summary import PortfolioSummaryResponse
@@ -232,10 +233,10 @@ async def _build_summary_from_latest_snapshot(
     if not reconciliation["is_reconciled"]:
         logger.error(
             "[summary_reconciliation] portfolio=%s snapshot_date=%s failed_fields=%s checks=%s",
-            portfolio_id,
-            snapshot.snapshot_date,
-            reconciliation["failed_fields"],
-            reconciliation["checks"],
+            sanitize_log_value(portfolio_id),
+            sanitize_log_value(snapshot.snapshot_date),
+            sanitize_log_value(reconciliation["failed_fields"]),
+            sanitize_log_value(reconciliation["checks"]),
         )
     return summary
 
@@ -291,7 +292,7 @@ async def get_canonical_portfolio_summary(
         except ValidationError:
             logger.warning(
                 "[summary_contract] portfolio=%s cache incompatível; recalculando",
-                portfolio_id,
+                sanitize_log_value(portfolio_id),
             )
 
     snapshot = await _get_latest_snapshot(db, portfolio_id)
