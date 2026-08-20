@@ -134,7 +134,7 @@ async def test_yahoo_adapter_uses_national_symbol_and_normalizes_rows() -> None:
         "eventCategory": "cash",
         "eventSemantics": "aggregate_cash_by_ex_date",
         "canonicalComparison": {
-            "value_per_unit": {"mode": "truncate", "scale": 2},
+            "value_per_unit": {"mode": "round_half_up", "scale": 2},
         },
     },)
 
@@ -311,6 +311,6 @@ async def test_yahoo_adapter_preserves_split_adjustment_evidence() -> None:
         "cumulativeFactor": "0.05",
     }
     assert result.rows[0]["canonicalComparison"]["value_per_unit"] == {
-        "mode": "truncate",
+        "mode": "round_half_up",
         "scale": 6,
     }
