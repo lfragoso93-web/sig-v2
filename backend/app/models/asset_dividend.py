@@ -65,6 +65,7 @@ class AssetDividend(Base):
             "ex_date",
             "dividend_type",
             text("COALESCE(payment_date, ex_date)"),
+            "value_per_unit",
             unique=True,
         ),
         Index(

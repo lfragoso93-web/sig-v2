@@ -103,6 +103,7 @@ async def inspect_dividends_seed_state(
             AssetDividend.ex_date,
             AssetDividend.dividend_type,
             func.coalesce(AssetDividend.payment_date, AssetDividend.ex_date),
+            AssetDividend.value_per_unit,
             func.count(AssetDividend.id).label("rows"),
         )
         .group_by(
@@ -110,6 +111,7 @@ async def inspect_dividends_seed_state(
             AssetDividend.ex_date,
             AssetDividend.dividend_type,
             func.coalesce(AssetDividend.payment_date, AssetDividend.ex_date),
+            AssetDividend.value_per_unit,
         )
         .having(func.count(AssetDividend.id) > 1),
     )
