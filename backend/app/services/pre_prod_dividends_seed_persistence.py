@@ -131,15 +131,19 @@ def _declared_precision_equivalent(
 ) -> bool:
     """Reconcilia apenas precisão complementar explicitamente declarada.
 
-    A fonte complementar pode declarar que publicou um valor truncado em uma
-    escala observada. A equivalência só é aceita para ``value_per_unit``, com no
-    mínimo seis casas decimais, e nunca amplia a precisão de armazenamento de
-    oito casas. Divergências fora desse contrato continuam bloqueantes.
+    A fonte complementar deve declarar o modo de redução de precisão e a escala
+    observada. A equivalência só é aceita para ``value_per_unit``, com no mínimo
+    seis casas decimais, e nunca amplia a precisão de armazenamento de oito
+    casas. Divergências fora desse contrato continuam bloqueantes.
     """
 
     if field != "value_per_unit":
         return False
 
+    rounding_by_mode = {
+        "truncate": ROUND_DOWN,
+        "round_half_up": ROUND_HALF_UP,
+    }
     candidates = (left, right)
     for candidate in candidates:
         payload = candidate.get("raw_payload")
@@ -151,7 +155,8 @@ def _declared_precision_equivalent(
         field_policy = comparison.get(field)
         if not isinstance(field_policy, dict):
             continue
-        if field_policy.get("mode") != "truncate":
+        rounding = rounding_by_mode.get(field_policy.get("mode"))
+        if rounding is None:
             continue
         try:
             scale = int(field_policy.get("scale"))
@@ -164,10 +169,10 @@ def _declared_precision_equivalent(
         right_value = right[field]
         quantum = Decimal(1).scaleb(-scale)
         return left_value.quantize(
-            quantum, rounding=ROUND_DOWN
+            quantum, rounding=rounding
         ) == right_value.quantize(
             quantum,
-            rounding=ROUND_DOWN,
+            rounding=rounding,
         )
     return False
 
