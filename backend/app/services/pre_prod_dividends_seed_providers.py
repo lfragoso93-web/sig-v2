@@ -159,7 +159,7 @@ class StrictYahooDividendProvider:
                 "eventSemantics": "aggregate_cash_by_ex_date",
                 "canonicalComparison": {
                     "value_per_unit": {
-                        "mode": "truncate",
+                        "mode": "round_half_up",
                         "scale": _decimal_scale(amount),
                     }
                 },
@@ -192,8 +192,6 @@ async def fetch_yahoo_dividend_history(symbol: str) -> list[YahooHistoryRow]:
                 message=r".*Timestamp\.utcnow is deprecated.*",
                 category=Pandas4Warning,
             )
-            # Ações vêm primeiro: a consulta longa pode preencher o cache interno
-            # do yfinance com uma série que omite splits antigos.
             actions = yf.Ticker(symbol).actions.copy(deep=True)
             history = yf.Ticker(symbol).history(
                 start="1970-01-01",
