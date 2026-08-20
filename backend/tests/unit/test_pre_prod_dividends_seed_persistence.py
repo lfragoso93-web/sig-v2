@@ -243,6 +243,40 @@ async def test_reconciles_numeric_difference_within_storage_precision() -> None:
 
 
 @pytest.mark.asyncio
+async def test_reconciles_declared_round_half_up_precision() -> None:
+    asset = SimpleNamespace(id=7, ticker="AFLT3", asset_type="ACAO")
+    first = _collection(
+        value=0.24956495,
+        source="brapi",
+        raw_payload={"rate": 0.24956495},
+    )
+    second = _collection(
+        value=0.249565,
+        source="yfinance_history",
+        raw_payload={
+            "rate": 0.249565,
+            "canonicalComparison": {
+                "value_per_unit": {
+                    "mode": "round_half_up",
+                    "scale": 6,
+                }
+            },
+        },
+    )
+    combined = StrictDividendAssetCollection(
+        ticker="PETR4",
+        asset_type="ACAO",
+        sources=(first.sources[0], second.sources[0]),
+    )
+    db = _db(assets=[asset])
+
+    result = await persist_asset_dividends_strict(db=db, collections=(combined,))
+
+    assert result.created == 1
+    assert result.unchanged == 1
+
+
+@pytest.mark.asyncio
 async def test_rejects_conflicting_dates_and_reports_exact_field() -> None:
     asset = SimpleNamespace(id=7, ticker="PETR4", asset_type="ACAO")
     first = _collection(source="brapi")
