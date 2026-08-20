@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
@@ -106,7 +107,7 @@ async def test_updates_existing_occurrence_metadata_when_identity_is_stable() ->
         record_date=date(2026, 7, 24),
         ex_date=date(2026, 7, 27),
         payment_date=date(2026, 8, 10),
-        value_per_unit=1.25,
+        value_per_unit=Decimal("1.25"),
         dividend_type=DividendType.DIVIDENDO,
         raw_payload={"rate": 1.25, "stale": True},
         source="brapi",
@@ -119,7 +120,7 @@ async def test_updates_existing_occurrence_metadata_when_identity_is_stable() ->
     )
 
     assert result.updated == 1
-    assert existing.value_per_unit == 1.25
+    assert existing.value_per_unit == Decimal("1.25")
     assert existing.raw_payload == {"rate": 1.25}
     db.add.assert_not_called()
     db.flush.assert_awaited_once()
@@ -136,7 +137,7 @@ async def test_unchanged_event_does_not_flush() -> None:
         record_date=event.record_date,
         payment_date=event.payment_date,
         approved_on=event.approved_on,
-        value_per_unit=1.25,
+        value_per_unit=Decimal("1.25"),
         gross_value_per_unit=None,
         factor=None,
         complete_factor=None,
@@ -339,7 +340,7 @@ async def test_same_source_same_dates_distinct_values_are_separate_occurrences()
     assert result.updated == 0
     assert db.add.call_count == 2
     created_values = {call.args[0].value_per_unit for call in db.add.call_args_list}
-    assert created_values == {0.113784574, 0.3413537}
+    assert created_values == {Decimal("0.113784574"), Decimal("0.3413537")}
 
 
 @pytest.mark.asyncio
