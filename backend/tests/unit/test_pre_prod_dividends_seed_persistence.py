@@ -244,7 +244,7 @@ async def test_reconciles_numeric_difference_within_storage_precision() -> None:
 
 @pytest.mark.asyncio
 async def test_reconciles_declared_round_half_up_precision() -> None:
-    asset = SimpleNamespace(id=7, ticker="AFLT3", asset_type="ACAO")
+    asset = SimpleNamespace(id=7, ticker="PETR4", asset_type="ACAO")
     first = _collection(
         value=0.24956495,
         source="brapi",
