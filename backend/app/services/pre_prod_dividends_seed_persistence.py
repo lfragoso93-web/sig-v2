@@ -8,7 +8,7 @@ materializa direitos por carteira.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import ROUND_DOWN, Decimal
+from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 
 from sqlalchemy import select, text, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +23,7 @@ from app.services.pre_prod_dividends_seed_collector import (
 
 _DIVIDENDS_SEED_LOCK_KEY = 7_317_202_607_28
 _NUMERIC_EQUIVALENCE_TOLERANCE = Decimal("0.00000001")
+_STORAGE_VALUE_QUANTUM = Decimal("0.00000001")
 _ABSORBED_COMPONENT_COVERAGE_TOLERANCE = Decimal("0.00001")
 _MIN_DECLARED_COMPLEMENTARY_SCALE = 6
 _ESTIMATED_PAYMENT_REMARK = "csv:payment_date_estimated"
@@ -75,6 +76,12 @@ def _decimal(value: float | None) -> Decimal | None:
     return None if value is None else Decimal(str(value))
 
 
+def _storage_value(value: Decimal | None) -> Decimal | None:
+    if value is None:
+        return None
+    return value.quantize(_STORAGE_VALUE_QUANTUM, rounding=ROUND_HALF_UP)
+
+
 def _event_values(event, source: str) -> dict:
     return {
         "record_date": event.record_date,
@@ -100,13 +107,14 @@ def _storage_identity(
     dividend_type: DividendType,
     values: dict,
 ) -> tuple:
-    """Espelha a identidade econômica persistida pelo índice único."""
+    """Espelha a identidade de ocorrência persistida pelo índice único."""
 
     return (
         asset_id,
         ex_date,
         dividend_type,
         values["payment_date"] or ex_date,
+        _storage_value(values["value_per_unit"]),
     )
 
 
@@ -345,7 +353,10 @@ async def persist_asset_dividends_strict(
     )
     existing = {}
     for row in existing_result.scalars().all():
-        row_values = {"payment_date": row.payment_date}
+        row_values = {
+            "payment_date": row.payment_date,
+            "value_per_unit": row.value_per_unit,
+        }
         existing[
             _storage_identity(
                 asset_id=row.asset_id,

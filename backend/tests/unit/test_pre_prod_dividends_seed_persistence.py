@@ -99,16 +99,16 @@ async def test_creates_global_event_under_transaction_lock_without_commit() -> N
 
 
 @pytest.mark.asyncio
-async def test_updates_existing_event_and_reports_unchanged_on_second_match() -> None:
+async def test_updates_existing_occurrence_metadata_when_identity_is_stable() -> None:
     asset = SimpleNamespace(id=7, ticker="PETR4", asset_type="ACAO")
     existing = AssetDividend(
         asset_id=7,
         record_date=date(2026, 7, 24),
         ex_date=date(2026, 7, 27),
         payment_date=date(2026, 8, 10),
-        value_per_unit=1,
+        value_per_unit=1.25,
         dividend_type=DividendType.DIVIDENDO,
-        raw_payload={"rate": 1},
+        raw_payload={"rate": 1.25, "stale": True},
         source="brapi",
     )
     db = _db(assets=[asset], existing=[existing])
@@ -149,10 +149,7 @@ async def test_unchanged_event_does_not_flush() -> None:
     )
     db = _db(assets=[asset], existing=[existing])
 
-    result = await persist_asset_dividends_strict(
-        db=db,
-        collections=(_collection(),),
-    )
+    result = await persist_asset_dividends_strict(db=db, collections=(_collection(),))
 
     assert result.unchanged == 1
     db.flush.assert_not_awaited()
@@ -163,10 +160,7 @@ async def test_rejects_missing_catalog_asset_without_creating_it() -> None:
     db = _db()
 
     with pytest.raises(DividendsSeedPersistenceError, match="PETR4/ACAO"):
-        await persist_asset_dividends_strict(
-            db=db,
-            collections=(_collection(),),
-        )
+        await persist_asset_dividends_strict(db=db, collections=(_collection(),))
 
     db.add.assert_not_called()
     db.flush.assert_not_awaited()
@@ -251,10 +245,7 @@ async def test_reconciles_numeric_difference_within_storage_precision() -> None:
 async def test_rejects_conflicting_dates_and_reports_exact_field() -> None:
     asset = SimpleNamespace(id=7, ticker="PETR4", asset_type="ACAO")
     first = _collection(source="brapi")
-    second = _collection(
-        source="yfinance_history",
-        payment_date=date(2026, 8, 11),
-    )
+    second = _collection(source="yfinance_history", payment_date=date(2026, 8, 11))
     combined = StrictDividendAssetCollection(
         ticker="PETR4",
         asset_type="ACAO",
@@ -308,14 +299,55 @@ async def test_distinct_global_identities_remain_separate_events() -> None:
 
 
 @pytest.mark.asyncio
+async def test_same_source_same_dates_distinct_values_are_separate_occurrences() -> None:
+    asset = SimpleNamespace(id=7, ticker="AFLT3", asset_type="ACAO")
+    first = ParsedDividendEvent(
+        record_date=date(2024, 4, 10),
+        ex_date=date(2024, 4, 11),
+        payment_date=date(2024, 12, 20),
+        approved_on=date(2024, 4, 10),
+        value_per_unit=0.113784574,
+        dividend_type="DIVIDENDO",
+        raw_payload={"rate": 0.113784574},
+    )
+    second = ParsedDividendEvent(
+        record_date=date(2024, 4, 10),
+        ex_date=date(2024, 4, 11),
+        payment_date=date(2024, 12, 20),
+        approved_on=date(2024, 4, 10),
+        value_per_unit=0.3413537,
+        dividend_type="DIVIDENDO",
+        raw_payload={"rate": 0.3413537},
+    )
+    source = StrictDividendSourceCollection(
+        source="brapi",
+        raw_rows=2,
+        normalized_rows=(first, second),
+        rejected_rows=0,
+        empty_reason=None,
+    )
+    collection = StrictDividendAssetCollection(
+        ticker="AFLT3",
+        asset_type="ACAO",
+        sources=(source,),
+    )
+    db = _db(assets=[asset])
+
+    result = await persist_asset_dividends_strict(db=db, collections=(collection,))
+
+    assert result.created == 2
+    assert result.updated == 0
+    assert db.add.call_count == 2
+    created_values = {call.args[0].value_per_unit for call in db.add.call_args_list}
+    assert created_values == {0.113784574, 0.3413537}
+
+
+@pytest.mark.asyncio
 async def test_lock_contention_is_blocking_before_any_query_or_write() -> None:
     db = _db(acquired=False)
 
     with pytest.raises(DividendsSeedAlreadyRunningError):
-        await persist_asset_dividends_strict(
-            db=db,
-            collections=(_collection(),),
-        )
+        await persist_asset_dividends_strict(db=db, collections=(_collection(),))
 
     db.execute.assert_not_awaited()
     db.add.assert_not_called()
