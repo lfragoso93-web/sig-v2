@@ -19,10 +19,10 @@ python -m scripts.migrate_treasury
 echo "[entrypoint] Heads Alembic detectadas:"
 alembic heads
 
-# A contração 20260731_drop_legacy_divs é um artefato operacional protegido da
-# Issue #158 e nunca deve ser aplicada implicitamente no startup da aplicação.
-# O alvo runtime-safe avança somente até a revisão canônica anterior ao DROP.
-RUNTIME_MIGRATION_TARGET="20260729_dividend_identity"
+# O runtime não usa `upgrade heads`: migrations destrutivas/operacionais podem
+# existir no grafo e não devem ser aplicadas apenas por estarem versionadas.
+# O alvo abaixo espelha o head canônico efetivamente validado no ambiente.
+RUNTIME_MIGRATION_TARGET="20260813_rate_history_metadata"
 echo "[entrypoint] Executando migrations runtime-safe ate ${RUNTIME_MIGRATION_TARGET}..."
 alembic upgrade "${RUNTIME_MIGRATION_TARGET}"
 
