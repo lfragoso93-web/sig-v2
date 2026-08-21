@@ -599,3 +599,78 @@ NO-GO conditions:
 - Any reserved public IP is required.
 - Any NAT Gateway, Load Balancer, managed database, Redis, Kubernetes, or other paid service is required.
 - Any app or data service must be exposed through public ingress.
+
+## OCI-07 VM Console Creation Checklist
+
+Decision date: 2026-08-21
+
+Goal: provide the exact manual Console checklist for creating the A1 VM without relying on OCI CLI JSON handling.
+
+Cloud-init artifact:
+
+- `docs/deployment/oci-cloud-init.yaml`
+
+Console values:
+
+- Name: `sgi-prod-a1-01`.
+- Region: `sa-saopaulo-1`.
+- Availability Domain: `qWqO:SA-SAOPAULO-1-AD-1`.
+- Image: Canonical Ubuntu ARM64, Ubuntu `24.04` preferred.
+- Shape: `VM.Standard.A1.Flex`.
+- OCPUs: `2`.
+- Memory: `12 GB`.
+- Boot volume size: `80 GB`.
+- VCN: `sgi-vcn-public`.
+- Subnet: `sgi-subnet-public`.
+- Public IPv4 address: assign ephemeral public IPv4.
+- Reserved public IP: do not assign.
+- NSG: attach `sgi-prod-vm-nsg`.
+- SSH keys: add only the operator's public SSH key if the Console requires one; do not create any broad SSH ingress rule.
+- Initialization script: paste the contents of `docs/deployment/oci-cloud-init.yaml`.
+
+Expected cloud-init result:
+
+- OS packages updated.
+- Docker Engine installed from Docker's Ubuntu ARM64 repository.
+- Docker Compose plugin installed.
+- Docker service enabled and running.
+- `/opt/sgi-v2` created and owned by `ubuntu`.
+- `ubuntu` added to the `docker` group.
+- UFW enabled with default deny inbound and allow outbound.
+- No application secrets written to the VM by cloud-init.
+
+Post-create checks from the OCI Console:
+
+- Instance lifecycle state is `RUNNING`.
+- Shape is `VM.Standard.A1.Flex`.
+- OCPU count is `2`.
+- Memory is `12 GB`.
+- Boot volume is `80 GB`.
+- Primary VNIC is attached to `sgi-subnet-public`.
+- Primary VNIC is associated with `sgi-prod-vm-nsg`.
+- Public IPv4 is ephemeral, not reserved.
+- No new ingress rule was created for SSH, HTTP, HTTPS, PostgreSQL, Redis, or backend.
+
+Post-create checks from the VM Console or Cloud Shell session:
+
+```bash
+cloud-init status --wait
+docker --version
+docker compose version
+sudo ufw status verbose
+ls -ld /opt/sgi-v2
+```
+
+Expected UFW posture:
+
+- Default incoming: deny.
+- Default outgoing: allow.
+- No explicit public inbound allow rules.
+
+NO-GO conditions:
+
+- Console suggests any non-free shape or paid image.
+- Console requires a reserved public IP.
+- Console requires opening SSH, HTTP, or HTTPS ingress to the Internet.
+- Cloud-init fails before Docker is installed.
+- VM is created without `sgi-prod-vm-nsg`.
