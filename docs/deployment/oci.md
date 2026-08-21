@@ -188,3 +188,65 @@ Before creating the VM, choose the network exposure model:
 2. Public IP plus Caddy, with hardened OCI ingress and Linux firewall.
 
 Recommended next block: `OCI-03A` network decision and minimal resource plan. Only after that should `OCI-06` compute provisioning run.
+
+## OCI-03A Network Decision
+
+Decision date: 2026-08-21
+
+Recommended initial exposure model: Cloudflare Tunnel.
+
+Rationale:
+
+- The current OCI VCN has no Internet Gateway and no default route, so direct public exposure would require adding an Internet Gateway and route rule.
+- The current default Security List allows SSH `22` from `0.0.0.0/0`, which must not be carried into production.
+- Cloudflare Tunnel publishes HTTP applications through outbound-only connections from the VM to Cloudflare and does not require public inbound ports on OCI.
+- Cloudflare documentation states Cloudflare Tunnel is available on all plans and that publishing an application through Tunnel does not require a paid Cloudflare Access plan. Access seats are only needed for Access policy login controls.
+- `cloudflared` has Linux ARM64 support, matching the A1 target.
+- OCI networking pricing states public internet egress includes the first 10 TB/month free. For this personal production deployment, expected Cloudflare Tunnel egress is far below that threshold.
+- Avoiding public inbound HTTP/HTTPS and SSH on day one keeps the first production shape simpler: one VM, one Docker Compose stack, no NAT Gateway, no Load Balancer, no public IP dependency for the application.
+
+Public IP plus Caddy remains a valid fallback if Cloudflare Tunnel is operationally unsuitable. That fallback would require:
+
+- Internet Gateway.
+- Route rule `0.0.0.0/0` to the Internet Gateway.
+- Hardened ingress for only `80/443`, or `443` if certificate flow allows.
+- No direct exposure for `5432`, `6379`, or `8000`.
+- SSH access restricted by Tailscale, Bastion, or a known administrative IP.
+- Linux firewall rules aligned with OCI Security List or NSG rules.
+
+Initial Cloudflare Tunnel target:
+
+```text
+Cloudflare DNS / Tunnel
+        |
+outbound cloudflared connection
+        |
+OCI VM.Standard.A1.Flex
+        |
+Docker Compose
+        |
+frontend nginx :80 -> /api -> backend:8000
+backend -> PostgreSQL / Redis on Docker network
+```
+
+OCI resources required for the first Tunnel-based VM:
+
+- One `VM.Standard.A1.Flex`.
+- One boot volume.
+- One VCN/subnet path with outbound Internet access.
+- No NAT Gateway.
+- No Load Balancer.
+- No Object Storage bucket yet.
+- No reserved public IP for the application.
+
+Open design item: outbound Internet from the VM still requires a valid route. Because the existing VCN currently has no Internet Gateway and no route rules, the minimal network plan must either add an Internet Gateway to the existing VCN or create a clean dedicated VCN with an Internet Gateway. NAT Gateway remains prohibited.
+
+Recommendation for the next block: create a minimal network plan that reuses `sgi-vcn-public` only if it can be hardened cleanly. Prefer a dedicated NSG over broad default Security List edits for production ingress/egress clarity.
+
+References checked on 2026-08-21:
+
+- Cloudflare Tunnel documentation: `https://developers.cloudflare.com/tunnel/`
+- Cloudflare Tunnel published applications: `https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/routing-to-tunnel/`
+- Cloudflare Tunnel downloads: `https://developers.cloudflare.com/tunnel/downloads/`
+- OCI VCN pricing: `https://www.oracle.com/cloud/networking/virtual-cloud-network/pricing/`
+- OCI Public IP documentation: `https://docs.oracle.com/en-us/iaas/Content/Network/Tasks/managingpublicIPs.htm`
