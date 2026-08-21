@@ -528,3 +528,74 @@ Next gate before VM creation:
 - Use an ephemeral public IP only for outbound connectivity.
 - Attach `sgi-prod-vm-nsg` to the VM VNIC.
 - Do not add public application ingress.
+
+## OCI-06 VM A1 Flex Plan
+
+Decision date: 2026-08-21
+
+Goal: define the VM creation parameters before launching the production host.
+
+Read-only preflight confirmed:
+
+- Region: `sa-saopaulo-1`.
+- Availability Domain: `qWqO:SA-SAOPAULO-1-AD-1`.
+- A1 AD availability: `41` OCPUs available, `0` used.
+- Existing minimal network path is ready: `sgi-prod-ig`, default route, and `sgi-prod-vm-nsg`.
+
+Planned instance:
+
+- Display name: `sgi-prod-a1-01`.
+- Shape: `VM.Standard.A1.Flex`.
+- OCPUs: `2`.
+- Memory: `12 GB`.
+- Boot volume: `80 GB`.
+- Image family: Canonical Ubuntu ARM64, prefer Ubuntu `24.04` if available for `VM.Standard.A1.Flex`; use Ubuntu `22.04` ARM64 only if `24.04` is unavailable.
+- Subnet: `sgi-subnet-public`.
+- Public IP: ephemeral public IP enabled on the primary VNIC for outbound Internet connectivity through the Internet Gateway.
+- Reserved public IP: none.
+- NSG: attach `sgi-prod-vm-nsg`.
+- Security List: do not broaden default Security List rules.
+- SSH ingress: do not open `22` to `0.0.0.0/0`; use Console/VNC/bootstrap path until a restricted admin access path is explicitly approved.
+
+Capacity posture:
+
+- Planned A1 allocation after create: `2` OCPUs, `12 GB`.
+- Always Free A1 envelope previously checked: up to `4` OCPUs and `24 GB` total for Ampere A1.
+- Remaining planned A1 headroom after create: `2` OCPUs, `12 GB`.
+- Planned boot volume after create: `80 GB`.
+- Always Free block/boot volume envelope previously checked: `200 GB` total.
+- Remaining planned storage headroom after create: at least `120 GB`, assuming no other retained volumes are introduced.
+
+Cloud-init responsibilities:
+
+- Update OS packages.
+- Install Docker Engine and Docker Compose plugin.
+- Enable Docker service.
+- Create `/opt/sgi-v2`.
+- Configure a conservative Linux firewall:
+  - default deny inbound;
+  - allow loopback;
+  - allow established/related;
+  - allow outbound;
+  - no PostgreSQL, Redis, backend, frontend, or SSH public ingress by default.
+- Do not write application secrets into cloud-init.
+
+Deployment responsibilities after VM creation:
+
+- Copy or clone the `stable-15jun` deployment source.
+- Create VM-local `.env` from `.env.oci.example`.
+- Fill secrets only on the VM.
+- Start Compose with:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml up -d --build
+```
+
+NO-GO conditions:
+
+- Shape is not `VM.Standard.A1.Flex`.
+- Proposed OCPUs or memory exceed Always Free A1 envelope.
+- Boot volume pushes total block/boot usage above Always Free storage envelope.
+- Any reserved public IP is required.
+- Any NAT Gateway, Load Balancer, managed database, Redis, Kubernetes, or other paid service is required.
+- Any app or data service must be exposed through public ingress.
