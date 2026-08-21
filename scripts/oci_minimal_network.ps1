@@ -28,10 +28,10 @@ function Write-Step {
     Write-Host "[oci-network] $Message"
 }
 
-function ConvertTo-OciJson {
-    param([object]$Value)
+function ConvertTo-OciJsonArray {
+    param([object[]]$Items)
 
-    return ($Value | ConvertTo-Json -Depth 20 -Compress)
+    return (ConvertTo-Json -InputObject @($Items) -Depth 20 -Compress)
 }
 
 $mode = if ($Execute) { "EXECUTE" } else { "DRY-RUN" }
@@ -114,7 +114,7 @@ if ($defaultRoutes.Count -gt 0) {
         description       = "SGI OCI outbound Internet via Always Free VCN path"
     }
     $updatedRules = @($routeRules) + $newRoute
-    $routeRulesJson = ConvertTo-OciJson $updatedRules
+    $routeRulesJson = ConvertTo-OciJsonArray -Items $updatedRules
     Invoke-OciJson @(
         "network", "route-table", "update",
         "--region", $Region,
@@ -218,7 +218,7 @@ if ($Execute) {
 
     if ($rulesToAdd.Count -gt 0) {
         Write-Step "adding NSG egress rules: $($rulesToAdd.Count)"
-        $rulesJson = ConvertTo-OciJson $rulesToAdd
+        $rulesJson = ConvertTo-OciJsonArray -Items $rulesToAdd
         Invoke-OciJson @(
             "network", "nsg", "rules", "add",
             "--region", $Region,

@@ -482,7 +482,7 @@ Manual Windows apply command after reviewing dry-run output:
 
 Local execution note: OCI CLI calls from this Codex session timed out on 2026-08-21 before applying any network changes, so the script was not executed against OCI from here.
 
-Windows CLI note: the first manual `-Execute` run created Internet Gateway `sgi-prod-ig`, then failed because OCI CLI did not accept a temporary `file://C:\...` JSON path for `--route-rules`. The script now passes compact JSON inline and is safe to rerun; it should detect the existing Internet Gateway and continue with route table and NSG steps.
+Windows CLI note: the first manual `-Execute` run created Internet Gateway `sgi-prod-ig`, then failed because OCI CLI did not accept a temporary `file://C:\...` JSON path for `--route-rules`. A second run showed OCI CLI expects `--route-rules` as a JSON array even when adding one route. The script now passes compact JSON arrays inline and is safe to rerun; it should detect the existing Internet Gateway and continue with route table and NSG steps.
 
 NO-GO conditions:
 
