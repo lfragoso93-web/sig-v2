@@ -28,10 +28,17 @@ function Write-Step {
     Write-Host "[oci-network] $Message"
 }
 
-function ConvertTo-OciJsonArray {
+function ConvertTo-OciJsonFileArg {
     param([object[]]$Items)
 
-    return (ConvertTo-Json -InputObject @($Items) -Depth 20 -Compress)
+    $path = Join-Path ([System.IO.Path]::GetTempPath()) ("oci-network-{0}.json" -f ([System.Guid]::NewGuid()))
+    $json = ConvertTo-Json -InputObject @($Items) -Depth 20 -Compress
+    [System.IO.File]::WriteAllText($path, $json, [System.Text.UTF8Encoding]::new($false))
+    $filePath = $path.Replace("\", "/")
+    return @{
+        Path = $path
+        Arg = "file:///$filePath"
+    }
 }
 
 $mode = if ($Execute) { "EXECUTE" } else { "DRY-RUN" }
@@ -114,14 +121,18 @@ if ($defaultRoutes.Count -gt 0) {
         description       = "SGI OCI outbound Internet via Always Free VCN path"
     }
     $updatedRules = @($routeRules) + $newRoute
-    $routeRulesJson = ConvertTo-OciJsonArray -Items $updatedRules
-    Invoke-OciJson @(
-        "network", "route-table", "update",
-        "--region", $Region,
-        "--rt-id", $routeTableId,
-        "--route-rules", $routeRulesJson,
-        "--force"
-    ) | Out-Null
+    $routeRulesFile = ConvertTo-OciJsonFileArg -Items $updatedRules
+    try {
+        Invoke-OciJson @(
+            "network", "route-table", "update",
+            "--region", $Region,
+            "--rt-id", $routeTableId,
+            "--route-rules", $routeRulesFile.Arg,
+            "--force"
+        ) | Out-Null
+    } finally {
+        Remove-Item -LiteralPath $routeRulesFile.Path -Force -ErrorAction SilentlyContinue
+    }
 } else {
     Write-Step "would add default route 0.0.0.0/0 to internet gateway"
 }
@@ -218,13 +229,17 @@ if ($Execute) {
 
     if ($rulesToAdd.Count -gt 0) {
         Write-Step "adding NSG egress rules: $($rulesToAdd.Count)"
-        $rulesJson = ConvertTo-OciJsonArray -Items $rulesToAdd
-        Invoke-OciJson @(
-            "network", "nsg", "rules", "add",
-            "--region", $Region,
-            "--nsg-id", $nsgId,
-            "--security-rules", $rulesJson
-        ) | Out-Null
+        $rulesFile = ConvertTo-OciJsonFileArg -Items $rulesToAdd
+        try {
+            Invoke-OciJson @(
+                "network", "nsg", "rules", "add",
+                "--region", $Region,
+                "--nsg-id", $nsgId,
+                "--security-rules", $rulesFile.Arg
+            ) | Out-Null
+        } finally {
+            Remove-Item -LiteralPath $rulesFile.Path -Force -ErrorAction SilentlyContinue
+        }
     } else {
         Write-Step "NSG egress rules already present"
     }
