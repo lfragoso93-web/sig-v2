@@ -435,3 +435,56 @@ NO-GO conditions:
 - Any real tunnel token, password, API key, or production hostname secret appears in Git.
 - The rendered OCI Compose publishes host ports for `frontend` or `backend`.
 - The rendered OCI Compose requires a paid OCI service.
+
+## OCI-05A Minimal Network Provisioning Script
+
+Decision date: 2026-08-21
+
+Goal: prepare an idempotent PowerShell script for the minimal OCI network changes approved in OCI-03B, while keeping the default execution mode as dry-run.
+
+Artifact added:
+
+- `scripts/oci_minimal_network.ps1`
+
+What the script does in dry-run mode:
+
+- Locates VCN `sgi-vcn-public`.
+- Checks the default route table.
+- Checks for Internet Gateway `sgi-prod-ig`.
+- Checks for NSG `sgi-prod-vm-nsg`.
+- Prints the changes it would apply.
+- Creates nothing unless `-Execute` is passed.
+
+What the script does with `-Execute`:
+
+- Creates Internet Gateway `sgi-prod-ig` if missing.
+- Adds route `0.0.0.0/0` to the Internet Gateway if missing.
+- Creates NSG `sgi-prod-vm-nsg` if missing.
+- Adds egress-only NSG rules for TCP `443`, TCP `80`, TCP `53`, UDP `53`, and UDP `7844`.
+- Creates no ingress rules.
+
+Manual Windows command:
+
+```powershell
+.\scripts\oci_minimal_network.ps1 `
+  -TenancyId "<tenancy-ocid>" `
+  -OciExe "E:\OCI\oci.exe"
+```
+
+Manual Windows apply command after reviewing dry-run output:
+
+```powershell
+.\scripts\oci_minimal_network.ps1 `
+  -TenancyId "<tenancy-ocid>" `
+  -OciExe "E:\OCI\oci.exe" `
+  -Execute
+```
+
+Local execution note: OCI CLI calls from this Codex session timed out on 2026-08-21 before applying any network changes, so the script was not executed against OCI from here.
+
+NO-GO conditions:
+
+- VCN `sgi-vcn-public` is not `AVAILABLE`.
+- Existing default route `0.0.0.0/0` points to a different network entity.
+- Script proposes any ingress rule.
+- Script proposes NAT Gateway, Load Balancer, managed database, Redis, Kubernetes, or reserved public IP.
