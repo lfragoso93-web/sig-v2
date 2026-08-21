@@ -131,21 +131,27 @@ def _declared_precision_equivalent(
 ) -> bool:
     """Reconcilia apenas precisão complementar explicitamente declarada.
 
-    A fonte complementar deve declarar o modo de redução de precisão e a escala
-    observada. A equivalência só é aceita para ``value_per_unit``, com no mínimo
-    seis casas decimais, e nunca amplia a precisão de armazenamento de oito
-    casas. Divergências fora desse contrato continuam bloqueantes.
+    A fonte complementar deve declarar a escala observada e a política de
+    redução de precisão. ``provider_quantized`` representa provedores cujo
+    histórico real expõe valores quantizados ora por truncamento, ora por
+    arredondamento. Nesse modo, o valor da outra fonte só é equivalente quando,
+    reduzido à mesma escala por uma dessas duas operações, reproduz exatamente
+    o valor declarado pelo provedor. A equivalência só vale para
+    ``value_per_unit``, com no mínimo seis casas decimais, sem ampliar a
+    precisão física de oito casas. Divergências fora desse contrato continuam
+    bloqueantes.
     """
 
     if field != "value_per_unit":
         return False
 
     rounding_by_mode = {
-        "truncate": ROUND_DOWN,
-        "round_half_up": ROUND_HALF_UP,
+        "truncate": (ROUND_DOWN,),
+        "round_half_up": (ROUND_HALF_UP,),
+        "provider_quantized": (ROUND_DOWN, ROUND_HALF_UP),
     }
-    candidates = (left, right)
-    for candidate in candidates:
+    candidates = ((left, right), (right, left))
+    for candidate, counterpart in candidates:
         payload = candidate.get("raw_payload")
         if not isinstance(payload, dict):
             continue
@@ -155,8 +161,8 @@ def _declared_precision_equivalent(
         field_policy = comparison.get(field)
         if not isinstance(field_policy, dict):
             continue
-        rounding = rounding_by_mode.get(field_policy.get("mode"))
-        if rounding is None:
+        roundings = rounding_by_mode.get(field_policy.get("mode"))
+        if roundings is None:
             continue
         try:
             scale = int(field_policy.get("scale"))
@@ -165,15 +171,15 @@ def _declared_precision_equivalent(
         if not (_MIN_DECLARED_COMPLEMENTARY_SCALE <= scale <= 8):
             continue
 
-        left_value = left[field]
-        right_value = right[field]
+        declared_value = candidate[field]
+        other_value = counterpart[field]
         quantum = Decimal(1).scaleb(-scale)
-        return left_value.quantize(
-            quantum, rounding=rounding
-        ) == right_value.quantize(
-            quantum,
-            rounding=rounding,
-        )
+        declared_quantized = declared_value.quantize(quantum, rounding=ROUND_HALF_UP)
+        if any(
+            other_value.quantize(quantum, rounding=rounding) == declared_quantized
+            for rounding in roundings
+        ):
+            return True
     return False
 
 
