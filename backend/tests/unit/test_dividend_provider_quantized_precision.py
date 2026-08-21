@@ -87,11 +87,12 @@ def _collection(*, canonical: float, yahoo: float):
 @pytest.mark.parametrize(
     ("canonical", "yahoo"),
     [
-        (0.24956495, 0.249565),  # AFLT3: round-half-up na escala Yahoo
-        (0.08453883, 0.084538),  # AALR3: truncamento na escala Yahoo
+        (0.24956495, 0.249565),  # AFLT3/2011
+        (0.08453883, 0.084538),  # AALR3/2019
+        (0.19024149, 0.190242),  # AFLT3/2016
     ],
 )
-async def test_provider_quantized_accepts_observed_quantization_modes(
+async def test_provider_quantized_accepts_values_within_declared_resolution(
     canonical: float,
     yahoo: float,
 ) -> None:
@@ -110,7 +111,17 @@ async def test_provider_quantized_accepts_observed_quantization_modes(
 
 
 @pytest.mark.asyncio
-async def test_provider_quantized_rejects_value_outside_declared_quantization() -> None:
+@pytest.mark.parametrize(
+    ("canonical", "yahoo"),
+    [
+        (0.08453900, 0.084538),  # limite exato de 1e-6 continua bloqueante
+        (0.08453983, 0.084538),  # acima da resolução declarada
+    ],
+)
+async def test_provider_quantized_rejects_value_outside_declared_resolution(
+    canonical: float,
+    yahoo: float,
+) -> None:
     asset = SimpleNamespace(id=7, ticker="TEST3", asset_type="ACAO")
     db = _db(asset)
 
@@ -120,7 +131,7 @@ async def test_provider_quantized_rejects_value_outside_declared_quantization() 
     ):
         await persist_asset_dividends_strict(
             db=db,
-            collections=(_collection(canonical=0.08453983, yahoo=0.084538),),
+            collections=(_collection(canonical=canonical, yahoo=yahoo),),
         )
 
     db.flush.assert_not_awaited()
