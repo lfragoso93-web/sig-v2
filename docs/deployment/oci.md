@@ -250,3 +250,141 @@ References checked on 2026-08-21:
 - Cloudflare Tunnel downloads: `https://developers.cloudflare.com/tunnel/downloads/`
 - OCI VCN pricing: `https://www.oracle.com/cloud/networking/virtual-cloud-network/pricing/`
 - OCI Public IP documentation: `https://docs.oracle.com/en-us/iaas/Content/Network/Tasks/managingpublicIPs.htm`
+
+## OCI-03B Minimal Network Plan
+
+Decision date: 2026-08-21
+
+Goal: give the A1 VM outbound Internet access for OS packages, Docker image pulls, Git, and Cloudflare Tunnel, while keeping inbound OCI exposure closed by default.
+
+### Reuse vs Recreate
+
+Reuse the existing VCN if the following changes can be applied cleanly:
+
+- VCN: `sgi-vcn-public`.
+- Subnet: `sgi-subnet-public`.
+- Keep CIDR: `10.0.0.0/24`.
+- Add exactly one Internet Gateway to this VCN.
+- Add one default route `0.0.0.0/0` to that Internet Gateway.
+- Do not create NAT Gateway.
+- Do not create Load Balancer.
+- Do not reserve a public IP for the application.
+- Use only an ephemeral public IP on the VM VNIC for outbound Internet access, not as an inbound application endpoint.
+
+Reasoning: the existing VCN/subnet are empty enough to reuse and already scoped to SGI naming. Creating a duplicate VCN would add cleanup and drift risk without clear benefit.
+
+### Public IP Policy
+
+Preferred first deployment:
+
+- Launch the VM with an ephemeral public IP so outbound Internet works through the Internet Gateway without a NAT Gateway.
+- Use outbound-only Cloudflare Tunnel for web traffic.
+- Use cloud-init to install the baseline packages and bootstrap access tooling.
+
+Inbound policy for bootstrap:
+
+- Do not treat the ephemeral public IP as a public application endpoint.
+- Keep OCI ingress closed by default.
+- If initial direct SSH is explicitly authorized, restrict SSH to a known administrative source IP.
+- Disable password authentication and root login.
+- Remove public SSH exposure after Tailscale or another safer access path is confirmed.
+
+Do not use a reserved public IP for the first tunnel-based deployment.
+
+### NSG Plan
+
+Create a dedicated production NSG instead of relying on the default Security List:
+
+- Name: `sgi-prod-vm-nsg`.
+- Purpose: rules attached directly to the VM VNIC.
+
+Ingress rules:
+
+- Default: no inbound TCP application ports.
+- No `22` from `0.0.0.0/0`.
+- No `80/443` inbound for the Cloudflare Tunnel path.
+- No `5432`, `6379`, or `8000` inbound.
+- Optional temporary SSH rule only if explicitly needed for bootstrap, restricted to the administrative IP.
+
+Egress rules:
+
+- Allow outbound TCP `443` to `0.0.0.0/0` for OS repositories, Docker registries, GitHub, Cloudflare Tunnel, and TLS APIs.
+- Allow outbound TCP `80` to `0.0.0.0/0` only if package repositories or redirects require it during bootstrap.
+- Allow outbound UDP/TCP `53` if VCN DNS resolution requires explicit NSG egress.
+- Allow outbound UDP `7844` to `0.0.0.0/0` for Cloudflare Tunnel if using QUIC transport.
+
+Tightening path after the VM is stable:
+
+- Prefer Cloudflare Tunnel over public app ingress.
+- Confirm whether `cloudflared` uses HTTP/2 over TCP `443` or QUIC over UDP `7844`.
+- Remove outbound `80` if not required.
+- Keep database/cache/backend private to the Docker network.
+
+### Security List Plan
+
+Do not broaden the default Security List.
+
+Before production exposure:
+
+- Remove or stop relying on the default SSH ingress `22` from `0.0.0.0/0`.
+- Use the NSG as the authoritative production control for VM traffic.
+- Keep subnet-level rules minimal and non-contradictory.
+
+### Linux Firewall
+
+Apply a second layer on the VM:
+
+- Default deny inbound.
+- Allow loopback.
+- Allow established/related.
+- Allow outbound.
+- Do not open PostgreSQL, Redis, or backend to non-local interfaces.
+- If SSH is temporarily enabled, restrict it to the administrative source and disable it once safer access is active.
+
+### Cloudflare Tunnel Runtime
+
+Run `cloudflared` as part of the deployment, preferably in Docker Compose, after the tunnel token is created outside the repository.
+
+Secret handling:
+
+- Do not commit the tunnel token.
+- Store the token in the VM-local `.env` or a VM-local systemd environment file.
+- Do not print the token in logs, docs, or issues.
+
+Expected route:
+
+```text
+Internet users
+        |
+Cloudflare DNS / Tunnel hostname
+        |
+Cloudflare network
+        |
+outbound tunnel from VM
+        |
+cloudflared on VM
+        |
+frontend nginx container :80
+        |
+/api -> backend:8000
+```
+
+### Minimal OCI Changes for OCI-05
+
+When the plan is approved, the next OCI-changing block should create or update only:
+
+1. Internet Gateway for `sgi-vcn-public`.
+2. Default route in the existing route table to the Internet Gateway.
+3. Dedicated NSG `sgi-prod-vm-nsg`.
+4. NSG egress rules required for bootstrap and Cloudflare Tunnel.
+5. Ephemeral public IP assignment on the VM VNIC for outbound connectivity.
+6. No inbound rules except a temporary restricted SSH rule if explicitly authorized.
+
+Expected monthly cost of this network plan: `R$ 0.00`, assuming personal traffic remains below the confirmed public egress free threshold and no paid network services are introduced.
+
+NO-GO conditions:
+
+- Any requirement to create NAT Gateway.
+- Any requirement to create Load Balancer.
+- Any requirement to expose SSH to `0.0.0.0/0`.
+- Any uncertainty that a proposed network resource remains free.
