@@ -388,3 +388,50 @@ NO-GO conditions:
 - Any requirement to create Load Balancer.
 - Any requirement to expose SSH to `0.0.0.0/0`.
 - Any uncertainty that a proposed network resource remains free.
+
+## OCI-04 Production Compose and Tunnel Artifacts
+
+Decision date: 2026-08-21
+
+Goal: prepare the Docker Compose inputs for the OCI A1 VM without committing secrets and without publishing application ports directly on the VM public IP.
+
+Artifacts added:
+
+- `.env.oci.example`: production-shaped environment contract for the VM.
+- `docker-compose.oci.yml`: OCI-specific Compose override for Cloudflare Tunnel and closed host ports.
+
+Expected VM command shape:
+
+```bash
+cp .env.oci.example .env
+# Fill real values only on the VM: passwords, SECRET_KEY, CORS hostname, API tokens, and CLOUDFLARE_TUNNEL_TOKEN.
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml up -d --build
+```
+
+Production exposure behavior:
+
+- `backend` keeps listening only inside Docker on `backend:8000`.
+- `frontend` keeps listening only inside Docker on `frontend:80`.
+- `cloudflared` joins the same Docker network and publishes the frontend through the outbound tunnel.
+- Host `ports` are removed by the OCI override, so the VM public IP is not the application entrypoint.
+
+Required manual VM values:
+
+- `POSTGRES_PASSWORD`: strong VM-local password.
+- `SECRET_KEY`: at least 32 random characters.
+- `SUPERADMIN_PASSWORD`: strong non-default password.
+- `CORS_ORIGINS`: final Cloudflare HTTPS hostname.
+- `CLOUDFLARE_TUNNEL_TOKEN`: created in Cloudflare and stored only in VM `.env`.
+
+Validation commands:
+
+```bash
+CLOUDFLARE_TUNNEL_TOKEN=dummy docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml config
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml build
+```
+
+NO-GO conditions:
+
+- Any real tunnel token, password, API key, or production hostname secret appears in Git.
+- The rendered OCI Compose publishes host ports for `frontend` or `backend`.
+- The rendered OCI Compose requires a paid OCI service.
