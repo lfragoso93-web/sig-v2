@@ -120,7 +120,9 @@ class StrictYahooDividendProvider:
     O índice de ``Dividends`` do Yahoo representa a data ex do evento, não a
     data efetiva de pagamento. O adaptador normaliza essa semântica na fronteira
     e registra a escala numérica observada para reconciliação auditável com a
-    fonte primária.
+    fonte primária. O histórico real mostra valores quantizados ora por
+    truncamento, ora por arredondamento; por isso o adapter declara somente a
+    escala observada, sem inventar um único modo de redução do provedor.
     """
 
     def __init__(self, *, history_fetcher: YahooHistoryFetcher) -> None:
@@ -159,7 +161,7 @@ class StrictYahooDividendProvider:
                 "eventSemantics": "aggregate_cash_by_ex_date",
                 "canonicalComparison": {
                     "value_per_unit": {
-                        "mode": "round_half_up",
+                        "mode": "provider_quantized",
                         "scale": _decimal_scale(amount),
                     }
                 },
