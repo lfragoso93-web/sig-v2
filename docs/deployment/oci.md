@@ -490,3 +490,41 @@ NO-GO conditions:
 - Existing default route `0.0.0.0/0` points to a different network entity.
 - Script proposes any ingress rule.
 - Script proposes NAT Gateway, Load Balancer, managed database, Redis, Kubernetes, or reserved public IP.
+
+## OCI-05B Minimal Network Created
+
+Completion date: 2026-08-21
+
+Result: minimal OCI network path created manually in the OCI Console after Windows OCI CLI JSON handling blocked the scripted route-table update.
+
+Confirmed resources:
+
+- Internet Gateway: `sgi-prod-ig`.
+- Internet Gateway state: `AVAILABLE`.
+- Internet Gateway status: enabled.
+- Route table: default route table for `sgi-vcn-public`.
+- Route: `0.0.0.0/0` to Internet Gateway `sgi-prod-ig`.
+- NSG: `sgi-prod-vm-nsg`.
+- NSG ingress: no ingress rules intentionally created.
+- NSG egress:
+  - TCP `443` to `0.0.0.0/0`.
+  - TCP `80` to `0.0.0.0/0`.
+  - TCP `53` to `0.0.0.0/0`.
+  - UDP `53` to `0.0.0.0/0`.
+  - UDP `7844` to `0.0.0.0/0`.
+
+Cost posture:
+
+- No NAT Gateway created.
+- No Load Balancer created.
+- No reserved public IP created.
+- No managed database, Redis, or Kubernetes created.
+- Expected incremental monthly cost: `R$ 0.00`.
+
+Next gate before VM creation:
+
+- Create VM only with `VM.Standard.A1.Flex`.
+- Keep total A1 allocation within Always Free limits.
+- Use an ephemeral public IP only for outbound connectivity.
+- Attach `sgi-prod-vm-nsg` to the VM VNIC.
+- Do not add public application ingress.
