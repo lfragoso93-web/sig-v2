@@ -1,6 +1,6 @@
 services:
   backend:
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${BACKEND_WORKERS:-2}
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${BACKEND_WORKERS:-1}
     ports: !reset []
     environment:
       ENVIRONMENT: production

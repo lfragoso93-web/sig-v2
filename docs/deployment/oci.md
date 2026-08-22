@@ -708,3 +708,32 @@ Retry guidance:
 - Keep ephemeral public IPv4 and no reserved public IP.
 - Keep `sgi-prod-vm-nsg` attached.
 - Keep cloud-init unchanged unless a specific boot error requires adjustment.
+
+## OCI-08 First Deploy Runbook
+
+Decision date: 2026-08-21
+
+Goal: prepare the first deployment sequence while waiting for A1 capacity.
+
+Artifact added:
+
+- `docs/deployment/oci-first-deploy-runbook.md`
+
+Key decisions:
+
+- Initial backend worker count is `1` for the constrained `1 OCPU / 6 GB` A1 VM.
+- Do not publish backend or frontend host ports.
+- Do not bypass Cloudflare Tunnel by opening OCI ingress for `80` or `443`.
+- Keep `.env` VM-local and out of Git.
+- Stop rollback preserves Docker volumes by default.
+
+Ready-to-run phases once the VM exists:
+
+1. Post-boot baseline checks.
+2. Deployment source placement in `/opt/sgi-v2`.
+3. VM-local `.env` creation.
+4. Compose render verification.
+5. Build and start.
+6. Backend/Postgres/Redis health checks.
+7. Cloudflare Tunnel check.
+8. Rollback without volume deletion.
