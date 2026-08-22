@@ -1027,3 +1027,21 @@ Use it immediately after the saved Stack creates the VM to record:
 - NSG and subnet attachment.
 - cloud-init, Docker, Compose, UFW, and `/opt/sgi-v2` baseline checks.
 - cost guardrail confirmations.
+
+## OCI-24 Environment Secret Generator
+
+Decision date: 2026-08-22
+
+Goal: reduce manual `.env` mistakes without committing or storing secrets.
+
+Artifact added:
+
+- `scripts/oci_generate_env_secrets.ps1`
+
+The script prints fresh values for:
+
+- `POSTGRES_PASSWORD`, generated from URL-safe characters.
+- `SECRET_KEY`, generated as 32 random bytes in hex.
+- `SUPERADMIN_PASSWORD`, generated from URL-safe characters.
+
+Operational rule: generated values are pasted only into the VM-local `.env`; they are not committed, documented, screenshotted, or copied into tickets.

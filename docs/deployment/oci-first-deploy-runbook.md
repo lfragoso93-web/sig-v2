@@ -97,6 +97,20 @@ openssl rand -base64 24
 openssl rand -hex 32
 ```
 
+From Windows, generate URL-safe values without writing them to disk:
+
+```powershell
+.\scripts\oci_generate_env_secrets.ps1
+```
+
+Use the generated `POSTGRES_PASSWORD` in all three fields:
+
+```env
+POSTGRES_PASSWORD=<generated-url-safe-password>
+DATABASE_URL=postgresql://sgi:<generated-url-safe-password>@db:5432/sgi
+ASYNC_DATABASE_URL=postgresql+asyncpg://sgi:<generated-url-safe-password>@db:5432/sgi
+```
+
 NO-GO:
 
 - `.env` contains default production-blocked values.

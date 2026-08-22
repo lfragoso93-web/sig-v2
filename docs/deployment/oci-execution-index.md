@@ -51,6 +51,7 @@ Do:
 Use:
 
 - `.env.oci.example`
+- `scripts/oci_generate_env_secrets.ps1`
 - `scripts/oci_env_preflight.sh`
 
 Do:
