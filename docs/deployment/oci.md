@@ -853,3 +853,43 @@ Expected effect:
 - Smaller upload/build context.
 - Less chance of Windows permission-denied temp directories affecting Docker builds.
 - Lower I/O pressure on `1 OCPU / 6 GB` VM builds.
+
+## OCI-15 Environment Preflight
+
+Decision date: 2026-08-21
+
+Goal: fail fast if the VM-local `.env` still contains placeholders or unsafe initial values.
+
+Artifact added:
+
+- `scripts/oci_env_preflight.sh`
+
+The preflight checks:
+
+- required production values are non-empty.
+- placeholder values from `.env.oci.example` are gone.
+- `SECRET_KEY` is at least 32 characters.
+- `ENVIRONMENT=production`.
+- `APP_DEBUG=false`.
+- initial `BACKEND_WORKERS=1`.
+- `VITE_API_URL` remains empty for nginx `/api` proxying.
+
+## OCI-16 Smoke Test
+
+Decision date: 2026-08-21
+
+Goal: provide a post-deploy smoke test that verifies the stack without opening OCI ingress.
+
+Artifacts added:
+
+- `scripts/oci_smoke_test.sh`
+- `docs/deployment/oci-smoke-test-runbook.md`
+
+The smoke test checks:
+
+- Compose service listing.
+- backend `/health`.
+- Postgres readiness.
+- Redis ping.
+- Cloudflare Tunnel logs availability.
+- no published host ports in rendered Compose config.

@@ -103,6 +103,19 @@ NO-GO:
 - `.env` is copied back into Git.
 - Cloudflare tunnel token appears in logs, docs, issues, or commits.
 
+Run the env preflight:
+
+```bash
+cd /opt/sgi-v2
+sh scripts/oci_env_preflight.sh .env
+```
+
+Expected:
+
+- Required production values are present.
+- Placeholders are gone.
+- Initial OCI worker/profile values are safe.
+
 ## 4. Render Compose Before Start
 
 ```bash
