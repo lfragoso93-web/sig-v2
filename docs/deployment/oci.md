@@ -989,3 +989,23 @@ Key decisions:
 - Keep boot volume `80 GB`.
 - Keep ephemeral public IPv4, not reserved public IP.
 - Do not add ingress rules or paid OCI services during retries.
+
+## OCI-22 Environment Preflight Hardening
+
+Decision date: 2026-08-22
+
+Goal: reduce first-deploy mistakes in the VM-local `.env` before Compose starts.
+
+Change:
+
+- Hardened `scripts/oci_env_preflight.sh`.
+- Updated `docs/deployment/oci-first-deploy-runbook.md`.
+
+Additional checks:
+
+- `POSTGRES_PASSWORD` must be URL-safe.
+- `DATABASE_URL` must use the configured `POSTGRES_PASSWORD`.
+- `ASYNC_DATABASE_URL` must use the configured `POSTGRES_PASSWORD`.
+- Both database URLs must target Docker service host `db:5432`.
+- `CORS_ORIGINS` must start with `https://`.
+- `CORS_ORIGINS` must not point to localhost.

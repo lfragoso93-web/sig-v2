@@ -114,6 +114,9 @@ Expected:
 
 - Required production values are present.
 - Placeholders are gone.
+- Database URLs use the same VM-local `POSTGRES_PASSWORD` and Docker host `db:5432`.
+- `POSTGRES_PASSWORD` is URL-safe so it can be embedded in both database URLs.
+- `CORS_ORIGINS` uses the final HTTPS hostname, not localhost.
 - Initial OCI worker/profile values are safe.
 
 ## 4. Render Compose Before Start

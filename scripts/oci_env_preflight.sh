@@ -41,6 +41,9 @@ require_not_placeholder APP_COMMIT_SHA
 
 require_nonempty POSTGRES_PASSWORD
 require_not_placeholder POSTGRES_PASSWORD
+case "$(get_value POSTGRES_PASSWORD)" in
+  *[!A-Za-z0-9._~-]*) fail "POSTGRES_PASSWORD must be URL-safe: use letters, numbers, dot, underscore, tilde, or hyphen" ;;
+esac
 
 require_nonempty DATABASE_URL
 require_not_placeholder DATABASE_URL
@@ -48,12 +51,29 @@ require_not_placeholder DATABASE_URL
 require_nonempty ASYNC_DATABASE_URL
 require_not_placeholder ASYNC_DATABASE_URL
 
+postgres_password="$(get_value POSTGRES_PASSWORD)"
+case "$(get_value DATABASE_URL)" in
+  *":${postgres_password}@db:5432/"*) ;;
+  *) fail "DATABASE_URL must use POSTGRES_PASSWORD and host db:5432" ;;
+esac
+case "$(get_value ASYNC_DATABASE_URL)" in
+  *":${postgres_password}@db:5432/"*) ;;
+  *) fail "ASYNC_DATABASE_URL must use POSTGRES_PASSWORD and host db:5432" ;;
+esac
+
 require_nonempty SECRET_KEY
 require_not_placeholder SECRET_KEY
 [ "$(get_value SECRET_KEY | wc -c | tr -d ' ')" -ge 32 ] || fail "SECRET_KEY must have at least 32 characters"
 
 require_nonempty CORS_ORIGINS
 require_not_placeholder CORS_ORIGINS
+case "$(get_value CORS_ORIGINS)" in
+  https://*) ;;
+  *) fail "CORS_ORIGINS must start with https://" ;;
+esac
+case "$(get_value CORS_ORIGINS)" in
+  *localhost*|*127.0.0.1*) fail "CORS_ORIGINS must not point to localhost in production" ;;
+esac
 
 require_nonempty SUPERADMIN_EMAIL
 require_not_placeholder SUPERADMIN_EMAIL
@@ -70,4 +90,5 @@ require_nonempty CLOUDFLARE_TUNNEL_TOKEN
 
 ok "required production values are present"
 ok "placeholders are not present"
+ok "database URLs and CORS origin match the OCI production profile"
 ok "initial OCI worker/profile values are safe"
