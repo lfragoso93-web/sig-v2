@@ -1236,3 +1236,20 @@ Remaining guardrails:
 - Use this VM for lab validation only.
 - Do not restore production data.
 - Do not publish the production hostname.
+
+## OCI-34 Source Tree Check Script
+
+Decision date: 2026-08-22
+
+Goal: validate extracted source packages on OCI hosts before any environment or data restore step.
+
+Artifact added:
+
+- `scripts/oci_source_tree_check.sh`
+
+The script checks:
+
+- required deployment files exist.
+- `.env`, `.git`, `node_modules`, and backup artifacts are absent.
+- source package is not a Git working tree.
+- OCI Compose renders with `cloudflared` and without published host ports when Docker is available.

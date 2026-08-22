@@ -87,6 +87,15 @@ test -f .env.oci.example
 test ! -f .env
 ```
 
+Or run the bundled source tree check:
+
+```bash
+cd /opt/sgi-v2
+sh scripts/oci_source_tree_check.sh
+```
+
+On the E2 Micro lab host, this is the preferred next validation after Docker baseline. It checks the extracted source package without restoring data or publishing the app.
+
 ## 5. Continue Deploy
 
 Continue with:

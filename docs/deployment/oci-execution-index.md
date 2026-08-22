@@ -48,6 +48,7 @@ Do:
 Use:
 
 - `docs/deployment/oci-source-transfer-runbook.md`
+- `scripts/oci_source_tree_check.sh`
 
 Do:
 
