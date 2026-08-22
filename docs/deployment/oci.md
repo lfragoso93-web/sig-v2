@@ -1209,3 +1209,30 @@ Scope:
 - Lab only.
 - Does not replace the ARM64 A1 production baseline.
 - Does not permit production data restore or production hostname publishing on E2 Micro.
+
+## OCI-33 E2 Micro Lab Baseline Passed
+
+Decision date: 2026-08-22
+
+Goal: record successful repair and baseline validation on the temporary E2 Micro lab VM.
+
+Result:
+
+- Docker apt source was repaired to `arch=amd64`.
+- Docker Engine installed successfully.
+- Docker Compose plugin installed successfully.
+- UFW baseline applied.
+- `/opt/sgi-v2` ownership is correct.
+- `scripts/oci_lab_e2micro_baseline_check.sh` passed.
+
+Observed:
+
+- Docker `29.7.2`.
+- Docker Compose `v5.5.0`.
+
+Remaining guardrails:
+
+- Reconnect SSH before using Docker as `ubuntu`.
+- Use this VM for lab validation only.
+- Do not restore production data.
+- Do not publish the production hostname.

@@ -106,6 +106,32 @@ Finding:
 - On `VM.Standard.E2.1.Micro`, use `docs/deployment/oci-cloud-init-lab-e2micro.yaml` or manually repair the Docker apt source to the host architecture before validating Docker.
 - The bundled repair path is `scripts/oci_lab_e2micro_repair.sh`, followed by `scripts/oci_lab_e2micro_baseline_check.sh`.
 
+## Current Repair Result
+
+2026-08-22 manual VM execution completed:
+
+- Docker apt source repaired to `arch=amd64`.
+- Docker Engine installed.
+- Docker Compose plugin installed.
+- Docker service enabled.
+- `/opt/sgi-v2` exists and is owned by `ubuntu`.
+- `ubuntu` added to the Docker group.
+- UFW default incoming set to deny.
+- UFW default outgoing set to allow.
+- Lab baseline check passed.
+
+Observed versions:
+
+- Docker `29.7.2`.
+- Docker Compose `v5.5.0`.
+
+Next lab-safe checks:
+
+- Reconnect SSH so Docker group membership applies.
+- Verify `docker ps` as `ubuntu`.
+- Test source package transfer mechanics.
+- Do not restore production data or publish the production hostname.
+
 ## Cleanup
 
 Terminate the lab instance after the tests are complete or after the A1 VM is created.
