@@ -775,3 +775,22 @@ Key decisions:
 - `CORS_ORIGINS` must be the final Cloudflare HTTPS hostname.
 - Tunnel token lives only in the VM-local `.env`.
 - OCI NSG remains without ingress rules for `80/443`.
+
+## OCI-11 Cost Guardrails
+
+Decision date: 2026-08-21
+
+Goal: keep every Stack retry and post-create check inside the approved cost envelope.
+
+Artifact added:
+
+- `docs/deployment/oci-cost-guardrails.md`
+
+Key decisions:
+
+- Retry only `VM.Standard.A1.Flex`.
+- Initial retry size remains `1 OCPU / 6 GB`.
+- Boot volume remains `80 GB`.
+- Public IPv4 must be ephemeral, not reserved.
+- NAT Gateway, Load Balancer, managed DB, Redis, Kubernetes, and reserved public IP remain forbidden.
+- Check billing/cost daily for the first week after VM creation.
