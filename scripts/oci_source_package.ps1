@@ -65,17 +65,21 @@ $manifest = @(
 $manifest | Set-Content -LiteralPath $manifestPath -Encoding utf8
 Ok "manifest created: $manifestPath"
 
-$listing = git archive --format=tar HEAD | tar -tf -
-if ($listing -match "(^|/)\.env$") {
+$listing = tar -tf $tarPath
+if ($LASTEXITCODE -ne 0) {
+    Fail "could not list generated tar archive"
+}
+$listingText = ($listing -join "`n")
+if ($listingText -match "(^|/)\.env($|\n)") {
     Fail "archive contains .env"
 }
-if ($listing -match "(^|/)node_modules/") {
+if ($listingText -match "(^|/)node_modules/") {
     Fail "archive contains node_modules"
 }
-if ($listing -match "(^|/)\.git/") {
+if ($listingText -match "(^|/)\.git/") {
     Fail "archive contains .git"
 }
-if ($listing -match "^artifacts/pre-prod-rebuild/") {
+if ($listingText -match "^artifacts/pre-prod-rebuild/") {
     Fail "archive contains backup artifacts"
 }
 Ok "archive excludes .env, .git, node_modules, and backup artifacts"
