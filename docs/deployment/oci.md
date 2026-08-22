@@ -952,3 +952,21 @@ Execution phases:
 7. Publish through tunnel.
 8. Smoke test.
 9. Operate and recover.
+
+## OCI-20 Source Package Script
+
+Decision date: 2026-08-21
+
+Goal: make fallback source transfer repeatable without packaging local secrets or untracked files.
+
+Artifact added:
+
+- `scripts/oci_source_package.ps1`
+
+The script:
+
+- requires branch `stable-15jun`.
+- requires a clean working tree.
+- creates a `git archive` tarball.
+- writes a manifest with commit and SHA-256.
+- checks that `.env`, `.git`, `node_modules`, and backup artifacts are not in the archive.

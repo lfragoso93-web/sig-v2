@@ -25,15 +25,10 @@ Expected:
 Create an archive from Git so ignored files stay out of the package:
 
 ```powershell
-git rev-parse HEAD
-git archive --format=tar --output artifacts\sgi-v2-source.tar HEAD
+.\scripts\oci_source_package.ps1
 ```
 
-Optional compression:
-
-```powershell
-gzip artifacts\sgi-v2-source.tar
-```
+The script requires a clean `stable-15jun` working tree and writes a `.tar` plus manifest under `artifacts\oci-source-package`.
 
 Expected:
 
@@ -41,6 +36,7 @@ Expected:
 - Package does not include `node_modules`.
 - Package does not include `.git`.
 - Package does not include backup artifacts.
+- Manifest records branch, commit, tracked file count, and SHA-256.
 
 NO-GO:
 
