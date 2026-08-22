@@ -970,3 +970,22 @@ The script:
 - creates a `git archive` tarball.
 - writes a manifest with commit and SHA-256.
 - checks that `.env`, `.git`, `node_modules`, and backup artifacts are not in the archive.
+
+## OCI-21 Stack Retry Runbook
+
+Decision date: 2026-08-21
+
+Goal: keep manual retries of the saved OCI Stack safe while A1 host capacity is unavailable.
+
+Artifact added:
+
+- `docs/deployment/oci-stack-retry-runbook.md`
+
+Key decisions:
+
+- Retry only the saved Stack `sgi-prod-a1-01`.
+- Keep shape `VM.Standard.A1.Flex`.
+- Keep initial size `1 OCPU / 6 GB`.
+- Keep boot volume `80 GB`.
+- Keep ephemeral public IPv4, not reserved public IP.
+- Do not add ingress rules or paid OCI services during retries.

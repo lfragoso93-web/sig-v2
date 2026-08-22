@@ -6,6 +6,7 @@ Status: use this as the top-level sequence when A1 capacity becomes available.
 
 Use:
 
+- `docs/deployment/oci-stack-retry-runbook.md`
 - `docs/deployment/oci-cost-guardrails.md`
 - `docs/deployment/oci.md`
 
