@@ -930,3 +930,25 @@ Key decisions:
 - Recover data only from verified backup artifacts.
 - Do not create paid services during recovery.
 - Do not open OCI `80/443` ingress to work around tunnel failures.
+
+## OCI-19 Execution Index
+
+Decision date: 2026-08-21
+
+Goal: provide one ordered entrypoint for all OCI runbooks.
+
+Artifact added:
+
+- `docs/deployment/oci-execution-index.md`
+
+Execution phases:
+
+1. Retry OCI Stack.
+2. Validate VM baseline.
+3. Place source.
+4. Configure environment.
+5. Restore data.
+6. Start app.
+7. Publish through tunnel.
+8. Smoke test.
+9. Operate and recover.
