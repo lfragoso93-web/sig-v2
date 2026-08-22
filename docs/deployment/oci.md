@@ -1159,3 +1159,30 @@ Rules:
 - Do not restore production data.
 - Do not publish the production hostname.
 - Do not use it as the future production boot volume.
+
+## OCI-31 E2 Micro Lab Verification
+
+Decision date: 2026-08-22
+
+Goal: record read-only OCI CLI verification of the temporary lab VM.
+
+Artifacts added:
+
+- `docs/deployment/oci-cloud-init-lab-e2micro.yaml`
+
+Verified:
+
+- Instance `sgi` is `RUNNING`.
+- Shape is `VM.Standard.E2.1.Micro`.
+- Memory is `1 GB`.
+- Public IPv4 is ephemeral.
+- Boot volume is `80 GB`.
+- NSG has no ingress rules.
+- Route table sends `0.0.0.0/0` to Internet Gateway `sgi-prod-ig`.
+- No NAT Gateway or Load Balancer was listed.
+
+Findings:
+
+- The subnet default Security List still allows SSH `22` from `0.0.0.0/0`.
+- The lab VM was created with the A1 ARM64 cloud-init. On E2 Micro this can break Docker install because the Docker apt source is pinned to `arch=arm64`.
+- Use `docs/deployment/oci-cloud-init-lab-e2micro.yaml` for future E2 Micro lab recreation, or manually repair Docker apt architecture on the current lab host.

@@ -15,6 +15,7 @@ This host is not production and must not receive real production data.
 - Expected cost: `R$ 0.00` if OCI marks the shape/image as Always Free eligible.
 - Boot volume: minimum/default size, preferably `47 GB`.
 - OS: Ubuntu Always Free eligible image.
+- Cloud-init: use `docs/deployment/oci-cloud-init-lab-e2micro.yaml`, not the A1 ARM64 production cloud-init.
 - Public IPv4: ephemeral only.
 - Reserved public IP: no.
 - NSG: preferably a separate lab NSG, or reuse `sgi-prod-vm-nsg` only if no ingress is added.
@@ -70,6 +71,26 @@ Expected:
 - Outbound package/download access works.
 - Memory is recognized as constrained.
 
+## Current Verification Notes
+
+2026-08-22 read-only OCI CLI verification found:
+
+- Instance `sgi` is `RUNNING`.
+- Shape is `VM.Standard.E2.1.Micro`.
+- OCPU is `1`.
+- Memory is `1 GB`.
+- Processor is AMD/x86.
+- Public IPv4 is ephemeral.
+- Boot volume is `80 GB`.
+- NSG has egress-only rules and no ingress.
+- The subnet default Security List still allows SSH `22` from `0.0.0.0/0`.
+- No NAT Gateway or Load Balancer was listed.
+
+Finding:
+
+- The VM was created with the A1 cloud-init, which hardcodes Docker repository `arch=arm64`.
+- On `VM.Standard.E2.1.Micro`, use `docs/deployment/oci-cloud-init-lab-e2micro.yaml` or manually repair the Docker apt source to the host architecture before validating Docker.
+
 ## Cleanup
 
 Terminate the lab instance after the tests are complete or after the A1 VM is created.
@@ -79,4 +100,3 @@ Before termination:
 - Confirm no production data exists on the host.
 - Confirm no tunnel token or real `.env` remains on the host.
 - Confirm no reserved public IP was created.
-

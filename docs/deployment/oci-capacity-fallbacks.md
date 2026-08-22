@@ -54,6 +54,7 @@ Safe options:
 Optional non-production lab use:
 
 - A `VM.Standard.E2.1.Micro` can be used for tiny connectivity, cloud-init, Docker install, firewall, transfer, and tunnel mechanics if it is clearly disposable.
+- Use `docs/deployment/oci-cloud-init-lab-e2micro.yaml` for E2 Micro lab hosts.
 - Do not restore production data onto it.
 - Do not publish SGI production through it.
 - Do not treat it as the future production host.
