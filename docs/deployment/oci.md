@@ -794,3 +794,38 @@ Key decisions:
 - Public IPv4 must be ephemeral, not reserved.
 - NAT Gateway, Load Balancer, managed DB, Redis, Kubernetes, and reserved public IP remain forbidden.
 - Check billing/cost daily for the first week after VM creation.
+
+## OCI-12 Compose Preflight
+
+Decision date: 2026-08-21
+
+Goal: provide a local check that the OCI Compose overlay remains safe before deployment.
+
+Artifact added:
+
+- `scripts/oci_compose_preflight.ps1`
+
+The preflight checks:
+
+- backend does not publish host ports.
+- frontend does not publish host ports.
+- `cloudflared` service is present.
+- backend worker count renders as `1`.
+- no real-looking tunnel token appears in rendered config.
+
+## OCI-13 Source Transfer Runbook
+
+Decision date: 2026-08-21
+
+Goal: prepare a fallback source transfer path if the VM cannot clone the repository directly.
+
+Artifact added:
+
+- `docs/deployment/oci-source-transfer-runbook.md`
+
+Key decisions:
+
+- Prefer `git clone --branch stable-15jun` on the VM.
+- Fallback package uses `git archive` from the operator machine.
+- Source package must not include `.env`, `.git`, `node_modules`, Terraform exports, or backup artifacts.
+- Source transfer must not require opening OCI web ingress.
