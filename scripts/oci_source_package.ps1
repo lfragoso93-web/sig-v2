@@ -24,14 +24,20 @@ if ($branch -ne "stable-15jun") {
 }
 Ok "branch is stable-15jun"
 
-$status = git status --porcelain
+$trackedChanges = git status --porcelain --untracked-files=no
 if ($LASTEXITCODE -ne 0) {
     Fail "could not read git status"
 }
-if ($status) {
-    Fail "working tree must be clean before packaging"
+if ($trackedChanges) {
+    Fail "tracked files must be clean before packaging"
 }
-Ok "working tree is clean"
+Ok "tracked files are clean"
+
+$untrackedChanges = git status --porcelain --untracked-files=normal
+$untrackedOnly = @($untrackedChanges | Where-Object { $_ -like "?? *" })
+if ($untrackedOnly.Count -gt 0) {
+    Write-Host "[oci-source-package] WARN: untracked files exist but git archive will exclude them"
+}
 
 $commit = (git rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0 -or $commit -notmatch "^[0-9a-f]{40}$") {
