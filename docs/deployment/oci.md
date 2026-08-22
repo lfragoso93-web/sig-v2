@@ -1293,3 +1293,29 @@ Scope:
 - SGI stack was not started.
 - No production data restored.
 - No production hostname published.
+
+## OCI-37 E2 Micro Compose Render Passed
+
+Decision date: 2026-08-22
+
+Goal: record OCI Compose render validation on the temporary E2 Micro lab VM.
+
+Command shape:
+
+```bash
+CLOUDFLARE_TUNNEL_TOKEN=dummy-preflight-token BACKEND_WORKERS=1 \
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml config > /tmp/sgi-compose-rendered.yml
+```
+
+Result:
+
+- No `published:` entries were found.
+- `cloudflared` service was present.
+
+Scope:
+
+- Lab validation only.
+- Compose render only.
+- SGI stack was not built or started.
+- No production data restored.
+- No production hostname published.
