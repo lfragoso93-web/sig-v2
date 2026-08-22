@@ -756,3 +756,22 @@ Key decisions:
 - Restore validation should target an isolated empty PostgreSQL database before the final OCI restore.
 - Restore uses checksum validation and single-transaction `pg_restore`.
 - Rollback preserves Docker volumes by default.
+
+## OCI-10 Cloudflare Tunnel Runbook
+
+Decision date: 2026-08-21
+
+Goal: prepare public app exposure without OCI inbound web ports.
+
+Artifact added:
+
+- `docs/deployment/oci-cloudflare-tunnel-runbook.md`
+
+Key decisions:
+
+- Cloudflare Tunnel is the only public web entrypoint.
+- Tunnel routes to `http://frontend:80` inside Docker.
+- `VITE_API_URL` remains empty so the frontend uses `/api`.
+- `CORS_ORIGINS` must be the final Cloudflare HTTPS hostname.
+- Tunnel token lives only in the VM-local `.env`.
+- OCI NSG remains without ingress rules for `80/443`.
