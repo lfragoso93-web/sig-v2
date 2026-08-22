@@ -25,6 +25,13 @@ sudo ufw status verbose
 ls -ld /opt/sgi-v2
 ```
 
+Or run the bundled baseline check:
+
+```bash
+cd /opt/sgi-v2
+sh scripts/oci_vm_baseline_check.sh
+```
+
 Expected:
 
 - `cloud-init` is done.

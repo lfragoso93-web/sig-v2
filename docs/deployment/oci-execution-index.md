@@ -26,6 +26,7 @@ Use:
 - `docs/deployment/oci-cloud-init.yaml`
 - `docs/deployment/oci-vm-handoff-template.md`
 - `docs/deployment/oci-first-deploy-runbook.md`
+- `scripts/oci_vm_baseline_check.sh`
 
 Do:
 

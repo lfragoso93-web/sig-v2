@@ -1064,3 +1064,24 @@ Use it after Cloudflare setup to record:
 - VM-local `.env` expectations without token value.
 - OCI no-ingress confirmation.
 - public smoke checks through Cloudflare.
+
+## OCI-26 VM Baseline Check Script
+
+Decision date: 2026-08-22
+
+Goal: make post-boot VM validation repeatable once A1 capacity is available.
+
+Artifact added:
+
+- `scripts/oci_vm_baseline_check.sh`
+
+The script checks:
+
+- host architecture is ARM64.
+- cloud-init status is readable.
+- Docker and Docker Compose plugin are installed.
+- Docker service is active.
+- `/opt/sgi-v2` exists and is owned by `ubuntu`.
+- UFW is active with deny incoming and allow outgoing defaults.
+- root filesystem is below 80 percent used.
+- no pre-deploy app/data TCP listener is present on `80`, `443`, `8000`, `5432`, or `6379`.
