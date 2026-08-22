@@ -96,6 +96,24 @@ sh scripts/oci_source_tree_check.sh
 
 On the E2 Micro lab host, this is the preferred next validation after Docker baseline. It checks the extracted source package without restoring data or publishing the app.
 
+## Current Lab Result
+
+2026-08-22 manual execution on the E2 Micro lab host passed:
+
+```bash
+cd /opt/sgi-v2
+sh scripts/oci_source_tree_check.sh
+```
+
+Result:
+
+- Required deployment files are present.
+- Local secrets and runtime artifacts are absent.
+- Source is not a Git working tree.
+- OCI Compose renders without host ports.
+
+This validates package transfer mechanics without restoring data or publishing the app.
+
 ## 5. Continue Deploy
 
 Continue with:

@@ -131,6 +131,7 @@ Next lab-safe checks:
 - Verify `docker ps` as `ubuntu`.
 - Test source package transfer mechanics.
 - Run `scripts/oci_source_tree_check.sh` after extracting the source package.
+- Source tree check passed on 2026-08-22.
 - Do not restore production data or publish the production hostname.
 
 ## Cleanup

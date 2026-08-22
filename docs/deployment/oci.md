@@ -1253,3 +1253,22 @@ The script checks:
 - `.env`, `.git`, `node_modules`, and backup artifacts are absent.
 - source package is not a Git working tree.
 - OCI Compose renders with `cloudflared` and without published host ports when Docker is available.
+
+## OCI-35 E2 Micro Source Tree Check Passed
+
+Decision date: 2026-08-22
+
+Goal: record successful source package extraction validation on the temporary E2 Micro lab VM.
+
+Result:
+
+- `scripts/oci_source_tree_check.sh` passed on `/opt/sgi-v2`.
+- Required deployment files are present.
+- `.env`, `.git`, `node_modules`, and backup artifacts are absent.
+- OCI Compose renders without published host ports.
+
+Scope:
+
+- Lab validation only.
+- No production data restored.
+- No production hostname published.
