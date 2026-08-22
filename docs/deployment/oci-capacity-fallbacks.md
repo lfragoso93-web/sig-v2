@@ -8,7 +8,9 @@ Do not create a different production VM shape as a placeholder for SGI v2.
 
 Keep retrying the saved Stack with `VM.Standard.A1.Flex`.
 
-## Why Not Use Another Shape Temporarily
+For non-production testing, a disposable `VM.Standard.E2.1.Micro` lab host is allowed if it remains clearly separated from production. Use `docs/deployment/oci-micro-lab-runbook.md`.
+
+## Why Not Use Another Shape For Production Temporarily
 
 OCI Always Free compute options include:
 
@@ -49,12 +51,13 @@ Safe options:
 - Keep boot volume `80 GB`.
 - Continue local readiness, backup, package, Cloudflare, and runbook preparation.
 
-Optional non-production use only:
+Optional non-production lab use:
 
-- A `VM.Standard.E2.1.Micro` can be used only for tiny connectivity or OCI Console experiments if it is clearly disposable.
+- A `VM.Standard.E2.1.Micro` can be used for tiny connectivity, cloud-init, Docker install, firewall, transfer, and tunnel mechanics if it is clearly disposable.
 - Do not restore production data onto it.
 - Do not publish SGI production through it.
 - Do not treat it as the future production host.
+- Do not expect it to validate full-stack performance.
 
 ## NO-GO
 
@@ -63,4 +66,3 @@ Optional non-production use only:
 - Larger shape with estimated cost above `R$ 0.00`.
 - Any reserved public IP, NAT Gateway, Load Balancer, managed DB, managed Redis, or OKE workaround.
 - Restoring production data onto a disposable test host.
-

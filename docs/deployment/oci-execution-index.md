@@ -13,6 +13,7 @@ Before retrying or deploying from Windows, run:
 Use:
 
 - `docs/deployment/oci-capacity-fallbacks.md`
+- `docs/deployment/oci-micro-lab-runbook.md`
 - `docs/deployment/oci-stack-retry-runbook.md`
 - `docs/deployment/oci-cost-guardrails.md`
 - `docs/deployment/oci.md`

@@ -1139,3 +1139,23 @@ Decision:
 - Keep retrying the saved Stack with `VM.Standard.A1.Flex`.
 - Treat resize as acceptable only within A1, for example `1 OCPU / 6 GB` to `2 OCPU / 12 GB`.
 - Do not rely on converting an AMD/x86 `VM.Standard.E2.1.Micro` placeholder into the ARM64 A1 production VM.
+- A disposable `VM.Standard.E2.1.Micro` lab host is allowed for non-production OCI/cloud-init/Docker/firewall/transfer testing only.
+
+## OCI-30 E2 Micro Lab Runbook
+
+Decision date: 2026-08-22
+
+Goal: permit useful Always Free testing while A1 capacity is unavailable, without confusing lab and production.
+
+Artifact added:
+
+- `docs/deployment/oci-micro-lab-runbook.md`
+
+Rules:
+
+- Use `VM.Standard.E2.1.Micro` only as `sgi-lab-e2micro-01` or similarly explicit lab naming.
+- Keep it disposable.
+- Use minimum/default boot volume where possible.
+- Do not restore production data.
+- Do not publish the production hostname.
+- Do not use it as the future production boot volume.

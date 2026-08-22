@@ -12,6 +12,7 @@ Allowed:
 - Initial size `1 OCPU / 6 GB`.
 - Later size up to `2 OCPU / 12 GB`, only if still inside A1 free limits.
 - No `VM.Standard.E2.1.Micro` production placeholder for later A1 conversion.
+- Optional disposable `VM.Standard.E2.1.Micro` lab host only if marked Always Free eligible and kept non-production.
 - Boot volume `80 GB`.
 - Existing VCN `sgi-vcn-public`.
 - Existing subnet `sgi-subnet-public`.
