@@ -90,6 +90,7 @@ Do:
 
 Use:
 
+- `docs/deployment/oci-cloudflare-handoff-template.md`
 - `docs/deployment/oci-cloudflare-tunnel-runbook.md`
 
 Do:

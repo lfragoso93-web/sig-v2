@@ -4,6 +4,10 @@ Status: prepared before the VM exists.
 
 Goal: publish SGI v2 through Cloudflare Tunnel without exposing OCI inbound `80/443`.
 
+Handoff template:
+
+- `docs/deployment/oci-cloudflare-handoff-template.md`
+
 ## 1. Decisions
 
 - Cloudflare Tunnel is the only public web entrypoint.
@@ -32,6 +36,8 @@ CLOUDFLARE_TUNNEL_TOKEN=<vm-local-token>
 ```
 
 Do not copy the token into Git, issues, docs, shell history snippets, screenshots, or support tickets.
+
+After setup, fill `docs/deployment/oci-cloudflare-handoff-template.md` with hostname and status only. Do not paste the token into the template.
 
 ## 3. DNS And App Environment
 

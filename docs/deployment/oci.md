@@ -1045,3 +1045,22 @@ The script prints fresh values for:
 - `SUPERADMIN_PASSWORD`, generated from URL-safe characters.
 
 Operational rule: generated values are pasted only into the VM-local `.env`; they are not committed, documented, screenshotted, or copied into tickets.
+
+## OCI-25 Cloudflare Tunnel Handoff Template
+
+Decision date: 2026-08-22
+
+Goal: make tunnel setup auditable without storing the tunnel token.
+
+Artifact added:
+
+- `docs/deployment/oci-cloudflare-handoff-template.md`
+
+Use it after Cloudflare setup to record:
+
+- tunnel name and public hostname.
+- service target `http://frontend:80`.
+- DNS route status.
+- VM-local `.env` expectations without token value.
+- OCI no-ingress confirmation.
+- public smoke checks through Cloudflare.
