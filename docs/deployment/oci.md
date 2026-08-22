@@ -829,3 +829,27 @@ Key decisions:
 - Fallback package uses `git archive` from the operator machine.
 - Source package must not include `.env`, `.git`, `node_modules`, Terraform exports, or backup artifacts.
 - Source transfer must not require opening OCI web ingress.
+
+## OCI-14 Backend Docker Context Trim
+
+Decision date: 2026-08-21
+
+Goal: reduce backend Docker build context for the constrained initial A1 VM.
+
+Change:
+
+- Expanded `backend/.dockerignore`.
+
+Excluded from backend production build context:
+
+- Python/tool caches.
+- Codex/runtime temp directories.
+- pytest cache directories.
+- review temp directories.
+- backend tests and test-only requirements.
+
+Expected effect:
+
+- Smaller upload/build context.
+- Less chance of Windows permission-denied temp directories affecting Docker builds.
+- Lower I/O pressure on `1 OCPU / 6 GB` VM builds.
