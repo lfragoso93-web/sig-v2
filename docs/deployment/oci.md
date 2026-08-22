@@ -674,3 +674,37 @@ NO-GO conditions:
 - Console requires opening SSH, HTTP, or HTTPS ingress to the Internet.
 - Cloud-init fails before Docker is installed.
 - VM is created without `sgi-prod-vm-nsg`.
+
+## OCI-07B VM Creation Capacity Block
+
+Event date: 2026-08-21
+
+Result: VM creation was attempted from the OCI Console with the safe Always Free configuration, but OCI returned insufficient host capacity for `VM.Standard.A1.Flex` in `AD-1`.
+
+Observed OCI error:
+
+- Capacity insufficient for shape `VM.Standard.A1.Flex` in availability domain `AD-1`.
+- OCI suggested trying a different availability domain, retrying later, or creating without a fault domain selection.
+
+Operational response:
+
+- Do not switch to a paid shape.
+- Do not increase OCPUs or memory.
+- Do not add paid network or managed services.
+- Save the request as an OCI Stack for later retry.
+
+Current VM status:
+
+- VM was not created.
+- A stack was saved from the Console configuration for retry.
+- Network resources remain ready: `sgi-prod-ig`, default route, and `sgi-prod-vm-nsg`.
+
+Retry guidance:
+
+- Retry only `VM.Standard.A1.Flex`.
+- Keep `1 OCPU / 6 GB` if OCI capacity remains constrained.
+- Scale later toward `2 OCPU / 12 GB` only if available and still within Always Free limits.
+- Keep boot volume at `80 GB`.
+- Keep ephemeral public IPv4 and no reserved public IP.
+- Keep `sgi-prod-vm-nsg` attached.
+- Keep cloud-init unchanged unless a specific boot error requires adjustment.
