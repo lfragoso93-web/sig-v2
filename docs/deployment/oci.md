@@ -1104,3 +1104,21 @@ The script checks:
 - `database.dump` hash matches the manifest.
 - `origin-inventory.json` and `backup-report.json` parse as JSON.
 - `database.contents.txt` is non-empty.
+
+## OCI-28 Local Readiness Script
+
+Decision date: 2026-08-22
+
+Goal: aggregate Windows-side checks before retrying the Stack or transferring source.
+
+Artifact added:
+
+- `scripts/oci_local_readiness.ps1`
+
+The script checks:
+
+- branch is `stable-15jun`.
+- tracked files are clean.
+- `.env`, local env files, backup artifacts, source packages, `node_modules`, private keys, and Terraform state are not tracked.
+- OCI Compose preflight passes.
+- OCI source package can be generated.

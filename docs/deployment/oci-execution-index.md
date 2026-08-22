@@ -2,6 +2,12 @@
 
 Status: use this as the top-level sequence when A1 capacity becomes available.
 
+Before retrying or deploying from Windows, run:
+
+```powershell
+.\scripts\oci_local_readiness.ps1
+```
+
 ## Phase 1. Retry OCI Stack
 
 Use:
