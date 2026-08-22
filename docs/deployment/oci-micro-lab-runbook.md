@@ -139,6 +139,7 @@ Next lab-safe checks:
 - Source tree check passed on 2026-08-22.
 - Docker runtime pull test passed on 2026-08-22 with `hello-world:latest`.
 - OCI Compose render check passed on 2026-08-22 with no `published:` entries and `cloudflared` present.
+- Run `scripts/oci_lab_image_pull_check.sh` to validate external image pulls without building SGI.
 - Do not restore production data or publish the production hostname.
 
 ## SSH Lab Exception

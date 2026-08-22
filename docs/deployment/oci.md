@@ -1340,3 +1340,27 @@ Boundary:
 - This exception does not apply to the production A1 VM.
 - Production A1 must not inherit broad SSH ingress.
 - The lab should mirror production configuration, but architecture and performance remain different because E2 Micro is AMD/x86 with about `1 GB` RAM.
+
+## OCI-39 E2 Micro Image Pull Check
+
+Decision date: 2026-08-22
+
+Goal: validate Docker registry pulls for external runtime images on the temporary E2 Micro lab VM.
+
+Artifact added:
+
+- `scripts/oci_lab_image_pull_check.sh`
+
+The script pulls:
+
+- `postgres:16-alpine`
+- `redis:7-alpine`
+- `cloudflare/cloudflared:latest`
+
+Scope:
+
+- Lab validation only.
+- No SGI backend/frontend build.
+- No containers are started.
+- No production data restored.
+- No production hostname published.
