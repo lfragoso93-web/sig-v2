@@ -1364,3 +1364,20 @@ Scope:
 - No containers are started.
 - No production data restored.
 - No production hostname published.
+
+## OCI-40 E2 Micro SSH Lockout Fix
+
+Decision date: 2026-08-22
+
+Goal: prevent repeating the temporary lab SSH lockout caused by enabling UFW deny incoming without explicitly allowing OpenSSH.
+
+Changes:
+
+- `scripts/oci_lab_e2micro_repair.sh` now runs `ufw allow OpenSSH`.
+- `scripts/oci_lab_e2micro_baseline_check.sh` now verifies SSH is allowed in UFW.
+- `docs/deployment/oci-cloud-init-lab-e2micro.yaml` now allows OpenSSH before enabling UFW.
+
+Recovery decision:
+
+- If no SSH session remains open, recreate the disposable E2 Micro lab VM with the corrected lab cloud-init.
+- Do not spend time on serial console recovery unless the lab contains irreplaceable non-production work.

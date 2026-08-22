@@ -28,10 +28,10 @@ runcmd:
   - usermod -aG docker ubuntu
   - ufw default deny incoming
   - ufw default allow outgoing
+  - ufw allow OpenSSH
   - ufw --force enable
   - docker --version
   - docker compose version
   - cloud-init status --long > /var/log/sgi-v2-cloud-init-status.log
 
 final_message: "SGI v2 OCI E2 micro lab baseline completed after $UPTIME seconds"
-

@@ -20,7 +20,7 @@ Important boundary:
 - Expected cost: `R$ 0.00` if OCI marks the shape/image as Always Free eligible.
 - Boot volume: minimum/default size, preferably `47 GB`.
 - OS: Ubuntu Always Free eligible image.
-- Cloud-init: use `docs/deployment/oci-cloud-init-lab-e2micro.yaml`, not the A1 ARM64 production cloud-init.
+- Cloud-init: use `docs/deployment/oci-cloud-init-lab-e2micro.yaml`, not the A1 ARM64 production cloud-init. The lab cloud-init must allow OpenSSH before enabling UFW.
 - Public IPv4: ephemeral only.
 - Reserved public IP: no.
 - NSG: preferably a separate lab NSG, or reuse `sgi-prod-vm-nsg` only if no ingress is added.
@@ -174,3 +174,21 @@ Before termination:
 - Confirm no production data exists on the host.
 - Confirm no tunnel token or real `.env` remains on the host.
 - Confirm no reserved public IP was created.
+
+## SSH Lockout Recovery
+
+If SSH is blocked by UFW and no session remains open, prefer recreating the disposable lab VM with `docs/deployment/oci-cloud-init-lab-e2micro.yaml`.
+
+Reason:
+
+- The lab has no production data.
+- OCI security rules can still allow `22`, while UFW inside the OS blocks it.
+- Reboot does not clear persistent UFW rules.
+- Serial console recovery is possible but slower than recreating this disposable lab.
+
+If a session is still open, recover in place:
+
+```bash
+sudo ufw allow OpenSSH
+sudo ufw status verbose
+```
