@@ -4,9 +4,14 @@ Use this only if A1 capacity remains unavailable and an Always Free lab host is 
 
 ## Purpose
 
-Create a disposable `VM.Standard.E2.1.Micro` instance to validate OCI basics while waiting for the real production A1 VM.
+Create a disposable `VM.Standard.E2.1.Micro` instance to rehearse the production operating model while waiting for the real production A1 VM.
 
-This host is not production and must not receive real production data.
+This host should mirror production configuration as closely as the shape allows, but it is not production and must not receive real production data.
+
+Important boundary:
+
+- Operational configuration should be production-like.
+- Architecture and performance are not production-like because E2 Micro is AMD/x86 with about `1 GB` RAM, while the final A1 VM is ARM64 with more memory.
 
 ## Allowed Shape
 
@@ -142,15 +147,18 @@ Decision date: 2026-08-22
 
 For the temporary E2 Micro lab VM, SSH `22` may remain reachable from `0.0.0.0/0` because the operator uses dynamic IPs, multiple locations, and VS Code Remote over SSH during validation.
 
+This is a temporary administrative access path while the lab is being configured. Close or restrict SSH after another access path is validated.
+
 Compensating controls:
 
-- Lab only.
+- Production-like lab only.
 - SSH key authentication only.
 - No password SSH.
 - No production data on the host.
 - No production `.env` on the host.
 - No production hostname published through this host.
 - UFW remains active with default deny incoming.
+- Remove or restrict SSH when Cloudflare/Tailscale/another administrative access path is validated.
 - Remove or restrict SSH before any production A1 deployment.
 
 This exception does not apply to `sgi-prod-a1-01`.

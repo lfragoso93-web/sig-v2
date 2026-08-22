@@ -1324,17 +1324,19 @@ Scope:
 
 Decision date: 2026-08-22
 
-Goal: record the operator decision to keep SSH open on the temporary E2 Micro lab VM for VS Code Remote and dynamic-location access.
+Goal: record the operator decision to keep SSH open on the temporary E2 Micro lab VM for VS Code Remote and dynamic-location access while the lab is configured to mirror production operations.
 
 Decision:
 
-- Keep SSH `22` open to `0.0.0.0/0` for the lab VM only.
+- Keep SSH `22` open to `0.0.0.0/0` for the lab VM only while it is the active administrative path.
 - Use SSH key authentication.
 - Keep UFW active with default deny incoming.
 - Keep the VM free of production data and production `.env`.
 - Do not publish the production hostname through this VM.
+- Close or restrict SSH when another administrative access path is validated.
 
 Boundary:
 
 - This exception does not apply to the production A1 VM.
 - Production A1 must not inherit broad SSH ingress.
+- The lab should mirror production configuration, but architecture and performance remain different because E2 Micro is AMD/x86 with about `1 GB` RAM.

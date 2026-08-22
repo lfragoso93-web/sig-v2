@@ -39,7 +39,9 @@ Do not create:
 
 Exception:
 
-- Temporary E2 Micro lab SSH `22` may remain open to `0.0.0.0/0` for VS Code Remote access while the host has no production data, no production `.env`, and no production hostname.
+- Temporary E2 Micro lab SSH `22` may remain open to `0.0.0.0/0` for VS Code Remote access while the host is being configured as a production-like lab.
+- The lab host must still have no production data, no production `.env`, and no production hostname.
+- Close or restrict lab SSH after another administrative access path is validated.
 - This exception does not apply to the production A1 VM.
 
 ## Retry Checklist
