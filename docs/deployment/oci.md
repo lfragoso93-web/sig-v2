@@ -1085,3 +1085,22 @@ The script checks:
 - UFW is active with deny incoming and allow outgoing defaults.
 - root filesystem is below 80 percent used.
 - no pre-deploy app/data TCP listener is present on `80`, `443`, `8000`, `5432`, or `6379`.
+
+## OCI-27 Backup Artifact Check Script
+
+Decision date: 2026-08-22
+
+Goal: validate backup artifacts on Windows before transfer to OCI.
+
+Artifact added:
+
+- `scripts/oci_backup_artifact_check.ps1`
+
+The script checks:
+
+- required backup files are present.
+- `database.dump` is non-empty.
+- `database.dump.sha256` has a recognized SHA-256 format.
+- `database.dump` hash matches the manifest.
+- `origin-inventory.json` and `backup-report.json` parse as JSON.
+- `database.contents.txt` is non-empty.

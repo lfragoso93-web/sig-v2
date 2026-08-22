@@ -71,11 +71,19 @@ sgi-v2-backup-<run-id>.tar.gz
 
 Do not commit backup artifacts to Git.
 
+Before transfer from Windows, validate the artifact directory:
+
+```powershell
+.\scripts\oci_backup_artifact_check.ps1 `
+  -BackupDirectory "artifacts\pre-prod-rebuild\<run-id>"
+```
+
 NO-GO:
 
 - Moving only `database.dump` without `backup-report.json`.
 - Editing generated artifact JSON manually.
 - Losing `database.dump.sha256`.
+- Transferring an artifact that fails `scripts\oci_backup_artifact_check.ps1`.
 
 ## 4. Transfer To OCI VM
 

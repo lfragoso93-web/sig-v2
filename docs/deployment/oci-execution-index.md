@@ -66,6 +66,7 @@ Do:
 Use:
 
 - `docs/deployment/oci-backup-restore-runbook.md`
+- `scripts/oci_backup_artifact_check.ps1`
 
 Do:
 
