@@ -136,6 +136,25 @@ Next lab-safe checks:
 - OCI Compose render check passed on 2026-08-22 with no `published:` entries and `cloudflared` present.
 - Do not restore production data or publish the production hostname.
 
+## SSH Lab Exception
+
+Decision date: 2026-08-22
+
+For the temporary E2 Micro lab VM, SSH `22` may remain reachable from `0.0.0.0/0` because the operator uses dynamic IPs, multiple locations, and VS Code Remote over SSH during validation.
+
+Compensating controls:
+
+- Lab only.
+- SSH key authentication only.
+- No password SSH.
+- No production data on the host.
+- No production `.env` on the host.
+- No production hostname published through this host.
+- UFW remains active with default deny incoming.
+- Remove or restrict SSH before any production A1 deployment.
+
+This exception does not apply to `sgi-prod-a1-01`.
+
 ## Cleanup
 
 Terminate the lab instance after the tests are complete or after the A1 VM is created.

@@ -1319,3 +1319,22 @@ Scope:
 - SGI stack was not built or started.
 - No production data restored.
 - No production hostname published.
+
+## OCI-38 E2 Micro SSH Lab Exception
+
+Decision date: 2026-08-22
+
+Goal: record the operator decision to keep SSH open on the temporary E2 Micro lab VM for VS Code Remote and dynamic-location access.
+
+Decision:
+
+- Keep SSH `22` open to `0.0.0.0/0` for the lab VM only.
+- Use SSH key authentication.
+- Keep UFW active with default deny incoming.
+- Keep the VM free of production data and production `.env`.
+- Do not publish the production hostname through this VM.
+
+Boundary:
+
+- This exception does not apply to the production A1 VM.
+- Production A1 must not inherit broad SSH ingress.

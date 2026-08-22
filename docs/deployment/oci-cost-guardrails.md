@@ -37,6 +37,11 @@ Do not create:
 - Extra block volume unless a separate storage review approves it.
 - Public ingress to PostgreSQL, Redis, backend, frontend, SSH, HTTP, or HTTPS.
 
+Exception:
+
+- Temporary E2 Micro lab SSH `22` may remain open to `0.0.0.0/0` for VS Code Remote access while the host has no production data, no production `.env`, and no production hostname.
+- This exception does not apply to the production A1 VM.
+
 ## Retry Checklist
 
 Before applying the saved OCI Stack:
