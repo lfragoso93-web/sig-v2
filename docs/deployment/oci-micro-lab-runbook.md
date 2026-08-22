@@ -132,6 +132,7 @@ Next lab-safe checks:
 - Test source package transfer mechanics.
 - Run `scripts/oci_source_tree_check.sh` after extracting the source package.
 - Source tree check passed on 2026-08-22.
+- Docker runtime pull test passed on 2026-08-22 with `hello-world:latest`.
 - Do not restore production data or publish the production hostname.
 
 ## Cleanup

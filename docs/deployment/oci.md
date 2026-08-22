@@ -1272,3 +1272,24 @@ Scope:
 - Lab validation only.
 - No production data restored.
 - No production hostname published.
+
+## OCI-36 E2 Micro Docker Runtime Check Passed
+
+Decision date: 2026-08-22
+
+Goal: record Docker runtime and outbound registry validation on the temporary E2 Micro lab VM.
+
+Result:
+
+- `docker ps` ran as `ubuntu`.
+- `docker run --rm hello-world` pulled `hello-world:latest`.
+- Docker Hub pull succeeded.
+- Container executed successfully.
+- Image architecture was `amd64`, matching E2 Micro.
+
+Scope:
+
+- Lab validation only.
+- SGI stack was not started.
+- No production data restored.
+- No production hostname published.
