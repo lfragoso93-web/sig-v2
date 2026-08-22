@@ -11,6 +11,7 @@ Allowed:
 - One `VM.Standard.A1.Flex` instance.
 - Initial size `1 OCPU / 6 GB`.
 - Later size up to `2 OCPU / 12 GB`, only if still inside A1 free limits.
+- No `VM.Standard.E2.1.Micro` production placeholder for later A1 conversion.
 - Boot volume `80 GB`.
 - Existing VCN `sgi-vcn-public`.
 - Existing subnet `sgi-subnet-public`.
@@ -40,6 +41,7 @@ Do not create:
 Before applying the saved OCI Stack:
 
 - Shape is `VM.Standard.A1.Flex`.
+- Production VM is not temporarily switched to `VM.Standard.E2.1.Micro`.
 - OCPUs are `1`.
 - Memory is `6 GB`.
 - Boot volume is `80 GB`.

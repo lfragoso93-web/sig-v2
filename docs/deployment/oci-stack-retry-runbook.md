@@ -2,6 +2,10 @@
 
 Use this when retrying the saved OCI Stack while `VM.Standard.A1.Flex` capacity is unavailable.
 
+Capacity fallback guidance:
+
+- `docs/deployment/oci-capacity-fallbacks.md`
+
 ## Current Stack
 
 - Stack name: `sgi-prod-a1-01`.
@@ -77,6 +81,6 @@ If the error is still insufficient A1 capacity:
 
 - Keep the Stack saved.
 - Do not change to a paid shape.
+- Do not create a different production VM shape as a placeholder.
 - Retry later.
 - Continue preparing source, environment, backup, and Cloudflare artifacts locally.
-

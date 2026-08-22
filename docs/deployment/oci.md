@@ -1122,3 +1122,20 @@ The script checks:
 - `.env`, local env files, backup artifacts, source packages, `node_modules`, private keys, and Terraform state are not tracked.
 - OCI Compose preflight passes.
 - OCI source package can be generated.
+
+## OCI-29 Capacity Fallback Decision
+
+Decision date: 2026-08-22
+
+Goal: define what to do when A1 capacity is unavailable without drifting into paid or incompatible production resources.
+
+Artifact added:
+
+- `docs/deployment/oci-capacity-fallbacks.md`
+
+Decision:
+
+- Do not create a different production VM shape as a placeholder.
+- Keep retrying the saved Stack with `VM.Standard.A1.Flex`.
+- Treat resize as acceptable only within A1, for example `1 OCPU / 6 GB` to `2 OCPU / 12 GB`.
+- Do not rely on converting an AMD/x86 `VM.Standard.E2.1.Micro` placeholder into the ARM64 A1 production VM.
