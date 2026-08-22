@@ -737,3 +737,22 @@ Ready-to-run phases once the VM exists:
 6. Backend/Postgres/Redis health checks.
 7. Cloudflare Tunnel check.
 8. Rollback without volume deletion.
+
+## OCI-09 Backup And Restore Runbook
+
+Decision date: 2026-08-21
+
+Goal: prepare the database migration path before the OCI VM exists.
+
+Artifact added:
+
+- `docs/deployment/oci-backup-restore-runbook.md`
+
+Key decisions:
+
+- Use the existing backend backup/restore CLIs instead of a new migration script.
+- Backup must run from `stable-15jun` with a full 40-character commit SHA.
+- Backup artifacts must include dump, SHA-256, inventory, contents listing, and manifest.
+- Restore validation should target an isolated empty PostgreSQL database before the final OCI restore.
+- Restore uses checksum validation and single-transaction `pg_restore`.
+- Rollback preserves Docker volumes by default.
