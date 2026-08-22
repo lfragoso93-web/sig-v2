@@ -24,6 +24,7 @@ Do:
 Use:
 
 - `docs/deployment/oci-cloud-init.yaml`
+- `docs/deployment/oci-vm-handoff-template.md`
 - `docs/deployment/oci-first-deploy-runbook.md`
 
 Do:

@@ -1009,3 +1009,21 @@ Additional checks:
 - Both database URLs must target Docker service host `db:5432`.
 - `CORS_ORIGINS` must start with `https://`.
 - `CORS_ORIGINS` must not point to localhost.
+
+## OCI-23 VM Handoff Template
+
+Decision date: 2026-08-22
+
+Goal: make the first successful VM creation auditable without recording secrets.
+
+Artifact added:
+
+- `docs/deployment/oci-vm-handoff-template.md`
+
+Use it immediately after the saved Stack creates the VM to record:
+
+- instance shape, image, OCPU, memory, and lifecycle state.
+- public/private IP facts without creating a reserved IP.
+- NSG and subnet attachment.
+- cloud-init, Docker, Compose, UFW, and `/opt/sgi-v2` baseline checks.
+- cost guardrail confirmations.
