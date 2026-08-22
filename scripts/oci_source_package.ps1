@@ -33,11 +33,7 @@ if ($trackedChanges) {
 }
 Ok "tracked files are clean"
 
-$untrackedChanges = git status --porcelain --untracked-files=normal
-$untrackedOnly = @($untrackedChanges | Where-Object { $_ -like "?? *" })
-if ($untrackedOnly.Count -gt 0) {
-    Write-Host "[oci-source-package] WARN: untracked files exist but git archive will exclude them"
-}
+Write-Host "[oci-source-package] WARN: untracked files are excluded by git archive"
 
 $commit = (git rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0 -or $commit -notmatch "^[0-9a-f]{40}$") {
