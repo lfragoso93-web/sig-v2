@@ -63,6 +63,20 @@ free -h
 df -h /
 ```
 
+For the current lab VM created with the A1 cloud-init, repair Docker first:
+
+```bash
+cd /opt/sgi-v2
+sudo sh scripts/oci_lab_e2micro_repair.sh
+```
+
+Then reconnect SSH and run:
+
+```bash
+cd /opt/sgi-v2
+sh scripts/oci_lab_e2micro_baseline_check.sh
+```
+
 Expected:
 
 - Cloud-init completes.
@@ -90,6 +104,7 @@ Finding:
 
 - The VM was created with the A1 cloud-init, which hardcodes Docker repository `arch=arm64`.
 - On `VM.Standard.E2.1.Micro`, use `docs/deployment/oci-cloud-init-lab-e2micro.yaml` or manually repair the Docker apt source to the host architecture before validating Docker.
+- The bundled repair path is `scripts/oci_lab_e2micro_repair.sh`, followed by `scripts/oci_lab_e2micro_baseline_check.sh`.
 
 ## Cleanup
 

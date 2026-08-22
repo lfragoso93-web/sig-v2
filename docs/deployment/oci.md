@@ -1186,3 +1186,26 @@ Findings:
 - The subnet default Security List still allows SSH `22` from `0.0.0.0/0`.
 - The lab VM was created with the A1 ARM64 cloud-init. On E2 Micro this can break Docker install because the Docker apt source is pinned to `arch=arm64`.
 - Use `docs/deployment/oci-cloud-init-lab-e2micro.yaml` for future E2 Micro lab recreation, or manually repair Docker apt architecture on the current lab host.
+
+## OCI-32 E2 Micro Lab Repair Scripts
+
+Decision date: 2026-08-22
+
+Goal: make the current E2 Micro lab host usable after it was created with the A1 ARM64 cloud-init.
+
+Artifacts added:
+
+- `scripts/oci_lab_e2micro_repair.sh`
+- `scripts/oci_lab_e2micro_baseline_check.sh`
+
+Use:
+
+- Run the repair script with `sudo` on the lab VM.
+- Reconnect SSH so `ubuntu` receives Docker group membership.
+- Run the lab baseline as `ubuntu`.
+
+Scope:
+
+- Lab only.
+- Does not replace the ARM64 A1 production baseline.
+- Does not permit production data restore or production hostname publishing on E2 Micro.
