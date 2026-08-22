@@ -1330,7 +1330,7 @@ Decision:
 
 - Keep SSH `22` open to `0.0.0.0/0` for the lab VM only while it is the active administrative path.
 - Use SSH key authentication.
-- Keep UFW active with default deny incoming.
+- Keep UFW active with default deny incoming and explicit SSH allow.
 - Keep the VM free of production data and production `.env`.
 - Do not publish the production hostname through this VM.
 - Close or restrict SSH when another administrative access path is validated.

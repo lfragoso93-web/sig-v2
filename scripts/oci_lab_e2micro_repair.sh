@@ -36,11 +36,11 @@ ok "/opt/sgi-v2 and docker group are configured"
 
 ufw default deny incoming
 ufw default allow outgoing
+ufw allow OpenSSH
 ufw --force enable
-ok "ufw baseline applied"
+ok "ufw baseline applied with SSH allowed for lab access"
 
 docker --version
 docker compose version
 
 printf '%s\n' "[oci-lab-e2micro-repair] repair completed; reconnect SSH for docker group membership to apply"
-

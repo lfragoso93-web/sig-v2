@@ -39,6 +39,7 @@ ufw_status="$(sudo ufw status verbose)"
 printf '%s\n' "$ufw_status" | grep -q "Status: active" || fail "ufw is not active"
 printf '%s\n' "$ufw_status" | grep -q "Default: deny (incoming)" || fail "ufw incoming default is not deny"
 printf '%s\n' "$ufw_status" | grep -q "allow (outgoing)" || fail "ufw outgoing default is not allow"
+printf '%s\n' "$ufw_status" | grep -Eq "22/tcp|OpenSSH" || fail "ufw must allow SSH on the lab host"
 ok "ufw defaults are safe"
 
 memory_mb="$(awk '/MemTotal/ { printf "%d", $2 / 1024 }' /proc/meminfo)"
@@ -50,4 +51,3 @@ root_used_pct="$(df -P / | awk 'NR == 2 { gsub("%", "", $5); print $5 }')"
 ok "root filesystem has lab headroom"
 
 printf '%s\n' "[oci-lab-e2micro-baseline] baseline check passed"
-

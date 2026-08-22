@@ -86,7 +86,7 @@ Expected:
 
 - Cloud-init completes.
 - Docker and Compose are installed.
-- UFW is active with deny incoming.
+- UFW is active with deny incoming and SSH allowed for lab administration.
 - Outbound package/download access works.
 - Memory is recognized as constrained.
 
@@ -123,6 +123,7 @@ Finding:
 - `ubuntu` added to the Docker group.
 - UFW default incoming set to deny.
 - UFW default outgoing set to allow.
+- UFW must allow OpenSSH while this lab host uses VS Code Remote.
 - Lab baseline check passed.
 
 Observed versions:
@@ -158,7 +159,7 @@ Compensating controls:
 - No production data on the host.
 - No production `.env` on the host.
 - No production hostname published through this host.
-- UFW remains active with default deny incoming.
+- UFW remains active with default deny incoming and explicit SSH allow.
 - Remove or restrict SSH when Cloudflare/Tailscale/another administrative access path is validated.
 - Remove or restrict SSH before any production A1 deployment.
 
