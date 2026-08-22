@@ -893,3 +893,40 @@ The smoke test checks:
 - Redis ping.
 - Cloudflare Tunnel logs availability.
 - no published host ports in rendered Compose config.
+
+## OCI-17 Line Endings And Operations
+
+Decision date: 2026-08-21
+
+Goal: make VM scripts safe to execute on Ubuntu and prepare routine operations.
+
+Artifacts added:
+
+- `.gitattributes`
+- `docs/deployment/oci-operations-runbook.md`
+
+Key decisions:
+
+- Shell scripts and YAML files are forced to LF line endings.
+- Routine operations preserve Docker volumes by default.
+- Code updates use `git pull --ff-only`.
+- Rollback changes code only unless data reset is explicitly approved.
+- Weekly cost/security recheck remains part of operations.
+
+## OCI-18 Disaster Recovery
+
+Decision date: 2026-08-21
+
+Goal: prepare a recovery path for VM loss, app regression, tunnel token rotation, and data restore without paid OCI services.
+
+Artifact added:
+
+- `docs/deployment/oci-disaster-recovery-runbook.md`
+
+Key decisions:
+
+- Recover VM via saved OCI Stack.
+- Recover code from `stable-15jun` and known commit SHA.
+- Recover data only from verified backup artifacts.
+- Do not create paid services during recovery.
+- Do not open OCI `80/443` ingress to work around tunnel failures.
