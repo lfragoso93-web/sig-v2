@@ -10,15 +10,23 @@ Use Git on the VM when possible:
 
 ```bash
 cd /opt
-git clone --branch stable-15jun <repo-url> sgi-v2
+sudo rm -rf /opt/sgi-v2
+git clone --branch stable-15jun https://github.com/lfragoso93-web/sig-v2.git sgi-v2
 cd /opt/sgi-v2
 git rev-parse HEAD
+sh scripts/oci_source_tree_check.sh
 ```
 
 Expected:
 
 - Branch is `stable-15jun`.
+- The cloned commit is the intended deployed commit.
 - Commit SHA is recorded in VM-local `.env` as `APP_COMMIT_SHA`.
+
+Important:
+
+- The operator machine must push the intended commits before the VM clones or pulls.
+- If local commits are not pushed yet, use the fallback source package instead.
 
 ## 2. Fallback Package From Operator Machine
 
@@ -94,7 +102,7 @@ cd /opt/sgi-v2
 sh scripts/oci_source_tree_check.sh
 ```
 
-On the E2 Micro lab host, this is the preferred next validation after Docker baseline. It checks the extracted source package without restoring data or publishing the app.
+On the E2 Micro lab host, this is the preferred next validation after Docker baseline. It checks the source tree without restoring data or publishing the app. It supports both Git clones and extracted source packages.
 
 ## Current Lab Result
 
@@ -112,7 +120,7 @@ Result:
 - Source is not a Git working tree.
 - OCI Compose renders without host ports.
 
-This validates package transfer mechanics without restoring data or publishing the app.
+This validates package transfer mechanics without restoring data or publishing the app. For future lab iterations, prefer Git clone/pull once the intended commits are pushed to GitHub.
 
 ## 5. Continue Deploy
 

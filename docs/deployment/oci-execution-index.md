@@ -52,8 +52,8 @@ Use:
 
 Do:
 
-- prefer Git clone of `stable-15jun`;
-- fallback to `git archive`;
+- prefer Git clone of `stable-15jun` after intended commits are pushed;
+- fallback to `git archive` when local commits are not pushed yet;
 - keep `.env` and backups out of source package.
 
 ## Phase 4. Configure Environment

@@ -25,9 +25,14 @@ ok "required deployment files are present"
 ok "local secrets and runtime artifacts are absent"
 
 if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  fail "transferred source should be a git archive, not a working tree"
+  branch="$(git rev-parse --abbrev-ref HEAD)"
+  [ "$branch" = "stable-15jun" ] || fail "git working tree must be on stable-15jun, got $branch"
+  commit="$(git rev-parse HEAD)"
+  printf '%s\n' "$commit" | grep -Eq '^[0-9a-f]{40}$' || fail "git commit SHA is not a full 40-character SHA"
+  ok "source is a git working tree on stable-15jun at $commit"
+else
+  ok "source is a git archive, not a git working tree"
 fi
-ok "source is not a git working tree"
 
 if command -v docker >/dev/null 2>&1; then
   CLOUDFLARE_TUNNEL_TOKEN=dummy-preflight-token BACKEND_WORKERS=1 \
@@ -44,4 +49,3 @@ else
 fi
 
 printf '%s\n' "[oci-source-tree-check] source tree check passed"
-

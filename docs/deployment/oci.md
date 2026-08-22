@@ -1273,6 +1273,23 @@ Scope:
 - No production data restored.
 - No production hostname published.
 
+## OCI-41 Git Source Path Clarified
+
+Decision date: 2026-08-22
+
+Goal: prefer Git on OCI hosts while preserving the source package fallback for unpublished local commits.
+
+Decision:
+
+- Use `git clone --branch stable-15jun https://github.com/lfragoso93-web/sig-v2.git` on lab/production hosts when the intended commits are pushed.
+- Use `scripts/oci_source_package.ps1` when local commits are ahead of GitHub and not pushed yet.
+- `scripts/oci_source_tree_check.sh` now supports both Git working trees and extracted source archives.
+
+Guardrail:
+
+- The VM must run the intended full 40-character commit SHA.
+- `.env`, backup artifacts, and `node_modules` must remain absent from source transfer.
+
 ## OCI-36 E2 Micro Docker Runtime Check Passed
 
 Decision date: 2026-08-22
