@@ -17,7 +17,6 @@ ok() {
 ok "required deployment files are present"
 
 [ ! -f .env ] || fail ".env must not exist in transferred source"
-[ ! -d .git ] || fail ".git must not exist in transferred source package"
 [ ! -d node_modules ] || fail "root node_modules must not exist in transferred source"
 [ ! -d frontend/node_modules ] || fail "frontend node_modules must not exist in transferred source"
 [ ! -d backend/node_modules ] || fail "backend node_modules must not exist in transferred source"
@@ -31,6 +30,7 @@ if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/n
   printf '%s\n' "$commit" | grep -Eq '^[0-9a-f]{40}$' || fail "git commit SHA is not a full 40-character SHA"
   ok "source is a git working tree on stable-15jun at $commit"
 else
+  [ ! -d .git ] || fail ".git exists but this directory is not a valid git working tree"
   ok "source is a git archive, not a git working tree"
 fi
 
