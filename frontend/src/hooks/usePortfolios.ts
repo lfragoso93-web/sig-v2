@@ -16,7 +16,7 @@ export const PORTFOLIOS_QUERY_KEY = ['portfolios'] as const
 export function usePortfolios() {
   return useQuery<Portfolio[]>({
     queryKey: PORTFOLIOS_QUERY_KEY,
-    queryFn: () => api.get('/portfolios').then((r) => r.data),
+    queryFn: () => api.get('/portfolios/').then((r) => r.data),
     staleTime: 30_000,
   })
 }
@@ -25,7 +25,7 @@ export function useCreatePortfolio() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (data: { name: string; description?: string }) =>
-      api.post<Portfolio>('/portfolios', data).then((r) => r.data),
+      api.post<Portfolio>('/portfolios/', data).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: PORTFOLIOS_QUERY_KEY }),
   })
 }
