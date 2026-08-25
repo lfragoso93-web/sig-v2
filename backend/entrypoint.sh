@@ -30,4 +30,4 @@ echo "[entrypoint] Criando/atualizando superadmin..."
 python -m scripts.create_superadmin
 
 echo "[entrypoint] Iniciando servidor..."
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
+exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers "${BACKEND_WORKERS:-1}"
