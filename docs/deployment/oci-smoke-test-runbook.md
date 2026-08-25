@@ -1,6 +1,6 @@
 # SGI v2 OCI Smoke Test Runbook
 
-Status: prepared before the VM exists.
+Status: validated on the OCI E2 Micro lab on 2026-08-25.
 
 Goal: validate the deployed OCI stack without opening public OCI ingress.
 
@@ -23,17 +23,25 @@ The script checks:
 
 ## 2. Manual Public Check
 
+Current lab hostname:
+
+```text
+https://sgi.lfconsultoria.dpdns.org
+```
+
 From the operator machine:
 
 ```bash
-curl -I https://<final-hostname>
-curl -f https://<final-hostname>/api/health
+curl -I https://sgi.lfconsultoria.dpdns.org
+curl -f https://sgi.lfconsultoria.dpdns.org/api/health
 ```
 
 Expected:
 
 - frontend responds over Cloudflare.
 - `/api/health` responds over Cloudflare and nginx proxy.
+
+If VM-local DNS has stale propagation during validation, use an operator machine or a temporary `curl --resolve` check instead of changing OCI ingress.
 
 NO-GO:
 

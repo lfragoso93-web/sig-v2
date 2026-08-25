@@ -1,14 +1,23 @@
 # SGI v2 OCI Cloudflare Tunnel Runbook
 
-Status: prepared before the VM exists.
+Status: validated on the OCI E2 Micro lab on 2026-08-25.
 
-Goal: publish SGI v2 through Cloudflare Tunnel without exposing OCI inbound `80/443`.
+Goal: publish SGI v2 through Cloudflare Tunnel without exposing OCI inbound app ports.
 
 Handoff template:
 
 - `docs/deployment/oci-cloudflare-handoff-template.md`
 
-## 1. Decisions
+## 1. Current Lab State
+
+- Public hostname: `sgi.lfconsultoria.dpdns.org`.
+- Tunnel service target: `http://frontend:80`.
+- SSH-over-tunnel was removed for this lab stage; the tunnel serves only the web app.
+- Browser access to `https://sgi.lfconsultoria.dpdns.org` is working through Cloudflare.
+- `CORS_ORIGINS` on the VM-local `.env` must match `https://sgi.lfconsultoria.dpdns.org`.
+- `VITE_API_URL` remains empty so the frontend uses same-origin `/api`.
+
+## 2. Decisions
 
 - Cloudflare Tunnel is the only public web entrypoint.
 - OCI NSG remains without inbound `80/443`.
@@ -16,7 +25,7 @@ Handoff template:
 - Backend listens only inside Docker on `backend:8000`.
 - Cloudflare tunnel token is stored only in the VM-local `.env`.
 
-## 2. Cloudflare Setup
+## 3. Cloudflare Setup
 
 In Cloudflare Zero Trust:
 
@@ -39,12 +48,12 @@ Do not copy the token into Git, issues, docs, shell history snippets, screenshot
 
 After setup, fill `docs/deployment/oci-cloudflare-handoff-template.md` with hostname and status only. Do not paste the token into the template.
 
-## 3. DNS And App Environment
+## 4. DNS And App Environment
 
 Set the production hostname in `.env`:
 
 ```env
-CORS_ORIGINS=https://<final-hostname>
+CORS_ORIGINS=https://sgi.lfconsultoria.dpdns.org
 VITE_API_URL=
 ```
 
@@ -55,7 +64,7 @@ Expected behavior:
 - Nginx proxies `/api` to `backend:8000` inside Docker.
 - No public OCI port receives web traffic.
 
-## 4. Compose Validation
+## 5. Compose Validation
 
 Before starting the stack:
 
@@ -72,7 +81,7 @@ Expected:
 - No `published:` entries for `frontend`.
 - `cloudflared` service is present.
 
-## 5. Tunnel Startup Check
+## 6. Tunnel Startup Check
 
 After app start:
 
@@ -87,13 +96,13 @@ Expected:
 - Tunnel connection is established.
 - No token value appears in copied logs.
 
-## 6. Public Smoke Checks
+## 7. Public Smoke Checks
 
 From the operator machine:
 
 ```bash
-curl -I https://<final-hostname>
-curl -f https://<final-hostname>/api/health
+curl -I https://sgi.lfconsultoria.dpdns.org
+curl -f https://sgi.lfconsultoria.dpdns.org/api/health
 ```
 
 Expected:
@@ -101,7 +110,7 @@ Expected:
 - Frontend returns HTTP success.
 - `/api/health` returns HTTP success through nginx.
 
-## 7. OCI Security Recheck
+## 8. OCI Security Recheck
 
 After tunnel works, verify OCI still has no public app ingress:
 
@@ -114,6 +123,7 @@ After tunnel works, verify OCI still has no public app ingress:
 NO-GO:
 
 - Opening OCI ingress `80` or `443` to work around tunnel errors.
+- Re-adding SSH service to the Cloudflare Tunnel without an explicit security review.
 - Publishing backend/frontend host ports in Compose.
 - Exposing PostgreSQL, Redis, or backend publicly.
 - Committing the tunnel token.

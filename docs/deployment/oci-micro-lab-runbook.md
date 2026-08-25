@@ -38,13 +38,12 @@ Safe tests:
 - Cloudflare Tunnel connector startup only if memory allows.
 - Source package transfer mechanics.
 
-Avoid full-stack validation on this host. With about `1 GB` RAM, PostgreSQL, Redis, backend, frontend build, and `cloudflared` are likely to be unreliable together.
+Full-stack validation is now allowed on this lab host, but keep expectations conservative. The E2 Micro has about `1 GB` RAM, so rebuilds can be slow and should not be treated as production performance evidence.
 
 ## What Not To Do
 
 - Do not restore production backup artifacts.
-- Do not run the full production SGI stack as the target architecture validation.
-- Do not publish the production hostname through this VM.
+- Do not treat the lab hostname as final production readiness. Current lab hostname: `sgi.lfconsultoria.dpdns.org`.
 - Do not create reserved public IP, NAT Gateway, Load Balancer, managed DB, managed Redis, or OKE.
 - Do not treat this boot volume as the future production boot volume.
 
@@ -138,6 +137,9 @@ Next lab-safe checks:
 - Test source package transfer mechanics.
 - Run `scripts/oci_source_tree_check.sh` after extracting the source package.
 - Source tree check passed on 2026-08-22.
+- Full OCI lab stack was validated on 2026-08-25 with Docker Compose, Cloudflare Tunnel, backend health, PostgreSQL, Redis and no published host ports.
+- Cloudflare Tunnel routes `sgi.lfconsultoria.dpdns.org` to `http://frontend:80`; SSH is not part of the tunnel configuration for this lab stage.
+- Backend image rebuilds on E2 Micro can take several minutes, especially while exporting Python dependency layers.
 - Docker runtime pull test passed on 2026-08-22 with `hello-world:latest`.
 - OCI Compose render check passed on 2026-08-22 with no `published:` entries and `cloudflared` present.
 - Run `scripts/oci_lab_image_pull_check.sh` to validate external image pulls without building SGI.

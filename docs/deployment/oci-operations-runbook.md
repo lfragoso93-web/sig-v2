@@ -1,8 +1,8 @@
 # SGI v2 OCI Operations Runbook
 
-Status: prepared before the VM exists.
+Status: updated from the running OCI E2 Micro lab on 2026-08-25.
 
-Goal: define routine operations for the single-VM OCI deployment without introducing paid services or public ingress.
+Goal: define routine operations for the single-VM OCI deployment without introducing paid services or public app ingress.
 
 ## 1. Daily Status
 
@@ -11,7 +11,7 @@ Run from `/opt/sgi-v2`:
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml ps
 docker system df
-sudo ufw status verbose
+# UFW is intentionally not managed in this lab block. Do not change it here.
 df -h /
 free -h
 ```
@@ -20,8 +20,8 @@ Expected:
 
 - App containers are running or healthy.
 - Disk usage leaves room for logs, images, and backups.
-- UFW default incoming is deny.
-- Memory pressure is acceptable for `1 OCPU / 6 GB`.
+- No backend/frontend host ports are published; app traffic enters through Cloudflare Tunnel.
+- Memory pressure is acceptable for the current E2 Micro lab limits.
 
 ## 2. Logs
 
@@ -113,7 +113,27 @@ docker compose down -v
 
 unless backups are verified and data deletion is explicitly approved.
 
-## 7. Cost And Security Recheck
+## 7. Reboot Recovery Check
+
+After any VM reboot:
+
+```bash
+cd /opt/sgi-v2
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml ps
+sh scripts/oci_smoke_test.sh
+curl -I https://sgi.lfconsultoria.dpdns.org
+```
+
+Expected:
+
+- PostgreSQL, Redis and backend report healthy.
+- Frontend and Cloudflared are up.
+- Smoke test passes.
+- Public hostname responds through Cloudflare.
+
+Do not open OCI app ingress to recover from tunnel or DNS issues. Fix Cloudflare/Docker routing instead.
+
+## 8. Cost And Security Recheck
 
 Weekly:
 
@@ -121,5 +141,5 @@ Weekly:
 - No NAT Gateway exists.
 - No Load Balancer exists.
 - No reserved public IP exists.
-- NSG `sgi-prod-vm-nsg` has no ingress rules.
-- Cloudflare Tunnel remains healthy.
+- NSG/lab security rules do not expose application ports.
+- Cloudflare Tunnel remains healthy and routes `sgi.lfconsultoria.dpdns.org` to `http://frontend:80`.
