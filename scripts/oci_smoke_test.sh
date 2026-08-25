@@ -32,7 +32,12 @@ ok "redis pong"
 docker compose $COMPOSE_FILES logs --tail=120 cloudflared >/tmp/sgi-cloudflared.log 2>&1 \
   || fail "cloudflared logs unavailable"
 
-if grep -E "CLOUDFLARE_TUNNEL_TOKEN|[A-Za-z0-9_-]{80,}" /tmp/sgi-cloudflared.log >/dev/null; then
+# cloudflared can emit masked fields such as token:***** and long precheck borders.
+# Redact known-safe masked/report values before looking for real secrets.
+sed -E 's/(token[=:])[[:space:]]*\*+/\1<masked>/Ig; s/(CLOUDFLARE_TUNNEL_TOKEN=)\*+/\1<masked>/g; s/INF \+[A-Za-z0-9_-]{80,}\+/INF +<precheck-border>+/g' \
+  /tmp/sgi-cloudflared.log >/tmp/sgi-cloudflared.sanitized.log
+
+if grep -E "CLOUDFLARE_TUNNEL_TOKEN=[^[:space:]]+|[A-Za-z0-9_-]{80,}" /tmp/sgi-cloudflared.sanitized.log >/dev/null; then
   fail "cloudflared logs may contain token-like content"
 fi
 ok "cloudflared logs captured without obvious token pattern"
