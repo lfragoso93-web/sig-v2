@@ -2,19 +2,17 @@
 
 Data: 2026-08-26  
 Branch de trabalho: `stable-15jun`  
-Base promovida para `main`: PR #287 / `origin/main` em `7a50cc307d54f91fa4c63cd50aedc6b70cff97b6`
+Base promovida para `main`: PR #290 / `origin/main` em `05f7b34ef48d3993478fbe7f5f757f69706c8e58`
 
 ## Estado pós-merge
 
-- A PR #287 foi mergeada com sucesso em `main`.
+- As PRs #287 e #290 foram mergeadas com sucesso em `main`.
 - A `main` não deve receber desenvolvimento direto; novos blocos continuam em `stable-15jun` e só retornam para `main` após validação.
 - Consulta pós-merge não retornou alertas abertos de Code Scanning.
 - Consulta pós-merge não retornou alertas abertos de Dependabot security.
-- PRs Dependabot superseded/remanescentes devem ser tratadas após triagem:
-  - #280 `lucide-react`: conteúdo já consolidado pela #287; candidata a fechamento como superseded.
-  - #235 `hadolint-action`: conteúdo já consolidado pela #287 e CI ajustado; candidata a fechamento como superseded.
-  - #288 `eslint 10.9.0`: nova atualização pós-merge; baixo risco, validar em bloco pequeno.
-  - #289 `typescript 7.0.2`: nova atualização major pós-merge; alto risco de compatibilidade, não aceitar automaticamente.
+- PRs remanescentes após triagem:
+  - #291 `stable-15jun -> main`: adiciona validação versionada de contratos de seed e readiness do lab OCI; validada manualmente no lab em `feda80284c3882b2f5614b1d1c6fab752e9a2f8a`; aguarda CI/merge.
+  - #289 `typescript 7.0.2`: permanece bloqueada por incompatibilidade de peer dependency com `typescript-eslint`; não aceitar automaticamente.
 
 ## Objetivo operacional
 
@@ -24,10 +22,10 @@ Liberar o ambiente OCI lab para testes completos com todos os seeds e bootstraps
 
 | Ordem | Bloco | Issues/PRs | Criticidade | Esforço | Utilidade | Critério de saída |
 |---:|---|---|---|---|---|---|
-| 1 | Higiene pós-merge e PRs superseded | #280, #235, #288, #289 | Alta | Baixo/Médio | Alta | PRs obsoletas fechadas; #288 validada ou absorvida; #289 classificada como major gateado |
-| 2 | Sincronizar `stable-15jun` com a `main` mergeada | #284 | Alta | Baixo | Alta | Branch de desenvolvimento alinhada ao merge commit sem reescrever histórico |
-| 3 | Gate de segurança recorrente | #269 | Alta | Baixo | Alta | Code Scanning, Dependabot, Gitleaks, Trivy, pip-audit e npm audit verdes/sem alertas abertos |
-| 4 | Certificação de contratos de seeds sem execução real | #216, #226, #158 | P0 | Médio | Máxima | Suítes focadas de FX, macro, Tesouro, B3, proventos e bootstrap completo passando no lab |
+| 1 | Manter PR #291 até merge | #291, #284, #216 | Alta | Baixo | Alta | CI/merge concluído; `stable-15jun` realinhada com `main` após merge |
+| 2 | Gate de segurança recorrente | #269 | Alta | Baixo | Alta | Code Scanning, Dependabot, Gitleaks, Trivy, pip-audit e npm audit verdes/sem alertas abertos |
+| 3 | Certificação de contratos de seeds sem execução real | #216, #226, #158 | P0 | Médio | Máxima | `scripts/oci_seed_contract_validation.sh` aprovado no lab sem executar seed real |
+| 4 | Readiness integrado do lab OCI | #284, #216, #227 | P0 | Baixo/Médio | Máxima | `scripts/oci_lab_seed_readiness_check.sh` aprovado; `/ready` preserva `ready_for_real_data=false` |
 | 5 | Ensaio de bootstrap completo com dados descartáveis | #227, #216, #158, #253 | P0 | Alto | Máxima | Execução lab não real com evidência, sem `ready_for_real_data=true`, sem produção e com smoke pós-restart |
 | 6 | Proventos reais: janela controlada | #226, #216, #158 | P0 | Médio/Alto | Máxima | Só após autorização explícita: duas execuções, `first.json`, `second.json`, `idempotency.json` e comparação OK |
 | 7 | Central SuperAdmin por etapas | #253 | Alta | Alto | Alta | UI/contrato para estágios nomeados, bloqueios, status e readiness sem endpoints legados |
@@ -39,11 +37,11 @@ Liberar o ambiente OCI lab para testes completos com todos os seeds e bootstraps
 
 ## Próximos blocos recomendados
 
-### Bloco A — Higiene pós-merge
+### Bloco A — PR #291 e alinhamento pós-merge
 
-1. Confirmar CI da `main` e alertas de segurança.
-2. Fechar #280 e #235 como superseded pela #287, se não houver divergência pendente.
-3. Tratar #288 em `stable-15jun` com build frontend e smoke OCI.
+1. Acompanhar CI da PR #291 ou registrar ausência de novo run para o SHA `feda8028`.
+2. Após merge, sincronizar `stable-15jun` com `main` por fast-forward, sem reescrever histórico.
+3. Reexecutar `sh scripts/oci_lab_seed_readiness_check.sh` no lab alinhado.
 4. Manter #289 como gate separado: TypeScript 7 exige validação de compatibilidade com `typescript-eslint`, Vite e toolchain.
 
 ### Bloco B — Validação dos seeds sem dados reais
@@ -76,7 +74,7 @@ Critérios:
 
 ### Bloco C — Ensaio lab com dados descartáveis
 
-Depois das suítes passarem:
+Depois do readiness integrado passar:
 
 1. Criar usuário/carteira lab descartável.
 2. Inserir operações sintéticas representativas.
@@ -95,4 +93,4 @@ Somente após autorização explícita nas issues/runbooks:
 
 ## Decisão atual
 
-O melhor próximo desenvolvimento é implementar/validar o Bloco A e depois o Bloco B. O sistema está saudável para testes de lab, mas ainda não deve ser declarado pronto para dados reais até os gates de seed completo e evidências terminarem.
+O lab já passou no readiness integrado sem dados reais. O próximo desenvolvimento é manter a PR #291 até merge e, em seguida, iniciar o ensaio completo com dados sintéticos/descartáveis. O sistema está saudável para testes de lab, mas ainda não deve ser declarado pronto para dados reais até os gates de seed completo, evidências e autorização formal terminarem.
