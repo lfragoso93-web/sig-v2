@@ -20,7 +20,7 @@ run_pytest() {
   docker run --rm \
     --env-file "$ENV_FILE" \
     -e PYTHONDONTWRITEBYTECODE=1 \
-    -v "$(pwd)/backend:/app:ro" \
+    -v "$(pwd)/backend:/app" \
     -w /app \
     "$IMAGE" \
     pytest -q -p no:cacheprovider "$@"
@@ -50,7 +50,7 @@ run_pytest "FX, macro and Treasury seed contracts" \
   tests/unit/test_pre_prod_treasury_seed_inspection.py \
   tests/unit/test_pre_prod_treasury_seed_idempotency_cli.py
 
-run_pytest "B3, asset bootstrap and system bootstrap contracts" \
+run_pytest "B3 and asset bootstrap contracts" \
   tests/test_pre_prod_b3_seed.py \
   tests/test_asset_bootstrap_plan_cli.py \
   tests/test_asset_bootstrap_planner.py \
@@ -67,7 +67,9 @@ run_pytest "B3, asset bootstrap and system bootstrap contracts" \
   tests/test_asset_bootstrap_report_diff_service.py \
   tests/test_asset_bootstrap_synthetic_idempotency.py \
   tests/test_asset_seed_crypto_adapter_boundary.py \
-  tests/test_asset_seed_proventos_classes.py \
+  tests/test_asset_seed_proventos_classes.py
+
+run_pytest "System bootstrap and admin surface contracts" \
   tests/test_system_bootstrap_contract.py \
   tests/test_system_bootstrap_execution_context.py \
   tests/test_system_bootstrap_fx_stage.py \
