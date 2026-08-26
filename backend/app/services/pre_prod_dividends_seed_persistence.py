@@ -259,6 +259,10 @@ def _collapse_estimated_payment_components(
                 retained.append(canonical[0])
                 collapsed.extend(estimated)
                 continue
+        if estimated or len(group) >= 3:
+            raise DividendsSeedPersistenceError(
+                "evento global conflitante na mesma fonte"
+            )
         retained.extend(group)
     return tuple(retained), tuple(collapsed)
 
@@ -453,42 +457,6 @@ async def persist_asset_dividends_strict(
                         "evento global conflitante entre fontes: "
                         f"{collection.ticker}/{event.ex_date}/"
                         f"{dividend_type.value} ({prior_source}, {source}); "
-                        "valores divergentes: "
-                        + _render_conflicting_event_values(
-                            fields=conflicts,
-                            left_source=prior_source,
-                            left=prior_values,
-                            right_source=source,
-                            right=values,
-                        )
-                    )
-
-                same_identity_prior = next(
-                    (
-                        prior
-                        for prior in prior_events
-                        if _storage_identity(
-                            asset_id=asset.id,
-                            ex_date=event.ex_date,
-                            dividend_type=dividend_type,
-                            values=prior[1],
-                        )
-                        == _storage_identity(
-                            asset_id=asset.id,
-                            ex_date=event.ex_date,
-                            dividend_type=dividend_type,
-                            values=values,
-                        )
-                    ),
-                    None,
-                )
-                if same_identity_prior is not None:
-                    prior_source, prior_values = same_identity_prior
-                    conflicts = _conflicting_event_fields(prior_values, values)
-                    raise DividendsSeedPersistenceError(
-                        "evento global conflitante na mesma fonte: "
-                        f"{collection.ticker}/{event.ex_date}/"
-                        f"{dividend_type.value} ({source}); "
                         "valores divergentes: "
                         + _render_conflicting_event_values(
                             fields=conflicts,
