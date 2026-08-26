@@ -4,6 +4,6 @@ pytest-asyncio==1.4.0
 aiosqlite==0.22.1
 httpx==0.28.1
 flake8==7.3.0
-mypy==2.3.0
+mypy==2.3.1
 types-passlib==1.7.7.20260211
-sqlalchemy[mypy]==2.0.51
+sqlalchemy[mypy]==2.0.52

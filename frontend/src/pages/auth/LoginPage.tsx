@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useAuth } from '@/contexts/AuthContext'
 import { Eye, EyeOff } from 'lucide-react'
+import { getApiValidationErrorMessage } from '@/utils/apiError'
 
 const schema = z.object({
   email:    z.string().email('E-mail inválido'),
@@ -26,8 +27,7 @@ export default function LoginPage() {
     try {
       await login(data.email, data.password)
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string } } }
-      setApiError(err?.response?.data?.detail ?? 'Credenciais inválidas.')
+      setApiError(getApiValidationErrorMessage(e, 'Credenciais inválidas.'))
     }
   }
 

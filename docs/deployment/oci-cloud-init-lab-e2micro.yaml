@@ -1,0 +1,37 @@
+#cloud-config
+package_update: true
+package_upgrade: false
+
+packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - git
+  - ufw
+
+write_files:
+  - path: /etc/profile.d/sgi-v2.sh
+    owner: root:root
+    permissions: "0644"
+    content: |
+      export SGI_APP_DIR=/opt/sgi-v2
+
+runcmd:
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - chmod a+r /etc/apt/keyrings/docker.asc
+  - . /etc/os-release && arch="$(dpkg --print-architecture)" && echo "deb [arch=${arch} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu ${VERSION_CODENAME} stable" > /etc/apt/sources.list.d/docker.list
+  - apt-get update
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  - systemctl enable --now docker
+  - install -d -o ubuntu -g ubuntu -m 0755 /opt/sgi-v2
+  - usermod -aG docker ubuntu
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow OpenSSH
+  - ufw --force enable
+  - docker --version
+  - docker compose version
+  - cloud-init status --long > /var/log/sgi-v2-cloud-init-status.log
+
+final_message: "SGI v2 OCI E2 micro lab baseline completed after $UPTIME seconds"

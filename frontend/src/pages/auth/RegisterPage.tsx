@@ -7,6 +7,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react'
 import api from '@/services/api'
 import { useAuth } from '@/contexts/AuthContext'
 import { Eye, EyeOff } from 'lucide-react'
+import { getApiValidationErrorMessage } from '@/utils/apiError'
 
 const schema = z.object({
   name:          z.string().min(2, 'Informe seu nome'),
@@ -92,8 +93,7 @@ export default function RegisterPage() {
       })
       await loginWithTokens(tokens.access_token, tokens.refresh_token)
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string } } }
-      setApiError(err?.response?.data?.detail ?? 'Erro ao criar conta. Tente novamente.')
+      setApiError(getApiValidationErrorMessage(e, 'Erro ao criar conta. Tente novamente.'))
     }
   }
 

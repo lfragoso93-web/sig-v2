@@ -6,3 +6,16 @@ __pycache__
 *.log
 .DS_Store
 alembic/versions/*.pyc
+
+.codex-runtime-temp/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.test-tmp/
+pytest-cache-files-*/
+review-temp/
+
+tests/
+requirements-test.txt
+TESTING.md
+verify_tests.py

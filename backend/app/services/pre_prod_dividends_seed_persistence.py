@@ -8,7 +8,7 @@ materializa direitos por carteira.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import ROUND_DOWN, Decimal
+from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 
 from sqlalchemy import select, text, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +23,7 @@ from app.services.pre_prod_dividends_seed_collector import (
 
 _DIVIDENDS_SEED_LOCK_KEY = 7_317_202_607_28
 _NUMERIC_EQUIVALENCE_TOLERANCE = Decimal("0.00000001")
+_STORAGE_VALUE_QUANTUM = Decimal("0.00000001")
 _ABSORBED_COMPONENT_COVERAGE_TOLERANCE = Decimal("0.00001")
 _MIN_DECLARED_COMPLEMENTARY_SCALE = 6
 _ESTIMATED_PAYMENT_REMARK = "csv:payment_date_estimated"
@@ -75,6 +76,12 @@ def _decimal(value: float | None) -> Decimal | None:
     return None if value is None else Decimal(str(value))
 
 
+def _storage_value(value: Decimal | None) -> Decimal | None:
+    if value is None:
+        return None
+    return value.quantize(_STORAGE_VALUE_QUANTUM, rounding=ROUND_HALF_UP)
+
+
 def _event_values(event, source: str) -> dict:
     return {
         "record_date": event.record_date,
@@ -100,13 +107,14 @@ def _storage_identity(
     dividend_type: DividendType,
     values: dict,
 ) -> tuple:
-    """Espelha a identidade econômica persistida pelo índice único."""
+    """Espelha a identidade de ocorrência persistida pelo índice único."""
 
     return (
         asset_id,
         ex_date,
         dividend_type,
         values["payment_date"] or ex_date,
+        _storage_value(values["value_per_unit"]),
     )
 
 
@@ -123,17 +131,25 @@ def _declared_precision_equivalent(
 ) -> bool:
     """Reconcilia apenas precisão complementar explicitamente declarada.
 
-    A fonte complementar pode declarar que publicou um valor truncado em uma
-    escala observada. A equivalência só é aceita para ``value_per_unit``, com no
-    mínimo seis casas decimais, e nunca amplia a precisão de armazenamento de
-    oito casas. Divergências fora desse contrato continuam bloqueantes.
+    A fonte complementar deve declarar a escala observada e a política de
+    redução de precisão. ``provider_quantized`` representa uma fonte cujo valor
+    é publicado em resolução limitada: a equivalência só é aceita quando a
+    diferença absoluta é estritamente menor que uma unidade da escala
+    declarada. Os modos ``truncate`` e ``round_half_up`` preservam comparação
+    determinística por quantização. A regra só vale para ``value_per_unit``,
+    com no mínimo seis casas decimais, sem ampliar a precisão física de oito
+    casas. Divergências fora desse contrato continuam bloqueantes.
     """
 
     if field != "value_per_unit":
         return False
 
-    candidates = (left, right)
-    for candidate in candidates:
+    rounding_by_mode = {
+        "truncate": (ROUND_DOWN,),
+        "round_half_up": (ROUND_HALF_UP,),
+    }
+    candidates = ((left, right), (right, left))
+    for candidate, counterpart in candidates:
         payload = candidate.get("raw_payload")
         if not isinstance(payload, dict):
             continue
@@ -143,8 +159,7 @@ def _declared_precision_equivalent(
         field_policy = comparison.get(field)
         if not isinstance(field_policy, dict):
             continue
-        if field_policy.get("mode") != "truncate":
-            continue
+        mode = field_policy.get("mode")
         try:
             scale = int(field_policy.get("scale"))
         except (TypeError, ValueError):
@@ -152,15 +167,24 @@ def _declared_precision_equivalent(
         if not (_MIN_DECLARED_COMPLEMENTARY_SCALE <= scale <= 8):
             continue
 
-        left_value = left[field]
-        right_value = right[field]
+        declared_value = candidate[field]
+        other_value = counterpart[field]
         quantum = Decimal(1).scaleb(-scale)
-        return left_value.quantize(
-            quantum, rounding=ROUND_DOWN
-        ) == right_value.quantize(
-            quantum,
-            rounding=ROUND_DOWN,
-        )
+
+        if mode == "provider_quantized":
+            if abs(other_value - declared_value) < quantum:
+                return True
+            continue
+
+        roundings = rounding_by_mode.get(mode)
+        if roundings is None:
+            continue
+        declared_quantized = declared_value.quantize(quantum, rounding=ROUND_HALF_UP)
+        if any(
+            other_value.quantize(quantum, rounding=rounding) == declared_quantized
+            for rounding in roundings
+        ):
+            return True
     return False
 
 
@@ -235,6 +259,10 @@ def _collapse_estimated_payment_components(
                 retained.append(canonical[0])
                 collapsed.extend(estimated)
                 continue
+        if estimated or len(group) >= 3:
+            raise DividendsSeedPersistenceError(
+                "evento global conflitante na mesma fonte"
+            )
         retained.extend(group)
     return tuple(retained), tuple(collapsed)
 
@@ -345,7 +373,10 @@ async def persist_asset_dividends_strict(
     )
     existing = {}
     for row in existing_result.scalars().all():
-        row_values = {"payment_date": row.payment_date}
+        row_values = {
+            "payment_date": row.payment_date,
+            "value_per_unit": row.value_per_unit,
+        }
         existing[
             _storage_identity(
                 asset_id=row.asset_id,
@@ -426,42 +457,6 @@ async def persist_asset_dividends_strict(
                         "evento global conflitante entre fontes: "
                         f"{collection.ticker}/{event.ex_date}/"
                         f"{dividend_type.value} ({prior_source}, {source}); "
-                        "valores divergentes: "
-                        + _render_conflicting_event_values(
-                            fields=conflicts,
-                            left_source=prior_source,
-                            left=prior_values,
-                            right_source=source,
-                            right=values,
-                        )
-                    )
-
-                same_identity_prior = next(
-                    (
-                        prior
-                        for prior in prior_events
-                        if _storage_identity(
-                            asset_id=asset.id,
-                            ex_date=event.ex_date,
-                            dividend_type=dividend_type,
-                            values=prior[1],
-                        )
-                        == _storage_identity(
-                            asset_id=asset.id,
-                            ex_date=event.ex_date,
-                            dividend_type=dividend_type,
-                            values=values,
-                        )
-                    ),
-                    None,
-                )
-                if same_identity_prior is not None:
-                    prior_source, prior_values = same_identity_prior
-                    conflicts = _conflicting_event_fields(prior_values, values)
-                    raise DividendsSeedPersistenceError(
-                        "evento global conflitante na mesma fonte: "
-                        f"{collection.ticker}/{event.ex_date}/"
-                        f"{dividend_type.value} ({source}); "
                         "valores divergentes: "
                         + _render_conflicting_event_values(
                             fields=conflicts,
