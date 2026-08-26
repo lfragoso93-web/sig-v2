@@ -48,7 +48,14 @@ Liberar o ambiente OCI lab para testes completos com todos os seeds e bootstraps
 
 ### Bloco B — Validação dos seeds sem dados reais
 
-Rodar, em containers temporários ou ambiente CI-equivalente, as suítes focadas:
+Rodar, em containers temporários ou ambiente CI-equivalente, as suítes focadas.
+No lab OCI, a entrada versionada é:
+
+```sh
+sh scripts/oci_seed_contract_validation.sh
+```
+
+Ela cobre:
 
 - `pre_prod_fx_seed`;
 - `pre_prod_macro_seed`;
