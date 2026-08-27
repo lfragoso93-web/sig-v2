@@ -5,6 +5,18 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — rebaseline para certificação OCI e testes integrados (27/08/2026)
+
+- O projeto entrou formalmente em fase de certificação operacional: novas funcionalidades ficam subordinadas à conclusão dos gates de teste e readiness.
+- Baseline de retomada registrado: `stable-15jun` em `a889edb6bbbb78feb7787c21b3439a0b835b73c6` e `main` em `3eeca232a8627f4562544739112d1dde82b879fb`.
+- PRs #290, #291 e #292 passam a compor o baseline de laboratório OCI: build frontend, Cloudflare HTTP/2 200, smoke OCI e validação repetível dos contratos de bootstrap sem seeds reais.
+- Evidências de contrato registradas: FX/Macro/Tesouro `81 passed, 1 skipped`; B3/Asset Bootstrap/System Bootstrap `70 passed`; Proventos `93 passed, 8 skipped`.
+- O smoke HTTP descartável passou a validar também o gate de SuperAdmin em `/api/v1/admin/bootstrap/status`, exigindo `403` para usuário comum.
+- `test_ready=true` permanece válido para dados fictícios/descartáveis; `ready_for_real_data=false` permanece obrigatório.
+- Ordem canônica atual: certificar lab e persistência → revalidar #227/#226/#216/#158 → executar operações reais somente quando autorizadas → reconciliar → GO/NO-GO.
+- A PR Dependabot #289, TypeScript 7, permanece bloqueada por incompatibilidade com `typescript-eslint 8.67.0` e não deve ser mergeada no estado atual.
+- README, ROADMAP e `docs/DEVELOPMENT_CONTINUITY.md` foram sincronizados com este rebaseline.
+
 ### Alterado — baseline pós-segurança e gate para teste real (18/08/2026)
 
 - A sanitização arquitetural da #247 foi consolidada como concluída e promovida pela PR #281.
@@ -178,30 +190,3 @@ Formato baseado em Keep a Changelog.
 - Removida do menu de posições a ação “Análise do Ativo”, que direcionava para `/carteira/analise` sem rota registrada.
 - Preservadas as ações funcionais de adicionar e consultar lançamentos.
 - O teste do menu passou a exigir duas ações e a ausência do link morto; o módulo de Análise continua bloqueado pela #57.
-
-### Removido — placeholders e entradas paralelas do frontend (14/08/2026)
-
-- Removidos placeholders órfãos de Análise/Histórico, stubs antigos de Login/Register, router alternativo e `ProtectedRoute` duplicado.
-- Preservadas as entradas canônicas em `main.tsx`, `router/ProtectedRoute.tsx` e `pages/auth/*`.
-- `MetasPage.tsx` não foi alterada e permanece bloqueada para o redesenho conjunto #246 + #57.
-- Adicionado gate estrutural cobrindo ausência dos seis arquivos e presença das entradas válidas.
-
-### Removido — entrada React vazia e duplicada (14/08/2026)
-
-- Removido `frontend/src/App.tsx`, arquivo sem consumidores que continha apenas `export {}`.
-- `frontend/src/main.tsx` permanece como entrada única para providers, roteamento e montagem React.
-- Adicionado gate estrutural contra a restauração do placeholder ou a perda do contrato mínimo da entrada canônica.
-
-### Removido — router administrativo de debug (14/08/2026)
-
-- Removida a superfície `/api/v1/debug`, sem consumidores, que permitia listar usuários, redefinição de senha e criação de `superadmin` mediante segredo estático paralelo.
-- Removidas a montagem condicional no `main.py` e as configurações órfãs `ADMIN_SECRET` e `DEBUG_RATE_LIMIT`.
-- Gestão legítima de usuários permanece em `/api/v1/admin`, protegida por JWT e `require_superadmin`.
-- Adicionado gate de segurança contra a reintrodução do arquivo, rota ou configuração.
-
-### Removido — backfill legado de Proventos (14/08/2026)
-
-- Removidos `backfill_dividends` e `dividend_backfill_service.py` após confirmação de que nenhum runtime, scheduler, CLI, workflow ou adapter certificado os consumia.
-- Removidos testes exclusivos do fluxo antigo; as nove regras úteis de normalização foram migradas para uma suíte unitária canônica.
-- Preservado o teste DB-first que impede eventos não monetários de contaminarem agregados financeiros.
-- O gate estrutural agora exige a ausência física do serviço; ingestão permanece exclusiva do seed/bootstrap certificado e explicitamente habilitado.
