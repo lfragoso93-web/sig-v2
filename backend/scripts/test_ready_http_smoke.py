@@ -168,6 +168,16 @@ async def main() -> None:
             _require_status(me, 200, "users/me")
             assert me.json()["email"] == email
 
+            admin_bootstrap_status = await client.get(
+                "/api/v1/admin/bootstrap/status",
+                headers=headers,
+            )
+            _require_status(
+                admin_bootstrap_status,
+                403,
+                "admin bootstrap status common user gate",
+            )
+
             portfolio = await client.post(
                 "/api/v1/portfolios/",
                 headers=headers,
