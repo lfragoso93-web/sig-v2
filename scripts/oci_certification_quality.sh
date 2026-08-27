@@ -50,6 +50,8 @@ build_backend_cert_image() {
 }
 
 [ -f docker-compose.yml ] || fail "run from repository root"
+[ -f docker-compose.prod.yml ] || fail "docker-compose.prod.yml missing"
+[ -f docker-compose.oci.yml ] || fail "docker-compose.oci.yml missing"
 [ -f backend/requirements-test.txt ] || fail "backend/requirements-test.txt missing"
 [ -f frontend/package-lock.json ] || fail "frontend/package-lock.json missing"
 [ -f scripts/oci_smoke_test.sh ] || fail "scripts/oci_smoke_test.sh missing"
@@ -87,6 +89,9 @@ docker run --rm --network "$CERT_NETWORK" \
   -e DATABASE_URL=postgresql://sgi:sgi@sgi-v2-cert-db:5432/sgi_ci \
   -e PYTHONDONTWRITEBYTECODE=1 \
   -v "$(pwd)/backend:/app" \
+  -v "$(pwd)/docker-compose.yml:/docker-compose.yml:ro" \
+  -v "$(pwd)/docker-compose.prod.yml:/docker-compose.prod.yml:ro" \
+  -v "$(pwd)/docker-compose.oci.yml:/docker-compose.oci.yml:ro" \
   -w /app \
   "$BACKEND_CERT_IMAGE" sh -ec '
     pip install --disable-pip-version-check -q -r requirements-test.txt pip-audit
