@@ -1,7 +1,7 @@
 # Roadmap pós-merge — liberação do lab para testes com seeds
 
-Data: 2026-08-27  
-Branch de trabalho: `stable-15jun`  
+Data: 2026-08-27
+Branch de trabalho: `stable-15jun`
 Base promovida para `main`: PR #292 / `origin/main` em `3eeca232a8627f4562544739112d1dde82b879fb`
 
 ## Estado pós-merge
