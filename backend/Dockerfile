@@ -36,6 +36,8 @@ RUN apt-get update \
         libpq5 \
         postgresql-client \
         curl \
+    && groupadd --gid 1000 app \
+    && useradd --uid 1000 --gid app --create-home --shell /usr/sbin/nologin app \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -58,10 +60,15 @@ RUN rm -rf \
         /usr/local/bin/pip3 \
         /usr/local/bin/pip3.12
 
-COPY . .
+COPY --chown=app:app . .
 
-# Normaliza line endings e garante permissao de execucao
-RUN sed -i 's/\r//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+# Normaliza line endings e garante permissao de execucao antes de cair privilegio.
+RUN sed -i 's/\r//' /app/entrypoint.sh \
+    && chmod +x /app/entrypoint.sh \
+    && mkdir -p /app/artifacts \
+    && chown -R app:app /app
+
+USER app
 
 EXPOSE 8000
 
