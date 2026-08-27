@@ -64,7 +64,7 @@ Durante a primeira execução real no lab foram encontrados dois problemas exclu
 1. BuildKit retornou `forwarding Ping: no such job`; o wrapper passou a validar o daemon e possui uma única tentativa segura com builder clássico como fallback.
 2. A suíte backend chegou a `513 passed, 4 skipped` antes de falhar em `test_entrypoint_schema_authority.py` porque o container de certificação montava apenas `backend:/app`; o teste estrutural corretamente esperava `docker-compose.prod.yml` e `docker-compose.oci.yml` na raiz calculada. O wrapper agora monta os três arquivos Compose canônicos read-only nos paths de raiz esperados, sem alterar ou relaxar o teste.
 
-CERT-01A permanece pendente até uma execução integral aprovada sobre o HEAD atualizado. CERT-01B permanece separado para Gitleaks, Trivy, Hadolint, image scans e reconciliação de alertas externos.
+CERT-01A permanece pendente até uma execução integral aprovada sobre o HEAD atualizado após o fix de mount. CERT-01B permanece separado para Gitleaks, Trivy, Hadolint, image scans e reconciliação de alertas externos.
 
 ## Segurança
 
