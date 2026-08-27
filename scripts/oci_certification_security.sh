@@ -7,6 +7,7 @@ GITLEAKS_IMAGE="zricethezav/gitleaks:v8.28.0"
 HADOLINT_IMAGE="hadolint/hadolint:v2.14.0-alpine"
 BACKEND_IMAGE="sgi-v2-backend-cert-security"
 FRONTEND_IMAGE="sgi-v2-frontend-cert-security"
+FRONTEND_SMOKE_CONTAINER="sgi-v2-frontend-cert-smoke"
 
 fail() {
   printf '%s\n' "[oci-cert-security] ERROR: $1" >&2
@@ -16,6 +17,11 @@ fail() {
 ok() {
   printf '%s\n' "[oci-cert-security] OK: $1"
 }
+
+cleanup() {
+  docker rm -f "$FRONTEND_SMOKE_CONTAINER" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT INT TERM
 
 [ -f docker-compose.yml ] || fail "run from repository root"
 [ -f backend/Dockerfile ] || fail "backend/Dockerfile missing"
@@ -52,6 +58,22 @@ printf '%s\n' "[oci-cert-security] Building runtime images with certified revisi
 docker build --target runtime --build-arg APP_COMMIT_SHA="$sha" -t "$BACKEND_IMAGE:$sha" ./backend
 docker build --target runtime -t "$FRONTEND_IMAGE:$sha" ./frontend
 ok "runtime images built"
+
+backend_uid="$(docker run --rm --entrypoint id "$BACKEND_IMAGE:$sha" -u)"
+frontend_uid="$(docker run --rm --entrypoint id "$FRONTEND_IMAGE:$sha" -u)"
+[ "$backend_uid" != "0" ] || fail "backend runtime still starts as root"
+[ "$frontend_uid" != "0" ] || fail "frontend runtime still starts as root"
+ok "runtime identities are non-root (backend uid=$backend_uid, frontend uid=$frontend_uid)"
+
+printf '%s\n' "[oci-cert-security] Running frontend non-root startup smoke"
+docker run -d --name "$FRONTEND_SMOKE_CONTAINER" "$FRONTEND_IMAGE:$sha" >/dev/null
+sleep 3
+docker ps --filter "name=$FRONTEND_SMOKE_CONTAINER" --filter status=running --format '{{.Names}}' | grep -qx "$FRONTEND_SMOKE_CONTAINER" \
+  || fail "frontend non-root runtime did not stay running"
+docker exec "$FRONTEND_SMOKE_CONTAINER" wget -qO- http://127.0.0.1/ >/dev/null \
+  || fail "frontend non-root runtime did not serve HTTP on port 80"
+cleanup
+ok "frontend non-root runtime served HTTP successfully"
 
 printf '%s\n' "[oci-cert-security] Running Trivy backend runtime image HIGH/CRITICAL gate"
 docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" image \
