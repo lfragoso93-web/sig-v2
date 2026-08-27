@@ -26,6 +26,8 @@ It runs:
 - final `ready_for_real_data=false` preservation through the existing smoke contract;
 - final clean-working-tree check.
 
+The backend test container mounts `backend/` at `/app` and exposes the three canonical Compose files read-only at the repository-root paths expected by structural tests (`/docker-compose.yml`, `/docker-compose.prod.yml`, `/docker-compose.oci.yml`). This preserves the same schema/entrypoint authority checks used by CI without weakening those tests.
+
 The temporary certification PostgreSQL container and network are removed on exit.
 
 ## Preconditions
