@@ -76,7 +76,11 @@ ok "runtime identities are non-root (backend uid=$backend_uid, frontend uid=$fro
 
 printf '%s\n' "[oci-cert-security] Running frontend non-root startup smoke"
 rm -f "$FRONTEND_SMOKE_LOG"
-docker run -d --name "$FRONTEND_SMOKE_CONTAINER" "$FRONTEND_IMAGE:$sha" >/dev/null
+# nginx resolves the configured upstream name at startup. The isolated smoke does
+# not run the real Compose backend, so provide a disposable localhost mapping.
+# The smoke only requests '/', therefore this mapping validates nginx startup,
+# non-root execution and static HTTP serving without exercising the proxy path.
+docker run -d --name "$FRONTEND_SMOKE_CONTAINER" --add-host backend:127.0.0.1 "$FRONTEND_IMAGE:$sha" >/dev/null
 sleep 3
 if ! docker ps --filter "name=$FRONTEND_SMOKE_CONTAINER" --filter status=running --format '{{.Names}}' | grep -qx "$FRONTEND_SMOKE_CONTAINER"; then
   frontend_smoke_diagnostics
