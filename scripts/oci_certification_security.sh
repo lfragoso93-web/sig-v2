@@ -8,6 +8,7 @@ HADOLINT_IMAGE="hadolint/hadolint:v2.14.0-alpine"
 BACKEND_IMAGE="sgi-v2-backend-cert-security"
 FRONTEND_IMAGE="sgi-v2-frontend-cert-security"
 FRONTEND_SMOKE_CONTAINER="sgi-v2-frontend-cert-smoke"
+FRONTEND_SMOKE_LOG="/tmp/sgi-frontend-cert-smoke.log"
 
 fail() {
   printf '%s\n' "[oci-cert-security] ERROR: $1" >&2
@@ -22,6 +23,14 @@ cleanup() {
   docker rm -f "$FRONTEND_SMOKE_CONTAINER" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT INT TERM
+
+frontend_smoke_diagnostics() {
+  docker logs "$FRONTEND_SMOKE_CONTAINER" >"$FRONTEND_SMOKE_LOG" 2>&1 || true
+  exit_code="$(docker inspect -f '{{.State.ExitCode}}' "$FRONTEND_SMOKE_CONTAINER" 2>/dev/null || printf '?')"
+  printf '%s\n' "[oci-cert-security] frontend smoke exit_code=$exit_code" >&2
+  printf '%s\n' "[oci-cert-security] frontend smoke logs ($FRONTEND_SMOKE_LOG):" >&2
+  cat "$FRONTEND_SMOKE_LOG" >&2 || true
+}
 
 [ -f docker-compose.yml ] || fail "run from repository root"
 [ -f backend/Dockerfile ] || fail "backend/Dockerfile missing"
@@ -66,12 +75,17 @@ frontend_uid="$(docker run --rm --entrypoint id "$FRONTEND_IMAGE:$sha" -u)"
 ok "runtime identities are non-root (backend uid=$backend_uid, frontend uid=$frontend_uid)"
 
 printf '%s\n' "[oci-cert-security] Running frontend non-root startup smoke"
+rm -f "$FRONTEND_SMOKE_LOG"
 docker run -d --name "$FRONTEND_SMOKE_CONTAINER" "$FRONTEND_IMAGE:$sha" >/dev/null
 sleep 3
-docker ps --filter "name=$FRONTEND_SMOKE_CONTAINER" --filter status=running --format '{{.Names}}' | grep -qx "$FRONTEND_SMOKE_CONTAINER" \
-  || fail "frontend non-root runtime did not stay running"
-docker exec "$FRONTEND_SMOKE_CONTAINER" wget -qO- http://127.0.0.1/ >/dev/null \
-  || fail "frontend non-root runtime did not serve HTTP on port 80"
+if ! docker ps --filter "name=$FRONTEND_SMOKE_CONTAINER" --filter status=running --format '{{.Names}}' | grep -qx "$FRONTEND_SMOKE_CONTAINER"; then
+  frontend_smoke_diagnostics
+  fail "frontend non-root runtime did not stay running"
+fi
+if ! docker exec "$FRONTEND_SMOKE_CONTAINER" wget -qO- http://127.0.0.1/ >/dev/null; then
+  frontend_smoke_diagnostics
+  fail "frontend non-root runtime did not serve HTTP on port 80"
+fi
 cleanup
 ok "frontend non-root runtime served HTTP successfully"
 
