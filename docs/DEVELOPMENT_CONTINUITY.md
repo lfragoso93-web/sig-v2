@@ -76,7 +76,13 @@ Correção estrutural em microblocos:
 
 - `fbf575c3146c45ccee1aa1e272384d7a865ba926` — Dockerfile canônico passa a executar Nginx como usuário `nginx`, mantendo a porta interna 80 por `CAP_NET_BIND_SERVICE` mínima;
 - `225baaa9c25e1ea008c37355c682a66c11b449cc` — `docker-compose.prod.yml` converge para o Dockerfile canônico;
-- `943f052da046333242f6f8e252b9fde2e1baf546` — remove `frontend/Dockerfile.prod` legado.
+- `943f052da046333242f6f8e252b9fde2e1baf546` — remove `frontend/Dockerfile.prod` legado;
+- `62a52ec12d71cb11619fdf75282d093ed859d2ed` — backend runtime passa a executar como usuário `app` não-root;
+- `6a5a8f224c210454cc31e92b4b23b73a583a685a` — gate valida UID não-root e startup HTTP do frontend;
+- `8f3a01e31078ca8db1dbcf143caa2531603e6c15` — smoke preserva exit code e logs do frontend para diagnóstico;
+- `4b7bf44a59a17212f1fb0aef174e013c991085af` — smoke isolado passa a resolver `backend` localmente, porque o Nginx canônico exige o upstream no startup mesmo quando o teste solicita apenas `/`.
+
+A reexecução sobre `8f3a01e3...` confirmou `backend uid=1000` e `frontend uid=101`. O frontend caiu somente porque o smoke isolado não possuía DNS/hosts para o upstream `backend`; não houve falha de permissão, bind ou execução não-root. O warning da imagem oficial sobre a diretiva `user` do nginx é esperado quando o master já inicia sem root.
 
 CERT-01B permanece pendente até reexecução integral sobre o HEAD atualizado e reconciliação de CodeQL/Code Scanning, Dependabot Security Alerts e Secret Scanning. Os avisos do Trivy sobre `site-packages`/`npm install` durante license detection são informativos e não constituíram finding de vulnerabilidade.
 
@@ -159,7 +165,7 @@ Ordem operacional:
 1. #150 — histórico persistido do IBOV;
 2. #149 — TWR Tesouro/Renda Fixa;
 3. #272 — dívida física de `corporate_events` em bloco separado;
-4. #83 — hardening residual de Backup/Restore administrativo;
+4. #83 — hardening residual do Backup/Restore administrativo;
 5. demais backlog de produto;
 6. #246 + #57 — Metas + Análise de Carteira como macroprojeto único.
 
