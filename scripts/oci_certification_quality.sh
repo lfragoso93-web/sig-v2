@@ -23,6 +23,32 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+build_backend_cert_image() {
+  printf '%s\n' "[oci-cert-quality] Building backend certification dependency image"
+
+  if docker build --target deps -t "$BACKEND_CERT_IMAGE" ./backend; then
+    ok "backend certification image built"
+    return 0
+  fi
+
+  printf '%s\n' "[oci-cert-quality] WARN: docker build failed; checking daemon/builder health before one safe retry" >&2
+
+  docker info >/dev/null 2>&1 || fail "Docker daemon is not healthy; inspect 'docker info' and daemon logs"
+
+  if docker buildx version >/dev/null 2>&1; then
+    docker buildx ls || true
+    if docker buildx inspect default >/dev/null 2>&1; then
+      docker buildx inspect default --bootstrap >/dev/null 2>&1 || true
+    fi
+  fi
+
+  printf '%s\n' "[oci-cert-quality] Retrying with classic builder to bypass transient BuildKit job state"
+  DOCKER_BUILDKIT=0 docker build --target deps -t "$BACKEND_CERT_IMAGE" ./backend \
+    || fail "backend certification image build failed with BuildKit and classic builder; inspect Docker daemon/buildx state"
+
+  ok "backend certification image built with classic builder fallback"
+}
+
 [ -f docker-compose.yml ] || fail "run from repository root"
 [ -f backend/requirements-test.txt ] || fail "backend/requirements-test.txt missing"
 [ -f frontend/package-lock.json ] || fail "frontend/package-lock.json missing"
@@ -39,9 +65,7 @@ sha="$(git rev-parse HEAD)"
 [ -z "$(git status --porcelain)" ] || fail "working tree must be clean"
 ok "git baseline $sha on stable-15jun with clean tree"
 
-printf '%s\n' "[oci-cert-quality] Building backend certification dependency image"
-docker build --target deps -t "$BACKEND_CERT_IMAGE" ./backend
-ok "backend certification image built"
+build_backend_cert_image
 
 docker network create "$CERT_NETWORK" >/dev/null
 docker run -d --name "$CERT_DB" --network "$CERT_NETWORK" \
