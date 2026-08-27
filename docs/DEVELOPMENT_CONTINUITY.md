@@ -64,7 +64,21 @@ Durante a primeira execução real no lab foram encontrados dois problemas exclu
 1. BuildKit retornou `forwarding Ping: no such job`; o wrapper passou a validar o daemon e possui uma única tentativa segura com builder clássico como fallback.
 2. A suíte backend chegou a `513 passed, 4 skipped` antes de falhar em `test_entrypoint_schema_authority.py` porque o container de certificação montava apenas `backend:/app`; o teste estrutural corretamente esperava `docker-compose.prod.yml` e `docker-compose.oci.yml` na raiz calculada. O wrapper agora monta os três arquivos Compose canônicos read-only nos paths de raiz esperados, sem alterar ou relaxar o teste.
 
-CERT-01A permanece pendente até uma execução integral aprovada sobre o HEAD atualizado após o fix de mount. CERT-01B permanece separado para Gitleaks, Trivy, Hadolint, image scans e reconciliação de alertas externos.
+CERT-01A foi aprovado no OCI lab sobre `d7c03078c9b31cfd004e88e321557ddc0f0658fe`: backend `1623 passed, 35 skipped`, `pip-audit` sem vulnerabilidades conhecidas, frontend completo aprovado, contratos de seed/bootstrap aprovados sem seed real, smoke HTTP descartável aprovado, `ready_for_real_data=false` preservado e árvore limpa ao final.
+
+## CERT-01B — segurança no OCI lab
+
+O entrypoint canônico é `scripts/oci_certification_security.sh` e o runbook é `docs/deployment/oci-certification-security.md`.
+
+Na primeira execução real do CERT-01B, o Trivy filesystem encontrou `AVD-DS-0002` HIGH em `frontend/Dockerfile.prod`: runtime Nginx sem `USER` não-root. A análise arquitetural mostrou que esse Dockerfile era também uma duplicação legada do Dockerfile canônico.
+
+Correção estrutural em microblocos:
+
+- `fbf575c3146c45ccee1aa1e272384d7a865ba926` — Dockerfile canônico passa a executar Nginx como usuário `nginx`, mantendo a porta interna 80 por `CAP_NET_BIND_SERVICE` mínima;
+- `225baaa9c25e1ea008c37355c682a66c11b449cc` — `docker-compose.prod.yml` converge para o Dockerfile canônico;
+- `943f052da046333242f6f8e252b9fde2e1baf546` — remove `frontend/Dockerfile.prod` legado.
+
+CERT-01B permanece pendente até reexecução integral sobre o HEAD atualizado e reconciliação de CodeQL/Code Scanning, Dependabot Security Alerts e Secret Scanning. Os avisos do Trivy sobre `site-packages`/`npm install` durante license detection são informativos e não constituíram finding de vulnerabilidade.
 
 ## Segurança
 
@@ -145,7 +159,7 @@ Ordem operacional:
 1. #150 — histórico persistido do IBOV;
 2. #149 — TWR Tesouro/Renda Fixa;
 3. #272 — dívida física de `corporate_events` em bloco separado;
-4. #83 — hardening residual do Backup/Restore administrativo;
+4. #83 — hardening residual de Backup/Restore administrativo;
 5. demais backlog de produto;
 6. #246 + #57 — Metas + Análise de Carteira como macroprojeto único.
 
