@@ -65,7 +65,7 @@ docker run --rm --network "$CERT_NETWORK" \
   -v "$(pwd)/backend:/app" \
   -w /app \
   "$BACKEND_CERT_IMAGE" sh -ec '
-    pip install --disable-pip-version-check -q -r requirements-test.txt
+    pip install --disable-pip-version-check -q -r requirements-test.txt pip-audit
     flake8 app --max-line-length=120 --extend-ignore=E501,E221 --per-file-ignores="app/models/*.py:F821,F401"
     mypy app
     python -m compileall -q app tests
@@ -74,8 +74,9 @@ docker run --rm --network "$CERT_NETWORK" \
     alembic current
     python -m app.governance.alembic_drift_gate
     pytest -qq -x --tb=line --disable-warnings
+    pip-audit --ignore-vuln GHSA-xgmm-8j9v-c9wx
   '
-ok "backend lint, typecheck, compile/import, fresh migration gate and pytest passed"
+ok "backend lint, typecheck, compile/import, fresh migration gate, pytest and pip-audit passed"
 
 printf '%s\n' "[oci-cert-quality] Running frontend quality gates"
 docker run --rm \
@@ -104,4 +105,5 @@ ok "disposable HTTP smoke passed and readiness stayed closed"
 [ -z "$(git status --porcelain)" ] || fail "certification commands dirtied the working tree"
 ok "working tree remained clean"
 
-printf '%s\n' "[oci-cert-quality] CERT-01 quality gate passed for $sha"
+printf '%s\n' "[oci-cert-quality] CERT-01A application quality gate passed for $sha"
+printf '%s\n' "[oci-cert-quality] Run CERT-01B repository/image security scanners separately before TEST-GO"
