@@ -91,28 +91,42 @@ Nenhuma nova funcionalidade deve ser iniciada antes deste gate.
 
 ### Etapa 1 — rebaseline de governança
 
-Sincronizar:
+Concluída em 27/08/2026 para:
 
 - #227 — gate-mãe;
 - #269 — segurança;
 - #284 — OCI;
-- #226 — Proventos;
-- #216 — gate agregado;
-- #158 — rebuild pré-produção;
 - README, ROADMAP, CHANGELOG e este documento.
 
 ### Etapa 2 — bateria completa com dados descartáveis
 
-Validar no lab:
+O entrypoint oficial de CERT-01A é agora:
 
-1. backend: pytest, compileall, import `app.main`, lint/type gates e Alembic;
-2. frontend: install, lint, typecheck, tests e production build;
-3. segurança: audits e scans disponíveis;
-4. stack: `/health`, `/ready`, frontend HTTP e Cloudflare;
-5. restart e persistência dos volumes;
-6. Redis fail-open;
-7. migrations em base descartável;
-8. controles de SuperAdmin e ausência de exposição indevida.
+```bash
+export SGI_CERT_EXPECTED_SHA="$(git rev-parse HEAD)"
+sh scripts/oci_certification_quality.sh
+```
+
+Runbook: `docs/deployment/oci-certification-quality.md`.
+
+CERT-01A executa, sobre um checkout limpo e SHA exato:
+
+1. backend: flake8, mypy, compileall, `import app.main`, Alembic em PostgreSQL 16 temporário, pytest e `pip-audit`;
+2. frontend: `npm ci`, lint, typecheck, Vitest serial, production build e `audit-ci` em container Node 22 isolado;
+3. stack: smoke OCI existente;
+4. contratos de seed/bootstrap sem execução real;
+5. smoke HTTP descartável e preservação de `ready_for_real_data=false`;
+6. confirmação final de árvore Git limpa.
+
+CERT-01A foi implementado e validado estaticamente com `sh -n`, mas ainda não deve ser marcado como aprovado até ser executado no host OCI sobre o HEAD de certificação.
+
+CERT-01B permanece separado para scanners de repositório/imagem: Gitleaks, Trivy, Hadolint, image scan e reconciliação de CodeQL/alertas externos quando acessíveis.
+
+Depois de CERT-01A/CERT-01B, validar ainda:
+
+- restart e persistência dos volumes;
+- Redis fail-open;
+- controles de SuperAdmin e ausência de exposição indevida.
 
 ### Etapa 3 — bootstrap sem contornar gates
 
