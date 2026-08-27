@@ -53,6 +53,19 @@ Evidências já disponíveis:
 
 Essas validações não promovem `ready_for_real_data`.
 
+## CERT-01A — qualidade de aplicação no OCI lab
+
+O entrypoint canônico é `scripts/oci_certification_quality.sh`.
+
+Ele exige branch `stable-15jun`, árvore limpa e pode fixar `SGI_CERT_EXPECTED_SHA`. Executa PostgreSQL 16 temporário, qualidade completa de backend, qualidade completa de frontend, dependency audits e os smokes/contratos OCI existentes sem seed real.
+
+Durante a primeira execução real no lab foram encontrados dois problemas exclusivamente operacionais do wrapper/host, sem evidência de regressão do SGI:
+
+1. BuildKit retornou `forwarding Ping: no such job`; o wrapper passou a validar o daemon e possui uma única tentativa segura com builder clássico como fallback.
+2. A suíte backend chegou a `513 passed, 4 skipped` antes de falhar em `test_entrypoint_schema_authority.py` porque o container de certificação montava apenas `backend:/app`; o teste estrutural corretamente esperava `docker-compose.prod.yml` e `docker-compose.oci.yml` na raiz calculada. O wrapper agora monta os três arquivos Compose canônicos read-only nos paths de raiz esperados, sem alterar ou relaxar o teste.
+
+CERT-01A permanece pendente até uma execução integral aprovada sobre o HEAD atualizado. CERT-01B permanece separado para Gitleaks, Trivy, Hadolint, image scans e reconciliação de alertas externos.
+
 ## Segurança
 
 O bloco final da #269 tratou:
@@ -91,42 +104,20 @@ Nenhuma nova funcionalidade deve ser iniciada antes deste gate.
 
 ### Etapa 1 — rebaseline de governança
 
-Concluída em 27/08/2026 para:
-
-- #227 — gate-mãe;
-- #269 — segurança;
-- #284 — OCI;
-- README, ROADMAP, CHANGELOG e este documento.
+Concluída em 27/08/2026 para README, ROADMAP, CHANGELOG, `DEVELOPMENT_CONTINUITY` e Issues centrais.
 
 ### Etapa 2 — bateria completa com dados descartáveis
 
-O entrypoint oficial de CERT-01A é agora:
+Validar no lab:
 
-```bash
-export SGI_CERT_EXPECTED_SHA="$(git rev-parse HEAD)"
-sh scripts/oci_certification_quality.sh
-```
-
-Runbook: `docs/deployment/oci-certification-quality.md`.
-
-CERT-01A executa, sobre um checkout limpo e SHA exato:
-
-1. backend: flake8, mypy, compileall, `import app.main`, Alembic em PostgreSQL 16 temporário, pytest e `pip-audit`;
-2. frontend: `npm ci`, lint, typecheck, Vitest serial, production build e `audit-ci` em container Node 22 isolado;
-3. stack: smoke OCI existente;
-4. contratos de seed/bootstrap sem execução real;
-5. smoke HTTP descartável e preservação de `ready_for_real_data=false`;
-6. confirmação final de árvore Git limpa.
-
-CERT-01A foi implementado e validado estaticamente com `sh -n`, mas ainda não deve ser marcado como aprovado até ser executado no host OCI sobre o HEAD de certificação.
-
-CERT-01B permanece separado para scanners de repositório/imagem: Gitleaks, Trivy, Hadolint, image scan e reconciliação de CodeQL/alertas externos quando acessíveis.
-
-Depois de CERT-01A/CERT-01B, validar ainda:
-
-- restart e persistência dos volumes;
-- Redis fail-open;
-- controles de SuperAdmin e ausência de exposição indevida.
+1. backend: pytest, compileall, import `app.main`, lint/type gates e Alembic;
+2. frontend: install, lint, typecheck, tests e production build;
+3. segurança: audits e scans disponíveis;
+4. stack: `/health`, `/ready`, frontend HTTP e Cloudflare;
+5. restart e persistência dos volumes;
+6. Redis fail-open;
+7. migrations em base descartável;
+8. controles de SuperAdmin e ausência de exposição indevida.
 
 ### Etapa 3 — bootstrap sem contornar gates
 
