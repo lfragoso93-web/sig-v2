@@ -24,6 +24,37 @@ Both wrappers preserve the same contract:
 - the offline idempotency comparator produces a third evidence artifact;
 - any non-zero seed/comparison exit code blocks the gate and preserves evidence.
 
+## Runtime SHA authority
+
+`docker-compose.yml` maps `APP_COMMIT_SHA` explicitly in both build args and backend runtime `environment`. This is intentional: the Compose/shell value must take precedence over any stale `APP_COMMIT_SHA` that may exist in `.env`. Runtime identity is part of the auditable pre-production contract.
+
+Before a real execution, rebuild/recreate the backend with the authorized SHA:
+
+```bash
+EXPECTED_SHA="<FULL_40_CHAR_SHA>"
+export APP_COMMIT_SHA="$EXPECTED_SHA"
+
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.prod.yml \
+  -f docker-compose.oci.yml \
+  build backend
+
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.prod.yml \
+  -f docker-compose.oci.yml \
+  up -d --no-deps --force-recreate backend
+
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.prod.yml \
+  -f docker-compose.oci.yml \
+  exec -T backend printenv APP_COMMIT_SHA
+```
+
+The final command must match `EXPECTED_SHA` exactly before any real seed execution.
+
 ## Required OCI variables
 
 After explicit authorization, the operator must set all values deliberately:
