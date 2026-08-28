@@ -4,7 +4,7 @@ Last updated: 2026-08-28
 
 This runbook prepares the Linux/OCI execution path for Issue #226 and contract `pre-prod-dividends-seed.v2`.
 
-> Execution is **not authorized by the presence of this file**. Real execution requires explicit operational authorization in Issue #226 for one exact `stable-15jun` SHA and one explicit date window.
+> Real execution was explicitly authorized in Issue #226 on 2026-08-28. The authorization applies only to the two controlled dividends seed runs on the exact `stable-15jun` SHA and date window recorded in the issue. It does not authorize any other real-data operation.
 
 ## Canonical wrappers
 
@@ -74,7 +74,7 @@ export SGI_PREPROD_ARTIFACT_ROOT="artifacts/pre-prod-rebuild"
 
 The wrapper rejects artifact paths outside repository `artifacts/`.
 
-## Preflight before authorization/execution
+## Preflight before execution
 
 ```bash
 cd /opt/sgi-v2
@@ -92,7 +92,7 @@ Do not continue if Git HEAD and runtime `APP_COMMIT_SHA` differ.
 
 ## Execution
 
-Only after Issue #226 explicitly authorizes the exact SHA and window:
+Only for the explicitly authorized SHA and window recorded in Issue #226:
 
 ```bash
 sh scripts/oci_pre_prod_dividends_idempotency.sh 2>&1 | tee /tmp/sgi-pre-prod-dividends.log
