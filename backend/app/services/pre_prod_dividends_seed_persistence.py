@@ -247,6 +247,9 @@ def _collapse_estimated_payment_components(
             in str((event.raw_payload or {}).get("remarks") or "")
         ]
         canonical = [event for event in group if event not in estimated]
+        if len(estimated) == 1 and not canonical:
+            retained.extend(group)
+            continue
         if len(estimated) >= 2 and len(canonical) == 1:
             component_values = [_decimal(event.value_per_unit) for event in estimated]
             canonical_value = _decimal(canonical[0].value_per_unit)
