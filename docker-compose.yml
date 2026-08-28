@@ -55,7 +55,6 @@ services:
       - path: .env
         required: false
     environment:
-      APP_COMMIT_SHA:    ${APP_COMMIT_SHA:-unknown}
       DATABASE_URL:       postgresql://${POSTGRES_USER:-sgi}:${POSTGRES_PASSWORD:-sgi}@db:5432/${POSTGRES_DB:-sgi}
       ASYNC_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-sgi}:${POSTGRES_PASSWORD:-sgi}@db:5432/${POSTGRES_DB:-sgi}
       REDIS_URL:          redis://redis:6379/0
