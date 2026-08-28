@@ -23,6 +23,7 @@ from app.services.pre_prod_dividends_seed_collector import (
 
 _DIVIDENDS_SEED_LOCK_KEY = 7_317_202_607_28
 _NUMERIC_EQUIVALENCE_TOLERANCE = Decimal("0.00000001")
+_SAME_SOURCE_AGGREGATE_TOLERANCE = Decimal("0.000001")
 _STORAGE_VALUE_QUANTUM = Decimal("0.00000001")
 _ABSORBED_COMPONENT_COVERAGE_TOLERANCE = Decimal("0.00001")
 _MIN_DECLARED_COMPLEMENTARY_SCALE = 6
@@ -224,10 +225,44 @@ def _render_conflicting_event_values(
     )
 
 
+def _collapse_declared_same_source_aggregate(group: list) -> tuple[tuple, tuple] | None:
+    """Reconcilia um agregado canônico apenas sob evidência estrutural forte."""
+
+    if len(group) != 3:
+        return None
+    aggregate_candidates = [event for event in group if event.approved_on is None]
+    if len(aggregate_candidates) != 1:
+        return None
+
+    aggregate = aggregate_candidates[0]
+    components = [event for event in group if event is not aggregate]
+    approvals = {event.approved_on for event in components}
+    if len(approvals) != 1 or None in approvals:
+        return None
+
+    for field in ("record_date", "payment_date", "isin_code"):
+        aggregate_value = getattr(aggregate, field)
+        component_values = {getattr(event, field) for event in components}
+        if aggregate_value is None or component_values != {aggregate_value}:
+            return None
+
+    aggregate_value = _decimal(aggregate.value_per_unit)
+    component_values = [_decimal(event.value_per_unit) for event in components]
+    if aggregate_value is None or any(value is None for value in component_values):
+        return None
+    if (
+        abs(sum(component_values, Decimal(0)) - aggregate_value)
+        > _SAME_SOURCE_AGGREGATE_TOLERANCE
+    ):
+        return None
+
+    return tuple(components), (aggregate,)
+
+
 def _collapse_estimated_payment_components(
     events: tuple,
 ) -> tuple[tuple, tuple]:
-    """Absorve estimativas equivalentes e preserva-as para reconciliação."""
+    """Reconcilia estimativas e agregados da mesma fonte de forma conservadora."""
 
     grouped: dict[tuple, list] = {}
     for event in events:
@@ -250,6 +285,20 @@ def _collapse_estimated_payment_components(
         if len(estimated) == 1 and not canonical:
             retained.extend(group)
             continue
+        if len(estimated) == 1 and len(canonical) == 1:
+            estimated_value = _decimal(estimated[0].value_per_unit)
+            canonical_value = _decimal(canonical[0].value_per_unit)
+            if (
+                estimated_value is not None
+                and canonical_value is not None
+                and abs(estimated_value - canonical_value)
+                <= _NUMERIC_EQUIVALENCE_TOLERANCE
+            ):
+                retained.append(canonical[0])
+                collapsed.append(estimated[0])
+            else:
+                retained.extend(group)
+            continue
         if len(estimated) >= 2 and len(canonical) == 1:
             component_values = [_decimal(event.value_per_unit) for event in estimated]
             canonical_value = _decimal(canonical[0].value_per_unit)
@@ -261,6 +310,13 @@ def _collapse_estimated_payment_components(
             ):
                 retained.append(canonical[0])
                 collapsed.extend(estimated)
+                continue
+        if not estimated:
+            aggregate_collapse = _collapse_declared_same_source_aggregate(group)
+            if aggregate_collapse is not None:
+                aggregate_retained, aggregate_collapsed = aggregate_collapse
+                retained.extend(aggregate_retained)
+                collapsed.extend(aggregate_collapsed)
                 continue
         if estimated or len(group) >= 3:
             raise DividendsSeedPersistenceError(
