@@ -135,11 +135,11 @@ def _declared_precision_equivalent(
     A fonte complementar deve declarar a escala observada e a política de
     redução de precisão. ``provider_quantized`` representa uma fonte cujo valor
     é publicado em resolução limitada: a equivalência só é aceita quando a
-    diferença absoluta é estritamente menor que uma unidade da escala
-    declarada. Os modos ``truncate`` e ``round_half_up`` preservam comparação
-    determinística por quantização. A regra só vale para ``value_per_unit``,
-    com no mínimo seis casas decimais, sem ampliar a precisão física de oito
-    casas. Divergências fora desse contrato continuam bloqueantes.
+    diferença absoluta não excede uma unidade da escala declarada. Os modos
+    ``truncate`` e ``round_half_up`` preservam comparação determinística por
+    quantização. A regra só vale para ``value_per_unit``, com no mínimo seis
+    casas decimais, sem ampliar a precisão física de oito casas. Divergências
+    fora desse contrato continuam bloqueantes.
     """
 
     if field != "value_per_unit":
@@ -173,7 +173,7 @@ def _declared_precision_equivalent(
         quantum = Decimal(1).scaleb(-scale)
 
         if mode == "provider_quantized":
-            if abs(other_value - declared_value) < quantum:
+            if abs(other_value - declared_value) <= quantum:
                 return True
             continue
 
@@ -453,50 +453,38 @@ async def persist_asset_dividends_strict(
     existing_result = await db.execute(
         select(AssetDividend).where(AssetDividend.asset_id.in_(asset_ids))
     )
-    existing = {}
-    for row in existing_result.scalars().all():
-        row_values = {
-            "payment_date": row.payment_date,
-            "value_per_unit": row.value_per_unit,
-        }
-        existing[
-            _storage_identity(
-                asset_id=row.asset_id,
-                ex_date=row.ex_date,
-                dividend_type=row.dividend_type,
-                values=row_values,
-            )
-        ] = row
+    existing = existing_result.scalars().all()
+    by_identity = {
+        (
+            item.asset_id,
+            item.ex_date,
+            item.dividend_type,
+            item.payment_date or item.ex_date,
+            _storage_value(_decimal(item.value_per_unit)),
+        ): item
+        for item in existing
+    }
 
     created = 0
     updated = 0
     unchanged = 0
-    seen: dict[
-        tuple[int, object, DividendType],
-        list[tuple[str, dict]],
-    ] = {}
-    absorbed_components: dict[
-        tuple[int, object, DividendType],
-        tuple[dict, ...],
-    ] = {}
+    seen: dict[tuple[int, object, DividendType], list[tuple[str, dict]]] = {}
 
     for collection in collections:
         asset = assets[(collection.ticker, collection.asset_type)]
         for source_collection in sorted(collection.sources, key=_source_sort_key):
             source = source_collection.source.strip().lower()
-            source_events, collapsed = _collapse_estimated_payment_components(
+            retained, collapsed = _collapse_estimated_payment_components(
                 source_collection.normalized_rows
             )
-            unchanged += len(collapsed)
-            for component in collapsed:
-                component_type = normalize_dividend_type(component.dividend_type)
-                component_key = (asset.id, component.ex_date, component_type)
-                absorbed_components[component_key] = (
-                    *absorbed_components.get(component_key, ()),
-                    _event_values(component, source),
-                )
-            for event in source_events:
+            collapsed_values = tuple(_event_values(event, source) for event in collapsed)
+
+            for event in retained:
                 dividend_type = normalize_dividend_type(event.dividend_type)
+                values = _event_values(event, source)
+                identity_key = (asset.id, event.ex_date, dividend_type)
+                prior_events = seen.setdefault(identity_key, [])
+
                 if _is_declared_cross_type_aggregate(
                     event=event,
                     source=source,
@@ -505,35 +493,22 @@ async def persist_asset_dividends_strict(
                 ):
                     unchanged += 1
                     continue
-                base_key = (asset.id, event.ex_date, dividend_type)
-                values = _event_values(event, source)
 
-                prior_events = seen.get(base_key, [])
-                equivalent = next(
-                    (
-                        prior
-                        for prior in prior_events
-                        if not _conflicting_event_fields(prior[1], values)
-                    ),
-                    None,
-                )
-                if equivalent is not None:
+                if _is_declared_absorbed_component_coverage(
+                    event=event,
+                    values=values,
+                    components=collapsed_values,
+                ):
                     unchanged += 1
                     continue
 
-                cross_source_prior = next(
-                    (prior for prior in prior_events if prior[0] != source),
-                    None,
-                )
-                if cross_source_prior is not None:
-                    if _is_declared_absorbed_component_coverage(
-                        event=event,
-                        values=values,
-                        components=absorbed_components.get(base_key, ()),
-                    ):
-                        unchanged += 1
+                conflict = False
+                for prior_source, prior_values in prior_events:
+                    if prior_source == source:
                         continue
-                    prior_source, prior_values = cross_source_prior
+                    conflicts = _conflicting_event_fields(prior_values, values)
+                    if not conflicts:
+                        continue
                     if _is_weak_yahoo_aggregate_against_strong_brapi(
                         source=source,
                         values=values,
@@ -541,55 +516,87 @@ async def persist_asset_dividends_strict(
                         prior_values=prior_values,
                     ):
                         unchanged += 1
-                        continue
-                    conflicts = _conflicting_event_fields(prior_values, values)
+                        conflict = True
+                        break
+                    rendered = _render_conflicting_event_values(
+                        fields=conflicts,
+                        left_source=prior_source,
+                        left=prior_values,
+                        right_source=source,
+                        right=values,
+                    )
                     raise DividendsSeedPersistenceError(
                         "evento global conflitante entre fontes: "
-                        f"{collection.ticker}/{event.ex_date}/"
-                        f"{dividend_type.value} ({prior_source}, {source}); "
-                        "valores divergentes: "
-                        + _render_conflicting_event_values(
-                            fields=conflicts,
-                            left_source=prior_source,
-                            left=prior_values,
-                            right_source=source,
-                            right=values,
-                        )
+                        f"{collection.ticker}/{event.ex_date}/{dividend_type.value} "
+                        f"({prior_source}, {source}); valores divergentes: {rendered}"
                     )
+                if conflict:
+                    continue
 
                 prior_events.append((source, values))
-                seen[base_key] = prior_events
                 storage_key = _storage_identity(
                     asset_id=asset.id,
                     ex_date=event.ex_date,
                     dividend_type=dividend_type,
                     values=values,
                 )
-                row = existing.get(storage_key)
-                if row is None:
-                    row = AssetDividend(
+                stored = by_identity.get(storage_key)
+                if stored is None:
+                    stored = AssetDividend(
                         asset_id=asset.id,
+                        record_date=event.record_date,
                         ex_date=event.ex_date,
+                        payment_date=event.payment_date,
+                        approved_on=event.approved_on,
+                        value_per_unit=_storage_value(values["value_per_unit"]),
+                        gross_value_per_unit=_storage_value(
+                            values["gross_value_per_unit"]
+                        ),
+                        factor=_storage_value(values["factor"]),
+                        complete_factor=_storage_value(values["complete_factor"]),
                         dividend_type=dividend_type,
-                        **values,
+                        isin_code=event.isin_code,
+                        asset_issued=event.asset_issued,
+                        related_to=event.related_to,
+                        remarks=event.remarks,
+                        source=source,
                     )
-                    db.add(row)
-                    existing[storage_key] = row
+                    db.add(stored)
+                    by_identity[storage_key] = stored
                     created += 1
                     continue
 
+                changes = {
+                    "record_date": event.record_date,
+                    "payment_date": event.payment_date,
+                    "approved_on": event.approved_on,
+                    "gross_value_per_unit": _storage_value(
+                        values["gross_value_per_unit"]
+                    ),
+                    "factor": _storage_value(values["factor"]),
+                    "complete_factor": _storage_value(values["complete_factor"]),
+                    "isin_code": event.isin_code,
+                    "asset_issued": event.asset_issued,
+                    "related_to": event.related_to,
+                    "remarks": event.remarks,
+                }
                 changed = False
-                for field, value in values.items():
-                    if getattr(row, field) != value:
-                        setattr(row, field, value)
+                for field, incoming in changes.items():
+                    if incoming is None:
+                        continue
+                    current = getattr(stored, field)
+                    if current is None:
+                        setattr(stored, field, incoming)
                         changed = True
+                if source == "brapi" and stored.source != "brapi":
+                    stored.source = "brapi"
+                    changed = True
                 if changed:
                     updated += 1
                 else:
                     unchanged += 1
 
-    if created or updated:
-        await db.flush()
+    await db.flush()
     return DividendsSeedPersistenceResult(
         created=created,
         updated=updated,
