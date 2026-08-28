@@ -24,6 +24,7 @@ is_iso_date() {
 [ -f docker-compose.oci.yml ] || fail "run from repository root"
 command -v git >/dev/null 2>&1 || fail "git required"
 command -v docker >/dev/null 2>&1 || fail "docker required"
+command -v sort >/dev/null 2>&1 || fail "sort required"
 
 printf '%s' "$COMMIT_SHA" | grep -Eq '^[0-9a-fA-F]{40}$' || fail "SGI_PREPROD_COMMIT_SHA must be a full 40-char SHA"
 COMMIT_SHA="$(printf '%s' "$COMMIT_SHA" | tr 'A-F' 'a-f')"
@@ -31,7 +32,8 @@ EXPECTED_CONFIRMATION="EXECUTE-DIVIDENDS-IDEMPOTENCY:$COMMIT_SHA"
 [ "$CONFIRMATION" = "$EXPECTED_CONFIRMATION" ] || fail "SGI_PREPROD_CONFIRMATION must be exactly $EXPECTED_CONFIRMATION"
 is_iso_date "$START_DATE" || fail "SGI_PREPROD_START_DATE must be YYYY-MM-DD"
 is_iso_date "$END_DATE" || fail "SGI_PREPROD_END_DATE must be YYYY-MM-DD"
-[ "$START_DATE" \< "$END_DATE" ] || [ "$START_DATE" = "$END_DATE" ] || fail "start date must not be later than end date"
+earlier_date="$(printf '%s\n%s\n' "$START_DATE" "$END_DATE" | sort | head -n1)"
+[ "$earlier_date" = "$START_DATE" ] || fail "start date must not be later than end date"
 
 branch="$(git branch --show-current)"
 [ "$branch" = "stable-15jun" ] || fail "branch must be stable-15jun, got $branch"
