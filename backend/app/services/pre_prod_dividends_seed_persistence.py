@@ -292,13 +292,10 @@ def _collapse_estimated_payment_components(
                 estimated_value is not None
                 and canonical_value is not None
                 and abs(estimated_value - canonical_value)
-                <= _NUMERIC_EQUIVALENCE_TOLERANCE
+                > _NUMERIC_EQUIVALENCE_TOLERANCE
             ):
-                retained.append(canonical[0])
-                collapsed.append(estimated[0])
-            else:
                 retained.extend(group)
-            continue
+                continue
         if len(estimated) >= 2 and len(canonical) == 1:
             component_values = [_decimal(event.value_per_unit) for event in estimated]
             canonical_value = _decimal(canonical[0].value_per_unit)
