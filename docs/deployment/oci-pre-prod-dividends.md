@@ -81,6 +81,8 @@ sudo chown -R 1000:1000 artifacts
 chmod u+rwx artifacts
 ```
 
+This ownership repair is operationally authorized as part of the already-approved two-run Proventos window because it changes only the host bind-mount ownership needed to preserve evidence; it does not execute a seed or alter application data.
+
 After repair, re-run the validation above. The POSIX wrapper also blocks before any seed if the host artifacts path is not writable or if the bind-mounted owner UID differs from the backend UID.
 
 ## Required OCI variables
