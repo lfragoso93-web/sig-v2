@@ -24,6 +24,17 @@ Both wrappers preserve the same contract:
 - the offline idempotency comparator produces a third evidence artifact;
 - any non-zero seed/comparison exit code blocks the gate and preserves evidence.
 
+## Current authorized OCI baseline
+
+As of 2026-08-28, the current authorized baseline for the already-approved two-run Proventos window is:
+
+```text
+stable-15jun = 5e0e87220c57ff8745eb9d409972c8888a849ddc
+window       = 2020-01-01 .. 2026-08-28
+```
+
+This SHA contains only operational hardening required to execute the already-authorized seed safely on OCI: runtime SHA authority, POSIX wrapper, artifact bind-mount preflight, shared host/backend write permissions, and documentation. It does not change the functional `pre-prod-dividends-seed.v2` contract.
+
 ## Runtime SHA authority
 
 `docker-compose.yml` maps `APP_COMMIT_SHA` explicitly in both build args and backend runtime `environment`. This is intentional: the Compose/shell value must take precedence over any stale `APP_COMMIT_SHA` that may exist in `.env`. Runtime identity is part of the auditable pre-production contract.
