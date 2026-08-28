@@ -85,6 +85,13 @@ volume_after="$(docker volume ls --format '{{.Name}}' | grep -E '(^|_)postgres_d
 [ "$volume_before" = "$volume_after" ] || fail "PostgreSQL volume identity changed across restart"
 ok "PostgreSQL data and volume identity persisted across restart"
 
+printf '%s\n' "[oci-cert-resilience] Removing disposable persistence marker before schema drift validation"
+$COMPOSE exec -T db psql -U "${POSTGRES_USER:-sgi}" -d "${POSTGRES_DB:-sgi}" -v ON_ERROR_STOP=1 -c "DROP TABLE IF EXISTS ${MARKER_TABLE};" >/dev/null
+if $COMPOSE exec -T db psql -U "${POSTGRES_USER:-sgi}" -d "${POSTGRES_DB:-sgi}" -Atqc "SELECT to_regclass('public.${MARKER_TABLE}');" | grep -q .; then
+  fail "disposable persistence marker table still exists before drift gate"
+fi
+ok "disposable marker removed before drift validation"
+
 printf '%s\n' "[oci-cert-resilience] Validating migration head after restart"
 current="$($COMPOSE exec -T backend alembic current 2>&1)"
 printf '%s\n' "$current"
@@ -138,10 +145,6 @@ async def main():
 asyncio.run(main())
 PY
 ok "Redis recovered and backend cache boundary reconnected"
-
-printf '%s\n' "[oci-cert-resilience] Cleaning disposable persistence marker"
-$COMPOSE exec -T db psql -U "${POSTGRES_USER:-sgi}" -d "${POSTGRES_DB:-sgi}" -v ON_ERROR_STOP=1 -c "DROP TABLE IF EXISTS ${MARKER_TABLE};" >/dev/null
-ok "disposable marker removed"
 
 [ -z "$(git status --porcelain)" ] || fail "resilience certification dirtied working tree"
 ok "working tree remained clean"
