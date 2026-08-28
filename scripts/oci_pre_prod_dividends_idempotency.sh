@@ -49,6 +49,20 @@ case "$ARTIFACT_ROOT" in
   *) fail "SGI_PREPROD_ARTIFACT_ROOT must stay under repository artifacts/" ;;
 esac
 
+[ -d artifacts ] || fail "artifacts directory is missing on host"
+[ -w artifacts ] || fail "artifacts directory is not writable by host operator; align ownership/permissions without chmod 777"
+
+if [ -e "$ARTIFACT_ROOT" ]; then
+  [ -d "$ARTIFACT_ROOT" ] || fail "$ARTIFACT_ROOT exists but is not a directory"
+  [ -w "$ARTIFACT_ROOT" ] || fail "$ARTIFACT_ROOT is not writable by host operator"
+else
+  mkdir -p "$ARTIFACT_ROOT" || fail "unable to create $ARTIFACT_ROOT; align host artifacts ownership first"
+fi
+
+runtime_uid="$($COMPOSE exec -T backend id -u | tr -d '\r\n')"
+runtime_artifact_uid="$($COMPOSE exec -T backend sh -c 'stat -c %u /app/artifacts 2>/dev/null || stat -f %u /app/artifacts' | tr -d '\r\n')"
+[ "$runtime_artifact_uid" = "$runtime_uid" ] || fail "bind-mounted /app/artifacts owner uid=$runtime_artifact_uid differs from backend uid=$runtime_uid; align host artifacts ownership before real execution"
+
 operation_id="$(date -u +%Y%m%d-%H%M%S)"
 operation_dir="$ARTIFACT_ROOT/dividends-idempotency-$operation_id"
 mkdir -p "$operation_dir"
