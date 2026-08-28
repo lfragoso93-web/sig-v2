@@ -59,7 +59,7 @@ def test_distinct_estimated_and_canonical_pair_are_both_retained() -> None:
     assert collapsed == ()
 
 
-def test_equivalent_estimated_and_canonical_pair_prefers_canonical() -> None:
+def test_equivalent_estimated_and_canonical_pair_remains_blocking() -> None:
     canonical = _event(0.02152467)
     estimated = _event(
         0.02152467,
@@ -67,12 +67,11 @@ def test_equivalent_estimated_and_canonical_pair_prefers_canonical() -> None:
         payment_date=date(2025, 4, 16),
     )
 
-    retained, collapsed = _collapse_estimated_payment_components(
-        (canonical, estimated)
-    )
-
-    assert retained == (canonical,)
-    assert collapsed == (estimated,)
+    with pytest.raises(
+        DividendsSeedPersistenceError,
+        match="evento global conflitante na mesma fonte",
+    ):
+        _collapse_estimated_payment_components((canonical, estimated))
 
 
 def test_taee11_like_canonical_aggregate_is_collapsed_to_components() -> None:
