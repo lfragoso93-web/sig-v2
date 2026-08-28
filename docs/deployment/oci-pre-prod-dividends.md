@@ -57,6 +57,32 @@ docker compose \
 
 The final command must match `EXPECTED_SHA` exactly before any real seed execution.
 
+## Artifact bind-mount ownership
+
+The backend runtime is intentionally non-root (UID 1000). The repository host directory `artifacts/` is bind-mounted at `/app/artifacts`, so the host directory must be writable by the operator and owned by the same UID used by the backend runtime. Do not use `chmod 777`.
+
+Validate before execution:
+
+```bash
+id -u
+stat -c '%u:%g %a %n' artifacts
+
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.prod.yml \
+  -f docker-compose.oci.yml \
+  exec -T backend sh -c 'id -u; stat -c "%u:%g %a %n" /app/artifacts'
+```
+
+On the OCI Ubuntu lab, if the operator and backend runtime both use UID 1000, the safe repair is:
+
+```bash
+sudo chown -R 1000:1000 artifacts
+chmod u+rwx artifacts
+```
+
+After repair, re-run the validation above. The POSIX wrapper also blocks before any seed if the host artifacts path is not writable or if the bind-mounted owner UID differs from the backend UID.
+
 ## Required OCI variables
 
 After explicit authorization, the operator must set all values deliberately:
