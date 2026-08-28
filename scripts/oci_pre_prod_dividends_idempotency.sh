@@ -60,12 +60,32 @@ else
 fi
 
 runtime_uid="$($COMPOSE exec -T backend id -u | tr -d '\r\n')"
+runtime_gid="$($COMPOSE exec -T backend id -g | tr -d '\r\n')"
 runtime_artifact_uid="$($COMPOSE exec -T backend sh -c 'stat -c %u /app/artifacts 2>/dev/null || stat -f %u /app/artifacts' | tr -d '\r\n')"
-[ "$runtime_artifact_uid" = "$runtime_uid" ] || fail "bind-mounted /app/artifacts owner uid=$runtime_artifact_uid differs from backend uid=$runtime_uid; align host artifacts ownership before real execution"
+runtime_artifact_gid="$($COMPOSE exec -T backend sh -c 'stat -c %g /app/artifacts 2>/dev/null || stat -f %g /app/artifacts' | tr -d '\r\n')"
+runtime_artifact_mode="$($COMPOSE exec -T backend sh -c 'stat -c %a /app/artifacts 2>/dev/null || stat -f %Lp /app/artifacts' | tr -d '\r\n')"
+
+case "$runtime_artifact_mode" in
+  *[2367][0-7]) group_writable=true ;;
+  *) group_writable=false ;;
+esac
+
+if [ "$runtime_artifact_uid" = "$runtime_uid" ]; then
+  :
+elif [ "$runtime_artifact_gid" = "$runtime_gid" ] && [ "$group_writable" = true ]; then
+  :
+else
+  fail "bind-mounted /app/artifacts is not writable by backend identity uid=$runtime_uid gid=$runtime_gid (owner=$runtime_artifact_uid group=$runtime_artifact_gid mode=$runtime_artifact_mode)"
+fi
+
+$COMPOSE exec -T backend sh -c 'touch /app/artifacts/.sgi-preprod-write-test && rm /app/artifacts/.sgi-preprod-write-test' \
+  || fail "backend cannot write to bind-mounted /app/artifacts"
+ok "artifact mount is writable by host operator and backend identity"
 
 operation_id="$(date -u +%Y%m%d-%H%M%S)"
 operation_dir="$ARTIFACT_ROOT/dividends-idempotency-$operation_id"
 mkdir -p "$operation_dir"
+chmod 2770 "$operation_dir" 2>/dev/null || true
 
 new_run_id() {
   previous="${1:-}"
