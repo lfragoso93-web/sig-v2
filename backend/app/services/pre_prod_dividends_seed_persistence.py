@@ -354,6 +354,32 @@ def _is_declared_absorbed_component_coverage(
     return False
 
 
+def _is_weak_yahoo_aggregate_against_strong_brapi(
+    *,
+    source: str,
+    values: dict,
+    prior_source: str,
+    prior_values: dict,
+) -> bool:
+    """Descarta apenas agregado Yahoo sem identidade diante de BRAPI forte."""
+
+    if source != "yfinance_history" or prior_source != "brapi":
+        return False
+    payload = values.get("raw_payload")
+    if (
+        not isinstance(payload, dict)
+        or payload.get("eventSemantics") != _AGGREGATE_CASH_BY_EX_DATE
+    ):
+        return False
+
+    identity_fields = ("record_date", "payment_date", "approved_on", "isin_code")
+    yahoo_has_identity = any(values[field] is not None for field in identity_fields)
+    brapi_has_strong_identity = all(
+        prior_values[field] is not None for field in identity_fields
+    )
+    return not yahoo_has_identity and brapi_has_strong_identity
+
+
 def _is_declared_cross_type_aggregate(
     *,
     event,
@@ -508,6 +534,14 @@ async def persist_asset_dividends_strict(
                         unchanged += 1
                         continue
                     prior_source, prior_values = cross_source_prior
+                    if _is_weak_yahoo_aggregate_against_strong_brapi(
+                        source=source,
+                        values=values,
+                        prior_source=prior_source,
+                        prior_values=prior_values,
+                    ):
+                        unchanged += 1
+                        continue
                     conflicts = _conflicting_event_fields(prior_values, values)
                     raise DividendsSeedPersistenceError(
                         "evento global conflitante entre fontes: "
