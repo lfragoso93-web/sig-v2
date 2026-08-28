@@ -28,6 +28,8 @@ Both wrappers preserve the same contract:
 
 `docker-compose.yml` maps `APP_COMMIT_SHA` explicitly in both build args and backend runtime `environment`. This is intentional: the Compose/shell value must take precedence over any stale `APP_COMMIT_SHA` that may exist in `.env`. Runtime identity is part of the auditable pre-production contract.
 
+This contract is protected by `backend/tests/test_compose_runtime_commit_identity.py`.
+
 Before a real execution, rebuild/recreate the backend with the authorized SHA:
 
 ```bash
