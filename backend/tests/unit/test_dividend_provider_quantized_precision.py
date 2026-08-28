@@ -111,11 +111,27 @@ async def test_provider_quantized_accepts_values_within_declared_resolution(
 
 
 @pytest.mark.asyncio
+async def test_provider_quantized_accepts_exact_declared_resolution_boundary() -> None:
+    asset = SimpleNamespace(id=7, ticker="TEST3", asset_type="ACAO")
+    db = _db(asset)
+
+    result = await persist_asset_dividends_strict(
+        db=db,
+        collections=(_collection(canonical=0.29248, yahoo=0.292479),),
+    )
+
+    assert result.created == 1
+    assert result.unchanged == 1
+    db.add.assert_called_once()
+    db.flush.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("canonical", "yahoo"),
     [
-        (0.08453900, 0.084538),  # limite exato de 1e-6 continua bloqueante
-        (0.08453983, 0.084538),  # acima da resolução declarada
+        (0.08453901, 0.084538),  # acima do quantum declarado de 1e-6
+        (0.08453983, 0.084538),  # divergência materialmente maior
     ],
 )
 async def test_provider_quantized_rejects_value_outside_declared_resolution(
