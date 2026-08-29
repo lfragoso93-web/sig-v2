@@ -5,6 +5,15 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — B3 COTAHIST-first para catálogo e OHLCV (29/08/2026)
+
+- O parser COTAHIST passou a sustentar um classificador B3 puro e determinístico para `ACAO`, `FII`, `ETF_NACIONAL` e `BDR`, rejeitando instrumentos inelegíveis e preservando `UNRESOLVED` em ambiguidades.
+- Adicionado upsert conservador de catálogo B3 mínimo a partir de COTAHIST, sem BRAPI/Yahoo, banco externo ou migrations novas.
+- O estágio B3 de pré-produção passou a montar o catálogo por COTAHIST antes do histórico quando `include_catalog=true`.
+- O rebuild histórico B3 passou a persistir `open`, `high`, `low`, `close`, `volume` e `source=b3_cotahist` a partir de `CotahistRecord` com `Decimal`, preservando precedência do mercado à vista sobre fracionário.
+- `CODBDI` continua fora do DTO mínimo; FII x ETF sem sinal seguro permanece `UNRESOLVED`.
+- Nenhum seed real de Proventos, CSV, snapshot, migration física, full market rebuild real ou `ready_for_real_data=true` foi executado.
+
 ### Alterado — rebaseline para certificação OCI e testes integrados (27/08/2026)
 
 - O projeto entrou formalmente em fase de certificação operacional: novas funcionalidades ficam subordinadas à conclusão dos gates de teste e readiness.

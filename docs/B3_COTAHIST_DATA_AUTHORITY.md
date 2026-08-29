@@ -16,14 +16,23 @@ O registro diário possui 245 bytes e contém identidade do papel, classificaç�
 
 ## Estado atual do SGI
 
-Hoje `app.integrations.b3_cotahist` extrai somente:
+`app.integrations.b3_cotahist` já extrai o DTO mínimo necessário para a fase B3:
 
 - `CODNEG` / ticker;
 - data do pregão;
-- `PREULT` / fechamento;
-- `TPMERC` / tipo de mercado.
+- `TPMERC` / mercado;
+- `NOMRES` / nome resumido;
+- `ESPECI` / especificação;
+- `MODREF` / moeda;
+- `PREABE`, `PREMAX`, `PREMIN`, `PREULT` / OHLC;
+- `VOLTOT` / volume financeiro;
+- `FATCOT` / fator de cotação;
+- `CODISI` / ISIN.
 
-`rebuild_b3_historical_market` recebe previamente os ativos de `assets` e solicita ao parser apenas esses tickers. Portanto o COTAHIST atual **não descobre nem cria o catálogo**; ele apenas preenche `asset_prices` de ativos já conhecidos.
+O estágio B3 de pré-produção já usa o COTAHIST para criar/upsertar catálogo
+mínimo antes do histórico. `rebuild_b3_historical_market` persiste OHLCV oficial
+em `asset_prices` e preserva a regra de precedência de mercado à vista sobre
+fracionário.
 
 O schema atual já possui espaço para parte importante do que o COTAHIST oferece:
 
@@ -197,14 +206,13 @@ Não criar migration apenas porque o campo existe na B3. Cada persistência nova
 
 ## Evolução recomendada em microblocos
 
-1. **DTO/parser tipado COTAHIST** — extrair todos os campos necessários usando `Decimal` e sem persistência nova;
-2. **classificador B3** — mapear apenas instrumentos suportados e rejeitar inelegíveis explicitamente;
-3. **catálogo COTAHIST-first** — criar/upsert conservador de `assets` com ticker, nome, moeda e ISIN;
-4. **OHLCV oficial** — preencher `open/high/low/close/volume`, preservando idempotência;
+1. **DTO/parser tipado COTAHIST** — concluído;
+2. **classificador B3** — concluído para casos seguros, com `UNRESOLVED` para ambiguidade;
+3. **catálogo COTAHIST-first** — concluído em upsert conservador de `assets`;
+4. **OHLCV oficial** — concluído para `open/high/low/close/volume` com idempotência;
 5. **BRAPI enrichment policy** — limitar atualizações por autoridade de campo;
-6. **inversão do estágio B3** — retirar dependência estrutural de BRAPI antes do COTAHIST;
-7. **bootstrap/system bootstrap** — refletir a nova ordem e dependências;
-8. somente depois retomar seeds reais subsequentes.
+6. **bootstrap/system bootstrap** — refletir a nova ordem e dependências;
+7. somente depois retomar seeds reais subsequentes.
 
 ## Gates
 

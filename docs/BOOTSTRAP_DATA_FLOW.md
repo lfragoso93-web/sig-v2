@@ -38,27 +38,27 @@ Para ativos negociados na B3 (`ACAO`, `FII`, `ETF_NACIONAL`, `BDR`):
 
 ### Estado atual do código
 
-Hoje o parser `app.integrations.b3_cotahist` extrai apenas:
+O parser `app.integrations.b3_cotahist` já possui DTO tipado mínimo com
+identidade, classificação, OHLCV, fator de cotação e ISIN usando `Decimal`.
 
-- ticker;
-- data;
-- preço de fechamento;
-- tipo de mercado.
+O estágio B3 de pré-produção já possui caminho COTAHIST-first para:
 
-O rebuild histórico atual também filtra apenas tickers já existentes em `assets`. Portanto, **o código atual ainda exige catálogo prévio da BRAPI antes do COTAHIST**.
+- classificar registros B3 suportados sem chamadas externas;
+- criar/upsertar catálogo mínimo em `assets`;
+- persistir histórico oficial de preços com `open`, `high`, `low`, `close`,
+  `volume` e `source=b3_cotahist`;
+- preferir mercado à vista (`010`) sobre fracionário (`020`) na mesma data.
 
-Esse comportamento é considerado transitório. A arquitetura alvo é COTAHIST-first para o baseline B3, com BRAPI como enriquecimento/atualização posterior.
+BRAPI permanece como fonte de enriquecimento/atualização posterior para campos
+complementares, não como pré-requisito para o catálogo B3 existir.
 
 ### Evolução necessária
 
-Antes de inverter a ordem real do estágio B3, implementar em blocos pequenos:
+Evolução remanescente em blocos pequenos:
 
-1. inventário dos campos do layout COTAHIST que podem alimentar identidade/metadados do ativo;
-2. DTO interno B3 independente do layout bruto;
-3. criação/normalização do catálogo B3 a partir do COTAHIST;
-4. histórico de preços a partir do mesmo baseline oficial;
-5. enriquecimento posterior via BRAPI apenas para campos complementares;
-6. auditoria de precedência para impedir downgrade de autoridade.
+1. enriquecer posteriormente via BRAPI apenas para campos complementares;
+2. auditar precedência para impedir downgrade de autoridade;
+3. refletir a nova ordem na Central de Bootstrap quando a #253 for retomada.
 
 ## 2. Ordem canônica do Initial Bootstrap
 
@@ -79,7 +79,8 @@ Antes de inverter a ordem real do estágio B3, implementar em blocos pequenos:
 - persistir identidade/metadados oficiais disponíveis;
 - posteriormente enriquecer via BRAPI.
 
-**Estado transitório atual:** BRAPI cria `assets` e COTAHIST é executado depois apenas para histórico.
+**Estado atual:** o estágio B3 já pode criar catálogo mínimo via COTAHIST antes
+do histórico. BRAPI deve atuar depois como enriquecimento.
 
 #### 1B. Cripto
 
