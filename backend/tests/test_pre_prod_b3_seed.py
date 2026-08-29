@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.services import pre_prod_b3_seed_service as service
-from app.services.asset_seed_service import SeedResult
+from app.services.b3_cotahist_catalog_service import B3CotahistCatalogResult
 from app.services.b3_historical_market_rebuild_service import (
     B3HistoricalMarketRebuildResult,
 )
@@ -14,6 +14,7 @@ class _LockSession:
     def __init__(self, acquired: bool = True):
         self.acquired = acquired
         self.execute = AsyncMock()
+        self.commit = AsyncMock()
 
     async def __aenter__(self):
         return self
@@ -39,7 +40,8 @@ async def test_stage_excludes_crypto_and_reports_counts(monkeypatch):
             ]
         ),
     )
-    seed = AsyncMock(return_value=SeedResult(created=4))
+    fetch_records = AsyncMock(side_effect=[["r2025"], ["r2026"]])
+    catalog_upsert = AsyncMock(return_value=B3CotahistCatalogResult(created=4))
     history = AsyncMock(
         return_value=B3HistoricalMarketRebuildResult(
             start_year=2020,
@@ -47,11 +49,12 @@ async def test_stage_excludes_crypto_and_reports_counts(monkeypatch):
             rows_inserted=100,
         )
     )
-    monkeypatch.setattr(service, "run_asset_seed", seed)
+    monkeypatch.setattr(service, "fetch_b3_cotahist_year_records", fetch_records)
+    monkeypatch.setattr(service, "upsert_b3_cotahist_catalog", catalog_upsert)
     monkeypatch.setattr(service, "rebuild_b3_historical_market", history)
 
     result = await service.run_pre_prod_b3_seed(
-        start_year=2020,
+        start_year=2025,
         end_year=2026,
         cutoff_date=date(2026, 7, 24),
     )
@@ -59,7 +62,8 @@ async def test_stage_excludes_crypto_and_reports_counts(monkeypatch):
     assert result.ok is True
     assert result.before.prices == 0
     assert result.after.prices == 100
-    assert seed.await_args.kwargs == {"include_crypto": False}
+    assert [call.args for call in fetch_records.await_args_list] == [(2025,), (2026,)]
+    assert catalog_upsert.await_args.args[1] == ["r2025", "r2026"]
     assert history.await_args.kwargs["cutoff_date"] == date(2026, 7, 24)
 
 
@@ -76,7 +80,8 @@ async def test_history_only_does_not_touch_catalog(monkeypatch):
             ]
         ),
     )
-    seed = AsyncMock(return_value=SeedResult())
+    fetch_records = AsyncMock(return_value=[])
+    catalog_upsert = AsyncMock(return_value=B3CotahistCatalogResult())
     history = AsyncMock(
         return_value=B3HistoricalMarketRebuildResult(
             start_year=1986,
@@ -84,7 +89,8 @@ async def test_history_only_does_not_touch_catalog(monkeypatch):
             rows_inserted=100,
         )
     )
-    monkeypatch.setattr(service, "run_asset_seed", seed)
+    monkeypatch.setattr(service, "fetch_b3_cotahist_year_records", fetch_records)
+    monkeypatch.setattr(service, "upsert_b3_cotahist_catalog", catalog_upsert)
     monkeypatch.setattr(service, "rebuild_b3_historical_market", history)
 
     result = await service.run_pre_prod_b3_seed(
@@ -94,7 +100,8 @@ async def test_history_only_does_not_touch_catalog(monkeypatch):
         include_catalog=False,
     )
 
-    seed.assert_not_awaited()
+    fetch_records.assert_not_awaited()
+    catalog_upsert.assert_not_awaited()
     assert result.ok is True
     assert result.catalog == {"skipped": True, "reason": "history_only"}
     assert result.before.assets == result.after.assets == 2222

@@ -278,6 +278,33 @@ def _parse_zip_bulk(
     }
 
 
+def _parse_zip_records(payload: bytes) -> list[CotahistRecord]:
+    records: list[CotahistRecord] = []
+    with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+        names = [name for name in archive.namelist() if name.lower().endswith(".txt")]
+        if not names:
+            return []
+        with archive.open(names[0]) as raw:
+            for binary_line in raw:
+                line = binary_line.decode("latin-1", errors="ignore").rstrip("\r\n")
+                record = parse_cotahist_record(line)
+                if record is not None:
+                    records.append(record)
+    return records
+
+
+async def fetch_b3_cotahist_year_records(year: int) -> list[CotahistRecord]:
+    """Baixa um arquivo anual e retorna registros COTAHIST parseados."""
+    payload = await _download_year(year)
+    if not payload:
+        return []
+    try:
+        return _parse_zip_records(payload)
+    except Exception as exc:
+        logger.warning("[b3_cotahist] parse de registros falhou ano=%s erro=%s", year, exc)
+        return []
+
+
 async def fetch_b3_cotahist_year_bulk(
     year: int,
     tickers: Iterable[str] | None = None,

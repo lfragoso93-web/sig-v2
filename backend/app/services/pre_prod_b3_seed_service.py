@@ -8,12 +8,13 @@ from time import monotonic
 from sqlalchemy import func, select, text
 
 from app.core.database import AsyncSessionLocal
+from app.integrations.b3_cotahist import fetch_b3_cotahist_year_records
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
-from app.services.asset_seed_service import run_asset_seed
 from app.services.b3_historical_market_rebuild_service import (
     rebuild_b3_historical_market,
 )
+from app.services.b3_cotahist_catalog_service import upsert_b3_cotahist_catalog
 
 _LOCK_KEY = 7_317_202_607_24
 _B3_TYPES = (
@@ -90,13 +91,14 @@ async def run_pre_prod_b3_seed(
         try:
             before = await _counts()
             if include_catalog:
+                records = []
+                for year in range(start_year, end_year + 1):
+                    records.extend(await fetch_b3_cotahist_year_records(year))
                 async with AsyncSessionLocal() as db:
-                    catalog_result = await run_asset_seed(
-                        db,
-                        include_crypto=False,
-                    )
+                    catalog_result = await upsert_b3_cotahist_catalog(db, records)
+                    await db.commit()
                 catalog = asdict(catalog_result)
-                catalog_errors = catalog_result.errors
+                catalog_errors = 0
             else:
                 catalog = {
                     "skipped": True,
