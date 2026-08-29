@@ -56,6 +56,10 @@ lacunas de metadados em ativos B3 já persistidos. Catálogos de domínios onde 
 BRAPI é canônica, como CRIPTO suportado, continuam pertencendo ao estágio
 dedicado desse domínio.
 
+No `system-bootstrap.v4`, o baseline B3 aparece como estágio explícito
+`b3_baseline` antes de `asset_catalog`. O estágio `asset_catalog` permanece para
+enriquecimento BRAPI de B3 já persistida e catálogo CRIPTO suportado.
+
 ### Evolução necessária
 
 Evolução remanescente em blocos pequenos:
@@ -300,8 +304,9 @@ Este documento descreve o **contrato alvo**.
 
 Já implementado:
 
-- COTAHIST como fonte histórica B3 de `asset_prices`;
-- BRAPI como catálogo B3 transitório;
+- COTAHIST como fonte de baseline B3 em `assets` e `asset_prices`;
+- estágio `b3_baseline` no `system-bootstrap.v4` antes do enriquecimento BRAPI;
+- BRAPI como enriquecimento de B3 já persistida e catálogo CRIPTO suportado;
 - providers dedicados excluídos do backfill genérico;
 - Tesouro oficial;
 - benchmarks/câmbio isolados;
@@ -311,9 +316,7 @@ Já implementado:
 
 Ainda a implementar antes de considerar o fluxo plenamente convergido:
 
-1. evoluir COTAHIST para catálogo/baseline B3 first-class;
-2. inverter o estágio B3 de BRAPI-first para COTAHIST-first;
-3. limitar BRAPI a enriquecimento/atualização quando COTAHIST já definiu o fato oficial;
-4. simplificar Proventos para BRAPI authoritative + Yahoo fallback-only;
-5. centralizar a normalização de Proventos em 8 casas;
-6. fazer `system-bootstrap`/Central de Bootstrap refletirem explicitamente esta ordem e dependências.
+1. auditar precedência para impedir downgrade de autoridade em rotas futuras;
+2. simplificar Proventos para BRAPI authoritative + Yahoo fallback-only;
+3. centralizar a normalização de Proventos em 8 casas;
+4. fazer a Central de Bootstrap refletir explicitamente esta ordem e dependências.
