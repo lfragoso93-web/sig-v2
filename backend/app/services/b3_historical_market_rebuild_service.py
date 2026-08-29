@@ -9,13 +9,15 @@ from __future__ import annotations
 import logging
 from dataclasses import asdict, dataclass, field
 from datetime import date
-from decimal import Decimal
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.core.database import AsyncSessionLocal
-from app.integrations.b3_cotahist import fetch_b3_cotahist_year_bulk
+from app.integrations.b3_cotahist import (
+    CotahistRecord,
+    fetch_b3_cotahist_year_records,
+)
 from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
 from app.models.transaction import Transaction
@@ -80,6 +82,29 @@ def _classify_lifecycle(
     return "COMPLETE"
 
 
+def _canonical_records_by_ticker(
+    records: list[CotahistRecord],
+    requested: set[str],
+) -> dict[str, list[CotahistRecord]]:
+    rows_by_ticker: dict[str, dict[date, CotahistRecord]] = {}
+    for record in records:
+        ticker = record.ticker.upper()
+        if ticker not in requested:
+            continue
+        ticker_rows = rows_by_ticker.setdefault(ticker, {})
+        day = record.timestamp.date()
+        previous = ticker_rows.get(day)
+        if previous is None or (
+            previous.market_type == "020" and record.market_type == "010"
+        ):
+            ticker_rows[day] = record
+
+    return {
+        ticker: sorted(values.values(), key=lambda record: record.timestamp)
+        for ticker, values in rows_by_ticker.items()
+    }
+
+
 async def rebuild_b3_historical_market(
     start_year: int | None = None,
     end_year: int | None = None,
@@ -107,25 +132,30 @@ async def rebuild_b3_historical_market(
 
         for year in range(resolved_start_year, resolved_end_year + 1):
             try:
-                series_by_ticker = await fetch_b3_cotahist_year_bulk(year, tickers)
+                records = await fetch_b3_cotahist_year_records(year)
+                series_by_ticker = _canonical_records_by_ticker(records, tickers)
                 result.years_processed += 1
                 if not series_by_ticker:
                     result.files_empty += 1
                     continue
-                for ticker, rows in series_by_ticker.items():
+                for ticker, records in series_by_ticker.items():
                     asset = assets_by_ticker.get(ticker)
                     if asset is None:
                         continue
-                    result.rows_received += len(rows)
-                    for timestamp, close in rows:
-                        if cutoff_date is not None and timestamp.date() > cutoff_date:
+                    result.rows_received += len(records)
+                    for record in records:
+                        if cutoff_date is not None and record.timestamp.date() > cutoff_date:
                             continue
                         stmt = (
                             pg_insert(AssetPrice)
                             .values(
                                 asset_id=int(asset.id),
-                                timestamp=timestamp,
-                                close=Decimal(str(round(close, 8))),
+                                timestamp=record.timestamp,
+                                open=record.open,
+                                high=record.high,
+                                low=record.low,
+                                close=record.close,
+                                volume=record.volume,
                                 source="b3_cotahist",
                             )
                             .on_conflict_do_nothing(constraint="uq_price_asset_timestamp")
@@ -134,8 +164,11 @@ async def rebuild_b3_historical_market(
                         inserted = await db.execute(stmt)
                         if inserted.scalar_one_or_none() is not None:
                             result.rows_inserted += 1
-                            inserted_by_asset[int(asset.id)] = inserted_by_asset.get(int(asset.id), 0) + 1
-                            touched.add(int(asset.id))
+                            asset_id = int(asset.id)
+                            inserted_by_asset[asset_id] = (
+                                inserted_by_asset.get(asset_id, 0) + 1
+                            )
+                            touched.add(asset_id)
                 await db.commit()
             except Exception:
                 await db.rollback()
