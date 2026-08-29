@@ -8,7 +8,9 @@ from __future__ import annotations
 import io
 import logging
 import zipfile
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Iterable
 
 import httpx
@@ -20,25 +22,90 @@ _URLS = (
     "https://bvmf.bmfbovespa.com.br/InstDados/SerHist/COTAHIST_A{year}.zip",
 )
 _VALID_MARKETS = {"010", "020"}
+_CENTS = Decimal("100")
 
 
-def _parse_record_fields(line: str) -> tuple[str, datetime, float, str] | None:
+@dataclass(frozen=True)
+class CotahistRecord:
+    """Subset canônico do registro 01 realmente consumível pelo SGI."""
+
+    timestamp: datetime
+    ticker: str
+    market_type: str
+    short_name: str
+    specification: str
+    currency: str
+    open: Decimal
+    high: Decimal
+    low: Decimal
+    close: Decimal
+    volume: Decimal
+    quotation_factor: int
+    isin: str | None
+
+
+def _decimal_cents(raw: str) -> Decimal:
+    return Decimal(raw.strip()) / _CENTS
+
+
+def parse_cotahist_record(line: str) -> CotahistRecord | None:
+    """Extrai somente identidade/classificação/OHLCV necessários ao SGI.
+
+    Campos de derivativos, ofertas, preço médio, contagem de negócios, quantidade
+    negociada e distribuição são deliberadamente ignorados enquanto não houver
+    consumidor canônico no domínio.
+    """
     if len(line) < 245 or line[:2] != "01":
         return None
+
     market_type = line[24:27]
     if market_type not in _VALID_MARKETS:
         return None
-    symbol = line[12:24].strip().upper()
-    raw_date = line[2:10]
-    raw_close = line[108:121]
+
+    ticker = line[12:24].strip().upper()
+    if not ticker:
+        return None
+
     try:
-        timestamp = datetime.strptime(raw_date, "%Y%m%d").replace(tzinfo=timezone.utc)
-        close = int(raw_close) / 100.0
-    except (TypeError, ValueError):
+        timestamp = datetime.strptime(line[2:10], "%Y%m%d").replace(
+            tzinfo=timezone.utc
+        )
+        open_price = _decimal_cents(line[56:69])
+        high_price = _decimal_cents(line[69:82])
+        low_price = _decimal_cents(line[82:95])
+        close_price = _decimal_cents(line[108:121])
+        volume = _decimal_cents(line[170:188])
+        quotation_factor = int(line[210:217])
+    except (ArithmeticError, TypeError, ValueError):
         return None
-    if not symbol or close <= 0:
+
+    if close_price <= 0 or quotation_factor <= 0:
         return None
-    return symbol, timestamp, close, market_type
+
+    isin = line[230:242].strip().upper() or None
+    return CotahistRecord(
+        timestamp=timestamp,
+        ticker=ticker,
+        market_type=market_type,
+        short_name=line[27:39].strip(),
+        specification=line[39:49].strip(),
+        currency=line[52:56].strip(),
+        open=open_price,
+        high=high_price,
+        low=low_price,
+        close=close_price,
+        volume=volume,
+        quotation_factor=quotation_factor,
+        isin=isin,
+    )
+
+
+def _parse_record_fields(line: str) -> tuple[str, datetime, float, str] | None:
+    """Compatibilidade temporária do consumidor histórico de fechamento."""
+    record = parse_cotahist_record(line)
+    if record is None:
+        return None
+    return record.ticker, record.timestamp, float(record.close), record.market_type
 
 
 def _parse_record(line: str, ticker: str) -> tuple[datetime, float] | None:
