@@ -42,6 +42,28 @@ class SystemBootstrapReport:
         return payload
 
 
+@dataclass(frozen=True)
+class B3BootstrapWindow:
+    start_year: int
+    end_year: int
+    cutoff_date: date
+
+
+def _resolve_b3_bootstrap_window(settings: object, today: date) -> B3BootstrapWindow:
+    start_year = getattr(settings, "B3_BOOTSTRAP_START_YEAR", None) or today.year
+    end_year = today.year
+    cutoff_date = today
+
+    if start_year > end_year:
+        raise ValueError("B3_BOOTSTRAP_START_YEAR não pode ser posterior ao ano atual")
+
+    return B3BootstrapWindow(
+        start_year=start_year,
+        end_year=end_year,
+        cutoff_date=cutoff_date,
+    )
+
+
 async def _run_stage(
     name: str,
     operation: Callable[[], Awaitable[str]],
@@ -71,19 +93,12 @@ async def _bootstrap_b3_baseline() -> str:
     from app.core.config import settings
     from app.services.pre_prod_b3_seed_service import run_pre_prod_b3_seed
 
-    today = date.today()
-    start_year = settings.B3_BOOTSTRAP_START_YEAR or today.year
-    end_year = settings.B3_BOOTSTRAP_END_YEAR or today.year
-    cutoff_date = (
-        date.fromisoformat(settings.B3_BOOTSTRAP_CUTOFF_DATE)
-        if settings.B3_BOOTSTRAP_CUTOFF_DATE
-        else today
-    )
+    window = _resolve_b3_bootstrap_window(settings, date.today())
 
     result = await run_pre_prod_b3_seed(
-        start_year=start_year,
-        end_year=end_year,
-        cutoff_date=cutoff_date,
+        start_year=window.start_year,
+        end_year=window.end_year,
+        cutoff_date=window.cutoff_date,
         include_catalog=True,
     )
     catalog = result.catalog

@@ -24,8 +24,6 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     ENABLE_BOOT_MARKET_SYNC: bool = False
     B3_BOOTSTRAP_START_YEAR: Optional[int] = None
-    B3_BOOTSTRAP_END_YEAR: Optional[int] = None
-    B3_BOOTSTRAP_CUTOFF_DATE: Optional[str] = None
 
     SECRET_KEY: str = _DEFAULT_SECRET_KEY
     ALGORITHM: str = "HS256"
