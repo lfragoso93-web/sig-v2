@@ -1,6 +1,11 @@
 from decimal import Decimal
 
-from app.integrations.b3_cotahist import parse_cotahist_record
+from app.integrations.b3_cotahist import (
+    CotahistAssetType,
+    CotahistClassificationStatus,
+    classify_cotahist_record,
+    parse_cotahist_record,
+)
 
 
 def _record(**overrides: str) -> str:
@@ -108,3 +113,96 @@ def test_parser_rejects_non_spot_market_and_invalid_record() -> None:
 def test_parser_rejects_missing_identity_or_non_positive_close() -> None:
     assert parse_cotahist_record(_record(ticker="")) is None
     assert parse_cotahist_record(_record(close="0000000000000")) is None
+
+
+def _classified_record(**overrides: str):
+    record = parse_cotahist_record(_record(**overrides))
+    assert record is not None
+    return classify_cotahist_record(record)
+
+
+def test_classifier_classifies_common_and_preferred_shares() -> None:
+    on = _classified_record(ticker="ALOS3", specification="ON      NM")
+    pn = _classified_record(ticker="PETR4", specification="PN      N2")
+
+    assert on.status == CotahistClassificationStatus.CLASSIFIED
+    assert on.asset_type == CotahistAssetType.ACAO
+    assert pn.status == CotahistClassificationStatus.CLASSIFIED
+    assert pn.asset_type == CotahistAssetType.ACAO
+
+
+def test_classifier_classifies_unit_as_share_without_suffix_only_rule() -> None:
+    result = _classified_record(ticker="TAEE11", specification="UNT     N2")
+
+    assert result.status == CotahistClassificationStatus.CLASSIFIED
+    assert result.asset_type == CotahistAssetType.ACAO
+
+
+def test_classifier_classifies_fii_with_official_certificate_and_name_signal() -> None:
+    result = _classified_record(
+        ticker="MXRF11",
+        name="FII MAXI",
+        specification="CI        ",
+    )
+
+    assert result.status == CotahistClassificationStatus.CLASSIFIED
+    assert result.asset_type == CotahistAssetType.FII
+
+
+def test_classifier_classifies_national_etf_with_certificate_and_name_signal() -> None:
+    result = _classified_record(
+        ticker="BOVA11",
+        name="ISHARES BOVA",
+        specification="CI        ",
+    )
+
+    assert result.status == CotahistClassificationStatus.CLASSIFIED
+    assert result.asset_type == CotahistAssetType.ETF_NACIONAL
+
+
+def test_classifier_classifies_bdr_deterministically_from_specification() -> None:
+    result = _classified_record(
+        ticker="AAPL34",
+        specification="BDR     N1",
+        isin="BRAAPLBDR004",
+    )
+
+    assert result.status == CotahistClassificationStatus.CLASSIFIED
+    assert result.asset_type == CotahistAssetType.BDR
+
+
+def test_classifier_accepts_fractional_market_with_same_asset_rule() -> None:
+    result = _classified_record(
+        ticker="WEGE3F",
+        market="020",
+        specification="ON      NM",
+    )
+
+    assert result.status == CotahistClassificationStatus.CLASSIFIED
+    assert result.asset_type == CotahistAssetType.ACAO
+
+
+def test_classifier_rejects_rights_subscription_and_options() -> None:
+    right = _classified_record(ticker="PETR1", specification="DIR ORD   ")
+    subscription = _classified_record(ticker="ABCD2", specification="SUB PN    ")
+    option = _classified_record(ticker="PETRC99", specification="OPCAO COMP")
+
+    assert right.status == CotahistClassificationStatus.INELEGIVEL
+    assert right.reason == "rights_receipts_or_subscription"
+    assert subscription.status == CotahistClassificationStatus.INELEGIVEL
+    assert option.status == CotahistClassificationStatus.INELEGIVEL
+    assert option.reason == "derivative_or_option"
+
+
+def test_classifier_returns_unresolved_for_unknown_or_ambiguous_fund_certificate() -> None:
+    unknown = _classified_record(ticker="ABCD10", specification="MISC      ")
+    ambiguous = _classified_record(
+        ticker="ABCD11",
+        name="ALPHA",
+        specification="CI        ",
+    )
+
+    assert unknown.status == CotahistClassificationStatus.UNRESOLVED
+    assert unknown.asset_type is None
+    assert ambiguous.status == CotahistClassificationStatus.UNRESOLVED
+    assert ambiguous.reason == "fund_certificate_without_safe_fii_etf_signal"

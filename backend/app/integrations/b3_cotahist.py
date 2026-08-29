@@ -11,6 +11,7 @@ import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
+from enum import Enum
 from typing import Iterable
 
 import httpx
@@ -23,6 +24,42 @@ _URLS = (
 )
 _VALID_MARKETS = {"010", "020"}
 _CENTS = Decimal("100")
+_SUPPORTED_SPOT_MARKETS = {"010", "020"}
+_RIGHTS_OR_RECEIPTS_MARKERS = {
+    "DIR",
+    "DIREITO",
+    "REC",
+    "RECIBO",
+    "SUB",
+    "SUBSCR",
+}
+_OPTION_MARKERS = {"OPCAO", "OPC", "CALL", "PUT"}
+_UNIT_MARKERS = {"UNT", "UNIT"}
+_COMMON_SHARE_MARKERS = {"ON", "ON NM", "ON N1", "ON N2", "ON ED", "ON EJ"}
+_PREFERRED_SHARE_MARKERS = {"PN", "PNA", "PNB", "PNC", "PND", "PN NM", "PN N1", "PN N2"}
+_FUND_MARKERS = {"CI", "CIE", "CI ER", "CIED"}
+_FII_NAME_PREFIXES = ("FII ", "FIAGRO ", "FIINFRA ", "FIP ", "FIDC ")
+_ETF_NAME_MARKERS = ("ETF", "ISHARES", "IT NOW", "BB ETF", "TREND", "HASHDEX")
+
+
+class CotahistAssetType(str, Enum):
+    ACAO = "ACAO"
+    FII = "FII"
+    ETF_NACIONAL = "ETF_NACIONAL"
+    BDR = "BDR"
+
+
+class CotahistClassificationStatus(str, Enum):
+    CLASSIFIED = "CLASSIFIED"
+    INELEGIVEL = "INELEGIVEL"
+    UNRESOLVED = "UNRESOLVED"
+
+
+@dataclass(frozen=True)
+class CotahistClassification:
+    status: CotahistClassificationStatus
+    asset_type: CotahistAssetType | None
+    reason: str
 
 
 @dataclass(frozen=True)
@@ -42,6 +79,85 @@ class CotahistRecord:
     volume: Decimal
     quotation_factor: int
     isin: str | None
+
+
+def _normalized_specification(record: CotahistRecord) -> str:
+    return " ".join(record.specification.upper().split())
+
+
+def _normalized_short_name(record: CotahistRecord) -> str:
+    return " ".join(record.short_name.upper().split())
+
+
+def _contains_marker(specification: str, markers: set[str]) -> bool:
+    tokens = set(specification.replace("/", " ").replace("-", " ").split())
+    return any(marker in tokens or marker in specification for marker in markers)
+
+
+def classify_cotahist_record(record: CotahistRecord) -> CotahistClassification:
+    """Classifica um registro COTAHIST sem chamadas externas ou persistência."""
+    if record.market_type not in _SUPPORTED_SPOT_MARKETS:
+        return CotahistClassification(
+            status=CotahistClassificationStatus.INELEGIVEL,
+            asset_type=None,
+            reason="unsupported_market_type",
+        )
+
+    specification = _normalized_specification(record)
+    short_name = _normalized_short_name(record)
+    if _contains_marker(specification, _OPTION_MARKERS):
+        return CotahistClassification(
+            status=CotahistClassificationStatus.INELEGIVEL,
+            asset_type=None,
+            reason="derivative_or_option",
+        )
+
+    if _contains_marker(specification, _RIGHTS_OR_RECEIPTS_MARKERS):
+        return CotahistClassification(
+            status=CotahistClassificationStatus.INELEGIVEL,
+            asset_type=None,
+            reason="rights_receipts_or_subscription",
+        )
+
+    if "BDR" in specification:
+        return CotahistClassification(
+            status=CotahistClassificationStatus.CLASSIFIED,
+            asset_type=CotahistAssetType.BDR,
+            reason="specification_bdr",
+        )
+
+    share_markers = _COMMON_SHARE_MARKERS | _PREFERRED_SHARE_MARKERS | _UNIT_MARKERS
+    if _contains_marker(specification, share_markers):
+        return CotahistClassification(
+            status=CotahistClassificationStatus.CLASSIFIED,
+            asset_type=CotahistAssetType.ACAO,
+            reason="share_or_unit_specification",
+        )
+
+    if _contains_marker(specification, _FUND_MARKERS):
+        if short_name.startswith(_FII_NAME_PREFIXES):
+            return CotahistClassification(
+                status=CotahistClassificationStatus.CLASSIFIED,
+                asset_type=CotahistAssetType.FII,
+                reason="fund_certificate_with_fii_name",
+            )
+        if any(marker in short_name for marker in _ETF_NAME_MARKERS):
+            return CotahistClassification(
+                status=CotahistClassificationStatus.CLASSIFIED,
+                asset_type=CotahistAssetType.ETF_NACIONAL,
+                reason="fund_certificate_with_etf_name",
+            )
+        return CotahistClassification(
+            status=CotahistClassificationStatus.UNRESOLVED,
+            asset_type=None,
+            reason="fund_certificate_without_safe_fii_etf_signal",
+        )
+
+    return CotahistClassification(
+        status=CotahistClassificationStatus.UNRESOLVED,
+        asset_type=None,
+        reason="unsupported_or_unknown_specification",
+    )
 
 
 def _decimal_cents(raw: str) -> Decimal:
