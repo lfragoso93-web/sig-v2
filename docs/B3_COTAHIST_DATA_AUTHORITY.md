@@ -34,6 +34,10 @@ mínimo antes do histórico. `rebuild_b3_historical_market` persiste OHLCV ofici
 em `asset_prices` e preserva a regra de precedência de mercado à vista sobre
 fracionário.
 
+BRAPI não cria ativos B3 ausentes do baseline COTAHIST. No universo B3, o seed
+BRAPI atua como enriquecimento conservador de ativos já persistidos, preenchendo
+lacunas de metadados complementares sem sobrescrever fatos oficiais.
+
 O schema atual já possui espaço para parte importante do que o COTAHIST oferece:
 
 ### `assets`
@@ -210,7 +214,7 @@ Não criar migration apenas porque o campo existe na B3. Cada persistência nova
 2. **classificador B3** — concluído para casos seguros, com `UNRESOLVED` para ambiguidade;
 3. **catálogo COTAHIST-first** — concluído em upsert conservador de `assets`;
 4. **OHLCV oficial** — concluído para `open/high/low/close/volume` com idempotência;
-5. **BRAPI enrichment policy** — limitar atualizações por autoridade de campo;
+5. **BRAPI enrichment policy** — concluída para impedir criação de B3 por BRAPI;
 6. **bootstrap/system bootstrap** — refletir a nova ordem e dependências;
 7. somente depois retomar seeds reais subsequentes.
 

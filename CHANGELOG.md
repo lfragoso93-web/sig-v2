@@ -11,6 +11,7 @@ Formato baseado em Keep a Changelog.
 - Adicionado upsert conservador de catálogo B3 mínimo a partir de COTAHIST, sem BRAPI/Yahoo, banco externo ou migrations novas.
 - O estágio B3 de pré-produção passou a montar o catálogo por COTAHIST antes do histórico quando `include_catalog=true`.
 - O rebuild histórico B3 passou a persistir `open`, `high`, `low`, `close`, `volume` e `source=b3_cotahist` a partir de `CotahistRecord` com `Decimal`, preservando precedência do mercado à vista sobre fracionário.
+- O seed BRAPI deixou de criar ativos B3 ausentes do baseline COTAHIST e passou a atuar como enriquecimento conservador de ativos B3 já persistidos.
 - `CODBDI` continua fora do DTO mínimo; FII x ETF sem sinal seguro permanece `UNRESOLVED`.
 - Nenhum seed real de Proventos, CSV, snapshot, migration física, full market rebuild real ou `ready_for_real_data=true` foi executado.
 

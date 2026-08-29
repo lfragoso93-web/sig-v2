@@ -50,15 +50,18 @@ O estágio B3 de pré-produção já possui caminho COTAHIST-first para:
 - preferir mercado à vista (`010`) sobre fracionário (`020`) na mesma data.
 
 BRAPI permanece como fonte de enriquecimento/atualização posterior para campos
-complementares, não como pré-requisito para o catálogo B3 existir.
+complementares, não como pré-requisito para o catálogo B3 existir. O seed BRAPI
+não cria novos ativos B3 quando o COTAHIST não os descobriu; ele apenas preenche
+lacunas de metadados em ativos B3 já persistidos. Catálogos de domínios onde a
+BRAPI é canônica, como CRIPTO suportado, continuam pertencendo ao estágio
+dedicado desse domínio.
 
 ### Evolução necessária
 
 Evolução remanescente em blocos pequenos:
 
-1. enriquecer posteriormente via BRAPI apenas para campos complementares;
-2. auditar precedência para impedir downgrade de autoridade;
-3. refletir a nova ordem na Central de Bootstrap quando a #253 for retomada.
+1. auditar precedência para impedir downgrade de autoridade em rotas futuras;
+2. refletir a nova ordem na Central de Bootstrap quando a #253 for retomada.
 
 ## 2. Ordem canônica do Initial Bootstrap
 
