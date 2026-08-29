@@ -20,6 +20,7 @@ def test_system_bootstrap_has_structured_report_and_explicit_stages() -> None:
         'BOOTSTRAP_SCHEMA_VERSION = "system-bootstrap.v4"',
         "class BootstrapStageResult",
         "class SystemBootstrapReport",
+        '"b3_baseline"',
         '"asset_catalog"',
         '"treasury_catalog"',
         '"treasury_reconciliation"',
@@ -32,6 +33,7 @@ def test_system_bootstrap_has_structured_report_and_explicit_stages() -> None:
         "run_system_bootstrap_fx_stage",
         "run_system_bootstrap_dividends_stage",
         "run_system_bootstrap_corporate_events_stage",
+        "run_pre_prod_b3_seed",
         "run_system_bootstrap",
     }
 
@@ -68,6 +70,9 @@ def test_treasury_history_stage_uses_official_provider_boundary() -> None:
 def test_asset_catalog_stage_reconciles_existing_catalog_without_market_backfill() -> None:
     source = _source()
 
+    assert '"b3_baseline"' in source
+    assert '"asset_catalog"' in source
+    assert "brapi_enrichment_and_crypto" in source
     assert "seed = await run_asset_seed(db)" in source
     assert "run_backfill" not in source
     assert "run_market_enrichment" not in source

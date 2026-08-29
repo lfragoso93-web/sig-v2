@@ -10,7 +10,7 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from app.services.system_bootstrap_execution_context import (
     build_system_bootstrap_execution_context,
@@ -62,8 +62,41 @@ async def _bootstrap_asset_catalog() -> str:
     async with AsyncSessionLocal() as db:
         seed = await run_asset_seed(db)
     return (
-        f"created={seed.created} updated={seed.updated} "
+        f"brapi_enrichment_and_crypto created={seed.created} updated={seed.updated} "
         f"skipped={seed.skipped} errors={seed.errors}"
+    )
+
+
+async def _bootstrap_b3_baseline() -> str:
+    from app.core.config import settings
+    from app.services.pre_prod_b3_seed_service import run_pre_prod_b3_seed
+
+    today = date.today()
+    start_year = settings.B3_BOOTSTRAP_START_YEAR or today.year
+    end_year = settings.B3_BOOTSTRAP_END_YEAR or today.year
+    cutoff_date = (
+        date.fromisoformat(settings.B3_BOOTSTRAP_CUTOFF_DATE)
+        if settings.B3_BOOTSTRAP_CUTOFF_DATE
+        else today
+    )
+
+    result = await run_pre_prod_b3_seed(
+        start_year=start_year,
+        end_year=end_year,
+        cutoff_date=cutoff_date,
+        include_catalog=True,
+    )
+    catalog = result.catalog
+    cotahist = result.cotahist
+    return (
+        f"start_year={result.start_year} end_year={result.end_year} "
+        f"cutoff_date={result.cutoff_date} ok={result.ok} "
+        f"catalog_created={catalog.get('created', 0)} "
+        f"catalog_updated={catalog.get('updated', 0)} "
+        f"catalog_unresolved={catalog.get('unresolved', 0)} "
+        f"catalog_ineligible={catalog.get('ineligible', 0)} "
+        f"prices_inserted={cotahist.get('rows_inserted', 0)} "
+        f"cotahist_errors={cotahist.get('errors', 0)}"
     )
 
 
@@ -177,6 +210,7 @@ async def run_system_bootstrap(
     )
 
     operations: tuple[tuple[str, Callable[[], Awaitable[str]]], ...] = (
+        ("b3_baseline", _bootstrap_b3_baseline),
         ("asset_catalog", _bootstrap_asset_catalog),
         ("treasury_catalog", _bootstrap_treasury_catalog),
         ("treasury_reconciliation", _bootstrap_treasury_reconciliation),
