@@ -16,6 +16,13 @@ Formato baseado em Keep a Changelog.
 - `CODBDI` continua fora do DTO mínimo; FII x ETF sem sinal seguro permanece `UNRESOLVED`.
 - Nenhum seed real de Proventos, CSV, snapshot, migration física, full market rebuild real ou `ready_for_real_data=true` foi executado.
 
+### Alterado — Proventos BRAPI authoritative / Yahoo fallback-only (30/08/2026)
+
+- O coletor estrito de Proventos passou a interromper a cadeia quando BRAPI possui cobertura válida, inclusive resposta vazia com cobertura.
+- Yahoo/yfinance só pode atuar depois de BRAPI declarar ausência real de cobertura; tentativa de usar Yahoo antes dessa condição passa a ser bloqueante.
+- O contrato documental de Proventos foi atualizado para remover a semântica de fonte concorrente/complementar.
+- A suíte unitária do coletor foi atualizada; testes legados de persistência/semântica ainda registram a arquitetura antiga de reconciliação concorrente e devem ser simplificados em bloco próprio.
+
 ### Alterado — rebaseline para certificação OCI e testes integrados (27/08/2026)
 
 - O projeto entrou formalmente em fase de certificação operacional: novas funcionalidades ficam subordinadas à conclusão dos gates de teste e readiness.

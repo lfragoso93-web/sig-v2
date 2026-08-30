@@ -81,7 +81,7 @@ possuir o ativo hoje não cria direito retroativo.
 | `asset_onboarding_service.py` | Background task de enriquecimento após criação | Removido | Serviço órfão; o CRUD de transações já proibia importação ou agendamento dessa ingestão externa |
 | Batch e CLIs de mercado | Backfill manual paralelo de preços e logos | Removido | Sem consumidores, scheduler ou runbook; duplicavam as etapas dedicadas do bootstrap e a manutenção de fechamento |
 | `run_proventos_sync.py` | Coleta manual global, inclusive por ticker | Removido | CLI órfã duplicava o bootstrap certificado e permitia chamar portas legadas sem seus gates; regressão estrutural impede sua reintrodução |
-| `dividend_history_seed_service.py` | Complemento histórico global via Yahoo | Canônico | Materialização retirada; persiste exclusivamente `asset_dividends` |
+| `dividend_history_seed_service.py` | Fallback histórico via Yahoo | Canônico | Uso permitido somente quando BRAPI declara ausência real de cobertura; materialização retirada; persiste exclusivamente `asset_dividends` |
 | `full_market_rebuild_service.py` | Rebuild amplo de mercado e snapshots | Confinado | A etapa paralela de Proventos e suas métricas foram removidas; o seed certificado é a única entrada operacional desse domínio |
 | `dividend_entitlement_service.py` | Helpers legados de quantidade e valor líquido | Removido | O módulo ficou sem callers após a retirada dos materializadores; regressão estrutural impede sua reintrodução |
 | `portfolio_service.py` | Totais e agrupamentos de Proventos no resumo/posições legados | Canônico | Assinaturas preservadas; agregações read-only usam direitos elegíveis, pagos, líquidos e em BRL |
