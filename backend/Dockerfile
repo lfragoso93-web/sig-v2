@@ -68,7 +68,7 @@ RUN sed -i 's/\r//' /app/entrypoint.sh \
     && mkdir -p /app/artifacts \
     && chown -R app:app /app
 
-USER app
+USER 1000:1000
 
 EXPOSE 8000
 

@@ -40,7 +40,7 @@ RUN apk upgrade --no-cache \
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build --chown=nginx:nginx /app/dist /usr/share/nginx/html
 
-USER nginx
+USER 101:101
 
 EXPOSE 80
 
