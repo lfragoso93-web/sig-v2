@@ -25,10 +25,8 @@ _DIVIDENDS_SEED_LOCK_KEY = 7_317_202_607_28
 _NUMERIC_EQUIVALENCE_TOLERANCE = Decimal("0.00000001")
 _SAME_SOURCE_AGGREGATE_TOLERANCE = Decimal("0.000001")
 _STORAGE_VALUE_QUANTUM = Decimal("0.00000001")
-_ABSORBED_COMPONENT_COVERAGE_TOLERANCE = Decimal("0.00001")
 _MIN_DECLARED_COMPLEMENTARY_SCALE = 6
 _ESTIMATED_PAYMENT_REMARK = "csv:payment_date_estimated"
-_AGGREGATE_CASH_BY_EX_DATE = "aggregate_cash_by_ex_date"
 _SOURCE_PRECEDENCE = {
     "brapi": 0,
     "yfinance_history": 1,
@@ -340,98 +338,6 @@ def _collapse_estimated_payment_components(
     return tuple(retained), tuple(collapsed)
 
 
-def _is_declared_absorbed_component_coverage(
-    *,
-    event,
-    values: dict,
-    components: tuple[dict, ...],
-) -> bool:
-    """Aceita cobertura complementar estrita de uma estimativa absorvida."""
-
-    payload = event.raw_payload
-    if (
-        not isinstance(payload, dict)
-        or payload.get("eventSemantics") != _AGGREGATE_CASH_BY_EX_DATE
-    ):
-        return False
-
-    candidate_value = values["value_per_unit"]
-    if candidate_value is None:
-        return False
-
-    for component in components:
-        component_value = component["value_per_unit"]
-        if component_value is None:
-            continue
-        if (
-            abs(component_value - candidate_value)
-            <= _ABSORBED_COMPONENT_COVERAGE_TOLERANCE
-        ):
-            return True
-    return False
-
-
-def _is_weak_yahoo_aggregate_against_strong_brapi(
-    *,
-    source: str,
-    values: dict,
-    prior_source: str,
-    prior_values: dict,
-) -> bool:
-    """Descarta apenas agregado Yahoo sem identidade diante de BRAPI forte."""
-
-    if source != "yfinance_history" or prior_source != "brapi":
-        return False
-    payload = values.get("raw_payload")
-    if (
-        not isinstance(payload, dict)
-        or payload.get("eventSemantics") != _AGGREGATE_CASH_BY_EX_DATE
-    ):
-        return False
-
-    identity_fields = ("record_date", "payment_date", "approved_on", "isin_code")
-    yahoo_has_identity = any(values[field] is not None for field in identity_fields)
-    brapi_has_strong_identity = all(
-        prior_values[field] is not None for field in identity_fields
-    )
-    return not yahoo_has_identity and brapi_has_strong_identity
-
-
-def _is_declared_cross_type_aggregate(
-    *,
-    event,
-    source: str,
-    asset_id: int,
-    seen: dict[tuple[int, object, DividendType], list[tuple[str, dict]]],
-) -> bool:
-    """Identifica total complementar sem tipo diante de eventos desagregados.
-
-    O histórico do Yahoo expõe uma única soma monetária por Data Ex e não
-    distingue JCP de dividendo. Essa linha não pode competir com uma identidade
-    individual quando a fonte principal já publicou os componentes por tipo.
-    """
-
-    payload = event.raw_payload
-    if (
-        not isinstance(payload, dict)
-        or payload.get("eventSemantics") != _AGGREGATE_CASH_BY_EX_DATE
-    ):
-        return False
-
-    component_types: set[DividendType] = set()
-    component_count = 0
-    for (prior_asset_id, prior_ex_date, prior_type), prior_events in seen.items():
-        if prior_asset_id != asset_id or prior_ex_date != event.ex_date:
-            continue
-        matching = [prior for prior in prior_events if prior[0] != source]
-        if not matching:
-            continue
-        component_types.add(prior_type)
-        component_count += len(matching)
-
-    return component_count >= 2 and len(component_types) >= 2
-
-
 async def persist_asset_dividends_strict(
     *,
     db: AsyncSession,
@@ -492,33 +398,15 @@ async def persist_asset_dividends_strict(
         asset = assets[(collection.ticker, collection.asset_type)]
         for source_collection in sorted(collection.sources, key=_source_sort_key):
             source = source_collection.source.strip().lower()
-            retained, collapsed = _collapse_estimated_payment_components(
+            retained, _collapsed = _collapse_estimated_payment_components(
                 source_collection.normalized_rows
             )
-            collapsed_values = tuple(_event_values(event, source) for event in collapsed)
 
             for event in retained:
                 dividend_type = normalize_dividend_type(event.dividend_type)
                 values = _event_values(event, source)
                 identity_key = (asset.id, event.ex_date, dividend_type)
                 prior_events = seen.setdefault(identity_key, [])
-
-                if _is_declared_cross_type_aggregate(
-                    event=event,
-                    source=source,
-                    asset_id=asset.id,
-                    seen=seen,
-                ):
-                    unchanged += 1
-                    continue
-
-                if _is_declared_absorbed_component_coverage(
-                    event=event,
-                    values=values,
-                    components=collapsed_values,
-                ):
-                    unchanged += 1
-                    continue
 
                 conflict = False
                 for prior_source, prior_values in prior_events:
@@ -527,15 +415,6 @@ async def persist_asset_dividends_strict(
                     conflicts = _conflicting_event_fields(prior_values, values)
                     if not conflicts:
                         continue
-                    if _is_weak_yahoo_aggregate_against_strong_brapi(
-                        source=source,
-                        values=values,
-                        prior_source=prior_source,
-                        prior_values=prior_values,
-                    ):
-                        unchanged += 1
-                        conflict = True
-                        break
                     rendered = _render_conflicting_event_values(
                         fields=conflicts,
                         left_source=prior_source,
