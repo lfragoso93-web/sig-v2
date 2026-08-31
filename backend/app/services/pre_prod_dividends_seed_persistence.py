@@ -83,6 +83,23 @@ def _storage_value(value: Decimal | None) -> Decimal | None:
     return value.quantize(_STORAGE_VALUE_QUANTUM, rounding=ROUND_HALF_UP)
 
 
+def _reject_concurrent_brapi_yahoo_rows(
+    collections: tuple[StrictDividendAssetCollection, ...],
+) -> None:
+    for collection in collections:
+        row_sources = {
+            source_collection.source.strip().lower()
+            for source_collection in collection.sources
+            if source_collection.normalized_rows
+        }
+        if {"brapi", "yfinance_history"}.issubset(row_sources):
+            raise DividendsSeedPersistenceError(
+                "coleção de proventos mistura linhas normalizadas de BRAPI e Yahoo: "
+                f"{collection.ticker}/{collection.asset_type}; "
+                "Yahoo é permitido apenas como fallback após BRAPI sem cobertura"
+            )
+
+
 def _event_values(event, source: str) -> dict:
     return {
         "record_date": event.record_date,
@@ -434,6 +451,7 @@ async def persist_asset_dividends_strict(
     scopes = {(item.ticker, item.asset_type) for item in collections}
     if not scopes:
         return DividendsSeedPersistenceResult(created=0, updated=0, unchanged=0)
+    _reject_concurrent_brapi_yahoo_rows(collections)
 
     asset_result = await db.execute(
         select(Asset).where(tuple_(Asset.ticker, Asset.asset_type).in_(sorted(scopes)))
@@ -596,7 +614,8 @@ async def persist_asset_dividends_strict(
                 else:
                     unchanged += 1
 
-    await db.flush()
+    if created or updated:
+        await db.flush()
     return DividendsSeedPersistenceResult(
         created=created,
         updated=updated,

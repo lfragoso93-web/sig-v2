@@ -86,7 +86,7 @@ async def test_yahoo_history_date_is_normalized_as_ex_date_not_payment_date() ->
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("reverse", [False, True])
-async def test_aalr3_reconciles_declared_yahoo_truncation_deterministically(
+async def test_aalr3_rejects_concurrent_brapi_yahoo_rows(
     reverse: bool,
 ) -> None:
     brapi = _source(
@@ -113,20 +113,17 @@ async def test_aalr3_reconciles_declared_yahoo_truncation_deterministically(
     )
     db = _db()
 
-    result = await persist_asset_dividends_strict(db=db, collections=(collection,))
+    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo é permitido"):
+        await persist_asset_dividends_strict(db=db, collections=(collection,))
 
-    assert result.created == 1
-    assert result.unchanged == 1
-    created = db.add.call_args.args[0]
-    assert created.source == "brapi"
-    assert created.payment_date == date(2019, 5, 7)
-    assert created.value_per_unit == Decimal("0.08453883")
+    db.add.assert_not_called()
+    db.flush.assert_not_awaited()
     db.commit.assert_not_awaited()
     db.rollback.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_aeri3_reconciles_yahoo_value_after_declared_reverse_split() -> None:
+async def test_aeri3_rejects_yahoo_value_after_brapi_coverage() -> None:
     asset = SimpleNamespace(id=12, ticker="AERI3", asset_type="ACAO")
     db = SimpleNamespace(
         scalar=AsyncMock(return_value=True),
@@ -166,20 +163,18 @@ async def test_aeri3_reconciles_yahoo_value_after_declared_reverse_split() -> No
         sources=(brapi, yahoo),
     )
 
-    result = await persist_asset_dividends_strict(db=db, collections=(collection,))
+    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo é permitido"):
+        await persist_asset_dividends_strict(db=db, collections=(collection,))
 
-    assert result.created == 1
-    assert result.unchanged == 1
-    created = db.add.call_args.args[0]
-    assert created.source == "brapi"
-    assert created.value_per_unit == Decimal("0.020702356")
+    db.add.assert_not_called()
+    db.flush.assert_not_awaited()
     db.commit.assert_not_awaited()
     db.rollback.assert_not_awaited()
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("reverse", [False, True])
-async def test_abev3_yahoo_aggregate_preserves_brapi_events_by_type(
+async def test_abev3_yahoo_aggregate_is_rejected_after_brapi_coverage(
     reverse: bool,
 ) -> None:
     asset = SimpleNamespace(id=12, ticker="ABEV3", asset_type="ACAO")
@@ -235,17 +230,11 @@ async def test_abev3_yahoo_aggregate_preserves_brapi_events_by_type(
         sources=sources,
     )
 
-    result = await persist_asset_dividends_strict(db=db, collections=(collection,))
+    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo é permitido"):
+        await persist_asset_dividends_strict(db=db, collections=(collection,))
 
-    assert result.created == 2
-    assert result.unchanged == 1
-    assert db.add.call_count == 2
-    created = [call.args[0] for call in db.add.call_args_list]
-    assert {row.dividend_type for row in created} == {
-        DividendType.DIVIDENDO,
-        DividendType.JCP,
-    }
-    assert {row.source for row in created} == {"brapi"}
+    db.add.assert_not_called()
+    db.flush.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -274,10 +263,7 @@ async def test_aggregate_marker_does_not_hide_single_type_conflict() -> None:
     )
     db = _db()
 
-    with pytest.raises(
-        DividendsSeedPersistenceError,
-        match="evento global conflitante entre fontes",
-    ):
+    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo é permitido"):
         await persist_asset_dividends_strict(db=db, collections=(collection,))
 
     db.flush.assert_not_awaited()
@@ -307,10 +293,7 @@ async def test_precision_contract_does_not_hide_material_value_conflict() -> Non
     )
     db = _db()
 
-    with pytest.raises(
-        DividendsSeedPersistenceError,
-        match=r"valores divergentes: value_per_unit",
-    ):
+    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo é permitido"):
         await persist_asset_dividends_strict(db=db, collections=(collection,))
 
     db.flush.assert_not_awaited()
@@ -343,10 +326,11 @@ async def test_distinct_ex_dates_remain_distinct_events() -> None:
     )
     db = _db()
 
-    result = await persist_asset_dividends_strict(db=db, collections=(collection,))
+    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo é permitido"):
+        await persist_asset_dividends_strict(db=db, collections=(collection,))
 
-    assert result.created == 2
-    assert db.add.call_count == 2
+    db.add.assert_not_called()
+    db.flush.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -373,7 +357,7 @@ async def test_declared_precision_below_six_decimals_remains_blocking() -> None:
     )
     db = _db()
 
-    with pytest.raises(DividendsSeedPersistenceError):
+    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo é permitido"):
         await persist_asset_dividends_strict(db=db, collections=(collection,))
 
     db.flush.assert_not_awaited()
@@ -485,7 +469,7 @@ async def test_abev3_estimated_components_collapse_into_canonical_total() -> Non
     result = await persist_asset_dividends_strict(db=db, collections=(collection,))
 
     assert result.created == 1
-    assert result.unchanged == 2
+    assert result.unchanged == 0
     created = db.add.call_args.args[0]
     assert created.value_per_unit == Decimal("0.09")
     assert created.remarks == ""
@@ -540,7 +524,7 @@ async def test_estimated_components_ignore_their_provisional_payment_date() -> N
     result = await persist_asset_dividends_strict(db=db, collections=(collection,))
 
     assert result.created == 1
-    assert result.unchanged == 2
+    assert result.unchanged == 0
     created = db.add.call_args.args[0]
     assert created.value_per_unit == Decimal("0.13")
     assert created.payment_date == date(2014, 4, 25)
@@ -608,7 +592,7 @@ async def test_estimated_component_policy_does_not_hide_other_conflicts(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("reverse", [False, True])
-async def test_abev3_partial_yahoo_component_preserves_brapi_total(
+async def test_abev3_partial_yahoo_component_is_rejected_after_brapi_total(
     reverse: bool,
 ) -> None:
     asset = SimpleNamespace(id=12, ticker="ABEV3", asset_type="ACAO")
@@ -666,14 +650,11 @@ async def test_abev3_partial_yahoo_component_preserves_brapi_total(
         sources=sources,
     )
 
-    result = await persist_asset_dividends_strict(db=db, collections=(collection,))
+    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo é permitido"):
+        await persist_asset_dividends_strict(db=db, collections=(collection,))
 
-    assert result.created == 1
-    assert result.unchanged == 3
-    created = db.add.call_args.args[0]
-    assert created.source == "brapi"
-    assert created.value_per_unit == Decimal("0.13")
-    assert created.payment_date == date(2014, 4, 25)
+    db.add.assert_not_called()
+    db.flush.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -731,10 +712,7 @@ async def test_absorbed_component_policy_keeps_arbitrary_value_blocking(
         sources=(brapi, yahoo),
     )
 
-    with pytest.raises(
-        DividendsSeedPersistenceError,
-        match=r"valores divergentes: value_per_unit",
-    ):
+    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo é permitido"):
         await persist_asset_dividends_strict(db=db, collections=(collection,))
 
     db.flush.assert_not_awaited()

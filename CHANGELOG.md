@@ -20,8 +20,9 @@ Formato baseado em Keep a Changelog.
 
 - O coletor estrito de Proventos passou a interromper a cadeia quando BRAPI possui cobertura válida, inclusive resposta vazia com cobertura.
 - Yahoo/yfinance só pode atuar depois de BRAPI declarar ausência real de cobertura; tentativa de usar Yahoo antes dessa condição passa a ser bloqueante.
+- A persistência global passou a rejeitar defensivamente coleções com linhas normalizadas simultâneas de BRAPI e Yahoo no mesmo ativo.
 - O contrato documental de Proventos foi atualizado para remover a semântica de fonte concorrente/complementar.
-- A suíte unitária do coletor foi atualizada; testes legados de persistência/semântica ainda registram a arquitetura antiga de reconciliação concorrente e devem ser simplificados em bloco próprio.
+- As suítes unitárias de coletor, persistência e semântica foram atualizadas para o modelo fallback-only.
 
 ### Alterado — rebaseline para certificação OCI e testes integrados (27/08/2026)
 

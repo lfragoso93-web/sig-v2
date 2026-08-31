@@ -100,7 +100,7 @@ async def test_creates_global_event_under_transaction_lock_without_commit() -> N
 
 
 @pytest.mark.asyncio
-async def test_updates_existing_occurrence_metadata_when_identity_is_stable() -> None:
+async def test_existing_occurrence_keeps_populated_metadata_when_identity_is_stable() -> None:
     asset = SimpleNamespace(id=7, ticker="PETR4", asset_type="ACAO")
     existing = AssetDividend(
         asset_id=7,
@@ -119,11 +119,11 @@ async def test_updates_existing_occurrence_metadata_when_identity_is_stable() ->
         collections=(_collection(value=1.25),),
     )
 
-    assert result.updated == 1
+    assert result.unchanged == 1
     assert existing.value_per_unit == Decimal("1.25")
-    assert existing.raw_payload == {"rate": 1.25}
+    assert existing.raw_payload == {"rate": 1.25, "stale": True}
     db.add.assert_not_called()
-    db.flush.assert_awaited_once()
+    db.flush.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -168,10 +168,10 @@ async def test_rejects_missing_catalog_asset_without_creating_it() -> None:
 
 
 @pytest.mark.asyncio
-async def test_rejects_conflicting_sources_for_same_global_identity() -> None:
+async def test_rejects_concurrent_brapi_yahoo_normalized_rows() -> None:
     asset = SimpleNamespace(id=7, ticker="PETR4", asset_type="ACAO")
     first = _collection(value=1.25, source="brapi")
-    second = _collection(value=1.30, source="yfinance_history")
+    second = _collection(value=1.25, source="yfinance_history")
     combined = StrictDividendAssetCollection(
         ticker="PETR4",
         asset_type="ACAO",
@@ -181,10 +181,7 @@ async def test_rejects_conflicting_sources_for_same_global_identity() -> None:
 
     with pytest.raises(
         DividendsSeedPersistenceError,
-        match=(
-            r"valores divergentes: value_per_unit "
-            r"\(brapi=1\.25, yfinance_history=1\.3\)"
-        ),
+        match="Yahoo é permitido apenas como fallback",
     ):
         await persist_asset_dividends_strict(db=db, collections=(combined,))
 
@@ -194,114 +191,32 @@ async def test_rejects_conflicting_sources_for_same_global_identity() -> None:
 
 
 @pytest.mark.asyncio
-async def test_reconciles_equivalent_sources_ignoring_provenance_payload() -> None:
+async def test_persists_yahoo_rows_when_it_is_the_only_normalized_source() -> None:
     asset = SimpleNamespace(id=7, ticker="PETR4", asset_type="ACAO")
-    first = _collection(
+    yahoo = _collection(source="yfinance_history", record_date=None)
+    brapi_without_coverage = StrictDividendSourceCollection(
         source="brapi",
-        raw_payload={"rate": 1.25, "provider_field": "primary"},
-    )
-    second = _collection(
-        source="yfinance_history",
-        record_date=None,
-        raw_payload={"rate": 1.25},
+        raw_rows=0,
+        normalized_rows=(),
+        rejected_rows=0,
+        empty_reason="provider_no_coverage: historical dividends unavailable",
     )
     combined = StrictDividendAssetCollection(
         ticker="PETR4",
         asset_type="ACAO",
-        sources=(first.sources[0], second.sources[0]),
+        sources=(brapi_without_coverage, yahoo.sources[0]),
     )
     db = _db(assets=[asset])
 
     result = await persist_asset_dividends_strict(db=db, collections=(combined,))
 
     assert result.created == 1
-    assert result.unchanged == 1
     created = db.add.call_args.args[0]
-    assert created.source == "brapi"
-    assert created.raw_payload == {
-        "rate": 1.25,
-        "provider_field": "primary",
-    }
+    assert created.source == "yfinance_history"
 
 
 @pytest.mark.asyncio
-async def test_reconciles_numeric_difference_within_storage_precision() -> None:
-    asset = SimpleNamespace(id=7, ticker="PETR4", asset_type="ACAO")
-    first = _collection(value=1.250000001, source="brapi")
-    second = _collection(value=1.250000009, source="yfinance_history")
-    combined = StrictDividendAssetCollection(
-        ticker="PETR4",
-        asset_type="ACAO",
-        sources=(first.sources[0], second.sources[0]),
-    )
-    db = _db(assets=[asset])
-
-    result = await persist_asset_dividends_strict(db=db, collections=(combined,))
-
-    assert result.created == 1
-    assert result.unchanged == 1
-
-
-@pytest.mark.asyncio
-async def test_reconciles_declared_round_half_up_precision() -> None:
-    asset = SimpleNamespace(id=7, ticker="PETR4", asset_type="ACAO")
-    first = _collection(
-        value=0.24956495,
-        source="brapi",
-        raw_payload={"rate": 0.24956495},
-    )
-    second = _collection(
-        value=0.249565,
-        source="yfinance_history",
-        raw_payload={
-            "rate": 0.249565,
-            "canonicalComparison": {
-                "value_per_unit": {
-                    "mode": "round_half_up",
-                    "scale": 6,
-                }
-            },
-        },
-    )
-    combined = StrictDividendAssetCollection(
-        ticker="PETR4",
-        asset_type="ACAO",
-        sources=(first.sources[0], second.sources[0]),
-    )
-    db = _db(assets=[asset])
-
-    result = await persist_asset_dividends_strict(db=db, collections=(combined,))
-
-    assert result.created == 1
-    assert result.unchanged == 1
-
-
-@pytest.mark.asyncio
-async def test_rejects_conflicting_dates_and_reports_exact_field() -> None:
-    asset = SimpleNamespace(id=7, ticker="PETR4", asset_type="ACAO")
-    first = _collection(source="brapi")
-    second = _collection(source="yfinance_history", payment_date=date(2026, 8, 11))
-    combined = StrictDividendAssetCollection(
-        ticker="PETR4",
-        asset_type="ACAO",
-        sources=(first.sources[0], second.sources[0]),
-    )
-    db = _db(assets=[asset])
-
-    with pytest.raises(
-        DividendsSeedPersistenceError,
-        match=(
-            r"valores divergentes: payment_date "
-            r"\(brapi=2026-08-10, yfinance_history=2026-08-11\)"
-        ),
-    ):
-        await persist_asset_dividends_strict(db=db, collections=(combined,))
-
-    db.flush.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_distinct_global_identities_remain_separate_events() -> None:
+async def test_same_source_distinct_global_identities_remain_separate_events() -> None:
     asset = SimpleNamespace(id=7, ticker="PETR4", asset_type="ACAO")
     first = _collection(source="brapi")
     second_event = ParsedDividendEvent(
@@ -314,7 +229,7 @@ async def test_distinct_global_identities_remain_separate_events() -> None:
         raw_payload={"rate": 1.25},
     )
     second_source = StrictDividendSourceCollection(
-        source="yfinance_history",
+        source="brapi",
         raw_rows=1,
         normalized_rows=(second_event,),
         rejected_rows=0,
@@ -374,7 +289,7 @@ async def test_same_source_same_dates_distinct_values_are_separate_occurrences()
     assert result.updated == 0
     assert db.add.call_count == 2
     created_values = {call.args[0].value_per_unit for call in db.add.call_args_list}
-    assert created_values == {Decimal("0.113784574"), Decimal("0.3413537")}
+    assert created_values == {Decimal("0.11378457"), Decimal("0.34135370")}
 
 
 @pytest.mark.asyncio
