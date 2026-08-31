@@ -1,6 +1,6 @@
 # Roadmap pós-merge — liberação do lab para testes com seeds
 
-Data: 2026-08-27
+Data: 2026-08-31
 Branch de trabalho: `stable-15jun`
 Base promovida para `main`: PR #292 / `origin/main` em `3eeca232a8627f4562544739112d1dde82b879fb`
 
@@ -11,8 +11,12 @@ Base promovida para `main`: PR #292 / `origin/main` em `3eeca232a8627f4562544739
 - PRs devem ser abertas apenas ao concluir uma issue ou macroalteração relevante; blocos menores podem seguir com commits/pushes rastreáveis na `stable-15jun`.
 - Consulta pós-merge não retornou alertas abertos de Code Scanning.
 - Consulta pós-merge não retornou alertas abertos de Dependabot security.
-- PRs remanescentes após triagem:
-  - #289 `typescript 7.0.2`: permanece bloqueada por incompatibilidade de peer dependency com `typescript-eslint`; não aceitar automaticamente.
+- `stable-15jun` avançou com os blocos COTAHIST-first/B3 baseline e Proventos
+  fallback-only já enviados ao remoto.
+- PRs abertas em 31/08/2026: #301, #300, #299, #298, #297, #296 e #295.
+- A PR #289 `typescript 7.0.2` deixou de aparecer na lista aberta consultada; a
+  regra permanece: não aceitar upgrade de TypeScript maior sem validação de
+  compatibilidade com `typescript-eslint`, Vite e a suíte frontend completa.
 
 ## Objetivo operacional
 
@@ -26,8 +30,8 @@ Liberar o ambiente OCI lab para testes completos com todos os seeds e bootstraps
 | 2 | Gate de segurança recorrente | #269 | Alta | Baixo | Alta | Code Scanning, Dependabot, Gitleaks, Trivy, pip-audit e npm audit verdes/sem alertas abertos |
 | 3 | Certificação de contratos de seeds sem execução real | #216, #226, #158 | P0 | Médio | Máxima | `scripts/oci_seed_contract_validation.sh` aprovado no lab sem executar seed real |
 | 4 | Readiness integrado do lab OCI | #284, #216, #227 | P0 | Baixo/Médio | Máxima | `scripts/oci_lab_seed_readiness_check.sh` aprovado; `/ready` preserva `ready_for_real_data=false` |
-| 5 | Jornada HTTP descartável do lab | #227, #216, #158 | P0 | Baixo/Médio | Máxima | `scripts/oci_lab_disposable_http_smoke.sh` aprovado; usuário e FX sintética removidos no cleanup |
-| 6 | Ensaio de bootstrap completo com dados descartáveis | #227, #216, #158, #253 | P0 | Alto | Máxima | Execução lab não real com evidência, sem `ready_for_real_data=true`, sem produção e com smoke pós-restart |
+| 5 | Jornada HTTP descartável ampliada | #227, #216, #158 | P0 | Baixo/Médio | Máxima | Smoke HTTP descartável cobre fluxo principal sem usuário/carteira real |
+| 6 | Ensaio de bootstrap com dados descartáveis | #227, #216, #158, #253 | P0 | Alto | Máxima | Execução lab não real com evidência, sem `ready_for_real_data=true`, sem produção e com smoke pós-restart |
 | 7 | Proventos reais: janela controlada | #226, #216, #158 | P0 | Médio/Alto | Máxima | Só após autorização explícita: duas execuções, `first.json`, `second.json`, `idempotency.json` e comparação OK |
 | 8 | Central SuperAdmin por etapas | #253 | Alta | Alto | Alta | UI/contrato para estágios nomeados, bloqueios, status e readiness sem endpoints legados |
 | 9 | Backup/restore hardening | #83 | Alta | Alto | Alta | Restore seguro, auditável, status persistido e testes em banco descartável |
@@ -75,11 +79,12 @@ Critérios:
 
 ### Bloco C — Ensaio lab com dados descartáveis
 
-Depois do readiness integrado passar:
+Pode começar assim que a validação de contratos de seeds for reexecutada no HEAD
+atual do lab:
 
 1. Rodar `sh scripts/oci_lab_disposable_http_smoke.sh`.
 2. Expandir gradualmente a jornada sintética para novos endpoints/telas.
-3. Rodar estágios de bootstrap permitidos em modo lab/teste, quando houver entrada segura.
+3. Rodar apenas estágios de bootstrap com entrada segura e dados descartáveis.
 4. Validar telas de patrimônio, rentabilidade, proventos, IRPF e administração.
 5. Executar smoke OCI e restart/recreate dos containers.
 
@@ -94,4 +99,14 @@ Somente após autorização explícita nas issues/runbooks:
 
 ## Decisão atual
 
-O lab já passou no readiness integrado e na jornada HTTP descartável sem dados reais. O próximo desenvolvimento é expandir o ensaio sintético por endpoints/telas e escolher uma issue funcional de alto valor somente depois que a jornada descartável cobrir o fluxo principal. O sistema está saudável para testes de lab, mas ainda não deve ser declarado pronto para dados reais até os gates de seed completo, evidências e autorização formal terminarem.
+O sistema está próximo de liberar testes integrados de lab com dados fictícios ou
+descartáveis. A previsão operacional é iniciar esse teste assim que:
+
+1. `scripts/oci_seed_contract_validation.sh` passar no HEAD atual do lab;
+2. `scripts/oci_lab_seed_readiness_check.sh` confirmar `/ready` fechado com
+   `ready_for_real_data=false`;
+3. `scripts/oci_lab_disposable_http_smoke.sh` passar após restart/recreate.
+
+Com esses três sinais verdes, o próximo ciclo já pode ser teste funcional do
+sistema em lab descartável. Testes com dados reais continuam bloqueados até a
+cadeia #226 → #216 → #158 ser concluída com autorização e evidências.

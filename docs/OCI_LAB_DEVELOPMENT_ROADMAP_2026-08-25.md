@@ -1,4 +1,4 @@
-# Roadmap de desenvolvimento no lab OCI — 2026-08-25
+# Roadmap de desenvolvimento no lab OCI — 2026-08-31
 
 Este plano organiza os próximos blocos de desenvolvimento do SGI v2 no ambiente de laboratório OCI, antes de qualquer promoção para produção.
 
@@ -23,16 +23,18 @@ Este plano organiza os próximos blocos de desenvolvimento do SGI v2 no ambiente
 - GitHub CLI autenticado com acesso ao repositório.
 - Code Scanning aberto: nenhum alerta encontrado na consulta atual.
 - Dependabot alerts abertos: nenhum alerta encontrado na consulta atual.
-- PRs abertas: 12.
-- Issues abertas consideradas neste plano: 19.
+- PRs abertas: 7.
+- Issues abertas consideradas neste plano: 18.
+- `stable-15jun` avançou com B3 COTAHIST-first, `b3_baseline` no
+  `system-bootstrap.v4` e Proventos BRAPI authoritative / Yahoo fallback-only.
 
 ## Prioridade por severidade, esforço e utilidade
 
 | Ordem | Bloco | Issues/PRs | Severidade | Esforço | Utilidade | Decisão |
 |---:|---|---|---|---|---|---|
 | 1 | Fechar estabilização operacional OCI do lab | #284 | Alta | Médio | Alta | Continuar agora |
-| 2 | Corrigir/registrar PRs com CI falhando | PR #279, PR #235 | Alta | Baixo/Médio | Alta | Antes de merge de dependências |
-| 3 | Validar PRs Dependabot verdes em `stable-15jun` | PRs #286, #285, #280, #278, #277, #276, #275, #274, #273, #261 | Média | Médio | Alta | Em lotes pequenos |
+| 2 | Corrigir/registrar PRs Dependabot abertas | PRs #301, #300, #299, #298, #297, #296, #295 | Alta | Baixo/Médio | Alta | Antes de merge de dependências |
+| 3 | Revalidar contratos de seed/bootstrap no HEAD atual | #216, #226, #158 | P0 | Médio | Máxima | Wrapper OCI aprovado sem seed real |
 | 4 | Revalidar gate de dados reais | #227, #226, #216, #158 | P0 | Médio | Máxima | Bloqueia seed completo real |
 | 5 | Executar seed completo apenas em modo permitido | #216, #226, #158 | P0 | Alto | Máxima | Primeiro com dados fictícios/descartáveis; real só com autorização |
 | 6 | Hardening operacional de backup/restore | #83 | Alta | Alto | Alta | Antes de alegar DR operacional |
@@ -91,28 +93,15 @@ Critério de saída:
 
 Objetivo: impedir que dependências atrasadas se misturem com features.
 
-### PRs com falha
+### PRs abertas
 
-- PR #279 — build-tools frontend:
-  - falha em `Frontend – lint, type check and build`;
-  - falha em `Dependency audit – Node.js`;
-  - tratar em branch/lote próprio e validar em `stable-15jun`.
-- PR #235 — `hadolint/hadolint-action`:
-  - falha em `Dockerfile lint – backend`;
-  - investigar regra nova antes de aceitar upgrade.
-
-### PRs verdes/mergeable
-
-- PR #286 — `mypy`;
-- PR #285 — `reportlab`;
-- PR #280 — `lucide-react`;
-- PR #278 — `recharts`;
-- PR #277 — `fastapi-stack`;
-- PR #276 — `zustand`;
-- PR #275 — `sqlalchemy-stack`;
-- PR #274 — `eslint-stack`;
-- PR #273 — `react-stack`;
-- PR #261 — `redis`.
+- #301 — `hadolint/hadolint-action`;
+- #300 — `lucide-react`;
+- #299 — `build-tools`;
+- #298 — `cryptography`;
+- #297 — `eslint-stack`;
+- #296 — `@tanstack/react-query`;
+- #295 — `@types/react-dom`.
 
 Critério de validação por lote:
 

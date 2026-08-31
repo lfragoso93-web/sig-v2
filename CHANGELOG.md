@@ -30,6 +30,7 @@ Formato baseado em Keep a Changelog.
 ### Alterado — rebaseline para certificação OCI e testes integrados (27/08/2026)
 
 - O projeto entrou formalmente em fase de certificação operacional: novas funcionalidades ficam subordinadas à conclusão dos gates de teste e readiness.
+- Roadmaps de lab/testes foram atualizados em 31/08/2026 com 7 PRs abertas, 18 Issues abertas e a previsão de entrada em testes integrados com dados descartáveis após três gates verdes.
 - Baseline de retomada registrado: `stable-15jun` em `a889edb6bbbb78feb7787c21b3439a0b835b73c6` e `main` em `3eeca232a8627f4562544739112d1dde82b879fb`.
 - PRs #290, #291 e #292 passam a compor o baseline de laboratório OCI: build frontend, Cloudflare HTTP/2 200, smoke OCI e validação repetível dos contratos de bootstrap sem seeds reais.
 - Evidências de contrato registradas: FX/Macro/Tesouro `81 passed, 1 skipped`; B3/Asset Bootstrap/System Bootstrap `70 passed`; Proventos `93 passed, 8 skipped`.
