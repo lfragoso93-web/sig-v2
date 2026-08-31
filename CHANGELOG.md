@@ -13,6 +13,7 @@ Formato baseado em Keep a Changelog.
 - O rebuild histórico B3 passou a persistir `open`, `high`, `low`, `close`, `volume` e `source=b3_cotahist` a partir de `CotahistRecord` com `Decimal`, preservando precedência do mercado à vista sobre fracionário.
 - O seed BRAPI deixou de criar ativos B3 ausentes do baseline COTAHIST e passou a atuar como enriquecimento conservador de ativos B3 já persistidos.
 - O `system-bootstrap.v4` ganhou estágio explícito `b3_baseline` antes de `asset_catalog`; o início histórico pode ser configurado por ambiente e o fim é sempre o dia atual.
+- A CLI auditável `pre_prod_b3_seed` passou a derivar `--end-year` e `--cutoff-date` do dia atual quando não informados, preservando overrides explícitos.
 - `CODBDI` continua fora do DTO mínimo; FII x ETF sem sinal seguro permanece `UNRESOLVED`.
 - Nenhum seed real de Proventos, CSV, snapshot, migration física, full market rebuild real ou `ready_for_real_data=true` foi executado.
 

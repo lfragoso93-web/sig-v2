@@ -51,6 +51,7 @@ run_pytest "FX, macro and Treasury seed contracts" \
   tests/unit/test_pre_prod_treasury_seed_idempotency_cli.py
 
 run_pytest "B3 and asset bootstrap contracts" \
+  tests/unit/test_pre_prod_b3_seed_cli.py \
   tests/test_pre_prod_b3_seed.py \
   tests/test_asset_bootstrap_plan_cli.py \
   tests/test_asset_bootstrap_planner.py \

@@ -328,10 +328,12 @@ O primeiro estágio possui entrada dedicada e não dispara os demais:
 
 ```powershell
 docker compose exec backend python -m app.cli.pre_prod_b3_seed `
-  --start-year <ANO_INICIAL> `
-  --end-year <ANO_FINAL> `
-  --cutoff-date <AAAA-MM-DD>
+  --start-year <ANO_INICIAL>
 ```
+
+Por padrão, o ano final e a data de corte são derivados do dia atual. Use
+`--end-year` e `--cutoff-date` apenas quando a janela operacional aprovada
+exigir uma data histórica explícita.
 
 O JSON deve ser preservado como evidência. Uma segunda execução controlada deve
 retornar `catalog.created=0` e `cotahist.rows_inserted=0`, salvo mudança real na
