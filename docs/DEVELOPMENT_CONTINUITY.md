@@ -59,7 +59,7 @@ Estado verificado em `stable-15jun`:
 
 - HEAD local e remoto: `e9e81d20370593419a11f8a941547c8fe0245873`;
 - árvore limpa antes da próxima rodada;
-- Issues abertas inventariadas: 19;
+- Issues abertas inventariadas: 18;
 - gates de dados reais ainda abertos: #227, #158, #216 e #226;
 - migração/certificação OCI permanece em #284;
 - saneamento de backlog permanece em #293.
