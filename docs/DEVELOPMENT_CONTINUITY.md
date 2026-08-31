@@ -1,6 +1,6 @@
 # Continuidade de desenvolvimento — SGI v2
 
-> Documento obrigatório para iniciar ou retomar qualquer conversa de desenvolvimento. Atualizado em 27/08/2026.
+> Documento obrigatório para iniciar ou retomar qualquer conversa de desenvolvimento. Atualizado em 31/08/2026.
 
 ## Contexto permanente
 
@@ -52,6 +52,39 @@ Evidências já disponíveis:
 - SHA `a889edb6bbbb78feb7787c21b3439a0b835b73c6` garante no smoke que usuário comum recebe `403` em `/api/v1/admin/bootstrap/status`.
 
 Essas validações não promovem `ready_for_real_data`.
+
+## Baseline corrente — 31/08/2026
+
+Estado verificado em `stable-15jun`:
+
+- HEAD local e remoto: `e9e81d20370593419a11f8a941547c8fe0245873`;
+- árvore limpa antes da próxima rodada;
+- Issues abertas inventariadas: 19;
+- gates de dados reais ainda abertos: #227, #158, #216 e #226;
+- migração/certificação OCI permanece em #284;
+- saneamento de backlog permanece em #293.
+
+Blocos recentes já enviados ao remoto após o rebaseline:
+
+- B3 COTAHIST passou a ser fonte primária do catálogo mínimo B3 e do OHLCV
+  histórico certificado;
+- BRAPI deixou de criar ativos B3 ausentes do baseline COTAHIST e passou a
+  enriquecer apenas ativos B3 já conhecidos;
+- `system-bootstrap.v4` ganhou estágio `b3_baseline` antes de `asset_catalog`;
+- o fim da janela B3 é sempre derivado do dia atual, sem variável `.env`;
+- Proventos foram contraídos para BRAPI autoritativa e Yahoo/yfinance
+  fallback-only após ausência real de cobertura;
+- persistência de Proventos rejeita linhas normalizadas simultâneas de BRAPI e
+  Yahoo no mesmo ativo;
+- lógica obsoleta de reconciliação complementar/cross-source via Yahoo foi
+  removida da persistência.
+
+Validações sintéticas recentes:
+
+- B3/COTAHIST/catalog/bootstrap: testes unitários e estruturais focados verdes;
+- Proventos coletor/persistência/semântica: `42 passed`;
+- nenhuma execução real de seed de Proventos, CSV, snapshot, migration física,
+  full rebuild real ou `ready_for_real_data=true`.
 
 ## CERT-01A — qualidade de aplicação no OCI lab
 

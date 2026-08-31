@@ -36,7 +36,7 @@ Exemplos atuais: #127, #130.
 
 Correção estrutural conhecida sem comportamento de produto novo.
 
-Exemplos atuais: #83, #272.
+Exemplos atuais: #83, #269, #272.
 
 ### Bug / gap de teste
 
@@ -89,6 +89,7 @@ Essas Issues são relacionadas, mas não duplicadas: #130 trata contratos/capabi
 ### Dívidas técnicas
 
 - #83 — Backup/Restore administrativo;
+- #269 — Code Scanning e vulnerabilidades abertas;
 - #272 — aliases físicos legados de `corporate_events`.
 
 ## Processo de sanitização
