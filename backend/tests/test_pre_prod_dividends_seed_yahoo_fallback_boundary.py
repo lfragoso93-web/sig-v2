@@ -1,5 +1,4 @@
 from datetime import date
-from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
@@ -65,7 +64,7 @@ def _yahoo_event() -> ParsedDividendEvent:
 
 
 @pytest.mark.asyncio
-async def test_weak_yahoo_aggregate_does_not_override_strong_brapi_event() -> None:
+async def test_yahoo_rows_are_rejected_when_brapi_has_normalized_coverage() -> None:
     brapi = ParsedDividendEvent(
         record_date=date(2024, 10, 4),
         ex_date=date(2024, 10, 7),
@@ -86,18 +85,15 @@ async def test_weak_yahoo_aggregate_does_not_override_strong_brapi_event() -> No
     )
     db = _db()
 
-    result = await persist_asset_dividends_strict(db=db, collections=(collection,))
+    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo é permitido"):
+        await persist_asset_dividends_strict(db=db, collections=(collection,))
 
-    assert result.created == 1
-    assert result.unchanged == 1
-    created = db.add.call_args.args[0]
-    assert created.source == "brapi"
-    assert created.value_per_unit == Decimal("0.09531157")
-    assert created.payment_date == date(2024, 10, 16)
+    db.add.assert_not_called()
+    db.flush.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_weak_yahoo_aggregate_still_blocks_when_primary_identity_is_weak() -> None:
+async def test_yahoo_rows_are_rejected_even_when_brapi_identity_is_weak() -> None:
     brapi = ParsedDividendEvent(
         record_date=None,
         ex_date=date(2024, 10, 7),
@@ -118,10 +114,8 @@ async def test_weak_yahoo_aggregate_still_blocks_when_primary_identity_is_weak()
     )
     db = _db()
 
-    with pytest.raises(
-        DividendsSeedPersistenceError,
-        match="evento global conflitante entre fontes",
-    ):
+    with pytest.raises(DividendsSeedPersistenceError, match="Yahoo é permitido"):
         await persist_asset_dividends_strict(db=db, collections=(collection,))
 
+    db.add.assert_not_called()
     db.flush.assert_not_awaited()

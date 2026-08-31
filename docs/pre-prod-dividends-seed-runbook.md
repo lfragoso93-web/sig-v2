@@ -54,7 +54,8 @@ O fluxo executa, sequencialmente:
 1. valida identidade e janela antes de abrir banco ou rede;
 2. adquire o advisory lock transacional dedicado;
 3. captura a inspeção inicial;
-4. coleta BRAPI como fonte principal e Yahoo como fonte complementar;
+4. coleta BRAPI como fonte principal e usa Yahoo apenas como fallback quando
+   BRAPI declara ausência real de cobertura;
 5. filtra e normaliza os eventos dentro da janela;
 6. persiste o catálogo global;
 7. executa `flush` e a inspeção final;
@@ -181,7 +182,7 @@ As duas evidências devem apresentar:
 - `schema_version=pre-prod-dividends-seed.v2`;
 - branch `stable-15jun`, SHA e janela iguais aos aprovados;
 - `run_id` distintos;
-- fontes principal e complementar explicitamente registradas;
+- fontes executadas e motivo de fallback explicitamente registrados;
 - `ok=true`;
 - transação final confirmada;
 - zero erros bloqueantes;
@@ -213,11 +214,11 @@ operacional. Não edite as evidências para fazê-las convergir.
 
 ## Critérios de aborto
 
-Dividendos históricos da fonte complementar podem estar ajustados por splits ou
-grupamentos posteriores. O adaptador desfaz apenas fatores positivos publicados
+Dividendos históricos do Yahoo podem estar ajustados por splits ou grupamentos
+posteriores. O adaptador desfaz apenas fatores positivos publicados
 explicitamente na série `Stock Splits`, registra o valor original do provedor e
-o fator acumulado no payload normalizado e então aplica a reconciliação estrita.
-Ausência do evento societário ou divergência remanescente continua bloqueante.
+o fator acumulado no payload normalizado. Esses eventos só podem ser persistidos
+quando BRAPI não trouxe cobertura normalizada para o ativo.
 
 Interrompa e registre na Issue #226 quando:
 

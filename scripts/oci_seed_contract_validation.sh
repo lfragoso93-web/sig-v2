@@ -92,6 +92,7 @@ run_pytest "Dividends seed contracts" \
   tests/unit/test_pre_prod_dividends_seed_providers.py \
   tests/unit/test_pre_prod_dividends_seed_source_semantics.py \
   tests/unit/test_pre_prod_dividends_seed_no_materialization.py \
-  tests/unit/test_pre_prod_dividends_idempotency_wrapper.py
+  tests/unit/test_pre_prod_dividends_idempotency_wrapper.py \
+  tests/test_pre_prod_dividends_seed_yahoo_fallback_boundary.py
 
 ok "all seed/bootstrap contract suites passed without real seed execution"

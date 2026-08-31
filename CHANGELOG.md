@@ -22,6 +22,7 @@ Formato baseado em Keep a Changelog.
 - Yahoo/yfinance só pode atuar depois de BRAPI declarar ausência real de cobertura; tentativa de usar Yahoo antes dessa condição passa a ser bloqueante.
 - A persistência global passou a rejeitar defensivamente coleções com linhas normalizadas simultâneas de BRAPI e Yahoo no mesmo ativo.
 - Caminhos internos obsoletos de reconciliação complementar/cross-source via Yahoo foram removidos da persistência.
+- O runbook e o wrapper OCI de contratos de Proventos foram alinhados para cobrir explicitamente o boundary Yahoo fallback-only.
 - O contrato documental de Proventos foi atualizado para remover a semântica de fonte concorrente/complementar.
 - As suítes unitárias de coletor, persistência e semântica foram atualizadas para o modelo fallback-only.
 
