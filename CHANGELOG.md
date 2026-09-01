@@ -26,6 +26,11 @@ Formato baseado em Keep a Changelog.
 - Absorvida em `stable-15jun` a atualização `hadolint/hadolint-action` de `v3.4.0` para `v3.5.0` nos jobs Dockerfile lint do CI.
 - PR #301 pode ser encerrada após confirmação do commit remoto em `stable-15jun`, sem abrir PR individual.
 
+### Alterado — Dependabot backend security (#298)
+
+- Absorvida em `stable-15jun` a atualização `cryptography` de `50.0.0` para `50.0.1` no backend.
+- PR #298 pode ser encerrada após validação local/container e push do commit, sem PR individual.
+
 ### Alterado — B3 COTAHIST-first para catálogo e OHLCV (29/08/2026)
 
 - O parser COTAHIST passou a sustentar um classificador B3 puro e determinístico para `ACAO`, `FII`, `ETF_NACIONAL` e `BDR`, rejeitando instrumentos inelegíveis e preservando `UNRESOLVED` em ambiguidades.
