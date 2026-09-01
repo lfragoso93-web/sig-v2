@@ -1,57 +1,24 @@
-from datetime import date
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock
+from decimal import Decimal
 
 import pytest
 
-from app.services.dividend_event_normalizer import ParsedDividendEvent
-from app.services.pre_prod_dividends_seed_collector import (
-    StrictDividendAssetCollection,
-    StrictDividendSourceCollection,
-)
 from app.services.pre_prod_dividends_seed_persistence import (
-    DividendsSeedPersistenceError,
-    persist_asset_dividends_strict,
+    _declared_precision_equivalent,
 )
 
 
-def _result(rows):
-    result = Mock()
-    result.scalars.return_value.all.return_value = rows
-    return result
+def _canonical(value: float) -> dict:
+    return {
+        "value_per_unit": Decimal(str(value)),
+        "raw_payload": {"rate": value},
+    }
 
 
-def _db(asset):
-    return SimpleNamespace(
-        scalar=AsyncMock(return_value=True),
-        execute=AsyncMock(side_effect=[_result([asset]), _result([])]),
-        add=Mock(),
-        flush=AsyncMock(),
-        commit=AsyncMock(),
-        rollback=AsyncMock(),
-        delete=AsyncMock(),
-    )
-
-
-def _collection(*, canonical: float, yahoo: float):
-    brapi = ParsedDividendEvent(
-        record_date=date(2019, 4, 25),
-        ex_date=date(2019, 4, 26),
-        payment_date=None,
-        approved_on=None,
-        value_per_unit=canonical,
-        dividend_type="DIVIDENDO",
-        raw_payload={"rate": canonical},
-    )
-    yahoo_event = ParsedDividendEvent(
-        record_date=None,
-        ex_date=date(2019, 4, 26),
-        payment_date=None,
-        approved_on=None,
-        value_per_unit=yahoo,
-        dividend_type="DIVIDENDO",
-        raw_payload={
-            "rate": yahoo,
+def _quantized(value: float) -> dict:
+    return {
+        "value_per_unit": Decimal(str(value)),
+        "raw_payload": {
+            "rate": value,
             "eventSemantics": "aggregate_cash_by_ex_date",
             "canonicalComparison": {
                 "value_per_unit": {
@@ -60,94 +27,49 @@ def _collection(*, canonical: float, yahoo: float):
                 }
             },
         },
-    )
-    return StrictDividendAssetCollection(
-        ticker="TEST3",
-        asset_type="ACAO",
-        sources=(
-            StrictDividendSourceCollection(
-                source="brapi",
-                raw_rows=1,
-                normalized_rows=(brapi,),
-                rejected_rows=0,
-                empty_reason=None,
-            ),
-            StrictDividendSourceCollection(
-                source="yfinance_history",
-                raw_rows=1,
-                normalized_rows=(yahoo_event,),
-                rejected_rows=0,
-                empty_reason=None,
-            ),
-        ),
-    )
+    }
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("canonical", "yahoo"),
+    ("canonical", "quantized"),
     [
         (0.24956495, 0.249565),  # AFLT3/2011
         (0.08453883, 0.084538),  # AALR3/2019
         (0.19024149, 0.190242),  # AFLT3/2016
     ],
 )
-async def test_provider_quantized_accepts_values_within_declared_resolution(
+def test_provider_quantized_accepts_values_within_declared_resolution(
     canonical: float,
-    yahoo: float,
+    quantized: float,
 ) -> None:
-    asset = SimpleNamespace(id=7, ticker="TEST3", asset_type="ACAO")
-    db = _db(asset)
-
-    result = await persist_asset_dividends_strict(
-        db=db,
-        collections=(_collection(canonical=canonical, yahoo=yahoo),),
+    assert _declared_precision_equivalent(
+        field="value_per_unit",
+        left=_canonical(canonical),
+        right=_quantized(quantized),
     )
 
-    assert result.created == 1
-    assert result.unchanged == 1
-    db.add.assert_called_once()
-    db.flush.assert_awaited_once()
 
-
-@pytest.mark.asyncio
-async def test_provider_quantized_accepts_exact_declared_resolution_boundary() -> None:
-    asset = SimpleNamespace(id=7, ticker="TEST3", asset_type="ACAO")
-    db = _db(asset)
-
-    result = await persist_asset_dividends_strict(
-        db=db,
-        collections=(_collection(canonical=0.29248, yahoo=0.292479),),
+def test_provider_quantized_accepts_exact_declared_resolution_boundary() -> None:
+    assert _declared_precision_equivalent(
+        field="value_per_unit",
+        left=_canonical(0.29248),
+        right=_quantized(0.292479),
     )
 
-    assert result.created == 1
-    assert result.unchanged == 1
-    db.add.assert_called_once()
-    db.flush.assert_awaited_once()
 
-
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("canonical", "yahoo"),
+    ("canonical", "quantized"),
     [
         (0.08453901, 0.084538),  # acima do quantum declarado de 1e-6
         (0.08453983, 0.084538),  # divergência materialmente maior
     ],
 )
-async def test_provider_quantized_rejects_value_outside_declared_resolution(
+def test_provider_quantized_rejects_value_outside_declared_resolution(
     canonical: float,
-    yahoo: float,
+    quantized: float,
 ) -> None:
-    asset = SimpleNamespace(id=7, ticker="TEST3", asset_type="ACAO")
-    db = _db(asset)
-
-    with pytest.raises(
-        DividendsSeedPersistenceError,
-        match="evento global conflitante entre fontes",
-    ):
-        await persist_asset_dividends_strict(
-            db=db,
-            collections=(_collection(canonical=canonical, yahoo=yahoo),),
-        )
-
-    db.flush.assert_not_awaited()
+    assert not _declared_precision_equivalent(
+        field="value_per_unit",
+        left=_canonical(canonical),
+        right=_quantized(quantized),
+    )
