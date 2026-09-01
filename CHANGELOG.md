@@ -21,6 +21,11 @@ Formato baseado em Keep a Changelog.
 - A leitura mensal de benchmarks em Rentabilidade compara datas de `asset_prices.timestamp` por dia calendário, evitando excluir o fechamento do próprio `end_date`.
 - Nenhum seed real, CSV, snapshot, full rebuild real ou `ready_for_real_data=true` foi executado.
 
+### Alterado — Dependabot security-actions (#301)
+
+- Absorvida em `stable-15jun` a atualização `hadolint/hadolint-action` de `v3.4.0` para `v3.5.0` nos jobs Dockerfile lint do CI.
+- PR #301 pode ser encerrada após confirmação do commit remoto em `stable-15jun`, sem abrir PR individual.
+
 ### Alterado — B3 COTAHIST-first para catálogo e OHLCV (29/08/2026)
 
 - O parser COTAHIST passou a sustentar um classificador B3 puro e determinístico para `ACAO`, `FII`, `ETF_NACIONAL` e `BDR`, rejeitando instrumentos inelegíveis e preservando `UNRESOLVED` em ambiguidades.

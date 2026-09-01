@@ -10,6 +10,7 @@
 - Issues abertas inventariadas: 18 (#293, #284, #272, #269, #253, #246, #227, #226, #216, #158, #150, #149, #130, #127, #97, #90, #83, #58).
 - PRs abertas atuais são apenas Dependabot: #295, #296, #297, #298, #299, #300 e #301.
 - Não abrir PR nova para microblocos; registrar commits pequenos e preparar promoção somente ao fechar macrobloco validado.
+- PR #301 absorvida em `stable-15jun`: `hadolint/hadolint-action` atualizado para `v3.5.0`; encerrar a PR externa após push/validação do bloco.
 
 ## Contexto permanente
 
