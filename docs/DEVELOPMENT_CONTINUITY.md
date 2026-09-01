@@ -13,6 +13,14 @@
 - PRs #295, #296, #297, #298, #300 e #301 foram absorvidas integralmente em `stable-15jun` e encerradas.
 - PR #299 foi encerrada no formato original; apenas `@vitejs/plugin-react 6.1.1` foi absorvido, enquanto TypeScript 7 permanece bloqueado por incompatibilidade com `typescript-eslint`.
 
+## #149 — TWR dedicado Tesouro/Renda Fixa — 01/09/2026
+
+- Primeiro bloco funcional concluido em `stable-15jun`: `twr_service` ganhou uma cadeia diaria pura para classes com historico dedicado.
+- A cadeia reutiliza o calculo canonico de TWR diario e composicao acumulada, segregando aportes/retiradas como fluxo externo e rendimentos/cupom como retorno.
+- O contrato e fail-closed: se faltar cobertura diaria dedicada, a linha publica indisponibilidade explicita e os dias seguintes ficam interrompidos, sem fallback para custo, curva nominal, valor sintetico ou provider em runtime.
+- Testes sinteticos cobrem variacao patrimonial por PU/preco, aporte neutro, rendimento/cupom, ausencia de cobertura e data duplicada.
+- Ainda nao houve integracao produtiva com `PortfolioClassSnapshot`; Tesouro Direto e Renda Fixa continuam sem TWR publicado ate o proximo bloco da #149.
+
 ## Contexto permanente
 
 - Repositório: `lfragoso93-web/sig-v2`.
@@ -207,7 +215,7 @@ Ordem operacional:
 ## Ordem posterior à primeira certificação
 
 1. #150 — histórico persistido do IBOV: implementação DB-first via COTAHIST concluída; validação real segue bloqueada pelos gates operacionais;
-2. #149 — TWR Tesouro/Renda Fixa;
+2. #149 — TWR Tesouro/Renda Fixa: base diaria pura concluida; integrar historicos dedicados e snapshots;
 3. #272 — dívida física de `corporate_events` em bloco separado;
 4. #83 — hardening residual do Backup/Restore administrativo;
 5. demais backlog de produto;

@@ -5,6 +5,13 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado - base TWR dedicada Tesouro/Renda Fixa (#149)
+
+- Adicionada cadeia diaria pura de TWR para classes com historico dedicado, reutilizando o calculo canonico de retorno diario e composicao.
+- O contrato novo e fail-closed: ausencia de cobertura diaria dedicada publica indisponibilidade explicita, sem fallback para custo, curva nominal, taxa sintetica ou provider em runtime.
+- Cobertos cenarios sinteticos de variacao patrimonial por PU/preco, aporte como fluxo externo, rendimento/cupom como retorno, interrupcao por falta de cobertura e rejeicao de data duplicada.
+- A integracao produtiva com snapshots de Tesouro Direto e Renda Fixa segue pendente nos proximos blocos da #149.
+
 ### Alterado — rebaseline pós-merge PR #302 (01/09/2026)
 
 - Registrado que a PR #302 foi mergeada em `main` pelo commit `7861268a2528d80e8c23dfc55f7b0800402abc6d`.
