@@ -18,8 +18,15 @@ describe('ImportCSVModal CSV contract', () => {
     expect(source).toContain('disabled={isLoading || !result || hasBlockingErrors}')
   })
 
-  it('refreshes portfolio views only after a successful import response', () => {
-    const successGate = source.indexOf('if (importResult.success)')
+  it('blocks partial import when validation reports warnings, skipped rows, or errors', () => {
+    expect(source).toContain('result.error_count > 0')
+    expect(source).toContain('result.skipped_count > 0')
+    expect(source).toContain('result.global_errors.length > 0')
+    expect(source).toContain('Corrija os erros ou avisos do CSV antes de confirmar. Nenhuma linha será importada parcialmente.')
+  })
+
+  it('refreshes portfolio views only after a successful import with persisted rows', () => {
+    const successGate = source.indexOf('if (importResult.success && importResult.imported_count > 0)')
     const refreshCall = source.indexOf('invalidateImportedData()')
     const successCallback = source.indexOf('onSuccess?.()')
 

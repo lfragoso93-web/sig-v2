@@ -188,7 +188,7 @@ export default function ImportCSVModal({ portfolioId, onClose, onSuccess }: Prop
       setResult(importResult)
       setRowFilter(null)
       setStep('results')
-      if (importResult.success) {
+      if (importResult.success && importResult.imported_count > 0) {
         invalidateImportedData()
         onSuccess?.()
       }
