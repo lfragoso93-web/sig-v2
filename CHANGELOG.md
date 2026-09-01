@@ -31,6 +31,11 @@ Formato baseado em Keep a Changelog.
 - Absorvida em `stable-15jun` a atualização `cryptography` de `50.0.0` para `50.0.1` no backend.
 - PR #298 pode ser encerrada após validação local/container e push do commit, sem PR individual.
 
+### Alterado — Dependabot react-stack (#295)
+
+- Absorvida em `stable-15jun` a atualização `@types/react-dom` de `19.2.4` para `19.2.5` no frontend.
+- PR #295 pode ser encerrada após validação frontend e push do commit, sem PR individual.
+
 ### Alterado — B3 COTAHIST-first para catálogo e OHLCV (29/08/2026)
 
 - O parser COTAHIST passou a sustentar um classificador B3 puro e determinístico para `ACAO`, `FII`, `ETF_NACIONAL` e `BDR`, rejeitando instrumentos inelegíveis e preservando `UNRESOLVED` em ambiguidades.
