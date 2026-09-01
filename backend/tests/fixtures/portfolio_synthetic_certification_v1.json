@@ -1,0 +1,215 @@
+{
+  "schema_version": "portfolio-synthetic-certification.v1",
+  "issue": 303,
+  "environment": {
+    "test_ready": true,
+    "ready_for_real_data": false,
+    "real_data_allowed": false
+  },
+  "portfolio": {
+    "name": "PORTFOLIO-TEST-READY synthetic multiclasse",
+    "currency": "BRL"
+  },
+  "transactions": [
+    {
+      "ticker": "PETR4",
+      "asset_type": "ACAO",
+      "operation": "buy",
+      "quantity": "100",
+      "price": "20.00",
+      "date": "2026-01-02",
+      "fees": "5.00",
+      "currency": "BRL",
+      "notes": "synthetic initial equity buy"
+    },
+    {
+      "ticker": "PETR4",
+      "asset_type": "ACAO",
+      "operation": "buy",
+      "quantity": "50",
+      "price": "22.00",
+      "date": "2026-01-10",
+      "fees": "3.00",
+      "currency": "BRL",
+      "notes": "synthetic second equity buy"
+    },
+    {
+      "ticker": "PETR4",
+      "asset_type": "ACAO",
+      "operation": "sell",
+      "quantity": "60",
+      "price": "25.00",
+      "date": "2026-02-01",
+      "fees": "4.00",
+      "currency": "BRL",
+      "notes": "synthetic partial equity sell"
+    },
+    {
+      "ticker": "MXRF11",
+      "asset_type": "FII",
+      "operation": "buy",
+      "quantity": "200",
+      "price": "10.00",
+      "date": "2026-01-05",
+      "fees": "2.00",
+      "currency": "BRL",
+      "notes": "synthetic income asset"
+    },
+    {
+      "ticker": "BOVA11",
+      "asset_type": "ETF_NACIONAL",
+      "operation": "buy",
+      "quantity": "20",
+      "price": "100.00",
+      "date": "2026-01-06",
+      "fees": "1.00",
+      "currency": "BRL",
+      "notes": "synthetic national ETF"
+    },
+    {
+      "ticker": "AAPL34",
+      "asset_type": "BDR",
+      "operation": "buy",
+      "quantity": "30",
+      "price": "40.00",
+      "date": "2026-01-07",
+      "fees": "1.50",
+      "currency": "BRL",
+      "notes": "synthetic BDR"
+    },
+    {
+      "ticker": "BTC",
+      "asset_type": "CRIPTO",
+      "operation": "buy",
+      "quantity": "0.10",
+      "price": "200000.00",
+      "date": "2026-01-08",
+      "fees": "20.00",
+      "currency": "BRL",
+      "notes": "synthetic eligible crypto"
+    },
+    {
+      "ticker": "TESOURO-SELIC-2029",
+      "asset_type": "TESOURO_DIRETO",
+      "operation": "buy",
+      "quantity": "0.50",
+      "price": "14000.00",
+      "date": "2026-01-09",
+      "fees": "0.00",
+      "currency": "BRL",
+      "notes": "synthetic treasury SELIC"
+    },
+    {
+      "ticker": "CDB-SYN-CDI-2028",
+      "asset_type": "RENDA_FIXA",
+      "operation": "buy",
+      "quantity": "1",
+      "price": "5000.00",
+      "date": "2026-01-11",
+      "fees": "0.00",
+      "currency": "BRL",
+      "notes": "synthetic fixed income CDI"
+    },
+    {
+      "ticker": "BOVA11",
+      "asset_type": "ETF_NACIONAL",
+      "operation": "sell",
+      "quantity": "20",
+      "price": "110.00",
+      "date": "2026-02-10",
+      "fees": "1.00",
+      "currency": "BRL",
+      "notes": "synthetic full ETF sell"
+    },
+    {
+      "ticker": "BOVA11",
+      "asset_type": "ETF_NACIONAL",
+      "operation": "buy",
+      "quantity": "5",
+      "price": "108.00",
+      "date": "2026-02-20",
+      "fees": "1.00",
+      "currency": "BRL",
+      "notes": "synthetic ETF rebuy after zero"
+    }
+  ],
+  "market_prices": {
+    "as_of": "2026-02-28",
+    "prices": {
+      "PETR4": "24.00",
+      "MXRF11": "10.50",
+      "BOVA11": "112.00",
+      "AAPL34": "38.00",
+      "BTC": "210000.00",
+      "TESOURO-SELIC-2029": "13900.00",
+      "CDB-SYN-CDI-2028": "5050.00"
+    },
+    "missing_coverage": [
+      "BDR-COVERAGE-GAP"
+    ]
+  },
+  "income_events": [
+    {
+      "ticker": "MXRF11",
+      "payment_date": "2026-02-14",
+      "quantity": "200",
+      "value_per_unit": "0.10",
+      "gross_amount": "20.00",
+      "source": "synthetic"
+    }
+  ],
+  "expected": {
+    "holdings": {
+      "PETR4": {
+        "quantity": "90.00000000",
+        "remaining_cost": "1905.00",
+        "realized_pnl": "293.00",
+        "market_value": "2160.00"
+      },
+      "MXRF11": {
+        "quantity": "200.00000000",
+        "remaining_cost": "2002.00",
+        "realized_pnl": "0.00",
+        "market_value": "2100.00"
+      },
+      "BOVA11": {
+        "quantity": "5.00000000",
+        "remaining_cost": "541.00",
+        "realized_pnl": "198.00",
+        "market_value": "560.00"
+      },
+      "AAPL34": {
+        "quantity": "30.00000000",
+        "remaining_cost": "1201.50",
+        "realized_pnl": "0.00",
+        "market_value": "1140.00"
+      },
+      "BTC": {
+        "quantity": "0.10000000",
+        "remaining_cost": "20020.00",
+        "realized_pnl": "0.00",
+        "market_value": "21000.00"
+      },
+      "TESOURO-SELIC-2029": {
+        "quantity": "0.50000000",
+        "remaining_cost": "7000.00",
+        "realized_pnl": "0.00",
+        "market_value": "6950.00"
+      },
+      "CDB-SYN-CDI-2028": {
+        "quantity": "1.00000000",
+        "remaining_cost": "5000.00",
+        "realized_pnl": "0.00",
+        "market_value": "5050.00"
+      }
+    },
+    "totals": {
+      "remaining_cost": "37669.50",
+      "market_value": "38960.00",
+      "realized_pnl": "491.00",
+      "income": "20.00",
+      "open_pnl": "1290.50",
+      "total_pnl": "1801.50"
+    }
+  }
+}

@@ -82,6 +82,13 @@ Durante toda esta certificação:
 
 Criar um dataset determinístico e versionável para uma carteira multiclasse.
 
+Fixture canônica atual:
+
+- `backend/tests/fixtures/portfolio_synthetic_certification_v1.json`;
+- schema `portfolio-synthetic-certification.v1`;
+- `test_ready=true`, `ready_for_real_data=false` e `real_data_allowed=false`;
+- reconciliada por `backend/tests/test_portfolio_synthetic_certification_fixture.py`.
+
 Cobrir, quando suportado pelo contrato corrente:
 
 - Ação;
@@ -130,6 +137,11 @@ Validar no mínimo:
 Tolerância monetária padrão: R$ 0,01, salvo contrato existente mais preciso.
 
 Nenhuma ausência de cobertura pode ser transformada silenciosamente em zero ou retorno simples.
+
+A fixture `portfolio-synthetic-certification.v1` calcula quantidade, custo
+remanescente, resultado realizado, valor de mercado, proventos sintéticos,
+resultado em aberto e resultado total de forma independente dos serviços da API.
+Ela usa FIFO para custo liberado em vendas e tolerância monetária de centavo.
 
 ### D. CSV sintético
 
