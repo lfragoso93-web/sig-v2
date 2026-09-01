@@ -56,6 +56,7 @@ _TD_INDEXER_MAP: dict[str, IndexerType] = {
 
 _RF_FI_TYPE = FixedIncomeType.OUTROS
 _TD_FI_TYPE = FixedIncomeType.OUTROS
+_RF_DEFAULT_INDEXER = IndexerType.CDI
 
 
 def _parse_indexer_rf(value: Optional[str]) -> Optional[IndexerType]:
@@ -68,6 +69,17 @@ def _parse_indexer_td(value: Optional[str]) -> Optional[IndexerType]:
     if not value:
         return None
     return _TD_INDEXER_MAP.get(value.strip())
+
+
+def _infer_treasury_indexer(ticker: str) -> Optional[IndexerType]:
+    normalized = str(ticker or "").upper()
+    if "SELIC" in normalized:
+        return IndexerType.SELIC
+    if "IPCA" in normalized:
+        return IndexerType.IPCA_PLUS
+    if "PREFIXADO" in normalized:
+        return IndexerType.PREFIXADO
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -117,6 +129,71 @@ def _parse_rf_meta_from_notes(notes: Optional[str]) -> dict:
         result["maturity"] = None
 
     return result
+
+
+async def _upsert_fixed_income_record(
+    db: AsyncSession,
+    portfolio_id: int,
+    ticker: str,
+    tx_date: DateType,
+    invested_amount: float,
+    notes: Optional[str],
+    asset_type: str,
+) -> None:
+    meta = _parse_rf_meta_from_notes(notes)
+    at = asset_type.upper()
+
+    if at == "TESOURO_DIRETO":
+        indexer = _parse_indexer_td(meta["indexer_str"]) or _infer_treasury_indexer(ticker)
+    else:
+        indexer = _parse_indexer_rf(meta["indexer_str"]) or _RF_DEFAULT_INDEXER
+
+    if indexer is None:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Indexador nao reconhecido para {at}/{ticker}.",
+        )
+
+    result = await db.execute(
+        select(FixedIncomeInvestment).where(
+            FixedIncomeInvestment.portfolio_id == portfolio_id,
+            FixedIncomeInvestment.name == ticker,
+        )
+    )
+    fi = result.scalar_one_or_none()
+
+    institution = (meta["issuer"] or "").strip()
+    if not institution and at == "TESOURO_DIRETO":
+        institution = "Tesouro Nacional"
+
+    rate_decimal = Decimal(str(round(float(meta["rate"] or 0), 6)))
+    invested_decimal = Decimal(str(round(max(float(invested_amount), 0), 2)))
+
+    if fi is None:
+        fi = FixedIncomeInvestment(
+            portfolio_id=portfolio_id,
+            name=ticker,
+            institution=institution,
+            fixed_income_type=_RF_FI_TYPE,
+            indexer=indexer,
+            rate=rate_decimal,
+            invested_amount=invested_decimal,
+            date_start=tx_date,
+            daily_liquidity=bool(meta["daily_liquidity"]),
+            date_maturity=meta["maturity"],
+            is_active=True,
+            is_ir_exempt=False,
+        )
+        db.add(fi)
+        return
+
+    fi.indexer = indexer
+    fi.rate = rate_decimal
+    fi.invested_amount = invested_decimal
+    fi.daily_liquidity = bool(meta["daily_liquidity"])
+    fi.date_maturity = meta["maturity"]
+    if institution:
+        fi.institution = institution
 
 
 # ---------------------------------------------------------------------------
@@ -388,32 +465,21 @@ async def create_transaction(
         notes=payload.notes,
     )
     db.add(tx)
+
+    if operation == OperationType.buy and asset_type in {"RENDA_FIXA", "TESOURO_DIRETO"}:
+        invested = float(payload.quantity) * float(payload.price)
+        await _upsert_fixed_income_record(
+            db,
+            portfolio_id,
+            ticker,
+            payload.date,
+            invested,
+            payload.notes,
+            asset_type,
+        )
+
     await db.commit()
     await db.refresh(tx)
-
-    if operation == OperationType.buy:
-        if asset_type == "RENDA_FIXA":
-            invested = float(payload.quantity) * float(payload.price)
-            background_tasks.add_task(
-                _upsert_fixed_income_isolated,
-                portfolio_id,
-                ticker,
-                payload.date,
-                invested,
-                payload.notes,
-                "RENDA_FIXA",
-            )
-        elif asset_type == "TESOURO_DIRETO":
-            invested = float(payload.quantity) * float(payload.price)
-            background_tasks.add_task(
-                _upsert_fixed_income_isolated,
-                portfolio_id,
-                ticker,
-                payload.date,
-                invested,
-                payload.notes,
-                "TESOURO_DIRETO",
-            )
 
     if asset_type != "CRIPTO":
         asset_data = AssetCreate(ticker=ticker, name=ticker, asset_type=asset_type)
@@ -495,32 +561,20 @@ async def update_transaction(
     tx.currency = currency
     tx.notes = notes
 
+    if operation == OperationType.buy and asset_type in {"RENDA_FIXA", "TESOURO_DIRETO"}:
+        invested = float(quantity) * float(price)
+        await _upsert_fixed_income_record(
+            db,
+            portfolio_id,
+            ticker,
+            tx_date,
+            invested,
+            notes,
+            asset_type,
+        )
+
     await db.commit()
     await db.refresh(tx)
-
-    if operation == OperationType.buy:
-        if asset_type == "RENDA_FIXA":
-            invested = float(quantity) * float(price)
-            background_tasks.add_task(
-                _upsert_fixed_income_isolated,
-                portfolio_id,
-                ticker,
-                tx_date,
-                invested,
-                notes,
-                "RENDA_FIXA",
-            )
-        elif asset_type == "TESOURO_DIRETO":
-            invested = float(quantity) * float(price)
-            background_tasks.add_task(
-                _upsert_fixed_income_isolated,
-                portfolio_id,
-                ticker,
-                tx_date,
-                invested,
-                notes,
-                "TESOURO_DIRETO",
-            )
 
     background_tasks.add_task(
         _run_snapshot_backfill,

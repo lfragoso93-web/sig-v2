@@ -76,13 +76,15 @@ class _Result:
 class _WriteSpySession:
     def __init__(self, execute_value=None) -> None:
         self.execute_value = execute_value
+        self.added = []
         self.add_called = False
         self.commit_called = False
 
     async def execute(self, _statement):
         return _Result(self.execute_value)
 
-    def add(self, _value) -> None:
+    def add(self, value) -> None:
+        self.added.append(value)
         self.add_called = True
 
     async def commit(self) -> None:
@@ -117,6 +119,10 @@ async def _reject_crypto(_db, ticker, _asset_type):
 
 
 async def _allow_crypto(*_args, **_kwargs):
+    return None
+
+
+async def _noop_asset(*_args, **_kwargs):
     return None
 
 
@@ -207,6 +213,70 @@ async def test_rejected_create_does_not_add_or_commit(monkeypatch) -> None:
     assert exc_info.value.status_code == 422
     assert db.add_called is False
     assert db.commit_called is False
+
+
+@pytest.mark.asyncio
+async def test_fixed_income_upsert_failure_blocks_transaction_commit(monkeypatch) -> None:
+    async def _fail_upsert(*_args, **_kwargs):
+        raise RuntimeError("fixed income upsert failed")
+
+    db = _WriteSpySession()
+    monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
+    monkeypatch.setattr(transactions, "_upsert_fixed_income_record", _fail_upsert)
+
+    with pytest.raises(RuntimeError, match="fixed income upsert failed"):
+        await transactions.create_transaction(
+            portfolio_id=1,
+            payload=TransactionCreate(
+                ticker="CDB-TESTE",
+                asset_type="RENDA_FIXA",
+                operation="buy",
+                quantity=1,
+                price=1000,
+                fees=0,
+                date=date(2026, 8, 11),
+                currency="BRL",
+                notes="Indexador: CDI | Taxa: 110% | Emissor: Banco Teste",
+            ),
+            background_tasks=BackgroundTasks(),
+            db=db,
+            current_user=object(),
+        )
+
+    assert db.commit_called is False
+
+
+@pytest.mark.asyncio
+async def test_fixed_income_buy_prepares_record_before_commit(monkeypatch) -> None:
+    db = _WriteSpySession(execute_value=None)
+    monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
+    monkeypatch.setattr(transactions, "get_or_create_asset", _noop_asset)
+
+    result = await transactions.create_transaction(
+        portfolio_id=1,
+        payload=TransactionCreate(
+            ticker="CDB-TESTE",
+            asset_type="RENDA_FIXA",
+            operation="buy",
+            quantity=1,
+            price=1000,
+            fees=0,
+            date=date(2026, 8, 11),
+            currency="BRL",
+            notes="Indexador: CDI | Taxa: 110% | Emissor: Banco Teste",
+        ),
+        background_tasks=BackgroundTasks(),
+        db=db,
+        current_user=object(),
+    )
+
+    assert result.ticker == "CDB-TESTE"
+    assert db.commit_called is True
+    assert any(
+        getattr(item, "name", None) == "CDB-TESTE"
+        and getattr(item, "invested_amount", None) == transactions.Decimal("1000.0")
+        for item in db.added
+    )
 
 
 @pytest.mark.asyncio
