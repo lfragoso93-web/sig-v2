@@ -1,0 +1,253 @@
+# Certificação funcional de carteira — PORTFOLIO-TEST-READY
+
+## Objetivo
+
+Este documento define o gate funcional anterior ao uso de carteiras e dados reais no SGI v2.
+
+A certificação deve provar, com dados sintéticos e reproduzíveis, que o fluxo financeiro ponta a ponta permanece consistente antes de avançar para os gates reais #226, #216, #158 e #227.
+
+Issue canônica: #303.
+
+## Separação de ambientes
+
+### Desenvolvimento e certificação pesada — LOCAL
+
+Ambiente oficial:
+
+- Windows;
+- PowerShell;
+- Docker Desktop;
+- branch `stable-15jun`.
+
+Devem ocorrer localmente:
+
+- desenvolvimento e correções;
+- builds;
+- migrations de teste;
+- pytest e qualidade backend;
+- testes/lint/build frontend;
+- bootstrap com dados permitidos;
+- criação da carteira sintética;
+- importação CSV sintética;
+- reconciliação financeira detalhada;
+- testes de restart, cache e persistência;
+- geração das evidências do gate.
+
+### Homologação real — OCI Free Tier
+
+A OCI não é ambiente de desenvolvimento.
+
+Ela recebe somente um SHA já aprovado no gate local e é usada para:
+
+- deploy do SHA certificado;
+- migrations necessárias;
+- smoke reduzido;
+- validação de PostgreSQL, Redis e volumes;
+- restart/reboot;
+- Cloudflare/rede;
+- CPU, memória e disco;
+- integrações externas autorizadas;
+- homologação operacional final.
+
+Falhas de código encontradas na OCI devem voltar para o ciclo local: diagnosticar → reproduzir localmente → corrigir → testar → commit → push → atualizar OCI → retestar.
+
+## Readiness
+
+Durante toda esta certificação:
+
+- `test_ready=true` permite usuário, carteira e dados fictícios/descartáveis;
+- `ready_for_real_data=false` permanece obrigatório;
+- nenhuma flag deve ser forçada para contornar #226/#216/#158/#227;
+- nenhum seed real de Proventos é autorizado por este documento;
+- nenhum CSV real é autorizado por este documento.
+
+## Ordem obrigatória
+
+### A. Baseline local
+
+1. confirmar diretório e repositório;
+2. confirmar `stable-15jun`;
+3. `git fetch origin`;
+4. comparar HEAD local, `origin/stable-15jun` e `origin/main`;
+5. reconciliar a divergência de branch sem perder commits da `stable-15jun`;
+6. confirmar working tree limpa;
+7. confirmar Issues/PRs relevantes;
+8. confirmar Docker Desktop e serviços Compose;
+9. validar Alembic/migration head e drift gate;
+10. executar qualidade proporcional ao HEAD;
+11. validar backend, frontend e smoke local;
+12. validar bootstrap somente nos estágios permitidos.
+
+### B. Dataset sintético canônico
+
+Criar um dataset determinístico e versionável para uma carteira multiclasse.
+
+Cobrir, quando suportado pelo contrato corrente:
+
+- Ação;
+- FII;
+- ETF;
+- BDR;
+- Criptomoeda elegível;
+- Tesouro Direto;
+- Renda Fixa.
+
+Casos mínimos:
+
+- compra única;
+- duas ou mais compras em preços/datas diferentes;
+- venda parcial;
+- venda total;
+- recompra depois de zerar a posição;
+- taxas;
+- ativo com Proventos;
+- ativo sem Proventos;
+- posição constante com variação de preço;
+- cobertura completa e cobertura ausente/incompleta.
+
+O dataset não deve depender de dados pessoais reais.
+
+### C. Reconciliação financeira independente
+
+Para cada caso, calcular expectativas de maneira independente da API e comparar com o SGI.
+
+Validar no mínimo:
+
+- quantidade;
+- custo/preço médio;
+- custo remanescente após venda;
+- resultado realizado;
+- total investido;
+- valor atual;
+- resultado em aberto;
+- Proventos conforme contrato canônico;
+- patrimônio;
+- distribuição por classe;
+- snapshots;
+- TWR/rentabilidade onde disponível;
+- IRPF para operações cobertas.
+
+Tolerância monetária padrão: R$ 0,01, salvo contrato existente mais preciso.
+
+Nenhuma ausência de cobertura pode ser transformada silenciosamente em zero ou retorno simples.
+
+### D. CSV sintético
+
+Validar:
+
+- dry-run;
+- erros e warnings;
+- normalização/resolução de ticker;
+- importação efetiva;
+- invalidação de cache;
+- rebuild de snapshots;
+- estado imediatamente após a resposta HTTP;
+- estado depois do rebuild;
+- comportamento em reexecução;
+- anti-duplicidade/idempotência conforme o contrato;
+- venda parcial/total e recompra via histórico importado.
+
+### E. Tesouro Direto — marcação a mercado + TWR
+
+A rentabilidade oficial de Tesouro Direto deve refletir marcação a mercado, não apenas a taxa contratada ou a curva teórica.
+
+Contrato esperado:
+
+- patrimônio diário = quantidade econômica × PU de mercado persistido do título na data;
+- variação de PU com posição constante é retorno de mercado;
+- compras/aportes são fluxos externos e não lucro;
+- vendas/resgates são fluxos externos e não perda;
+- cupons e amortizações devem ser segregados para não haver dupla contagem entre patrimônio e caixa;
+- vencimento deve encerrar a posição pelo valor efetivamente liquidado, preservando o retorno acumulado;
+- taxa contratada/curva pode permanecer como informação de contratação/accrual onde aplicável, mas não substitui o PU de mercado na rentabilidade oficial;
+- falta de PU diário deve publicar indisponibilidade explícita/fail-closed;
+- provider externo não pode ser chamado durante cálculo/read path para preencher lacunas.
+
+Casos mínimos independentes:
+
+1. posição constante + queda de PU => retorno negativo, mesmo com taxa contratada positiva;
+2. posição constante + alta de PU => retorno positivo;
+3. compra no meio da série não vira retorno do dia;
+4. venda parcial não distorce o TWR;
+5. cupom/amortização não é contado duas vezes;
+6. vencimento/resgate zera a posição e preserva a cadeia anterior;
+7. lacuna de PU interrompe/publica indisponibilidade conforme contrato.
+
+Antes da integração produtiva da #149, confirmar qual histórico oficial persistido e qual campo de PU são a fonte canônica da cadeia diária.
+
+### F. Renda Fixa — consistência operacional
+
+Validar explicitamente:
+
+- coerência entre transações e `fixed_income_investments`;
+- comportamento se o side-effect de upsert falhar;
+- ausência de estado parcialmente consistente silencioso;
+- invalidação de cache;
+- cálculo por indexador e séries persistidas;
+- fail-closed quando a cadeia TWR dedicada não tiver cobertura suficiente.
+
+### G. UI ponta a ponta
+
+Validar:
+
+- login e seleção/criação de carteira;
+- Transações;
+- Patrimônio;
+- Posições;
+- Rentabilidade;
+- Proventos;
+- IRPF;
+- filtros/períodos relevantes;
+- estados vazios/indisponíveis coerentes;
+- ausência de chamadas inesperadas a providers em read paths financeiros.
+
+### H. Resiliência local
+
+Validar:
+
+- restart do backend;
+- Redis indisponível/fail-open;
+- restart completo do Compose;
+- persistência PostgreSQL/volumes;
+- caches e snapshots após restart;
+- Alembic ainda no head esperado.
+
+## Bugs e gaps encontrados
+
+Cada bug deve virar Issue pequena própria com:
+
+- comportamento esperado;
+- comportamento observado;
+- passos de reprodução;
+- SHA;
+- ambiente;
+- severidade;
+- evidência;
+- critério de aceite.
+
+Não esconder bugs dentro da #303 e não misturar várias correções não relacionadas no mesmo commit.
+
+## Critério PORTFOLIO-TEST-READY
+
+O gate local só é aprovado quando:
+
+- dataset sintético reproduzível estiver documentado;
+- principais números financeiros estiverem reconciliados;
+- Tesouro tiver semântica explícita de marcação a mercado e fluxo;
+- Renda Fixa não puder ficar parcialmente consistente silenciosamente;
+- CSV e rebuild estiverem validados;
+- UI crítica estiver validada;
+- restart/persistência estiverem aprovados;
+- blockers encontrados estiverem corrigidos;
+- documentação viva refletir o resultado;
+- existir SHA exato da `stable-15jun` aprovado para homologação OCI.
+
+## Próxima etapa após aprovação
+
+Após `PORTFOLIO-TEST-READY`:
+
+1. executar somente então os gates reais #226 → #216 → #158 → #227;
+2. selecionar um SHA exato já certificado localmente;
+3. atualizar OCI para esse SHA;
+4. realizar homologação reduzida e operacional;
+5. qualquer falha de código retorna ao ambiente local.
