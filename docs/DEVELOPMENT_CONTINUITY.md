@@ -8,9 +8,10 @@
 - `stable-15jun` permanece a branch obrigatória de desenvolvimento, atualmente em `2c9358629b3e5e9206a365ebeac45f9272dfd48e`.
 - A diferença esperada entre `origin/main` e `origin/stable-15jun` é apenas o merge commit da #302; novo desenvolvimento deve continuar em `stable-15jun`.
 - Issues abertas inventariadas: 18 (#293, #284, #272, #269, #253, #246, #227, #226, #216, #158, #150, #149, #130, #127, #97, #90, #83, #58).
-- PRs abertas atuais são apenas Dependabot: #295, #296, #297, #298, #299, #300 e #301.
+- PRs abertas atuais: nenhuma após triagem dos Dependabot #295, #296, #297, #298, #299, #300 e #301.
 - Não abrir PR nova para microblocos; registrar commits pequenos e preparar promoção somente ao fechar macrobloco validado.
-- PR #301 absorvida em `stable-15jun`: `hadolint/hadolint-action` atualizado para `v3.5.0`; encerrar a PR externa após push/validação do bloco.
+- PRs #295, #296, #297, #298, #300 e #301 foram absorvidas integralmente em `stable-15jun` e encerradas.
+- PR #299 foi encerrada no formato original; apenas `@vitejs/plugin-react 6.1.1` foi absorvido, enquanto TypeScript 7 permanece bloqueado por incompatibilidade com `typescript-eslint`.
 
 ## Contexto permanente
 

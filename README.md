@@ -158,7 +158,7 @@ O bloco final da #269 foi promovido pela PR #282. O CI correspondente foi aprova
 
 ## PRs de dependências
 
-Em 01/09/2026 existem 7 PRs Dependabot abertas contra `main`: #295, #296, #297, #298, #299, #300 e #301. Elas devem ser avaliadas em blocos próprios, sem merge automático e sem PR nova para microblocos.
+Em 01/09/2026, as PRs Dependabot #295, #296, #297, #298, #299, #300 e #301 foram triadas e encerradas. As atualizações seguras foram absorvidas em `stable-15jun`; TypeScript 7 segue bloqueado enquanto `typescript-eslint` exigir TypeScript `<6.1.0`.
 
 ## Comandos principais
 

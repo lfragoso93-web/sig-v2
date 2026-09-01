@@ -8,7 +8,7 @@
 - `stable-15jun` segue como branch de desenvolvimento em `2c9358629b3e5e9206a365ebeac45f9272dfd48e`.
 - `main` está um commit à frente apenas pelo merge commit; não há divergência funcional pendente da #302.
 - Próximos blocos continuam sem PR nova até fechamento de macrobloco validado.
-- PRs abertas atuais: Dependabot #295, #296, #297, #298, #299, #300 e #301.
+- PRs abertas atuais: nenhuma após triagem e encerramento dos Dependabot #295, #296, #297, #298, #299, #300 e #301.
 
 ## Direção atual
 
@@ -172,9 +172,9 @@ Contrato #267:
 
 ## PRs abertas
 
-Em 01/09/2026 existem 7 PRs Dependabot abertas contra `main`: #295, #296, #297, #298, #299, #300 e #301.
+Em 01/09/2026, as 7 PRs Dependabot abertas contra `main` (#295, #296, #297, #298, #299, #300 e #301) foram triadas e encerradas.
 
-Elas não devem ser mergeadas automaticamente. Tratar cada grupo de dependências com validação própria em `stable-15jun`, mantendo a política de PR apenas para macrobloco concluído.
+#295, #296, #297, #298, #300 e #301 foram absorvidas integralmente em `stable-15jun`. #299 foi encerrada no formato original porque TypeScript 7 permanece incompatível com o peer range vigente de `typescript-eslint`; apenas `@vitejs/plugin-react 6.1.1` foi absorvido.
 
 ## Estado operacional
 
