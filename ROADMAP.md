@@ -118,7 +118,7 @@ Contrato #267:
 
 ### Fase 3 — performance e benchmarks
 
-- [ ] #150 — histórico persistido do IBOV;
+- [x] #150 — histórico persistido do IBOV materializado via COTAHIST no fluxo B3 DB-first;
 - [ ] #149 — TWR diário de Tesouro Direto e Renda Fixa;
 - [ ] reconciliar snapshots de classe e consolidado.
 
@@ -154,7 +154,7 @@ Contrato #267:
 
 ### P1 — após primeira certificação
 
-- #150 — histórico persistido do IBOV.
+- #150 — histórico persistido do IBOV: implementação DB-first via COTAHIST concluída em `stable-15jun`, pendente apenas de validação operacional real quando gates permitirem.
 - #149 — TWR Tesouro/Renda Fixa.
 
 ### P2 — dívida estrutural/operacional

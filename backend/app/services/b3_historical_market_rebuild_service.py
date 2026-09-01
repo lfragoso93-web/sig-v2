@@ -25,12 +25,14 @@ from app.services.asset_last_price_refresh_service import refresh_asset_last_pri
 
 logger = logging.getLogger(__name__)
 
+_IBOV_TICKER = "IBOV"
 _B3_TYPES = {
     AssetType.ACAO.value,
     AssetType.FII.value,
     AssetType.ETF_NACIONAL.value,
     AssetType.BDR.value,
 }
+_B3_BENCHMARK_TICKERS = {_IBOV_TICKER}
 
 
 @dataclass
@@ -105,6 +107,28 @@ def _canonical_records_by_ticker(
     }
 
 
+async def _ensure_ibov_benchmark_asset(db) -> Asset:
+    result = await db.execute(
+        select(Asset).where(func.upper(Asset.ticker) == _IBOV_TICKER).limit(1)
+    )
+    asset = result.scalar_one_or_none()
+    if asset is not None:
+        return asset
+
+    asset = Asset(
+        ticker=_IBOV_TICKER,
+        name="Ibovespa",
+        asset_type=AssetType.OUTRO.value,
+        currency="BRL",
+        provider="b3_cotahist",
+        provider_symbol=_IBOV_TICKER,
+        provider_status="persisted_benchmark",
+    )
+    db.add(asset)
+    await db.flush()
+    return asset
+
+
 async def rebuild_b3_historical_market(
     start_year: int | None = None,
     end_year: int | None = None,
@@ -120,8 +144,12 @@ async def rebuild_b3_historical_market(
         resolved_end_year = end_year or today.year
         result = B3HistoricalMarketRebuildResult(resolved_start_year, resolved_end_year)
 
+        await _ensure_ibov_benchmark_asset(db)
         assets_result = await db.execute(
-            select(Asset).where(Asset.asset_type.in_(_B3_TYPES))
+            select(Asset).where(
+                (Asset.asset_type.in_(_B3_TYPES))
+                | (func.upper(Asset.ticker).in_(_B3_BENCHMARK_TICKERS))
+            )
         )
         assets = list(assets_result.scalars().all())
         result.assets = len(assets)

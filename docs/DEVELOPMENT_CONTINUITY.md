@@ -204,7 +204,7 @@ Ordem operacional:
 
 ## Ordem posterior à primeira certificação
 
-1. #150 — histórico persistido do IBOV;
+1. #150 — histórico persistido do IBOV: implementação DB-first via COTAHIST concluída; validação real segue bloqueada pelos gates operacionais;
 2. #149 — TWR Tesouro/Renda Fixa;
 3. #272 — dívida física de `corporate_events` em bloco separado;
 4. #83 — hardening residual do Backup/Restore administrativo;

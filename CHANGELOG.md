@@ -13,6 +13,14 @@ Formato baseado em Keep a Changelog.
 - Inventário de PRs abertas atualizado para Dependabot #295, #296, #297, #298, #299, #300 e #301.
 - Mantida a regra operacional de evitar PRs para microblocos e promover apenas macroblocos validados.
 
+### Alterado — IBOV persistido DB-first (#150)
+
+- O rebuild histórico B3/COTAHIST passa a garantir o ativo sintético `IBOV` como benchmark persistido em `assets`.
+- Fechamentos do `IBOV` vindos de COTAHIST são persistidos em `asset_prices` com `source=b3_cotahist`, sem provider em runtime financeiro.
+- O relatório do estágio B3 passa a incluir o benchmark sintético nas contagens operacionais de ativos/preços.
+- A leitura mensal de benchmarks em Rentabilidade compara datas de `asset_prices.timestamp` por dia calendário, evitando excluir o fechamento do próprio `end_date`.
+- Nenhum seed real, CSV, snapshot, full rebuild real ou `ready_for_real_data=true` foi executado.
+
 ### Alterado — B3 COTAHIST-first para catálogo e OHLCV (29/08/2026)
 
 - O parser COTAHIST passou a sustentar um classificador B3 puro e determinístico para `ACAO`, `FII`, `ETF_NACIONAL` e `BDR`, rejeitando instrumentos inelegíveis e preservando `UNRESOLVED` em ambiguidades.
