@@ -87,7 +87,7 @@ Contrato #267:
 | OCI lab | Operacional para testes descartáveis | executar bateria formal |
 | Pré-produção/rebuild | Parcial | retomar após #226/#216 |
 | IBOV persistido | Planejado | #150 após primeira certificação |
-| TWR Tesouro/Renda Fixa | Em desenvolvimento | #149: base diaria pura concluida; integrar snapshots dedicados |
+| TWR Tesouro/Renda Fixa | Em desenvolvimento | #149: Tesouro integrado a snapshots DB-first; Renda Fixa pendente |
 
 ## Ordem canônica de execução
 
@@ -119,7 +119,7 @@ Contrato #267:
 ### Fase 3 — performance e benchmarks
 
 - [x] #150 — histórico persistido do IBOV materializado via COTAHIST no fluxo B3 DB-first;
-- [ ] #149 — TWR diario de Tesouro Direto e Renda Fixa: base pura fail-closed concluida; integrar historicos dedicados e snapshots;
+- [ ] #149 — TWR diario de Tesouro Direto e Renda Fixa: Tesouro integrado a snapshots DB-first; Renda Fixa exige historico dedicado sem fallback;
 - [ ] reconciliar snapshots de classe e consolidado.
 
 ### Fase 4 — dívidas estruturais separadas
@@ -155,7 +155,7 @@ Contrato #267:
 ### P1 — após primeira certificação
 
 - #150 — histórico persistido do IBOV: implementação DB-first via COTAHIST concluída em `stable-15jun`, pendente apenas de validação operacional real quando gates permitirem.
-- #149 — TWR Tesouro/Renda Fixa: primeiro bloco concluido com cadeia diaria pura e testes; integracao produtiva segue pendente.
+- #149 — TWR Tesouro/Renda Fixa: Tesouro integrado ao rebuild de snapshots quando houver fechamento diario exato persistido; Renda Fixa segue pendente por depender de historico dedicado sem fallback.
 
 ### P2 — dívida estrutural/operacional
 

@@ -1,8 +1,10 @@
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 
 from app.models.asset import AssetType
+from app.models.asset import Asset
+from app.models.asset_price import AssetPrice
 from app.services.canonical_dividend_entitlement import (
     DividendEntitlement,
     DividendEvent,
@@ -15,6 +17,7 @@ from app.services.portfolio_class_reconciliation_service import _check
 from app.services.portfolio_class_snapshot_read_service import class_snapshot_payload
 from app.services.portfolio_class_snapshot_service import (
     _group_received_dividends,
+    _load_exact_treasury_prices,
     _next_business_date,
     class_twr_availability,
 )
@@ -28,8 +31,50 @@ def test_availability_refuses_dedicated_history_estimates() -> None:
 
     assert by_type[AssetType.ACAO.value]["available"] is True
     assert by_type[AssetType.FII.value]["status"] == "available"
-    assert by_type[AssetType.TESOURO_DIRETO.value]["available"] is False
+    assert by_type[AssetType.TESOURO_DIRETO.value]["available"] is True
     assert by_type[AssetType.RENDA_FIXA.value]["status"] == "dedicated_history_not_available"
+
+
+async def test_treasury_exact_prices_do_not_use_prior_day_fallback(db) -> None:
+    asset = Asset(
+        ticker="TESOURO-SELIC-01032031",
+        name="Tesouro Selic 2031",
+        asset_type=AssetType.TESOURO_DIRETO.value,
+        currency="BRL",
+    )
+    db.add(asset)
+    await db.flush()
+    db.add_all(
+        [
+            AssetPrice(
+                asset_id=asset.id,
+                timestamp=datetime(2026, 8, 3, 18, tzinfo=UTC),
+                close=Decimal("100.00"),
+                source="tesouro_transparente",
+            ),
+            AssetPrice(
+                asset_id=asset.id,
+                timestamp=datetime(2026, 8, 4, 18, tzinfo=UTC),
+                close=Decimal("101.00"),
+                source="tesouro_transparente",
+            ),
+        ]
+    )
+    await db.flush()
+
+    prices = await _load_exact_treasury_prices(
+        db,
+        ["tesouro-selic-01032031"],
+        date(2026, 8, 4),
+    )
+    missing = await _load_exact_treasury_prices(
+        db,
+        ["tesouro-selic-01032031"],
+        date(2026, 8, 5),
+    )
+
+    assert prices == {"TESOURO-SELIC-01032031": Decimal("101.00000000")}
+    assert missing == {}
 
 
 def test_non_business_dates_move_to_next_close() -> None:

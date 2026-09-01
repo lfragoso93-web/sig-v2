@@ -130,7 +130,7 @@ Princípios: DB-first, fonte oficial primeiro, bootstrap idempotente, universo o
 ### Depois — performance e benchmarks
 
 9. Materializar histórico persistido do IBOV (#150).
-10. Integrar aos snapshots o TWR dedicado de Tesouro Direto e Renda Fixa (#149); a base diaria pura e fail-closed ja existe em `twr_service`.
+10. Concluir TWR dedicado de Renda Fixa (#149); Tesouro Direto ja possui trilha de snapshots DB-first quando houver fechamento diario exato em `asset_prices`.
 11. Reconciliar snapshots e rentabilidade quando necessário.
 
 ### Dívidas estruturais separadas

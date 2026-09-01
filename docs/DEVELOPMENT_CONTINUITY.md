@@ -19,7 +19,10 @@
 - A cadeia reutiliza o calculo canonico de TWR diario e composicao acumulada, segregando aportes/retiradas como fluxo externo e rendimentos/cupom como retorno.
 - O contrato e fail-closed: se faltar cobertura diaria dedicada, a linha publica indisponibilidade explicita e os dias seguintes ficam interrompidos, sem fallback para custo, curva nominal, valor sintetico ou provider em runtime.
 - Testes sinteticos cobrem variacao patrimonial por PU/preco, aporte neutro, rendimento/cupom, ausencia de cobertura e data duplicada.
-- Ainda nao houve integracao produtiva com `PortfolioClassSnapshot`; Tesouro Direto e Renda Fixa continuam sem TWR publicado ate o proximo bloco da #149.
+- Segundo bloco funcional: `rebuild_class_snapshots` passou a materializar Tesouro Direto em trilha dedicada quando existe fechamento diario exato em `asset_prices`.
+- Tesouro nao usa a janela aproximada de precos das classes de mercado; ausencia de preco no dia impede snapshot/TWR em vez de buscar custo, preco anterior, curva ou provider.
+- Snapshots de Tesouro materializados sao marcados como `return_is_estimated=false` e `valuation_status=complete`; a API publica so declara disponibilidade quando existir snapshot.
+- Renda Fixa continua sem TWR dedicado porque o valuation atual ainda usa fallback anual quando falta serie de taxas; integrar RF exige historico diario dedicado sem fallback.
 
 ## Contexto permanente
 
@@ -215,7 +218,7 @@ Ordem operacional:
 ## Ordem posterior à primeira certificação
 
 1. #150 — histórico persistido do IBOV: implementação DB-first via COTAHIST concluída; validação real segue bloqueada pelos gates operacionais;
-2. #149 — TWR Tesouro/Renda Fixa: base diaria pura concluida; integrar historicos dedicados e snapshots;
+2. #149 — TWR Tesouro/Renda Fixa: Tesouro integrado a snapshots DB-first; Renda Fixa ainda exige historico diario dedicado sem fallback;
 3. #272 — dívida física de `corporate_events` em bloco separado;
 4. #83 — hardening residual do Backup/Restore administrativo;
 5. demais backlog de produto;

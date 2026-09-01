@@ -14,11 +14,12 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.asset import AssetType
+from app.models.asset import Asset, AssetType
+from app.models.asset_price import AssetPrice
 from app.models.portfolio_class_snapshot import PortfolioClassSnapshot
 from app.models.transaction import OperationType, Transaction
 from app.services.canonical_dividend_aggregation_service import (
@@ -38,7 +39,9 @@ from app.services.corporate_action_position_reader import (
 from app.services.fx_rate_reader import load_usd_brl_rates_for_dates
 from app.services.price_history_service import get_prices_at_date_batch
 from app.services.twr_service import (
+    DailyTwrInput,
     append_compounded_return_pct,
+    build_daily_twr_chain,
     calculate_daily_twr_pct,
 )
 
@@ -54,11 +57,12 @@ SUPPORTED_CLASS_TWR_TYPES = {
     AssetType.STOCK,
     AssetType.BDR,
     AssetType.CRIPTO,
+    AssetType.TESOURO_DIRETO,
 }
 UNSUPPORTED_CLASS_TWR_TYPES = {
-    AssetType.TESOURO_DIRETO,
     AssetType.RENDA_FIXA,
 }
+MARKET_PRICE_CLASS_TWR_TYPES = SUPPORTED_CLASS_TWR_TYPES - {AssetType.TESOURO_DIRETO}
 _USD_TYPES = {AssetType.STOCK, AssetType.ETF_INTERNACIONAL}
 
 
@@ -162,6 +166,33 @@ def _operation_brl(transaction: Transaction) -> tuple[Decimal, Decimal, Decimal]
     return quantity, price_brl, fees_brl
 
 
+async def _load_exact_treasury_prices(
+    db: AsyncSession,
+    tickers: Iterable[str],
+    target_date: date,
+) -> dict[str, Decimal]:
+    normalized = sorted({str(ticker).upper() for ticker in tickers if ticker})
+    if not normalized:
+        return {}
+
+    result = await db.execute(
+        select(Asset.ticker, AssetPrice.close)
+        .join(AssetPrice, AssetPrice.asset_id == Asset.id)
+        .where(
+            Asset.asset_type == AssetType.TESOURO_DIRETO.value,
+            func.upper(Asset.ticker).in_(normalized),
+            func.date(AssetPrice.timestamp) == target_date,
+        )
+        .order_by(AssetPrice.timestamp.desc())
+    )
+    prices: dict[str, Decimal] = {}
+    for ticker, close in result.all():
+        key = str(ticker).upper()
+        if key not in prices:
+            prices[key] = _decimal(close)
+    return prices
+
+
 async def _upsert_class_snapshot(
     db: AsyncSession,
     portfolio_id: int,
@@ -217,6 +248,16 @@ async def rebuild_class_snapshots(
         for transaction in transactions
         if _asset_type(transaction.asset_type) in SUPPORTED_CLASS_TWR_TYPES
     ]
+    market_transactions = [
+        transaction
+        for transaction in transactions
+        if _asset_type(transaction.asset_type) in MARKET_PRICE_CLASS_TWR_TYPES
+    ]
+    treasury_transactions = [
+        transaction
+        for transaction in transactions
+        if _asset_type(transaction.asset_type) == AssetType.TESOURO_DIRETO
+    ]
     if not supported_transactions:
         return 0
 
@@ -230,7 +271,7 @@ async def rebuild_class_snapshots(
     today = datetime.now(UTC).date()
     usd_transactions = [
         transaction
-        for transaction in supported_transactions
+        for transaction in market_transactions
         if _asset_type(transaction.asset_type) in _USD_TYPES
     ]
     fx_rates_by_date: dict[date, Decimal] = {}
@@ -256,15 +297,20 @@ async def rebuild_class_snapshots(
     )
 
     transactions_by_day: dict[date, list[Transaction]] = defaultdict(list)
-    for transaction in supported_transactions:
+    for transaction in market_transactions:
         transactions_by_day[_next_business_date(transaction.date)].append(transaction)
+    treasury_transactions_by_day: dict[date, list[Transaction]] = defaultdict(list)
+    for transaction in treasury_transactions:
+        treasury_transactions_by_day[_next_business_date(transaction.date)].append(transaction)
 
     actions_by_ticker = await load_global_corporate_actions_by_ticker(
         db,
-        [str(transaction.ticker) for transaction in supported_transactions],
+        [str(transaction.ticker) for transaction in market_transactions],
     )
 
     return_states: dict[AssetType, ClassReturnState] = defaultdict(ClassReturnState)
+    treasury_inputs: list[DailyTwrInput] = []
+    treasury_realized_pnl = _ZERO
     count = 0
     cursor = start
     while cursor <= today:
@@ -281,7 +327,7 @@ async def rebuild_class_snapshots(
                     external_flows[parsed] -= quantity * price_brl - fees_brl
 
             projected_positions = project_class_positions_at(
-                supported_transactions,
+                market_transactions,
                 actions_by_ticker,
                 target_date=cursor,
             )
@@ -361,6 +407,79 @@ async def rebuild_class_snapshots(
                 )
                 class_state.previous_value = market_value
                 count += 1
+
+            if AssetType.TESOURO_DIRETO in portfolio_types:
+                treasury_flow = _ZERO
+                for transaction in treasury_transactions_by_day.get(cursor, []):
+                    quantity, price_brl, fees_brl = _operation_brl(transaction)
+                    if transaction.operation == OperationType.buy:
+                        treasury_flow += quantity * price_brl + fees_brl
+                    elif transaction.operation == OperationType.sell:
+                        treasury_flow -= quantity * price_brl - fees_brl
+
+                treasury_positions = project_class_positions_at(
+                    treasury_transactions,
+                    {},
+                    target_date=cursor,
+                )
+                treasury_open, treasury_realized = aggregate_class_positions(
+                    treasury_positions.values()
+                )
+                treasury_realized_pnl = treasury_realized.get(
+                    AssetType.TESOURO_DIRETO,
+                    treasury_realized_pnl,
+                )
+                open_positions = treasury_open.get(AssetType.TESOURO_DIRETO, [])
+                treasury_prices = await _load_exact_treasury_prices(
+                    db,
+                    (position.ticker for position in open_positions),
+                    cursor,
+                )
+                has_coverage = all(
+                    str(position.ticker).upper() in treasury_prices
+                    for position in open_positions
+                )
+                market_value = _ZERO
+                cost_basis = _ZERO
+                for position in open_positions:
+                    close = treasury_prices.get(str(position.ticker).upper())
+                    if close is not None:
+                        market_value += position.quantity * close
+                    cost_basis += position.cost
+
+                treasury_inputs.append(
+                    DailyTwrInput(
+                        reference_date=cursor,
+                        market_value=market_value,
+                        net_external_flow=treasury_flow,
+                        income_day=_ZERO,
+                        has_coverage=has_coverage,
+                    )
+                )
+                treasury_point = build_daily_twr_chain(treasury_inputs)[-1]
+                if treasury_point.available:
+                    unrealized_pnl = market_value - cost_basis
+                    await _upsert_class_snapshot(
+                        db,
+                        portfolio_id,
+                        AssetType.TESOURO_DIRETO,
+                        cursor,
+                        {
+                            "market_value": market_value.quantize(_MONEY),
+                            "cost_basis": cost_basis.quantize(_MONEY),
+                            "realized_pnl": treasury_realized_pnl.quantize(_MONEY),
+                            "unrealized_pnl": unrealized_pnl.quantize(_MONEY),
+                            "net_external_flow": treasury_flow.quantize(_MONEY),
+                            "dividends_day": _ZERO,
+                            "dividends_accumulated": _ZERO.quantize(_MONEY),
+                            "daily_return_pct": treasury_point.daily_return_pct,
+                            "accumulated_return_pct": treasury_point.accumulated_return_pct,
+                            "has_partial_prices": False,
+                            "return_is_estimated": False,
+                            "valuation_status": "complete",
+                        },
+                    )
+                    count += 1
 
             if count and count % 100 == 0:
                 await db.commit()

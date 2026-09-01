@@ -12,6 +12,13 @@ Formato baseado em Keep a Changelog.
 - Cobertos cenarios sinteticos de variacao patrimonial por PU/preco, aporte como fluxo externo, rendimento/cupom como retorno, interrupcao por falta de cobertura e rejeicao de data duplicada.
 - A integracao produtiva com snapshots de Tesouro Direto e Renda Fixa segue pendente nos proximos blocos da #149.
 
+### Alterado - snapshots TWR Tesouro Direto (#149)
+
+- `rebuild_class_snapshots` passou a tratar Tesouro Direto em trilha dedicada, separada das classes de mercado que aceitam preco aproximado de janela.
+- O TWR de Tesouro consome somente fechamento exato persistido em `asset_prices` para o dia da carteira; falta de preco diario nao usa fallback de custo ou preco anterior.
+- Snapshots materializados de Tesouro recebem `return_is_estimated=false` e `valuation_status=complete`; a disponibilidade publica so fica positiva quando houver snapshot.
+- Renda Fixa permanece indisponivel para TWR dedicado porque o valuation corrente ainda possui fallback anual e nao constitui historico diario dedicado.
+
 ### Alterado — rebaseline pós-merge PR #302 (01/09/2026)
 
 - Registrado que a PR #302 foi mergeada em `main` pelo commit `7861268a2528d80e8c23dfc55f7b0800402abc6d`.
