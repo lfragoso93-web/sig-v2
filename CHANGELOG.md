@@ -51,6 +51,11 @@ Formato baseado em Keep a Changelog.
 - Absorvida em `stable-15jun` a atualização `eslint` de `10.9.0` para `10.9.1` e `typescript-eslint` de `8.67.0` para `8.68.0`.
 - PR #297 pode ser encerrada após validação frontend e push do commit, sem PR individual.
 
+### Alterado — Dependabot frontend build-tools parcial (#299)
+
+- Absorvida em `stable-15jun` apenas a atualização segura `@vitejs/plugin-react` de `6.1.0` para `6.1.1`.
+- TypeScript `7.0.2` permanece bloqueado por incompatibilidade com o peer range vigente de `typescript-eslint` (`<6.1.0`); PR #299 deve ser encerrada no formato atual.
+
 ### Alterado — B3 COTAHIST-first para catálogo e OHLCV (29/08/2026)
 
 - O parser COTAHIST passou a sustentar um classificador B3 puro e determinístico para `ACAO`, `FII`, `ETF_NACIONAL` e `BDR`, rejeitando instrumentos inelegíveis e preservando `UNRESOLVED` em ambiguidades.
