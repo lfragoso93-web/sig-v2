@@ -5,6 +5,14 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — rebaseline pós-merge PR #302 (01/09/2026)
+
+- Registrado que a PR #302 foi mergeada em `main` pelo commit `7861268a2528d80e8c23dfc55f7b0800402abc6d`.
+- `stable-15jun` segue como branch obrigatória de desenvolvimento em `2c9358629b3e5e9206a365ebeac45f9272dfd48e`.
+- Documentada a diferença esperada: `main` está um commit à frente apenas pelo merge commit da #302.
+- Inventário de PRs abertas atualizado para Dependabot #295, #296, #297, #298, #299, #300 e #301.
+- Mantida a regra operacional de evitar PRs para microblocos e promover apenas macroblocos validados.
+
 ### Alterado — B3 COTAHIST-first para catálogo e OHLCV (29/08/2026)
 
 - O parser COTAHIST passou a sustentar um classificador B3 puro e determinístico para `ACAO`, `FII`, `ETF_NACIONAL` e `BDR`, rejeitando instrumentos inelegíveis e preservando `UNRESOLVED` em ambiguidades.

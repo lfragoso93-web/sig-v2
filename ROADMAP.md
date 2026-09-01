@@ -2,6 +2,14 @@
 
 > Última atualização: 27/08/2026
 
+## Rebaseline pós-merge PR #302 — 01/09/2026
+
+- PR #302 foi mergeada em `main` pelo commit `7861268a2528d80e8c23dfc55f7b0800402abc6d`.
+- `stable-15jun` segue como branch de desenvolvimento em `2c9358629b3e5e9206a365ebeac45f9272dfd48e`.
+- `main` está um commit à frente apenas pelo merge commit; não há divergência funcional pendente da #302.
+- Próximos blocos continuam sem PR nova até fechamento de macrobloco validado.
+- PRs abertas atuais: Dependabot #295, #296, #297, #298, #299, #300 e #301.
+
 ## Direção atual
 
 O SGI v2 encerrou a fase principal de sanitização arquitetural e hardening de segurança. O foco atual é **certificação operacional para testes integrados**, usando o ambiente OCI de laboratório sem liberar dados reais prematuramente.
@@ -164,9 +172,9 @@ Contrato #267:
 
 ## PRs abertas
 
-No início deste rebaseline existe somente a PR Dependabot #289, TypeScript `6.0.3 -> 7.0.2`.
+Em 01/09/2026 existem 7 PRs Dependabot abertas contra `main`: #295, #296, #297, #298, #299, #300 e #301.
 
-Ela não deve ser mergeada agora: `typescript-eslint 8.67.0` exige TypeScript `<6.1.0`, e a própria validação da PR #290 registrou falha de resolução do `npm` para esse upgrade. Tratar como bloqueada por compatibilidade do ecossistema.
+Elas não devem ser mergeadas automaticamente. Tratar cada grupo de dependências com validação própria em `stable-15jun`, mantendo a política de PR apenas para macrobloco concluído.
 
 ## Estado operacional
 

@@ -2,6 +2,15 @@
 
 > Documento obrigatório para iniciar ou retomar qualquer conversa de desenvolvimento. Atualizado em 31/08/2026.
 
+## Rebaseline pós-merge PR #302 — 01/09/2026
+
+- PR #302 mergeada em `main` em 01/09/2026 pelo commit `7861268a2528d80e8c23dfc55f7b0800402abc6d`.
+- `stable-15jun` permanece a branch obrigatória de desenvolvimento, atualmente em `2c9358629b3e5e9206a365ebeac45f9272dfd48e`.
+- A diferença esperada entre `origin/main` e `origin/stable-15jun` é apenas o merge commit da #302; novo desenvolvimento deve continuar em `stable-15jun`.
+- Issues abertas inventariadas: 18 (#293, #284, #272, #269, #253, #246, #227, #226, #216, #158, #150, #149, #130, #127, #97, #90, #83, #58).
+- PRs abertas atuais são apenas Dependabot: #295, #296, #297, #298, #299, #300 e #301.
+- Não abrir PR nova para microblocos; registrar commits pequenos e preparar promoção somente ao fechar macrobloco validado.
+
 ## Contexto permanente
 
 - Repositório: `lfragoso93-web/sig-v2`.
@@ -202,11 +211,11 @@ Ordem operacional:
 5. demais backlog de produto;
 6. #246 + #57 — Metas + Análise de Carteira como macroprojeto único.
 
-## PR Dependabot aberta
+## PRs Dependabot abertas
 
-A PR #289 propõe TypeScript `6.0.3 -> 7.0.2`.
+Em 01/09/2026, as PRs abertas são #295, #296, #297, #298, #299, #300 e #301, todas de Dependabot contra `main`.
 
-Não mergear no estado atual: `typescript-eslint 8.67.0` exige TypeScript `<6.1.0`, e a validação registrada na PR #290 confirmou falha de resolução do `npm`. Reavaliar somente quando o ecossistema suportar TypeScript 7 e a suíte frontend puder ser validada integralmente.
+Não mergear automaticamente. Cada atualização deve ser tratada em bloco próprio, com `stable-15jun` sincronizada, instalação determinística, suítes backend/frontend aplicáveis e CI verde antes de promoção.
 
 ## Qualidade por macrobloco
 
