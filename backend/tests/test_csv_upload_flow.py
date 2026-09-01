@@ -206,3 +206,47 @@ async def test_router_skips_refresh_and_rebuild_when_import_only_skips_rows():
     assert background_tasks.tasks == []
     assert result["imported_count"] == 0
     assert result["skipped_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_router_skips_refresh_and_rebuild_when_import_failed():
+    db = AsyncMock(spec=AsyncSession)
+    current_user = SimpleNamespace(id=11)
+    background_tasks = BackgroundTasks()
+    service_result = {
+        "success": False,
+        "imported_count": 1,
+        "skipped_count": 0,
+        "error_count": 1,
+        "rows": [],
+        "global_errors": ["synthetic persistence failure"],
+    }
+
+    with patch(
+        "app.routers.portfolios.get_portfolio",
+        new_callable=AsyncMock,
+    ), patch(
+        "app.routers.portfolios.csv_import_service.import_transactions_csv",
+        new_callable=AsyncMock,
+        return_value=service_result,
+    ), patch(
+        "app.routers.portfolios.invalidate_portfolio_cache",
+        new_callable=AsyncMock,
+    ) as invalidate, patch(
+        "app.routers.portfolios.invalidate_rentabilidade_cache",
+        new_callable=AsyncMock,
+    ) as invalidate_rentabilidade:
+        result = await import_portfolio_csv(
+            portfolio_id=5,
+            file=FakeUpload(b"csv"),
+            dry_run=False,
+            background_tasks=background_tasks,
+            db=db,
+            current_user=current_user,
+        )
+
+    invalidate.assert_not_awaited()
+    invalidate_rentabilidade.assert_not_awaited()
+    assert background_tasks.tasks == []
+    assert result["success"] is False
+    assert result["imported_count"] == 1
