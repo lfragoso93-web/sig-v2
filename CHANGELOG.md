@@ -46,6 +46,11 @@ Formato baseado em Keep a Changelog.
 - Absorvida em `stable-15jun` a atualização `@tanstack/react-query` e `@tanstack/query-core` de `5.101.4` para `5.102.8`.
 - PR #296 pode ser encerrada após validação frontend e push do commit, sem PR individual.
 
+### Alterado — Dependabot frontend eslint-stack (#297)
+
+- Absorvida em `stable-15jun` a atualização `eslint` de `10.9.0` para `10.9.1` e `typescript-eslint` de `8.67.0` para `8.68.0`.
+- PR #297 pode ser encerrada após validação frontend e push do commit, sem PR individual.
+
 ### Alterado — B3 COTAHIST-first para catálogo e OHLCV (29/08/2026)
 
 - O parser COTAHIST passou a sustentar um classificador B3 puro e determinístico para `ACAO`, `FII`, `ETF_NACIONAL` e `BDR`, rejeitando instrumentos inelegíveis e preservando `UNRESOLVED` em ambiguidades.
