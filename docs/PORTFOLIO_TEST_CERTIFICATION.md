@@ -159,6 +159,15 @@ Validar:
 - anti-duplicidade/idempotência conforme o contrato;
 - venda parcial/total e recompra via histórico importado.
 
+Contrato de reexecução atual:
+
+- uma linha com mesma carteira, ticker, classe, operação, quantidade, preço,
+  data, taxas e moeda é tratada como duplicada;
+- duplicatas idênticas retornam `status="skipped"` e incrementam
+  `skipped_count`;
+- quando a reexecução não importa nenhuma transação nova, não há commit nem
+  invalidação de cache.
+
 ### E. Tesouro Direto — marcação a mercado + TWR
 
 A rentabilidade oficial de Tesouro Direto deve refletir marcação a mercado, não apenas a taxa contratada ou a curva teórica.
