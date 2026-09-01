@@ -68,7 +68,7 @@ describe('ImportCSVModal behavior', () => {
     selectCsv(container)
 
     const confirm = await screen.findByRole('button', { name: 'Confirmar importação' })
-    expect(confirm).toBeDisabled()
+    expect((confirm as HTMLButtonElement).disabled).toBe(true)
     expect(screen.getByText(/Nenhuma linha será importada parcialmente/)).toBeTruthy()
     expect(mocks.post).toHaveBeenCalledTimes(1)
     expect(mocks.post.mock.calls[0][2]).toMatchObject({ params: { dry_run: true } })
@@ -123,7 +123,7 @@ describe('ImportCSVModal behavior', () => {
     selectCsv(container)
 
     const confirm = await screen.findByRole('button', { name: 'Confirmar importação' })
-    await waitFor(() => expect(confirm).not.toBeDisabled())
+    await waitFor(() => expect((confirm as HTMLButtonElement).disabled).toBe(false))
     fireEvent.click(confirm)
 
     await waitFor(() => expect(mocks.post).toHaveBeenCalledTimes(2))
