@@ -4,22 +4,39 @@ Plataforma pessoal para acompanhamento, consolidação e análise de investiment
 
 A branch de desenvolvimento é `stable-15jun`. A promoção para `main` ocorre exclusivamente por Pull Request após validação integral e sincronização da documentação viva.
 
-## Status atual — 18/08/2026
+## Status atual — 27/08/2026
 
-O SGI v2 concluiu a sanitização arquitetural da Issue #247 e promoveu esse baseline para `main` pela PR #281. Em seguida, a revisão de segurança da Issue #269 recebeu um bloco final pela PR #282, com hardening de backup/path, sanitização residual de logs e publicação SARIF do Trivy da imagem backend.
+O SGI v2 concluiu a sanitização arquitetural da Issue #247 e o bloco final de segurança da Issue #269. Desde então, o foco migrou da construção da base para **certificação operacional e preparação para testes integrados**.
+
+O ambiente OCI de laboratório já está funcional e foi usado para validar build/runtime, contratos de bootstrap e smoke HTTP descartável. As PRs #290, #291 e #292 consolidaram esse avanço, sem executar seeds reais e sem promover o ambiente para dados reais.
 
 A Issue #227 permanece como gate-mãe para dados reais.
 
 - `test_ready=true`: permanece válido para testes controlados com usuários, carteiras e dados fictícios/descartáveis.
 - `ready_for_real_data=false`: permanece obrigatório; nenhuma flag deve ser forçada manualmente para executar teste ou carga real.
 
-Baseline vigente:
+Baseline vigente no início deste rebaseline:
 
-- `stable-15jun`: `f36f02a32fcaf9345f98bb40f9065df7a2488101`;
-- `main`: `b45dc435b8f20b218ff1dfbdd9ab1c868817ff3f`;
-- as árvores são equivalentes; a diferença é apenas o merge commit da PR #282.
+- `stable-15jun`: `a889edb6bbbb78feb7787c21b3439a0b835b73c6`;
+- `main`: `3eeca232a8627f4562544739112d1dde82b879fb`;
+- `main` contém a PR #292; `stable-15jun` já avançou com pequenos blocos posteriores de documentação e hardening do smoke.
 
-O próximo macrobloco não é funcional: é o gate para o TESTE REAL controlado. Antes de qualquer carga real, #226, #216 e #158 devem ser revalidadas contra o baseline pós-#281/#282. Se houver blocker formal, ele deve ser resolvido sem contorno e em microbloco próprio.
+### Evidências OCI já obtidas
+
+- stack Docker validada em ARM64 para o alvo Ampere A1;
+- laboratório OCI descartável disponível para validações sem dados reais;
+- frontend production build aprovado no lab;
+- hostname público via Cloudflare Tunnel validado com HTTP/2 200;
+- smoke OCI aprovado;
+- suites de contrato executadas sem seeds reais:
+  - FX/Macro/Tesouro: 81 aprovados, 1 ignorado;
+  - B3/Asset Bootstrap/System Bootstrap: 70 aprovados;
+  - Proventos: 93 aprovados, 8 ignorados;
+- wrapper de validação de contratos publicado pela PR #291;
+- smoke HTTP descartável endurecido pela PR #292;
+- usuário comum explicitamente bloqueado (`403`) em `/api/v1/admin/bootstrap/status` no SHA `a889edb6bbbb78feb7787c21b3439a0b835b73c6`.
+
+Nenhuma dessas evidências autoriza dados reais. O próximo macrobloco continua sendo a certificação controlada dos gates #227, #226, #216 e #158.
 
 A convergência Alembic ↔ MetaData da Issue #241 permanece concluída para todos os domínios estabilizados. O único diff deliberadamente preservado é `goals`, que não deve receber migration antes do redesenho conjunto de Metas e Análise de Carteira (#246 + #57).
 
@@ -97,41 +114,36 @@ Princípios: DB-first, fonte oficial primeiro, bootstrap idempotente, universo o
 
 ## Ordem canônica de trabalho
 
-### Agora — gate para TESTE REAL controlado
+### Agora — certificação para TESTES integrados
 
-1. Revalidar #227, #226, #216 e #158 contra o baseline pós-#281/#282.
-2. Confirmar quais gates permitem teste com dados fictícios e quais exigem execução real autorizada.
-3. Não forçar `ready_for_real_data=true`.
-4. Resolver blockers formais em Issues/microblocos próprios.
-5. Quando autorizado, executar teste real auditável de infraestrutura, bootstrap, dados, reconciliação, persistência e segurança.
-6. Produzir decisão explícita GO / NO-GO.
+1. Sincronizar documentação viva e Issues com o baseline OCI pós-PRs #290/#291/#292.
+2. Executar qualidade completa e smoke no lab com dados fictícios/descartáveis.
+3. Validar restart, persistência, volumes, migrations e Redis fail-open.
+4. Validar `system-bootstrap.v4` e seus contratos sem contornar gates de dados reais.
+5. Revalidar #227, #226, #216 e #158.
+6. Somente quando houver autorização operacional, executar as duas rodadas reais controladas de Proventos (#226).
+7. Fechar o gate agregado (#216), retomar rebuild/CSV/posições/snapshots (#158) e reconciliar os resultados.
+8. Produzir decisão explícita GO / NO-GO para `ready_for_real_data`.
 
 ### Depois — performance e benchmarks
 
-7. Materializar histórico persistido do IBOV (#150).
-8. Implementar TWR dedicado de Tesouro Direto e Renda Fixa (#149).
-9. Reconciliar snapshots e rentabilidade quando necessário.
-
-### Cadeia operacional para dados reais
-
-10. Executar as duas rodadas reais controladas de Proventos (#226), se ainda forem requisito após a auditoria do gate.
-11. Fechar o gate agregado de seeds/bootstrap (#216).
-12. Retomar rebuild, CSV, posições, snapshots e reconciliação (#158).
-13. Somente então decidir `ready_for_real_data=true`.
+9. Materializar histórico persistido do IBOV (#150).
+10. Implementar TWR dedicado de Tesouro Direto e Renda Fixa (#149).
+11. Reconciliar snapshots e rentabilidade quando necessário.
 
 ### Dívidas estruturais separadas
 
-14. Tratar #272 em janela própria para contração física de aliases/colunas legadas de `corporate_events`.
+12. Tratar #272 em janela própria para contração física de aliases/colunas legadas de `corporate_events`.
 
 ### Próxima grande fase funcional
 
-15. Redesenhar Metas + Análise de Carteira como um único macroprojeto (#246 + #57), definindo domínio e contratos antes de schema/API/frontend.
+13. Redesenhar Metas + Análise de Carteira como um único macroprojeto (#246 + #57), definindo domínio e contratos antes de schema/API/frontend.
 
 ## Estado operacional
 
 - `system-bootstrap.v4` é a porta única de bootstrap e registra catálogo, históricos, Tesouro, benchmarks, FX, Proventos e eventos corporativos sob contratos canônicos.
 - Proventos permanecem governados pela #226 para execução real.
-- `test_ready=true` foi certificado pela #268 no SHA `a8444b545a10aa7d48dd70f08a07e3fa386605d6`.
+- `test_ready=true` foi certificado pela #268 e recebeu novos smokes OCI pós-certificação.
 - Depois do bootstrap certificado, chamadas externas recorrentes ficam limitadas a preço intraday e fechamento diário.
 - CRUD de transações não dispara ingestão externa automática.
 - Rebuilds permanecem operações explícitas; não pertencem a requests comuns.
@@ -144,7 +156,7 @@ O bloco final da #269 foi promovido pela PR #282. O CI correspondente foi aprova
 
 ## PRs de dependências
 
-PRs Dependabot abertas são tratadas como fila técnica separada da ordem funcional. Devem ser avaliadas individualmente por risco, compatibilidade e CI antes de qualquer merge.
+A única PR aberta no início deste rebaseline é a #289, TypeScript `6.0.3 -> 7.0.2`. Ela permanece bloqueada por incompatibilidade de peer dependency com `typescript-eslint 8.67.0`, que exige TypeScript `<6.1.0`. Não deve ser mergeada enquanto o ecossistema não estiver compatível e a suíte frontend não passar integralmente.
 
 ## Comandos principais
 
@@ -178,6 +190,7 @@ npm run build
 - `CHANGELOG.md` — mudanças relevantes.
 - `docs/architecture.md` — arquitetura DB-first e fronteiras dos módulos.
 - `docs/DEVELOPMENT_CONTINUITY.md` — checkpoint obrigatório para retomada.
+- `docs/deployment/oci.md` — histórico e decisões do ambiente OCI.
 - `docs/PROVIDER_ACCESS_POLICY_2026-08.md` — política de acesso a providers.
 - `docs/ROUTER_ENDPOINT_AUDIT_2026-08.md` — auditoria das superfícies HTTP.
 - `docs/DIVIDENDS_CANONICAL_ARCHITECTURE.md` — arquitetura canônica de Proventos.

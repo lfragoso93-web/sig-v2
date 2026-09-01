@@ -89,6 +89,7 @@ async def test_dividend_persistence_second_run_marks_existing_event_unchanged(mo
     db = MagicMock()
     db.scalar = AsyncMock(return_value=True)
     db.add = MagicMock()
+    db.flush = AsyncMock()
 
     asset = SimpleNamespace(id=7, ticker="PETR4", asset_type="ACAO")
     existing = SimpleNamespace(

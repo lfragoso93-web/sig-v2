@@ -23,7 +23,7 @@ def _event(value: float = 1.25) -> dict:
 
 
 @pytest.mark.asyncio
-async def test_collects_sources_sequentially_without_session_or_concurrency() -> None:
+async def test_brapi_coverage_stops_yahoo_fallback() -> None:
     calls: list[str] = []
 
     async def brapi(ticker: str, asset_type: str):
@@ -51,13 +51,58 @@ async def test_collects_sources_sequentially_without_session_or_concurrency() ->
 
     assert calls == [
         "brapi:PETR4:ACAO",
-        "yahoo:PETR4:ACAO",
         "brapi:MXRF11:FII",
-        "yahoo:MXRF11:FII",
     ]
     assert result[0].normalized_rows == 1
     assert result[0].sources[0].normalized_rows[0].value_per_unit == 1.25
-    assert result[0].sources[1].empty_reason == "no_historical_events"
+    assert len(result[0].sources) == 1
+
+
+@pytest.mark.asyncio
+async def test_yahoo_runs_only_after_brapi_declares_no_coverage() -> None:
+    calls: list[str] = []
+
+    async def brapi(ticker: str, asset_type: str):
+        calls.append(f"brapi:{ticker}:{asset_type}")
+        return StrictDividendProviderResult(
+            source="brapi",
+            rows=(),
+            empty_reason="provider_no_coverage_http_404",
+        )
+
+    async def yahoo(ticker: str, asset_type: str):
+        calls.append(f"yahoo:{ticker}:{asset_type}")
+        return StrictDividendProviderResult(
+            source="yfinance_history",
+            rows=(_event(),),
+        )
+
+    result = await collect_dividends_strict(
+        assets=(StrictDividendAsset("petr4", "acao"),),
+        providers=(brapi, yahoo),
+    )
+
+    assert calls == ["brapi:PETR4:ACAO", "yahoo:PETR4:ACAO"]
+    assert [source.source for source in result[0].sources] == [
+        "brapi",
+        "yfinance_history",
+    ]
+    assert result[0].normalized_rows == 1
+
+
+@pytest.mark.asyncio
+async def test_yahoo_before_brapi_no_coverage_is_blocking() -> None:
+    async def yahoo(ticker: str, asset_type: str):
+        return StrictDividendProviderResult(
+            source="yfinance_history",
+            rows=(_event(),),
+        )
+
+    with pytest.raises(StrictDividendCollectionError, match="fallback"):
+        await collect_dividends_strict(
+            assets=(StrictDividendAsset("PETR4", "ACAO"),),
+            providers=(yahoo,),
+        )
 
 
 @pytest.mark.asyncio

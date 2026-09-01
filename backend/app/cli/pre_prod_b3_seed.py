@@ -17,8 +17,18 @@ def _parser() -> argparse.ArgumentParser:
         description="Reconstrói catálogo B3 e histórico COTAHIST",
     )
     parser.add_argument("--start-year", type=int, required=True)
-    parser.add_argument("--end-year", type=int, required=True)
-    parser.add_argument("--cutoff-date", type=date.fromisoformat, required=True)
+    parser.add_argument(
+        "--end-year",
+        type=int,
+        default=None,
+        help="Ano final da janela; padrão: ano atual",
+    )
+    parser.add_argument(
+        "--cutoff-date",
+        type=date.fromisoformat,
+        default=None,
+        help="Data final da janela; padrão: dia atual",
+    )
     parser.add_argument(
         "--history-only",
         action="store_true",
@@ -29,11 +39,14 @@ def _parser() -> argparse.ArgumentParser:
 
 async def _main() -> int:
     args = _parser().parse_args()
+    today = date.today()
+    end_year = args.end_year or today.year
+    cutoff_date = args.cutoff_date or today
     try:
         result = await run_pre_prod_b3_seed(
             start_year=args.start_year,
-            end_year=args.end_year,
-            cutoff_date=args.cutoff_date,
+            end_year=end_year,
+            cutoff_date=cutoff_date,
             include_catalog=not args.history_only,
         )
     except B3SeedAlreadyRunningError as exc:

@@ -2,7 +2,7 @@
 
 O módulo separa a orquestração de coleta das integrações e da persistência.
 Provedores são injetados explicitamente, executados em sequência e devem
-distinguir ausência legítima de eventos de indisponibilidade.
+distinguir cobertura válida sem eventos de ausência real de cobertura.
 """
 from __future__ import annotations
 
@@ -86,15 +86,29 @@ class StrictDividendAssetCollection:
         return sum(len(source.normalized_rows) for source in self.sources)
 
 
+def _has_authoritative_brapi_coverage(
+    source: str,
+    normalized_rows: tuple[ParsedDividendEvent, ...],
+    empty_reason: str | None,
+) -> bool:
+    if source != "brapi":
+        return False
+    if normalized_rows:
+        return True
+    return not str(empty_reason or "").startswith("provider_no_coverage")
+
+
 async def collect_dividends_strict(
     *,
     assets: Iterable[StrictDividendAsset],
     providers: tuple[StrictDividendProvider, ...],
 ) -> tuple[StrictDividendAssetCollection, ...]:
-    """Coleta ativos e fontes em ordem, sem sessão, concorrência ou fallback.
+    """Coleta ativos e fontes em ordem, sem sessão ou concorrência.
 
     Qualquer falha de provedor ou linha inválida interrompe o estágio. Uma fonte
-    sem eventos só é aceita quando declara ``empty_reason``.
+    sem eventos só é aceita quando declara ``empty_reason``. BRAPI é
+    autoritativa quando possui cobertura; Yahoo/yfinance só pode atuar como
+    fallback de ausência real de cobertura.
     """
 
     if not providers:
@@ -104,6 +118,7 @@ async def collect_dividends_strict(
     for asset in assets:
         source_collections: list[StrictDividendSourceCollection] = []
         seen_sources: set[str] = set()
+        brapi_declared_no_coverage = False
 
         for provider in providers:
             try:
@@ -120,6 +135,10 @@ async def collect_dividends_strict(
             if source in seen_sources:
                 raise StrictDividendCollectionError(
                     f"{asset.ticker}: fonte duplicada {source!r}"
+                )
+            if source == "yfinance_history" and not brapi_declared_no_coverage:
+                raise StrictDividendCollectionError(
+                    f"{asset.ticker}: Yahoo só pode atuar como fallback de ausência BRAPI"
                 )
             seen_sources.add(source)
 
@@ -146,6 +165,14 @@ async def collect_dividends_strict(
                     empty_reason=response.empty_reason,
                 )
             )
+            if _has_authoritative_brapi_coverage(
+                source,
+                tuple(normalized),
+                response.empty_reason,
+            ):
+                break
+            if source == "brapi":
+                brapi_declared_no_coverage = True
 
         collections.append(
             StrictDividendAssetCollection(

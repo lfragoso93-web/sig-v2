@@ -10,5 +10,4 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile.prod
-    command: nginx -g 'daemon off;'
+      dockerfile: Dockerfile

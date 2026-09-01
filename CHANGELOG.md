@@ -5,6 +5,41 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Alterado — B3 COTAHIST-first para catálogo e OHLCV (29/08/2026)
+
+- O parser COTAHIST passou a sustentar um classificador B3 puro e determinístico para `ACAO`, `FII`, `ETF_NACIONAL` e `BDR`, rejeitando instrumentos inelegíveis e preservando `UNRESOLVED` em ambiguidades.
+- Adicionado upsert conservador de catálogo B3 mínimo a partir de COTAHIST, sem BRAPI/Yahoo, banco externo ou migrations novas.
+- O estágio B3 de pré-produção passou a montar o catálogo por COTAHIST antes do histórico quando `include_catalog=true`.
+- O rebuild histórico B3 passou a persistir `open`, `high`, `low`, `close`, `volume` e `source=b3_cotahist` a partir de `CotahistRecord` com `Decimal`, preservando precedência do mercado à vista sobre fracionário.
+- O seed BRAPI deixou de criar ativos B3 ausentes do baseline COTAHIST e passou a atuar como enriquecimento conservador de ativos B3 já persistidos.
+- O `system-bootstrap.v4` ganhou estágio explícito `b3_baseline` antes de `asset_catalog`; o início histórico pode ser configurado por ambiente e o fim é sempre o dia atual.
+- A CLI auditável `pre_prod_b3_seed` passou a derivar `--end-year` e `--cutoff-date` do dia atual quando não informados, preservando overrides explícitos.
+- `CODBDI` continua fora do DTO mínimo; FII x ETF sem sinal seguro permanece `UNRESOLVED`.
+- Nenhum seed real de Proventos, CSV, snapshot, migration física, full market rebuild real ou `ready_for_real_data=true` foi executado.
+
+### Alterado — Proventos BRAPI authoritative / Yahoo fallback-only (30/08/2026)
+
+- O coletor estrito de Proventos passou a interromper a cadeia quando BRAPI possui cobertura válida, inclusive resposta vazia com cobertura.
+- Yahoo/yfinance só pode atuar depois de BRAPI declarar ausência real de cobertura; tentativa de usar Yahoo antes dessa condição passa a ser bloqueante.
+- A persistência global passou a rejeitar defensivamente coleções com linhas normalizadas simultâneas de BRAPI e Yahoo no mesmo ativo.
+- Caminhos internos obsoletos de reconciliação complementar/cross-source via Yahoo foram removidos da persistência.
+- O runbook e o wrapper OCI de contratos de Proventos foram alinhados para cobrir explicitamente o boundary Yahoo fallback-only.
+- O contrato documental de Proventos foi atualizado para remover a semântica de fonte concorrente/complementar.
+- As suítes unitárias de coletor, persistência e semântica foram atualizadas para o modelo fallback-only.
+
+### Alterado — rebaseline para certificação OCI e testes integrados (27/08/2026)
+
+- O projeto entrou formalmente em fase de certificação operacional: novas funcionalidades ficam subordinadas à conclusão dos gates de teste e readiness.
+- Roadmaps de lab/testes foram atualizados em 31/08/2026 com 7 PRs abertas, 18 Issues abertas e a previsão de entrada em testes integrados com dados descartáveis após três gates verdes.
+- Baseline de retomada registrado: `stable-15jun` em `a889edb6bbbb78feb7787c21b3439a0b835b73c6` e `main` em `3eeca232a8627f4562544739112d1dde82b879fb`.
+- PRs #290, #291 e #292 passam a compor o baseline de laboratório OCI: build frontend, Cloudflare HTTP/2 200, smoke OCI e validação repetível dos contratos de bootstrap sem seeds reais.
+- Evidências de contrato registradas: FX/Macro/Tesouro `81 passed, 1 skipped`; B3/Asset Bootstrap/System Bootstrap `70 passed`; Proventos `93 passed, 8 skipped`.
+- O smoke HTTP descartável passou a validar também o gate de SuperAdmin em `/api/v1/admin/bootstrap/status`, exigindo `403` para usuário comum.
+- `test_ready=true` permanece válido para dados fictícios/descartáveis; `ready_for_real_data=false` permanece obrigatório.
+- Ordem canônica atual: certificar lab e persistência → revalidar #227/#226/#216/#158 → executar operações reais somente quando autorizadas → reconciliar → GO/NO-GO.
+- A PR Dependabot #289, TypeScript 7, permanece bloqueada por incompatibilidade com `typescript-eslint 8.67.0` e não deve ser mergeada no estado atual.
+- README, ROADMAP e `docs/DEVELOPMENT_CONTINUITY.md` foram sincronizados com este rebaseline.
+
 ### Alterado — baseline pós-segurança e gate para teste real (18/08/2026)
 
 - A sanitização arquitetural da #247 foi consolidada como concluída e promovida pela PR #281.

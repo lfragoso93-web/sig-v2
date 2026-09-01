@@ -1,23 +1,42 @@
 # Roadmap modular — SGI v2
 
-> Última atualização: 18/08/2026
+> Última atualização: 27/08/2026
 
 ## Direção atual
 
-O SGI v2 concluiu a sanitização arquitetural da #247 e promoveu esse baseline para `main` pela PR #281. A revisão de segurança recebeu bloco final adicional pela PR #282.
+O SGI v2 encerrou a fase principal de sanitização arquitetural e hardening de segurança. O foco atual é **certificação operacional para testes integrados**, usando o ambiente OCI de laboratório sem liberar dados reais prematuramente.
 
 A Issue #227 permanece como gate-mãe para dados reais.
 
 - `test_ready=true`: uso controlado com dados fictícios/descartáveis continua permitido.
 - `ready_for_real_data=false`: dados reais permanecem bloqueados até conclusão explícita dos gates operacionais.
 
-Baseline atual:
+Baseline no início deste rebaseline:
 
-- `stable-15jun`: `f36f02a32fcaf9345f98bb40f9065df7a2488101` antes da sincronização documental desta retomada;
-- `main`: `b45dc435b8f20b218ff1dfbdd9ab1c868817ff3f`;
-- conteúdo funcional pós-#282 equivalente entre as branches; a diferença era somente o merge commit em `main`.
+- `stable-15jun`: `a889edb6bbbb78feb7787c21b3439a0b835b73c6`;
+- `main`: `3eeca232a8627f4562544739112d1dde82b879fb`;
+- a PR #292 já foi promovida para `main`; `stable-15jun` avançou depois dela com pequenos blocos de documentação e hardening de smoke.
 
-A Issue #241 está concluída. Alembic ↔ MetaData convergiu para todos os domínios estabilizados. `goals` continua sendo a única exceção deliberada e pertence ao futuro macroprojeto #246 + #57.
+## Estado OCI de laboratório
+
+O OCI deixou de ser apenas planejamento. Já existem evidências operacionais de laboratório:
+
+- stack ARM64 validada para Ampere A1;
+- E2 Micro descartável usado como lab enquanto A1 não estava disponível;
+- Docker/Compose e baseline do host validados;
+- Cloudflare Tunnel usado como única entrada pública web, sem expor backend, PostgreSQL ou Redis;
+- frontend production build aprovado;
+- hostname público validado com HTTP/2 200;
+- smoke OCI aprovado;
+- contratos de seed/bootstrap executados sem seeds reais:
+  - FX/Macro/Tesouro: 81 aprovados, 1 ignorado;
+  - B3/Asset Bootstrap/System Bootstrap: 70 aprovados;
+  - Proventos: 93 aprovados, 8 ignorados;
+- PR #291 publicou wrapper repetível de validação de contratos;
+- PR #292 endureceu o smoke HTTP descartável;
+- SHA `a889edb6bbbb78feb7787c21b3439a0b835b73c6` adicionou a prova de `403` para usuário comum em `/api/v1/admin/bootstrap/status`.
+
+Essas evidências não alteram `ready_for_real_data=false`.
 
 ## Regra operacional canônica
 
@@ -42,24 +61,25 @@ Contrato #267:
 
 | Módulo | Estado atual | Próxima decisão |
 |---|---|---|
-| Core backend e autenticação | `test_ready` | preservar baseline e validar ambiente real |
-| Carteiras e transações | Consolidado | preservar CRUD sem sync externo |
+| Core backend e autenticação | `test_ready` | certificar no lab e preservar baseline |
+| Carteiras e transações | Consolidado | testar ponta a ponta com dados descartáveis |
 | Dados canônicos / DB-first | Consolidado | validar certificação operacional |
-| B3 / Tesouro / benchmarks / câmbio | Persistidos e integrados ao bootstrap | validar cobertura no teste controlado |
+| B3 / Tesouro / benchmarks / câmbio | Persistidos e integrados ao bootstrap | validar cobertura e restart |
 | CRIPTO | #267 concluída | preservar contrato fail-closed |
-| Proventos | `pre-prod-dividends-seed.v2` sob gate #226 | revalidar autorização antes de execução real |
-| Snapshots e valuation | Consolidado | TWR dedicado #149 após gate real |
-| Resumo e Patrimônio | Consolidado | manter DB-first |
-| Rentabilidade | Consolidada | #150 / #149 após teste real |
-| IRPF | Canônico | validação real futura controlada |
-| Eventos corporativos | Integrados ao `system-bootstrap.v4` | preservar; dívida física isolada em #272 |
+| Proventos | `pre-prod-dividends-seed.v2` sob gate #226 | executar real somente após autorização |
+| Snapshots e valuation | Consolidado | reconciliar no teste controlado |
+| Resumo e Patrimônio | Consolidado | validar ponta a ponta |
+| Rentabilidade | Consolidada | validar; #150/#149 depois do gate |
+| IRPF | Canônico | validar com carteira controlada |
+| Eventos corporativos | Integrados ao `system-bootstrap.v4` | preservar; dívida física em #272 |
 | Metas | Não estabilizado | redesenho conjunto #246 + #57 |
 | Análise de Carteira | Não implementada funcionalmente | redesenho conjunto #246 + #57 |
-| Convergência Alembic/ORM | Concluída fora de `goals` | manter gates |
-| Bootstrap inicial | `system-bootstrap.v4` | auditar blockers para teste real |
-| Pré-produção/rebuild | Bloqueada | retomar somente após gates autorizarem |
-| IBOV persistido | Planejado | #150 após teste real |
-| TWR Tesouro/Renda Fixa | Planejado | #149 após #150 conforme revalidação |
+| Convergência Alembic/ORM | Concluída fora de `goals` | manter gate |
+| Bootstrap inicial | `system-bootstrap.v4` | certificar contratos e operação |
+| OCI lab | Operacional para testes descartáveis | executar bateria formal |
+| Pré-produção/rebuild | Parcial | retomar após #226/#216 |
+| IBOV persistido | Planejado | #150 após primeira certificação |
+| TWR Tesouro/Renda Fixa | Planejado | #149 após primeira certificação |
 
 ## Ordem canônica de execução
 
@@ -71,35 +91,44 @@ Contrato #267:
 - [x] CI da PR #282 aprovado;
 - [ ] manter `Security deep scan` e demais scanners como verificação recorrente; não presumir execução sem evidência.
 
-### Fase 1 — Gate para TESTE REAL controlado — AGORA
+### Fase 1 — rebaseline e certificação de TESTE — AGORA
 
-1. revalidar #227, #226, #216 e #158;
-2. identificar blockers formais de dados reais;
-3. não forçar `ready_for_real_data=true`;
-4. não contornar autorização da #226;
-5. resolver blockers em microblocos independentes;
-6. quando autorizado, executar teste real auditável cobrindo infraestrutura, bootstrap, dados, reconciliação, persistência e segurança;
-7. produzir decisão GO / NO-GO.
+1. sincronizar README, ROADMAP, CHANGELOG, `DEVELOPMENT_CONTINUITY` e Issues centrais com o estado OCI real;
+2. executar qualidade completa no lab: backend, frontend, segurança e smoke;
+3. validar restart, persistência, volumes, migrations e Redis fail-open;
+4. validar `system-bootstrap.v4` e contratos sem executar seeds reais proibidos;
+5. confirmar controles SuperAdmin e estados de readiness;
+6. registrar achados em microblocos e corrigir blockers sem introduzir features.
 
-### Fase 2 — Performance e benchmarks
+### Fase 2 — gate operacional para dados reais
+
+- [ ] #227 — revalidar decisão de readiness;
+- [ ] #226 — duas execuções reais controladas de Proventos, somente após autorização explícita;
+- [ ] #216 — reconciliar e fechar gate agregado de seeds/bootstrap;
+- [ ] #158 — retomar CSV, posições, snapshots e reconciliação financeira;
+- [ ] produzir GO / NO-GO explícito para `ready_for_real_data=true`.
+
+### Fase 3 — performance e benchmarks
 
 - [ ] #150 — histórico persistido do IBOV;
 - [ ] #149 — TWR diário de Tesouro Direto e Renda Fixa;
 - [ ] reconciliar snapshots de classe e consolidado.
 
-### Fase 3 — Cadeia operacional para dados reais
-
-- [ ] #226 — duas execuções reais controladas de Proventos, se ainda exigidas após auditoria;
-- [ ] #216 — reconciliar e fechar gate de seeds/bootstrap;
-- [ ] #158 — retomar CSV, posições, snapshots e reconciliação financeira;
-- [ ] decidir formalmente `ready_for_real_data=true` somente depois dos gates.
-
-### Fase 4 — Dívidas estruturais separadas
+### Fase 4 — dívidas estruturais separadas
 
 - [ ] #272 — contração física dos aliases/colunas legadas de `corporate_events`;
+- [ ] #83 — hardening residual de Backup/Restore administrativo;
 - [ ] demais dívidas estruturais válidas após auditoria.
 
-### Fase 5 — Metas + Análise de Carteira
+### Fase 5 — evolução de produto
+
+- [ ] #253 — Central de Bootstrap SuperAdmin, se continuar necessária após certificação;
+- [ ] #58 — Janela Global do Ativo;
+- [ ] #90 — refinamento de UX de Patrimônio;
+- [ ] #97 — Google OAuth;
+- [ ] #130 — evolução BRAPI em blocos concretos, não como pacote monolítico.
+
+### Fase 6 — Metas + Análise de Carteira
 
 - [ ] tratar #246 + #57 como macroprojeto único;
 - [ ] definir domínio e contratos antes de migration;
@@ -107,35 +136,37 @@ Contrato #267:
 
 ## Classificação das Issues abertas
 
-### Trabalho atual
+### P0 — trabalho corrente / gate
 
-- #227 — gate-mãe de readiness e teste real.
-- #226 — autorização/execução real controlada de Proventos.
+- #227 — gate-mãe de readiness.
+- #226 — execução real controlada de Proventos.
 - #216 — gate agregado de seeds/bootstrap.
 - #158 — rebuild pré-produção e reconciliação.
+- #284 — OCI: atualizar tracker para refletir que o lab já está operacional e separar lab de produção A1.
 
-### Próxima fase técnica
+### P1 — após primeira certificação
 
 - #150 — histórico persistido do IBOV.
 - #149 — TWR Tesouro/Renda Fixa.
 
-### Dívida estrutural isolada
+### P2 — dívida estrutural/operacional
 
 - #272 — contração física de `corporate_events`.
+- #83 — Backup/Restore administrativo.
+
+### P3/P4 — backlog e produto
+
+- #253, #58, #90, #97, #127 e #130.
 
 ### Bloqueadas / futuras
 
 - #246 + #57 — Metas + Análise.
 
-### Backlog não bloqueador
+## PRs abertas
 
-- #253 — Central de Bootstrap SuperAdmin.
-- #58 — Janela Global do Ativo.
-- #83 — Backup/Restore hardening.
-- #90 — UX de Patrimônio.
-- #97 — Google OAuth.
-- #127 — provedores configuráveis, sujeito à política fail-closed.
-- #130 — evolução BRAPI, somente para lacunas concretas.
+No início deste rebaseline existe somente a PR Dependabot #289, TypeScript `6.0.3 -> 7.0.2`.
+
+Ela não deve ser mergeada agora: `typescript-eslint 8.67.0` exige TypeScript `<6.1.0`, e a própria validação da PR #290 registrou falha de resolução do `npm` para esse upgrade. Tratar como bloqueada por compatibilidade do ecossistema.
 
 ## Estado operacional
 
@@ -151,4 +182,4 @@ Contrato #267:
 
 ## Gate para próxima promoção estrutural
 
-A próxima PR `stable-15jun` → `main` deve ser preparada apenas quando um novo macrobloco estiver concluído, validado e documentado. Não abrir PR a cada microcommit.
+A próxima PR `stable-15jun` → `main` deve ser preparada apenas quando este macrobloco de rebaseline/certificação estiver concluído, validado e documentado. Não abrir PR a cada microcommit.

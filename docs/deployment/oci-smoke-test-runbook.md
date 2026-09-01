@@ -48,3 +48,44 @@ NO-GO:
 - opening OCI ingress `80/443`.
 - publishing frontend/backend ports in Compose.
 - sharing logs that contain token-like values.
+
+## 3. Seed/Bootstrap Contract Readiness
+
+Run this after merge syncs or before a larger lab rehearsal:
+
+```bash
+sh scripts/oci_lab_seed_readiness_check.sh
+```
+
+The script checks:
+
+- OCI smoke test passes.
+- Seed/bootstrap contract suites pass in temporary containers.
+- No real seed is executed.
+- backend `/ready` remains HTTP `503` with `ready_for_real_data=false`.
+- the public frontend hostname responds through Cloudflare Tunnel.
+
+## 4. Disposable HTTP Journey
+
+Run this before or after backend changes that affect login, portfolios,
+transactions, summary, rentabilidade, dividends or IRPF:
+
+```bash
+sh scripts/oci_lab_disposable_http_smoke.sh
+```
+
+The script executes `backend/scripts/test_ready_http_smoke.py` inside the
+backend container. It creates only synthetic/disposable data, then removes the
+temporary user and any synthetic USD-BRL row it created for the test.
+
+Expected output includes:
+
+```text
+TEST-READY-HTTP-SMOKE:PASS
+TEST-READY-HTTP-SMOKE-CLEANUP:PASS
+```
+
+If the lab database has no persisted USD-BRL rate for the current date, the
+smoke inserts a synthetic `USD-BRL = 5.00000000` row and removes it during
+cleanup. This is only a test fixture and does not authorize real data,
+production snapshots or real seed execution.

@@ -10,7 +10,7 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from app.services.system_bootstrap_execution_context import (
     build_system_bootstrap_execution_context,
@@ -42,6 +42,28 @@ class SystemBootstrapReport:
         return payload
 
 
+@dataclass(frozen=True)
+class B3BootstrapWindow:
+    start_year: int
+    end_year: int
+    cutoff_date: date
+
+
+def _resolve_b3_bootstrap_window(settings: object, today: date) -> B3BootstrapWindow:
+    start_year = getattr(settings, "B3_BOOTSTRAP_START_YEAR", None) or today.year
+    end_year = today.year
+    cutoff_date = today
+
+    if start_year > end_year:
+        raise ValueError("B3_BOOTSTRAP_START_YEAR não pode ser posterior ao ano atual")
+
+    return B3BootstrapWindow(
+        start_year=start_year,
+        end_year=end_year,
+        cutoff_date=cutoff_date,
+    )
+
+
 async def _run_stage(
     name: str,
     operation: Callable[[], Awaitable[str]],
@@ -62,8 +84,34 @@ async def _bootstrap_asset_catalog() -> str:
     async with AsyncSessionLocal() as db:
         seed = await run_asset_seed(db)
     return (
-        f"created={seed.created} updated={seed.updated} "
+        f"brapi_enrichment_and_crypto created={seed.created} updated={seed.updated} "
         f"skipped={seed.skipped} errors={seed.errors}"
+    )
+
+
+async def _bootstrap_b3_baseline() -> str:
+    from app.core.config import settings
+    from app.services.pre_prod_b3_seed_service import run_pre_prod_b3_seed
+
+    window = _resolve_b3_bootstrap_window(settings, date.today())
+
+    result = await run_pre_prod_b3_seed(
+        start_year=window.start_year,
+        end_year=window.end_year,
+        cutoff_date=window.cutoff_date,
+        include_catalog=True,
+    )
+    catalog = result.catalog
+    cotahist = result.cotahist
+    return (
+        f"start_year={result.start_year} end_year={result.end_year} "
+        f"cutoff_date={result.cutoff_date} ok={result.ok} "
+        f"catalog_created={catalog.get('created', 0)} "
+        f"catalog_updated={catalog.get('updated', 0)} "
+        f"catalog_unresolved={catalog.get('unresolved', 0)} "
+        f"catalog_ineligible={catalog.get('ineligible', 0)} "
+        f"prices_inserted={cotahist.get('rows_inserted', 0)} "
+        f"cotahist_errors={cotahist.get('errors', 0)}"
     )
 
 
@@ -177,6 +225,7 @@ async def run_system_bootstrap(
     )
 
     operations: tuple[tuple[str, Callable[[], Awaitable[str]]], ...] = (
+        ("b3_baseline", _bootstrap_b3_baseline),
         ("asset_catalog", _bootstrap_asset_catalog),
         ("treasury_catalog", _bootstrap_treasury_catalog),
         ("treasury_reconciliation", _bootstrap_treasury_reconciliation),

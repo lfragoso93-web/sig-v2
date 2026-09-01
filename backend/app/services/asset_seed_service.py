@@ -1,11 +1,7 @@
-"""
-Asset Seed Service.
+"""Enriquecimento BRAPI do catálogo persistido e catálogo CRIPTO suportado.
 
-Popula/atualiza `assets` com todos os ativos listados na B3 via BRAPI v2.
-
-O seed persiste metadados e logos já entregues pelo catálogo. Históricos,
-eventos e Proventos pertencem exclusivamente aos estágios dedicados e gated
-do bootstrap global.
+B3 é descoberta pelo COTAHIST. A BRAPI só complementa metadados de ativos B3
+já existentes; CRIPTO permanece com catálogo próprio pelo universo suportado.
 """
 import logging
 import re
@@ -51,7 +47,13 @@ class SeedResult:
 
 
 def _extract_logo_url(item: dict) -> str | None:
-    raw = item.get("logourl") or item.get("logoUrl") or item.get("logo_url") or item.get("logo") or item.get("image")
+    raw = (
+        item.get("logourl")
+        or item.get("logoUrl")
+        or item.get("logo_url")
+        or item.get("logo")
+        or item.get("image")
+    )
     return str(raw).strip() if raw else None
 
 
@@ -90,6 +92,23 @@ async def _upsert_asset(
         existing.logo_url = logo_url
         changed = True
     return "updated" if changed else "skipped"
+
+
+async def _enrich_b3_asset(
+    db: AsyncSession,
+    ticker: str,
+    name: str,
+    asset_type: AssetType,
+    sector: str | None,
+    logo_url: str | None = None,
+) -> str:
+    result = await db.execute(
+        select(Asset).where(Asset.ticker == ticker, Asset.asset_type == asset_type.value)
+    )
+    existing = result.scalar_one_or_none()
+    if existing is None:
+        return "skipped"
+    return await _upsert_asset(db, ticker, name, asset_type, sector, logo_url)
 
 
 def _has_history(ticker: str) -> bool:
@@ -170,7 +189,9 @@ async def run_asset_seed(
         )
 
         for item in items:
-            ticker = (item.get("stock") or item.get("symbol") or item.get("ticker") or "").strip().upper()
+            ticker = (
+                item.get("stock") or item.get("symbol") or item.get("ticker") or ""
+            ).strip().upper()
             if not ticker:
                 result.errors += 1
                 continue
@@ -184,17 +205,25 @@ async def run_asset_seed(
                 continue
 
             name = (item.get("name") or item.get("longName") or "").strip()
-            sector = (item.get("sector") or item.get("segment") or item.get("subSector") or "").strip() or None
+            sector = (
+                item.get("sector")
+                or item.get("segment")
+                or item.get("subSector")
+                or ""
+            ).strip() or None
             logo_url = _extract_logo_url(item)
 
             try:
-                status = await _upsert_asset(db, ticker, name, asset_type, sector, logo_url)
+                status = await _enrich_b3_asset(
+                    db,
+                    ticker,
+                    name,
+                    asset_type,
+                    sector,
+                    logo_url,
+                )
                 result.seeded_tickers[type_label].append(ticker)
-                if status == "created":
-                    result.created += 1
-                    result.by_type[type_label] += 1
-                    result.new_tickers[type_label].append(ticker)
-                elif status == "updated":
+                if status == "updated":
                     result.updated += 1
                 else:
                     result.skipped += 1

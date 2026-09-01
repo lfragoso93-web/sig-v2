@@ -54,7 +54,12 @@ contrato v2.
 
 ## Coleta e persistência
 
-- BRAPI é a fonte principal e Yahoo histórico é complementar;
+- BRAPI é autoritativa quando possui cobertura válida;
+- Yahoo histórico é fallback-only e só roda quando BRAPI declara ausência real
+  de cobertura para o ativo;
+- Yahoo nunca reconcilia nem sobrescreve o mesmo escopo já coberto por BRAPI;
+- a persistência rejeita defensivamente coleções que tragam linhas
+  normalizadas de BRAPI e Yahoo no mesmo ativo;
 - valores históricos do Yahoo são revertidos à escala da Data Ex somente por
   fatores positivos de split/grupamento publicados após o evento; valor do
   provedor e fator acumulado permanecem no payload normalizado;
