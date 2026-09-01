@@ -85,3 +85,50 @@ async def test_rebuild_skips_when_portfolio_has_no_transactions():
 
     invalidate.assert_not_awaited()
     backfill.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_rebuild_failure_is_isolated_from_cache_refresh():
+    db = AsyncMock()
+    query_result = MagicMock()
+    query_result.scalar_one_or_none.return_value = date(2024, 1, 15)
+    db.execute.return_value = query_result
+
+    with (
+        patch(
+            "app.services.csv_snapshot_rebuild_service.AsyncSessionLocal",
+            return_value=_SessionContext(db),
+        ),
+        patch(
+            "app.services.csv_snapshot_rebuild_service.invalidate_snapshots_from",
+            new=AsyncMock(side_effect=RuntimeError("synthetic rebuild failure")),
+        ) as invalidate,
+        patch(
+            "app.services.csv_snapshot_rebuild_service.backfill_snapshots_with_returns",
+            new=AsyncMock(),
+        ) as backfill,
+        patch(
+            "app.services.csv_snapshot_rebuild_service.invalidate_portfolio_cache",
+            new=AsyncMock(),
+        ) as invalidate_cache,
+        patch(
+            "app.services.csv_snapshot_rebuild_service.invalidate_rentabilidade_cache",
+            new=AsyncMock(),
+        ) as invalidate_rentabilidade,
+        patch("app.services.csv_snapshot_rebuild_service.logger") as logger,
+    ):
+        await rebuild_snapshots_after_csv_import(7)
+
+    invalidate.assert_awaited_once_with(
+        db,
+        7,
+        date(2024, 1, 15),
+        commit=True,
+    )
+    backfill.assert_not_awaited()
+    invalidate_cache.assert_not_awaited()
+    invalidate_rentabilidade.assert_not_awaited()
+    logger.exception.assert_called_once_with(
+        "[csv_snapshot_rebuild] falha ao reconstruir portfolio=%s",
+        7,
+    )
