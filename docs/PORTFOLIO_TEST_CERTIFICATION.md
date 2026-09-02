@@ -103,20 +103,23 @@ Baseline atual publicado em `stable-15jun`:
   canonica alinhada para `admin@sgi.com`; seed idempotente e nao destrutivo,
   workaround `.local` removido do frontend e identidade legada preservada.
 
-Esses blocos avancam os itens B, C, D, E, F e G em nivel dirigido. O marco
-`PORTFOLIO-TEST-READY` ainda nao esta aprovado: permanecem pendentes a
-certificacao local integrada, UI ponta a ponta alem do modal CSV, resiliencia/restart,
-persistencia/volumes e a selecao de um SHA final para homologacao OCI.
+Esses blocos avancam os itens B, C, D, E, F e G. O marco
+`PORTFOLIO-TEST-READY` ainda nao esta aprovado: as provas operacionais de
+Compose, restart, persistencia PostgreSQL, snapshots/cache e smoke UI ja foram
+executadas, mas o fechamento deve continuar orientado pelos criterios funcionais
+restantes e pela selecao de um SHA final aprovado para homologacao OCI.
 
-Estimativa operacional apos `883e6dcbcfee0f344baf34065fb39c46775ef9c4`:
+Estado consolidado da certificacao local:
 
 - concluido em nivel dirigido: dataset sintetico, reconciliacao independente,
   CSV dry-run/import/reexecucao/invalidos/rebuild agendado, Tesouro/Renda Fixa
   fail-closed parcial, matriz IRPF, modal CSV critico e Redis fail-open;
-- pendente para aprovar o gate: uma bateria integrada local com Compose,
-  restart backend/Redis/Compose com containers reais, prova operacional de
-  persistencia PostgreSQL/volumes, verificacao de snapshots/cache apos restart,
-  smoke UI ponta a ponta alem do modal CSV e registro do SHA final aprovado.
+- concluido em nivel operacional: Compose local, health de PostgreSQL/Redis,
+  restart de backend/Redis/Compose, persistencia do volume PostgreSQL,
+  verificacao de snapshots/cache apos restart e smoke UI autenticado;
+- pendente para aprovar o gate: revisar os criterios funcionais ainda sem
+  evidencia conclusiva, corrigir blockers remanescentes caso existam, manter a
+  documentacao sincronizada e registrar o SHA final aprovado.
 
 Evidencia local adicional:
 
