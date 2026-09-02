@@ -145,6 +145,19 @@ Evidencia operacional de restart controlado:
   `8decdae25f7d5a7a8fa4a64a90e6d01543c2d708`;
 - `alembic current` permaneceu `20260820_dividend_occurrence (head)`.
 
+Evidencia operacional de persistencia PostgreSQL/volume:
+
+- criada tabela sintetica temporaria `portfolio_test_ready_volume_probe` com
+  marcador `synthetic-volume-probe`;
+- `docker compose -f docker-compose.yml restart db` concluiu sem remover
+  volumes;
+- apos restart, `db` voltou `healthy`, backend permaneceu `healthy` e
+  `/health` retornou `status=ok`, `postgres=ok`, `redis=ok`;
+- marcador `synthetic-volume-probe` permaneceu legivel apos restart do
+  Postgres, comprovando persistencia no volume `postgres_data`;
+- tabela sintetica temporaria removida ao final da prova;
+- `alembic current` permaneceu `20260820_dividend_occurrence (head)`.
+
 ## Ordem obrigatória
 
 ### A. Baseline local
