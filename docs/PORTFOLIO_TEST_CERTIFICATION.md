@@ -84,11 +84,14 @@ Baseline atual publicado em `stable-15jun`:
   `TESOURO_DIRETO` e `RENDA_FIXA` sem TWR dedicado, como
   `partial_by_design`;
 - `39d2ee8c0fd64fa82aa264e8ad88343431580b3e`: classes fiscais comuns do
-  fixture mapeadas para a matriz sintetica de IRPF.
+  fixture mapeadas para a matriz sintetica de IRPF;
+- `ad9b027a9087173e270117741ecebea4cd4279ab`: modal de importacao CSV
+  bloqueia confirmacao apos dry-run com erro, sem importacao real, `onSuccess`
+  ou invalidacao de cache.
 
 Esses blocos avancam os itens B, C, D, E e F em nivel dirigido. O marco
 `PORTFOLIO-TEST-READY` ainda nao esta aprovado: permanecem pendentes a
-certificacao local integrada, UI ponta a ponta, resiliencia/restart,
+certificacao local integrada, UI ponta a ponta alem do modal CSV, resiliencia/restart,
 persistencia/volumes e a selecao de um SHA final para homologacao OCI.
 
 ## Ordem obrigatória
