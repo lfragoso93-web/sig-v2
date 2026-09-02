@@ -281,6 +281,47 @@ async def test_synthetic_fixture_effective_import_commits_once() -> None:
     db.rollback.assert_not_awaited()
 
 
+@pytest.mark.asyncio
+async def test_synthetic_fixture_repeat_import_skips_duplicates() -> None:
+    fixture = _load_fixture()
+    db = AsyncMock(spec=AsyncSession)
+    portfolio_result = MagicMock()
+    portfolio_result.scalar_one_or_none.return_value = SimpleNamespace(
+        id=303,
+        user_id=303,
+    )
+    execute_results = [portfolio_result]
+
+    for _transaction in fixture["transactions"]:
+        duplicate_result = MagicMock()
+        duplicate_result.scalar_one_or_none.return_value = object()
+        execute_results.append(duplicate_result)
+
+    db.execute = AsyncMock(side_effect=execute_results)
+    db.add = MagicMock()
+    db.commit = AsyncMock()
+
+    result = await import_csv_transactions(
+        content=_to_csv(fixture["transactions"]),
+        portfolio_id=303,
+        user_id=303,
+        db=db,
+    )
+
+    assert result["success"] is True
+    assert result["imported_count"] == 0
+    assert result["skipped_count"] == len(fixture["transactions"])
+    assert result["error_count"] == 0
+    assert all(row["status"] == "skipped" for row in result["rows"])
+    assert all(
+        row["warnings"] == ["duplicate transaction skipped"]
+        for row in result["rows"]
+    )
+    db.add.assert_not_called()
+    db.commit.assert_not_awaited()
+    db.rollback.assert_not_awaited()
+
+
 def test_portfolio_synthetic_fixture_reconciles_independently() -> None:
     fixture = _load_fixture()
 
