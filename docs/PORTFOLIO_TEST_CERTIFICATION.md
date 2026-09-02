@@ -112,6 +112,14 @@ Estimativa operacional apos `883e6dcbcfee0f344baf34065fb39c46775ef9c4`:
   persistencia PostgreSQL/volumes, verificacao de snapshots/cache apos restart,
   smoke UI ponta a ponta alem do modal CSV e registro do SHA final aprovado.
 
+Evidencia local adicional:
+
+- `docker compose config --quiet` passou apos corrigir o `.env` local ignorado
+  pelo Git para usar `;` como separador Windows de `COMPOSE_FILE`;
+- servicos efetivos renderizados: `redis`, `db`, `backend`, `frontend`,
+  `cloudflared`;
+- volume efetivo renderizado: `postgres_data`.
+
 ## Ordem obrigatória
 
 ### A. Baseline local
