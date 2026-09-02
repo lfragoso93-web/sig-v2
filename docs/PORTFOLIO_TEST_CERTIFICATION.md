@@ -92,7 +92,10 @@ Baseline atual publicado em `stable-15jun`:
   best-effort/fail-open quando Redis esta indisponivel;
 - `883e6dcbcfee0f344baf34065fb39c46775ef9c4`: `/health` mantem Redis
   indisponivel como sinal informativo/non-blocking, enquanto Postgres segue
-  como dependencia degradante.
+  como dependencia degradante;
+- `11ab59339fe30ad6c1c1f177841045680976a8d4`: Compose local validado por
+  contrato estrutural com Postgres persistente, healthchecks/dependencias
+  `service_healthy` e Redis efemero como cache.
 
 Esses blocos avancam os itens B, C, D, E, F e G em nivel dirigido. O marco
 `PORTFOLIO-TEST-READY` ainda nao esta aprovado: permanecem pendentes a
@@ -105,9 +108,9 @@ Estimativa operacional apos `883e6dcbcfee0f344baf34065fb39c46775ef9c4`:
   CSV dry-run/import/reexecucao/invalidos/rebuild agendado, Tesouro/Renda Fixa
   fail-closed parcial, matriz IRPF, modal CSV critico e Redis fail-open;
 - pendente para aprovar o gate: uma bateria integrada local com Compose,
-  restart backend/Redis/Compose, persistencia PostgreSQL/volumes, verificacao de
-  snapshots/cache apos restart, smoke UI ponta a ponta alem do modal CSV e
-  registro do SHA final aprovado.
+  restart backend/Redis/Compose com containers reais, prova operacional de
+  persistencia PostgreSQL/volumes, verificacao de snapshots/cache apos restart,
+  smoke UI ponta a ponta alem do modal CSV e registro do SHA final aprovado.
 
 ## Ordem obrigatória
 
