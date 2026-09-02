@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest'
 import { loginSchema } from './LoginPage'
 
 describe('LoginPage validation', () => {
-  it('accepts the local synthetic superadmin email', () => {
+  it('accepts the canonical synthetic superadmin email', () => {
     expect(loginSchema.safeParse({
-      email: 'admin@sig.local',
+      email: 'admin@sgi.com',
       password: 'Admin@1234!',
     }).success).toBe(true)
   })

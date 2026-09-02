@@ -7,16 +7,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Eye, EyeOff } from 'lucide-react'
 import { getApiValidationErrorMessage } from '@/utils/apiError'
 
-const standardEmailSchema = z.string().email()
-const localSyntheticLoginEmails = new Set(['admin@sig.local'])
-
-const loginEmailSchema = z.string().trim().refine(
-  email => (
-    standardEmailSchema.safeParse(email).success ||
-    localSyntheticLoginEmails.has(email.toLowerCase())
-  ),
-  'E-mail inválido',
-)
+const loginEmailSchema = z.string().trim().email('E-mail inválido')
 
 export const loginSchema = z.object({
   email:    loginEmailSchema,

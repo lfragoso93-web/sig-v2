@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     REDIS_PORT: int = 6379
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000,http://localhost:80,http://localhost"
 
-    SUPERADMIN_EMAIL: str = "admin@sig.local"
+    SUPERADMIN_EMAIL: str = "admin@sgi.com"
     SUPERADMIN_PASSWORD: str = _DEFAULT_ADMIN_PASSWORD
     SUPERADMIN_NAME: str = "Super Admin"
 
