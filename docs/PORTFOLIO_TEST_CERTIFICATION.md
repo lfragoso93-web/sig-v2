@@ -120,6 +120,18 @@ Evidencia local adicional:
   `cloudflared`;
 - volume efetivo renderizado: `postgres_data`.
 
+Evidencia operacional local em containers:
+
+- backend reconstruido e recriado com runtime `APP_COMMIT_SHA` =
+  `8decdae25f7d5a7a8fa4a64a90e6d01543c2d708`;
+- `docker compose -f docker-compose.yml ps` mostrou `backend`, `db` e `redis`
+  `healthy`;
+- `/health` retornou `status=ok`, `postgres=ok`, `redis=ok` e
+  `ready_for_real_data=false`;
+- `pg_isready -U sgi -d sgi` retornou accepting connections;
+- `redis-cli ping` retornou `PONG`;
+- `alembic current` retornou `20260820_dividend_occurrence (head)`.
+
 ## Ordem obrigatória
 
 ### A. Baseline local
