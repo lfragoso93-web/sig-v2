@@ -96,6 +96,9 @@ Baseline atual publicado em `stable-15jun`:
 - `11ab59339fe30ad6c1c1f177841045680976a8d4`: Compose local validado por
   contrato estrutural com Postgres persistente, healthchecks/dependencias
   `service_healthy` e Redis efemero como cache.
+- `9782a3ee2f39717d9a4ca351bf98b961c03bd9cd`: login local aceita o
+  superadmin sintetico `admin@sig.local`, preservando validacao de e-mails
+  comuns e rejeicao de formato invalido.
 
 Esses blocos avancam os itens B, C, D, E, F e G em nivel dirigido. O marco
 `PORTFOLIO-TEST-READY` ainda nao esta aprovado: permanecem pendentes a
@@ -181,6 +184,25 @@ Evidencia operacional de snapshots/cache apos restart:
   retornou `synthetic-cache-probe`, removeu a chave e confirmou `exists=0`;
 - durante a prova, `/health` permaneceu `status=ok`, `postgres=ok`,
   `redis=ok` e `ready_for_real_data=false`.
+
+Evidencia operacional de smoke UI local:
+
+- tela publica `http://localhost/` respondeu e renderizou links de entrada e
+  cadastro;
+- login com `admin@sig.local` revelou incompatibilidade entre seed local e
+  validacao frontend; bug tratado separadamente na Issue #305 e corrigido no
+  commit `9782a3ee2f39717d9a4ca351bf98b961c03bd9cd`;
+- teste frontend dedicado validou que `admin@sig.local` e um e-mail comum sao
+  aceitos, enquanto formato invalido continua bloqueado;
+- smoke visual seguiu com usuario sintetico descartavel
+  `portfolio.ui.1788374313258@example.com`;
+- cadastro, aceite de termos, onboarding e criacao da carteira
+  `Portfolio Test Ready UI` concluidos em `http://localhost/welcome` e
+  redirecionados para `http://localhost/carteira`;
+- navegacao validada sem erro visivel nas telas Resumo, Patrimonio,
+  Rentabilidade, Transacoes, Proventos, Metas, IRPF e Configuracoes;
+- estados vazios permaneceram coerentes para uma carteira recem-criada, sem
+  dados reais e com `ready_for_real_data=false`.
 
 ## Ordem obrigatória
 
