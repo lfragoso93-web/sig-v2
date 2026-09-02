@@ -9,7 +9,10 @@ from pathlib import Path
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.csv_import_service import CSV_TEMPLATE_HEADERS, parse_csv_content
+from app.services.csv_import_service import (
+    CSV_TEMPLATE_HEADERS,
+    parse_csv_content,
+)
 
 
 FIXTURE_PATH = (
@@ -47,7 +50,10 @@ def _to_csv(transactions: list[dict[str, str]]) -> str:
     return output.getvalue()
 
 
-def _reconcile(transactions: list[dict[str, str]], prices: dict[str, str]) -> dict:
+def _reconcile(
+    transactions: list[dict[str, str]],
+    prices: dict[str, str],
+) -> dict:
     lots: dict[str, list[Lot]] = defaultdict(list)
     realized: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
 
@@ -58,7 +64,12 @@ def _reconcile(transactions: list[dict[str, str]], prices: dict[str, str]) -> di
         fees = Decimal(tx["fees"])
 
         if tx["operation"] == "buy":
-            lots[ticker].append(Lot(quantity=quantity, unit_cost=(quantity * price + fees) / quantity))
+            lots[ticker].append(
+                Lot(
+                    quantity=quantity,
+                    unit_cost=(quantity * price + fees) / quantity,
+                )
+            )
             continue
 
         remaining_to_sell = quantity
@@ -79,7 +90,10 @@ def _reconcile(transactions: list[dict[str, str]], prices: dict[str, str]) -> di
     holdings = {}
     for ticker, ticker_lots in lots.items():
         quantity = sum((lot.quantity for lot in ticker_lots), Decimal("0"))
-        remaining_cost = sum((lot.quantity * lot.unit_cost for lot in ticker_lots), Decimal("0"))
+        remaining_cost = sum(
+            (lot.quantity * lot.unit_cost for lot in ticker_lots),
+            Decimal("0"),
+        )
         market_value = quantity * Decimal(prices[ticker])
         holdings[ticker] = {
             "quantity": f"{_quantity(quantity):.8f}",
@@ -89,22 +103,33 @@ def _reconcile(transactions: list[dict[str, str]], prices: dict[str, str]) -> di
         }
 
     totals = {
-        "remaining_cost": sum(Decimal(item["remaining_cost"]) for item in holdings.values()),
-        "market_value": sum(Decimal(item["market_value"]) for item in holdings.values()),
-        "realized_pnl": sum(Decimal(item["realized_pnl"]) for item in holdings.values()),
+        "remaining_cost": sum(
+            Decimal(item["remaining_cost"]) for item in holdings.values()
+        ),
+        "market_value": sum(
+            Decimal(item["market_value"]) for item in holdings.values()
+        ),
+        "realized_pnl": sum(
+            Decimal(item["realized_pnl"]) for item in holdings.values()
+        ),
     }
     totals["income"] = Decimal("20.00")
     totals["open_pnl"] = totals["market_value"] - totals["remaining_cost"]
-    totals["total_pnl"] = totals["open_pnl"] + totals["realized_pnl"] + totals["income"]
+    totals["total_pnl"] = (
+        totals["open_pnl"] + totals["realized_pnl"] + totals["income"]
+    )
 
     return {
         "holdings": holdings,
-        "totals": {key: f"{_money(value):.2f}" for key, value in totals.items()},
+        "totals": {
+            key: f"{_money(value):.2f}" for key, value in totals.items()
+        },
     }
 
 
 def test_portfolio_synthetic_fixture_contract_is_explicit() -> None:
     fixture = _load_fixture()
+    transactions = fixture["transactions"]
 
     assert fixture["schema_version"] == "portfolio-synthetic-certification.v1"
     assert fixture["issue"] == 303
@@ -113,7 +138,7 @@ def test_portfolio_synthetic_fixture_contract_is_explicit() -> None:
         "ready_for_real_data": False,
         "real_data_allowed": False,
     }
-    assert {row["asset_type"] for row in fixture["transactions"]} == {
+    assert {row["asset_type"] for row in transactions} == {
         "ACAO",
         "FII",
         "ETF_NACIONAL",
@@ -122,8 +147,30 @@ def test_portfolio_synthetic_fixture_contract_is_explicit() -> None:
         "TESOURO_DIRETO",
         "RENDA_FIXA",
     }
-    assert any(row["operation"] == "sell" for row in fixture["transactions"])
+    assert any(row["operation"] == "sell" for row in transactions)
+    assert any(Decimal(row["fees"]) > 0 for row in transactions)
     assert fixture["market_prices"]["missing_coverage"] == ["BDR-COVERAGE-GAP"]
+
+
+def test_portfolio_synthetic_fixture_covers_required_cases() -> None:
+    fixture = _load_fixture()
+    transactions = fixture["transactions"]
+
+    grouped: dict[str, list[dict[str, str]]] = defaultdict(list)
+    for transaction in transactions:
+        grouped[transaction["ticker"]].append(transaction)
+
+    assert sum(1 for row in grouped["PETR4"] if row["operation"] == "buy") >= 2
+    assert any(row["operation"] == "sell" for row in grouped["PETR4"])
+    assert grouped["BOVA11"][0]["operation"] == "buy"
+    assert grouped["BOVA11"][1]["operation"] == "sell"
+    assert grouped["BOVA11"][2]["operation"] == "buy"
+    assert Decimal(grouped["BOVA11"][1]["quantity"]) == Decimal("20")
+    assert Decimal(grouped["BOVA11"][2]["quantity"]) > 0
+    income_tickers = {event["ticker"] for event in fixture["income_events"]}
+
+    assert income_tickers == {"MXRF11"}
+    assert "AAPL34" not in income_tickers
 
 
 @pytest.mark.asyncio
