@@ -13,6 +13,9 @@ from fastapi import BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.routers.portfolios import import_portfolio_csv
+from app.services.rentabilidade_reconciliation_service import (
+    reconcile_rentabilidade_page,
+)
 from app.services.csv_import_service import (
     CSV_TEMPLATE_HEADERS,
     import_csv_transactions,
@@ -62,6 +65,17 @@ def _to_csv(transactions: list[dict[str, str]]) -> str:
     writer.writeheader()
     writer.writerows(transactions)
     return output.getvalue()
+
+
+def _expected_classes(fixture: dict) -> dict[str, dict[str, str]]:
+    ticker_classes = {
+        row["ticker"]: row["asset_type"]
+        for row in fixture["transactions"]
+    }
+    return {
+        ticker_classes[ticker]: values
+        for ticker, values in fixture["expected"]["holdings"].items()
+    }
 
 
 def _reconcile(
@@ -429,3 +443,64 @@ def test_portfolio_synthetic_fixture_reconciles_independently() -> None:
     )
 
     assert actual == fixture["expected"]
+
+
+@pytest.mark.asyncio
+async def test_synthetic_fixture_surfaces_partial_twr_by_design() -> None:
+    fixture = _load_fixture()
+    expected = fixture["expected"]["totals"]
+    classes = [
+        {
+            "asset_type": asset_type,
+            "current_value": float(row["market_value"]),
+            "cost_basis": float(row["remaining_cost"]),
+            "dedicated_history_required": asset_type
+            in {"TESOURO_DIRETO", "RENDA_FIXA"},
+            "twr_available": asset_type
+            not in {"TESOURO_DIRETO", "RENDA_FIXA"},
+        }
+        for asset_type, row in _expected_classes(fixture).items()
+    ]
+    summary = {
+        "total_patrimonio": float(expected["market_value"]),
+        "total_investido": float(expected["remaining_cost"]),
+        "ganho_nao_realizado": float(expected["open_pnl"]),
+        "ganho_realizado": float(expected["realized_pnl"]),
+        "lucro_total": float(expected["total_pnl"]),
+        "total_proventos": float(expected["income"]),
+    }
+    kpis = {
+        "patrimonio_atual": float(expected["market_value"]),
+        "custo_posicoes_abertas": float(expected["remaining_cost"]),
+        "resultado_nao_realizado": float(expected["open_pnl"]),
+        "resultado_realizado": float(expected["realized_pnl"]),
+        "resultado_total": float(expected["total_pnl"]),
+        "proventos_total": float(expected["income"]),
+        "performance_as_of": fixture["market_prices"]["as_of"],
+    }
+
+    with (
+        patch(
+            "app.services.rentabilidade_reconciliation_service."
+            "get_canonical_portfolio_summary",
+            new=AsyncMock(return_value=summary),
+        ),
+        patch(
+            "app.services.rentabilidade_reconciliation_service."
+            "get_rentabilidade_kpis",
+            new=AsyncMock(return_value=kpis),
+        ),
+        patch(
+            "app.services.rentabilidade_reconciliation_service."
+            "get_canonical_class_performance",
+            new=AsyncMock(return_value=classes),
+        ),
+    ):
+        result = await reconcile_rentabilidade_page(AsyncMock(), 303, 303)
+
+    assert result["is_reconciled"] is True
+    assert result["unsupported_class_twr"] == [
+        "TESOURO_DIRETO",
+        "RENDA_FIXA",
+    ]
+    assert result["twr_comparability_status"] == "partial_by_design"
