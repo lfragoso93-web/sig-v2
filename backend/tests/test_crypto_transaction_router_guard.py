@@ -148,7 +148,9 @@ def test_create_crypto_guard_runs_before_transaction_construction() -> None:
         transactions.create_transaction,
         "_validate_crypto_transaction_asset",
     )
-    transaction_index = _transaction_assignment_index(transactions.create_transaction)
+    transaction_index = _transaction_assignment_index(
+        transactions.create_transaction
+    )
 
     assert guard_index < transaction_index
 
@@ -158,20 +160,26 @@ def test_update_crypto_guard_runs_before_transaction_mutation() -> None:
         transactions.update_transaction,
         "_validate_crypto_transaction_asset",
     )
-    mutation_index = _transaction_mutation_index(transactions.update_transaction)
+    mutation_index = _transaction_mutation_index(
+        transactions.update_transaction
+    )
 
     assert guard_index < mutation_index
 
 
 def test_crypto_requests_do_not_use_get_or_create_asset_after_commit() -> None:
-    source = textwrap.dedent(inspect.getsource(transactions.create_transaction))
+    source = textwrap.dedent(
+        inspect.getsource(transactions.create_transaction)
+    )
 
     assert 'if asset_type != "CRIPTO":' in source
     assert "await get_or_create_asset(db, asset_data)" in source
 
 
 @pytest.mark.asyncio
-async def test_non_crypto_transaction_skips_crypto_eligibility(monkeypatch) -> None:
+async def test_non_crypto_transaction_skips_crypto_eligibility(
+    monkeypatch,
+) -> None:
     called = False
 
     async def _unexpected_call(_db, _ticker):
@@ -184,13 +192,17 @@ async def test_non_crypto_transaction_skips_crypto_eligibility(monkeypatch) -> N
         _unexpected_call,
     )
 
-    await transactions._validate_crypto_transaction_asset(object(), "PETR4", "ACAO")
+    await transactions._validate_crypto_transaction_asset(
+        object(), "PETR4", "ACAO"
+    )
 
     assert called is False
 
 
 @pytest.mark.asyncio
-async def test_rejected_crypto_is_exposed_as_unprocessable_entity(monkeypatch) -> None:
+async def test_rejected_crypto_is_exposed_as_unprocessable_entity(
+    monkeypatch,
+) -> None:
     async def _reject(_db, ticker):
         raise CryptoTransactionEligibilityError(
             ticker=ticker,
@@ -205,7 +217,9 @@ async def test_rejected_crypto_is_exposed_as_unprocessable_entity(monkeypatch) -
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        await transactions._validate_crypto_transaction_asset(object(), "APT", "CRIPTO")
+        await transactions._validate_crypto_transaction_asset(
+            object(), "APT", "CRIPTO"
+        )
 
     assert exc_info.value.status_code == 422
     assert "APT" in str(exc_info.value.detail)
@@ -216,7 +230,9 @@ async def test_rejected_crypto_is_exposed_as_unprocessable_entity(monkeypatch) -
 async def test_rejected_create_does_not_add_or_commit(monkeypatch) -> None:
     db = _WriteSpySession()
     monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
-    monkeypatch.setattr(transactions, "_validate_crypto_transaction_asset", _reject_crypto)
+    monkeypatch.setattr(
+        transactions, "_validate_crypto_transaction_asset", _reject_crypto
+    )
 
     with pytest.raises(HTTPException) as exc_info:
         await transactions.create_transaction(
@@ -233,13 +249,17 @@ async def test_rejected_create_does_not_add_or_commit(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_fixed_income_upsert_failure_blocks_transaction_commit(monkeypatch) -> None:
+async def test_fixed_income_upsert_failure_blocks_transaction_commit(
+    monkeypatch,
+) -> None:
     async def _fail_upsert(*_args, **_kwargs):
         raise RuntimeError("fixed income upsert failed")
 
     db = _WriteSpySession()
     monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
-    monkeypatch.setattr(transactions, "_upsert_fixed_income_record", _fail_upsert)
+    monkeypatch.setattr(
+        transactions, "_upsert_fixed_income_record", _fail_upsert
+    )
 
     with pytest.raises(RuntimeError, match="fixed income upsert failed"):
         await transactions.create_transaction(
@@ -264,7 +284,9 @@ async def test_fixed_income_upsert_failure_blocks_transaction_commit(monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_fixed_income_buy_prepares_record_before_commit(monkeypatch) -> None:
+async def test_fixed_income_buy_prepares_record_before_commit(
+    monkeypatch,
+) -> None:
     db = _WriteSpySession(execute_value=None)
     monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
     monkeypatch.setattr(transactions, "get_or_create_asset", _noop_asset)
@@ -291,7 +313,8 @@ async def test_fixed_income_buy_prepares_record_before_commit(monkeypatch) -> No
     assert db.commit_called is True
     assert any(
         getattr(item, "name", None) == "CDB-TESTE"
-        and getattr(item, "invested_amount", None) == transactions.Decimal("1000.0")
+        and getattr(item, "invested_amount", None)
+        == transactions.Decimal("1000.0")
         for item in db.added
     )
 
@@ -358,7 +381,9 @@ async def test_rejected_update_does_not_mutate_or_commit(monkeypatch) -> None:
     )
     db = _WriteSpySession(existing)
     monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
-    monkeypatch.setattr(transactions, "_validate_crypto_transaction_asset", _reject_crypto)
+    monkeypatch.setattr(
+        transactions, "_validate_crypto_transaction_asset", _reject_crypto
+    )
 
     with pytest.raises(HTTPException) as exc_info:
         await transactions.update_transaction(
@@ -393,7 +418,9 @@ async def test_partial_update_preserves_omitted_fields(monkeypatch) -> None:
     )
     db = _WriteSpySession(existing)
     monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
-    monkeypatch.setattr(transactions, "_validate_crypto_transaction_asset", _allow_crypto)
+    monkeypatch.setattr(
+        transactions, "_validate_crypto_transaction_asset", _allow_crypto
+    )
 
     result = await transactions.update_transaction(
         portfolio_id=1,
@@ -430,7 +457,9 @@ async def test_partial_update_can_clear_notes(monkeypatch) -> None:
     )
     db = _WriteSpySession(existing)
     monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
-    monkeypatch.setattr(transactions, "_validate_crypto_transaction_asset", _allow_crypto)
+    monkeypatch.setattr(
+        transactions, "_validate_crypto_transaction_asset", _allow_crypto
+    )
 
     result = await transactions.update_transaction(
         portfolio_id=1,
@@ -459,6 +488,12 @@ def test_transaction_eligibility_service_has_no_provider_imports() -> None:
         elif isinstance(node, ast.ImportFrom) and node.module:
             imported_modules.add(node.module)
 
-    assert not any("coingecko" in module_name.lower() for module_name in imported_modules)
-    assert not any("brapi" in module_name.lower() for module_name in imported_modules)
-    assert not any("httpx" in module_name.lower() for module_name in imported_modules)
+    assert not any(
+        "coingecko" in module_name.lower() for module_name in imported_modules
+    )
+    assert not any(
+        "brapi" in module_name.lower() for module_name in imported_modules
+    )
+    assert not any(
+        "httpx" in module_name.lower() for module_name in imported_modules
+    )
