@@ -61,6 +61,36 @@ Durante toda esta certificação:
 - nenhum seed real de Proventos é autorizado por este documento;
 - nenhum CSV real é autorizado por este documento.
 
+## Estado da certificacao #303
+
+Baseline atual publicado em `stable-15jun`:
+
+- `b852e9ccdfbf48500b763c98bbcfa3ce6b1ad3b8`: contrato do fixture sintetico
+  multiclasse explicita classes, taxas, provento, ativo sem provento, venda
+  parcial, venda total e recompra;
+- `47026d4faddee55398ddb00b8e2dc08c601fb979`: upload CSV sintetico em
+  `dry_run=True` validado como read-only;
+- `bc38e6de8da657b09e9e9e6321516be8dd49950b`: importacao efetiva CSV
+  sintetica validada com commit unico;
+- `026421109fa959ba578c942a6bdd883954eabc98`: repeticao do CSV sintetico
+  validada como duplicidade/idempotencia;
+- `aa2926cf11231c252a4ea85f60af94e8cc52ed1c`: linha invalida derivada do
+  fixture bloqueia persistencia;
+- `db81a3ae40445856bfb1982bfaabb6f459c69e17`: importacao real agenda rebuild
+  de snapshots em background;
+- `e2487fd6809fc683427c9b59efc711469687b150`: linhas `RENDA_FIXA` e
+  `TESOURO_DIRETO` preparam `fixed_income_investments` antes do commit;
+- `310db2420a1afb3f1ea896fd5fcaea214b36e128`: Rentabilidade reconciliada com
+  `TESOURO_DIRETO` e `RENDA_FIXA` sem TWR dedicado, como
+  `partial_by_design`;
+- `39d2ee8c0fd64fa82aa264e8ad88343431580b3e`: classes fiscais comuns do
+  fixture mapeadas para a matriz sintetica de IRPF.
+
+Esses blocos avancam os itens B, C, D, E e F em nivel dirigido. O marco
+`PORTFOLIO-TEST-READY` ainda nao esta aprovado: permanecem pendentes a
+certificacao local integrada, UI ponta a ponta, resiliencia/restart,
+persistencia/volumes e a selecao de um SHA final para homologacao OCI.
+
 ## Ordem obrigatória
 
 ### A. Baseline local
