@@ -6,11 +6,13 @@ from decimal import Decimal, ROUND_HALF_UP
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.routers.portfolios import import_portfolio_csv
 from app.services.csv_import_service import (
     CSV_TEMPLATE_HEADERS,
     import_csv_transactions,
@@ -353,6 +355,69 @@ async def test_synthetic_fixture_invalid_row_blocks_persistence() -> None:
     db.add.assert_not_called()
     db.commit.assert_not_awaited()
     db.rollback.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_synthetic_upload_schedules_snapshot_rebuild() -> None:
+    fixture = _load_fixture()
+    transactions = fixture["transactions"]
+    db = AsyncMock(spec=AsyncSession)
+    current_user = SimpleNamespace(id=303)
+    background_tasks = BackgroundTasks()
+    service_result = {
+        "success": True,
+        "imported_count": len(transactions),
+        "skipped_count": 0,
+        "error_count": 0,
+        "rows": [
+            {
+                "row_num": index,
+                "errors": [],
+                "warnings": [],
+                "status": "imported",
+            }
+            for index, _transaction in enumerate(transactions, start=2)
+        ],
+        "global_errors": [],
+    }
+
+    with (
+        patch(
+            "app.routers.portfolios.get_portfolio",
+            new_callable=AsyncMock,
+        ) as get_portfolio,
+        patch(
+            "app.routers.portfolios."
+            "csv_import_service.import_transactions_csv",
+            new_callable=AsyncMock,
+            return_value=service_result,
+        ) as import_csv,
+        patch(
+            "app.routers.portfolios.invalidate_portfolio_cache",
+            new_callable=AsyncMock,
+        ) as invalidate_cache,
+        patch(
+            "app.routers.portfolios.invalidate_rentabilidade_cache",
+            new_callable=AsyncMock,
+        ) as invalidate_rentabilidade,
+    ):
+        result = await import_portfolio_csv(
+            portfolio_id=303,
+            file=FakeUpload(_to_csv(transactions).encode("utf-8")),
+            dry_run=False,
+            background_tasks=background_tasks,
+            db=db,
+            current_user=current_user,
+        )
+
+    get_portfolio.assert_awaited_once_with(db, 303, 303)
+    import_csv.assert_awaited_once()
+    assert import_csv.await_args.kwargs["dry_run"] is False
+    invalidate_cache.assert_awaited_once_with(303)
+    invalidate_rentabilidade.assert_awaited_once_with(303)
+    assert len(background_tasks.tasks) == 1
+    assert background_tasks.tasks[0].args == (303,)
+    assert result["imported_count"] == len(transactions)
 
 
 def test_portfolio_synthetic_fixture_reconciles_independently() -> None:
