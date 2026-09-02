@@ -89,12 +89,25 @@ Baseline atual publicado em `stable-15jun`:
   bloqueia confirmacao apos dry-run com erro, sem importacao real, `onSuccess`
   ou invalidacao de cache;
 - `712dad454ab4bcf0a06d1950458bd0f69d280a99`: cache Redis validado como
-  best-effort/fail-open quando Redis esta indisponivel.
+  best-effort/fail-open quando Redis esta indisponivel;
+- `883e6dcbcfee0f344baf34065fb39c46775ef9c4`: `/health` mantem Redis
+  indisponivel como sinal informativo/non-blocking, enquanto Postgres segue
+  como dependencia degradante.
 
 Esses blocos avancam os itens B, C, D, E, F e G em nivel dirigido. O marco
 `PORTFOLIO-TEST-READY` ainda nao esta aprovado: permanecem pendentes a
 certificacao local integrada, UI ponta a ponta alem do modal CSV, resiliencia/restart,
 persistencia/volumes e a selecao de um SHA final para homologacao OCI.
+
+Estimativa operacional apos `883e6dcbcfee0f344baf34065fb39c46775ef9c4`:
+
+- concluido em nivel dirigido: dataset sintetico, reconciliacao independente,
+  CSV dry-run/import/reexecucao/invalidos/rebuild agendado, Tesouro/Renda Fixa
+  fail-closed parcial, matriz IRPF, modal CSV critico e Redis fail-open;
+- pendente para aprovar o gate: uma bateria integrada local com Compose,
+  restart backend/Redis/Compose, persistencia PostgreSQL/volumes, verificacao de
+  snapshots/cache apos restart, smoke UI ponta a ponta alem do modal CSV e
+  registro do SHA final aprovado.
 
 ## Ordem obrigatória
 
