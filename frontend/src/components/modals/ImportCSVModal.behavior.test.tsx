@@ -74,6 +74,45 @@ describe('ImportCSVModal behavior', () => {
     expect(mocks.post.mock.calls[0][2]).toMatchObject({ params: { dry_run: true } })
   })
 
+  it('blocks real import when dry-run returns errors', async () => {
+    const onSuccess = vi.fn()
+    mocks.post.mockResolvedValueOnce({
+      data: {
+        success: false,
+        imported_count: 0,
+        skipped_count: 0,
+        error_count: 1,
+        global_errors: ['CSV invalido para importacao sintetica'],
+        rows: [
+          {
+            row_num: 2,
+            errors: ['ticker obrigatorio'],
+            warnings: [],
+            status: 'error',
+            operation: 'buy',
+          },
+        ],
+      },
+    })
+
+    const { container } = render(
+      <ImportCSVModal portfolioId={5} onClose={vi.fn()} onSuccess={onSuccess} />,
+    )
+
+    selectCsv(container)
+
+    await screen.findByText('CSV invalido para importacao sintetica')
+    const confirm = screen.getByRole('button', { name: /Confirmar/ })
+    expect((confirm as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText('ticker obrigatorio')).toBeTruthy()
+    fireEvent.click(confirm)
+
+    expect(mocks.post).toHaveBeenCalledTimes(1)
+    expect(mocks.post.mock.calls[0][2]).toMatchObject({ params: { dry_run: true } })
+    expect(onSuccess).not.toHaveBeenCalled()
+    expect(mocks.invalidateQueries).not.toHaveBeenCalled()
+  })
+
   it('imports validated CSV and refreshes queries only after persisted rows', async () => {
     const onSuccess = vi.fn()
     mocks.post
