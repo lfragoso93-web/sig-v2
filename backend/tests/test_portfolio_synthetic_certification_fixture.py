@@ -322,6 +322,39 @@ async def test_synthetic_fixture_repeat_import_skips_duplicates() -> None:
     db.rollback.assert_not_awaited()
 
 
+@pytest.mark.asyncio
+async def test_synthetic_fixture_invalid_row_blocks_persistence() -> None:
+    fixture = _load_fixture()
+    transactions = [dict(row) for row in fixture["transactions"]]
+    transactions[1]["quantity"] = "invalid"
+    db = AsyncMock(spec=AsyncSession)
+    portfolio_result = MagicMock()
+    portfolio_result.scalar_one_or_none.return_value = SimpleNamespace(
+        id=303,
+        user_id=303,
+    )
+    db.execute.return_value = portfolio_result
+    db.add = MagicMock()
+    db.commit = AsyncMock()
+
+    result = await import_csv_transactions(
+        content=_to_csv(transactions),
+        portfolio_id=303,
+        user_id=303,
+        db=db,
+    )
+
+    assert result["success"] is False
+    assert result["imported_count"] == 0
+    assert result["skipped_count"] == 0
+    assert result["error_count"] == 1
+    assert result["rows"][1]["status"] == "error"
+    assert "quantity" in result["rows"][1]["errors"][0]
+    db.add.assert_not_called()
+    db.commit.assert_not_awaited()
+    db.rollback.assert_not_awaited()
+
+
 def test_portfolio_synthetic_fixture_reconciles_independently() -> None:
     fixture = _load_fixture()
 
