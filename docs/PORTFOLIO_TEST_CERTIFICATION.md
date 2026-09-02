@@ -204,6 +204,18 @@ Evidencia operacional de smoke UI local:
 - estados vazios permaneceram coerentes para uma carteira recem-criada, sem
   dados reais e com `ready_for_real_data=false`.
 
+Evidencia operacional de runtime alinhado ao HEAD:
+
+- backend e frontend recriados localmente com `APP_COMMIT_SHA` explicito;
+- runtime backend passou a reportar
+  `1c91c55b7b3fa84fea5c764dc4ae79ffed728ab3`, igual ao HEAD publicado da
+  `stable-15jun`;
+- `backend`, `db` e `redis` permaneceram `healthy`, e `frontend` permaneceu
+  acessivel em HTTP 200;
+- `/health` retornou `status=ok`, `postgres=ok`, `redis=ok` e
+  `ready_for_real_data=false`;
+- `alembic current` permaneceu `20260820_dividend_occurrence (head)`.
+
 ## Ordem obrigatória
 
 ### A. Baseline local
