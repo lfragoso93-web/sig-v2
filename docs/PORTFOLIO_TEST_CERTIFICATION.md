@@ -87,9 +87,11 @@ Baseline atual publicado em `stable-15jun`:
   fixture mapeadas para a matriz sintetica de IRPF;
 - `ad9b027a9087173e270117741ecebea4cd4279ab`: modal de importacao CSV
   bloqueia confirmacao apos dry-run com erro, sem importacao real, `onSuccess`
-  ou invalidacao de cache.
+  ou invalidacao de cache;
+- `712dad454ab4bcf0a06d1950458bd0f69d280a99`: cache Redis validado como
+  best-effort/fail-open quando Redis esta indisponivel.
 
-Esses blocos avancam os itens B, C, D, E e F em nivel dirigido. O marco
+Esses blocos avancam os itens B, C, D, E, F e G em nivel dirigido. O marco
 `PORTFOLIO-TEST-READY` ainda nao esta aprovado: permanecem pendentes a
 certificacao local integrada, UI ponta a ponta alem do modal CSV, resiliencia/restart,
 persistencia/volumes e a selecao de um SHA final para homologacao OCI.
