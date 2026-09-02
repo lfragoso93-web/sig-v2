@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.csv_import_service import (
     CSV_TEMPLATE_HEADERS,
+    import_csv_transactions,
     import_transactions_csv,
     parse_csv_content,
 )
@@ -227,6 +228,57 @@ async def test_synthetic_fixture_upload_dry_run_is_read_only() -> None:
     assert all(row["status"] == "valid" for row in result["rows"])
     db.add.assert_not_called()
     db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_synthetic_fixture_effective_import_commits_once() -> None:
+    fixture = _load_fixture()
+    db = AsyncMock(spec=AsyncSession)
+    portfolio_result = MagicMock()
+    portfolio_result.scalar_one_or_none.return_value = SimpleNamespace(
+        id=303,
+        user_id=303,
+    )
+    assets_seen: set[tuple[str, str]] = set()
+    transactions = fixture["transactions"]
+    execute_results = [portfolio_result]
+
+    for transaction in transactions:
+        duplicate_result = MagicMock()
+        duplicate_result.scalar_one_or_none.return_value = None
+        execute_results.append(duplicate_result)
+
+        asset_key = (transaction["ticker"], transaction["asset_type"])
+        asset_result = MagicMock()
+        asset_result.scalar_one_or_none.return_value = (
+            SimpleNamespace(ticker=transaction["ticker"])
+            if asset_key in assets_seen
+            else None
+        )
+        execute_results.append(asset_result)
+        assets_seen.add(asset_key)
+
+    db.execute = AsyncMock(side_effect=execute_results)
+    db.add = MagicMock()
+    db.flush = AsyncMock()
+    db.commit = AsyncMock()
+
+    result = await import_csv_transactions(
+        content=_to_csv(transactions),
+        portfolio_id=303,
+        user_id=303,
+        db=db,
+    )
+
+    assert result["success"] is True
+    assert result["imported_count"] == len(transactions)
+    assert result["skipped_count"] == 0
+    assert result["error_count"] == 0
+    assert all(row["status"] == "imported" for row in result["rows"])
+    assert db.add.call_count == len(transactions) + len(assets_seen)
+    assert db.flush.await_count == len(assets_seen)
+    db.commit.assert_awaited_once()
+    db.rollback.assert_not_awaited()
 
 
 def test_portfolio_synthetic_fixture_reconciles_independently() -> None:
