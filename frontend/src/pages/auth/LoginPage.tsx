@@ -7,11 +7,22 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Eye, EyeOff } from 'lucide-react'
 import { getApiValidationErrorMessage } from '@/utils/apiError'
 
-const schema = z.object({
-  email:    z.string().email('E-mail inválido'),
+const standardEmailSchema = z.string().email()
+const localSyntheticLoginEmails = new Set(['admin@sig.local'])
+
+const loginEmailSchema = z.string().trim().refine(
+  email => (
+    standardEmailSchema.safeParse(email).success ||
+    localSyntheticLoginEmails.has(email.toLowerCase())
+  ),
+  'E-mail inválido',
+)
+
+export const loginSchema = z.object({
+  email:    loginEmailSchema,
   password: z.string().min(6, 'Mínimo 6 caracteres'),
 })
-type FormData = z.infer<typeof schema>
+type FormData = z.infer<typeof loginSchema>
 
 export default function LoginPage() {
   const { login } = useAuth()
@@ -19,7 +30,7 @@ export default function LoginPage() {
   const [apiError, setApiError] = useState('')
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(loginSchema),
   })
 
   const onSubmit = async (data: FormData) => {
