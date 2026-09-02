@@ -173,6 +173,15 @@ Evidencia operacional de restart completo do Compose:
 - `redis-cli ping` retornou `PONG`;
 - `http://localhost/` retornou HTTP 200.
 
+Evidencia operacional de snapshots/cache apos restart:
+
+- apos restart completo, `portfolio_snapshots` e
+  `portfolio_class_snapshots` permaneceram presentes no schema PostgreSQL;
+- Redis aceitou chave sintetica temporaria `portfolio-test-ready-cache-probe`,
+  retornou `synthetic-cache-probe`, removeu a chave e confirmou `exists=0`;
+- durante a prova, `/health` permaneceu `status=ok`, `postgres=ok`,
+  `redis=ok` e `ready_for_real_data=false`.
+
 ## Ordem obrigatória
 
 ### A. Baseline local
