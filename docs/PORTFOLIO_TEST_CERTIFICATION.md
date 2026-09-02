@@ -158,6 +158,21 @@ Evidencia operacional de persistencia PostgreSQL/volume:
 - tabela sintetica temporaria removida ao final da prova;
 - `alembic current` permaneceu `20260820_dividend_occurrence (head)`.
 
+Evidencia operacional de restart completo do Compose:
+
+- `docker compose -f docker-compose.yml restart` reiniciou `redis`, `backend`,
+  `db` e `frontend` sem remover volumes;
+- apos estabilizacao, `backend`, `db` e `redis` voltaram `healthy`, e
+  `frontend` voltou a responder HTTP;
+- `/health` retornou `status=ok`, `postgres=ok`, `redis=ok` e
+  `ready_for_real_data=false`;
+- runtime `APP_COMMIT_SHA` permaneceu
+  `8decdae25f7d5a7a8fa4a64a90e6d01543c2d708`;
+- `alembic current` permaneceu `20260820_dividend_occurrence (head)`;
+- `pg_isready -U sgi -d sgi` retornou accepting connections;
+- `redis-cli ping` retornou `PONG`;
+- `http://localhost/` retornou HTTP 200.
+
 ## Ordem obrigatória
 
 ### A. Baseline local
