@@ -5,12 +5,15 @@ from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 from io import StringIO
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.csv_import_service import (
     CSV_TEMPLATE_HEADERS,
+    import_transactions_csv,
     parse_csv_content,
 )
 
@@ -22,6 +25,14 @@ FIXTURE_PATH = (
 )
 CENT = Decimal("0.01")
 QTY = Decimal("0.00000001")
+
+
+class FakeUpload:
+    def __init__(self, content: bytes):
+        self._content = content
+
+    async def read(self) -> bytes:
+        return self._content
 
 
 @dataclass
@@ -187,6 +198,35 @@ async def test_portfolio_synthetic_fixture_is_valid_csv_contract() -> None:
     assert len(rows) == len(fixture["transactions"])
     assert all(row.is_valid() for row in rows)
     assert all(row.warnings == [] for row in rows)
+
+
+@pytest.mark.asyncio
+async def test_synthetic_fixture_upload_dry_run_is_read_only() -> None:
+    fixture = _load_fixture()
+    db = AsyncMock(spec=AsyncSession)
+    portfolio_result = MagicMock()
+    portfolio_result.scalar_one_or_none.return_value = SimpleNamespace(
+        id=303,
+        user_id=303,
+    )
+    db.execute.return_value = portfolio_result
+
+    result = await import_transactions_csv(
+        db=db,
+        portfolio_id=303,
+        user_id=303,
+        file=FakeUpload(_to_csv(fixture["transactions"]).encode("utf-8")),
+        dry_run=True,
+    )
+
+    assert result["success"] is True
+    assert result["imported_count"] == 0
+    assert result["skipped_count"] == 0
+    assert result["error_count"] == 0
+    assert len(result["rows"]) == len(fixture["transactions"])
+    assert all(row["status"] == "valid" for row in result["rows"])
+    db.add.assert_not_called()
+    db.commit.assert_not_awaited()
 
 
 def test_portfolio_synthetic_fixture_reconciles_independently() -> None:
