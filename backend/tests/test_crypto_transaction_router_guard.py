@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import ast
 import inspect
+import json
 import textwrap
 from datetime import date
+from pathlib import Path
 
 import pytest
 from app.models.transaction import OperationType, Transaction
@@ -13,6 +15,13 @@ from app.services.crypto_transaction_eligibility_service import (
     CryptoTransactionEligibilityError,
 )
 from fastapi import BackgroundTasks, HTTPException
+
+
+FIXTURE_PATH = (
+    Path(__file__).parent
+    / "fixtures"
+    / "portfolio_synthetic_certification_v1.json"
+)
 
 
 def _top_level_call_index(function, call_name: str) -> int:
@@ -124,6 +133,14 @@ async def _allow_crypto(*_args, **_kwargs):
 
 async def _noop_asset(*_args, **_kwargs):
     return None
+
+
+def _synthetic_transaction(asset_type: str) -> dict:
+    fixture = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+    for row in fixture["transactions"]:
+        if row["asset_type"] == asset_type:
+            return row
+    raise AssertionError(f"synthetic fixture row not found: {asset_type}")
 
 
 def test_create_crypto_guard_runs_before_transaction_construction() -> None:
@@ -276,6 +293,52 @@ async def test_fixed_income_buy_prepares_record_before_commit(monkeypatch) -> No
         getattr(item, "name", None) == "CDB-TESTE"
         and getattr(item, "invested_amount", None) == transactions.Decimal("1000.0")
         for item in db.added
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("asset_type", ["RENDA_FIXA", "TESOURO_DIRETO"])
+async def test_synthetic_fixed_income_rows_prepare_auxiliary_record(
+    monkeypatch,
+    asset_type: str,
+) -> None:
+    row = _synthetic_transaction(asset_type)
+    db = _WriteSpySession(execute_value=None)
+    background_tasks = BackgroundTasks()
+    monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
+    monkeypatch.setattr(transactions, "get_or_create_asset", _noop_asset)
+
+    result = await transactions.create_transaction(
+        portfolio_id=303,
+        payload=TransactionCreate(
+            ticker=row["ticker"],
+            asset_type=row["asset_type"],
+            operation=row["operation"],
+            quantity=float(row["quantity"]),
+            price=float(row["price"]),
+            fees=float(row["fees"]),
+            date=date.fromisoformat(row["date"]),
+            currency=row["currency"],
+            notes=row["notes"],
+        ),
+        background_tasks=background_tasks,
+        db=db,
+        current_user=object(),
+    )
+
+    auxiliary_records = [
+        item
+        for item in db.added
+        if item.__class__.__name__ == "FixedIncomeInvestment"
+    ]
+
+    assert result.ticker == row["ticker"]
+    assert db.commit_called is True
+    assert len(auxiliary_records) == 1
+    assert auxiliary_records[0].portfolio_id == 303
+    assert auxiliary_records[0].name == row["ticker"]
+    assert auxiliary_records[0].invested_amount == transactions.Decimal(
+        str(round(float(row["quantity"]) * float(row["price"]), 2))
     )
 
 
