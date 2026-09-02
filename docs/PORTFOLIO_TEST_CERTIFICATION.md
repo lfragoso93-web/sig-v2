@@ -132,6 +132,19 @@ Evidencia operacional local em containers:
 - `redis-cli ping` retornou `PONG`;
 - `alembic current` retornou `20260820_dividend_occurrence (head)`.
 
+Evidencia operacional de restart controlado:
+
+- `docker compose -f docker-compose.yml restart redis` concluiu e Redis voltou
+  `healthy`;
+- apos restart Redis, `/health` permaneceu `status=ok`, `postgres=ok` e
+  `redis=ok`;
+- `docker compose -f docker-compose.yml restart backend` concluiu, executou o
+  entrypoint com migrations runtime-safe e recriou o servidor;
+- apos restart backend, `backend`, `db` e `redis` permaneceram `healthy`;
+- runtime `APP_COMMIT_SHA` permaneceu
+  `8decdae25f7d5a7a8fa4a64a90e6d01543c2d708`;
+- `alembic current` permaneceu `20260820_dividend_occurrence (head)`.
+
 ## Ordem obrigatória
 
 ### A. Baseline local
