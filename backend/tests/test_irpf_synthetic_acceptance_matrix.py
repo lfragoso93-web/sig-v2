@@ -9,22 +9,76 @@ from pathlib import Path
 
 import pytest
 from app.services.irpf_common_loss_carryforward import compensate_common_losses
-from app.services.irpf_day_trade_monthly_assessment import assess_day_trade_months
-from app.services.irpf_day_trade_monthly_projection import DayTradeMonthlyProjection
-from app.services.irpf_monthly_common_assessment import assess_common_monthly_groups
+from app.services.irpf_day_trade_monthly_assessment import (
+    assess_day_trade_months,
+)
+from app.services.irpf_day_trade_monthly_projection import (
+    DayTradeMonthlyProjection,
+)
+from app.services.irpf_monthly_common_assessment import (
+    assess_common_monthly_groups,
+)
 from app.services.irpf_realized_disposal_tax_adapter import (
     adapt_realized_disposals,
     group_common_entries_by_month,
 )
 from app.services.position_timeline_projection import CanonicalRealizedDisposal
 
-_FIXTURE_PATH = Path(__file__).parent / "fixtures" / "irpf_synthetic_acceptance_v1.json"
+_FIXTURE_PATH = (
+    Path(__file__).parent
+    / "fixtures"
+    / "irpf_synthetic_acceptance_v1.json"
+)
+_PORTFOLIO_FIXTURE_PATH = (
+    Path(__file__).parent
+    / "fixtures"
+    / "portfolio_synthetic_certification_v1.json"
+)
+_IRPF_COMMON_ALIASES = {
+    "ETF_NACIONAL": "ETF",
+}
+_IRPF_OUT_OF_SCOPE_ASSET_TYPES = {
+    "CRIPTO",
+    "TESOURO_DIRETO",
+    "RENDA_FIXA",
+}
 
 
 def _load_corpus() -> dict[str, object]:
     corpus = json.loads(_FIXTURE_PATH.read_text(encoding="utf-8"))
     assert corpus["schema_version"] == "irpf-synthetic-acceptance.v1"
     return corpus
+
+
+def _load_portfolio_fixture() -> dict[str, object]:
+    fixture = json.loads(_PORTFOLIO_FIXTURE_PATH.read_text(encoding="utf-8"))
+    assert fixture["schema_version"] == "portfolio-synthetic-certification.v1"
+    return fixture
+
+
+def _irpf_common_type(asset_type: str) -> str:
+    return _IRPF_COMMON_ALIASES.get(asset_type, asset_type)
+
+
+def test_portfolio_synthetic_fixture_has_irpf_common_coverage() -> None:
+    corpus = _load_corpus()
+    fixture = _load_portfolio_fixture()
+    portfolio_types = {
+        str(row["asset_type"])
+        for row in fixture["transactions"]
+    }
+    required_types = {
+        _irpf_common_type(asset_type)
+        for asset_type in portfolio_types
+        if asset_type not in _IRPF_OUT_OF_SCOPE_ASSET_TYPES
+    }
+    covered_types = {
+        str(scenario["asset_type"])
+        for scenario in corpus["common_scenarios"]
+    }
+
+    assert required_types <= covered_types
+    assert _IRPF_OUT_OF_SCOPE_ASSET_TYPES <= portfolio_types
 
 
 def _disposal(
@@ -57,7 +111,9 @@ def _disposal(
 
 
 @pytest.mark.parametrize("scenario", _load_corpus()["common_scenarios"])
-def test_common_synthetic_acceptance_scenarios(scenario: dict[str, object]) -> None:
+def test_common_synthetic_acceptance_scenarios(
+    scenario: dict[str, object],
+) -> None:
     disposals = tuple(
         _disposal(
             transaction_id=index,
@@ -77,7 +133,9 @@ def test_common_synthetic_acceptance_scenarios(scenario: dict[str, object]) -> N
     for actual, expected in zip(compensated, scenario["months"], strict=True):
         assert actual.competence_month == expected["competence"]
         assert actual.exemption_applied is expected["expected_exemption"]
-        assert actual.taxable_base_brl == Decimal(expected["expected_taxable_base_brl"])
+        assert actual.taxable_base_brl == Decimal(
+            expected["expected_taxable_base_brl"]
+        )
         assert actual.tax_due_brl == Decimal(expected["expected_tax_due_brl"])
         assert actual.closing_loss_carryforward_brl == Decimal(
             expected["expected_closing_loss_brl"]
@@ -104,7 +162,9 @@ def test_day_trade_synthetic_acceptance_scenarios(
     assert len(assessments) == len(scenario["months"])
     for actual, expected in zip(assessments, scenario["months"], strict=True):
         assert actual.competence_month == expected["competence"]
-        assert actual.taxable_base_brl == Decimal(expected["expected_taxable_base_brl"])
+        assert actual.taxable_base_brl == Decimal(
+            expected["expected_taxable_base_brl"]
+        )
         assert actual.tax_due_brl == Decimal(expected["expected_tax_due_brl"])
         assert actual.closing_loss_carryforward_brl == Decimal(
             expected["expected_closing_loss_brl"]
