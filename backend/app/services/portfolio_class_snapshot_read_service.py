@@ -9,7 +9,6 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import AssetType
-from app.models.fixed_income import FixedIncomeInvestment
 from app.models.portfolio_class_snapshot import PortfolioClassSnapshot
 from app.models.transaction import Transaction
 from app.services.portfolio_class_snapshot_service import class_twr_availability
@@ -51,14 +50,6 @@ async def get_class_twr_availability(db: AsyncSession, portfolio_id: int) -> lis
         except (TypeError, ValueError):
             continue
 
-    fixed_income_result = await db.execute(
-        select(func.count(FixedIncomeInvestment.id)).where(
-            FixedIncomeInvestment.portfolio_id == portfolio_id,
-            FixedIncomeInvestment.is_active.is_(True),
-        )
-    )
-    if int(fixed_income_result.scalar_one() or 0) > 0:
-        types.add(AssetType.RENDA_FIXA)
 
     latest_result = await db.execute(
         select(
@@ -79,7 +70,10 @@ async def get_class_twr_availability(db: AsyncSession, portfolio_id: int) -> lis
         row["available"] = bool(row["engine_supported"] and row["data_available"])
         if row["engine_supported"] and not row["data_available"]:
             row["status"] = "awaiting_backfill"
-            row["reason"] = "O motor é suportado, mas o histórico por classe ainda não foi materializado."
+            row["reason"] = (
+                "O motor é suportado, mas o histórico por classe "
+                "ainda não foi materializado."
+            )
     return rows
 
 
@@ -97,7 +91,9 @@ async def get_daily_class_evolution(
         query = query.where(
             PortfolioClassSnapshot.snapshot_date >= date.today() - timedelta(days=days)
         )
-    result = await db.execute(query.order_by(PortfolioClassSnapshot.snapshot_date.asc()))
+    result = await db.execute(
+        query.order_by(PortfolioClassSnapshot.snapshot_date.asc())
+    )
     return [class_snapshot_payload(row) for row in result.scalars().all()]
 
 
@@ -114,7 +110,9 @@ async def get_monthly_class_evolution(
     start_date = monthly_window_start(months)
     if start_date is not None:
         query = query.where(PortfolioClassSnapshot.snapshot_date >= start_date)
-    result = await db.execute(query.order_by(PortfolioClassSnapshot.snapshot_date.asc()))
+    result = await db.execute(
+        query.order_by(PortfolioClassSnapshot.snapshot_date.asc())
+    )
     rows = list(result.scalars().all())
     grouped: dict[str, list[PortfolioClassSnapshot]] = defaultdict(list)
     for row in rows:
@@ -126,7 +124,10 @@ async def get_monthly_class_evolution(
         payload = class_snapshot_payload(last)
         payload["period"] = period
         payload["monthly_return_pct"] = float(
-            compound_return_pcts(Decimal(str(row.daily_return_pct)) for row in period_rows)
+            compound_return_pcts(
+                Decimal(str(row.daily_return_pct))
+                for row in period_rows
+            )
         )
         payloads.append(payload)
     return payloads
