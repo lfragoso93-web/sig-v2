@@ -1,14 +1,10 @@
 from sqlalchemy import String, Numeric, Date, Boolean, ForeignKey, Enum as SAEnum, Text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
 from app.models.base import TimestampMixin
 from decimal import Decimal
 from datetime import date
-from typing import TYPE_CHECKING
 import enum
-
-if TYPE_CHECKING:
-    from app.models.portfolio import Portfolio
 
 
 class FixedIncomeType(str, enum.Enum):
@@ -59,8 +55,6 @@ class FixedIncomeInvestment(Base, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_ir_exempt: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # LCI/LCA isentos
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-
-    portfolio: Mapped["Portfolio"] = relationship("Portfolio", back_populates="fixed_income")
 
     def __repr__(self) -> str:
         return f"<FixedIncome id={self.id} name={self.name} indexer={self.indexer} daily_liquidity={self.daily_liquidity}>"
