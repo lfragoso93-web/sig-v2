@@ -27,7 +27,6 @@ from app.services.crypto_transaction_eligibility_service import (
     require_financially_certified_crypto_asset,
 )
 from app.services.portfolio_service import invalidate_portfolio_cache
-from app.services.rentabilidade_cache_service import invalidate_rentabilidade_cache
 from app.services.transaction_service import list_transactions_paginated
 
 log = logging.getLogger(__name__)
@@ -144,7 +143,9 @@ async def _upsert_fixed_income_record(
     at = asset_type.upper()
 
     if at == "TESOURO_DIRETO":
-        indexer = _parse_indexer_td(meta["indexer_str"]) or _infer_treasury_indexer(ticker)
+        indexer = _parse_indexer_td(
+            meta["indexer_str"]
+        ) or _infer_treasury_indexer(ticker)
     else:
         indexer = _parse_indexer_rf(meta["indexer_str"]) or _RF_DEFAULT_INDEXER
 
@@ -194,116 +195,6 @@ async def _upsert_fixed_income_record(
     fi.date_maturity = meta["maturity"]
     if institution:
         fi.institution = institution
-
-
-# ---------------------------------------------------------------------------
-# Upsert fixed_income_investments — sessao isolada + invalida cache
-# ---------------------------------------------------------------------------
-
-
-async def _upsert_fixed_income_isolated(
-    portfolio_id: int,
-    ticker: str,
-    tx_date: DateType,
-    invested_amount: float,
-    notes: Optional[str],
-    asset_type: str,
-) -> None:
-    """
-    Cria ou atualiza fixed_income_investments em sessao propria.
-    Apos salvar, invalida o cache de rentabilidade para que o calculo
-    retroativo apareca imediatamente na proxima consulta do frontend.
-    """
-    try:
-        async with AsyncSessionLocal() as db:
-            meta = _parse_rf_meta_from_notes(notes)
-            at = asset_type.upper()
-
-            if at == "TESOURO_DIRETO":
-                indexer = _parse_indexer_td(meta["indexer_str"])
-            else:
-                indexer = _parse_indexer_rf(meta["indexer_str"])
-
-            if indexer is None:
-                log.warning(
-                    "[upsert_fi] indexador nao reconhecido '%s' para %s/%s — registro omitido",
-                    meta["indexer_str"],
-                    at,
-                    ticker,
-                )
-                return
-
-            result = await db.execute(
-                select(FixedIncomeInvestment).where(
-                    FixedIncomeInvestment.portfolio_id == portfolio_id,
-                    FixedIncomeInvestment.name == ticker,
-                )
-            )
-            fi = result.scalar_one_or_none()
-
-            institution = (meta["issuer"] or "").strip()
-            if not institution and at == "TESOURO_DIRETO":
-                institution = "Tesouro Nacional"
-
-            rate_decimal = Decimal(str(round(float(meta["rate"] or 0), 6)))
-            invested_decimal = Decimal(str(round(max(float(invested_amount), 0), 2)))
-
-            if fi is None:
-                fi = FixedIncomeInvestment(
-                    portfolio_id=portfolio_id,
-                    name=ticker,
-                    institution=institution,
-                    fixed_income_type=_RF_FI_TYPE,
-                    indexer=indexer,
-                    rate=rate_decimal,
-                    invested_amount=invested_decimal,
-                    date_start=tx_date,
-                    daily_liquidity=bool(meta["daily_liquidity"]),
-                    date_maturity=meta["maturity"],
-                    is_active=True,
-                    is_ir_exempt=False,
-                )
-                db.add(fi)
-                log.info(
-                    "[upsert_fi] CRIADO %s | portfolio=%s | indexer=%s | rate=%s | invested=%.2f",
-                    ticker,
-                    portfolio_id,
-                    indexer,
-                    rate_decimal,
-                    invested_amount,
-                )
-            else:
-                fi.indexer = indexer
-                fi.rate = rate_decimal
-                fi.invested_amount = invested_decimal
-                fi.daily_liquidity = bool(meta["daily_liquidity"])
-                fi.date_maturity = meta["maturity"]
-                if institution:
-                    fi.institution = institution
-                log.info(
-                    "[upsert_fi] ATUALIZADO %s | portfolio=%s | indexer=%s | rate=%s | invested=%.2f",
-                    ticker,
-                    portfolio_id,
-                    indexer,
-                    rate_decimal,
-                    invested_amount,
-                )
-
-            await db.commit()
-
-        await invalidate_rentabilidade_cache(portfolio_id)
-        log.info(
-            "[upsert_fi] cache de rentabilidade invalidado para portfolio=%s",
-            portfolio_id,
-        )
-
-    except Exception as exc:
-        log.error(
-            "[upsert_fi] ERRO ao salvar fixed_income_investments para %s/%s: %s",
-            ticker,
-            portfolio_id,
-            exc,
-        )
 
 
 # ---------------------------------------------------------------------------
@@ -466,7 +357,10 @@ async def create_transaction(
     )
     db.add(tx)
 
-    if operation == OperationType.buy and asset_type in {"RENDA_FIXA", "TESOURO_DIRETO"}:
+    if operation == OperationType.buy and asset_type in {
+        "RENDA_FIXA",
+        "TESOURO_DIRETO",
+    }:
         invested = float(payload.quantity) * float(payload.price)
         await _upsert_fixed_income_record(
             db,
@@ -561,7 +455,10 @@ async def update_transaction(
     tx.currency = currency
     tx.notes = notes
 
-    if operation == OperationType.buy and asset_type in {"RENDA_FIXA", "TESOURO_DIRETO"}:
+    if operation == OperationType.buy and asset_type in {
+        "RENDA_FIXA",
+        "TESOURO_DIRETO",
+    }:
         invested = float(quantity) * float(price)
         await _upsert_fixed_income_record(
             db,
@@ -643,7 +540,10 @@ async def _run_snapshot_backfill(portfolio_id: int, tx_date: DateType) -> None:
         async with AsyncSessionLocal() as db:
             deleted = await invalidate_snapshots_from(db, portfolio_id, tx_date)
             log.info(
-                "[snapshot_backfill] portfolio=%s invalida a partir de %s (%s removidos)",
+                (
+                    "[snapshot_backfill] portfolio=%s invalida a partir de %s "
+                    "(%s removidos)"
+                ),
                 portfolio_id,
                 tx_date,
                 deleted,
