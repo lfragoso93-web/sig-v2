@@ -1,7 +1,5 @@
 import logging
-import re
 from datetime import date as DateType
-from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
@@ -10,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal, get_db
 from app.core.deps import get_current_user
-from app.models.fixed_income import FixedIncomeInvestment, FixedIncomeType, IndexerType
 from app.models.portfolio import Portfolio
 from app.models.transaction import OperationType, Transaction
 from app.models.user import User
@@ -32,170 +29,6 @@ from app.services.transaction_service import list_transactions_paginated
 log = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# ---------------------------------------------------------------------------
-# Mapeamentos de indexador
-# ---------------------------------------------------------------------------
-
-_RF_INDEXER_MAP: dict[str, IndexerType] = {
-    "CDI": IndexerType.CDI,
-    "IPCA": IndexerType.IPCA_PLUS,
-    "IPCA+": IndexerType.IPCA_PLUS,
-    "SELIC": IndexerType.SELIC,
-    "Prefixado": IndexerType.PREFIXADO,
-    "IGP-M": IndexerType.IGPM_PLUS,
-    "Outro": IndexerType.CDI,
-}
-
-_TD_INDEXER_MAP: dict[str, IndexerType] = {
-    "IPCA+": IndexerType.IPCA_PLUS,
-    "Prefixado": IndexerType.PREFIXADO,
-    "SELIC": IndexerType.SELIC,
-}
-
-_RF_FI_TYPE = FixedIncomeType.OUTROS
-_TD_FI_TYPE = FixedIncomeType.OUTROS
-_RF_DEFAULT_INDEXER = IndexerType.CDI
-
-
-def _parse_indexer_rf(value: Optional[str]) -> Optional[IndexerType]:
-    if not value:
-        return None
-    return _RF_INDEXER_MAP.get(value.strip())
-
-
-def _parse_indexer_td(value: Optional[str]) -> Optional[IndexerType]:
-    if not value:
-        return None
-    return _TD_INDEXER_MAP.get(value.strip())
-
-
-def _infer_treasury_indexer(ticker: str) -> Optional[IndexerType]:
-    normalized = str(ticker or "").upper()
-    if "SELIC" in normalized:
-        return IndexerType.SELIC
-    if "IPCA" in normalized:
-        return IndexerType.IPCA_PLUS
-    if "PREFIXADO" in normalized:
-        return IndexerType.PREFIXADO
-    return None
-
-
-# ---------------------------------------------------------------------------
-# Parser de notes
-# ---------------------------------------------------------------------------
-
-
-def _parse_rf_meta_from_notes(notes: Optional[str]) -> dict:
-    result: dict = {
-        "indexer_str": None,
-        "rate": 0.0,
-        "maturity": None,
-        "issuer": "",
-        "daily_liquidity": False,
-    }
-    if not notes:
-        return result
-
-    m = re.search(r"Indexador:\s*([^|\-\n]+)", notes)
-    if m:
-        result["indexer_str"] = m.group(1).strip()
-
-    m = re.search(r"([0-9]+(?:[.,][0-9]+)?)\s*%\s*do\s+", notes, re.IGNORECASE)
-    if m:
-        result["rate"] = float(m.group(1).replace(",", "."))
-
-    if not result["rate"]:
-        m = re.search(r"Taxa:\s*([0-9]+(?:[.,][0-9]+)?)\s*%", notes, re.IGNORECASE)
-        if m:
-            result["rate"] = float(m.group(1).replace(",", "."))
-
-    m = re.search(r"Vencimento:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})", notes)
-    if m:
-        try:
-            from datetime import date
-
-            result["maturity"] = date.fromisoformat(m.group(1))
-        except ValueError:
-            pass
-
-    m = re.search(r"Emissor:\s*([^|\-\n]+)", notes)
-    if m:
-        result["issuer"] = m.group(1).strip()
-
-    if re.search(r"Liquidez:\s*Di", notes, re.IGNORECASE):
-        result["daily_liquidity"] = True
-        result["maturity"] = None
-
-    return result
-
-
-async def _upsert_fixed_income_record(
-    db: AsyncSession,
-    portfolio_id: int,
-    ticker: str,
-    tx_date: DateType,
-    invested_amount: float,
-    notes: Optional[str],
-    asset_type: str,
-) -> None:
-    meta = _parse_rf_meta_from_notes(notes)
-    at = asset_type.upper()
-
-    if at == "TESOURO_DIRETO":
-        indexer = _parse_indexer_td(
-            meta["indexer_str"]
-        ) or _infer_treasury_indexer(ticker)
-    else:
-        indexer = _parse_indexer_rf(meta["indexer_str"]) or _RF_DEFAULT_INDEXER
-
-    if indexer is None:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Indexador nao reconhecido para {at}/{ticker}.",
-        )
-
-    result = await db.execute(
-        select(FixedIncomeInvestment).where(
-            FixedIncomeInvestment.portfolio_id == portfolio_id,
-            FixedIncomeInvestment.name == ticker,
-        )
-    )
-    fi = result.scalar_one_or_none()
-
-    institution = (meta["issuer"] or "").strip()
-    if not institution and at == "TESOURO_DIRETO":
-        institution = "Tesouro Nacional"
-
-    rate_decimal = Decimal(str(round(float(meta["rate"] or 0), 6)))
-    invested_decimal = Decimal(str(round(max(float(invested_amount), 0), 2)))
-
-    if fi is None:
-        fi = FixedIncomeInvestment(
-            portfolio_id=portfolio_id,
-            name=ticker,
-            institution=institution,
-            fixed_income_type=_RF_FI_TYPE,
-            indexer=indexer,
-            rate=rate_decimal,
-            invested_amount=invested_decimal,
-            date_start=tx_date,
-            daily_liquidity=bool(meta["daily_liquidity"]),
-            date_maturity=meta["maturity"],
-            is_active=True,
-            is_ir_exempt=False,
-        )
-        db.add(fi)
-        return
-
-    fi.indexer = indexer
-    fi.rate = rate_decimal
-    fi.invested_amount = invested_decimal
-    fi.daily_liquidity = bool(meta["daily_liquidity"])
-    fi.date_maturity = meta["maturity"]
-    if institution:
-        fi.institution = institution
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -357,20 +190,6 @@ async def create_transaction(
     )
     db.add(tx)
 
-    if operation == OperationType.buy and asset_type in {
-        "RENDA_FIXA",
-        "TESOURO_DIRETO",
-    }:
-        invested = float(payload.quantity) * float(payload.price)
-        await _upsert_fixed_income_record(
-            db,
-            portfolio_id,
-            ticker,
-            payload.date,
-            invested,
-            payload.notes,
-            asset_type,
-        )
 
     await db.commit()
     await db.refresh(tx)
@@ -455,20 +274,6 @@ async def update_transaction(
     tx.currency = currency
     tx.notes = notes
 
-    if operation == OperationType.buy and asset_type in {
-        "RENDA_FIXA",
-        "TESOURO_DIRETO",
-    }:
-        invested = float(quantity) * float(price)
-        await _upsert_fixed_income_record(
-            db,
-            portfolio_id,
-            ticker,
-            tx_date,
-            invested,
-            notes,
-            asset_type,
-        )
 
     await db.commit()
     await db.refresh(tx)

@@ -8,14 +8,14 @@ from datetime import date
 from pathlib import Path
 
 import pytest
+from fastapi import BackgroundTasks, HTTPException
+
 from app.models.transaction import OperationType, Transaction
 from app.routers import transactions
 from app.schemas.transaction import TransactionCreate, TransactionUpdate
 from app.services.crypto_transaction_eligibility_service import (
     CryptoTransactionEligibilityError,
 )
-from fastapi import BackgroundTasks, HTTPException
-
 
 FIXTURE_PATH = (
     Path(__file__).parent
@@ -248,45 +248,9 @@ async def test_rejected_create_does_not_add_or_commit(monkeypatch) -> None:
     assert db.commit_called is False
 
 
-@pytest.mark.asyncio
-async def test_fixed_income_upsert_failure_blocks_transaction_commit(
-    monkeypatch,
-) -> None:
-    async def _fail_upsert(*_args, **_kwargs):
-        raise RuntimeError("fixed income upsert failed")
-
-    db = _WriteSpySession()
-    monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
-    monkeypatch.setattr(
-        transactions, "_upsert_fixed_income_record", _fail_upsert
-    )
-
-    with pytest.raises(RuntimeError, match="fixed income upsert failed"):
-        await transactions.create_transaction(
-            portfolio_id=1,
-            payload=TransactionCreate(
-                ticker="CDB-TESTE",
-                asset_type="RENDA_FIXA",
-                operation="buy",
-                quantity=1,
-                price=1000,
-                fees=0,
-                date=date(2026, 8, 11),
-                currency="BRL",
-                notes="Indexador: CDI | Taxa: 110% | Emissor: Banco Teste",
-            ),
-            background_tasks=BackgroundTasks(),
-            db=db,
-            current_user=object(),
-        )
-
-    assert db.commit_called is False
-
 
 @pytest.mark.asyncio
-async def test_fixed_income_buy_prepares_record_before_commit(
-    monkeypatch,
-) -> None:
+async def test_fixed_income_buy_persists_only_transaction(monkeypatch) -> None:
     db = _WriteSpySession(execute_value=None)
     monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
     monkeypatch.setattr(transactions, "get_or_create_asset", _noop_asset)
@@ -311,17 +275,14 @@ async def test_fixed_income_buy_prepares_record_before_commit(
 
     assert result.ticker == "CDB-TESTE"
     assert db.commit_called is True
-    assert any(
-        getattr(item, "name", None) == "CDB-TESTE"
-        and getattr(item, "invested_amount", None)
-        == transactions.Decimal("1000.0")
-        for item in db.added
-    )
 
+    assert len(db.added) == 1
+    assert isinstance(db.added[0], Transaction)
+    assert db.added[0] is result
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("asset_type", ["RENDA_FIXA", "TESOURO_DIRETO"])
-async def test_synthetic_fixed_income_rows_prepare_auxiliary_record(
+async def test_synthetic_fixed_income_rows_use_transactions_as_source_of_truth(
     monkeypatch,
     asset_type: str,
 ) -> None:
@@ -349,21 +310,12 @@ async def test_synthetic_fixed_income_rows_prepare_auxiliary_record(
         current_user=object(),
     )
 
-    auxiliary_records = [
-        item
-        for item in db.added
-        if item.__class__.__name__ == "FixedIncomeInvestment"
-    ]
-
     assert result.ticker == row["ticker"]
+    assert result.asset_type == asset_type
     assert db.commit_called is True
-    assert len(auxiliary_records) == 1
-    assert auxiliary_records[0].portfolio_id == 303
-    assert auxiliary_records[0].name == row["ticker"]
-    assert auxiliary_records[0].invested_amount == transactions.Decimal(
-        str(round(float(row["quantity"]) * float(row["price"]), 2))
-    )
-
+    assert len(db.added) == 1
+    assert isinstance(db.added[0], Transaction)
+    assert db.added[0] is result
 
 @pytest.mark.asyncio
 async def test_rejected_update_does_not_mutate_or_commit(monkeypatch) -> None:

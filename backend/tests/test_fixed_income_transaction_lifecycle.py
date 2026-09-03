@@ -4,11 +4,6 @@ from decimal import Decimal
 import pytest
 from fastapi import BackgroundTasks
 
-from app.models.fixed_income import (
-    FixedIncomeInvestment,
-    FixedIncomeType,
-    IndexerType,
-)
 from app.models.transaction import OperationType, Transaction
 from app.routers import transactions
 from app.schemas.transaction import TransactionUpdate
@@ -75,42 +70,14 @@ def _transaction(
     )
 
 
-def _fixed_income() -> FixedIncomeInvestment:
-    return FixedIncomeInvestment(
-        id=50,
-        portfolio_id=1,
-        name="CDB-TESTE",
-        institution="Banco Teste",
-        fixed_income_type=FixedIncomeType.CDB,
-        indexer=IndexerType.CDI,
-        rate=Decimal("110"),
-        invested_amount=Decimal("1000"),
-        date_start=date(2026, 8, 11),
-        daily_liquidity=True,
-        date_maturity=None,
-        is_active=True,
-        is_ir_exempt=False,
-    )
 
 
-def _projection_was_reconciled(
-    db: _LifecycleSession,
-    fixed_income: FixedIncomeInvestment,
-) -> bool:
-    return fixed_income.is_active is False or fixed_income in db.deleted
-
-
-@pytest.mark.xfail(
-    strict=True,
-    reason="#306: buy -> sell ainda deixa fixed_income_investments ativo",
-)
 @pytest.mark.asyncio
-async def test_fixed_income_buy_to_sell_reconciles_previous_projection(
+async def test_fixed_income_buy_to_sell_updates_canonical_transaction(
     monkeypatch,
 ) -> None:
     tx = _transaction(transaction_id=101)
-    fixed_income = _fixed_income()
-    db = _LifecycleSession(tx, fixed_income)
+    db = _LifecycleSession(tx)
 
     monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
     monkeypatch.setattr(
@@ -131,20 +98,14 @@ async def test_fixed_income_buy_to_sell_reconciles_previous_projection(
 
     assert result.operation == OperationType.sell
     assert db.commit_called is True
-    assert _projection_was_reconciled(db, fixed_income)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="#306: mudanca de classe ainda deixa projecao RF ativa",
-)
 @pytest.mark.asyncio
-async def test_fixed_income_change_to_non_fixed_income_reconciles_projection(
+async def test_fixed_income_change_to_non_fixed_income_updates_canonical_transaction(
     monkeypatch,
 ) -> None:
     tx = _transaction(transaction_id=102)
-    fixed_income = _fixed_income()
-    db = _LifecycleSession(tx, fixed_income)
+    db = _LifecycleSession(tx)
 
     monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
     monkeypatch.setattr(
@@ -164,20 +125,14 @@ async def test_fixed_income_change_to_non_fixed_income_reconciles_projection(
 
     assert result.asset_type == "ACAO"
     assert db.commit_called is True
-    assert _projection_was_reconciled(db, fixed_income)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="#306: delete ainda remove apenas Transaction",
-)
 @pytest.mark.asyncio
-async def test_delete_fixed_income_transaction_reconciles_projection(
+async def test_delete_fixed_income_transaction_deletes_canonical_transaction(
     monkeypatch,
 ) -> None:
     tx = _transaction(transaction_id=103)
-    fixed_income = _fixed_income()
-    db = _LifecycleSession(tx, fixed_income)
+    db = _LifecycleSession(tx)
 
     monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
 
@@ -191,4 +146,3 @@ async def test_delete_fixed_income_transaction_reconciles_projection(
 
     assert tx in db.deleted
     assert db.commit_called is True
-    assert _projection_was_reconciled(db, fixed_income)
