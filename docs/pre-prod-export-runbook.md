@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Executar a exportação read-only dos dados classificados como não reconstruíveis pelo contrato `pre-prod-cleanup-impact.v2`, preservando contagens, schema, checksums e rastreabilidade suficientes para restauração ou reimportação posterior.
+Executar a exportação read-only dos dados classificados como não reconstruíveis pelo contrato `pre-prod-cleanup-impact.v2`, preservando contagens, schema, checksums e rastreabilidade para auditoria e evidência de preservação.
 
 Este procedimento não executa limpeza, seed, importação, rebuild ou qualquer comando de escrita na origem.
 
@@ -11,10 +11,13 @@ Este procedimento não executa limpeza, seed, importação, rebuild ou qualquer 
 A CLI exporta exclusivamente as tabelas classificadas pelo gate como `export_required`:
 
 - `transactions`;
-- `fixed_income_investments`;
 - `corporate_events`.
 
 A lista efetiva é derivada do cleanup impact no mesmo snapshot da exportação. A operação aborta se o gate não estiver aprovado ou se as contagens exportadas divergirem da origem.
+
+No contrato corrente pós-`20260903_drop_fixed_income`, a lista efetiva contém `transactions` e `corporate_events`. Runs históricos executados por SHAs anteriores podem conter `fixed_income_investments.csv`; esse artefato continua válido como evidência histórica, mas não é exigido por uma nova execução.
+
+Este export seletivo não possui contrato de reidratação. Para recuperação operacional use o dump completo `pre-prod-backup.v3` e o fluxo aprovado de restore em banco vazio.
 
 ## Contratos e garantias
 
@@ -126,7 +129,6 @@ artifacts/pre-prod-rebuild/<run-id>/export/
 ├── manifest.json
 └── tables/
     ├── corporate_events.csv
-    ├── fixed_income_investments.csv
     └── transactions.csv
 ```
 

@@ -127,9 +127,10 @@ Antes de aceitar o plano, o JSON final de `pre_prod_export` deve registrar:
 - `cleanup_executed=false`;
 - `rebuild_executed=false`;
 - `overwrite_performed=false`;
-- exatamente as tabelas `transactions`, `fixed_income_investments` e
-  `corporate_events`;
+- exatamente as tabelas `transactions` e `corporate_events` classificadas como `export_before_cleanup` no inventário corrente;
 - exit code `0`.
+
+Artefatos históricos anteriores a `20260903_drop_fixed_income` podem registrar uma terceira tabela, `fixed_income_investments`. Essa evidência deve ser mantida com o run original e não altera o critério das execuções correntes.
 
 ## Critérios do plano
 
