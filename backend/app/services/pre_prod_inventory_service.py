@@ -73,10 +73,6 @@ TABLE_POLICIES: dict[str, tuple[str, str]] = {
         "export_before_cleanup",
         "Eventos podem conter estado aplicado, vínculo com carteira e dados brutos não integralmente reproduzíveis.",
     ),
-    "fixed_income_investments": (
-        "export_before_cleanup",
-        "Investimentos de renda fixa contêm condições contratuais informadas pelo usuário.",
-    ),
     "transactions": (
         "export_before_cleanup",
         "Livro-razão financeiro informado pelo usuário e fonte dos rebuilds posteriores.",
