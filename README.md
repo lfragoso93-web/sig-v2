@@ -95,7 +95,7 @@ bootstrap inicial / sincronizadores operacionais
         ↓
 catálogo suportado + históricos + eventos + taxas persistidos
         ↓
-transactions + fixed_income_investments + corporate_events
+transactions + corporate_events
         ↓
 projeções canônicas de posição, custo e realizações
         ↓

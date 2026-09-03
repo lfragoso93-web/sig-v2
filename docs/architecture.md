@@ -13,7 +13,7 @@ bootstrap inicial certificado
         ↓
 assets + asset_prices + rate_history + fx_rates + asset_dividends + corporate_events
         ↓
-transactions + fixed_income_investments
+transactions
         ↓
 projeções canônicas de posição, custo e realizações
         ↓
@@ -25,6 +25,8 @@ summary.v2 + rentabilidade.v2 + leitores históricos
         ↓
 Resumo / Patrimônio / Rentabilidade / Proventos / IRPF
 ```
+
+`transactions` é também a fonte canônica do lifecycle de Renda Fixa e Tesouro Direto. A antiga projeção `fixed_income_investments` foi retirada do runtime e do ORM; a migration `20260903_drop_fixed_income` formaliza a contração física com bloqueio fail-closed quando dados legados ainda existirem.
 
 Metas e Análise de Carteira não integram, neste momento, o conjunto de contratos funcionais estabilizados. O redesenho será conduzido em conjunto por #246 + #57 somente após a estabilização definitiva da base.
 

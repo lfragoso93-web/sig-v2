@@ -78,8 +78,10 @@ Baseline atual publicado em `stable-15jun`:
   fixture bloqueia persistencia;
 - `db81a3ae40445856bfb1982bfaabb6f459c69e17`: importacao real agenda rebuild
   de snapshots em background;
-- `e2487fd6809fc683427c9b59efc711469687b150`: linhas `RENDA_FIXA` e
-  `TESOURO_DIRETO` preparam `fixed_income_investments` antes do commit;
+- `e2487fd6809fc683427c9b59efc711469687b150`: evidência histórica registrou
+  a antiga projeção auxiliar `fixed_income_investments`; esse contrato foi
+  posteriormente aposentado, e `transactions` passou a ser a fonte canônica
+  exclusiva do lifecycle `RENDA_FIXA`/`TESOURO_DIRETO`;
 - `310db2420a1afb3f1ea896fd5fcaea214b36e128`: Rentabilidade reconciliada com
   `TESOURO_DIRETO` e `RENDA_FIXA` sem TWR dedicado, como
   `partial_by_design`;
@@ -366,11 +368,17 @@ Antes da integração produtiva da #149, confirmar qual histórico oficial persi
 
 ### F. Renda Fixa — consistência operacional
 
+Estado estrutural certificado no CERT-FIN-06/#307: `transactions` é a fonte
+canônica do lifecycle RF/Tesouro. O model e os consumers runtime de
+`fixed_income_investments` foram retirados em
+`b39c1cbec86a7103747086faa364dc31c7aa9724`; a migration física permanece
+fail-closed para ambientes que ainda contenham dados legados.
+
 Validar explicitamente:
 
-- coerência entre transações e `fixed_income_investments`;
-- comportamento se o side-effect de upsert falhar;
-- ausência de estado parcialmente consistente silencioso;
+- lifecycle de aplicações, resgates e posição derivado exclusivamente de `transactions`;
+- ausência de projeção paralela ou side-effect em `fixed_income_investments`;
+- atomicidade das alterações transacionais, sem estado parcialmente consistente silencioso;
 - invalidação de cache;
 - cálculo por indexador e séries persistidas;
 - fail-closed quando a cadeia TWR dedicada não tiver cobertura suficiente.
