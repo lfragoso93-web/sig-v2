@@ -5,6 +5,17 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — projeção e tabela legadas de Renda Fixa/Tesouro (#306, #307)
+
+- `transactions` foi consolidada como fonte canônica do lifecycle de Renda Fixa e Tesouro Direto; criação e atualização de transações não projetam mais estado paralelo em `fixed_income_investments`.
+- A #306 foi concluída no SHA `2c2e8a02909f8e265a142dcc40ec9d229496539c`, removendo o side effect legado do CRUD sem habilitar novo comportamento de TWR.
+- O relacionamento ORM legado foi retirado em `12ad5c4ff5ad5c2d05010db3be7d6da817bce473`.
+- A contração estrutural foi publicada em `b39c1cbec86a7103747086faa364dc31c7aa9724`: model/export ORM removidos, inventário pre-prod atualizado e migration `20260903_drop_fixed_income` criada para remover a tabela e seus enums dedicados.
+- A migration é fail-closed quando existem linhas legadas e foi validada em bancos descartáveis tanto no caminho vazio quanto no bloqueio com dado existente; migrations históricas permanecem imutáveis.
+- O banco local principal ainda não recebeu `alembic upgrade head` para essa contração; o SHA estrutural não é apresentado como runtime certificado.
+- `pre-prod-backup.v3` permanece o mecanismo operacional de recuperação; o export seletivo é evidência de auditoria/preservação, sem contrato de reidratação.
+- README, arquitetura, certificação e runbooks pre-prod foram sincronizados até `133ad9f5a72f6c8944eda58ce72da9ca5ce9238c`; o inventário corrente possui 23 tabelas, com 2 `export_before_cleanup`: `transactions` e `corporate_events`.
+
 ### Alterado - base TWR dedicada Tesouro/Renda Fixa (#149)
 
 - Adicionada cadeia diaria pura de TWR para classes com historico dedicado, reutilizando o calculo canonico de retorno diario e composicao.

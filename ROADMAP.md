@@ -1,6 +1,6 @@
 # Roadmap modular — SGI v2
 
-> Última atualização: 27/08/2026
+> Última atualização: 04/09/2026
 
 ## Rebaseline pós-merge PR #302 — 01/09/2026
 
@@ -10,9 +10,22 @@
 - Próximos blocos continuam sem PR nova até fechamento de macrobloco validado.
 - PRs abertas atuais: nenhuma após triagem e encerramento dos Dependabot #295, #296, #297, #298, #299, #300 e #301.
 
+## Estado corrente — certificação funcional de carteira — 04/09/2026
+
+- branch obrigatória de desenvolvimento: `stable-15jun`;
+- baseline documental corrente antes deste bloco: `133ad9f5a72f6c8944eda58ce72da9ca5ce9238c`;
+- #303 é o gate ativo da certificação funcional `PORTFOLIO-TEST-READY` com dados sintéticos/descartáveis;
+- #306 foi concluída: o CRUD de Renda Fixa/Tesouro deixou de projetar estado paralelo em `fixed_income_investments`;
+- #307 está em conclusão estrutural: model e consumers foram retirados e `20260903_drop_fixed_income` foi validada em bancos descartáveis, mas ainda não aplicada ao banco local principal;
+- `transactions` é a fonte canônica do lifecycle financeiro de Renda Fixa e Tesouro Direto;
+- no inventário pre-prod corrente, somente `transactions` e `corporate_events` são `export_before_cleanup`;
+- #149 permanece aberta: Tesouro possui trilha TWR DB-first com fechamento diário exato; Renda Fixa permanece fail-closed enquanto não existir histórico diário dedicado;
+- `ready_for_real_data=false` permanece obrigatório;
+- desenvolvimento, migrations de validação e suítes pesadas ocorrem no ambiente local; OCI fica reservado à homologação do SHA exato já certificado localmente.
+
 ## Direção atual
 
-O SGI v2 encerrou a fase principal de sanitização arquitetural e hardening de segurança. O foco atual é **certificação operacional para testes integrados**, usando o ambiente OCI de laboratório sem liberar dados reais prematuramente.
+O SGI v2 encerrou a fase principal de sanitização arquitetural e hardening de segurança. O foco atual é **certificação funcional e financeira de carteira sintética no ambiente local**, mantendo o OCI somente para homologação do SHA exato já certificado e sem liberar dados reais prematuramente.
 
 A Issue #227 permanece como gate-mãe para dados reais.
 
@@ -84,7 +97,7 @@ Contrato #267:
 | Análise de Carteira | Não implementada funcionalmente | redesenho conjunto #246 + #57 |
 | Convergência Alembic/ORM | Concluída fora de `goals` | manter gate |
 | Bootstrap inicial | `system-bootstrap.v4` | certificar contratos e operação |
-| OCI lab | Operacional para testes descartáveis | executar bateria formal |
+| OCI lab | Homologação de SHA local certificado | não desenvolver nem executar suítes pesadas no host |
 | Pré-produção/rebuild | Parcial | retomar após #226/#216 |
 | IBOV persistido | Planejado | #150 após primeira certificação |
 | TWR Tesouro/Renda Fixa | Em desenvolvimento | #149: Tesouro integrado a snapshots DB-first; Renda Fixa pendente |
@@ -99,14 +112,14 @@ Contrato #267:
 - [x] CI da PR #282 aprovado;
 - [ ] manter `Security deep scan` e demais scanners como verificação recorrente; não presumir execução sem evidência.
 
-### Fase 1 — rebaseline e certificação de TESTE — AGORA
+### Fase 1 — certificação `PORTFOLIO-TEST-READY` — AGORA
 
-1. sincronizar README, ROADMAP, CHANGELOG, `DEVELOPMENT_CONTINUITY` e Issues centrais com o estado OCI real;
-2. executar qualidade completa no lab: backend, frontend, segurança e smoke;
-3. validar restart, persistência, volumes, migrations e Redis fail-open;
-4. validar `system-bootstrap.v4` e contratos sem executar seeds reais proibidos;
-5. confirmar controles SuperAdmin e estados de readiness;
-6. registrar achados em microblocos e corrigir blockers sem introduzir features.
+1. concluir #307 e aplicar de forma controlada `20260903_drop_fixed_income` no banco local principal após os gates de backup e documentação;
+2. certificar os casos financeiros sintéticos de Tesouro Direto e Renda Fixa sob #303/#149, preservando comportamento fail-closed;
+3. executar a suíte integrada da carteira sintética e reconciliar transações, posições, snapshots, patrimônio e rentabilidade;
+4. reconstruir/recriar o runtime no SHA final da certificação e executar smoke do SHA exato;
+5. sincronizar documentação e Issues com a evidência final;
+6. somente depois homologar no OCI o mesmo SHA já certificado localmente.
 
 ### Fase 2 — gate operacional para dados reais
 
@@ -146,6 +159,8 @@ Contrato #267:
 
 ### P0 — trabalho corrente / gate
 
+- #303 — certificação funcional da carteira sintética antes de dados reais.
+- #307 — retirada estrutural de `fixed_income_investments`; falta aplicação controlada da migration no banco local principal.
 - #227 — gate-mãe de readiness.
 - #226 — execução real controlada de Proventos.
 - #216 — gate agregado de seeds/bootstrap.
