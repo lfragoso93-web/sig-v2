@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import pytest
+from app.services.pre_prod_inventory_service import build_pre_prod_inventory
 from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-
-from app.services.pre_prod_inventory_service import build_pre_prod_inventory
 
 
 @pytest.mark.asyncio
@@ -138,6 +137,7 @@ async def test_inventory_can_preserve_supplied_read_only_transaction() -> None:
         ("transactions", "export_before_cleanup"),
         ("corporate_events", "export_before_cleanup"),
         ("asset_prices", "rebuildable"),
+        ("asset_universe_memberships", "rebuildable"),
         ("fx_rates", "rebuildable"),
         ("future_table", "unclassified"),
     ],

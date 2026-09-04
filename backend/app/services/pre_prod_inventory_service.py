@@ -89,6 +89,10 @@ TABLE_POLICIES: dict[str, tuple[str, str]] = {
         "rebuildable",
         "Histórico de preços possui fontes oficiais e rotinas idempotentes de seed.",
     ),
+    "asset_universe_memberships": (
+        "rebuildable",
+        "Fotografia operacional do universo candidato de ativos; é regenerada pelo seed a partir das fontes canônicas de catálogo.",
+    ),
     "assets": (
         "rebuildable",
         "Catálogo canônico é reconstruído pelas fontes oficiais e reconciliado com as transações exportadas.",
