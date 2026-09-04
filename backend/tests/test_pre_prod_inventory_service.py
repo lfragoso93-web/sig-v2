@@ -136,6 +136,7 @@ async def test_inventory_can_preserve_supplied_read_only_transaction() -> None:
         ("irpf_reports", "preserved"),
         ("transactions", "export_before_cleanup"),
         ("corporate_events", "export_before_cleanup"),
+        ("fixed_income_investments", "export_before_cleanup"),
         ("asset_prices", "rebuildable"),
         ("asset_universe_memberships", "rebuildable"),
         ("fx_rates", "rebuildable"),

@@ -77,6 +77,10 @@ TABLE_POLICIES: dict[str, tuple[str, str]] = {
         "export_before_cleanup",
         "Livro-razão financeiro informado pelo usuário e fonte dos rebuilds posteriores.",
     ),
+    "fixed_income_investments": (
+        "export_before_cleanup",
+        "Projeção financeira legada que pode existir em bancos pré-contração; deve ser preservada antes da migration controlada que remove a tabela.",
+    ),
     "asset_aliases": (
         "rebuildable",
         "Aliases canônicos podem ser recriados a partir do catálogo e dos eventos corporativos exportados.",
