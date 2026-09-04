@@ -1,9 +1,10 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import pytest
-from app.services.pre_prod_inventory_service import build_pre_prod_inventory
 from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from app.services.pre_prod_inventory_service import build_pre_prod_inventory
 
 
 @pytest.mark.asyncio
