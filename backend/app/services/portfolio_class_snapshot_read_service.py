@@ -50,7 +50,6 @@ async def get_class_twr_availability(db: AsyncSession, portfolio_id: int) -> lis
         except (TypeError, ValueError):
             continue
 
-
     latest_result = await db.execute(
         select(
             PortfolioClassSnapshot.asset_type,
