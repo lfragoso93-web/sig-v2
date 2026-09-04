@@ -95,4 +95,6 @@ async def test_class_availability_requires_supported_engine_and_materialized_dat
     assert by_type["ACAO"]["available"] is True
     assert by_type["ACAO"]["latest_snapshot_date"] == "2026-01-31"
     assert by_type["TESOURO_DIRETO"]["available"] is False
-    assert by_type["TESOURO_DIRETO"]["engine_supported"] is False
+    assert by_type["TESOURO_DIRETO"]["engine_supported"] is True
+    assert by_type["TESOURO_DIRETO"]["data_available"] is False
+    assert by_type["TESOURO_DIRETO"]["status"] == "awaiting_backfill"
