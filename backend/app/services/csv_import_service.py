@@ -116,8 +116,9 @@ async def import_transactions_csv(
 ) -> Dict[str, Any]:
     """Entrada usada pelo endpoint multipart de importação.
 
-    No dry-run apenas valida o conteúdo. Na importação efetiva delega para a
-    rotina transacional existente, preservando uma única regra de persistência.
+    No dry-run valida o conteúdo e todos os blockers de persistência conhecidos.
+    Na importação efetiva delega para a rotina transacional existente, preservando
+    uma única regra de persistência.
     """
     try:
         content = await _read_upload_text(file)
@@ -156,6 +157,8 @@ async def import_transactions_csv(
         }
 
     rows, global_errors = await parse_csv_content(content, portfolio_id, db)
+    if not global_errors and not any(row.errors or row.warnings for row in rows):
+        await _validate_duplicate_transactions(rows, portfolio_id, db)
     response_rows = []
     error_count = len(global_errors)
     skipped_count = 0
@@ -195,6 +198,62 @@ def _safe_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _transaction_identity(row: CSVRow) -> tuple[str, str, str, float, float, DateType, float, str]:
+    data = row.data
+    return (
+        data.get("ticker", "").strip().upper(),
+        data.get("asset_type", "").strip().upper(),
+        data.get("operation", "").strip().lower(),
+        float(data.get("quantity", 0)),
+        float(data.get("price", 0)),
+        _parse_date(data.get("date", "").strip()),
+        float(data.get("fees", 0) or 0),
+        data.get("currency", "BRL").strip().upper(),
+    )
+
+
+async def _validate_duplicate_transactions(
+    rows: List[CSVRow],
+    portfolio_id: int,
+    db: AsyncSession,
+) -> None:
+    """Marca duplicatas antes de qualquer persistência para manter o lote atômico."""
+    seen: set[tuple[str, str, str, float, float, DateType, float, str]] = set()
+
+    for row in rows:
+        identity = _transaction_identity(row)
+        if identity in seen:
+            row.add_error("duplicate transaction in CSV")
+            continue
+        seen.add(identity)
+
+        (
+            ticker,
+            asset_type,
+            operation,
+            quantity,
+            price,
+            parsed_date,
+            fees,
+            currency,
+        ) = identity
+        existing_transaction = await db.execute(
+            select(Transaction).where(
+                Transaction.portfolio_id == portfolio_id,
+                Transaction.ticker == ticker,
+                Transaction.asset_type == asset_type,
+                Transaction.operation == operation,
+                Transaction.quantity == quantity,
+                Transaction.price == price,
+                Transaction.date == parsed_date,
+                Transaction.fees == fees,
+                Transaction.currency == currency,
+            )
+        )
+        if existing_transaction.scalar_one_or_none() is not None:
+            row.add_error("duplicate transaction already exists")
 
 
 async def parse_csv_content(
@@ -349,7 +408,34 @@ async def import_csv_transactions(
         return result
 
     rows, global_errors = await parse_csv_content(content, portfolio_id, db)
+    if not global_errors and not any(row.errors or row.warnings for row in rows):
+        await _validate_duplicate_transactions(rows, portfolio_id, db)
     result["global_errors"] = global_errors
+
+    duplicate_only = (
+        bool(rows)
+        and not global_errors
+        and all(
+            row.errors == ["duplicate transaction already exists"] and not row.warnings
+            for row in rows
+        )
+    )
+    if duplicate_only:
+        result["success"] = True
+        result["skipped_count"] = len(rows)
+        result["rows"] = [
+            {
+                "row_num": row.row_num,
+                "errors": [],
+                "warnings": ["duplicate transaction skipped"],
+                "status": "skipped",
+                "ticker": (row.data.get("ticker") or "").strip().upper() or None,
+                "operation": (row.data.get("operation") or "").strip().lower() or None,
+                "quantity": _safe_float(row.data.get("quantity")),
+            }
+            for row in rows
+        ]
+        return result
 
     blocking_rows = [row for row in rows if row.errors or row.warnings]
     if global_errors or blocking_rows:
@@ -369,26 +455,6 @@ async def import_csv_transactions(
     created_transactions = []
 
     for csv_row in rows:
-        if csv_row.warnings and not csv_row.errors:
-            result["rows"].append({
-                "row_num": csv_row.row_num,
-                "errors": csv_row.errors,
-                "warnings": csv_row.warnings,
-                "status": "warning",
-            })
-            result["skipped_count"] += 1
-            continue
-
-        if not csv_row.is_valid():
-            result["rows"].append({
-                "row_num": csv_row.row_num,
-                "errors": csv_row.errors,
-                "warnings": csv_row.warnings,
-                "status": "error",
-            })
-            result["error_count"] += 1
-            continue
-
         try:
             ticker = csv_row.data.get("ticker", "").strip().upper()
             asset_type = csv_row.data.get("asset_type", "").strip().upper()
@@ -401,32 +467,6 @@ async def import_csv_transactions(
             notes = csv_row.data.get("notes", "").strip()
 
             parsed_date = _parse_date(date_str)
-
-            existing_transaction = await db.execute(
-                select(Transaction).where(
-                    Transaction.portfolio_id == portfolio_id,
-                    Transaction.ticker == ticker,
-                    Transaction.asset_type == asset_type,
-                    Transaction.operation == operation,
-                    Transaction.quantity == quantity,
-                    Transaction.price == price,
-                    Transaction.date == parsed_date,
-                    Transaction.fees == fees,
-                    Transaction.currency == currency,
-                )
-            )
-            if existing_transaction.scalar_one_or_none() is not None:
-                result["rows"].append({
-                    "row_num": csv_row.row_num,
-                    "errors": [],
-                    "warnings": ["duplicate transaction skipped"],
-                    "status": "skipped",
-                    "ticker": ticker,
-                    "operation": operation,
-                    "quantity": quantity,
-                })
-                result["skipped_count"] += 1
-                continue
 
             asset = await db.execute(
                 select(Asset).where(

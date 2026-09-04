@@ -336,7 +336,7 @@ async def rebuild_class_snapshots(
             )
 
             for asset_type in sorted(
-                SUPPORTED_CLASS_TWR_TYPES & portfolio_types,
+                MARKET_PRICE_CLASS_TWR_TYPES & portfolio_types,
                 key=lambda item: item.value,
             ):
                 open_positions = open_by_class.get(asset_type, [])

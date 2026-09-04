@@ -38,7 +38,9 @@ async def test_import_upload_dry_run_validates_without_persisting():
     db = AsyncMock(spec=AsyncSession)
     portfolio_result = MagicMock()
     portfolio_result.scalar_one_or_none.return_value = SimpleNamespace(id=1, user_id=7)
-    db.execute.return_value = portfolio_result
+    duplicate_result = MagicMock()
+    duplicate_result.scalar_one_or_none.return_value = None
+    db.execute.side_effect = [portfolio_result, duplicate_result]
 
     csv = (
         "ticker,asset_type,operation,quantity,price,date,fees,currency,notes\n"
