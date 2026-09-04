@@ -413,6 +413,31 @@ async def import_csv_transactions(
     await _validate_duplicate_transactions(rows, portfolio_id, db)
     result["global_errors"] = global_errors
 
+    duplicate_only = (
+        bool(rows)
+        and not global_errors
+        and all(
+            row.errors == ["duplicate transaction already exists"] and not row.warnings
+            for row in rows
+        )
+    )
+    if duplicate_only:
+        result["success"] = True
+        result["skipped_count"] = len(rows)
+        result["rows"] = [
+            {
+                "row_num": row.row_num,
+                "errors": [],
+                "warnings": ["duplicate transaction skipped"],
+                "status": "skipped",
+                "ticker": (row.data.get("ticker") or "").strip().upper() or None,
+                "operation": (row.data.get("operation") or "").strip().lower() or None,
+                "quantity": _safe_float(row.data.get("quantity")),
+            }
+            for row in rows
+        ]
+        return result
+
     blocking_rows = [row for row in rows if row.errors or row.warnings]
     if global_errors or blocking_rows:
         result["error_count"] += len(global_errors) + sum(1 for row in rows if row.errors)
