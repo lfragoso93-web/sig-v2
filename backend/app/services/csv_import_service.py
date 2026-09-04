@@ -157,7 +157,8 @@ async def import_transactions_csv(
         }
 
     rows, global_errors = await parse_csv_content(content, portfolio_id, db)
-    await _validate_duplicate_transactions(rows, portfolio_id, db)
+    if not global_errors and not any(row.errors or row.warnings for row in rows):
+        await _validate_duplicate_transactions(rows, portfolio_id, db)
     response_rows = []
     error_count = len(global_errors)
     skipped_count = 0
@@ -222,9 +223,6 @@ async def _validate_duplicate_transactions(
     seen: set[tuple[str, str, str, float, float, DateType, float, str]] = set()
 
     for row in rows:
-        if row.errors or row.warnings:
-            continue
-
         identity = _transaction_identity(row)
         if identity in seen:
             row.add_error("duplicate transaction in CSV")
@@ -410,7 +408,8 @@ async def import_csv_transactions(
         return result
 
     rows, global_errors = await parse_csv_content(content, portfolio_id, db)
-    await _validate_duplicate_transactions(rows, portfolio_id, db)
+    if not global_errors and not any(row.errors or row.warnings for row in rows):
+        await _validate_duplicate_transactions(rows, portfolio_id, db)
     result["global_errors"] = global_errors
 
     duplicate_only = (
