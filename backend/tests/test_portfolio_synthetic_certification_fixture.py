@@ -226,7 +226,12 @@ async def test_synthetic_fixture_upload_dry_run_is_read_only() -> None:
         id=303,
         user_id=303,
     )
-    db.execute.return_value = portfolio_result
+    execute_results = [portfolio_result]
+    for _transaction in fixture["transactions"]:
+        duplicate_result = MagicMock()
+        duplicate_result.scalar_one_or_none.return_value = None
+        execute_results.append(duplicate_result)
+    db.execute = AsyncMock(side_effect=execute_results)
 
     result = await import_transactions_csv(
         db=db,
