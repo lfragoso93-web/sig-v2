@@ -51,7 +51,6 @@ async def reconcile_latest_class_snapshots(
         except (TypeError, ValueError):
             unknown_types.add(str(raw))
 
-
     unsupported = sorted(
         [
             item.value
