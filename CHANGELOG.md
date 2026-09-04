@@ -5,6 +5,82 @@ Formato baseado em Keep a Changelog.
 
 ## [Unreleased] — branch `stable-15jun`
 
+### Removido — projeção e tabela legadas de Renda Fixa/Tesouro (#306, #307)
+
+- `transactions` foi consolidada como fonte canônica do lifecycle de Renda Fixa e Tesouro Direto; criação e atualização de transações não projetam mais estado paralelo em `fixed_income_investments`.
+- A #306 foi concluída no SHA `2c2e8a02909f8e265a142dcc40ec9d229496539c`, removendo o side effect legado do CRUD sem habilitar novo comportamento de TWR.
+- O relacionamento ORM legado foi retirado em `12ad5c4ff5ad5c2d05010db3be7d6da817bce473`.
+- A contração estrutural foi publicada em `b39c1cbec86a7103747086faa364dc31c7aa9724`: model/export ORM removidos, inventário pre-prod atualizado e migration `20260903_drop_fixed_income` criada para remover a tabela e seus enums dedicados.
+- A migration é fail-closed quando existem linhas legadas e foi validada em bancos descartáveis tanto no caminho vazio quanto no bloqueio com dado existente; migrations históricas permanecem imutáveis.
+- O banco local principal ainda não recebeu `alembic upgrade head` para essa contração; o SHA estrutural não é apresentado como runtime certificado.
+- `pre-prod-backup.v3` permanece o mecanismo operacional de recuperação; o export seletivo é evidência de auditoria/preservação, sem contrato de reidratação.
+- README, arquitetura, certificação e runbooks pre-prod foram sincronizados até `133ad9f5a72f6c8944eda58ce72da9ca5ce9238c`; o inventário corrente possui 23 tabelas, com 2 `export_before_cleanup`: `transactions` e `corporate_events`.
+
+### Alterado - base TWR dedicada Tesouro/Renda Fixa (#149)
+
+- Adicionada cadeia diaria pura de TWR para classes com historico dedicado, reutilizando o calculo canonico de retorno diario e composicao.
+- O contrato novo e fail-closed: ausencia de cobertura diaria dedicada publica indisponibilidade explicita, sem fallback para custo, curva nominal, taxa sintetica ou provider em runtime.
+- Cobertos cenarios sinteticos de variacao patrimonial por PU/preco, aporte como fluxo externo, rendimento/cupom como retorno, interrupcao por falta de cobertura e rejeicao de data duplicada.
+- A integracao produtiva com snapshots de Tesouro Direto e Renda Fixa segue pendente nos proximos blocos da #149.
+
+### Alterado - snapshots TWR Tesouro Direto (#149)
+
+- `rebuild_class_snapshots` passou a tratar Tesouro Direto em trilha dedicada, separada das classes de mercado que aceitam preco aproximado de janela.
+- O TWR de Tesouro consome somente fechamento exato persistido em `asset_prices` para o dia da carteira; falta de preco diario nao usa fallback de custo ou preco anterior.
+- Snapshots materializados de Tesouro recebem `return_is_estimated=false` e `valuation_status=complete`; a disponibilidade publica so fica positiva quando houver snapshot.
+- Renda Fixa permanece indisponivel para TWR dedicado porque o valuation corrente ainda possui fallback anual e nao constitui historico diario dedicado.
+
+### Alterado — rebaseline pós-merge PR #302 (01/09/2026)
+
+- Registrado que a PR #302 foi mergeada em `main` pelo commit `7861268a2528d80e8c23dfc55f7b0800402abc6d`.
+- `stable-15jun` segue como branch obrigatória de desenvolvimento em `2c9358629b3e5e9206a365ebeac45f9272dfd48e`.
+- Documentada a diferença esperada: `main` está um commit à frente apenas pelo merge commit da #302.
+- Inventário de PRs abertas atualizado para Dependabot #295, #296, #297, #298, #299, #300 e #301.
+- Mantida a regra operacional de evitar PRs para microblocos e promover apenas macroblocos validados.
+
+### Alterado — IBOV persistido DB-first (#150)
+
+- O rebuild histórico B3/COTAHIST passa a garantir o ativo sintético `IBOV` como benchmark persistido em `assets`.
+- Fechamentos do `IBOV` vindos de COTAHIST são persistidos em `asset_prices` com `source=b3_cotahist`, sem provider em runtime financeiro.
+- O relatório do estágio B3 passa a incluir o benchmark sintético nas contagens operacionais de ativos/preços.
+- A leitura mensal de benchmarks em Rentabilidade compara datas de `asset_prices.timestamp` por dia calendário, evitando excluir o fechamento do próprio `end_date`.
+- Nenhum seed real, CSV, snapshot, full rebuild real ou `ready_for_real_data=true` foi executado.
+
+### Alterado — Dependabot security-actions (#301)
+
+- Absorvida em `stable-15jun` a atualização `hadolint/hadolint-action` de `v3.4.0` para `v3.5.0` nos jobs Dockerfile lint do CI.
+- PR #301 pode ser encerrada após confirmação do commit remoto em `stable-15jun`, sem abrir PR individual.
+
+### Alterado — Dependabot backend security (#298)
+
+- Absorvida em `stable-15jun` a atualização `cryptography` de `50.0.0` para `50.0.1` no backend.
+- PR #298 pode ser encerrada após validação local/container e push do commit, sem PR individual.
+
+### Alterado — Dependabot react-stack (#295)
+
+- Absorvida em `stable-15jun` a atualização `@types/react-dom` de `19.2.4` para `19.2.5` no frontend.
+- PR #295 pode ser encerrada após validação frontend e push do commit, sem PR individual.
+
+### Alterado — Dependabot frontend lucide-react (#300)
+
+- Absorvida em `stable-15jun` a atualização `lucide-react` de `1.33.0` para `1.35.0`.
+- PR #300 pode ser encerrada após validação frontend e push do commit, sem PR individual.
+
+### Alterado — Dependabot frontend TanStack Query (#296)
+
+- Absorvida em `stable-15jun` a atualização `@tanstack/react-query` e `@tanstack/query-core` de `5.101.4` para `5.102.8`.
+- PR #296 pode ser encerrada após validação frontend e push do commit, sem PR individual.
+
+### Alterado — Dependabot frontend eslint-stack (#297)
+
+- Absorvida em `stable-15jun` a atualização `eslint` de `10.9.0` para `10.9.1` e `typescript-eslint` de `8.67.0` para `8.68.0`.
+- PR #297 pode ser encerrada após validação frontend e push do commit, sem PR individual.
+
+### Alterado — Dependabot frontend build-tools parcial (#299)
+
+- Absorvida em `stable-15jun` apenas a atualização segura `@vitejs/plugin-react` de `6.1.0` para `6.1.1`.
+- TypeScript `7.0.2` permanece bloqueado por incompatibilidade com o peer range vigente de `typescript-eslint` (`<6.1.0`); PR #299 deve ser encerrada no formato atual.
+
 ### Alterado — B3 COTAHIST-first para catálogo e OHLCV (29/08/2026)
 
 - O parser COTAHIST passou a sustentar um classificador B3 puro e determinístico para `ACAO`, `FII`, `ETF_NACIONAL` e `BDR`, rejeitando instrumentos inelegíveis e preservando `UNRESOLVED` em ambiguidades.

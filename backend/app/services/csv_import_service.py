@@ -402,6 +402,32 @@ async def import_csv_transactions(
 
             parsed_date = _parse_date(date_str)
 
+            existing_transaction = await db.execute(
+                select(Transaction).where(
+                    Transaction.portfolio_id == portfolio_id,
+                    Transaction.ticker == ticker,
+                    Transaction.asset_type == asset_type,
+                    Transaction.operation == operation,
+                    Transaction.quantity == quantity,
+                    Transaction.price == price,
+                    Transaction.date == parsed_date,
+                    Transaction.fees == fees,
+                    Transaction.currency == currency,
+                )
+            )
+            if existing_transaction.scalar_one_or_none() is not None:
+                result["rows"].append({
+                    "row_num": csv_row.row_num,
+                    "errors": [],
+                    "warnings": ["duplicate transaction skipped"],
+                    "status": "skipped",
+                    "ticker": ticker,
+                    "operation": operation,
+                    "quantity": quantity,
+                })
+                result["skipped_count"] += 1
+                continue
+
             asset = await db.execute(
                 select(Asset).where(
                     (Asset.ticker == ticker) & (Asset.asset_type == asset_type)

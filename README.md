@@ -6,6 +6,8 @@ A branch de desenvolvimento é `stable-15jun`. A promoção para `main` ocorre e
 
 ## Status atual — 27/08/2026
 
+Atualização de 01/09/2026: a PR #302 foi mergeada em `main` pelo commit `7861268a2528d80e8c23dfc55f7b0800402abc6d`. O desenvolvimento continua em `stable-15jun` no baseline `2c9358629b3e5e9206a365ebeac45f9272dfd48e`; `main` está um commit à frente apenas pelo merge commit da #302.
+
 O SGI v2 concluiu a sanitização arquitetural da Issue #247 e o bloco final de segurança da Issue #269. Desde então, o foco migrou da construção da base para **certificação operacional e preparação para testes integrados**.
 
 O ambiente OCI de laboratório já está funcional e foi usado para validar build/runtime, contratos de bootstrap e smoke HTTP descartável. As PRs #290, #291 e #292 consolidaram esse avanço, sem executar seeds reais e sem promover o ambiente para dados reais.
@@ -93,7 +95,7 @@ bootstrap inicial / sincronizadores operacionais
         ↓
 catálogo suportado + históricos + eventos + taxas persistidos
         ↓
-transactions + fixed_income_investments + corporate_events
+transactions + corporate_events
         ↓
 projeções canônicas de posição, custo e realizações
         ↓
@@ -128,7 +130,7 @@ Princípios: DB-first, fonte oficial primeiro, bootstrap idempotente, universo o
 ### Depois — performance e benchmarks
 
 9. Materializar histórico persistido do IBOV (#150).
-10. Implementar TWR dedicado de Tesouro Direto e Renda Fixa (#149).
+10. Concluir TWR dedicado de Renda Fixa (#149); Tesouro Direto ja possui trilha de snapshots DB-first quando houver fechamento diario exato em `asset_prices`.
 11. Reconciliar snapshots e rentabilidade quando necessário.
 
 ### Dívidas estruturais separadas
@@ -156,7 +158,7 @@ O bloco final da #269 foi promovido pela PR #282. O CI correspondente foi aprova
 
 ## PRs de dependências
 
-A única PR aberta no início deste rebaseline é a #289, TypeScript `6.0.3 -> 7.0.2`. Ela permanece bloqueada por incompatibilidade de peer dependency com `typescript-eslint 8.67.0`, que exige TypeScript `<6.1.0`. Não deve ser mergeada enquanto o ecossistema não estiver compatível e a suíte frontend não passar integralmente.
+Em 01/09/2026, as PRs Dependabot #295, #296, #297, #298, #299, #300 e #301 foram triadas e encerradas. As atualizações seguras foram absorvidas em `stable-15jun`; TypeScript 7 segue bloqueado enquanto `typescript-eslint` exigir TypeScript `<6.1.0`.
 
 ## Comandos principais
 

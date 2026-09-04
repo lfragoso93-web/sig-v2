@@ -6,7 +6,7 @@ from datetime import date
 from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset
@@ -73,10 +73,10 @@ async def _ibov_monthly(
 
     query = select(AssetPrice).where(
         AssetPrice.asset_id == asset.id,
-        AssetPrice.timestamp <= end_date,
+        func.date(AssetPrice.timestamp) <= end_date,
     )
     if start_date is not None:
-        query = query.where(AssetPrice.timestamp >= start_date)
+        query = query.where(func.date(AssetPrice.timestamp) >= start_date)
     result = await db.execute(query.order_by(AssetPrice.timestamp.asc()))
 
     closes: dict[str, Decimal] = {}

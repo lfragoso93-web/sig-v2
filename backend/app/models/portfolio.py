@@ -8,7 +8,6 @@ from app.models.base import TimestampMixin
 
 if TYPE_CHECKING:
     from app.models.corporate_event import CorporateEvent
-    from app.models.fixed_income import FixedIncomeInvestment
     from app.models.goal import Goal
     from app.models.portfolio_class_snapshot import PortfolioClassSnapshot
     from app.models.portfolio_class_target import PortfolioClassTarget
@@ -35,11 +34,6 @@ class Portfolio(Base, TimestampMixin):
     )
     positions: Mapped[list["PortfolioPosition"]] = relationship(
         "PortfolioPosition", back_populates="portfolio", cascade="all, delete-orphan"
-    )
-    fixed_income: Mapped[list["FixedIncomeInvestment"]] = relationship(
-        "FixedIncomeInvestment",
-        back_populates="portfolio",
-        cascade="all, delete-orphan",
     )
     goals: Mapped[list["Goal"]] = relationship(
         "Goal", back_populates="portfolio", cascade="all, delete-orphan"

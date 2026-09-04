@@ -280,11 +280,14 @@ PETR4,ACAO,buy,100,25.50,2024-01-15,10.00,BRL,Compra inicial"""
         
         portfolio_result = MagicMock()
         portfolio_result.scalar_one_or_none = MagicMock(return_value=portfolio)
+
+        existing_tx_result = MagicMock()
+        existing_tx_result.scalar_one_or_none = MagicMock(return_value=None)
         
         asset_result = MagicMock()
         asset_result.scalar_one_or_none = MagicMock(return_value=None)
         
-        db.execute = AsyncMock(side_effect=[portfolio_result, asset_result])
+        db.execute = AsyncMock(side_effect=[portfolio_result, existing_tx_result, asset_result])
         db.commit = AsyncMock()
         db.add = MagicMock()
         db.flush = AsyncMock()
@@ -294,6 +297,37 @@ PETR4,ACAO,buy,100,25.50,2024-01-15,10.00,BRL,Compra inicial"""
 
         assert result["success"] is True
         assert result["imported_count"] == 1
+
+    async def test_import_skips_duplicate_transaction_without_reinserting(self):
+        content = """ticker,asset_type,operation,quantity,price,date,fees,currency,notes
+PETR4,ACAO,buy,100,25.50,2024-01-15,10.00,BRL,Compra inicial"""
+
+        db = AsyncMock(spec=AsyncSession)
+
+        portfolio = MagicMock(spec=Portfolio)
+        portfolio.user_id = 1
+
+        portfolio_result = MagicMock()
+        portfolio_result.scalar_one_or_none = MagicMock(return_value=portfolio)
+
+        duplicate_result = MagicMock()
+        duplicate_result.scalar_one_or_none = MagicMock(return_value=Transaction())
+
+        db.execute = AsyncMock(side_effect=[portfolio_result, duplicate_result])
+        db.add = MagicMock()
+        db.commit = AsyncMock()
+
+        with patch('app.services.csv_import_service.invalidate_portfolio_cache', new_callable=AsyncMock) as invalidate:
+            result = await import_csv_transactions(content, 1, 1, db)
+
+        assert result["success"] is True
+        assert result["imported_count"] == 0
+        assert result["skipped_count"] == 1
+        assert result["rows"][0]["status"] == "skipped"
+        assert result["rows"][0]["warnings"] == ["duplicate transaction skipped"]
+        db.add.assert_not_called()
+        db.commit.assert_not_awaited()
+        invalidate.assert_not_awaited()
 
     async def test_import_portfolio_not_found(self):
         content = """ticker,asset_type,operation,quantity,price,date,fees,currency,notes

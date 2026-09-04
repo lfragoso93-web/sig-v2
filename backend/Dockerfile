@@ -66,7 +66,7 @@ COPY --chown=app:app . .
 RUN sed -i 's/\r//' /app/entrypoint.sh \
     && chmod +x /app/entrypoint.sh \
     && mkdir -p /app/artifacts \
-    && chown -R app:app /app
+    && chown app:app /app/artifacts
 
 USER 1000:1000
 

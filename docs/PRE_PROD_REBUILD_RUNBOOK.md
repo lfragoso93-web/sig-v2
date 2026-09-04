@@ -48,7 +48,7 @@ A execução real ainda não ocorreu. A cadeia `20260724-100752` foi invalidada 
 
 A fonte executável da política é `TABLE_POLICIES`, em `pre_prod_inventory_service.py`. Cada tabela recebe classificação e justificativa no relatório `pre-prod-inventory.v2`.
 
-O inventário real validado contém 24 tabelas: 11 preservadas, 3 exportáveis e 10 reconstruíveis.
+O inventário corrente contém 23 tabelas: 11 preservadas, 2 exportáveis e 10 reconstruíveis.
 
 ### Preservar — 11 tabelas
 
@@ -66,13 +66,16 @@ O inventário real validado contém 24 tabelas: 11 preservadas, 3 exportáveis e
 
 Essas tabelas contêm estrutura aplicada, identidade, configuração, preferências, trilha de auditoria ou histórico fiscal não integralmente regenerável.
 
-### Exportar antes de qualquer limpeza — 3 tabelas
+### Exportar antes de qualquer limpeza — 2 tabelas
 
 - `corporate_events`;
-- `fixed_income_investments`;
 - `transactions`.
 
-Eventos corporativos podem conter estado aplicado e dados brutos; renda fixa contém condições contratuais; transações formam o livro-razão financeiro. Nenhuma delas pode ser perdida ou presumida como regenerável.
+Eventos corporativos podem conter estado aplicado e dados brutos; transações formam o livro-razão financeiro informado pelo usuário. Nenhuma dessas tabelas pode ser perdida ou presumida como regenerável.
+
+Artefatos produzidos por SHAs anteriores à contração `20260903_drop_fixed_income` podem conter `fixed_income_investments.csv`. Esses arquivos permanecem evidência histórica da execução original, mas não integram o contrato corrente de `export_before_cleanup`.
+
+A recuperação operacional da base é feita pelo backup completo `pre-prod-backup.v3` e restore validado com `pg_restore`. O export seletivo é evidência de auditoria/preservação e não deve ser tratado como mecanismo de reidratação.
 
 ### Reconstruir — 10 tabelas
 
@@ -112,7 +115,6 @@ Ela deve conter, conforme a etapa:
 - `cleanup-impact.json`;
 - `export/manifest.json`;
 - `export/tables/corporate_events.csv`;
-- `export/tables/fixed_income_investments.csv`;
 - `export/tables/transactions.csv`;
 - `cleanup/plan.json`;
 - `cleanup/execution.json`;
@@ -210,7 +212,7 @@ docker compose exec `
 A exportação deve:
 
 - usar snapshot read-only consistente;
-- conter exatamente as três tabelas `export_before_cleanup`;
+- conter exatamente as duas tabelas `export_before_cleanup` do inventário corrente;
 - registrar contagens, schema, bytes e SHA-256;
 - retornar `reconciled=true`;
 - bloquear a sequência diante de qualquer divergência.
@@ -233,7 +235,7 @@ O plano deve confirmar:
 - `database_accessed=false` durante o planejamento;
 - zero blockers e zero ciclos;
 - checksums dos cinco artefatos de entrada;
-- 13 tabelas no `cleanup_order`;
+- 12 tabelas no `cleanup_order` (2 export?veis + 10 reconstru?veis);
 - zero escritas, limpeza ou rebuild;
 - ausência de sobrescrita.
 

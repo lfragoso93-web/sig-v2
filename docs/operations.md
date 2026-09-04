@@ -163,7 +163,6 @@ Contrato: `pre-prod-export.v1`.
 A exportação aprovada deve conter:
 
 - `transactions`;
-- `fixed_income_investments`;
 - `corporate_events`;
 - CSV determinístico;
 - manifesto;
@@ -174,6 +173,10 @@ A exportação aprovada deve conter:
 - `cleanup_executed=false`;
 - `rebuild_executed=false`;
 - `overwrite_performed=false`.
+
+No inventário corrente, somente `transactions` e `corporate_events` são `export_before_cleanup`. Artefatos históricos anteriores a `20260903_drop_fixed_income` podem conter `fixed_income_investments.csv` e devem ser preservados como evidência da execução que os produziu.
+
+O mecanismo operacional de recuperação continua sendo o backup completo `pre-prod-backup.v3` restaurado em banco vazio. O export seletivo não substitui esse restore.
 
 A execução real `20260722-134741` exportou 3 tabelas, 323 linhas e 47.576 bytes com exit code `0`.
 

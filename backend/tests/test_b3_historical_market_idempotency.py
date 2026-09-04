@@ -123,3 +123,40 @@ async def test_cotahist_persists_ohlcv_and_prefers_standard_market(
     assert price.close == Decimal("30.00000000")
     assert price.volume == Decimal("123456.78")
     assert price.source == "b3_cotahist"
+
+
+@pytest.mark.asyncio
+async def test_cotahist_materializes_ibov_benchmark_history(
+    db: AsyncSession,
+    monkeypatch,
+):
+    async def fake_year(_year: int):
+        return [
+            _record(ticker="IBOV", day=23, close="125000.00"),
+            _record(ticker="PETR4", day=23, close="30.00"),
+        ]
+
+    monkeypatch.setattr(service, "AsyncSessionLocal", lambda: _FixtureSession(db))
+    monkeypatch.setattr(service, "fetch_b3_cotahist_year_records", fake_year)
+    monkeypatch.setattr(service, "refresh_asset_last_prices", AsyncMock(return_value=1))
+
+    result = await service.rebuild_b3_historical_market(
+        2026,
+        2026,
+        cutoff_date=date(2026, 7, 24),
+    )
+
+    asset = (
+        await db.execute(select(Asset).where(Asset.ticker == "IBOV"))
+    ).scalar_one()
+    price = (
+        await db.execute(select(AssetPrice).where(AssetPrice.asset_id == asset.id))
+    ).scalar_one()
+
+    assert asset.asset_type == AssetType.OUTRO.value
+    assert asset.provider == "b3_cotahist"
+    assert asset.provider_status == "persisted_benchmark"
+    assert result.rows_received == 1
+    assert result.rows_inserted == 1
+    assert price.close == Decimal("125000.00000000")
+    assert price.source == "b3_cotahist"

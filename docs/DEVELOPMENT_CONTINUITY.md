@@ -2,6 +2,28 @@
 
 > Documento obrigatório para iniciar ou retomar qualquer conversa de desenvolvimento. Atualizado em 31/08/2026.
 
+## Rebaseline pós-merge PR #302 — 01/09/2026
+
+- PR #302 mergeada em `main` em 01/09/2026 pelo commit `7861268a2528d80e8c23dfc55f7b0800402abc6d`.
+- `stable-15jun` permanece a branch obrigatória de desenvolvimento, atualmente em `2c9358629b3e5e9206a365ebeac45f9272dfd48e`.
+- A diferença esperada entre `origin/main` e `origin/stable-15jun` é apenas o merge commit da #302; novo desenvolvimento deve continuar em `stable-15jun`.
+- Issues abertas inventariadas: 18 (#293, #284, #272, #269, #253, #246, #227, #226, #216, #158, #150, #149, #130, #127, #97, #90, #83, #58).
+- PRs abertas atuais: nenhuma após triagem dos Dependabot #295, #296, #297, #298, #299, #300 e #301.
+- Não abrir PR nova para microblocos; registrar commits pequenos e preparar promoção somente ao fechar macrobloco validado.
+- PRs #295, #296, #297, #298, #300 e #301 foram absorvidas integralmente em `stable-15jun` e encerradas.
+- PR #299 foi encerrada no formato original; apenas `@vitejs/plugin-react 6.1.1` foi absorvido, enquanto TypeScript 7 permanece bloqueado por incompatibilidade com `typescript-eslint`.
+
+## #149 — TWR dedicado Tesouro/Renda Fixa — 01/09/2026
+
+- Primeiro bloco funcional concluido em `stable-15jun`: `twr_service` ganhou uma cadeia diaria pura para classes com historico dedicado.
+- A cadeia reutiliza o calculo canonico de TWR diario e composicao acumulada, segregando aportes/retiradas como fluxo externo e rendimentos/cupom como retorno.
+- O contrato e fail-closed: se faltar cobertura diaria dedicada, a linha publica indisponibilidade explicita e os dias seguintes ficam interrompidos, sem fallback para custo, curva nominal, valor sintetico ou provider em runtime.
+- Testes sinteticos cobrem variacao patrimonial por PU/preco, aporte neutro, rendimento/cupom, ausencia de cobertura e data duplicada.
+- Segundo bloco funcional: `rebuild_class_snapshots` passou a materializar Tesouro Direto em trilha dedicada quando existe fechamento diario exato em `asset_prices`.
+- Tesouro nao usa a janela aproximada de precos das classes de mercado; ausencia de preco no dia impede snapshot/TWR em vez de buscar custo, preco anterior, curva ou provider.
+- Snapshots de Tesouro materializados sao marcados como `return_is_estimated=false` e `valuation_status=complete`; a API publica so declara disponibilidade quando existir snapshot.
+- Renda Fixa continua sem TWR dedicado porque o valuation atual ainda usa fallback anual quando falta serie de taxas; integrar RF exige historico diario dedicado sem fallback.
+
 ## Contexto permanente
 
 - Repositório: `lfragoso93-web/sig-v2`.
@@ -195,18 +217,18 @@ Ordem operacional:
 
 ## Ordem posterior à primeira certificação
 
-1. #150 — histórico persistido do IBOV;
-2. #149 — TWR Tesouro/Renda Fixa;
+1. #150 — histórico persistido do IBOV: implementação DB-first via COTAHIST concluída; validação real segue bloqueada pelos gates operacionais;
+2. #149 — TWR Tesouro/Renda Fixa: Tesouro integrado a snapshots DB-first; Renda Fixa ainda exige historico diario dedicado sem fallback;
 3. #272 — dívida física de `corporate_events` em bloco separado;
 4. #83 — hardening residual do Backup/Restore administrativo;
 5. demais backlog de produto;
 6. #246 + #57 — Metas + Análise de Carteira como macroprojeto único.
 
-## PR Dependabot aberta
+## PRs Dependabot abertas
 
-A PR #289 propõe TypeScript `6.0.3 -> 7.0.2`.
+Em 01/09/2026, as PRs abertas são #295, #296, #297, #298, #299, #300 e #301, todas de Dependabot contra `main`.
 
-Não mergear no estado atual: `typescript-eslint 8.67.0` exige TypeScript `<6.1.0`, e a validação registrada na PR #290 confirmou falha de resolução do `npm`. Reavaliar somente quando o ecossistema suportar TypeScript 7 e a suíte frontend puder ser validada integralmente.
+Não mergear automaticamente. Cada atualização deve ser tratada em bloco próprio, com `stable-15jun` sincronizada, instalação determinística, suítes backend/frontend aplicáveis e CI verde antes de promoção.
 
 ## Qualidade por macrobloco
 

@@ -3,6 +3,7 @@ from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cache import cache_delete
@@ -15,7 +16,6 @@ _CACHE_PREFIX = "portfolio"
 _PORTFOLIO_DEPENDENT_TABLES = (
     "dividends",
     "corporate_events",
-    "fixed_income_investments",
     "goals",
     "irpf_reports",
     "portfolio_class_targets",
@@ -97,7 +97,7 @@ async def delete_portfolio_safely(db: AsyncSession, portfolio_id: int, user_id: 
             old_values=old_values,
         )
         await db.flush()
-    except Exception as exc:
+    except SQLAlchemyError as exc:
         logger.warning("[portfolio_delete] falha ao registrar auditoria: %s", exc)
         await db.rollback()
 

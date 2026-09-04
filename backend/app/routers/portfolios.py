@@ -235,7 +235,11 @@ async def import_portfolio_csv(
     if dry_run:
         result = await enrich_csv_dry_run_with_ticker_resolution(result)
     result = _localize_csv_result(result)
-    if not dry_run and result.get("imported_count", 0) > 0:
+    if (
+        not dry_run
+        and result.get("success") is True
+        and result.get("imported_count", 0) > 0
+    ):
         await _refresh_after_csv_import(portfolio_id)
         background_tasks.add_task(rebuild_snapshots_after_csv_import, portfolio_id)
     return result

@@ -5,9 +5,7 @@ WORKDIR /app
 
 COPY package*.json ./
 
-# Usa npm install em vez de npm ci para evitar falha quando o package-lock.json
-# está levemente desatualizado em relação ao package.json (ex: minor bumps de eslint/typescript-eslint)
-RUN npm install
+RUN npm ci
 
 COPY . .
 

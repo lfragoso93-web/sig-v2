@@ -73,13 +73,13 @@ TABLE_POLICIES: dict[str, tuple[str, str]] = {
         "export_before_cleanup",
         "Eventos podem conter estado aplicado, vínculo com carteira e dados brutos não integralmente reproduzíveis.",
     ),
-    "fixed_income_investments": (
-        "export_before_cleanup",
-        "Investimentos de renda fixa contêm condições contratuais informadas pelo usuário.",
-    ),
     "transactions": (
         "export_before_cleanup",
         "Livro-razão financeiro informado pelo usuário e fonte dos rebuilds posteriores.",
+    ),
+    "fixed_income_investments": (
+        "export_before_cleanup",
+        "Projeção financeira legada que pode existir em bancos pré-contração; deve ser preservada antes da migration controlada que remove a tabela.",
     ),
     "asset_aliases": (
         "rebuildable",
@@ -92,6 +92,10 @@ TABLE_POLICIES: dict[str, tuple[str, str]] = {
     "asset_prices": (
         "rebuildable",
         "Histórico de preços possui fontes oficiais e rotinas idempotentes de seed.",
+    ),
+    "asset_universe_memberships": (
+        "rebuildable",
+        "Fotografia operacional do universo candidato de ativos; é regenerada pelo seed a partir das fontes canônicas de catálogo.",
     ),
     "assets": (
         "rebuildable",

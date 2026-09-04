@@ -23,6 +23,7 @@ _B3_TYPES = (
     AssetType.ETF_NACIONAL.value,
     AssetType.BDR.value,
 )
+_B3_BENCHMARK_TICKERS = ("IBOV",)
 
 
 class B3SeedAlreadyRunningError(RuntimeError):
@@ -56,13 +57,21 @@ class PreProdB3SeedResult:
 async def _counts() -> B3SeedCounts:
     async with AsyncSessionLocal() as db:
         assets = await db.scalar(
-            select(func.count()).select_from(Asset).where(Asset.asset_type.in_(_B3_TYPES))
+            select(func.count())
+            .select_from(Asset)
+            .where(
+                (Asset.asset_type.in_(_B3_TYPES))
+                | (func.upper(Asset.ticker).in_(_B3_BENCHMARK_TICKERS))
+            )
         )
         prices = await db.scalar(
             select(func.count())
             .select_from(AssetPrice)
             .join(Asset, Asset.id == AssetPrice.asset_id)
-            .where(Asset.asset_type.in_(_B3_TYPES))
+            .where(
+                (Asset.asset_type.in_(_B3_TYPES))
+                | (func.upper(Asset.ticker).in_(_B3_BENCHMARK_TICKERS))
+            )
         )
     return B3SeedCounts(assets=int(assets or 0), prices=int(prices or 0))
 
