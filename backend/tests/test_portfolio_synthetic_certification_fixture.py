@@ -264,11 +264,12 @@ async def test_synthetic_fixture_effective_import_commits_once() -> None:
     transactions = fixture["transactions"]
     execute_results = [portfolio_result]
 
-    for transaction in transactions:
+    for _transaction in transactions:
         duplicate_result = MagicMock()
         duplicate_result.scalar_one_or_none.return_value = None
         execute_results.append(duplicate_result)
 
+    for transaction in transactions:
         asset_key = (transaction["ticker"], transaction["asset_type"])
         asset_result = MagicMock()
         asset_result.scalar_one_or_none.return_value = (
