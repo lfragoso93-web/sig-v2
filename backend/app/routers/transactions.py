@@ -190,7 +190,6 @@ async def create_transaction(
     )
     db.add(tx)
 
-
     await db.commit()
     await db.refresh(tx)
 
@@ -273,7 +272,6 @@ async def update_transaction(
     tx.date = tx_date
     tx.currency = currency
     tx.notes = notes
-
 
     await db.commit()
     await db.refresh(tx)
