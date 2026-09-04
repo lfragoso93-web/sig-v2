@@ -116,8 +116,9 @@ async def import_transactions_csv(
 ) -> Dict[str, Any]:
     """Entrada usada pelo endpoint multipart de importação.
 
-    No dry-run apenas valida o conteúdo. Na importação efetiva delega para a
-    rotina transacional existente, preservando uma única regra de persistência.
+    No dry-run valida o conteúdo e todos os blockers de persistência conhecidos.
+    Na importação efetiva delega para a rotina transacional existente, preservando
+    uma única regra de persistência.
     """
     try:
         content = await _read_upload_text(file)
@@ -156,6 +157,7 @@ async def import_transactions_csv(
         }
 
     rows, global_errors = await parse_csv_content(content, portfolio_id, db)
+    await _validate_duplicate_transactions(rows, portfolio_id, db)
     response_rows = []
     error_count = len(global_errors)
     skipped_count = 0
@@ -195,6 +197,65 @@ def _safe_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _transaction_identity(row: CSVRow) -> tuple[str, str, str, float, float, DateType, float, str]:
+    data = row.data
+    return (
+        data.get("ticker", "").strip().upper(),
+        data.get("asset_type", "").strip().upper(),
+        data.get("operation", "").strip().lower(),
+        float(data.get("quantity", 0)),
+        float(data.get("price", 0)),
+        _parse_date(data.get("date", "").strip()),
+        float(data.get("fees", 0) or 0),
+        data.get("currency", "BRL").strip().upper(),
+    )
+
+
+async def _validate_duplicate_transactions(
+    rows: List[CSVRow],
+    portfolio_id: int,
+    db: AsyncSession,
+) -> None:
+    """Marca duplicatas antes de qualquer persistência para manter o lote atômico."""
+    seen: set[tuple[str, str, str, float, float, DateType, float, str]] = set()
+
+    for row in rows:
+        if row.errors or row.warnings:
+            continue
+
+        identity = _transaction_identity(row)
+        if identity in seen:
+            row.add_error("duplicate transaction in CSV")
+            continue
+        seen.add(identity)
+
+        (
+            ticker,
+            asset_type,
+            operation,
+            quantity,
+            price,
+            parsed_date,
+            fees,
+            currency,
+        ) = identity
+        existing_transaction = await db.execute(
+            select(Transaction).where(
+                Transaction.portfolio_id == portfolio_id,
+                Transaction.ticker == ticker,
+                Transaction.asset_type == asset_type,
+                Transaction.operation == operation,
+                Transaction.quantity == quantity,
+                Transaction.price == price,
+                Transaction.date == parsed_date,
+                Transaction.fees == fees,
+                Transaction.currency == currency,
+            )
+        )
+        if existing_transaction.scalar_one_or_none() is not None:
+            row.add_error("duplicate transaction already exists")
 
 
 async def parse_csv_content(
@@ -349,6 +410,7 @@ async def import_csv_transactions(
         return result
 
     rows, global_errors = await parse_csv_content(content, portfolio_id, db)
+    await _validate_duplicate_transactions(rows, portfolio_id, db)
     result["global_errors"] = global_errors
 
     blocking_rows = [row for row in rows if row.errors or row.warnings]
