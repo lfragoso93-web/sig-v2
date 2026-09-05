@@ -8,9 +8,7 @@ import os
 from app.certification.portfolio_seed_identity_service import (
     provision_synthetic_user_portfolio,
 )
-from app.certification.portfolio_seed_transaction_service import (
-    seed_non_crypto_transactions,
-)
+from app.certification.portfolio_seed_transaction_service import seed_transactions
 from app.core.database import AsyncSessionLocal
 
 
@@ -24,7 +22,7 @@ async def _run() -> None:
 
     async with AsyncSessionLocal() as db:
         identity = await provision_synthetic_user_portfolio(db, password=password)
-        transactions = await seed_non_crypto_transactions(
+        transactions = await seed_transactions(
             db,
             portfolio_id=identity.portfolio_id,
         )
@@ -37,7 +35,8 @@ async def _run() -> None:
         f"portfolio_created={str(identity.portfolio_created).lower()} "
         f"transactions_created={transactions.created} "
         f"transactions_reused={transactions.reused} "
-        f"blocked_crypto={transactions.blocked_crypto}"
+        f"crypto_membership_created={transactions.crypto_membership_created} "
+        f"crypto_membership_reused={transactions.crypto_membership_reused}"
     )
 
 
