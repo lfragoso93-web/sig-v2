@@ -14,8 +14,13 @@ from app.certification.portfolio_synthetic_fixture import (
     load_portfolio_synthetic_certification_fixture,
 )
 from app.models.asset import Asset
+from app.models.asset_universe_membership import AssetUniverseMembership
 from app.models.transaction import OperationType, Transaction
 from app.schemas.transaction import TransactionCreate
+from app.services.asset_universe_membership_service import (
+    CRYPTO_SYNTHETIC_CERTIFICATION_SOURCE,
+    CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_KEY,
+)
 from app.services.transaction_write_service import create_transaction_record
 
 
@@ -23,7 +28,8 @@ from app.services.transaction_write_service import create_transaction_record
 class SyntheticTransactionSeedResult:
     created: int
     reused: int
-    blocked_crypto: int
+    crypto_membership_created: int
+    crypto_membership_reused: int
 
 
 def _identity_tuple(*, portfolio_id: int, row: dict[str, str], ticker: str) -> tuple:
@@ -119,30 +125,55 @@ async def _require_owned_asset(
     return asset
 
 
-async def seed_non_crypto_transactions(
+async def _require_synthetic_crypto_membership(
+    db: AsyncSession,
+    *,
+    asset: Asset,
+) -> bool:
+    result = await db.execute(
+        select(AssetUniverseMembership).where(
+            AssetUniverseMembership.asset_id == asset.id,
+            AssetUniverseMembership.universe_key
+            == CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_KEY,
+        )
+    )
+    membership = result.scalar_one_or_none()
+    if membership is not None:
+        if membership.source != CRYPTO_SYNTHETIC_CERTIFICATION_SOURCE:
+            raise SyntheticSeedContractError(
+                "synthetic crypto membership collision; source is not certification-owned"
+            )
+        return False
+
+    db.add(
+        AssetUniverseMembership(
+            asset_id=asset.id,
+            universe_key=CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_KEY,
+            rank=None,
+            source=CRYPTO_SYNTHETIC_CERTIFICATION_SOURCE,
+        )
+    )
+    await db.commit()
+    return True
+
+
+async def seed_transactions(
     db: AsyncSession,
     *,
     portfolio_id: int,
 ) -> SyntheticTransactionSeedResult:
-    """Seed every non-CRIPTO fixture transaction using the canonical write service.
-
-    CRIPTO remains explicitly blocked by issue #317 until a synthetic eligibility
-    contract can satisfy the canonical lifecycle without falsifying provider state.
-    """
+    """Seed the full fixture through canonical writes and synthetic ownership guards."""
     fixture = load_portfolio_synthetic_certification_fixture()
     plan = build_synthetic_asset_plan(fixture)
 
     created = 0
     reused = 0
-    blocked_crypto = 0
+    crypto_membership_created = 0
+    crypto_membership_reused = 0
 
     for row in fixture["transactions"]:
         identity = plan[row["ticker"]]
-        if identity.asset_type == "CRIPTO":
-            blocked_crypto += 1
-            continue
-
-        await _require_owned_asset(
+        asset = await _require_owned_asset(
             db,
             ticker=identity.ticker,
             asset_type=identity.asset_type,
@@ -151,6 +182,16 @@ async def seed_non_crypto_transactions(
             expected_provider_symbol=identity.provider_symbol,
             expected_provider_status=identity.provider_status,
         )
+
+        if identity.asset_type == "CRIPTO":
+            membership_created = await _require_synthetic_crypto_membership(
+                db,
+                asset=asset,
+            )
+            if membership_created:
+                crypto_membership_created += 1
+            else:
+                crypto_membership_reused += 1
 
         existing = await _find_existing_transaction(
             db,
@@ -182,5 +223,6 @@ async def seed_non_crypto_transactions(
     return SyntheticTransactionSeedResult(
         created=created,
         reused=reused,
-        blocked_crypto=blocked_crypto,
+        crypto_membership_created=crypto_membership_created,
+        crypto_membership_reused=crypto_membership_reused,
     )
