@@ -27,6 +27,7 @@ def _owned_mxrf11() -> SimpleNamespace:
         ticker="CERT303-MXRF11",
         asset_type="FII",
         name="SGI certification #303 synthetic asset [MXRF11]",
+        currency="BRL",
         provider="synthetic-certification",
         provider_symbol="MXRF11",
         provider_status="synthetic-owned",
@@ -130,6 +131,27 @@ async def test_seed_fails_closed_on_existing_dividend_contamination() -> None:
     with pytest.raises(
         SyntheticSeedContractError,
         match="synthetic dividend collision for CERT303-MXRF11",
+    ):
+        await seed_synthetic_dividends(db)
+
+    db.add.assert_not_called()
+    db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_seed_fails_closed_on_non_brl_dividend_asset() -> None:
+    db = AsyncMock(spec=AsyncSession)
+    db.add = MagicMock()
+    db.commit = AsyncMock()
+    wrong_currency = _owned_mxrf11()
+    wrong_currency.currency = "USD"
+    db.execute = AsyncMock(
+        side_effect=[_execute_result(scalar=wrong_currency)]
+    )
+
+    with pytest.raises(
+        SyntheticSeedContractError,
+        match="CERT303-MXRF11 must use BRL currency",
     ):
         await seed_synthetic_dividends(db)
 
