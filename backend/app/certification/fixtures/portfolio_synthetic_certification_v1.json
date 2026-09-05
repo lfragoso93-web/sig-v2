@@ -151,11 +151,14 @@
   "income_events": [
     {
       "ticker": "MXRF11",
+      "record_date": "2026-02-05",
+      "ex_date": "2026-02-06",
       "payment_date": "2026-02-14",
+      "dividend_type": "RENDIMENTO",
       "quantity": "200",
       "value_per_unit": "0.10",
       "gross_amount": "20.00",
-      "source": "synthetic"
+      "source": "synthetic-certification"
     }
   ],
   "expected": {
