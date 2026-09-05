@@ -8,6 +8,9 @@ import os
 from app.certification.portfolio_seed_identity_service import (
     provision_synthetic_user_portfolio,
 )
+from app.certification.portfolio_seed_market_price_service import (
+    seed_generic_market_prices,
+)
 from app.certification.portfolio_seed_transaction_service import seed_transactions
 from app.core.database import AsyncSessionLocal
 
@@ -26,6 +29,7 @@ async def _run() -> None:
             db,
             portfolio_id=identity.portfolio_id,
         )
+        market_prices = await seed_generic_market_prices(db)
 
     print(
         "CERT303-SEED "
@@ -36,7 +40,9 @@ async def _run() -> None:
         f"transactions_created={transactions.created} "
         f"transactions_reused={transactions.reused} "
         f"crypto_membership_created={transactions.crypto_membership_created} "
-        f"crypto_membership_reused={transactions.crypto_membership_reused}"
+        f"crypto_membership_reused={transactions.crypto_membership_reused} "
+        f"market_prices_created={market_prices.created} "
+        f"market_prices_reused={market_prices.reused}"
     )
 
 
