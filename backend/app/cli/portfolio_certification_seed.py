@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 
+from app.certification.portfolio_seed_dividend_service import seed_synthetic_dividends
 from app.certification.portfolio_seed_identity_service import (
     provision_synthetic_user_portfolio,
 )
@@ -30,6 +31,7 @@ async def _run() -> None:
             portfolio_id=identity.portfolio_id,
         )
         market_prices = await seed_generic_market_prices(db)
+        dividends = await seed_synthetic_dividends(db)
 
     print(
         "CERT303-SEED "
@@ -42,7 +44,9 @@ async def _run() -> None:
         f"crypto_membership_created={transactions.crypto_membership_created} "
         f"crypto_membership_reused={transactions.crypto_membership_reused} "
         f"market_prices_created={market_prices.created} "
-        f"market_prices_reused={market_prices.reused}"
+        f"market_prices_reused={market_prices.reused} "
+        f"dividends_created={dividends.created} "
+        f"dividends_reused={dividends.reused}"
     )
 
 
