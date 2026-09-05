@@ -2,25 +2,20 @@ from __future__ import annotations
 
 import ast
 import inspect
-import json
 import textwrap
 from datetime import date
-from pathlib import Path
 
 import pytest
 from fastapi import BackgroundTasks, HTTPException
 
+from app.certification.portfolio_synthetic_fixture import (
+    load_portfolio_synthetic_certification_fixture,
+)
 from app.models.transaction import OperationType, Transaction
 from app.routers import transactions
 from app.schemas.transaction import TransactionCreate, TransactionUpdate
 from app.services.crypto_transaction_eligibility_service import (
     CryptoTransactionEligibilityError,
-)
-
-FIXTURE_PATH = (
-    Path(__file__).parent
-    / "fixtures"
-    / "portfolio_synthetic_certification_v1.json"
 )
 
 
@@ -136,7 +131,7 @@ async def _noop_asset(*_args, **_kwargs):
 
 
 def _synthetic_transaction(asset_type: str) -> dict:
-    fixture = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+    fixture = load_portfolio_synthetic_certification_fixture()
     for row in fixture["transactions"]:
         if row["asset_type"] == asset_type:
             return row
@@ -248,7 +243,6 @@ async def test_rejected_create_does_not_add_or_commit(monkeypatch) -> None:
     assert db.commit_called is False
 
 
-
 @pytest.mark.asyncio
 async def test_fixed_income_buy_persists_only_transaction(monkeypatch) -> None:
     db = _WriteSpySession(execute_value=None)
@@ -279,6 +273,7 @@ async def test_fixed_income_buy_persists_only_transaction(monkeypatch) -> None:
     assert len(db.added) == 1
     assert isinstance(db.added[0], Transaction)
     assert db.added[0] is result
+
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("asset_type", ["RENDA_FIXA", "TESOURO_DIRETO"])
@@ -316,6 +311,7 @@ async def test_synthetic_fixed_income_rows_use_transactions_as_source_of_truth(
     assert len(db.added) == 1
     assert isinstance(db.added[0], Transaction)
     assert db.added[0] is result
+
 
 @pytest.mark.asyncio
 async def test_rejected_update_does_not_mutate_or_commit(monkeypatch) -> None:
