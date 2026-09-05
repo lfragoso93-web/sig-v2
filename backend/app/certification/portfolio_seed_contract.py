@@ -13,7 +13,7 @@ from app.certification.portfolio_synthetic_fixture import (
 )
 
 
-SYNTHETIC_USER_EMAIL = "portfolio-certification-303@synthetic.invalid"
+SYNTHETIC_USER_EMAIL = "portfolio-certification-303@example.com"
 SYNTHETIC_USER_NAME = "SGI Portfolio Certification #303"
 SYNTHETIC_PORTFOLIO_NAME = "PORTFOLIO-TEST-READY synthetic multiclasse"
 SYNTHETIC_OWNERSHIP_MARKER = "sgi:certification:issue-303:v1"
