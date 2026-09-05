@@ -9,10 +9,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset, AssetType
 from app.models.asset_universe_membership import AssetUniverseMembership
-from app.services.asset_universe_membership_service import CRYPTO_TOP100_UNIVERSE_KEY
+from app.services.asset_universe_membership_service import (
+    CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_KEY,
+    CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_SOURCE,
+    CRYPTO_TOP100_UNIVERSE_KEY,
+)
 from app.services.crypto_financial_certification_service import (
     is_crypto_financially_certified,
 )
+
+SYNTHETIC_CERTIFICATION_PROVIDER = "synthetic-certification"
+SYNTHETIC_CERTIFICATION_PROVIDER_STATUS = "synthetic-owned"
 
 
 @dataclass(frozen=True)
@@ -34,10 +41,13 @@ async def require_financially_certified_crypto_asset(
     db: AsyncSession,
     ticker: str,
 ) -> Asset:
-    """Retorna CRIPTO apenas se candidata Top100 e financeiramente certificada.
+    """Retorna CRIPTO elegível usando somente provas persistidas no banco.
 
-    A validação é estritamente DB-first: não consulta CoinGecko, BRAPI ou qualquer
-    outro provider durante o request transacional.
+    Ativos reais continuam exigindo membership Top100 e lifecycle financeiro
+    certificado. Ativos sintéticos de certificação usam um universo separado e
+    só são aceitos quando provider, provider_status, universe_key e source
+    comprovam explicitamente a origem sintética. Nenhum provider externo é
+    consultado durante o request transacional.
     """
     normalized_ticker = ticker.strip().upper()
     if not normalized_ticker:
@@ -60,12 +70,37 @@ async def require_financially_certified_crypto_asset(
         )
 
     membership_result = await db.execute(
-        select(AssetUniverseMembership.id)
+        select(
+            AssetUniverseMembership.universe_key,
+            AssetUniverseMembership.source,
+        )
         .where(AssetUniverseMembership.asset_id == asset.id)
-        .where(AssetUniverseMembership.universe_key == CRYPTO_TOP100_UNIVERSE_KEY)
-        .limit(1)
+        .where(
+            AssetUniverseMembership.universe_key.in_(
+                {
+                    CRYPTO_TOP100_UNIVERSE_KEY,
+                    CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_KEY,
+                }
+            )
+        )
     )
-    if membership_result.scalar_one_or_none() is None:
+    memberships = {universe_key: source for universe_key, source in membership_result.all()}
+
+    synthetic_identity = (
+        asset.provider == SYNTHETIC_CERTIFICATION_PROVIDER
+        and asset.provider_status == SYNTHETIC_CERTIFICATION_PROVIDER_STATUS
+    )
+    synthetic_source = memberships.get(CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_KEY)
+    if synthetic_identity:
+        if synthetic_source == CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_SOURCE:
+            return asset
+        raise CryptoTransactionEligibilityError(
+            ticker=normalized_ticker,
+            reason="prova de elegibilidade sintética ausente ou inválida",
+            provider_status=asset.provider_status,
+        )
+
+    if CRYPTO_TOP100_UNIVERSE_KEY not in memberships:
         raise CryptoTransactionEligibilityError(
             ticker=normalized_ticker,
             reason="ativo fora do universo candidato Top 100 persistido",
