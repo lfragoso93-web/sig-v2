@@ -12,20 +12,33 @@ async def get_or_create_asset(
     """
     Retorna (asset, is_new).
 
-    A criação básica do catálogo é local. Nenhum caller deve usar `is_new` para
-    disparar onboarding ou ingestão externa automática; catálogo completo,
-    metadados e históricos pertencem ao bootstrap certificado do ambiente.
+    A identidade canônica do catálogo é (ticker, asset_type), alinhada ao
+    constraint uq_asset_ticker_type do modelo. A criação básica do catálogo é
+    local. Nenhum caller deve usar is_new para disparar onboarding ou ingestão
+    externa automática; catálogo completo, metadados e históricos pertencem
+    ao bootstrap certificado do ambiente.
     """
-    result = await db.execute(select(Asset).where(Asset.ticker == data.ticker))
+    ticker = data.ticker.strip().upper()
+    asset_type = (
+        data.asset_type.value
+        if isinstance(data.asset_type, AssetType)
+        else str(data.asset_type).strip().upper()
+    )
+    result = await db.execute(
+        select(Asset).where(
+            Asset.ticker == ticker,
+            Asset.asset_type == asset_type,
+        )
+    )
     asset = result.scalar_one_or_none()
     if asset:
         return asset, False
 
     asset = Asset(
-        ticker=data.ticker,
+        ticker=ticker,
         name=data.name,
-        asset_type=data.asset_type,
-        currency=getattr(data, "currency", "BRL"),
+        asset_type=asset_type,
+        currency=getattr(data, "currency", None) or "BRL",
     )
     db.add(asset)
     await db.commit()
