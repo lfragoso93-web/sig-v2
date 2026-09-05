@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,8 +18,8 @@ from app.models.asset_universe_membership import AssetUniverseMembership
 from app.models.transaction import OperationType, Transaction
 from app.schemas.transaction import TransactionCreate
 from app.services.asset_universe_membership_service import (
-    CRYPTO_SYNTHETIC_CERTIFICATION_SOURCE,
     CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_KEY,
+    CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_SOURCE,
 )
 from app.services.transaction_write_service import create_transaction_record
 
@@ -129,7 +129,7 @@ async def _require_synthetic_crypto_membership(
     db: AsyncSession,
     *,
     asset: Asset,
-) -> bool:
+) -> tuple[int, int]:
     result = await db.execute(
         select(AssetUniverseMembership).where(
             AssetUniverseMembership.asset_id == asset.id,
@@ -138,23 +138,25 @@ async def _require_synthetic_crypto_membership(
         )
     )
     membership = result.scalar_one_or_none()
-    if membership is not None:
-        if membership.source != CRYPTO_SYNTHETIC_CERTIFICATION_SOURCE:
-            raise SyntheticSeedContractError(
-                "synthetic crypto membership collision; source is not certification-owned"
+    if membership is None:
+        db.add(
+            AssetUniverseMembership(
+                asset_id=asset.id,
+                universe_key=CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_KEY,
+                rank=None,
+                source=CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_SOURCE,
+                refreshed_at=datetime.now(timezone.utc),
             )
-        return False
-
-    db.add(
-        AssetUniverseMembership(
-            asset_id=asset.id,
-            universe_key=CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_KEY,
-            rank=None,
-            source=CRYPTO_SYNTHETIC_CERTIFICATION_SOURCE,
         )
-    )
-    await db.commit()
-    return True
+        await db.commit()
+        return 1, 0
+
+    if membership.source != CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_SOURCE:
+        raise SyntheticSeedContractError(
+            f"synthetic crypto membership collision for {asset.ticker}; "
+            "ownership is ambiguous"
+        )
+    return 0, 1
 
 
 async def seed_transactions(
@@ -162,14 +164,14 @@ async def seed_transactions(
     *,
     portfolio_id: int,
 ) -> SyntheticTransactionSeedResult:
-    """Seed the full fixture through canonical writes and synthetic ownership guards."""
+    """Seed the complete synthetic transaction fixture through canonical writes."""
     fixture = load_portfolio_synthetic_certification_fixture()
     plan = build_synthetic_asset_plan(fixture)
 
     created = 0
     reused = 0
-    crypto_membership_created = 0
-    crypto_membership_reused = 0
+    membership_created = 0
+    membership_reused = 0
 
     for row in fixture["transactions"]:
         identity = plan[row["ticker"]]
@@ -184,14 +186,12 @@ async def seed_transactions(
         )
 
         if identity.asset_type == "CRIPTO":
-            membership_created = await _require_synthetic_crypto_membership(
+            added, reused_membership = await _require_synthetic_crypto_membership(
                 db,
                 asset=asset,
             )
-            if membership_created:
-                crypto_membership_created += 1
-            else:
-                crypto_membership_reused += 1
+            membership_created += added
+            membership_reused += reused_membership
 
         existing = await _find_existing_transaction(
             db,
@@ -223,6 +223,6 @@ async def seed_transactions(
     return SyntheticTransactionSeedResult(
         created=created,
         reused=reused,
-        crypto_membership_created=crypto_membership_created,
-        crypto_membership_reused=crypto_membership_reused,
+        crypto_membership_created=membership_created,
+        crypto_membership_reused=membership_reused,
     )
