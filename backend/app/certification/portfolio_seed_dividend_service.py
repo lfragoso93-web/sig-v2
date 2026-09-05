@@ -155,6 +155,11 @@ async def _load_owned_asset(
         provider_status=asset.provider_status,
         expected=identity,
     )
+    currency = str(getattr(asset.currency, "value", asset.currency) or "").upper().strip()
+    if currency != "BRL":
+        raise SyntheticSeedContractError(
+            f"synthetic dividend asset {identity.ticker} must use BRL currency"
+        )
     return asset
 
 
