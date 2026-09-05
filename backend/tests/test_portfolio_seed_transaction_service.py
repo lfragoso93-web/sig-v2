@@ -164,5 +164,8 @@ async def test_seed_fails_closed_on_crypto_membership_source_collision() -> None
         execute_results.append(transaction_result)
     db.execute = AsyncMock(side_effect=execute_results)
 
-    with pytest.raises(SyntheticSeedContractError, match="membership collision"):
+    with pytest.raises(
+        SyntheticSeedContractError,
+        match="synthetic crypto membership collision for CERT303-BTC",
+    ):
         await seed_transactions(db, portfolio_id=303)
