@@ -5,121 +5,115 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.certification.portfolio_seed_contract import SyntheticSeedContractError
-from app.certification.portfolio_seed_transaction_service import (
-    seed_non_crypto_transactions,
-)
+from app.certification.portfolio_seed_transaction_service import seed_transactions
+
+
+FIXTURE_ORDER = [
+    "PETR4",
+    "PETR4",
+    "PETR4",
+    "MXRF11",
+    "BOVA11",
+    "AAPL34",
+    "BTC",
+    "TESOURO-SELIC-2029",
+    "CDB-SYN-CDI-2028",
+    "BOVA11",
+    "BOVA11",
+]
+
+
+def _owned_asset(source_ticker: str) -> SimpleNamespace:
+    return SimpleNamespace(
+        id=303,
+        name=f"SGI certification #303 synthetic asset [{source_ticker}]",
+        provider="synthetic-certification",
+        provider_symbol=source_ticker,
+        provider_status="synthetic-owned",
+    )
 
 
 @pytest.mark.asyncio
-async def test_seed_creates_ten_non_crypto_transactions_and_blocks_crypto() -> None:
+async def test_seed_creates_full_fixture_and_crypto_membership() -> None:
     db = AsyncMock(spec=AsyncSession)
     db.add = MagicMock()
     db.commit = AsyncMock()
     db.refresh = AsyncMock()
 
-    asset_results = []
-    transaction_results = []
-    for _ in range(10):
+    execute_results = []
+    for source_ticker in FIXTURE_ORDER:
         asset_result = MagicMock()
         asset_result.scalar_one_or_none.return_value = None
-        asset_results.append(asset_result)
+        execute_results.append(asset_result)
+
+        if source_ticker == "BTC":
+            membership_result = MagicMock()
+            membership_result.scalar_one_or_none.return_value = None
+            execute_results.append(membership_result)
 
         transaction_result = MagicMock()
         transaction_result.scalar_one_or_none.return_value = None
-        transaction_results.append(transaction_result)
-
-    execute_results = []
-    for asset_result, transaction_result in zip(asset_results, transaction_results):
-        execute_results.extend([asset_result, transaction_result])
+        execute_results.append(transaction_result)
     db.execute = AsyncMock(side_effect=execute_results)
 
-    created_tx = SimpleNamespace(id=1)
+    async def refresh_with_id(asset):
+        if getattr(asset, "ticker", None) == "CERT303-BTC":
+            asset.id = 303
+
+    db.refresh.side_effect = refresh_with_id
+
     with patch(
         "app.certification.portfolio_seed_transaction_service.create_transaction_record",
         new_callable=AsyncMock,
-        return_value=created_tx,
+        return_value=SimpleNamespace(id=1),
     ) as create_record:
-        result = await seed_non_crypto_transactions(db, portfolio_id=303)
+        result = await seed_transactions(db, portfolio_id=303)
 
-    assert result.created == 10
+    assert result.created == 11
     assert result.reused == 0
-    assert result.blocked_crypto == 1
-    assert create_record.await_count == 10
-    assert db.add.call_count == 10
-    assert db.commit.await_count == 10
-    assert db.refresh.await_count == 10
-
-    tickers = [call.kwargs["payload"].ticker for call in create_record.await_args_list]
-    assert "CERT303-BTC" not in tickers
-    assert "CERT303-PETR4" in tickers
-    assert "CERT303-MXRF11" in tickers
-    assert "CERT303-TESOURO-SELIC-2029" in tickers
-    assert "CERT303-CDB-SYN-CDI-2028" in tickers
+    assert result.crypto_membership_created == 1
+    assert result.crypto_membership_reused == 0
+    assert create_record.await_count == 11
+    assert "CERT303-BTC" in [
+        call.kwargs["payload"].ticker for call in create_record.await_args_list
+    ]
 
 
 @pytest.mark.asyncio
-async def test_seed_replay_reuses_all_non_crypto_transactions_without_writes() -> None:
+async def test_seed_replay_reuses_full_fixture_and_crypto_membership() -> None:
     db = AsyncMock(spec=AsyncSession)
     db.add = MagicMock()
     db.commit = AsyncMock()
     db.refresh = AsyncMock()
 
     execute_results = []
-    for index in range(10):
+    for source_ticker in FIXTURE_ORDER:
         asset_result = MagicMock()
-        asset_result.scalar_one_or_none.return_value = SimpleNamespace(
-            name=(
-                "SGI certification #303 synthetic asset [PETR4]"
-                if index < 3
-                else None
-            ),
-            provider="synthetic-certification",
-            provider_symbol=None,
-            provider_status="synthetic-owned",
-        )
+        asset_result.scalar_one_or_none.return_value = _owned_asset(source_ticker)
         execute_results.append(asset_result)
+
+        if source_ticker == "BTC":
+            membership_result = MagicMock()
+            membership_result.scalar_one_or_none.return_value = SimpleNamespace(
+                source="synthetic-certification"
+            )
+            execute_results.append(membership_result)
 
         transaction_result = MagicMock()
         transaction_result.scalar_one_or_none.return_value = object()
         execute_results.append(transaction_result)
-
-    fixture_order = [
-        "PETR4",
-        "PETR4",
-        "PETR4",
-        "MXRF11",
-        "BOVA11",
-        "AAPL34",
-        "TESOURO-SELIC-2029",
-        "CDB-SYN-CDI-2028",
-        "BOVA11",
-        "BOVA11",
-    ]
-    asset_cursor = 0
-    adjusted_results = []
-    for source_ticker in fixture_order:
-        asset_result = MagicMock()
-        asset_result.scalar_one_or_none.return_value = SimpleNamespace(
-            name=f"SGI certification #303 synthetic asset [{source_ticker}]",
-            provider="synthetic-certification",
-            provider_symbol=source_ticker,
-            provider_status="synthetic-owned",
-        )
-        transaction_result = MagicMock()
-        transaction_result.scalar_one_or_none.return_value = object()
-        adjusted_results.extend([asset_result, transaction_result])
-        asset_cursor += 1
-    db.execute = AsyncMock(side_effect=adjusted_results)
+    db.execute = AsyncMock(side_effect=execute_results)
 
     with patch(
         "app.certification.portfolio_seed_transaction_service.create_transaction_record",
         new_callable=AsyncMock,
     ) as create_record:
-        result = await seed_non_crypto_transactions(db, portfolio_id=303)
+        result = await seed_transactions(db, portfolio_id=303)
 
     assert result.created == 0
-    assert result.reused == 10
-    assert result.blocked_crypto == 1
+    assert result.reused == 11
+    assert result.crypto_membership_created == 0
+    assert result.crypto_membership_reused == 1
     create_record.assert_not_awaited()
     db.add.assert_not_called()
     db.commit.assert_not_awaited()
@@ -139,4 +133,34 @@ async def test_seed_fails_closed_on_asset_namespace_collision() -> None:
     db.execute = AsyncMock(return_value=collision)
 
     with pytest.raises(SyntheticSeedContractError, match="ownership is ambiguous"):
-        await seed_non_crypto_transactions(db, portfolio_id=303)
+        await seed_transactions(db, portfolio_id=303)
+
+
+@pytest.mark.asyncio
+async def test_seed_fails_closed_on_crypto_membership_source_collision() -> None:
+    db = AsyncMock(spec=AsyncSession)
+    db.add = MagicMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+
+    execute_results = []
+    for source_ticker in FIXTURE_ORDER:
+        asset_result = MagicMock()
+        asset_result.scalar_one_or_none.return_value = _owned_asset(source_ticker)
+        execute_results.append(asset_result)
+
+        if source_ticker == "BTC":
+            membership_result = MagicMock()
+            membership_result.scalar_one_or_none.return_value = SimpleNamespace(
+                source="unexpected-source"
+            )
+            execute_results.append(membership_result)
+            break
+
+        transaction_result = MagicMock()
+        transaction_result.scalar_one_or_none.return_value = object()
+        execute_results.append(transaction_result)
+    db.execute = AsyncMock(side_effect=execute_results)
+
+    with pytest.raises(SyntheticSeedContractError, match="membership collision"):
+        await seed_transactions(db, portfolio_id=303)
