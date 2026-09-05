@@ -24,10 +24,7 @@ def _safe_fixture() -> dict:
 
 
 def test_loader_reads_runtime_fixture() -> None:
-    fixture = (
-        portfolio_synthetic_fixture
-        .load_portfolio_synthetic_certification_fixture()
-    )
+    fixture = portfolio_synthetic_fixture.load_portfolio_synthetic_certification_fixture()
 
     assert fixture["schema_version"] == "portfolio-synthetic-certification.v1"
     assert fixture["issue"] == 303
