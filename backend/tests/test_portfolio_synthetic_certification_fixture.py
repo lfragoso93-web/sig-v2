@@ -25,7 +25,9 @@ from app.services.csv_import_service import (
 
 
 FIXTURE_PATH = (
-    Path(__file__).parent
+    Path(__file__).resolve().parents[1]
+    / "app"
+    / "certification"
     / "fixtures"
     / "portfolio_synthetic_certification_v1.json"
 )

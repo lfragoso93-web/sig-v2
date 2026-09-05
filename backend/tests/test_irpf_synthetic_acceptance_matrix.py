@@ -8,6 +8,9 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from app.certification.portfolio_synthetic_fixture import (
+    load_portfolio_synthetic_certification_fixture,
+)
 from app.services.irpf_common_loss_carryforward import compensate_common_losses
 from app.services.irpf_day_trade_monthly_assessment import (
     assess_day_trade_months,
@@ -29,11 +32,6 @@ _FIXTURE_PATH = (
     / "fixtures"
     / "irpf_synthetic_acceptance_v1.json"
 )
-_PORTFOLIO_FIXTURE_PATH = (
-    Path(__file__).parent
-    / "fixtures"
-    / "portfolio_synthetic_certification_v1.json"
-)
 _IRPF_COMMON_ALIASES = {
     "ETF_NACIONAL": "ETF",
 }
@@ -51,9 +49,7 @@ def _load_corpus() -> dict[str, object]:
 
 
 def _load_portfolio_fixture() -> dict[str, object]:
-    fixture = json.loads(_PORTFOLIO_FIXTURE_PATH.read_text(encoding="utf-8"))
-    assert fixture["schema_version"] == "portfolio-synthetic-certification.v1"
-    return fixture
+    return load_portfolio_synthetic_certification_fixture()
 
 
 def _irpf_common_type(asset_type: str) -> str:
