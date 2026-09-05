@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 
@@ -44,6 +45,53 @@ def _identity_tuple(*, portfolio_id: int, row: dict[str, str], ticker: str) -> t
         float(row.get("fees", "0") or 0),
         row.get("currency", "BRL"),
     )
+
+
+def _persisted_identity_tuple(transaction: Transaction) -> tuple:
+    operation = transaction.operation
+    if isinstance(operation, OperationType):
+        operation = operation.value
+    return (
+        transaction.portfolio_id,
+        transaction.ticker,
+        transaction.asset_type,
+        str(operation),
+        float(transaction.quantity),
+        float(transaction.price),
+        transaction.date,
+        float(transaction.fees or 0),
+        transaction.currency,
+    )
+
+
+async def _assert_existing_transactions_are_expected(
+    db: AsyncSession,
+    *,
+    portfolio_id: int,
+    fixture: dict,
+    plan: dict,
+) -> None:
+    expected = Counter(
+        _identity_tuple(
+            portfolio_id=portfolio_id,
+            row=row,
+            ticker=plan[row["ticker"]].ticker,
+        )
+        for row in fixture["transactions"]
+    )
+    result = await db.execute(
+        select(Transaction).where(Transaction.portfolio_id == portfolio_id)
+    )
+    existing = list(result.scalars().all())
+    actual = Counter(_persisted_identity_tuple(transaction) for transaction in existing)
+
+    unexpected = actual - expected
+    if unexpected:
+        identity, count = next(iter(unexpected.items()))
+        raise SyntheticSeedContractError(
+            "synthetic portfolio contains unexpected transaction state; "
+            f"ticker={identity[1]} excess_count={count}"
+        )
 
 
 async def _find_existing_transaction(
@@ -167,6 +215,12 @@ async def seed_transactions(
     """Seed the complete synthetic transaction fixture through canonical writes."""
     fixture = load_portfolio_synthetic_certification_fixture()
     plan = build_synthetic_asset_plan(fixture)
+    await _assert_existing_transactions_are_expected(
+        db,
+        portfolio_id=portfolio_id,
+        fixture=fixture,
+        plan=plan,
+    )
 
     created = 0
     reused = 0
