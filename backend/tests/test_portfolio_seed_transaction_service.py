@@ -1,3 +1,4 @@
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -34,6 +35,12 @@ def _owned_asset(source_ticker: str) -> SimpleNamespace:
     )
 
 
+def _preflight_result(transactions: list[SimpleNamespace] | None = None) -> MagicMock:
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = transactions or []
+    return result
+
+
 @pytest.mark.asyncio
 async def test_seed_creates_full_fixture_and_crypto_membership() -> None:
     db = AsyncMock(spec=AsyncSession)
@@ -41,7 +48,7 @@ async def test_seed_creates_full_fixture_and_crypto_membership() -> None:
     db.commit = AsyncMock()
     db.refresh = AsyncMock()
 
-    execute_results = []
+    execute_results = [_preflight_result()]
     for source_ticker in FIXTURE_ORDER:
         asset_result = MagicMock()
         asset_result.scalar_one_or_none.return_value = _owned_asset(source_ticker)
@@ -88,7 +95,7 @@ async def test_seed_replay_reuses_full_fixture_and_crypto_membership() -> None:
     db.commit = AsyncMock()
     db.refresh = AsyncMock()
 
-    execute_results = []
+    execute_results = [_preflight_result()]
     for source_ticker in FIXTURE_ORDER:
         asset_result = MagicMock()
         asset_result.scalar_one_or_none.return_value = _owned_asset(source_ticker)
@@ -123,6 +130,42 @@ async def test_seed_replay_reuses_full_fixture_and_crypto_membership() -> None:
 
 
 @pytest.mark.asyncio
+async def test_seed_fails_closed_on_unexpected_existing_transaction() -> None:
+    db = AsyncMock(spec=AsyncSession)
+    db.add = MagicMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+
+    unexpected = SimpleNamespace(
+        portfolio_id=303,
+        ticker="CERT303-UNEXPECTED",
+        asset_type="ACAO",
+        operation="buy",
+        quantity=1.0,
+        price=1.0,
+        date=date(2026, 1, 1),
+        fees=0.0,
+        currency="BRL",
+    )
+    db.execute = AsyncMock(side_effect=[_preflight_result([unexpected])])
+
+    with patch(
+        "app.certification.portfolio_seed_transaction_service.create_transaction_record",
+        new_callable=AsyncMock,
+    ) as create_record:
+        with pytest.raises(
+            SyntheticSeedContractError,
+            match="unexpected transaction state; ticker=CERT303-UNEXPECTED",
+        ):
+            await seed_transactions(db, portfolio_id=303)
+
+    create_record.assert_not_awaited()
+    db.add.assert_not_called()
+    db.commit.assert_not_awaited()
+    db.refresh.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_seed_fails_closed_on_asset_namespace_collision() -> None:
     db = AsyncMock(spec=AsyncSession)
     collision = MagicMock()
@@ -132,7 +175,7 @@ async def test_seed_fails_closed_on_asset_namespace_collision() -> None:
         provider_symbol="PETR4",
         provider_status="READY",
     )
-    db.execute = AsyncMock(return_value=collision)
+    db.execute = AsyncMock(side_effect=[_preflight_result(), collision])
 
     with pytest.raises(SyntheticSeedContractError, match="ownership is ambiguous"):
         await seed_transactions(db, portfolio_id=303)
@@ -145,7 +188,7 @@ async def test_seed_fails_closed_on_crypto_membership_source_collision() -> None
     db.commit = AsyncMock()
     db.refresh = AsyncMock()
 
-    execute_results = []
+    execute_results = [_preflight_result()]
     for source_ticker in FIXTURE_ORDER:
         asset_result = MagicMock()
         asset_result.scalar_one_or_none.return_value = _owned_asset(source_ticker)
