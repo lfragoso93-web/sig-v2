@@ -1,4 +1,6 @@
 import pytest
+from pydantic import TypeAdapter
+from pydantic.networks import EmailStr
 
 from app.certification import portfolio_seed_contract as contract
 
@@ -8,7 +10,8 @@ def test_synthetic_seed_identity_is_deterministic_and_safe() -> None:
 
     assert identity.schema_version == "portfolio-synthetic-certification.v1"
     assert identity.issue_number == 303
-    assert identity.user_email.endswith("@synthetic.invalid")
+    assert identity.user_email == "portfolio-certification-303@example.com"
+    assert TypeAdapter(EmailStr).validate_python(identity.user_email) == identity.user_email
     assert identity.user_name == "SGI Portfolio Certification #303"
     assert identity.portfolio_name == "PORTFOLIO-TEST-READY synthetic multiclasse"
     assert identity.ownership_marker == "sgi:certification:issue-303:v1"
