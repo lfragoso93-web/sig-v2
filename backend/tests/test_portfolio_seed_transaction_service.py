@@ -26,6 +26,7 @@ FIXTURE_ORDER = [
 def _owned_asset(source_ticker: str) -> SimpleNamespace:
     return SimpleNamespace(
         id=303,
+        ticker=f"CERT303-{source_ticker}",
         name=f"SGI certification #303 synthetic asset [{source_ticker}]",
         provider="synthetic-certification",
         provider_symbol=source_ticker,
@@ -43,7 +44,7 @@ async def test_seed_creates_full_fixture_and_crypto_membership() -> None:
     execute_results = []
     for source_ticker in FIXTURE_ORDER:
         asset_result = MagicMock()
-        asset_result.scalar_one_or_none.return_value = None
+        asset_result.scalar_one_or_none.return_value = _owned_asset(source_ticker)
         execute_results.append(asset_result)
 
         if source_ticker == "BTC":
@@ -56,16 +57,11 @@ async def test_seed_creates_full_fixture_and_crypto_membership() -> None:
         execute_results.append(transaction_result)
     db.execute = AsyncMock(side_effect=execute_results)
 
-    async def refresh_with_id(asset):
-        if getattr(asset, "ticker", None) == "CERT303-BTC":
-            asset.id = 303
-
-    db.refresh.side_effect = refresh_with_id
-
+    created_tx = SimpleNamespace(id=1)
     with patch(
         "app.certification.portfolio_seed_transaction_service.create_transaction_record",
         new_callable=AsyncMock,
-        return_value=SimpleNamespace(id=1),
+        return_value=created_tx,
     ) as create_record:
         result = await seed_transactions(db, portfolio_id=303)
 
@@ -74,9 +70,15 @@ async def test_seed_creates_full_fixture_and_crypto_membership() -> None:
     assert result.crypto_membership_created == 1
     assert result.crypto_membership_reused == 0
     assert create_record.await_count == 11
-    assert "CERT303-BTC" in [
-        call.kwargs["payload"].ticker for call in create_record.await_args_list
-    ]
+    assert db.add.call_count == 1
+    assert db.commit.await_count == 1
+
+    tickers = [call.kwargs["payload"].ticker for call in create_record.await_args_list]
+    assert "CERT303-BTC" in tickers
+    assert "CERT303-PETR4" in tickers
+    assert "CERT303-MXRF11" in tickers
+    assert "CERT303-TESOURO-SELIC-2029" in tickers
+    assert "CERT303-CDB-SYN-CDI-2028" in tickers
 
 
 @pytest.mark.asyncio
