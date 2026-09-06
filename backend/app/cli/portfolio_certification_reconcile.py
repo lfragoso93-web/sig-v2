@@ -9,6 +9,7 @@ from sqlalchemy import select
 
 from app.certification.portfolio_financial_reconciliation import (
     assert_declared_financial_expectations,
+    calculate_independent_class_distribution,
     calculate_independent_financial_reconciliation,
 )
 from app.certification.portfolio_seed_contract import load_synthetic_seed_identity
@@ -22,7 +23,8 @@ from app.services.dividend_service import list_dividends
 from app.services.portfolio_canonical_valuation_service import (
     calculate_canonical_portfolio_totals,
 )
-from app.services.portfolio_snapshot_service import _build_positions_at
+from app.services.portfolio_position_state_service import build_positions_at
+from app.services.portfolio_snapshot_service import _calc_totals as calc_snapshot_totals
 
 _MONEY = Decimal("0.01")
 
@@ -56,12 +58,14 @@ async def main() -> None:
     fixture = load_portfolio_synthetic_certification_fixture()
     target_date = date.fromisoformat(fixture["market_prices"]["as_of"])
     expected = calculate_independent_financial_reconciliation()
+    expected_classes = calculate_independent_class_distribution()
     assert_declared_financial_expectations(fixture, expected)
 
     async with AsyncSessionLocal() as db:
         portfolio_id, user_id = await _load_portfolio_identity(db)
-        positions = await _build_positions_at(db, portfolio_id, target_date)
+        positions = await build_positions_at(db, portfolio_id, target_date)
         totals = await calculate_canonical_portfolio_totals(db, portfolio_id, target_date)
+        snapshot_totals = await calc_snapshot_totals(db, portfolio_id, target_date)
         dividends = await list_dividends(db, portfolio_id, user_id)
 
     failures: list[str] = []
@@ -91,6 +95,32 @@ async def main() -> None:
         if actual != wanted:
             failures.append(f"{name}:actual={actual}:expected={wanted}")
 
+    actual_classes = {
+        str(asset_type): _money(value)
+        for asset_type, value in totals["market_value_by_class"].items()
+    }
+    if actual_classes != expected_classes:
+        failures.append(
+            f"class-distribution:actual={actual_classes}:expected={expected_classes}"
+        )
+
+    expected_snapshot = {
+        key: totals[key]
+        for key in (
+            "market_value",
+            "cost_basis",
+            "invested_total",
+            "realized_pnl",
+            "unrealized_pnl",
+            "total_pnl",
+            "return_pct",
+        )
+    }
+    if snapshot_totals != expected_snapshot:
+        failures.append(
+            f"snapshot-payload:actual={snapshot_totals}:expected={expected_snapshot}"
+        )
+
     income = sum((_money(item.total_received) for item in dividends), Decimal("0.00"))
     if income != expected.income:
         failures.append(f"income:actual={income}:expected={expected.income}")
@@ -112,6 +142,20 @@ async def main() -> None:
         f"income={income}",
         f"total_pnl_with_income={total_pnl_with_income}",
         f"status={'PASS' if not failures else 'FAIL'}",
+    )
+    print(
+        "CERT303-CLASS",
+        " ".join(f"{key}={actual_classes[key]}" for key in sorted(actual_classes)),
+        f"status={'PASS' if actual_classes == expected_classes else 'FAIL'}",
+    )
+    print(
+        "CERT303-SNAPSHOT",
+        f"market_value={_money(snapshot_totals['market_value'])}",
+        f"cost_basis={_money(snapshot_totals['cost_basis'])}",
+        f"realized_pnl={_money(snapshot_totals['realized_pnl'])}",
+        f"unrealized_pnl={_money(snapshot_totals['unrealized_pnl'])}",
+        f"total_pnl={_money(snapshot_totals['total_pnl'])}",
+        f"status={'PASS' if snapshot_totals == expected_snapshot else 'FAIL'}",
     )
     if failures:
         raise RuntimeError("; ".join(failures))
