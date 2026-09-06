@@ -44,6 +44,13 @@ def _asset_type(value: object) -> AssetType:
         return AssetType.ACAO
 
 
+def _average_price_from_state(state: object) -> Decimal:
+    """Deriva o custo médio da projeção canônica sem depender de campo legado."""
+    qty = Decimal(str(getattr(state, "qty", 0) or 0))
+    cost = Decimal(str(getattr(state, "cost", 0) or 0))
+    return cost / qty if qty else _ZERO
+
+
 async def _base_totals_without_dedicated_lookup(
     db: AsyncSession,
     portfolio_id: int,
@@ -101,10 +108,11 @@ async def _base_totals_without_dedicated_lookup(
     realized_pnl = _ZERO
     for ticker, state in positions.items():
         current_type = effective_types[ticker]
+        average_price = _average_price_from_state(state)
         if current_type in _NON_MARKET_TYPES:
-            close = state.avg_price
+            close = average_price
         else:
-            close = Decimal(str(prices.get(ticker.upper(), float(state.avg_price))))
+            close = Decimal(str(prices.get(ticker.upper(), float(average_price))))
         close_brl = close * fx_snapshot if state.is_usd else close
         market_value += state.qty * close_brl
         cost_basis += state.cost
@@ -225,7 +233,7 @@ async def _treasury_correction_at_date(
             continue
 
         canonical_value = state.qty * Decimal(str(price))
-        proxy_value = state.qty * state.avg_price
+        proxy_value = state.cost
         correction += canonical_value - proxy_value
         matched += 1
 
