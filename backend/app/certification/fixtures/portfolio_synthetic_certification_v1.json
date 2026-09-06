@@ -177,8 +177,8 @@
     "holdings": {
       "PETR4": {
         "quantity": "90.00000000",
-        "remaining_cost": "1905.00",
-        "realized_pnl": "293.00",
+        "remaining_cost": "1864.80",
+        "realized_pnl": "252.80",
         "market_value": "2160.00"
       },
       "MXRF11": {
@@ -219,11 +219,11 @@
       }
     },
     "totals": {
-      "remaining_cost": "37669.50",
+      "remaining_cost": "37629.30",
       "market_value": "38960.00",
-      "realized_pnl": "491.00",
+      "realized_pnl": "450.80",
       "income": "20.00",
-      "open_pnl": "1290.50",
+      "open_pnl": "1330.70",
       "total_pnl": "1801.50"
     }
   }
