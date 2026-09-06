@@ -9,6 +9,18 @@ from app.models.asset import AssetType
 from app.services import portfolio_canonical_valuation_service as valuation
 
 
+def test_average_price_is_derived_from_snapshot_cost_and_quantity() -> None:
+    state = SimpleNamespace(qty=Decimal("0.50"), cost=Decimal("7000.00"))
+
+    assert valuation._average_price_from_state(state) == Decimal("14000.0")
+
+
+def test_average_price_is_zero_for_zero_quantity() -> None:
+    state = SimpleNamespace(qty=Decimal("0"), cost=Decimal("0"))
+
+    assert valuation._average_price_from_state(state) == Decimal("0")
+
+
 @pytest.mark.asyncio
 async def test_treasury_correction_resolves_synthetic_alias_and_marks_one_match(
     monkeypatch,
@@ -17,7 +29,7 @@ async def test_treasury_correction_resolves_synthetic_alias_and_marks_one_match(
         "CERT303-TESOURO-SELIC-2029": SimpleNamespace(
             asset_type=AssetType.TESOURO_DIRETO,
             qty=Decimal("0.50"),
-            avg_price=Decimal("14000.00"),
+            cost=Decimal("7000.00"),
         )
     }
     build_positions = AsyncMock(return_value=positions)
