@@ -6,6 +6,7 @@ oráculo independente para comparar o read path canônico.
 """
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -180,3 +181,27 @@ def calculate_independent_financial_reconciliation() -> FinancialReconciliation:
         open_pnl=open_pnl.quantize(_MONEY),
         total_pnl=total_pnl.quantize(_MONEY),
     )
+
+
+def calculate_independent_class_distribution() -> dict[str, Decimal]:
+    """Agrupa o market value esperado por classe sem usar serviços do SGI."""
+    fixture = load_portfolio_synthetic_certification_fixture()
+    reconciliation = calculate_independent_financial_reconciliation()
+    type_by_ticker: dict[str, str] = {}
+    for tx in fixture["transactions"]:
+        ticker = _persisted_ticker(tx["ticker"])
+        asset_type = str(tx["asset_type"]).strip().upper()
+        previous = type_by_ticker.setdefault(ticker, asset_type)
+        if previous != asset_type:
+            raise ValueError(f"asset type drift for {ticker}: {previous} != {asset_type}")
+
+    totals: dict[str, Decimal] = defaultdict(lambda: _ZERO)
+    for ticker, holding in reconciliation.holdings.items():
+        if ticker not in type_by_ticker:
+            raise ValueError(f"missing asset type for {ticker}")
+        totals[type_by_ticker[ticker]] += holding.market_value
+
+    distribution = {key: value.quantize(_MONEY) for key, value in totals.items()}
+    if sum(distribution.values(), _ZERO).quantize(_MONEY) != reconciliation.market_value:
+        raise ValueError("independent class distribution does not close to market value")
+    return distribution
