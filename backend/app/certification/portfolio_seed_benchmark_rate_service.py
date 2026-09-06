@@ -137,10 +137,15 @@ def _expected_contract(fixture: dict) -> SyntheticBenchmarkContract:
 
 
 def _is_canonical_rate(row: RateHistory, expected: SyntheticBenchmarkContract) -> bool:
+    try:
+        rate_daily = Decimal(str(row.rate_daily))
+    except (InvalidOperation, TypeError, ValueError):
+        return False
+
     return (
         row.indicator == expected.indicator
         and row.date == expected.observation_date
-        and Decimal(row.rate_daily) == expected.rate_daily
+        and rate_daily == expected.rate_daily
         and row.rate_monthly is None
         and row.rate_annual is None
         and row.source == expected.source
