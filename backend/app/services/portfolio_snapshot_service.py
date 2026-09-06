@@ -7,8 +7,9 @@ Os snapshots capturam o retorno de PRECO puro da carteira, sem proventos.
 
   total_pnl  = realized_pnl + unrealized_pnl
                Lucro/prejuizo de compra e venda e valorizacao de preco.
-               NAO inclui dividendos, JCP, rendimentos de RF nem outros
-               proventos recebidos.
+               NAO inclui dividendos, JCP ou outros proventos recebidos.
+               Renda Fixa e Tesouro usam os mesmos motores dedicados do
+               valuation canonico; nao existe fallback paralelo no snapshot.
 
   return_pct = total_pnl / (cost_basis + max(realized_pnl, 0)) * 100
                Percentual de retorno de preco sobre capital empregado.
@@ -23,9 +24,9 @@ FLUXO DE ATUALIZACAO
 
 POLITICA DE PRECO
 =================
-A leitura e estritamente DB-first. Ausencia de cotacao ou cambio persistido nao
-aciona providers a partir do runtime financeiro; pipelines de mercado sao os
-unicos responsaveis por preencher as tabelas globais antes do consumo.
+A leitura e estritamente DB-first e delega ao valuation canonico da carteira.
+Ausencia de cobertura persistida permanece fail-closed e nunca aciona providers
+no runtime financeiro.
 """
 from __future__ import annotations
 
@@ -34,48 +35,32 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import case, delete, func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.asset import Asset, AssetType
 from app.models.portfolio import Portfolio
 from app.models.portfolio_snapshot import PortfolioSnapshot
-from app.models.transaction import OperationType, Transaction
-from app.services.corporate_action_position_reader import (
-    load_global_corporate_actions_by_ticker,
+from app.models.transaction import Transaction
+from app.services.portfolio_canonical_valuation_service import (
+    calculate_canonical_portfolio_totals,
 )
-from app.services.persisted_fx_query_service import (
-    get_persisted_usd_brl_rate_for_date,
-)
-from app.services.persisted_price_query_service import (
-    get_persisted_prices_at_date_batch,
-)
-from app.services.snapshot_position_projection import project_snapshot_positions
-from app.services.snapshot_price_resolution_service import (
-    SnapshotPriceRequirement,
-    resolve_missing_snapshot_prices,
+from app.services.portfolio_position_state_service import (
+    TickerState as _TickerState,
+    build_positions_at as _build_positions_at,
 )
 
 logger = logging.getLogger(__name__)
 
-
-class _TickerState:
-    """Estado projetado de um ticker em uma data de snapshot."""
-
-    __slots__ = ("ticker", "asset_type", "qty", "cost", "realized_pnl", "is_usd")
-
-    def __init__(self, ticker: str, asset_type: str, is_usd: bool = False):
-        self.ticker = ticker
-        self.asset_type = asset_type
-        self.qty = Decimal("0")
-        self.cost = Decimal("0")
-        self.realized_pnl = Decimal("0")
-        self.is_usd = is_usd
-
-
-def _safe_div(a: Decimal, b: Decimal) -> Decimal:
-    return a / b if b else Decimal("0")
+_SNAPSHOT_TOTAL_FIELDS = (
+    "market_value",
+    "cost_basis",
+    "invested_total",
+    "realized_pnl",
+    "unrealized_pnl",
+    "total_pnl",
+    "return_pct",
+)
 
 
 async def invalidate_snapshots_from(
@@ -101,164 +86,14 @@ async def invalidate_snapshots_from(
     return deleted
 
 
-async def _build_positions_at(
-    db: AsyncSession,
-    portfolio_id: int,
-    target_date: date,
-) -> dict[str, _TickerState]:
-    result = await db.execute(
-        select(Transaction)
-        .where(
-            Transaction.portfolio_id == portfolio_id,
-            Transaction.date <= target_date,
-        )
-        .order_by(Transaction.date.asc(), Transaction.id.asc())
-    )
-    transactions = list(result.scalars().all())
-    if not transactions:
-        return {}
-
-    actions_by_ticker = await load_global_corporate_actions_by_ticker(
-        db,
-        [str(tx.ticker) for tx in transactions],
-    )
-    projections = project_snapshot_positions(
-        transactions=transactions,
-        actions_by_ticker=actions_by_ticker,
-        target_date=target_date,
-    )
-
-    states: dict[str, _TickerState] = {}
-    for ticker, (projection, asset_type, is_usd) in projections.items():
-        state = _TickerState(ticker, asset_type, is_usd=is_usd)
-        state.qty = projection.quantity
-        state.cost = projection.total_cost
-        state.realized_pnl = projection.realized_pnl
-        states[ticker] = state
-
-    return states
-
-
 async def _calc_totals(
     db: AsyncSession,
     portfolio_id: int,
     target_date: date,
 ) -> dict:
-    positions = await _build_positions_at(db, portfolio_id, target_date)
-    if not positions:
-        return {
-            "market_value": Decimal("0"),
-            "cost_basis": Decimal("0"),
-            "invested_total": Decimal("0"),
-            "realized_pnl": Decimal("0"),
-            "unrealized_pnl": Decimal("0"),
-            "total_pnl": Decimal("0"),
-            "return_pct": Decimal("0"),
-        }
-
-    date_str = target_date.isoformat()
-    market_value = Decimal("0")
-    cost_basis = Decimal("0")
-    realized_pnl = Decimal("0")
-
-    tickers_list = list(positions.keys())
-    asset_rows = await db.execute(
-        select(Asset.ticker, Asset.asset_type).where(Asset.ticker.in_(tickers_list))
-    )
-    asset_type_map: dict[str, AssetType] = {
-        r.ticker: r.asset_type for r in asset_rows.all()
-    }
-
-    fx_snapshot: Optional[float] = None
-    if any(state.is_usd for state in positions.values()):
-        fx_snapshot = await get_persisted_usd_brl_rate_for_date(db, target_date)
-
-    requirements: list[SnapshotPriceRequirement] = []
-    for ticker, state in positions.items():
-        asset_type = asset_type_map.get(ticker)
-        if asset_type is None:
-            try:
-                asset_type = AssetType(state.asset_type)
-            except (ValueError, KeyError):
-                asset_type = AssetType.ACAO
-        requirements.append(
-            SnapshotPriceRequirement(ticker=ticker, asset_type=asset_type)
-        )
-
-    tickers_with_types = [
-        (requirement.ticker, requirement.asset_type) for requirement in requirements
-    ]
-    persisted_prices = await get_persisted_prices_at_date_batch(
-        db,
-        tickers_with_types,
-        date_str,
-    )
-    prices_map = await resolve_missing_snapshot_prices(
-        db,
-        requirements,
-        date_str,
-        persisted_prices,
-    )
-
-    for ticker, state in positions.items():
-        close = prices_map[ticker]
-        close_brl = close
-        if state.is_usd and fx_snapshot:
-            close_brl = close * fx_snapshot
-
-        market_value += state.qty * Decimal(str(close_brl))
-        cost_basis += state.cost
-        realized_pnl += state.realized_pnl
-
-    invested_result = await db.execute(
-        select(
-            func.sum(
-                case(
-                    (
-                        Transaction.operation == OperationType.buy,
-                        (
-                            Transaction.price
-                            * func.coalesce(Transaction.fx_rate, 1.0)
-                            * Transaction.quantity
-                            + func.coalesce(Transaction.fees, 0)
-                            * func.coalesce(Transaction.fx_rate, 1.0)
-                        ),
-                    ),
-                    else_=-(
-                        Transaction.price
-                        * func.coalesce(Transaction.fx_rate, 1.0)
-                        * Transaction.quantity
-                    ),
-                )
-            )
-        ).where(
-            Transaction.portfolio_id == portfolio_id,
-            Transaction.date <= target_date,
-        )
-    )
-    invested_total = Decimal(str(invested_result.scalar_one() or 0))
-
-    unrealized_pnl = market_value - cost_basis
-    total_pnl = realized_pnl + unrealized_pnl
-
-    realized_positive = max(realized_pnl, Decimal("0"))
-    return_base = cost_basis + realized_positive
-    if return_base > 0:
-        return_pct = _safe_div(total_pnl, return_base) * 100
-    elif invested_total > 0:
-        return_pct = _safe_div(total_pnl, invested_total) * 100
-    else:
-        return_pct = Decimal("0")
-
-    return {
-        "market_value": market_value.quantize(Decimal("0.01")),
-        "cost_basis": cost_basis.quantize(Decimal("0.01")),
-        "invested_total": invested_total.quantize(Decimal("0.01")),
-        "realized_pnl": realized_pnl.quantize(Decimal("0.01")),
-        "unrealized_pnl": unrealized_pnl.quantize(Decimal("0.01")),
-        "total_pnl": total_pnl.quantize(Decimal("0.01")),
-        "return_pct": return_pct.quantize(Decimal("0.0001")),
-    }
+    """Projeta os campos do snapshot a partir do valuation canônico único."""
+    totals = await calculate_canonical_portfolio_totals(db, portfolio_id, target_date)
+    return {field: totals[field] for field in _SNAPSHOT_TOTAL_FIELDS}
 
 
 async def _upsert_snapshot(
