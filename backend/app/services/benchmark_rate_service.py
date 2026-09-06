@@ -3,6 +3,7 @@ Servico DB-first de benchmarks macroeconomicos para Renda Fixa.
 
 - Persiste series historicas oficiais do SGS/BCB em ``rate_history`` apenas em
   fluxos explicitos de bootstrap/backfill.
+- Persiste intervalos de cobertura comprovada separadamente das observacoes.
 - Fornece fatores acumulados e referencias anuais exclusivamente a partir do
   historico persistido durante requests financeiros.
 - Nao agenda nem dispara consultas externas recorrentes por conta propria.
@@ -12,6 +13,7 @@ from __future__ import annotations
 import logging
 from datetime import date, timedelta
 from decimal import Decimal
+from enum import Enum
 from typing import Iterable, Optional
 
 from sqlalchemy import func, select
@@ -20,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.integrations.bcb_sgs import SGS_INDICATORS, fetch_many_sgs_series
 from app.models.rate_history import RateHistory
+from app.models.rate_history_coverage import RateHistoryCoverage
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +30,12 @@ DEFAULT_HISTORY_START = date(2010, 1, 1)
 _DAILY_INCREMENTAL_DAYS = 10
 _MONTHLY_INCREMENTAL_DAYS = 120
 _MONTHLY_INDICATORS = {"IPCA", "IGPM"}
+
+
+class BenchmarkCoverageStatus(str, Enum):
+    COMPLETE = "complete"
+    PARTIAL = "partial"
+    ABSENT = "absent"
 
 
 def _to_decimal(value: object, default: str = "0") -> Decimal:
@@ -76,6 +85,84 @@ async def _upsert_rate_rows(db: AsyncSession, rows: list[dict]) -> int:
     return inserted_or_updated
 
 
+async def record_benchmark_coverage(
+    db: AsyncSession,
+    indicator: str,
+    start_date: date,
+    end_date: date,
+    *,
+    source: str = "BCB_SGS",
+) -> None:
+    """Registra que todo o range solicitado foi obtido sem janela com falha."""
+    if end_date < start_date:
+        raise ValueError("end_date must be greater than or equal to start_date")
+
+    stmt = (
+        pg_insert(RateHistoryCoverage)
+        .values(
+            indicator=indicator.upper(),
+            start_date=start_date,
+            end_date=end_date,
+            source=source,
+        )
+        .on_conflict_do_nothing(
+            index_elements=[
+                RateHistoryCoverage.indicator,
+                RateHistoryCoverage.start_date,
+                RateHistoryCoverage.end_date,
+                RateHistoryCoverage.source,
+            ]
+        )
+    )
+    await db.execute(stmt)
+
+
+async def benchmark_coverage_status(
+    db: AsyncSession,
+    indicator: str,
+    start_date: date,
+    end_date: date,
+) -> BenchmarkCoverageStatus:
+    """Classifica cobertura pela uniao dos ranges explicitamente comprovados.
+
+    Os ranges representam requisicoes concluídas ao provider, portanto cobrem
+    também finais de semana e feriados sem observacao. Isso evita inferir um
+    calendario financeiro a partir das linhas de ``rate_history``.
+    """
+    if end_date <= start_date:
+        return BenchmarkCoverageStatus.COMPLETE
+
+    result = await db.execute(
+        select(RateHistoryCoverage)
+        .where(
+            RateHistoryCoverage.indicator == indicator.upper(),
+            RateHistoryCoverage.start_date <= end_date,
+            RateHistoryCoverage.end_date >= start_date,
+        )
+        .order_by(
+            RateHistoryCoverage.start_date.asc(),
+            RateHistoryCoverage.end_date.asc(),
+        )
+    )
+    intervals = list(result.scalars().all())
+    if not intervals:
+        return BenchmarkCoverageStatus.ABSENT
+
+    cursor = start_date
+    for interval in intervals:
+        interval_start = interval.start_date
+        interval_end = interval.end_date
+        if interval_end < cursor:
+            continue
+        if interval_start > cursor:
+            return BenchmarkCoverageStatus.PARTIAL
+        cursor = max(cursor, interval_end + timedelta(days=1))
+        if cursor > end_date:
+            return BenchmarkCoverageStatus.COMPLETE
+
+    return BenchmarkCoverageStatus.PARTIAL
+
+
 async def import_benchmark_history(
     db: AsyncSession,
     indicators: Optional[Iterable[str]] = None,
@@ -95,6 +182,16 @@ async def import_benchmark_history(
     stats: dict[str, int] = {}
     for indicator, rows in series.items():
         stats[indicator] = await _upsert_rate_rows(db, rows)
+
+    if start_date is not None and end_date is not None and limit_last is None:
+        for indicator in selected:
+            await record_benchmark_coverage(
+                db,
+                indicator,
+                start_date,
+                end_date,
+                source="BCB_SGS",
+            )
 
     if commit:
         await db.commit()
