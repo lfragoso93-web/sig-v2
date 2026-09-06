@@ -14,8 +14,10 @@ Regra de negócio:
     4. vencimento
 - O valor aplicado e a data de aplicação NÃO entram na chave de agrupamento.
 
-A correção usa a série histórica persistida em rate_history, importada do SGS/BCB.
-Quando não há histórico suficiente, cai para um fallback anual conservador.
+CDI e SELIC exigem cobertura histórica persistida e comprovada para todo o
+período de valuation. Ausência ou cobertura parcial falham explicitamente em vez
+de serem mascaradas por uma referência anual aproximada. Produtos com taxa
+contratual própria, como PREFIXADO, preservam a composição anual do contrato.
 """
 from __future__ import annotations
 
@@ -29,8 +31,13 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.transaction import Transaction, OperationType
-from app.services.benchmark_rate_service import benchmark_factor, latest_annual_reference_pct
+from app.models.transaction import OperationType, Transaction
+from app.services.benchmark_rate_service import (
+    BenchmarkCoverageStatus,
+    benchmark_coverage_status,
+    benchmark_factor,
+    latest_annual_reference_pct,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +47,24 @@ _DEFAULT_CDI_ANNUAL_PCT = Decimal("10.65")
 _DEFAULT_SELIC_ANNUAL_PCT = Decimal("10.65")
 _DEFAULT_IPCA_ANNUAL_PCT = Decimal("4.50")
 _DEFAULT_IGPM_ANNUAL_PCT = Decimal("4.00")
+
+
+class IncompleteBenchmarkCoverageError(RuntimeError):
+    def __init__(
+        self,
+        indicator: str,
+        start: date,
+        target: date,
+        status: BenchmarkCoverageStatus,
+    ) -> None:
+        self.indicator = indicator
+        self.start = start
+        self.target = target
+        self.status = status
+        super().__init__(
+            f"{indicator} benchmark coverage is {status.value} for "
+            f"{start.isoformat()}..{target.isoformat()}"
+        )
 
 
 @dataclass(frozen=True)
@@ -190,12 +215,21 @@ async def _fallback_factor(db: AsyncSession, key: FixedIncomeKey, start: date, t
 
 async def _application_factor(db: AsyncSession, key: FixedIncomeKey, start: date, target: date) -> Decimal:
     idx = _normalize_indexer(key.indexer)
+
+    if idx in {"CDI", "SELIC"}:
+        coverage = await benchmark_coverage_status(db, idx, start, target)
+        if coverage is not BenchmarkCoverageStatus.COMPLETE:
+            raise IncompleteBenchmarkCoverageError(idx, start, target, coverage)
+        return await benchmark_factor(
+            db,
+            idx,
+            start,
+            target,
+            multiplier_pct=key.rate_pct or Decimal("100"),
+        )
+
     try:
-        if idx == "CDI":
-            factor = await benchmark_factor(db, "CDI", start, target, multiplier_pct=key.rate_pct or Decimal("100"))
-        elif idx == "SELIC":
-            factor = await benchmark_factor(db, "SELIC", start, target, multiplier_pct=key.rate_pct or Decimal("100"))
-        elif idx == "IPCA_PLUS":
+        if idx == "IPCA_PLUS":
             factor = await benchmark_factor(db, "IPCA", start, target, spread_annual_pct=key.rate_pct)
         elif idx == "IGPM_PLUS":
             factor = await benchmark_factor(db, "IGPM", start, target, spread_annual_pct=key.rate_pct)
