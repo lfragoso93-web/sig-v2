@@ -6,7 +6,12 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.certification.portfolio_seed_contract import SyntheticSeedContractError
-from app.certification.portfolio_seed_transaction_service import seed_transactions
+from app.certification.portfolio_seed_transaction_service import (
+    LEGACY_SYNTHETIC_CDB_NOTES,
+    SYNTHETIC_CDB_TICKER,
+    _reconcile_existing_certification_notes,
+    seed_transactions,
+)
 
 
 FIXTURE_ORDER = [
@@ -22,6 +27,10 @@ FIXTURE_ORDER = [
     "BOVA11",
     "BOVA11",
 ]
+CANONICAL_CDB_NOTES = (
+    "synthetic fixed income | Indexador: CDI | Taxa: 100% | "
+    "Benchmark Source: synthetic-certification"
+)
 
 
 def _owned_asset(source_ticker: str) -> SimpleNamespace:
@@ -87,6 +96,13 @@ async def test_seed_creates_full_fixture_and_crypto_membership() -> None:
     assert "CERT303-TESOURO-SELIC-2029" in tickers
     assert "CERT303-CDB-SYN-CDI-2028" in tickers
 
+    cdb_payload = next(
+        call.kwargs["payload"]
+        for call in create_record.await_args_list
+        if call.kwargs["payload"].ticker == SYNTHETIC_CDB_TICKER
+    )
+    assert cdb_payload.notes == CANONICAL_CDB_NOTES
+
 
 @pytest.mark.asyncio
 async def test_seed_replay_reuses_full_fixture_and_crypto_membership() -> None:
@@ -109,7 +125,8 @@ async def test_seed_replay_reuses_full_fixture_and_crypto_membership() -> None:
             execute_results.append(membership_result)
 
         transaction_result = MagicMock()
-        transaction_result.scalar_one_or_none.return_value = object()
+        notes = CANONICAL_CDB_NOTES if source_ticker == "CDB-SYN-CDI-2028" else None
+        transaction_result.scalar_one_or_none.return_value = SimpleNamespace(notes=notes)
         execute_results.append(transaction_result)
     db.execute = AsyncMock(side_effect=execute_results)
 
@@ -127,6 +144,40 @@ async def test_seed_replay_reuses_full_fixture_and_crypto_membership() -> None:
     db.add.assert_not_called()
     db.commit.assert_not_awaited()
     db.refresh.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_reconcile_upgrades_only_exact_legacy_cdb_note() -> None:
+    db = AsyncMock(spec=AsyncSession)
+    db.commit = AsyncMock()
+    transaction = SimpleNamespace(notes=LEGACY_SYNTHETIC_CDB_NOTES)
+
+    await _reconcile_existing_certification_notes(
+        db,
+        transaction=transaction,
+        row={"notes": CANONICAL_CDB_NOTES},
+        ticker=SYNTHETIC_CDB_TICKER,
+    )
+
+    assert transaction.notes == CANONICAL_CDB_NOTES
+    db.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_reconcile_fails_closed_on_unknown_cdb_note() -> None:
+    db = AsyncMock(spec=AsyncSession)
+    db.commit = AsyncMock()
+    transaction = SimpleNamespace(notes="unexpected CDB provenance")
+
+    with pytest.raises(SyntheticSeedContractError, match="note collision"):
+        await _reconcile_existing_certification_notes(
+            db,
+            transaction=transaction,
+            row={"notes": CANONICAL_CDB_NOTES},
+            ticker=SYNTHETIC_CDB_TICKER,
+        )
+
+    db.commit.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -203,7 +254,7 @@ async def test_seed_fails_closed_on_crypto_membership_source_collision() -> None
             break
 
         transaction_result = MagicMock()
-        transaction_result.scalar_one_or_none.return_value = object()
+        transaction_result.scalar_one_or_none.return_value = SimpleNamespace(notes=None)
         execute_results.append(transaction_result)
     db.execute = AsyncMock(side_effect=execute_results)
 
