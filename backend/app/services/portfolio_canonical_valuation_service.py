@@ -6,6 +6,7 @@ substituídos pelos respectivos motores dedicados antes do retorno.
 """
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import date
 from decimal import Decimal
 
@@ -55,7 +56,7 @@ async def _base_totals_without_dedicated_lookup(
     db: AsyncSession,
     portfolio_id: int,
     target_date: date,
-) -> dict[str, Decimal]:
+) -> dict:
     """Replica a base patrimonial sem consultar preços para classes dedicadas."""
     positions = await build_positions_at(db, portfolio_id, target_date)
     if not positions:
@@ -69,6 +70,7 @@ async def _base_totals_without_dedicated_lookup(
             "return_pct": _ZERO,
             "pre_listing_assets": 0,
             "real_price_gaps": 0,
+            "market_value_by_class": {},
         }
 
     tickers = list(positions)
@@ -110,6 +112,7 @@ async def _base_totals_without_dedicated_lookup(
         fx_snapshot = persisted_fx.rate
 
     market_value = _ZERO
+    market_value_by_class: dict[str, Decimal] = defaultdict(lambda: _ZERO)
     cost_basis = _ZERO
     realized_pnl = _ZERO
     for ticker, state in positions.items():
@@ -120,7 +123,9 @@ async def _base_totals_without_dedicated_lookup(
         else:
             close = Decimal(str(prices[ticker.upper()]))
         close_brl = close * fx_snapshot if state.is_usd else close
-        market_value += state.qty * close_brl
+        position_value = state.qty * close_brl
+        market_value += position_value
+        market_value_by_class[current_type.value] += position_value
         cost_basis += state.cost
         realized_pnl += state.realized_pnl
 
@@ -169,6 +174,9 @@ async def _base_totals_without_dedicated_lookup(
         "return_pct": return_pct.quantize(_PCT),
         "pre_listing_assets": len(pre_listing),
         "real_price_gaps": len(real_gaps),
+        "market_value_by_class": {
+            key: value.quantize(_MONEY) for key, value in market_value_by_class.items()
+        },
     }
 
 
@@ -262,13 +270,33 @@ async def calculate_canonical_portfolio_totals(
     treasury = await _treasury_correction_at_date(db, portfolio_id, target_date)
 
     fixed_income_correction = fixed_income["current_value"] - fixed_income["invested_amount"]
-    total_correction = fixed_income_correction + Decimal(str(treasury["correction"]))
+    treasury_correction = Decimal(str(treasury["correction"]))
+    total_correction = fixed_income_correction + treasury_correction
     market_value = Decimal(str(totals["market_value"])) + total_correction
     unrealized_pnl = Decimal(str(totals["unrealized_pnl"])) + total_correction
     realized_pnl = Decimal(str(totals["realized_pnl"]))
     total_pnl = realized_pnl + unrealized_pnl
     cost_basis = Decimal(str(totals["cost_basis"]))
     invested_total = Decimal(str(totals["invested_total"]))
+
+    market_value_by_class = dict(totals["market_value_by_class"])
+    if fixed_income["invested_amount"] or fixed_income["current_value"]:
+        market_value_by_class[AssetType.RENDA_FIXA.value] = (
+            Decimal(str(market_value_by_class.get(AssetType.RENDA_FIXA.value, _ZERO)))
+            + fixed_income_correction
+        ).quantize(_MONEY)
+    if treasury_correction:
+        market_value_by_class[AssetType.TESOURO_DIRETO.value] = (
+            Decimal(str(market_value_by_class.get(AssetType.TESOURO_DIRETO.value, _ZERO)))
+            + treasury_correction
+        ).quantize(_MONEY)
+
+    class_total = sum(market_value_by_class.values(), _ZERO).quantize(_MONEY)
+    if class_total != market_value.quantize(_MONEY):
+        raise RuntimeError(
+            "distribuição canônica por classe divergiu do patrimônio: "
+            f"classes={class_total} total={market_value.quantize(_MONEY)}"
+        )
 
     return_base = cost_basis + max(realized_pnl, _ZERO)
     if return_base > 0:
@@ -284,6 +312,7 @@ async def calculate_canonical_portfolio_totals(
         "unrealized_pnl": unrealized_pnl.quantize(_MONEY),
         "total_pnl": total_pnl.quantize(_MONEY),
         "return_pct": return_pct.quantize(_PCT),
+        "market_value_by_class": market_value_by_class,
         "fixed_income_invested": fixed_income["invested_amount"],
         "fixed_income_current": fixed_income["current_value"],
         "fixed_income_income": fixed_income["income_amount"],
