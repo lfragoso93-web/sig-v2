@@ -16,7 +16,7 @@ from app.certification.portfolio_synthetic_fixture import (
 )
 from app.core.database import AsyncSessionLocal
 from app.models.portfolio import Portfolio
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.services.portfolio_canonical_valuation_service import (
     calculate_canonical_portfolio_totals,
 )
@@ -37,8 +37,11 @@ async def _load_portfolio_id(db) -> int:
         .where(
             User.email == identity.user_email,
             User.name == identity.user_name,
+            User.role == UserRole.user,
+            User.is_active.is_(True),
             Portfolio.name == identity.portfolio_name,
             Portfolio.description == identity.ownership_marker,
+            Portfolio.is_active.is_(True),
         )
     )
     ids = list(result.scalars().all())
