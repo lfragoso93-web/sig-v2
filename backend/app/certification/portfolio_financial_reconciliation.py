@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 
+from app.certification.portfolio_seed_asset_policy import syntheticize_ticker
 from app.certification.portfolio_synthetic_fixture import (
     load_portfolio_synthetic_certification_fixture,
 )
@@ -52,7 +53,8 @@ def calculate_independent_financial_reconciliation() -> FinancialReconciliation:
 
     states: dict[str, dict[str, Decimal]] = {}
     for tx in fixture["transactions"]:
-        ticker = str(tx["ticker"])
+        source_ticker = str(tx["ticker"])
+        ticker = syntheticize_ticker(source_ticker)
         state = states.setdefault(
             ticker,
             {"quantity": _ZERO, "cost": _ZERO, "realized": _ZERO},
@@ -61,7 +63,7 @@ def calculate_independent_financial_reconciliation() -> FinancialReconciliation:
         price = _decimal(tx["price"])
         fees = _decimal(tx.get("fees", "0"))
         if quantity <= 0 or price < 0 or fees < 0:
-            raise ValueError(f"invalid synthetic transaction values for {ticker}")
+            raise ValueError(f"invalid synthetic transaction values for {source_ticker}")
 
         if str(tx["operation"]).lower() == "buy":
             state["quantity"] += quantity
@@ -71,7 +73,7 @@ def calculate_independent_financial_reconciliation() -> FinancialReconciliation:
         if str(tx["operation"]).lower() != "sell":
             raise ValueError(f"unsupported synthetic operation: {tx['operation']}")
         if state["quantity"] <= 0 or quantity > state["quantity"]:
-            raise ValueError(f"synthetic sale exceeds position for {ticker}")
+            raise ValueError(f"synthetic sale exceeds position for {source_ticker}")
 
         average_price = state["cost"] / state["quantity"]
         sold_cost = average_price * quantity
@@ -82,10 +84,12 @@ def calculate_independent_financial_reconciliation() -> FinancialReconciliation:
             state["cost"] = _ZERO
 
     holdings: dict[str, ReconciledHolding] = {}
-    for ticker, state in states.items():
-        if state["quantity"] <= 0:
+    for source_ticker, raw_price in prices.items():
+        ticker = syntheticize_ticker(source_ticker)
+        state = states.get(ticker)
+        if state is None or state["quantity"] <= 0:
             continue
-        market_value = state["quantity"] * _decimal(prices[ticker])
+        market_value = state["quantity"] * _decimal(raw_price)
         holdings[ticker] = ReconciledHolding(
             ticker=ticker,
             quantity=state["quantity"],
