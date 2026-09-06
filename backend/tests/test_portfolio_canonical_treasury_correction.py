@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import ANY, AsyncMock
 
 import pytest
 
@@ -39,11 +39,11 @@ async def test_treasury_correction_resolves_synthetic_alias_and_marks_one_match(
         "unresolved": 0,
     }
     resolve_symbol.assert_awaited_once_with(
-        pytest.ANY,
+        ANY,
         "CERT303-TESOURO-SELIC-2029",
     )
     get_price.assert_awaited_once_with(
-        pytest.ANY,
+        ANY,
         "cert303-tesouro-selic-2029",
         AssetType.TESOURO_DIRETO,
         "2026-02-28",
