@@ -1,6 +1,6 @@
 """add proven rate history coverage intervals
 
-Revision ID: 20260906_rate_history_coverages
+Revision ID: 20260906_rate_coverage
 Revises: 20260903_drop_fixed_income
 """
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision: str = "20260906_rate_history_coverages"
+revision: str = "20260906_rate_coverage"
 down_revision: str = "20260903_drop_fixed_income"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
