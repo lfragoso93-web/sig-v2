@@ -9,13 +9,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 
-from app.certification.portfolio_seed_asset_policy import syntheticize_ticker
 from app.certification.portfolio_synthetic_fixture import (
     load_portfolio_synthetic_certification_fixture,
 )
 
 _ZERO = Decimal("0")
 _MONEY = Decimal("0.01")
+_SYNTHETIC_PREFIX = "CERT303-"
 
 
 @dataclass(frozen=True)
@@ -46,6 +46,13 @@ def _decimal(value: object) -> Decimal:
     return Decimal(str(value))
 
 
+def _persisted_ticker(source_ticker: object) -> str:
+    normalized = str(source_ticker or "").strip().upper()
+    if not normalized or normalized.startswith(_SYNTHETIC_PREFIX):
+        raise ValueError("invalid source ticker in synthetic reconciliation fixture")
+    return f"{_SYNTHETIC_PREFIX}{normalized}"
+
+
 def calculate_independent_financial_reconciliation() -> FinancialReconciliation:
     """Calcula o resultado esperado sem reutilizar o motor financeiro do SGI."""
     fixture = load_portfolio_synthetic_certification_fixture()
@@ -54,7 +61,7 @@ def calculate_independent_financial_reconciliation() -> FinancialReconciliation:
     states: dict[str, dict[str, Decimal]] = {}
     for tx in fixture["transactions"]:
         source_ticker = str(tx["ticker"])
-        ticker = syntheticize_ticker(source_ticker)
+        ticker = _persisted_ticker(source_ticker)
         state = states.setdefault(
             ticker,
             {"quantity": _ZERO, "cost": _ZERO, "realized": _ZERO},
@@ -85,7 +92,7 @@ def calculate_independent_financial_reconciliation() -> FinancialReconciliation:
 
     holdings: dict[str, ReconciledHolding] = {}
     for source_ticker, raw_price in prices.items():
-        ticker = syntheticize_ticker(source_ticker)
+        ticker = _persisted_ticker(source_ticker)
         state = states.get(ticker)
         if state is None or state["quantity"] <= 0:
             continue
