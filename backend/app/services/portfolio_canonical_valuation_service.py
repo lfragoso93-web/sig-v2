@@ -94,6 +94,12 @@ async def _base_totals_without_dedicated_lookup(
     else:
         prices, pre_listing, real_gaps = {}, set(), set()
 
+    if real_gaps:
+        raise RuntimeError(
+            "cobertura persistida de preço indisponível para: "
+            + ", ".join(sorted(real_gaps))
+        )
+
     fx_snapshot = Decimal("1")
     if any(state.is_usd for state in positions.values()):
         persisted_fx = await load_usd_brl_rate_at_or_before(db, target_date)
@@ -109,10 +115,10 @@ async def _base_totals_without_dedicated_lookup(
     for ticker, state in positions.items():
         current_type = effective_types[ticker]
         average_price = _average_price_from_state(state)
-        if current_type in _NON_MARKET_TYPES:
+        if current_type in _NON_MARKET_TYPES or ticker.upper() in pre_listing:
             close = average_price
         else:
-            close = Decimal(str(prices.get(ticker.upper(), float(average_price))))
+            close = Decimal(str(prices[ticker.upper()]))
         close_brl = close * fx_snapshot if state.is_usd else close
         market_value += state.qty * close_brl
         cost_basis += state.cost
