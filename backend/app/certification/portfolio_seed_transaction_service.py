@@ -24,6 +24,9 @@ from app.services.asset_universe_membership_service import (
 )
 from app.services.transaction_write_service import create_transaction_record
 
+SYNTHETIC_CDB_TICKER = "CERT303-CDB-SYN-CDI-2028"
+LEGACY_SYNTHETIC_CDB_NOTES = "synthetic fixed income CDI"
+
 
 @dataclass(frozen=True)
 class SyntheticTransactionSeedResult:
@@ -120,6 +123,35 @@ async def _find_existing_transaction(
         )
     )
     return result.scalar_one_or_none()
+
+
+async def _reconcile_existing_certification_notes(
+    db: AsyncSession,
+    *,
+    transaction: Transaction,
+    row: dict[str, str],
+    ticker: str,
+) -> None:
+    """Upgrade only the known legacy CDB note to the source-qualified contract."""
+    if ticker != SYNTHETIC_CDB_TICKER:
+        return
+
+    expected_notes = row.get("notes")
+    current_notes = transaction.notes
+    if current_notes == expected_notes:
+        return
+    if (
+        current_notes == LEGACY_SYNTHETIC_CDB_NOTES
+        and expected_notes
+        and "Benchmark Source: synthetic-certification" in expected_notes
+    ):
+        transaction.notes = expected_notes
+        await db.commit()
+        return
+
+    raise SyntheticSeedContractError(
+        "synthetic CDB note collision; persisted benchmark provenance is not canonical"
+    )
 
 
 async def _require_owned_asset(
@@ -254,6 +286,12 @@ async def seed_transactions(
             ticker=identity.ticker,
         )
         if existing is not None:
+            await _reconcile_existing_certification_notes(
+                db,
+                transaction=existing,
+                row=row,
+                ticker=identity.ticker,
+            )
             reused += 1
             continue
 
