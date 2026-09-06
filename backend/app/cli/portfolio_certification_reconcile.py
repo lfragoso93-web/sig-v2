@@ -8,6 +8,7 @@ from decimal import Decimal
 from sqlalchemy import select
 
 from app.certification.portfolio_financial_reconciliation import (
+    assert_declared_financial_expectations,
     calculate_independent_financial_reconciliation,
 )
 from app.certification.portfolio_seed_contract import load_synthetic_seed_identity
@@ -55,6 +56,7 @@ async def main() -> None:
     fixture = load_portfolio_synthetic_certification_fixture()
     target_date = date.fromisoformat(fixture["market_prices"]["as_of"])
     expected = calculate_independent_financial_reconciliation()
+    assert_declared_financial_expectations(fixture, expected)
 
     async with AsyncSessionLocal() as db:
         portfolio_id, user_id = await _load_portfolio_identity(db)
