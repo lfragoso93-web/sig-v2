@@ -6,8 +6,11 @@ from app.certification import portfolio_financial_reconciliation as reconciliati
 
 def test_independent_reconciliation_keeps_realized_pnl_from_fully_closed_position(monkeypatch):
     fixture = deepcopy(reconciliation.load_portfolio_synthetic_certification_fixture())
-    fixture["transactions"] = fixture["transactions"][:-1]
-    fixture["market_prices"]["prices"].pop("BOVA11")
+    fixture["transactions"] = [
+        row for row in fixture["transactions"] if row["ticker"] == "BOVA11"
+    ][:-1]
+    fixture["market_prices"]["prices"] = {}
+    fixture["income_events"] = []
     monkeypatch.setattr(
         reconciliation,
         "load_portfolio_synthetic_certification_fixture",
@@ -16,5 +19,7 @@ def test_independent_reconciliation_keeps_realized_pnl_from_fully_closed_positio
 
     actual = reconciliation.calculate_independent_financial_reconciliation()
 
-    assert "CERT303-BOVA11" not in actual.holdings
-    assert actual.realized_pnl == Decimal("491.00")
+    assert actual.holdings == {}
+    assert actual.realized_pnl == Decimal("198.00")
+    assert actual.open_pnl == Decimal("0.00")
+    assert actual.total_pnl == Decimal("198.00")
