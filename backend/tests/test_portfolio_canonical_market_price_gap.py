@@ -30,7 +30,7 @@ async def test_base_totals_fail_closed_on_real_market_price_gap(monkeypatch):
     )
 
     db = AsyncMock()
-    db.execute.return_value.all.return_value = []
+    db.execute.return_value = SimpleNamespace(all=lambda: [])
 
     with pytest.raises(RuntimeError, match="CERT303-GAP"):
         await service._base_totals_without_dedicated_lookup(
