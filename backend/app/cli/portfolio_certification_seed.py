@@ -5,6 +5,9 @@ from __future__ import annotations
 import asyncio
 import os
 
+from app.certification.portfolio_seed_benchmark_rate_service import (
+    seed_synthetic_benchmark_rate,
+)
 from app.certification.portfolio_seed_dividend_service import seed_synthetic_dividends
 from app.certification.portfolio_seed_identity_service import (
     provision_synthetic_user_portfolio,
@@ -36,6 +39,7 @@ async def _run() -> None:
         market_prices = await seed_generic_market_prices(db)
         dividends = await seed_synthetic_dividends(db)
         treasury_price = await seed_synthetic_treasury_price(db)
+        benchmark_rate = await seed_synthetic_benchmark_rate(db)
 
     print(
         "CERT303-SEED "
@@ -52,7 +56,11 @@ async def _run() -> None:
         f"dividends_created={dividends.created} "
         f"dividends_reused={dividends.reused} "
         f"treasury_prices_created={treasury_price.created} "
-        f"treasury_prices_reused={treasury_price.reused}"
+        f"treasury_prices_reused={treasury_price.reused} "
+        f"benchmark_rates_created={benchmark_rate.rates_created} "
+        f"benchmark_rates_reused={benchmark_rate.rates_reused} "
+        f"benchmark_coverages_created={benchmark_rate.coverages_created} "
+        f"benchmark_coverages_reused={benchmark_rate.coverages_reused}"
     )
 
 
