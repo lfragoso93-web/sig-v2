@@ -25,7 +25,7 @@ from app.services.fixed_income_valuation_service import (
 )
 from app.services.fx_rate_reader import load_usd_brl_rate_at_or_before
 from app.services.lifecycle_aware_price_service import get_prices_at_date_with_lifecycle
-from app.services.portfolio_snapshot_service import _build_positions_at
+from app.services.portfolio_position_state_service import build_positions_at
 from app.services.price_history_service import get_price_at_date
 from app.services.treasury_catalog_service import resolve_treasury_symbol
 
@@ -57,7 +57,7 @@ async def _base_totals_without_dedicated_lookup(
     target_date: date,
 ) -> dict[str, Decimal]:
     """Replica a base patrimonial sem consultar preços para classes dedicadas."""
-    positions = await _build_positions_at(db, portfolio_id, target_date)
+    positions = await build_positions_at(db, portfolio_id, target_date)
     if not positions:
         return {
             "market_value": _ZERO,
@@ -213,7 +213,7 @@ async def _treasury_correction_at_date(
     target_date: date,
 ) -> dict[str, Decimal | int]:
     """Substitui o proxy por custo médio pelo preço do ativo oficial do Tesouro."""
-    positions = await _build_positions_at(db, portfolio_id, target_date)
+    positions = await build_positions_at(db, portfolio_id, target_date)
     correction = _ZERO
     matched = 0
     unresolved = 0
