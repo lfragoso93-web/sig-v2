@@ -3,10 +3,13 @@ from decimal import Decimal
 from app.certification.portfolio_financial_reconciliation import (
     calculate_independent_financial_reconciliation,
 )
-from app.certification.portfolio_seed_asset_policy import syntheticize_ticker
 from app.certification.portfolio_synthetic_fixture import (
     load_portfolio_synthetic_certification_fixture,
 )
+
+
+def _persisted_ticker(source_ticker: str) -> str:
+    return f"CERT303-{source_ticker.strip().upper()}"
 
 
 def test_independent_reconciliation_matches_declared_fixture_expectations():
@@ -15,10 +18,10 @@ def test_independent_reconciliation_matches_declared_fixture_expectations():
     actual = calculate_independent_financial_reconciliation()
 
     assert set(actual.holdings) == {
-        syntheticize_ticker(ticker) for ticker in declared["holdings"]
+        _persisted_ticker(ticker) for ticker in declared["holdings"]
     }
     for source_ticker, expected in declared["holdings"].items():
-        holding = actual.holdings[syntheticize_ticker(source_ticker)]
+        holding = actual.holdings[_persisted_ticker(source_ticker)]
         assert holding.quantity == Decimal(expected["quantity"])
         assert holding.remaining_cost == Decimal(expected["remaining_cost"])
         assert holding.realized_pnl == Decimal(expected["realized_pnl"])
