@@ -122,23 +122,30 @@ async def benchmark_coverage_status(
     indicator: str,
     start_date: date,
     end_date: date,
+    *,
+    source: Optional[str] = None,
 ) -> BenchmarkCoverageStatus:
     """Classifica cobertura pela uniao dos ranges explicitamente comprovados.
 
-    Os ranges representam requisicoes concluídas ao provider, portanto cobrem
-    também finais de semana e feriados sem observacao. Isso evita inferir um
-    calendario financeiro a partir das linhas de ``rate_history``.
+    Os ranges representam requisicoes concluidas ao provider, portanto cobrem
+    tambem finais de semana e feriados sem observacao. Isso evita inferir um
+    calendario financeiro a partir das linhas de ``rate_history``. Quando
+    ``source`` e informado, somente intervalos dessa proveniencia participam.
     """
     if end_date <= start_date:
         return BenchmarkCoverageStatus.COMPLETE
 
+    filters = [
+        RateHistoryCoverage.indicator == indicator.upper(),
+        RateHistoryCoverage.start_date <= end_date,
+        RateHistoryCoverage.end_date >= start_date,
+    ]
+    if source is not None:
+        filters.append(RateHistoryCoverage.source == source)
+
     result = await db.execute(
         select(RateHistoryCoverage)
-        .where(
-            RateHistoryCoverage.indicator == indicator.upper(),
-            RateHistoryCoverage.start_date <= end_date,
-            RateHistoryCoverage.end_date >= start_date,
-        )
+        .where(*filters)
         .order_by(
             RateHistoryCoverage.start_date.asc(),
             RateHistoryCoverage.end_date.asc(),
@@ -206,10 +213,10 @@ async def import_missing_benchmark_history(
     *,
     commit: bool = True,
 ) -> dict[str, int]:
-    """Backfill inicial e atualização incremental por frequência da série.
+    """Backfill inicial e atualizacao incremental por frequencia da serie.
 
-    Este é um fluxo operacional explícito de bootstrap/backfill. ``commit=False``
-    permite que um orquestrador controle a transação sem introduzir consultas a
+    Este e um fluxo operacional explicito de bootstrap/backfill. ``commit=False``
+    permite que um orquestrador controle a transacao sem introduzir consultas a
     provider em consumidores financeiros comuns.
     """
     today = end_date or date.today()
@@ -246,14 +253,20 @@ async def get_rate_rows(
     indicator: str,
     start_date: date,
     end_date: date,
+    *,
+    source: Optional[str] = None,
 ) -> list[RateHistory]:
+    filters = [
+        RateHistory.indicator == indicator.upper(),
+        RateHistory.date >= start_date,
+        RateHistory.date <= end_date,
+    ]
+    if source is not None:
+        filters.append(RateHistory.source == source)
+
     result = await db.execute(
         select(RateHistory)
-        .where(
-            RateHistory.indicator == indicator.upper(),
-            RateHistory.date >= start_date,
-            RateHistory.date <= end_date,
-        )
+        .where(*filters)
         .order_by(RateHistory.date.asc())
     )
     return list(result.scalars().all())
@@ -276,12 +289,20 @@ async def benchmark_factor(
     end_date: date,
     multiplier_pct: Decimal = Decimal("100"),
     spread_annual_pct: Decimal = Decimal("0"),
+    *,
+    source: Optional[str] = None,
 ) -> Decimal:
     indicator = indicator.upper()
     if end_date <= start_date:
         return Decimal("1")
 
-    rows = await get_rate_rows(db, indicator, start_date, end_date)
+    rows = await get_rate_rows(
+        db,
+        indicator,
+        start_date,
+        end_date,
+        source=source,
+    )
     factor = Decimal("1")
 
     if indicator in {"CDI", "SELIC"}:
