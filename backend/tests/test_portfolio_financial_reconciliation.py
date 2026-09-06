@@ -3,6 +3,7 @@ from decimal import Decimal
 from app.certification.portfolio_financial_reconciliation import (
     calculate_independent_financial_reconciliation,
 )
+from app.certification.portfolio_seed_asset_policy import syntheticize_ticker
 from app.certification.portfolio_synthetic_fixture import (
     load_portfolio_synthetic_certification_fixture,
 )
@@ -13,9 +14,11 @@ def test_independent_reconciliation_matches_declared_fixture_expectations():
     declared = fixture["expected"]
     actual = calculate_independent_financial_reconciliation()
 
-    assert set(actual.holdings) == set(declared["holdings"])
-    for ticker, expected in declared["holdings"].items():
-        holding = actual.holdings[ticker]
+    assert set(actual.holdings) == {
+        syntheticize_ticker(ticker) for ticker in declared["holdings"]
+    }
+    for source_ticker, expected in declared["holdings"].items():
+        holding = actual.holdings[syntheticize_ticker(source_ticker)]
         assert holding.quantity == Decimal(expected["quantity"])
         assert holding.remaining_cost == Decimal(expected["remaining_cost"])
         assert holding.realized_pnl == Decimal(expected["realized_pnl"])
@@ -32,7 +35,7 @@ def test_independent_reconciliation_matches_declared_fixture_expectations():
 
 def test_independent_reconciliation_proves_full_exit_then_rebuy_resets_cost_basis():
     actual = calculate_independent_financial_reconciliation()
-    bova = actual.holdings["BOVA11"]
+    bova = actual.holdings["CERT303-BOVA11"]
 
     assert bova.quantity == Decimal("5")
     assert bova.remaining_cost == Decimal("541.00")
