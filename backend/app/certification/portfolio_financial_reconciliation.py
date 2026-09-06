@@ -53,6 +53,58 @@ def _persisted_ticker(source_ticker: object) -> str:
     return f"{_SYNTHETIC_PREFIX}{normalized}"
 
 
+def assert_declared_financial_expectations(
+    fixture: dict,
+    actual: FinancialReconciliation,
+) -> None:
+    """Falha se o oráculo independente divergir do bloco expected do fixture."""
+    declared = fixture["expected"]
+    failures: list[str] = []
+
+    expected_tickers = {
+        _persisted_ticker(source_ticker) for source_ticker in declared["holdings"]
+    }
+    if set(actual.holdings) != expected_tickers:
+        failures.append("holding-set")
+
+    for source_ticker, expected in declared["holdings"].items():
+        ticker = _persisted_ticker(source_ticker)
+        holding = actual.holdings.get(ticker)
+        if holding is None:
+            failures.append(f"{ticker}:missing")
+            continue
+        comparisons = {
+            "quantity": (holding.quantity, _decimal(expected["quantity"])),
+            "remaining_cost": (
+                holding.remaining_cost,
+                _decimal(expected["remaining_cost"]),
+            ),
+            "realized_pnl": (holding.realized_pnl, _decimal(expected["realized_pnl"])),
+            "market_value": (holding.market_value, _decimal(expected["market_value"])),
+        }
+        for field, (observed, wanted) in comparisons.items():
+            if observed != wanted:
+                failures.append(
+                    f"{ticker}:{field}:actual={observed}:expected={wanted}"
+                )
+
+    totals = declared["totals"]
+    total_comparisons = {
+        "remaining_cost": (actual.remaining_cost, _decimal(totals["remaining_cost"])),
+        "market_value": (actual.market_value, _decimal(totals["market_value"])),
+        "realized_pnl": (actual.realized_pnl, _decimal(totals["realized_pnl"])),
+        "income": (actual.income, _decimal(totals["income"])),
+        "open_pnl": (actual.open_pnl, _decimal(totals["open_pnl"])),
+        "total_pnl": (actual.total_pnl, _decimal(totals["total_pnl"])),
+    }
+    for field, (observed, wanted) in total_comparisons.items():
+        if observed != wanted:
+            failures.append(f"totals:{field}:actual={observed}:expected={wanted}")
+
+    if failures:
+        raise ValueError("declared financial expectations drift: " + "; ".join(failures))
+
+
 def calculate_independent_financial_reconciliation() -> FinancialReconciliation:
     """Calcula o resultado esperado sem reutilizar o motor financeiro do SGI."""
     fixture = load_portfolio_synthetic_certification_fixture()
