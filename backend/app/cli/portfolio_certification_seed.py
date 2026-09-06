@@ -13,6 +13,9 @@ from app.certification.portfolio_seed_market_price_service import (
     seed_generic_market_prices,
 )
 from app.certification.portfolio_seed_transaction_service import seed_transactions
+from app.certification.portfolio_seed_treasury_price_service import (
+    seed_synthetic_treasury_price,
+)
 from app.core.database import AsyncSessionLocal
 
 
@@ -32,6 +35,7 @@ async def _run() -> None:
         )
         market_prices = await seed_generic_market_prices(db)
         dividends = await seed_synthetic_dividends(db)
+        treasury_price = await seed_synthetic_treasury_price(db)
 
     print(
         "CERT303-SEED "
@@ -46,7 +50,9 @@ async def _run() -> None:
         f"market_prices_created={market_prices.created} "
         f"market_prices_reused={market_prices.reused} "
         f"dividends_created={dividends.created} "
-        f"dividends_reused={dividends.reused}"
+        f"dividends_reused={dividends.reused} "
+        f"treasury_prices_created={treasury_price.created} "
+        f"treasury_prices_reused={treasury_price.reused}"
     )
 
 
