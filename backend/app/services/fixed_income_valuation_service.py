@@ -12,6 +12,7 @@ Regra de negócio:
     2. indexador
     3. percentual/taxa informado
     4. vencimento
+    5. fonte de benchmark, quando explicitamente informada
 - O valor aplicado e a data de aplicação NÃO entram na chave de agrupamento.
 
 CDI e SELIC exigem cobertura histórica persistida e comprovada para todo o
@@ -73,6 +74,7 @@ class FixedIncomeKey:
     indexer: str
     rate_pct: Decimal
     maturity: Optional[date]
+    benchmark_source: Optional[str] = None
 
 
 @dataclass
@@ -141,11 +143,14 @@ def _normalize_indexer(raw: Optional[str]) -> str:
     return value
 
 
-def _parse_notes(notes: Optional[str]) -> tuple[str, Decimal, Optional[date]]:
+def _parse_notes(
+    notes: Optional[str],
+) -> tuple[str, Decimal, Optional[date], Optional[str]]:
     text = notes or ""
     indexer: Optional[str] = None
     rate = Decimal("0")
     maturity: Optional[date] = None
+    benchmark_source: Optional[str] = None
 
     m = re.search(r"Indexador:\s*([^|\-\n]+)", text, re.IGNORECASE)
     if m:
@@ -167,7 +172,15 @@ def _parse_notes(notes: Optional[str]) -> tuple[str, Decimal, Optional[date]]:
         except ValueError:
             maturity = None
 
-    return _normalize_indexer(indexer), rate, maturity
+    m = re.search(
+        r"(?:Benchmark Source|Fonte Benchmark):\s*([^|\n]+)",
+        text,
+        re.IGNORECASE,
+    )
+    if m:
+        benchmark_source = m.group(1).strip() or None
+
+    return _normalize_indexer(indexer), rate, maturity, benchmark_source
 
 
 async def _latest_refs(db: AsyncSession) -> dict[str, Decimal]:
@@ -217,7 +230,13 @@ async def _application_factor(db: AsyncSession, key: FixedIncomeKey, start: date
     idx = _normalize_indexer(key.indexer)
 
     if idx in {"CDI", "SELIC"}:
-        coverage = await benchmark_coverage_status(db, idx, start, target)
+        coverage = await benchmark_coverage_status(
+            db,
+            idx,
+            start,
+            target,
+            source=key.benchmark_source,
+        )
         if coverage is not BenchmarkCoverageStatus.COMPLETE:
             raise IncompleteBenchmarkCoverageError(idx, start, target, coverage)
         return await benchmark_factor(
@@ -226,6 +245,7 @@ async def _application_factor(db: AsyncSession, key: FixedIncomeKey, start: date
             start,
             target,
             multiplier_pct=key.rate_pct or Decimal("100"),
+            source=key.benchmark_source,
         )
 
     try:
@@ -256,13 +276,19 @@ async def _load_fixed_income_transactions(db: AsyncSession, portfolio_id: int) -
 
 def _application_from_buy(tx: Transaction) -> FixedIncomeApplication:
     name = str(tx.ticker or "RENDA_FIXA").strip().upper()
-    indexer, rate, maturity = _parse_notes(getattr(tx, "notes", None))
+    indexer, rate, maturity, benchmark_source = _parse_notes(getattr(tx, "notes", None))
     amount = (
         _decimal_from_str(getattr(tx, "quantity", 0))
         * _decimal_from_str(getattr(tx, "price", 0))
         + _decimal_from_str(getattr(tx, "fees", 0))
     )
-    key = FixedIncomeKey(name=name, indexer=indexer, rate_pct=_pct(rate), maturity=maturity)
+    key = FixedIncomeKey(
+        name=name,
+        indexer=indexer,
+        rate_pct=_pct(rate),
+        maturity=maturity,
+        benchmark_source=benchmark_source,
+    )
     return FixedIncomeApplication(
         key=key,
         invested_amount=_money(amount),
@@ -280,9 +306,17 @@ def _apply_redemption(applications: list[FixedIncomeApplication], tx: Transactio
         return
 
     name = str(tx.ticker or "").strip().upper()
-    idx, rate, maturity = _parse_notes(getattr(tx, "notes", None))
-    has_full_key = bool(getattr(tx, "notes", None)) and (idx or rate or maturity)
-    key = FixedIncomeKey(name=name, indexer=idx, rate_pct=_pct(rate), maturity=maturity)
+    idx, rate, maturity, benchmark_source = _parse_notes(getattr(tx, "notes", None))
+    has_full_key = bool(getattr(tx, "notes", None)) and (
+        idx or rate or maturity or benchmark_source
+    )
+    key = FixedIncomeKey(
+        name=name,
+        indexer=idx,
+        rate_pct=_pct(rate),
+        maturity=maturity,
+        benchmark_source=benchmark_source,
+    )
 
     for app in applications:
         if redeem_amount <= 0:
