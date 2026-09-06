@@ -90,13 +90,17 @@ def calculate_independent_financial_reconciliation() -> FinancialReconciliation:
         if state["quantity"] == 0:
             state["cost"] = _ZERO
 
+    price_by_ticker = {
+        _persisted_ticker(source_ticker): _decimal(raw_price)
+        for source_ticker, raw_price in prices.items()
+    }
     holdings: dict[str, ReconciledHolding] = {}
-    for source_ticker, raw_price in prices.items():
-        ticker = _persisted_ticker(source_ticker)
-        state = states.get(ticker)
-        if state is None or state["quantity"] <= 0:
+    for ticker, state in states.items():
+        if state["quantity"] <= 0:
             continue
-        market_value = state["quantity"] * _decimal(raw_price)
+        if ticker not in price_by_ticker:
+            raise ValueError(f"missing expected market price for {ticker}")
+        market_value = state["quantity"] * price_by_ticker[ticker]
         holdings[ticker] = ReconciledHolding(
             ticker=ticker,
             quantity=state["quantity"],
