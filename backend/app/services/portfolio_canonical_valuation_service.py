@@ -222,9 +222,10 @@ async def _treasury_correction_at_date(
             unresolved += 1
             continue
 
+        price_ticker = ticker if canonical.lower() == ticker.lower() else canonical
         price = await get_price_at_date(
             db,
-            canonical,
+            price_ticker,
             AssetType.TESOURO_DIRETO,
             target_date.isoformat(),
         )
