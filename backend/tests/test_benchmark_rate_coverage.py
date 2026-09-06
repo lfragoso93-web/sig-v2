@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -7,6 +8,8 @@ import pytest
 from app.services.benchmark_rate_service import (
     BenchmarkCoverageStatus,
     benchmark_coverage_status,
+    benchmark_factor,
+    get_rate_rows,
 )
 
 
@@ -78,3 +81,62 @@ async def test_zero_length_period_is_complete_without_database_lookup() -> None:
 
     assert status is BenchmarkCoverageStatus.COMPLETE
     db.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_coverage_query_can_be_qualified_by_source() -> None:
+    db = _db_with_intervals(
+        SimpleNamespace(start_date=date(2026, 1, 11), end_date=date(2026, 2, 28))
+    )
+
+    status = await benchmark_coverage_status(
+        db,
+        "CDI",
+        date(2026, 1, 11),
+        date(2026, 2, 28),
+        source="synthetic-certification",
+    )
+
+    assert status is BenchmarkCoverageStatus.COMPLETE
+    statement = db.execute.await_args.args[0]
+    assert "rate_history_coverages.source" in str(statement)
+    assert "synthetic-certification" in statement.compile().params.values()
+
+
+@pytest.mark.asyncio
+async def test_rate_rows_query_can_be_qualified_by_source() -> None:
+    db = _db_with_intervals(
+        SimpleNamespace(rate_daily=Decimal("1.00000000"))
+    )
+
+    rows = await get_rate_rows(
+        db,
+        "CDI",
+        date(2026, 1, 11),
+        date(2026, 2, 28),
+        source="synthetic-certification",
+    )
+
+    assert len(rows) == 1
+    statement = db.execute.await_args.args[0]
+    assert "rate_history.source" in str(statement)
+    assert "synthetic-certification" in statement.compile().params.values()
+
+
+@pytest.mark.asyncio
+async def test_benchmark_factor_uses_only_source_qualified_rows() -> None:
+    db = _db_with_intervals(
+        SimpleNamespace(rate_daily=Decimal("1.00000000"))
+    )
+
+    factor = await benchmark_factor(
+        db,
+        "CDI",
+        date(2026, 1, 11),
+        date(2026, 2, 28),
+        source="synthetic-certification",
+    )
+
+    assert factor == Decimal("1.01000000")
+    statement = db.execute.await_args.args[0]
+    assert "rate_history.source" in str(statement)
