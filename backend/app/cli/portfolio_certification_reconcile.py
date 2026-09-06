@@ -17,11 +17,11 @@ from app.certification.portfolio_synthetic_fixture import (
 from app.core.database import AsyncSessionLocal
 from app.models.portfolio import Portfolio
 from app.models.user import User, UserRole
+from app.services.dividend_service import list_dividends
 from app.services.portfolio_canonical_valuation_service import (
     calculate_canonical_portfolio_totals,
 )
 from app.services.portfolio_snapshot_service import _build_positions_at
-from app.services.portfolio_dividend_projection_service import project_portfolio_dividends
 
 _MONEY = Decimal("0.01")
 
@@ -30,10 +30,10 @@ def _money(value: object) -> Decimal:
     return Decimal(str(value)).quantize(_MONEY)
 
 
-async def _load_portfolio_id(db) -> int:
+async def _load_portfolio_identity(db) -> tuple[int, int]:
     identity = load_synthetic_seed_identity()
     result = await db.execute(
-        select(Portfolio.id)
+        select(Portfolio.id, User.id)
         .join(User, User.id == Portfolio.user_id)
         .where(
             User.email == identity.user_email,
@@ -45,10 +45,10 @@ async def _load_portfolio_id(db) -> int:
             Portfolio.is_active.is_(True),
         )
     )
-    ids = list(result.scalars().all())
-    if len(ids) != 1:
+    rows = list(result.all())
+    if len(rows) != 1:
         raise RuntimeError("synthetic certification portfolio identity is not unique")
-    return int(ids[0])
+    return int(rows[0][0]), int(rows[0][1])
 
 
 async def main() -> None:
@@ -57,10 +57,10 @@ async def main() -> None:
     expected = calculate_independent_financial_reconciliation()
 
     async with AsyncSessionLocal() as db:
-        portfolio_id = await _load_portfolio_id(db)
+        portfolio_id, user_id = await _load_portfolio_identity(db)
         positions = await _build_positions_at(db, portfolio_id, target_date)
         totals = await calculate_canonical_portfolio_totals(db, portfolio_id, target_date)
-        dividends = await project_portfolio_dividends(db, portfolio_id)
+        dividends = await list_dividends(db, portfolio_id, user_id)
 
     failures: list[str] = []
     for ticker, expected_holding in expected.holdings.items():
@@ -89,7 +89,7 @@ async def main() -> None:
         if actual != wanted:
             failures.append(f"{name}:actual={actual}:expected={wanted}")
 
-    income = sum((_money(item.total_amount) for item in dividends), Decimal("0.00"))
+    income = sum((_money(item.total_received) for item in dividends), Decimal("0.00"))
     if income != expected.income:
         failures.append(f"income:actual={income}:expected={expected.income}")
     total_pnl_with_income = _money(totals["total_pnl"]) + income
