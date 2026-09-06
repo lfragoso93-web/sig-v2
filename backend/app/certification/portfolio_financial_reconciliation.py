@@ -60,6 +60,8 @@ def calculate_independent_financial_reconciliation() -> FinancialReconciliation:
         quantity = _decimal(tx["quantity"])
         price = _decimal(tx["price"])
         fees = _decimal(tx.get("fees", "0"))
+        if quantity <= 0 or price < 0 or fees < 0:
+            raise ValueError(f"invalid synthetic transaction values for {ticker}")
 
         if str(tx["operation"]).lower() == "buy":
             state["quantity"] += quantity
@@ -68,7 +70,7 @@ def calculate_independent_financial_reconciliation() -> FinancialReconciliation:
 
         if str(tx["operation"]).lower() != "sell":
             raise ValueError(f"unsupported synthetic operation: {tx['operation']}")
-        if quantity > state["quantity"]:
+        if state["quantity"] <= 0 or quantity > state["quantity"]:
             raise ValueError(f"synthetic sale exceeds position for {ticker}")
 
         average_price = state["cost"] / state["quantity"]
