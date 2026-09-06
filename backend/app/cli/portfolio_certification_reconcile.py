@@ -21,6 +21,7 @@ from app.services.portfolio_canonical_valuation_service import (
     calculate_canonical_portfolio_totals,
 )
 from app.services.portfolio_snapshot_service import _build_positions_at
+from app.services.portfolio_dividend_projection_service import project_portfolio_dividends
 
 _MONEY = Decimal("0.01")
 
@@ -59,6 +60,7 @@ async def main() -> None:
         portfolio_id = await _load_portfolio_id(db)
         positions = await _build_positions_at(db, portfolio_id, target_date)
         totals = await calculate_canonical_portfolio_totals(db, portfolio_id, target_date)
+        dividends = await project_portfolio_dividends(db, portfolio_id)
 
     failures: list[str] = []
     for ticker, expected_holding in expected.holdings.items():
@@ -87,6 +89,15 @@ async def main() -> None:
         if actual != wanted:
             failures.append(f"{name}:actual={actual}:expected={wanted}")
 
+    income = sum((_money(item.total_amount) for item in dividends), Decimal("0.00"))
+    if income != expected.income:
+        failures.append(f"income:actual={income}:expected={expected.income}")
+    total_pnl_with_income = _money(totals["total_pnl"]) + income
+    if total_pnl_with_income != expected.total_pnl:
+        failures.append(
+            f"total-pnl-with-income:actual={total_pnl_with_income}:expected={expected.total_pnl}"
+        )
+
     print(
         "CERT303-RECONCILE",
         f"portfolio_id={portfolio_id}",
@@ -96,8 +107,8 @@ async def main() -> None:
         f"market_value={_money(totals['market_value'])}",
         f"realized_pnl={_money(totals['realized_pnl'])}",
         f"open_pnl={_money(totals['unrealized_pnl'])}",
-        f"income={expected.income}",
-        f"total_pnl_with_income={expected.total_pnl}",
+        f"income={income}",
+        f"total_pnl_with_income={total_pnl_with_income}",
         f"status={'PASS' if not failures else 'FAIL'}",
     )
     if failures:
