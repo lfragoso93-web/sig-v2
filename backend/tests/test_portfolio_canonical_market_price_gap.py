@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -32,7 +33,9 @@ async def test_base_totals_fail_closed_on_real_market_price_gap(monkeypatch):
     db.execute.return_value.all.return_value = []
 
     with pytest.raises(RuntimeError, match="CERT303-GAP"):
-        await service._base_totals_without_dedicated_lookup(db, 303, service.date(2026, 2, 28))
+        await service._base_totals_without_dedicated_lookup(
+            db, 303, date(2026, 2, 28)
+        )
 
 
 @pytest.mark.asyncio
@@ -61,7 +64,7 @@ async def test_base_totals_allows_pre_listing_cost_proxy(monkeypatch):
     db.execute.side_effect = [asset_result, invested_result]
 
     totals = await service._base_totals_without_dedicated_lookup(
-        db, 303, service.date(2026, 2, 28)
+        db, 303, date(2026, 2, 28)
     )
 
     assert totals["market_value"] == Decimal("100.00")
