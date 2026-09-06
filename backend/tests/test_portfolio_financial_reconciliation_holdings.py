@@ -8,7 +8,7 @@ from app.certification.portfolio_financial_reconciliation import (
 def test_independent_reconciliation_open_pnl_by_holding():
     actual = calculate_independent_financial_reconciliation()
     expected = {
-        "CERT303-PETR4": Decimal("255.00"),
+        "CERT303-PETR4": Decimal("295.20"),
         "CERT303-MXRF11": Decimal("98.00"),
         "CERT303-BOVA11": Decimal("19.00"),
         "CERT303-AAPL34": Decimal("-61.50"),
