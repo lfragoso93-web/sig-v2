@@ -30,6 +30,7 @@ DEFAULT_HISTORY_START = date(2010, 1, 1)
 _DAILY_INCREMENTAL_DAYS = 10
 _MONTHLY_INCREMENTAL_DAYS = 120
 _MONTHLY_INDICATORS = {"IPCA", "IGPM"}
+_OFFICIAL_BENCHMARK_SOURCES = ("BCB", "BCB_SGS")
 
 
 class BenchmarkCoverageStatus(str, Enum):
@@ -61,6 +62,9 @@ async def _upsert_rate_rows(db: AsyncSession, rows: list[dict]) -> int:
             "date": row["date"],
             "source": row.get("source", "BCB_SGS"),
         }
+        if values["source"] not in _OFFICIAL_BENCHMARK_SOURCES:
+            raise ValueError("official benchmark importer received a nonofficial source")
+
         if row["value_field"] == "rate_daily":
             values["rate_daily"] = row["value"]
             values["rate_monthly"] = None
@@ -78,9 +82,15 @@ async def _upsert_rate_rows(db: AsyncSession, rows: list[dict]) -> int:
                     "rate_monthly": values.get("rate_monthly"),
                     "source": values["source"],
                 },
+                where=RateHistory.source.in_(_OFFICIAL_BENCHMARK_SOURCES),
             )
         )
-        await db.execute(stmt)
+        result = await db.execute(stmt)
+        if getattr(result, "rowcount", 1) == 0:
+            raise RuntimeError(
+                "benchmark observation collision with nonofficial persisted source: "
+                f"{values['indicator']} {values['date']}"
+            )
         inserted_or_updated += 1
     return inserted_or_updated
 
