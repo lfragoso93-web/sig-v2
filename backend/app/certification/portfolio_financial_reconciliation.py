@@ -107,7 +107,7 @@ def calculate_independent_financial_reconciliation() -> FinancialReconciliation:
 
     remaining_cost = sum((item.remaining_cost for item in holdings.values()), _ZERO)
     market_value = sum((item.market_value for item in holdings.values()), _ZERO)
-    realized_pnl = sum((item.realized_pnl for item in holdings.values()), _ZERO)
+    realized_pnl = sum((state["realized"] for state in states.values()), _ZERO)
     income = sum(
         (_decimal(event["gross_amount"]) for event in fixture.get("income_events", [])),
         _ZERO,
