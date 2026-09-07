@@ -78,11 +78,13 @@ async def _calc_current_quantity(
     db: AsyncSession,
     portfolio_id: int,
     ticker: str,
+    asset_type: str,
     exclude_tx_id: int | None = None,
 ) -> float:
     stmt = select(Transaction.operation, Transaction.quantity).where(
         Transaction.portfolio_id == portfolio_id,
         Transaction.ticker == ticker,
+        Transaction.asset_type == asset_type,
     )
     if exclude_tx_id is not None:
         stmt = stmt.where(Transaction.id != exclude_tx_id)
@@ -104,10 +106,17 @@ async def _validate_sell(
     db: AsyncSession,
     portfolio_id: int,
     ticker: str,
+    asset_type: str,
     quantity: float,
     exclude_tx_id: int | None = None,
 ) -> None:
-    current_qty = await _calc_current_quantity(db, portfolio_id, ticker, exclude_tx_id)
+    current_qty = await _calc_current_quantity(
+        db,
+        portfolio_id,
+        ticker,
+        asset_type,
+        exclude_tx_id,
+    )
     if quantity > current_qty:
         raise HTTPException(
             status_code=400,
@@ -240,6 +249,7 @@ async def update_transaction(
             db,
             portfolio_id,
             ticker,
+            asset_type,
             quantity,
             exclude_tx_id=transaction_id,
         )

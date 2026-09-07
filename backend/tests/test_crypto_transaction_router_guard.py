@@ -12,11 +12,13 @@ from app.certification.portfolio_synthetic_fixture import (
     load_portfolio_synthetic_certification_fixture,
 )
 from app.models.transaction import OperationType, Transaction
+from app.models.asset import Asset
 from app.routers import transactions
 from app.schemas.transaction import TransactionCreate, TransactionUpdate
 from app.services.crypto_transaction_eligibility_service import (
     CryptoTransactionEligibilityError,
 )
+from app.services.transaction_write_service import TransactionWriteError
 
 
 def _top_level_call_index(function, call_name: str) -> int:
@@ -139,15 +141,10 @@ def _synthetic_transaction(asset_type: str) -> dict:
 
 
 def test_create_crypto_guard_runs_before_transaction_construction() -> None:
-    guard_index = _top_level_call_index(
-        transactions.create_transaction,
-        "_validate_crypto_transaction_asset",
-    )
-    transaction_index = _transaction_assignment_index(
-        transactions.create_transaction
-    )
+    source = textwrap.dedent(inspect.getsource(transactions.create_transaction))
 
-    assert guard_index < transaction_index
+    assert "create_transaction_record(" in source
+    assert "Transaction(" not in source
 
 
 def test_update_crypto_guard_runs_before_transaction_mutation() -> None:
@@ -167,8 +164,8 @@ def test_crypto_requests_do_not_use_get_or_create_asset_after_commit() -> None:
         inspect.getsource(transactions.create_transaction)
     )
 
-    assert 'if asset_type != "CRIPTO":' in source
-    assert "await get_or_create_asset(db, asset_data)" in source
+    assert "get_or_create_asset" not in source
+    assert "create_transaction_record(" in source
 
 
 @pytest.mark.asyncio
@@ -225,9 +222,11 @@ async def test_rejected_crypto_is_exposed_as_unprocessable_entity(
 async def test_rejected_create_does_not_add_or_commit(monkeypatch) -> None:
     db = _WriteSpySession()
     monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
-    monkeypatch.setattr(
-        transactions, "_validate_crypto_transaction_asset", _reject_crypto
-    )
+
+    async def _reject_write(*_args, **_kwargs):
+        raise TransactionWriteError("CRIPTO APT nÃ£o elegÃ­vel para transaÃ§Ãµes")
+
+    monkeypatch.setattr(transactions, "create_transaction_record", _reject_write)
 
     with pytest.raises(HTTPException) as exc_info:
         await transactions.create_transaction(
@@ -247,7 +246,6 @@ async def test_rejected_create_does_not_add_or_commit(monkeypatch) -> None:
 async def test_fixed_income_buy_persists_only_transaction(monkeypatch) -> None:
     db = _WriteSpySession(execute_value=None)
     monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
-    monkeypatch.setattr(transactions, "get_or_create_asset", _noop_asset)
 
     result = await transactions.create_transaction(
         portfolio_id=1,
@@ -270,9 +268,9 @@ async def test_fixed_income_buy_persists_only_transaction(monkeypatch) -> None:
     assert result.ticker == "CDB-TESTE"
     assert db.commit_called is True
 
-    assert len(db.added) == 1
-    assert isinstance(db.added[0], Transaction)
-    assert db.added[0] is result
+    assert len(db.added) == 2
+    assert any(isinstance(item, Asset) for item in db.added)
+    assert any(item is result for item in db.added)
 
 
 @pytest.mark.asyncio
@@ -285,7 +283,6 @@ async def test_synthetic_fixed_income_rows_use_transactions_as_source_of_truth(
     db = _WriteSpySession(execute_value=None)
     background_tasks = BackgroundTasks()
     monkeypatch.setattr(transactions, "_get_portfolio", _allow_portfolio)
-    monkeypatch.setattr(transactions, "get_or_create_asset", _noop_asset)
 
     result = await transactions.create_transaction(
         portfolio_id=303,
@@ -308,9 +305,9 @@ async def test_synthetic_fixed_income_rows_use_transactions_as_source_of_truth(
     assert result.ticker == row["ticker"]
     assert result.asset_type == asset_type
     assert db.commit_called is True
-    assert len(db.added) == 1
-    assert isinstance(db.added[0], Transaction)
-    assert db.added[0] is result
+    assert len(db.added) == 2
+    assert any(isinstance(item, Asset) for item in db.added)
+    assert any(item is result for item in db.added)
 
 
 @pytest.mark.asyncio

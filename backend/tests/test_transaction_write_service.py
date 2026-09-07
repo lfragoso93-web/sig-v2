@@ -107,6 +107,32 @@ async def test_create_transaction_record_rejects_sell_above_current_quantity() -
 
 
 @pytest.mark.asyncio
+async def test_sell_quantity_lookup_is_scoped_by_asset_type() -> None:
+    db = AsyncMock(spec=AsyncSession)
+    rows = MagicMock()
+    rows.all.return_value = []
+    db.execute = AsyncMock(return_value=rows)
+    payload = TransactionCreate(
+        ticker="SAME",
+        asset_type="ACAO",
+        operation="sell",
+        quantity=1,
+        price=10,
+        fees=0,
+        date="2026-01-03",
+        currency="BRL",
+    )
+
+    with pytest.raises(sut.TransactionWriteError, match="Quantidade insuficiente"):
+        await sut.add_transaction_record(db, portfolio_id=303, payload=payload)
+
+    statement = db.execute.await_args.args[0]
+    assert "transactions.asset_type" in str(statement)
+    db.add.assert_not_called()
+    db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_create_transaction_record_requires_crypto_eligibility() -> None:
     db = AsyncMock(spec=AsyncSession)
     payload = TransactionCreate(

@@ -105,3 +105,44 @@ PETR4,ACAO,buy,1,10,2026-01-02,0,BRL,repetida"""
     assert imported["imported_count"] == 0
     assert imported["error_count"] == 1
     assert await _ticker_count(db, portfolio.id, "PETR4") == 0
+
+
+@pytest.mark.asyncio
+async def test_sell_validation_does_not_use_same_ticker_from_another_asset_type(
+    db,
+    portfolio,
+):
+    portfolio_id = portfolio.id
+    user_id = portfolio.user_id
+    db.add(
+        Transaction(
+            portfolio_id=portfolio_id,
+            ticker="SAME",
+            asset_type="BDR",
+            operation=OperationType.buy,
+            quantity=10,
+            price=20,
+            fees=0,
+            date=date(2026, 1, 2),
+            currency="BRL",
+        )
+    )
+    await db.flush()
+    await db.commit()
+
+    content = """ticker,asset_type,operation,quantity,price,date,fees,currency,notes
+SAME,ACAO,sell,1,10,2026-01-03,0,BRL,classe incorreta"""
+
+    imported = await import_transactions_csv(
+        db=db,
+        portfolio_id=portfolio_id,
+        user_id=user_id,
+        file=_Upload(content),
+        dry_run=False,
+    )
+
+    assert imported["success"] is False
+    assert imported["imported_count"] == 0
+    assert imported["error_count"] == 1
+    assert "Quantidade insuficiente" in imported["rows"][0]["errors"][0]
+    assert await _ticker_count(db, portfolio_id, "SAME") == 1

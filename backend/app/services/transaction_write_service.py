@@ -22,11 +22,13 @@ async def _current_quantity(
     db: AsyncSession,
     portfolio_id: int,
     ticker: str,
+    asset_type: str,
 ) -> float:
     result = await db.execute(
         select(Transaction.operation, Transaction.quantity).where(
             Transaction.portfolio_id == portfolio_id,
             Transaction.ticker == ticker,
+            Transaction.asset_type == asset_type,
         )
     )
     quantity = 0.0
@@ -96,7 +98,7 @@ async def add_transaction_record(
             raise TransactionWriteError(str(exc)) from exc
 
     if operation == OperationType.sell:
-        current_qty = await _current_quantity(db, portfolio_id, ticker)
+        current_qty = await _current_quantity(db, portfolio_id, ticker, asset_type)
         if payload.quantity > current_qty:
             raise TransactionWriteError(
                 f"Quantidade insuficiente para venda de {ticker}. "
