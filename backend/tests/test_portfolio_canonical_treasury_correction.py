@@ -35,7 +35,7 @@ async def test_treasury_correction_preserves_persisted_ticker_case_for_same_iden
     build_positions = AsyncMock(return_value=positions)
     resolve_symbol = AsyncMock(return_value="cert303-tesouro-selic-2029")
     get_price = AsyncMock(return_value=13900.0)
-    monkeypatch.setattr(valuation, "_build_positions_at", build_positions)
+    monkeypatch.setattr(valuation, "build_positions_at", build_positions)
     monkeypatch.setattr(valuation, "resolve_treasury_symbol", resolve_symbol)
     monkeypatch.setattr(valuation, "get_price_at_date", get_price)
 
@@ -76,7 +76,7 @@ async def test_treasury_correction_uses_distinct_canonical_ticker_for_real_alias
     build_positions = AsyncMock(return_value=positions)
     resolve_symbol = AsyncMock(return_value="tesouro-selic-2029")
     get_price = AsyncMock(return_value=13900.0)
-    monkeypatch.setattr(valuation, "_build_positions_at", build_positions)
+    monkeypatch.setattr(valuation, "build_positions_at", build_positions)
     monkeypatch.setattr(valuation, "resolve_treasury_symbol", resolve_symbol)
     monkeypatch.setattr(valuation, "get_price_at_date", get_price)
 
