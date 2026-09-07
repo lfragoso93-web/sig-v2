@@ -1,7 +1,6 @@
 import csv
 import json
 from collections import defaultdict
-from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 from io import StringIO
 from pathlib import Path
@@ -43,12 +42,6 @@ class FakeUpload:
         return self._content
 
 
-@dataclass
-class Lot:
-    quantity: Decimal
-    unit_cost: Decimal
-
-
 def _money(value: Decimal) -> Decimal:
     return value.quantize(CENT, rounding=ROUND_HALF_UP)
 
@@ -84,7 +77,9 @@ def _reconcile(
     transactions: list[dict[str, str]],
     prices: dict[str, str],
 ) -> dict:
-    lots: dict[str, list[Lot]] = defaultdict(list)
+    positions: dict[str, tuple[Decimal, Decimal]] = defaultdict(
+        lambda: (Decimal("0"), Decimal("0"))
+    )
     realized: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
 
     for tx in sorted(transactions, key=lambda row: row["date"]):
@@ -94,36 +89,28 @@ def _reconcile(
         fees = Decimal(tx["fees"])
 
         if tx["operation"] == "buy":
-            lots[ticker].append(
-                Lot(
-                    quantity=quantity,
-                    unit_cost=(quantity * price + fees) / quantity,
-                )
+            held_quantity, held_cost = positions[ticker]
+            positions[ticker] = (
+                held_quantity + quantity,
+                held_cost + quantity * price + fees,
             )
             continue
 
-        remaining_to_sell = quantity
+        held_quantity, held_cost = positions[ticker]
+        average_cost = held_cost / held_quantity if held_quantity > 0 else Decimal("0")
         proceeds = quantity * price - fees
-        cost_released = Decimal("0")
-
-        while remaining_to_sell > 0:
-            current_lot = lots[ticker][0]
-            consumed = min(current_lot.quantity, remaining_to_sell)
-            cost_released += consumed * current_lot.unit_cost
-            current_lot.quantity -= consumed
-            remaining_to_sell -= consumed
-            if current_lot.quantity == 0:
-                lots[ticker].pop(0)
-
+        cost_released = quantity * average_cost
         realized[ticker] += proceeds - cost_released
+        remaining_quantity = held_quantity - quantity
+        positions[ticker] = (
+            max(remaining_quantity, Decimal("0")),
+            max(held_cost - cost_released, Decimal("0")),
+        )
 
     holdings = {}
-    for ticker, ticker_lots in lots.items():
-        quantity = sum((lot.quantity for lot in ticker_lots), Decimal("0"))
-        remaining_cost = sum(
-            (lot.quantity * lot.unit_cost for lot in ticker_lots),
-            Decimal("0"),
-        )
+    for ticker, (quantity, remaining_cost) in positions.items():
+        if quantity <= 0:
+            continue
         market_value = quantity * Decimal(prices[ticker])
         holdings[ticker] = {
             "quantity": f"{_quantity(quantity):.8f}",
@@ -265,6 +252,7 @@ async def test_synthetic_fixture_effective_import_commits_once() -> None:
     assets_seen: set[tuple[str, str]] = set()
     transactions = fixture["transactions"]
     execute_results = [portfolio_result]
+    prior_transactions: list[dict[str, str]] = []
 
     for _transaction in transactions:
         duplicate_result = MagicMock()
@@ -272,27 +260,45 @@ async def test_synthetic_fixture_effective_import_commits_once() -> None:
         execute_results.append(duplicate_result)
 
     for transaction in transactions:
+        if transaction["operation"] == "sell":
+            quantity_result = MagicMock()
+            quantity_result.all.return_value = [
+                (row["operation"], float(row["quantity"]))
+                for row in prior_transactions
+                if row["ticker"] == transaction["ticker"]
+                and row["asset_type"] == transaction["asset_type"]
+            ]
+            execute_results.append(quantity_result)
+
         asset_key = (transaction["ticker"], transaction["asset_type"])
-        asset_result = MagicMock()
-        asset_result.scalar_one_or_none.return_value = (
-            SimpleNamespace(ticker=transaction["ticker"])
-            if asset_key in assets_seen
-            else None
-        )
-        execute_results.append(asset_result)
-        assets_seen.add(asset_key)
+        if transaction["asset_type"] != "CRIPTO":
+            asset_result = MagicMock()
+            asset_result.scalar_one_or_none.return_value = (
+                SimpleNamespace(ticker=transaction["ticker"])
+                if asset_key in assets_seen
+                else None
+            )
+            execute_results.append(asset_result)
+            assets_seen.add(asset_key)
+
+        prior_transactions.append(transaction)
 
     db.execute = AsyncMock(side_effect=execute_results)
     db.add = MagicMock()
     db.flush = AsyncMock()
     db.commit = AsyncMock()
 
-    result = await import_csv_transactions(
-        content=_to_csv(transactions),
-        portfolio_id=303,
-        user_id=303,
-        db=db,
-    )
+    with patch(
+        "app.services.transaction_write_service."
+        "require_financially_certified_crypto_asset",
+        new=AsyncMock(),
+    ):
+        result = await import_csv_transactions(
+            content=_to_csv(transactions),
+            portfolio_id=303,
+            user_id=303,
+            db=db,
+        )
 
     assert result["success"] is True
     assert result["imported_count"] == len(transactions)
@@ -300,7 +306,7 @@ async def test_synthetic_fixture_effective_import_commits_once() -> None:
     assert result["error_count"] == 0
     assert all(row["status"] == "imported" for row in result["rows"])
     assert db.add.call_count == len(transactions) + len(assets_seen)
-    assert db.flush.await_count == len(assets_seen)
+    assert db.flush.await_count == len(transactions) + len(assets_seen)
     db.commit.assert_awaited_once()
     db.rollback.assert_not_awaited()
 
