@@ -7,8 +7,10 @@ from sqlalchemy import func, select
 from app.core.database import AsyncSessionLocal
 from app.models.transaction import Transaction
 from app.services.portfolio_service import invalidate_portfolio_cache
+from app.services.portfolio_snapshot_canonical_twr_service import (
+    backfill_canonical_snapshots_with_returns,
+)
 from app.services.portfolio_snapshot_service import invalidate_snapshots_from
-from app.services.portfolio_snapshot_twr_service import backfill_snapshots_with_returns
 from app.services.rentabilidade_cache_service import invalidate_rentabilidade_cache
 
 logger = logging.getLogger(__name__)
@@ -37,7 +39,7 @@ async def rebuild_snapshots_after_csv_import(portfolio_id: int) -> None:
                 first_date,
                 commit=True,
             )
-            created = await backfill_snapshots_with_returns(db, portfolio_id)
+            created = await backfill_canonical_snapshots_with_returns(db, portfolio_id)
 
             await invalidate_portfolio_cache(portfolio_id)
             await invalidate_rentabilidade_cache(portfolio_id)

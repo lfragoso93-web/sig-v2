@@ -1,7 +1,9 @@
+import inspect
 from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from app.services import csv_snapshot_rebuild_service
 from app.services.csv_snapshot_rebuild_service import (
     rebuild_snapshots_after_csv_import,
 )
@@ -35,7 +37,7 @@ async def test_rebuild_uses_first_transaction_date_and_refreshes_caches():
             new=AsyncMock(return_value=12),
         ) as invalidate,
         patch(
-            "app.services.csv_snapshot_rebuild_service.backfill_snapshots_with_returns",
+            "app.services.csv_snapshot_rebuild_service.backfill_canonical_snapshots_with_returns",
             new=AsyncMock(return_value=400),
         ) as backfill,
         patch(
@@ -77,7 +79,7 @@ async def test_rebuild_skips_when_portfolio_has_no_transactions():
             new=AsyncMock(),
         ) as invalidate,
         patch(
-            "app.services.csv_snapshot_rebuild_service.backfill_snapshots_with_returns",
+            "app.services.csv_snapshot_rebuild_service.backfill_canonical_snapshots_with_returns",
             new=AsyncMock(),
         ) as backfill,
     ):
@@ -104,7 +106,7 @@ async def test_rebuild_failure_is_isolated_from_cache_refresh():
             new=AsyncMock(side_effect=RuntimeError("synthetic rebuild failure")),
         ) as invalidate,
         patch(
-            "app.services.csv_snapshot_rebuild_service.backfill_snapshots_with_returns",
+            "app.services.csv_snapshot_rebuild_service.backfill_canonical_snapshots_with_returns",
             new=AsyncMock(),
         ) as backfill,
         patch(
@@ -132,3 +134,10 @@ async def test_rebuild_failure_is_isolated_from_cache_refresh():
         "[csv_snapshot_rebuild] falha ao reconstruir portfolio=%s",
         7,
     )
+
+
+def test_csv_rebuild_uses_canonical_snapshot_backfill_boundary():
+    source = inspect.getsource(csv_snapshot_rebuild_service)
+
+    assert "backfill_canonical_snapshots_with_returns" in source
+    assert "backfill_snapshots_with_returns" not in source
