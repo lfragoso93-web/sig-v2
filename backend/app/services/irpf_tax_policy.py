@@ -84,6 +84,7 @@ _ALIASES = {
     "ACOES": "ACAO",
     "AÇÕES": "ACAO",
     "STOCK_BR": "ACAO",
+    "ETF_NACIONAL": "ETF",
     "FUNDO_IMOBILIARIO": "FII",
     "FUNDO IMOBILIARIO": "FII",
     "FUNDO IMOBILIÁRIO": "FII",
