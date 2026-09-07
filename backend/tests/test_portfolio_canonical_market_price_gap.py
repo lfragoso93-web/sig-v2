@@ -20,7 +20,7 @@ async def test_base_totals_fail_closed_on_real_market_price_gap(monkeypatch):
     )
     monkeypatch.setattr(
         service,
-        "_build_positions_at",
+        "build_positions_at",
         AsyncMock(return_value={"CERT303-GAP": state}),
     )
     monkeypatch.setattr(
@@ -49,7 +49,7 @@ async def test_base_totals_allows_pre_listing_cost_proxy(monkeypatch):
     )
     monkeypatch.setattr(
         service,
-        "_build_positions_at",
+        "build_positions_at",
         AsyncMock(return_value={"CERT303-PRE": state}),
     )
     monkeypatch.setattr(
