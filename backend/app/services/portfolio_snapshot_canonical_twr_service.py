@@ -16,6 +16,7 @@ from app.services.canonical_dividend_aggregation_service import (
 from app.services.canonical_dividend_entitlement_reader import (
     load_portfolio_dividend_entitlements,
 )
+from app.services.fixed_income_valuation_service import IncompleteBenchmarkCoverageError
 from app.services.portfolio_canonical_valuation_service import (
     calculate_canonical_portfolio_totals,
 )
@@ -74,7 +75,20 @@ async def backfill_canonical_snapshots_with_returns(
 
     while cursor <= today:
         if cursor.weekday() < 5:
-            totals = await calculate_canonical_portfolio_totals(db, portfolio_id, cursor)
+            try:
+                totals = await calculate_canonical_portfolio_totals(
+                    db,
+                    portfolio_id,
+                    cursor,
+                )
+            except IncompleteBenchmarkCoverageError as exc:
+                logger.warning(
+                    "[snapshot_twr_canonical] portfolio=%s stop=%s reason=%s",
+                    portfolio_id,
+                    cursor,
+                    exc,
+                )
+                break
             realized_pnl, net_external_flow = calculate_transaction_components(
                 transactions,
                 cursor,
