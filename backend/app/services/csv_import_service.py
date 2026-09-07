@@ -4,11 +4,16 @@ from datetime import datetime, date as DateType
 from typing import Tuple, List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.transaction import Transaction, OperationType
-from app.models.asset import Asset, AssetType
+from app.models.asset import AssetType
 from app.models.portfolio import Portfolio
 from sqlalchemy import select
 from app.core.log_safety import sanitize_log_value
+from app.schemas.transaction import TransactionCreate
 from app.services.portfolio_service import invalidate_portfolio_cache
+from app.services.transaction_write_service import (
+    TransactionWriteError,
+    add_transaction_record,
+)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -453,6 +458,7 @@ async def import_csv_transactions(
         return result
 
     created_transactions = []
+    creation_failed = False
 
     for csv_row in rows:
         try:
@@ -468,35 +474,22 @@ async def import_csv_transactions(
 
             parsed_date = _parse_date(date_str)
 
-            asset = await db.execute(
-                select(Asset).where(
-                    (Asset.ticker == ticker) & (Asset.asset_type == asset_type)
-                )
-            )
-            asset_obj = asset.scalar_one_or_none()
-
-            if not asset_obj:
-                asset_obj = Asset(
+            transaction = await add_transaction_record(
+                db,
+                portfolio_id=portfolio_id,
+                payload=TransactionCreate(
                     ticker=ticker,
                     asset_type=asset_type,
+                    operation=operation,
+                    quantity=quantity,
+                    price=price,
+                    fees=fees,
+                    date=parsed_date,
                     currency=currency,
-                )
-                db.add(asset_obj)
-                await db.flush()
-
-            transaction = Transaction(
-                portfolio_id=portfolio_id,
-                ticker=ticker,
-                asset_type=asset_type,
-                operation=operation,
-                quantity=quantity,
-                price=price,
-                fees=fees,
-                date=parsed_date,
-                currency=currency,
-                notes=notes if notes else None,
+                    notes=notes if notes else None,
+                ),
+                flush=True,
             )
-            db.add(transaction)
             created_transactions.append(transaction)
 
             result["rows"].append({
@@ -510,7 +503,8 @@ async def import_csv_transactions(
             })
             result["imported_count"] += 1
 
-        except Exception as e:
+        except (TransactionWriteError, ValueError) as e:
+            creation_failed = True
             logger.error(
                 "Error importing row %d: %s",
                 csv_row.row_num,
@@ -523,6 +517,12 @@ async def import_csv_transactions(
                 "status": "error",
             })
             result["error_count"] += 1
+
+    if creation_failed:
+        await db.rollback()
+        result["success"] = False
+        result["imported_count"] = 0
+        return result
 
     if created_transactions:
         try:

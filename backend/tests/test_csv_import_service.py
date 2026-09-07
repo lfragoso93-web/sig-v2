@@ -1,4 +1,6 @@
 """Testes para csv_import_service — importacao de transacoes via CSV."""
+import inspect
+
 import pytest
 from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -14,6 +16,7 @@ from app.services.csv_import_service import (
     _parse_date,
     CSVRow,
 )
+from app.services import csv_import_service
 
 
 class TestGenerateCSVTemplate:
@@ -44,6 +47,13 @@ class TestGenerateCSVTemplate:
         reader = csv.DictReader(io.StringIO(template))
         rows = list(reader)
         assert len(rows) == 3
+
+
+def test_import_csv_transactions_uses_canonical_write_boundary():
+    source = inspect.getsource(csv_import_service.import_csv_transactions)
+
+    assert "add_transaction_record(" in source
+    assert "Transaction(" not in source
 
 
 class TestCSVRowClass:
