@@ -1,9 +1,10 @@
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.asset import Asset
+from app.models.transaction import Transaction
 from app.schemas.transaction import TransactionCreate
 from app.services import transaction_write_service as sut
 
@@ -14,6 +15,9 @@ async def test_create_transaction_record_persists_and_resolves_non_crypto_asset(
     db.add = MagicMock()
     db.commit = AsyncMock()
     db.refresh = AsyncMock()
+    asset_result = MagicMock()
+    asset_result.scalar_one_or_none.return_value = None
+    db.execute = AsyncMock(return_value=asset_result)
     payload = TransactionCreate(
         ticker=" petr4 ",
         asset_type="ACAO",
@@ -26,23 +30,56 @@ async def test_create_transaction_record_persists_and_resolves_non_crypto_asset(
         notes="test",
     )
 
-    with patch(
-        "app.services.transaction_write_service.get_or_create_asset",
-        new_callable=AsyncMock,
-        return_value=(SimpleNamespace(ticker="PETR4"), True),
-    ) as get_or_create_asset:
-        result = await sut.create_transaction_record(
-            db,
-            portfolio_id=303,
-            payload=payload,
-        )
+    result = await sut.create_transaction_record(
+        db,
+        portfolio_id=303,
+        payload=payload,
+    )
 
     assert result.ticker == "PETR4"
     assert result.portfolio_id == 303
-    db.add.assert_called_once_with(result)
+    added_objects = [call.args[0] for call in db.add.call_args_list]
+    assert any(isinstance(obj, Asset) and obj.ticker == "PETR4" for obj in added_objects)
+    assert result in added_objects
     db.commit.assert_awaited_once()
     db.refresh.assert_awaited_once_with(result)
-    get_or_create_asset.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_add_transaction_record_preserves_caller_transaction_boundary() -> None:
+    db = AsyncMock(spec=AsyncSession)
+    db.add = MagicMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+    db.flush = AsyncMock()
+    asset_result = MagicMock()
+    asset_result.scalar_one_or_none.return_value = None
+    db.execute = AsyncMock(return_value=asset_result)
+    payload = TransactionCreate(
+        ticker="VALE3",
+        asset_type="ACAO",
+        operation="buy",
+        quantity=5,
+        price=70,
+        fees=0,
+        date="2026-01-03",
+        currency="BRL",
+    )
+
+    result = await sut.add_transaction_record(
+        db,
+        portfolio_id=303,
+        payload=payload,
+        flush=True,
+    )
+
+    assert isinstance(result, Transaction)
+    assert result.ticker == "VALE3"
+    assert result.portfolio_id == 303
+    assert db.add.call_count == 2
+    db.flush.assert_awaited()
+    db.commit.assert_not_awaited()
+    db.refresh.assert_not_awaited()
 
 
 @pytest.mark.asyncio

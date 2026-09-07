@@ -1,14 +1,13 @@
-"""Canonical transaction write service shared by HTTP and certification callers."""
+"""Canonical transaction write service shared by HTTP, CSV and certification callers."""
 
 from __future__ import annotations
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.asset import Asset
 from app.models.transaction import OperationType, Transaction
-from app.schemas.asset import AssetCreate
 from app.schemas.transaction import TransactionCreate
-from app.services.asset_service import get_or_create_asset
 from app.services.crypto_transaction_eligibility_service import (
     CryptoTransactionEligibilityError,
     require_financially_certified_crypto_asset,
@@ -40,16 +39,46 @@ async def _current_quantity(
     return max(quantity, 0.0)
 
 
-async def create_transaction_record(
+async def _add_catalog_asset_if_missing(
+    db: AsyncSession,
+    *,
+    ticker: str,
+    asset_type: str,
+    currency: str,
+    flush: bool,
+) -> None:
+    result = await db.execute(
+        select(Asset).where(
+            Asset.ticker == ticker,
+            Asset.asset_type == asset_type,
+        )
+    )
+    if result.scalar_one_or_none() is not None:
+        return
+
+    db.add(
+        Asset(
+            ticker=ticker,
+            name=ticker,
+            asset_type=asset_type,
+            currency=currency,
+        )
+    )
+    if flush:
+        await db.flush()
+
+
+async def add_transaction_record(
     db: AsyncSession,
     *,
     portfolio_id: int,
     payload: TransactionCreate,
+    flush: bool = False,
 ) -> Transaction:
-    """Persist one transaction using the canonical domain write path.
+    """Add one transaction using the canonical domain write path.
 
-    This function deliberately does not schedule snapshots/cache invalidation;
-    callers own post-commit orchestration appropriate to their surface.
+    This function deliberately does not commit, refresh, or schedule snapshots/cache
+    invalidation; callers own transaction boundaries and post-commit orchestration.
     """
     ticker = payload.ticker.strip().upper()
     asset_type = payload.asset_type
@@ -74,6 +103,16 @@ async def create_transaction_record(
                 f"Posicao atual: {current_qty:.4f} | Tentativa: {payload.quantity:.4f}"
             )
 
+    currency = payload.currency or "BRL"
+    if asset_type != "CRIPTO":
+        await _add_catalog_asset_if_missing(
+            db,
+            ticker=ticker,
+            asset_type=asset_type,
+            currency=currency,
+            flush=flush,
+        )
+
     transaction = Transaction(
         portfolio_id=portfolio_id,
         ticker=ticker,
@@ -83,17 +122,33 @@ async def create_transaction_record(
         price=payload.price,
         fees=payload.fees or 0.0,
         date=payload.date,
-        currency=payload.currency or "BRL",
+        currency=currency,
         notes=payload.notes,
     )
     db.add(transaction)
+
+    if flush:
+        await db.flush()
+
+    return transaction
+
+
+async def create_transaction_record(
+    db: AsyncSession,
+    *,
+    portfolio_id: int,
+    payload: TransactionCreate,
+) -> Transaction:
+    """Persist one transaction using the canonical domain write path.
+
+    This function deliberately does not schedule snapshots/cache invalidation;
+    callers own post-commit orchestration appropriate to their surface.
+    """
+    transaction = await add_transaction_record(
+        db,
+        portfolio_id=portfolio_id,
+        payload=payload,
+    )
     await db.commit()
     await db.refresh(transaction)
-
-    if asset_type != "CRIPTO":
-        await get_or_create_asset(
-            db,
-            AssetCreate(ticker=ticker, name=ticker, asset_type=asset_type),
-        )
-
     return transaction
