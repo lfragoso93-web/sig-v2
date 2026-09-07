@@ -66,3 +66,13 @@ def test_snapshot_cycle_does_not_use_provider_prefetch():
 
     assert "prefetch=False" in source
     assert "provider" not in source.lower()
+
+
+def test_snapshot_replay_is_backed_by_unique_upsert_contract():
+    service = Path("app/services/portfolio_snapshot_service.py").read_text(
+        encoding="utf-8"
+    )
+    model = Path("app/models/portfolio_snapshot.py").read_text(encoding="utf-8")
+
+    assert 'constraint="uq_snapshot_portfolio_date"' in service
+    assert 'name="uq_snapshot_portfolio_date"' in model
