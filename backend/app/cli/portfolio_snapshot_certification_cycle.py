@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping
 from datetime import date
 from decimal import Decimal
 
@@ -38,13 +39,22 @@ def _money(value: object) -> Decimal:
     return Decimal(str(value)).quantize(_MONEY)
 
 
+def _snapshot_value(values: object, key: str) -> object:
+    if isinstance(values, Mapping):
+        return values[key]
+    return getattr(values, key)
+
+
 def _snapshot_signature(values: object) -> tuple[Decimal, ...]:
-    return (
-        _money(getattr(values, "market_value", values["market_value"])),
-        _money(getattr(values, "cost_basis", values["cost_basis"])),
-        _money(getattr(values, "realized_pnl", values["realized_pnl"])),
-        _money(getattr(values, "unrealized_pnl", values["unrealized_pnl"])),
-        _money(getattr(values, "total_pnl", values["total_pnl"])),
+    return tuple(
+        _money(_snapshot_value(values, key))
+        for key in (
+            "market_value",
+            "cost_basis",
+            "realized_pnl",
+            "unrealized_pnl",
+            "total_pnl",
+        )
     )
 
 
