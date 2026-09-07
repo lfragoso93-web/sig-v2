@@ -1,8 +1,10 @@
 from pathlib import Path
 
 
-def test_reconciliation_identity_lookup_requires_active_owned_user_and_portfolio():
-    source = Path("app/cli/portfolio_certification_reconcile.py").read_text(encoding="utf-8")
+def test_shared_certification_identity_requires_active_owned_user_and_portfolio():
+    source = Path(
+        "app/certification/portfolio_certification_identity.py"
+    ).read_text(encoding="utf-8")
 
     for token in (
         "User.email == identity.user_email",
@@ -14,3 +16,10 @@ def test_reconciliation_identity_lookup_requires_active_owned_user_and_portfolio
         "Portfolio.is_active.is_(True)",
     ):
         assert token in source
+
+
+def test_reconciliation_cli_reuses_shared_certification_identity():
+    source = Path("app/cli/portfolio_certification_reconcile.py").read_text(encoding="utf-8")
+
+    assert "load_certification_portfolio_identity" in source
+    assert "select(Portfolio.id, User.id)" not in source
