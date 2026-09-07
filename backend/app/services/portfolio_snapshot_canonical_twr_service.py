@@ -8,6 +8,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.transaction import Transaction
 from app.services.canonical_dividend_aggregation_service import (
     group_received_entitlements_by_day,
@@ -39,6 +40,7 @@ _DIAGNOSTIC_PREFIXES = (
     "pre_listing_",
     "real_price_",
 )
+_SNAPSHOT_COLUMNS = set(PortfolioSnapshot.__table__.columns.keys())
 
 
 async def backfill_canonical_snapshots_with_returns(
@@ -107,7 +109,8 @@ async def backfill_canonical_snapshots_with_returns(
             snapshot_fields = {
                 key: value
                 for key, value in totals.items()
-                if not key.startswith(_DIAGNOSTIC_PREFIXES)
+                if key in _SNAPSHOT_COLUMNS
+                and not key.startswith(_DIAGNOSTIC_PREFIXES)
             }
             values = {
                 **snapshot_fields,
