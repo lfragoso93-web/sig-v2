@@ -5,20 +5,18 @@ import asyncio
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import select
-
+from app.certification.portfolio_certification_identity import (
+    load_certification_portfolio_identity,
+)
 from app.certification.portfolio_financial_reconciliation import (
     assert_declared_financial_expectations,
     calculate_independent_class_distribution,
     calculate_independent_financial_reconciliation,
 )
-from app.certification.portfolio_seed_contract import load_synthetic_seed_identity
 from app.certification.portfolio_synthetic_fixture import (
     load_portfolio_synthetic_certification_fixture,
 )
 from app.core.database import AsyncSessionLocal
-from app.models.portfolio import Portfolio
-from app.models.user import User, UserRole
 from app.services.dividend_service import list_dividends
 from app.services.portfolio_canonical_valuation_service import (
     calculate_canonical_portfolio_totals,
@@ -33,27 +31,6 @@ def _money(value: object) -> Decimal:
     return Decimal(str(value)).quantize(_MONEY)
 
 
-async def _load_portfolio_identity(db) -> tuple[int, int]:
-    identity = load_synthetic_seed_identity()
-    result = await db.execute(
-        select(Portfolio.id, User.id)
-        .join(User, User.id == Portfolio.user_id)
-        .where(
-            User.email == identity.user_email,
-            User.name == identity.user_name,
-            User.role == UserRole.user,
-            User.is_active.is_(True),
-            Portfolio.name == identity.portfolio_name,
-            Portfolio.description == identity.ownership_marker,
-            Portfolio.is_active.is_(True),
-        )
-    )
-    rows = list(result.all())
-    if len(rows) != 1:
-        raise RuntimeError("synthetic certification portfolio identity is not unique")
-    return int(rows[0][0]), int(rows[0][1])
-
-
 async def main() -> None:
     fixture = load_portfolio_synthetic_certification_fixture()
     target_date = date.fromisoformat(fixture["market_prices"]["as_of"])
@@ -62,7 +39,7 @@ async def main() -> None:
     assert_declared_financial_expectations(fixture, expected)
 
     async with AsyncSessionLocal() as db:
-        portfolio_id, user_id = await _load_portfolio_identity(db)
+        portfolio_id, user_id = await load_certification_portfolio_identity(db)
         positions = await build_positions_at(db, portfolio_id, target_date)
         totals = await calculate_canonical_portfolio_totals(db, portfolio_id, target_date)
         snapshot_totals = await calc_snapshot_totals(db, portfolio_id, target_date)
