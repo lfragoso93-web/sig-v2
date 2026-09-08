@@ -24,6 +24,10 @@ async def test_canonical_totals_substitui_proxy_de_renda_fixa(monkeypatch):
             "unrealized_pnl": Decimal("0.00"),
             "total_pnl": Decimal("0.00"),
             "return_pct": Decimal("0.0000"),
+            "market_value_by_class": {
+                "ACAO": Decimal("600.00"),
+                "RENDA_FIXA": Decimal("400.00"),
+            },
         }
 
     async def fake_fixed_income(*_args, **_kwargs):
@@ -56,6 +60,7 @@ async def test_canonical_totals_sem_renda_fixa_preserva_base(monkeypatch):
         "unrealized_pnl": Decimal("50.00"),
         "total_pnl": Decimal("50.00"),
         "return_pct": Decimal("6.2500"),
+        "market_value_by_class": {"ACAO": Decimal("850.00")},
     }
 
     async def fake_base(*_args, **_kwargs):
@@ -78,3 +83,4 @@ async def test_canonical_totals_sem_renda_fixa_preserva_base(monkeypatch):
     assert result["unrealized_pnl"] == base["unrealized_pnl"]
     assert result["total_pnl"] == base["total_pnl"]
     assert result["return_pct"] == base["return_pct"]
+    assert result["market_value_by_class"] == base["market_value_by_class"]
