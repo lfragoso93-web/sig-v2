@@ -57,4 +57,4 @@ def test_transactions_router_keeps_local_snapshot_recalculation() -> None:
 
     assert "_run_snapshot_backfill" in source
     assert "invalidate_portfolio_cache" in source
-    assert "get_or_create_asset" in source
+    assert "create_transaction_record" in source
