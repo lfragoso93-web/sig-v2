@@ -158,16 +158,62 @@ async def test_refuses_reserved_email_with_different_user_name(monkeypatch):
 @pytest.mark.asyncio
 async def test_refuses_existing_user_when_password_does_not_match(monkeypatch):
     db = SimpleNamespace()
+    existing_portfolio = _portfolio()
     monkeypatch.setattr(
         sut.user_service,
         "get_user_by_email",
         AsyncMock(return_value=_user()),
     )
-    monkeypatch.setattr(sut, "_load_reserved_portfolios", AsyncMock(return_value=[]))
+    monkeypatch.setattr(
+        sut,
+        "_load_reserved_portfolios",
+        AsyncMock(return_value=[existing_portfolio]),
+    )
+    monkeypatch.setattr(
+        sut.portfolio_service,
+        "list_portfolios",
+        AsyncMock(return_value=[existing_portfolio]),
+    )
     monkeypatch.setattr(sut, "verify_password", lambda plain, hashed: False)
 
     with pytest.raises(sut.SyntheticSeedIdentityError, match="password does not match"):
         await sut.provision_synthetic_user_portfolio(db, password=PASSWORD)
+
+
+@pytest.mark.asyncio
+async def test_rotates_existing_owned_user_password_only_when_requested(monkeypatch):
+    db = AsyncMock()
+    existing_user = _user()
+    existing_portfolio = _portfolio()
+
+    monkeypatch.setattr(
+        sut.user_service,
+        "get_user_by_email",
+        AsyncMock(return_value=existing_user),
+    )
+    monkeypatch.setattr(
+        sut,
+        "_load_reserved_portfolios",
+        AsyncMock(return_value=[existing_portfolio]),
+    )
+    monkeypatch.setattr(
+        sut.portfolio_service,
+        "list_portfolios",
+        AsyncMock(return_value=[existing_portfolio]),
+    )
+    monkeypatch.setattr(sut, "verify_password", lambda plain, hashed: False)
+    monkeypatch.setattr(sut, "hash_password", lambda plain: f"hashed:{plain}")
+
+    result = await sut.provision_synthetic_user_portfolio(
+        db,
+        password=PASSWORD,
+        rotate_password=True,
+    )
+
+    assert result.password_rotated is True
+    assert existing_user.hashed_password == f"hashed:{PASSWORD}"
+    db.commit.assert_awaited_once()
+    db.refresh.assert_awaited_once_with(existing_user)
 
 
 @pytest.mark.asyncio

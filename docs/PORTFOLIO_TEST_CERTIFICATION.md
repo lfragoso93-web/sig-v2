@@ -249,6 +249,27 @@ Evidencia operacional de validacao assistida descartavel - 08/09/2026:
   `PASS`;
 - `/ready` permaneceu fechado com `ready_for_real_data=false`.
 
+Evidencia operacional de banco alimentado para testes assistidos - 08/09/2026:
+
+- backend reconstruido e recriado localmente antes do seed operacional;
+- seed sintetico idempotente executado com senha descartavel fornecida por
+  ambiente, sem credencial versionada:
+  `CERT303-SEED user_id=14 portfolio_id=13 user_created=false portfolio_created=false password_rotated=false transactions_created=0 transactions_reused=11 crypto_membership_created=0 crypto_membership_reused=1 market_prices_created=0 market_prices_reused=5 dividends_created=0 dividends_reused=1 treasury_prices_created=0 treasury_prices_reused=1 benchmark_rates_created=0 benchmark_rates_reused=1 benchmark_coverages_created=0 benchmark_coverages_reused=1`;
+- normalizacao fail-closed aplicada ao ativo sintetico legado `CERT303-BTC`,
+  restrita a ticker, classe, nome e moeda da identidade reservada #303;
+- certificacao de reconciliacao Docker:
+  `CERT303-RECONCILE portfolio_id=13 date=2026-02-28 positions=7 remaining_cost=37629.30 market_value=38960.00 realized_pnl=450.80 open_pnl=1330.70 income=20.00 total_pnl_with_income=1801.50 status=PASS`;
+- certificacao IRPF Docker:
+  `CERT303-IRPF portfolio_id=13 year=2026 disposals=2 gross_sales=3700.00 swing_realized=450.80 taxable_base=198.00 gross_tax=29.70 irrf=0.19 net_tax=29.51 payment_due=29.51 day_trade_tax=0.00 status=PASS`;
+- certificacao TWR Docker permaneceu `PASS`, com `RENDA_FIXA` explicitamente
+  indisponivel para cadeia diaria dedicada ate a #149;
+- ciclo de snapshot Docker:
+  `CERT303-SNAPSHOT-CYCLE portfolio_id=13 date=2026-02-28 market_value=38960.00 cost_basis=37629.30 realized_pnl=450.80 unrealized_pnl=1330.70 total_pnl=1781.50 replay_rows=1 invalidated=1 mutated_total_pnl=1780.50 restored_total_pnl=1781.50 status=PASS`;
+- smoke HTTP interno confirmou login `200` e listagem `200` da carteira
+  `PORTFOLIO-TEST-READY synthetic multiclasse` para `user_id=14`;
+- banco local esta pronto para validacao assistida de carteiras apenas com dados
+  ficticios/descartaveis; `/ready` e `ready_for_real_data` permanecem fechados.
+
 ## Ordem obrigatória
 
 ### A. Baseline local

@@ -11,6 +11,7 @@ from app.certification.portfolio_seed_contract import (
     SyntheticSeedContractError,
     load_synthetic_seed_identity,
 )
+from app.core.security import hash_password
 from app.core.security import verify_password
 from app.models.portfolio import Portfolio
 from app.models.user import User, UserRole
@@ -29,9 +30,16 @@ class SyntheticSeedProvisionResult:
     portfolio_id: int
     user_created: bool
     portfolio_created: bool
+    password_rotated: bool = False
 
 
 def _assert_owned_user(user: User, password: str) -> None:
+    _assert_owned_user_identity(user)
+    if not verify_password(password, user.hashed_password):
+        raise SyntheticSeedIdentityError("synthetic certification password does not match existing user")
+
+
+def _assert_owned_user_identity(user: User) -> None:
     identity = load_synthetic_seed_identity()
     if user.email != identity.user_email:
         raise SyntheticSeedIdentityError("synthetic user email does not match reserved identity")
@@ -41,8 +49,13 @@ def _assert_owned_user(user: User, password: str) -> None:
         raise SyntheticSeedIdentityError("synthetic certification user must keep role=user")
     if user.is_active is not True:
         raise SyntheticSeedIdentityError("synthetic certification user must remain active")
-    if not verify_password(password, user.hashed_password):
-        raise SyntheticSeedIdentityError("synthetic certification password does not match existing user")
+
+
+async def _rotate_owned_user_password(db: AsyncSession, user: User, password: str) -> None:
+    _assert_owned_user_identity(user)
+    user.hashed_password = hash_password(password)
+    await db.commit()
+    await db.refresh(user)
 
 
 def _assert_owned_portfolio(portfolio: Portfolio) -> None:
@@ -65,6 +78,7 @@ async def provision_synthetic_user_portfolio(
     db: AsyncSession,
     *,
     password: str,
+    rotate_password: bool = False,
 ) -> SyntheticSeedProvisionResult:
     """Create or reuse only the exact disposable identity reserved by issue #303.
 
@@ -104,7 +118,7 @@ async def provision_synthetic_user_portfolio(
             portfolio_created=True,
         )
 
-    _assert_owned_user(existing_user, password)
+    _assert_owned_user_identity(existing_user)
 
     user_portfolios = await portfolio_service.list_portfolios(db, existing_user.id)
     if len(user_portfolios) > 1:
@@ -118,12 +132,24 @@ async def provision_synthetic_user_portfolio(
             raise SyntheticSeedIdentityError(
                 "reserved synthetic portfolio name is also used by another portfolio"
             )
+        password_matches = verify_password(password, existing_user.hashed_password)
+        password_rotated = False
+        if not password_matches:
+            if not rotate_password:
+                raise SyntheticSeedIdentityError(
+                    "synthetic certification password does not match existing user"
+                )
+            await _rotate_owned_user_password(db, existing_user, password)
+            password_rotated = True
         return SyntheticSeedProvisionResult(
             user_id=existing_user.id,
             portfolio_id=portfolio.id,
             user_created=False,
             portfolio_created=False,
+            password_rotated=password_rotated,
         )
+
+    _assert_owned_user(existing_user, password)
 
     if reserved_portfolios:
         raise SyntheticSeedIdentityError(

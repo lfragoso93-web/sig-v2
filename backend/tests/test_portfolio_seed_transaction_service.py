@@ -9,6 +9,7 @@ from app.certification.portfolio_seed_contract import SyntheticSeedContractError
 from app.certification.portfolio_seed_transaction_service import (
     LEGACY_SYNTHETIC_CDB_NOTES,
     SYNTHETIC_CDB_TICKER,
+    _require_owned_asset,
     _reconcile_existing_certification_notes,
     seed_transactions,
 )
@@ -38,6 +39,7 @@ def _owned_asset(source_ticker: str) -> SimpleNamespace:
         id=303,
         ticker=f"CERT303-{source_ticker}",
         name=f"SGI certification #303 synthetic asset [{source_ticker}]",
+        currency="BRL",
         provider="synthetic-certification",
         provider_symbol=source_ticker,
         provider_status="synthetic-owned",
@@ -222,6 +224,7 @@ async def test_seed_fails_closed_on_asset_namespace_collision() -> None:
     collision = MagicMock()
     collision.scalar_one_or_none.return_value = SimpleNamespace(
         name="real asset accidentally using reserved namespace",
+        currency="BRL",
         provider="brapi",
         provider_symbol="PETR4",
         provider_status="READY",
@@ -230,6 +233,43 @@ async def test_seed_fails_closed_on_asset_namespace_collision() -> None:
 
     with pytest.raises(SyntheticSeedContractError, match="ownership is ambiguous"):
         await seed_transactions(db, portfolio_id=303)
+
+
+@pytest.mark.asyncio
+async def test_require_owned_asset_normalizes_exact_legacy_synthetic_asset() -> None:
+    db = AsyncMock(spec=AsyncSession)
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+    legacy_asset = SimpleNamespace(
+        id=2869,
+        ticker="CERT303-BTC",
+        asset_type="CRIPTO",
+        name="SGI certification #303 synthetic asset [BTC]",
+        currency="BRL",
+        provider="yfinance",
+        provider_symbol="CERT303-BTC-USD",
+        provider_status="HISTORY_END_UNAVAILABLE",
+    )
+    query_result = MagicMock()
+    query_result.scalar_one_or_none.return_value = legacy_asset
+    db.execute = AsyncMock(return_value=query_result)
+
+    asset = await _require_owned_asset(
+        db,
+        ticker="CERT303-BTC",
+        asset_type="CRIPTO",
+        expected_name="SGI certification #303 synthetic asset [BTC]",
+        expected_provider="synthetic-certification",
+        expected_provider_symbol="BTC",
+        expected_provider_status="synthetic-owned",
+    )
+
+    assert asset is legacy_asset
+    assert legacy_asset.provider == "synthetic-certification"
+    assert legacy_asset.provider_symbol == "BTC"
+    assert legacy_asset.provider_status == "synthetic-owned"
+    db.commit.assert_awaited_once()
+    db.refresh.assert_awaited_once_with(legacy_asset)
 
 
 @pytest.mark.asyncio

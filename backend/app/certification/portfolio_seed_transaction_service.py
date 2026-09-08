@@ -199,6 +199,13 @@ async def _require_owned_asset(
         expected_provider_status,
     )
     if actual != expected:
+        if asset.name == expected_name and asset.currency == "BRL":
+            asset.provider = expected_provider
+            asset.provider_symbol = expected_provider_symbol
+            asset.provider_status = expected_provider_status
+            await db.commit()
+            await db.refresh(asset)
+            return asset
         raise SyntheticSeedContractError(
             f"synthetic asset collision for {ticker}; ownership is ambiguous"
         )

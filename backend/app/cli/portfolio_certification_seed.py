@@ -23,6 +23,7 @@ from app.core.database import AsyncSessionLocal
 
 
 PASSWORD_ENV = "SGI_CERT303_PASSWORD"
+ROTATE_PASSWORD_ENV = "SGI_CERT303_ROTATE_PASSWORD"
 
 
 async def _run() -> None:
@@ -31,7 +32,11 @@ async def _run() -> None:
         raise SystemExit(f"{PASSWORD_ENV} is required")
 
     async with AsyncSessionLocal() as db:
-        identity = await provision_synthetic_user_portfolio(db, password=password)
+        identity = await provision_synthetic_user_portfolio(
+            db,
+            password=password,
+            rotate_password=os.getenv(ROTATE_PASSWORD_ENV) == "1",
+        )
         transactions = await seed_transactions(
             db,
             portfolio_id=identity.portfolio_id,
@@ -47,6 +52,7 @@ async def _run() -> None:
         f"portfolio_id={identity.portfolio_id} "
         f"user_created={str(identity.user_created).lower()} "
         f"portfolio_created={str(identity.portfolio_created).lower()} "
+        f"password_rotated={str(identity.password_rotated).lower()} "
         f"transactions_created={transactions.created} "
         f"transactions_reused={transactions.reused} "
         f"crypto_membership_created={transactions.crypto_membership_created} "
