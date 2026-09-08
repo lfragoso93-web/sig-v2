@@ -22,7 +22,11 @@ from app.schemas.portfolio_summary import PortfolioSummaryResponse
 from app.services.canonical_dividend_aggregation_service import (
     load_received_entitlement_totals,
 )
-from app.services.fixed_income_valuation_service import get_fixed_income_totals
+from app.services.fixed_income_valuation_service import (
+    RENDA_FIXA_TYPE,
+    IncompleteBenchmarkCoverageError,
+    get_fixed_income_totals,
+)
 from app.services.persisted_fx_query_service import get_persisted_usd_brl_rate
 from app.services.portfolio_reconciliation_service import reconcile_snapshot_summary
 from app.services.portfolio_service import (
@@ -111,7 +115,20 @@ async def _get_latest_snapshot(db: AsyncSession, portfolio_id: int) -> Portfolio
 
 async def _get_intraday_valuation(db: AsyncSession, portfolio_id: int) -> dict:
     enriched = await _non_fixed_income_enriched(db, portfolio_id)
-    fixed_income = await get_fixed_income_totals(db, portfolio_id)
+    fixed_income_unavailable: str | None = None
+    try:
+        fixed_income = await get_fixed_income_totals(db, portfolio_id)
+    except IncompleteBenchmarkCoverageError as exc:
+        logger.warning(
+            "[summary_fixed_income_unavailable] portfolio=%s reason=%s",
+            sanitize_log_value(portfolio_id),
+            sanitize_log_value(str(exc)),
+        )
+        fixed_income_unavailable = RENDA_FIXA_TYPE
+        fixed_income = {
+            "invested_amount": 0,
+            "current_value": 0,
+        }
     total_invested = sum(position["total_invested"] for position in enriched) + float(
         fixed_income["invested_amount"]
     )
@@ -127,13 +144,18 @@ async def _get_intraday_valuation(db: AsyncSession, portfolio_id: int) -> dict:
         for position in enriched
         if position["asset_type"] in _MARKET_PRICE_TYPES
     ]
-    assets_without_price = tuple(
+    market_assets_without_price = tuple(
         position["ticker"]
         for position in price_eligible_positions
         if position.get("current_price") is None
     )
+    assets_without_price = market_assets_without_price
+    if fixed_income_unavailable:
+        assets_without_price = (*assets_without_price, fixed_income_unavailable)
     price_assets_total = len(price_eligible_positions)
-    price_assets_covered = price_assets_total - len(assets_without_price)
+    price_assets_covered = price_assets_total - len(market_assets_without_price)
+    if fixed_income_unavailable:
+        price_assets_total += 1
     price_coverage_pct = (
         price_assets_covered / price_assets_total * 100
         if price_assets_total

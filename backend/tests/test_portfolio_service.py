@@ -4,6 +4,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from app.models.transaction import OperationType
 from app.schemas.portfolio import PortfolioCreate, PortfolioUpdate
+from app.services import portfolio_service
+from app.services.benchmark_rate_service import BenchmarkCoverageStatus
+from app.services.fixed_income_valuation_service import IncompleteBenchmarkCoverageError
 from app.services.portfolio_service import (
     build_group_performance_metrics,
     calc_raw_positions,
@@ -275,6 +278,63 @@ async def test_get_portfolio_positions_not_found():
         await get_portfolio_positions(db, portfolio_id=999, user_id=1)
     
     assert exc_info.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_portfolio_positions_degrades_when_fixed_income_benchmark_is_partial(monkeypatch):
+    db = AsyncMock(spec=AsyncSession)
+    enriched_positions = [
+        {
+            "ticker": "PETR4",
+            "asset_type": "ACAO",
+            "quantity": 100.0,
+            "avg_price": 10.0,
+            "avg_price_usd": None,
+            "total_invested": 1_000.0,
+            "current_price": 12.0,
+            "current_price_usd": None,
+            "current_value": 1_200.0,
+            "result_abs": 200.0,
+            "result_pct": 20.0,
+            "is_usd": False,
+        },
+    ]
+
+    monkeypatch.setattr(portfolio_service, "cache_get", AsyncMock(return_value=None))
+    monkeypatch.setattr(portfolio_service, "cache_set", AsyncMock())
+    monkeypatch.setattr(portfolio_service, "get_portfolio", AsyncMock(return_value=object()))
+    monkeypatch.setattr(
+        portfolio_service,
+        "_non_fixed_income_enriched",
+        AsyncMock(return_value=enriched_positions),
+    )
+    monkeypatch.setattr(portfolio_service, "get_targets_map", AsyncMock(return_value={}))
+    monkeypatch.setattr(
+        portfolio_service,
+        "_fetch_previous_prices_batch",
+        AsyncMock(return_value=({}, None)),
+    )
+    monkeypatch.setattr(portfolio_service, "_fetch_logos_batch", AsyncMock(return_value={}))
+    monkeypatch.setattr(portfolio_service, "sum_dividends_by_ticker", AsyncMock(return_value={}))
+    monkeypatch.setattr(
+        portfolio_service,
+        "get_fixed_income_valuations",
+        AsyncMock(
+            side_effect=IncompleteBenchmarkCoverageError(
+                "CDI",
+                date(2026, 4, 14),
+                date(2026, 9, 8),
+                BenchmarkCoverageStatus.PARTIAL,
+            )
+        ),
+    )
+
+    positions = await get_portfolio_positions(db, portfolio_id=15, user_id=16)
+
+    assert len(positions) == 1
+    assert positions[0]["asset_type"] == "ACAO"
+    assert positions[0]["total_value"] == 1_200.0
+    assert positions[0]["positions"][0]["ticker"] == "PETR4"
 
 
 @pytest.mark.asyncio

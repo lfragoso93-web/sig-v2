@@ -178,3 +178,38 @@ Interromper a rodada e manter `ready_for_real_data=false` se ocorrer:
 - usuario acessando carteira de outro usuario;
 - SuperAdmin exposto a usuario comum;
 - importacao CSV real ou seed real fora da issue autorizadora.
+
+## Finding real assistido - 08/09/2026
+
+Usuario: `lfragoso93@gmail.com`.
+
+Evidencia: apos importar CSV com ativos B3, a carteira `Principal`
+aparentava nao carregar dados em Resumo/Posicoes.
+
+Diagnostico:
+
+- a importacao persistiu 308 transacoes e 65 ativos distintos;
+- nao havia transacao sem ativo canonico correspondente;
+- a carteira ainda nao possuia posicoes/snapshots materializados;
+- os endpoints quebravam porque renda fixa com benchmark CDI parcial em
+  `2026-04-14..2026-09-08` propagava `IncompleteBenchmarkCoverageError`.
+
+Correcao aplicada:
+
+- Resumo canonico e legado preservam os totais nao-RF quando renda fixa esta
+  indisponivel por cobertura parcial de benchmark;
+- Posicoes preservam os grupos nao-RF e registram a indisponibilidade de renda
+  fixa em log;
+- o resumo marca `RENDA_FIXA` em `assets_without_price` e ajusta a cobertura
+  para explicitar que existe pendencia, sem derrubar toda a carteira.
+
+Validacao:
+
+- testes focados: `24 passed`;
+- runtime local: carteira `portfolio_id=15`, usuario `user_id=16`, retornou
+  resumo com `total_patrimonio=20678.08`, `has_partial_prices=true`, 8 grupos e
+  34 posicoes abertas.
+
+Status de liberacao: bug P0 da superficie foi removido para rodada assistida,
+mas `ready_for_real_data` continua `false` ate fechar cobertura/precos
+pendentes e os gates formais.

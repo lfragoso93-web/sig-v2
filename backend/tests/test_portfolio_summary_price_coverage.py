@@ -1,12 +1,15 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-
 from app.services import portfolio_summary_service
-from app.services.portfolio_summary_service import _build_summary_from_valuation_fallback
+from app.services.benchmark_rate_service import BenchmarkCoverageStatus
+from app.services.fixed_income_valuation_service import IncompleteBenchmarkCoverageError
+from app.services.portfolio_summary_service import (
+    _build_summary_from_valuation_fallback,
+)
 
 
 @pytest.mark.asyncio
@@ -89,3 +92,64 @@ async def test_summary_reports_complete_and_partial_price_coverage(
     assert summary["has_partial_prices"] is missing_price
     assert summary["valuation_mode"] == "intraday"
     assert summary["summary_source"] == "valuation_fallback"
+
+
+@pytest.mark.asyncio
+async def test_summary_degrades_when_fixed_income_benchmark_is_partial(monkeypatch) -> None:
+    monkeypatch.setattr(
+        portfolio_summary_service,
+        "_non_fixed_income_enriched",
+        AsyncMock(
+            return_value=[
+                {
+                    "ticker": "PETR4",
+                    "asset_type": "ACAO",
+                    "total_invested": 1_100.0,
+                    "current_value": 1_250.0,
+                    "current_price": 12.5,
+                },
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        portfolio_summary_service,
+        "get_fixed_income_totals",
+        AsyncMock(
+            side_effect=IncompleteBenchmarkCoverageError(
+                "CDI",
+                date(2026, 4, 14),
+                date(2026, 9, 8),
+                BenchmarkCoverageStatus.PARTIAL,
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        portfolio_summary_service,
+        "_get_received_dividend_totals",
+        AsyncMock(return_value=(0.0, 0.0)),
+    )
+    monkeypatch.setattr(
+        portfolio_summary_service,
+        "get_realized_pnl",
+        AsyncMock(return_value=0.0),
+    )
+    monkeypatch.setattr(
+        portfolio_summary_service,
+        "get_persisted_usd_brl_rate",
+        AsyncMock(return_value=5.4),
+    )
+
+    db = AsyncMock()
+    db.execute.return_value = SimpleNamespace(
+        scalar_one_or_none=lambda: datetime(2026, 9, 8, 15, 30, tzinfo=timezone.utc),
+    )
+
+    summary = await _build_summary_from_valuation_fallback(db, 15)
+
+    assert summary["total_investido"] == 1_100
+    assert summary["total_patrimonio"] == 1_250
+    assert summary["has_partial_prices"] is True
+    assert summary["assets_without_price"] == ["RENDA_FIXA"]
+    assert summary["price_assets_total"] == 2
+    assert summary["price_assets_covered"] == 1
+    assert summary["price_coverage_pct"] == 50.0
