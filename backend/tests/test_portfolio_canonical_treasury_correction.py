@@ -22,7 +22,7 @@ def test_average_price_is_zero_for_zero_quantity() -> None:
 
 
 @pytest.mark.asyncio
-async def test_treasury_correction_preserves_persisted_ticker_case_for_same_identity(
+async def test_treasury_correction_uses_persisted_ticker_for_same_identity(
     monkeypatch,
 ) -> None:
     positions = {
@@ -34,10 +34,12 @@ async def test_treasury_correction_preserves_persisted_ticker_case_for_same_iden
     }
     build_positions = AsyncMock(return_value=positions)
     resolve_symbol = AsyncMock(return_value="cert303-tesouro-selic-2029")
-    get_price = AsyncMock(return_value=13900.0)
+    persisted_ticker = AsyncMock(return_value="cert303-tesouro-selic-2029")
+    get_price = AsyncMock(return_value=Decimal("13900.0"))
     monkeypatch.setattr(valuation, "build_positions_at", build_positions)
     monkeypatch.setattr(valuation, "resolve_treasury_symbol", resolve_symbol)
-    monkeypatch.setattr(valuation, "get_price_at_date", get_price)
+    monkeypatch.setattr(valuation, "_persisted_treasury_ticker", persisted_ticker)
+    monkeypatch.setattr(valuation, "_treasury_price_at_or_before", get_price)
 
     result = await valuation._treasury_correction_at_date(
         AsyncMock(),
@@ -54,11 +56,14 @@ async def test_treasury_correction_preserves_persisted_ticker_case_for_same_iden
         ANY,
         "CERT303-TESOURO-SELIC-2029",
     )
+    persisted_ticker.assert_awaited_once_with(
+        ANY,
+        "cert303-tesouro-selic-2029",
+    )
     get_price.assert_awaited_once_with(
         ANY,
-        "CERT303-TESOURO-SELIC-2029",
-        AssetType.TESOURO_DIRETO,
-        "2026-02-28",
+        "cert303-tesouro-selic-2029",
+        date(2026, 2, 28),
     )
 
 
@@ -75,10 +80,12 @@ async def test_treasury_correction_uses_distinct_canonical_ticker_for_real_alias
     }
     build_positions = AsyncMock(return_value=positions)
     resolve_symbol = AsyncMock(return_value="tesouro-selic-2029")
-    get_price = AsyncMock(return_value=13900.0)
+    persisted_ticker = AsyncMock(return_value="tesouro-selic-2029")
+    get_price = AsyncMock(return_value=Decimal("13900.0"))
     monkeypatch.setattr(valuation, "build_positions_at", build_positions)
     monkeypatch.setattr(valuation, "resolve_treasury_symbol", resolve_symbol)
-    monkeypatch.setattr(valuation, "get_price_at_date", get_price)
+    monkeypatch.setattr(valuation, "_persisted_treasury_ticker", persisted_ticker)
+    monkeypatch.setattr(valuation, "_treasury_price_at_or_before", get_price)
 
     result = await valuation._treasury_correction_at_date(
         AsyncMock(),
@@ -91,9 +98,9 @@ async def test_treasury_correction_uses_distinct_canonical_ticker_for_real_alias
         "matched": 1,
         "unresolved": 0,
     }
+    persisted_ticker.assert_awaited_once_with(ANY, "tesouro-selic-2029")
     get_price.assert_awaited_once_with(
         ANY,
         "tesouro-selic-2029",
-        AssetType.TESOURO_DIRETO,
-        "2026-02-28",
+        date(2026, 2, 28),
     )

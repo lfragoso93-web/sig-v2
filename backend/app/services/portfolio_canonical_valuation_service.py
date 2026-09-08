@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.asset_types import DEDICATED_PRICE_TYPES, NO_QUOTE_TYPES
 from app.models.asset import Asset, AssetType
+from app.models.asset_price import AssetPrice
 from app.models.transaction import OperationType, Transaction
 from app.services.fixed_income_valuation_service import (
     RENDA_FIXA_TYPE,
@@ -27,7 +28,6 @@ from app.services.fixed_income_valuation_service import (
 from app.services.fx_rate_reader import load_usd_brl_rate_at_or_before
 from app.services.lifecycle_aware_price_service import get_prices_at_date_with_lifecycle
 from app.services.portfolio_position_state_service import build_positions_at
-from app.services.price_history_service import get_price_at_date
 from app.services.treasury_catalog_service import resolve_treasury_symbol
 
 _ZERO = Decimal("0")
@@ -51,6 +51,37 @@ def _average_price_from_state(state: object) -> Decimal:
     qty = Decimal(str(getattr(state, "qty", 0) or 0))
     cost = Decimal(str(getattr(state, "cost", 0) or 0))
     return cost / qty if qty else _ZERO
+
+
+async def _persisted_treasury_ticker(db: AsyncSession, canonical: str) -> str:
+    result = await db.execute(
+        select(Asset.ticker).where(
+            Asset.asset_type == _TREASURY_TYPE,
+            func.lower(Asset.ticker) == canonical.lower(),
+        )
+    )
+    found = result.scalars().first()
+    return str(found) if found else canonical
+
+
+async def _treasury_price_at_or_before(
+    db: AsyncSession,
+    ticker: str,
+    target_date: date,
+) -> Decimal | None:
+    result = await db.execute(
+        select(AssetPrice.close)
+        .join(Asset, AssetPrice.asset_id == Asset.id)
+        .where(
+            Asset.asset_type == _TREASURY_TYPE,
+            func.lower(Asset.ticker) == ticker.lower(),
+            func.date(AssetPrice.timestamp) <= target_date,
+        )
+        .order_by(AssetPrice.timestamp.desc())
+        .limit(1)
+    )
+    price = result.scalars().first()
+    return Decimal(str(price)) if price is not None else None
 
 
 async def _base_totals_without_dedicated_lookup(
@@ -237,18 +268,13 @@ async def _treasury_correction_at_date(
             unresolved += 1
             continue
 
-        price_ticker = ticker if canonical.lower() == ticker.lower() else canonical
-        price = await get_price_at_date(
-            db,
-            price_ticker,
-            AssetType.TESOURO_DIRETO,
-            target_date.isoformat(),
-        )
+        price_ticker = await _persisted_treasury_ticker(db, canonical)
+        price = await _treasury_price_at_or_before(db, price_ticker, target_date)
         if price is None:
             unresolved += 1
             continue
 
-        canonical_value = state.qty * Decimal(str(price))
+        canonical_value = state.qty * price
         proxy_value = state.cost
         correction += canonical_value - proxy_value
         matched += 1

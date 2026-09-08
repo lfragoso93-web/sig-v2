@@ -94,8 +94,29 @@ Validacao:
 - carteira 15 passou a ter snapshots de `2026-08-10` a `2026-09-08`;
 - Resumo canonico retornou `snapshot_date=2026-09-08`, 9 grupos e 35 posicoes.
 
-Pendencia remanescente:
+## Bloco Tesouro - normalizacao e historico
 
-- Tesouro importado ainda aparece com simbolos que nao resolvem no catalogo:
-  `TESOURO-RENDA-MAIS-2060`, `TESOURO-RENDA-MAIS-2065` e
-  `TESOURO-SELIC-01032031`.
+Correcao aplicada:
+
+- valuation canonico de Tesouro passa a resolver o simbolo no catalogo
+  persistido e consultar o ticker exatamente como esta no banco, evitando falha
+  por diferenca de caixa entre CSV/importacao e `assets`;
+- leitura de preco atual persistido passou a ser case-insensitive, preservando a
+  chave solicitada pelo chamador;
+- leitura historica persistida e leitura historica em lote passaram a ser
+  case-insensitive, incluindo o endpoint publico de historico;
+- correcao canonica de Tesouro usa o ultimo preco oficial persistido ate a data
+  do snapshot, sem chamar provider e sem inventar valor quando nao ha serie.
+
+Validacao:
+
+- testes focados: `11 passed`;
+- backend Docker reconstruido;
+- rebuild limitado da carteira 15 atualizou 22 snapshots;
+- Resumo canonico da carteira 15 retornou `has_partial_prices=false`,
+  `assets_without_price=[]`, `price_coverage_pct=100.0` e
+  `snapshot_date=2026-09-08`;
+- Posicoes exibiram `TESOURO-RENDA-MAIS-2060`, `TESOURO-RENDA-MAIS-2065` e
+  `TESOURO-SELIC-01032031` com preco atual e valor de mercado;
+- historico publico de `TESOURO-RENDA-MAIS-2065` retornou serie recente ate
+  `2026-09-08`.

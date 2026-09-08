@@ -231,5 +231,18 @@ Bloco operacional de cobertura:
   `2026-04-14..2026-09-08`;
 - rebuild da carteira 15 criou/atualizou 22 snapshots e o resumo passou a usar
   `snapshot_date=2026-09-08`;
-- pendencia remanescente para rodada real assistida: normalizacao/cobertura dos
-  simbolos de Tesouro importados.
+- a pendencia de normalizacao/cobertura dos simbolos de Tesouro importados foi
+  promovida para o bloco seguinte e resolvida abaixo.
+
+Bloco Tesouro validado:
+
+- valuation canonico, preco atual e historico persistido agora resolvem tickers
+  de Tesouro de forma case-insensitive, preservando a chave solicitada pela API;
+- a correcao canonica usa o ultimo preco oficial persistido ate a data do
+  snapshot, sem fallback externo em leitura;
+- validacao focada: `11 passed`;
+- runtime da carteira 15: rebuild de 22 snapshots, `has_partial_prices=false`,
+  `assets_without_price=[]`, `price_coverage_pct=100.0` e posicoes de Tesouro
+  com preco atual/valor calculado;
+- historico de `TESOURO-RENDA-MAIS-2065` retornou serie recente ate
+  `2026-09-08`.
