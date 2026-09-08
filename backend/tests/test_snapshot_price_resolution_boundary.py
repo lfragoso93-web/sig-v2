@@ -23,6 +23,12 @@ SNAPSHOT_PATH = (
     / "services"
     / "portfolio_snapshot_service.py"
 )
+CANONICAL_VALUATION_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "app"
+    / "services"
+    / "portfolio_canonical_valuation_service.py"
+)
 
 
 @pytest.mark.asyncio
@@ -57,11 +63,13 @@ async def test_unresolved_price_fails_explicitly() -> None:
 
 def test_snapshot_consumer_has_no_broad_prefetch_or_price_proxy() -> None:
     source = SNAPSHOT_PATH.read_text(encoding="utf-8")
+    valuation_source = CANONICAL_VALUATION_PATH.read_text(encoding="utf-8")
     assert "_prefetch_price_history" not in source
     assert "persist_daily_prices" not in source
     assert "usando avg_price como proxy" not in source
     assert "state.avg_price" not in source
-    assert "resolve_missing_snapshot_prices" in source
+    assert "calculate_canonical_portfolio_totals" in source
+    assert "get_prices_at_date_with_lifecycle" in valuation_source
 
 
 def test_resolution_service_has_no_broad_history_fetch() -> None:

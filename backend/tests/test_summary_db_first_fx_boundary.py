@@ -27,6 +27,12 @@ SNAPSHOT_PRICE_RESOLUTION_PATH = (
     / "services"
     / "snapshot_price_resolution_service.py"
 )
+CANONICAL_VALUATION_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "app"
+    / "services"
+    / "portfolio_canonical_valuation_service.py"
+)
 
 
 def _imported_modules(module) -> set[str]:
@@ -101,11 +107,13 @@ def test_snapshot_price_resolution_has_no_provider_boundary() -> None:
 
 def test_snapshot_service_must_use_persisted_market_readers_only() -> None:
     source = SNAPSHOT_SERVICE_PATH.read_text(encoding="utf-8")
+    valuation_source = CANONICAL_VALUATION_PATH.read_text(encoding="utf-8")
 
     assert "app.services.fx_service" not in source
     assert "get_usd_brl_today" not in source
     assert "get_usd_brl_for_date" not in source
     assert "app.services.price_history_service" not in source
     assert "get_prices_at_date_batch" not in source
-    assert "get_persisted_usd_brl_rate_for_date" in source
-    assert "get_persisted_prices_at_date_batch" in source
+    assert "calculate_canonical_portfolio_totals" in source
+    assert "load_usd_brl_rate_at_or_before" in valuation_source
+    assert "get_prices_at_date_with_lifecycle" in valuation_source
