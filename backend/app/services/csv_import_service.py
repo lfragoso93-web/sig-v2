@@ -31,6 +31,11 @@ CSV_TEMPLATE_HEADERS = [
     "currency",
     "notes",
 ]
+CRYPTO_TICKER_ALIASES = {
+    "BITCOIN": "BTC",
+    "ETHEREUM": "ETH",
+    "CARDANO": "ADA",
+}
 
 
 def generate_csv_template() -> str:
@@ -205,6 +210,13 @@ def _safe_float(value: Any) -> float | None:
         return None
 
 
+def _normalize_csv_ticker(ticker: str, asset_type: str) -> str:
+    normalized = ticker.strip().upper()
+    if asset_type.strip().upper() == AssetType.CRIPTO.value:
+        return CRYPTO_TICKER_ALIASES.get(normalized, normalized)
+    return normalized
+
+
 def _transaction_identity(row: CSVRow) -> tuple[str, str, str, float, float, DateType, float, str]:
     data = row.data
     return (
@@ -293,14 +305,18 @@ async def parse_csv_content(
                 rows.append(csv_row)
                 continue
 
-            ticker = raw_row.get("ticker", "").strip().upper()
             asset_type = raw_row.get("asset_type", "").strip().upper()
+            ticker = _normalize_csv_ticker(raw_row.get("ticker", ""), asset_type)
+            raw_row["ticker"] = ticker
+            raw_row["asset_type"] = asset_type
             operation = raw_row.get("operation", "").strip().lower()
+            raw_row["operation"] = operation
             quantity_str = raw_row.get("quantity", "").strip()
             price_str = raw_row.get("price", "").strip()
             date_str = raw_row.get("date", "").strip()
             fees_str = raw_row.get("fees", "0").strip()
             currency = raw_row.get("currency", "BRL").strip().upper()
+            raw_row["currency"] = currency
             if not ticker:
                 csv_row.add_error("ticker is required")
 

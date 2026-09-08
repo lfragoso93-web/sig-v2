@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.transaction import Transaction, OperationType
 from app.models.asset import Asset, AssetType
 from app.models.portfolio import Portfolio
+from app.services.transaction_write_service import TransactionWriteError
 from app.services.csv_import_service import (
     generate_csv_template,
     parse_csv_content,
@@ -133,6 +134,19 @@ VALE3,ACAO,buy,50,80.00,2024-02-20,5.00,BRL,"""
         assert len(rows) == 2
         assert rows[0].is_valid()
         assert rows[1].is_valid()
+
+    async def test_parse_normalizes_common_crypto_names_to_canonical_tickers(self):
+        content = """ticker,asset_type,operation,quantity,price,date,fees,currency,notes
+Bitcoin,CRIPTO,buy,0.01,300000,2026-01-15,0,BRL,
+ethereum,CRIPTO,buy,0.10,15000,2026-01-16,0,BRL,
+CARDANO,CRIPTO,buy,10,5,2026-01-17,0,BRL,"""
+
+        db = AsyncMock(spec=AsyncSession)
+        rows, global_errors = await parse_csv_content(content, 1, db)
+
+        assert global_errors == []
+        assert [row.data["ticker"] for row in rows] == ["BTC", "ETH", "ADA"]
+        assert all(row.is_valid() for row in rows)
 
     async def test_parse_csv_missing_headers(self):
         content = """ticker,quantity,price
@@ -307,6 +321,95 @@ PETR4,ACAO,buy,100,25.50,2024-01-15,10.00,BRL,Compra inicial"""
 
         assert result["success"] is True
         assert result["imported_count"] == 1
+
+    async def test_import_uses_canonical_crypto_ticker_aliases(self):
+        content = """ticker,asset_type,operation,quantity,price,date,fees,currency,notes
+Bitcoin,CRIPTO,buy,0.01,300000,2026-01-15,0,BRL,cripto por nome comum"""
+
+        db = AsyncMock(spec=AsyncSession)
+
+        portfolio = MagicMock(spec=Portfolio)
+        portfolio.user_id = 1
+
+        portfolio_result = MagicMock()
+        portfolio_result.scalar_one_or_none = MagicMock(return_value=portfolio)
+
+        existing_tx_result = MagicMock()
+        existing_tx_result.scalar_one_or_none = MagicMock(return_value=None)
+
+        db.execute = AsyncMock(side_effect=[portfolio_result, existing_tx_result])
+        db.commit = AsyncMock()
+
+        with (
+            patch(
+                "app.services.csv_import_service.add_transaction_record",
+                new_callable=AsyncMock,
+            ) as add_record,
+            patch(
+                "app.services.csv_import_service.invalidate_portfolio_cache",
+                new_callable=AsyncMock,
+            ),
+        ):
+            add_record.return_value = Transaction()
+            result = await import_csv_transactions(content, 1, 1, db)
+
+        assert result["success"] is True
+        assert result["imported_count"] == 1
+        payload = add_record.await_args.kwargs["payload"]
+        assert payload.ticker == "BTC"
+        assert result["rows"][0]["ticker"] == "BTC"
+
+    async def test_import_rolls_back_when_later_canonical_writer_row_fails(self):
+        content = """ticker,asset_type,operation,quantity,price,date,fees,currency,notes
+PETR4,ACAO,buy,100,25.50,2024-01-15,10.00,BRL,ok
+UNKNOWN,CRIPTO,buy,1,10,2024-01-16,0,BRL,erro"""
+
+        db = AsyncMock(spec=AsyncSession)
+
+        portfolio = MagicMock(spec=Portfolio)
+        portfolio.user_id = 1
+
+        portfolio_result = MagicMock()
+        portfolio_result.scalar_one_or_none = MagicMock(return_value=portfolio)
+
+        first_duplicate_check = MagicMock()
+        first_duplicate_check.scalar_one_or_none = MagicMock(return_value=None)
+        second_duplicate_check = MagicMock()
+        second_duplicate_check.scalar_one_or_none = MagicMock(return_value=None)
+
+        db.execute = AsyncMock(
+            side_effect=[
+                portfolio_result,
+                first_duplicate_check,
+                second_duplicate_check,
+            ]
+        )
+        db.commit = AsyncMock()
+        db.rollback = AsyncMock()
+
+        with (
+            patch(
+                "app.services.csv_import_service.add_transaction_record",
+                new_callable=AsyncMock,
+            ) as add_record,
+            patch(
+                "app.services.csv_import_service.invalidate_portfolio_cache",
+                new_callable=AsyncMock,
+            ) as invalidate,
+        ):
+            add_record.side_effect = [
+                Transaction(),
+                TransactionWriteError("cripto invalida"),
+            ]
+            result = await import_csv_transactions(content, 1, 1, db)
+
+        assert result["success"] is False
+        assert result["imported_count"] == 0
+        assert result["error_count"] == 1
+        assert add_record.await_count == 2
+        db.rollback.assert_awaited_once()
+        db.commit.assert_not_awaited()
+        invalidate.assert_not_awaited()
 
     async def test_import_skips_duplicate_transaction_without_reinserting(self):
         content = """ticker,asset_type,operation,quantity,price,date,fees,currency,notes
