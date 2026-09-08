@@ -50,10 +50,17 @@ async def test_benchmark_import_repeated_execution_uses_upsert_without_duplicate
     upserts = [
         call.args[0]
         for call in db.execute.await_args_list
-        if "INSERT INTO rate_history" in str(call.args[0])
+        if "INSERT INTO rate_history (" in str(call.args[0])
+    ]
+    coverage_upserts = [
+        call.args[0]
+        for call in db.execute.await_args_list
+        if "INSERT INTO rate_history_coverage" in str(call.args[0])
     ]
     assert len(upserts) == 2
     assert all("ON CONFLICT" in str(statement) for statement in upserts)
+    assert len(coverage_upserts) == 2
+    assert all("ON CONFLICT" in str(statement) for statement in coverage_upserts)
 
 
 class _CorporateEventsResult:
