@@ -183,6 +183,19 @@ async def resolve_treasury_symbol(db: AsyncSession, raw: str | None) -> Optional
         return None
 
     lower = value.lower()
+    canonical = canonical_treasury_symbol_from_text(value)
+    if canonical and canonical.lower() != lower:
+        canonical_exists = await db.execute(
+            select(Asset.ticker).where(
+                Asset.asset_type == _TREASURY_TYPE,
+                func.lower(Asset.ticker) == canonical.lower(),
+                func.coalesce(Asset.provider_status, "") != _INACTIVE_STATUS,
+            )
+        )
+        found = canonical_exists.scalars().first()
+        if found:
+            return str(found).lower()
+
     exact = await db.execute(
         select(Asset.ticker).where(
             Asset.asset_type == _TREASURY_TYPE,
@@ -208,7 +221,6 @@ async def resolve_treasury_symbol(db: AsyncSession, raw: str | None) -> Optional
     if found:
         return str(found).lower()
 
-    canonical = canonical_treasury_symbol_from_text(value)
     if canonical:
         canonical_exists = await db.execute(
             select(Asset.ticker).where(

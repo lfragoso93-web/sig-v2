@@ -1,5 +1,6 @@
 from datetime import date
 
+from app.integrations.brapi_treasury import canonical_treasury_symbol_from_text
 from app.integrations.tesouro_transparente import (
     _canonical_symbol,
     _legacy_maturity_symbol,
@@ -50,6 +51,21 @@ def test_commercial_year_rules_for_renda_and_educa():
     assert _canonical_symbol(
         "Tesouro Educa+", "15/12/2030"
     ) == "tesouro-educa-mais-2026"
+
+
+def test_common_treasury_text_resolves_to_full_canonical_symbols():
+    assert (
+        canonical_treasury_symbol_from_text("TESOURO SELIC 2031")
+        == "tesouro-selic-01032031"
+    )
+    assert (
+        canonical_treasury_symbol_from_text("TESOURO PREFIXADO 2028")
+        == "tesouro-prefixado-01012028"
+    )
+    assert (
+        canonical_treasury_symbol_from_text("TESOURO IPCA+ 2035")
+        == "tesouro-ipca-15082035"
+    )
 
 
 def test_legacy_maturity_symbols_are_available_for_migration():
