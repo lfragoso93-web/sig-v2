@@ -4,6 +4,26 @@ Issue mae: #227
 Gate funcional: #303
 Branch obrigatoria: `stable-15jun`
 
+## Status atual - 08/09/2026
+
+GO para usuarios convidados testarem jornadas assistidas com contas, carteiras e
+dados ficticios/descartaveis.
+
+NO-GO para usuarios, carteiras, CSV, seeds, snapshots ou posicoes reais. A flag
+`ready_for_real_data` deve permanecer `false` ate a conclusao formal dos gates
+#226, #216, #158 e #227.
+
+Baseline operacional publicado: `59a6a9fc741d557324233065137a9c1a25d4af64`.
+
+Carteira sintetica ja alimentada no banco local de validacao:
+
+- usuario: `portfolio-certification-303@example.com`;
+- carteira: `PORTFOLIO-TEST-READY synthetic multiclasse`;
+- `user_id=14`;
+- `portfolio_id=13`;
+- fixture #303 com 11 transacoes, precos sinteticos, provento sintetico,
+  Tesouro, Renda Fixa, cripto e matriz IRPF certificada.
+
 ## Objetivo
 
 Validar o SGI v2 com usuarios convidados em jornadas controladas antes de

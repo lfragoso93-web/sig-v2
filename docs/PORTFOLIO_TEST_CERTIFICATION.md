@@ -118,10 +118,14 @@ Estado consolidado da certificacao local:
   fail-closed parcial, matriz IRPF, modal CSV critico e Redis fail-open;
 - concluido em nivel operacional: Compose local, health de PostgreSQL/Redis,
   restart de backend/Redis/Compose, persistencia do volume PostgreSQL,
-  verificacao de snapshots/cache apos restart e smoke UI autenticado;
-- pendente para aprovar o gate: revisar os criterios funcionais ainda sem
-  evidencia conclusiva, corrigir blockers remanescentes caso existam, manter a
-  documentacao sincronizada e registrar o SHA final aprovado.
+  verificacao de snapshots/cache apos restart, smoke UI autenticado e banco
+  local alimentado para a carteira sintetica #303;
+- status em 08/09/2026: GO para validacao assistida por usuarios com dados
+  ficticios/descartaveis no baseline
+  `59a6a9fc741d557324233065137a9c1a25d4af64`;
+- pendente para `ready_for_real_data=true`: concluir formalmente os gates reais
+  #226, #216, #158 e #227, corrigir blockers remanescentes caso existam,
+  manter a documentacao sincronizada e registrar o SHA final aprovado.
 
 Evidencia local adicional:
 
