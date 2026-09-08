@@ -231,6 +231,24 @@ Evidencia operacional de runtime alinhado ao HEAD:
   `ready_for_real_data=false`;
 - `alembic current` permaneceu `20260820_dividend_occurrence (head)`.
 
+Evidencia operacional de validacao assistida descartavel - 08/09/2026:
+
+- runbook de validacao com usuarios de teste publicado em
+  `docs/USER_VALIDATION_RUNBOOK.md`;
+- SHA local/remoto validado: `9ce6331540bb3c96dcb21df0a5660e494a9b860a`;
+- frontend local validado com `npm ci`, `typecheck`, `lint`, Vitest e build;
+- backend local validado com suite completa fora do sandbox:
+  `1880 passed`, `1 skipped`, `10 warnings`;
+- Docker local permaneceu saudavel para `backend`, `db`, `redis`, `frontend` e
+  `cloudflared`;
+- certificacoes sinteticas Docker permaneceram `PASS` para reconciliacao,
+  IRPF, disponibilidade TWR e ciclo de snapshot;
+- smoke HTTP descartavel executado no backend Docker:
+  `TEST-READY-HTTP-SMOKE:PASS portfolio_id=14 btc_tx_id=None sell_tx_id=81 canonical_transactions=6`;
+- limpeza automatica do usuario/carteira descartavel e do FX sintetico retornou
+  `PASS`;
+- `/ready` permaneceu fechado com `ready_for_real_data=false`.
+
 ## Ordem obrigatória
 
 ### A. Baseline local
