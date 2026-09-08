@@ -33,6 +33,7 @@ from app.services.treasury_catalog_service import resolve_treasury_symbol
 _ZERO = Decimal("0")
 _MONEY = Decimal("0.01")
 _PCT = Decimal("0.0001")
+_CLASS_TOTAL_ROUNDING_TOLERANCE = Decimal("0.01")
 _TREASURY_TYPE = AssetType.TESOURO_DIRETO.value
 _NON_MARKET_TYPES = NO_QUOTE_TYPES | DEDICATED_PRICE_TYPES
 
@@ -292,10 +293,22 @@ async def calculate_canonical_portfolio_totals(
         ).quantize(_MONEY)
 
     class_total = sum(market_value_by_class.values(), _ZERO).quantize(_MONEY)
-    if class_total != market_value.quantize(_MONEY):
+    rounded_market_value = market_value.quantize(_MONEY)
+    class_delta = rounded_market_value - class_total
+    if class_delta and abs(class_delta) <= _CLASS_TOTAL_ROUNDING_TOLERANCE:
+        adjustment_key = max(
+            market_value_by_class,
+            key=lambda item: abs(market_value_by_class[item]),
+        )
+        market_value_by_class[adjustment_key] = (
+            market_value_by_class[adjustment_key] + class_delta
+        ).quantize(_MONEY)
+        class_total = sum(market_value_by_class.values(), _ZERO).quantize(_MONEY)
+
+    if class_total != rounded_market_value:
         raise RuntimeError(
             "distribuição canônica por classe divergiu do patrimônio: "
-            f"classes={class_total} total={market_value.quantize(_MONEY)}"
+            f"classes={class_total} total={rounded_market_value}"
         )
 
     return_base = cost_basis + max(realized_pnl, _ZERO)

@@ -57,3 +57,45 @@ Validacao adicional:
   pendencia explicita para `AREA11`, `INTR`, `IVV`, `NVDA` e `TFLO`;
 - dry-run runtime na carteira 15 bloqueou `NVDA`, `IVV` e `AREA11` por
   historico de precos persistido indisponivel, mantendo `PETR4` valido.
+
+## Bloco operacional - reparo de cobertura e snapshots
+
+Execucoes operacionais controladas no banco local de validacao:
+
+- `repair_market_price_gaps NVDA`: 6.949 linhas inseridas, primeira cotacao em
+  `1999-01-22`;
+- `repair_market_price_gaps TFLO`: 3.167 linhas inseridas, primeira cotacao em
+  `2014-02-04`;
+- `repair_market_price_gaps IVV`: cobertura confirmada com 6.614 linhas,
+  primeira cotacao em `2000-05-19`;
+- `repair_market_price_gaps INTR`: cobertura confirmada com 1.056 linhas,
+  primeira cotacao em `2022-06-23`;
+- `repair_market_price_gaps AREA11`: cobertura confirmada com 208 linhas,
+  primeira cotacao em `2025-10-27`;
+- `repair_market_price_gaps RBRF11`: cobertura ampliada para 2.492 linhas,
+  primeira cotacao em `2017-09-15`.
+
+Benchmark:
+
+- seed macro oficial executado pelo wrapper `pre_prod_macro_seed.ps1`;
+- evidencia: `artifacts/pre-prod-rebuild/20260908-195126/macro-seed.json`;
+- CDI `2026-04-14..2026-09-08` validou como `complete`.
+
+Correcao de runtime:
+
+- a reconciliacao canonica por classe agora ajusta residuo de arredondamento de
+  ate R$ 0,01 na maior classe e continua rejeitando divergencia material.
+
+Validacao:
+
+- testes focados de valuation/snapshot: `7 passed`;
+- backend Docker reconstruido e `/health` 200;
+- rebuild limitado da carteira 15 criou/atualizou 22 snapshots;
+- carteira 15 passou a ter snapshots de `2026-08-10` a `2026-09-08`;
+- Resumo canonico retornou `snapshot_date=2026-09-08`, 9 grupos e 35 posicoes.
+
+Pendencia remanescente:
+
+- Tesouro importado ainda aparece com simbolos que nao resolvem no catalogo:
+  `TESOURO-RENDA-MAIS-2060`, `TESOURO-RENDA-MAIS-2065` e
+  `TESOURO-SELIC-01032031`.

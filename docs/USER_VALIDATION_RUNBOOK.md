@@ -222,3 +222,14 @@ Bloco seguinte validado:
   persistido antes da escrita;
 - validacao local: `49 passed`, `/health` 200 e dry-run runtime bloqueando
   `NVDA`, `IVV` e `AREA11` sem bloquear `PETR4`.
+
+Bloco operacional de cobertura:
+
+- historicos de `NVDA`, `TFLO`, `IVV`, `INTR`, `AREA11`, `RBRF11`,
+  `BTC`, `ETH` e `ADA` foram reparados/confirmados no banco local;
+- seed macro oficial `20260908-195126` registrou CDI completo para
+  `2026-04-14..2026-09-08`;
+- rebuild da carteira 15 criou/atualizou 22 snapshots e o resumo passou a usar
+  `snapshot_date=2026-09-08`;
+- pendencia remanescente para rodada real assistida: normalizacao/cobertura dos
+  simbolos de Tesouro importados.
