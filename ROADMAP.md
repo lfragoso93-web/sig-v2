@@ -124,6 +124,7 @@ Contrato #267:
 ### Fase 2 — gate operacional para dados reais
 
 - [ ] #227 — revalidar decisão de readiness;
+- [ ] validação assistida com usuários de teste conforme `docs/USER_VALIDATION_RUNBOOK.md`;
 - [ ] #226 — duas execuções reais controladas de Proventos, somente após autorização explícita;
 - [ ] #216 — reconciliar e fechar gate agregado de seeds/bootstrap;
 - [ ] #158 — retomar CSV, posições, snapshots e reconciliação financeira;

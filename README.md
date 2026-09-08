@@ -123,6 +123,9 @@ Princípios: DB-first, fonte oficial primeiro, bootstrap idempotente, universo o
 3. Validar restart, persistência, volumes, migrations e Redis fail-open.
 4. Validar `system-bootstrap.v4` e seus contratos sem contornar gates de dados reais.
 5. Revalidar #227, #226, #216 e #158.
+5.1. Executar a validação assistida com usuários de teste conforme
+     `docs/USER_VALIDATION_RUNBOOK.md`, usando somente dados fictícios ou
+     descartáveis.
 6. Somente quando houver autorização operacional, executar as duas rodadas reais controladas de Proventos (#226).
 7. Fechar o gate agregado (#216), retomar rebuild/CSV/posições/snapshots (#158) e reconciliar os resultados.
 8. Produzir decisão explícita GO / NO-GO para `ready_for_real_data`.
