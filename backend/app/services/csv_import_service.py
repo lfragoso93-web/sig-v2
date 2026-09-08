@@ -14,6 +14,11 @@ from app.services.transaction_write_service import (
     TransactionWriteError,
     add_transaction_record,
 )
+from app.services.crypto_transaction_eligibility_service import (
+    CryptoTransactionEligibilityError,
+    require_financially_certified_crypto_asset,
+)
+from app.services.treasury_catalog_service import resolve_treasury_symbol
 import logging
 
 logger = logging.getLogger(__name__)
@@ -169,6 +174,8 @@ async def import_transactions_csv(
     rows, global_errors = await parse_csv_content(content, portfolio_id, db)
     if not global_errors and not any(row.errors or row.warnings for row in rows):
         await _validate_duplicate_transactions(rows, portfolio_id, db)
+    if not global_errors:
+        await _validate_writer_preflight(rows, db)
     response_rows = []
     error_count = len(global_errors)
     skipped_count = 0
@@ -215,6 +222,13 @@ def _normalize_csv_ticker(ticker: str, asset_type: str) -> str:
     if asset_type.strip().upper() == AssetType.CRIPTO.value:
         return CRYPTO_TICKER_ALIASES.get(normalized, normalized)
     return normalized
+
+
+async def _resolve_csv_ticker(ticker: str, asset_type: str, db: AsyncSession) -> str | None:
+    normalized = _normalize_csv_ticker(ticker, asset_type)
+    if asset_type.strip().upper() != AssetType.TESOURO_DIRETO.value or not normalized:
+        return normalized
+    return await resolve_treasury_symbol(db, ticker)
 
 
 def _transaction_identity(row: CSVRow) -> tuple[str, str, str, float, float, DateType, float, str]:
@@ -273,6 +287,26 @@ async def _validate_duplicate_transactions(
             row.add_error("duplicate transaction already exists")
 
 
+async def _validate_writer_preflight(
+    rows: List[CSVRow],
+    db: AsyncSession,
+) -> None:
+    """Antecipa blockers do writer canonico no dry-run, sem escrever no banco."""
+    for row in rows:
+        if row.errors or row.warnings:
+            continue
+
+        ticker = row.data.get("ticker", "").strip().upper()
+        asset_type = row.data.get("asset_type", "").strip().upper()
+        if asset_type != AssetType.CRIPTO.value:
+            continue
+
+        try:
+            await require_financially_certified_crypto_asset(db, ticker)
+        except CryptoTransactionEligibilityError as exc:
+            row.add_error(str(exc))
+
+
 async def parse_csv_content(
     content: str,
     portfolio_id: int,
@@ -306,8 +340,9 @@ async def parse_csv_content(
                 continue
 
             asset_type = raw_row.get("asset_type", "").strip().upper()
-            ticker = _normalize_csv_ticker(raw_row.get("ticker", ""), asset_type)
-            raw_row["ticker"] = ticker
+            raw_ticker = raw_row.get("ticker", "")
+            ticker = await _resolve_csv_ticker(raw_ticker, asset_type, db)
+            raw_row["ticker"] = ticker or raw_ticker.strip().upper()
             raw_row["asset_type"] = asset_type
             operation = raw_row.get("operation", "").strip().lower()
             raw_row["operation"] = operation
@@ -317,8 +352,12 @@ async def parse_csv_content(
             fees_str = raw_row.get("fees", "0").strip()
             currency = raw_row.get("currency", "BRL").strip().upper()
             raw_row["currency"] = currency
-            if not ticker:
+            if not raw_ticker.strip():
                 csv_row.add_error("ticker is required")
+            elif asset_type == AssetType.TESOURO_DIRETO.value and ticker is None:
+                csv_row.add_error(
+                    "ticker de Tesouro Direto nao encontrado no catalogo persistido"
+                )
 
             if not asset_type:
                 csv_row.add_error("asset_type is required")
@@ -431,6 +470,8 @@ async def import_csv_transactions(
     rows, global_errors = await parse_csv_content(content, portfolio_id, db)
     if not global_errors and not any(row.errors or row.warnings for row in rows):
         await _validate_duplicate_transactions(rows, portfolio_id, db)
+    if not global_errors:
+        await _validate_writer_preflight(rows, db)
     result["global_errors"] = global_errors
 
     duplicate_only = (
@@ -538,6 +579,10 @@ async def import_csv_transactions(
         await db.rollback()
         result["success"] = False
         result["imported_count"] = 0
+        for row in result["rows"]:
+            if row.get("status") == "imported":
+                row["status"] = "skipped"
+                row["warnings"] = ["transaction rolled back because batch has errors"]
         return result
 
     if created_transactions:
