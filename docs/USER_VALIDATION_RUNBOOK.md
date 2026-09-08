@@ -213,3 +213,12 @@ Validacao:
 Status de liberacao: bug P0 da superficie foi removido para rodada assistida,
 mas `ready_for_real_data` continua `false` ate fechar cobertura/precos
 pendentes e os gates formais.
+
+Bloco seguinte validado:
+
+- rebuild canonico de snapshots interrompe em lacuna real de preco persistido
+  sem abortar a rotina de pos-importacao;
+- CSV bloqueia novas linhas de ativos de mercado sem catalogo/historico
+  persistido antes da escrita;
+- validacao local: `49 passed`, `/health` 200 e dry-run runtime bloqueando
+  `NVDA`, `IVV` e `AREA11` sem bloquear `PETR4`.

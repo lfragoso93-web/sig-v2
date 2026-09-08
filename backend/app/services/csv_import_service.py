@@ -1,25 +1,29 @@
 import csv
 import io
-from datetime import datetime, date as DateType
-from typing import Tuple, List, Dict, Any
+import logging
+from datetime import date as DateType
+from datetime import datetime
+from typing import Any
+
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.transaction import Transaction, OperationType
-from app.models.asset import AssetType
-from app.models.portfolio import Portfolio
-from sqlalchemy import select
+
 from app.core.log_safety import sanitize_log_value
+from app.models.asset import Asset, AssetType
+from app.models.asset_price import AssetPrice
+from app.models.portfolio import Portfolio
+from app.models.transaction import OperationType, Transaction
 from app.schemas.transaction import TransactionCreate
+from app.services.crypto_transaction_eligibility_service import (
+    CryptoTransactionEligibilityError,
+    require_financially_certified_crypto_asset,
+)
 from app.services.portfolio_service import invalidate_portfolio_cache
 from app.services.transaction_write_service import (
     TransactionWriteError,
     add_transaction_record,
 )
-from app.services.crypto_transaction_eligibility_service import (
-    CryptoTransactionEligibilityError,
-    require_financially_certified_crypto_asset,
-)
 from app.services.treasury_catalog_service import resolve_treasury_symbol
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +44,14 @@ CRYPTO_TICKER_ALIASES = {
     "BITCOIN": "BTC",
     "ETHEREUM": "ETH",
     "CARDANO": "ADA",
+}
+PRICE_HISTORY_REQUIRED_TYPES = {
+    AssetType.ACAO.value,
+    AssetType.BDR.value,
+    AssetType.ETF_INTERNACIONAL.value,
+    AssetType.ETF_NACIONAL.value,
+    AssetType.FII.value,
+    AssetType.STOCK.value,
 }
 
 
@@ -91,11 +103,11 @@ class CSVImportError(Exception):
 
 
 class CSVRow:
-    def __init__(self, row_num: int, data: Dict[str, Any]):
+    def __init__(self, row_num: int, data: dict[str, Any]):
         self.row_num = row_num
         self.data = data
-        self.errors: List[str] = []
-        self.warnings: List[str] = []
+        self.errors: list[str] = []
+        self.warnings: list[str] = []
 
     def add_error(self, message: str):
         self.errors.append(message)
@@ -128,7 +140,7 @@ async def import_transactions_csv(
     user_id: int,
     file: Any,
     dry_run: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Entrada usada pelo endpoint multipart de importação.
 
     No dry-run valida o conteúdo e todos os blockers de persistência conhecidos.
@@ -174,7 +186,7 @@ async def import_transactions_csv(
     rows, global_errors = await parse_csv_content(content, portfolio_id, db)
     if not global_errors and not any(row.errors or row.warnings for row in rows):
         await _validate_duplicate_transactions(rows, portfolio_id, db)
-    if not global_errors:
+    if not global_errors and not any(row.errors or row.warnings for row in rows):
         await _validate_writer_preflight(rows, db)
     response_rows = []
     error_count = len(global_errors)
@@ -246,7 +258,7 @@ def _transaction_identity(row: CSVRow) -> tuple[str, str, str, float, float, Dat
 
 
 async def _validate_duplicate_transactions(
-    rows: List[CSVRow],
+    rows: list[CSVRow],
     portfolio_id: int,
     db: AsyncSession,
 ) -> None:
@@ -288,7 +300,7 @@ async def _validate_duplicate_transactions(
 
 
 async def _validate_writer_preflight(
-    rows: List[CSVRow],
+    rows: list[CSVRow],
     db: AsyncSession,
 ) -> None:
     """Antecipa blockers do writer canonico no dry-run, sem escrever no banco."""
@@ -306,12 +318,73 @@ async def _validate_writer_preflight(
         except CryptoTransactionEligibilityError as exc:
             row.add_error(str(exc))
 
+    await _validate_persisted_price_history_preflight(rows, db)
+
+
+async def _validate_persisted_price_history_preflight(
+    rows: list[CSVRow],
+    db: AsyncSession,
+) -> None:
+    """Bloqueia ativos de mercado sem catálogo e histórico persistido."""
+    requirements = {
+        (
+            row.data.get("ticker", "").strip().upper(),
+            row.data.get("asset_type", "").strip().upper(),
+        )
+        for row in rows
+        if not row.errors
+        and not row.warnings
+        and row.data.get("asset_type", "").strip().upper() in PRICE_HISTORY_REQUIRED_TYPES
+    }
+    if not requirements:
+        return
+
+    assets_result = await db.execute(
+        select(
+            Asset.ticker,
+            Asset.asset_type,
+            Asset.last_price,
+            func.count(AssetPrice.id).label("price_rows"),
+        )
+        .outerjoin(AssetPrice, AssetPrice.asset_id == Asset.id)
+        .where(
+            func.upper(Asset.ticker).in_([ticker for ticker, _ in requirements]),
+            Asset.asset_type.in_([asset_type for _, asset_type in requirements]),
+        )
+        .group_by(Asset.id, Asset.ticker, Asset.asset_type, Asset.last_price)
+    )
+    coverage = {
+        (str(row.ticker).strip().upper(), str(row.asset_type).strip().upper()): {
+            "last_price": row.last_price,
+            "price_rows": int(row.price_rows or 0),
+        }
+        for row in assets_result.all()
+    }
+
+    for row in rows:
+        if row.errors or row.warnings:
+            continue
+        ticker = row.data.get("ticker", "").strip().upper()
+        asset_type = row.data.get("asset_type", "").strip().upper()
+        if asset_type not in PRICE_HISTORY_REQUIRED_TYPES:
+            continue
+        item = coverage.get((ticker, asset_type))
+        if item is None:
+            row.add_error(
+                f"{ticker} {asset_type} nao elegivel para importacao: ativo nao esta no catalogo persistido"
+            )
+            continue
+        if item["last_price"] is None or item["price_rows"] <= 0:
+            row.add_error(
+                f"{ticker} {asset_type} nao elegivel para importacao: historico de precos persistido indisponivel"
+            )
+
 
 async def parse_csv_content(
     content: str,
     portfolio_id: int,
     db: AsyncSession,
-) -> Tuple[List[CSVRow], List[str]]:
+) -> tuple[list[CSVRow], list[str]]:
     """
     Parse CSV content and validate each row.
     Returns (rows_with_validation, global_errors)
@@ -413,7 +486,7 @@ async def parse_csv_content(
             rows.append(csv_row)
 
     except Exception as e:
-        global_errors.append(f"Error parsing CSV: {str(e)}")
+        global_errors.append(f"Error parsing CSV: {e!s}")
         logger.error("CSV parse error: %s", sanitize_log_value(e))
 
     return rows, global_errors
@@ -441,7 +514,7 @@ async def import_csv_transactions(
     portfolio_id: int,
     user_id: int,
     db: AsyncSession,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Import transactions from CSV content.
     Returns dict with import results and validation details.
@@ -470,7 +543,7 @@ async def import_csv_transactions(
     rows, global_errors = await parse_csv_content(content, portfolio_id, db)
     if not global_errors and not any(row.errors or row.warnings for row in rows):
         await _validate_duplicate_transactions(rows, portfolio_id, db)
-    if not global_errors:
+    if not global_errors and not any(row.errors or row.warnings for row in rows):
         await _validate_writer_preflight(rows, db)
     result["global_errors"] = global_errors
 
@@ -604,7 +677,7 @@ async def import_csv_transactions(
             result["success"] = False
             result["error_count"] += len(created_transactions)
             result["imported_count"] = 0
-            result["global_errors"].append(f"Database error: {str(e)}")
+            result["global_errors"].append(f"Database error: {e!s}")
     else:
         result["success"] = result["error_count"] == 0
 

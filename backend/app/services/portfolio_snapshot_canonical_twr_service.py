@@ -42,6 +42,7 @@ _DIAGNOSTIC_PREFIXES = (
     "real_price_",
 )
 _SNAPSHOT_COLUMNS = set(PortfolioSnapshot.__table__.columns.keys())
+_PERSISTED_PRICE_COVERAGE_ERROR = "cobertura persistida de preço indisponível para:"
 
 
 async def backfill_canonical_snapshots_with_returns(
@@ -82,6 +83,16 @@ async def backfill_canonical_snapshots_with_returns(
                     cursor,
                 )
             except IncompleteBenchmarkCoverageError as exc:
+                logger.warning(
+                    "[snapshot_twr_canonical] portfolio=%s stop=%s reason=%s",
+                    portfolio_id,
+                    cursor,
+                    exc,
+                )
+                break
+            except RuntimeError as exc:
+                if _PERSISTED_PRICE_COVERAGE_ERROR not in str(exc):
+                    raise
                 logger.warning(
                     "[snapshot_twr_canonical] portfolio=%s stop=%s reason=%s",
                     portfolio_id,

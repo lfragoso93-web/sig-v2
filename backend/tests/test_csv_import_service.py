@@ -1,26 +1,26 @@
 """Testes para csv_import_service — importacao de transacoes via CSV."""
 import inspect
-
-import pytest
 from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.transaction import Transaction, OperationType
+import pytest
 from app.models.asset import Asset, AssetType
 from app.models.portfolio import Portfolio
+from app.models.transaction import Transaction
+from app.services import csv_import_service
 from app.services.asset_universe_membership_service import (
     CRYPTO_TOP100_UNIVERSE_KEY,
 )
-from app.services.transaction_write_service import TransactionWriteError
 from app.services.csv_import_service import (
-    generate_csv_template,
-    parse_csv_content,
-    import_csv_transactions,
-    _parse_date,
     CSVRow,
+    _parse_date,
+    _validate_writer_preflight,
+    generate_csv_template,
+    import_csv_transactions,
+    parse_csv_content,
 )
-from app.services import csv_import_service
+from app.services.transaction_write_service import TransactionWriteError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class TestGenerateCSVTemplate:
@@ -58,6 +58,65 @@ def test_import_csv_transactions_uses_canonical_write_boundary():
 
     assert "add_transaction_record(" in source
     assert "Transaction(" not in source
+
+
+@pytest.mark.asyncio
+async def test_writer_preflight_blocks_market_asset_without_persisted_prices():
+    row = CSVRow(
+        2,
+        {
+            "ticker": "NVDA",
+            "asset_type": "STOCK",
+            "operation": "buy",
+            "quantity": "1",
+            "price": "100",
+            "date": "2026-03-03",
+            "fees": "0",
+            "currency": "USD",
+        },
+    )
+    db = AsyncMock(spec=AsyncSession)
+    result = MagicMock()
+    result.all.return_value = []
+    db.execute.return_value = result
+
+    await _validate_writer_preflight([row], db)
+
+    assert row.errors == [
+        "NVDA STOCK nao elegivel para importacao: ativo nao esta no catalogo persistido"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_writer_preflight_allows_market_asset_with_persisted_prices():
+    row = CSVRow(
+        2,
+        {
+            "ticker": "PETR4",
+            "asset_type": "ACAO",
+            "operation": "buy",
+            "quantity": "1",
+            "price": "30",
+            "date": "2026-03-03",
+            "fees": "0",
+            "currency": "BRL",
+        },
+    )
+    db = AsyncMock(spec=AsyncSession)
+    result = MagicMock()
+    result.all.return_value = [
+        MagicMock(
+            ticker="PETR4",
+            asset_type="ACAO",
+            last_price=30,
+            price_rows=10,
+        )
+    ]
+    db.execute.return_value = result
+
+    await _validate_writer_preflight([row], db)
+
+    assert row.errors == []
 
 
 class TestCSVRowClass:
@@ -347,11 +406,23 @@ PETR4,ACAO,buy,100,25.50,2024-01-15,10.00,BRL,Compra inicial"""
 
         existing_tx_result = MagicMock()
         existing_tx_result.scalar_one_or_none = MagicMock(return_value=None)
+
+        coverage_result = MagicMock()
+        coverage_result.all.return_value = [
+            MagicMock(
+                ticker="PETR4",
+                asset_type="ACAO",
+                last_price=25.50,
+                price_rows=1,
+            )
+        ]
         
         asset_result = MagicMock()
         asset_result.scalar_one_or_none = MagicMock(return_value=None)
         
-        db.execute = AsyncMock(side_effect=[portfolio_result, existing_tx_result, asset_result])
+        db.execute = AsyncMock(
+            side_effect=[portfolio_result, existing_tx_result, coverage_result, asset_result]
+        )
         db.commit = AsyncMock()
         db.add = MagicMock()
         db.flush = AsyncMock()
