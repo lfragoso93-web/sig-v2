@@ -314,6 +314,15 @@ Já implementado:
 - eventos corporativos globais;
 - separação DB-first/provider-boundary.
 
+Checkpoint local de 08/09/2026:
+
+- inventário pré-prod está sem tabelas desconhecidas e sem findings bloqueantes;
+- cripto possui 44 ativos financeiramente certificados para transações
+  controladas;
+- ativos cripto sem histórico suficiente ficam bloqueados por status terminal
+  explícito, sem fallback silencioso;
+- `/ready` continua fechado até bootstrap/certificação final.
+
 Ainda a implementar antes de considerar o fluxo plenamente convergido:
 
 1. auditar precedência para impedir downgrade de autoridade em rotas futuras;

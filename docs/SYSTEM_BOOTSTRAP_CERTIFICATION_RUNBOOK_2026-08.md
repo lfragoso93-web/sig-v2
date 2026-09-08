@@ -23,6 +23,23 @@ Antes de qualquer estágio:
 8. snapshot/backup operacional válido quando a etapa puder alterar volume relevante de dados;
 9. Issue correspondente atualizada antes da execução real.
 
+## Checkpoint atual — 08/09/2026
+
+Estado local validado em `stable-15jun`:
+
+- commit base: `fe3b265fa2b8dc72cf90626afd5749124d85c0c8`;
+- backend saudável e `/health` 200;
+- `/ready` 503 com `ready_for_real_data=false`;
+- inventário `pre-prod-inventory.v2` aprovado com `unclassified_tables=0` e
+  `blocking_findings=0`;
+- cripto financeiro aprovado para 44 ativos certificados;
+- cripto completo ainda não aprovado: 11 gaps de complemento e 2 históricos rasos
+  indisponíveis permanecem como bloqueios explícitos;
+- bootstrap automático permanece desabilitado por `ENABLE_BOOT_MARKET_SYNC=false`.
+
+Esse checkpoint autoriza planejamento e rodada assistida controlada com usuários
+de teste, mas não autoriza promoção de readiness real.
+
 ## Ordem operacional recomendada
 
 ### 1. `asset_catalog`

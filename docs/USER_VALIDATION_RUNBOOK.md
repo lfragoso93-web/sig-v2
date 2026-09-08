@@ -13,7 +13,7 @@ NO-GO para usuarios, carteiras, CSV, seeds, snapshots ou posicoes reais. A flag
 `ready_for_real_data` deve permanecer `false` ate a conclusao formal dos gates
 #226, #216, #158 e #227.
 
-Baseline operacional publicado: `6da8eb39779cd8a6ad142fe35b57b7f0b8c707f3`.
+Baseline operacional publicado: `fe3b265fa2b8dc72cf90626afd5749124d85c0c8`.
 
 Atualização do bloco 08/09/2026:
 
@@ -23,6 +23,16 @@ Atualização do bloco 08/09/2026:
 - `ready_for_real_data=false` permanece obrigatório;
 - inventário pré-prod deve rodar com `unclassified_tables=0` após a
   classificação de `rate_history_coverages`.
+
+Panorama para usuários convidados:
+
+- liberado: contas de teste, carteiras de teste, navegação completa, lançamentos
+  fictícios, CSV sintético/controlado e criptoativos certificados;
+- não liberado: carteiras reais irrestritas, CSV real sem supervisão, ativos
+  cripto bloqueados, seeds reais fora da janela autorizada e qualquer promoção
+  de readiness;
+- critério de avanço: rodada assistida sem blocker P0/P1 em autenticação,
+  segregação de carteiras, CSV, patrimônio, rentabilidade, Proventos ou IRPF.
 
 Carteira sintetica ja alimentada no banco local de validacao:
 

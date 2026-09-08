@@ -1,6 +1,40 @@
 # Continuidade de desenvolvimento — SGI v2
 
-> Documento obrigatório para iniciar ou retomar qualquer conversa de desenvolvimento. Atualizado em 31/08/2026.
+> Documento obrigatório para iniciar ou retomar qualquer conversa de desenvolvimento. Atualizado em 08/09/2026.
+
+## Panorama de liberação assistida — 08/09/2026
+
+Baseline corrente em `stable-15jun`: `fe3b265fa2b8dc72cf90626afd5749124d85c0c8`.
+
+Estado verificado:
+
+- `/health` retorna 200 com Postgres e Redis `ok`;
+- `/ready` permanece 503 com `ready_for_real_data=false`, como esperado;
+- inventário `pre-prod-inventory.v2` está verde: 20 tabelas, `unclassified_tables=0`,
+  `blocking_findings=0` e zero escritas;
+- cobertura agregada local possui B3, cripto, Tesouro, câmbio e macro já
+  alimentados em banco para testes assistidos;
+- CSV com BTC validou em dry-run para o usuário/portfolio afetado, sem erro de
+  certificação financeira;
+- cripto financeiro está liberável para 44 ativos certificados;
+- 13 criptoativos do Top 60 continuam bloqueados explicitamente: 11 por
+  `HISTORY_START_COMPLEMENT_GAPPED` e 2 por `HISTORY_START_SHALLOW_UNAVAILABLE`.
+
+Decisão operacional:
+
+- GO para usuários convidados testarem jornadas assistidas com contas/carteiras
+  de teste e escopo controlado de ativos certificados;
+- GO com ressalva para CSV sintético/controlado, incluindo BTC e demais
+  criptoativos certificados;
+- NO-GO para produção real, carteira real irrestrita, seed real irrestrito,
+  snapshots reais oficiais ou `ready_for_real_data=true`.
+
+Estimativa prática: estamos perto de uma rodada assistida confiável com usuários
+de teste, mas ainda não na liberação total de dados reais. O que falta para
+avaliar `ready_for_real_data=true` é fechar a evidência operacional pesada:
+bootstrap completo ou equivalente formal, duas execuções reais controladas dos
+gates de Proventos/eventos quando autorizadas, reconciliação B3/Tesouro final,
+rebuild de posições/snapshots reais e decisão GO/NO-GO documentada.
 
 ## Rebaseline pós-merge PR #302 — 01/09/2026
 
