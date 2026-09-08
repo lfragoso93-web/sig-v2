@@ -1,6 +1,6 @@
 # Operação — SGI v2
 
-> Última atualização: 01/08/2026
+> Última atualização: 08/09/2026
 
 Este guia descreve os comandos de manutenção, validação e diagnóstico do SGI v2.
 
@@ -76,6 +76,10 @@ Aprovar somente quando:
 - `read_only=true`;
 - `writes_executed=0`;
 - todas as tabelas possuem classificação e justificativa.
+
+No baseline de 08/09/2026, `rate_history_coverages` pertence ao grupo
+`rebuildable`, pois guarda cobertura derivada do seed idempotente de
+`rate_history`.
 
 ## Backup e restore isolado
 

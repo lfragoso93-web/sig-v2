@@ -129,6 +129,10 @@ TABLE_POLICIES: dict[str, tuple[str, str]] = {
         "rebuildable",
         "Séries macroeconômicas são regeneráveis por fontes oficiais.",
     ),
+    "rate_history_coverages": (
+        "rebuildable",
+        "Coberturas de séries macroeconômicas são derivadas do seed idempotente de rate_history.",
+    ),
 }
 
 

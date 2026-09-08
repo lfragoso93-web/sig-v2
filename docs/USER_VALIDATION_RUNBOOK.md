@@ -13,7 +13,16 @@ NO-GO para usuarios, carteiras, CSV, seeds, snapshots ou posicoes reais. A flag
 `ready_for_real_data` deve permanecer `false` ate a conclusao formal dos gates
 #226, #216, #158 e #227.
 
-Baseline operacional publicado: `59a6a9fc741d557324233065137a9c1a25d4af64`.
+Baseline operacional publicado: `6da8eb39779cd8a6ad142fe35b57b7f0b8c707f3`.
+
+Atualização do bloco 08/09/2026:
+
+- cripto financeiro pronto para 44 ativos certificados;
+- 13 criptoativos do Top 60 seguem bloqueados explicitamente por histórico raso
+  indisponível ou gap de complemento;
+- `ready_for_real_data=false` permanece obrigatório;
+- inventário pré-prod deve rodar com `unclassified_tables=0` após a
+  classificação de `rate_history_coverages`.
 
 Carteira sintetica ja alimentada no banco local de validacao:
 

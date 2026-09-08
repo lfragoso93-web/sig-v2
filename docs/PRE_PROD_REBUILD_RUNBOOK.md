@@ -5,7 +5,7 @@
 > Executor e ensaio isolado: #196  
 > Limpeza real controlada: #199  
 > Seed isolado de proventos: #226  
-> Última atualização: 28/07/2026
+> Última atualização: 08/09/2026
 
 ## Objetivo
 
@@ -48,17 +48,13 @@ A execução real ainda não ocorreu. A cadeia `20260724-100752` foi invalidada 
 
 A fonte executável da política é `TABLE_POLICIES`, em `pre_prod_inventory_service.py`. Cada tabela recebe classificação e justificativa no relatório `pre-prod-inventory.v2`.
 
-O inventário corrente contém 23 tabelas: 11 preservadas, 2 exportáveis e 10 reconstruíveis.
+O inventário corrente contém 20 tabelas: 7 preservadas, 2 exportáveis e 11 reconstruíveis.
 
-### Preservar — 11 tabelas
+### Preservar — 7 tabelas
 
 - `alembic_version`;
 - `audit_logs`;
-- `goal_allocations`;
 - `goals`;
-- `irpf_losses`;
-- `irpf_records`;
-- `irpf_reports`;
 - `portfolio_class_targets`;
 - `portfolios`;
 - `system_configs`;
@@ -77,22 +73,25 @@ Artefatos produzidos por SHAs anteriores à contração `20260903_drop_fixed_inc
 
 A recuperação operacional da base é feita pelo backup completo `pre-prod-backup.v3` e restore validado com `pg_restore`. O export seletivo é evidência de auditoria/preservação e não deve ser tratado como mecanismo de reidratação.
 
-### Reconstruir — 10 tabelas
+### Reconstruir — 11 tabelas
 
 - `asset_aliases`;
 - `asset_dividends`;
 - `asset_prices`;
+- `asset_universe_memberships`;
 - `assets`;
 - `dividends`;
+- `dividends_sync_jobs`;
 - `fx_rates`;
 - `portfolio_class_snapshots`;
 - `portfolio_positions`;
 - `portfolio_snapshots`;
-- `rate_history`.
+- `rate_history`;
+- `rate_history_coverages`.
 
 Essas tabelas possuem fonte oficial, pipeline idempotente ou são projeções derivadas dos dados preservados/exportados.
 
-`app_configs` e `dividends_sync_jobs` não pertencem ao inventário canônico atual e não devem ser inseridas manualmente na política escrita.
+`app_configs`, `goal_allocations`, `irpf_losses`, `irpf_records` e `irpf_reports` não pertencem ao inventário canônico atual e não devem ser inseridas manualmente na política escrita sem retorno confirmado ao schema ativo.
 
 Qualquer tabela nova ou desconhecida permanece `unclassified`, faz a CLI retornar código diferente de zero e exige revisão arquitetural antes da limpeza.
 
@@ -392,3 +391,7 @@ Uma segunda execução, sem novos dados externos ou transações, deve:
   contagem zero em `dividends` e `dividends_sync_jobs`.
 - Próximo gate operacional de proventos: autorizar explicitamente e executar as
   duas rodadas v2 no mesmo SHA e janela, preservando as três evidências.
+- Bloco 08/09/2026: inventário read-only local apontou 20 tabelas, zero findings
+  bloqueantes e `rate_history_coverages` como única tabela sem política. A tabela
+  foi classificada como reconstruível por ser cobertura derivada/idempotente de
+  `rate_history`; o próximo inventário deve exigir `unclassified_tables=0`.
