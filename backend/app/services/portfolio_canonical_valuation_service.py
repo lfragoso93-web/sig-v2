@@ -33,7 +33,7 @@ from app.services.treasury_catalog_service import resolve_treasury_symbol
 _ZERO = Decimal("0")
 _MONEY = Decimal("0.01")
 _PCT = Decimal("0.0001")
-_CLASS_TOTAL_ROUNDING_TOLERANCE = Decimal("0.01")
+_CLASS_TOTAL_ROUNDING_TOLERANCE = Decimal("0.02")
 _TREASURY_TYPE = AssetType.TESOURO_DIRETO.value
 _NON_MARKET_TYPES = NO_QUOTE_TYPES | DEDICATED_PRICE_TYPES
 

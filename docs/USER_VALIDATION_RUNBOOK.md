@@ -409,4 +409,10 @@ Bloco Evolucao Patrimonial - janela inicial e gaps de snapshot:
 - correcao de backfill: gaps de preco persistido agora pulam apenas o dia sem
   cobertura e seguem reconstruindo datas posteriores; gaps de benchmark dedicado
   de Renda Fixa/Tesouro continuam bloqueando a partir da fronteira oficial;
-- validacao automatizada focada: `9 passed`.
+- primeira reexecucao runtime avancou alem do gap inicial de `PETZ3`, mas
+  bloqueou em `2025-11-25` por divergencia de arredondamento de centavos entre
+  soma por classe e patrimonio (`classes=17123.95`, `total=17123.93`);
+- correcao complementar: reconciliacao por classe passou a aceitar ajuste de
+  ate `R$ 0,02`; divergencias materiais acima disso continuam bloqueadas;
+- validacao automatizada: `11 passed` no bloco de valuation/snapshot e
+  `typecheck` frontend aprovado.

@@ -87,42 +87,7 @@ async def test_canonical_totals_sem_renda_fixa_preserva_base(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_canonical_totals_reconciles_one_cent_class_rounding(monkeypatch):
-    async def fake_base(*_args, **_kwargs):
-        return {
-            "market_value": Decimal("19750.93"),
-            "cost_basis": Decimal("19750.93"),
-            "invested_total": Decimal("19750.93"),
-            "realized_pnl": Decimal("0.00"),
-            "unrealized_pnl": Decimal("0.00"),
-            "total_pnl": Decimal("0.00"),
-            "return_pct": Decimal("0.0000"),
-            "market_value_by_class": {
-                "ACAO": Decimal("10000.00"),
-                "CRIPTO": Decimal("9750.92"),
-            },
-        }
-
-    async def fake_fixed_income(*_args, **_kwargs):
-        return {
-            "invested_amount": Decimal("0.00"),
-            "current_value": Decimal("0.00"),
-            "income_amount": Decimal("0.00"),
-        }
-
-    monkeypatch.setattr(service, "_base_totals_without_dedicated_lookup", fake_base)
-    monkeypatch.setattr(service, "_fixed_income_totals_at_date", fake_fixed_income)
-    monkeypatch.setattr(service, "_treasury_correction_at_date", _treasury_without_correction)
-
-    result = await service.calculate_canonical_portfolio_totals(None, 1, None)
-
-    assert result["market_value"] == Decimal("19750.93")
-    assert sum(result["market_value_by_class"].values(), Decimal("0")) == Decimal("19750.93")
-    assert result["market_value_by_class"]["ACAO"] == Decimal("10000.01")
-
-
-@pytest.mark.asyncio
-async def test_canonical_totals_rejects_material_class_divergence(monkeypatch):
+async def test_canonical_totals_reconciles_cent_class_rounding(monkeypatch):
     async def fake_base(*_args, **_kwargs):
         return {
             "market_value": Decimal("19750.93"),
@@ -149,5 +114,40 @@ async def test_canonical_totals_rejects_material_class_divergence(monkeypatch):
     monkeypatch.setattr(service, "_fixed_income_totals_at_date", fake_fixed_income)
     monkeypatch.setattr(service, "_treasury_correction_at_date", _treasury_without_correction)
 
-    with pytest.raises(RuntimeError, match="classes=19750.91 total=19750.93"):
+    result = await service.calculate_canonical_portfolio_totals(None, 1, None)
+
+    assert result["market_value"] == Decimal("19750.93")
+    assert sum(result["market_value_by_class"].values(), Decimal("0")) == Decimal("19750.93")
+    assert result["market_value_by_class"]["ACAO"] == Decimal("10000.02")
+
+
+@pytest.mark.asyncio
+async def test_canonical_totals_rejects_material_class_divergence(monkeypatch):
+    async def fake_base(*_args, **_kwargs):
+        return {
+            "market_value": Decimal("19750.93"),
+            "cost_basis": Decimal("19750.93"),
+            "invested_total": Decimal("19750.93"),
+            "realized_pnl": Decimal("0.00"),
+            "unrealized_pnl": Decimal("0.00"),
+            "total_pnl": Decimal("0.00"),
+            "return_pct": Decimal("0.0000"),
+            "market_value_by_class": {
+                "ACAO": Decimal("10000.00"),
+                "CRIPTO": Decimal("9750.90"),
+            },
+        }
+
+    async def fake_fixed_income(*_args, **_kwargs):
+        return {
+            "invested_amount": Decimal("0.00"),
+            "current_value": Decimal("0.00"),
+            "income_amount": Decimal("0.00"),
+        }
+
+    monkeypatch.setattr(service, "_base_totals_without_dedicated_lookup", fake_base)
+    monkeypatch.setattr(service, "_fixed_income_totals_at_date", fake_fixed_income)
+    monkeypatch.setattr(service, "_treasury_correction_at_date", _treasury_without_correction)
+
+    with pytest.raises(RuntimeError, match="classes=19750.90 total=19750.93"):
         await service.calculate_canonical_portfolio_totals(None, 1, None)
