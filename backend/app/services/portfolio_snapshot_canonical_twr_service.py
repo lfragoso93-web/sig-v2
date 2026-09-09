@@ -45,6 +45,10 @@ _SNAPSHOT_COLUMNS = set(PortfolioSnapshot.__table__.columns.keys())
 _PERSISTED_PRICE_COVERAGE_ERROR = "cobertura persistida de preço indisponível para:"
 
 
+def _is_persisted_price_gap(exc: RuntimeError) -> bool:
+    return _PERSISTED_PRICE_COVERAGE_ERROR in str(exc)
+
+
 async def backfill_canonical_snapshots_with_returns(
     db: AsyncSession,
     portfolio_id: int,
@@ -91,15 +95,16 @@ async def backfill_canonical_snapshots_with_returns(
                 )
                 break
             except RuntimeError as exc:
-                if _PERSISTED_PRICE_COVERAGE_ERROR not in str(exc):
+                if not _is_persisted_price_gap(exc):
                     raise
                 logger.warning(
-                    "[snapshot_twr_canonical] portfolio=%s stop=%s reason=%s",
+                    "[snapshot_twr_canonical] portfolio=%s skip=%s reason=%s",
                     portfolio_id,
                     cursor,
                     exc,
                 )
-                break
+                cursor += timedelta(days=1)
+                continue
             realized_pnl, net_external_flow = calculate_transaction_components(
                 transactions,
                 cursor,

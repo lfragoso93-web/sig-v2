@@ -35,7 +35,7 @@ class _Result:
 class _FixedToday:
     @classmethod
     def today(cls):
-        return date(2026, 9, 8)
+        return date(2026, 9, 9)
 
 
 @pytest.mark.asyncio
@@ -143,7 +143,7 @@ async def test_canonical_twr_stops_at_dedicated_coverage_boundary(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_canonical_twr_stops_at_persisted_price_gap_boundary(monkeypatch):
+async def test_canonical_twr_skips_persisted_price_gap_and_continues(monkeypatch):
     persisted_dates = []
 
     async def _capture_upsert(_db, _portfolio_id, snapshot_date, _values):
@@ -162,6 +162,7 @@ async def test_canonical_twr_stops_at_persisted_price_gap_boundary(monkeypatch):
         side_effect=[
             totals,
             RuntimeError("cobertura persistida de preço indisponível para: RBRF11"),
+            totals,
         ]
     )
     monkeypatch.setattr(
@@ -184,7 +185,7 @@ async def test_canonical_twr_stops_at_persisted_price_gap_boundary(monkeypatch):
 
     count = await service.backfill_canonical_snapshots_with_returns(db, 13)
 
-    assert count == 1
-    assert persisted_dates == [date(2026, 9, 7)]
-    assert valuation.await_count == 2
+    assert count == 2
+    assert persisted_dates == [date(2026, 9, 7), date(2026, 9, 9)]
+    assert valuation.await_count == 3
     db.commit.assert_awaited_once()

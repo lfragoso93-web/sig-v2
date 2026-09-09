@@ -75,7 +75,7 @@ export default function ResumePage() {
   const globalPortfolioId = useAppStore(s => s.selectedPortfolioId)
   const setGlobal         = useAppStore(s => s.setSelectedPortfolioId)
 
-  const [period,          setPeriod]          = useState<PeriodOption>('12m')
+  const [period,          setPeriod]          = useState<PeriodOption>('all')
   const [assetClass,      setAssetClass]      = useState(ASSET_CLASS_ALL)
   const [showCreateModal, setShowCreateModal] = useState(false)
 

@@ -392,3 +392,21 @@ Bloco Gaveta do Ativo - proventos, preco medio e historico:
 - validacao automatizada: backend focado `15 passed`; frontend `typecheck`
   aprovado; `npm run build` aprovado fora do sandbox apos bloqueio local
   `spawn EPERM` no binario nativo do Tailwind/Rolldown.
+
+Bloco Evolucao Patrimonial - janela inicial e gaps de snapshot:
+
+- evidencia de usuario: a evolucao patrimonial no Resumo exibia apenas dois
+  meses, apesar de a carteira possuir compras desde `2024-10-22`;
+- diagnostico runtime da carteira `15/Principal`: `308` transacoes, snapshots
+  existentes de `2024-10-22` a `2026-09-08`, mas com cobertura mensal somente em
+  `2024-10`, `2024-11`, `2024-12`, `2025-01`, `2026-08` e `2026-09`;
+- causa de UX: o Resumo iniciava em `Ultimos 12 meses`, portanto ocultava os
+  snapshots antigos e destacava apenas `2026-08` e `2026-09`;
+- causa de dados: o backfill canonico interrompia todo o historico ao encontrar
+  o primeiro gap de cotacao persistida de ativo listado; um gap pontual impedia
+  a reconstrucao dos meses seguintes;
+- correcao: o periodo padrao do grafico no Resumo passa a ser `Todo periodo`;
+- correcao de backfill: gaps de preco persistido agora pulam apenas o dia sem
+  cobertura e seguem reconstruindo datas posteriores; gaps de benchmark dedicado
+  de Renda Fixa/Tesouro continuam bloqueando a partir da fronteira oficial;
+- validacao automatizada focada: `9 passed`.
