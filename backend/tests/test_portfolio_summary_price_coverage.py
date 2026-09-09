@@ -125,6 +125,18 @@ async def test_summary_degrades_when_fixed_income_benchmark_is_partial(monkeypat
     )
     monkeypatch.setattr(
         portfolio_summary_service,
+        "get_fixed_income_principal_totals",
+        AsyncMock(
+            return_value={
+                "invested_amount": Decimal("3000.00"),
+                "current_value": Decimal("3000.00"),
+                "income_amount": Decimal("0.00"),
+                "income_pct": Decimal("0.0000"),
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        portfolio_summary_service,
         "_get_received_dividend_totals",
         AsyncMock(return_value=(0.0, 0.0)),
     )
@@ -146,10 +158,10 @@ async def test_summary_degrades_when_fixed_income_benchmark_is_partial(monkeypat
 
     summary = await _build_summary_from_valuation_fallback(db, 15)
 
-    assert summary["total_investido"] == 1_100
-    assert summary["total_patrimonio"] == 1_250
-    assert summary["has_partial_prices"] is True
-    assert summary["assets_without_price"] == ["RENDA_FIXA"]
-    assert summary["price_assets_total"] == 2
+    assert summary["total_investido"] == 4_100
+    assert summary["total_patrimonio"] == 4_250
+    assert summary["has_partial_prices"] is False
+    assert summary["assets_without_price"] == []
+    assert summary["price_assets_total"] == 1
     assert summary["price_assets_covered"] == 1
-    assert summary["price_coverage_pct"] == 50.0
+    assert summary["price_coverage_pct"] == 100.0

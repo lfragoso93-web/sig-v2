@@ -389,6 +389,66 @@ async def get_fixed_income_valuations(
     return await _aggregate_applications(db, applications, target)
 
 
+async def get_fixed_income_principal_valuations(
+    db: AsyncSession,
+    portfolio_id: int,
+) -> list[FixedIncomeValuation]:
+    txs = await _load_fixed_income_transactions(db, portfolio_id)
+
+    applications: list[FixedIncomeApplication] = []
+    for tx in txs:
+        if _is_buy(tx.operation):
+            app = _application_from_buy(tx)
+            if app.invested_amount > 0:
+                applications.append(app)
+        elif _is_sell(tx.operation):
+            _apply_redemption(applications, tx)
+
+    grouped: dict[FixedIncomeKey, dict[str, Decimal | int]] = {}
+    for app in applications:
+        if app.remaining_principal <= 0:
+            continue
+        if app.key not in grouped:
+            grouped[app.key] = {"invested": Decimal("0"), "count": 0}
+        grouped[app.key]["invested"] = (
+            grouped[app.key]["invested"] + app.remaining_principal  # type: ignore[operator]
+        )
+        grouped[app.key]["count"] = int(grouped[app.key]["count"]) + 1
+
+    result: list[FixedIncomeValuation] = []
+    for key, values in grouped.items():
+        invested = _money(values["invested"])  # type: ignore[arg-type]
+        result.append(
+            FixedIncomeValuation(
+                key=key,
+                invested_amount=invested,
+                current_value=invested,
+                income_amount=Decimal("0.00"),
+                income_pct=Decimal("0.0000"),
+                applications_count=int(values["count"]),
+            )
+        )
+
+    result.sort(
+        key=lambda item: (item.key.name, item.key.indexer, item.key.maturity or date.max)
+    )
+    return result
+
+
+async def get_fixed_income_principal_totals(
+    db: AsyncSession,
+    portfolio_id: int,
+) -> dict[str, Decimal]:
+    valuations = await get_fixed_income_principal_valuations(db, portfolio_id)
+    invested = _money(sum((v.invested_amount for v in valuations), Decimal("0")))
+    return {
+        "invested_amount": invested,
+        "current_value": invested,
+        "income_amount": Decimal("0.00"),
+        "income_pct": Decimal("0.0000"),
+    }
+
+
 async def get_fixed_income_totals(
     db: AsyncSession,
     portfolio_id: int,

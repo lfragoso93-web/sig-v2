@@ -27,6 +27,8 @@ from app.services.corporate_action_position_reader import (
 from app.services.fixed_income_valuation_service import (
     RENDA_FIXA_TYPE,
     IncompleteBenchmarkCoverageError,
+    get_fixed_income_principal_totals,
+    get_fixed_income_principal_valuations,
     get_fixed_income_totals,
     get_fixed_income_valuations,
     valuation_to_position_payload,
@@ -517,10 +519,7 @@ async def get_portfolio_summary(db: AsyncSession, portfolio_id: int, user_id: in
             portfolio_id,
             exc,
         )
-        rf_totals = {
-            "invested_amount": Decimal(0),
-            "current_value": Decimal(0),
-        }
+        rf_totals = await get_fixed_income_principal_totals(db, portfolio_id)
 
     non_rf_invested = sum(p["total_invested"] for p in enriched)
     non_rf_current = sum(
@@ -597,7 +596,7 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
             portfolio_id,
             exc,
         )
-        valuations = []
+        valuations = await get_fixed_income_principal_valuations(db, portfolio_id)
     rf_positions = [valuation_to_position_payload(v, idx + 1) for idx, v in enumerate(valuations)]
 
     total_current = sum(

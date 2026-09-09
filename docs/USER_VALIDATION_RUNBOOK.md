@@ -306,3 +306,20 @@ Bloco Proventos real controlado - finding e correcao parcial:
   materializado para teste fidedigno;
 - a dupla idempotente completa de Proventos ainda nao esta certificada; manter
   `ready_for_real_data=false` e repetir a janela oficial em bloco dedicado.
+
+Bloco Renda Fixa no Resumo - semantica de cotacao:
+
+- evidencia de usuario: alerta no Resumo informava que `RENDA_FIXA` nao tinha
+  cotacao atual e que valor investido seria usado como referencia;
+- decisao de produto: `RENDA_FIXA` nao e ativo de cotacao de mercado no SGI v2;
+  seu valuation vem da compra aberta e da rentabilidade/indexador informado;
+- correcao: quando a cobertura do benchmark/indexador esta incompleta, o resumo
+  usa o principal aberto de renda fixa como valor atual conservador, sem
+  adicionar `RENDA_FIXA` em `assets_without_price`;
+- a rota legada de posicoes tambem passou a preservar posicoes de renda fixa
+  pelo principal aberto quando o benchmark esta parcial;
+- validacao automatizada: `35 passed`;
+- validacao runtime em `2026-09-09` para `lfragoso93@gmail.com`, carteira
+  `15/Principal`: `has_partial_prices=false`, `assets_without_price=[]`,
+  `price_assets_total=34`, `price_assets_covered=34`,
+  `price_coverage_pct=100.0`.

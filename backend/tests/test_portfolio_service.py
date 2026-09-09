@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -6,7 +7,11 @@ from app.models.transaction import OperationType
 from app.schemas.portfolio import PortfolioCreate, PortfolioUpdate
 from app.services import portfolio_service
 from app.services.benchmark_rate_service import BenchmarkCoverageStatus
-from app.services.fixed_income_valuation_service import IncompleteBenchmarkCoverageError
+from app.services.fixed_income_valuation_service import (
+    FixedIncomeKey,
+    FixedIncomeValuation,
+    IncompleteBenchmarkCoverageError,
+)
 from app.services.portfolio_service import (
     build_group_performance_metrics,
     calc_raw_positions,
@@ -328,13 +333,37 @@ async def test_get_portfolio_positions_degrades_when_fixed_income_benchmark_is_p
             )
         ),
     )
+    monkeypatch.setattr(
+        portfolio_service,
+        "get_fixed_income_principal_valuations",
+        AsyncMock(
+            return_value=[
+                FixedIncomeValuation(
+                    key=FixedIncomeKey(
+                        name="CDB TESTE",
+                        indexer="CDI",
+                        rate_pct=Decimal("110.0000"),
+                        maturity=None,
+                    ),
+                    invested_amount=Decimal("3000.00"),
+                    current_value=Decimal("3000.00"),
+                    income_amount=Decimal("0.00"),
+                    income_pct=Decimal("0.0000"),
+                    applications_count=1,
+                )
+            ]
+        ),
+    )
 
     positions = await get_portfolio_positions(db, portfolio_id=15, user_id=16)
 
-    assert len(positions) == 1
+    assert len(positions) == 2
     assert positions[0]["asset_type"] == "ACAO"
     assert positions[0]["total_value"] == 1_200.0
     assert positions[0]["positions"][0]["ticker"] == "PETR4"
+    assert positions[1]["asset_type"] == "RENDA_FIXA"
+    assert positions[1]["total_value"] == 3_000.0
+    assert positions[1]["positions"][0]["ticker"] == "CDB TESTE"
 
 
 @pytest.mark.asyncio
