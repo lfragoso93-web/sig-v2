@@ -246,3 +246,16 @@ Bloco Tesouro validado:
   com preco atual/valor calculado;
 - historico de `TESOURO-RENDA-MAIS-2065` retornou serie recente ate
   `2026-09-08`.
+
+Bloco gate descartavel validado:
+
+- smoke HTTP descartavel executado no backend local:
+  `TEST-READY-HTTP-SMOKE:PASS`, com limpeza de carteira/transacoes e FX tambem
+  em `PASS`;
+- `/ready` interno retornou HTTP `503`, `state=not_started`,
+  `bootstrap_complete=false` e `ready_for_real_data=false`;
+- motivo operacional preservado: bootstrap automatico desabilitado por
+  `ENABLE_BOOT_MARKET_SYNC=false`;
+- este bloco libera continuidade de testes assistidos com dados
+  ficticios/descartaveis, mas nao libera dados reais nem altera
+  `ready_for_real_data`.
