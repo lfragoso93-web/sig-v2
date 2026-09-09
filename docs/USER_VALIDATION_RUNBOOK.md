@@ -259,3 +259,27 @@ Bloco gate descartavel validado:
 - este bloco libera continuidade de testes assistidos com dados
   ficticios/descartaveis, mas nao libera dados reais nem altera
   `ready_for_real_data`.
+
+Bloco contratos de seed/bootstrap validado:
+
+- suite FX/Macro/Tesouro sem execucao real: `81 passed, 1 skipped`;
+- suite B3/bootstrap de ativos sem execucao real: `47 passed`;
+- suite System bootstrap/Admin sem execucao real: `26 passed`;
+- suite Proventos seed contracts sem execucao real: `94 passed, 8 skipped`;
+- total do bloco: `248 passed, 9 skipped`;
+- nenhum seed real foi executado neste bloco e `ready_for_real_data` permanece
+  fechado.
+
+Panorama de liberacao para testes com usuarios:
+
+- liberado agora: rodada assistida com usuarios internos/controlados usando
+  dados ficticios ou descartaveis, CSV sintetico e carteiras de teste;
+- parcialmente liberado: usuario real assistido ja pode validar navegacao,
+  importacao observada e leitura de carteira desde que os dados sejam tratados
+  como teste controlado e nao como liberacao geral;
+- ainda bloqueado: abertura ampla para usuarios com dados reais, execucoes reais
+  de seeds/proventos fora de janela autorizada e mudanca de
+  `ready_for_real_data=true`;
+- proximos gates obrigatorios: duas execucoes reais controladas de Proventos
+  (#226), reconciliacao agregada (#216), importacao/rebuild operacional (#158)
+  e decisao formal GO/NO-GO (#227).
