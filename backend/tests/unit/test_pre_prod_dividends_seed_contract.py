@@ -104,6 +104,11 @@ def test_result_serializes_minimum_canonical_envelope() -> None:
         "branch": DIVIDENDS_SEED_BRANCH,
         "commit_sha": _VALID_SHA,
     }
+    assert payload["authorized_tables"]["read"] == (
+        "assets",
+        "asset_dividends",
+        "transactions",
+    )
     assert payload["authorized_tables"]["write"] == ("asset_dividends",)
     assert payload["transaction"]["final_state"] == "committed"
     for section in (

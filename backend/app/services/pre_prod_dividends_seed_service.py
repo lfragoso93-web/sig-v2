@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset
+from app.models.transaction import Transaction
 from app.services.dividend_ticker_policy import is_event_ticker
 from app.services.pre_prod_dividends_seed_collector import (
     STRICT_DIVIDENDS_ELIGIBLE_TYPES,
@@ -71,6 +72,30 @@ async def load_dividends_seed_assets(
             select(Asset.ticker, Asset.asset_type)
             .where(Asset.asset_type.in_(sorted(STRICT_DIVIDENDS_ELIGIBLE_TYPES)))
             .order_by(Asset.ticker, Asset.asset_type)
+        )
+    ).all()
+    return tuple(
+        StrictDividendAsset(ticker=ticker, asset_type=asset_type)
+        for ticker, asset_type in rows
+        if is_event_ticker(ticker)
+    )
+
+
+async def load_dividends_seed_assets_for_portfolio(
+    db: AsyncSession,
+    portfolio_id: int,
+) -> tuple[StrictDividendAsset, ...]:
+    """Carrega ativos cobertos usados por uma carteira de validacao."""
+
+    rows = (
+        await db.execute(
+            select(Transaction.ticker, Transaction.asset_type)
+            .where(Transaction.portfolio_id == portfolio_id)
+            .where(
+                Transaction.asset_type.in_(sorted(STRICT_DIVIDENDS_ELIGIBLE_TYPES))
+            )
+            .distinct()
+            .order_by(Transaction.ticker, Transaction.asset_type)
         )
     ).all()
     return tuple(

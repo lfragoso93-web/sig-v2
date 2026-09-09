@@ -14,6 +14,7 @@ DIVIDENDS_SEED_BRANCH = "stable-15jun"
 DIVIDENDS_SEED_READ_TABLES = (
     "assets",
     "asset_dividends",
+    "transactions",
 )
 DIVIDENDS_SEED_WRITE_TABLES = ("asset_dividends",)
 _RUN_ID_PATTERN = re.compile(r"^\d{8}-\d{6}$")

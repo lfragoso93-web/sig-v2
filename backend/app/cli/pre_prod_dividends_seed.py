@@ -29,6 +29,7 @@ from app.services.pre_prod_dividends_seed_providers import (
 )
 from app.services.pre_prod_dividends_seed_service import (
     DividendsSeedUnexpectedStageError,
+    load_dividends_seed_assets_for_portfolio,
     run_pre_prod_dividends_seed,
 )
 
@@ -70,6 +71,15 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--start-date", required=True, help="Data inicial YYYY-MM-DD")
     parser.add_argument("--end-date", required=True, help="Data final YYYY-MM-DD")
+    parser.add_argument(
+        "--portfolio-id",
+        type=int,
+        default=None,
+        help=(
+            "Escopo opcional para validacao assistida: coleta apenas ativos "
+            "elegiveis presentes nas transacoes da carteira"
+        ),
+    )
     return parser
 
 
@@ -93,6 +103,14 @@ async def _main() -> int:
             AsyncSessionLocal() as db,
             httpx.AsyncClient(timeout=30.0) as client,
         ):
+            asset_loader = (
+                (lambda session: load_dividends_seed_assets_for_portfolio(session, args.portfolio_id))
+                if args.portfolio_id is not None
+                else None
+            )
+            runner_kwargs = {}
+            if asset_loader is not None:
+                runner_kwargs["asset_loader"] = asset_loader
             result = await run_pre_prod_dividends_seed(
                 run_id=args.run_id,
                 branch=args.branch,
@@ -106,6 +124,7 @@ async def _main() -> int:
                         history_fetcher=fetch_yahoo_dividend_history
                     ),
                 ),
+                **runner_kwargs,
             )
     except DividendsSeedAlreadyRunningError as exc:
         print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))

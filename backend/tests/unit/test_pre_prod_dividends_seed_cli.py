@@ -46,6 +46,7 @@ def _dependencies(monkeypatch):
                 commit_sha=COMMIT_SHA,
                 start_date="2026-01-01",
                 end_date="2026-12-31",
+                portfolio_id=None,
             )
         ),
     )
@@ -71,6 +72,47 @@ async def test_cli_prints_contract_on_success(monkeypatch, capsys):
     assert runner.await_args.kwargs["start_date"].isoformat() == "2026-01-01"
     assert runner.await_args.kwargs["end_date"].isoformat() == "2026-12-31"
     assert len(runner.await_args.kwargs["providers"]) == 2
+    assert "asset_loader" not in runner.await_args.kwargs
+
+
+@pytest.mark.asyncio
+async def test_cli_accepts_portfolio_scoped_seed(monkeypatch):
+    scoped_loader = AsyncMock(return_value=("PETR4",))
+    monkeypatch.setattr(
+        cli,
+        "load_dividends_seed_assets_for_portfolio",
+        scoped_loader,
+    )
+    monkeypatch.setattr(
+        cli,
+        "_parser",
+        lambda: SimpleNamespace(
+            parse_args=lambda: SimpleNamespace(
+                run_id=RUN_ID,
+                branch=BRANCH,
+                commit_sha=COMMIT_SHA,
+                start_date="2026-01-01",
+                end_date="2026-12-31",
+                portfolio_id=15,
+            )
+        ),
+    )
+    result = SimpleNamespace(
+        ok=True,
+        to_dict=lambda: {
+            "schema_version": "pre-prod-dividends-seed.v2",
+            "run_id": RUN_ID,
+            "ok": True,
+        },
+    )
+    runner = AsyncMock(return_value=result)
+    monkeypatch.setattr(cli, "run_pre_prod_dividends_seed", runner)
+
+    assert await cli._main() == cli.EXIT_OK
+    session = object()
+    scoped_assets = await runner.await_args.kwargs["asset_loader"](session)
+    assert scoped_assets == ("PETR4",)
+    scoped_loader.assert_awaited_once_with(session, 15)
 
 
 @pytest.mark.asyncio
@@ -87,6 +129,7 @@ async def test_cli_validates_identity_before_opening_resources(monkeypatch, caps
                 commit_sha=COMMIT_SHA,
                 start_date="2026-01-01",
                 end_date="2026-12-31",
+                portfolio_id=None,
             )
         ),
     )
@@ -113,6 +156,7 @@ async def test_cli_rejects_invalid_window_before_opening_resources(monkeypatch, 
                 commit_sha=COMMIT_SHA,
                 start_date="2026-12-31",
                 end_date="2026-01-01",
+                portfolio_id=None,
             )
         ),
     )
