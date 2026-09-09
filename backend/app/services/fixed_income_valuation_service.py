@@ -37,6 +37,7 @@ from app.services.benchmark_rate_service import (
     BenchmarkCoverageStatus,
     benchmark_coverage_status,
     benchmark_factor,
+    latest_covered_rate_date,
     latest_annual_reference_pct,
 )
 
@@ -230,20 +231,46 @@ async def _application_factor(db: AsyncSession, key: FixedIncomeKey, start: date
     idx = _normalize_indexer(key.indexer)
 
     if idx in {"CDI", "SELIC"}:
+        effective_target = target
         coverage = await benchmark_coverage_status(
             db,
             idx,
             start,
-            target,
+            effective_target,
             source=key.benchmark_source,
         )
-        if coverage is not BenchmarkCoverageStatus.COMPLETE:
+        if coverage is BenchmarkCoverageStatus.ABSENT:
             raise IncompleteBenchmarkCoverageError(idx, start, target, coverage)
+        if coverage is BenchmarkCoverageStatus.PARTIAL:
+            last_covered = await latest_covered_rate_date(
+                db,
+                idx,
+                start,
+                target,
+                source=key.benchmark_source,
+            )
+            if last_covered is None or last_covered <= start:
+                raise IncompleteBenchmarkCoverageError(idx, start, target, coverage)
+            effective_target = last_covered
+            effective_coverage = await benchmark_coverage_status(
+                db,
+                idx,
+                start,
+                effective_target,
+                source=key.benchmark_source,
+            )
+            if effective_coverage is not BenchmarkCoverageStatus.COMPLETE:
+                raise IncompleteBenchmarkCoverageError(
+                    idx,
+                    start,
+                    target,
+                    coverage,
+                )
         return await benchmark_factor(
             db,
             idx,
             start,
-            target,
+            effective_target,
             multiplier_pct=key.rate_pct or Decimal("100"),
             source=key.benchmark_source,
         )

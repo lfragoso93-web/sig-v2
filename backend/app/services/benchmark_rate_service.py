@@ -292,6 +292,50 @@ async def latest_rate(db: AsyncSession, indicator: str) -> Optional[RateHistory]
     return result.scalar_one_or_none()
 
 
+async def latest_covered_rate_date(
+    db: AsyncSession,
+    indicator: str,
+    start_date: date,
+    end_date: date,
+    *,
+    source: Optional[str] = None,
+) -> date | None:
+    """Ultima data observada que tambem esta dentro de cobertura comprovada."""
+
+    indicator = indicator.upper()
+    filters = [
+        RateHistory.indicator == indicator,
+        RateHistory.date >= start_date,
+        RateHistory.date <= end_date,
+    ]
+    if source is not None:
+        filters.append(RateHistory.source == source)
+
+    observed_date = (
+        await db.execute(select(func.max(RateHistory.date)).where(*filters))
+    ).scalar_one_or_none()
+    if observed_date is None:
+        return None
+
+    coverage_filters = [
+        RateHistoryCoverage.indicator == indicator,
+        RateHistoryCoverage.start_date <= observed_date,
+        RateHistoryCoverage.end_date >= start_date,
+    ]
+    if source is not None:
+        coverage_filters.append(RateHistoryCoverage.source == source)
+
+    covered_until = (
+        await db.execute(
+            select(func.max(RateHistoryCoverage.end_date)).where(*coverage_filters)
+        )
+    ).scalar_one_or_none()
+    if covered_until is None:
+        return None
+
+    return min(observed_date, covered_until, end_date)
+
+
 async def benchmark_factor(
     db: AsyncSession,
     indicator: str,

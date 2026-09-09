@@ -349,3 +349,22 @@ Bloco Proventos escopado para teste assistido:
 - status: liberado para teste assistido desta carteira com Proventos semeados;
   ainda falta repetir/decidir a estrategia para varredura global antes de
   liberar uso amplo e marcar `ready_for_real_data=true`.
+
+Bloco Renda Fixa - calculo ate a data atual:
+
+- evidencia de usuario: apos remover o alerta de cotacao, a renda fixa voltou a
+  aparecer, mas permanecia pelo principal quando a data atual passava da ultima
+  observacao CDI persistida;
+- causa: o valuation exigia cobertura completa ate `date.today()`. Em
+  `2026-09-09`, a cobertura CDI oficial `BCB_SGS` estava comprovada ate
+  `2026-09-08` e a ultima observacao CDI persistida estava em `2026-09-04`;
+- correcao: para CDI/SELIC, quando a cobertura ate a data alvo e parcial, o
+  valuation usa uma data efetiva igual a ultima data observada/coberta dentro da
+  janela, desde que a cobertura ate essa data seja completa; ausencia real segue
+  bloqueada;
+- validacao runtime da carteira `15/Principal` de `lfragoso93@gmail.com`:
+  `LIG LIQUIDEZ` com `invested=121.14`, `current=127.20`, `income=6.06`,
+  `income_pct=5.0025`, `applications_count=2`;
+- resumo apos limpeza de cache: `total_patrimonio=20724.59`,
+  `total_investido=22013.33`, `has_partial_prices=false`,
+  `assets_without_price=[]`.

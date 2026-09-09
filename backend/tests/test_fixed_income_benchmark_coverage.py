@@ -35,6 +35,11 @@ async def test_cdi_fails_closed_without_complete_coverage(monkeypatch, status) -
     monkeypatch.setattr(valuation, "benchmark_coverage_status", coverage)
     monkeypatch.setattr(valuation, "benchmark_factor", factor)
     monkeypatch.setattr(valuation, "_fallback_factor", fallback)
+    monkeypatch.setattr(
+        valuation,
+        "latest_covered_rate_date",
+        AsyncMock(return_value=None),
+    )
 
     with pytest.raises(valuation.IncompleteBenchmarkCoverageError) as excinfo:
         await valuation._application_factor(
@@ -68,6 +73,69 @@ async def test_complete_cdi_uses_persisted_factor_without_fallback(monkeypatch) 
     assert result == Decimal("1.01")
     factor.assert_awaited_once()
     fallback.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_partial_cdi_uses_latest_covered_rate_before_target(monkeypatch) -> None:
+    coverage = AsyncMock(
+        side_effect=[
+            BenchmarkCoverageStatus.PARTIAL,
+            BenchmarkCoverageStatus.COMPLETE,
+        ]
+    )
+    latest_covered = AsyncMock(return_value=date(2026, 9, 8))
+    factor = AsyncMock(return_value=Decimal("1.0123"))
+    fallback = AsyncMock(return_value=Decimal("1.99"))
+    monkeypatch.setattr(valuation, "benchmark_coverage_status", coverage)
+    monkeypatch.setattr(valuation, "latest_covered_rate_date", latest_covered)
+    monkeypatch.setattr(valuation, "benchmark_factor", factor)
+    monkeypatch.setattr(valuation, "_fallback_factor", fallback)
+
+    db = AsyncMock()
+    result = await valuation._application_factor(
+        db,
+        _key("CDI"),
+        date(2026, 4, 14),
+        date(2026, 9, 9),
+    )
+
+    assert result == Decimal("1.0123")
+    latest_covered.assert_awaited_once_with(
+        db,
+        "CDI",
+        date(2026, 4, 14),
+        date(2026, 9, 9),
+        source=None,
+    )
+    factor.assert_awaited_once_with(
+        db,
+        "CDI",
+        date(2026, 4, 14),
+        date(2026, 9, 8),
+        multiplier_pct=Decimal("100"),
+        source=None,
+    )
+    fallback.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_partial_cdi_still_fails_when_no_covered_rate(monkeypatch) -> None:
+    coverage = AsyncMock(return_value=BenchmarkCoverageStatus.PARTIAL)
+    latest_covered = AsyncMock(return_value=None)
+    factor = AsyncMock(return_value=Decimal("1.0123"))
+    monkeypatch.setattr(valuation, "benchmark_coverage_status", coverage)
+    monkeypatch.setattr(valuation, "latest_covered_rate_date", latest_covered)
+    monkeypatch.setattr(valuation, "benchmark_factor", factor)
+
+    with pytest.raises(valuation.IncompleteBenchmarkCoverageError):
+        await valuation._application_factor(
+            AsyncMock(),
+            _key("CDI"),
+            date(2026, 4, 14),
+            date(2026, 9, 9),
+        )
+
+    factor.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -128,6 +196,11 @@ def test_application_parser_reads_benchmark_source_without_changing_indexer() ->
 async def test_selic_uses_same_strict_coverage_contract(monkeypatch) -> None:
     coverage = AsyncMock(return_value=BenchmarkCoverageStatus.ABSENT)
     monkeypatch.setattr(valuation, "benchmark_coverage_status", coverage)
+    monkeypatch.setattr(
+        valuation,
+        "latest_covered_rate_date",
+        AsyncMock(return_value=None),
+    )
 
     with pytest.raises(valuation.IncompleteBenchmarkCoverageError) as excinfo:
         await valuation._application_factor(
