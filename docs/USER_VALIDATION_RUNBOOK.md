@@ -323,3 +323,29 @@ Bloco Renda Fixa no Resumo - semantica de cotacao:
   `15/Principal`: `has_partial_prices=false`, `assets_without_price=[]`,
   `price_assets_total=34`, `price_assets_covered=34`,
   `price_coverage_pct=100.0`.
+
+Bloco Proventos escopado para teste assistido:
+
+- objetivo: destravar teste fidedigno da carteira real de validacao sem exigir
+  varredura global de todos os ativos do catalogo;
+- alteracao operacional: `pre_prod_dividends_seed` aceita `--portfolio-id` e o
+  wrapper `Invoke-PreProdDividendsIdempotency.ps1` aceita `-PortfolioId`;
+- sem `--portfolio-id`, o fluxo permanece global; com o parametro, a coleta
+  fica restrita aos tickers elegiveis presentes nas transacoes da carteira;
+- fronteira de auditoria atualizada: leitura declarada de `transactions` alem de
+  `assets` e `asset_dividends`; escrita segue restrita a `asset_dividends`;
+- carteira `15/Principal` de `lfragoso93@gmail.com`: escopo medido de `49`
+  ativos elegiveis contra mais de `2.300` no universo global bruto;
+- primeira execucao escopada em `2026-09-09` materializou `183` eventos globais
+  de proventos para a janela `2026-01-01..2026-09-09`;
+- evidencia idempotente final no commit
+  `8746bd72cc5ad628874025f7f40919ad9e5a7af1`:
+  `artifacts/pre-prod-rebuild/dividends-idempotency-20260909-122935`;
+- relatorio: `ok=true`, `zero_physical_writes_on_second_run=true`,
+  `zero_integrity_findings=true`, `stable_after_state=true`;
+- impacto runtime: carteira `15` passou a expor `183` direitos de proventos,
+  `dividendos_recebidos_12m=569.51`, `total_proventos=569.51`,
+  `has_partial_prices=false`, `assets_without_price=[]`;
+- status: liberado para teste assistido desta carteira com Proventos semeados;
+  ainda falta repetir/decidir a estrategia para varredura global antes de
+  liberar uso amplo e marcar `ready_for_real_data=true`.
