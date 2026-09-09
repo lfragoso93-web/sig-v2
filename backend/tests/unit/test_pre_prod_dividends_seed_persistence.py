@@ -293,6 +293,113 @@ async def test_same_source_same_dates_distinct_values_are_separate_occurrences()
 
 
 @pytest.mark.asyncio
+async def test_same_source_three_unique_occurrences_remain_separate_events() -> None:
+    asset = SimpleNamespace(id=7, ticker="CPFE3", asset_type="ACAO")
+    events = [
+        ParsedDividendEvent(
+            record_date=date(2026, 4, 29),
+            ex_date=date(2026, 4, 30),
+            payment_date=date(2026, 12, day),
+            approved_on=date(2026, 4, 29),
+            value_per_unit=value,
+            dividend_type="DIVIDENDO",
+            raw_payload={"rate": value},
+        )
+        for day, value in ((10, 0.10), (11, 0.20), (12, 0.30))
+    ]
+    source = StrictDividendSourceCollection(
+        source="brapi",
+        raw_rows=3,
+        normalized_rows=tuple(events),
+        rejected_rows=0,
+        empty_reason=None,
+    )
+    collection = StrictDividendAssetCollection(
+        ticker="CPFE3",
+        asset_type="ACAO",
+        sources=(source,),
+    )
+    db = _db(assets=[asset])
+
+    result = await persist_asset_dividends_strict(db=db, collections=(collection,))
+
+    assert result.created == 3
+    assert db.add.call_count == 3
+
+
+@pytest.mark.asyncio
+async def test_same_source_duplicate_occurrences_are_collapsed() -> None:
+    asset = SimpleNamespace(id=7, ticker="HBRE3", asset_type="ACAO")
+    events = [
+        ParsedDividendEvent(
+            record_date=date(2026, 1, 1),
+            ex_date=date(2026, 1, 2),
+            payment_date=date(2026, 8, 10),
+            approved_on=date(2026, 1, 1),
+            value_per_unit=0.10,
+            dividend_type="DIVIDENDO",
+            raw_payload={"rate": 0.10, "row": row},
+        )
+        for row in (1, 2, 3)
+    ]
+    source = StrictDividendSourceCollection(
+        source="brapi",
+        raw_rows=3,
+        normalized_rows=tuple(events),
+        rejected_rows=0,
+        empty_reason=None,
+    )
+    collection = StrictDividendAssetCollection(
+        ticker="HBRE3",
+        asset_type="ACAO",
+        sources=(source,),
+    )
+    db = _db(assets=[asset])
+
+    result = await persist_asset_dividends_strict(db=db, collections=(collection,))
+
+    assert result.created == 1
+    assert db.add.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_same_source_conflict_error_renders_safe_identity_context() -> None:
+    asset = SimpleNamespace(id=7, ticker="PETR4", asset_type="ACAO")
+    events = [
+        ParsedDividendEvent(
+            record_date=date(2026, 7, day),
+            ex_date=date(2026, 7, 27),
+            payment_date=date(2026, 8, 10),
+            approved_on=None,
+            value_per_unit=1.0,
+            dividend_type="DIVIDENDO",
+            raw_payload={"rate": value, "secret": "must-not-render"},
+        )
+        for day, value in ((24, 1.0), (25, 2.0), (26, 3.0))
+    ]
+    source = StrictDividendSourceCollection(
+        source="brapi",
+        raw_rows=3,
+        normalized_rows=tuple(events),
+        rejected_rows=0,
+        empty_reason=None,
+    )
+    collection = StrictDividendAssetCollection(
+        ticker="PETR4",
+        asset_type="ACAO",
+        sources=(source,),
+    )
+    db = _db(assets=[asset])
+
+    with pytest.raises(DividendsSeedPersistenceError) as exc_info:
+        await persist_asset_dividends_strict(db=db, collections=(collection,))
+
+    message = str(exc_info.value)
+    assert "PETR4/ACAO/2026-07-27/DIVIDENDO/brapi; eventos=3" in message
+    assert "must-not-render" not in message
+
+
+@pytest.mark.asyncio
 async def test_lock_contention_is_blocking_before_any_query_or_write() -> None:
     db = _db(acquired=False)
 
