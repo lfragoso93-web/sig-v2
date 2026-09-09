@@ -40,6 +40,7 @@ _POSITION_KEYS = (
     "maturity_date",
     "indexer",
     "rate_pct",
+    "proventos",
 )
 
 

@@ -138,6 +138,22 @@ def test_repurchase_after_event_is_not_transformed_retroactively():
     assert result.applied_event_ids == ()
 
 
+def test_full_sale_resets_average_price_before_repurchase():
+    result = project_position_timeline(
+        movements=[
+            _buy(1, "10", "10"),
+            _sell(2, "10", "12"),
+            _buy(3, "5", "20"),
+        ],
+        actions=[],
+    )
+
+    assert result.quantity == Decimal(5)
+    assert result.total_cost == Decimal(100)
+    assert result.average_price == Decimal(20)
+    assert result.realized_pnl == Decimal(20)
+
+
 def test_bonus_and_reverse_split_are_applied_in_chronological_order():
     result = project_position_timeline(
         movements=[_buy(1, "100", "10")],

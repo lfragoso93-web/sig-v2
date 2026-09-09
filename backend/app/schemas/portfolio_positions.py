@@ -38,6 +38,7 @@ class PositionItemResponse(BaseModel):
     maturity_date: str | None = None
     indexer: str | None = None
     rate_pct: float | None = None
+    proventos: float = 0.0
 
 
 class PositionGroupResponse(BaseModel):

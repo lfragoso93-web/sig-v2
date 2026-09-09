@@ -368,3 +368,27 @@ Bloco Renda Fixa - calculo ate a data atual:
 - resumo apos limpeza de cache: `total_patrimonio=20724.59`,
   `total_investido=22013.33`, `has_partial_prices=false`,
   `assets_without_price=[]`.
+
+Bloco Gaveta do Ativo - proventos, preco medio e historico:
+
+- evidencia de usuario: na gaveta de detalhe do ativo, `Dividendos (Total)`
+  aparecia sem valor e o `Preco Medio` era suspeito apos ciclo de zeragem e
+  recompra;
+- causa: a gaveta recalculava preco medio no frontend a partir da lista paginada
+  de transacoes, ignorando o estado canonico da posicao aberta; alem disso,
+  proventos existiam no total do grupo, mas nao eram expostos por ativo no
+  contrato de posicoes;
+- correcao: cada posicao aberta passa a expor `proventos` canonico por ticker no
+  payload de posicoes e a projecao estrita preserva esse campo;
+- a gaveta passou a usar `asset.average_price` do backend, que ja zera custo e
+  quantidade quando uma posicao e totalmente vendida e recalcula o preco medio
+  apenas da nova posicao aberta;
+- foi adicionado teste explicito para compra, venda total e recompra:
+  `10 @ 10`, venda total, `5 @ 20` resulta em quantidade `5`, custo `100` e
+  preco medio `20`;
+- UX: `Dividendos (Total)` foi alinhado para `Proventos (Total)`, o historico de
+  precos ganhou seletor `1 sem`, `15 dias`, `30 dias`, `90 dias`, `1 ano` e
+  `Max`, e a gaveta exibe variacao de `7 dias` e `90 dias`;
+- validacao automatizada: backend focado `15 passed`; frontend `typecheck`
+  aprovado; `npm run build` aprovado fora do sandbox apos bloqueio local
+  `spawn EPERM` no binario nativo do Tailwind/Rolldown.

@@ -644,6 +644,7 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
             "logo_url": logos.get(e["ticker"]),
             "is_usd": is_usd,
             "currency": "USD" if is_usd else "BRL",
+            "proventos": round(float(dividends_by_ticker.get(e["ticker"], 0.0)), 2),
         })
 
     if rf_positions:
