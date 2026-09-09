@@ -283,3 +283,26 @@ Panorama de liberacao para testes com usuarios:
 - proximos gates obrigatorios: duas execucoes reais controladas de Proventos
   (#226), reconciliacao agregada (#216), importacao/rebuild operacional (#158)
   e decisao formal GO/NO-GO (#227).
+
+Bloco Proventos real controlado - finding e correcao parcial:
+
+- tentativa oficial do wrapper `Invoke-PreProdDividendsIdempotency.ps1` para
+  `2026-01-01..2026-09-08` abortou no primeiro seed com
+  `evento global conflitante na mesma fonte`;
+- primeira melhoria adicionou diagnostico seguro ao erro, sem payload bruto;
+- diagnostico identificou `CPFE3/ACAO/2026-04-30/DIVIDENDO/brapi; eventos=6`;
+- a persistencia passou a aceitar multiplas ocorrencias globais unicas da mesma
+  fonte/data/tipo quando a identidade de armazenamento e distinta;
+- segunda rodada identificou o padrao complementar
+  `HBRE3/ACAO/2026-01-02/DIVIDENDO/brapi; eventos=4`;
+- a persistencia passou a colapsar duplicatas identicas da mesma fonte e manter
+  bloqueio para duplicatas com campos canonicos divergentes;
+- validacao focada apos a correcao: `27 passed`;
+- a tentativa subsequente do wrapper com o commit corrigido foi interrompida sem
+  `first.json` em `artifacts/pre-prod-rebuild/dividends-idempotency-20260909-012602`;
+- consulta de estado em `asset_dividends` apos a interrupcao confirmou apenas
+  `1` evento no intervalo `2026-01-01..2026-09-08`
+  (`CERT303-MXRF11`, `ex_date=2026-02-06`), portanto o seed real ainda nao foi
+  materializado para teste fidedigno;
+- a dupla idempotente completa de Proventos ainda nao esta certificada; manter
+  `ready_for_real_data=false` e repetir a janela oficial em bloco dedicado.
