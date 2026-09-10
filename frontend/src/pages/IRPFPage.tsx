@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import {
   FileText,
   Download,
@@ -307,7 +307,15 @@ function RendimentosTable({
   )
 }
 
-function DARFMonthlyTable({ data }: { data: IRPFCanonicalMonthlyAssessment[] }) {
+function DARFMonthlyTable({
+  data,
+  paidMonths,
+  onTogglePaid,
+}: {
+  data: IRPFCanonicalMonthlyAssessment[]
+  paidMonths: Set<string>
+  onTogglePaid: (month: string) => void
+}) {
   if (!data.length) return <Empty label="Nenhuma apuração mensal encontrada." />
 
   return (
@@ -315,7 +323,7 @@ function DARFMonthlyTable({ data }: { data: IRPFCanonicalMonthlyAssessment[] }) 
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b" style={{ borderColor: 'var(--color-divider)' }}>
-            {['Mês', 'IR Swing', 'IR Day Trade', 'IRRF', 'Imposto Líquido', 'DARF do Mês', 'Saldo Acumulado'].map(h => (
+            {['Mês', 'IR Swing', 'IR Day Trade', 'IRRF', 'Imposto Líquido', 'DARF do Mês', 'Saldo Acumulado', 'Pagamento'].map(h => (
               <th key={h} className="text-left px-3 py-2 text-xs font-semibold" style={{ color: 'var(--color-text-muted)' }}>{h}</th>
             ))}
           </tr>
@@ -328,6 +336,7 @@ function DARFMonthlyTable({ data }: { data: IRPFCanonicalMonthlyAssessment[] }) 
             const netTax = Number(month.total_net_tax_due_brl)
             const paymentDue = Number(month.payment_due_brl)
             const accumulated = Number(month.closing_accumulated_tax_brl)
+            const isPaid = paidMonths.has(month.competence_month)
 
             return (
               <tr
@@ -351,6 +360,24 @@ function DARFMonthlyTable({ data }: { data: IRPFCanonicalMonthlyAssessment[] }) 
                 <td className="px-3 py-2 tabular-nums text-right" style={{ color: accumulated > 0 ? 'var(--color-warning, #f59e0b)' : 'var(--color-text-muted)' }}>
                   {formatBRL(accumulated)}
                 </td>
+                <td className="px-3 py-2 text-right">
+                  {paymentDue > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => onTogglePaid(month.competence_month)}
+                      className="rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors"
+                      style={{
+                        background: isPaid ? 'rgba(34, 197, 94, 0.12)' : 'var(--color-surface-dynamic)',
+                        borderColor: isPaid ? 'rgba(34, 197, 94, 0.45)' : 'var(--color-border)',
+                        color: isPaid ? 'var(--color-success)' : 'var(--color-text)',
+                      }}
+                    >
+                      {isPaid ? 'Pago' : 'Marcar pago'}
+                    </button>
+                  ) : (
+                    <span className="text-xs" style={{ color: 'var(--color-text-faint)' }}>-</span>
+                  )}
+                </td>
               </tr>
             )
           })}
@@ -362,7 +389,7 @@ function DARFMonthlyTable({ data }: { data: IRPFCanonicalMonthlyAssessment[] }) 
             <td className="px-3 py-2 tabular-nums text-right font-bold" style={{ color: 'var(--color-error)' }}>
               {formatBRL(data.reduce((sum, month) => sum + Number(month.payment_due_brl), 0))}
             </td>
-            <td />
+            <td colSpan={2} />
           </tr>
         </tfoot>
       </table>
@@ -411,6 +438,12 @@ export default function IRPFPage() {
   const [activeTab, setActiveTab] = useState<Tab>('resumo')
   const [downloading, setDownloading] = useState(false)
   const [downloadingCSV, setDownloadingCSV] = useState(false)
+  const [paidDARFMonths, setPaidDARFMonths] = useState<Set<string>>(new Set())
+
+  const paidDARFStorageKey = useMemo(
+    () => portfolioId && selectedYear ? `sgi.irpf.darf.paid.${portfolioId}.${selectedYear}` : null,
+    [portfolioId, selectedYear],
+  )
 
   const { data: anos, isLoading: loadingAnos } = useIRPFAnos(portfolioId)
 
@@ -418,6 +451,36 @@ export default function IRPFPage() {
     setSelectedYear(current => reconcileIRPFYear(current, anos, fallbackYear))
     setActiveTab('resumo')
   }, [portfolioId, anos, fallbackYear])
+
+  useEffect(() => {
+    if (!paidDARFStorageKey) {
+      setPaidDARFMonths(new Set())
+      return
+    }
+
+    try {
+      const stored = window.localStorage.getItem(paidDARFStorageKey)
+      const months = stored ? JSON.parse(stored) : []
+      setPaidDARFMonths(new Set(Array.isArray(months) ? months : []))
+    } catch {
+      setPaidDARFMonths(new Set())
+    }
+  }, [paidDARFStorageKey])
+
+  const togglePaidDARFMonth = useCallback((month: string) => {
+    if (!paidDARFStorageKey) return
+
+    setPaidDARFMonths(previous => {
+      const next = new Set(previous)
+      if (next.has(month)) {
+        next.delete(month)
+      } else {
+        next.add(month)
+      }
+      window.localStorage.setItem(paidDARFStorageKey, JSON.stringify([...next].sort()))
+      return next
+    })
+  }, [paidDARFStorageKey])
 
   const {
     data: canonicalAssessment,
@@ -624,7 +687,7 @@ export default function IRPFPage() {
 
         <div className="p-4">
           {activeTab === 'resumo' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-6">
               <div>
                 <h2 className="text-sm font-semibold mb-3">Bens e Direitos</h2>
                 {loadingCanonicalAssets ? (
@@ -665,7 +728,13 @@ export default function IRPFPage() {
               ? <SkeletonCard />
               : isCanonicalAssessmentError
                 ? <ErrorNotice label="Não foi possível carregar DARF mensal." />
-              : <DARFMonthlyTable data={darfMonthly} />
+              : (
+                <DARFMonthlyTable
+                  data={darfMonthly}
+                  paidMonths={paidDARFMonths}
+                  onTogglePaid={togglePaidDARFMonth}
+                />
+              )
           )}
           {activeTab === 'rendimentos' && (
             isCanonicalIncomeError

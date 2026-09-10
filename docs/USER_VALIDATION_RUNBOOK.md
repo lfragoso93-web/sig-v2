@@ -512,3 +512,20 @@ Bloco IRPF - ganhos, rendimentos e DARF mensal:
   valor de DARF liberado no mes e saldo acumulado abaixo do minimo normativo;
 - escopo: a geracao oficial de DARF ainda nao foi implementada; o bloco atual
   expõe a base mensal necessaria para evoluir para emissao/exportacao guiada.
+
+Bloco IRPF - confirmacao visual de DARF paga e resumo legivel:
+
+- evidencia de usuario: a tela IRPF passou a funcionar, mas o Resumo exibia
+  Bens e Rendimentos espremidos lado a lado, ocultando colunas e dificultando
+  leitura;
+- melhoria UX: o Resumo passou a empilhar Bens e Direitos e Rendimentos em
+  blocos de largura total, preservando overflow horizontal apenas dentro das
+  tabelas;
+- melhoria operacional: a aba `DARF Mensal` passou a permitir marcar/desmarcar
+  meses com DARF liberada como `Pago`;
+- escopo de persistencia: o estado `Pago` fica no `localStorage`, separado por
+  carteira e ano-base, para apoiar validacao com usuarios sem criar ainda
+  contrato fiscal auditavel no banco;
+- proximo passo fiscal: persistir pagamentos de DARF em tabela propria com
+  data de pagamento, codigo de receita, valor pago, vencimento, juros/multa e
+  comprovante quando a emissao/gestao oficial for implementada.
