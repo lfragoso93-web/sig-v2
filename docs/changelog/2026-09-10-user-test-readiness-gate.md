@@ -33,4 +33,4 @@ Etapas destrutivas e dominios ja certificados nao devem ser repetidos apenas par
 
 ## Governanca
 
-O GOV-02 foi executado somente como governanca/documentacao sobre `stable-15jun`; nenhum seed, migration, CSV, rebuild ou alteracao de flag de readiness foi executado.
+GOV-02 concluido documentalmente sobre `stable-15jun`; nenhum seed, migration, CSV, rebuild ou alteracao de flag de readiness foi executado.
