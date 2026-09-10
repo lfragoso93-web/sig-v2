@@ -60,7 +60,7 @@ export function useUpdateGoal() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ portfolioId, id, data }: { portfolioId: number; id: number; data: GoalUpdate }) =>
-      api.patch<Goal>(`/portfolios/${portfolioId}/goals/${id}`, data).then(r => r.data),
+      api.put<Goal>(`/portfolios/${portfolioId}/goals/${id}`, data).then(r => r.data),
     onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: GOALS_KEY(v.portfolioId) }),
   })
 }

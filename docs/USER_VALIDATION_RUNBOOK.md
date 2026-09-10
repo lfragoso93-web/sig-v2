@@ -529,3 +529,18 @@ Bloco IRPF - confirmacao visual de DARF paga e resumo legivel:
 - proximo passo fiscal: persistir pagamentos de DARF em tabela propria com
   data de pagamento, codigo de receita, valor pago, vencimento, juros/multa e
   comprovante quando a emissao/gestao oficial for implementada.
+
+Bloco Metas - UI e contrato de edicao:
+
+- evidencia de usuario: pagina Metas estava fora do padrao visual do SIG v2,
+  com modal pouco legivel e dificuldade para registrar metas concretas;
+- diagnostico frontend: a pagina ainda usava componentes/classes antigas
+  (`bg-base-*`, `badge`, `btn-xs`) e icones por emoji, destoando dos tokens
+  atuais (`page-container`, `card`, `input`, `kpi-grid`);
+- diagnostico de contrato: o hook de atualizacao enviava `PATCH`, mas o backend
+  publica `PUT /api/v1/portfolios/{portfolio_id}/goals/{goal_id}`;
+- correcao UX: a tela foi reconstruida com cabecalho, KPIs, cards responsivos,
+  modal legivel, icones Lucide, estados de loading/erro e validacao basica do
+  formulario antes do envio;
+- correcao funcional: edicao de metas passou a usar `PUT`, com teste estrutural
+  no frontend para manter o contrato alinhado ao backend.
