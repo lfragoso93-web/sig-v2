@@ -84,6 +84,8 @@ Unica decisao formal de liberacao ampla. Consome #303, #226, #216, #158 e homolo
 
 GOV-01..05 alinharam Issues, readiness, OCI, backlog, README, ROADMAP, CHANGELOG, `docs/DEVELOPMENT_CONTINUITY.md`, `docs/architecture.md` e `docs/ISSUE_GOVERNANCE.md` ao estado atual.
 
+Baseline documental para iniciar GOV-06: `57b1ffe44e0d289d5f046557e7683a565d120a5d`.
+
 Baselines historicos permanecem no Git/changelogs datados, mas nao prevalecem sobre as Issues rebaselined e os documentos canonicos atuais.
 
 A persistencia auditavel do estado de DARF pago e demais evolucoes fora do escopo inicial devem permanecer explicitas e nao ser confundidas com funcionalidades fiscais definitivas.
