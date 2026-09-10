@@ -65,6 +65,9 @@ Commits GOV-05:
 - `8f9ec8f7448ebb877434416d345c6fc550899b08` — readiness cross-reference;
 - `b85917dc0edd9b17eed01fda88172ff3cbd22f74` — governance hierarchy/GOV-06 handoff;
 - `da5787d89c9de937bf5d738685a6b1e553db8229` — GOV-05 baseline before final handoff;
-- `d5ff4c39673862bef82ae755fe89e326a368629c` — final issue-governance handoff.
+- `d5ff4c39673862bef82ae755fe89e326a368629c` — final issue-governance handoff;
+- `db2c612dcf0e3a7b27bcebf9dc18b3b5d38e1691` — final changelog alignment;
+- `57b1ffe44e0d289d5f046557e7683a565d120a5d` — GOV-06 baseline in issue governance;
+- `33d07a6d2b6c87d1c017efdc5e381f897ea2d96e` — readiness baseline reference.
 
 Nenhum codigo, schema ou dado runtime foi alterado durante GOV-05.
