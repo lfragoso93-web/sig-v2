@@ -46,6 +46,8 @@ Microcommits GOV-03:
 - `b0e2c7903ac4672d141d0b8ef5d4a0cc09a1bb92` — bootstrap/promotion flow;
 - `dc06693331fb743746c73264ee6d22d70f01bb81` — OCI operator contract;
 - `a33c9ed08c9db078445ed6bcd01da63f1aef4784` — changelog GOV-03 record;
-- `40d1c919259db77766ed2dd13050eab59f5cb067` — readiness/OCI boundary.
+- `40d1c919259db77766ed2dd13050eab59f5cb067` — readiness/OCI boundary;
+- `957a88139fa403164667c9dfcdfd0c6c5007101e` — GOV-03 completion record;
+- `a947b7bdecaa4afa23947006072ce628c996ccb2` — final readiness governance alignment.
 
 Nenhum codigo, schema, recurso OCI ou dado de runtime foi alterado por GOV-03.
