@@ -46,6 +46,8 @@ Essas evidencias podem ser reutilizadas pelos gates reais quando seus contratos 
 - **#158 — rebuild pre-producao:** preparacao, backup, limpeza historica e grande parte do rebuild ja possuem evidencia. Executar apenas o delta necessario: importacao candidata, rebuild/reconciliacao final, validacao funcional e eventual contracao fisica autorizada.
 - **#227 — GO/NO-GO:** decisao formal de liberacao ampla, consumindo #303/#226/#216/#158 mais seguranca, resiliencia e homologacao.
 
+Os corpos de #226/#216/#158/#227 sao os trackers vivos de execucao; este documento registra a fronteira entre eles e o gate assistido.
+
 ## Condicoes remanescentes
 
 1. concluir rodada assistida sem blocker P0/P1 e congelar SHA candidato;
