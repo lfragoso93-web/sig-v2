@@ -40,7 +40,7 @@ Desenvolvimento/certificacao pesada local; OCI como homologacao do SHA exato; `/
 
 ## GOV-05 — documentacao raiz — CONCLUIDO
 
-README, ROADMAP, CHANGELOG, `docs/DEVELOPMENT_CONTINUITY.md`, `docs/architecture.md` e `docs/ISSUE_GOVERNANCE.md` foram rebaselined para o estado real de 10/09/2026.
+README, ROADMAP, CHANGELOG, `docs/DEVELOPMENT_CONTINUITY.md`, `docs/architecture.md`, `docs/ISSUE_GOVERNANCE.md` e `docs/USER_TEST_READINESS_GATE.md` foram rebaselined para o estado real de 10/09/2026.
 
 Correcoes principais:
 
@@ -61,6 +61,7 @@ Commits GOV-05:
 - `9a7ae31f4986cbd32c59475b32e8165cb0c8db6d` — CHANGELOG;
 - `d512d1d3d826b0401615440efbdc0a78f4dabb21` — DEVELOPMENT_CONTINUITY;
 - `cfe828300d05e35b672bbdf8775587c0388cccbb` — architecture;
-- `556eb126255cbfb5ac86c3a7777ae92e1481a0f6` — ISSUE_GOVERNANCE.
+- `556eb126255cbfb5ac86c3a7777ae92e1481a0f6` — ISSUE_GOVERNANCE;
+- `8f9ec8f7448ebb877434416d345c6fc550899b08` — readiness cross-reference.
 
 Nenhum codigo, schema ou dado runtime foi alterado durante GOV-05.
