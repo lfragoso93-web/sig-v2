@@ -8,7 +8,7 @@ O gate `user-test-readiness.v1` decide se o SGI v2 pode receber rodadas assistid
 
 ## Execucao
 
-- Docker: `docker-compose run --rm backend python -m app.cli.user_test_readiness`
+- Docker: `docker compose run --rm backend python -m app.cli.user_test_readiness`
 - SuperAdmin: `GET /api/v1/admin/bootstrap/user-test-readiness`
 
 ## Evidencia registrada
@@ -82,6 +82,8 @@ Unica decisao formal de liberacao ampla. Consome #303, #226, #216, #158 e homolo
 
 ## Governanca documental
 
-GOV-03 alinhou `oci-execution-index.md`, `oci-first-deploy-runbook.md`, `oci.md`, `BOOTSTRAP_DATA_FLOW.md` e este gate ao mesmo contrato local -> OCI. O registro final do bloco esta no changelog datado de 10/09/2026, com baseline documental final `7b927b19f2798658943916d06d67eac9ca6f0ba8` antes deste ajuste de referencia.
+GOV-01..05 alinharam Issues, readiness, OCI, backlog, README, ROADMAP, CHANGELOG, `docs/DEVELOPMENT_CONTINUITY.md`, `docs/architecture.md` e `docs/ISSUE_GOVERNANCE.md` ao estado atual.
+
+Baselines historicos permanecem no Git/changelogs datados, mas nao prevalecem sobre as Issues rebaselined e os documentos canonicos atuais.
 
 A persistencia auditavel do estado de DARF pago e demais evolucoes fora do escopo inicial devem permanecer explicitas e nao ser confundidas com funcionalidades fiscais definitivas.
