@@ -33,12 +33,9 @@ A validacao assistida acrescentou evidencia real-controlada importante, sem prom
 - eventos corporativos: 122 eventos globais obtidos no escopo da carteira, ainda `PENDENTE/UNRECONCILED` para reconciliacao canonica;
 - IRPF suportado e Renda Fixa/Tesouro validados em runtime assistido.
 
-Essas evidencias mudam o estado de governanca, mas nao equivalem ao gate global originalmente exigido pela #226. A cadeia real permanece:
+Essas evidencias mudam o estado de governanca, mas nao equivalem ao gate global originalmente exigido pela #226. A cadeia real permanece #226 -> #216 -> #158 -> #227.
 
-1. #226 — decidir e executar a estrategia final de Proventos para cobertura global/operacional, preservando a evidencia portfolio-scoped ja aprovada;
-2. #216 — reconciliar benchmarks, cambio e Proventos no gate agregado;
-3. #158 — executar a janela operacional final de importacao/rebuild/reconciliacao, sem repetir destrutivamente etapas ja certificadas;
-4. #227 — produzir GO/NO-GO formal e somente entao avaliar `ready_for_real_data=true`.
+A documentacao agora explicita que etapas destrutivas e dominios ja certificados nao devem ser repetidos apenas para satisfazer checklists historicos. O delta operacional remanescente deve ser executado sobre um SHA candidato congelado e reconciliado antes do GO/NO-GO.
 
 O estado `GO_ASSISTED` continua separado de `ready_for_real_data`.
 
