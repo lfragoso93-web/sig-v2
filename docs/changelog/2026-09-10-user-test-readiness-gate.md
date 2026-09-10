@@ -54,6 +54,6 @@ Correcoes principais:
 - hierarquia de Issues alinhada ao mesmo fluxo;
 - historico detalhado permanece preservado no Git e nos changelogs datados.
 
-Baseline de transicao para GOV-06: `c1f214f4555171ea8c1a96b71e3eb28d876b392e`.
+Baseline final GOV-05 / inicio GOV-06: `c4c8f27de542103fc73ead30a1632bdcf22d6b73`.
 
 Nenhum codigo, schema ou dado runtime foi alterado durante GOV-05.
