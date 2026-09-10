@@ -18,34 +18,34 @@
 
 ## GOV-01 — readiness assistido
 
-- #303 rebaselined para o estado real da certificacao sintetica/assistida;
-- `GO_ASSISTED` separado explicitamente de abertura ampla com dados reais.
+#303 foi rebaselined para o estado real da certificacao sintetica/assistida, separando `GO_ASSISTED` de abertura ampla com dados reais.
 
 ## GOV-02 — gates de dados reais
 
-#226, #216, #158 e #227 foram reavaliadas contra as evidencias assistidas publicadas.
+#226, #216, #158 e #227 foram reavaliadas contra as evidencias assistidas publicadas. A cadeia real ficou formalizada como #226 -> #216 -> #158 -> #227, preservando evidencias ja certificadas e evitando repeticao destrutiva por checklist historico.
 
-- Proventos portfolio-scoped: 49 ativos elegiveis, 183 eventos na janela controlada e prova de idempotencia sem escrita fisica na segunda execucao;
-- carteira assistida: CSV com 308 transacoes e 65 ativos distintos, seguido de reparos e rebuild canonico;
-- snapshots: 493 snapshots entre 22/10/2024 e 10/09/2026, com parcialidade/estimativa explicita quando aplicavel;
-- eventos corporativos: 122 eventos obtidos no escopo da carteira, ainda com reconciliacao canonica pendente para eventos complexos;
-- IRPF suportado e Renda Fixa/Tesouro validados em runtime assistido.
+Evidencias incorporadas incluem Proventos portfolio-scoped idempotentes, CSV assistido com 308 transacoes/65 ativos, 493 snapshots no rebuild observado, eventos corporativos portfolio-scoped e validacoes de IRPF/RF/Tesouro.
 
-A cadeia real ficou formalizada como #226 -> #216 -> #158 -> #227, preservando evidencias ja certificadas e evitando repeticao destrutiva por checklist historico.
-
-## GOV-03 — operacao e OCI
+## GOV-03 — operacao e OCI — CONCLUIDO
 
 A fronteira operacional foi rebaselined:
 
 - desenvolvimento, correcoes e certificacao pesada acontecem localmente;
 - OCI e ambiente de homologacao de SHA ja certificado localmente;
-- deploy OCI deve fixar o SHA exato, e `APP_COMMIT_SHA` deve corresponder ao checkout;
+- deploy OCI fixa o SHA exato e `APP_COMMIT_SHA` deve corresponder ao checkout;
 - falhas de codigo encontradas na OCI voltam para reproducao/correcao local e geram novo SHA;
 - `/ready=503` e esperado enquanto `ready_for_real_data=false`, mesmo com `/health=200` e `GO_ASSISTED`;
-- readiness nao deve ser forcado para aprovar smoke;
-- restore/importacao real ampla, seeds globais e contracoes destrutivas permanecem subordinados a #226/#216/#158/#227;
-- `docs/deployment/oci-execution-index.md`, `oci-first-deploy-runbook.md`, `oci.md` e `BOOTSTRAP_DATA_FLOW.md` foram alinhados a esse contrato.
+- readiness nao e forcado para aprovar smoke;
+- restore/importacao real ampla, seeds globais e contracoes destrutivas permanecem subordinados aos gates reais;
+- `docs/deployment/oci-execution-index.md`, `oci-first-deploy-runbook.md`, `oci.md`, `BOOTSTRAP_DATA_FLOW.md` e `USER_TEST_READINESS_GATE.md` foram alinhados ao mesmo contrato.
 
-## Governanca
+Microcommits GOV-03:
 
-Os rebaselines documentais foram divididos em commits pequenos. Nenhum codigo, schema ou dado de runtime foi alterado por estes commits.
+- `b39b8374a3b39fe324e54dbb8d1a356e54501c79` — execution index;
+- `c6c4754d2b6d8332259fb84b26daaa5aca35a251` — exact-SHA deploy runbook;
+- `b0e2c7903ac4672d141d0b8ef5d4a0cc09a1bb92` — bootstrap/promotion flow;
+- `dc06693331fb743746c73264ee6d22d70f01bb81` — OCI operator contract;
+- `a33c9ed08c9db078445ed6bcd01da63f1aef4784` — changelog GOV-03 record;
+- `40d1c919259db77766ed2dd13050eab59f5cb067` — readiness/OCI boundary.
+
+Nenhum codigo, schema, recurso OCI ou dado de runtime foi alterado por GOV-03.
