@@ -29,6 +29,7 @@ import type {
   GanhoCapitalMensal,
   RendimentoIsento,
   JCPItem,
+  IRPFCanonicalMonthlyAssessment,
   VendaMensal,
 } from '@/types/irpf'
 import clsx from 'clsx'
@@ -306,6 +307,69 @@ function RendimentosTable({
   )
 }
 
+function DARFMonthlyTable({ data }: { data: IRPFCanonicalMonthlyAssessment[] }) {
+  if (!data.length) return <Empty label="Nenhuma apuração mensal encontrada." />
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b" style={{ borderColor: 'var(--color-divider)' }}>
+            {['Mês', 'IR Swing', 'IR Day Trade', 'IRRF', 'Imposto Líquido', 'DARF do Mês', 'Saldo Acumulado'].map(h => (
+              <th key={h} className="text-left px-3 py-2 text-xs font-semibold" style={{ color: 'var(--color-text-muted)' }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((month, i) => {
+            const swingTax = Number(month.swing_gross_tax_due_brl)
+            const dayTradeTax = Number(month.day_trade_gross_tax_due_brl)
+            const withholding = Number(month.swing_withholding_brl) + Number(month.day_trade_withholding_brl)
+            const netTax = Number(month.total_net_tax_due_brl)
+            const paymentDue = Number(month.payment_due_brl)
+            const accumulated = Number(month.closing_accumulated_tax_brl)
+
+            return (
+              <tr
+                key={month.competence_month}
+                className="border-b"
+                style={{
+                  borderColor: 'var(--color-divider)',
+                  background: i % 2 === 0 ? 'transparent' : 'var(--color-surface-offset)',
+                }}
+              >
+                <td className="px-3 py-2 font-medium">{mesLabel(month.competence_month)}</td>
+                <td className="px-3 py-2 tabular-nums text-right">{formatBRL(swingTax)}</td>
+                <td className="px-3 py-2 tabular-nums text-right">{formatBRL(dayTradeTax)}</td>
+                <td className="px-3 py-2 tabular-nums text-right" style={{ color: withholding > 0 ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
+                  {formatBRL(withholding)}
+                </td>
+                <td className="px-3 py-2 tabular-nums text-right">{formatBRL(netTax)}</td>
+                <td className={clsx('px-3 py-2 tabular-nums text-right font-semibold', paymentDue > 0 ? 'text-[var(--color-error)]' : 'text-[var(--color-text-muted)]')}>
+                  {formatBRL(paymentDue)}
+                </td>
+                <td className="px-3 py-2 tabular-nums text-right" style={{ color: accumulated > 0 ? 'var(--color-warning, #f59e0b)' : 'var(--color-text-muted)' }}>
+                  {formatBRL(accumulated)}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+        <tfoot>
+          <tr style={{ borderTop: '2px solid var(--color-divider)' }}>
+            <td className="px-3 py-2 text-xs font-semibold" style={{ color: 'var(--color-text-muted)' }}>Total</td>
+            <td colSpan={4} />
+            <td className="px-3 py-2 tabular-nums text-right font-bold" style={{ color: 'var(--color-error)' }}>
+              {formatBRL(data.reduce((sum, month) => sum + Number(month.payment_due_brl), 0))}
+            </td>
+            <td />
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  )
+}
+
 function Empty({ label }: { label: string }) {
   return (
     <div className="py-8 text-center text-sm" style={{ color: 'var(--color-text-muted)' }}>{label}</div>
@@ -331,6 +395,7 @@ const TABS = [
   { key: 'resumo',       label: 'Resumo',          icon: FileText },
   { key: 'bens',         label: 'Bens e Direitos', icon: Wallet },
   { key: 'ganhos',       label: 'Ganhos de Capital', icon: TrendingUp },
+  { key: 'darf',         label: 'DARF Mensal',     icon: Landmark },
   { key: 'rendimentos',  label: 'Rendimentos',     icon: Banknote },
   { key: 'jcp',          label: 'JCP',             icon: BadgePercent },
 ] as const
@@ -433,6 +498,7 @@ export default function IRPFPage() {
   )
   const bensDireitos = canonicalAssets?.items ?? []
   const ganhosCapital = canonicalCapitalGains?.months ?? []
+  const darfMonthly = canonicalAssessment?.monthly ?? []
   const dividendos = canonicalIncome?.dividends ?? []
   const jcp = canonicalIncome?.jcp ?? []
 
@@ -593,6 +659,13 @@ export default function IRPFPage() {
               : isCanonicalCapitalGainsError
                 ? <ErrorNotice label="Não foi possível carregar Ganhos de Capital." />
               : <GanhosCapitalTable data={ganhosCapital} />
+          )}
+          {activeTab === 'darf' && (
+            loadingCanonicalAssessment
+              ? <SkeletonCard />
+              : isCanonicalAssessmentError
+                ? <ErrorNotice label="Não foi possível carregar DARF mensal." />
+              : <DARFMonthlyTable data={darfMonthly} />
           )}
           {activeTab === 'rendimentos' && (
             isCanonicalIncomeError

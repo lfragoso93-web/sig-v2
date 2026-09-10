@@ -494,3 +494,21 @@ Bloco IRPF - contrato de rota portfolio-scoped:
   como compatibilidade;
 - gate estrutural: adicionado teste para impedir que o contrato
   portfolio-scoped do IRPF deixe de ser registrado em `app/main.py`.
+
+Bloco IRPF - ganhos, rendimentos e DARF mensal:
+
+- evidencia de usuario: apos corrigir as rotas, a tela carregou Bens e resumo,
+  mas Ganhos de Capital, Rendimentos e JCP ainda nao carregavam;
+- diagnostico runtime: o endpoint canonico de Ganhos de Capital registrou
+  `TypeError: unsupported operand type(s) for +: 'decimal.Decimal' and 'float'`
+  ao somar preco, quantidade e taxas no motor fiscal;
+- causa: o motor historico de ganhos ainda misturava `Decimal` vindo do banco
+  com `float` em operacoes monetarias;
+- correcao: preco, quantidade, taxas e cambio passaram a ser normalizados para
+  `Decimal` durante o calculo, convertendo para `float` apenas no envelope de
+  resposta legado esperado pela tela;
+- melhoria de interface: adicionada aba `DARF Mensal` usando o contrato anual
+  canonico ja existente, com IR Swing, IR Day Trade, IRRF, imposto liquido,
+  valor de DARF liberado no mes e saldo acumulado abaixo do minimo normativo;
+- escopo: a geracao oficial de DARF ainda nao foi implementada; o bloco atual
+  expõe a base mensal necessaria para evoluir para emissao/exportacao guiada.
