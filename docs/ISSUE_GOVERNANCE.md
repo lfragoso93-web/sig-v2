@@ -70,6 +70,17 @@ Manter uma hierarquia única para certificação, dados reais, operação, dívi
 - evidências certificadas devem ser reutilizadas; não repetir operação destrutiva por checklist antigo;
 - documentação e Issues devem ser atualizadas no mesmo macrobloco em que a decisão muda.
 
-## Sanitização
+## Estado da sanitização
 
-#293 acompanha a limpeza final de Issues duplicadas, obsoletas ou contraditórias. A segunda passada deve usar esta hierarquia como referência e preservar histórico apenas quando ele continuar útil.
+GOV-01..05 concluíram o rebaseline de readiness, gates reais, OCI, backlog funcional e documentação raiz. A próxima etapa é **GOV-06 — sanitização final de Issues**.
+
+GOV-06 deve:
+
+- localizar Issues abertas que ainda descrevem trabalho já concluído;
+- localizar duplicidades/overlaps residuais;
+- revisar trackers com dependências ou ordem já superadas;
+- fechar somente quando houver evidência ou Issue canônica substituta;
+- preservar histórico útil em comentário/body antes de encerrar;
+- atualizar #293 com a hierarquia final.
+
+#293 permanece aberta até essa segunda passada terminar.
