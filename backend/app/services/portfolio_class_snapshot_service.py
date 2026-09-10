@@ -36,7 +36,9 @@ from app.services.class_snapshot_position_projection import (
 from app.services.corporate_action_position_reader import (
     load_global_corporate_actions_by_ticker,
 )
-from app.services.fixed_income_valuation_service import get_fixed_income_totals
+from app.services.fixed_income_valuation_service import (
+    get_fixed_income_totals_from_transactions,
+)
 from app.services.fx_rate_reader import load_usd_brl_rates_for_dates
 from app.services.price_history_service import get_prices_at_date_batch
 from app.services.twr_service import (
@@ -507,7 +509,11 @@ async def rebuild_class_snapshots(
 
             if AssetType.RENDA_FIXA in portfolio_types:
                 class_state = return_states[AssetType.RENDA_FIXA]
-                totals = await get_fixed_income_totals(db, portfolio_id, cursor)
+                totals = await get_fixed_income_totals_from_transactions(
+                    db,
+                    fixed_income_transactions,
+                    cursor,
+                )
                 market_value = _decimal(totals["current_value"])
                 cost_basis = _decimal(totals["invested_amount"])
                 external_flow = _net_external_flow_for_day(

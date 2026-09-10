@@ -14,7 +14,7 @@ _EXPECTED = {
     "CRIPTO": (True, "available"),
     "ETF_NACIONAL": (True, "available"),
     "FII": (True, "available"),
-    "RENDA_FIXA": (False, "dedicated_history_not_available"),
+    "RENDA_FIXA": (True, "available"),
     "TESOURO_DIRETO": (True, "available"),
 }
 
@@ -35,10 +35,6 @@ def main() -> None:
     if actual != _EXPECTED:
         failures.append(f"availability:actual={actual}:expected={_EXPECTED}")
 
-    renda_fixa = next(row for row in rows if row["asset_type"] == "RENDA_FIXA")
-    if not renda_fixa["reason"]:
-        failures.append("renda-fixa:missing-unavailability-reason")
-
     print(
         "CERT303-TWR-AVAILABILITY",
         " ".join(
@@ -46,8 +42,8 @@ def main() -> None:
             for asset_type, (available, status) in sorted(actual.items())
         ),
         "scope=availability-only",
-        "rf_daily_twr=false",
-        "issue149=open",
+        "rf_daily_twr=true",
+        "issue149=closed",
         f"status={'PASS' if not failures else 'FAIL'}",
     )
     if failures:

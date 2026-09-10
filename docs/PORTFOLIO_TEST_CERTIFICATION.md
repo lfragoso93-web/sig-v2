@@ -82,9 +82,10 @@ Baseline atual publicado em `stable-15jun`:
   a antiga projeção auxiliar `fixed_income_investments`; esse contrato foi
   posteriormente aposentado, e `transactions` passou a ser a fonte canônica
   exclusiva do lifecycle `RENDA_FIXA`/`TESOURO_DIRETO`;
-- `310db2420a1afb3f1ea896fd5fcaea214b36e128`: Rentabilidade reconciliada com
-  `TESOURO_DIRETO` e `RENDA_FIXA` sem TWR dedicado, como
-  `partial_by_design`;
+- `310db2420a1afb3f1ea896fd5fcaea214b36e128`: Rentabilidade reconciliada no
+  contrato historico `partial_by_design`; posteriormente, `RENDA_FIXA` passou a
+  ter TWR dedicado por contrato/indexador, mantendo apenas `TESOURO_DIRETO`
+  condicionado a cobertura oficial exata;
 - `39d2ee8c0fd64fa82aa264e8ad88343431580b3e`: classes fiscais comuns do
   fixture mapeadas para a matriz sintetica de IRPF;
 - `ad9b027a9087173e270117741ecebea4cd4279ab`: modal de importacao CSV

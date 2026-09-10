@@ -646,3 +646,24 @@ Bloco Rentabilidade - TWR canonico e Renda Fixa por classe:
   de classe passaram a incluir `RENDA_FIXA` com 493 linhas;
 - ressalva: `TESOURO_DIRETO` continua limitado a cobertura oficial/exata
   disponivel no historico dedicado, sem interpolacao artificial.
+
+Bloco Performance - primeira limpeza do motor de Rentabilidade:
+
+- evidencia tecnica: rebuilds completos ficaram lentos porque partes do motor
+  recalculavam a mesma base diaria varias vezes e ainda havia contratos de teste
+  apontando para caminhos legados;
+- limpeza funcional: o rebuild pos-transacao passou a ser protegido por teste
+  estrutural que espera `backfill_canonical_snapshots_with_returns`, nao mais o
+  backfill simples legado;
+- otimizacao: Renda Fixa ganhou calculo de valuation/totais a partir de
+  transacoes ja carregadas em memoria, evitando recarregar as mesmas linhas em
+  cada dia util do rebuild por classe;
+- otimizacao: produtos `PREFIXADO` deixam de consultar referencias de benchmark
+  no fallback, usando composicao contratual deterministica;
+- limpeza de contrato: certificacao TWR, reconciliacao de Rentabilidade e
+  fixture sintetico foram alinhados para tratar `RENDA_FIXA` como TWR dedicado
+  disponivel;
+- validacao automatizada focada: `14 passed`;
+- divida tecnica mapeada: quatro testes antigos do fixture CSV ainda falham por
+  mocks defasados de importacao/crypto eligibility; nao foram misturados neste
+  bloco por pertencerem ao contrato de importacao.

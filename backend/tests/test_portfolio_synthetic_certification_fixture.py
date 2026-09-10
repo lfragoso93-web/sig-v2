@@ -470,8 +470,7 @@ async def test_synthetic_fixture_surfaces_partial_twr_by_design() -> None:
             "cost_basis": float(row["remaining_cost"]),
             "dedicated_history_required": asset_type
             in {"TESOURO_DIRETO", "RENDA_FIXA"},
-            "twr_available": asset_type
-            not in {"TESOURO_DIRETO", "RENDA_FIXA"},
+            "twr_available": asset_type != "TESOURO_DIRETO",
         }
         for asset_type, row in _expected_classes(fixture).items()
     ]
@@ -515,6 +514,5 @@ async def test_synthetic_fixture_surfaces_partial_twr_by_design() -> None:
     assert result["is_reconciled"] is True
     assert result["unsupported_class_twr"] == [
         "TESOURO_DIRETO",
-        "RENDA_FIXA",
     ]
     assert result["twr_comparability_status"] == "partial_by_design"

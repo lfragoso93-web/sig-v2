@@ -222,6 +222,8 @@ def _compound_value(principal: Decimal, annual_rate_pct: Decimal, start: date, t
 
 
 async def _fallback_factor(db: AsyncSession, key: FixedIncomeKey, start: date, target: date) -> Decimal:
+    if _normalize_indexer(key.indexer) == "PREFIXADO":
+        return _compound_value(Decimal("1"), key.rate_pct, start, target)
     refs = await _latest_refs(db)
     annual = _annual_rate_pct(key.indexer, key.rate_pct, refs)
     return _compound_value(Decimal("1"), annual, start, target)
@@ -403,6 +405,19 @@ async def get_fixed_income_valuations(
 ) -> list[FixedIncomeValuation]:
     target = target_date or date.today()
     txs = await _load_fixed_income_transactions(db, portfolio_id)
+    return await get_fixed_income_valuations_from_transactions(db, txs, target)
+
+
+async def get_fixed_income_valuations_from_transactions(
+    db: AsyncSession,
+    transactions: list[Transaction],
+    target_date: date,
+) -> list[FixedIncomeValuation]:
+    txs = [
+        tx
+        for tx in transactions
+        if tx.date <= target_date and str(tx.asset_type or "").upper() == RENDA_FIXA_TYPE
+    ]
 
     applications: list[FixedIncomeApplication] = []
     for tx in txs:
@@ -413,7 +428,29 @@ async def get_fixed_income_valuations(
         elif _is_sell(tx.operation):
             _apply_redemption(applications, tx)
 
-    return await _aggregate_applications(db, applications, target)
+    return await _aggregate_applications(db, applications, target_date)
+
+
+async def get_fixed_income_totals_from_transactions(
+    db: AsyncSession,
+    transactions: list[Transaction],
+    target_date: date,
+) -> dict[str, Decimal]:
+    valuations = await get_fixed_income_valuations_from_transactions(
+        db,
+        transactions,
+        target_date,
+    )
+    invested = _money(sum((v.invested_amount for v in valuations), Decimal("0")))
+    current = _money(sum((v.current_value for v in valuations), Decimal("0")))
+    income = _money(current - invested)
+    income_pct = _pct((income / invested * Decimal("100")) if invested > 0 else Decimal("0"))
+    return {
+        "invested_amount": invested,
+        "current_value": current,
+        "income_amount": income,
+        "income_pct": income_pct,
+    }
 
 
 async def get_fixed_income_principal_valuations(
