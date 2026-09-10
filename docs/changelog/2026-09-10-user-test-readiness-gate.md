@@ -5,65 +5,39 @@
 - Relatorio read-only `user-test-readiness.v1`.
 - CLI `python -m app.cli.user_test_readiness`.
 - Rota SuperAdmin `/api/v1/admin/bootstrap/user-test-readiness`.
-- Testes focados para garantir que o relatorio permanece read-only e nao
-  promove `ready_for_real_data`.
-
-## Estado consolidado
-
-- `status=GO_ASSISTED` para validacao acompanhada;
-- `go_for_assisted_user_tests=true`;
-- `ready_for_real_data=false`;
-- `blockers=[]`;
-- `warnings=[]`;
-- `/health=200` e `/ready=503` no ambiente de validacao registrado.
-
-O resultado libera continuidade dos testes assistidos, mas nao equivale a
-readiness de producao nem autoriza abertura ampla com dados reais.
-
-## Evidencias correlacionadas
-
-O rebaseline documental da #303 passou a registrar como ja certificados ou
-validados no ciclo atual:
-
-- fixture sintetica multiclasse e reconciliacao financeira independente;
-- CSV dry-run/import/replay/invalidos/atomicidade/rebuild;
-- snapshots canonicos com persistencia, replay, invalidacao e recomposicao;
-- IRPF das classes suportadas;
-- Redis fail-open e persistencia PostgreSQL apos restart;
-- smoke UI e jornadas assistidas basicas;
-- Proventos escopados por carteira com prova de idempotencia;
-- fronteira explicita de TWR de Renda Fixa sob #149.
-
-## Governanca
-
-A Issue #303 deixou de refletir um checklist majoritariamente pendente e foi
-atualizada para representar o estado real da certificacao em 10/09/2026.
-
-O gate agora distingue explicitamente:
-
-1. `PORTFOLIO-TEST-READY` / validacao assistida;
-2. estrategia final de Proventos sob #226;
-3. reconciliacao agregada #216;
-4. importacao/rebuild operacional #158;
-5. decisao final #227;
-6. somente depois, eventual `ready_for_real_data=true`.
-
-A execucao escopada de Proventos e suficiente para a carteira assistida, mas nao
-fecha automaticamente o gate global de Proventos.
+- Testes focados para garantir que o relatorio permanece read-only e nao promove `ready_for_real_data`.
 
 ## Documentacao
 
-- `docs/USER_VALIDATION_RUNBOOK.md` permanece como runbook das jornadas
-  acompanhadas;
-- `docs/USER_TEST_READINESS_GATE.md` foi rebaselined para explicitar a fronteira
-  assistido x dados reais, Proventos escopados, TWR de Renda Fixa e criterios de
-  bloqueio/continuidade;
-- #303 foi sincronizada com as evidencias ja publicadas na `stable-15jun`.
+- `docs/USER_VALIDATION_RUNBOOK.md` atualizado com o novo status `GO_ASSISTED`.
+- `docs/USER_TEST_READINESS_GATE.md` criado como contrato operacional do gate.
+- Issue #303 rebaselined para refletir a certificacao sintética/assistida ja comprovada.
+- Gates reais #226, #216, #158 e #227 reavaliados em 10/09/2026 contra as evidencias assistidas publicadas.
 
-## Baseline
+## Evidencia runtime
 
-Baseline observada no inicio do GOV-01:
-`9644a643f70d9126c7d07bfbac9231320515ee40`.
+- `/health=200`;
+- `/ready=503`;
+- `go_for_assisted_user_tests=true`;
+- `ready_for_real_data=false`;
+- `blockers=[]`;
+- `warnings=[]`.
 
-Commit documental do rebaseline do gate:
-`3f48c3128150fee6c5ea0b52da5f8a5bdf7064f7`.
+## Rebaseline dos gates de dados reais
+
+A validacao assistida acrescentou evidencia real-controlada importante, sem promover o sistema para uso real amplo:
+
+- Proventos portfolio-scoped: carteira 15, 49 ativos elegiveis, 183 eventos globais materializados na janela controlada e prova de idempotencia sem escrita fisica na segunda execucao;
+- carteira assistida: CSV com 308 transacoes e 65 ativos distintos, seguido de reparos de cobertura e rebuild canonico;
+- snapshots: 493 snapshots reconstruidos entre 22/10/2024 e 10/09/2026, com datas parciais/estimadas explicitamente marcadas;
+- eventos corporativos: 122 eventos globais obtidos no escopo da carteira, ainda `PENDENTE/UNRECONCILED` para reconciliacao canonica;
+- IRPF suportado e Renda Fixa/Tesouro validados em runtime assistido.
+
+Essas evidencias mudam o estado de governanca, mas nao equivalem ao gate global originalmente exigido pela #226. A cadeia real permanece:
+
+1. #226 — decidir e executar a estrategia final de Proventos para cobertura global/operacional, preservando a evidencia portfolio-scoped ja aprovada;
+2. #216 — reconciliar benchmarks, cambio e Proventos no gate agregado;
+3. #158 — executar a janela operacional final de importacao/rebuild/reconciliacao, sem repetir destrutivamente etapas ja certificadas;
+4. #227 — produzir GO/NO-GO formal e somente entao avaliar `ready_for_real_data=true`.
+
+O estado `GO_ASSISTED` continua separado de `ready_for_real_data`.
