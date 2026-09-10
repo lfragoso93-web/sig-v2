@@ -1,17 +1,18 @@
 # Arquitetura — SGI v2
 
-> Última atualização: 15/08/2026
+> Última atualização: 10/09/2026.
 
 ## Objetivo
 
-O SGI v2 calcula patrimônio, posição, custo, resultado, proventos, rentabilidade e IRPF a partir de dados persistidos e contratos canônicos. Provedores externos pertencem ao bootstrap inicial e aos sincronizadores operacionais de preço; páginas, KPIs, relatórios e cálculos financeiros não consultam providers diretamente.
+O SGI v2 calcula patrimônio, posição, custo, resultado, Proventos, rentabilidade e IRPF a partir de dados persistidos e contratos canônicos. Provedores externos pertencem a bootstrap, ingestão, sincronização ou reconciliação explicitamente autorizados; páginas, KPIs, relatórios e cálculos financeiros não consultam providers diretamente.
 
 ## Fluxo financeiro principal
 
 ```text
-bootstrap inicial certificado
+bootstrap / sincronizadores autorizados
         ↓
-assets + asset_prices + rate_history + fx_rates + asset_dividends + corporate_events
+assets + asset_prices + rate_history + fx_rates
+asset_dividends + corporate_events
         ↓
 transactions
         ↓
@@ -26,254 +27,183 @@ summary.v2 + rentabilidade.v2 + leitores históricos
 Resumo / Patrimônio / Rentabilidade / Proventos / IRPF
 ```
 
-`transactions` é também a fonte canônica do lifecycle de Renda Fixa e Tesouro Direto. A antiga projeção `fixed_income_investments` foi retirada do runtime e do ORM; a migration `20260903_drop_fixed_income` formaliza a contração física com bloqueio fail-closed quando dados legados ainda existirem.
-
-Metas e Análise de Carteira não integram, neste momento, o conjunto de contratos funcionais estabilizados. O redesenho será conduzido em conjunto por #246 + #57 somente após a estabilização definitiva da base.
+`transactions` é a fonte canônica do lifecycle financeiro, inclusive Renda Fixa e Tesouro Direto. Não reintroduzir projeção paralela em `fixed_income_investments`.
 
 ## Princípios obrigatórios
 
-### Bootstrap-first + DB-first
-
-Antes de existir uso real, o ambiente deve executar um bootstrap idempotente e certificável que carregue no banco todo o conjunto necessário ao funcionamento do sistema:
-
-- catálogo de ativos e metadados;
-- histórico de preços;
-- Proventos globais;
-- eventos corporativos;
-- Tesouro Direto e histórico associado;
-- benchmarks e taxas;
-- câmbio;
-- demais séries auxiliares necessárias aos contratos canônicos.
-
-A aplicação só deve ser considerada pronta para criação/importação de carteiras reais depois da conclusão e validação desse bootstrap.
-
-Após o bootstrap:
+### DB-first
 
 - serviços financeiros leem dados persistidos;
-- busca, detalhes, posições, relatórios, IRPF, Proventos e rentabilidade não consultam provider;
-- consultas externas recorrentes ficam restritas a **preço intraday** e **preço oficial/de fechamento do dia**;
-- preços obtidos externamente devem ser persistidos antes de alimentar contratos financeiros;
-- nenhuma mutação comum de usuário dispara seed, onboarding, backfill histórico ou coleta de eventos.
-
-### Cobertura histórica por domínio
-
-Não existe uma data inicial global arbitrária para o bootstrap. Cada domínio define a maior cobertura válida suportada por sua fonte canônica:
-
-- USD-BRL: `1994-07-01`, início do Real, via PTAX oficial;
-- Proventos: `1970-01-01`, limite técnico atual do histórico Yahoo complementar usado pelo adapter estrito;
-- preços, Tesouro, benchmarks e eventos mantêm suas próprias regras de cobertura.
-
-Essa separação evita que uma limitação de um provider reduza silenciosamente a profundidade dos demais domínios.
+- busca, detalhes, posições, relatórios, IRPF, Proventos e rentabilidade não consultam provider no read path financeiro;
+- dados externos são persistidos antes de alimentar contratos financeiros;
+- ausência de preço, FX ou benchmark é explícita e nunca vira zero, paridade fixa ou preço inventado.
 
 ### Contratos financeiros únicos
 
-`summary.v2` e `rentabilidade.v2` são as fontes públicas de leitura consolidada. Posição histórica, custo e resultado realizado são fornecidos por projetores compartilhados, não por reconstruções locais em cada módulo.
+- `summary.v2` é a leitura consolidada canônica de resumo;
+- `rentabilidade.v2` é a leitura pública canônica de rentabilidade;
+- projetores compartilhados fornecem posição, custo e realizado;
+- snapshots persistem a série histórica derivada;
+- módulos futuros não podem recriar esses cálculos localmente.
 
-### Alembic como autoridade de schema
+### Idempotência e rastreabilidade
 
-- O startup não cria tabelas paralelamente ao Alembic.
-- `Base.metadata` deve refletir contratos estabilizados produzidos pelas migrations.
-- Autogenerate monolítico não é mecanismo de correção arquitetural.
-- Divergências devem ser classificadas e tratadas por domínio.
-- Módulos incompletos não devem ter schema cristalizado apenas para silenciar `alembic check`.
-
-### Separação contábil e fiscal
-
-A projeção contábil calcula posição, custo e realização. O IRPF acrescenta semântica fiscal: Day Trade, Swing Trade, isenções, alíquotas, compensações, retenções e apresentação.
-
-### Separação temporal
-
-- preço intraday representa estado corrente e pode vir de sincronizador externo dedicado;
-- preço de fechamento diário é coletado externamente e persistido como referência oficial do dia;
-- snapshots representam performance fechada;
-- leituras históricas usam data de corte explícita;
-- ausência de TWR é `null`, nunca retorno simples disfarçado.
-
-### Idempotência
-
-Bootstrap, seeds, sincronizações, migrations e rebuilds devem produzir o mesmo estado lógico sem duplicar preços, eventos, posições ou snapshots.
+Bootstrap, seeds, sincronizações, migrations e rebuilds devem produzir estado lógico estável sem duplicar fatos financeiros. Operações reais devem registrar SHA/run_id/evidência quando o contrato exigir.
 
 ### Qualidade explícita
 
-Cobertura parcial, preços ausentes, retornos estimados, fonte e data de referência permanecem visíveis. Ausência ou falha não vira zero silenciosamente.
-
-### Tempo UTC explícito
-
-- serviços operacionais usam UTC timezone-aware;
-- colunas `DateTime(timezone=False)` usam UTC naive por helper explícito;
-- `datetime.utcnow()` não é permitido no runtime.
-
-## Projeções canônicas
-
-### Posição e custo
-
-`position_timeline_projection.py` é o núcleo cronológico puro. Readers de banco carregam transações e eventos e aplicam a data de corte.
-
-```text
-transactions + corporate_events
-        ↓
-position_timeline_projection
-        ↓
-historical_position_projection_reader
-        ↓
-posições abertas + custo + timelines
-```
-
-### Resultado realizado
-
-`realized_pnl_projection_reader.py` expõe realizações derivadas da mesma projeção cronológica. Rentabilidade e IRPF reconciliam sobre o mesmo conjunto de operações.
-
-### Snapshots
-
-`snapshot_position_projection.py` e `class_snapshot_position_projection.py` alimentam snapshots sem reconstruções paralelas de posição. O MetaData de snapshots representa índices, comentários e timestamps físicos da cadeia Alembic canônica.
-
-## IRPF
-
-A arquitetura atual separa responsabilidades e não persiste `IRPFReport` legado:
-
-| Serviço | Responsabilidade |
-|---|---|
-| `irpf_bens_direitos_service.py` | posição e custo em 31/12 via leitor histórico |
-| `irpf_tax_service.py` | regras fiscais mensais canônicas |
-| `irpf_report_service.py` | composição read-only do relatório |
-| `irpf_export_service.py` | PDF e CSV a partir dos contratos canônicos |
-
-`app.models.irpf`, `IRPFReport`, `irpf_records` e `irpf_losses` não participam do runtime canônico. Consumers removidos são protegidos por gates estruturais.
-
-## Rentabilidade
-
-A fachada legada foi removida. Resultado realizado, capital líquido aportado, proventos, posição e patrimônio usam contratos compartilhados; invalidação de cache está isolada no serviço canônico de cache.
+Cobertura parcial, preços ausentes, retornos estimados, fontes e datas efetivas ficam observáveis. Indisponibilidade não é convertida em número aparentemente válido.
 
 ## Proventos
 
-Eventos pertencem ao ativo e são persistidos exclusivamente em `asset_dividends`.
+Eventos monetários pertencem ao ativo e são persistidos em `asset_dividends`.
 
-```text
-system-bootstrap.v4 / seed estrito autorizado
-        ↓
-asset_dividends
-        ↓
-histórico de posições na data de corte
-        ↓
-direito calculado sob demanda
-        ↓
-reconhecimento financeiro por data de pagamento
-```
+Direitos por carteira são projetados sob demanda a partir da posição histórica. Não existe materialização canônica de direitos por portfolio.
 
-O bootstrap reutiliza `pre-prod-dividends-seed.v2`, com adapters estritos BRAPI + Yahoo e identidade auditável compartilhada. A presença da etapa no orquestrador não autoriza execução real: sem `SGI_BOOTSTRAP_ENABLE_DIVIDENDS=true`, ela falha antes de consultar providers, e a autorização operacional continua pertencendo à #226.
-
-Não existe materialização ativa de direitos por carteira. Depois do bootstrap, requests de Proventos não consultam provider.
+A prova assistida portfolio-scoped já demonstrou idempotência. A #226 decide a suficiência dessa evidência para promoção ou eventual necessidade de execução global controlada.
 
 ## Eventos corporativos
 
-O motor canônico trata splits, grupamentos, bonificações e subscrições independentemente do fornecedor. Eventos pertencem ao ativo, são persistidos em `corporate_events` e alimentam projeções históricas sem mutar transações originais.
+Eventos pertencem ao ativo em `corporate_events`. Transações históricas não são mutadas para aplicar split, grupamento, bonificação, subscrição ou troca de ticker.
 
-O `system-bootstrap.v4` registra `corporate_events` como estágio explícito por `system_bootstrap_corporate_events_stage.py`. O wrapper:
+Eventos complexos podem permanecer `UNRECONCILED` até tratamento canônico. Para promoção, devem ser reconciliados os eventos materiais ao dataset aprovado.
 
-- exige opt-in `SGI_BOOTSTRAP_ENABLE_CORPORATE_EVENTS=true` antes de abrir sessão ou consultar provider;
-- lê o catálogo persistido e restringe o processamento a `ACAO`, `BDR` e `ETF_NACIONAL`;
-- usa `pg_advisory_xact_lock` durante a transação;
-- delega toda coleta e persistência exclusivamente a `sync_corporate_events_for_asset`;
-- realiza commit somente após sucesso integral e rollback em qualquer falha;
-- não usa `asset_market_pipeline_service` nem `dividend_backfill_service`.
+## Renda Fixa e Tesouro
 
-A integração estrutural e seus gates foram certificados. A Issue #129 permanece aberta apenas para auditoria residual de consumidores/aliases/provider boundaries, coordenada pela #247; a #254 está concluída.
+### Tesouro Direto
 
-## Transações
+- valuation DB-first por preço persistido;
+- resolução case-insensitive validada;
+- snapshots dedicados;
+- ausência de PU necessário permanece explícita/fail-closed.
 
-`transactions` reflete o contrato financeiro migrado. Criar ou editar transação não dispara coleta externa, onboarding de mercado ou backfill histórico; apenas efeitos locais derivados podem ocorrer.
+### Renda Fixa
 
-## Câmbio
+- lifecycle derivado de `transactions`;
+- valuation corrente usa motor dedicado de accrual/indexador;
+- benchmark parcial/ausente não vira preço de mercado;
+- TWR diário dedicado ainda pertence à #149.
 
-`fx_rates` é persistido e DB-first. Requests financeiros leem somente a cobertura persistida.
+A ausência de TWR dedicado não deve ser mascarada por retorno simples ou fallback anual rotulado como TWR.
 
-O `system-bootstrap.v2+` integra USD-BRL reutilizando o estágio auditável da #217:
+## IRPF
 
-- PTAX oficial do BCB;
-- par único `USD-BRL`;
-- cobertura desde `1994-07-01`;
-- advisory lock;
-- inspeção antes/depois;
-- transação controlada;
-- identidade `run_id + stable-15jun + SHA`.
+O módulo anual consome operações/classes suportadas e permanece separado do valuation contábil. Classes não suportadas ficam explicitamente fora do cálculo até módulo dedicado.
 
-Nenhum fallback BRAPI/AwesomeAPI/fixo participa deste estágio certificado.
+O estado "DARF pago" armazenado apenas no frontend/localStorage não deve ser tratado como persistência fiscal auditável de servidor.
 
-## Metas e Análise de Carteira
+## Metas e Análise
 
-O módulo `goals` é uma exceção arquitetural consciente:
+A situação atual não é mais "goals intocável".
 
-- a tabela histórica está preservada;
-- ORM, schemas Pydantic e service atuais não formam contrato funcional coerente;
-- nenhuma migration deve ser criada apenas para limpar o diff remanescente do `alembic check`;
-- o redesenho será conduzido pela #246 em conjunto com #57;
-- a nova arquitetura deve decidir taxonomia, KPIs calculados versus persistidos, relação com `portfolio_class_targets`, histórico e projeções antes de DDL definitivo.
+### Metas operacional
 
-## Navegação de carteira
+Durante a certificação assistida, schema/runtime/UI foram alinhados o suficiente para operações básicas. A migration runtime-safe de 10/09 corrigiu a divergência necessária para funcionamento atual.
 
-Módulos dependentes da carteira selecionada ficam sob `/carteira`. Aliases temporários devem ser eliminados somente após comprovação de consumidores durante a #247.
+Isso não transforma o desenho atual no contrato definitivo do domínio.
 
-## Bootstrap, scheduler e readiness
+### Macroprojeto #246
 
-A porta única atual é `run_system_bootstrap()` sob contrato `system-bootstrap.v4`.
+O desenho definitivo deve decidir:
 
-A arquitetura distingue três estados:
+- taxonomia de metas;
+- relação com `portfolio_class_targets`;
+- campos persistidos versus calculados;
+- histórico/evolução;
+- concentração/diversificação/rebalanceamento;
+- integração com Analysis Engine #360.
 
-1. **ambiente não inicializado** — schema disponível, mas dados canônicos ainda não certificados;
-2. **bootstrap em execução** — coleta histórica/global idempotente e persistência das séries necessárias;
-3. **runtime pronto** — criação/importação de carteiras liberada e consultas funcionais operando DB-first.
+### Analysis Engine #360
 
-O bootstrap carrega contexto auditável único com `run_id`, branch `stable-15jun` e SHA completo. O disparo administrativo exige esse SHA; startup automático pode recebê-lo por `SGI_BOOTSTRAP_COMMIT_SHA`.
+Deve ser determinístico, DB-first e consumir contratos financeiros existentes sem duplicá-los.
 
-Etapas registradas no v4:
+### IA #361
 
-1. `asset_catalog`;
-2. `treasury_catalog`;
-3. `treasury_reconciliation`;
-4. `treasury_history`;
-5. `asset_price_history`;
-6. `benchmarks`;
-7. `fx_rates`;
-8. `asset_dividends` — explicitamente gated pela #226;
-9. `corporate_events` — explicitamente gated e transacional pela #254.
+Somente depois do Analysis Engine. IA é camada explicativa sobre DTO estruturado; não calcula números financeiros e não acessa banco/provider de forma irrestrita.
 
-Todos os domínios externos obrigatórios estão representados no orquestrador. A #268 certificou `test_ready=true` com dados fictícios e gate global verde; o readiness para dados reais continua falso até a evidência operacional de #226/#216/#158 e decisão final da #227.
+## Asset Detail
 
-No runtime pronto, o scheduler pode consultar providers apenas para:
+A superfície de detalhe de ativo já existe parcialmente e foi exercitada com histórico, Proventos e preço médio canônico. #58 permanece aberta para completar cobertura, DY, metadados, iconografia e responsividade junto da #351.
 
-- preço intraday;
-- preço de fechamento diário.
+Nenhum provider deve ser chamado no render/read path para completar logos, histórico ou métricas.
 
-Não devem existir sincronizações automáticas recorrentes de catálogo, Proventos, eventos, benchmarks, câmbio ou históricos fora de jobs explicitamente controlados para manutenção/correção.
+## Bootstrap e rebuild
 
-Até o encerramento da Issue #227:
+O fluxo canônico está detalhado em `docs/BOOTSTRAP_DATA_FLOW.md`.
 
-- não importar carteiras reais;
-- não criar usuários reais de produção;
-- usar bancos descartáveis e fixtures;
-- não considerar o ambiente pronto até que o bootstrap canônico seja integralmente executado e certificado;
-- não executar automaticamente migrations físicas de contração.
+Separar:
 
-## Governança arquitetural atual
+1. Initial Bootstrap;
+2. Incremental Sync;
+3. Full Market Rebuild;
+4. Promotion Reconciliation (#158).
 
-A ordem canônica é:
+`full_market_rebuild` não substitui bootstrap inicial nem a reconciliação de promoção. Não repetir operações destrutivas já certificadas somente por checklist histórico.
 
-1. concluir #247/#129: sanitização residual e fronteiras DB-first;
-2. #150 e #149 — performance e benchmarks;
-3. #226/#216/#158 — certificação operacional e primeira carga real;
-4. #253 — Central de Bootstrap SuperAdmin;
-5. #246 + #57 — macroprojeto Metas + Análise.
+## Readiness
 
-## Qualidade validada
+Existem estados distintos:
 
-O checkpoint da #268 no HEAD `a8444b545a10aa7d48dd70f08a07e3fa386605d6` certificou a suíte backend completa com **1638 passed**, smoke HTTP e cleanup descartável, Alembic/drift gate, mypy, frontend, fronteiras DB-first e ausência de provider nos requests auditados. O CI final executou e aprovou backend, frontend, auditorias de dependências, Trivy filesystem, Gitleaks e lint dos Dockerfiles.
+1. ambiente não preparado;
+2. ambiente apto a validação assistida;
+3. ambiente pronto para dados reais.
 
-O baseline promovido após a #269/#271 é `4ff76c4fe9f1738db9b392b3568fcb35f81185e7`. Isso preserva `test_ready=true`, mas não altera `ready_for_real_data=false`.
+Estado registrado em 10/09/2026:
 
-## Pendências arquiteturais
+```text
+user-test-readiness.v1=GO_ASSISTED
+ready_for_real_data=false
+/health=200
+/ready=503
+```
 
-1. Concluir auditoria global de serviços, routers, endpoints, duplicações e legado remanescente (#247/#129).
-2. Materializar histórico persistido do IBOV (#150).
-3. Implementar TWR dedicado para Tesouro e Renda Fixa (#149).
-4. Retomar execução real de Proventos, importação e rebuild apenas sob #226/#216/#158/#227.
-5. Iniciar #246 + #57 somente depois da estabilização e promoção da base.
+`GO_ASSISTED` não implica `/ready=200`.
+
+A cadeia para promoção ampla é:
+
+```text
+#303 → #226 → #216 → #158 → OCI exact-SHA homologation → #227
+```
+
+Somente #227 pode registrar o GO/NO-GO amplo antes de avaliar `ready_for_real_data=true`.
+
+## Local x OCI
+
+### Local
+
+Ambiente oficial de desenvolvimento, correção, migrations de teste, suítes pesadas e certificação financeira.
+
+### OCI
+
+Ambiente de homologação do SHA exato já certificado localmente. Valida deploy, migrations, restart, persistência, recursos, rede/tunnel e segurança/resiliência aplicáveis.
+
+Não manter hotfix permanente na VM. Defeito encontrado em OCI volta ao ambiente local e produz novo SHA.
+
+## Segurança e operação
+
+- PostgreSQL, Redis e backend não devem ser expostos publicamente;
+- Cloudflare Tunnel permanece o caminho preferido de aplicação no desenho OCI atual;
+- segredos ficam fora do Git;
+- rollback preserva volumes salvo reset explicitamente autorizado e respaldado por backup;
+- migrations destrutivas e contrações físicas exigem gate próprio.
+
+## Ordem arquitetural corrente
+
+1. concluir #303 e congelar SHA;
+2. fechar #226;
+3. fechar #216;
+4. executar delta #158;
+5. homologar o mesmo SHA em OCI (#284);
+6. #227 emitir GO/NO-GO;
+7. somente depois promover macrobloco para `main` e avançar backlog de produto.
+
+## Backlog pós-GO por padrão
+
+- #149 — TWR diário dedicado restante;
+- #351/#90/#58 — UX/detalhe de ativo;
+- #355–#359 — features auxiliares;
+- #246/#360 — Metas + Analysis Engine;
+- #361 — IA;
+- #97 — OAuth.
+
+#352 e #354 são exceções: se ainda reproduzíveis e funcionais, podem ser P1 antes do primeiro GO.
