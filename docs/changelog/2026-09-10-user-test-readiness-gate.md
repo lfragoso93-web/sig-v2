@@ -26,7 +26,7 @@
 
 ## GOV-03 — operacao e OCI — CONCLUIDO
 
-A fronteira operacional foi rebaselined: desenvolvimento/certificacao pesada local; OCI como homologacao do SHA exato; `/ready=503` esperado enquanto `ready_for_real_data=false`.
+Desenvolvimento/certificacao pesada local; OCI como homologacao do SHA exato; `/ready=503` esperado enquanto `ready_for_real_data=false`.
 
 ## GOV-04 — backlog funcional — CONCLUIDO
 
@@ -40,7 +40,7 @@ A fronteira operacional foi rebaselined: desenvolvimento/certificacao pesada loc
 
 ## GOV-05 — documentacao raiz — CONCLUIDO
 
-README, ROADMAP, CHANGELOG, `docs/DEVELOPMENT_CONTINUITY.md` e `docs/architecture.md` foram rebaselined para o estado real de 10/09/2026.
+README, ROADMAP, CHANGELOG, `docs/DEVELOPMENT_CONTINUITY.md`, `docs/architecture.md` e `docs/ISSUE_GOVERNANCE.md` foram rebaselined para o estado real de 10/09/2026.
 
 Correcoes principais:
 
@@ -51,6 +51,7 @@ Correcoes principais:
 - #150 deixou de aparecer como trabalho futuro;
 - ordem de promocao alinhada para #303 -> #226 -> #216 -> #158 -> OCI exact-SHA -> #227;
 - backlog pos-GO separado de blockers reais;
+- hierarquia de Issues alinhada ao mesmo fluxo;
 - historico detalhado permanece preservado no Git e nos changelogs datados.
 
 Commits GOV-05:
@@ -59,6 +60,7 @@ Commits GOV-05:
 - `cb1125330c9cc42c6b5390971166be63962db706` — ROADMAP;
 - `9a7ae31f4986cbd32c59475b32e8165cb0c8db6d` — CHANGELOG;
 - `d512d1d3d826b0401615440efbdc0a78f4dabb21` — DEVELOPMENT_CONTINUITY;
-- `cfe828300d05e35b672bbdf8775587c0388cccbb` — architecture.
+- `cfe828300d05e35b672bbdf8775587c0388cccbb` — architecture;
+- `556eb126255cbfb5ac86c3a7777ae92e1481a0f6` — ISSUE_GOVERNANCE.
 
 Nenhum codigo, schema ou dado runtime foi alterado durante GOV-05.
