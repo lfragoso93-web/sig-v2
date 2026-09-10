@@ -24,29 +24,19 @@ GET /api/v1/admin/bootstrap/user-test-readiness
 
 ## Contrato
 
-O relatorio retorna:
-
-- `schema_version`: sempre `user-test-readiness.v1`;
-- `go_for_assisted_user_tests`: libera ou bloqueia rodada assistida;
-- `ready_for_real_data`: espelha o gate real, sem promove-lo;
-- `status`: `GO_ASSISTED` ou `NO_GO`;
-- `checks`: lista de verificacoes com `code`, `status`, `detail` e `severity`;
-- `counts`: contagens criticas de tabelas;
-- `blockers`: falhas impeditivas;
-- `warnings`: pendencias nao impeditivas para rodada assistida;
-- `safety`: garantias de execucao read-only.
+O relatorio retorna `schema_version=user-test-readiness.v1`, `go_for_assisted_user_tests`, `ready_for_real_data`, `status`, `checks`, `counts`, `blockers`, `warnings` e garantias read-only em `safety`.
 
 ## Checks atuais
 
-- `database_inventory`: exige inventario pre-prod sem findings bloqueantes e sem tabelas nao classificadas;
-- `goals_runtime_schema`: exige a revision `20260910_goals_runtime`;
-- `assisted_test_data_present`: exige usuarios, carteiras e transacoes;
-- `market_history_present`: exige catalogo e historico de precos;
-- `snapshot_history_present`: alerta se nao houver snapshots;
-- `dividends_seed_present`: alerta se nao houver Proventos globais;
-- `corporate_events_seed_present`: alerta se nao houver eventos corporativos;
-- `real_data_gate_closed`: confirma que dados reais continuam fechados;
-- `automatic_bootstrap_policy`: confirma bootstrap automatico desligado no ambiente de teste assistido.
+- `database_inventory`: inventario pre-prod sem findings bloqueantes/tabelas nao classificadas;
+- `goals_runtime_schema`: revision `20260910_goals_runtime`;
+- `assisted_test_data_present`: usuarios, carteiras e transacoes;
+- `market_history_present`: catalogo e historico de precos;
+- `snapshot_history_present`: alerta de snapshots;
+- `dividends_seed_present`: alerta de Proventos globais;
+- `corporate_events_seed_present`: alerta de eventos corporativos;
+- `real_data_gate_closed`: confirma dados reais fechados;
+- `automatic_bootstrap_policy`: bootstrap automatico desligado no ambiente assistido.
 
 ## Evidencia runtime local
 
@@ -77,48 +67,40 @@ goals=2
 
 ## Interpretacao
 
-`GO_ASSISTED` permite iniciar ou continuar testes acompanhados com usuarios convidados, massa controlada e observacao tecnica.
-
-A validacao assistida ja produziu evidencia real-controlada adicional sem abrir o gate amplo:
-
-- seed de Proventos escopado por carteira com prova de idempotencia;
-- importacao CSV assistida seguida de rebuild e reconciliacao;
-- reparos de historico de mercado e cobertura macro;
-- validacao de Tesouro, Renda Fixa, IRPF e snapshots no runtime assistido;
-- seed portfolio-scoped de eventos corporativos, ainda sem reconciliacao canonica dos eventos complexos.
+`GO_ASSISTED` permite testes acompanhados com usuarios convidados, massa controlada e observacao tecnica. A validacao assistida ja produziu evidencia real-controlada de Proventos escopados por carteira, CSV seguido de rebuild/reconciliacao, reparos de historico, Tesouro, Renda Fixa, IRPF, snapshots e eventos corporativos portfolio-scoped.
 
 Essas evidencias podem ser reutilizadas pelos gates reais quando seus contratos permitirem. Elas nao devem ser descartadas nem repetidas apenas para satisfazer checklists historicos.
 
-`GO_ASSISTED` nao permite abertura ampla para usuarios com dados reais, seed real global fora de janela autorizada, promocao manual de readiness nem tratar resultados de homologacao como declaracao fiscal ou financeira final.
+`GO_ASSISTED` nao permite abertura ampla para usuarios com dados reais, seed global fora de janela autorizada, promocao manual de readiness nem tratar homologacao como declaracao fiscal/financeira final.
 
-## Separacao dos gates reais
+## Mapa canônico dos gates reais
 
 ### #226 — Proventos
 
-O caminho portfolio-scoped usado na validacao assistida esta comprovado e idempotente. O que permanece aberto e a decisao operacional sobre cobertura real global e a evidencia exigida para o gate de pre-producao. A #226 nao deve voltar a exigir trabalho ja comprovado no escopo assistido; deve registrar a diferenca entre a prova portfolio-scoped e o gate global.
+O caminho portfolio-scoped usado na validacao assistida esta comprovado e idempotente. Permanece aberta a decisao operacional sobre cobertura real global e a evidencia exigida pelo gate de pre-producao. A prova assistida deve ser preservada como evidencia parcial valida, nao repetida artificialmente.
 
 ### #216 — gate agregado
 
-Benchmarks e cambio ja possuem evidencia consolidada. Proventos e o ultimo componente material a reconciliar no gate agregado antes da janela operacional final.
+Benchmarks e cambio ja possuem evidencia consolidada. Proventos e o ultimo componente material a reconciliar no gate agregado. O fechamento depende da #226 no escopo operacional definido, nao da repeticao dos dominios ja certificados.
 
 ### #158 — rebuild pre-producao
 
-A #158 deve preservar as etapas destrutivas/estruturais ja certificadas e executar somente o delta operacional ainda necessario: importacao controlada, rebuild/reconciliacao final, validacao funcional e, quando autorizada, eventual contracao fisica protegida. Nao repetir limpeza ou rebuild amplo apenas por historico de checklist.
+Preparacao, backup, limpeza historica e grande parte do rebuild ja possuem evidencias. A execucao final deve operar sobre o delta ainda necessario: importacao controlada da massa candidata, rebuild/reconciliacao final, validacao funcional e eventual contracao fisica explicitamente autorizada. Nao repetir etapas destrutivas ja certificadas apenas por estarem em checklist historico.
 
 ### #227 — GO/NO-GO
 
-A #227 e a unica decisao formal de liberacao ampla. Deve consumir as evidencias da #303, #226, #216 e #158, mais seguranca/resiliencia/homologacao, antes de qualquer alteracao de `ready_for_real_data`.
+E a decisao formal de liberacao ampla. Deve consumir #303, #226, #216 e #158, alem de seguranca, resiliencia e homologacao. Somente uma decisao positiva pode autorizar a avaliacao/promocao de `ready_for_real_data=true`.
 
-## Proximos gates
+## Condicoes remanescentes para avaliar dados reais amplos
 
-Para avaliar `ready_for_real_data=true`, continuam pendentes:
+1. concluir rodada assistida sem blocker P0/P1 nas jornadas criticas e congelar SHA candidato;
+2. fechar a estrategia operacional final de Proventos na #226, aproveitando a evidencia portfolio-scoped;
+3. reconciliar e concluir #216;
+4. executar o delta operacional final da #158 e reconciliar patrimonio, rentabilidade, Proventos, Tesouro, Renda Fixa e IRPF;
+5. reconciliar eventos corporativos necessarios e definir tratamento dos eventos complexos `UNRECONCILED`;
+6. repetir gates de seguranca/resiliencia aplicaveis sobre o mesmo SHA;
+7. produzir GO/NO-GO formal na #227;
+8. homologar no OCI o mesmo SHA certificado, sem desenvolvimento direto no servidor;
+9. somente depois avaliar `ready_for_real_data=true` e a promocao estrutural para `main`.
 
-1. fechar a estrategia operacional final de Proventos na #226, considerando a evidencia portfolio-scoped ja aprovada;
-2. reconciliar e concluir o gate agregado #216;
-3. executar o delta operacional final da #158 com importacao/rebuild e reconciliacao controlados;
-4. reconciliar eventos corporativos necessarios para os ativos da carteira e definir tratamento dos eventos complexos ainda `UNRECONCILED`;
-5. concluir a rodada assistida sem blocker P0/P1 nas jornadas criticas;
-6. produzir decisao formal GO/NO-GO na #227;
-7. somente depois avaliar `ready_for_real_data=true`.
-
-A persistencia auditavel do estado de DARF pago permanece divida fiscal de produto; o gate deve avaliar se ela bloqueia o escopo de abertura pretendido, sem confundir a marcacao local atual com persistencia fiscal definitiva.
+A persistencia auditavel do estado de DARF pago permanece divida fiscal de produto. O gate final deve decidir explicitamente se ela bloqueia o escopo de abertura pretendido; a marcacao local atual nao deve ser tratada como persistencia fiscal definitiva.
