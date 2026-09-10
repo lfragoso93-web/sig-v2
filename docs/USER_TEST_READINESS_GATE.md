@@ -11,9 +11,9 @@ O gate `user-test-readiness.v1` decide se o SGI v2 pode receber rodadas assistid
 - Docker: `docker-compose run --rm backend python -m app.cli.user_test_readiness`
 - SuperAdmin: `GET /api/v1/admin/bootstrap/user-test-readiness`
 
-O relatorio e read-only e publica `schema_version`, `go_for_assisted_user_tests`, `ready_for_real_data`, `status`, `checks`, `counts`, `blockers`, `warnings` e `safety`.
+## Evidencia registrada
 
-## Evidencia runtime — 10/09/2026
+Em 10/09/2026:
 
 ```text
 schema_version=user-test-readiness.v1
@@ -22,46 +22,62 @@ go_for_assisted_user_tests=true
 ready_for_real_data=false
 blockers=[]
 warnings=[]
-users=6
-portfolios=5
-transactions=332
-assets=3684
-asset_prices=4404638
-portfolio_snapshots=536
-asset_dividends=184
-corporate_events=123
-goals=2
 ```
+
+Contagens observadas: users=6, portfolios=5, transactions=332, assets=3684, asset_prices=4404638, portfolio_snapshots=536, asset_dividends=184, corporate_events=123, goals=2.
 
 ## Interpretacao
 
-`GO_ASSISTED` permite testes acompanhados com usuarios convidados, massa controlada e observacao tecnica. A validacao assistida ja produziu evidencia real-controlada de Proventos escopados por carteira, CSV seguido de rebuild/reconciliacao, reparos de historico, Tesouro, Renda Fixa, IRPF, snapshots e eventos corporativos portfolio-scoped.
+`GO_ASSISTED` permite testes acompanhados com massa controlada. Nao permite abertura ampla, seed global real fora de gate, promocao manual de readiness nem tratar homologacao como declaracao fiscal/financeira final.
 
-Essas evidencias podem ser reutilizadas pelos gates reais quando seus contratos permitirem; nao devem ser descartadas nem repetidas apenas para satisfazer checklists historicos. `GO_ASSISTED` nao permite abertura ampla, seed global fora de janela autorizada ou promocao manual de readiness.
+A validacao assistida ja produziu evidencia reutilizavel de CSV/rebuild, mercado, Tesouro, Renda Fixa, IRPF, Proventos portfolio-scoped idempotentes e eventos corporativos portfolio-scoped.
 
-## Mapa canonico dos gates reais
+## Fronteira local x OCI
 
-- **#226 — Proventos:** prova portfolio-scoped esta comprovada e idempotente; permanece a estrategia/evidencia operacional para cobertura real global. A prova assistida e evidencia parcial valida, nao substituto automatico do gate global.
-- **#216 — gate agregado:** benchmarks e cambio estao consolidados; Proventos e o ultimo componente material a reconciliar.
-- **#158 — rebuild pre-producao:** preparacao, backup, limpeza historica e grande parte do rebuild ja possuem evidencia. Executar apenas o delta necessario: importacao candidata, rebuild/reconciliacao final, validacao funcional e eventual contracao fisica autorizada.
-- **#227 — GO/NO-GO:** decisao formal de liberacao ampla, consumindo #303/#226/#216/#158 mais seguranca, resiliencia e homologacao.
+- **Local:** desenvolvimento, correcoes e certificacao pesada do SHA candidato.
+- **OCI:** homologacao do SHA exato ja certificado localmente.
 
-Os corpos atualizados de #226/#216/#158/#227 sao os trackers vivos de execucao; este documento registra a fronteira entre eles e o gate assistido.
+OCI valida deploy, migrations, restart, persistencia, recursos, rede/tunnel e smoke. Nao e ambiente de desenvolvimento.
 
-## Condicoes remanescentes
+Durante a fase assistida, esta combinacao e valida:
 
-1. concluir rodada assistida sem blocker P0/P1 e congelar SHA candidato;
-2. concluir estrategia operacional de Proventos na #226 aproveitando a evidencia portfolio-scoped;
-3. reconciliar e concluir #216;
-4. executar o delta final da #158 e reconciliar patrimonio, rentabilidade, Proventos, Tesouro, Renda Fixa e IRPF;
-5. reconciliar eventos corporativos necessarios e definir tratamento dos eventos complexos `UNRECONCILED`;
-6. repetir gates aplicaveis de seguranca/resiliencia sobre o mesmo SHA;
-7. produzir GO/NO-GO formal na #227;
-8. homologar no OCI o mesmo SHA certificado;
-9. somente depois avaliar `ready_for_real_data=true` e promocao estrutural para `main`.
+```text
+/health = 200
+/ready = 503
+GO_ASSISTED = true
+ready_for_real_data = false
+```
 
-A persistencia auditavel de DARF pago permanece divida fiscal de produto. O gate final deve decidir explicitamente se ela bloqueia o escopo de abertura pretendido; a marcacao local atual nao e persistencia fiscal definitiva.
+`/ready=503` nao deve ser contornado. Se OCI revelar defeito de codigo, a correcao volta ao ambiente local e gera novo SHA para nova homologacao.
 
-## Baseline documental GOV-02
+Ver `docs/deployment/oci-execution-index.md`.
 
-GOV-02 concluido documentalmente sobre `stable-15jun` sem atividade concorrente do Codex. Nenhum seed, migration, CSV, rebuild ou alteracao de flag de readiness foi executado; as evidencias citadas sao previamente produzidas e preservadas.
+## Gates reais
+
+### #226 — Proventos
+
+O caminho portfolio-scoped esta comprovado e idempotente. Permanece a decisao operacional sobre portfolio-scoped versus global controlado para promocao.
+
+### #216 — gate agregado
+
+Benchmarks e cambio estao concluidos. Proventos e o componente material restante para reconciliacao agregada.
+
+### #158 — promotion reconciliation
+
+Preserva etapas destrutivas/estruturais ja certificadas e executa somente o delta operacional sobre SHA/dataset congelados: importacao quando necessaria, derivados canonicos, reconciliacao financeira, eventos corporativos materiais, restart/idempotencia e eventual contracao protegida.
+
+### #227 — GO/NO-GO
+
+Unica decisao formal de liberacao ampla. Consome #303, #226, #216, #158 e homologacao OCI do mesmo SHA antes de qualquer avaliacao de `ready_for_real_data=true`.
+
+## Sequencia de promocao
+
+1. concluir rodada assistida #303 sem blocker P0/P1 critico e congelar SHA;
+2. fechar estrategia #226;
+3. concluir #216;
+4. executar delta #158;
+5. homologar exatamente o SHA candidato na OCI;
+6. produzir GO/NO-GO na #227;
+7. somente depois avaliar `ready_for_real_data=true`.
+
+A persistencia auditavel do estado de DARF pago e demais evolucoes fora do escopo inicial devem permanecer explicitas e nao ser confundidas com funcionalidades fiscais definitivas.
