@@ -33,4 +33,4 @@ Etapas destrutivas e dominios ja certificados nao devem ser repetidos apenas par
 
 ## Governanca
 
-Nenhum codigo, schema ou dado de runtime foi alterado por estes commits documentais. As Issues #226/#216/#158/#227 permanecem abertas ate seus criterios operacionais remanescentes serem comprovados.
+O GOV-02 foi executado somente como governanca/documentacao sobre `stable-15jun`; nenhum seed, migration, CSV, rebuild ou alteracao de flag de readiness foi executado. As Issues #226/#216/#158/#227 permanecem abertas ate seus criterios operacionais remanescentes serem comprovados.
