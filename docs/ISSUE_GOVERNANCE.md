@@ -1,121 +1,75 @@
 # Governança de Issues — SGI v2
 
-> Documento canônico para organização, consolidação e encerramento do backlog do SGI v2.
+Atualizado em 10/09/2026.
 
 ## Objetivo
 
-Manter o backlog pequeno, legível e acionável antes e durante a fase de testes funcionais, evitando Issues duplicadas, sobrepostas ou obsoletas.
+Manter uma hierarquia única para certificação, dados reais, operação, dívida técnica e evolução de produto. Issues não devem competir como fontes de verdade para o mesmo trabalho.
 
-## Taxonomia
+## Cadeia de promoção para dados reais
 
-### Gate
+1. #303 — fechar `PORTFOLIO-TEST-READY` e congelar SHA candidato;
+2. #226 — fechar estratégia operacional de Proventos;
+3. #216 — fechar gate agregado de seeds/bootstrap;
+4. #158 — executar `promotion reconciliation` sobre SHA/dataset congelados;
+5. #284 — homologar exatamente o mesmo SHA na OCI;
+6. #227 — emitir GO/NO-GO amplo;
+7. somente depois avaliar `ready_for_real_data=true` e promoção para `main`.
 
-Issue que controla autorização operacional ou readiness. Permanece aberta enquanto o bloqueio existir, mesmo que parte da implementação esteja concluída.
+## Classificação atual
 
-Exemplos atuais: #227, #158, #216, #226, #284.
+### Gates / certificação
 
-### Macroprojeto
-
-Issue que concentra uma evolução funcional/arquitetural ampla e pode absorver escopos historicamente separados.
-
-Exemplo atual: #246 passa a ser a Issue canônica do macroprojeto Metas + Análise de Carteira, absorvendo #57.
-
-### Feature
-
-Entrega funcional independente que não precisa controlar outras Issues.
-
-Exemplos atuais: #58, #90, #97, #149, #150, #253.
-
-### Arquitetura / plataforma
-
-Evolução transversal que habilita várias features, sem ser por si só um gate de dados reais.
-
-Exemplos atuais: #127, #130.
-
-### Dívida técnica
-
-Correção estrutural conhecida sem comportamento de produto novo.
-
-Exemplos atuais: #83, #269, #272.
-
-### Bug / gap de teste
-
-Finding reproduzível descoberto na fase de testes. Deve ter escopo pequeno, severidade/impacto, passos de reprodução e critério de aceite. Não deve ser escondido dentro de macroprojeto quando exigir correção independente.
-
-## Regras de consolidação
-
-1. fechar como `duplicate` somente quando todo o escopo útil estiver preservado em outra Issue canônica;
-2. antes de fechar, atualizar a Issue canônica com entregas, critérios e dependências que seriam perdidos;
-3. gates não devem ser fechados apenas porque a implementação terminou; fechar somente quando o gate operacional também estiver satisfeito;
-4. Issues-mãe devem funcionar como índice e não repetir detalhes operacionais de todas as filhas;
-5. uma feature não deve permanecer aberta só para servir de referência histórica se o trabalho já estiver integralmente absorvido;
-6. novas descobertas da fase de testes devem preferir Issues pequenas e específicas;
-7. não criar nova Issue quando uma Issue canônica existente já cobrir integralmente o trabalho;
-8. documentação e Issue devem refletir o mesmo estado real.
-
-## Hierarquia vigente
-
-### Dados reais / pré-produção
-
-- #227 — gate-mãe de arquitetura/readiness;
-- #158 — reconstrução e sequência operacional da base;
-- #216 — gate agregado de seeds isolados;
+- #303 — certificação funcional assistida;
 - #226 — Proventos;
-- #284 — certificação/migração OCI.
+- #216 — gate agregado;
+- #158 — reconciliação final de promoção;
+- #284 — homologação OCI;
+- #227 — decisão formal GO/NO-GO.
 
-Enquanto esses gates estiverem ativos, eles permanecem separados porque governam decisões operacionais distintas.
+### Bugs candidatos a blocker do primeiro GO
 
-### Providers / dados de mercado
+- #352 — seleção de classe; P1 se ainda funcionalmente impeditiva;
+- #354 — divergência de senha; P1 se ainda reproduzível.
 
-- #130 — evolução técnica da integração BRAPI e enriquecimento;
-- #127 — configuração dinâmica de providers pelo SuperAdmin;
-- #253 — UI/orquestração operacional do bootstrap.
+#353 é P2 por padrão.
 
-Essas Issues são relacionadas, mas não duplicadas: #130 trata contratos/capabilities de integração; #127 trata configuração administrativa; #253 trata execução/visualização do bootstrap.
+### Dívidas financeiras/estruturais
 
-### Metas + Análise de Carteira
-
-- #246 — Issue canônica do macroprojeto completo;
-- #57 — escopo histórico absorvido por #246 e deve permanecer fechado como duplicado após consolidação.
-
-### Features independentes
-
-- #58 — Janela Global do Ativo;
-- #90 — UX de Patrimônio;
-- #97 — Google OAuth;
-- #149 — TWR Tesouro/Renda Fixa;
-- #150 — histórico persistido do IBOV.
-
-### Dívidas técnicas
-
+- #149 — TWR diário dedicado restante de Tesouro/RF; não blocker automático se indisponibilidade permanecer explícita;
 - #83 — Backup/Restore administrativo;
-- #269 — Code Scanning e vulnerabilidades abertas;
-- #272 — aliases físicos legados de `corporate_events`.
+- #272 — contração física residual de `corporate_events` e aliases relacionados.
 
-## Processo de sanitização
+### Evolução de produto
 
-A Issue #293 acompanha a sanitização do backlog.
+- #58 — detalhe global de ativo, parcialmente implementado;
+- #90 — refinamento de Patrimônio;
+- #97 — OAuth;
+- #351 — UI/UX V2;
+- #355 — taxonomia RF;
+- #356 — paginação;
+- #357 — exportação;
+- #358 — adapter Área do Investidor B3;
+- #359 — calculadoras;
+- #246 — macroprojeto Metas + Análise;
+- #360 — Analysis Engine determinístico;
+- #361 — IA explicável depois de #360/#246.
 
-Cada rodada deve:
+### Providers / bootstrap
 
-1. inventariar Issues abertas;
-2. classificar pela taxonomia acima;
-3. detectar duplicidade/sobreposição;
-4. escolher a Issue canônica;
-5. mover o escopo útil para a canônica;
-6. fechar a redundante com motivo explícito;
-7. registrar o resultado na #293;
-8. não misturar essa operação com implementação funcional.
+- #130 — BRAPI/capabilities/enriquecimento;
+- #127 — configuração dinâmica de providers;
+- #253 — Central de Bootstrap, se ainda necessária após certificação.
 
-## Entrada da fase de testes
+## Regras
 
-Quando a fase de testes funcionais começar, bugs e gaps deverão ser registrados como Issues específicas, com:
+- bug reproduzível deve ter Issue pequena própria;
+- macroprojeto não deve esconder bug P0/P1;
+- feature futura não vira blocker sem impacto material na jornada de release;
+- Issue concluída ou integralmente absorvida deve ser encerrada/rotulada de forma coerente;
+- evidências certificadas devem ser reutilizadas; não repetir operação destrutiva por checklist antigo;
+- documentação e Issues devem ser atualizadas no mesmo macrobloco em que a decisão muda.
 
-- comportamento esperado;
-- comportamento observado;
-- passos de reprodução;
-- ambiente/SHA;
-- severidade/impacto;
-- evidências;
-- critério de aceite;
-- relação com macroprojeto existente, quando houver.
+## Sanitização
+
+#293 acompanha a limpeza final de Issues duplicadas, obsoletas ou contraditórias. A segunda passada deve usar esta hierarquia como referência e preservar histórico apenas quando ele continuar útil.
