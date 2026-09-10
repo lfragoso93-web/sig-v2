@@ -9,10 +9,10 @@
 
 ## Documentacao
 
-- `docs/USER_VALIDATION_RUNBOOK.md` atualizado com o novo status `GO_ASSISTED`.
-- `docs/USER_TEST_READINESS_GATE.md` criado como contrato operacional do gate.
+- `docs/USER_VALIDATION_RUNBOOK.md` atualizado com `GO_ASSISTED`.
+- `docs/USER_TEST_READINESS_GATE.md` criado e rebaselined como contrato operacional do gate.
 - Issue #303 rebaselined para refletir a certificacao sintetica/assistida ja comprovada.
-- Gates reais #226, #216, #158 e #227 reavaliados em 10/09/2026 contra as evidencias assistidas publicadas.
+- Gates reais #226, #216, #158 e #227 reavaliados em 10/09/2026 contra as evidencias publicadas.
 
 ## Evidencia runtime
 
@@ -27,18 +27,16 @@
 
 A validacao assistida acrescentou evidencia real-controlada importante, sem promover o sistema para uso real amplo:
 
-- Proventos portfolio-scoped: carteira 15, 49 ativos elegiveis, 183 eventos globais materializados na janela controlada e prova de idempotencia sem escrita fisica na segunda execucao;
+- Proventos portfolio-scoped: carteira 15, 49 ativos elegiveis, 183 eventos globais na janela controlada e prova de idempotencia sem escrita fisica na segunda execucao;
 - carteira assistida: CSV com 308 transacoes e 65 ativos distintos, seguido de reparos de cobertura e rebuild canonico;
 - snapshots: 493 snapshots reconstruidos entre 22/10/2024 e 10/09/2026, com datas parciais/estimadas explicitamente marcadas;
-- eventos corporativos: 122 eventos globais obtidos no escopo da carteira, ainda `PENDENTE/UNRECONCILED` para reconciliacao canonica;
+- eventos corporativos: 122 eventos globais obtidos no escopo da carteira, ainda `PENDENTE/UNRECONCILED`;
 - IRPF suportado e Renda Fixa/Tesouro validados em runtime assistido.
 
-Essas evidencias mudam o estado de governanca, mas nao equivalem ao gate global originalmente exigido pela #226. A cadeia real permanece #226 -> #216 -> #158 -> #227.
+Essas evidencias sao parciais validas para os gates reais, mas nao equivalem automaticamente ao gate global da #226. A cadeia formal permanece #226 -> #216 -> #158 -> #227.
 
-A documentacao agora explicita que etapas destrutivas e dominios ja certificados nao devem ser repetidos apenas para satisfazer checklists historicos. O delta operacional remanescente deve ser executado sobre um SHA candidato congelado e reconciliado antes do GO/NO-GO.
-
-O estado `GO_ASSISTED` continua separado de `ready_for_real_data`.
+Etapas destrutivas e dominios ja certificados nao devem ser repetidos apenas para satisfazer checklists historicos. O delta operacional remanescente deve ser executado sobre um SHA candidato congelado e reconciliado antes do GO/NO-GO.
 
 ## Governanca
 
-O rebaseline documental foi dividido em commits pequenos. Nenhum codigo, schema ou dado de runtime foi alterado por estes commits. As Issues #226/#216/#158/#227 permanecem abertas ate seus criterios operacionais remanescentes serem comprovados.
+Nenhum codigo, schema ou dado de runtime foi alterado por estes commits documentais. As Issues #226/#216/#158/#227 permanecem abertas ate seus criterios operacionais remanescentes serem comprovados.
