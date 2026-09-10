@@ -16,6 +16,18 @@ from app.models.asset import Asset, AssetType
 from app.models.asset_price import AssetPrice
 
 logger = logging.getLogger(__name__)
+_MAX_STALE_MARKET_PRICE_DAYS = 90
+
+
+def _is_stale_price_usable(
+    *,
+    last_price_date: date | None,
+    target_date: date,
+    max_age_days: int = _MAX_STALE_MARKET_PRICE_DAYS,
+) -> bool:
+    if last_price_date is None or last_price_date > target_date:
+        return False
+    return (target_date - last_price_date).days <= max_age_days
 
 
 async def get_prices_at_date_with_lifecycle(
@@ -71,6 +83,7 @@ async def get_prices_at_date_with_lifecycle(
 
     missing_ids = [ticker_to_asset_id[ticker] for ticker in missing if ticker in ticker_to_asset_id]
     first_dates: dict[int, date] = {}
+    last_prices: dict[int, tuple[date, float]] = {}
     if missing_ids:
         first_result = await db.execute(
             select(AssetPrice.asset_id, func.min(AssetPrice.timestamp))
@@ -81,12 +94,44 @@ async def get_prices_at_date_with_lifecycle(
             if first_timestamp is not None:
                 first_dates[int(asset_id)] = first_timestamp.date()
 
+        stale_start = datetime.combine(
+            target_date - timedelta(days=_MAX_STALE_MARKET_PRICE_DAYS),
+            datetime.min.time(),
+            tzinfo=timezone.utc,
+        )
+        stale_end = datetime.combine(
+            target_date,
+            datetime.max.time(),
+            tzinfo=timezone.utc,
+        )
+        stale_result = await db.execute(
+            select(AssetPrice)
+            .where(
+                AssetPrice.asset_id.in_(missing_ids),
+                AssetPrice.timestamp >= stale_start,
+                AssetPrice.timestamp <= stale_end,
+            )
+            .order_by(AssetPrice.asset_id.asc(), AssetPrice.timestamp.desc())
+        )
+        for row in stale_result.scalars().all():
+            asset_id = int(row.asset_id)
+            if asset_id not in last_prices:
+                last_prices[asset_id] = (row.timestamp.date(), float(row.close))
+
     for ticker in missing:
         asset_id = ticker_to_asset_id.get(ticker)
         first_date = first_dates.get(asset_id) if asset_id is not None else None
         if first_date is not None and target_date < first_date:
             pre_listing.add(ticker)
             continue
+        if asset_id is not None:
+            stale = last_prices.get(asset_id)
+            if stale and _is_stale_price_usable(
+                last_price_date=stale[0],
+                target_date=target_date,
+            ):
+                prices[ticker] = stale[1]
+                continue
         real_gaps.add(ticker)
         logger.warning(
             "[PriceLifecycle] lacuna real de preco para %s em %s first_price=%s",

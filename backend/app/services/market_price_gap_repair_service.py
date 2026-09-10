@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy import func, select
@@ -72,6 +72,37 @@ def _fetch_yahoo_max_sync(symbol: str) -> list[tuple[datetime, float]]:
         ts = ts.replace(tzinfo=timezone.utc) if ts.tzinfo is None else ts.astimezone(timezone.utc)
         rows.append((ts, float(close)))
     return rows
+
+
+def _as_date(value: date | datetime | None) -> date | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    return value
+
+
+def _needs_b3_backfill(
+    *,
+    provider_rows: list[tuple[datetime, float]],
+    transaction_start: date | None,
+    target_end: date,
+    first_price: date | datetime | None,
+    last_price: date | datetime | None,
+) -> bool:
+    """Detecta lacunas na ponta inicial ou final que exigem COTAHIST."""
+
+    first_price_date = _as_date(first_price)
+    last_price_date = _as_date(last_price)
+    return (
+        not provider_rows
+        or (
+            transaction_start is not None
+            and (first_price_date is None or first_price_date > transaction_start)
+        )
+        or last_price_date is None
+        or last_price_date < target_end
+    )
 
 
 async def _fetch_provider_rows(
@@ -163,10 +194,17 @@ async def repair_market_price_gaps(
                     select(func.min(AssetPrice.timestamp)).where(AssetPrice.asset_id == int(asset.id))
                 )
                 first_price = first_price_result.scalar_one_or_none()
+                last_price_result = await db.execute(
+                    select(func.max(AssetPrice.timestamp)).where(AssetPrice.asset_id == int(asset.id))
+                )
+                last_price = last_price_result.scalar_one_or_none()
 
-                needs_b3 = not rows or (
-                    tx_start is not None
-                    and (first_price is None or first_price.date() > tx_start)
+                needs_b3 = _needs_b3_backfill(
+                    provider_rows=rows,
+                    transaction_start=tx_start,
+                    target_end=datetime.now(timezone.utc).date(),
+                    first_price=first_price,
+                    last_price=last_price,
                 )
                 if needs_b3:
                     b3_rows = await fetch_b3_cotahist(

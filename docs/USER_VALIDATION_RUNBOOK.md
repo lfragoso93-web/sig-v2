@@ -416,3 +416,37 @@ Bloco Evolucao Patrimonial - janela inicial e gaps de snapshot:
   ate `R$ 0,02`; divergencias materiais acima disso continuam bloqueadas;
 - validacao automatizada: `11 passed` no bloco de valuation/snapshot e
   `typecheck` frontend aprovado.
+
+Bloco TWR historico - preco sem negocio e seed corporativo:
+
+- diagnostico runtime apos o primeiro rebuild: a carteira `15/Principal`
+  chegava a `457` snapshots de `2024-10-22` a `2026-09-09`, sem dias parciais,
+  mas outubro/2025 e novembro/2025 permaneciam truncados por lacuna de `RBRF11`;
+- causa: `RBRF11` tinha historico persistido ate `2025-10-02` e voltava em
+  `2025-11-26`; como o lifecycle aceitava apenas janela de 5 dias, datas sem
+  negocio derrubavam o snapshot inteiro;
+- reparo operacional: `repair_market_price_gaps PETZ3 RBRF11 AUAU3` inseriu
+  `672` precos (`501` para `PETZ3` via B3 COTAHIST, `171` para `AUAU3` via
+  Yahoo) e, apos melhoria de cauda, `RBRF11` recebeu mais `689` precos via
+  B3 COTAHIST;
+- correcao de codigo: o reparo dirigido agora cai para B3 COTAHIST tambem
+  quando a serie do provedor termina antes da data alvo; o lifecycle de precos
+  usa ultimo fechamento persistido por ate `90` dias antes de classificar como
+  lacuna real;
+- rebuild runtime final da carteira `15` gerou `493` snapshots de
+  `2024-10-22` a `2026-09-10`; outubro/2025 fechou com `23` dias uteis e
+  novembro/2025 com `20` dias uteis;
+- `36` snapshots ficaram marcados como parciais/estimados: `35` datas entre
+  `2025-10-08` e `2025-11-25` por `RBRF11` sem negocio publicado e
+  `2026-09-10` por fechamento de mercado ainda incompleto;
+- seed corporativo escopado: criada CLI
+  `python -m app.cli.pre_prod_corporate_events_seed --portfolio-id <id>` para
+  coletar eventos corporativos globais somente dos ativos usados na carteira;
+- PETZ3/AUAU3: importacao CSV ja registrava alias `PETZ3 -> AUAU3` efetivo em
+  `2026-01-05` e evento portfolio-scoped aplicado; a projecao canonica de
+  eventos corporativos permanece global e nao consome eventos por carteira;
+- seed corporativo runtime da carteira `15`: `33` ativos processados, `122`
+  eventos globais criados e `0` erros; os eventos entram como
+  `PENDENTE/UNRECONCILED` ate a reconciliacao canonica;
+- validacao runtime: helpers de cauda/stale price aprovados no container
+  backend; imagem backend reconstruida e saudavel.
