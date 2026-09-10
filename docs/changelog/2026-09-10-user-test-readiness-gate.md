@@ -62,6 +62,7 @@ Commits GOV-05:
 - `d512d1d3d826b0401615440efbdc0a78f4dabb21` — DEVELOPMENT_CONTINUITY;
 - `cfe828300d05e35b672bbdf8775587c0388cccbb` — architecture;
 - `556eb126255cbfb5ac86c3a7777ae92e1481a0f6` — ISSUE_GOVERNANCE;
-- `8f9ec8f7448ebb877434416d345c6fc550899b08` — readiness cross-reference.
+- `8f9ec8f7448ebb877434416d345c6fc550899b08` — readiness cross-reference;
+- `b85917dc0edd9b17eed01fda88172ff3cbd22f74` — governance hierarchy/GOV-06 handoff.
 
 Nenhum codigo, schema ou dado runtime foi alterado durante GOV-05.
