@@ -11,8 +11,8 @@
 
 - `docs/USER_VALIDATION_RUNBOOK.md` atualizado com `GO_ASSISTED`.
 - `docs/USER_TEST_READINESS_GATE.md` criado e rebaselined como contrato operacional do gate.
-- Issue #303 rebaselined para refletir a certificacao sintetica/assistida ja comprovada.
-- Gates reais #226, #216, #158 e #227 reavaliados em 10/09/2026 contra as evidencias publicadas.
+- Issue #303 rebaselined para refletir a certificacao sintetica/assistida comprovada.
+- Gates #226, #216, #158 e #227 reavaliados em 10/09/2026 contra as evidencias publicadas.
 
 ## Evidencia runtime
 
@@ -25,13 +25,7 @@
 
 ## Rebaseline dos gates de dados reais
 
-A validacao assistida acrescentou evidencia real-controlada importante, sem promover o sistema para uso real amplo:
-
-- Proventos portfolio-scoped: carteira 15, 49 ativos elegiveis, 183 eventos globais na janela controlada e prova de idempotencia sem escrita fisica na segunda execucao;
-- carteira assistida: CSV com 308 transacoes e 65 ativos distintos, seguido de reparos de cobertura e rebuild canonico;
-- snapshots: 493 snapshots reconstruidos entre 22/10/2024 e 10/09/2026, com datas parciais/estimadas explicitamente marcadas;
-- eventos corporativos: 122 eventos globais obtidos no escopo da carteira, ainda `PENDENTE/UNRECONCILED`;
-- IRPF suportado e Renda Fixa/Tesouro validados em runtime assistido.
+A validacao assistida acrescentou evidencia real-controlada importante sem promover uso real amplo: Proventos portfolio-scoped idempotentes, CSV assistido com rebuild, 493 snapshots historicos, 122 eventos corporativos ainda pendentes de reconciliacao, IRPF suportado e Renda Fixa/Tesouro validados.
 
 Essas evidencias sao parciais validas para os gates reais, mas nao equivalem automaticamente ao gate global da #226. A cadeia formal permanece #226 -> #216 -> #158 -> #227.
 
