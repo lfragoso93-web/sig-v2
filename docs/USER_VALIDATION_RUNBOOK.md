@@ -544,3 +544,21 @@ Bloco Metas - UI e contrato de edicao:
   formulario antes do envio;
 - correcao funcional: edicao de metas passou a usar `PUT`, com teste estrutural
   no frontend para manter o contrato alinhado ao backend.
+
+Bloco Metas - schema runtime de criacao:
+
+- evidencia de usuario: apos a melhoria visual, a criacao de metas nao
+  persistia nenhum registro;
+- diagnostico runtime: o backend falhava ao listar/criar metas com
+  `UndefinedColumnError: column goals.current_value does not exist`;
+- causa: a tabela fisica `goals` ainda seguia o contrato inicial legado, sem
+  `current_value`, `base_value` e `monthly_contribution`, e com `goal_type`
+  preso ao enum antigo (`PATRIMONIO_ALVO`, `DY_MENSAL`, etc.);
+- correcao: adicionada migration runtime-safe
+  `20260910_goals_runtime_contract.py`, partindo de
+  `20260820_dividend_occurrence`, para adicionar as colunas faltantes e migrar
+  `goal_type` para `VARCHAR` compatível com o contrato atual do service;
+- operacao: `entrypoint.sh` passou a mirar `20260910_goals_runtime` como alvo
+  runtime-safe, sem puxar a branch destrutiva posterior;
+- validacao runtime: `goals` passou a listar sem excecao para a carteira `15`,
+  e um insert/delete smoke confirmou persistencia dos campos novos.
