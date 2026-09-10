@@ -82,6 +82,6 @@ Unica decisao formal de liberacao ampla. Consome #303, #226, #216, #158 e homolo
 
 ## Governanca documental
 
-GOV-03 alinhou `oci-execution-index.md`, `oci-first-deploy-runbook.md`, `oci.md`, `BOOTSTRAP_DATA_FLOW.md` e este gate ao mesmo contrato local -> OCI. O fechamento documental de GOV-03 esta registrado no changelog datado de 10/09/2026.
+GOV-03 alinhou `oci-execution-index.md`, `oci-first-deploy-runbook.md`, `oci.md`, `BOOTSTRAP_DATA_FLOW.md` e este gate ao mesmo contrato local -> OCI. O registro final do bloco esta no changelog datado de 10/09/2026, com baseline documental final `7b927b19f2798658943916d06d67eac9ca6f0ba8` antes deste ajuste de referencia.
 
 A persistencia auditavel do estado de DARF pago e demais evolucoes fora do escopo inicial devem permanecer explicitas e nao ser confundidas com funcionalidades fiscais definitivas.
