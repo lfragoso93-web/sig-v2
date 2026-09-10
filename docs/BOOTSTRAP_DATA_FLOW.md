@@ -2,330 +2,236 @@
 
 > Documento arquitetural canônico para reconstrução inicial, sincronização incremental e rebuild de dados globais. Qualquer seed, backfill, rebuild ou Central de Bootstrap deve respeitar este fluxo.
 
+Atualizado em 10/09/2026 para separar bootstrap técnico, `GO_ASSISTED` e promoção para dados reais.
+
 ## Objetivo
 
 Evitar que estágios de carga sejam executados fora de ordem, sobrescrevam dados certificados ou misturem fontes com responsabilidades diferentes.
 
-Este documento distingue três operações que não são equivalentes:
+Este documento distingue quatro operações que não são equivalentes:
 
 1. **Initial Bootstrap** — construção de uma base vazia ou recém-reconstruída;
 2. **Incremental Sync** — atualização rotineira de dados já persistidos;
-3. **Full Market Rebuild** — reconstrução de derivados/cobertura sobre uma base global já preparada.
+3. **Full Market Rebuild** — reconstrução de derivados/cobertura sobre uma base global já preparada;
+4. **Promotion Reconciliation** — delta final e controlado executado sobre SHA/dataset candidato depois dos gates de certificação.
 
-`full_market_rebuild` **não substitui** o Initial Bootstrap.
+`full_market_rebuild` não substitui Initial Bootstrap nem Promotion Reconciliation.
 
 ## Princípios
 
 - runtime financeiro é DB-first;
 - providers participam apenas de bootstrap, ingestão, sincronização ou reconciliação explícitas;
-- dados globais devem estar persistidos e certificados antes da importação de carteiras reais;
-- dados de carteira nunca devem ser usados como mecanismo para descobrir ou criar silenciosamente dados globais;
-- cada domínio possui uma fonte canônica e, quando necessário, fallbacks explicitamente limitados;
-- operações globais idempotentes devem preferir `insert-if-missing`/upsert conservador e nunca substituir silenciosamente uma fonte de maior autoridade por outra de menor autoridade;
-- `ready_for_real_data=true` somente após todos os estágios obrigatórios estarem certificados.
+- dados de carteira nunca devem criar silenciosamente fatos globais;
+- cada domínio possui fonte canônica e fallbacks explicitamente limitados;
+- operações idempotentes preferem escrita conservadora e nunca fazem downgrade silencioso de autoridade;
+- evidência já certificada deve ser reutilizada; não repetir operação destrutiva apenas por checklist histórico;
+- `GO_ASSISTED` permite validação controlada e não equivale a `ready_for_real_data=true`;
+- `ready_for_real_data=true` somente pode ser avaliado após #226 -> #216 -> #158 -> #227.
 
-## 1. Universo B3 — autoridade e precedência de fontes
+## Ambientes
 
-### Decisão alvo
+### Local
 
-Para ativos negociados na B3 (`ACAO`, `FII`, `ETF_NACIONAL`, `BDR`):
+Ambiente primário de desenvolvimento, correção e certificação pesada. O SHA candidato nasce e é validado aqui.
 
-1. **B3 COTAHIST é a fonte oficial de baseline histórico da B3**;
-2. o COTAHIST deve ser evoluído para fornecer também o máximo possível de identidade/metadados oficiais disponíveis no layout histórico;
-3. **BRAPI é fonte de enriquecimento e atualização**, especialmente para campos não fornecidos ou não normalizados pelo COTAHIST, como nome amigável, setor, logo, cobertura e dados recentes de provider;
-4. BRAPI não deve apagar nem substituir silenciosamente fatos históricos oficiais já persistidos a partir do COTAHIST;
+### OCI
+
+Ambiente de homologação do SHA já certificado localmente. OCI valida deploy, migrations, persistência, restart, recursos, rede, tunnel e smoke. Falha de código encontrada na OCI deve ser corrigida localmente e resultar em novo SHA; não se desenvolve na VM.
+
+## 1. Universo B3 — autoridade e precedência
+
+Para ativos B3 (`ACAO`, `FII`, `ETF_NACIONAL`, `BDR`):
+
+1. B3 COTAHIST é baseline histórico oficial;
+2. COTAHIST fornece o máximo possível de identidade/metadados oficiais;
+3. BRAPI enriquece/atualiza campos complementares;
+4. BRAPI não apaga fatos oficiais persistidos do COTAHIST;
 5. Yahoo não é fonte primária do universo B3.
 
-### Estado atual do código
-
-O parser `app.integrations.b3_cotahist` já possui DTO tipado mínimo com
-identidade, classificação, OHLCV, fator de cotação e ISIN usando `Decimal`.
-
-O estágio B3 de pré-produção já possui caminho COTAHIST-first para:
-
-- classificar registros B3 suportados sem chamadas externas;
-- criar/upsertar catálogo mínimo em `assets`;
-- persistir histórico oficial de preços com `open`, `high`, `low`, `close`,
-  `volume` e `source=b3_cotahist`;
-- preferir mercado à vista (`010`) sobre fracionário (`020`) na mesma data.
-
-BRAPI permanece como fonte de enriquecimento/atualização posterior para campos
-complementares, não como pré-requisito para o catálogo B3 existir. O seed BRAPI
-não cria novos ativos B3 quando o COTAHIST não os descobriu; ele apenas preenche
-lacunas de metadados em ativos B3 já persistidos. Catálogos de domínios onde a
-BRAPI é canônica, como CRIPTO suportado, continuam pertencendo ao estágio
-dedicado desse domínio.
-
-No `system-bootstrap.v4`, o baseline B3 aparece como estágio explícito
-`b3_baseline` antes de `asset_catalog`. O estágio `asset_catalog` permanece para
-enriquecimento BRAPI de B3 já persistida e catálogo CRIPTO suportado.
-
-### Evolução necessária
-
-Evolução remanescente em blocos pequenos:
-
-1. auditar precedência para impedir downgrade de autoridade em rotas futuras;
-2. refletir a nova ordem na Central de Bootstrap quando a #253 for retomada.
+O estágio `b3_baseline` do `system-bootstrap.v4` precede `asset_catalog`. BRAPI enriquece B3 já persistida e mantém seu papel canônico onde o contrato do domínio assim definir, como CRIPTO suportado.
 
 ## 2. Ordem canônica do Initial Bootstrap
 
 ### Fase 0 — Schema e infraestrutura
 
-- migrations/Alembic no head aprovado;
+- migrations/Alembic no head aprovado para o ambiente;
 - PostgreSQL/Redis/serviços saudáveis;
-- identidade operacional por branch/SHA/run_id quando aplicável;
-- nenhum dado real importado ainda.
+- identidade operacional branch/SHA/run_id quando aplicável;
+- nenhuma promoção manual de readiness.
 
 ### Fase 1 — Catálogos globais
 
-#### 1A. Universo B3
+- B3: COTAHIST-first, BRAPI enrichment;
+- Cripto: universo suportado pelo contrato vigente;
+- Tesouro: catálogo oficial dedicado;
+- demais classes: fonte canônica própria.
 
-**Alvo arquitetural:** COTAHIST-first.
-
-- descobrir/criar ativos B3 a partir do layout oficial possível;
-- persistir identidade/metadados oficiais disponíveis;
-- posteriormente enriquecer via BRAPI.
-
-**Estado atual:** o estágio B3 já pode criar catálogo mínimo via COTAHIST antes
-do histórico. BRAPI deve atuar depois como enriquecimento.
-
-#### 1B. Cripto
-
-- universo suportado canônico definido pela integração BRAPI/contrato vigente;
-- persistir apenas ativos suportados pelo SGI.
-
-#### 1C. Tesouro Direto
-
-- catálogo oficial do Tesouro;
-- nenhuma BRAPI deve substituir o catálogo oficial.
-
-#### 1D. Outros catálogos
-
-- cada classe usa sua fonte oficial/canônica própria;
-- nenhum catálogo deve depender de carteira de usuário.
+Nenhum catálogo depende de carteira de usuário para existir.
 
 ### Fase 2 — Históricos globais de preços
 
-#### B3
+- B3: COTAHIST em `asset_prices`;
+- Tesouro: fonte oficial dedicada;
+- Cripto/outras classes: provider dedicado por capacidade;
+- backfill genérico somente onde não houver provider/bootstrap dedicado.
 
-- fonte histórica oficial: **B3 COTAHIST**;
-- persistência em `asset_prices`;
-- identidade por ativo + timestamp;
-- COTAHIST prevalece sobre históricos genéricos para o baseline B3.
+### Fase 3 — Séries auxiliares
 
-#### Tesouro
+Benchmarks, taxas macroeconômicas e câmbio preservam fontes canônicas e fallbacks governados.
 
-- fonte oficial dedicada;
-- histórico e último preço separados conforme contrato Tesouro.
-
-#### Cripto e outras classes
-
-- provider dedicado por capacidade;
-- backfill genérico só atua onde não existe provider/bootstrap dedicado.
-
-### Fase 3 — Séries auxiliares globais
-
-- benchmarks e taxas macroeconômicas;
-- câmbio;
-- demais séries globais obrigatórias.
-
-Cada série deve preservar sua fonte canônica própria; fallback nunca substitui automaticamente uma fonte oficial estável.
-
-### Fase 4 — Proventos globais
+### Fase 4 — Proventos
 
 Tabela canônica: `asset_dividends`.
 
-Política alvo de provider:
+- direitos pertencem ao ativo e são projetados para carteira sob demanda;
+- nenhuma materialização por carteira;
+- BRAPI é authoritative quando possui cobertura válida;
+- Yahoo é fallback de cobertura, não concorrente do mesmo evento;
+- valores usam normalização canônica/`Decimal` compatível com `Numeric(18, 8)`.
 
-1. **BRAPI authoritative** para Proventos quando houver cobertura válida;
-2. Yahoo apenas **fallback de cobertura**, nunca fonte concorrente para o mesmo evento já coberto pela BRAPI;
-3. valores monetários normalizados pelo SGI antes da identidade/persistência;
-4. precisão máxima canônica de `value_per_unit` e `gross_value_per_unit`: **8 casas decimais**, compatível com `Numeric(18, 8)`;
-5. nenhuma materialização de direitos por carteira.
+A certificação assistida já comprovou seed `portfolio-scoped` e idempotência. O gate #226 decide se essa estratégia é suficiente para promoção ou se haverá global controlado.
 
-### Fase 5 — Eventos corporativos globais
+### Fase 5 — Eventos corporativos
 
 Tabela canônica: `corporate_events`.
 
-- eventos pertencem ao ativo, não à carteira;
-- splits, bônus, subscrições, ticker changes e demais eventos usam o contrato global vigente;
-- transações históricas não são mutadas para “aplicar” evento corporativo;
-- precedência de provider deve ser explicitamente documentada no domínio.
+Eventos pertencem ao ativo. Transações históricas não são mutadas para "aplicar" eventos. Eventos materiais ao dataset de promoção devem estar reconciliados antes do GO; não é obrigatório reconciliar todo o universo global se isso não for requisito do escopo aprovado.
 
-### Fase 6 — Auditoria global de cobertura
+### Fase 6 — Auditoria de cobertura
 
-Só após catálogos, preços, séries auxiliares, Proventos e eventos corporativos:
+Auditar cobertura temporal, gaps, duplicidades, órfãos, fontes, lifecycle e blockers por domínio.
 
-- cobertura temporal;
-- lacunas;
-- duplicidades;
-- órfãos;
-- fontes observadas;
-- lifecycle dos ativos;
-- erros e bloqueios por domínio.
+### Fase 7 — Dados de carteira
 
-Essa fase não cria dados de carteira.
+Há duas políticas distintas:
 
-### Fase 7 — Importação de dados de carteira
+- **validação assistida:** pode usar carteira/dados controlados quando `GO_ASSISTED` autorizar;
+- **abertura ampla real:** somente depois dos gates #226/#216/#158 e decisão #227.
 
-Somente depois da certificação global:
-
-- usuários/carteiras reais;
-- CSV/transações reais;
-- aliases/tickers devem ser resolvidos antes de criar ativos.
-
-Importação de carteira não pode descobrir silenciosamente provider nem substituir o catálogo global.
+Importação não pode descobrir provider silenciosamente nem substituir catálogo global.
 
 ### Fase 8 — Derivados de carteira
 
-- posições;
-- preço médio/custo;
-- direitos de Proventos calculados sob demanda;
-- efeitos de eventos corporativos conforme motor canônico;
-- nenhuma duplicação de fatos globais em tabelas de carteira.
+Posições, custo/preço médio, direitos de Proventos e efeitos de eventos corporativos usam motores canônicos, sem duplicar fatos globais.
 
 ### Fase 9 — Snapshots, valuation e TWR
 
-Executar somente após:
+Executar após transações e cobertura necessária. Gaps devem permanecer explícitos; contratos dedicados como RF/Tesouro não recebem fallback silencioso de mercado.
 
-- preços globais certificados;
-- transações importadas;
-- posições reconciliadas;
-- séries auxiliares disponíveis.
+### Fase 10 — Reconciliação
 
-### Fase 10 — Reconciliação final e readiness
+Validar patrimônio, rentabilidade, Proventos, Tesouro, Renda Fixa, IRPF suportado, restart/persistência/idempotência e provider-boundary.
 
-Validar:
+Esta fase pode produzir `GO_ASSISTED`, mas não promove dados reais por si só.
 
-- patrimônio;
-- rentabilidade;
-- Proventos;
-- Tesouro;
-- Renda Fixa;
-- IRPF quando aplicável;
-- restart/persistência/idempotência;
-- ausência de dependência de provider em GETs/cálculos financeiros.
+## 3. Promotion Reconciliation
 
-Somente então considerar `ready_for_real_data=true`.
+Quando #303 estiver funcionalmente pronto e #226/#216 liberarem o gate de dados globais, #158 executa somente o delta necessário sobre SHA/dataset congelados:
 
-## 3. Sincronização incremental
+- importação controlada quando ainda necessária;
+- rebuild somente dos derivados necessários;
+- reconciliação financeira final;
+- eventos corporativos materiais ao dataset;
+- restart/idempotência/persistência;
+- eventual contração física somente com backup e autorização.
 
-A sincronização incremental atualiza uma base já inicializada e **não deve repetir indiscriminadamente o Initial Bootstrap**.
+A evidência é entregue à #227. Somente #227 registra GO/NO-GO amplo.
 
-Regras:
+## 4. Sincronização incremental
 
-- COTAHIST pode complementar anos/períodos ausentes sem substituir identidades já persistidas;
-- BRAPI atualiza/enriquece catálogo e dados recentes dentro de sua responsabilidade;
-- backfills operam apenas em gaps comprovados;
+Não repetir Initial Bootstrap indiscriminadamente.
+
+- COTAHIST complementa períodos ausentes sem downgrade;
+- BRAPI enriquece/atualiza dentro de sua responsabilidade;
+- backfills operam em gaps comprovados;
 - providers dedicados prevalecem sobre backfill genérico;
-- Proventos BRAPI-first; Yahoo somente fallback de cobertura;
-- eventos corporativos seguem provider canônico do domínio;
-- qualquer fallback utilizado deve ficar observável na coluna/source/evidência correspondente.
+- Proventos seguem autoridade/fallback do domínio;
+- fallbacks ficam observáveis em source/evidência.
 
-## 4. Full Market Rebuild
+## 5. Full Market Rebuild
 
-`full_market_rebuild` é uma operação de manutenção/reconstrução sobre uma base global já preparada.
+É manutenção/reconstrução sobre base preparada. Pode atuar em preços, Tesouro, benchmarks, snapshots/TWR, manutenção e auditoria de cobertura conforme contrato vigente.
 
-Ele pode executar, conforme contrato vigente:
+Não deve:
 
-- backfill/auditoria de preços globais;
-- Tesouro;
-- benchmarks;
-- snapshots/TWR;
-- manutenção;
-- auditoria final de cobertura.
-
-Ele **não deve** ser usado para:
-
-- bootstrap de uma base vazia;
+- bootstrapar base vazia;
 - criar silenciosamente todos os catálogos;
 - contornar gates de Proventos/eventos;
 - importar CSV real;
-- substituir a ordem de reconstrução da #158.
+- substituir #158;
+- ser executado globalmente apenas para repetir evidência já certificada.
 
-## 5. Matriz de autoridade por domínio
+## 6. Matriz de autoridade
 
-| Domínio | Fonte primária/canônica | Fonte complementar/fallback | Escrita principal | Pré-requisito |
-| --- | --- | --- | --- | --- |
-| Catálogo B3 | B3 COTAHIST (alvo) | BRAPI para enriquecimento | `assets` | schema |
-| Histórico B3 | B3 COTAHIST | nenhuma fonte genérica deve sobrescrever | `asset_prices` | catálogo B3 |
-| Cripto | contrato BRAPI/universo suportado | conforme capability explícita | `assets`, preços dedicados | schema |
-| Tesouro catálogo | fonte oficial | nenhuma substituição por BRAPI | catálogo/`assets` | schema |
-| Tesouro histórico | fonte oficial | conforme contrato Tesouro | preços Tesouro | catálogo Tesouro |
-| Benchmarks | fontes oficiais | fallback explicitamente governado | séries/taxas | schema |
-| Câmbio | fonte canônica vigente | fallback explicitamente governado | série FX | schema |
-| Proventos | BRAPI | Yahoo somente fallback de cobertura | `asset_dividends` | catálogo |
-| Eventos corporativos | provider canônico do domínio | fallback explícito | `corporate_events` | catálogo |
-| Cobertura | dados já persistidos | — | evidência/status | todos globais |
-| Transações | arquivo/entrada do usuário | resolução por catálogo | `transactions` | globais certificados |
-| Posições | cálculo interno | — | derivados | transações |
-| Snapshots/TWR | cálculo interno | — | snapshots | posições + mercado |
-
-## 6. Política de precisão para Proventos
-
-`asset_dividends.value_per_unit` e `gross_value_per_unit` usam `Numeric(18, 8)`.
-
-Contrato alvo:
-
-- usar `Decimal`;
-- máximo de 8 casas decimais;
-- normalização centralizada com quantum `0.00000001`;
-- arredondamento único e documentado pelo domínio;
-- identidade e comparação devem usar o valor já normalizado;
-- diferenças entre providers não justificam competição quando a fonte primária possui cobertura válida.
+| Domínio | Fonte primária/canônica | Complementar/fallback | Escrita principal |
+| --- | --- | --- | --- |
+| Catálogo B3 | B3 COTAHIST | BRAPI enrichment | `assets` |
+| Histórico B3 | B3 COTAHIST | sem overwrite genérico | `asset_prices` |
+| Cripto | contrato BRAPI/universo suportado | capability explícita | `assets`/preços |
+| Tesouro | fonte oficial | contrato dedicado | catálogo/preços |
+| Benchmarks | fontes oficiais | fallback governado | séries/taxas |
+| Câmbio | fonte canônica vigente | fallback governado | FX |
+| Proventos | BRAPI | Yahoo fallback-only | `asset_dividends` |
+| Eventos corporativos | provider canônico | fallback explícito | `corporate_events` |
+| Transações | entrada do usuário | resolução por catálogo | `transactions` |
+| Posições | cálculo interno | — | derivados |
+| Snapshots/TWR | cálculo interno | — | snapshots |
 
 ## 7. Gates operacionais
 
-Antes de cada estágio real:
+Antes de cada operação real:
 
-- confirmar Issue relacionada;
-- confirmar branch `stable-15jun` e SHA remoto/local;
-- confirmar working tree limpa;
-- confirmar dependências anteriores concluídas;
-- registrar `run_id`/evidência quando o contrato exigir;
-- executar somente as tabelas autorizadas para aquele estágio;
-- comparar estado antes/depois;
-- interromper ao primeiro blocker não reconciliado.
+- Issue relacionada atualizada;
+- branch `stable-15jun` e SHA conhecidos;
+- working tree limpa no ambiente de desenvolvimento;
+- dependências anteriores concluídas;
+- run_id/evidência quando exigido;
+- somente tabelas autorizadas;
+- comparação antes/depois;
+- interrupção no primeiro blocker não reconciliado.
+
+Para OCI, adicionalmente: checkout deve corresponder exatamente ao SHA certificado localmente.
 
 ## 8. Relação com Issues
 
-- #158 — reconstrução limpa e ordem operacional real;
-- #216 — gate agregado de seeds isolados;
-- #226 — Proventos;
-- #253 — futura Central de Bootstrap deve refletir este contrato;
-- #227 — gate-mãe antes de dados reais;
+- #303 — certificação funcional/`GO_ASSISTED`;
+- #226 — decisão operacional de Proventos;
+- #216 — gate agregado;
+- #158 — Promotion Reconciliation;
+- #227 — GO/NO-GO amplo;
+- #284 — homologação OCI;
 - #129 — eventos corporativos;
-- #130 — evolução BRAPI/cobertura/enriquecimento;
-- #272 — dívida física de `corporate_events`.
+- #253 — futura Central de Bootstrap;
+- #130 — evolução BRAPI.
 
-## 9. Estado de implementação desta decisão
+## 9. Estado atual — 10/09/2026
 
-Este documento descreve o **contrato alvo**.
+Já comprovado:
 
-Já implementado:
-
-- COTAHIST como fonte de baseline B3 em `assets` e `asset_prices`;
-- estágio `b3_baseline` no `system-bootstrap.v4` antes do enriquecimento BRAPI;
-- BRAPI como enriquecimento de B3 já persistida e catálogo CRIPTO suportado;
-- providers dedicados excluídos do backfill genérico;
+- COTAHIST-first para B3;
 - Tesouro oficial;
 - benchmarks/câmbio isolados;
-- Proventos globais em `asset_dividends`;
-- eventos corporativos globais;
-- separação DB-first/provider-boundary.
+- Proventos globais asset-based e prova portfolio-scoped idempotente;
+- eventos corporativos globais com seed portfolio-scoped disponível;
+- DB-first/provider-boundary;
+- carteira assistida com CSV/rebuild/reconciliações;
+- `user-test-readiness.v1 = GO_ASSISTED` sem blockers/warnings na evidência registrada.
 
-Checkpoint local de 08/09/2026:
+Estado de readiness:
 
-- inventário pré-prod está sem tabelas desconhecidas e sem findings bloqueantes;
-- cripto possui 44 ativos financeiramente certificados para transações
-  controladas;
-- ativos cripto sem histórico suficiente ficam bloqueados por status terminal
-  explícito, sem fallback silencioso;
-- `/ready` continua fechado até bootstrap/certificação final.
+```text
+/health = 200
+/ready = 503
+GO_ASSISTED = true
+ready_for_real_data = false
+```
 
-Ainda a implementar antes de considerar o fluxo plenamente convergido:
+Pendências de promoção:
 
-1. auditar precedência para impedir downgrade de autoridade em rotas futuras;
-2. simplificar Proventos para BRAPI authoritative + Yahoo fallback-only;
-3. centralizar a normalização de Proventos em 8 casas;
-4. fazer a Central de Bootstrap refletir explicitamente esta ordem e dependências.
+1. fechar rodada #303 e congelar SHA;
+2. decidir #226;
+3. fechar #216;
+4. executar delta #158;
+5. homologar o mesmo SHA na OCI;
+6. #227 emitir GO/NO-GO;
+7. somente após GO avaliar `ready_for_real_data=true`.
