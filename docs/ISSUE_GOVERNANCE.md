@@ -74,13 +74,8 @@ Manter uma hierarquia única para certificação, dados reais, operação, dívi
 
 GOV-01..05 concluíram o rebaseline de readiness, gates reais, OCI, backlog funcional e documentação raiz. A próxima etapa é **GOV-06 — sanitização final de Issues**.
 
-GOV-06 deve:
-
-- localizar Issues abertas que ainda descrevem trabalho já concluído;
-- localizar duplicidades/overlaps residuais;
-- revisar trackers com dependências ou ordem já superadas;
-- fechar somente quando houver evidência ou Issue canônica substituta;
-- preservar histórico útil em comentário/body antes de encerrar;
-- atualizar #293 com a hierarquia final.
+GOV-06 deve localizar Issues abertas que descrevem trabalho já concluído, duplicidades/overlaps residuais e trackers com dependências superadas. Fechar somente com evidência ou Issue canônica substituta, preservando histórico útil antes do encerramento.
 
 #293 permanece aberta até essa segunda passada terminar.
+
+Baseline documental para iniciar GOV-06: `da5787d89c9de937bf5d738685a6b1e553db8229`.
