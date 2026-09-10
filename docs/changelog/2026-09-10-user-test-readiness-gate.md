@@ -26,33 +26,39 @@
 
 ## GOV-03 — operacao e OCI — CONCLUIDO
 
-A fronteira operacional foi rebaselined:
-
-- desenvolvimento, correcoes e certificacao pesada acontecem localmente;
-- OCI e ambiente de homologacao de SHA ja certificado localmente;
-- deploy OCI fixa o SHA exato e `APP_COMMIT_SHA` deve corresponder ao checkout;
-- falhas de codigo encontradas na OCI voltam para reproducao/correcao local e geram novo SHA;
-- `/ready=503` e esperado enquanto `ready_for_real_data=false`, mesmo com `/health=200` e `GO_ASSISTED`;
-- readiness nao e forcado para aprovar smoke;
-- restore/importacao real ampla, seeds globais e contracoes destrutivas permanecem subordinados aos gates reais;
-- `docs/deployment/oci-execution-index.md`, `oci-first-deploy-runbook.md`, `oci.md`, `BOOTSTRAP_DATA_FLOW.md` e `USER_TEST_READINESS_GATE.md` foram alinhados ao mesmo contrato.
+A fronteira operacional foi rebaselined: desenvolvimento/certificacao pesada local; OCI como homologacao do SHA exato; `/ready=503` esperado enquanto `ready_for_real_data=false`.
 
 ## GOV-04 — backlog funcional — CONCLUIDO
 
-Backlog funcional reclassificado contra o estado real publicado:
+- #58: parcialmente implementada;
+- #149: parcialmente implementada, nao blocker automatico se fail-closed;
+- #246: Metas basica operacional, macroprojeto definitivo ainda planejado;
+- #351: epic pos-GO;
+- #352/#354: candidatos P1 se reproduziveis;
+- #353: P2 por padrao;
+- #355–#361: backlog de evolucao pos-GO.
 
-- #58 — parcialmente implementada; detalhe de ativo, historico, Proventos e preco medio ja existem, restando consolidacao de cobertura, DY, metadados/iconografia e responsividade;
-- #90 — refinamento de Patrimonio planejado, subordinado ao design system da #351;
-- #149 — parcialmente implementada; Tesouro/RF atuais continuam corretos no escopo certificado, mas TWR diario dedicado permanece divida explicita;
-- #246 — parcialmente implementada; Metas recebeu correcoes runtime-safe necessarias, enquanto o macroprojeto Metas + Analise permanece futuro;
-- #351 — epic UX pos-GO, com bugs funcionais pequenos tratados separadamente;
-- #352 — candidato P1 se o seletor de classe ainda impedir/errar lancamentos;
-- #353 — P2 por padrao;
-- #354 — candidato P1 se o mismatch de senha ainda afetar onboarding;
-- #355–#359 — features pos-GO;
-- #360 — Analysis Engine deterministico planejado apos #246;
-- #361 — IA explicavel planejada e bloqueada por #360/#246.
+## GOV-05 — documentacao raiz — CONCLUIDO
 
-Decisao de release: apenas findings reproduziveis que bloqueiem onboarding, lancamentos ou outra jornada critica devem atrasar `PORTFOLIO-TEST-READY`. Redesign, exportacao, import B3 avancado, calculadoras, Analysis Engine e IA nao sao blockers automaticos do primeiro GO.
+README, ROADMAP, CHANGELOG, `docs/DEVELOPMENT_CONTINUITY.md` e `docs/architecture.md` foram rebaselined para o estado real de 10/09/2026.
 
-Nenhuma funcionalidade, schema ou dado runtime foi alterado por GOV-04; as alteracoes foram de Issue/governanca e este registro documental.
+Correcoes principais:
+
+- removidos baselines historicos tratados como instrucao corrente;
+- removida a premissa obsoleta de que `goals` nao poderia receber correcao/migration;
+- removida a obrigacao mecanica de duas execucoes globais de Proventos;
+- #58 deixou de aparecer como apenas planejada;
+- #150 deixou de aparecer como trabalho futuro;
+- ordem de promocao alinhada para #303 -> #226 -> #216 -> #158 -> OCI exact-SHA -> #227;
+- backlog pos-GO separado de blockers reais;
+- historico detalhado permanece preservado no Git e nos changelogs datados.
+
+Commits GOV-05:
+
+- `0d85ff9352fe2d3970868181544c3f3e94b80f3c` — README;
+- `cb1125330c9cc42c6b5390971166be63962db706` — ROADMAP;
+- `9a7ae31f4986cbd32c59475b32e8165cb0c8db6d` — CHANGELOG;
+- `d512d1d3d826b0401615440efbdc0a78f4dabb21` — DEVELOPMENT_CONTINUITY;
+- `cfe828300d05e35b672bbdf8775587c0388cccbb` — architecture.
+
+Nenhum codigo, schema ou dado runtime foi alterado durante GOV-05.
