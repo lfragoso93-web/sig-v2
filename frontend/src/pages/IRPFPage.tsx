@@ -312,6 +312,21 @@ function Empty({ label }: { label: string }) {
   )
 }
 
+function ErrorNotice({ label }: { label: string }) {
+  return (
+    <div
+      className="rounded-lg border px-3 py-2 text-sm"
+      style={{
+        background: 'rgba(239, 68, 68, 0.08)',
+        borderColor: 'rgba(239, 68, 68, 0.35)',
+        color: 'var(--color-error)',
+      }}
+    >
+      {label}
+    </div>
+  )
+}
+
 const TABS = [
   { key: 'resumo',       label: 'Resumo',          icon: FileText },
   { key: 'bens',         label: 'Bens e Direitos', icon: Wallet },
@@ -342,18 +357,22 @@ export default function IRPFPage() {
   const {
     data: canonicalAssessment,
     isLoading: loadingCanonicalAssessment,
+    isError: isCanonicalAssessmentError,
   } = useIRPFCanonicalAnnualAssessment(portfolioId, selectedYear)
   const {
     data: canonicalAssets,
     isLoading: loadingCanonicalAssets,
+    isError: isCanonicalAssetsError,
   } = useIRPFCanonicalAssetsAssessment(portfolioId, selectedYear)
   const {
     data: canonicalCapitalGains,
     isLoading: loadingCanonicalCapitalGains,
+    isError: isCanonicalCapitalGainsError,
   } = useIRPFCanonicalCapitalGainsAssessment(portfolioId, selectedYear)
   const {
     data: canonicalIncome,
     isLoading: loadingCanonicalIncome,
+    isError: isCanonicalIncomeError,
   } = useIRPFCanonicalIncomeAssessment(portfolioId, selectedYear)
 
   const handleDownloadPDF = useCallback(async () => {
@@ -480,6 +499,10 @@ export default function IRPFPage() {
       <div className="kpi-grid">
         {loadingCanonicalAssessment ? (
           [...Array(4)].map((_, i) => <SkeletonCard key={i} />)
+        ) : isCanonicalAssessmentError ? (
+          <div className="col-span-full">
+            <ErrorNotice label="Não foi possível carregar a apuração anual de IRPF." />
+          </div>
         ) : canonicalAssessment ? (
           <>
             <KpiCard
@@ -538,12 +561,20 @@ export default function IRPFPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div>
                 <h2 className="text-sm font-semibold mb-3">Bens e Direitos</h2>
-                {loadingCanonicalAssets ? <SkeletonCard /> : <BensDireitosTable data={bensDireitos} />}
+                {loadingCanonicalAssets ? (
+                  <SkeletonCard />
+                ) : isCanonicalAssetsError ? (
+                  <ErrorNotice label="Não foi possível carregar Bens e Direitos." />
+                ) : (
+                  <BensDireitosTable data={bensDireitos} />
+                )}
               </div>
               <div>
                 <h2 className="text-sm font-semibold mb-3">Rendimentos</h2>
                 {loadingCanonicalIncome ? (
                   <SkeletonCard />
+                ) : isCanonicalIncomeError ? (
+                  <ErrorNotice label="Não foi possível carregar Rendimentos." />
                 ) : (
                   <RendimentosTable dividendos={dividendos} jcp={jcp} />
                 )}
@@ -551,17 +582,27 @@ export default function IRPFPage() {
             </div>
           )}
 
-          {activeTab === 'bens' && <BensDireitosTable data={bensDireitos} />}
+          {activeTab === 'bens' && (
+            isCanonicalAssetsError
+              ? <ErrorNotice label="Não foi possível carregar Bens e Direitos." />
+              : <BensDireitosTable data={bensDireitos} />
+          )}
           {activeTab === 'ganhos' && (
             loadingCanonicalCapitalGains
               ? <SkeletonCard />
+              : isCanonicalCapitalGainsError
+                ? <ErrorNotice label="Não foi possível carregar Ganhos de Capital." />
               : <GanhosCapitalTable data={ganhosCapital} />
           )}
           {activeTab === 'rendimentos' && (
-            <RendimentosTable dividendos={dividendos} jcp={[]} />
+            isCanonicalIncomeError
+              ? <ErrorNotice label="Não foi possível carregar Rendimentos." />
+              : <RendimentosTable dividendos={dividendos} jcp={[]} />
           )}
           {activeTab === 'jcp' && (
-            <RendimentosTable dividendos={[]} jcp={jcp} />
+            isCanonicalIncomeError
+              ? <ErrorNotice label="Não foi possível carregar JCP." />
+              : <RendimentosTable dividendos={[]} jcp={jcp} />
           )}
         </div>
       </div>

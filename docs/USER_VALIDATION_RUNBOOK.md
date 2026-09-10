@@ -450,3 +450,28 @@ Bloco TWR historico - preco sem negocio e seed corporativo:
   `PENDENTE/UNRECONCILED` ate a reconciliacao canonica;
 - validacao runtime: helpers de cauda/stale price aprovados no container
   backend; imagem backend reconstruida e saudavel.
+
+Bloco IRPF - apuracao anual e tela de erro explicito:
+
+- evidencia de usuario: tela IRPF mostrava apenas ano-base `2025` e nao exibia
+  informacao fiscal mesmo com `196` transacoes em 2025 na carteira
+  `15/Principal`;
+- diagnostico runtime: a CLI canônica
+  `python -m app.cli.irpf_annual_assessment --portfolio-id 15 --year 2025`
+  abortava com `classe fiscal nao suportada: 'CRIPTO'`;
+- causa: o motor anual integrado de renda variavel consumia todas as
+  transacoes/baixas realizadas do ano; classes ainda sem politica fiscal
+  canônica propria (`CRIPTO`, `TESOURO_DIRETO`) derrubavam toda a apuracao;
+- correcao: a apuracao anual integrada passou a filtrar apenas classes com
+  politica fiscal suportada pelo motor atual (`ACAO`, `BDR`, `ETF`, `FII`,
+  `FIAGRO` e aliases), mantendo classes fora de escopo fora desse contrato ate
+  modulo fiscal dedicado;
+- correcao UX: a pagina IRPF agora mostra erro explicito quando um endpoint
+  canonico falha, em vez de renderizar estado vazio indistinguivel de ausencia
+  real de dados;
+- validacao runtime da carteira `15/2025`: contrato
+  `irpf-annual-assessment.v1` gerado com `total_gross_tax_due_brl=13.85`,
+  `total_withholding_brl=0.33` e `total_payment_due_brl=13.52`;
+- validacao frontend: `npm run typecheck` e `npm run build` aprovados; o build
+  precisou rodar fora do sandbox por `spawn EPERM` no binario nativo
+  Tailwind/Rolldown em Windows.
