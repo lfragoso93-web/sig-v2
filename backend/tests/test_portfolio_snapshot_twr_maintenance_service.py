@@ -29,7 +29,7 @@ async def test_maintenance_processes_only_incomplete_portfolios_and_isolates_err
             needs,
         ),
         patch(
-            "app.services.portfolio_snapshot_twr_maintenance_service.backfill_snapshots_with_returns",
+            "app.services.portfolio_snapshot_twr_maintenance_service.backfill_canonical_snapshots_with_returns",
             backfill,
         ),
     ):

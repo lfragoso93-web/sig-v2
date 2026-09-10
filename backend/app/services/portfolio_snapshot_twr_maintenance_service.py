@@ -22,7 +22,9 @@ from app.services.portfolio_class_snapshot_service import (
     SUPPORTED_CLASS_TWR_TYPES,
     rebuild_class_snapshots,
 )
-from app.services.portfolio_snapshot_twr_service import backfill_snapshots_with_returns
+from app.services.portfolio_snapshot_canonical_twr_service import (
+    backfill_canonical_snapshots_with_returns,
+)
 
 logger = logging.getLogger(__name__)
 _MONEY_TOLERANCE = Decimal("0.01")
@@ -178,7 +180,10 @@ async def maintain_twr_snapshots_for_active_portfolios(
                 skipped += 1
                 continue
             if rebuild_consolidated:
-                snapshots += await backfill_snapshots_with_returns(db, portfolio_id)
+                snapshots += await backfill_canonical_snapshots_with_returns(
+                    db,
+                    portfolio_id,
+                )
             if rebuild_classes:
                 class_snapshots += await rebuild_class_snapshots(db, portfolio_id)
             processed += 1

@@ -619,3 +619,30 @@ Bloco readiness para testes assistidos:
 - validacao automatizada focada: `6 passed`;
 - este bloco libera a continuidade das rodadas assistidas, mas mantem
   `ready_for_real_data=false`.
+
+Bloco Rentabilidade - TWR canonico e Renda Fixa por classe:
+
+- evidencia de usuario: a pagina Patrimonio mostrava snapshots canonicos de
+  Renda Fixa inconsistentes, e a pagina Rentabilidade exibia grafico e KPIs
+  parciais;
+- diagnostico: fluxos operacionais ainda chamavam o backfill simples de
+  snapshots, que preenchia patrimonio/custo mas deixava campos de TWR
+  (`daily_return_pct`, `accumulated_return_pct`, fluxos externos e proventos)
+  zerados ou estimados;
+- diagnostico adicional: `RENDA_FIXA` estava fora do TWR dedicado por classe,
+  mesmo ja tendo motor canonico proprio por indexador/contrato;
+- correcao: rebuilds de admin, transacoes, manutencao e full market passaram a
+  usar o backfill canonico com retornos; a invalidacao de cache de
+  Rentabilidade foi conectada ao rebuild pos-transacao;
+- correcao: `RENDA_FIXA` passou a gerar snapshots de classe com o
+  `fixed_income_valuation_service`, sem exigir cotacao de mercado;
+- correcao runtime: lacunas de preco persistido agora sao reconhecidas tanto em
+  mensagens acentuadas quanto em mensagens com encoding legado, evitando
+  interrupcao do rebuild quando um ativo pontual precisa de reparo de historico;
+- operacao em 10/09/2026: reparado historico do ativo `NU`, com 1.192 precos
+  inseridos via `repair_market_price_gaps`;
+- validacao runtime da carteira `15`: snapshots consolidados chegaram a
+  493 linhas ate 10/09/2026, com 492 retornos acumulados nao zerados; snapshots
+  de classe passaram a incluir `RENDA_FIXA` com 493 linhas;
+- ressalva: `TESOURO_DIRETO` continua limitado a cobertura oficial/exata
+  disponivel no historico dedicado, sem interpolacao artificial.

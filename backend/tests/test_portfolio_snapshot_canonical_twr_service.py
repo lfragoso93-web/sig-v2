@@ -189,3 +189,13 @@ async def test_canonical_twr_skips_persisted_price_gap_and_continues(monkeypatch
     assert persisted_dates == [date(2026, 9, 7), date(2026, 9, 9)]
     assert valuation.await_count == 3
     db.commit.assert_awaited_once()
+
+
+def test_persisted_price_gap_detection_accepts_encoded_and_unicode_messages():
+    assert service._is_persisted_price_gap(
+        RuntimeError("cobertura persistida de preÃ§o indisponÃ­vel para: RBRF11")
+    )
+    assert service._is_persisted_price_gap(
+        RuntimeError("cobertura persistida de preço indisponível para: NU")
+    )
+    assert not service._is_persisted_price_gap(RuntimeError("erro inesperado"))

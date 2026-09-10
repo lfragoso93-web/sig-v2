@@ -328,10 +328,11 @@ async def delete_transaction(
 
 async def _run_snapshot_backfill(portfolio_id: int, tx_date: DateType) -> None:
     try:
-        from app.services.portfolio_snapshot_service import (
-            backfill_snapshots,
-            invalidate_snapshots_from,
+        from app.services.portfolio_snapshot_canonical_twr_service import (
+            backfill_canonical_snapshots_with_returns,
         )
+        from app.services.portfolio_snapshot_service import invalidate_snapshots_from
+        from app.services.rentabilidade_cache_service import invalidate_rentabilidade_cache
 
         async with AsyncSessionLocal() as db:
             deleted = await invalidate_snapshots_from(db, portfolio_id, tx_date)
@@ -344,7 +345,11 @@ async def _run_snapshot_backfill(portfolio_id: int, tx_date: DateType) -> None:
                 tx_date,
                 deleted,
             )
-            count = await backfill_snapshots(db=db, portfolio_id=portfolio_id)
+            count = await backfill_canonical_snapshots_with_returns(
+                db=db,
+                portfolio_id=portfolio_id,
+            )
+            await invalidate_rentabilidade_cache(portfolio_id)
             log.info(
                 "[snapshot_backfill] portfolio=%s — %s snapshots recalculados",
                 portfolio_id,

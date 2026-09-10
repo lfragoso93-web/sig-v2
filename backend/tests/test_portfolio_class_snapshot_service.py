@@ -23,7 +23,7 @@ from app.services.portfolio_class_snapshot_service import (
 )
 
 
-def test_availability_refuses_dedicated_history_estimates() -> None:
+def test_availability_exposes_dedicated_fixed_income_history() -> None:
     rows = class_twr_availability(
         [AssetType.ACAO, AssetType.FII, AssetType.TESOURO_DIRETO, AssetType.RENDA_FIXA]
     )
@@ -32,7 +32,7 @@ def test_availability_refuses_dedicated_history_estimates() -> None:
     assert by_type[AssetType.ACAO.value]["available"] is True
     assert by_type[AssetType.FII.value]["status"] == "available"
     assert by_type[AssetType.TESOURO_DIRETO.value]["available"] is True
-    assert by_type[AssetType.RENDA_FIXA.value]["status"] == "dedicated_history_not_available"
+    assert by_type[AssetType.RENDA_FIXA.value]["status"] == "available"
 
 
 async def test_treasury_exact_prices_do_not_use_prior_day_fallback(db) -> None:

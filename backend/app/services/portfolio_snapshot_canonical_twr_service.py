@@ -46,7 +46,8 @@ _PERSISTED_PRICE_COVERAGE_ERROR = "cobertura persistida de preço indisponível 
 
 
 def _is_persisted_price_gap(exc: RuntimeError) -> bool:
-    return _PERSISTED_PRICE_COVERAGE_ERROR in str(exc)
+    message = str(exc).lower()
+    return "cobertura persistida" in message and "indispon" in message
 
 
 async def backfill_canonical_snapshots_with_returns(

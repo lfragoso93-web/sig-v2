@@ -36,6 +36,7 @@ from app.services.class_snapshot_position_projection import (
 from app.services.corporate_action_position_reader import (
     load_global_corporate_actions_by_ticker,
 )
+from app.services.fixed_income_valuation_service import get_fixed_income_totals
 from app.services.fx_rate_reader import load_usd_brl_rates_for_dates
 from app.services.price_history_service import get_prices_at_date_batch
 from app.services.twr_service import (
@@ -58,11 +59,13 @@ SUPPORTED_CLASS_TWR_TYPES = {
     AssetType.BDR,
     AssetType.CRIPTO,
     AssetType.TESOURO_DIRETO,
-}
-UNSUPPORTED_CLASS_TWR_TYPES = {
     AssetType.RENDA_FIXA,
 }
-MARKET_PRICE_CLASS_TWR_TYPES = SUPPORTED_CLASS_TWR_TYPES - {AssetType.TESOURO_DIRETO}
+UNSUPPORTED_CLASS_TWR_TYPES: set[AssetType] = set()
+MARKET_PRICE_CLASS_TWR_TYPES = SUPPORTED_CLASS_TWR_TYPES - {
+    AssetType.TESOURO_DIRETO,
+    AssetType.RENDA_FIXA,
+}
 _USD_TYPES = {AssetType.STOCK, AssetType.ETF_INTERNACIONAL}
 
 
@@ -166,6 +169,22 @@ def _operation_brl(transaction: Transaction) -> tuple[Decimal, Decimal, Decimal]
     return quantity, price_brl, fees_brl
 
 
+def _net_external_flow_for_day(
+    transactions: Iterable[Transaction],
+    target_date: date,
+) -> Decimal:
+    flow = _ZERO
+    for transaction in transactions:
+        if _next_business_date(transaction.date) != target_date:
+            continue
+        quantity, price_brl, fees_brl = _operation_brl(transaction)
+        if transaction.operation == OperationType.buy:
+            flow += quantity * price_brl + fees_brl
+        elif transaction.operation == OperationType.sell:
+            flow -= quantity * price_brl - fees_brl
+    return flow
+
+
 async def _load_exact_treasury_prices(
     db: AsyncSession,
     tickers: Iterable[str],
@@ -257,6 +276,11 @@ async def rebuild_class_snapshots(
         transaction
         for transaction in transactions
         if _asset_type(transaction.asset_type) == AssetType.TESOURO_DIRETO
+    ]
+    fixed_income_transactions = [
+        transaction
+        for transaction in transactions
+        if _asset_type(transaction.asset_type) == AssetType.RENDA_FIXA
     ]
     if not supported_transactions:
         return 0
@@ -480,6 +504,50 @@ async def rebuild_class_snapshots(
                         },
                     )
                     count += 1
+
+            if AssetType.RENDA_FIXA in portfolio_types:
+                class_state = return_states[AssetType.RENDA_FIXA]
+                totals = await get_fixed_income_totals(db, portfolio_id, cursor)
+                market_value = _decimal(totals["current_value"])
+                cost_basis = _decimal(totals["invested_amount"])
+                external_flow = _net_external_flow_for_day(
+                    fixed_income_transactions,
+                    cursor,
+                ).quantize(_MONEY)
+                daily_return = calculate_daily_twr_pct(
+                    class_state.previous_value,
+                    market_value,
+                    net_external_flow=external_flow,
+                    dividends_day=_ZERO,
+                )
+                class_state.accumulated_return_pct = append_compounded_return_pct(
+                    class_state.accumulated_return_pct,
+                    daily_return,
+                )
+                unrealized_pnl = market_value - cost_basis
+
+                await _upsert_class_snapshot(
+                    db,
+                    portfolio_id,
+                    AssetType.RENDA_FIXA,
+                    cursor,
+                    {
+                        "market_value": market_value.quantize(_MONEY),
+                        "cost_basis": cost_basis.quantize(_MONEY),
+                        "realized_pnl": _ZERO.quantize(_MONEY),
+                        "unrealized_pnl": unrealized_pnl.quantize(_MONEY),
+                        "net_external_flow": external_flow,
+                        "dividends_day": _ZERO.quantize(_MONEY),
+                        "dividends_accumulated": _ZERO.quantize(_MONEY),
+                        "daily_return_pct": daily_return,
+                        "accumulated_return_pct": class_state.accumulated_return_pct,
+                        "has_partial_prices": False,
+                        "return_is_estimated": False,
+                        "valuation_status": "complete",
+                    },
+                )
+                class_state.previous_value = market_value
+                count += 1
 
             if count and count % 100 == 0:
                 await db.commit()
