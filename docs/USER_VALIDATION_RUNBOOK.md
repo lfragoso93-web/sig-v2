@@ -475,3 +475,22 @@ Bloco IRPF - apuracao anual e tela de erro explicito:
 - validacao frontend: `npm run typecheck` e `npm run build` aprovados; o build
   precisou rodar fora do sandbox por `spawn EPERM` no binario nativo
   Tailwind/Rolldown em Windows.
+
+Bloco IRPF - contrato de rota portfolio-scoped:
+
+- evidencia de usuario: apos a UX passar a exibir falhas explicitamente, a tela
+  IRPF carregava sem quebrar layout, mas mostrava erros em Apuracao anual, Bens
+  e Direitos e Rendimentos;
+- diagnostico runtime: logs do backend registraram `404 Not Found` para
+  `/api/v1/portfolios/15/irpf/anos`,
+  `/api/v1/portfolios/15/irpf/2025/canonical`,
+  `/api/v1/portfolios/15/irpf/2025/canonical/assets`,
+  `/api/v1/portfolios/15/irpf/2025/canonical/capital-gains` e
+  `/api/v1/portfolios/15/irpf/2025/canonical/income`;
+- causa: o router IRPF estava montado somente em `/api/v1/irpf`, enquanto a
+  interface e o padrao dos modulos de carteira usam `/api/v1/portfolios`;
+- correcao: o backend passou a expor o router tambem em
+  `/api/v1/portfolios/{portfolio_id}/irpf/...`, preservando o prefixo anterior
+  como compatibilidade;
+- gate estrutural: adicionado teste para impedir que o contrato
+  portfolio-scoped do IRPF deixe de ser registrado em `app/main.py`.
