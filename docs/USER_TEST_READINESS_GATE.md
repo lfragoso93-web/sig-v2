@@ -64,4 +64,4 @@ A persistencia auditavel de DARF pago permanece divida fiscal de produto. O gate
 
 ## Baseline documental GOV-02
 
-Este mapa foi revalidado com `stable-15jun` sem atividade concorrente do Codex. O GOV-02 altera somente governanca/documentacao; nao executa seeds, migrations, CSV, rebuilds nem muda flags de readiness. As evidencias runtime citadas sao evidencias previamente produzidas e preservadas, nao novas execucoes deste bloco.
+GOV-02 concluido documentalmente sobre `stable-15jun` sem atividade concorrente do Codex. Nenhum seed, migration, CSV, rebuild ou alteracao de flag de readiness foi executado; as evidencias citadas sao previamente produzidas e preservadas.
