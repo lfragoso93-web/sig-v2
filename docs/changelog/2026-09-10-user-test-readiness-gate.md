@@ -11,7 +11,7 @@
 
 - `docs/USER_VALIDATION_RUNBOOK.md` atualizado com o novo status `GO_ASSISTED`.
 - `docs/USER_TEST_READINESS_GATE.md` criado como contrato operacional do gate.
-- Issue #303 rebaselined para refletir a certificacao sintética/assistida ja comprovada.
+- Issue #303 rebaselined para refletir a certificacao sintetica/assistida ja comprovada.
 - Gates reais #226, #216, #158 e #227 reavaliados em 10/09/2026 contra as evidencias assistidas publicadas.
 
 ## Evidencia runtime
@@ -41,3 +41,7 @@ Essas evidencias mudam o estado de governanca, mas nao equivalem ao gate global 
 4. #227 — produzir GO/NO-GO formal e somente entao avaliar `ready_for_real_data=true`.
 
 O estado `GO_ASSISTED` continua separado de `ready_for_real_data`.
+
+## Governanca
+
+O rebaseline documental foi dividido em commits pequenos. Nenhum codigo, schema ou dado de runtime foi alterado por estes commits.
