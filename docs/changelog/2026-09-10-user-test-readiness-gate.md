@@ -12,7 +12,7 @@
 - `docs/USER_VALIDATION_RUNBOOK.md` atualizado com `GO_ASSISTED`.
 - `docs/USER_TEST_READINESS_GATE.md` criado e rebaselined como contrato operacional do gate.
 - Issue #303 rebaselined para refletir a certificacao sintetica/assistida comprovada.
-- Gates #226, #216, #158 e #227 reavaliados em 10/09/2026 contra as evidencias publicadas.
+- Gates #226, #216, #158 e #227 reavaliados em 10/09/2026 contra as evidencias publicadas e mantidos como trackers vivos da cadeia real.
 
 ## Evidencia runtime
 
@@ -33,4 +33,4 @@ Etapas destrutivas e dominios ja certificados nao devem ser repetidos apenas par
 
 ## Governanca
 
-O GOV-02 foi executado somente como governanca/documentacao sobre `stable-15jun`; nenhum seed, migration, CSV, rebuild ou alteracao de flag de readiness foi executado. As Issues #226/#216/#158/#227 permanecem abertas ate seus criterios operacionais remanescentes serem comprovados. O mapa canonico dessas dependencias fica em `docs/USER_TEST_READINESS_GATE.md` e nos corpos atualizados dos respectivos trackers.
+O GOV-02 foi executado somente como governanca/documentacao sobre `stable-15jun`; nenhum seed, migration, CSV, rebuild ou alteracao de flag de readiness foi executado.
