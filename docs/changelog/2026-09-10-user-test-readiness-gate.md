@@ -24,8 +24,6 @@
 
 #226, #216, #158 e #227 foram reavaliadas contra as evidencias assistidas publicadas. A cadeia real ficou formalizada como #226 -> #216 -> #158 -> #227, preservando evidencias ja certificadas e evitando repeticao destrutiva por checklist historico.
 
-Evidencias incorporadas incluem Proventos portfolio-scoped idempotentes, CSV assistido com 308 transacoes/65 ativos, 493 snapshots no rebuild observado, eventos corporativos portfolio-scoped e validacoes de IRPF/RF/Tesouro.
-
 ## GOV-03 — operacao e OCI — CONCLUIDO
 
 A fronteira operacional foi rebaselined:
@@ -39,15 +37,13 @@ A fronteira operacional foi rebaselined:
 - restore/importacao real ampla, seeds globais e contracoes destrutivas permanecem subordinados aos gates reais;
 - `docs/deployment/oci-execution-index.md`, `oci-first-deploy-runbook.md`, `oci.md`, `BOOTSTRAP_DATA_FLOW.md` e `USER_TEST_READINESS_GATE.md` foram alinhados ao mesmo contrato.
 
-Microcommits GOV-03:
+Microcommits principais GOV-03:
 
 - `b39b8374a3b39fe324e54dbb8d1a356e54501c79` — execution index;
 - `c6c4754d2b6d8332259fb84b26daaa5aca35a251` — exact-SHA deploy runbook;
 - `b0e2c7903ac4672d141d0b8ef5d4a0cc09a1bb92` — bootstrap/promotion flow;
 - `dc06693331fb743746c73264ee6d22d70f01bb81` — OCI operator contract;
-- `a33c9ed08c9db078445ed6bcd01da63f1aef4784` — changelog GOV-03 record;
 - `40d1c919259db77766ed2dd13050eab59f5cb067` — readiness/OCI boundary;
-- `957a88139fa403164667c9dfcdfd0c6c5007101e` — GOV-03 completion record;
-- `a947b7bdecaa4afa23947006072ce628c996ccb2` — final readiness governance alignment.
+- `8e125eee7ca2b566a75ba95d5803f12133390b28` — final readiness reference before this changelog closure.
 
 Nenhum codigo, schema, recurso OCI ou dado de runtime foi alterado por GOV-03.
