@@ -59,3 +59,7 @@ Essas evidencias podem ser reutilizadas pelos gates reais quando seus contratos 
 9. somente depois avaliar `ready_for_real_data=true` e promocao estrutural para `main`.
 
 A persistencia auditavel de DARF pago permanece divida fiscal de produto. O gate final deve decidir explicitamente se ela bloqueia o escopo de abertura pretendido; a marcacao local atual nao e persistencia fiscal definitiva.
+
+## Baseline documental GOV-02
+
+Este mapa foi revalidado com `stable-15jun` sem atividade concorrente do Codex. O GOV-02 altera somente governanca/documentacao; nao executa seeds, migrations, CSV, rebuilds nem muda flags de readiness. As evidencias runtime citadas sao evidencias previamente produzidas e preservadas, nao novas execucoes deste bloco.
