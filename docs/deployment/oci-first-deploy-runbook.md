@@ -1,19 +1,33 @@
-# SGI v2 OCI First Deploy Runbook
+# SGI v2 OCI First Deploy / Homologation Runbook
 
-Status: prepared before the VM exists.
+Status: OCI e alvo de homologacao de SHA previamente certificado localmente.
 
-Target VM profile:
+Atualizado em 10/09/2026.
 
-- Shape: `VM.Standard.A1.Flex`.
-- Initial size: `1 OCPU / 6 GB`.
-- Boot volume: `80 GB`.
-- OS: Ubuntu ARM64.
-- App directory: `/opt/sgi-v2`.
+Target preferencial:
+
+- Shape: `VM.Standard.A1.Flex` quando houver capacidade;
+- perfil inicial historico: `1 OCPU / 6 GB`, ajustavel dentro dos guardrails Free Tier;
+- Boot volume: `80 GB`;
+- OS: Ubuntu ARM64;
+- App directory: `/opt/sgi-v2`;
 - Network entrypoint: Cloudflare Tunnel only.
 
-## 1. Post-Boot Baseline Checks
+E2 Micro pode ser usado como lab limitado, mas nao substitui a homologacao de capacidade/performance do alvo final.
 
-Run after the VM reaches `RUNNING` and cloud-init has had time to finish.
+## 0. Precondition — Certified Candidate
+
+Antes do deploy:
+
+- branch de desenvolvimento: `stable-15jun`;
+- codigo e testes pesados executados localmente;
+- SHA candidato registrado;
+- nenhuma correcao deve ser feita diretamente na VM;
+- enquanto `ready_for_real_data=false`, usar apenas dados permitidos pelo estagio vigente.
+
+Se a OCI revelar defeito de codigo, interromper, reproduzir/corrigir localmente, publicar novo SHA e repetir a homologacao.
+
+## 1. Post-Boot Baseline Checks
 
 ```bash
 cloud-init status --wait
@@ -25,57 +39,40 @@ sudo ufw status verbose
 ls -ld /opt/sgi-v2
 ```
 
-Or run the bundled baseline check:
+Ou:
 
 ```bash
 cd /opt/sgi-v2
 sh scripts/oci_vm_baseline_check.sh
 ```
 
-Expected:
+NO-GO se Docker estiver ausente, firewall permitir ingress publico indevido ou `/opt/sgi-v2` estiver inconsistente.
 
-- `cloud-init` is done.
-- Docker and Docker Compose plugin are installed.
-- Docker service is active.
-- UFW default incoming is deny.
-- UFW default outgoing is allow.
-- `/opt/sgi-v2` exists and is owned by `ubuntu`.
+## 2. Deployment Source — Exact SHA
 
-NO-GO:
-
-- Docker is missing.
-- UFW is disabled or allows public inbound by default.
-- `/opt/sgi-v2` is missing.
-
-## 2. Deployment Source
-
-Use the current `stable-15jun` source state.
-
-Preferred if GitHub access is available from the VM:
+Nao fazer deploy apenas do "HEAD atual" da branch. Fazer checkout do SHA certificado.
 
 ```bash
 cd /opt
 git clone --branch stable-15jun <repo-url> sgi-v2
 cd /opt/sgi-v2
-git rev-parse HEAD
+git fetch origin
+git reset --hard <CERTIFIED_SHA>
+DEPLOYED_SHA="$(git rev-parse HEAD)"
+printf 'DEPLOYED_SHA=%s\n' "$DEPLOYED_SHA"
 ```
 
-Fallback if GitHub auth is not available:
+Esperado:
 
-```bash
-cd /opt/sgi-v2
-# Copy the repo contents from the operator machine by the approved transfer method.
-git rev-parse HEAD
+```text
+DEPLOYED_SHA == CERTIFIED_SHA
 ```
 
-Expected:
+Se diferir: NO-GO.
 
-- The deployed commit is known and recorded in `.env` as `APP_COMMIT_SHA`.
-- No local `.env` is committed.
+Nao editar arquivos versionados na VM para corrigir comportamento.
 
 ## 3. VM-Local Environment
-
-Create the VM-local environment file:
 
 ```bash
 cd /opt/sgi-v2
@@ -83,64 +80,42 @@ cp .env.oci.example .env
 chmod 600 .env
 ```
 
-Fill these values only on the VM:
+Preencher somente na VM:
 
-- `APP_COMMIT_SHA`: deployed Git commit.
-- `POSTGRES_PASSWORD`: strong generated value.
-- `DATABASE_URL`: same Postgres password.
-- `ASYNC_DATABASE_URL`: same Postgres password.
-- `SECRET_KEY`: at least 32 random characters.
-- `CORS_ORIGINS`: final Cloudflare HTTPS hostname.
-- `SUPERADMIN_EMAIL`: production admin email.
-- `SUPERADMIN_PASSWORD`: strong non-default password.
-- `BRAPI_TOKEN` or compatible market-data token if needed.
-- `ALPHA_VANTAGE_API_KEY` if needed.
-- `CLOUDFLARE_TUNNEL_TOKEN`: token created in Cloudflare.
+- `APP_COMMIT_SHA=<CERTIFIED_SHA>`;
+- credenciais PostgreSQL;
+- `SECRET_KEY`;
+- `CORS_ORIGINS`;
+- SuperAdmin;
+- tokens de providers quando autorizados;
+- `CLOUDFLARE_TUNNEL_TOKEN`.
 
-Suggested local generation commands:
+O valor de `APP_COMMIT_SHA` deve ser comparado com `git rev-parse HEAD` antes do start.
 
-```bash
-openssl rand -base64 24
-openssl rand -hex 32
-```
+Nunca registrar segredos em Git, Issues ou logs.
 
-From Windows, generate URL-safe values without writing them to disk:
-
-```powershell
-.\scripts\oci_generate_env_secrets.ps1
-```
-
-Use the generated `POSTGRES_PASSWORD` in all three fields:
-
-```env
-POSTGRES_PASSWORD=<generated-url-safe-password>
-DATABASE_URL=postgresql://sgi:<generated-url-safe-password>@db:5432/sgi
-ASYNC_DATABASE_URL=postgresql+asyncpg://sgi:<generated-url-safe-password>@db:5432/sgi
-```
-
-NO-GO:
-
-- `.env` contains default production-blocked values.
-- `.env` is copied back into Git.
-- Cloudflare tunnel token appears in logs, docs, issues, or commits.
-
-Run the env preflight:
+Executar:
 
 ```bash
-cd /opt/sgi-v2
 sh scripts/oci_env_preflight.sh .env
 ```
 
-Expected:
+## 4. Readiness Policy Before Start
 
-- Required production values are present.
-- Placeholders are gone.
-- Database URLs use the same VM-local `POSTGRES_PASSWORD` and Docker host `db:5432`.
-- `POSTGRES_PASSWORD` is URL-safe so it can be embedded in both database URLs.
-- `CORS_ORIGINS` uses the final HTTPS hostname, not localhost.
-- Initial OCI worker/profile values are safe.
+Nao forcar flags para transformar um ambiente `GO_ASSISTED` em ambiente real-ready.
 
-## 4. Render Compose Before Start
+Enquanto #227 nao emitir GO:
+
+```text
+test_ready=true
+GO_ASSISTED permitido quando o gate reportar isso
+ready_for_real_data=false
+/ready pode retornar 503
+```
+
+`/health=200` e o sinal de saude do processo para smoke de infraestrutura. `/ready=503` durante esta fase e comportamento esperado, nao falha a ser contornada.
+
+## 5. Render Compose Before Start
 
 ```bash
 cd /opt/sgi-v2
@@ -149,37 +124,25 @@ grep -n "published:" /tmp/sgi-compose-rendered.yml || true
 grep -n "cloudflared:" /tmp/sgi-compose-rendered.yml
 ```
 
-Expected:
+NO-GO se backend/frontend publicarem host ports ou se o tunnel esperado estiver ausente.
 
-- No `published:` entries for `backend` or `frontend`.
-- `cloudflared` is present.
-
-NO-GO:
-
-- Backend or frontend publishes a host port.
-- Cloudflare Tunnel service is missing.
-
-## 5. Build And Start
+## 6. Build And Start
 
 ```bash
 cd /opt/sgi-v2
 docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml up -d --build
 ```
 
-Follow startup:
+Depois:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml ps
 docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml logs --tail=100
 ```
 
-For the initial `1 OCPU / 6 GB` VM, keep:
+Em VM pequena, manter perfil de workers conservador.
 
-```env
-BACKEND_WORKERS=1
-```
-
-## 6. Local Container Health Checks
+## 7. Local Container Health Checks
 
 ```bash
 cd /opt/sgi-v2
@@ -188,44 +151,48 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compos
 docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml exec redis redis-cli ping
 ```
 
-Expected:
+Esperado: backend saudavel, Postgres ready e Redis `PONG`.
 
-- Backend health endpoint returns success.
-- Postgres is ready.
-- Redis returns `PONG`.
+Quando aplicavel, registrar separadamente `/ready`; nao exigir 200 enquanto o gate de dados reais estiver fechado.
 
-## 7. Tunnel Check
+## 8. Tunnel Check
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml logs cloudflared --tail=100
 ```
 
-Expected:
+Esperado: tunnel conectado, hostname publico chegando ao frontend e `/api` roteado internamente.
 
-- Tunnel connects successfully.
-- Public hostname reaches the frontend through Cloudflare.
-- `/api` requests are proxied to backend internally.
+Nunca abrir OCI `80/443` para contornar falha de tunnel. Nunca expor backend/Postgres/Redis.
 
-NO-GO:
+## 9. Homologation Evidence
 
-- Opening OCI ingress for `80` or `443` to bypass the tunnel.
-- Exposing backend, Postgres, or Redis publicly.
+Registrar para o SHA implantado:
 
-## 8. Rollback
+- `git rev-parse HEAD` e `APP_COMMIT_SHA`;
+- estado de migrations;
+- `/health`;
+- `/ready` e motivo do estado;
+- `user-test-readiness.v1` quando aplicavel;
+- restart do stack/VM;
+- persistencia dos volumes;
+- CPU/RAM/disco;
+- tunnel/hostname;
+- portas publicadas.
 
-Stop application stack:
+Nao reexecutar suite pesada de desenvolvimento na OCI apenas para duplicar evidencia local. Executar apenas testes/smokes necessarios para provar a homologacao do ambiente.
+
+## 10. Data Policy
+
+Durante `GO_ASSISTED`, usar massa controlada. Restore/importacao real ampla, seed global real e contracoes destrutivas dependem da cadeia #226 -> #216 -> #158 -> #227.
+
+Nao promover `ready_for_real_data` neste runbook.
+
+## 11. Rollback
 
 ```bash
 cd /opt/sgi-v2
 docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.oci.yml down
 ```
 
-Keep volumes unless an explicit data reset is approved.
-
-Do not run:
-
-```bash
-docker compose down -v
-```
-
-without a verified backup and explicit approval.
+Preservar volumes salvo autorizacao explicita. Nunca executar `docker compose down -v` sem backup verificado e decisao operacional.
