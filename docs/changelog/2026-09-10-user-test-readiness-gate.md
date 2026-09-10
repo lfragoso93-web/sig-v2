@@ -37,13 +37,22 @@ A fronteira operacional foi rebaselined:
 - restore/importacao real ampla, seeds globais e contracoes destrutivas permanecem subordinados aos gates reais;
 - `docs/deployment/oci-execution-index.md`, `oci-first-deploy-runbook.md`, `oci.md`, `BOOTSTRAP_DATA_FLOW.md` e `USER_TEST_READINESS_GATE.md` foram alinhados ao mesmo contrato.
 
-Microcommits principais GOV-03:
+## GOV-04 — backlog funcional — CONCLUIDO
 
-- `b39b8374a3b39fe324e54dbb8d1a356e54501c79` — execution index;
-- `c6c4754d2b6d8332259fb84b26daaa5aca35a251` — exact-SHA deploy runbook;
-- `b0e2c7903ac4672d141d0b8ef5d4a0cc09a1bb92` — bootstrap/promotion flow;
-- `dc06693331fb743746c73264ee6d22d70f01bb81` — OCI operator contract;
-- `40d1c919259db77766ed2dd13050eab59f5cb067` — readiness/OCI boundary;
-- `8e125eee7ca2b566a75ba95d5803f12133390b28` — final readiness reference before this changelog closure.
+Backlog funcional reclassificado contra o estado real publicado:
 
-Nenhum codigo, schema, recurso OCI ou dado de runtime foi alterado por GOV-03.
+- #58 — parcialmente implementada; detalhe de ativo, historico, Proventos e preco medio ja existem, restando consolidacao de cobertura, DY, metadados/iconografia e responsividade;
+- #90 — refinamento de Patrimonio planejado, subordinado ao design system da #351;
+- #149 — parcialmente implementada; Tesouro/RF atuais continuam corretos no escopo certificado, mas TWR diario dedicado permanece divida explicita;
+- #246 — parcialmente implementada; Metas recebeu correcoes runtime-safe necessarias, enquanto o macroprojeto Metas + Analise permanece futuro;
+- #351 — epic UX pos-GO, com bugs funcionais pequenos tratados separadamente;
+- #352 — candidato P1 se o seletor de classe ainda impedir/errar lancamentos;
+- #353 — P2 por padrao;
+- #354 — candidato P1 se o mismatch de senha ainda afetar onboarding;
+- #355–#359 — features pos-GO;
+- #360 — Analysis Engine deterministico planejado apos #246;
+- #361 — IA explicavel planejada e bloqueada por #360/#246.
+
+Decisao de release: apenas findings reproduziveis que bloqueiem onboarding, lancamentos ou outra jornada critica devem atrasar `PORTFOLIO-TEST-READY`. Redesign, exportacao, import B3 avancado, calculadoras, Analysis Engine e IA nao sao blockers automaticos do primeiro GO.
+
+Nenhuma funcionalidade, schema ou dado runtime foi alterado por GOV-04; as alteracoes foram de Issue/governanca e este registro documental.
