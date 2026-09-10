@@ -44,4 +44,4 @@ O estado `GO_ASSISTED` continua separado de `ready_for_real_data`.
 
 ## Governanca
 
-O rebaseline documental foi dividido em commits pequenos. Nenhum codigo, schema ou dado de runtime foi alterado por estes commits.
+O rebaseline documental foi dividido em commits pequenos. Nenhum codigo, schema ou dado de runtime foi alterado por estes commits. As Issues #226/#216/#158/#227 permanecem abertas ate seus criterios operacionais remanescentes serem comprovados.
