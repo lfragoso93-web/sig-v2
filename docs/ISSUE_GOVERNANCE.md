@@ -78,4 +78,4 @@ GOV-06 deve localizar Issues abertas que descrevem trabalho já concluído, dupl
 
 #293 permanece aberta até essa segunda passada terminar.
 
-Baseline documental para iniciar GOV-06: `912130297b8feb602958b92e39e719e006676679`.
+Baseline documental para iniciar GOV-06: `959d3edf051b37f18089936f8f142fd4d2958d43`.
