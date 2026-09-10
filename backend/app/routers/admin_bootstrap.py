@@ -10,6 +10,9 @@ from app.services.system_bootstrap_trigger_service import (
     run_reserved_system_bootstrap,
 )
 from app.services.system_readiness_service import get_bootstrap_readiness
+from app.services.user_test_readiness_service import build_user_test_readiness
+from app.core.database import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(tags=["admin-bootstrap"])
 
@@ -23,6 +26,15 @@ async def admin_system_bootstrap_status(
         **readiness.to_dict(),
         "launch_reserved": bootstrap_launch_reserved(),
     }
+
+
+@router.get("/bootstrap/user-test-readiness")
+async def admin_user_test_readiness(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_superadmin),
+):
+    report = await build_user_test_readiness(db)
+    return report.to_dict()
 
 
 @router.post("/bootstrap", status_code=status.HTTP_202_ACCEPTED)

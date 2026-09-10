@@ -4,6 +4,45 @@ Issue mae: #227
 Gate funcional: #303
 Branch obrigatoria: `stable-15jun`
 
+## Status atual - 10/09/2026
+
+GO para usuarios convidados testarem jornadas assistidas com contas, carteiras,
+dados ficticios/descartaveis e carteira real-controlada de homologacao quando
+acompanhada pelo responsavel tecnico.
+
+NO-GO para abertura ampla com dados reais e para promocao de
+`ready_for_real_data=true`.
+
+Gate executavel:
+
+```bash
+docker-compose run --rm backend python -m app.cli.user_test_readiness
+```
+
+Documento do contrato: `docs/USER_TEST_READINESS_GATE.md`.
+
+Rota SuperAdmin equivalente:
+
+```text
+GET /api/v1/admin/bootstrap/user-test-readiness
+```
+
+Evidencia runtime local:
+
+- `/health=200`;
+- `/ready=503`;
+- `user-test-readiness.v1`;
+- `status=GO_ASSISTED`;
+- `go_for_assisted_user_tests=true`;
+- `blockers=[]`;
+- `warnings=[]`;
+- contagens: `users=6`, `portfolios=5`, `transactions=332`,
+  `assets=3684`, `asset_prices=4404638`, `portfolio_snapshots=536`,
+  `asset_dividends=184`, `corporate_events=123`, `goals=2`.
+
+O relatorio e read-only, nao chama providers, nao executa bootstrap, nao escreve
+no banco e nao promove `/ready`.
+
 ## Status atual - 08/09/2026
 
 GO para usuarios convidados testarem jornadas assistidas com contas, carteiras e
@@ -76,7 +115,9 @@ Antes de iniciar uma rodada com usuarios:
    - certificacoes sinteticas #303 com `status=PASS`.
 6. Confirmar `/health` com Postgres ok.
 7. Confirmar que `/ready` permanece fechado enquanto `ready_for_real_data=false`.
-8. Confirmar que nenhum opt-in real esta ativo sem issue autorizando:
+8. Executar `python -m app.cli.user_test_readiness` no container backend e
+   registrar `status`, `blockers`, `warnings` e contagens criticas.
+9. Confirmar que nenhum opt-in real esta ativo sem issue autorizando:
    - `SGI_BOOTSTRAP_ENABLE_DIVIDENDS`;
    - `SGI_BOOTSTRAP_ENABLE_CORPORATE_EVENTS`;
    - qualquer comando real de importacao CSV ou seed.
@@ -562,3 +603,19 @@ Bloco Metas - schema runtime de criacao:
   runtime-safe, sem puxar a branch destrutiva posterior;
 - validacao runtime: `goals` passou a listar sem excecao para a carteira `15`,
   e um insert/delete smoke confirmou persistencia dos campos novos.
+
+Bloco readiness para testes assistidos:
+
+- criada CLI read-only `python -m app.cli.user_test_readiness`;
+- criada rota SuperAdmin
+  `/api/v1/admin/bootstrap/user-test-readiness`;
+- o relatorio consolida inventario de banco, revision runtime de Metas,
+  presenca de usuarios/carteiras/transacoes, historico de mercado, snapshots,
+  Proventos, eventos corporativos e politica de gate real;
+- o resultado separa explicitamente `go_for_assisted_user_tests` de
+  `ready_for_real_data`;
+- validacao runtime em 10/09/2026 retornou `GO_ASSISTED`, sem blockers e sem
+  warnings;
+- validacao automatizada focada: `6 passed`;
+- este bloco libera a continuidade das rodadas assistidas, mas mantem
+  `ready_for_real_data=false`.
