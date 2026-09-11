@@ -79,11 +79,12 @@ async def _load_owned_assets(
     expected: dict[str, tuple[SyntheticAssetIdentity, Decimal]],
 ) -> dict[str, Asset]:
     assets: dict[str, Asset] = {}
+    asset_columns = Asset.__table__.c
     for ticker, (identity, _) in expected.items():
         result = await db.execute(
             select(Asset).where(
-                Asset.ticker == identity.ticker,
-                Asset.asset_type == identity.asset_type,
+                asset_columns.ticker == identity.ticker,
+                asset_columns.asset_type == identity.asset_type,
             )
         )
         asset = result.scalar_one_or_none()
@@ -92,12 +93,16 @@ async def _load_owned_assets(
                 f"synthetic market price asset {ticker} must be seeded before prices"
             )
         assert_persisted_asset_identity(
-            ticker=asset.ticker,
-            asset_type=asset.asset_type,
-            name=asset.name,
-            provider=asset.provider,
-            provider_symbol=asset.provider_symbol,
-            provider_status=asset.provider_status,
+            ticker=str(asset.ticker),
+            asset_type=str(asset.asset_type),
+            name=str(asset.name) if asset.name is not None else None,
+            provider=str(asset.provider) if asset.provider is not None else None,
+            provider_symbol=(
+                str(asset.provider_symbol) if asset.provider_symbol is not None else None
+            ),
+            provider_status=(
+                str(asset.provider_status) if asset.provider_status is not None else None
+            ),
             expected=identity,
         )
         assets[ticker] = asset
@@ -116,23 +121,24 @@ async def seed_generic_market_prices(db: AsyncSession) -> SyntheticMarketPriceSe
     market_timestamp = _market_timestamp(str(fixture["market_prices"]["as_of"]))
     assets = await _load_owned_assets(db, expected)
 
-    asset_ids = [asset.id for asset in assets.values()]
+    asset_ids = [int(asset.id) for asset in assets.values()]
+    price_columns = AssetPrice.__table__.c
     existing_result = await db.execute(
-        select(AssetPrice).where(AssetPrice.asset_id.in_(asset_ids))
+        select(AssetPrice).where(price_columns.asset_id.in_(asset_ids))
     )
     existing_rows = list(existing_result.scalars().all())
 
-    by_asset_id = {asset.id: ticker for ticker, asset in assets.items()}
+    by_asset_id = {int(asset.id): ticker for ticker, asset in assets.items()}
     reused_tickers: set[str] = set()
     for row in existing_rows:
-        ticker = by_asset_id.get(row.asset_id)
+        ticker = by_asset_id.get(int(row.asset_id))
         if ticker is None:
             raise SyntheticSeedContractError("unexpected synthetic market price asset")
         _, expected_close = expected[ticker]
         if (
             row.timestamp != market_timestamp
-            or Decimal(row.close) != expected_close
-            or row.source != SYNTHETIC_MARKET_PRICE_SOURCE
+            or Decimal(str(row.close)) != expected_close
+            or str(row.source) != SYNTHETIC_MARKET_PRICE_SOURCE
             or row.open is not None
             or row.high is not None
             or row.low is not None
@@ -151,7 +157,7 @@ async def seed_generic_market_prices(db: AsyncSession) -> SyntheticMarketPriceSe
         _, close = expected[ticker]
         db.add(
             AssetPrice(
-                asset_id=asset.id,
+                asset_id=int(asset.id),
                 timestamp=market_timestamp,
                 close=close,
                 source=SYNTHETIC_MARKET_PRICE_SOURCE,
