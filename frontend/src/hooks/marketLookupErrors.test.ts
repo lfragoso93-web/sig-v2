@@ -35,5 +35,6 @@ describe('market lookup error contracts', () => {
     expect(source).toContain('?? uniqueTreasuryCatalogMatch(tdItems, ticker)')
     expect(source).toContain('applyTDSuggestion(catalogItem)')
     expect(source).toContain('useTreasuryPrice(activeSlug, date, isTesouro && !!activeSlug && !priceEdited)')
+    expect(source).toContain('setRate(String(tdRate))')
   })
 })

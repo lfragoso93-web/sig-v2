@@ -84,18 +84,20 @@ def _classify_empty_symbols(
 async def _persist_history_rows(
     db: AsyncSession,
     asset_id: int,
-    rows: list[tuple[datetime, float]],
+    rows: list[tuple],
     source: str,
 ) -> int:
     changed = 0
-    for timestamp, close in rows:
+    for row in rows:
+        timestamp, close = row[0], row[1]
+        rate = Decimal(str(round(row[2], 8))) if len(row) > 2 and row[2] is not None else None
         value = Decimal(str(round(close, 8)))
         stmt = (
             pg_insert(AssetPrice)
-            .values(asset_id=asset_id, timestamp=timestamp, close=value, source=source)
+            .values(asset_id=asset_id, timestamp=timestamp, open=rate, close=value, source=source)
             .on_conflict_do_update(
                 constraint="uq_price_asset_timestamp",
-                set_={"close": value, "source": source},
+                set_={"open": rate, "close": value, "source": source},
             )
         )
         await db.execute(stmt)

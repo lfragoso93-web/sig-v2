@@ -802,3 +802,27 @@ Bloco UX - vencimento completo de Tesouro no lancamento:
 - validacao frontend: `npm run typecheck`;
 - validacao frontend: `npx vitest run hooks/marketLookupErrors.test.ts --pool threads --maxWorkers 1 --no-file-parallelism` com `5 passed`;
 - validacao frontend: `npm run build`.
+
+Bloco UX/Transacoes - taxa do Tesouro e venda canonica:
+
+- evidencia de usuario: apos preencher vencimento e PU, o modal ainda deixava
+  a taxa vazia e a venda continuava falhando em alguns cenarios;
+- causa da taxa: o historico oficial do Tesouro era persistido apenas como PU em
+  `asset_prices.close`; a taxa diaria oficial existia no CSV, mas nao era
+  exposta ao modal;
+- correcao de taxa: o parser oficial passou a extrair taxa de compra/base/venda
+  e o endpoint `/assets/tesouro/price` passou a devolver `rate`;
+- transicao de dados: proximos seeds gravam a taxa em `asset_prices.open`; para
+  bases ja seedadas, o endpoint usa fallback no Tesouro Transparente enquanto a
+  taxa ainda nao estiver persistida;
+- correcao frontend: `useTreasuryPrice` agora retorna `rate` e o modal preenche
+  `Taxa (% a.a.)` automaticamente quando a resposta trouxer esse valor;
+- causa da venda: a leitura de posicao ainda comparava ticker com caixa exata,
+  podendo ignorar compras persistidas em minusculo/canonico diferente;
+- correcao de venda: a validacao canonica de venda passou a comparar ticker em
+  lowercase apos resolver Tesouro pelo catalogo;
+- validacao backend: `pytest tests/integrations/test_tesouro_transparente.py tests/test_assets_router_provider_boundary.py tests/test_transaction_write_service.py` com `16 passed`;
+- validacao backend: `python -m compileall app`;
+- validacao frontend: `npm run typecheck`;
+- validacao frontend: `npx vitest run hooks/marketLookupErrors.test.ts --pool threads --maxWorkers 1 --no-file-parallelism` com `5 passed`;
+- validacao frontend: `npm run build`.

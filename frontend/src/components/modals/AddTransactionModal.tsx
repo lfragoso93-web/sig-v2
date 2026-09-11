@@ -284,7 +284,7 @@ export default function AddTransactionModal({ onClose }: Props) {
   const { quote, loading: quoteLoading, error: quoteError } = useTickerQuote(ticker, !!tab.brapiEnabled && !isEditMode, date)
   const { items: tdItems, loading: tdLoading, error: tdSearchError } = useTesouroSearch(ticker, isTesouro && !isEditMode)
   const { items: rvItems, loading: rvLoading, error: rvSearchError } = useTickerSuggest(ticker, !!tab.brapiSuggestType && !isEditMode, tab.brapiSuggestType)
-  const { price: tdPrice, loading: tdPriceLoading, error: tdPriceError } = useTreasuryPrice(activeSlug, date, isTesouro && !!activeSlug && !priceEdited)
+  const { price: tdPrice, rate: tdRate, loading: tdPriceLoading, error: tdPriceError } = useTreasuryPrice(activeSlug, date, isTesouro && !!activeSlug && !priceEdited)
   const anyLoading = quoteLoading || tdLoading || rvLoading || tdPriceLoading
   const lookupError = quoteError ?? tdSearchError ?? rvSearchError ?? tdPriceError
 
@@ -313,6 +313,12 @@ export default function AddTransactionModal({ onClose }: Props) {
       setPrice(String(tdPrice)); setPriceFromBrapi(true)
     }
   }, [tdPrice, isTesouro, priceEdited])
+
+  useEffect(() => {
+    if (tdRate !== null && tdRate !== undefined && isTesouro && !rate) {
+      setRate(String(tdRate))
+    }
+  }, [tdRate, isTesouro, rate])
 
   useEffect(() => {
     if (isTesouro && activeSlug && !priceEdited) { setPrice(''); setPriceFromBrapi(false) }

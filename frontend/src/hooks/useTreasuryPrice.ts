@@ -6,6 +6,7 @@ interface TreasuryPriceResponse {
   price:      number | null
   price_date: string
   source:     string
+  rate:       number | null
 }
 
 /**
@@ -16,12 +17,14 @@ interface TreasuryPriceResponse {
  */
 export function useTreasuryPrice(slug: string, date: string, enabled = true) {
   const [price,   setPrice]   = useState<number | null>(null)
+  const [rate,    setRate]    = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState<string | null>(null)
 
   useEffect(() => {
     if (!enabled || !slug || !date) {
       setPrice(null)
+      setRate(null)
       setError(null)
       return
     }
@@ -34,8 +37,10 @@ export function useTreasuryPrice(slug: string, date: string, enabled = true) {
           `/assets/tesouro/price?slug=${encodeURIComponent(slug)}&date=${date}`
         )
         setPrice(res.data.price)
+        setRate(res.data.rate)
       } catch {
         setPrice(null)
+        setRate(null)
         setError('Não foi possível consultar o preço do título. Informe-o manualmente.')
       } finally {
         setLoading(false)
@@ -45,5 +50,5 @@ export function useTreasuryPrice(slug: string, date: string, enabled = true) {
     return () => clearTimeout(timer)
   }, [slug, date, enabled])
 
-  return { price, loading, error }
+  return { price, rate, loading, error }
 }

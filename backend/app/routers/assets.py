@@ -27,6 +27,7 @@ from app.services.persisted_price_query_service import (
     get_persisted_price_history,
     get_persisted_prices_at_date_batch,
 )
+from app.services.treasury_quote_query_service import load_treasury_rate_at_or_before
 
 router = APIRouter()
 
@@ -79,6 +80,7 @@ class TreasuryPriceResponse(BaseModel):
     price: Optional[float]
     price_date: str
     source: str = "asset_prices"
+    rate: Optional[float] = None
 
 
 class TickerSuggestion(BaseModel):
@@ -353,7 +355,17 @@ async def get_treasury_price(
         ).get(normalized_ticker)
         source = "asset_prices"
 
-    return TreasuryPriceResponse(slug=slug, price=price, price_date=date, source=source)
+    requested_date = date_type.fromisoformat(date)
+    rate, rate_date = await load_treasury_rate_at_or_before(
+        db,
+        asset_id=int(asset.id),
+        ticker=normalized_ticker,
+        target_date=requested_date,
+    )
+    if rate_date and rate_date != date:
+        date = rate_date
+
+    return TreasuryPriceResponse(slug=slug, price=price, price_date=date, source=source, rate=rate)
 
 
 @router.get("/quote/{ticker}", response_model=TickerQuoteResponse)

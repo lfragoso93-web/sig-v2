@@ -170,7 +170,8 @@ async def test_treasury_sell_normalizes_human_title_before_quantity_lookup() -> 
             compile_kwargs={"literal_binds": True}
         )
     )
-    assert "TESOURO-SELIC-01032029" in quantity_statement
+    assert "lower(transactions.ticker)" in quantity_statement
+    assert "tesouro-selic-01032029" in quantity_statement
     assert result in [call.args[0] for call in db.add.call_args_list]
 
 

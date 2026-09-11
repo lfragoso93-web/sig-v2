@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.asset import Asset
@@ -28,7 +28,7 @@ async def _current_quantity(
     result = await db.execute(
         select(Transaction.operation, Transaction.quantity).where(
             Transaction.portfolio_id == portfolio_id,
-            Transaction.ticker == ticker,
+            func.lower(Transaction.ticker) == ticker.lower(),
             Transaction.asset_type == asset_type,
         )
     )

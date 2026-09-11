@@ -5,6 +5,7 @@ from app.integrations.tesouro_transparente import (
     _canonical_symbol,
     _legacy_maturity_symbol,
     parse_history_csv,
+    parse_quote_csv,
 )
 
 
@@ -94,3 +95,21 @@ Tesouro RendA+ Aposentadoria Extra;15/12/2079;15/07/2026;1.245,60
     assert list(parsed) == ["tesouro-selic-01032031"]
     assert len(parsed["tesouro-selic-01032031"]) == 1
     assert parsed["tesouro-selic-01032031"][0][1] == 15247.81
+
+
+def test_parse_quote_csv_returns_price_and_rate_at_or_before_target_date():
+    csv_text = """Tipo Titulo;Data Vencimento;Data Base;PU Compra Manha;Taxa Compra Manha
+Tesouro Selic;01/03/2031;14/07/2026;15.240,00;13,12
+Tesouro Selic;01/03/2031;15/07/2026;15.247,81;13,10
+"""
+
+    parsed = parse_quote_csv(
+        csv_text,
+        "tesouro-selic-01032031",
+        date(2026, 7, 16),
+    )
+
+    assert parsed is not None
+    assert parsed[0].date() == date(2026, 7, 15)
+    assert parsed[1] == 15247.81
+    assert parsed[2] == 13.10
