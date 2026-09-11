@@ -29,8 +29,8 @@ from app.services.fixed_income_valuation_service import (
     IncompleteBenchmarkCoverageError,
     get_fixed_income_principal_totals,
     get_fixed_income_principal_valuations,
-    get_fixed_income_totals,
-    get_fixed_income_valuations,
+    get_fixed_income_totals_with_coverage_fallback,
+    get_fixed_income_valuations_with_coverage_fallback,
     valuation_to_position_payload,
 )
 from app.services.fx_rate_reader import (
@@ -512,7 +512,9 @@ async def get_portfolio_summary(db: AsyncSession, portfolio_id: int, user_id: in
 
     enriched = await _non_fixed_income_enriched(db, portfolio_id)
     try:
-        rf_totals = await get_fixed_income_totals(db, portfolio_id)
+        rf_totals, _fixed_income_effective_date = (
+            await get_fixed_income_totals_with_coverage_fallback(db, portfolio_id)
+        )
     except IncompleteBenchmarkCoverageError as exc:
         logger.warning(
             "[legacy_summary_fixed_income_unavailable] portfolio=%s reason=%s",
@@ -589,7 +591,9 @@ async def get_portfolio_positions(db: AsyncSession, portfolio_id: int, user_id: 
     dividends_by_ticker = await sum_dividends_by_ticker(db, portfolio_id, tickers)
 
     try:
-        valuations = await get_fixed_income_valuations(db, portfolio_id)
+        valuations, _fixed_income_effective_date = (
+            await get_fixed_income_valuations_with_coverage_fallback(db, portfolio_id)
+        )
     except IncompleteBenchmarkCoverageError as exc:
         logger.warning(
             "[positions_fixed_income_unavailable] portfolio=%s reason=%s",

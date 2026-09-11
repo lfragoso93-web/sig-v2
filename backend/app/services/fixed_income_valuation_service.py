@@ -242,6 +242,15 @@ async def _application_factor(db: AsyncSession, key: FixedIncomeKey, start: date
             source=key.benchmark_source,
         )
         if coverage is BenchmarkCoverageStatus.ABSENT:
+            last_covered = await latest_covered_rate_date(
+                db,
+                idx,
+                start,
+                target,
+                source=key.benchmark_source,
+            )
+            if last_covered is None or last_covered <= start:
+                return Decimal("1")
             raise IncompleteBenchmarkCoverageError(idx, start, target, coverage)
         if coverage is BenchmarkCoverageStatus.PARTIAL:
             last_covered = await latest_covered_rate_date(
@@ -451,6 +460,63 @@ async def get_fixed_income_totals_from_transactions(
         "income_amount": income,
         "income_pct": income_pct,
     }
+
+
+async def _covered_target_or_none(
+    db: AsyncSession,
+    exc: IncompleteBenchmarkCoverageError,
+) -> date | None:
+    covered = await latest_covered_rate_date(
+        db,
+        exc.indicator,
+        exc.start,
+        exc.target,
+    )
+    if covered is None or covered <= exc.start:
+        return None
+    return covered
+
+
+async def get_fixed_income_valuations_with_coverage_fallback(
+    db: AsyncSession,
+    portfolio_id: int,
+    target_date: Optional[date] = None,
+) -> tuple[list[FixedIncomeValuation], date | None]:
+    target = target_date or date.today()
+    try:
+        return await get_fixed_income_valuations(db, portfolio_id, target), target
+    except IncompleteBenchmarkCoverageError as exc:
+        covered = await _covered_target_or_none(db, exc)
+        if covered is None:
+            raise
+        logger.warning(
+            "[fixed_income] benchmark incompleto ate %s; usando ultima cobertura %s",
+            target,
+            covered,
+        )
+        return await get_fixed_income_valuations(db, portfolio_id, covered), covered
+
+
+async def get_fixed_income_totals_with_coverage_fallback(
+    db: AsyncSession,
+    portfolio_id: int,
+    target_date: Optional[date] = None,
+) -> tuple[dict[str, Decimal], date | None]:
+    valuations, effective_date = await get_fixed_income_valuations_with_coverage_fallback(
+        db,
+        portfolio_id,
+        target_date,
+    )
+    invested = _money(sum((v.invested_amount for v in valuations), Decimal("0")))
+    current = _money(sum((v.current_value for v in valuations), Decimal("0")))
+    income = _money(current - invested)
+    income_pct = _pct((income / invested * Decimal("100")) if invested > 0 else Decimal("0"))
+    return {
+        "invested_amount": invested,
+        "current_value": current,
+        "income_amount": income,
+        "income_pct": income_pct,
+    }, effective_date
 
 
 async def get_fixed_income_principal_valuations(

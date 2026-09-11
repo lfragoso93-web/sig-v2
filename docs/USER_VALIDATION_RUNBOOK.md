@@ -685,3 +685,21 @@ Bloco Performance - valuation canonico com transacoes pre-carregadas:
   para 10/09/2026..11/09/2026 ainda estava ausente, mantendo o comportamento
   fail-closed do benchmark;
 - validacao automatizada focada: `16 passed`.
+
+Bloco Renda Fixa - regressao de fallback por benchmark recente:
+
+- evidencia de usuario: apos as otimizacoes, `LIG LIQUIDEZ` voltou a exibir
+  valor atual igual ao aplicado, zerando resultado de capital na tela
+  Patrimonio;
+- causa: quando uma aplicacao CDI recente nao tinha taxa posterior ao dia de
+  compra, o valuation propagava `IncompleteBenchmarkCoverageError` para a
+  carteira inteira; a camada de Patrimonio/Resumo degradava tudo para principal;
+- correcao: a ausencia de CDI posterior passa a afetar somente a aplicacao sem
+  periodo coberto, mantendo fator `1` para ela, sem impedir que aplicacoes mais
+  antigas sejam valorizadas com CDI historico disponivel;
+- correcao: Posicoes e Resumo usam fallback para a ultima data coberta quando o
+  benchmark do dia atual ainda nao esta completo, antes de cair para principal;
+- validacao runtime da carteira `15`: `LIG LIQUIDEZ` passou de aplicado
+  `R$ 121,14` para valor atual `R$ 127,20`, com resultado `R$ 6,06`;
+- cache local da carteira `15` foi invalidado apos a correcao;
+- validacao automatizada focada: `8 passed`.

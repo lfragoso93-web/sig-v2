@@ -323,7 +323,7 @@ async def test_get_portfolio_positions_degrades_when_fixed_income_benchmark_is_p
     monkeypatch.setattr(portfolio_service, "sum_dividends_by_ticker", AsyncMock(return_value={}))
     monkeypatch.setattr(
         portfolio_service,
-        "get_fixed_income_valuations",
+        "get_fixed_income_valuations_with_coverage_fallback",
         AsyncMock(
             side_effect=IncompleteBenchmarkCoverageError(
                 "CDI",

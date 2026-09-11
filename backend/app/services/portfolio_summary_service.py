@@ -25,7 +25,7 @@ from app.services.canonical_dividend_aggregation_service import (
 from app.services.fixed_income_valuation_service import (
     IncompleteBenchmarkCoverageError,
     get_fixed_income_principal_totals,
-    get_fixed_income_totals,
+    get_fixed_income_totals_with_coverage_fallback,
 )
 from app.services.persisted_fx_query_service import get_persisted_usd_brl_rate
 from app.services.portfolio_reconciliation_service import reconcile_snapshot_summary
@@ -116,7 +116,9 @@ async def _get_latest_snapshot(db: AsyncSession, portfolio_id: int) -> Portfolio
 async def _get_intraday_valuation(db: AsyncSession, portfolio_id: int) -> dict:
     enriched = await _non_fixed_income_enriched(db, portfolio_id)
     try:
-        fixed_income = await get_fixed_income_totals(db, portfolio_id)
+        fixed_income, _fixed_income_effective_date = (
+            await get_fixed_income_totals_with_coverage_fallback(db, portfolio_id)
+        )
     except IncompleteBenchmarkCoverageError as exc:
         logger.warning(
             "[summary_fixed_income_unavailable] portfolio=%s reason=%s",

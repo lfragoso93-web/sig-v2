@@ -52,12 +52,12 @@ async def test_summary_reports_complete_and_partial_price_coverage(
     )
     monkeypatch.setattr(
         portfolio_summary_service,
-        "get_fixed_income_totals",
+        "get_fixed_income_totals_with_coverage_fallback",
         AsyncMock(
-            return_value={
+            return_value=({
                 "invested_amount": Decimal("3000.00"),
                 "current_value": Decimal("3150.00"),
-            }
+            }, date(2026, 7, 18))
         ),
     )
     monkeypatch.setattr(
@@ -113,7 +113,7 @@ async def test_summary_degrades_when_fixed_income_benchmark_is_partial(monkeypat
     )
     monkeypatch.setattr(
         portfolio_summary_service,
-        "get_fixed_income_totals",
+        "get_fixed_income_totals_with_coverage_fallback",
         AsyncMock(
             side_effect=IncompleteBenchmarkCoverageError(
                 "CDI",

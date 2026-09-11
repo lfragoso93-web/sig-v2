@@ -46,8 +46,8 @@ async def test_mixed_portfolio_uses_intraday_valuation_and_closed_twr(monkeypatc
     )
     monkeypatch.setattr(
         portfolio_summary_service,
-        "get_fixed_income_totals",
-        AsyncMock(return_value=fixed_income_totals),
+        "get_fixed_income_totals_with_coverage_fallback",
+        AsyncMock(return_value=(fixed_income_totals, date(2026, 7, 18))),
     )
     monkeypatch.setattr(
         portfolio_summary_service,
