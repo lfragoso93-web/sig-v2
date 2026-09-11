@@ -9,6 +9,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import TypedDict
+
+
+class SyntheticDisposalExpectation(TypedDict):
+    gross_proceeds_brl: Decimal
+    cost_basis_brl: Decimal
+    fees_brl: Decimal
+    realized_pnl_brl: Decimal
+    fiscal_group: str
+    exemption_applied: bool
 
 
 @dataclass(frozen=True)
@@ -40,7 +50,7 @@ EXPECTED_SYNTHETIC_IRPF_2026 = SyntheticIrpfExpectation(
     total_day_trade_tax_due_brl=Decimal("0.00"),
 )
 
-EXPECTED_DISPOSALS_2026 = {
+EXPECTED_DISPOSALS_2026: dict[str, SyntheticDisposalExpectation] = {
     "CERT303-PETR4": {
         "gross_proceeds_brl": Decimal("1500.00"),
         "cost_basis_brl": Decimal("1243.20"),
