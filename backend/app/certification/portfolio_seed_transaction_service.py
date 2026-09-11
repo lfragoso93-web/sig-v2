@@ -55,15 +55,15 @@ def _persisted_identity_tuple(transaction: Transaction) -> tuple:
     if isinstance(operation, OperationType):
         operation = operation.value
     return (
-        transaction.portfolio_id,
-        transaction.ticker,
-        transaction.asset_type,
+        int(transaction.portfolio_id),
+        str(transaction.ticker),
+        str(transaction.asset_type),
         str(operation),
         float(transaction.quantity),
         float(transaction.price),
         transaction.date,
         float(transaction.fees or 0),
-        transaction.currency,
+        str(transaction.currency),
     )
 
 
@@ -82,8 +82,9 @@ async def _assert_existing_transactions_are_expected(
         )
         for row in fixture["transactions"]
     )
+    transaction_columns = Transaction.__table__.c
     result = await db.execute(
-        select(Transaction).where(Transaction.portfolio_id == portfolio_id)
+        select(Transaction).where(transaction_columns.portfolio_id == portfolio_id)
     )
     existing = list(result.scalars().all())
     actual = Counter(_persisted_identity_tuple(transaction) for transaction in existing)
@@ -109,17 +110,18 @@ async def _find_existing_transaction(
         row=row,
         ticker=ticker,
     )
+    transaction_columns = Transaction.__table__.c
     result = await db.execute(
         select(Transaction).where(
-            Transaction.portfolio_id == portfolio_id,
-            Transaction.ticker == ticker,
-            Transaction.asset_type == asset_type,
-            Transaction.operation == OperationType(operation),
-            Transaction.quantity == quantity,
-            Transaction.price == price,
-            Transaction.date == tx_date,
-            Transaction.fees == fees,
-            Transaction.currency == currency,
+            transaction_columns.portfolio_id == portfolio_id,
+            transaction_columns.ticker == ticker,
+            transaction_columns.asset_type == asset_type,
+            transaction_columns.operation == OperationType(operation),
+            transaction_columns.quantity == quantity,
+            transaction_columns.price == price,
+            transaction_columns.date == tx_date,
+            transaction_columns.fees == fees,
+            transaction_columns.currency == currency,
         )
     )
     return result.scalar_one_or_none()
@@ -145,7 +147,7 @@ async def _reconcile_existing_certification_notes(
         and expected_notes
         and "Benchmark Source: synthetic-certification" in expected_notes
     ):
-        transaction.notes = expected_notes
+        setattr(transaction, "notes", expected_notes)
         await db.commit()
         return
 
@@ -164,10 +166,11 @@ async def _require_owned_asset(
     expected_provider_symbol: str,
     expected_provider_status: str,
 ) -> Asset:
+    asset_columns = Asset.__table__.c
     result = await db.execute(
         select(Asset).where(
-            Asset.ticker == ticker,
-            Asset.asset_type == asset_type,
+            asset_columns.ticker == ticker,
+            asset_columns.asset_type == asset_type,
         )
     )
     asset = result.scalar_one_or_none()
@@ -187,10 +190,10 @@ async def _require_owned_asset(
         return asset
 
     actual = (
-        asset.name,
-        asset.provider,
-        asset.provider_symbol,
-        asset.provider_status,
+        str(asset.name) if asset.name is not None else None,
+        str(asset.provider) if asset.provider is not None else None,
+        str(asset.provider_symbol) if asset.provider_symbol is not None else None,
+        str(asset.provider_status) if asset.provider_status is not None else None,
     )
     expected = (
         expected_name,
@@ -199,10 +202,12 @@ async def _require_owned_asset(
         expected_provider_status,
     )
     if actual != expected:
-        if asset.name == expected_name and asset.currency == "BRL":
-            asset.provider = expected_provider
-            asset.provider_symbol = expected_provider_symbol
-            asset.provider_status = expected_provider_status
+        asset_name = str(asset.name) if asset.name is not None else None
+        asset_currency = str(asset.currency or "")
+        if asset_name == expected_name and asset_currency == "BRL":
+            setattr(asset, "provider", expected_provider)
+            setattr(asset, "provider_symbol", expected_provider_symbol)
+            setattr(asset, "provider_status", expected_provider_status)
             await db.commit()
             await db.refresh(asset)
             return asset
@@ -217,10 +222,12 @@ async def _require_synthetic_crypto_membership(
     *,
     asset: Asset,
 ) -> tuple[int, int]:
+    asset_id = int(asset.id)
+    membership_columns = AssetUniverseMembership.__table__.c
     result = await db.execute(
         select(AssetUniverseMembership).where(
-            AssetUniverseMembership.asset_id == asset.id,
-            AssetUniverseMembership.universe_key
+            membership_columns.asset_id == asset_id,
+            membership_columns.universe_key
             == CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_KEY,
         )
     )
@@ -228,7 +235,7 @@ async def _require_synthetic_crypto_membership(
     if membership is None:
         db.add(
             AssetUniverseMembership(
-                asset_id=asset.id,
+                asset_id=asset_id,
                 universe_key=CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_KEY,
                 rank=None,
                 source=CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_SOURCE,
@@ -238,9 +245,9 @@ async def _require_synthetic_crypto_membership(
         await db.commit()
         return 1, 0
 
-    if membership.source != CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_SOURCE:
+    if str(membership.source) != CRYPTO_SYNTHETIC_CERTIFICATION_UNIVERSE_SOURCE:
         raise SyntheticSeedContractError(
-            f"synthetic crypto membership collision for {asset.ticker}; "
+            f"synthetic crypto membership collision for {str(asset.ticker)}; "
             "ownership is ambiguous"
         )
     return 0, 1

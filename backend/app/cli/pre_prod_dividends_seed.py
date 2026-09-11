@@ -8,9 +8,11 @@ import json
 from datetime import date
 
 import httpx
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal
 from app.services.pre_prod_dividends_seed_collector import (
+    StrictDividendAsset,
     StrictDividendCollectionError,
 )
 from app.services.pre_prod_dividends_seed_contract import (
@@ -103,29 +105,42 @@ async def _main() -> int:
             AsyncSessionLocal() as db,
             httpx.AsyncClient(timeout=30.0) as client,
         ):
-            asset_loader = (
-                (lambda session: load_dividends_seed_assets_for_portfolio(session, args.portfolio_id))
-                if args.portfolio_id is not None
-                else None
-            )
-            runner_kwargs = {}
-            if asset_loader is not None:
-                runner_kwargs["asset_loader"] = asset_loader
-            result = await run_pre_prod_dividends_seed(
-                run_id=args.run_id,
-                branch=args.branch,
-                commit_sha=args.commit_sha,
-                start_date=start_date,
-                end_date=end_date,
-                db=db,
-                providers=(
-                    StrictBrapiDividendProvider(client=client),
-                    StrictYahooDividendProvider(
-                        history_fetcher=fetch_yahoo_dividend_history
-                    ),
+            providers = (
+                StrictBrapiDividendProvider(client=client),
+                StrictYahooDividendProvider(
+                    history_fetcher=fetch_yahoo_dividend_history
                 ),
-                **runner_kwargs,
             )
+            portfolio_id = args.portfolio_id
+            if portfolio_id is not None:
+                async def asset_loader(
+                    session: AsyncSession,
+                ) -> tuple[StrictDividendAsset, ...]:
+                    return await load_dividends_seed_assets_for_portfolio(
+                        session,
+                        portfolio_id,
+                    )
+
+                result = await run_pre_prod_dividends_seed(
+                    run_id=args.run_id,
+                    branch=args.branch,
+                    commit_sha=args.commit_sha,
+                    start_date=start_date,
+                    end_date=end_date,
+                    db=db,
+                    providers=providers,
+                    asset_loader=asset_loader,
+                )
+            else:
+                result = await run_pre_prod_dividends_seed(
+                    run_id=args.run_id,
+                    branch=args.branch,
+                    commit_sha=args.commit_sha,
+                    start_date=start_date,
+                    end_date=end_date,
+                    db=db,
+                    providers=providers,
+                )
     except DividendsSeedAlreadyRunningError as exc:
         print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
         return EXIT_ALREADY_RUNNING
