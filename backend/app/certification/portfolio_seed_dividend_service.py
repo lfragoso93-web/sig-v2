@@ -135,10 +135,11 @@ async def _load_owned_asset(
     event: SyntheticDividendEvent,
 ) -> Asset:
     identity = event.identity
+    asset_columns = Asset.__table__.c
     result = await db.execute(
         select(Asset).where(
-            Asset.ticker == identity.ticker,
-            Asset.asset_type == identity.asset_type,
+            asset_columns.ticker == identity.ticker,
+            asset_columns.asset_type == identity.asset_type,
         )
     )
     asset = result.scalar_one_or_none()
@@ -147,12 +148,16 @@ async def _load_owned_asset(
             f"synthetic dividend asset {identity.ticker} must be seeded before dividends"
         )
     assert_persisted_asset_identity(
-        ticker=asset.ticker,
-        asset_type=asset.asset_type,
-        name=asset.name,
-        provider=asset.provider,
-        provider_symbol=asset.provider_symbol,
-        provider_status=asset.provider_status,
+        ticker=str(asset.ticker),
+        asset_type=str(asset.asset_type),
+        name=str(asset.name) if asset.name is not None else None,
+        provider=str(asset.provider) if asset.provider is not None else None,
+        provider_symbol=(
+            str(asset.provider_symbol) if asset.provider_symbol is not None else None
+        ),
+        provider_status=(
+            str(asset.provider_status) if asset.provider_status is not None else None
+        ),
         expected=identity,
     )
     currency = str(getattr(asset.currency, "value", asset.currency) or "").upper().strip()
@@ -169,7 +174,7 @@ def _is_canonical_existing(row: AssetDividend, expected: SyntheticDividendEvent)
         and row.ex_date == expected.ex_date
         and row.payment_date == expected.payment_date
         and row.dividend_type == expected.dividend_type
-        and Decimal(row.value_per_unit) == expected.value_per_unit
+        and Decimal(str(row.value_per_unit)) == expected.value_per_unit
         and row.source == SYNTHETIC_DIVIDEND_SOURCE
         and row.approved_on is None
         and row.gross_value_per_unit is None
@@ -196,18 +201,20 @@ async def seed_synthetic_dividends(db: AsyncSession) -> SyntheticDividendSeedRes
         if asset is None:
             asset = await _load_owned_asset(db, event)
             assets_by_ticker[event.identity.ticker] = asset
-        events_by_asset_id.setdefault(asset.id, []).append(event)
+        events_by_asset_id.setdefault(int(asset.id), []).append(event)
 
+    dividend_columns = AssetDividend.__table__.c
     existing_result = await db.execute(
         select(AssetDividend).where(
-            AssetDividend.asset_id.in_(list(events_by_asset_id))
+            dividend_columns.asset_id.in_(list(events_by_asset_id))
         )
     )
     existing_rows = list(existing_result.scalars().all())
 
     reused_keys: set[tuple[int, date, DividendType, date, Decimal]] = set()
     for row in existing_rows:
-        candidates = events_by_asset_id.get(row.asset_id, [])
+        row_asset_id = int(row.asset_id)
+        candidates = events_by_asset_id.get(row_asset_id, [])
         matching = [
             event
             for event in candidates
@@ -215,7 +222,7 @@ async def seed_synthetic_dividends(db: AsyncSession) -> SyntheticDividendSeedRes
                 row.ex_date == event.ex_date
                 and row.dividend_type == event.dividend_type
                 and row.payment_date == event.payment_date
-                and Decimal(row.value_per_unit) == event.value_per_unit
+                and Decimal(str(row.value_per_unit)) == event.value_per_unit
             )
         ]
         if len(matching) != 1 or not _is_canonical_existing(row, matching[0]):
@@ -223,16 +230,16 @@ async def seed_synthetic_dividends(db: AsyncSession) -> SyntheticDividendSeedRes
                 (
                     ticker
                     for ticker, asset in assets_by_ticker.items()
-                    if asset.id == row.asset_id
+                    if int(asset.id) == row_asset_id
                 ),
-                str(row.asset_id),
+                str(row_asset_id),
             )
             raise SyntheticSeedContractError(
                 f"synthetic dividend collision for {ticker}; existing row is not canonical"
             )
         event = matching[0]
         key = (
-            row.asset_id,
+            row_asset_id,
             event.ex_date,
             event.dividend_type,
             event.payment_date,
@@ -247,8 +254,9 @@ async def seed_synthetic_dividends(db: AsyncSession) -> SyntheticDividendSeedRes
     created = 0
     for event in expected_events:
         asset = assets_by_ticker[event.identity.ticker]
+        asset_id = int(asset.id)
         key = (
-            asset.id,
+            asset_id,
             event.ex_date,
             event.dividend_type,
             event.payment_date,
@@ -258,7 +266,7 @@ async def seed_synthetic_dividends(db: AsyncSession) -> SyntheticDividendSeedRes
             continue
         db.add(
             AssetDividend(
-                asset_id=asset.id,
+                asset_id=asset_id,
                 record_date=event.record_date,
                 ex_date=event.ex_date,
                 payment_date=event.payment_date,
