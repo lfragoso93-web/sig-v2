@@ -250,6 +250,16 @@ async def _application_factor(db: AsyncSession, key: FixedIncomeKey, start: date
                 source=key.benchmark_source,
             )
             if last_covered is None or last_covered <= start:
+                observed_factor = await benchmark_factor(
+                    db,
+                    idx,
+                    start,
+                    target,
+                    multiplier_pct=key.rate_pct or Decimal("100"),
+                    source=key.benchmark_source,
+                )
+                if observed_factor != Decimal("1"):
+                    return observed_factor
                 return Decimal("1")
             raise IncompleteBenchmarkCoverageError(idx, start, target, coverage)
         if coverage is BenchmarkCoverageStatus.PARTIAL:
@@ -271,6 +281,16 @@ async def _application_factor(db: AsyncSession, key: FixedIncomeKey, start: date
                 source=key.benchmark_source,
             )
             if effective_coverage is not BenchmarkCoverageStatus.COMPLETE:
+                observed_factor = await benchmark_factor(
+                    db,
+                    idx,
+                    start,
+                    effective_target,
+                    multiplier_pct=key.rate_pct or Decimal("100"),
+                    source=key.benchmark_source,
+                )
+                if observed_factor != Decimal("1"):
+                    return observed_factor
                 raise IncompleteBenchmarkCoverageError(
                     idx,
                     start,

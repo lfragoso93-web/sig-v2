@@ -122,6 +122,11 @@ async def test_new_cdi_application_without_next_rate_keeps_principal(monkeypatch
         "latest_covered_rate_date",
         AsyncMock(return_value=None),
     )
+    monkeypatch.setattr(
+        service,
+        "benchmark_factor",
+        AsyncMock(return_value=Decimal("1")),
+    )
 
     totals = await get_fixed_income_totals_from_transactions(
         object(),
@@ -132,3 +137,47 @@ async def test_new_cdi_application_without_next_rate_keeps_principal(monkeypatch
     assert totals["invested_amount"] == Decimal("121.14")
     assert totals["current_value"] == Decimal("121.14")
     assert totals["income_amount"] == Decimal("0.00")
+
+
+@pytest.mark.asyncio
+async def test_fixed_income_uses_observed_factor_when_coverage_metadata_is_missing(monkeypatch):
+    transactions = [
+        Transaction(
+            id=3,
+            portfolio_id=7,
+            ticker="CDB PORQUINHO OBJETIVO",
+            asset_type="RENDA_FIXA",
+            operation=OperationType.buy,
+            quantity=Decimal("1"),
+            price=Decimal("7547.98"),
+            fees=Decimal("0"),
+            date=date(2026, 4, 14),
+            currency="BRL",
+            notes="Indexador: CDI | Taxa: 100%",
+        )
+    ]
+    monkeypatch.setattr(
+        service,
+        "benchmark_coverage_status",
+        AsyncMock(return_value=BenchmarkCoverageStatus.ABSENT),
+    )
+    monkeypatch.setattr(
+        service,
+        "latest_covered_rate_date",
+        AsyncMock(return_value=None),
+    )
+    monkeypatch.setattr(
+        service,
+        "benchmark_factor",
+        AsyncMock(return_value=Decimal("1.0125")),
+    )
+
+    totals = await get_fixed_income_totals_from_transactions(
+        object(),
+        transactions,
+        date(2026, 9, 11),
+    )
+
+    assert totals["invested_amount"] == Decimal("7547.98")
+    assert totals["current_value"] == Decimal("7642.33")
+    assert totals["income_amount"] == Decimal("94.35")
