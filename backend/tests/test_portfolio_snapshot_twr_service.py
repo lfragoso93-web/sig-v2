@@ -5,7 +5,7 @@ from typing import cast
 
 from app.models.asset import AssetType
 from app.models.transaction import OperationType, Transaction
-from app.services.portfolio_snapshot_twr_service import (
+from app.services.portfolio_snapshot_twr_components import (
     build_open_quote_requirements,
     calculate_transaction_components,
 )
