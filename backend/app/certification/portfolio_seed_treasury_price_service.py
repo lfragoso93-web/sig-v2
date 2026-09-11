@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.certification.portfolio_seed_asset_policy import (
+    SyntheticAssetIdentity,
     assert_persisted_asset_identity,
     build_synthetic_asset_plan,
 )
@@ -37,7 +38,9 @@ def _price_timestamp(as_of: object) -> datetime:
         raise SyntheticSeedContractError("synthetic treasury price as_of is invalid") from exc
 
 
-def _expected_treasury_price(fixture: dict) -> tuple[object, Decimal, datetime]:
+def _expected_treasury_price(
+    fixture: dict,
+) -> tuple[SyntheticAssetIdentity, Decimal, datetime]:
     plan = build_synthetic_asset_plan(fixture)
     treasury = [identity for identity in plan.values() if identity.asset_type == _TREASURY_TYPE]
     if len(treasury) != 1:
@@ -69,10 +72,11 @@ async def seed_synthetic_treasury_price(
     fixture = load_portfolio_synthetic_certification_fixture()
     identity, expected_close, timestamp = _expected_treasury_price(fixture)
 
+    asset_columns = Asset.__table__.c
     asset_result = await db.execute(
         select(Asset).where(
-            Asset.ticker == identity.ticker,
-            Asset.asset_type == identity.asset_type,
+            asset_columns.ticker == identity.ticker,
+            asset_columns.asset_type == identity.asset_type,
         )
     )
     asset = asset_result.scalar_one_or_none()
@@ -80,22 +84,37 @@ async def seed_synthetic_treasury_price(
         raise SyntheticSeedContractError(
             f"synthetic treasury asset {identity.ticker} must be seeded before price"
         )
+
+    asset_ticker = str(asset.ticker)
+    asset_type = str(asset.asset_type)
+    asset_name = str(asset.name) if asset.name is not None else None
+    asset_provider = str(asset.provider) if asset.provider is not None else None
+    asset_provider_symbol = (
+        str(asset.provider_symbol) if asset.provider_symbol is not None else None
+    )
+    asset_provider_status = (
+        str(asset.provider_status) if asset.provider_status is not None else None
+    )
+    asset_currency = str(asset.currency or "").strip().upper()
+    asset_id = int(asset.id)
+
     assert_persisted_asset_identity(
-        ticker=asset.ticker,
-        asset_type=asset.asset_type,
-        name=asset.name,
-        provider=asset.provider,
-        provider_symbol=asset.provider_symbol,
-        provider_status=asset.provider_status,
+        ticker=asset_ticker,
+        asset_type=asset_type,
+        name=asset_name,
+        provider=asset_provider,
+        provider_symbol=asset_provider_symbol,
+        provider_status=asset_provider_status,
         expected=identity,
     )
-    if str(asset.currency or "").strip().upper() != "BRL":
+    if asset_currency != "BRL":
         raise SyntheticSeedContractError(
             f"synthetic treasury asset {identity.ticker} must use BRL currency"
         )
 
+    price_columns = AssetPrice.__table__.c
     existing_result = await db.execute(
-        select(AssetPrice).where(AssetPrice.asset_id == asset.id)
+        select(AssetPrice).where(price_columns.asset_id == asset_id)
     )
     existing = list(existing_result.scalars().all())
     if existing:
@@ -106,8 +125,8 @@ async def seed_synthetic_treasury_price(
         row = existing[0]
         if (
             row.timestamp != timestamp
-            or Decimal(row.close) != expected_close
-            or row.source != SYNTHETIC_TREASURY_PRICE_SOURCE
+            or Decimal(str(row.close)) != expected_close
+            or str(row.source) != SYNTHETIC_TREASURY_PRICE_SOURCE
             or row.open is not None
             or row.high is not None
             or row.low is not None
@@ -120,7 +139,7 @@ async def seed_synthetic_treasury_price(
 
     db.add(
         AssetPrice(
-            asset_id=asset.id,
+            asset_id=asset_id,
             timestamp=timestamp,
             close=expected_close,
             source=SYNTHETIC_TREASURY_PRICE_SOURCE,
