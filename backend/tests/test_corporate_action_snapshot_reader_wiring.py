@@ -12,14 +12,19 @@ def _source(name: str) -> str:
 
 
 def test_portfolio_snapshot_uses_shared_canonical_reader() -> None:
-    source = _source("portfolio_snapshot_service.py")
+    writer_source = _source("portfolio_snapshot_canonical_twr_service.py")
+    invalidation_source = _source("portfolio_snapshot_service.py")
     position_source = _source("portfolio_position_state_service.py")
 
-    assert "calculate_canonical_portfolio_totals" in source
+    assert "from app.services.portfolio_canonical_valuation_service import" in writer_source
+    assert "calculate_canonical_portfolio_totals" in writer_source
     assert "from app.services.corporate_action_position_reader import" in position_source
     assert "load_global_corporate_actions_by_ticker" in position_source
-    assert "from app.models.corporate_event import" not in source
-    assert "select(CorporateEvent)" not in source
+
+    assert "calculate_canonical_portfolio_totals" not in invalidation_source
+    assert "upsert_enriched_snapshot" not in invalidation_source
+    assert "from app.models.corporate_event import" not in invalidation_source
+    assert "select(CorporateEvent)" not in invalidation_source
 
 
 def test_class_snapshot_uses_shared_canonical_reader() -> None:
