@@ -20,11 +20,11 @@ from app.services.fixed_income_valuation_service import IncompleteBenchmarkCover
 from app.services.portfolio_canonical_valuation_service import (
     calculate_canonical_portfolio_totals,
 )
-from app.services.portfolio_snapshot_twr_service import (
-    _accumulated_dividends_at,
-    _decimal,
-    _upsert_enriched_snapshot,
+from app.services.portfolio_snapshot_twr_components import (
+    accumulated_dividends_at,
     calculate_transaction_components,
+    decimal_value,
+    upsert_enriched_snapshot,
 )
 from app.services.silent_price_coverage_service import has_partial_prices_silent
 from app.services.twr_service import (
@@ -117,15 +117,15 @@ async def backfill_canonical_snapshots_with_returns(
             )
             totals["realized_pnl"] = realized_pnl
             totals["total_pnl"] = (
-                realized_pnl + _decimal(totals["unrealized_pnl"])
+                realized_pnl + decimal_value(totals["unrealized_pnl"])
             ).quantize(_MONEY)
 
             dividends_day = dividends_day_map.get(cursor, _ZERO)
-            dividends_accumulated = _accumulated_dividends_at(
+            dividends_accumulated = accumulated_dividends_at(
                 dividends_accumulated_map,
                 cursor,
             )
-            current_value = _decimal(totals["market_value"])
+            current_value = decimal_value(totals["market_value"])
             daily_return = calculate_daily_twr_pct(
                 previous_value,
                 current_value,
@@ -158,7 +158,7 @@ async def backfill_canonical_snapshots_with_returns(
                 "has_partial_prices": has_partial_prices,
                 "return_is_estimated": has_partial_prices,
             }
-            await _upsert_enriched_snapshot(db, portfolio_id, cursor, values)
+            await upsert_enriched_snapshot(db, portfolio_id, cursor, values)
             previous_value = current_value
             count += 1
             if count % 30 == 0:
