@@ -8,7 +8,7 @@ from app.core.provider_status import (
 )
 from app.models.asset import AssetType
 from app.models.transaction import OperationType
-from app.services.portfolio_snapshot_twr_service import build_open_quote_requirements
+from app.services.portfolio_snapshot_twr_components import build_open_quote_requirements
 
 
 def _tx(ticker: str, asset_type: AssetType):
