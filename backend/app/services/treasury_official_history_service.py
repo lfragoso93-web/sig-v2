@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 import re
 from collections import defaultdict
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 
 from sqlalchemy import func, or_, select
