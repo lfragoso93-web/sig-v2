@@ -30,4 +30,4 @@ def test_canonical_snapshot_writer_remains_the_materialization_boundary() -> Non
     source = CANONICAL_WRITER.read_text(encoding="utf-8")
 
     assert "async def backfill_canonical_snapshots_with_returns(" in source
-    assert "_upsert_enriched_snapshot" in source
+    assert "upsert_enriched_snapshot" in source
