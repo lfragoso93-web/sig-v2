@@ -26,4 +26,13 @@ describe('market lookup error contracts', () => {
     expect(source).toContain('lookupError && !anyLoading')
     expect(source).toContain('role="alert"')
   })
+
+  it('auto-applies exact treasury catalog matches in the transaction modal', () => {
+    const source = read('src/components/modals/AddTransactionModal.tsx')
+
+    expect(source).toContain('function matchesTreasuryItem')
+    expect(source).toContain('const exactItem = tdItems.find(item => matchesTreasuryItem(item, ticker))')
+    expect(source).toContain('applyTDSuggestion(exactItem)')
+    expect(source).toContain('useTreasuryPrice(activeSlug, date, isTesouro && !!activeSlug && !priceEdited)')
+  })
 })

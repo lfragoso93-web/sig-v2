@@ -36,6 +36,29 @@ const RF_INDEXERS = ['CDI', 'IPCA', 'Prefixado', 'SELIC', 'IGP-M', 'Outro']
 const TD_INDEXERS = ['IPCA+', 'Prefixado', 'SELIC']
 const TODAY       = new Date().toISOString().split('T')[0]
 
+function normalizeTreasurySearch(value: string | null | undefined) {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+}
+
+function treasuryIdentity(item: TreasuryItem) {
+  return normalizeTreasurySearch((item as any).slug || item.ticker || item.name)
+}
+
+function matchesTreasuryItem(item: TreasuryItem, value: string) {
+  const normalized = normalizeTreasurySearch(value)
+  if (!normalized) return false
+  return [
+    item.name,
+    item.ticker,
+    item.slug,
+    (item as any).slug || item.ticker,
+  ].some(candidate => normalizeTreasurySearch(candidate) === normalized)
+}
+
 const fieldStyle: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: '0.3rem' }
 const labelStyle: React.CSSProperties = {
   fontSize: 'var(--text-xs)', fontWeight: 500,
@@ -199,6 +222,7 @@ export default function AddTransactionModal({ onClose }: Props) {
   const [showTDSugg,     setShowTDSugg]     = useState(false)
   const [showRVSugg,     setShowRVSugg]     = useState(false)
   const dropdownRef                          = useRef<HTMLDivElement>(null)
+  const autoAppliedTreasuryRef               = useRef('')
 
   const tab            = TABS.find(t => t.key === activeTab)!
   const isRF           = tab.extraFields === 'renda_fixa'
@@ -249,8 +273,24 @@ export default function AddTransactionModal({ onClose }: Props) {
   }, [date, isTesouro, activeSlug])
 
   useEffect(() => {
-    if (isTesouro && tdItems.length > 0) setShowTDSugg(true); else setShowTDSugg(false)
-  }, [tdItems, isTesouro])
+    if (!isTesouro || isEditMode || tdItems.length === 0) {
+      setShowTDSugg(false)
+      return
+    }
+
+    const exactItem = tdItems.find(item => matchesTreasuryItem(item, ticker))
+    if (exactItem) {
+      const key = treasuryIdentity(exactItem)
+      if (key && autoAppliedTreasuryRef.current !== key) {
+        autoAppliedTreasuryRef.current = key
+        applyTDSuggestion(exactItem)
+      }
+      setShowTDSugg(false)
+      return
+    }
+
+    setShowTDSugg(true)
+  }, [tdItems, isTesouro, isEditMode, ticker])
 
   useEffect(() => {
     if (tab.brapiSuggestType && rvItems.length > 0) setShowRVSugg(true); else setShowRVSugg(false)
@@ -579,7 +619,10 @@ export default function AddTransactionModal({ onClose }: Props) {
                         setTicker(v)
                         if (!prefill?.ticker) setAssetName('')
                         setPrice(''); setPriceFromBrapi(false); setPriceEdited(false)
-                        if (isTesouro) setActiveSlug('')
+                        if (isTesouro) {
+                          setActiveSlug('')
+                          autoAppliedTreasuryRef.current = ''
+                        }
                       }}
                       onFocus={() => {
                         if (!isEditMode) {
@@ -663,7 +706,7 @@ export default function AddTransactionModal({ onClose }: Props) {
 
                   <div style={{ display: 'flex', gap: '0.75rem' }}>
                     <Field label="Indexador" required style={{ flex: 1 }}>
-                      <Select value={indexer} onChange={e => setIndexer(e.target.value)}>
+                      <Select value={indexer} onChange={e => setIndexer(e.target.value)} disabled={isTesouro && !!activeSlug}>
                         <option value="">Selecionar…</option>
                         {indexerOptions.map(o => <option key={o} value={o}>{o}</option>)}
                       </Select>
@@ -684,7 +727,13 @@ export default function AddTransactionModal({ onClose }: Props) {
                   <div style={{ display: 'flex', gap: '0.75rem' }}>
                     {!dailyLiquidity && (
                       <Field label="Vencimento" style={{ flex: 1 }}>
-                        <Input type="date" value={maturity} onChange={e => setMaturity(e.target.value)} />
+                        <Input
+                          type="date"
+                          value={maturity}
+                          onChange={e => setMaturity(e.target.value)}
+                          readOnly={isTesouro && !!activeSlug}
+                          style={isTesouro && !!activeSlug ? { opacity: 0.75 } : undefined}
+                        />
                       </Field>
                     )}
                     {dailyLiquidity && (

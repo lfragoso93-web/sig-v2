@@ -743,3 +743,21 @@ Bloco Performance - precos de Tesouro em lote no valuation canonico:
 - validacao tecnica: `python -m compileall app`;
 - medicao local na carteira `15`: backfill canonico com `days_back=30` passou
   de 1,751s para 1,428s.
+
+Bloco UX - autopreenchimento de Tesouro no modal de lancamento:
+
+- evidencia de usuario: apos o seed, o catalogo e os precos do Tesouro ja estao
+  persistidos, entao exigir preenchimento manual de indexador/vencimento no
+  lancamento reduzia a qualidade do teste e gerava retrabalho;
+- ajuste: o modal de lancamento passou a reconhecer correspondencia exata de
+  titulo do Tesouro por nome, ticker ou slug do catalogo;
+- comportamento: ao encontrar correspondencia exata, o modal aplica a sugestao,
+  preenche nome, indexador, vencimento e aciona a busca do PU da data informada;
+- compra e venda: a regra vale para ambas as operacoes, pois o preenchimento
+  ocorre antes da montagem do payload;
+- seguranca operacional: o usuario ainda pode editar manualmente o PU; indexador
+  e vencimento ficam derivados do titulo selecionado para evitar inconsistencias
+  entre cadastro e historico seedado;
+- validacao frontend: `npm run typecheck`;
+- validacao frontend: `npx vitest run legacyMutationModalsAbsence.test.ts hooks/marketLookupErrors.test.ts --pool threads --maxWorkers 1 --no-file-parallelism` com `8 passed`;
+- validacao frontend: `npm run build`.
