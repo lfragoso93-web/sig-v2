@@ -105,7 +105,7 @@ async def _run(*, apply: bool) -> dict:
                     )
                     .values(provider_status=CERTIFIED_STATUS)
                 )
-                updated = int(result.rowcount or 0)
+                updated = int(getattr(result, "rowcount", 0) or 0)
                 await db.commit()
 
     return {
