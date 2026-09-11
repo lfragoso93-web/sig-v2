@@ -216,20 +216,30 @@ async def _fixed_income_totals_at_date(
     db: AsyncSession,
     portfolio_id: int,
     target_date: date,
+    transactions: list[Transaction] | None = None,
 ) -> dict[str, Decimal]:
     """Calcula Renda Fixa usando somente lançamentos existentes até a data-alvo."""
-    result = await db.execute(
-        select(Transaction)
-        .where(
-            Transaction.portfolio_id == portfolio_id,
-            Transaction.asset_type == RENDA_FIXA_TYPE,
-            Transaction.date <= target_date,
+    if transactions is None:
+        result = await db.execute(
+            select(Transaction)
+            .where(
+                Transaction.portfolio_id == portfolio_id,
+                Transaction.asset_type == RENDA_FIXA_TYPE,
+                Transaction.date <= target_date,
+            )
+            .order_by(Transaction.date.asc(), Transaction.id.asc())
         )
-        .order_by(Transaction.date.asc(), Transaction.id.asc())
-    )
+        fixed_income_transactions = list(result.scalars().all())
+    else:
+        fixed_income_transactions = [
+            tx
+            for tx in transactions
+            if tx.date <= target_date
+            and str(getattr(tx, "asset_type", "") or "").upper() == RENDA_FIXA_TYPE
+        ]
 
     applications = []
-    for tx in result.scalars().all():
+    for tx in fixed_income_transactions:
         if _is_buy(tx.operation):
             application = _application_from_buy(tx)
             if application.invested_amount > 0:
@@ -290,10 +300,16 @@ async def calculate_canonical_portfolio_totals(
     db: AsyncSession,
     portfolio_id: int,
     target_date: date,
+    transactions: list[Transaction] | None = None,
 ) -> dict:
     """Retorna totais de mercado corrigidos por Renda Fixa e Tesouro."""
     totals = await _base_totals_without_dedicated_lookup(db, portfolio_id, target_date)
-    fixed_income = await _fixed_income_totals_at_date(db, portfolio_id, target_date)
+    fixed_income = await _fixed_income_totals_at_date(
+        db,
+        portfolio_id,
+        target_date,
+        transactions=transactions,
+    )
     treasury = await _treasury_correction_at_date(db, portfolio_id, target_date)
 
     fixed_income_correction = fixed_income["current_value"] - fixed_income["invested_amount"]

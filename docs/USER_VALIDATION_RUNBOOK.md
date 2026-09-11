@@ -667,3 +667,21 @@ Bloco Performance - primeira limpeza do motor de Rentabilidade:
 - divida tecnica mapeada: quatro testes antigos do fixture CSV ainda falham por
   mocks defasados de importacao/crypto eligibility; nao foram misturados neste
   bloco por pertencerem ao contrato de importacao.
+
+Bloco Performance - valuation canonico com transacoes pre-carregadas:
+
+- evidencia tecnica: o backfill consolidado ainda recalculava Renda Fixa por
+  dia util fazendo nova consulta de transacoes dentro do valuation canonico;
+- otimizacao: `calculate_canonical_portfolio_totals` passou a aceitar
+  transacoes pre-carregadas e repassar essa lista para o calculo historico de
+  Renda Fixa;
+- integracao: `backfill_canonical_snapshots_with_returns` agora carrega as
+  transacoes uma vez e reutiliza a lista no valuation diario;
+- compatibilidade: chamadas pontuais continuam funcionando sem passar lista de
+  transacoes, mantendo o carregamento interno antigo como fallback;
+- medicao local na carteira `15`: backfill canonico com `days_back=30`
+  processou 22 snapshots em 2,858s;
+- observacao operacional: a execucao parou em 11/09/2026 porque a cobertura CDI
+  para 10/09/2026..11/09/2026 ainda estava ausente, mantendo o comportamento
+  fail-closed do benchmark;
+- validacao automatizada focada: `16 passed`.

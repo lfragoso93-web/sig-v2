@@ -86,6 +86,7 @@ async def backfill_canonical_snapshots_with_returns(
                     db,
                     portfolio_id,
                     cursor,
+                    transactions=transactions,
                 )
             except IncompleteBenchmarkCoverageError as exc:
                 logger.warning(
