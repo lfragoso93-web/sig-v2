@@ -132,9 +132,9 @@ async def main() -> None:
             expected.total_day_trade_tax_due_brl,
         ),
     }
-    for label, (actual, wanted) in comparisons.items():
-        if actual != wanted:
-            failures.append(f"{label}:actual={actual}:expected={wanted}")
+    for label, (actual, target) in comparisons.items():
+        if actual != target:
+            failures.append(f"{label}:actual={actual}:expected={target}")
 
     print(
         "CERT303-IRPF",
