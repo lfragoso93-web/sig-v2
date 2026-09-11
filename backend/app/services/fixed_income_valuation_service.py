@@ -271,7 +271,7 @@ async def _application_factor(db: AsyncSession, key: FixedIncomeKey, start: date
                 source=key.benchmark_source,
             )
             if last_covered is None or last_covered <= start:
-                raise IncompleteBenchmarkCoverageError(idx, start, target, coverage)
+                return Decimal("1")
             effective_target = last_covered
             effective_coverage = await benchmark_coverage_status(
                 db,

@@ -52,7 +52,7 @@ from app.services.position_timeline_projection import (
 logger = logging.getLogger(__name__)
 
 _CACHE_TTL = 120
-_CACHE_PREFIX = "portfolio"
+_CACHE_PREFIX = "portfolio:v2"
 
 
 async def get_usd_brl_today(db: AsyncSession) -> float:
@@ -82,8 +82,12 @@ async def get_usd_brl_batch(db: AsyncSession, dates: list[str]) -> dict[str, flo
     return result
 
 
-def _cache_key(portfolio_id: int, suffix: str) -> str:
+def portfolio_cache_key(portfolio_id: int, suffix: str) -> str:
     return f"{_CACHE_PREFIX}:{portfolio_id}:{suffix}"
+
+
+def _cache_key(portfolio_id: int, suffix: str) -> str:
+    return portfolio_cache_key(portfolio_id, suffix)
 
 
 async def invalidate_portfolio_cache(portfolio_id: int) -> None:

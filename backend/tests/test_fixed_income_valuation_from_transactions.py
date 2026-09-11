@@ -181,3 +181,64 @@ async def test_fixed_income_uses_observed_factor_when_coverage_metadata_is_missi
     assert totals["invested_amount"] == Decimal("7547.98")
     assert totals["current_value"] == Decimal("7642.33")
     assert totals["income_amount"] == Decimal("94.35")
+
+
+@pytest.mark.asyncio
+async def test_fixed_income_partial_coverage_does_not_zero_whole_group(monkeypatch):
+    transactions = [
+        Transaction(
+            id=4,
+            portfolio_id=7,
+            ticker="CDB PORQUINHO OBJETIVO",
+            asset_type="RENDA_FIXA",
+            operation=OperationType.buy,
+            quantity=Decimal("1"),
+            price=Decimal("1000.00"),
+            fees=Decimal("0"),
+            date=date(2026, 8, 5),
+            currency="BRL",
+            notes="Indexador: CDI | Taxa: 100%",
+        ),
+        Transaction(
+            id=5,
+            portfolio_id=7,
+            ticker="CDB PORQUINHO OBJETIVO",
+            asset_type="RENDA_FIXA",
+            operation=OperationType.buy,
+            quantity=Decimal("1"),
+            price=Decimal("200.00"),
+            fees=Decimal("0"),
+            date=date(2026, 9, 4),
+            currency="BRL",
+            notes="Indexador: CDI | Taxa: 100%",
+        ),
+    ]
+
+    async def fake_coverage(_db, _indicator, start, _target, **_kwargs):
+        if start == date(2026, 8, 5):
+            return BenchmarkCoverageStatus.PARTIAL
+        return BenchmarkCoverageStatus.PARTIAL
+
+    async def fake_latest(_db, _indicator, start, _target, **_kwargs):
+        if start == date(2026, 8, 5):
+            return date(2026, 9, 4)
+        return date(2026, 9, 4)
+
+    async def fake_factor(_db, _indicator, start, _target, **_kwargs):
+        if start == date(2026, 8, 5):
+            return Decimal("1.0100")
+        return Decimal("1")
+
+    monkeypatch.setattr(service, "benchmark_coverage_status", fake_coverage)
+    monkeypatch.setattr(service, "latest_covered_rate_date", fake_latest)
+    monkeypatch.setattr(service, "benchmark_factor", fake_factor)
+
+    totals = await get_fixed_income_totals_from_transactions(
+        object(),
+        transactions,
+        date(2026, 9, 11),
+    )
+
+    assert totals["invested_amount"] == Decimal("1200.00")
+    assert totals["current_value"] == Decimal("1210.00")
+    assert totals["income_amount"] == Decimal("10.00")
