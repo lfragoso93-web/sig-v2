@@ -78,6 +78,12 @@ class _Result:
     def scalar_one_or_none(self):
         return self.value
 
+    def scalars(self):
+        return self
+
+    def first(self):
+        return self.value
+
 
 class _WriteSpySession:
     def __init__(self, execute_value=None) -> None:
