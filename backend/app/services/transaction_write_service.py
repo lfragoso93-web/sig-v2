@@ -12,6 +12,7 @@ from app.services.crypto_transaction_eligibility_service import (
     CryptoTransactionEligibilityError,
     require_financially_certified_crypto_asset,
 )
+from app.services.treasury_catalog_service import resolve_treasury_symbol
 
 
 class TransactionWriteError(ValueError):
@@ -51,7 +52,7 @@ async def _add_catalog_asset_if_missing(
 ) -> None:
     result = await db.execute(
         select(Asset).where(
-            Asset.ticker == ticker,
+            Asset.ticker.ilike(ticker),
             Asset.asset_type == asset_type,
         )
     )
@@ -84,6 +85,10 @@ async def add_transaction_record(
     """
     ticker = payload.ticker.strip().upper()
     asset_type = payload.asset_type
+    if asset_type == "TESOURO_DIRETO":
+        canonical_ticker = await resolve_treasury_symbol(db, payload.ticker)
+        if canonical_ticker:
+            ticker = canonical_ticker.strip().upper()
     try:
         operation = OperationType(payload.operation)
     except ValueError as exc:

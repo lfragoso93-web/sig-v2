@@ -5,6 +5,7 @@ export interface TransactionModalPrefill {
   tab?: string
   ticker?: string
   assetName?: string
+  treasurySlug?: string
   transactionId?: number
   operation?: 'buy' | 'sell'
   quantity?: number

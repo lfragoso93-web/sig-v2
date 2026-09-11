@@ -761,3 +761,25 @@ Bloco UX - autopreenchimento de Tesouro no modal de lancamento:
 - validacao frontend: `npm run typecheck`;
 - validacao frontend: `npx vitest run legacyMutationModalsAbsence.test.ts hooks/marketLookupErrors.test.ts --pool threads --maxWorkers 1 --no-file-parallelism` com `8 passed`;
 - validacao frontend: `npm run build`.
+
+Bloco UX/Transacoes - venda de Tesouro com ticker canonico:
+
+- evidencia de usuario: o modal ainda nao preenchia todos os dados em alguns
+  caminhos, o seletor de compra/venda ficava visualmente pressionado pelas abas
+  e a venda podia falhar com "quantidade insuficiente" mesmo existindo posicao;
+- causa funcional: a tela de Tesouro abria o modal usando o nome/rotulo do lote,
+  enquanto a validacao de venda no backend compara quantidade por ticker
+  canonico e tipo de ativo;
+- correcao frontend: a tela de Tesouro passa a enviar o `brapi_symbol`/ticker
+  canonico como identidade do titulo e o modal inicializa `activeSlug`,
+  indexador e vencimento a partir desse prefill;
+- correcao backend: o servico canonico de escrita de transacoes resolve titulos
+  de Tesouro pelo catalogo antes de validar quantidade e persistir a transacao;
+- correcao visual: as abas do modal deixam de quebrar em multiplas linhas e
+  passam a rolar horizontalmente, preservando o seletor compra/venda visivel no
+  inicio da area de campos;
+- validacao backend: `pytest tests/test_transaction_write_service.py tests/test_transaction_snapshot_invalidation_contract.py` com `8 passed`;
+- validacao backend: `python -m compileall app`;
+- validacao frontend: `npm run typecheck`;
+- validacao frontend: `npx vitest run legacyMutationModalsAbsence.test.ts hooks/marketLookupErrors.test.ts --pool threads --maxWorkers 1 --no-file-parallelism` com `8 passed`;
+- validacao frontend: `npm run build`.

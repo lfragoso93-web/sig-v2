@@ -59,6 +59,32 @@ function matchesTreasuryItem(item: TreasuryItem, value: string) {
   ].some(candidate => normalizeTreasurySearch(candidate) === normalized)
 }
 
+function inferTreasuryIndexer(value: string | null | undefined) {
+  const normalized = normalizeTreasurySearch(value)
+  if (normalized.includes('selic')) return 'SELIC'
+  if (normalized.includes('ipca') || normalized.includes('renda') || normalized.includes('educa')) return 'IPCA+'
+  if (normalized.includes('igp')) return 'IGP-M'
+  if (normalized.includes('prefixado')) return 'Prefixado'
+  return ''
+}
+
+function inferTreasuryMaturity(value: string | null | undefined) {
+  const raw = String(value ?? '')
+  const compactMatch = raw.match(/(\d{2})(\d{2})(20\d{2})$/)
+  if (compactMatch) {
+    const [, day, month, year] = compactMatch
+    return `${year}-${month}-${day}`
+  }
+
+  const isoMatch = raw.match(/(20\d{2})-(\d{2})-(\d{2})/)
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch
+    return `${year}-${month}-${day}`
+  }
+
+  return ''
+}
+
 const fieldStyle: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: '0.3rem' }
 const labelStyle: React.CSSProperties = {
   fontSize: 'var(--text-xs)', fontWeight: 500,
@@ -198,6 +224,13 @@ export default function AddTransactionModal({ onClose }: Props) {
   const isPending  = isCreating || isUpdating
   const isEditMode = !!prefill?.transactionId
   const initialTab = prefill?.tab ?? 'acao'
+  const initialIsTesouro = initialTab === 'tesouro'
+  const initialTreasuryIdentity = initialIsTesouro
+    ? prefill?.treasurySlug || prefill?.ticker || ''
+    : ''
+  const initialTreasuryLabel = initialIsTesouro
+    ? prefill?.assetName || prefill?.ticker || ''
+    : ''
 
   const [activeTab,      setActiveTab]      = useState(initialTab)
   const [operation,      setOperation]      = useState<'buy' | 'sell'>(prefill?.operation ?? 'buy')
@@ -212,12 +245,12 @@ export default function AddTransactionModal({ onClose }: Props) {
   const [error,          setError]          = useState<string | null>(null)
   const [success,        setSuccess]        = useState(false)
   const [priceFromBrapi, setPriceFromBrapi] = useState(false)
-  const [indexer,        setIndexer]        = useState('')
+  const [indexer,        setIndexer]        = useState(initialIsTesouro ? inferTreasuryIndexer(initialTreasuryLabel || initialTreasuryIdentity) : '')
   const [rate,           setRate]           = useState('')
-  const [maturity,       setMaturity]       = useState('')
+  const [maturity,       setMaturity]       = useState(initialIsTesouro ? inferTreasuryMaturity(initialTreasuryLabel || initialTreasuryIdentity) : '')
   const [issuer,         setIssuer]         = useState('')
   const [dailyLiquidity, setDailyLiquidity] = useState(false)
-  const [activeSlug,     setActiveSlug]     = useState('')
+  const [activeSlug,     setActiveSlug]     = useState(initialTreasuryIdentity)
   const [priceEdited,    setPriceEdited]    = useState(isEditMode)
   const [showTDSugg,     setShowTDSugg]     = useState(false)
   const [showRVSugg,     setShowRVSugg]     = useState(false)
@@ -465,7 +498,8 @@ export default function AddTransactionModal({ onClose }: Props) {
         boxShadow: 'var(--shadow-lg)',
         overflow: 'hidden',
         display: 'flex', flexDirection: 'column',
-        maxHeight: '92dvh',
+        maxHeight: '94dvh',
+        minHeight: 0,
       }}>
 
         {/* Header */}
@@ -528,14 +562,17 @@ export default function AddTransactionModal({ onClose }: Props) {
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
 
             {/* Abas */}
             <div style={{
-              display: 'flex', gap: 4, rowGap: 4,
-              flexWrap: 'wrap',
-              padding: '0.875rem 1.25rem 0',
+              display: 'flex', gap: 4,
+              flexWrap: 'nowrap',
+              padding: '0.75rem 1.25rem 0',
               flexShrink: 0,
+              overflowX: 'auto',
+              overflowY: 'hidden',
+              scrollbarWidth: 'thin',
             }}>
               {TABS.map(t => {
                 const isActive = activeTab === t.key
@@ -567,12 +604,13 @@ export default function AddTransactionModal({ onClose }: Props) {
               })}
             </div>
 
-            <div style={{ height: 1, background: 'oklch(from var(--color-text) l c h / 0.07)', margin: '0.625rem 1.25rem 0', flexShrink: 0 }} />
+            <div style={{ height: 1, background: 'oklch(from var(--color-text) l c h / 0.07)', margin: '0.5rem 1.25rem 0', flexShrink: 0 }} />
 
             {/* Campos */}
             <div style={{
               flex: 1, overflowY: 'auto', overflowX: 'hidden',
-              padding: '1rem 1.25rem',
+              minHeight: 0,
+              padding: '0.875rem 1.25rem 1rem',
               display: 'flex', flexDirection: 'column', gap: '0.875rem',
             }}>
 

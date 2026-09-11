@@ -133,6 +133,48 @@ async def test_sell_quantity_lookup_is_scoped_by_asset_type() -> None:
 
 
 @pytest.mark.asyncio
+async def test_treasury_sell_normalizes_human_title_before_quantity_lookup() -> None:
+    db = AsyncMock(spec=AsyncSession)
+    quantity_rows = MagicMock()
+    quantity_rows.all.return_value = [("buy", 1.5)]
+    asset_result = MagicMock()
+    asset_result.scalar_one_or_none.return_value = object()
+    db.execute = AsyncMock(side_effect=[quantity_rows, asset_result])
+    db.add = MagicMock()
+    payload = TransactionCreate(
+        ticker="Tesouro Selic 2029",
+        asset_type="TESOURO_DIRETO",
+        operation="sell",
+        quantity=1,
+        price=14000,
+        fees=0,
+        date="2026-01-03",
+        currency="BRL",
+    )
+
+    with patch(
+        "app.services.transaction_write_service.resolve_treasury_symbol",
+        new_callable=AsyncMock,
+        return_value="tesouro-selic-01032029",
+    ) as resolve_symbol:
+        result = await sut.add_transaction_record(
+            db,
+            portfolio_id=303,
+            payload=payload,
+        )
+
+    assert result.ticker == "TESOURO-SELIC-01032029"
+    resolve_symbol.assert_awaited_once_with(db, "Tesouro Selic 2029")
+    quantity_statement = str(
+        db.execute.await_args_list[0].args[0].compile(
+            compile_kwargs={"literal_binds": True}
+        )
+    )
+    assert "TESOURO-SELIC-01032029" in quantity_statement
+    assert result in [call.args[0] for call in db.add.call_args_list]
+
+
+@pytest.mark.asyncio
 async def test_create_transaction_record_requires_crypto_eligibility() -> None:
     db = AsyncMock(spec=AsyncSession)
     payload = TransactionCreate(

@@ -70,10 +70,12 @@ export default function TesouroDiretoPage() {
 
   // Abre o AddTransactionModal global já existente, pré-preenchido com os dados do título
   const handleEdit = (item: TreasuryItem) => {
+    const canonicalTicker = item.brapi_symbol || item.ticker || item.brapi_name
     openTransactionModal({
       tab:       'tesouro',
-      ticker:    item.brapi_name,
+      ticker:    canonicalTicker,
       assetName: item.brapi_name,
+      treasurySlug: canonicalTicker,
     })
   }
 
