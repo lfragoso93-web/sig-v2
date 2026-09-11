@@ -84,6 +84,13 @@ class _Result:
     def first(self):
         return self.value
 
+    def all(self):
+        if self.value is None:
+            return []
+        if isinstance(self.value, list):
+            return self.value
+        return [self.value]
+
 
 class _WriteSpySession:
     def __init__(self, execute_value=None) -> None:
