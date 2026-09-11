@@ -21,7 +21,7 @@ SNAPSHOT_PATH = (
     Path(__file__).resolve().parents[1]
     / "app"
     / "services"
-    / "portfolio_snapshot_service.py"
+    / "portfolio_snapshot_canonical_twr_service.py"
 )
 CANONICAL_VALUATION_PATH = (
     Path(__file__).resolve().parents[1]
