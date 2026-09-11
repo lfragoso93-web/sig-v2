@@ -88,9 +88,11 @@ async def _base_totals_without_dedicated_lookup(
     db: AsyncSession,
     portfolio_id: int,
     target_date: date,
+    positions: dict | None = None,
 ) -> dict:
     """Replica a base patrimonial sem consultar preços para classes dedicadas."""
-    positions = await build_positions_at(db, portfolio_id, target_date)
+    if positions is None:
+        positions = await build_positions_at(db, portfolio_id, target_date)
     if not positions:
         return {
             "market_value": _ZERO,
@@ -261,9 +263,11 @@ async def _treasury_correction_at_date(
     db: AsyncSession,
     portfolio_id: int,
     target_date: date,
+    positions: dict | None = None,
 ) -> dict[str, Decimal | int]:
     """Substitui o proxy por custo médio pelo preço do ativo oficial do Tesouro."""
-    positions = await build_positions_at(db, portfolio_id, target_date)
+    if positions is None:
+        positions = await build_positions_at(db, portfolio_id, target_date)
     correction = _ZERO
     matched = 0
     unresolved = 0
@@ -303,14 +307,25 @@ async def calculate_canonical_portfolio_totals(
     transactions: list[Transaction] | None = None,
 ) -> dict:
     """Retorna totais de mercado corrigidos por Renda Fixa e Tesouro."""
-    totals = await _base_totals_without_dedicated_lookup(db, portfolio_id, target_date)
+    positions = await build_positions_at(db, portfolio_id, target_date)
+    totals = await _base_totals_without_dedicated_lookup(
+        db,
+        portfolio_id,
+        target_date,
+        positions=positions,
+    )
     fixed_income = await _fixed_income_totals_at_date(
         db,
         portfolio_id,
         target_date,
         transactions=transactions,
     )
-    treasury = await _treasury_correction_at_date(db, portfolio_id, target_date)
+    treasury = await _treasury_correction_at_date(
+        db,
+        portfolio_id,
+        target_date,
+        positions=positions,
+    )
 
     fixed_income_correction = fixed_income["current_value"] - fixed_income["invested_amount"]
     treasury_correction = Decimal(str(treasury["correction"]))

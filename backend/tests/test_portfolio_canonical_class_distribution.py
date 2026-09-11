@@ -37,6 +37,11 @@ async def test_canonical_distribution_applies_fixed_income_and_treasury_correcti
     )
     monkeypatch.setattr(
         service,
+        "build_positions_at",
+        AsyncMock(return_value={}),
+    )
+    monkeypatch.setattr(
+        service,
         "_fixed_income_totals_at_date",
         AsyncMock(
             return_value={

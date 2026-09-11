@@ -703,3 +703,15 @@ Bloco Renda Fixa - regressao de fallback por benchmark recente:
   `R$ 121,14` para valor atual `R$ 127,20`, com resultado `R$ 6,06`;
 - cache local da carteira `15` foi invalidado apos a correcao;
 - validacao automatizada focada: `8 passed`.
+
+Bloco Performance - projecao unica de posicoes no valuation canonico:
+
+- evidencia tecnica: `calculate_canonical_portfolio_totals` projetava posicoes
+  uma vez para a base patrimonial e outra vez para a correcao de Tesouro;
+- otimizacao: a funcao principal passou a chamar `build_positions_at` uma unica
+  vez por data e repassar a mesma estrutura para os calculos de base e Tesouro;
+- compatibilidade: helpers internos continuam aceitando chamada isolada sem
+  receber posicoes pre-carregadas;
+- validacao automatizada focada: `15 passed`;
+- medicao local na carteira `15`: backfill canonico com `days_back=30` passou
+  de 22 snapshots em 2,858s para 23 snapshots em 1,997s.

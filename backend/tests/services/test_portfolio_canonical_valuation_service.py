@@ -1,9 +1,17 @@
 from decimal import Decimal
 from datetime import date
+from unittest.mock import AsyncMock
 
 import pytest
 
 from app.services import portfolio_canonical_valuation_service as service
+
+
+@pytest.fixture(autouse=True)
+def _mock_position_projection(monkeypatch):
+    projection = AsyncMock(return_value={})
+    monkeypatch.setattr(service, "build_positions_at", projection)
+    return projection
 
 
 async def _treasury_without_correction(*_args, **_kwargs):
@@ -157,6 +165,7 @@ async def test_canonical_totals_rejects_material_class_divergence(monkeypatch):
 @pytest.mark.asyncio
 async def test_canonical_totals_reuses_preloaded_transactions_for_fixed_income(
     monkeypatch,
+    _mock_position_projection,
 ):
     transactions = [object()]
     captured = {}
@@ -196,3 +205,54 @@ async def test_canonical_totals_reuses_preloaded_transactions_for_fixed_income(
 
     assert captured["transactions"] is transactions
     assert result["market_value"] == Decimal("1010.00")
+    _mock_position_projection.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_canonical_totals_reuses_single_position_projection(
+    monkeypatch,
+    _mock_position_projection,
+):
+    captured = {}
+
+    async def fake_base(*_args, **kwargs):
+        captured["base_positions"] = kwargs.get("positions")
+        return {
+            "market_value": Decimal("1000.00"),
+            "cost_basis": Decimal("1000.00"),
+            "invested_total": Decimal("1000.00"),
+            "realized_pnl": Decimal("0.00"),
+            "unrealized_pnl": Decimal("0.00"),
+            "total_pnl": Decimal("0.00"),
+            "return_pct": Decimal("0.0000"),
+            "market_value_by_class": {"ACAO": Decimal("1000.00")},
+        }
+
+    async def fake_fixed_income(*_args, **_kwargs):
+        return {
+            "invested_amount": Decimal("0.00"),
+            "current_value": Decimal("0.00"),
+            "income_amount": Decimal("0.00"),
+        }
+
+    async def fake_treasury(*_args, **kwargs):
+        captured["treasury_positions"] = kwargs.get("positions")
+        return {
+            "correction": Decimal("0.00"),
+            "matched": 0,
+            "unresolved": 0,
+        }
+
+    monkeypatch.setattr(service, "_base_totals_without_dedicated_lookup", fake_base)
+    monkeypatch.setattr(service, "_fixed_income_totals_at_date", fake_fixed_income)
+    monkeypatch.setattr(service, "_treasury_correction_at_date", fake_treasury)
+
+    await service.calculate_canonical_portfolio_totals(
+        None,
+        1,
+        date(2026, 1, 2),
+    )
+
+    _mock_position_projection.assert_awaited_once()
+    assert captured["base_positions"] is _mock_position_projection.return_value
+    assert captured["treasury_positions"] is _mock_position_projection.return_value
