@@ -170,13 +170,15 @@ async def seed_synthetic_benchmark_rate(
     """Seed isolated CDI source data and proven coverage for CERT303 Renda Fixa."""
     fixture = load_portfolio_synthetic_certification_fixture()
     expected = _expected_contract(fixture)
+    rate_columns = RateHistory.__table__.c
+    coverage_columns = RateHistoryCoverage.__table__.c
 
     source_rows_result = await db.execute(
         select(RateHistory).where(
-            RateHistory.indicator == expected.indicator,
-            RateHistory.source == expected.source,
-            RateHistory.date >= expected.coverage_start,
-            RateHistory.date <= expected.coverage_end,
+            rate_columns.indicator == expected.indicator,
+            rate_columns.source == expected.source,
+            rate_columns.date >= expected.coverage_start,
+            rate_columns.date <= expected.coverage_end,
         )
     )
     source_rows = list(source_rows_result.scalars().all())
@@ -190,8 +192,8 @@ async def seed_synthetic_benchmark_rate(
     else:
         identity_result = await db.execute(
             select(RateHistory).where(
-                RateHistory.indicator == expected.indicator,
-                RateHistory.date == expected.observation_date,
+                rate_columns.indicator == expected.indicator,
+                rate_columns.date == expected.observation_date,
             )
         )
         identity_rows = list(identity_result.scalars().all())
@@ -214,10 +216,10 @@ async def seed_synthetic_benchmark_rate(
 
     coverage_result = await db.execute(
         select(RateHistoryCoverage).where(
-            RateHistoryCoverage.indicator == expected.indicator,
-            RateHistoryCoverage.source == expected.source,
-            RateHistoryCoverage.start_date <= expected.coverage_end,
-            RateHistoryCoverage.end_date >= expected.coverage_start,
+            coverage_columns.indicator == expected.indicator,
+            coverage_columns.source == expected.source,
+            coverage_columns.start_date <= expected.coverage_end,
+            coverage_columns.end_date >= expected.coverage_start,
         )
     )
     coverages = list(coverage_result.scalars().all())

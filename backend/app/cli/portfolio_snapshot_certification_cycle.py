@@ -21,10 +21,10 @@ from app.certification.portfolio_synthetic_fixture import (
 from app.core.database import AsyncSessionLocal
 from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.transaction import OperationType, Transaction
-from app.services.portfolio_snapshot_service import (
-    calc_snapshot_at_date,
-    invalidate_snapshots_from,
+from app.services.portfolio_snapshot_canonical_twr_service import (
+    backfill_canonical_snapshots_with_returns,
 )
+from app.services.portfolio_snapshot_service import invalidate_snapshots_from
 
 _MONEY = Decimal("0.01")
 _MUTATION_FEE_DELTA = Decimal("1.00")
@@ -93,6 +93,22 @@ async def _snapshot_count(db, portfolio_id: int, target_date: date) -> int:
     return int(result.scalar_one() or 0)
 
 
+async def _rebuild_to_target(
+    db,
+    portfolio_id: int,
+    target_date: date,
+    *,
+    commit: bool,
+) -> PortfolioSnapshot:
+    await backfill_canonical_snapshots_with_returns(
+        db,
+        portfolio_id,
+        end_date=target_date,
+        commit=commit,
+    )
+    return await _load_snapshot(db, portfolio_id, target_date)
+
+
 async def _load_mutation_transaction(db, portfolio_id: int) -> Transaction:
     result = await db.execute(
         select(Transaction).where(
@@ -121,22 +137,20 @@ async def main() -> None:
     async with AsyncSessionLocal() as db:
         portfolio_id, _ = await load_certification_portfolio_identity(db)
 
-        baseline_totals = await calc_snapshot_at_date(
-            db, portfolio_id, target_date, commit=True, prefetch=False
+        baseline_row = await _rebuild_to_target(
+            db, portfolio_id, target_date, commit=True
         )
-        baseline_row = await _load_snapshot(db, portfolio_id, target_date)
         baseline = _snapshot_signature(baseline_row)
-        if baseline != wanted or _snapshot_signature(baseline_totals) != wanted:
+        if baseline != wanted:
             raise RuntimeError(f"baseline snapshot mismatch: actual={baseline}:expected={wanted}")
         if await _snapshot_count(db, portfolio_id, target_date) != 1:
             raise RuntimeError("baseline snapshot uniqueness failed")
 
-        replay_totals = await calc_snapshot_at_date(
-            db, portfolio_id, target_date, commit=True, prefetch=False
+        replay_row = await _rebuild_to_target(
+            db, portfolio_id, target_date, commit=True
         )
-        replay_row = await _load_snapshot(db, portfolio_id, target_date)
         replay = _snapshot_signature(replay_row)
-        if replay != baseline or _snapshot_signature(replay_totals) != baseline:
+        if replay != baseline:
             raise RuntimeError("snapshot replay changed certified values")
         if await _snapshot_count(db, portfolio_id, target_date) != 1:
             raise RuntimeError("snapshot replay created a duplicate row")
@@ -147,12 +161,11 @@ async def main() -> None:
         if deleted != 1 or await _snapshot_count(db, portfolio_id, target_date) != 0:
             raise RuntimeError("snapshot invalidation did not remove exactly the target row")
 
-        rebuilt_totals = await calc_snapshot_at_date(
-            db, portfolio_id, target_date, commit=True, prefetch=False
+        rebuilt_row = await _rebuild_to_target(
+            db, portfolio_id, target_date, commit=True
         )
-        rebuilt_row = await _load_snapshot(db, portfolio_id, target_date)
         rebuilt = _snapshot_signature(rebuilt_row)
-        if rebuilt != baseline or _snapshot_signature(rebuilt_totals) != baseline:
+        if rebuilt != baseline:
             raise RuntimeError("snapshot rebuild did not restore certified values")
         if await _snapshot_count(db, portfolio_id, target_date) != 1:
             raise RuntimeError("snapshot rebuild uniqueness failed")
@@ -161,15 +174,14 @@ async def main() -> None:
         original_fees = Decimal(str(tx.fees))
         savepoint = await db.begin_nested()
         try:
-            tx.fees = original_fees + _MUTATION_FEE_DELTA
+            setattr(tx, "fees", original_fees + _MUTATION_FEE_DELTA)
             await db.flush()
             await invalidate_snapshots_from(db, portfolio_id, target_date, commit=False)
-            mutated_totals = await calc_snapshot_at_date(
-                db, portfolio_id, target_date, commit=False, prefetch=False
+            mutated_row = await _rebuild_to_target(
+                db, portfolio_id, target_date, commit=False
             )
-            mutated_row = await _load_snapshot(db, portfolio_id, target_date)
             mutated = _snapshot_signature(mutated_row)
-            if mutated == baseline or _snapshot_signature(mutated_totals) == baseline:
+            if mutated == baseline:
                 raise RuntimeError("synthetic mutation did not change the snapshot")
             if mutated[4] != baseline[4] - _MUTATION_FEE_DELTA:
                 raise RuntimeError(
@@ -183,14 +195,13 @@ async def main() -> None:
             raise RuntimeError("synthetic transaction mutation escaped savepoint rollback")
 
         await invalidate_snapshots_from(db, portfolio_id, target_date, commit=False)
-        restored_totals = await calc_snapshot_at_date(
-            db, portfolio_id, target_date, commit=False, prefetch=False
+        restored_row = await _rebuild_to_target(
+            db, portfolio_id, target_date, commit=False
         )
         await db.commit()
 
-        restored_row = await _load_snapshot(db, portfolio_id, target_date)
         restored = _snapshot_signature(restored_row)
-        if restored != baseline or _snapshot_signature(restored_totals) != baseline:
+        if restored != baseline:
             raise RuntimeError("final snapshot did not return to certified baseline")
         if await _snapshot_count(db, portfolio_id, target_date) != 1:
             raise RuntimeError("final snapshot uniqueness failed")

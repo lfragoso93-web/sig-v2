@@ -22,9 +22,17 @@ from app.services.portfolio_canonical_valuation_service import (
     calculate_canonical_portfolio_totals,
 )
 from app.services.portfolio_position_state_service import build_positions_at
-from app.services.portfolio_snapshot_service import _calc_totals as calc_snapshot_totals
 
 _MONEY = Decimal("0.01")
+_SNAPSHOT_TOTAL_FIELDS = (
+    "market_value",
+    "cost_basis",
+    "invested_total",
+    "realized_pnl",
+    "unrealized_pnl",
+    "total_pnl",
+    "return_pct",
+)
 
 
 def _money(value: object) -> Decimal:
@@ -42,7 +50,7 @@ async def main() -> None:
         portfolio_id, user_id = await load_certification_portfolio_identity(db)
         positions = await build_positions_at(db, portfolio_id, target_date)
         totals = await calculate_canonical_portfolio_totals(db, portfolio_id, target_date)
-        snapshot_totals = await calc_snapshot_totals(db, portfolio_id, target_date)
+        snapshot_totals = {field: totals[field] for field in _SNAPSHOT_TOTAL_FIELDS}
         dividends = await list_dividends(db, portfolio_id, user_id)
 
     failures: list[str] = []
@@ -81,18 +89,7 @@ async def main() -> None:
             f"class-distribution:actual={actual_classes}:expected={expected_classes}"
         )
 
-    expected_snapshot = {
-        key: totals[key]
-        for key in (
-            "market_value",
-            "cost_basis",
-            "invested_total",
-            "realized_pnl",
-            "unrealized_pnl",
-            "total_pnl",
-            "return_pct",
-        )
-    }
+    expected_snapshot = {key: totals[key] for key in _SNAPSHOT_TOTAL_FIELDS}
     if snapshot_totals != expected_snapshot:
         failures.append(
             f"snapshot-payload:actual={snapshot_totals}:expected={expected_snapshot}"

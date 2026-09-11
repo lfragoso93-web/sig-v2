@@ -71,7 +71,7 @@ async def test_canonical_twr_persists_only_snapshot_columns(monkeypatch):
         "has_partial_prices_silent",
         AsyncMock(return_value=False),
     )
-    monkeypatch.setattr(service, "_upsert_enriched_snapshot", _capture_upsert)
+    monkeypatch.setattr(service, "upsert_enriched_snapshot", _capture_upsert)
 
     db = AsyncMock()
     db.execute = AsyncMock(return_value=_Result())
@@ -127,7 +127,7 @@ async def test_canonical_twr_stops_at_dedicated_coverage_boundary(monkeypatch):
         "has_partial_prices_silent",
         AsyncMock(return_value=False),
     )
-    monkeypatch.setattr(service, "_upsert_enriched_snapshot", _capture_upsert)
+    monkeypatch.setattr(service, "upsert_enriched_snapshot", _capture_upsert)
     monkeypatch.setattr(service, "date", _FixedToday)
 
     db = AsyncMock()
@@ -176,7 +176,7 @@ async def test_canonical_twr_skips_persisted_price_gap_and_continues(monkeypatch
         "has_partial_prices_silent",
         AsyncMock(return_value=False),
     )
-    monkeypatch.setattr(service, "_upsert_enriched_snapshot", _capture_upsert)
+    monkeypatch.setattr(service, "upsert_enriched_snapshot", _capture_upsert)
     monkeypatch.setattr(service, "date", _FixedToday)
 
     db = AsyncMock()

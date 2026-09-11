@@ -20,11 +20,11 @@ from app.services.fixed_income_valuation_service import IncompleteBenchmarkCover
 from app.services.portfolio_canonical_valuation_service import (
     calculate_canonical_portfolio_totals,
 )
-from app.services.portfolio_snapshot_twr_service import (
-    _accumulated_dividends_at,
-    _decimal,
-    _upsert_enriched_snapshot,
+from app.services.portfolio_snapshot_twr_components import (
+    accumulated_dividends_at,
     calculate_transaction_components,
+    decimal_value,
+    upsert_enriched_snapshot,
 )
 from app.services.silent_price_coverage_service import has_partial_prices_silent
 from app.services.twr_service import (
@@ -54,8 +54,16 @@ async def backfill_canonical_snapshots_with_returns(
     db: AsyncSession,
     portfolio_id: int,
     days_back: int | None = None,
+    *,
+    end_date: date | None = None,
+    commit: bool = True,
 ) -> int:
-    """Reconstrói snapshots usando valuation dedicado de Renda Fixa e Tesouro."""
+    """Reconstrói snapshots canônicos até ``end_date`` usando apenas dados persistidos.
+
+    ``commit=False`` mantém todo o ciclo dentro da transação do chamador. Isso é
+    usado por certificações destrutivas encapsuladas em savepoint sem criar uma
+    segunda fronteira de escrita para ``PortfolioSnapshot``.
+    """
     tx_result = await db.execute(
         select(Transaction)
         .where(Transaction.portfolio_id == portfolio_id)
@@ -69,19 +77,19 @@ async def backfill_canonical_snapshots_with_returns(
         await load_portfolio_dividend_entitlements(db, portfolio_id)
     )
 
+    upper_bound = end_date or date.today()
     start = transactions[0].date
     if days_back is not None:
-        start = max(start, date.today() - timedelta(days=days_back))
+        start = max(start, upper_bound - timedelta(days=days_back))
 
     previous_value = _ZERO
     accumulated_return = _ZERO
     count = 0
     cursor = start
-    today = date.today()
     treasury_symbol_cache: dict[str, str | None] = {}
     treasury_ticker_cache: dict[str, str] = {}
 
-    while cursor <= today:
+    while cursor <= upper_bound:
         if cursor.weekday() < 5:
             try:
                 totals = await calculate_canonical_portfolio_totals(
@@ -117,15 +125,15 @@ async def backfill_canonical_snapshots_with_returns(
             )
             totals["realized_pnl"] = realized_pnl
             totals["total_pnl"] = (
-                realized_pnl + _decimal(totals["unrealized_pnl"])
+                realized_pnl + decimal_value(totals["unrealized_pnl"])
             ).quantize(_MONEY)
 
             dividends_day = dividends_day_map.get(cursor, _ZERO)
-            dividends_accumulated = _accumulated_dividends_at(
+            dividends_accumulated = accumulated_dividends_at(
                 dividends_accumulated_map,
                 cursor,
             )
-            current_value = _decimal(totals["market_value"])
+            current_value = decimal_value(totals["market_value"])
             daily_return = calculate_daily_twr_pct(
                 previous_value,
                 current_value,
@@ -158,18 +166,20 @@ async def backfill_canonical_snapshots_with_returns(
                 "has_partial_prices": has_partial_prices,
                 "return_is_estimated": has_partial_prices,
             }
-            await _upsert_enriched_snapshot(db, portfolio_id, cursor, values)
+            await upsert_enriched_snapshot(db, portfolio_id, cursor, values)
             previous_value = current_value
             count += 1
-            if count % 30 == 0:
+            if commit and count % 30 == 0:
                 await db.commit()
         cursor += timedelta(days=1)
 
-    await db.commit()
+    if commit:
+        await db.commit()
     logger.info(
-        "[snapshot_twr_canonical] portfolio=%s snapshots=%s start=%s mode=db_only",
+        "[snapshot_twr_canonical] portfolio=%s snapshots=%s start=%s end=%s mode=db_only",
         portfolio_id,
         count,
         start,
+        upper_bound,
     )
     return count
