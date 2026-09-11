@@ -715,3 +715,15 @@ Bloco Performance - projecao unica de posicoes no valuation canonico:
 - validacao automatizada focada: `15 passed`;
 - medicao local na carteira `15`: backfill canonico com `days_back=30` passou
   de 22 snapshots em 2,858s para 23 snapshots em 1,997s.
+
+Bloco Performance - cache de catalogo do Tesouro no backfill canonico:
+
+- evidencia tecnica: a correcao canonica de Tesouro resolvia simbolo e ticker
+  persistido repetidamente para o mesmo ativo ao longo do loop diario;
+- otimizacao: `backfill_canonical_snapshots_with_returns` agora mantem caches
+  em memoria para resolucao de simbolo canonico e ticker persistido de Tesouro;
+- seguranca: o preco do Tesouro continua sendo consultado por data, preservando
+  a politica de historico oficial/exato e sem interpolacao artificial;
+- validacao automatizada focada: `15 passed`;
+- medicao local na carteira `15`: backfill canonico com `days_back=30` passou
+  de 1,997s para 1,751s.

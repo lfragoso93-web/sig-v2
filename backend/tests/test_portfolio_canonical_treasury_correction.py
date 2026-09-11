@@ -104,3 +104,38 @@ async def test_treasury_correction_uses_distinct_canonical_ticker_for_real_alias
         "tesouro-selic-2029",
         date(2026, 2, 28),
     )
+
+
+@pytest.mark.asyncio
+async def test_treasury_correction_reuses_symbol_and_ticker_caches(
+    monkeypatch,
+) -> None:
+    positions = {
+        "Tesouro Selic 2029": SimpleNamespace(
+            asset_type=AssetType.TESOURO_DIRETO,
+            qty=Decimal("0.50"),
+            cost=Decimal("7000.00"),
+        )
+    }
+    resolve_symbol = AsyncMock(return_value="tesouro-selic-2029")
+    persisted_ticker = AsyncMock(return_value="tesouro-selic-2029")
+    get_price = AsyncMock(return_value=Decimal("13900.0"))
+    monkeypatch.setattr(valuation, "resolve_treasury_symbol", resolve_symbol)
+    monkeypatch.setattr(valuation, "_persisted_treasury_ticker", persisted_ticker)
+    monkeypatch.setattr(valuation, "_treasury_price_at_or_before", get_price)
+
+    symbol_cache = {}
+    ticker_cache = {}
+    for target_date in (date(2026, 2, 28), date(2026, 3, 1)):
+        await valuation._treasury_correction_at_date(
+            AsyncMock(),
+            portfolio_id=13,
+            target_date=target_date,
+            positions=positions,
+            treasury_symbol_cache=symbol_cache,
+            treasury_ticker_cache=ticker_cache,
+        )
+
+    resolve_symbol.assert_awaited_once_with(ANY, "Tesouro Selic 2029")
+    persisted_ticker.assert_awaited_once_with(ANY, "tesouro-selic-2029")
+    assert get_price.await_count == 2

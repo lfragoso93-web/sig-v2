@@ -264,6 +264,8 @@ async def _treasury_correction_at_date(
     portfolio_id: int,
     target_date: date,
     positions: dict | None = None,
+    treasury_symbol_cache: dict[str, str | None] | None = None,
+    treasury_ticker_cache: dict[str, str] | None = None,
 ) -> dict[str, Decimal | int]:
     """Substitui o proxy por custo médio pelo preço do ativo oficial do Tesouro."""
     if positions is None:
@@ -277,12 +279,23 @@ async def _treasury_correction_at_date(
         if raw_type.upper() != _TREASURY_TYPE:
             continue
 
-        canonical = await resolve_treasury_symbol(db, ticker)
+        canonical = None
+        if treasury_symbol_cache is not None and ticker in treasury_symbol_cache:
+            canonical = treasury_symbol_cache[ticker]
+        else:
+            canonical = await resolve_treasury_symbol(db, ticker)
+            if treasury_symbol_cache is not None:
+                treasury_symbol_cache[ticker] = canonical
         if not canonical:
             unresolved += 1
             continue
 
-        price_ticker = await _persisted_treasury_ticker(db, canonical)
+        if treasury_ticker_cache is not None and canonical in treasury_ticker_cache:
+            price_ticker = treasury_ticker_cache[canonical]
+        else:
+            price_ticker = await _persisted_treasury_ticker(db, canonical)
+            if treasury_ticker_cache is not None:
+                treasury_ticker_cache[canonical] = price_ticker
         price = await _treasury_price_at_or_before(db, price_ticker, target_date)
         if price is None:
             unresolved += 1
@@ -305,6 +318,8 @@ async def calculate_canonical_portfolio_totals(
     portfolio_id: int,
     target_date: date,
     transactions: list[Transaction] | None = None,
+    treasury_symbol_cache: dict[str, str | None] | None = None,
+    treasury_ticker_cache: dict[str, str] | None = None,
 ) -> dict:
     """Retorna totais de mercado corrigidos por Renda Fixa e Tesouro."""
     positions = await build_positions_at(db, portfolio_id, target_date)
@@ -325,6 +340,8 @@ async def calculate_canonical_portfolio_totals(
         portfolio_id,
         target_date,
         positions=positions,
+        treasury_symbol_cache=treasury_symbol_cache,
+        treasury_ticker_cache=treasury_ticker_cache,
     )
 
     fixed_income_correction = fixed_income["current_value"] - fixed_income["invested_amount"]

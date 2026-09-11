@@ -78,6 +78,8 @@ async def backfill_canonical_snapshots_with_returns(
     count = 0
     cursor = start
     today = date.today()
+    treasury_symbol_cache: dict[str, str | None] = {}
+    treasury_ticker_cache: dict[str, str] = {}
 
     while cursor <= today:
         if cursor.weekday() < 5:
@@ -87,6 +89,8 @@ async def backfill_canonical_snapshots_with_returns(
                     portfolio_id,
                     cursor,
                     transactions=transactions,
+                    treasury_symbol_cache=treasury_symbol_cache,
+                    treasury_ticker_cache=treasury_ticker_cache,
                 )
             except IncompleteBenchmarkCoverageError as exc:
                 logger.warning(
