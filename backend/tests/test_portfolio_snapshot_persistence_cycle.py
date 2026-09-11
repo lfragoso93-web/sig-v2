@@ -25,21 +25,24 @@ def test_snapshot_signature_accepts_mapping_and_orm_like_object():
     assert tuple(str(item) for item in _snapshot_signature(orm_like)) == expected
 
 
-def test_snapshot_cycle_uses_existing_persistence_contracts():
+def test_snapshot_cycle_uses_canonical_persistence_contracts():
     source = Path("app/cli/portfolio_snapshot_certification_cycle.py").read_text(
         encoding="utf-8"
     )
 
     for token in (
         "load_certification_portfolio_identity",
-        "calc_snapshot_at_date",
+        "backfill_canonical_snapshots_with_returns",
         "invalidate_snapshots_from",
+        "end_date=target_date",
+        "commit=False",
         "await db.begin_nested()",
         "await savepoint.rollback()",
         "await db.refresh(tx)",
         "await db.commit()",
     ):
         assert token in source
+    assert "calc_snapshot_at_date" not in source
 
 
 def test_snapshot_cycle_mutation_is_exactly_scoped_to_cert303_petr4():
@@ -64,15 +67,15 @@ def test_snapshot_cycle_does_not_use_provider_prefetch():
         encoding="utf-8"
     )
 
-    assert "prefetch=False" in source
+    assert "prefetch" not in source
     assert "provider" not in source.lower()
 
 
 def test_snapshot_replay_is_backed_by_unique_upsert_contract():
-    service = Path("app/services/portfolio_snapshot_service.py").read_text(
+    components = Path("app/services/portfolio_snapshot_twr_components.py").read_text(
         encoding="utf-8"
     )
     model = Path("app/models/portfolio_snapshot.py").read_text(encoding="utf-8")
 
-    assert 'constraint="uq_snapshot_portfolio_date"' in service
+    assert 'constraint="uq_snapshot_portfolio_date"' in components
     assert 'name="uq_snapshot_portfolio_date"' in model
