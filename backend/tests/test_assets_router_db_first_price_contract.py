@@ -78,7 +78,12 @@ async def test_treasury_current_price_uses_persisted_market_price() -> None:
             assets,
             "get_persisted_current_prices",
             return_value={"BRSTNCNTB0X": 4321.25},
-        ),
+        ) as current_reader,
+        patch.object(
+            assets,
+            "load_treasury_rate_at_or_before",
+            return_value=(None, None),
+        ) as rate_reader,
     ):
         result = await assets.get_treasury_price(
             "BRSTNCNTB0X",
@@ -87,6 +92,8 @@ async def test_treasury_current_price_uses_persisted_market_price() -> None:
             None,
         )
 
+    current_reader.assert_awaited_once_with(db, ["BRSTNCNTB0X"])
+    rate_reader.assert_awaited_once()
     assert result.price == 4321.25
     assert result.source == "assets.last_price"
 
