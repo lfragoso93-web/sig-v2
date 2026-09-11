@@ -7,6 +7,7 @@ substituídos pelos respectivos motores dedicados antes do retorno.
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Iterable
 from datetime import date
 from decimal import Decimal
 
@@ -69,19 +70,35 @@ async def _treasury_price_at_or_before(
     ticker: str,
     target_date: date,
 ) -> Decimal | None:
+    prices = await _treasury_prices_at_or_before_batch(db, [ticker], target_date)
+    return prices.get(ticker.lower())
+
+
+async def _treasury_prices_at_or_before_batch(
+    db: AsyncSession,
+    tickers: Iterable[str],
+    target_date: date,
+) -> dict[str, Decimal]:
+    normalized = sorted({str(ticker).lower() for ticker in tickers if ticker})
+    if not normalized:
+        return {}
+
     result = await db.execute(
-        select(AssetPrice.close)
-        .join(Asset, AssetPrice.asset_id == Asset.id)
+        select(func.lower(Asset.ticker), AssetPrice.close)
+        .join(AssetPrice, AssetPrice.asset_id == Asset.id)
         .where(
             Asset.asset_type == _TREASURY_TYPE,
-            func.lower(Asset.ticker) == ticker.lower(),
+            func.lower(Asset.ticker).in_(normalized),
             func.date(AssetPrice.timestamp) <= target_date,
         )
-        .order_by(AssetPrice.timestamp.desc())
-        .limit(1)
+        .distinct(func.lower(Asset.ticker))
+        .order_by(func.lower(Asset.ticker).asc(), AssetPrice.timestamp.desc())
     )
-    price = result.scalars().first()
-    return Decimal(str(price)) if price is not None else None
+    return {
+        str(ticker).lower(): Decimal(str(close))
+        for ticker, close in result.all()
+        if close is not None
+    }
 
 
 async def _base_totals_without_dedicated_lookup(
@@ -273,6 +290,7 @@ async def _treasury_correction_at_date(
     correction = _ZERO
     matched = 0
     unresolved = 0
+    treasury_positions: list[tuple[object, str]] = []
 
     for ticker, state in positions.items():
         raw_type = state.asset_type.value if hasattr(state.asset_type, "value") else str(state.asset_type or "")
@@ -296,7 +314,15 @@ async def _treasury_correction_at_date(
             price_ticker = await _persisted_treasury_ticker(db, canonical)
             if treasury_ticker_cache is not None:
                 treasury_ticker_cache[canonical] = price_ticker
-        price = await _treasury_price_at_or_before(db, price_ticker, target_date)
+        treasury_positions.append((state, price_ticker))
+
+    prices = await _treasury_prices_at_or_before_batch(
+        db,
+        [price_ticker for _, price_ticker in treasury_positions],
+        target_date,
+    )
+    for state, price_ticker in treasury_positions:
+        price = prices.get(price_ticker.lower())
         if price is None:
             unresolved += 1
             continue

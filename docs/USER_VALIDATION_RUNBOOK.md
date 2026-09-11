@@ -727,3 +727,19 @@ Bloco Performance - cache de catalogo do Tesouro no backfill canonico:
 - validacao automatizada focada: `15 passed`;
 - medicao local na carteira `15`: backfill canonico com `days_back=30` passou
   de 1,997s para 1,751s.
+
+Bloco Performance - precos de Tesouro em lote no valuation canonico:
+
+- evidencia tecnica: mesmo com cache de catalogo, cada posicao de Tesouro ainda
+  disparava uma consulta propria de preco dentro do mesmo dia de backfill;
+- otimizacao: a correcao canonica de Tesouro agora coleta todos os tickers
+  elegiveis e busca os precos persistidos em lote para a data alvo;
+- seguranca: a consulta em lote preserva a mesma politica anterior de usar o
+  ultimo preco oficial persistido em ou antes da data, sem interpolacao e sem
+  usar cotacao futura;
+- compatibilidade: a funcao pontual de preco por ticker foi mantida como wrapper
+  sobre a busca em lote;
+- validacao automatizada focada: `16 passed`;
+- validacao tecnica: `python -m compileall app`;
+- medicao local na carteira `15`: backfill canonico com `days_back=30` passou
+  de 1,751s para 1,428s.
