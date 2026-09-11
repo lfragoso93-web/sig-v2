@@ -783,3 +783,22 @@ Bloco UX/Transacoes - venda de Tesouro com ticker canonico:
 - validacao frontend: `npm run typecheck`;
 - validacao frontend: `npx vitest run legacyMutationModalsAbsence.test.ts hooks/marketLookupErrors.test.ts --pool threads --maxWorkers 1 --no-file-parallelism` com `8 passed`;
 - validacao frontend: `npm run build`.
+
+Bloco UX - vencimento completo de Tesouro no lancamento:
+
+- evidencia de usuario: `TESOURO SELIC 2031` preenchia indexador e PU, mas
+  deixava vencimento vazio no modal de lancamento;
+- causa: a aplicacao automatica do catalogo exigia correspondencia exata por
+  nome/ticker/slug; consultas por nome comercial curto podem retornar um unico
+  titulo compativel sem ter identidade textual exatamente igual;
+- correcao frontend: quando a busca do catalogo retorna um unico titulo cujos
+  termos contem a consulta do usuario, o modal aplica essa sugestao e herda
+  vencimento, slug e demais metadados do item persistido;
+- correcao backend: o endpoint de busca do Tesouro agora extrai vencimento tanto
+  de slugs compactos (`01032031`) quanto de nomes oficiais com data
+  (`01/03/2031`) ou ISO (`2031-03-01`);
+- validacao backend: `pytest tests/test_assets_router_provider_boundary.py tests/test_transaction_write_service.py` com `10 passed`;
+- validacao backend: `python -m compileall app`;
+- validacao frontend: `npm run typecheck`;
+- validacao frontend: `npx vitest run hooks/marketLookupErrors.test.ts --pool threads --maxWorkers 1 --no-file-parallelism` com `5 passed`;
+- validacao frontend: `npm run build`.

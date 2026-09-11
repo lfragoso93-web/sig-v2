@@ -59,6 +59,19 @@ function matchesTreasuryItem(item: TreasuryItem, value: string) {
   ].some(candidate => normalizeTreasurySearch(candidate) === normalized)
 }
 
+function uniqueTreasuryCatalogMatch(items: TreasuryItem[], value: string) {
+  if (items.length !== 1) return null
+  const normalized = normalizeTreasurySearch(value)
+  if (!normalized) return null
+
+  const item = items[0]
+  const searchable = normalizeTreasurySearch(
+    [item.name, item.ticker, item.slug].filter(Boolean).join(' '),
+  )
+  const terms = normalized.split(/\s+/).filter(Boolean)
+  return terms.every(term => searchable.includes(term)) ? item : null
+}
+
 function inferTreasuryIndexer(value: string | null | undefined) {
   const normalized = normalizeTreasurySearch(value)
   if (normalized.includes('selic')) return 'SELIC'
@@ -311,12 +324,13 @@ export default function AddTransactionModal({ onClose }: Props) {
       return
     }
 
-    const exactItem = tdItems.find(item => matchesTreasuryItem(item, ticker))
-    if (exactItem) {
-      const key = treasuryIdentity(exactItem)
+    const catalogItem = tdItems.find(item => matchesTreasuryItem(item, ticker))
+      ?? uniqueTreasuryCatalogMatch(tdItems, ticker)
+    if (catalogItem) {
+      const key = treasuryIdentity(catalogItem)
       if (key && autoAppliedTreasuryRef.current !== key) {
         autoAppliedTreasuryRef.current = key
-        applyTDSuggestion(exactItem)
+        applyTDSuggestion(catalogItem)
       }
       setShowTDSugg(false)
       return

@@ -31,8 +31,9 @@ describe('market lookup error contracts', () => {
     const source = read('src/components/modals/AddTransactionModal.tsx')
 
     expect(source).toContain('function matchesTreasuryItem')
-    expect(source).toContain('const exactItem = tdItems.find(item => matchesTreasuryItem(item, ticker))')
-    expect(source).toContain('applyTDSuggestion(exactItem)')
+    expect(source).toContain('function uniqueTreasuryCatalogMatch')
+    expect(source).toContain('?? uniqueTreasuryCatalogMatch(tdItems, ticker)')
+    expect(source).toContain('applyTDSuggestion(catalogItem)')
     expect(source).toContain('useTreasuryPrice(activeSlug, date, isTesouro && !!activeSlug && !priceEdited)')
   })
 })

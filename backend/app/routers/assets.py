@@ -134,6 +134,22 @@ def _treasury_indexer(value: str) -> str:
 
 
 def _treasury_maturity_from_ticker(ticker: str) -> Optional[str]:
+    slash_match = re.search(r"(\d{2})/(\d{2})/(20\d{2})", ticker)
+    if slash_match:
+        day, month, year = slash_match.groups()
+        try:
+            return date_type(int(year), int(month), int(day)).isoformat()
+        except ValueError:
+            return None
+
+    iso_match = re.search(r"(20\d{2})-(\d{2})-(\d{2})", ticker)
+    if iso_match:
+        year, month, day = iso_match.groups()
+        try:
+            return date_type(int(year), int(month), int(day)).isoformat()
+        except ValueError:
+            return None
+
     match = re.search(r"(\d{2})(\d{2})(20\d{2})$", ticker)
     if not match:
         return None
@@ -300,7 +316,10 @@ async def search_treasury(
             ticker=item.ticker,
             slug=item.ticker,
             indexer=_treasury_indexer(item.name),
-            maturity_date=_treasury_maturity_from_ticker(item.ticker),
+            maturity_date=(
+                _treasury_maturity_from_ticker(item.ticker)
+                or _treasury_maturity_from_ticker(item.name)
+            ),
         )
         for item in items
     ]
