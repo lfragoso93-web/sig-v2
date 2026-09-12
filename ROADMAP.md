@@ -1,6 +1,6 @@
 # Roadmap — SGI v2
 
-> Última atualização: 10/09/2026.
+> Última atualização: 12/09/2026.
 
 ## Estado do projeto
 
@@ -33,7 +33,7 @@ Não é necessário concluir #149, #351, #360, #361, OAuth, exportações ou cal
 
 ## Fase 2 — Proventos (#226)
 
-A arquitetura e a implementação estão avançadas. Já existe prova controlada portfolio-scoped e idempotente.
+A arquitetura e a implementação estão avançadas. O contrato vigente é `pre-prod-dividends-seed.v2`: eventos globais são persistidos exclusivamente em `asset_dividends` e os direitos de carteira são calculados sob demanda a partir das posições históricas, sem materialização por carteira. Já existe prova controlada portfolio-scoped e idempotente.
 
 Decisão restante:
 
@@ -134,7 +134,7 @@ Eventos portfolio-scoped já podem ser coletados, mas eventos complexos permanec
 | Tesouro | 🟢 valuation DB-first |
 | Renda Fixa atual | 🟢 valuation dedicado |
 | RF TWR diário | 🟠 #149 |
-| Proventos portfolio-scoped | 🟢 comprovado |
+| Proventos `pre-prod-dividends-seed.v2` | 🟢 asset-based; direitos sob demanda; portfolio-scoped comprovado |
 | Proventos gate amplo | 🟠 #226 |
 | Eventos corporativos | 🟠 reconciliação material pendente |
 | IRPF suportado | 🟢 funcional |
