@@ -113,3 +113,71 @@ Tesouro Selic;01/03/2031;15/07/2026;15.247,81;13,10
     assert parsed[0].date() == date(2026, 7, 15)
     assert parsed[1] == 15247.81
     assert parsed[2] == 13.10
+def test_canonical_treasury_symbol_preserves_specific_historical_prefixado_symbol():
+    assert (
+        canonical_treasury_symbol_from_text(
+            "tesouro-prefixado-01042006"
+        )
+        == "tesouro-prefixado-01042006"
+    )
+    assert (
+        canonical_treasury_symbol_from_text(
+            "tesouro-prefixado-01072006"
+        )
+        == "tesouro-prefixado-01072006"
+    )
+    assert (
+        canonical_treasury_symbol_from_text(
+            "tesouro-prefixado-01102006"
+        )
+        == "tesouro-prefixado-01102006"
+    )
+
+
+def test_canonical_treasury_symbol_preserves_specific_coupon_prefixado_symbol():
+    assert (
+        canonical_treasury_symbol_from_text(
+            "tesouro-prefixado-com-juros-semestrais-01072010"
+        )
+        == "tesouro-prefixado-com-juros-semestrais-01072010"
+    )
+
+
+def test_canonical_treasury_symbol_preserves_specific_ipca_symbol():
+    assert (
+        canonical_treasury_symbol_from_text(
+            "tesouro-ipca-15052029"
+        )
+        == "tesouro-ipca-15052029"
+    )
+    assert (
+        canonical_treasury_symbol_from_text(
+            "tesouro-ipca-com-juros-semestrais-15052035"
+        )
+        == "tesouro-ipca-com-juros-semestrais-15052035"
+    )
+
+
+def test_canonical_treasury_symbol_keeps_commercial_name_heuristics():
+    assert (
+        canonical_treasury_symbol_from_text("TESOURO PREFIXADO 2028")
+        == "tesouro-prefixado-01012028"
+    )
+    assert (
+        canonical_treasury_symbol_from_text("TESOURO SELIC 2031")
+        == "tesouro-selic-01032031"
+    )
+    assert (
+        canonical_treasury_symbol_from_text("TESOURO IPCA+ 2035")
+        == "tesouro-ipca-15082035"
+    )
+    assert (
+        canonical_treasury_symbol_from_text(
+            "TESOURO RENDA+ APOSENTADORIA EXTRA 2030"
+        )
+        == "tesouro-renda-mais-2030"
+    )
+    assert (
+        canonical_treasury_symbol_from_text("TESOURO EDUCA+ 2026")
+        == "tesouro-educa-mais-2026"
+    )

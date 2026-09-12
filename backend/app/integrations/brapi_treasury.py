@@ -97,6 +97,11 @@ def canonical_treasury_symbol_from_text(value: str | None) -> Optional[str]:
     """Converte nomes públicos comuns para symbol canônico usado pelo SGI."""
     if not value:
         return None
+
+    raw = value.strip().lower()
+    if is_brapi_treasury_symbol(raw):
+        return raw
+
     slug = _slug_text(value)
     year = _year_from_text(value)
     if not year:
