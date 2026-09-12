@@ -361,7 +361,7 @@ def _collapse_estimated_payment_components(
                 deduped.append(first)
                 duplicated.extend(rest)
 
-            if not has_conflict:
+            if not has_conflict and len(deduped) < 3:
                 retained.extend(deduped)
                 collapsed.extend(duplicated)
                 continue
