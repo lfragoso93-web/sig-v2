@@ -86,6 +86,7 @@ Princípios obrigatórios:
 - dados externos são persistidos antes de entrar em contratos financeiros;
 - `transactions` é a fonte canônica do lifecycle, inclusive Renda Fixa e Tesouro;
 - Proventos pertencem ao ativo em `asset_dividends`;
+- o seed isolado de Proventos publica o contrato `pre-prod-dividends-seed.v2`; direitos de carteira são calculados sob demanda a partir das posições históricas, sem materialização por carteira;
 - eventos corporativos pertencem ao ativo em `corporate_events`;
 - rebuilds e seeds são operações explícitas e auditáveis.
 
@@ -101,7 +102,7 @@ Princípios obrigatórios:
 | Rentabilidade | funcional; TWR RF permanece #149 |
 | Tesouro | valuation DB-first e snapshots dedicados |
 | Renda Fixa | lifecycle transaction-derived e valuation dedicado |
-| Proventos | asset-based; prova portfolio-scoped idempotente |
+| Proventos | `pre-prod-dividends-seed.v2` asset-based; direitos calculados sob demanda; prova portfolio-scoped idempotente |
 | Eventos corporativos | reconciliação material ainda pendente para casos complexos |
 | IRPF | funcional para classes suportadas |
 | Metas | superfície básica funcional; desenho definitivo permanece #246 |
