@@ -40,7 +40,16 @@ async def test_import_upload_dry_run_validates_without_persisting():
     portfolio_result.scalar_one_or_none.return_value = SimpleNamespace(id=1, user_id=7)
     duplicate_result = MagicMock()
     duplicate_result.scalar_one_or_none.return_value = None
-    db.execute.side_effect = [portfolio_result, duplicate_result]
+    coverage_result = MagicMock()
+    coverage_result.all.return_value = [
+        SimpleNamespace(
+            ticker="PETR4",
+            asset_type="ACAO",
+            last_price=30.0,
+            price_rows=1,
+        )
+    ]
+    db.execute.side_effect = [portfolio_result, duplicate_result, coverage_result]
 
     csv = (
         "ticker,asset_type,operation,quantity,price,date,fees,currency,notes\n"
