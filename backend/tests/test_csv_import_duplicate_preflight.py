@@ -1,8 +1,11 @@
-from datetime import date
+from datetime import date, datetime, timezone
+from decimal import Decimal
 
 import pytest
 from sqlalchemy import func, select
 
+from app.models.asset import Asset
+from app.models.asset_price import AssetPrice
 from app.models.transaction import OperationType, Transaction
 from app.services.csv_import_service import import_transactions_csv
 
@@ -127,7 +130,23 @@ async def test_sell_validation_does_not_use_same_ticker_from_another_asset_type(
             currency="BRL",
         )
     )
+    acao_asset = Asset(
+        ticker="SAME",
+        name="SAME ACAO",
+        asset_type="ACAO",
+        currency="BRL",
+        last_price=Decimal("10.00"),
+    )
+    db.add(acao_asset)
     await db.flush()
+    db.add(
+        AssetPrice(
+            asset_id=acao_asset.id,
+            timestamp=datetime(2026, 1, 3, 12, 0, tzinfo=timezone.utc),
+            close=Decimal("10.00"),
+            source="test",
+        )
+    )
     await db.commit()
 
     content = """ticker,asset_type,operation,quantity,price,date,fees,currency,notes
