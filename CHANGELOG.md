@@ -4,6 +4,15 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 
 ## [Unreleased] — branch `stable-15jun`
 
+### 12/09/2026 — recuperação local de gates e contrato canônico de Proventos
+
+- a recuperação da #363 passou a usar suíte local completa como ferramenta de descoberta; a PR estrutural #362 permanece fechada/draft durante o saneamento para evitar consumo iterativo de GitHub Actions;
+- contratos de snapshot foram alinhados ao writer único `portfolio_snapshot_canonical_twr_service.py`, mantendo `portfolio_snapshot_service.py` restrito à invalidação;
+- o contrato vigente de Proventos foi explicitado como `pre-prod-dividends-seed.v2`;
+- `asset_dividends` permanece a única persistência canônica de eventos globais de Proventos;
+- direitos de carteira são calculados sob demanda a partir das posições históricas, sem materialização por carteira;
+- README, ROADMAP e CHANGELOG foram sincronizados para refletir essa fronteira canônica.
+
 ### 10/09/2026 — rebaseline de governança e certificação
 
 - `user-test-readiness.v1` consolidado como gate read-only para validação assistida;
