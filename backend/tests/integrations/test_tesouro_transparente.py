@@ -113,6 +113,8 @@ Tesouro Selic;01/03/2031;15/07/2026;15.247,81;13,10
     assert parsed[0].date() == date(2026, 7, 15)
     assert parsed[1] == 15247.81
     assert parsed[2] == 13.10
+
+
 def test_canonical_treasury_symbol_preserves_specific_historical_prefixado_symbol():
     assert (
         canonical_treasury_symbol_from_text(
