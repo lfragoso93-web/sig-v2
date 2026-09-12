@@ -17,6 +17,7 @@ from app.services.rentabilidade_reconciliation_service import (
 )
 from app.services.csv_import_service import (
     CSV_TEMPLATE_HEADERS,
+    PRICE_HISTORY_REQUIRED_TYPES,
     import_csv_transactions,
     import_transactions_csv,
     parse_csv_content,
@@ -32,6 +33,7 @@ FIXTURE_PATH = (
 )
 CENT = Decimal("0.01")
 QTY = Decimal("0.00000001")
+_TREASURY_SYMBOL = "tesouro-selic-2029"
 
 
 class FakeUpload:
@@ -60,6 +62,29 @@ def _to_csv(transactions: list[dict[str, str]]) -> str:
     writer.writeheader()
     writer.writerows(transactions)
     return output.getvalue()
+
+
+def _price_coverage_result(fixture: dict) -> MagicMock:
+    seen: set[tuple[str, str]] = set()
+    rows = []
+    for transaction in fixture["transactions"]:
+        ticker = transaction["ticker"].strip().upper()
+        asset_type = transaction["asset_type"].strip().upper()
+        key = (ticker, asset_type)
+        if asset_type not in PRICE_HISTORY_REQUIRED_TYPES or key in seen:
+            continue
+        seen.add(key)
+        rows.append(
+            SimpleNamespace(
+                ticker=ticker,
+                asset_type=asset_type,
+                last_price=Decimal(fixture["market_prices"]["prices"][ticker]),
+                price_rows=1,
+            )
+        )
+    result = MagicMock()
+    result.all.return_value = rows
+    return result
 
 
 def _expected_classes(fixture: dict) -> dict[str, dict[str, str]]:
@@ -194,11 +219,15 @@ def test_portfolio_synthetic_fixture_covers_required_cases() -> None:
 async def test_portfolio_synthetic_fixture_is_valid_csv_contract() -> None:
     fixture = _load_fixture()
 
-    rows, global_errors = await parse_csv_content(
-        _to_csv(fixture["transactions"]),
-        portfolio_id=303,
-        db=AsyncSession,
-    )
+    with patch(
+        "app.services.csv_import_service.resolve_treasury_symbol",
+        new=AsyncMock(return_value=_TREASURY_SYMBOL),
+    ):
+        rows, global_errors = await parse_csv_content(
+            _to_csv(fixture["transactions"]),
+            portfolio_id=303,
+            db=AsyncMock(spec=AsyncSession),
+        )
 
     assert global_errors == []
     assert len(rows) == len(fixture["transactions"])
@@ -220,15 +249,26 @@ async def test_synthetic_fixture_upload_dry_run_is_read_only() -> None:
         duplicate_result = MagicMock()
         duplicate_result.scalar_one_or_none.return_value = None
         execute_results.append(duplicate_result)
+    execute_results.append(_price_coverage_result(fixture))
     db.execute = AsyncMock(side_effect=execute_results)
 
-    result = await import_transactions_csv(
-        db=db,
-        portfolio_id=303,
-        user_id=303,
-        file=FakeUpload(_to_csv(fixture["transactions"]).encode("utf-8")),
-        dry_run=True,
-    )
+    with (
+        patch(
+            "app.services.csv_import_service.resolve_treasury_symbol",
+            new=AsyncMock(return_value=_TREASURY_SYMBOL),
+        ),
+        patch(
+            "app.services.csv_import_service.require_financially_certified_crypto_asset",
+            new=AsyncMock(),
+        ),
+    ):
+        result = await import_transactions_csv(
+            db=db,
+            portfolio_id=303,
+            user_id=303,
+            file=FakeUpload(_to_csv(fixture["transactions"]).encode("utf-8")),
+            dry_run=True,
+        )
 
     assert result["success"] is True
     assert result["imported_count"] == 0
@@ -259,6 +299,8 @@ async def test_synthetic_fixture_effective_import_commits_once() -> None:
         duplicate_result.scalar_one_or_none.return_value = None
         execute_results.append(duplicate_result)
 
+    execute_results.append(_price_coverage_result(fixture))
+
     for transaction in transactions:
         if transaction["operation"] == "sell":
             quantity_result = MagicMock()
@@ -288,10 +330,28 @@ async def test_synthetic_fixture_effective_import_commits_once() -> None:
     db.flush = AsyncMock()
     db.commit = AsyncMock()
 
-    with patch(
-        "app.services.transaction_write_service."
-        "require_financially_certified_crypto_asset",
-        new=AsyncMock(),
+    with (
+        patch(
+            "app.services.csv_import_service.resolve_treasury_symbol",
+            new=AsyncMock(return_value=_TREASURY_SYMBOL),
+        ),
+        patch(
+            "app.services.csv_import_service.require_financially_certified_crypto_asset",
+            new=AsyncMock(),
+        ),
+        patch(
+            "app.services.transaction_write_service.resolve_treasury_symbol",
+            new=AsyncMock(return_value=_TREASURY_SYMBOL),
+        ),
+        patch(
+            "app.services.transaction_write_service."
+            "require_financially_certified_crypto_asset",
+            new=AsyncMock(),
+        ),
+        patch(
+            "app.services.csv_import_service.invalidate_portfolio_cache",
+            new=AsyncMock(),
+        ) as invalidate_cache,
     ):
         result = await import_csv_transactions(
             content=_to_csv(transactions),
@@ -309,6 +369,7 @@ async def test_synthetic_fixture_effective_import_commits_once() -> None:
     assert db.flush.await_count == len(transactions) + len(assets_seen)
     db.commit.assert_awaited_once()
     db.rollback.assert_not_awaited()
+    invalidate_cache.assert_awaited_once_with(303)
 
 
 @pytest.mark.asyncio
@@ -331,12 +392,16 @@ async def test_synthetic_fixture_repeat_import_skips_duplicates() -> None:
     db.add = MagicMock()
     db.commit = AsyncMock()
 
-    result = await import_csv_transactions(
-        content=_to_csv(fixture["transactions"]),
-        portfolio_id=303,
-        user_id=303,
-        db=db,
-    )
+    with patch(
+        "app.services.csv_import_service.resolve_treasury_symbol",
+        new=AsyncMock(return_value=_TREASURY_SYMBOL),
+    ):
+        result = await import_csv_transactions(
+            content=_to_csv(fixture["transactions"]),
+            portfolio_id=303,
+            user_id=303,
+            db=db,
+        )
 
     assert result["success"] is True
     assert result["imported_count"] == 0
@@ -367,12 +432,16 @@ async def test_synthetic_fixture_invalid_row_blocks_persistence() -> None:
     db.add = MagicMock()
     db.commit = AsyncMock()
 
-    result = await import_csv_transactions(
-        content=_to_csv(transactions),
-        portfolio_id=303,
-        user_id=303,
-        db=db,
-    )
+    with patch(
+        "app.services.csv_import_service.resolve_treasury_symbol",
+        new=AsyncMock(return_value=_TREASURY_SYMBOL),
+    ):
+        result = await import_csv_transactions(
+            content=_to_csv(transactions),
+            portfolio_id=303,
+            user_id=303,
+            db=db,
+        )
 
     assert result["success"] is False
     assert result["imported_count"] == 0
