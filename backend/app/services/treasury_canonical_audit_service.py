@@ -11,6 +11,12 @@ from app.models.asset_price import AssetPrice
 from app.models.transaction import Transaction
 from app.services.treasury_catalog_service import resolve_treasury_symbol
 
+SYNTHETIC_CERTIFICATION_PROVIDER = "synthetic-certification"
+
+
+def _is_synthetic_certification_asset(asset: Asset) -> bool:
+    return str(asset.provider or "").strip() == SYNTHETIC_CERTIFICATION_PROVIDER
+
 
 async def audit_treasury_canonical_assets(db: AsyncSession) -> dict[str, object]:
     result = await db.execute(
@@ -21,6 +27,8 @@ async def audit_treasury_canonical_assets(db: AsyncSession) -> dict[str, object]
     groups: dict[str, list[Asset]] = defaultdict(list)
     unresolved: list[str] = []
     for asset in assets:
+        if _is_synthetic_certification_asset(asset):
+            continue
         ticker = str(asset.ticker or "").strip()
         canonical = await resolve_treasury_symbol(db, ticker)
         if not canonical:
