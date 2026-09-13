@@ -36,6 +36,7 @@ _MONEY = Decimal("0.01")
 _PCT = Decimal("0.0001")
 _CLASS_TOTAL_ROUNDING_TOLERANCE = Decimal("0.02")
 _TREASURY_TYPE = AssetType.TESOURO_DIRETO.value
+_SYNTHETIC_CERTIFICATION_PROVIDER = "synthetic-certification"
 _NON_MARKET_TYPES = NO_QUOTE_TYPES | DEDICATED_PRICE_TYPES
 
 
@@ -63,6 +64,21 @@ async def _persisted_treasury_ticker(db: AsyncSession, canonical: str) -> str:
     )
     found = result.scalars().first()
     return str(found) if found else canonical
+
+
+async def _synthetic_certification_treasury_ticker(
+    db: AsyncSession,
+    ticker: str,
+) -> str | None:
+    result = await db.execute(
+        select(Asset.ticker).where(
+            Asset.ticker == ticker,
+            Asset.asset_type == _TREASURY_TYPE,
+            Asset.provider == _SYNTHETIC_CERTIFICATION_PROVIDER,
+        )
+    )
+    found = result.scalars().first()
+    return str(found) if found else None
 
 
 async def _treasury_price_at_or_before(
@@ -295,6 +311,11 @@ async def _treasury_correction_at_date(
     for ticker, state in positions.items():
         raw_type = state.asset_type.value if hasattr(state.asset_type, "value") else str(state.asset_type or "")
         if raw_type.upper() != _TREASURY_TYPE:
+            continue
+
+        synthetic_ticker = await _synthetic_certification_treasury_ticker(db, ticker)
+        if synthetic_ticker:
+            treasury_positions.append((state, synthetic_ticker))
             continue
 
         canonical = None

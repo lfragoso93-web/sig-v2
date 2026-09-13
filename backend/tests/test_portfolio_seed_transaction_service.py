@@ -87,15 +87,14 @@ async def test_seed_creates_full_fixture_and_crypto_membership() -> None:
     assert result.reused == 0
     assert result.crypto_membership_created == 1
     assert result.crypto_membership_reused == 0
-    assert create_record.await_count == 11
-    assert db.add.call_count == 1
-    assert db.commit.await_count == 1
+    assert create_record.await_count == 10
+    assert db.add.call_count == 2
+    assert db.commit.await_count == 2
 
     tickers = [call.kwargs["payload"].ticker for call in create_record.await_args_list]
     assert "CERT303-BTC" in tickers
     assert "CERT303-PETR4" in tickers
     assert "CERT303-MXRF11" in tickers
-    assert "CERT303-TESOURO-SELIC-2029" in tickers
     assert "CERT303-CDB-SYN-CDI-2028" in tickers
 
     cdb_payload = next(

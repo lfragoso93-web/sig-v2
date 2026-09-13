@@ -6,7 +6,7 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.certification.portfolio_seed_asset_policy import build_synthetic_asset_plan
@@ -26,6 +26,8 @@ from app.services.transaction_write_service import create_transaction_record
 
 SYNTHETIC_CDB_TICKER = "CERT303-CDB-SYN-CDI-2028"
 LEGACY_SYNTHETIC_CDB_NOTES = "synthetic fixed income CDI"
+SYNTHETIC_TREASURY_TICKER = "CERT303-TESOURO-SELIC-2029"
+LEGACY_SYNTHETIC_TREASURY_TICKER = "tesouro-selic-01032029"
 
 
 @dataclass(frozen=True)
@@ -54,9 +56,16 @@ def _persisted_identity_tuple(transaction: Transaction) -> tuple:
     operation = transaction.operation
     if isinstance(operation, OperationType):
         operation = operation.value
+    ticker = str(transaction.ticker)
+    if (
+        ticker == LEGACY_SYNTHETIC_TREASURY_TICKER
+        and str(transaction.asset_type) == "TESOURO_DIRETO"
+        and str(transaction.notes or "") == "synthetic treasury SELIC"
+    ):
+        ticker = SYNTHETIC_TREASURY_TICKER
     return (
         int(transaction.portfolio_id),
-        str(transaction.ticker),
+        ticker,
         str(transaction.asset_type),
         str(operation),
         float(transaction.quantity),
@@ -111,10 +120,19 @@ async def _find_existing_transaction(
         ticker=ticker,
     )
     transaction_columns = Transaction.__table__.c
+    ticker_predicate = transaction_columns.ticker == ticker
+    if ticker == SYNTHETIC_TREASURY_TICKER:
+        ticker_predicate = or_(
+            ticker_predicate,
+            and_(
+                transaction_columns.ticker == LEGACY_SYNTHETIC_TREASURY_TICKER,
+                transaction_columns.notes == "synthetic treasury SELIC",
+            ),
+        )
     result = await db.execute(
         select(Transaction).where(
             transaction_columns.portfolio_id == portfolio_id,
-            transaction_columns.ticker == ticker,
+            ticker_predicate,
             transaction_columns.asset_type == asset_type,
             transaction_columns.operation == OperationType(operation),
             transaction_columns.quantity == quantity,
@@ -124,7 +142,15 @@ async def _find_existing_transaction(
             transaction_columns.currency == currency,
         )
     )
-    return result.scalar_one_or_none()
+    transaction = result.scalar_one_or_none()
+    if (
+        transaction is not None
+        and ticker == SYNTHETIC_TREASURY_TICKER
+        and str(getattr(transaction, "ticker", "")) == LEGACY_SYNTHETIC_TREASURY_TICKER
+    ):
+        transaction.ticker = SYNTHETIC_TREASURY_TICKER
+        await db.commit()
+    return transaction
 
 
 async def _reconcile_existing_certification_notes(
@@ -154,6 +180,30 @@ async def _reconcile_existing_certification_notes(
     raise SyntheticSeedContractError(
         "synthetic CDB note collision; persisted benchmark provenance is not canonical"
     )
+
+
+async def _create_owned_transaction(
+    db: AsyncSession,
+    *,
+    portfolio_id: int,
+    row: dict[str, str],
+    ticker: str,
+) -> None:
+    db.add(
+        Transaction(
+            portfolio_id=portfolio_id,
+            ticker=ticker,
+            asset_type=row["asset_type"],
+            operation=OperationType(row["operation"]),
+            quantity=float(row["quantity"]),
+            price=float(row["price"]),
+            fees=float(row.get("fees", "0") or 0),
+            date=date.fromisoformat(row["date"]),
+            currency=row.get("currency", "BRL"),
+            notes=row.get("notes"),
+        )
+    )
+    await db.commit()
 
 
 async def _require_owned_asset(
@@ -309,21 +359,29 @@ async def seed_transactions(
             reused += 1
             continue
 
-        await create_transaction_record(
-            db,
-            portfolio_id=portfolio_id,
-            payload=TransactionCreate(
+        if identity.ticker == SYNTHETIC_TREASURY_TICKER:
+            await _create_owned_transaction(
+                db,
+                portfolio_id=portfolio_id,
+                row=row,
                 ticker=identity.ticker,
-                asset_type=identity.asset_type,
-                operation=row["operation"],
-                quantity=float(row["quantity"]),
-                price=float(row["price"]),
-                fees=float(row.get("fees", "0") or 0),
-                date=date.fromisoformat(row["date"]),
-                currency=row.get("currency", "BRL"),
-                notes=row.get("notes"),
-            ),
-        )
+            )
+        else:
+            await create_transaction_record(
+                db,
+                portfolio_id=portfolio_id,
+                payload=TransactionCreate(
+                    ticker=identity.ticker,
+                    asset_type=identity.asset_type,
+                    operation=row["operation"],
+                    quantity=float(row["quantity"]),
+                    price=float(row["price"]),
+                    fees=float(row.get("fees", "0") or 0),
+                    date=date.fromisoformat(row["date"]),
+                    currency=row.get("currency", "BRL"),
+                    notes=row.get("notes"),
+                ),
+            )
         created += 1
 
     return SyntheticTransactionSeedResult(
