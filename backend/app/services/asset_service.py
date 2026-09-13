@@ -1,6 +1,6 @@
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_
+from sqlalchemy import func, select, or_
 from app.models.asset import Asset, AssetType
 from app.schemas.asset import AssetCreate
 
@@ -18,15 +18,21 @@ async def get_or_create_asset(
     externa automática; catálogo completo, metadados e históricos pertencem
     ao bootstrap certificado do ambiente.
     """
-    ticker = data.ticker.strip().upper()
+    raw_ticker = data.ticker.strip()
     asset_type = (
         data.asset_type.value
         if isinstance(data.asset_type, AssetType)
         else str(data.asset_type).strip().upper()
     )
+    ticker = (
+        raw_ticker.lower()
+        if asset_type == AssetType.TESOURO_DIRETO.value
+        else raw_ticker.upper()
+    )
+
     result = await db.execute(
         select(Asset).where(
-            Asset.ticker == ticker,
+            func.lower(Asset.ticker) == ticker.lower(),
             Asset.asset_type == asset_type,
         )
     )

@@ -18,44 +18,44 @@ class TestGetOrCreateAsset:
 
     async def test_get_existing_asset(self):
         db = AsyncMock(spec=AsyncSession)
-        
+
         existing_asset = MagicMock(spec=Asset)
         existing_asset.ticker = "PETR4"
         existing_asset.name = "Petrobras"
-        
+
         execute_result = MagicMock()
         execute_result.scalar_one_or_none = MagicMock(return_value=existing_asset)
         db.execute = AsyncMock(return_value=execute_result)
-        
+
         data = AssetCreate(
             ticker="PETR4",
             name="Petrobras",
             asset_type=AssetType.ACAO,
         )
-        
+
         asset, is_new = await get_or_create_asset(db, data)
-        
+
         assert asset == existing_asset
         assert is_new is False
 
     async def test_create_new_asset(self):
         db = AsyncMock(spec=AsyncSession)
-        
+
         execute_result = MagicMock()
         execute_result.scalar_one_or_none = MagicMock(return_value=None)
         db.execute = AsyncMock(return_value=execute_result)
-        
+
         db.commit = AsyncMock()
         db.refresh = AsyncMock()
-        
+
         data = AssetCreate(
             ticker="VALE3",
             name="Vale S.A.",
             asset_type=AssetType.ACAO,
         )
-        
+
         asset, is_new = await get_or_create_asset(db, data)
-        
+
         assert is_new is True
         db.add.assert_called_once()
         db.commit.assert_called_once()
@@ -63,23 +63,23 @@ class TestGetOrCreateAsset:
 
     async def test_create_asset_with_currency(self):
         db = AsyncMock(spec=AsyncSession)
-        
+
         execute_result = MagicMock()
         execute_result.scalar_one_or_none = MagicMock(return_value=None)
         db.execute = AsyncMock(return_value=execute_result)
-        
+
         db.commit = AsyncMock()
         db.refresh = AsyncMock()
-        
+
         data = AssetCreate(
             ticker="AAPL",
             name="Apple Inc.",
             asset_type=AssetType.STOCK,
             currency="USD",
         )
-        
+
         asset, is_new = await get_or_create_asset(db, data)
-        
+
         assert is_new is True
 
 
@@ -88,34 +88,34 @@ class TestListAssets:
 
     async def test_list_assets_empty(self):
         db = AsyncMock(spec=AsyncSession)
-        
+
         execute_result = MagicMock()
         execute_result.scalars = MagicMock(return_value=execute_result)
         execute_result.all = MagicMock(return_value=[])
-        
+
         db.execute = AsyncMock(return_value=execute_result)
-        
+
         assets = await list_assets(db)
-        
+
         assert assets == []
 
     async def test_list_assets_multiple(self):
         db = AsyncMock(spec=AsyncSession)
-        
+
         asset1 = MagicMock(spec=Asset)
         asset1.ticker = "PETR4"
-        
+
         asset2 = MagicMock(spec=Asset)
         asset2.ticker = "VALE3"
-        
+
         execute_result = MagicMock()
         execute_result.scalars = MagicMock(return_value=execute_result)
         execute_result.all = MagicMock(return_value=[asset1, asset2])
-        
+
         db.execute = AsyncMock(return_value=execute_result)
-        
+
         assets = await list_assets(db)
-        
+
         assert len(assets) == 2
         assert assets[0].ticker == "PETR4"
         assert assets[1].ticker == "VALE3"
@@ -126,28 +126,28 @@ class TestGetAssetByTicker:
 
     async def test_get_asset_found(self):
         db = AsyncMock(spec=AsyncSession)
-        
+
         asset = MagicMock(spec=Asset)
         asset.ticker = "PETR4"
         asset.name = "Petrobras"
-        
+
         execute_result = MagicMock()
         execute_result.scalar_one_or_none = MagicMock(return_value=asset)
         db.execute = AsyncMock(return_value=execute_result)
-        
+
         result = await get_asset_by_ticker(db, "PETR4")
-        
+
         assert result == asset
 
     async def test_get_asset_not_found(self):
         db = AsyncMock(spec=AsyncSession)
-        
+
         execute_result = MagicMock()
         execute_result.scalar_one_or_none = MagicMock(return_value=None)
         db.execute = AsyncMock(return_value=execute_result)
-        
+
         result = await get_asset_by_ticker(db, "NONEXISTENT")
-        
+
         assert result is None
 
 
@@ -156,85 +156,142 @@ class TestSearchAssets:
 
     async def test_search_assets_empty_query(self):
         db = AsyncMock(spec=AsyncSession)
-        
+
         asset1 = MagicMock(spec=Asset)
         asset1.ticker = "PETR4"
-        
+
         asset2 = MagicMock(spec=Asset)
         asset2.ticker = "VALE3"
-        
+
         execute_result = MagicMock()
         execute_result.scalars = MagicMock(return_value=execute_result)
         execute_result.all = MagicMock(return_value=[asset1, asset2])
-        
+
         db.execute = AsyncMock(return_value=execute_result)
-        
+
         assets = await search_assets(db, "")
-        
+
         assert len(assets) == 2
 
     async def test_search_assets_by_ticker(self):
         db = AsyncMock(spec=AsyncSession)
-        
+
         asset = MagicMock(spec=Asset)
         asset.ticker = "PETR4"
-        
+
         execute_result = MagicMock()
         execute_result.scalars = MagicMock(return_value=execute_result)
         execute_result.all = MagicMock(return_value=[asset])
-        
+
         db.execute = AsyncMock(return_value=execute_result)
-        
+
         assets = await search_assets(db, "PETR")
-        
+
         assert len(assets) == 1
         assert assets[0].ticker == "PETR4"
 
     async def test_search_assets_by_name(self):
         db = AsyncMock(spec=AsyncSession)
-        
+
         asset = MagicMock(spec=Asset)
         asset.ticker = "PETR4"
         asset.name = "Petrobras S.A."
-        
+
         execute_result = MagicMock()
         execute_result.scalars = MagicMock(return_value=execute_result)
         execute_result.all = MagicMock(return_value=[asset])
-        
+
         db.execute = AsyncMock(return_value=execute_result)
-        
+
         assets = await search_assets(db, "Petrobras")
-        
+
         assert len(assets) == 1
 
     async def test_search_assets_by_type(self):
         db = AsyncMock(spec=AsyncSession)
-        
+
         asset = MagicMock(spec=Asset)
         asset.ticker = "PETR4"
         asset.asset_type = AssetType.ACAO
-        
+
         execute_result = MagicMock()
         execute_result.scalars = MagicMock(return_value=execute_result)
         execute_result.all = MagicMock(return_value=[asset])
-        
+
         db.execute = AsyncMock(return_value=execute_result)
-        
+
         assets = await search_assets(db, "PETR", asset_type=AssetType.ACAO)
-        
+
         assert len(assets) == 1
 
     async def test_search_assets_limit(self):
         db = AsyncMock(spec=AsyncSession)
-        
+
         assets_list = [MagicMock(spec=Asset) for _ in range(5)]
-        
+
         execute_result = MagicMock()
         execute_result.scalars = MagicMock(return_value=execute_result)
         execute_result.all = MagicMock(return_value=assets_list[:10])
-        
+
         db.execute = AsyncMock(return_value=execute_result)
-        
+
         assets = await search_assets(db, "", limit=10)
-        
+
         assert len(assets) <= 10
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_asset_reuses_lowercase_treasury_identity() -> None:
+    db = AsyncMock(spec=AsyncSession)
+
+    existing = Asset(
+        id=17,
+        ticker="tesouro-selic-01032031",
+        name="Tesouro Selic 2031-03-01",
+        asset_type=AssetType.TESOURO_DIRETO.value,
+        currency="BRL",
+    )
+
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = existing
+    db.execute.return_value = result
+
+    data = AssetCreate(
+        ticker="TESOURO-SELIC-01032031",
+        name="Tesouro Selic 2031",
+        asset_type=AssetType.TESOURO_DIRETO,
+        currency="BRL",
+    )
+
+    asset, is_new = await get_or_create_asset(db, data)
+
+    assert asset is existing
+    assert is_new is False
+    db.add.assert_not_called()
+    db.commit.assert_not_awaited()
+    db.refresh.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_asset_persists_new_treasury_identity_lowercase() -> None:
+    db = AsyncMock(spec=AsyncSession)
+
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = None
+    db.execute.return_value = result
+
+    data = AssetCreate(
+        ticker="TESOURO-SELIC-01032031",
+        name="Tesouro Selic 2031",
+        asset_type=AssetType.TESOURO_DIRETO,
+        currency="BRL",
+    )
+
+    asset, is_new = await get_or_create_asset(db, data)
+
+    assert is_new is True
+    assert asset.ticker == "tesouro-selic-01032031"
+    assert asset.asset_type == AssetType.TESOURO_DIRETO.value
+    db.add.assert_called_once_with(asset)
+    db.commit.assert_awaited_once()
+    db.refresh.assert_awaited_once_with(asset)
