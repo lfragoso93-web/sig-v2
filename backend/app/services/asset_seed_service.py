@@ -124,7 +124,7 @@ async def _run_crypto_seed(db: AsyncSession, result: SeedResult) -> None:
     result.new_tickers.setdefault(type_label, [])
     result.seeded_tickers.setdefault(type_label, [])
 
-    logger.info("[seed] iniciando seed CRIPTO do universo suportado Top 100 por market cap")
+    logger.info("[seed] iniciando seed CRIPTO do universo suportado Top 50 por market cap")
     coins = await fetch_supported_crypto_universe()
     logger.info("[seed] universo CRIPTO suportado e disponível na BRAPI: %d", len(coins))
 
@@ -163,7 +163,7 @@ async def _run_crypto_seed(db: AsyncSession, result: SeedResult) -> None:
 
     memberships = await replace_crypto_candidate_memberships(db, coins)
     await db.commit()
-    logger.info("[seed] associações CRIPTO Top 100 persistidas: %d", memberships)
+    logger.info("[seed] associações CRIPTO Top 50 persistidas: %d", memberships)
 
 
 async def run_asset_seed(
