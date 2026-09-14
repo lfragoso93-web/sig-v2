@@ -66,7 +66,7 @@ describe('AddTransactionModal', () => {
       window.innerWidth = width
       setup()
 
-      const classSelect = screen.getByRole('combobox', { name: /Classe/i })
+      const classSelect = screen.getByRole('combobox', { name: /Tipo de ativo/i })
       const buyButton = screen.getByRole('button', { name: /Compra/i })
       const sellButton = screen.getByRole('button', { name: /Venda/i })
 
@@ -74,6 +74,7 @@ describe('AddTransactionModal', () => {
       expect(classSelect).toHaveProperty('value', 'acao')
       expect(buyButton).toBeTruthy()
       expect(sellButton).toBeTruthy()
+      expect(buyButton.compareDocumentPosition(classSelect) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     },
   )
 
@@ -99,7 +100,7 @@ describe('AddTransactionModal', () => {
         Cripto: 'cripto',
       }
 
-      fireEvent.change(screen.getByRole('combobox', { name: /Classe/i }), {
+      fireEvent.change(screen.getByRole('combobox', { name: /Tipo de ativo/i }), {
         target: { value: classKeyByLabel[label] },
       })
       await submitSimpleTransaction()
@@ -121,7 +122,7 @@ describe('AddTransactionModal', () => {
   it('envia a classe canonica selecionada no payload de lancamento', async () => {
     setup()
 
-    fireEvent.change(screen.getByRole('combobox', { name: /Classe/i }), {
+    fireEvent.change(screen.getByRole('combobox', { name: /Tipo de ativo/i }), {
       target: { value: 'cripto' },
     })
     fireEvent.change(screen.getByPlaceholderText(/BTC ou Bitcoin/i), {

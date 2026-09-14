@@ -592,19 +592,6 @@ export default function AddTransactionModal({ onClose }: Props) {
               display: 'flex', flexDirection: 'column', gap: '0.875rem',
             }}>
 
-              <Field label="Classe">
-                <Select
-                  value={activeTab}
-                  onChange={e => handleTabChange(e.target.value)}
-                  disabled={isEditMode}
-                  aria-label="Classe"
-                >
-                  {TABS.map(t => (
-                    <option key={t.key} value={t.key}>{t.label}</option>
-                  ))}
-                </Select>
-              </Field>
-
               {/* Toggle Compra/Venda */}
               <div style={{
                 display: 'grid', gridTemplateColumns: '1fr 1fr',
@@ -635,6 +622,19 @@ export default function AddTransactionModal({ onClose }: Props) {
                   )
                 })}
               </div>
+
+              <Field label="Tipo de ativo">
+                <Select
+                  value={activeTab}
+                  onChange={e => handleTabChange(e.target.value)}
+                  disabled={isEditMode}
+                  aria-label="Tipo de ativo"
+                >
+                  {TABS.map(t => (
+                    <option key={t.key} value={t.key}>{t.label}</option>
+                  ))}
+                </Select>
+              </Field>
 
               {/* Ticker + Moeda */}
               <div style={{ display: 'flex', gap: '0.75rem' }}>
