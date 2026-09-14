@@ -66,9 +66,11 @@ NO-GO:
 - executar migrations destrutivas sobre dataset com dados sem backup/gate
   explicito.
 
-### Artefato candidato aceito em 14/09/2026
+### Artefato candidato gerado em 14/09/2026
 
-O blocker de ausencia de dataset candidato foi removido pelo artefato local:
+O artefato local abaixo passou na validacao estrutural, mas nao esta liberado
+para restore porque a verificacao posterior encontrou runtime
+`APP_COMMIT_SHA=unknown` no container de origem:
 
 - caminho host:
   `C:\Users\Acer\Documents\Codex\sgi-v2-backups\20260914-233314`;
@@ -84,9 +86,11 @@ O blocker de ausencia de dataset candidato foi removido pelo artefato local:
   0 tabelas sem classificacao e 0 findings bloqueantes;
 - validador local `scripts\oci_backup_artifact_check.ps1`: aprovado.
 
-Esse artefato autoriza somente o proximo passo de restore em banco PostgreSQL
-isolado/descartavel para reconciliation. Ele nao autoriza import, rebuild,
-cleanup, migration destrutiva ou promocao de `ready_for_real_data=true`.
+Esse artefato deve ser tratado como evidencia diagnostica, nao como entrada
+aprovada para restore. O backup candidato precisa ser regenerado em runtime cujo
+`APP_COMMIT_SHA` corresponda exatamente ao SHA informado na CLI. Import, rebuild,
+cleanup, migration destrutiva e promocao de `ready_for_real_data=true`
+continuam bloqueados.
 
 ## Comandos permitidos por padrao
 

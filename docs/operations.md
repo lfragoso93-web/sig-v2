@@ -88,6 +88,7 @@ $RunId = Get-Date -Format "yyyyMMdd-HHmmss"
 $CommitSha = (git rev-parse stable-15jun).Trim()
 
 docker compose exec `
+    -e "APP_COMMIT_SHA=$CommitSha" `
     -e "PRE_PROD_BRANCH=stable-15jun" `
     -e "PRE_PROD_COMMIT_SHA=$CommitSha" `
     backend python -m app.cli.pre_prod_backup --run-id $RunId

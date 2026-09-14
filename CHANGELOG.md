@@ -73,7 +73,7 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 - banco apenas migrado com schema e sem usuários/carteiras/transações permanece
   NO-GO para reconciliation operacional.
 
-### 14/09/2026 — #158 artefato candidato aceito
+### 14/09/2026 — #158 artefato candidato bloqueado por identidade runtime
 
 - artefato `pre-prod-backup.v3` gerado para o SHA
   `1e7c3fca6e6acaea19a75c1197f036a1f1021199` em
@@ -85,9 +85,14 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
   classificação e 0 findings bloqueantes;
 - `scripts\oci_backup_artifact_check.ps1` aprovou presença dos arquivos
   obrigatórios, JSONs, conteúdo do dump e checksum;
-- próximo passo permitido: restore isolado/descartável para reconciliation;
-  import, rebuild, cleanup, migration destrutiva e `ready_for_real_data=true`
-  continuam bloqueados.
+- verificação posterior encontrou runtime `APP_COMMIT_SHA=unknown` no container
+  de origem e checkout local divergente do SHA informado;
+- o artefato fica bloqueado para restore candidato e deve ser regenerado em
+  runtime com `APP_COMMIT_SHA` igual ao SHA certificado;
+- a CLI `pre_prod_backup` passou a falhar quando `APP_COMMIT_SHA` estiver
+  ausente/`unknown` ou divergir do `--commit-sha` informado;
+- restore, import, rebuild, cleanup, migration destrutiva e
+  `ready_for_real_data=true` continuam bloqueados.
 
 ### 12/09/2026 — recuperação local de gates e contrato canônico de Proventos
 

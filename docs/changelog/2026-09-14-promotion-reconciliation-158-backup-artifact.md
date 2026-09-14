@@ -1,11 +1,16 @@
-# #158 - artefato candidato aceito
+# #158 - artefato candidato bloqueado por identidade runtime
 
 ## Contexto
 
 O bloco anterior da #158 estava bloqueado pela ausencia de um artefato local
-`pre-prod-backup.v3` aprovado. O backup administrativo `.sql.gz` da interface
-nao substitui o contrato de certificacao, porque nao traz o relatorio v3,
-inventario de origem, checksum do dump custom e listagem `pg_restore`.
+`pre-prod-backup.v3`. Um artefato foi gerado e passou nas validacoes
+estruturais, mas a checagem posterior encontrou identidade runtime invalida:
+o container de origem expunha `APP_COMMIT_SHA=unknown` e o checkout local
+inspecionado nao estava no SHA informado ao backup.
+
+O backup administrativo `.sql.gz` da interface nao substitui o contrato de
+certificacao, porque nao traz o relatorio v3, inventario de origem, checksum do
+dump custom e listagem `pg_restore`.
 
 ## Evidencia
 
@@ -54,12 +59,17 @@ Resultado:
 
 ## Decisao
 
-O artefato remove o blocker de entrada da #158 e passa a ser o dataset candidato
-para o proximo microbloco. A unica acao operacional autorizada a partir dele e
-o restore em banco PostgreSQL isolado/descartavel para reconciliacao.
+O artefato permanece como evidencia diagnostica, mas nao remove o blocker de
+entrada da #158. Ele nao deve ser usado como dataset candidato para restore ate
+ser regenerado em runtime cujo `APP_COMMIT_SHA` corresponda exatamente ao SHA
+informado na CLI.
+
+A CLI `pre_prod_backup` passa a validar essa identidade antes de abrir a sessao
+de backup.
 
 Continuam bloqueados:
 
+- restore candidato;
 - import/rebuild;
 - cleanup real;
 - migration destrutiva sobre dataset com dados;
