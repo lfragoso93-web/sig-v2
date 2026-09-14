@@ -584,48 +584,6 @@ export default function AddTransactionModal({ onClose }: Props) {
         ) : (
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
 
-            {/* Abas */}
-            <div style={{
-              display: 'flex', gap: 4,
-              flexWrap: 'nowrap',
-              padding: '0.75rem 1.25rem 0',
-              flexShrink: 0,
-              overflowX: 'auto',
-              overflowY: 'hidden',
-              scrollbarWidth: 'thin',
-            }}>
-              {TABS.map(t => {
-                const isActive = activeTab === t.key
-                return (
-                  <button
-                    key={t.key} type="button"
-                    onClick={() => !isEditMode && handleTabChange(t.key)}
-                    style={{
-                      flexShrink: 0,
-                      display: 'flex', alignItems: 'center', gap: 5,
-                      padding: '5px 10px',
-                      borderRadius: 'var(--radius-lg)',
-                      border: isActive
-                        ? '1px solid oklch(from var(--color-primary) l c h / 0.3)'
-                        : '1px solid transparent',
-                      background: isActive
-                        ? 'oklch(from var(--color-primary) l c h / 0.12)'
-                        : 'transparent',
-                      color: isActive ? 'var(--color-primary)' : 'var(--color-text-muted)',
-                      fontSize: 'var(--text-xs)', fontWeight: isActive ? 600 : 400,
-                      cursor: isEditMode && !isActive ? 'default' : 'pointer',
-                      opacity: isEditMode && !isActive ? 0.35 : 1,
-                      transition: 'all 150ms ease', whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {t.icon}{t.label}
-                  </button>
-                )
-              })}
-            </div>
-
-            <div style={{ height: 1, background: 'oklch(from var(--color-text) l c h / 0.07)', margin: '0.5rem 1.25rem 0', flexShrink: 0 }} />
-
             {/* Campos */}
             <div style={{
               flex: 1, overflowY: 'auto', overflowX: 'hidden',
@@ -633,6 +591,19 @@ export default function AddTransactionModal({ onClose }: Props) {
               padding: '0.875rem 1.25rem 1rem',
               display: 'flex', flexDirection: 'column', gap: '0.875rem',
             }}>
+
+              <Field label="Classe">
+                <Select
+                  value={activeTab}
+                  onChange={e => handleTabChange(e.target.value)}
+                  disabled={isEditMode}
+                  aria-label="Classe"
+                >
+                  {TABS.map(t => (
+                    <option key={t.key} value={t.key}>{t.label}</option>
+                  ))}
+                </Select>
+              </Field>
 
               {/* Toggle Compra/Venda */}
               <div style={{

@@ -61,20 +61,19 @@ describe('AddTransactionModal', () => {
   })
 
   it.each([375, 430])(
-    'mantem as abas de classe rolaveis em %ipx',
+    'mantem a escolha de classe compacta em %ipx',
     (width) => {
       window.innerWidth = width
       setup()
 
-      const criptoTab = screen.getByRole('button', { name: /Cripto/i })
-      const tabList = criptoTab.parentElement
+      const classSelect = screen.getByRole('combobox', { name: /Classe/i })
+      const buyButton = screen.getByRole('button', { name: /Compra/i })
+      const sellButton = screen.getByRole('button', { name: /Venda/i })
 
-      expect(tabList?.style.display).toBe('flex')
-      expect(tabList?.style.flexWrap).toBe('nowrap')
-      expect(tabList?.style.overflowX).toBe('auto')
-      expect(tabList?.style.overflowY).toBe('hidden')
-      expect(criptoTab.style.flexShrink).toBe('0')
-      expect(criptoTab.style.whiteSpace).toBe('nowrap')
+      expect(classSelect).toBeTruthy()
+      expect(classSelect).toHaveProperty('value', 'acao')
+      expect(buyButton).toBeTruthy()
+      expect(sellButton).toBeTruthy()
     },
   )
 
@@ -90,8 +89,19 @@ describe('AddTransactionModal', () => {
     'envia asset_type %s apos trocar a classe no modal',
     async (label, assetType, currency) => {
       setup()
+      const classKeyByLabel: Record<string, string> = {
+        Ação: 'acao',
+        FII: 'fii',
+        'ETF BR': 'etf_br',
+        BDR: 'bdr',
+        Stock: 'stock',
+        'ETF INT': 'etf_int',
+        Cripto: 'cripto',
+      }
 
-      fireEvent.click(screen.getByRole('button', { name: label }))
+      fireEvent.change(screen.getByRole('combobox', { name: /Classe/i }), {
+        target: { value: classKeyByLabel[label] },
+      })
       await submitSimpleTransaction()
 
       expect(createTransaction).toHaveBeenCalledWith({
@@ -111,7 +121,9 @@ describe('AddTransactionModal', () => {
   it('envia a classe canonica selecionada no payload de lancamento', async () => {
     setup()
 
-    fireEvent.click(screen.getByRole('button', { name: /Cripto/i }))
+    fireEvent.change(screen.getByRole('combobox', { name: /Classe/i }), {
+      target: { value: 'cripto' },
+    })
     fireEvent.change(screen.getByPlaceholderText(/BTC ou Bitcoin/i), {
       target: { value: 'btc' },
     })
