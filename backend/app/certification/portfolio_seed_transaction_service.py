@@ -148,7 +148,7 @@ async def _find_existing_transaction(
         and ticker == SYNTHETIC_TREASURY_TICKER
         and str(getattr(transaction, "ticker", "")) == LEGACY_SYNTHETIC_TREASURY_TICKER
     ):
-        transaction.ticker = SYNTHETIC_TREASURY_TICKER
+        setattr(transaction, "ticker", SYNTHETIC_TREASURY_TICKER)
         await db.commit()
     return transaction
 
