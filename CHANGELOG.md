@@ -15,7 +15,8 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
   alinhada;
 - `PORTFOLIO-TEST-READY` foi consolidado em #303 no SHA publicado, sem alterar
   `ready_for_real_data=false`;
-- o proximo gate da Trilha A passa a ser #226.
+- #226 e #216 foram posteriormente consumidas; o gate corrente da Trilha A é
+  #158.
 
 ### 14/09/2026 — #226 Proventos decidido
 
@@ -35,6 +36,16 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 - não haverá seed global de Proventos por repetição de checklist histórico;
 - #158 passa a ser o próximo gate da Trilha A;
 - PR `stable-15jun` -> `main` continua bloqueada até #158, #269, #284 e #227.
+
+### 14/09/2026 — #158 rebaseline operacional iniciado
+
+- #158 passa a consumir #303, #226 e #216 como evidências fechadas;
+- promotion reconciliation deve executar somente o delta necessário sobre
+  SHA/dataset congelados;
+- seeds globais, rebuilds amplos, importações e contrações físicas continuam
+  proibidos sem gate explícito dentro da própria #158;
+- o próximo avanço deve produzir evidência operacional antes de #269, #284 e
+  #227.
 
 ### 12/09/2026 — recuperação local de gates e contrato canônico de Proventos
 

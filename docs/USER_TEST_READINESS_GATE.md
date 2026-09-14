@@ -4,7 +4,7 @@ Atualizado em 10/09/2026.
 
 ## Objetivo
 
-O gate `user-test-readiness.v1` decide se o SGI v2 pode receber rodadas assistidas com usuarios convidados. Ele nao substitui `/ready` nem autoriza dados reais irrestritos. O ambiente continua `ready_for_real_data=false` ate a decisao formal dos gates #226, #216, #158 e #227.
+O gate `user-test-readiness.v1` decide se o SGI v2 pode receber rodadas assistidas com usuarios convidados. Ele nao substitui `/ready` nem autoriza dados reais irrestritos. O ambiente continua `ready_for_real_data=false` ate a decisao formal dos gates #158, #269, #284 e #227.
 
 ## Execucao
 

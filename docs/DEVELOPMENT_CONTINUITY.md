@@ -43,11 +43,11 @@ ready_for_real_data=false
 ```text
 #303
   ↓
-#226
+#226 (concluida)
   ↓
-#216
+#216 (concluida)
   ↓
-#158
+#158 (agora)
   ↓
 OCI: homologação do SHA exato
   ↓
