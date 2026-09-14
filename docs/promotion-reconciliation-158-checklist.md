@@ -37,10 +37,34 @@ Registrar na #158 antes da execucao:
 - dataset/carteira alvo;
 - janela de dados;
 - artefatos existentes que serao consumidos;
+- caminho local do artefato `pre-prod-backup.v3` ou justificativa explicita
+  para dataset sintetico/controlado;
 - comandos exatos a executar;
 - comandos explicitamente proibidos no bloco;
 - criterio de sucesso;
 - criterio de abort.
+
+## Dataset candidato
+
+Antes de qualquer import/rebuild da #158, o ambiente local precisa conter um
+dataset candidato aprovado.
+
+Fontes aceitas:
+
+- restore de `pre-prod-backup.v3` validado, com `backup-report.json`,
+  `database.dump`, `database.dump.sha256` e `origin-inventory.json`;
+- dataset sintetico/controlado explicitamente aprovado para repetir uma
+  evidencia #303, sem ser tratado como dataset real de promocao.
+
+NO-GO:
+
+- banco com apenas schema e sem usuarios/carteiras/transacoes;
+- artefato de backup parcial;
+- dump sem `backup-report.json`;
+- backup v1/v2;
+- restaurar por fora do runbook sem registrar origem, SHA e checksum;
+- executar migrations destrutivas sobre dataset com dados sem backup/gate
+  explicito.
 
 ## Comandos permitidos por padrao
 

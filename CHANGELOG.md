@@ -62,6 +62,17 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 - nenhuma importação, seed, rebuild, provider ou promoção de
   `ready_for_real_data=true` foi executada.
 
+### 14/09/2026 — #158 dataset candidato bloqueado
+
+- busca local em `artifacts/` e em `C:\Users\Acer\Documents\Codex` não encontrou
+  `pre-prod-backup.v3`, `backup-report.json`, `database.dump` ou
+  `origin-inventory.json`;
+- checklist da #158 passou a exigir caminho local do artefato de backup aprovado
+  ou justificativa explícita para dataset sintético/controlado antes de qualquer
+  import/rebuild;
+- banco apenas migrado com schema e sem usuários/carteiras/transações permanece
+  NO-GO para reconciliation operacional.
+
 ### 12/09/2026 — recuperação local de gates e contrato canônico de Proventos
 
 - a recuperação da #363 passou a usar suíte local completa como ferramenta de descoberta; a PR estrutural #362 permanece fechada/draft durante o saneamento para evitar consumo iterativo de GitHub Actions;

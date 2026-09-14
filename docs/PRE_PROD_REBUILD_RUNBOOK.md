@@ -313,6 +313,10 @@ Confirmar nos artefatos:
 Checklist operacional corrente da #158:
 `docs/promotion-reconciliation-158-checklist.md`.
 
+Antes de qualquer importação/rebuild desta fase, confirmar que o ambiente local
+possui dataset candidato aprovado. Banco apenas migrado com schema e sem
+usuários/carteiras/transações permanece NO-GO para reconciliation operacional.
+
 Ordem:
 
 1. catálogo e aliases;
