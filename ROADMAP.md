@@ -31,20 +31,19 @@ Estado:
 
 Não é necessário concluir #149, #351, #360, #361, OAuth, exportações ou calculadoras para fechar #303, desde que indisponibilidades sejam explícitas e não prejudiquem jornada crítica.
 
-## Fase 2 — Proventos (#226) — AGORA
+## Fase 2 — Proventos (#226) — CONCLUÍDA
 
 A arquitetura e a implementação estão avançadas. O contrato vigente é `pre-prod-dividends-seed.v2`: eventos globais são persistidos exclusivamente em `asset_dividends` e os direitos de carteira são calculados sob demanda a partir das posições históricas, sem materialização por carteira. Já existe prova controlada portfolio-scoped e idempotente.
 
-Decisão restante:
+Decisão:
 
-- aceitar portfolio-scoped como evidência operacional suficiente para o escopo de promoção; ou
-- executar global controlado somente se houver justificativa concreta.
+- aceitar portfolio-scoped como evidência operacional suficiente para o escopo de promoção controlada;
+- não executar seed global mecanicamente;
+- exigir global controlado somente se #216/#158 identificarem necessidade material nova.
 
-Não repetir mecanicamente seeds globais apenas para satisfazer checklist histórico.
+## Fase 3 — gate agregado (#216) — AGORA
 
-## Fase 3 — gate agregado (#216)
-
-Benchmarks e câmbio estão consolidados. Consumir a decisão/evidência final de #226 e fechar a reconciliação agregada.
+Benchmarks e câmbio estão consolidados. Consumir a decisão de #226 e fechar a reconciliação agregada sem repetir seed global por checklist histórico.
 
 ## Fase 4 — promotion reconciliation (#158)
 
@@ -135,7 +134,7 @@ Eventos portfolio-scoped já podem ser coletados, mas eventos complexos permanec
 | Renda Fixa atual | 🟢 valuation dedicado |
 | RF TWR diário | 🟠 #149 |
 | Proventos `pre-prod-dividends-seed.v2` | 🟢 asset-based; direitos sob demanda; portfolio-scoped comprovado |
-| Proventos gate amplo | 🟠 #226 |
+| Proventos gate amplo | 🟢 #226 portfolio-scoped suficiente |
 | Eventos corporativos | 🟠 reconciliação material pendente |
 | IRPF suportado | 🟢 funcional |
 | Metas operacional | 🟢 básico funcional |

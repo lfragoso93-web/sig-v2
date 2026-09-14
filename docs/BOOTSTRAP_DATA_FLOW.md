@@ -89,7 +89,7 @@ Tabela canônica: `asset_dividends`.
 - Yahoo é fallback de cobertura, não concorrente do mesmo evento;
 - valores usam normalização canônica/`Decimal` compatível com `Numeric(18, 8)`.
 
-A certificação assistida já comprovou seed `portfolio-scoped` e idempotência. O gate #226 decide se essa estratégia é suficiente para promoção ou se haverá global controlado.
+A certificação assistida já comprovou seed `portfolio-scoped` e idempotência. O gate #226 aceitou essa estratégia como suficiente para a promoção controlada; global controlado só deve ocorrer se #216/#158 identificarem necessidade material nova.
 
 ### Fase 5 — Eventos corporativos
 
@@ -228,8 +228,8 @@ ready_for_real_data = false
 
 Pendências de promoção:
 
-1. fechar rodada #303 e congelar SHA;
-2. decidir #226;
+1. consumir #303 como `PORTFOLIO-TEST-READY`;
+2. consumir #226 como portfolio-scoped suficiente;
 3. fechar #216;
 4. executar delta #158;
 5. homologar o mesmo SHA na OCI;

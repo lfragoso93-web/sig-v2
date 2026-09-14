@@ -56,7 +56,7 @@ Ver `docs/deployment/oci-execution-index.md`.
 
 ### #226 — Proventos
 
-O caminho portfolio-scoped esta comprovado e idempotente. Permanece a decisao operacional sobre portfolio-scoped versus global controlado para promocao.
+O caminho portfolio-scoped esta comprovado e idempotente. A decisao operacional de #226 aceita essa evidencia como suficiente para promocao controlada; global controlado fica condicionado a necessidade material nova em #216/#158.
 
 ### #216 — gate agregado
 
@@ -72,13 +72,14 @@ Unica decisao formal de liberacao ampla. Consome #303, #226, #216, #158 e homolo
 
 ## Sequencia de promocao
 
-1. concluir rodada assistida #303 sem blocker P0/P1 critico e congelar SHA;
-2. fechar estrategia #226;
+1. consumir #303 como `PORTFOLIO-TEST-READY`;
+2. consumir #226 como portfolio-scoped suficiente;
 3. concluir #216;
 4. executar delta #158;
-5. homologar exatamente o SHA candidato na OCI;
-6. produzir GO/NO-GO na #227;
-7. somente depois avaliar `ready_for_real_data=true`.
+5. executar #269 no mesmo SHA candidato;
+6. homologar exatamente o SHA candidato na OCI;
+7. produzir GO/NO-GO na #227;
+8. somente depois avaliar `ready_for_real_data=true`.
 
 ## Governanca documental
 

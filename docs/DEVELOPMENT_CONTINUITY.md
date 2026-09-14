@@ -66,7 +66,13 @@ Somente após GO formal da #227 avaliar `ready_for_real_data=true`.
 - #363 permanece fechada;
 - nao altera `ready_for_real_data=false`.
 
-### #226/#216/#158
+### #226
+
+- fechado em 14/09/2026;
+- evidencia portfolio-scoped/idempotente aceita como suficiente para promocao controlada;
+- seed global controlado somente se #216/#158 identificarem necessidade material nova.
+
+### #216/#158
 
 - consumir evidências já certificadas;
 - evitar repetir seeds/rebuilds destrutivos por checklist histórico;

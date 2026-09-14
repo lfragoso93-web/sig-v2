@@ -17,6 +17,16 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
   `ready_for_real_data=false`;
 - o proximo gate da Trilha A passa a ser #226.
 
+### 14/09/2026 — #226 Proventos decidido
+
+- a evidência portfolio-scoped/idempotente de Proventos foi aceita como
+  suficiente para o escopo de promoção controlada;
+- não haverá seed global mecânico apenas por checklist histórico;
+- eventual global controlado fica condicionado a necessidade material nova em
+  #216/#158;
+- `asset_dividends` permanece a única persistência canônica global e direitos de
+  carteira continuam calculados sob demanda.
+
 ### 12/09/2026 — recuperação local de gates e contrato canônico de Proventos
 
 - a recuperação da #363 passou a usar suíte local completa como ferramenta de descoberta; a PR estrutural #362 permanece fechada/draft durante o saneamento para evitar consumo iterativo de GitHub Actions;
@@ -69,13 +79,12 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 
 ### Pendências para o primeiro GO
 
-1. decidir/fechar #226;
-2. fechar #216;
-3. executar o delta final #158;
-4. executar #269 no mesmo SHA candidato;
-5. homologar exatamente o mesmo SHA na OCI (#284);
-6. #227 emitir GO/NO-GO;
-7. somente após GO avaliar `ready_for_real_data=true` e promoção para `main`.
+1. fechar #216;
+2. executar o delta final #158;
+3. executar #269 no mesmo SHA candidato;
+4. homologar exatamente o mesmo SHA na OCI (#284);
+5. #227 emitir GO/NO-GO;
+6. somente após GO avaliar `ready_for_real_data=true` e promoção para `main`.
 
 ## Histórico
 

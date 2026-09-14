@@ -60,7 +60,7 @@ Eventos monetários pertencem ao ativo e são persistidos em `asset_dividends`.
 
 Direitos por carteira são projetados sob demanda a partir da posição histórica. Não existe materialização canônica de direitos por portfolio.
 
-A prova assistida portfolio-scoped já demonstrou idempotência. A #226 decide a suficiência dessa evidência para promoção ou eventual necessidade de execução global controlada.
+A prova assistida portfolio-scoped já demonstrou idempotência. A #226 aceitou essa evidência como suficiente para promoção controlada; execução global só deve ser reconsiderada diante de necessidade material nova em #216/#158.
 
 ## Eventos corporativos
 
