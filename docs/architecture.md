@@ -189,13 +189,14 @@ Não manter hotfix permanente na VM. Defeito encontrado em OCI volta ao ambiente
 
 ## Ordem arquitetural corrente
 
-1. concluir #303 e congelar SHA;
+1. consumir #303 como `PORTFOLIO-TEST-READY` aprovado;
 2. fechar #226;
 3. fechar #216;
 4. executar delta #158;
-5. homologar o mesmo SHA em OCI (#284);
-6. #227 emitir GO/NO-GO;
-7. somente depois promover macrobloco para `main` e avançar backlog de produto.
+5. executar #269 no mesmo SHA candidato;
+6. homologar o mesmo SHA em OCI (#284);
+7. #227 emitir GO/NO-GO;
+8. somente depois promover macrobloco para `main` e avançar backlog de produto.
 
 ## Backlog pós-GO por padrão
 

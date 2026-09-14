@@ -106,11 +106,13 @@ Baseline atual publicado em `stable-15jun`:
   canonica alinhada para `admin@sgi.com`; seed idempotente e nao destrutivo,
   workaround `.local` removido do frontend e identidade legada preservada.
 
-Esses blocos avancam os itens B, C, D, E, F e G. O marco
-`PORTFOLIO-TEST-READY` ainda nao esta aprovado: as provas operacionais de
-Compose, restart, persistencia PostgreSQL, snapshots/cache e smoke UI ja foram
-executadas, mas o fechamento deve continuar orientado pelos criterios funcionais
-restantes e pela selecao de um SHA final aprovado para homologacao OCI.
+Esses blocos avancaram os itens B, C, D, E, F e G. Em 14/09/2026, apos a
+recuperacao dos gates tecnicos (#363), preservacao da politica de senha (#354)
+e validacao manual do seletor de tipo de ativo (#352), o marco
+`PORTFOLIO-TEST-READY` foi aprovado para o SHA registrado na Issue #303.
+
+Essa aprovacao nao altera `ready_for_real_data=false` e nao substitui os gates
+reais #226, #216, #158, #269, #284 e #227.
 
 Estado consolidado da certificacao local:
 
@@ -482,6 +484,10 @@ O gate local só é aprovado quando:
 - blockers encontrados estiverem corrigidos;
 - documentação viva refletir o resultado;
 - existir SHA exato da `stable-15jun` aprovado para homologação OCI.
+
+Status em 14/09/2026: aprovado para `PORTFOLIO-TEST-READY` no SHA publicado e
+registrado na Issue #303. A aprovacao e restrita ao gate local/assistido e nao
+autoriza `ready_for_real_data=true`.
 
 ## Próxima etapa após aprovação
 

@@ -13,8 +13,9 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
   #303;
 - #354 permanece fechada enquanto a politica de senha frontend/backend seguir
   alinhada;
-- `PORTFOLIO-TEST-READY` ainda nao foi formalmente declarado: #303 deve
-  consolidar a evidencia e congelar o SHA candidato antes de #226.
+- `PORTFOLIO-TEST-READY` foi consolidado em #303 no SHA publicado, sem alterar
+  `ready_for_real_data=false`;
+- o proximo gate da Trilha A passa a ser #226.
 
 ### 12/09/2026 — recuperação local de gates e contrato canônico de Proventos
 
@@ -68,14 +69,13 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 
 ### Pendências para o primeiro GO
 
-1. concluir #303 e congelar SHA;
-2. consolidar o fechamento da #352 e preservar #354 fechada se o contrato de senha continuar alinhado;
-3. decidir/fechar #226;
-4. fechar #216;
-5. executar o delta final #158;
-6. homologar exatamente o mesmo SHA na OCI;
-7. #227 emitir GO/NO-GO;
-8. somente após GO avaliar `ready_for_real_data=true` e promoção para `main`.
+1. decidir/fechar #226;
+2. fechar #216;
+3. executar o delta final #158;
+4. executar #269 no mesmo SHA candidato;
+5. homologar exatamente o mesmo SHA na OCI (#284);
+6. #227 emitir GO/NO-GO;
+7. somente após GO avaliar `ready_for_real_data=true` e promoção para `main`.
 
 ## Histórico
 

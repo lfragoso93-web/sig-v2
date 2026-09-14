@@ -17,21 +17,21 @@ ready_for_real_data=false
 
 Branch obrigatória: `stable-15jun`.
 
-## Fase 1 — fechar `PORTFOLIO-TEST-READY` (#303) — AGORA
+## Fase 1 — `PORTFOLIO-TEST-READY` (#303) — CONCLUÍDA
 
-Objetivo: congelar um SHA candidato funcional antes dos gates de dados reais.
+Objetivo concluido: congelar um SHA candidato funcional antes dos gates de dados reais.
 
-Pendências efetivas:
+Estado:
 
-1. concluir sincronização final de governança/documentação;
-2. consumir o fechamento da #352 e preservar #354 fechada se a regra de senha continuar alinhada;
-3. completar rodada assistida sem P0/P1 crítico nas jornadas principais;
-4. registrar SHA exato;
-5. registrar formalmente `PORTFOLIO-TEST-READY`.
+1. #363 fechado;
+2. #352 fechado apos validacao manual do seletor `Tipo de ativo`;
+3. #354 preservado fechado;
+4. `PORTFOLIO-TEST-READY` registrado formalmente na #303;
+5. `ready_for_real_data=false` permanece obrigatorio.
 
 Não é necessário concluir #149, #351, #360, #361, OAuth, exportações ou calculadoras para fechar #303, desde que indisponibilidades sejam explícitas e não prejudiquem jornada crítica.
 
-## Fase 2 — Proventos (#226)
+## Fase 2 — Proventos (#226) — AGORA
 
 A arquitetura e a implementação estão avançadas. O contrato vigente é `pre-prod-dividends-seed.v2`: eventos globais são persistidos exclusivamente em `asset_dividends` e os direitos de carteira são calculados sob demanda a partir das posições históricas, sem materialização por carteira. Já existe prova controlada portfolio-scoped e idempotente.
 

@@ -60,11 +60,11 @@ Somente após GO formal da #227 avaliar `ready_for_real_data=true`.
 
 ### #303 — PORTFOLIO-TEST-READY
 
-- concluir rodada assistida sem P0/P1 crítico;
-- consumir #352 como fechada/validada no modal de lancamento;
-- preservar #354 fechada se o contrato de senha continuar alinhado;
-- congelar SHA candidato;
-- registrar decisão formal.
+- aprovado em 14/09/2026 no SHA registrado na Issue #303;
+- #352 foi fechada/validada no modal de lancamento;
+- #354 permanece fechada;
+- #363 permanece fechada;
+- nao altera `ready_for_real_data=false`.
 
 ### #226/#216/#158
 

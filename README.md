@@ -31,9 +31,11 @@ ready_for_real_data=false
 - #354 permanece fechada.
 - #352 foi validada manualmente e fechada: `Tipo de ativo` virou caixa seletora
   no modal de lancamento, e a transacao foi adicionada com sucesso.
+- #303 foi consolidada como `PORTFOLIO-TEST-READY`; `ready_for_real_data=false`
+  permanece obrigatorio ate #226, #216, #158, #269, #284 e #227.
 - Nao abrir PR `stable-15jun` -> `main` agora. A PR estrutural continua
-  condicionada ao fechamento certificado de #303, #226, #216, #158, #269,
-  #284 e #227 sobre o mesmo SHA candidato.
+  condicionada ao fechamento certificado de #226, #216, #158, #269, #284 e
+  #227 sobre o mesmo SHA candidato.
 
 `GO_ASSISTED` permite testes acompanhados com massa sintética/controlada. Não autoriza abertura ampla com dados reais e não altera `/ready` manualmente.
 
@@ -125,7 +127,7 @@ Princípios obrigatórios:
 - #352 — seleção de classe; fechada após validação manual do seletor `Tipo de ativo`;
 - #354 — regra de senha; fechado após alinhamento frontend/backend no SHA `f93f5a2eff0ef2c1f797209577af8d2934d8c9b0`;
 - eventos corporativos materiais ao dataset de promoção;
-- fechamento #303 → #226 → #216 → #158 → #227.
+- fechamento #226 → #216 → #158 → #269 → #284 → #227.
 
 #149 não bloqueia automaticamente o primeiro GO se TWR de RF continuar explicitamente indisponível e nenhum fallback for apresentado como TWR.
 
