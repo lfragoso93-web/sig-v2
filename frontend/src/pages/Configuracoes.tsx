@@ -11,6 +11,7 @@ import AdminPanel from '@/components/admin/AdminPanel'
 import PasswordInput from '@/components/ui/PasswordInput'
 import DistribuicaoCarteira from '@/components/configuracoes/DistribuicaoCarteira'
 import { getApiErrorDetail } from '@/utils/apiError'
+import { getPasswordPolicyError } from '@/utils/passwordPolicy'
 
 function SectionCard({ children }: { children: React.ReactNode }) {
   return <section className="card settings-card">{children}</section>
@@ -126,7 +127,8 @@ function PasswordSection() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault(); setFeedback(null)
     if (form.next !== form.confirm) { setFeedback({ msg: 'As senhas não coincidem.', isError: true }); return }
-    if (form.next.length < 6) { setFeedback({ msg: 'A nova senha deve ter ao menos 6 caracteres.', isError: true }); return }
+    const passwordError = getPasswordPolicyError(form.next)
+    if (passwordError) { setFeedback({ msg: passwordError, isError: true }); return }
     try { await changePassword.mutateAsync({ current_password: form.current, new_password: form.next }); setFeedback({ msg: 'Senha alterada com sucesso.', isError: false }); setForm({ current: '', next: '', confirm: '' }); setTimeout(() => setOpen(false), 1500) }
     catch (error: unknown) { setFeedback({ msg: getApiErrorDetail(error) ?? 'Senha atual incorreta.', isError: true }) }
   }

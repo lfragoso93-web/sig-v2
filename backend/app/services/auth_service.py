@@ -12,6 +12,7 @@ from app.core.security import (
     hash_password,
 )
 from app.services.user_service import get_user_by_email
+from app.schemas.password_policy import validate_strong_password
 from datetime import timedelta
 
 logger = logging.getLogger(__name__)
@@ -104,11 +105,13 @@ async def reset_password(db: AsyncSession, token: str, new_password: str) -> Non
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Token invalido ou expirado",
         )
-    if len(new_password) < 8:
+    try:
+        validate_strong_password(new_password)
+    except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Nova senha deve ter no minimo 8 caracteres",
-        )
+            detail=str(exc),
+        ) from exc
     await db.execute(
         update(User)
         .where(User.id == user.id)

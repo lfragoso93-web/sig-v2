@@ -8,11 +8,12 @@ import api from '@/services/api'
 import { useAuth } from '@/contexts/AuthContext'
 import { Eye, EyeOff } from 'lucide-react'
 import { getApiValidationErrorMessage } from '@/utils/apiError'
+import { PASSWORD_POLICY_HELP, strongPasswordSchema } from '@/utils/passwordPolicy'
 
 const schema = z.object({
   name:          z.string().min(2, 'Informe seu nome'),
   email:         z.string().email('E-mail inválido'),
-  password:      z.string().min(8, 'Mínimo 8 caracteres'),
+  password:      strongPasswordSchema,
   confirm:       z.string(),
   acceptedTerms: z.literal(true, {
     message: 'Você precisa aceitar os termos para continuar',
@@ -141,7 +142,7 @@ export default function RegisterPage() {
         <div style={{ position: 'relative' }}>
           <input
             type={showPass ? 'text' : 'password'}
-            autoComplete="new-password" placeholder="Mínimo 8 caracteres"
+            autoComplete="new-password" placeholder="Minimo 10 caracteres"
             className={errors.password ? 'input-error' : 'input'}
             style={{ paddingRight: '2.5rem' }}
             {...register('password')}
@@ -158,7 +159,9 @@ export default function RegisterPage() {
             {showPass ? <EyeOff size={15} /> : <Eye size={15} />}
           </button>
         </div>
-        {errors.password && <p style={errStyle}>{errors.password.message}</p>}
+        <p style={{ ...errStyle, color: errors.password ? errStyle.color : 'var(--color-text-muted)' }}>
+          {errors.password?.message ?? PASSWORD_POLICY_HELP}
+        </p>
       </div>
 
       {/* Confirmar senha */}

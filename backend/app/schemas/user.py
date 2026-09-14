@@ -1,8 +1,8 @@
 from pydantic import BaseModel, EmailStr, field_validator
+from app.schemas.password_policy import validate_strong_password
 from app.models.user import UserRole
 from datetime import datetime
 from typing import Optional
-import re
 
 
 class UserCreate(BaseModel):
@@ -13,30 +13,7 @@ class UserCreate(BaseModel):
     @field_validator("password")
     @classmethod
     def password_strength(cls, v: str) -> str:
-        """
-        Política de senha forte:
-        - Mínimo 10 caracteres
-        - Pelo menos uma letra maiúscula
-        - Pelo menos uma letra minúscula
-        - Pelo menos um número
-        - Pelo menos um caractere especial
-        """
-        if len(v) < 10:
-            raise ValueError("Senha deve ter no mínimo 10 caracteres")
-
-        if not re.search(r"[A-Z]", v):
-            raise ValueError("Senha deve conter pelo menos uma letra maiúscula")
-
-        if not re.search(r"[a-z]", v):
-            raise ValueError("Senha deve conter pelo menos uma letra minúscula")
-
-        if not re.search(r"\d", v):
-            raise ValueError("Senha deve conter pelo menos um número")
-
-        if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", v):
-            raise ValueError("Senha deve conter pelo menos um caractere especial (!@#$%^&*(),.?\":{}|<>)")
-
-        return v
+        return validate_strong_password(v)
 
 
 class UserUpdate(BaseModel):
@@ -52,9 +29,7 @@ class UserPasswordUpdate(BaseModel):
     @field_validator("new_password")
     @classmethod
     def password_strength(cls, v: str) -> str:
-        if len(v) < 8:
-            raise ValueError("Senha deve ter no mínimo 8 caracteres")
-        return v
+        return validate_strong_password(v)
 
 
 class UserAdminUpdate(BaseModel):
@@ -74,30 +49,7 @@ class AdminResetPasswordRequest(BaseModel):
     @field_validator("new_password")
     @classmethod
     def password_strength(cls, v: str) -> str:
-        """
-        Política de senha forte:
-        - Mínimo 10 caracteres
-        - Pelo menos uma letra maiúscula
-        - Pelo menos uma letra minúscula
-        - Pelo menos um número
-        - Pelo menos um caractere especial
-        """
-        if len(v) < 10:
-            raise ValueError("Senha deve ter no mínimo 10 caracteres")
-
-        if not re.search(r"[A-Z]", v):
-            raise ValueError("Senha deve conter pelo menos uma letra maiúscula")
-
-        if not re.search(r"[a-z]", v):
-            raise ValueError("Senha deve conter pelo menos uma letra minúscula")
-
-        if not re.search(r"\d", v):
-            raise ValueError("Senha deve conter pelo menos um número")
-
-        if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", v):
-            raise ValueError("Senha deve conter pelo menos um caractere especial (!@#$%^&*(),.?\":{}|<>)")
-
-        return v
+        return validate_strong_password(v)
 
 
 class UserResponse(BaseModel):

@@ -15,6 +15,7 @@ import api from '@/services/api'
 import PasswordInput from '@/components/ui/PasswordInput'
 import AuditLogsPanel from '@/components/admin/AuditLogsPanel'
 import BackupPanel from '@/components/admin/BackupPanel'
+import { isStrongPassword } from '@/utils/passwordPolicy'
 
 // ── Types ────────────────────────────────────────────
 interface AdminUser {
@@ -111,7 +112,7 @@ function ResetPasswordForm({ userId, onClose }: { userId: number; onClose: () =>
     >
       <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Redefinir senha</p>
       <PasswordInput
-        placeholder="Nova senha (mín. 8 caracteres)"
+        placeholder="Nova senha (min. 10 caracteres)"
         value={newPassword}
         onChange={e => { setNewPassword(e.target.value); setFeedback(null) }}
         className="input w-full text-xs"
@@ -138,7 +139,7 @@ function ResetPasswordForm({ userId, onClose }: { userId: number; onClose: () =>
         >Cancelar</button>
         <button
           onClick={() => resetPassword.mutate()}
-          disabled={newPassword.length < 8 || resetPassword.isPending}
+          disabled={!isStrongPassword(newPassword) || resetPassword.isPending}
           className="btn btn-primary text-xs px-3 disabled:opacity-50"
           style={{ minHeight: 32 }}
         >
@@ -297,7 +298,7 @@ function UsersSection() {
             style={{ fontSize: 16 }}
           />
           <PasswordInput
-            placeholder="Senha"
+            placeholder="Senha forte (min. 10 caracteres)"
             value={newUser.password}
             onChange={e => setNewUser(v => ({ ...v, password: e.target.value }))}
             className="input w-full text-xs"
@@ -319,7 +320,7 @@ function UsersSection() {
             >Cancelar</button>
             <button
               onClick={() => createUser.mutate()}
-              disabled={createUser.isPending || !newUser.email || !newUser.password}
+              disabled={createUser.isPending || !newUser.email || !isStrongPassword(newUser.password)}
               className="btn btn-primary text-xs px-3 disabled:opacity-50"
               style={{ minHeight: 32 }}
             >
