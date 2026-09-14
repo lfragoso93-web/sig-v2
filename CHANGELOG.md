@@ -44,6 +44,8 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
   SHA/dataset congelados;
 - seeds globais, rebuilds amplos, importações e contrações físicas continuam
   proibidos sem gate explícito dentro da própria #158;
+- checklist executável publicado em
+  `docs/promotion-reconciliation-158-checklist.md`;
 - o próximo avanço deve produzir evidência operacional antes de #269, #284 e
   #227.
 

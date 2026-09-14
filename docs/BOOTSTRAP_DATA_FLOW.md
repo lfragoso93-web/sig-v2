@@ -126,6 +126,8 @@ Esta fase pode produzir `GO_ASSISTED`, mas não promove dados reais por si só.
 
 ## 3. Promotion Reconciliation
 
+Checklist operacional corrente: `docs/promotion-reconciliation-158-checklist.md`.
+
 Com #303, #226 e #216 consumidos, #158 executa somente o delta necessário sobre SHA/dataset congelados:
 
 - importação controlada quando ainda necessária;

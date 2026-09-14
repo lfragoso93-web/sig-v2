@@ -82,6 +82,7 @@ Somente após GO formal da #227 avaliar `ready_for_real_data=true`.
 
 ### #158
 
+- checklist operacional: `docs/promotion-reconciliation-158-checklist.md`;
 - consumir evidências já certificadas;
 - evitar repetir seeds/rebuilds destrutivos por checklist histórico;
 - executar somente o delta ainda necessário;

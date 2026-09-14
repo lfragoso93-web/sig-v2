@@ -310,6 +310,9 @@ Confirmar nos artefatos:
 
 ### 9. Recriar dados canônicos em blocos separados
 
+Checklist operacional corrente da #158:
+`docs/promotion-reconciliation-158-checklist.md`.
+
 Ordem:
 
 1. catálogo e aliases;
