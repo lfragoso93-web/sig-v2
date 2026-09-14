@@ -66,6 +66,28 @@ NO-GO:
 - executar migrations destrutivas sobre dataset com dados sem backup/gate
   explicito.
 
+### Artefato candidato aceito em 14/09/2026
+
+O blocker de ausencia de dataset candidato foi removido pelo artefato local:
+
+- caminho host:
+  `C:\Users\Acer\Documents\Codex\sgi-v2-backups\20260914-233314`;
+- `schema_version=pre-prod-backup.v3`;
+- `run_id=20260914-233314`;
+- branch `stable-15jun`;
+- commit `1e7c3fca6e6acaea19a75c1197f036a1f1021199`;
+- `consistent_snapshot=true`;
+- `database.dump` com 40.977.216 bytes;
+- SHA-256
+  `486d971f25e7924249fac2c8b2630e59b746e16aeaa93bc5dc963093d9e33b81`;
+- inventario de origem `pre-prod-inventory.v2`: 20 tabelas, 4.434.193 linhas,
+  0 tabelas sem classificacao e 0 findings bloqueantes;
+- validador local `scripts\oci_backup_artifact_check.ps1`: aprovado.
+
+Esse artefato autoriza somente o proximo passo de restore em banco PostgreSQL
+isolado/descartavel para reconciliation. Ele nao autoriza import, rebuild,
+cleanup, migration destrutiva ou promocao de `ready_for_real_data=true`.
+
 ## Comandos permitidos por padrao
 
 - consultas read-only de contagem, cobertura e integridade;

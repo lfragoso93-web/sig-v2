@@ -73,6 +73,22 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 - banco apenas migrado com schema e sem usuários/carteiras/transações permanece
   NO-GO para reconciliation operacional.
 
+### 14/09/2026 — #158 artefato candidato aceito
+
+- artefato `pre-prod-backup.v3` gerado para o SHA
+  `1e7c3fca6e6acaea19a75c1197f036a1f1021199` em
+  `C:\Users\Acer\Documents\Codex\sgi-v2-backups\20260914-233314`;
+- backup com snapshot consistente, `pg_dump`/PostgreSQL major 16/16,
+  `database.dump` de 40.977.216 bytes e SHA-256
+  `486d971f25e7924249fac2c8b2630e59b746e16aeaa93bc5dc963093d9e33b81`;
+- inventário de origem registrou 20 tabelas, 4.434.193 linhas, 0 tabelas sem
+  classificação e 0 findings bloqueantes;
+- `scripts\oci_backup_artifact_check.ps1` aprovou presença dos arquivos
+  obrigatórios, JSONs, conteúdo do dump e checksum;
+- próximo passo permitido: restore isolado/descartável para reconciliation;
+  import, rebuild, cleanup, migration destrutiva e `ready_for_real_data=true`
+  continuam bloqueados.
+
 ### 12/09/2026 — recuperação local de gates e contrato canônico de Proventos
 
 - a recuperação da #363 passou a usar suíte local completa como ferramenta de descoberta; a PR estrutural #362 permanece fechada/draft durante o saneamento para evitar consumo iterativo de GitHub Actions;
