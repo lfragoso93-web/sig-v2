@@ -49,6 +49,19 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 - o próximo avanço deve produzir evidência operacional antes de #269, #284 e
   #227.
 
+### 14/09/2026 — #158 validação local read-only preparada
+
+- banco Docker local estava sem tabelas públicas; foi migrado em base vazia até
+  `20260910_goals_runtime`, alvo runtime-safe do entrypoint;
+- a cadeia Alembic aplicada inclui `20260731_drop_legacy_divs`; neste ambiente
+  não havia dados/tabelas prévias, portanto não houve perda de dataset;
+- inventário `pre-prod-inventory.v2` passou com 20 tabelas, 0 unclassified e 0
+  blocking findings;
+- `user-test-readiness.v1` retornou `NO_GO` por ausência de usuários,
+  carteiras, transações, ativos, preços, snapshots, Proventos e eventos;
+- nenhuma importação, seed, rebuild, provider ou promoção de
+  `ready_for_real_data=true` foi executada.
+
 ### 12/09/2026 — recuperação local de gates e contrato canônico de Proventos
 
 - a recuperação da #363 passou a usar suíte local completa como ferramenta de descoberta; a PR estrutural #362 permanece fechada/draft durante o saneamento para evitar consumo iterativo de GitHub Actions;
