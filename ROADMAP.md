@@ -1,6 +1,6 @@
 # Roadmap — SGI v2
 
-> Última atualização: 12/09/2026.
+> Última atualização: 14/09/2026.
 
 ## Estado do projeto
 
@@ -24,7 +24,7 @@ Objetivo: congelar um SHA candidato funcional antes dos gates de dados reais.
 Pendências efetivas:
 
 1. concluir sincronização final de governança/documentação;
-2. revalidar #352 no SHA candidato e preservar #354 fechada se a regra de senha continuar alinhada;
+2. consumir o fechamento da #352 e preservar #354 fechada se a regra de senha continuar alinhada;
 3. completar rodada assistida sem P0/P1 crítico nas jornadas principais;
 4. registrar SHA exato;
 5. registrar formalmente `PORTFOLIO-TEST-READY`.
@@ -109,7 +109,7 @@ Eventos portfolio-scoped já podem ser coletados, mas eventos complexos permanec
 | #90 UX Patrimônio | planejada | pós-GO |
 | #246 Metas + Análise | Metas operacional parcial; macroprojeto planejado | não blocker automático |
 | #351 UI/UX V2 | planejada | pós-GO |
-| #352 seleção de classe | bug | candidato P1 se reproduzível |
+| #352 seleção de classe | fechado | validada manualmente; nao blocker |
 | #353 scroll | bug UX P2 | não blocker automático |
 | #354 senha | fechado | não blocker enquanto frontend/backend seguirem alinhados |
 | #355 taxonomia RF | planejada | pós-GO |

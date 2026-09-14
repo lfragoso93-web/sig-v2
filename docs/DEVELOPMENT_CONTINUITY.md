@@ -1,6 +1,6 @@
 # Continuidade de desenvolvimento — SGI v2
 
-> Documento obrigatório para retomar desenvolvimento. Atualizado em 10/09/2026.
+> Documento obrigatório para retomar desenvolvimento. Atualizado em 14/09/2026.
 
 ## Baseline atual
 
@@ -61,7 +61,7 @@ Somente após GO formal da #227 avaliar `ready_for_real_data=true`.
 ### #303 — PORTFOLIO-TEST-READY
 
 - concluir rodada assistida sem P0/P1 crítico;
-- revalidar #352;
+- consumir #352 como fechada/validada no modal de lancamento;
 - preservar #354 fechada se o contrato de senha continuar alinhado;
 - congelar SHA candidato;
 - registrar decisão formal.
@@ -119,7 +119,7 @@ Essas frentes só sobem de prioridade se bloquearem uma jornada crítica real do
 
 ## Bugs candidatos P1
 
-- #352 — seleção de classe no lançamento, se ainda reproduzível e funcionalmente impeditiva;
+- #352 — fechada apos validacao manual do seletor `Tipo de ativo` e lancamento bem-sucedido;
 - #354 — fechada após alinhamento da regra mínima de senha; reabrir apenas com regressão comprovada.
 
 #353 é P2 por padrão.

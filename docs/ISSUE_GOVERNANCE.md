@@ -1,6 +1,6 @@
 # Governança de Issues — SGI v2
 
-Atualizado em 10/09/2026.
+Atualizado em 14/09/2026.
 
 ## Objetivo
 
@@ -27,9 +27,9 @@ Manter uma hierarquia única para certificação, dados reais, operação, dívi
 - #284 — homologação OCI;
 - #227 — decisão formal GO/NO-GO.
 
-### Bugs candidatos a blocker do primeiro GO
+### Bugs acompanhados no primeiro GO
 
-- #352 — seleção de classe; P1 se ainda funcionalmente impeditiva;
+- #352 — seleção de classe; fechada apos validacao manual do seletor `Tipo de ativo`;
 - #354 — divergência de senha; fechada após alinhamento frontend/backend, reabrir apenas com regressão comprovada.
 
 #353 é P2 por padrão.

@@ -14,11 +14,12 @@ this block.
   `b89851de83d2a1670682275f31788301f8278e7a`;
 - #363 is closed after local recovery of backend technical gates;
 - #354 remains closed after frontend/backend password policy alignment;
-- #352 remains open.
+- #352 remained open at this baseline; it was later closed in
+  `2026-09-14-a1-352-closed.md`.
 
 ## A1 state
 
-#352 has two automated evidence blocks:
+#352 had two automated evidence blocks at this baseline:
 
 - `f89f9f0641b1a68e44db798fc56ed382bd1db769` covers that the selected class in
   `AddTransactionModal` reaches the canonical transaction write path as
@@ -26,8 +27,7 @@ this block.
 - `b89851de83d2a1670682275f31788301f8278e7a` covers mobile class tabs at
   375 px and 430 px as non-wrapping horizontally scrollable controls.
 
-The remaining #352 decision is visual/manual validation, or an explicit Issue
-decision that the automated evidence is sufficient for the first assisted gate.
+That remaining visual/manual decision was later completed and #352 was closed.
 
 ## PR decision
 
@@ -45,7 +45,7 @@ Reason:
 
 ## Canonical next map
 
-1. Complete #352 final validation or record sufficiency of current evidence.
+1. Consume #352 as closed evidence in #303.
 2. Finish #303 and freeze an exact candidate SHA for `PORTFOLIO-TEST-READY`.
 3. Decide and close #226 using the existing portfolio-scoped Proventos evidence,
    or justify a controlled global run if materially needed.

@@ -4,6 +4,18 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 
 ## [Unreleased] — branch `stable-15jun`
 
+### 14/09/2026 — A1/#352 validada e fechada
+
+- #352 foi corrigida e validada manualmente: o seletor de `Tipo de ativo`
+  substitui a barra de classes no modal de lancamento;
+- a transacao foi adicionada com sucesso no fluxo atualizado;
+- #352 deixou de ser candidato P1 aberto e passa a ser evidencia consumida por
+  #303;
+- #354 permanece fechada enquanto a politica de senha frontend/backend seguir
+  alinhada;
+- `PORTFOLIO-TEST-READY` ainda nao foi formalmente declarado: #303 deve
+  consolidar a evidencia e congelar o SHA candidato antes de #226.
+
 ### 12/09/2026 — recuperação local de gates e contrato canônico de Proventos
 
 - a recuperação da #363 passou a usar suíte local completa como ferramenta de descoberta; a PR estrutural #362 permanece fechada/draft durante o saneamento para evitar consumo iterativo de GitHub Actions;
@@ -57,7 +69,7 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 ### Pendências para o primeiro GO
 
 1. concluir #303 e congelar SHA;
-2. revalidar candidato P1 #352 e preservar #354 fechada se o contrato de senha continuar alinhado;
+2. consolidar o fechamento da #352 e preservar #354 fechada se o contrato de senha continuar alinhado;
 3. decidir/fechar #226;
 4. fechar #216;
 5. executar o delta final #158;

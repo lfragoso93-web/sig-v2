@@ -29,9 +29,8 @@ ready_for_real_data=false
 
 - #363 fechado apos recuperacao dos gates tecnicos locais.
 - #354 permanece fechada.
-- #352 tem cobertura automatizada para payload canonico de classe e tabs
-  responsivas em 375 px/430 px, mas segue aberta para validacao visual/manual
-  final ou decisao explicita de suficiencia.
+- #352 foi validada manualmente e fechada: `Tipo de ativo` virou caixa seletora
+  no modal de lancamento, e a transacao foi adicionada com sucesso.
 - Nao abrir PR `stable-15jun` -> `main` agora. A PR estrutural continua
   condicionada ao fechamento certificado de #303, #226, #216, #158, #269,
   #284 e #227 sobre o mesmo SHA candidato.
@@ -123,7 +122,7 @@ Princípios obrigatórios:
 
 ## Itens que podem afetar o primeiro GO
 
-- #352 — seleção de classe; P1 se ainda impedir/errar lançamento;
+- #352 — seleção de classe; fechada após validação manual do seletor `Tipo de ativo`;
 - #354 — regra de senha; fechado após alinhamento frontend/backend no SHA `f93f5a2eff0ef2c1f797209577af8d2934d8c9b0`;
 - eventos corporativos materiais ao dataset de promoção;
 - fechamento #303 → #226 → #216 → #158 → #227.

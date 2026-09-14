@@ -206,4 +206,4 @@ Não manter hotfix permanente na VM. Defeito encontrado em OCI volta ao ambiente
 - #361 — IA;
 - #97 — OAuth.
 
-#352 segue como exceção: se ainda reproduzível e funcionalmente impeditiva, pode ser P1 antes do primeiro GO. #354 foi fechada após alinhamento da política de senha frontend/backend e só deve reabrir com regressão comprovada.
+#352 foi fechada apos validacao manual do seletor `Tipo de ativo` no modal de lancamento. #354 foi fechada após alinhamento da política de senha frontend/backend e só deve reabrir com regressão comprovada.
