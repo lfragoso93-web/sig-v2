@@ -25,6 +25,17 @@ ready_for_real_data=false
 /ready=503
 ```
 
+### Delta 14/09/2026
+
+- #363 fechado apos recuperacao dos gates tecnicos locais.
+- #354 permanece fechada.
+- #352 tem cobertura automatizada para payload canonico de classe e tabs
+  responsivas em 375 px/430 px, mas segue aberta para validacao visual/manual
+  final ou decisao explicita de suficiencia.
+- Nao abrir PR `stable-15jun` -> `main` agora. A PR estrutural continua
+  condicionada ao fechamento certificado de #303, #226, #216, #158, #269,
+  #284 e #227 sobre o mesmo SHA candidato.
+
 `GO_ASSISTED` permite testes acompanhados com massa sintética/controlada. Não autoriza abertura ampla com dados reais e não altera `/ready` manualmente.
 
 A cadeia obrigatória para promoção é:
