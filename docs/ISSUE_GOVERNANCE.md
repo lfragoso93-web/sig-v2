@@ -30,7 +30,7 @@ Manter uma hierarquia única para certificação, dados reais, operação, dívi
 ### Bugs candidatos a blocker do primeiro GO
 
 - #352 — seleção de classe; P1 se ainda funcionalmente impeditiva;
-- #354 — divergência de senha; P1 se ainda reproduzível.
+- #354 — divergência de senha; fechada após alinhamento frontend/backend, reabrir apenas com regressão comprovada.
 
 #353 é P2 por padrão.
 

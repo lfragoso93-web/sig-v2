@@ -113,7 +113,7 @@ Princípios obrigatórios:
 ## Itens que podem afetar o primeiro GO
 
 - #352 — seleção de classe; P1 se ainda impedir/errar lançamento;
-- #354 — regra de senha; P1 se frontend/backend ainda divergirem;
+- #354 — regra de senha; fechado após alinhamento frontend/backend no SHA `f93f5a2eff0ef2c1f797209577af8d2934d8c9b0`;
 - eventos corporativos materiais ao dataset de promoção;
 - fechamento #303 → #226 → #216 → #158 → #227.
 

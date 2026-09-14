@@ -27,7 +27,8 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 - #149 reclassificada como dívida financeira parcial, não blocker automático quando a ausência de TWR é explícita;
 - #246 atualizada para reconhecer Metas operacionalmente funcional após migration runtime-safe, preservando o macroprojeto definitivo como futuro;
 - #351 classificada como epic pós-GO;
-- #352 e #354 identificadas como candidatos P1 se ainda reproduzíveis;
+- #352 identificada como candidato P1 se ainda reproduzível;
+- #354 foi fechada após alinhamento da política de senha frontend/backend;
 - #353 classificada como P2 por padrão;
 - #355–#361 classificados como evolução pós-GO, com #360 precedendo #361;
 - README, ROADMAP e CHANGELOG rebaselined para remover baselines históricos tratados como instruções vigentes.
@@ -56,7 +57,7 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 ### Pendências para o primeiro GO
 
 1. concluir #303 e congelar SHA;
-2. revalidar candidatos P1 #352/#354;
+2. revalidar candidato P1 #352 e preservar #354 fechada se o contrato de senha continuar alinhado;
 3. decidir/fechar #226;
 4. fechar #216;
 5. executar o delta final #158;

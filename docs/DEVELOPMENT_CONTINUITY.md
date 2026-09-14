@@ -61,7 +61,8 @@ Somente após GO formal da #227 avaliar `ready_for_real_data=true`.
 ### #303 — PORTFOLIO-TEST-READY
 
 - concluir rodada assistida sem P0/P1 crítico;
-- revalidar #352 e #354;
+- revalidar #352;
+- preservar #354 fechada se o contrato de senha continuar alinhado;
 - congelar SHA candidato;
 - registrar decisão formal.
 
@@ -119,7 +120,7 @@ Essas frentes só sobem de prioridade se bloquearem uma jornada crítica real do
 ## Bugs candidatos P1
 
 - #352 — seleção de classe no lançamento, se ainda reproduzível e funcionalmente impeditiva;
-- #354 — divergência de regra mínima de senha, se ainda reproduzível.
+- #354 — fechada após alinhamento da regra mínima de senha; reabrir apenas com regressão comprovada.
 
 #353 é P2 por padrão.
 
