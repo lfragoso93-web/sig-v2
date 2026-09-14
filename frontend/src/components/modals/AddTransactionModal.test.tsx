@@ -45,6 +45,24 @@ describe('AddTransactionModal', () => {
     localStorage.clear()
   })
 
+  it.each([375, 430])(
+    'mantem as abas de classe rolaveis em %ipx',
+    (width) => {
+      window.innerWidth = width
+      setup()
+
+      const criptoTab = screen.getByRole('button', { name: /Cripto/i })
+      const tabList = criptoTab.parentElement
+
+      expect(tabList?.style.display).toBe('flex')
+      expect(tabList?.style.flexWrap).toBe('nowrap')
+      expect(tabList?.style.overflowX).toBe('auto')
+      expect(tabList?.style.overflowY).toBe('hidden')
+      expect(criptoTab.style.flexShrink).toBe('0')
+      expect(criptoTab.style.whiteSpace).toBe('nowrap')
+    },
+  )
+
   it('envia a classe canonica selecionada no payload de lancamento', async () => {
     setup()
 
