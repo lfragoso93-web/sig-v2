@@ -26,7 +26,7 @@ Este documento distingue quatro operações que não são equivalentes:
 - operações idempotentes preferem escrita conservadora e nunca fazem downgrade silencioso de autoridade;
 - evidência já certificada deve ser reutilizada; não repetir operação destrutiva apenas por checklist histórico;
 - `GO_ASSISTED` permite validação controlada e não equivale a `ready_for_real_data=true`;
-- `ready_for_real_data=true` somente pode ser avaliado após #226 -> #216 -> #158 -> #227.
+- `ready_for_real_data=true` somente pode ser avaliado após #158 -> #269 -> #284 -> #227.
 
 ## Ambientes
 
@@ -106,7 +106,7 @@ Auditar cobertura temporal, gaps, duplicidades, órfãos, fontes, lifecycle e bl
 Há duas políticas distintas:
 
 - **validação assistida:** pode usar carteira/dados controlados quando `GO_ASSISTED` autorizar;
-- **abertura ampla real:** somente depois dos gates #226/#216/#158 e decisão #227.
+- **abertura ampla real:** somente depois dos gates #158/#269/#284 e decisão #227.
 
 Importação não pode descobrir provider silenciosamente nem substituir catálogo global.
 
@@ -126,7 +126,7 @@ Esta fase pode produzir `GO_ASSISTED`, mas não promove dados reais por si só.
 
 ## 3. Promotion Reconciliation
 
-Quando #303 estiver funcionalmente pronto e #226/#216 liberarem o gate de dados globais, #158 executa somente o delta necessário sobre SHA/dataset congelados:
+Com #303, #226 e #216 consumidos, #158 executa somente o delta necessário sobre SHA/dataset congelados:
 
 - importação controlada quando ainda necessária;
 - rebuild somente dos derivados necessários;
@@ -230,8 +230,9 @@ Pendências de promoção:
 
 1. consumir #303 como `PORTFOLIO-TEST-READY`;
 2. consumir #226 como portfolio-scoped suficiente;
-3. fechar #216;
+3. consumir #216 como gate agregado fechado;
 4. executar delta #158;
-5. homologar o mesmo SHA na OCI;
-6. #227 emitir GO/NO-GO;
-7. somente após GO avaliar `ready_for_real_data=true`.
+5. executar #269 no mesmo SHA candidato;
+6. homologar o mesmo SHA na OCI (#284);
+7. #227 emitir GO/NO-GO;
+8. somente após GO avaliar `ready_for_real_data=true`.

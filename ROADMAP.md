@@ -41,11 +41,14 @@ Decisão:
 - não executar seed global mecanicamente;
 - exigir global controlado somente se #216/#158 identificarem necessidade material nova.
 
-## Fase 3 — gate agregado (#216) — AGORA
+## Fase 3 — gate agregado (#216) — CONCLUÍDA
 
-Benchmarks e câmbio estão consolidados. Consumir a decisão de #226 e fechar a reconciliação agregada sem repetir seed global por checklist histórico.
+Benchmarks e câmbio permanecem consolidados. A decisão de #226 foi consumida:
+a evidência portfolio-scoped de Proventos é suficiente para a promoção
+controlada, sem seed global mecânico. Global controlado só volta ao escopo se
+#158 encontrar necessidade material nova.
 
-## Fase 4 — promotion reconciliation (#158)
+## Fase 4 — promotion reconciliation (#158) — AGORA
 
 Executar apenas o delta necessário sobre SHA/dataset congelados:
 

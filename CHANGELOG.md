@@ -27,6 +27,15 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 - `asset_dividends` permanece a única persistência canônica global e direitos de
   carteira continuam calculados sob demanda.
 
+### 14/09/2026 — #216 gate agregado fechado
+
+- benchmarks e câmbio permanecem como evidências consolidadas;
+- a decisão de #226 foi consumida como componente material restante de
+  Proventos;
+- não haverá seed global de Proventos por repetição de checklist histórico;
+- #158 passa a ser o próximo gate da Trilha A;
+- PR `stable-15jun` -> `main` continua bloqueada até #158, #269, #284 e #227.
+
 ### 12/09/2026 — recuperação local de gates e contrato canônico de Proventos
 
 - a recuperação da #363 passou a usar suíte local completa como ferramenta de descoberta; a PR estrutural #362 permanece fechada/draft durante o saneamento para evitar consumo iterativo de GitHub Actions;
@@ -79,12 +88,11 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 
 ### Pendências para o primeiro GO
 
-1. fechar #216;
-2. executar o delta final #158;
-3. executar #269 no mesmo SHA candidato;
-4. homologar exatamente o mesmo SHA na OCI (#284);
-5. #227 emitir GO/NO-GO;
-6. somente após GO avaliar `ready_for_real_data=true` e promoção para `main`.
+1. executar o delta final #158;
+2. executar #269 no mesmo SHA candidato;
+3. homologar exatamente o mesmo SHA na OCI (#284);
+4. #227 emitir GO/NO-GO;
+5. somente após GO avaliar `ready_for_real_data=true` e promoção para `main`.
 
 ## Histórico
 

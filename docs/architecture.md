@@ -162,7 +162,7 @@ ready_for_real_data=false
 A cadeia para promoção ampla é:
 
 ```text
-#303 → #226 → #216 → #158 → OCI exact-SHA homologation → #227
+#303 → #226 → #216 → #158 → #269 → OCI exact-SHA homologation → #227
 ```
 
 Somente #227 pode registrar o GO/NO-GO amplo antes de avaliar `ready_for_real_data=true`.
@@ -190,8 +190,8 @@ Não manter hotfix permanente na VM. Defeito encontrado em OCI volta ao ambiente
 ## Ordem arquitetural corrente
 
 1. consumir #303 como `PORTFOLIO-TEST-READY` aprovado;
-2. fechar #226;
-3. fechar #216;
+2. consumir #226 como Proventos portfolio-scoped suficiente;
+3. consumir #216 como gate agregado fechado;
 4. executar delta #158;
 5. executar #269 no mesmo SHA candidato;
 6. homologar o mesmo SHA em OCI (#284);

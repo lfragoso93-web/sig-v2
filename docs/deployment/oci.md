@@ -27,7 +27,7 @@ local development/certification
         |
 #303 PORTFOLIO-TEST-READY / candidate SHA
         |
-#226 -> #216 -> #158
+#158 -> #269 -> #284
         |
 OCI homologates exact candidate SHA
         |
@@ -51,7 +51,7 @@ Do not force readiness, execute real global seeds, restore broad real data or ru
 
 ## Final promotion homologation
 
-After #303/#226/#216/#158 identify the promotion SHA and dataset:
+After #158, #269, #284 and #227 identify or approve the promotion SHA and dataset:
 
 1. checkout exactly that SHA on OCI;
 2. verify `APP_COMMIT_SHA == git rev-parse HEAD`;
@@ -110,12 +110,13 @@ OCI availability never authorizes real data by itself. Backup/restore, seeds, im
 
 Current broad-data order:
 
-1. #303 — functional readiness and candidate SHA;
-2. #226 — Proventos strategy;
-3. #216 — aggregate seed reconciliation;
-4. #158 — promotion reconciliation;
-5. OCI — exact-SHA homologation;
-6. #227 — GO/NO-GO.
+1. #303 - functional readiness and candidate SHA, closed;
+2. #226 - Proventos strategy, closed;
+3. #216 - aggregate seed reconciliation, closed;
+4. #158 - promotion reconciliation;
+5. #269 - security gate on the same candidate SHA;
+6. #284 - exact-SHA OCI homologation;
+7. #227 - GO/NO-GO.
 
 ## Rollback and recovery
 

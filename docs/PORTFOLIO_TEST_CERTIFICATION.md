@@ -4,7 +4,7 @@
 
 Este documento define o gate funcional anterior ao uso de carteiras e dados reais no SGI v2.
 
-A certificação deve provar, com dados sintéticos e reproduzíveis, que o fluxo financeiro ponta a ponta permanece consistente antes de avançar para os gates reais #226, #216, #158 e #227.
+A certificação deve provar, com dados sintéticos e reproduzíveis, que o fluxo financeiro ponta a ponta permanece consistente antes de avançar para os gates reais #158, #269, #284 e #227.
 
 Issue canônica: #303.
 
@@ -57,7 +57,7 @@ Durante toda esta certificação:
 
 - `test_ready=true` permite usuário, carteira e dados fictícios/descartáveis;
 - `ready_for_real_data=false` permanece obrigatório;
-- nenhuma flag deve ser forçada para contornar #226/#216/#158/#227;
+- nenhuma flag deve ser forçada para contornar #158/#269/#284/#227;
 - nenhum seed real de Proventos é autorizado por este documento;
 - nenhum CSV real é autorizado por este documento.
 
@@ -112,7 +112,7 @@ e validacao manual do seletor de tipo de ativo (#352), o marco
 `PORTFOLIO-TEST-READY` foi aprovado para o SHA registrado na Issue #303.
 
 Essa aprovacao nao altera `ready_for_real_data=false` e nao substitui os gates
-reais #226, #216, #158, #269, #284 e #227.
+reais #158, #269, #284 e #227.
 
 Estado consolidado da certificacao local:
 
@@ -127,7 +127,7 @@ Estado consolidado da certificacao local:
   ficticios/descartaveis no baseline
   `59a6a9fc741d557324233065137a9c1a25d4af64`;
 - pendente para `ready_for_real_data=true`: concluir formalmente os gates reais
-  #226, #216, #158 e #227, corrigir blockers remanescentes caso existam,
+  #158, #269, #284 e #227, corrigir blockers remanescentes caso existam,
   manter a documentacao sincronizada e registrar o SHA final aprovado.
 
 Evidencia local adicional:
@@ -493,7 +493,7 @@ autoriza `ready_for_real_data=true`.
 
 Após `PORTFOLIO-TEST-READY`:
 
-1. executar somente então os gates reais #226 → #216 → #158 → #227;
+1. executar somente entao os gates reais #158 -> #269 -> #284 -> #227;
 2. selecionar um SHA exato já certificado localmente;
 3. atualizar OCI para esse SHA;
 4. realizar homologação reduzida e operacional;

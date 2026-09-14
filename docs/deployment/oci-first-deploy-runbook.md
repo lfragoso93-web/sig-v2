@@ -184,7 +184,7 @@ Nao reexecutar suite pesada de desenvolvimento na OCI apenas para duplicar evide
 
 ## 10. Data Policy
 
-Durante `GO_ASSISTED`, usar massa controlada. Restore/importacao real ampla, seed global real e contracoes destrutivas dependem da cadeia #226 -> #216 -> #158 -> #227.
+Durante `GO_ASSISTED`, usar massa controlada. Restore/importacao real ampla, seed global real e contracoes destrutivas dependem da cadeia #158 -> #269 -> #284 -> #227.
 
 Nao promover `ready_for_real_data` neste runbook.
 

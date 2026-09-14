@@ -9,8 +9,8 @@ Manter uma hierarquia única para certificação, dados reais, operação, dívi
 ## Cadeia de promoção para dados reais
 
 1. #303 — `PORTFOLIO-TEST-READY` aprovado e SHA candidato registrado;
-2. #226 — fechar estratégia operacional de Proventos;
-3. #216 — fechar gate agregado de seeds/bootstrap;
+2. #226 — estratégia operacional de Proventos fechada;
+3. #216 — gate agregado de seeds/bootstrap fechado;
 4. #158 — executar `promotion reconciliation` sobre SHA/dataset congelados;
 5. #284 — homologar exatamente o mesmo SHA na OCI;
 6. #227 — emitir GO/NO-GO amplo;
@@ -21,8 +21,8 @@ Manter uma hierarquia única para certificação, dados reais, operação, dívi
 ### Gates / certificação
 
 - #303 — certificação funcional assistida, concluida para `PORTFOLIO-TEST-READY`;
-- #226 — Proventos;
-- #216 — gate agregado;
+- #226 — Proventos, fechado;
+- #216 — gate agregado, fechado;
 - #158 — reconciliação final de promoção;
 - #284 — homologação OCI;
 - #227 — decisão formal GO/NO-GO.

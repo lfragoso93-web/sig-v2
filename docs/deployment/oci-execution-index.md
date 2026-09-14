@@ -18,7 +18,7 @@ Fluxo vigente:
 6. se OCI revelar falha de codigo/contrato, reproduzir e corrigir localmente, gerar novo SHA e homologar novamente;
 7. nunca editar codigo na VM OCI como forma de correcao permanente.
 
-`GO_ASSISTED` permite testes acompanhados e nao altera essa fronteira. `ready_for_real_data=false` permanece obrigatorio ate #226 -> #216 -> #158 -> #227.
+`GO_ASSISTED` permite testes acompanhados e nao altera essa fronteira. `ready_for_real_data=false` permanece obrigatorio ate #158 -> #269 -> #284 -> #227.
 
 ## Phase 0. Freeze Candidate SHA
 
@@ -94,7 +94,7 @@ Enquanto o projeto estiver somente `GO_ASSISTED`:
 - nao executar seed global real apenas para testar deploy;
 - nao executar contracao destrutiva sem gate especifico.
 
-Restore/importacao real pertencem aos gates #226/#216/#158/#227 e so entram no deploy de promocao quando formalmente autorizados.
+Restore/importacao real pertencem aos gates #158/#269/#284/#227 e so entram no deploy de promocao quando formalmente autorizados.
 
 ## Phase 6. Start App
 

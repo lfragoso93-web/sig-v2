@@ -60,7 +60,7 @@ O caminho portfolio-scoped esta comprovado e idempotente. A decisao operacional 
 
 ### #216 — gate agregado
 
-Benchmarks e cambio estao concluidos. Proventos e o componente material restante para reconciliacao agregada.
+Fechado em 14/09/2026. Benchmarks e cambio estao concluidos, e a decisao de #226 foi consumida como evidencia suficiente de Proventos para promocao controlada. Nao repetir seed global por checklist historico.
 
 ### #158 — promotion reconciliation
 
@@ -74,7 +74,7 @@ Unica decisao formal de liberacao ampla. Consome #303, #226, #216, #158 e homolo
 
 1. consumir #303 como `PORTFOLIO-TEST-READY`;
 2. consumir #226 como portfolio-scoped suficiente;
-3. concluir #216;
+3. consumir #216 como concluida;
 4. executar delta #158;
 5. executar #269 no mesmo SHA candidato;
 6. homologar exatamente o SHA candidato na OCI;

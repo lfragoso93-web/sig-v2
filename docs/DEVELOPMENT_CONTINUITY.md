@@ -72,7 +72,15 @@ Somente após GO formal da #227 avaliar `ready_for_real_data=true`.
 - evidencia portfolio-scoped/idempotente aceita como suficiente para promocao controlada;
 - seed global controlado somente se #216/#158 identificarem necessidade material nova.
 
-### #216/#158
+### #216
+
+- fechado em 14/09/2026;
+- benchmarks e cambio permanecem evidencias consolidadas;
+- decisao de #226 consumida sem seed global mecanico;
+- global controlado volta ao escopo somente se #158 encontrar necessidade
+  material nova.
+
+### #158
 
 - consumir evidências já certificadas;
 - evitar repetir seeds/rebuilds destrutivos por checklist histórico;

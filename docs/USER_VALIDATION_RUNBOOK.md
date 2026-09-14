@@ -202,9 +202,9 @@ somente quando:
 
 Depois disso, a ordem permanece:
 
-1. #226 - duas execucoes reais controladas de Proventos;
-2. #216 - reconciliacao do gate agregado;
-3. #158 - importacao/rebuild/reconciliacao operacional;
+1. #158 - importacao/rebuild/reconciliacao operacional;
+2. #269 - security gate sobre o mesmo SHA candidato;
+3. #284 - homologacao OCI do SHA exato;
 4. #227 - decisao formal GO/NO-GO;
 5. somente entao avaliar `ready_for_real_data=true`.
 
@@ -321,9 +321,8 @@ Panorama de liberacao para testes com usuarios:
 - ainda bloqueado: abertura ampla para usuarios com dados reais, execucoes reais
   de seeds/proventos fora de janela autorizada e mudanca de
   `ready_for_real_data=true`;
-- proximos gates obrigatorios: duas execucoes reais controladas de Proventos
-  (#226), reconciliacao agregada (#216), importacao/rebuild operacional (#158)
-  e decisao formal GO/NO-GO (#227).
+- proximos gates obrigatorios: importacao/rebuild operacional (#158), security
+  gate (#269), homologacao OCI (#284) e decisao formal GO/NO-GO (#227).
 
 Bloco Proventos real controlado - finding e correcao parcial:
 
