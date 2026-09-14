@@ -39,6 +39,21 @@ function setup() {
   render(<AddTransactionModal onClose={vi.fn()} />)
 }
 
+async function submitSimpleTransaction() {
+  fireEvent.change(screen.getAllByRole('textbox')[0], {
+    target: { value: 'abc' },
+  })
+  fireEvent.change(screen.getByPlaceholderText('0'), {
+    target: { value: '1' },
+  })
+  fireEvent.change(screen.getAllByPlaceholderText('0,00')[0], {
+    target: { value: '10' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: /Salvar/i }))
+
+  await waitFor(() => expect(createTransaction).toHaveBeenCalledTimes(1))
+}
+
 describe('AddTransactionModal', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -60,6 +75,36 @@ describe('AddTransactionModal', () => {
       expect(tabList?.style.overflowY).toBe('hidden')
       expect(criptoTab.style.flexShrink).toBe('0')
       expect(criptoTab.style.whiteSpace).toBe('nowrap')
+    },
+  )
+
+  it.each([
+    ['Ação', 'ACAO', 'BRL'],
+    ['FII', 'FII', 'BRL'],
+    ['ETF BR', 'ETF_NACIONAL', 'BRL'],
+    ['BDR', 'BDR', 'BRL'],
+    ['Stock', 'STOCK', 'USD'],
+    ['ETF INT', 'ETF_INTERNACIONAL', 'USD'],
+    ['Cripto', 'CRIPTO', 'BRL'],
+  ])(
+    'envia asset_type %s apos trocar a classe no modal',
+    async (label, assetType, currency) => {
+      setup()
+
+      fireEvent.click(screen.getByRole('button', { name: label }))
+      await submitSimpleTransaction()
+
+      expect(createTransaction).toHaveBeenCalledWith({
+        portfolioId: 42,
+        data: expect.objectContaining({
+          ticker: 'ABC',
+          asset_type: assetType,
+          operation: 'buy',
+          quantity: 1,
+          price: 10,
+          currency,
+        }),
+      })
     },
   )
 
