@@ -2,11 +2,14 @@ import pytest
 
 from app.services.corporate_event_reconciliation_plan import (
     CorporateEventEvidence,
+    CorporateEventMatchResolutionEvidence,
     CorporateEventReconciliationDecision,
+    FractionalResolutionPolicy,
     build_reconciliation_execution_report,
     build_reconciliation_dry_run_report,
     plan_conflict_reconciliation,
     plan_matched_reconciliation,
+    validate_match_resolution_evidence,
 )
 
 
@@ -103,3 +106,43 @@ def test_execution_report_records_write_count() -> None:
     assert payload["dry_run"] is False
     assert payload["database_writes_executed"] == 2
     assert payload["event_ids"] == [12, 13]
+
+
+def test_match_resolution_requires_broker_statement_reference() -> None:
+    with pytest.raises(ValueError, match="extrato/corretora"):
+        validate_match_resolution_evidence(
+            CorporateEventMatchResolutionEvidence(
+                broker_statement_reference=" ",
+                fractional_policy=FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE,
+            )
+        )
+
+
+def test_match_resolution_allows_no_fractional_residue() -> None:
+    validate_match_resolution_evidence(
+        CorporateEventMatchResolutionEvidence(
+            broker_statement_reference="broker-note:AMOB3:2025-05",
+            fractional_policy=FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE,
+        )
+    )
+
+
+def test_match_resolution_requires_cash_settlement_details_for_fraction() -> None:
+    with pytest.raises(ValueError, match="preco de liquidacao"):
+        validate_match_resolution_evidence(
+            CorporateEventMatchResolutionEvidence(
+                broker_statement_reference="broker-note:KLBN11:2025-12",
+                fractional_policy=FractionalResolutionPolicy.CASH_SETTLEMENT,
+                fractional_quantity="0.10",
+            )
+        )
+
+
+def test_match_resolution_rejects_manual_review_for_matched() -> None:
+    with pytest.raises(ValueError, match="nao autoriza MATCHED"):
+        validate_match_resolution_evidence(
+            CorporateEventMatchResolutionEvidence(
+                broker_statement_reference="broker-note:KLBN11:2025-12",
+                fractional_policy=FractionalResolutionPolicy.MANUAL_REVIEW,
+            )
+        )

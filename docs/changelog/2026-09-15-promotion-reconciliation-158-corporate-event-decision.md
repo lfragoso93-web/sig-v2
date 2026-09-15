@@ -157,6 +157,23 @@ A persistencia de `CONFLICT` nao torna os eventos refletidos na carteira; ela
 formaliza o bloqueio e preserva fail-closed ate reconciliacao contra extrato ou
 politica canonica de fracao/residuo.
 
+## Pre-requisitos para futuro `MATCHED`
+
+Foi adicionado um contrato puro de evidencia para bloquear reconciliacao
+fail-open:
+
+- todo `MATCHED` futuro exige referencia nao vazia de extrato/corretora;
+- eventos sem residuo fracionario devem declarar `NO_FRACTIONAL_RESIDUE` e nao
+  podem informar quantidade fracionaria, preco de liquidacao ou caixa;
+- eventos com liquidacao de fracao devem declarar `CASH_SETTLEMENT` e informar
+  quantidade fracionaria, preco de liquidacao e tratamento de caixa;
+- `MANUAL_REVIEW` nao autoriza `MATCHED`.
+
+Esse contrato nao executa escrita em banco, nao cria transacao, nao altera
+status de evento corporativo e nao autoriza rebuild seletivo. Ele define a
+evidencia minima para um executor futuro retirar eventos de `CONFLICT` com
+auditoria.
+
 ## Governanca
 
 Foi criada a Issue #370 para tratar a reconciliacao ou descarte formal dos 4

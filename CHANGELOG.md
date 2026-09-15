@@ -36,6 +36,9 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 - executor controlado persistiu `CONFLICT` para os quatro eventos materiais no
   banco restaurado isolado, mantendo `requires_review=true`,
   `is_canonical=false` e os eventos fora da projecao financeira;
+- contrato de evidencia para futuro `MATCHED` agora exige referencia de
+  extrato/corretora e politica explicita de fracao/residuo; `MANUAL_REVIEW`
+  nao autoriza evento reconciliado;
 - foi criada a Issue #370 e a #158 permanece bloqueada para #269/#284/#227,
   PR estrutural para `main` e `ready_for_real_data=true`.
 

@@ -359,6 +359,22 @@ Decisao: a persistencia do conflito formaliza o bloqueio, mas nao resolve #370
 para GO. Os eventos seguem fora da projecao financeira ate reconciliacao contra
 extrato ou politica canonica de fracao/residuo.
 
+### Pre-requisitos para saida de `CONFLICT` em 15/09/2026
+
+Foi adicionado um contrato puro de evidencia para qualquer transicao futura para
+`MATCHED`:
+
+- referencia nao vazia de extrato/corretora e obrigatoria;
+- `NO_FRACTIONAL_RESIDUE` so e valido quando nao houver quantidade fracionaria,
+  preco de liquidacao ou tratamento de caixa;
+- `CASH_SETTLEMENT` exige quantidade fracionaria, preco de liquidacao e
+  tratamento de caixa explicitos;
+- `MANUAL_REVIEW` nao autoriza `MATCHED`.
+
+Esse contrato nao altera banco, nao executa rebuild e nao promove evento
+corporativo. Ele apenas impede reconciliacao fail-open enquanto #370 nao tiver
+evidencia operacional suficiente.
+
 ## Comandos permitidos por padrao
 
 - consultas read-only de contagem, cobertura e integridade;

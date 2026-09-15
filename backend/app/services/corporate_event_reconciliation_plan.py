@@ -12,6 +12,12 @@ class CorporateEventReconciliationDecision(StrEnum):
     CONFLICT = "CONFLICT"
 
 
+class FractionalResolutionPolicy(StrEnum):
+    NO_FRACTIONAL_RESIDUE = "NO_FRACTIONAL_RESIDUE"
+    CASH_SETTLEMENT = "CASH_SETTLEMENT"
+    MANUAL_REVIEW = "MANUAL_REVIEW"
+
+
 @dataclass(frozen=True)
 class CorporateEventEvidence:
     event_id: int
@@ -29,6 +35,15 @@ class CorporateEventReconciliationUpdate:
     is_canonical: bool
     matched_event_id: int | None
     review_reason: str
+
+
+@dataclass(frozen=True)
+class CorporateEventMatchResolutionEvidence:
+    broker_statement_reference: str
+    fractional_policy: FractionalResolutionPolicy
+    fractional_quantity: str | None = None
+    fractional_settlement_price: str | None = None
+    cash_treatment: str | None = None
 
 
 @dataclass(frozen=True)
@@ -72,6 +87,41 @@ def _validate_evidences(
     if len(set(ids)) != len(ids):
         raise ValueError("evidencias duplicadas no plano de reconciliacao")
     return tuple(sorted(evidences, key=lambda item: item.event_id))
+
+
+def validate_match_resolution_evidence(
+    evidence: CorporateEventMatchResolutionEvidence,
+) -> None:
+    if not evidence.broker_statement_reference.strip():
+        raise ValueError("referencia de extrato/corretora e obrigatoria")
+
+    has_fraction = bool(str(evidence.fractional_quantity or "").strip())
+    if evidence.fractional_policy == FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE:
+        if has_fraction:
+            raise ValueError(
+                "NO_FRACTIONAL_RESIDUE nao aceita quantidade fracionaria"
+            )
+        if evidence.fractional_settlement_price or evidence.cash_treatment:
+            raise ValueError(
+                "NO_FRACTIONAL_RESIDUE nao aceita liquidacao fracionaria"
+            )
+        return
+
+    if evidence.fractional_policy == FractionalResolutionPolicy.CASH_SETTLEMENT:
+        if not has_fraction:
+            raise ValueError("CASH_SETTLEMENT exige quantidade fracionaria")
+        if not str(evidence.fractional_settlement_price or "").strip():
+            raise ValueError("CASH_SETTLEMENT exige preco de liquidacao")
+        if not str(evidence.cash_treatment or "").strip():
+            raise ValueError("CASH_SETTLEMENT exige tratamento de caixa")
+        return
+
+    if evidence.fractional_policy == FractionalResolutionPolicy.MANUAL_REVIEW:
+        raise ValueError("MANUAL_REVIEW nao autoriza MATCHED")
+
+    raise ValueError(
+        f"politica fracionaria desconhecida: {evidence.fractional_policy}"
+    )
 
 
 def plan_conflict_reconciliation(
