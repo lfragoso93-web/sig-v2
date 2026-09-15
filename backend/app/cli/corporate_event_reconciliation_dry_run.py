@@ -18,7 +18,9 @@ from app.services.corporate_event_reconciliation_dry_run_service import (
     execute_corporate_event_conflict_reconciliation,
 )
 from app.services.corporate_event_reconciliation_plan import (
+    CorporateEventMatchResolutionEvidence,
     CorporateEventReconciliationDecision,
+    FractionalResolutionPolicy,
 )
 
 
@@ -44,6 +46,14 @@ def _arguments() -> argparse.Namespace:
     )
     parser.add_argument("--reason", required=True)
     parser.add_argument("--canonical-event-id", type=int)
+    parser.add_argument("--broker-statement-reference")
+    parser.add_argument(
+        "--fractional-policy",
+        choices=[item.value for item in FractionalResolutionPolicy],
+    )
+    parser.add_argument("--fractional-quantity")
+    parser.add_argument("--fractional-settlement-price")
+    parser.add_argument("--cash-treatment")
     parser.add_argument(
         "--execute",
         action="store_true",
@@ -55,6 +65,31 @@ def _arguments() -> argparse.Namespace:
 async def _main(arguments: argparse.Namespace) -> int:
     event_ids = tuple(arguments.event_id)
     decision = CorporateEventReconciliationDecision(arguments.decision)
+
+    match_argument_values = (
+        arguments.broker_statement_reference,
+        arguments.fractional_policy,
+        arguments.fractional_quantity,
+        arguments.fractional_settlement_price,
+        arguments.cash_treatment,
+    )
+    has_match_arguments = any(value is not None for value in match_argument_values)
+
+    match_resolution_evidence = None
+    if decision == CorporateEventReconciliationDecision.MATCHED:
+        if not arguments.broker_statement_reference:
+            raise ValueError("MATCHED exige --broker-statement-reference")
+        if not arguments.fractional_policy:
+            raise ValueError("MATCHED exige --fractional-policy")
+        match_resolution_evidence = CorporateEventMatchResolutionEvidence(
+            broker_statement_reference=arguments.broker_statement_reference,
+            fractional_policy=FractionalResolutionPolicy(arguments.fractional_policy),
+            fractional_quantity=arguments.fractional_quantity,
+            fractional_settlement_price=arguments.fractional_settlement_price,
+            cash_treatment=arguments.cash_treatment,
+        )
+    elif has_match_arguments:
+        raise ValueError("CONFLICT nao aceita argumentos de evidencia de MATCHED")
 
     async with AsyncSessionLocal() as db:
         if arguments.execute:
@@ -75,6 +110,7 @@ async def _main(arguments: argparse.Namespace) -> int:
                 decision=decision,
                 reason=arguments.reason,
                 canonical_event_id=arguments.canonical_event_id,
+                match_resolution_evidence=match_resolution_evidence,
             )
             await db.rollback()
 

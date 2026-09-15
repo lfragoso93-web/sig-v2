@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.corporate_event import CorporateEvent
 from app.services.corporate_event_reconciliation_plan import (
     CorporateEventEvidence,
+    CorporateEventMatchResolutionEvidence,
     CorporateEventReconciliationDecision,
     CorporateEventReconciliationDryRunReport,
     CorporateEventReconciliationUpdate,
@@ -33,6 +34,7 @@ async def build_corporate_event_reconciliation_dry_run(
     decision: CorporateEventReconciliationDecision,
     reason: str,
     canonical_event_id: int | None = None,
+    match_resolution_evidence: CorporateEventMatchResolutionEvidence | None = None,
 ) -> CorporateEventReconciliationDryRunReport:
     if not event_ids:
         raise ValueError("event_ids e obrigatorio")
@@ -53,6 +55,7 @@ async def build_corporate_event_reconciliation_dry_run(
         decision=decision,
         reason=reason,
         canonical_event_id=canonical_event_id,
+        match_resolution_evidence=match_resolution_evidence,
     )
 
 

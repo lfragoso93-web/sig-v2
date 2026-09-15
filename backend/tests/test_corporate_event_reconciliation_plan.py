@@ -146,3 +146,69 @@ def test_match_resolution_rejects_manual_review_for_matched() -> None:
                 fractional_policy=FractionalResolutionPolicy.MANUAL_REVIEW,
             )
         )
+
+
+def test_matched_dry_run_requires_operational_evidence() -> None:
+    with pytest.raises(ValueError, match="evidencia operacional"):
+        build_reconciliation_dry_run_report(
+            (_evidence(12), _evidence(13, "yahoo")),
+            decision=CorporateEventReconciliationDecision.MATCHED,
+            reason="fonte canonica validada contra extrato",
+            canonical_event_id=13,
+        )
+
+
+def test_matched_dry_run_validates_operational_evidence() -> None:
+    with pytest.raises(ValueError, match="nao autoriza MATCHED"):
+        build_reconciliation_dry_run_report(
+            (_evidence(12), _evidence(13, "yahoo")),
+            decision=CorporateEventReconciliationDecision.MATCHED,
+            reason="aguarda revisao operacional",
+            canonical_event_id=13,
+            match_resolution_evidence=CorporateEventMatchResolutionEvidence(
+                broker_statement_reference="broker-note:AMOB3:2025-05",
+                fractional_policy=FractionalResolutionPolicy.MANUAL_REVIEW,
+            ),
+        )
+
+
+def test_matched_dry_run_accepts_valid_operational_evidence() -> None:
+    report = build_reconciliation_dry_run_report(
+        (_evidence(12), _evidence(13, "yahoo")),
+        decision=CorporateEventReconciliationDecision.MATCHED,
+        reason="fonte canonica validada contra extrato",
+        canonical_event_id=13,
+        match_resolution_evidence=CorporateEventMatchResolutionEvidence(
+            broker_statement_reference="broker-note:AMOB3:2025-05",
+            fractional_policy=FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE,
+        ),
+    )
+
+    assert report.dry_run is True
+    assert report.database_writes_executed == 0
+    assert report.decision == "MATCHED"
+    assert [update.event_id for update in report.updates] == [12, 13]
+    assert [update.event_id for update in report.updates if update.is_canonical] == [13]
+
+
+def test_conflict_dry_run_rejects_matched_evidence() -> None:
+    with pytest.raises(ValueError, match="CONFLICT nao aceita evidencia"):
+        build_reconciliation_dry_run_report(
+            (_evidence(12), _evidence(13, "yahoo")),
+            decision=CorporateEventReconciliationDecision.CONFLICT,
+            reason="fontes conflitantes",
+            match_resolution_evidence=CorporateEventMatchResolutionEvidence(
+                broker_statement_reference="broker-note:AMOB3:2025-05",
+                fractional_policy=FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE,
+            ),
+        )
+
+
+def test_conflict_dry_run_rejects_canonical_event_id() -> None:
+    with pytest.raises(ValueError, match="CONFLICT nao aceita canonical_event_id"):
+        build_reconciliation_dry_run_report(
+            (_evidence(12), _evidence(13, "yahoo")),
+            decision=CorporateEventReconciliationDecision.CONFLICT,
+            reason="fontes conflitantes",
+            canonical_event_id=12,
+        )

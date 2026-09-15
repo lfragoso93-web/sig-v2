@@ -191,12 +191,20 @@ def build_reconciliation_dry_run_report(
     decision: CorporateEventReconciliationDecision,
     reason: str,
     canonical_event_id: int | None = None,
+    match_resolution_evidence: CorporateEventMatchResolutionEvidence | None = None,
 ) -> CorporateEventReconciliationDryRunReport:
     if decision == CorporateEventReconciliationDecision.CONFLICT:
+        if canonical_event_id is not None:
+            raise ValueError("CONFLICT nao aceita canonical_event_id")
+        if match_resolution_evidence is not None:
+            raise ValueError("CONFLICT nao aceita evidencia de MATCHED")
         updates = plan_conflict_reconciliation(evidences, reason=reason)
     elif decision == CorporateEventReconciliationDecision.MATCHED:
         if canonical_event_id is None:
             raise ValueError("MATCHED exige canonical_event_id")
+        if match_resolution_evidence is None:
+            raise ValueError("MATCHED exige evidencia operacional")
+        validate_match_resolution_evidence(match_resolution_evidence)
         updates = plan_matched_reconciliation(
             evidences,
             canonical_event_id=canonical_event_id,
