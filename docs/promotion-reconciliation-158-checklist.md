@@ -336,6 +336,29 @@ Decisao: os planos confirmam que a proxima etapa pode ser um executor controlado
 para persistir `CONFLICT` no banco restaurado, mas ainda nao autorizam
 `MATCHED`, rebuild seletivo, nem promocao de GO.
 
+### Persistencia controlada de `CONFLICT` em 15/09/2026
+
+O executor foi habilitado apenas para `CONFLICT` mediante flag explicita
+`--execute`. `MATCHED` permanece restrito a dry-run ate existir evidencia de
+extrato, fracao/residuo e evento canonico.
+
+Execucao no banco restaurado isolado:
+
+- preflight: eventos 12, 13, 81 e 82 estavam `UNRECONCILED`,
+  `requires_review=true`, `is_canonical=true`;
+- `AMOB3` eventos 12 e 13: `corporate-event-reconciliation-execution.v1`,
+  `database_writes_executed=2`, ambos `CONFLICT`, `requires_review=true`,
+  `is_canonical=false`;
+- `KLBN11` eventos 81 e 82: `corporate-event-reconciliation-execution.v1`,
+  `database_writes_executed=2`, ambos `CONFLICT`, `requires_review=true`,
+  `is_canonical=false`;
+- pos-validacao SQL confirmou os 4 eventos em `CONFLICT`, com motivo de revisao
+  registrado e sem `matched_event_id`.
+
+Decisao: a persistencia do conflito formaliza o bloqueio, mas nao resolve #370
+para GO. Os eventos seguem fora da projecao financeira ate reconciliacao contra
+extrato ou politica canonica de fracao/residuo.
+
 ## Comandos permitidos por padrao
 
 - consultas read-only de contagem, cobertura e integridade;

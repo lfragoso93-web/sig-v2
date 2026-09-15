@@ -140,6 +140,23 @@ Os planos mantem todos os quatro eventos fora da projecao financeira e prontos
 para uma etapa futura de persistencia controlada de `CONFLICT`, sem autorizar
 `MATCHED`, rebuild seletivo ou GO.
 
+## Persistencia controlada de conflito
+
+O executor de reconciliacao foi habilitado somente para `CONFLICT` com flag
+explicita `--execute`. A execucao no banco restaurado isolado produziu:
+
+- `AMOB3` eventos 12 e 13: relatório
+  `corporate-event-reconciliation-execution.v1`, `database_writes_executed=2`;
+- `KLBN11` eventos 81 e 82: relatório
+  `corporate-event-reconciliation-execution.v1`, `database_writes_executed=2`;
+- pós-estado dos quatro eventos: `reconciliation_status=CONFLICT`,
+  `requires_review=true`, `is_canonical=false`, `matched_event_id=null` e
+  `review_reason` preenchido.
+
+A persistencia de `CONFLICT` nao torna os eventos refletidos na carteira; ela
+formaliza o bloqueio e preserva fail-closed ate reconciliacao contra extrato ou
+politica canonica de fracao/residuo.
+
 ## Governanca
 
 Foi criada a Issue #370 para tratar a reconciliacao ou descarte formal dos 4

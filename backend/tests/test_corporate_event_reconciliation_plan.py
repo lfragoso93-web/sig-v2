@@ -3,6 +3,7 @@ import pytest
 from app.services.corporate_event_reconciliation_plan import (
     CorporateEventEvidence,
     CorporateEventReconciliationDecision,
+    build_reconciliation_execution_report,
     build_reconciliation_dry_run_report,
     plan_conflict_reconciliation,
     plan_matched_reconciliation,
@@ -83,3 +84,22 @@ def test_dry_run_report_is_versioned_and_read_only() -> None:
     assert {item["reconciliation_status"] for item in payload["updates"]} == {
         "CONFLICT",
     }
+
+
+def test_execution_report_records_write_count() -> None:
+    updates = plan_conflict_reconciliation(
+        (_evidence(12), _evidence(13, "yahoo")),
+        reason="persistir conflito",
+    )
+
+    report = build_reconciliation_execution_report(
+        updates,
+        decision=CorporateEventReconciliationDecision.CONFLICT,
+        database_writes_executed=2,
+    )
+    payload = report.to_dict()
+
+    assert payload["schema_version"] == "corporate-event-reconciliation-execution.v1"
+    assert payload["dry_run"] is False
+    assert payload["database_writes_executed"] == 2
+    assert payload["event_ids"] == [12, 13]

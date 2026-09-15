@@ -164,3 +164,20 @@ def build_reconciliation_dry_run_report(
         event_ids=tuple(update.event_id for update in updates),
         updates=updates,
     )
+
+
+def build_reconciliation_execution_report(
+    updates: tuple[CorporateEventReconciliationUpdate, ...],
+    *,
+    decision: CorporateEventReconciliationDecision,
+    database_writes_executed: int,
+) -> CorporateEventReconciliationDryRunReport:
+    return CorporateEventReconciliationDryRunReport(
+        schema_version="corporate-event-reconciliation-execution.v1",
+        ok=True,
+        decision=decision.value,
+        dry_run=False,
+        database_writes_executed=database_writes_executed,
+        event_ids=tuple(update.event_id for update in updates),
+        updates=updates,
+    )

@@ -15,6 +15,7 @@ import sys
 from app.core.database import AsyncSessionLocal
 from app.services.corporate_event_reconciliation_dry_run_service import (
     build_corporate_event_reconciliation_dry_run,
+    execute_corporate_event_conflict_reconciliation,
 )
 from app.services.corporate_event_reconciliation_plan import (
     CorporateEventReconciliationDecision,
@@ -43,6 +44,11 @@ def _arguments() -> argparse.Namespace:
     )
     parser.add_argument("--reason", required=True)
     parser.add_argument("--canonical-event-id", type=int)
+    parser.add_argument(
+        "--execute",
+        action="store_true",
+        help="Persiste apenas plano CONFLICT; MATCHED permanece somente dry-run.",
+    )
     return parser.parse_args()
 
 
@@ -51,14 +57,26 @@ async def _main(arguments: argparse.Namespace) -> int:
     decision = CorporateEventReconciliationDecision(arguments.decision)
 
     async with AsyncSessionLocal() as db:
-        report = await build_corporate_event_reconciliation_dry_run(
-            db,
-            event_ids=event_ids,
-            decision=decision,
-            reason=arguments.reason,
-            canonical_event_id=arguments.canonical_event_id,
-        )
-        await db.rollback()
+        if arguments.execute:
+            if decision != CorporateEventReconciliationDecision.CONFLICT:
+                raise ValueError("execucao real permitida somente para CONFLICT")
+            if arguments.canonical_event_id is not None:
+                raise ValueError("CONFLICT nao aceita canonical-event-id")
+            report = await execute_corporate_event_conflict_reconciliation(
+                db,
+                event_ids=event_ids,
+                reason=arguments.reason,
+            )
+            await db.commit()
+        else:
+            report = await build_corporate_event_reconciliation_dry_run(
+                db,
+                event_ids=event_ids,
+                decision=decision,
+                reason=arguments.reason,
+                canonical_event_id=arguments.canonical_event_id,
+            )
+            await db.rollback()
 
     print(json.dumps(report.to_dict(), ensure_ascii=False, indent=2, sort_keys=True))
     return 0
