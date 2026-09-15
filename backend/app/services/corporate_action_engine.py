@@ -97,6 +97,15 @@ def _event_id(
     return f"{source}:{digest}"
 
 
+def _brapi_stock_dividend_kind(raw: dict[str, Any]) -> CorporateActionKind:
+    label = str(raw.get("label") or "").strip().upper()
+    if label == CorporateActionKind.REVERSE_SPLIT.value:
+        return CorporateActionKind.REVERSE_SPLIT
+    if label == CorporateActionKind.SPLIT.value:
+        return CorporateActionKind.SPLIT
+    return CorporateActionKind.STOCK_BONUS
+
+
 def normalize_brapi_corporate_actions(
     ticker: str,
     payload: dict[str, Any],
@@ -142,6 +151,7 @@ def normalize_brapi_corporate_actions(
                     field=f"{key}.lastDatePrior",
                 )
                 if kind == CorporateActionKind.STOCK_BONUS:
+                    kind = _brapi_stock_dividend_kind(raw)
                     quantity_factor = _positive_decimal(
                         raw.get("factor"), field=f"{key}.factor"
                     )

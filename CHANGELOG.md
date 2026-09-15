@@ -18,6 +18,9 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 - simulacao read-only pelo motor puro mostrou que aplicar mecanicamente os 4
   eventos pendentes mudaria realizado e deixaria residuo de posicao em
   `KLBN11`, logo #370 exige reconciliacao economica antes de rebuild;
+- normalizador BRAPI passou a respeitar labels explicitos `GRUPAMENTO` e
+  `DESDOBRAMENTO` em `stockDividends`, prevenindo nova classificacao semantica
+  errada como bonificacao;
 - foi criada a Issue #370 e a #158 permanece bloqueada para #269/#284/#227,
   PR estrutural para `main` e `ready_for_real_data=true`.
 

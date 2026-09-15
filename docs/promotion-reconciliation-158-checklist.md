@@ -250,6 +250,27 @@ Decisao: a #370 nao pode ser resolvida por promocao mecanica de eventos
 fator, data efetiva e tratamento de fracao/residuo antes de qualquer rebuild
 seletivo. Enquanto isso, os eventos permanecem fail-closed e fora das projecoes.
 
+### Classificacao tecnica da #370 em 15/09/2026
+
+Foi feita leitura read-only dos metadados brutos dos 4 eventos bloqueantes:
+
+- `AMOB3` BRAPI trazia `label=GRUPAMENTO`, `completeFactor="1 para 50"` e
+  fator `0.02`, mas o normalizador havia persistido o evento como
+  `BONIFICACAO`;
+- `AMOB3` Yahoo trazia `GRUPAMENTO` com o mesmo fator `0.02` no dia seguinte;
+- `KLBN11` BRAPI trazia `BONIFICACAO`, `completeFactor="1,01 para 1"` e fator
+  `1.01`;
+- `KLBN11` Yahoo trazia `DESDOBRAMENTO` com fator `1.01` no dia seguinte.
+
+Correcao preventiva aplicada: o normalizador BRAPI agora respeita labels
+explicitos `GRUPAMENTO` e `DESDOBRAMENTO` dentro de `stockDividends`, evitando
+nova persistencia semanticamente errada como bonificacao. Essa correcao nao
+migra eventos existentes nem altera projecoes ja persistidas.
+
+Decisao operacional: `AMOB3` e `KLBN11` seguem dependentes de reconciliacao de
+duplicidade economica entre fontes antes de qualquer evento ser marcado como
+`MATCHED` ou usado em rebuild seletivo.
+
 ## Comandos permitidos por padrao
 
 - consultas read-only de contagem, cobertura e integridade;

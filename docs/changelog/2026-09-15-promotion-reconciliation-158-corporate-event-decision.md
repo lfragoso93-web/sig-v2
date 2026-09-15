@@ -57,6 +57,25 @@ Conclusao: a #370 nao deve ser tratada como simples promocao de eventos
 fator, data efetiva e tratamento de fracao/residuo antes de qualquer rebuild
 seletivo.
 
+## Classificacao tecnica dos eventos
+
+Leitura read-only dos metadados brutos mostrou:
+
+- `AMOB3` BRAPI: `label=GRUPAMENTO`, `completeFactor="1 para 50"` e fator
+  `0.02`, embora o evento estivesse persistido como `BONIFICACAO`;
+- `AMOB3` Yahoo: `GRUPAMENTO` com fator `0.02` no dia seguinte;
+- `KLBN11` BRAPI: `BONIFICACAO`, `completeFactor="1,01 para 1"` e fator
+  `1.01`;
+- `KLBN11` Yahoo: `DESDOBRAMENTO` com fator `1.01` no dia seguinte.
+
+Foi aplicada uma correcao preventiva no normalizador BRAPI para respeitar labels
+explicitos `GRUPAMENTO` e `DESDOBRAMENTO` em `stockDividends`. A correcao evita
+novos eventos com classificacao semantica errada, mas nao altera eventos ja
+persistidos nem promove eventos pendentes.
+
+`AMOB3` e `KLBN11` continuam exigindo reconciliacao de duplicidade economica
+entre fontes antes de qualquer evento ser marcado como `MATCHED`.
+
 ## Governanca
 
 Foi criada a Issue #370 para tratar a reconciliacao ou descarte formal dos 4
