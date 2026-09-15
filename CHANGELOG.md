@@ -27,6 +27,9 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 - decisao arquitetural: eventos corporativos materiais fazem parte do lifecycle
   do investidor e #370 permanece blocker da #158 ate associacao/reconciliacao
   no banco ou politica canonica de conflito/fração/residuo;
+- contrato puro de reconciliacao criado para planejar `CONFLICT` e `MATCHED`
+  sem escrever no banco, sem rebuild e sem colocar eventos revisaveis na
+  projecao financeira;
 - foi criada a Issue #370 e a #158 permanece bloqueada para #269/#284/#227,
   PR estrutural para `main` e `ready_for_real_data=true`.
 

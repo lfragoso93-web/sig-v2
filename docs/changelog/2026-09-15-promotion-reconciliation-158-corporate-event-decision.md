@@ -107,6 +107,22 @@ O caminho correto e resolver a associacao/reconciliacao no banco, preservando
 fail-closed ate haver politica canonica para conflito, fracao/residuo e
 auditoria.
 
+## Contrato minimo de reconciliacao
+
+Foi criado um contrato puro em `corporate_event_reconciliation_plan.py` para
+planejar a reconciliacao antes de qualquer executor de banco:
+
+- plano `CONFLICT`: todas as evidencias ficam `CONFLICT`,
+  `requires_review=true`, `is_canonical=false`, sem `matched_event_id` e fora da
+  projecao financeira;
+- plano `MATCHED`: exige um `canonical_event_id`; somente ele fica `MATCHED`,
+  `requires_review=false`, `is_canonical=true`; as evidencias duplicadas ficam
+  `CONFLICT`, revisaveis e vinculadas via `matched_event_id`.
+
+Esse contrato nao altera eventos persistidos e nao autoriza rebuild. Ele cria a
+base segura para um executor posterior associar/reconciliar eventos materiais no
+banco sem abrir caminho fail-open.
+
 ## Governanca
 
 Foi criada a Issue #370 para tratar a reconciliacao ou descarte formal dos 4

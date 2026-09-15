@@ -302,6 +302,23 @@ Decisao arquitetural: #370 permanece blocker de #158. Nao e valido tratar
 eventos materiais apenas como nota externa ou como pendencia nao bloqueante do
 primeiro GO controlado.
 
+### Contrato minimo de reconciliacao da #370 em 15/09/2026
+
+Foi criado um contrato puro, sem escrita em banco, para planejar a reconciliacao
+dos eventos corporativos:
+
+- `plan_conflict_reconciliation`: marca todas as evidencias do grupo como
+  `CONFLICT`, `requires_review=true`, `is_canonical=false` e sem
+  `matched_event_id`; nada entra na projecao financeira;
+- `plan_matched_reconciliation`: exige um `canonical_event_id` explicito; somente
+  esse evento fica `MATCHED`, `requires_review=false` e `is_canonical=true`;
+  evidencias duplicadas ficam `CONFLICT`, revisaveis e apontam
+  `matched_event_id` para o evento canonico.
+
+O contrato nao executa SQL, nao muda eventos existentes, nao cria transacoes e
+nao autoriza rebuild. Ele define o formato minimo seguro que um executor futuro
+deve seguir para associar/reconciliar eventos materiais no banco.
+
 ## Comandos permitidos por padrao
 
 - consultas read-only de contagem, cobertura e integridade;
