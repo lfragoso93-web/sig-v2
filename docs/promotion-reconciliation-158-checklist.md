@@ -271,6 +271,32 @@ Decisao operacional: `AMOB3` e `KLBN11` seguem dependentes de reconciliacao de
 duplicidade economica entre fontes antes de qualquer evento ser marcado como
 `MATCHED` ou usado em rebuild seletivo.
 
+### Plano de reconciliacao economica da #370 em 15/09/2026
+
+Foi feita simulacao read-only por fonte isolada no motor
+`project_position_timeline`:
+
+- `AMOB3` sem eventos: quantidade 0, custo 0, realizado -4,20;
+- `AMOB3` com somente BRAPI corrigido para `GRUPAMENTO`: quantidade 0, custo 0,
+  realizado -85,3440;
+- `AMOB3` com somente Yahoo `GRUPAMENTO`: quantidade 0, custo 0, realizado
+  -85,3440;
+- `KLBN11` sem eventos: quantidade 0, custo 0, realizado 1,70;
+- `KLBN11` com somente BRAPI `BONIFICACAO`: quantidade 0,10, custo
+  1,8346534653465346534653465, realizado 3,5346534653465346534653465;
+- `KLBN11` com somente Yahoo `DESDOBRAMENTO`: quantidade 0,10, custo
+  1,8346534653465346534653465, realizado 3,5346534653465346534653465.
+
+Decisao: nenhum dos 4 eventos deve ser marcado como `MATCHED` no dataset
+candidato neste momento. O plano seguro e manter os eventos fora da projecao e
+trata-los como conflito/revisao manual ate haver reconciliacao contra extrato
+ou politica canonica de fracao/residuo.
+
+Implicacao para #158: a existencia desses conflitos nao autoriza rebuild
+seletivo. O proximo passo deve decidir se eventos em `CONFLICT` documentado
+bloqueiam o primeiro GO ou se podem permanecer explicitamente fail-closed e fora
+do escopo de promocao controlada.
+
 ## Comandos permitidos por padrao
 
 - consultas read-only de contagem, cobertura e integridade;

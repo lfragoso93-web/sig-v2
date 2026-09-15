@@ -76,6 +76,25 @@ persistidos nem promove eventos pendentes.
 `AMOB3` e `KLBN11` continuam exigindo reconciliacao de duplicidade economica
 entre fontes antes de qualquer evento ser marcado como `MATCHED`.
 
+## Plano de reconciliacao economica
+
+Simulacao por fonte isolada confirmou que nenhuma das quatro evidencias pode ser
+marcada como `MATCHED` com seguranca no dataset candidato:
+
+| Ticker | Cenario | Quantidade final | Custo final | Realizado |
+| --- | --- | ---: | ---: | ---: |
+| AMOB3 | sem eventos | 0 | 0 | -4,20 |
+| AMOB3 | somente BRAPI corrigido para `GRUPAMENTO` | 0 | 0 | -85,3440 |
+| AMOB3 | somente Yahoo `GRUPAMENTO` | 0 | 0 | -85,3440 |
+| KLBN11 | sem eventos | 0 | 0 | 1,70 |
+| KLBN11 | somente BRAPI `BONIFICACAO` | 0,10 | 1,8346534653465346534653465 | 3,5346534653465346534653465 |
+| KLBN11 | somente Yahoo `DESDOBRAMENTO` | 0,10 | 1,8346534653465346534653465 | 3,5346534653465346534653465 |
+
+Decisao: os 4 eventos devem permanecer fora da projecao financeira e tratados
+como conflito/revisao manual ate haver reconciliacao contra extrato ou politica
+canonica de fracao/residuo. Esse plano nao executa rebuild seletivo nem altera
+estado persistido dos eventos.
+
 ## Governanca
 
 Foi criada a Issue #370 para tratar a reconciliacao ou descarte formal dos 4

@@ -21,6 +21,9 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 - normalizador BRAPI passou a respeitar labels explicitos `GRUPAMENTO` e
   `DESDOBRAMENTO` em `stockDividends`, prevenindo nova classificacao semantica
   errada como bonificacao;
+- simulacao por fonte isolada concluiu que nenhum dos 4 eventos de
+  `AMOB3`/`KLBN11` pode ser marcado como `MATCHED` no dataset candidato sem
+  reconciliacao adicional de extrato/fracao/residuo;
 - foi criada a Issue #370 e a #158 permanece bloqueada para #269/#284/#227,
   PR estrutural para `main` e `ready_for_real_data=true`.
 
