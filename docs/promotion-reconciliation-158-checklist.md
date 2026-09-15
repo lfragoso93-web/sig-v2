@@ -179,6 +179,30 @@ Proximo passo permitido: reconciliation read-only focada nos deltas materiais
 acima, especialmente eventos corporativos materiais e consistencia de Tesouro,
 sem import, rebuild, cleanup real, migration destrutiva ou seed global.
 
+### Reconciliation read-only focada em 15/09/2026
+
+O bloco focado confirmou a materialidade dos eventos corporativos e reduziu o
+escopo operacional que ainda precisa de decisao:
+
+- eventos corporativos globais pendentes: 122;
+- todos os 122 pertencem a tickers presentes na carteira 15;
+- eventos globais dentro da janela de exposicao da carteira 15: 14;
+- evento de carteira ja aplicado, mas ainda `UNRECONCILED`: 1
+  `TICKER_CHANGE` de `PETZ3` em 05/01/2026;
+- total de eventos materiais para decisao da #158: 15, em 8 tickers
+  (`AMOB3`, `FIQE3`, `GOAU4`, `ITSA4`, `KLBN11`, `KLBN4`, `PETZ3`, `POMO4`);
+- `POMO4` mantem posicao liquida aberta de 30 unidades; os demais tickers
+  materiais estao zerados no ledger, mas podem afetar historico/custo/IRPF;
+- auditoria Tesouro read-only retornou 152 ativos, 151 grupos canonicos,
+  0 duplicidades, 0 candidatos de migracao, `destructive_changes=false`;
+- IRPF runtime da carteira 15 retornou contrato `irpf-annual-assessment.v1`
+  para 2025 e 2026 sem tabelas fisicas legadas.
+
+Decisao: #158 nao deve executar cleanup/rebuild/import ainda. O proximo bloco
+deve decidir os 15 eventos corporativos materiais: reconciliar de forma
+read-only se ja estiverem refletidos no ledger/snapshots ou abrir Issue
+especifica para tratar o delta antes do GO.
+
 ## Comandos permitidos por padrao
 
 - consultas read-only de contagem, cobertura e integridade;

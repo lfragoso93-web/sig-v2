@@ -152,6 +152,25 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 - proximo passo permitido: reconciliation read-only focada nos deltas materiais
   antes de qualquer import/rebuild/cleanup.
 
+### 15/09/2026 — #158 reconciliation read-only focada
+
+- eventos corporativos materiais foram reduzidos de 123 pendencias brutas para
+  15 eventos a decidir no escopo da carteira 15;
+- 14 eventos globais pendentes caem dentro da janela de exposicao da carteira
+  15 e 1 `TICKER_CHANGE` de `PETZ3` ja aplicado permanece
+  `UNRECONCILED/requires_review=true`;
+- os 15 eventos materiais envolvem `AMOB3`, `FIQE3`, `GOAU4`, `ITSA4`,
+  `KLBN11`, `KLBN4`, `PETZ3` e `POMO4`;
+- `POMO4` e o unico ticker material com posicao liquida aberta observada
+  (30 unidades); os demais estao zerados no ledger, mas ainda podem afetar
+  historico, custo, snapshots e IRPF;
+- auditoria Tesouro read-only retornou 152 ativos, 151 grupos canonicos, 0
+  duplicidades, 0 candidatos de migracao e `destructive_changes=false`;
+- IRPF runtime da carteira 15 emitiu `irpf-annual-assessment.v1` para 2025 e
+  2026 sem tabelas fisicas legadas;
+- nenhum import, rebuild, cleanup real, migration destrutiva, seed global ou
+  promocao de `ready_for_real_data=true` foi executado.
+
 ### 12/09/2026 — recuperação local de gates e contrato canônico de Proventos
 
 - a recuperação da #363 passou a usar suíte local completa como ferramenta de descoberta; a PR estrutural #362 permanece fechada/draft durante o saneamento para evitar consumo iterativo de GitHub Actions;
