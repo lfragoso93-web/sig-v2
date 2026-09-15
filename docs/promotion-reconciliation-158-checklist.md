@@ -140,6 +140,45 @@ Esse restore aprova somente a integridade do backup em laboratorio descartavel.
 Ele nao autoriza import, rebuild, cleanup real, migration destrutiva ou promocao
 de `ready_for_real_data=true`.
 
+### Validacao read-only aprovada com deltas em 14/09/2026
+
+O banco isolado `sgi_restore_20260915_002119` passou nos gates read-only:
+
+- `pre-prod-inventory.v2`: 20 tabelas, 4.434.818 linhas, 0 tabelas sem
+  classificacao, 0 findings bloqueantes;
+- `user-test-readiness.v1`: `GO_ASSISTED`, sem blockers ou warnings,
+  `ready_for_real_data=false`;
+- seguranca: `read_only=true`, `writes_executed=0`,
+  `promotes_ready_for_real_data=false`.
+
+Dataset observado:
+
+- 6 carteiras, 7 usuarios e 366 transacoes;
+- carteira 15: 354 transacoes entre 22/10/2024 e 13/09/2026;
+- carteira 13: 11 transacoes sinteticas entre 02/01/2026 e 20/02/2026;
+- carteira 17: 1 transacao de cripto em 09/09/2026;
+- snapshots consolidados: 608;
+- snapshots por classe: 5.121;
+- `asset_dividends`: 184 eventos globais;
+- `corporate_events`: 123 eventos.
+
+Deltas materiais para a #158:
+
+- eventos corporativos: 123 eventos permanecem
+  `UNRECONCILED/requires_review`, sendo 122 `PENDENTE` e 1 `APLICADO`;
+- snapshots: existem dias com `has_partial_prices=true` e
+  `return_is_estimated=true` nas carteiras 13, 15 e 17; isso deve permanecer
+  explicito e nao pode virar zero/fallback silencioso;
+- Tesouro: ha pares legado/canonico com quantidades liquidas opostas ou
+  complementares em `transactions`; evidencia registrada tambem na #365 para
+  impedir normalizacao destrutiva antes de #364;
+- IRPF: nao ha tabelas fisicas `irpf*` no schema restaurado; validacao deve
+  continuar usando os servicos runtime suportados, sem recriar tabelas legadas.
+
+Proximo passo permitido: reconciliation read-only focada nos deltas materiais
+acima, especialmente eventos corporativos materiais e consistencia de Tesouro,
+sem import, rebuild, cleanup real, migration destrutiva ou seed global.
+
 ## Comandos permitidos por padrao
 
 - consultas read-only de contagem, cobertura e integridade;

@@ -130,6 +130,28 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
   sobre o dataset restaurado; import/rebuild/cleanup real e
   `ready_for_real_data=true` continuam bloqueados.
 
+### 14/09/2026 — #158 validação read-only do dataset restaurado
+
+- `pre-prod-inventory.v2` passou sobre `sgi_restore_20260915_002119` com
+  20 tabelas, 4.434.818 linhas, 0 tabelas sem classificacao e 0 findings
+  bloqueantes;
+- `user-test-readiness.v1` retornou `GO_ASSISTED`, sem blockers/warnings e com
+  `ready_for_real_data=false`;
+- dataset restaurado contem 6 carteiras, 7 usuarios, 366 transacoes, 608
+  snapshots consolidados, 5.121 snapshots por classe, 184 eventos globais de
+  Proventos e 123 eventos corporativos;
+- eventos corporativos seguem como delta material: 122 `PENDENTE/UNRECONCILED`
+  e 1 `APLICADO/UNRECONCILED`, todos `requires_review=true`;
+- snapshots preservam explicitamente dias com cobertura parcial/preco estimado,
+  sem mascarar ausencia como zero;
+- evidencia Tesouro lida em `transactions` mostrou pares legado/canonico com
+  quantidades liquidas opostas/complementares; o achado foi registrado na #365
+  sem iniciar Trilha B;
+- nao ha tabelas fisicas `irpf*`; IRPF deve continuar validado por servicos
+  runtime suportados, sem recriar legado;
+- proximo passo permitido: reconciliation read-only focada nos deltas materiais
+  antes de qualquer import/rebuild/cleanup.
+
 ### 12/09/2026 — recuperação local de gates e contrato canônico de Proventos
 
 - a recuperação da #363 passou a usar suíte local completa como ferramenta de descoberta; a PR estrutural #362 permanece fechada/draft durante o saneamento para evitar consumo iterativo de GitHub Actions;
