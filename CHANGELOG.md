@@ -30,6 +30,9 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 - contrato puro de reconciliacao criado para planejar `CONFLICT` e `MATCHED`
   sem escrever no banco, sem rebuild e sem colocar eventos revisaveis na
   projecao financeira;
+- CLI read-only de dry-run emite planos auditaveis para `AMOB3` e `KLBN11`
+  com `database_writes_executed=0` e `dry_run=true`, preparando persistencia
+  controlada posterior de `CONFLICT`;
 - foi criada a Issue #370 e a #158 permanece bloqueada para #269/#284/#227,
   PR estrutural para `main` e `ready_for_real_data=true`.
 

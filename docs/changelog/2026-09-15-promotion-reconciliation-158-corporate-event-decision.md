@@ -123,6 +123,23 @@ Esse contrato nao altera eventos persistidos e nao autoriza rebuild. Ele cria a
 base segura para um executor posterior associar/reconciliar eventos materiais no
 banco sem abrir caminho fail-open.
 
+## Dry-run auditavel
+
+Foi adicionada a CLI read-only `corporate_event_reconciliation_dry_run`, que
+carrega eventos por ID, aplica o contrato puro e retorna um relatório
+`corporate-event-reconciliation-dry-run.v1`.
+
+Execucoes no banco restaurado isolado:
+
+- `AMOB3` eventos 12 e 13: `decision=CONFLICT`,
+  `database_writes_executed=0`, `dry_run=true`;
+- `KLBN11` eventos 81 e 82: `decision=CONFLICT`,
+  `database_writes_executed=0`, `dry_run=true`.
+
+Os planos mantem todos os quatro eventos fora da projecao financeira e prontos
+para uma etapa futura de persistencia controlada de `CONFLICT`, sem autorizar
+`MATCHED`, rebuild seletivo ou GO.
+
 ## Governanca
 
 Foi criada a Issue #370 para tratar a reconciliacao ou descarte formal dos 4

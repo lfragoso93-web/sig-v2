@@ -319,6 +319,23 @@ O contrato nao executa SQL, nao muda eventos existentes, nao cria transacoes e
 nao autoriza rebuild. Ele define o formato minimo seguro que um executor futuro
 deve seguir para associar/reconciliar eventos materiais no banco.
 
+### Dry-run auditavel da #370 em 15/09/2026
+
+Foi criada a CLI read-only `corporate_event_reconciliation_dry_run`, que carrega
+eventos por ID, aplica o contrato puro e sempre retorna
+`database_writes_executed=0` em modo `dry_run=true`.
+
+Execucoes no banco restaurado isolado:
+
+- `AMOB3` eventos 12 e 13: plano `CONFLICT`, ambos `requires_review=true`,
+  `is_canonical=false`, `matched_event_id=null`;
+- `KLBN11` eventos 81 e 82: plano `CONFLICT`, ambos `requires_review=true`,
+  `is_canonical=false`, `matched_event_id=null`.
+
+Decisao: os planos confirmam que a proxima etapa pode ser um executor controlado
+para persistir `CONFLICT` no banco restaurado, mas ainda nao autorizam
+`MATCHED`, rebuild seletivo, nem promocao de GO.
+
 ## Comandos permitidos por padrao
 
 - consultas read-only de contagem, cobertura e integridade;

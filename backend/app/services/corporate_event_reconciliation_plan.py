@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Any
 
 
 class CorporateEventReconciliationDecision(StrEnum):
@@ -28,6 +29,38 @@ class CorporateEventReconciliationUpdate:
     is_canonical: bool
     matched_event_id: int | None
     review_reason: str
+
+
+@dataclass(frozen=True)
+class CorporateEventReconciliationDryRunReport:
+    schema_version: str
+    ok: bool
+    decision: str
+    dry_run: bool
+    database_writes_executed: int
+    event_ids: tuple[int, ...]
+    updates: tuple[CorporateEventReconciliationUpdate, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": self.schema_version,
+            "ok": self.ok,
+            "decision": self.decision,
+            "dry_run": self.dry_run,
+            "database_writes_executed": self.database_writes_executed,
+            "event_ids": list(self.event_ids),
+            "updates": [
+                {
+                    "event_id": update.event_id,
+                    "reconciliation_status": update.reconciliation_status,
+                    "requires_review": update.requires_review,
+                    "is_canonical": update.is_canonical,
+                    "matched_event_id": update.matched_event_id,
+                    "review_reason": update.review_reason,
+                }
+                for update in self.updates
+            ],
+        }
 
 
 def _validate_evidences(
@@ -100,3 +133,34 @@ def plan_matched_reconciliation(
             )
         )
     return tuple(updates)
+
+
+def build_reconciliation_dry_run_report(
+    evidences: tuple[CorporateEventEvidence, ...],
+    *,
+    decision: CorporateEventReconciliationDecision,
+    reason: str,
+    canonical_event_id: int | None = None,
+) -> CorporateEventReconciliationDryRunReport:
+    if decision == CorporateEventReconciliationDecision.CONFLICT:
+        updates = plan_conflict_reconciliation(evidences, reason=reason)
+    elif decision == CorporateEventReconciliationDecision.MATCHED:
+        if canonical_event_id is None:
+            raise ValueError("MATCHED exige canonical_event_id")
+        updates = plan_matched_reconciliation(
+            evidences,
+            canonical_event_id=canonical_event_id,
+            reason=reason,
+        )
+    else:
+        raise ValueError(f"decisao desconhecida: {decision}")
+
+    return CorporateEventReconciliationDryRunReport(
+        schema_version="corporate-event-reconciliation-dry-run.v1",
+        ok=True,
+        decision=decision.value,
+        dry_run=True,
+        database_writes_executed=0,
+        event_ids=tuple(update.event_id for update in updates),
+        updates=updates,
+    )

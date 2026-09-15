@@ -2,6 +2,8 @@ import pytest
 
 from app.services.corporate_event_reconciliation_plan import (
     CorporateEventEvidence,
+    CorporateEventReconciliationDecision,
+    build_reconciliation_dry_run_report,
     plan_conflict_reconciliation,
     plan_matched_reconciliation,
 )
@@ -62,3 +64,22 @@ def test_plan_rejects_unknown_canonical_event() -> None:
 def test_plan_requires_non_empty_reason() -> None:
     with pytest.raises(ValueError, match="motivo"):
         plan_conflict_reconciliation((_evidence(12),), reason=" ")
+
+
+def test_dry_run_report_is_versioned_and_read_only() -> None:
+    report = build_reconciliation_dry_run_report(
+        (_evidence(12), _evidence(13, "yahoo")),
+        decision=CorporateEventReconciliationDecision.CONFLICT,
+        reason="duplicidade sem reconciliacao de fracao",
+    )
+
+    payload = report.to_dict()
+
+    assert payload["schema_version"] == "corporate-event-reconciliation-dry-run.v1"
+    assert payload["ok"] is True
+    assert payload["dry_run"] is True
+    assert payload["database_writes_executed"] == 0
+    assert payload["event_ids"] == [12, 13]
+    assert {item["reconciliation_status"] for item in payload["updates"]} == {
+        "CONFLICT",
+    }
