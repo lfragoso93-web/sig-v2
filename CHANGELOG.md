@@ -113,6 +113,23 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
   import, rebuild, cleanup, migration destrutiva e `ready_for_real_data=true`
   continuam bloqueados.
 
+### 14/09/2026 — #158 restore isolado reconciliado
+
+- artefato `20260915-002119` restaurado em banco descartavel
+  `sgi_restore_20260915_002119`;
+- `restore-report.json` retornou `pre-prod-restore.v1` com `ok=true`;
+- `reconciliation-report.json` retornou `pre-prod-reconciliation.v1` com
+  `ok=true`;
+- migrations de origem e destino coincidiram:
+  `20260906_rate_source32`, `20260910_goals_runtime`;
+- nao houve tabelas ausentes, tabelas inesperadas, divergencias de
+  classificacao, divergencias de contagem ou divergencias de findings;
+- seguranca preservada: zero escritas na origem, restore somente no alvo,
+  sem cleanup e sem rebuild;
+- proximo passo permitido: iniciar as validacoes read-only da reconciliation
+  sobre o dataset restaurado; import/rebuild/cleanup real e
+  `ready_for_real_data=true` continuam bloqueados.
+
 ### 12/09/2026 — recuperação local de gates e contrato canônico de Proventos
 
 - a recuperação da #363 passou a usar suíte local completa como ferramenta de descoberta; a PR estrutural #362 permanece fechada/draft durante o saneamento para evitar consumo iterativo de GitHub Actions;

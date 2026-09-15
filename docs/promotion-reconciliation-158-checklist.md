@@ -117,6 +117,29 @@ Esse artefato autoriza somente o proximo passo de restore em banco PostgreSQL
 isolado/descartavel para reconciliation. Ele nao autoriza import, rebuild,
 cleanup, migration destrutiva ou promocao de `ready_for_real_data=true`.
 
+### Restore isolado aprovado em 14/09/2026
+
+O artefato `20260915-002119` foi restaurado em banco PostgreSQL isolado:
+
+- destino: `sig-v2-db-1:5432/sgi_restore_20260915_002119`;
+- `restore-report.json`: `schema_version=pre-prod-restore.v1`, `ok=true`;
+- `reconciliation-report.json`: `schema_version=pre-prod-reconciliation.v1`,
+  `ok=true`;
+- migrations de origem e destino:
+  `20260906_rate_source32`, `20260910_goals_runtime`;
+- tabelas ausentes: 0;
+- tabelas inesperadas: 0;
+- divergencias de classificacao: 0;
+- divergencias de contagem: 0;
+- divergencias de findings: 0;
+- seguranca: `source_database_writes_executed=0`,
+  `restore_target_only=true`, `cleanup_executed=false`,
+  `rebuild_executed=false`.
+
+Esse restore aprova somente a integridade do backup em laboratorio descartavel.
+Ele nao autoriza import, rebuild, cleanup real, migration destrutiva ou promocao
+de `ready_for_real_data=true`.
+
 ## Comandos permitidos por padrao
 
 - consultas read-only de contagem, cobertura e integridade;
