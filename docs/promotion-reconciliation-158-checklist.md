@@ -92,6 +92,31 @@ aprovada para restore. O backup candidato precisa ser regenerado em runtime cujo
 cleanup, migration destrutiva e promocao de `ready_for_real_data=true`
 continuam bloqueados.
 
+### Artefato candidato aceito em 14/09/2026
+
+O artefato local abaixo foi gerado a partir da imagem backend construida no SHA
+certificado e com `APP_COMMIT_SHA` validado pela CLI:
+
+- caminho host:
+  `artifacts\pre-prod-rebuild\20260915-002119`;
+- `schema_version=pre-prod-backup.v3`;
+- `run_id=20260915-002119`;
+- branch `stable-15jun`;
+- commit `48b5041ceaf3240384065c42578fde6689ce17db`;
+- `consistent_snapshot=true`;
+- `pg_dump_major=16`;
+- `server_major=16`;
+- `database.dump` com 40.981.404 bytes;
+- SHA-256
+  `d42efc2f507854b58ab30429530aee10462c3b41ad29467db57ab91dfe77b4c9`;
+- inventario de origem `pre-prod-inventory.v2`: 20 tabelas, 4.434.818 linhas,
+  0 tabelas sem classificacao e 0 findings bloqueantes;
+- validador local `scripts\oci_backup_artifact_check.ps1`: aprovado.
+
+Esse artefato autoriza somente o proximo passo de restore em banco PostgreSQL
+isolado/descartavel para reconciliation. Ele nao autoriza import, rebuild,
+cleanup, migration destrutiva ou promocao de `ready_for_real_data=true`.
+
 ## Comandos permitidos por padrao
 
 - consultas read-only de contagem, cobertura e integridade;
