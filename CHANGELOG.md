@@ -15,6 +15,9 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
   bonificacao/desdobramento;
 - os demais 11 eventos ocorreram sem posicao na data; `POMO4` possui posicao
   final aberta, mas seus eventos de 2025 ocorreram antes das recompras de 2026;
+- simulacao read-only pelo motor puro mostrou que aplicar mecanicamente os 4
+  eventos pendentes mudaria realizado e deixaria residuo de posicao em
+  `KLBN11`, logo #370 exige reconciliacao economica antes de rebuild;
 - foi criada a Issue #370 e a #158 permanece bloqueada para #269/#284/#227,
   PR estrutural para `main` e `ready_for_real_data=true`.
 

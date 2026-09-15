@@ -40,6 +40,23 @@ Os outros 11 eventos revisados ocorreram com quantidade zero na data do evento.
 ocorreram depois da zeragem em 24/06/2025 e antes das recompras de abril/2026,
 sem afetar a posicao aberta atual pelo projetor canonico.
 
+## Simulacao read-only de impacto
+
+Os 4 eventos bloqueantes foram simulados com `project_position_timeline`, sem
+alterar dados persistidos e sem mudar o estado de reconciliacao dos eventos.
+
+| Ticker | Cenario | Quantidade final | Custo final | Realizado |
+| --- | --- | ---: | ---: | ---: |
+| AMOB3 | sem eventos | 0 | 0 | -4,20 |
+| AMOB3 | aplicando eventos pendentes | 0 | 0 | -86,966880 |
+| KLBN11 | sem eventos | 0 | 0 | 1,70 |
+| KLBN11 | aplicando eventos pendentes | 0,2010 | 3,6511420448975590628369768 | 5,3511420448975590628369768 |
+
+Conclusao: a #370 nao deve ser tratada como simples promocao de eventos
+`UNRECONCILED` para `MATCHED`. O delta exige reconciliacao economica de fonte,
+fator, data efetiva e tratamento de fracao/residuo antes de qualquer rebuild
+seletivo.
+
 ## Governanca
 
 Foi criada a Issue #370 para tratar a reconciliacao ou descarte formal dos 4

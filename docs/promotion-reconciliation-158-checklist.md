@@ -229,6 +229,27 @@ Issue criada: #370. A #158 nao deve avancar para #269/#284/#227 nem abrir PR
 estrutural para `main` enquanto #370 nao estiver reconciliada ou formalmente
 aceita como nao bloqueante com evidencia.
 
+### Simulacao read-only de impacto da #370 em 15/09/2026
+
+Os 4 eventos bloqueantes foram simulados no motor puro
+`project_position_timeline`, sem marcar eventos como reconciliados e sem
+alterar o banco.
+
+Resultado:
+
+- `AMOB3` sem eventos: quantidade final 0, custo final 0, realizado -4,20;
+- `AMOB3` aplicando os dois eventos pendentes: quantidade final 0, custo final
+  0, realizado -86,966880;
+- `KLBN11` sem eventos: quantidade final 0, custo final 0, realizado 1,70;
+- `KLBN11` aplicando os dois eventos pendentes: quantidade final 0,2010,
+  custo final 3,6511420448975590628369768 e realizado
+  5,3511420448975590628369768.
+
+Decisao: a #370 nao pode ser resolvida por promocao mecanica de eventos
+`UNRECONCILED` para `MATCHED`. E necessario reconciliar economicamente fonte,
+fator, data efetiva e tratamento de fracao/residuo antes de qualquer rebuild
+seletivo. Enquanto isso, os eventos permanecem fail-closed e fora das projecoes.
+
 ## Comandos permitidos por padrao
 
 - consultas read-only de contagem, cobertura e integridade;
