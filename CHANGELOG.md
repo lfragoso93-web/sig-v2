@@ -4,6 +4,20 @@ Todas as mudanças relevantes do projeto são documentadas aqui. O histórico de
 
 ## [Unreleased] — branch `stable-15jun`
 
+### 15/09/2026 - #158 eventos corporativos materiais decididos
+
+- os 15 eventos corporativos inicialmente materiais foram cruzados com a
+  exposicao real da carteira 15 na data de cada evento;
+- todos continuam `UNRECONCILED/requires_review=true` e, pelo contrato
+  fail-closed atual, nao entram nas projecoes financeiras;
+- 4 eventos possuem quantidade positiva no evento e bloqueiam o GO ate
+  reconciliacao ou descarte formal: `AMOB3` bonificacao/grupamento e `KLBN11`
+  bonificacao/desdobramento;
+- os demais 11 eventos ocorreram sem posicao na data; `POMO4` possui posicao
+  final aberta, mas seus eventos de 2025 ocorreram antes das recompras de 2026;
+- foi criada a Issue #370 e a #158 permanece bloqueada para #269/#284/#227,
+  PR estrutural para `main` e `ready_for_real_data=true`.
+
 ### 14/09/2026 — A1/#352 validada e fechada
 
 - #352 foi corrigida e validada manualmente: o seletor de `Tipo de ativo`

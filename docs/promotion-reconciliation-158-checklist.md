@@ -203,6 +203,32 @@ deve decidir os 15 eventos corporativos materiais: reconciliar de forma
 read-only se ja estiverem refletidos no ledger/snapshots ou abrir Issue
 especifica para tratar o delta antes do GO.
 
+### Decisao de eventos corporativos em 15/09/2026
+
+O bloco de decisao cruzou os 15 eventos inicialmente materiais com a exposicao
+real da carteira 15 na data de cada evento.
+
+Resultado:
+
+- todos os 15 eventos permanecem `UNRECONCILED/requires_review=true` e, pelo
+  contrato atual de `corporate_action_position_reader`, ficam fora da projecao
+  financeira;
+- 4 eventos ocorreram com quantidade positiva na data do evento e bloqueiam o
+  GO ate reconciliacao ou descarte formal:
+  - `AMOB3` `BONIFICACAO` em 28/05/2025, quantidade 6;
+  - `AMOB3` `GRUPAMENTO` em 29/05/2025, quantidade 6;
+  - `KLBN11` `BONIFICACAO` em 17/12/2025, quantidade 10;
+  - `KLBN11` `DESDOBRAMENTO` em 18/12/2025, quantidade 10;
+- os outros 11 eventos revisados ocorreram com quantidade zero na data do
+  evento;
+- `POMO4` tem posicao final de 30 unidades, mas seus eventos de dezembro/2025
+  ocorreram apos zeragem em 24/06/2025 e antes das recompras de abril/2026;
+  portanto nao afetam a posicao aberta atual pelo projetor canonico.
+
+Issue criada: #370. A #158 nao deve avancar para #269/#284/#227 nem abrir PR
+estrutural para `main` enquanto #370 nao estiver reconciliada ou formalmente
+aceita como nao bloqueante com evidencia.
+
 ## Comandos permitidos por padrao
 
 - consultas read-only de contagem, cobertura e integridade;
