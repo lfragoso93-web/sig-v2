@@ -293,9 +293,14 @@ trata-los como conflito/revisao manual ate haver reconciliacao contra extrato
 ou politica canonica de fracao/residuo.
 
 Implicacao para #158: a existencia desses conflitos nao autoriza rebuild
-seletivo. O proximo passo deve decidir se eventos em `CONFLICT` documentado
-bloqueiam o primeiro GO ou se podem permanecer explicitamente fail-closed e fora
-do escopo de promocao controlada.
+seletivo e bloqueia o primeiro GO. Eventos corporativos materiais fazem parte do
+lifecycle do investidor e precisam estar associados/reconciliados no banco antes
+da promocao, ou formalmente resolvidos por politica canonica de conflito,
+fracao/residuo e auditoria.
+
+Decisao arquitetural: #370 permanece blocker de #158. Nao e valido tratar
+eventos materiais apenas como nota externa ou como pendencia nao bloqueante do
+primeiro GO controlado.
 
 ## Comandos permitidos por padrao
 

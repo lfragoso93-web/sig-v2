@@ -95,6 +95,18 @@ como conflito/revisao manual ate haver reconciliacao contra extrato ou politica
 canonica de fracao/residuo. Esse plano nao executa rebuild seletivo nem altera
 estado persistido dos eventos.
 
+## Decisao arquitetural de GO
+
+Eventos corporativos materiais fazem parte do lifecycle financeiro do investidor
+e precisam estar associados/reconciliados no banco para que posicoes, custo,
+rentabilidade, snapshots e IRPF reflitam corretamente a carteira.
+
+Portanto, #370 permanece blocker da #158. Nao e valido promover o primeiro GO
+tratando eventos materiais conflitantes como pendencia externa ou nao bloqueante.
+O caminho correto e resolver a associacao/reconciliacao no banco, preservando
+fail-closed ate haver politica canonica para conflito, fracao/residuo e
+auditoria.
+
 ## Governanca
 
 Foi criada a Issue #370 para tratar a reconciliacao ou descarte formal dos 4
