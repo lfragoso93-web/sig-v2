@@ -7,6 +7,9 @@ from datetime import date
 from decimal import Decimal
 from typing import Any, Iterable
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models.corporate_event import CorporateEvent
 from app.services.corporate_action_engine import (
     CorporateActionKind,
@@ -37,14 +40,40 @@ class CorporateEventSemanticRepairCandidate:
     event_date: date
     quantity_factor: Decimal
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "event_id": self.event_id,
+            "ticker": self.ticker,
+            "old_event_type": self.old_event_type,
+            "new_event_type": self.new_event_type,
+            "old_source_event_id": self.old_source_event_id,
+            "new_source_event_id": self.new_source_event_id,
+            "old_source_payload_hash": self.old_source_payload_hash,
+            "new_source_payload_hash": self.new_source_payload_hash,
+            "event_date": self.event_date.isoformat(),
+            "quantity_factor": str(self.quantity_factor),
+        }
+
 
 @dataclass(frozen=True)
 class CorporateEventSemanticRepairReport:
     candidates: tuple[CorporateEventSemanticRepairCandidate, ...]
+    dry_run: bool = True
+    database_writes_executed: int = 0
+    schema_version: str = "corporate-event-semantic-repair.v1"
 
     @property
     def total_candidates(self) -> int:
         return len(self.candidates)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": self.schema_version,
+            "dry_run": self.dry_run,
+            "database_writes_executed": self.database_writes_executed,
+            "total_candidates": self.total_candidates,
+            "candidates": [candidate.to_dict() for candidate in self.candidates],
+        }
 
 
 def _raw_label(raw_metadata: object) -> str:
@@ -125,11 +154,6 @@ def _build_candidate(
 
     action = actions[0]
     new_identity = (action.source, action.source_event_id)
-    if new_identity in existing_identities:
-        raise CorporateEventSemanticRepairError(
-            f"evento {event.id}: nova identidade ja existe: {new_identity}"
-        )
-
     new_payload_hash = source_payload_hash(action)
     if (
         event.event_type == action.kind.value
@@ -138,6 +162,11 @@ def _build_candidate(
     ):
         raise CorporateEventSemanticRepairError(
             f"evento {event.id}: sem mudanca semantica real"
+        )
+    current_identity = (str(event.source_provider), str(event.source_event_id))
+    if new_identity != current_identity and new_identity in existing_identities:
+        raise CorporateEventSemanticRepairError(
+            f"evento {event.id}: nova identidade ja existe: {new_identity}"
         )
 
     return CorporateEventSemanticRepairCandidate(
@@ -160,8 +189,108 @@ def build_corporate_event_semantic_repair_plan(
     existing_source_identities: Iterable[tuple[str | None, str | None]] | None = None,
 ) -> CorporateEventSemanticRepairReport:
     existing_identities = _identity_set(existing_source_identities)
-    candidates = tuple(
-        _build_candidate(event, existing_identities=existing_identities)
-        for event in events
-    )
+    candidates = []
+    for event in events:
+        candidate = _build_candidate(event, existing_identities=existing_identities)
+        existing_identities.add(("brapi", candidate.new_source_event_id))
+        candidates.append(candidate)
+    candidates = tuple(candidates)
     return CorporateEventSemanticRepairReport(candidates=candidates)
+
+
+async def _load_events_for_repair(
+    db: AsyncSession,
+    *,
+    event_ids: tuple[int, ...],
+    lock: bool,
+) -> tuple[CorporateEvent, ...]:
+    if not event_ids:
+        raise CorporateEventSemanticRepairError("event_ids e obrigatorio")
+    if len(set(event_ids)) != len(event_ids):
+        raise CorporateEventSemanticRepairError("event_ids contem duplicidade")
+
+    statement = select(CorporateEvent).where(CorporateEvent.id.in_(event_ids))
+    if lock:
+        statement = statement.with_for_update()
+    result = await db.execute(statement)
+    events = tuple(sorted(result.scalars().all(), key=lambda item: int(item.id)))
+    found_ids = {int(event.id) for event in events}
+    missing = sorted(set(event_ids) - found_ids)
+    if missing:
+        raise CorporateEventSemanticRepairError(f"eventos nao encontrados: {missing}")
+    return events
+
+
+async def _existing_source_identities(
+    db: AsyncSession,
+    *,
+    exclude_event_ids: tuple[int, ...],
+) -> set[tuple[str, str]]:
+    statement = (
+        select(CorporateEvent.source_provider, CorporateEvent.source_event_id)
+        .where(CorporateEvent.source_provider.is_not(None))
+        .where(CorporateEvent.source_event_id.is_not(None))
+    )
+    if exclude_event_ids:
+        statement = statement.where(CorporateEvent.id.not_in(exclude_event_ids))
+    result = await db.execute(
+        statement
+    )
+    return {
+        (str(source_provider), str(source_event_id))
+        for source_provider, source_event_id in result.all()
+        if source_provider and source_event_id
+    }
+
+
+async def build_corporate_event_semantic_repair_dry_run(
+    db: AsyncSession,
+    *,
+    event_ids: tuple[int, ...],
+) -> CorporateEventSemanticRepairReport:
+    events = await _load_events_for_repair(db, event_ids=event_ids, lock=False)
+    return build_corporate_event_semantic_repair_plan(
+        events,
+        existing_source_identities=await _existing_source_identities(
+            db,
+            exclude_event_ids=event_ids,
+        ),
+    )
+
+
+def _apply_candidate(
+    event: CorporateEvent,
+    candidate: CorporateEventSemanticRepairCandidate,
+) -> None:
+    event.event_type = candidate.new_event_type
+    event.source_event_id = candidate.new_source_event_id
+    event.source_payload_hash = candidate.new_source_payload_hash
+
+
+async def execute_corporate_event_semantic_repair(
+    db: AsyncSession,
+    *,
+    event_ids: tuple[int, ...],
+) -> CorporateEventSemanticRepairReport:
+    events = await _load_events_for_repair(db, event_ids=event_ids, lock=True)
+    events_by_id = {int(event.id): event for event in events}
+    report = build_corporate_event_semantic_repair_plan(
+        events,
+        existing_source_identities=await _existing_source_identities(
+            db,
+            exclude_event_ids=event_ids,
+        ),
+    )
+    for candidate in report.candidates:
+        event = events_by_id.get(candidate.event_id)
+        if event is None:
+            raise CorporateEventSemanticRepairError(
+                f"evento nao encontrado durante execucao: {candidate.event_id}"
+            )
+        _apply_candidate(event, candidate)
+    await db.flush()
+    return CorporateEventSemanticRepairReport(
+        candidates=report.candidates,
+        dry_run=False,
+        database_writes_executed=len(report.candidates),
+    )

@@ -5,6 +5,7 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.corporate_event import CorporateEvent, CorporateEventStatus
 from app.services.corporate_action_engine import (
@@ -14,6 +15,8 @@ from app.services.corporate_action_engine import (
 from app.services.corporate_event_semantic_repair import (
     CorporateEventSemanticRepairError,
     build_corporate_event_semantic_repair_plan,
+    build_corporate_event_semantic_repair_dry_run,
+    execute_corporate_event_semantic_repair,
 )
 
 
@@ -84,6 +87,7 @@ def test_amob3_like_grupamento_generates_dry_run_candidate() -> None:
     assert candidate.new_source_payload_hash != "old-hash"
     assert candidate.event_date == date(2024, 7, 10)
     assert candidate.quantity_factor == Decimal("0.1")
+    assert report.to_dict()["database_writes_executed"] == 0
 
 
 def test_desdobramento_generates_dry_run_candidate() -> None:
@@ -162,3 +166,101 @@ def test_dry_run_does_not_mutate_event_properties() -> None:
     for key, value in before.items():
         if key != "_sa_instance_state":
             assert after[key] == value
+
+
+@pytest.mark.asyncio
+async def test_database_dry_run_does_not_mutate_event(db: AsyncSession) -> None:
+    event = _event()
+    db.add(event)
+    await db.flush()
+
+    report = await build_corporate_event_semantic_repair_dry_run(
+        db,
+        event_ids=(int(event.id),),
+    )
+
+    [candidate] = report.candidates
+    assert report.dry_run is True
+    assert report.database_writes_executed == 0
+    assert candidate.new_event_type == "GRUPAMENTO"
+    assert event.event_type == "BONIFICACAO"
+    assert event.source_event_id == "brapi:old"
+    assert event.source_payload_hash == "old-hash"
+    assert event.reconciliation_status == "UNRECONCILED"
+    assert event.requires_review is True
+    assert event.is_canonical is True
+    assert event.matched_event_id is None
+
+
+@pytest.mark.asyncio
+async def test_execute_repairs_only_semantic_identity_fields(db: AsyncSession) -> None:
+    event = _event()
+    db.add(event)
+    await db.flush()
+    original_status = event.reconciliation_status
+    original_requires_review = event.requires_review
+    original_is_canonical = event.is_canonical
+    original_matched_event_id = event.matched_event_id
+    original_raw_metadata = dict(event.raw_metadata)
+    original_quantity_factor = event.quantity_factor
+
+    report = await execute_corporate_event_semantic_repair(
+        db,
+        event_ids=(int(event.id),),
+    )
+
+    [candidate] = report.candidates
+    assert report.dry_run is False
+    assert report.database_writes_executed == 1
+    assert event.event_type == "GRUPAMENTO"
+    assert event.source_event_id == candidate.new_source_event_id
+    assert event.source_payload_hash == candidate.new_source_payload_hash
+    assert event.reconciliation_status == original_status
+    assert event.requires_review == original_requires_review
+    assert event.is_canonical == original_is_canonical
+    assert event.matched_event_id == original_matched_event_id
+    assert event.raw_metadata == original_raw_metadata
+    assert event.quantity_factor == original_quantity_factor
+
+
+@pytest.mark.asyncio
+async def test_database_execution_rejects_existing_identity_collision(
+    db: AsyncSession,
+) -> None:
+    event = _event()
+    action = _action_for(event)
+    colliding = _event(
+        id=371,
+        ticker="ZZZZ3",
+        source_event_id=action.source_event_id,
+        raw_metadata=_raw("DESDOBRAMENTO", "2"),
+        quantity_factor=Decimal("2"),
+        ratio=Decimal("2"),
+    )
+    db.add_all([event, colliding])
+    await db.flush()
+
+    with pytest.raises(CorporateEventSemanticRepairError, match="nova identidade"):
+        await execute_corporate_event_semantic_repair(db, event_ids=(int(event.id),))
+
+    assert event.event_type == "BONIFICACAO"
+    assert event.source_event_id == "brapi:old"
+
+
+@pytest.mark.asyncio
+async def test_database_dry_run_rejects_semantically_correct_event(
+    db: AsyncSession,
+) -> None:
+    event = _event()
+    action = _action_for(event)
+    event.event_type = action.kind.value
+    event.source_event_id = action.source_event_id
+    event.source_payload_hash = source_payload_hash(action)
+    db.add(event)
+    await db.flush()
+
+    with pytest.raises(CorporateEventSemanticRepairError, match="sem mudanca"):
+        await build_corporate_event_semantic_repair_dry_run(
+            db,
+            event_ids=(int(event.id),),
+        )
