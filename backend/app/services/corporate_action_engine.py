@@ -37,6 +37,16 @@ class NormalizedCorporateAction:
         return self.kind != CorporateActionKind.SUBSCRIPTION
 
 
+def source_payload_hash(action: NormalizedCorporateAction) -> str:
+    payload = json.dumps(
+        action.raw_payload,
+        sort_keys=True,
+        ensure_ascii=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 @dataclass(frozen=True)
 class CorporateActionProjection:
     quantity: Decimal

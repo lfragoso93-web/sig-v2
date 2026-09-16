@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import json
 import logging
 import warnings
 from collections.abc import Awaitable, Callable
@@ -26,6 +24,7 @@ from app.services.corporate_action_engine import (
     NormalizedCorporateAction,
     normalize_brapi_corporate_actions,
     normalize_yahoo_splits,
+    source_payload_hash,
 )
 from app.services.dividend_history_seed_service import _yf_symbol
 
@@ -111,13 +110,7 @@ async def fetch_yahoo_splits(symbol: str) -> list[tuple[date, float]]:
 
 
 def _source_payload_hash(action: NormalizedCorporateAction) -> str:
-    payload = json.dumps(
-        action.raw_payload,
-        sort_keys=True,
-        ensure_ascii=True,
-        separators=(",", ":"),
-    )
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return source_payload_hash(action)
 
 
 async def sync_corporate_events_for_asset(
