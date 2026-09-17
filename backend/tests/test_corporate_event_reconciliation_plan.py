@@ -87,6 +87,7 @@ def test_dry_run_report_is_versioned_and_read_only() -> None:
     assert {item["reconciliation_status"] for item in payload["updates"]} == {
         "CONFLICT",
     }
+    assert "match_resolution_evidence" not in payload
 
 
 def test_execution_report_records_write_count() -> None:

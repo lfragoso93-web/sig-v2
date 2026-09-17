@@ -75,18 +75,13 @@ class CorporateEventReconciliationDryRunReport:
     match_resolution_evidence: CorporateEventMatchResolutionEvidence | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "schema_version": self.schema_version,
             "ok": self.ok,
             "decision": self.decision,
             "dry_run": self.dry_run,
             "database_writes_executed": self.database_writes_executed,
             "event_ids": list(self.event_ids),
-            "match_resolution_evidence": (
-                self.match_resolution_evidence.to_dict()
-                if self.match_resolution_evidence is not None
-                else None
-            ),
             "updates": [
                 {
                     "event_id": update.event_id,
@@ -99,6 +94,11 @@ class CorporateEventReconciliationDryRunReport:
                 for update in self.updates
             ],
         }
+        if self.match_resolution_evidence is not None:
+            payload["match_resolution_evidence"] = (
+                self.match_resolution_evidence.to_dict()
+            )
+        return payload
 
 
 def _validate_evidences(
