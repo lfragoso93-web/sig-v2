@@ -18,6 +18,12 @@ class FractionalResolutionPolicy(StrEnum):
     MANUAL_REVIEW = "MANUAL_REVIEW"
 
 
+class CorporateEventMatchEvidenceType(StrEnum):
+    BROKER_STATEMENT = "BROKER_STATEMENT"
+    OFFICIAL_ISSUER_DOCUMENT = "OFFICIAL_ISSUER_DOCUMENT"
+    OFFICIAL_EXCHANGE_DOCUMENT = "OFFICIAL_EXCHANGE_DOCUMENT"
+
+
 @dataclass(frozen=True)
 class CorporateEventEvidence:
     event_id: int
@@ -39,11 +45,22 @@ class CorporateEventReconciliationUpdate:
 
 @dataclass(frozen=True)
 class CorporateEventMatchResolutionEvidence:
-    broker_statement_reference: str
+    evidence_type: CorporateEventMatchEvidenceType
+    evidence_reference: str
     fractional_policy: FractionalResolutionPolicy
     fractional_quantity: str | None = None
     fractional_settlement_price: str | None = None
     cash_treatment: str | None = None
+
+    def to_dict(self) -> dict[str, str | None]:
+        return {
+            "evidence_type": self.evidence_type.value,
+            "evidence_reference": self.evidence_reference,
+            "fractional_policy": self.fractional_policy.value,
+            "fractional_quantity": self.fractional_quantity,
+            "fractional_settlement_price": self.fractional_settlement_price,
+            "cash_treatment": self.cash_treatment,
+        }
 
 
 @dataclass(frozen=True)
@@ -55,6 +72,7 @@ class CorporateEventReconciliationDryRunReport:
     database_writes_executed: int
     event_ids: tuple[int, ...]
     updates: tuple[CorporateEventReconciliationUpdate, ...]
+    match_resolution_evidence: CorporateEventMatchResolutionEvidence | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -64,6 +82,11 @@ class CorporateEventReconciliationDryRunReport:
             "dry_run": self.dry_run,
             "database_writes_executed": self.database_writes_executed,
             "event_ids": list(self.event_ids),
+            "match_resolution_evidence": (
+                self.match_resolution_evidence.to_dict()
+                if self.match_resolution_evidence is not None
+                else None
+            ),
             "updates": [
                 {
                     "event_id": update.event_id,
@@ -92,8 +115,8 @@ def _validate_evidences(
 def validate_match_resolution_evidence(
     evidence: CorporateEventMatchResolutionEvidence,
 ) -> None:
-    if not evidence.broker_statement_reference.strip():
-        raise ValueError("referencia de extrato/corretora e obrigatoria")
+    if not evidence.evidence_reference.strip():
+        raise ValueError("referencia documental da evidencia e obrigatoria")
 
     has_fraction = bool(str(evidence.fractional_quantity or "").strip())
     if evidence.fractional_policy == FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE:
@@ -214,13 +237,18 @@ def build_reconciliation_dry_run_report(
         raise ValueError(f"decisao desconhecida: {decision}")
 
     return CorporateEventReconciliationDryRunReport(
-        schema_version="corporate-event-reconciliation-dry-run.v1",
+        schema_version=(
+            "corporate-event-reconciliation-dry-run.v2"
+            if match_resolution_evidence is not None
+            else "corporate-event-reconciliation-dry-run.v1"
+        ),
         ok=True,
         decision=decision.value,
         dry_run=True,
         database_writes_executed=0,
         event_ids=tuple(update.event_id for update in updates),
         updates=updates,
+        match_resolution_evidence=match_resolution_evidence,
     )
 
 

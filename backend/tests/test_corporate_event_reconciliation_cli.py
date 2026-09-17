@@ -1,7 +1,6 @@
 ﻿from argparse import Namespace
 
 import pytest
-
 from app.cli import corporate_event_reconciliation_dry_run as cli
 
 
@@ -10,7 +9,8 @@ def _arguments(
     decision: str,
     execute: bool = False,
     canonical_event_id: int | None = None,
-    broker_statement_reference: str | None = None,
+    evidence_type: str | None = None,
+    evidence_reference: str | None = None,
     fractional_policy: str | None = None,
     fractional_quantity: str | None = None,
     fractional_settlement_price: str | None = None,
@@ -21,7 +21,8 @@ def _arguments(
         decision=decision,
         reason="reconciliacao de certificacao",
         canonical_event_id=canonical_event_id,
-        broker_statement_reference=broker_statement_reference,
+        evidence_type=evidence_type,
+        evidence_reference=evidence_reference,
         fractional_policy=fractional_policy,
         fractional_quantity=fractional_quantity,
         fractional_settlement_price=fractional_settlement_price,
@@ -31,12 +32,26 @@ def _arguments(
 
 
 @pytest.mark.asyncio
-async def test_cli_matched_requires_broker_statement_reference() -> None:
-    with pytest.raises(ValueError, match="broker-statement-reference"):
+async def test_cli_matched_requires_evidence_type() -> None:
+    with pytest.raises(ValueError, match="evidence-type"):
         await cli._main(
             _arguments(
                 decision="MATCHED",
                 canonical_event_id=13,
+                evidence_reference="b3:official-document:AMOB3:2025-05",
+                fractional_policy="NO_FRACTIONAL_RESIDUE",
+            )
+        )
+
+
+@pytest.mark.asyncio
+async def test_cli_matched_requires_evidence_reference() -> None:
+    with pytest.raises(ValueError, match="evidence-reference"):
+        await cli._main(
+            _arguments(
+                decision="MATCHED",
+                canonical_event_id=13,
+                evidence_type="OFFICIAL_EXCHANGE_DOCUMENT",
                 fractional_policy="NO_FRACTIONAL_RESIDUE",
             )
         )
@@ -49,7 +64,8 @@ async def test_cli_matched_requires_fractional_policy() -> None:
             _arguments(
                 decision="MATCHED",
                 canonical_event_id=13,
-                broker_statement_reference="broker-note:AMOB3:2025-05",
+                evidence_type="OFFICIAL_EXCHANGE_DOCUMENT",
+                evidence_reference="b3:official-document:AMOB3:2025-05",
             )
         )
 
@@ -63,7 +79,8 @@ async def test_cli_conflict_rejects_matched_evidence_arguments() -> None:
         await cli._main(
             _arguments(
                 decision="CONFLICT",
-                broker_statement_reference="broker-note:AMOB3:2025-05",
+                evidence_type="OFFICIAL_EXCHANGE_DOCUMENT",
+                evidence_reference="b3:official-document:AMOB3:2025-05",
             )
         )
 
@@ -88,7 +105,8 @@ async def test_cli_matched_execute_remains_forbidden(monkeypatch) -> None:
                 decision="MATCHED",
                 execute=True,
                 canonical_event_id=13,
-                broker_statement_reference="broker-note:AMOB3:2025-05",
+                evidence_type="OFFICIAL_EXCHANGE_DOCUMENT",
+                evidence_reference="b3:official-document:AMOB3:2025-05",
                 fractional_policy="NO_FRACTIONAL_RESIDUE",
             )
         )

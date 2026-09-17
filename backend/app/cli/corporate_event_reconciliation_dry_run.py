@@ -18,6 +18,7 @@ from app.services.corporate_event_reconciliation_dry_run_service import (
     execute_corporate_event_conflict_reconciliation,
 )
 from app.services.corporate_event_reconciliation_plan import (
+    CorporateEventMatchEvidenceType,
     CorporateEventMatchResolutionEvidence,
     CorporateEventReconciliationDecision,
     FractionalResolutionPolicy,
@@ -46,7 +47,11 @@ def _arguments() -> argparse.Namespace:
     )
     parser.add_argument("--reason", required=True)
     parser.add_argument("--canonical-event-id", type=int)
-    parser.add_argument("--broker-statement-reference")
+    parser.add_argument(
+        "--evidence-type",
+        choices=[item.value for item in CorporateEventMatchEvidenceType],
+    )
+    parser.add_argument("--evidence-reference")
     parser.add_argument(
         "--fractional-policy",
         choices=[item.value for item in FractionalResolutionPolicy],
@@ -67,7 +72,8 @@ async def _main(arguments: argparse.Namespace) -> int:
     decision = CorporateEventReconciliationDecision(arguments.decision)
 
     match_argument_values = (
-        arguments.broker_statement_reference,
+        arguments.evidence_type,
+        arguments.evidence_reference,
         arguments.fractional_policy,
         arguments.fractional_quantity,
         arguments.fractional_settlement_price,
@@ -77,12 +83,15 @@ async def _main(arguments: argparse.Namespace) -> int:
 
     match_resolution_evidence = None
     if decision == CorporateEventReconciliationDecision.MATCHED:
-        if not arguments.broker_statement_reference:
-            raise ValueError("MATCHED exige --broker-statement-reference")
+        if not arguments.evidence_type:
+            raise ValueError("MATCHED exige --evidence-type")
+        if not arguments.evidence_reference:
+            raise ValueError("MATCHED exige --evidence-reference")
         if not arguments.fractional_policy:
             raise ValueError("MATCHED exige --fractional-policy")
         match_resolution_evidence = CorporateEventMatchResolutionEvidence(
-            broker_statement_reference=arguments.broker_statement_reference,
+            evidence_type=CorporateEventMatchEvidenceType(arguments.evidence_type),
+            evidence_reference=arguments.evidence_reference,
             fractional_policy=FractionalResolutionPolicy(arguments.fractional_policy),
             fractional_quantity=arguments.fractional_quantity,
             fractional_settlement_price=arguments.fractional_settlement_price,

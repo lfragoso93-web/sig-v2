@@ -1,12 +1,12 @@
-import pytest
-
+﻿import pytest
 from app.services.corporate_event_reconciliation_plan import (
     CorporateEventEvidence,
+    CorporateEventMatchEvidenceType,
     CorporateEventMatchResolutionEvidence,
     CorporateEventReconciliationDecision,
     FractionalResolutionPolicy,
-    build_reconciliation_execution_report,
     build_reconciliation_dry_run_report,
+    build_reconciliation_execution_report,
     plan_conflict_reconciliation,
     plan_matched_reconciliation,
     validate_match_resolution_evidence,
@@ -108,11 +108,11 @@ def test_execution_report_records_write_count() -> None:
     assert payload["event_ids"] == [12, 13]
 
 
-def test_match_resolution_requires_broker_statement_reference() -> None:
-    with pytest.raises(ValueError, match="extrato/corretora"):
+def test_match_resolution_requires_document_reference() -> None:
+    with pytest.raises(ValueError, match="referencia documental"):
         validate_match_resolution_evidence(
             CorporateEventMatchResolutionEvidence(
-                broker_statement_reference=" ",
+                evidence_type=CorporateEventMatchEvidenceType.BROKER_STATEMENT, evidence_reference=" ",
                 fractional_policy=FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE,
             )
         )
@@ -121,7 +121,7 @@ def test_match_resolution_requires_broker_statement_reference() -> None:
 def test_match_resolution_allows_no_fractional_residue() -> None:
     validate_match_resolution_evidence(
         CorporateEventMatchResolutionEvidence(
-            broker_statement_reference="broker-note:AMOB3:2025-05",
+            evidence_type=CorporateEventMatchEvidenceType.BROKER_STATEMENT, evidence_reference="broker-note:AMOB3:2025-05",
             fractional_policy=FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE,
         )
     )
@@ -131,7 +131,7 @@ def test_match_resolution_requires_cash_settlement_details_for_fraction() -> Non
     with pytest.raises(ValueError, match="preco de liquidacao"):
         validate_match_resolution_evidence(
             CorporateEventMatchResolutionEvidence(
-                broker_statement_reference="broker-note:KLBN11:2025-12",
+                evidence_type=CorporateEventMatchEvidenceType.BROKER_STATEMENT, evidence_reference="broker-note:KLBN11:2025-12",
                 fractional_policy=FractionalResolutionPolicy.CASH_SETTLEMENT,
                 fractional_quantity="0.10",
             )
@@ -142,7 +142,7 @@ def test_match_resolution_rejects_manual_review_for_matched() -> None:
     with pytest.raises(ValueError, match="nao autoriza MATCHED"):
         validate_match_resolution_evidence(
             CorporateEventMatchResolutionEvidence(
-                broker_statement_reference="broker-note:KLBN11:2025-12",
+                evidence_type=CorporateEventMatchEvidenceType.BROKER_STATEMENT, evidence_reference="broker-note:KLBN11:2025-12",
                 fractional_policy=FractionalResolutionPolicy.MANUAL_REVIEW,
             )
         )
@@ -166,7 +166,7 @@ def test_matched_dry_run_validates_operational_evidence() -> None:
             reason="aguarda revisao operacional",
             canonical_event_id=13,
             match_resolution_evidence=CorporateEventMatchResolutionEvidence(
-                broker_statement_reference="broker-note:AMOB3:2025-05",
+                evidence_type=CorporateEventMatchEvidenceType.BROKER_STATEMENT, evidence_reference="broker-note:AMOB3:2025-05",
                 fractional_policy=FractionalResolutionPolicy.MANUAL_REVIEW,
             ),
         )
@@ -179,7 +179,7 @@ def test_matched_dry_run_accepts_valid_operational_evidence() -> None:
         reason="fonte canonica validada contra extrato",
         canonical_event_id=13,
         match_resolution_evidence=CorporateEventMatchResolutionEvidence(
-            broker_statement_reference="broker-note:AMOB3:2025-05",
+            evidence_type=CorporateEventMatchEvidenceType.BROKER_STATEMENT, evidence_reference="broker-note:AMOB3:2025-05",
             fractional_policy=FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE,
         ),
     )
@@ -198,7 +198,7 @@ def test_conflict_dry_run_rejects_matched_evidence() -> None:
             decision=CorporateEventReconciliationDecision.CONFLICT,
             reason="fontes conflitantes",
             match_resolution_evidence=CorporateEventMatchResolutionEvidence(
-                broker_statement_reference="broker-note:AMOB3:2025-05",
+                evidence_type=CorporateEventMatchEvidenceType.BROKER_STATEMENT, evidence_reference="broker-note:AMOB3:2025-05",
                 fractional_policy=FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE,
             ),
         )
@@ -212,3 +212,30 @@ def test_conflict_dry_run_rejects_canonical_event_id() -> None:
             reason="fontes conflitantes",
             canonical_event_id=12,
         )
+
+
+def test_matched_dry_run_serializes_official_evidence_as_v2() -> None:
+    report = build_reconciliation_dry_run_report(
+        (_evidence(12), _evidence(13, "yahoo")),
+        decision=CorporateEventReconciliationDecision.MATCHED,
+        reason="evento validado por documento oficial",
+        canonical_event_id=13,
+        match_resolution_evidence=CorporateEventMatchResolutionEvidence(
+            evidence_type=CorporateEventMatchEvidenceType.OFFICIAL_EXCHANGE_DOCUMENT,
+            evidence_reference="b3:official-document:AMOB3:2025-05",
+            fractional_policy=FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE,
+        ),
+    )
+
+    payload = report.to_dict()
+
+    assert payload["schema_version"] == "corporate-event-reconciliation-dry-run.v2"
+    assert payload["match_resolution_evidence"] == {
+        "evidence_type": "OFFICIAL_EXCHANGE_DOCUMENT",
+        "evidence_reference": "b3:official-document:AMOB3:2025-05",
+        "fractional_policy": "NO_FRACTIONAL_RESIDUE",
+        "fractional_quantity": None,
+        "fractional_settlement_price": None,
+        "cash_treatment": None,
+    }
+    assert payload["database_writes_executed"] == 0
