@@ -5,6 +5,9 @@ from app.models.asset_price import AssetPrice
 from app.models.asset_universe_membership import AssetUniverseMembership
 from app.models.audit_log import AuditAction, AuditLog
 from app.models.corporate_event import CorporateEvent
+from app.models.corporate_event_reconciliation_evidence import (
+    CorporateEventReconciliationEvidence,
+)
 from app.models.fx_rate import FxRate
 from app.models.goal import Goal
 from app.models.portfolio import Portfolio
@@ -27,6 +30,7 @@ __all__ = [
     "AuditAction",
     "AuditLog",
     "CorporateEvent",
+    "CorporateEventReconciliationEvidence",
     "FxRate",
     "Goal",
     "Portfolio",
