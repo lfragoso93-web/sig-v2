@@ -79,8 +79,6 @@ async def backfill_canonical_snapshots_with_returns(
 
     upper_bound = end_date or date.today()
     start = transactions[0].date
-    if days_back is not None:
-        start = max(start, upper_bound - timedelta(days=days_back))
 
     previous_value = _ZERO
     accumulated_return = _ZERO

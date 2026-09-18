@@ -39,6 +39,118 @@ class _FixedToday:
 
 
 @pytest.mark.asyncio
+async def test_days_back_preserves_same_twr_chain_as_full_rebuild(monkeypatch):
+    transaction = SimpleNamespace(
+        ticker="PETR4",
+        asset_type="ACAO",
+        operation=OperationType.buy,
+        quantity=1,
+        price=10,
+        fees=0,
+        date=date(2026, 9, 1),
+        fx_rate=None,
+        notes=None,
+    )
+
+    class HistoricalScalars:
+        def all(self):
+            return [transaction]
+
+    class HistoricalResult:
+        def scalars(self):
+            return HistoricalScalars()
+
+    market_values = {
+        date(2026, 9, 1): Decimal("10.00"),
+        date(2026, 9, 2): Decimal("11.00"),
+        date(2026, 9, 3): Decimal("12.00"),
+        date(2026, 9, 4): Decimal("12.00"),
+        date(2026, 9, 5): Decimal("12.00"),
+        date(2026, 9, 6): Decimal("12.00"),
+        date(2026, 9, 7): Decimal("12.00"),
+        date(2026, 9, 8): Decimal("12.00"),
+        date(2026, 9, 9): Decimal("12.00"),
+    }
+
+    async def valuation(_db, _portfolio_id, snapshot_date, **_kwargs):
+        value = market_values[snapshot_date]
+        return {
+            "market_value": value,
+            "cost_basis": Decimal("10.00"),
+            "invested_total": Decimal("10.00"),
+            "realized_pnl": Decimal("0.00"),
+            "unrealized_pnl": value - Decimal("10.00"),
+            "total_pnl": value - Decimal("10.00"),
+            "return_pct": Decimal("0.0000"),
+        }
+
+    async def run(days_back):
+        persisted = {}
+
+        async def capture_upsert(_db, _portfolio_id, snapshot_date, values):
+            persisted[snapshot_date] = dict(values)
+
+        monkeypatch.setattr(
+            service,
+            "load_portfolio_dividend_entitlements",
+            AsyncMock(return_value=[]),
+        )
+        monkeypatch.setattr(
+            service,
+            "calculate_canonical_portfolio_totals",
+            valuation,
+        )
+        monkeypatch.setattr(
+            service,
+            "has_partial_prices_silent",
+            AsyncMock(return_value=False),
+        )
+        monkeypatch.setattr(
+            service,
+            "upsert_enriched_snapshot",
+            capture_upsert,
+        )
+
+        db = AsyncMock()
+        db.execute = AsyncMock(return_value=HistoricalResult())
+        db.commit = AsyncMock()
+
+        count = await service.backfill_canonical_snapshots_with_returns(
+            db,
+            portfolio_id=13,
+            days_back=days_back,
+            end_date=date(2026, 9, 9),
+        )
+
+        return count, persisted
+
+    full_count, full = await run(None)
+    bounded_count, bounded = await run(1)
+
+    assert full_count == bounded_count
+    assert set(full) == set(bounded)
+
+    old_bounded_start = date(2026, 9, 8)
+
+    assert date(2026, 9, 2) < old_bounded_start
+    assert full[date(2026, 9, 2)]["daily_return_pct"] != Decimal("0")
+
+    for snapshot_date in full:
+        assert (
+            bounded[snapshot_date]["market_value"]
+            == full[snapshot_date]["market_value"]
+        )
+        assert (
+            bounded[snapshot_date]["daily_return_pct"]
+            == full[snapshot_date]["daily_return_pct"]
+        )
+        assert (
+            bounded[snapshot_date]["accumulated_return_pct"]
+            == full[snapshot_date]["accumulated_return_pct"]
+        )
+
+
+@pytest.mark.asyncio
 async def test_canonical_twr_persists_only_snapshot_columns(monkeypatch):
     persisted_values = []
 
@@ -81,10 +193,9 @@ async def test_canonical_twr_persists_only_snapshot_columns(monkeypatch):
     count = await service.backfill_canonical_snapshots_with_returns(
         db,
         portfolio_id=13,
-        days_back=0,
     )
 
-    assert count == 1
+    assert count == 3
     assert persisted_values
     assert "market_value_by_class" not in persisted_values[0]
     assert set(persisted_values[0]).issubset(service._SNAPSHOT_COLUMNS)
