@@ -16,6 +16,7 @@ from app.core.database import AsyncSessionLocal
 from app.services.corporate_event_reconciliation_dry_run_service import (
     build_corporate_event_reconciliation_dry_run,
     execute_corporate_event_conflict_reconciliation,
+    execute_corporate_event_matched_reconciliation,
 )
 from app.services.corporate_event_reconciliation_plan import (
     CorporateEventMatchEvidenceType,
@@ -62,7 +63,7 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument(
         "--execute",
         action="store_true",
-        help="Persiste apenas plano CONFLICT; MATCHED permanece somente dry-run.",
+        help="Persiste reconciliacao CONFLICT ou MATCHED validada.",
     )
     return parser.parse_args()
 
@@ -102,15 +103,26 @@ async def _main(arguments: argparse.Namespace) -> int:
 
     async with AsyncSessionLocal() as db:
         if arguments.execute:
-            if decision != CorporateEventReconciliationDecision.CONFLICT:
-                raise ValueError("execucao real permitida somente para CONFLICT")
-            if arguments.canonical_event_id is not None:
-                raise ValueError("CONFLICT nao aceita canonical-event-id")
-            report = await execute_corporate_event_conflict_reconciliation(
-                db,
-                event_ids=event_ids,
-                reason=arguments.reason,
-            )
+            if decision == CorporateEventReconciliationDecision.CONFLICT:
+                if arguments.canonical_event_id is not None:
+                    raise ValueError("CONFLICT nao aceita canonical-event-id")
+                report = await execute_corporate_event_conflict_reconciliation(
+                    db,
+                    event_ids=event_ids,
+                    reason=arguments.reason,
+                )
+            else:
+                if arguments.canonical_event_id is None:
+                    raise ValueError("MATCHED exige --canonical-event-id")
+                if match_resolution_evidence is None:
+                    raise ValueError("MATCHED exige evidencia de reconciliacao")
+                report = await execute_corporate_event_matched_reconciliation(
+                    db,
+                    event_ids=event_ids,
+                    canonical_event_id=arguments.canonical_event_id,
+                    reason=arguments.reason,
+                    match_resolution_evidence=match_resolution_evidence,
+                )
             await db.commit()
         else:
             report = await build_corporate_event_reconciliation_dry_run(

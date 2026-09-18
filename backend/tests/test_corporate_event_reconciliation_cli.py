@@ -1,4 +1,4 @@
-﻿from argparse import Namespace
+from argparse import Namespace
 
 import pytest
 from app.cli import corporate_event_reconciliation_dry_run as cli
@@ -86,20 +86,200 @@ async def test_cli_conflict_rejects_matched_evidence_arguments() -> None:
 
 
 @pytest.mark.asyncio
-async def test_cli_matched_execute_remains_forbidden(monkeypatch) -> None:
+async def test_cli_matched_execute_dispatches_writer_and_commits(
+    monkeypatch,
+) -> None:
+    calls = []
+    session = None
+
+    class FakeReport:
+        def to_dict(self):
+            return {
+                "schema_version": "test.v1",
+                "decision": "MATCHED",
+            }
+
     class FakeSession:
+        def __init__(self):
+            self.commits = 0
+            self.rollbacks = 0
+
         async def __aenter__(self):
             return self
 
         async def __aexit__(self, exc_type, exc, tb):
             return False
 
-    monkeypatch.setattr(cli, "AsyncSessionLocal", FakeSession)
+        async def commit(self):
+            self.commits += 1
 
-    with pytest.raises(
-        ValueError,
-        match="execucao real permitida somente para CONFLICT",
+        async def rollback(self):
+            self.rollbacks += 1
+
+    class FakeSessionFactory:
+        def __call__(self):
+            nonlocal session
+            session = FakeSession()
+            return session
+
+    async def fake_matched_writer(
+        db,
+        *,
+        event_ids,
+        canonical_event_id,
+        reason,
+        match_resolution_evidence,
     ):
+        calls.append(
+            {
+                "db": db,
+                "event_ids": event_ids,
+                "canonical_event_id": canonical_event_id,
+                "reason": reason,
+                "evidence": match_resolution_evidence,
+            }
+        )
+        return FakeReport()
+
+    monkeypatch.setattr(cli, "AsyncSessionLocal", FakeSessionFactory())
+    monkeypatch.setattr(
+        cli,
+        "execute_corporate_event_matched_reconciliation",
+        fake_matched_writer,
+    )
+
+    result = await cli._main(
+        _arguments(
+            decision="MATCHED",
+            execute=True,
+            canonical_event_id=13,
+            evidence_type="OFFICIAL_EXCHANGE_DOCUMENT",
+            evidence_reference="b3:official-document:AMOB3:2025-05",
+            fractional_policy="NO_FRACTIONAL_RESIDUE",
+        )
+    )
+
+    assert result == 0
+    assert session is not None
+    assert session.commits == 1
+    assert session.rollbacks == 0
+
+    assert len(calls) == 1
+    call = calls[0]
+    assert call["db"] is session
+    assert call["event_ids"] == (12, 13)
+    assert call["canonical_event_id"] == 13
+    assert call["reason"] == "reconciliacao de certificacao"
+    assert (
+        call["evidence"].evidence_type.value
+        == "OFFICIAL_EXCHANGE_DOCUMENT"
+    )
+    assert (
+        call["evidence"].evidence_reference
+        == "b3:official-document:AMOB3:2025-05"
+    )
+    assert (
+        call["evidence"].fractional_policy.value
+        == "NO_FRACTIONAL_RESIDUE"
+    )
+
+
+@pytest.mark.asyncio
+async def test_cli_matched_execute_requires_canonical_event_id(
+    monkeypatch,
+) -> None:
+    writer_called = False
+    session = None
+
+    class FakeSession:
+        def __init__(self):
+            self.commits = 0
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def commit(self):
+            self.commits += 1
+
+        async def rollback(self):
+            return None
+
+    class FakeSessionFactory:
+        def __call__(self):
+            nonlocal session
+            session = FakeSession()
+            return session
+
+    async def fake_matched_writer(*args, **kwargs):
+        nonlocal writer_called
+        writer_called = True
+        raise AssertionError("writer nao deveria ser chamado")
+
+    monkeypatch.setattr(cli, "AsyncSessionLocal", FakeSessionFactory())
+    monkeypatch.setattr(
+        cli,
+        "execute_corporate_event_matched_reconciliation",
+        fake_matched_writer,
+    )
+
+    with pytest.raises(ValueError, match="canonical-event-id"):
+        await cli._main(
+            _arguments(
+                decision="MATCHED",
+                execute=True,
+                evidence_type="OFFICIAL_EXCHANGE_DOCUMENT",
+                evidence_reference="b3:official-document:AMOB3:2025-05",
+                fractional_policy="NO_FRACTIONAL_RESIDUE",
+            )
+        )
+
+    assert writer_called is False
+    assert session is not None
+    assert session.commits == 0
+
+
+@pytest.mark.asyncio
+async def test_cli_matched_execute_does_not_commit_writer_failure(
+    monkeypatch,
+) -> None:
+    session = None
+
+    class FakeSession:
+        def __init__(self):
+            self.commits = 0
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def commit(self):
+            self.commits += 1
+
+        async def rollback(self):
+            return None
+
+    class FakeSessionFactory:
+        def __call__(self):
+            nonlocal session
+            session = FakeSession()
+            return session
+
+    async def failing_matched_writer(*args, **kwargs):
+        raise ValueError("evidencia divergente")
+
+    monkeypatch.setattr(cli, "AsyncSessionLocal", FakeSessionFactory())
+    monkeypatch.setattr(
+        cli,
+        "execute_corporate_event_matched_reconciliation",
+        failing_matched_writer,
+    )
+
+    with pytest.raises(ValueError, match="evidencia divergente"):
         await cli._main(
             _arguments(
                 decision="MATCHED",
@@ -110,3 +290,88 @@ async def test_cli_matched_execute_remains_forbidden(monkeypatch) -> None:
                 fractional_policy="NO_FRACTIONAL_RESIDUE",
             )
         )
+
+    assert session is not None
+    assert session.commits == 0
+
+
+@pytest.mark.asyncio
+async def test_cli_conflict_execute_preserves_existing_dispatch(
+    monkeypatch,
+) -> None:
+    conflict_calls = []
+    matched_called = False
+    session = None
+
+    class FakeReport:
+        def to_dict(self):
+            return {
+                "schema_version": "test.v1",
+                "decision": "CONFLICT",
+            }
+
+    class FakeSession:
+        def __init__(self):
+            self.commits = 0
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def commit(self):
+            self.commits += 1
+
+        async def rollback(self):
+            return None
+
+    class FakeSessionFactory:
+        def __call__(self):
+            nonlocal session
+            session = FakeSession()
+            return session
+
+    async def fake_conflict_writer(db, *, event_ids, reason):
+        conflict_calls.append(
+            {
+                "db": db,
+                "event_ids": event_ids,
+                "reason": reason,
+            }
+        )
+        return FakeReport()
+
+    async def forbidden_matched_writer(*args, **kwargs):
+        nonlocal matched_called
+        matched_called = True
+        raise AssertionError("MATCHED writer nao deveria ser chamado")
+
+    monkeypatch.setattr(cli, "AsyncSessionLocal", FakeSessionFactory())
+    monkeypatch.setattr(
+        cli,
+        "execute_corporate_event_conflict_reconciliation",
+        fake_conflict_writer,
+    )
+    monkeypatch.setattr(
+        cli,
+        "execute_corporate_event_matched_reconciliation",
+        forbidden_matched_writer,
+    )
+
+    result = await cli._main(
+        _arguments(
+            decision="CONFLICT",
+            execute=True,
+        )
+    )
+
+    assert result == 0
+    assert session is not None
+    assert session.commits == 1
+    assert matched_called is False
+
+    assert len(conflict_calls) == 1
+    assert conflict_calls[0]["db"] is session
+    assert conflict_calls[0]["event_ids"] == (12, 13)
+    assert conflict_calls[0]["reason"] == "reconciliacao de certificacao"
