@@ -6,6 +6,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.corporate_event import CorporateEvent
+from app.models.corporate_event_reconciliation_evidence import (
+    CorporateEventReconciliationEvidence,
+)
 from app.services.corporate_event_reconciliation_plan import (
     CorporateEventEvidence,
     CorporateEventMatchResolutionEvidence,
@@ -14,6 +17,8 @@ from app.services.corporate_event_reconciliation_plan import (
     CorporateEventReconciliationUpdate,
     build_reconciliation_execution_report,
     build_reconciliation_dry_run_report,
+    plan_matched_reconciliation,
+    validate_match_resolution_evidence,
 )
 
 
@@ -95,4 +100,110 @@ async def execute_corporate_event_conflict_reconciliation(
         report.updates,
         decision=CorporateEventReconciliationDecision.CONFLICT,
         database_writes_executed=len(report.updates),
+    )
+
+
+async def execute_corporate_event_matched_reconciliation(
+    db: AsyncSession,
+    *,
+    event_ids: tuple[int, ...],
+    canonical_event_id: int,
+    reason: str,
+    match_resolution_evidence: CorporateEventMatchResolutionEvidence,
+) -> CorporateEventReconciliationDryRunReport:
+    """Persiste MATCHED + evidencia sem assumir commit da transacao."""
+
+    if not event_ids:
+        raise ValueError("event_ids e obrigatorio")
+    if len(set(event_ids)) != len(event_ids):
+        raise ValueError("event_ids contem duplicidade")
+
+    validate_match_resolution_evidence(match_resolution_evidence)
+
+    result = await db.execute(
+        select(CorporateEvent)
+        .where(CorporateEvent.id.in_(event_ids))
+        .order_by(CorporateEvent.id)
+        .with_for_update()
+    )
+    events = tuple(
+        sorted(result.scalars().all(), key=lambda item: int(item.id))
+    )
+
+    events_by_id = {int(event.id): event for event in events}
+    found_ids = set(events_by_id)
+    requested_ids = set(event_ids)
+    missing = sorted(requested_ids - found_ids)
+
+    if missing:
+        raise ValueError(
+            f"eventos nao encontrados durante execucao: {missing}"
+        )
+
+    updates = plan_matched_reconciliation(
+        tuple(evidence_from_event(event) for event in events),
+        canonical_event_id=canonical_event_id,
+        reason=reason,
+    )
+
+    existing_result = await db.execute(
+        select(CorporateEventReconciliationEvidence)
+        .where(
+            CorporateEventReconciliationEvidence.corporate_event_id
+            == canonical_event_id
+        )
+        .with_for_update()
+    )
+    existing = existing_result.scalar_one_or_none()
+
+    expected = {
+        "decision": CorporateEventReconciliationDecision.MATCHED.value,
+        "evidence_type": match_resolution_evidence.evidence_type.value,
+        "evidence_reference": match_resolution_evidence.evidence_reference,
+        "fractional_policy": match_resolution_evidence.fractional_policy.value,
+        "fractional_quantity": match_resolution_evidence.fractional_quantity,
+        "fractional_settlement_price": (
+            match_resolution_evidence.fractional_settlement_price
+        ),
+        "cash_treatment": match_resolution_evidence.cash_treatment,
+    }
+
+    if existing is None:
+        db.add(
+            CorporateEventReconciliationEvidence(
+                corporate_event_id=canonical_event_id,
+                **expected,
+            )
+        )
+        evidence_write_count = 1
+    else:
+        actual = {
+            "decision": existing.decision,
+            "evidence_type": existing.evidence_type,
+            "evidence_reference": existing.evidence_reference,
+            "fractional_policy": existing.fractional_policy,
+            "fractional_quantity": existing.fractional_quantity,
+            "fractional_settlement_price": (
+                existing.fractional_settlement_price
+            ),
+            "cash_treatment": existing.cash_treatment,
+        }
+
+        if actual != expected:
+            raise ValueError(
+                "evento canonico ja possui evidencia de reconciliacao "
+                "divergente"
+            )
+
+        evidence_write_count = 0
+
+    for update in updates:
+        _apply_update(events_by_id[update.event_id], update)
+
+    await db.flush()
+
+    return build_reconciliation_execution_report(
+        updates,
+        decision=CorporateEventReconciliationDecision.MATCHED,
+        database_writes_executed=len(updates) + evidence_write_count,
     )

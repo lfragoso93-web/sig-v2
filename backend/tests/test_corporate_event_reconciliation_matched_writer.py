@@ -1,0 +1,371 @@
+from datetime import date
+from decimal import Decimal
+
+import pytest
+from sqlalchemy import select
+
+from app.models.asset import Asset
+from app.models.corporate_event import CorporateEvent
+from app.models.corporate_event_reconciliation_evidence import (
+    CorporateEventReconciliationEvidence,
+)
+from app.services.corporate_event_reconciliation_dry_run_service import (
+    execute_corporate_event_matched_reconciliation,
+)
+from app.services.corporate_event_reconciliation_plan import (
+    CorporateEventMatchEvidenceType,
+    CorporateEventMatchResolutionEvidence,
+    FractionalResolutionPolicy,
+)
+
+
+async def _create_event(
+    db,
+    *,
+    asset: Asset,
+    source_provider: str,
+    source_event_id: str,
+) -> CorporateEvent:
+    event = CorporateEvent(
+        asset_id=asset.id,
+        ticker=asset.ticker,
+        event_type="GRUPAMENTO",
+        event_date=date(2025, 5, 29),
+        ratio=Decimal("0.02"),
+        effective_date=date(2025, 5, 29),
+        quantity_factor=Decimal("0.02"),
+        source_provider=source_provider,
+        source_event_id=source_event_id,
+        reconciliation_status="UNRECONCILED",
+        requires_review=True,
+        is_canonical=True,
+    )
+    db.add(event)
+    await db.flush()
+    await db.refresh(event)
+    return event
+
+
+@pytest.mark.asyncio
+async def test_matched_writer_persists_state_and_canonical_evidence(db) -> None:
+    asset = Asset(
+        ticker="AMOB3",
+        name="Automob",
+        asset_type="ACAO",
+        currency="BRL",
+    )
+    db.add(asset)
+    await db.flush()
+
+    brapi = await _create_event(
+        db,
+        asset=asset,
+        source_provider="brapi",
+        source_event_id="brapi:test",
+    )
+    yahoo = await _create_event(
+        db,
+        asset=asset,
+        source_provider="yahoo",
+        source_event_id="yahoo:test",
+    )
+
+    report = await execute_corporate_event_matched_reconciliation(
+        db,
+        event_ids=(brapi.id, yahoo.id),
+        canonical_event_id=yahoo.id,
+        reason="documento oficial confirma evento canonico",
+        match_resolution_evidence=CorporateEventMatchResolutionEvidence(
+            evidence_type=(
+                CorporateEventMatchEvidenceType.OFFICIAL_EXCHANGE_DOCUMENT
+            ),
+            evidence_reference="b3:test:AMOB3",
+            fractional_policy=(
+                FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE
+            ),
+        ),
+    )
+
+    assert report.dry_run is False
+    assert report.decision == "MATCHED"
+
+    assert yahoo.reconciliation_status == "MATCHED"
+    assert yahoo.requires_review is False
+    assert yahoo.is_canonical is True
+    assert yahoo.matched_event_id is None
+
+    assert brapi.reconciliation_status == "CONFLICT"
+    assert brapi.requires_review is True
+    assert brapi.is_canonical is False
+    assert brapi.matched_event_id == yahoo.id
+
+    result = await db.execute(
+        select(CorporateEventReconciliationEvidence)
+    )
+    rows = result.scalars().all()
+
+    assert len(rows) == 1
+    evidence = rows[0]
+    assert evidence.corporate_event_id == yahoo.id
+    assert evidence.decision == "MATCHED"
+    assert evidence.evidence_type == "OFFICIAL_EXCHANGE_DOCUMENT"
+    assert evidence.evidence_reference == "b3:test:AMOB3"
+    assert evidence.fractional_policy == "NO_FRACTIONAL_RESIDUE"
+
+
+@pytest.mark.asyncio
+async def test_matched_writer_is_idempotent_for_same_evidence(db) -> None:
+    asset = Asset(
+        ticker="AMOB3",
+        name="Automob",
+        asset_type="ACAO",
+        currency="BRL",
+    )
+    db.add(asset)
+    await db.flush()
+
+    first = await _create_event(
+        db,
+        asset=asset,
+        source_provider="brapi",
+        source_event_id="brapi:test",
+    )
+    canonical = await _create_event(
+        db,
+        asset=asset,
+        source_provider="yahoo",
+        source_event_id="yahoo:test",
+    )
+
+    evidence = CorporateEventMatchResolutionEvidence(
+        evidence_type=CorporateEventMatchEvidenceType.OFFICIAL_EXCHANGE_DOCUMENT,
+        evidence_reference="b3:test:AMOB3",
+        fractional_policy=FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE,
+    )
+
+    await execute_corporate_event_matched_reconciliation(
+        db,
+        event_ids=(first.id, canonical.id),
+        canonical_event_id=canonical.id,
+        reason="documento oficial confirma evento canonico",
+        match_resolution_evidence=evidence,
+    )
+
+    await execute_corporate_event_matched_reconciliation(
+        db,
+        event_ids=(first.id, canonical.id),
+        canonical_event_id=canonical.id,
+        reason="documento oficial confirma evento canonico",
+        match_resolution_evidence=evidence,
+    )
+
+    result = await db.execute(
+        select(CorporateEventReconciliationEvidence)
+    )
+    rows = result.scalars().all()
+
+    assert len(rows) == 1
+
+
+@pytest.mark.asyncio
+async def test_matched_writer_rejects_conflicting_evidence(db) -> None:
+    asset = Asset(
+        ticker="AMOB3",
+        name="Automob",
+        asset_type="ACAO",
+        currency="BRL",
+    )
+    db.add(asset)
+    await db.flush()
+
+    first = await _create_event(
+        db,
+        asset=asset,
+        source_provider="brapi",
+        source_event_id="brapi:test",
+    )
+    canonical = await _create_event(
+        db,
+        asset=asset,
+        source_provider="yahoo",
+        source_event_id="yahoo:test",
+    )
+
+    await execute_corporate_event_matched_reconciliation(
+        db,
+        event_ids=(first.id, canonical.id),
+        canonical_event_id=canonical.id,
+        reason="documento oficial confirma evento canonico",
+        match_resolution_evidence=CorporateEventMatchResolutionEvidence(
+            evidence_type=(
+                CorporateEventMatchEvidenceType.OFFICIAL_EXCHANGE_DOCUMENT
+            ),
+            evidence_reference="b3:test:AMOB3",
+            fractional_policy=(
+                FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE
+            ),
+        ),
+    )
+
+    with pytest.raises(ValueError, match="evidencia.*divergente"):
+        await execute_corporate_event_matched_reconciliation(
+            db,
+            event_ids=(first.id, canonical.id),
+            canonical_event_id=canonical.id,
+            reason="tentativa com outra evidencia",
+            match_resolution_evidence=CorporateEventMatchResolutionEvidence(
+                evidence_type=(
+                    CorporateEventMatchEvidenceType.OFFICIAL_ISSUER_DOCUMENT
+                ),
+                evidence_reference="issuer:test:AMOB3",
+                fractional_policy=(
+                    FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE
+                ),
+            ),
+        )
+
+
+@pytest.mark.asyncio
+async def test_matched_writer_validates_complete_event_set_before_mutation(
+    db,
+) -> None:
+    asset = Asset(
+        ticker="AMOB3",
+        name="Automob",
+        asset_type="ACAO",
+        currency="BRL",
+    )
+    db.add(asset)
+    await db.flush()
+
+    event = await _create_event(
+        db,
+        asset=asset,
+        source_provider="brapi",
+        source_event_id="brapi:test",
+    )
+
+    original_status = event.reconciliation_status
+    original_review = event.requires_review
+    original_canonical = event.is_canonical
+
+    with pytest.raises(ValueError, match="eventos nao encontrados durante execucao"):
+        await execute_corporate_event_matched_reconciliation(
+            db,
+            event_ids=(event.id, 999999),
+            canonical_event_id=event.id,
+            reason="nao deve aplicar parcialmente",
+            match_resolution_evidence=CorporateEventMatchResolutionEvidence(
+                evidence_type=(
+                    CorporateEventMatchEvidenceType.OFFICIAL_EXCHANGE_DOCUMENT
+                ),
+                evidence_reference="b3:test:AMOB3",
+                fractional_policy=(
+                    FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE
+                ),
+            ),
+        )
+
+    assert event.reconciliation_status == original_status
+    assert event.requires_review is original_review
+    assert event.is_canonical is original_canonical
+
+    result = await db.execute(
+        select(CorporateEventReconciliationEvidence)
+    )
+    assert result.scalars().all() == []
+
+
+@pytest.mark.asyncio
+async def test_matched_writer_changes_are_reverted_by_caller_rollback(db) -> None:
+    asset = Asset(
+        ticker="AMOB3",
+        name="Automob",
+        asset_type="ACAO",
+        currency="BRL",
+    )
+    db.add(asset)
+    await db.flush()
+
+    first = await _create_event(
+        db,
+        asset=asset,
+        source_provider="brapi",
+        source_event_id="brapi:rollback",
+    )
+    canonical = await _create_event(
+        db,
+        asset=asset,
+        source_provider="yahoo",
+        source_event_id="yahoo:rollback",
+    )
+
+    first_id = first.id
+    canonical_id = canonical.id
+
+    # Fixture durable; writer changes remain in a caller-owned transaction.
+    await db.commit()
+
+    await execute_corporate_event_matched_reconciliation(
+        db,
+        event_ids=(first_id, canonical_id),
+        canonical_event_id=canonical_id,
+        reason="documento oficial confirma evento canonico",
+        match_resolution_evidence=CorporateEventMatchResolutionEvidence(
+            evidence_type=(
+                CorporateEventMatchEvidenceType.OFFICIAL_EXCHANGE_DOCUMENT
+            ),
+            evidence_reference="b3:test:rollback",
+            fractional_policy=(
+                FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE
+            ),
+        ),
+    )
+
+    evidence_before = await db.execute(
+        select(CorporateEventReconciliationEvidence).where(
+            CorporateEventReconciliationEvidence.corporate_event_id
+            == canonical_id
+        )
+    )
+    assert evidence_before.scalar_one_or_none() is not None
+
+    canonical_before = await db.get(CorporateEvent, canonical_id)
+    first_before = await db.get(CorporateEvent, first_id)
+
+    assert canonical_before is not None
+    assert first_before is not None
+    assert canonical_before.reconciliation_status == "MATCHED"
+    assert canonical_before.requires_review is False
+    assert canonical_before.is_canonical is True
+    assert first_before.reconciliation_status == "CONFLICT"
+    assert first_before.is_canonical is False
+    assert first_before.matched_event_id == canonical_id
+
+    await db.rollback()
+    db.expire_all()
+
+    canonical_after = await db.get(CorporateEvent, canonical_id)
+    first_after = await db.get(CorporateEvent, first_id)
+
+    evidence_after = await db.execute(
+        select(CorporateEventReconciliationEvidence).where(
+            CorporateEventReconciliationEvidence.corporate_event_id
+            == canonical_id
+        )
+    )
+
+    assert canonical_after is not None
+    assert first_after is not None
+
+    assert canonical_after.reconciliation_status == "UNRECONCILED"
+    assert canonical_after.requires_review is True
+    assert canonical_after.is_canonical is True
+    assert canonical_after.matched_event_id is None
+
+    assert first_after.reconciliation_status == "UNRECONCILED"
+    assert first_after.requires_review is True
+    assert first_after.is_canonical is True
+    assert first_after.matched_event_id is None
+
+    assert evidence_after.scalar_one_or_none() is None
