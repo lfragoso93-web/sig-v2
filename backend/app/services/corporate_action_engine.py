@@ -10,6 +10,8 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Any, Iterable
 
+from app.services.corporate_event_fractional_resolution import FractionalResolution
+
 
 class CorporateActionKind(StrEnum):
     SPLIT = "DESDOBRAMENTO"
@@ -31,6 +33,7 @@ class NormalizedCorporateAction:
     kind: CorporateActionKind
     quantity_factor: Decimal
     raw_payload: dict[str, Any]
+    fractional_resolution: FractionalResolution | None = None
 
     @property
     def automatically_affects_quantity(self) -> bool:

@@ -12,6 +12,9 @@ from app.services.corporate_action_engine import (
     CorporateActionKind,
     NormalizedCorporateAction,
 )
+from app.services.corporate_event_fractional_resolution import (
+    FractionalResolutionPolicy,
+)
 
 
 class PositionMovementKind(StrEnum):
@@ -164,7 +167,26 @@ def project_position_timeline(
             continue
         if quantity <= 0:
             continue
-        quantity *= action.quantity_factor
+
+        projected_quantity = quantity * action.quantity_factor
+        resolution = action.fractional_resolution
+
+        if resolution is not None:
+            if resolution.policy == FractionalResolutionPolicy.CASH_SETTLEMENT:
+                raise ValueError(
+                    "CASH_SETTLEMENT ainda nao possui projecao financeira canonica"
+                )
+
+            if (
+                resolution.policy
+                == FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE
+                and projected_quantity != projected_quantity.to_integral_value()
+            ):
+                raise ValueError(
+                    "NO_FRACTIONAL_RESIDUE incompativel com quantidade projetada"
+                )
+
+        quantity = projected_quantity
         applied.append(action.source_event_id)
 
     return PositionTimelineProjection(

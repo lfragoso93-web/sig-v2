@@ -6,16 +6,12 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
+from app.services.corporate_event_fractional_resolution import FractionalResolutionPolicy
+
 
 class CorporateEventReconciliationDecision(StrEnum):
     MATCHED = "MATCHED"
     CONFLICT = "CONFLICT"
-
-
-class FractionalResolutionPolicy(StrEnum):
-    NO_FRACTIONAL_RESIDUE = "NO_FRACTIONAL_RESIDUE"
-    CASH_SETTLEMENT = "CASH_SETTLEMENT"
-    MANUAL_REVIEW = "MANUAL_REVIEW"
 
 
 class CorporateEventMatchEvidenceType(StrEnum):

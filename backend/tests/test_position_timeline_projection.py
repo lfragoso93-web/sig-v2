@@ -1,9 +1,15 @@
 from datetime import date
 from decimal import Decimal
 
+import pytest
+
 from app.services.corporate_action_engine import (
     CorporateActionKind,
     NormalizedCorporateAction,
+)
+from app.services.corporate_event_fractional_resolution import (
+    FractionalResolution,
+    FractionalResolutionPolicy,
 )
 from app.services.position_timeline_projection import (
     PositionMovement,
@@ -186,3 +192,83 @@ def test_subscription_is_recorded_without_changing_quantity():
     assert result.total_cost == Decimal(1000)
     assert result.realized_pnl == 0
     assert result.subscription_event_ids == ("subscription",)
+
+
+def test_cash_settlement_fraction_is_fail_closed_until_projection_is_supported():
+    action = _action(
+        "bonus",
+        date(2026, 1, 2),
+        CorporateActionKind.STOCK_BONUS,
+        "1.01",
+    )
+    action = NormalizedCorporateAction(
+        source=action.source,
+        source_event_id=action.source_event_id,
+        ticker=action.ticker,
+        event_date=action.event_date,
+        kind=action.kind,
+        quantity_factor=action.quantity_factor,
+        raw_payload=action.raw_payload,
+        fractional_resolution=FractionalResolution(
+            policy=FractionalResolutionPolicy.CASH_SETTLEMENT,
+            fractional_quantity=Decimal("0.10"),
+            settlement_price=Decimal("1"),
+            cash_treatment="TEST_ONLY",
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="CASH_SETTLEMENT ainda nao possui projecao financeira canonica",
+    ):
+        project_position_timeline(
+            movements=[_buy(1, "10", "18.53")],
+            actions=[action],
+        )
+
+
+def test_no_fractional_residue_rejects_fractional_projected_quantity():
+    action = _action(
+        "bonus",
+        date(2026, 1, 2),
+        CorporateActionKind.STOCK_BONUS,
+        "1.01",
+    )
+    action = NormalizedCorporateAction(
+        source=action.source,
+        source_event_id=action.source_event_id,
+        ticker=action.ticker,
+        event_date=action.event_date,
+        kind=action.kind,
+        quantity_factor=action.quantity_factor,
+        raw_payload=action.raw_payload,
+        fractional_resolution=FractionalResolution(
+            policy=FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE,
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="NO_FRACTIONAL_RESIDUE incompativel com quantidade projetada",
+    ):
+        project_position_timeline(
+            movements=[_buy(1, "10", "18.53")],
+            actions=[action],
+        )
+
+
+def test_bonus_without_fractional_resolution_preserves_existing_behavior():
+    result = project_position_timeline(
+        movements=[_buy(1, "10", "18.53")],
+        actions=[
+            _action(
+                "bonus",
+                date(2026, 1, 2),
+                CorporateActionKind.STOCK_BONUS,
+                "1.01",
+            )
+        ],
+    )
+
+    assert result.quantity == Decimal("10.10")
+    assert result.total_cost == Decimal("185.30")
