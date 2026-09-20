@@ -11,9 +11,16 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.corporate_event import CorporateEvent
+from app.models.corporate_event_reconciliation_evidence import (
+    CorporateEventReconciliationEvidence,
+)
 from app.services.corporate_action_engine import (
     CorporateActionKind,
     NormalizedCorporateAction,
+)
+from app.services.corporate_event_fractional_resolution import (
+    FractionalResolution,
+    FractionalResolutionPolicy,
 )
 
 _SUPPORTED_KINDS = {kind.value: kind for kind in CorporateActionKind}
@@ -104,6 +111,60 @@ def _raw_payload(event: CorporateEvent) -> dict[str, Any]:
     return parsed
 
 
+def _fractional_resolution(
+    event: CorporateEvent,
+    evidence: CorporateEventReconciliationEvidence | None,
+) -> FractionalResolution | None:
+    """Converte evidencia MATCHED persistida no contrato puro de projecao."""
+
+    source_provider = _normalized_text(event.source_provider).lower()
+    if source_provider in {"", _LEGACY_SOURCE_PROVIDER}:
+        return None
+
+    if evidence is None:
+        raise ValueError(
+            f"evento corporativo MATCHED {event.id!r} sem evidencia de reconciliacao"
+        )
+
+    if _normalized_text(evidence.decision).upper() != _MATCHED_RECONCILIATION_STATUS:
+        raise ValueError(
+            f"evento corporativo MATCHED {event.id!r} com evidencia nao-MATCHED"
+        )
+
+    try:
+        policy = FractionalResolutionPolicy(
+            _normalized_text(evidence.fractional_policy).upper()
+        )
+    except ValueError as exc:
+        raise ValueError(
+            f"evento corporativo MATCHED {event.id!r} com politica fracionaria invalida"
+        ) from exc
+
+    if policy == FractionalResolutionPolicy.MANUAL_REVIEW:
+        raise ValueError(
+            f"evento corporativo MATCHED {event.id!r} nao aceita MANUAL_REVIEW"
+        )
+
+    return FractionalResolution(
+        policy=policy,
+        fractional_quantity=(
+            Decimal(str(evidence.fractional_quantity))
+            if evidence.fractional_quantity is not None
+            else None
+        ),
+        settlement_price=(
+            Decimal(str(evidence.fractional_settlement_price))
+            if evidence.fractional_settlement_price is not None
+            else None
+        ),
+        cash_treatment=(
+            str(evidence.cash_treatment)
+            if evidence.cash_treatment is not None
+            else None
+        ),
+    )
+
+
 async def load_global_corporate_actions_by_ticker(
     db: AsyncSession,
     tickers: list[str],
@@ -122,14 +183,23 @@ async def load_global_corporate_actions_by_ticker(
         return {}
 
     result = await db.execute(
-        select(CorporateEvent).where(
+        select(
+            CorporateEvent,
+            CorporateEventReconciliationEvidence,
+        )
+        .outerjoin(
+            CorporateEventReconciliationEvidence,
+            CorporateEventReconciliationEvidence.corporate_event_id
+            == CorporateEvent.id,
+        )
+        .where(
             CorporateEvent.ticker.in_(normalized_tickers),
             CorporateEvent.portfolio_id.is_(None),
         )
     )
 
     actions: dict[str, list[NormalizedCorporateAction]] = {}
-    for event in result.scalars().all():
+    for event, evidence in result.all():
         if not _is_projection_eligible(event):
             continue
 
@@ -148,6 +218,7 @@ async def load_global_corporate_actions_by_ticker(
                 kind=kind,
                 quantity_factor=_quantity_factor(event),
                 raw_payload=_raw_payload(event),
+                fractional_resolution=_fractional_resolution(event, evidence),
             )
         )
 
