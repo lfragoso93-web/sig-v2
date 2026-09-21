@@ -46,7 +46,10 @@ def verify_corporate_event_report_manifest(
         if parsed_start > parsed_end:
             raise ValueError("janela do manifesto esta invertida")
     source_sha = manifest.get("source_commit_sha")
-    if source_sha is not None and not re.fullmatch(r"[0-9a-fA-F]{40}", source_sha):
+    if source_sha is not None and (
+        not isinstance(source_sha, str)
+        or not re.fullmatch(r"[0-9a-fA-F]{40}", source_sha)
+    ):
         raise ValueError("source_commit_sha invalido no manifesto")
     artifact_context = report.get("artifact_context")
     if not isinstance(artifact_context, dict):

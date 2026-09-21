@@ -108,6 +108,16 @@ def test_manifest_verification_rejects_invalid_source_sha(tmp_path) -> None:
         verify_corporate_event_report_manifest(report_file, manifest_file)
 
 
+def test_manifest_verification_rejects_non_string_source_sha(tmp_path) -> None:
+    report_file, manifest_file = _write_artifacts(tmp_path)
+    manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+    manifest["source_commit_sha"] = 40
+    manifest_file.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="source_commit_sha invalido"):
+        verify_corporate_event_report_manifest(report_file, manifest_file)
+
+
 def test_manifest_verification_rejects_context_mismatch(tmp_path) -> None:
     report_file, manifest_file = _write_artifacts(tmp_path)
     manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
