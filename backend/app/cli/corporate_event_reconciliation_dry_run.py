@@ -11,6 +11,8 @@ import argparse
 import asyncio
 import json
 import sys
+from pathlib import Path
+from typing import Any
 
 from app.core.database import AsyncSessionLocal
 from app.services.corporate_event_reconciliation_dry_run_service import (
@@ -47,6 +49,11 @@ def _arguments() -> argparse.Namespace:
         help="Inclui o preflight read-only do evento no relatorio dry-run.",
     )
     parser.add_argument(
+        "--report-file",
+        type=Path,
+        help="Salva o JSON do dry-run em um arquivo novo, sem sobrescrever.",
+    )
+    parser.add_argument(
         "--decision",
         choices=[item.value for item in CorporateEventReconciliationDecision],
         required=True,
@@ -81,6 +88,8 @@ async def _main(arguments: argparse.Namespace) -> int:
         raise ValueError(
             "ledger-preflight-event-id exige dry-run e nao aceita --execute"
         )
+    if arguments.execute and arguments.report_file is not None:
+        raise ValueError("report-file exige dry-run e nao aceita --execute")
     if (
         arguments.ledger_preflight_event_id is not None
         and arguments.ledger_preflight_event_id not in event_ids
@@ -153,7 +162,18 @@ async def _main(arguments: argparse.Namespace) -> int:
             )
             await db.rollback()
 
-    print(json.dumps(report.to_dict(), ensure_ascii=False, indent=2, sort_keys=True))
+    payload: dict[str, Any] = report.to_dict()
+    serialized = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
+    if arguments.report_file is not None:
+        try:
+            with arguments.report_file.open("x", encoding="utf-8", newline="\n") as handle:
+                handle.write(serialized)
+                handle.write("\n")
+        except FileExistsError:
+            raise ValueError(
+                f"report-file ja existe e nao sera sobrescrito: {arguments.report_file}"
+            ) from None
+    print(serialized)
     return 0
 
 

@@ -1,4 +1,5 @@
 from argparse import Namespace
+import json
 
 import pytest
 from app.cli import corporate_event_reconciliation_dry_run as cli
@@ -16,6 +17,7 @@ def _arguments(
     fractional_settlement_price: str | None = None,
     cash_treatment: str | None = None,
     ledger_preflight_event_id: int | None = None,
+    report_file=None,
 ) -> Namespace:
     return Namespace(
         event_id=[12, 13],
@@ -29,6 +31,7 @@ def _arguments(
         fractional_settlement_price=fractional_settlement_price,
         cash_treatment=cash_treatment,
         ledger_preflight_event_id=ledger_preflight_event_id,
+        report_file=report_file,
         execute=execute,
     )
 
@@ -97,6 +100,32 @@ async def test_cli_ledger_preflight_requires_dry_run() -> None:
                 ledger_preflight_event_id=12,
             )
         )
+
+
+@pytest.mark.asyncio
+async def test_cli_report_file_requires_dry_run(tmp_path) -> None:
+    with pytest.raises(ValueError, match="report-file exige dry-run"):
+        await cli._main(
+            _arguments(
+                decision="CONFLICT",
+                execute=True,
+                report_file=tmp_path / "report.json",
+            )
+        )
+
+
+def test_cli_report_file_is_exclusive_and_writes_json(tmp_path) -> None:
+    report_file = tmp_path / "report.json"
+    payload = {"schema_version": "test.v1", "database_writes_executed": 0}
+    serialized = json.dumps(payload, indent=2, sort_keys=True)
+
+    with report_file.open("x", encoding="utf-8", newline="\n") as handle:
+        handle.write(serialized)
+        handle.write("\n")
+
+    assert json.loads(report_file.read_text(encoding="utf-8")) == payload
+    with pytest.raises(FileExistsError):
+        report_file.open("x", encoding="utf-8")
 
 
 @pytest.mark.asyncio
