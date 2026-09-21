@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,6 +44,48 @@ class CorporateEventLedgerPreflight:
     @property
     def projected_net_quantity(self) -> Decimal:
         return self.ledger.net_quantity * self.quantity_factor
+
+
+@dataclass(frozen=True)
+class CorporateEventLedgerPreflightReport:
+    schema_version: str
+    dry_run: bool
+    database_writes_executed: int
+    ready_for_execution: bool
+    preflight: CorporateEventLedgerPreflight
+
+    def to_dict(self) -> dict[str, Any]:
+        ledger = self.preflight.ledger
+        return {
+            "schema_version": self.schema_version,
+            "dry_run": self.dry_run,
+            "database_writes_executed": self.database_writes_executed,
+            "ready_for_execution": self.ready_for_execution,
+            "event_id": self.preflight.event_id,
+            "event_type": self.preflight.event_type,
+            "quantity_factor": str(self.preflight.quantity_factor),
+            "portfolio_id": ledger.portfolio_id,
+            "ticker": ledger.ticker,
+            "as_of": ledger.as_of.isoformat(),
+            "transaction_ids": list(ledger.transaction_ids),
+            "transaction_count": ledger.transaction_count,
+            "first_transaction_date": (
+                ledger.first_transaction_date.isoformat()
+                if ledger.first_transaction_date is not None
+                else None
+            ),
+            "last_transaction_date": (
+                ledger.last_transaction_date.isoformat()
+                if ledger.last_transaction_date is not None
+                else None
+            ),
+            "buy_quantity": str(ledger.buy_quantity),
+            "sell_quantity": str(ledger.sell_quantity),
+            "net_quantity": str(ledger.net_quantity),
+            "projected_net_quantity": str(
+                self.preflight.projected_net_quantity
+            ),
+        }
 
 
 async def read_ledger_transaction_preflight(
@@ -126,4 +169,18 @@ async def read_corporate_event_ledger_preflight(
         event_type=str(event.event_type),
         quantity_factor=quantity_factor,
         ledger=ledger,
+    )
+
+
+async def build_corporate_event_ledger_preflight_report(
+    db: AsyncSession,
+    event: CorporateEvent,
+) -> CorporateEventLedgerPreflightReport:
+    preflight = await read_corporate_event_ledger_preflight(db, event)
+    return CorporateEventLedgerPreflightReport(
+        schema_version="corporate-event-ledger-preflight.v1",
+        dry_run=True,
+        database_writes_executed=0,
+        ready_for_execution=False,
+        preflight=preflight,
     )

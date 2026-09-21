@@ -8,6 +8,7 @@ from app.models.asset import Asset
 from app.models.corporate_event import CorporateEvent
 from app.models.transaction import OperationType, Transaction
 from app.services.corporate_event_ledger_preflight import (
+    build_corporate_event_ledger_preflight_report,
     read_corporate_event_ledger_preflight,
     read_ledger_transaction_preflight,
 )
@@ -170,3 +171,60 @@ async def test_corporate_event_preflight_requires_explicit_portfolio(db, portfol
 
     with pytest.raises(ValueError, match="portfolio_id explicito"):
         await read_corporate_event_ledger_preflight(db, event)
+
+
+@pytest.mark.asyncio
+async def test_corporate_event_preflight_report_is_versioned_and_read_only(
+    db, portfolio
+) -> None:
+    asset = Asset(ticker="AMOB3", name="Automob", asset_type="ACAO", currency="BRL")
+    db.add(asset)
+    await db.flush()
+    db.add(
+        Transaction(
+            portfolio_id=portfolio.id,
+            ticker="AMOB3",
+            asset_type="ACAO",
+            operation=OperationType.buy,
+            quantity=Decimal("300"),
+            price=Decimal("0.30"),
+            date=date(2024, 1, 1),
+            currency="BRL",
+        )
+    )
+    event = CorporateEvent(
+        asset_id=asset.id,
+        ticker="AMOB3",
+        event_type="GRUPAMENTO",
+        event_date=date(2025, 1, 1),
+        ratio=Decimal("0.02"),
+        effective_date=date(2025, 1, 1),
+        quantity_factor=Decimal("0.02"),
+        portfolio_id=portfolio.id,
+        source_provider="test",
+    )
+    db.add(event)
+    await db.flush()
+
+    report = await build_corporate_event_ledger_preflight_report(db, event)
+
+    assert report.to_dict() == {
+        "schema_version": "corporate-event-ledger-preflight.v1",
+        "dry_run": True,
+        "database_writes_executed": 0,
+        "ready_for_execution": False,
+        "event_id": event.id,
+        "event_type": "GRUPAMENTO",
+        "quantity_factor": "0.02",
+        "portfolio_id": portfolio.id,
+        "ticker": "AMOB3",
+        "as_of": "2025-01-01",
+        "transaction_ids": [1],
+        "transaction_count": 1,
+        "first_transaction_date": "2024-01-01",
+        "last_transaction_date": "2024-01-01",
+        "buy_quantity": "300.00000000",
+        "sell_quantity": "0",
+        "net_quantity": "300.00000000",
+        "projected_net_quantity": "6.0000000000",
+    }
