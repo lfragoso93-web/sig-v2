@@ -16,7 +16,7 @@ from app.services.corporate_event_reconciliation_plan import (
 def _evidence(event_id: int, source: str = "brapi") -> CorporateEventEvidence:
     return CorporateEventEvidence(
         event_id=event_id,
-        ticker="AMOB3",
+        ticker="ABEV3",
         event_type="GRUPAMENTO",
         source_provider=source,
         source_event_id=f"{source}:{event_id}",
@@ -167,6 +167,36 @@ def test_matched_cash_settlement_keeps_klbn11_fail_closed_until_unit_contract() 
                 fractional_quantity="0.10",
                 fractional_settlement_price="4.00",
                 cash_treatment="AUCTION_SETTLEMENT",
+            ),
+        )
+
+
+def test_matched_grouping_keeps_amob3_fail_closed_until_ledger_basis_contract() -> None:
+    with pytest.raises(ValueError, match="AMOB3 exige contrato explicito"):
+        build_reconciliation_dry_run_report(
+            (
+                CorporateEventEvidence(
+                    event_id=12,
+                    ticker="AMOB3",
+                    event_type="GRUPAMENTO",
+                    source_provider="brapi",
+                    source_event_id="brapi:amob3",
+                ),
+                CorporateEventEvidence(
+                    event_id=13,
+                    ticker="AMOB3",
+                    event_type="GRUPAMENTO",
+                    source_provider="yahoo",
+                    source_event_id="yahoo:amob3",
+                ),
+            ),
+            decision=CorporateEventReconciliationDecision.MATCHED,
+            reason="ledger pode ja estar ajustado pelo grupamento",
+            canonical_event_id=12,
+            match_resolution_evidence=CorporateEventMatchResolutionEvidence(
+                evidence_type=CorporateEventMatchEvidenceType.BROKER_STATEMENT,
+                evidence_reference="broker-note:AMOB3:2025-05",
+                fractional_policy=FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE,
             ),
         )
 

@@ -49,8 +49,8 @@ async def _create_event(
 @pytest.mark.asyncio
 async def test_matched_writer_persists_state_and_canonical_evidence(db) -> None:
     asset = Asset(
-        ticker="AMOB3",
-        name="Automob",
+        ticker="ABEV3",
+        name="Ambev",
         asset_type="ACAO",
         currency="BRL",
     )
@@ -79,7 +79,7 @@ async def test_matched_writer_persists_state_and_canonical_evidence(db) -> None:
             evidence_type=(
                 CorporateEventMatchEvidenceType.OFFICIAL_EXCHANGE_DOCUMENT
             ),
-            evidence_reference="b3:test:AMOB3",
+            evidence_reference="b3:test:ABEV3",
             fractional_policy=(
                 FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE
             ),
@@ -109,15 +109,15 @@ async def test_matched_writer_persists_state_and_canonical_evidence(db) -> None:
     assert evidence.corporate_event_id == yahoo.id
     assert evidence.decision == "MATCHED"
     assert evidence.evidence_type == "OFFICIAL_EXCHANGE_DOCUMENT"
-    assert evidence.evidence_reference == "b3:test:AMOB3"
+    assert evidence.evidence_reference == "b3:test:ABEV3"
     assert evidence.fractional_policy == "NO_FRACTIONAL_RESIDUE"
 
 
 @pytest.mark.asyncio
 async def test_matched_writer_is_idempotent_for_same_evidence(db) -> None:
     asset = Asset(
-        ticker="AMOB3",
-        name="Automob",
+        ticker="ABEV3",
+        name="Ambev",
         asset_type="ACAO",
         currency="BRL",
     )
@@ -139,7 +139,7 @@ async def test_matched_writer_is_idempotent_for_same_evidence(db) -> None:
 
     evidence = CorporateEventMatchResolutionEvidence(
         evidence_type=CorporateEventMatchEvidenceType.OFFICIAL_EXCHANGE_DOCUMENT,
-        evidence_reference="b3:test:AMOB3",
+        evidence_reference="b3:test:ABEV3",
         fractional_policy=FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE,
     )
 
@@ -170,8 +170,8 @@ async def test_matched_writer_is_idempotent_for_same_evidence(db) -> None:
 @pytest.mark.asyncio
 async def test_matched_writer_rejects_conflicting_evidence(db) -> None:
     asset = Asset(
-        ticker="AMOB3",
-        name="Automob",
+        ticker="ABEV3",
+        name="Ambev",
         asset_type="ACAO",
         currency="BRL",
     )
@@ -200,7 +200,7 @@ async def test_matched_writer_rejects_conflicting_evidence(db) -> None:
             evidence_type=(
                 CorporateEventMatchEvidenceType.OFFICIAL_EXCHANGE_DOCUMENT
             ),
-            evidence_reference="b3:test:AMOB3",
+            evidence_reference="b3:test:ABEV3",
             fractional_policy=(
                 FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE
             ),
@@ -217,7 +217,7 @@ async def test_matched_writer_rejects_conflicting_evidence(db) -> None:
                 evidence_type=(
                     CorporateEventMatchEvidenceType.OFFICIAL_ISSUER_DOCUMENT
                 ),
-                evidence_reference="issuer:test:AMOB3",
+                evidence_reference="issuer:test:ABEV3",
                 fractional_policy=(
                     FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE
                 ),
@@ -262,6 +262,59 @@ async def test_matched_writer_keeps_klbn11_cash_settlement_fail_closed(db) -> No
                 fractional_quantity="0.10",
                 fractional_settlement_price="4.00",
                 cash_treatment="AUCTION_SETTLEMENT",
+            ),
+        )
+
+    assert brapi.reconciliation_status == "UNRECONCILED"
+    assert brapi.requires_review is True
+    assert brapi.is_canonical is True
+    assert brapi.matched_event_id is None
+
+    assert yahoo.reconciliation_status == "UNRECONCILED"
+    assert yahoo.requires_review is True
+    assert yahoo.is_canonical is True
+    assert yahoo.matched_event_id is None
+
+    result = await db.execute(
+        select(CorporateEventReconciliationEvidence)
+    )
+    assert result.scalars().all() == []
+
+
+@pytest.mark.asyncio
+async def test_matched_writer_keeps_amob3_grouping_fail_closed(db) -> None:
+    asset = Asset(
+        ticker="AMOB3",
+        name="Automob",
+        asset_type="ACAO",
+        currency="BRL",
+    )
+    db.add(asset)
+    await db.flush()
+
+    brapi = await _create_event(
+        db,
+        asset=asset,
+        source_provider="brapi",
+        source_event_id="brapi:amob3",
+    )
+    yahoo = await _create_event(
+        db,
+        asset=asset,
+        source_provider="yahoo",
+        source_event_id="yahoo:amob3",
+    )
+
+    with pytest.raises(ValueError, match="AMOB3 exige contrato explicito"):
+        await execute_corporate_event_matched_reconciliation(
+            db,
+            event_ids=(brapi.id, yahoo.id),
+            canonical_event_id=brapi.id,
+            reason="ledger pode ja estar ajustado pelo grupamento",
+            match_resolution_evidence=CorporateEventMatchResolutionEvidence(
+                evidence_type=CorporateEventMatchEvidenceType.BROKER_STATEMENT,
+                evidence_reference="broker-note:AMOB3:2025-05",
+                fractional_policy=FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE,
             ),
         )
 
@@ -335,8 +388,8 @@ async def test_matched_writer_validates_complete_event_set_before_mutation(
 @pytest.mark.asyncio
 async def test_matched_writer_changes_are_reverted_by_caller_rollback(db) -> None:
     asset = Asset(
-        ticker="AMOB3",
-        name="Automob",
+        ticker="ABEV3",
+        name="Ambev",
         asset_type="ACAO",
         currency="BRL",
     )

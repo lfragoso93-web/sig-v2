@@ -157,6 +157,28 @@ def _reject_unsupported_composite_cash_settlement(
         )
 
 
+def _reject_unsupported_adjusted_ledger_reapplication(
+    evidences: tuple[CorporateEventEvidence, ...],
+    evidence: CorporateEventMatchResolutionEvidence,
+) -> None:
+    if evidence.fractional_policy != FractionalResolutionPolicy.NO_FRACTIONAL_RESIDUE:
+        return
+
+    has_amob3 = any(item.ticker.strip().upper() == "AMOB3" for item in evidences)
+    if not has_amob3:
+        return
+
+    quantity_changing_types = {"GRUPAMENTO", "DESDOBRAMENTO"}
+    has_quantity_changing_event = any(
+        item.event_type.strip().upper() in quantity_changing_types
+        for item in evidences
+    )
+    if has_quantity_changing_event:
+        raise ValueError(
+            "MATCHED para AMOB3 exige contrato explicito de base do ledger"
+        )
+
+
 def plan_conflict_reconciliation(
     evidences: tuple[CorporateEventEvidence, ...],
     *,
@@ -239,6 +261,10 @@ def build_reconciliation_dry_run_report(
             raise ValueError("MATCHED exige evidencia operacional")
         validate_match_resolution_evidence(match_resolution_evidence)
         _reject_unsupported_composite_cash_settlement(
+            evidences,
+            match_resolution_evidence,
+        )
+        _reject_unsupported_adjusted_ledger_reapplication(
             evidences,
             match_resolution_evidence,
         )
