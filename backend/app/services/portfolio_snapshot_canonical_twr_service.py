@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 _ZERO = Decimal("0")
 _MONEY = Decimal("0.01")
 _DIAGNOSTIC_PREFIXES = (
+    "corporate_action_",
     "fixed_income_",
     "treasury_",
     "pre_listing_",
